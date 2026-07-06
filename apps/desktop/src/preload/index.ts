@@ -25,6 +25,15 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.tasksDelete, { profileId, id }),
   restoreTask: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.tasksRestore, { profileId, id }),
+  listEvents: (profileId) => ipcRenderer.invoke(IpcChannel.eventsList, { profileId }),
+  createEvent: (profileId, event) =>
+    ipcRenderer.invoke(IpcChannel.eventsCreate, { profileId, event }),
+  updateEvent: (profileId, id, changes) =>
+    ipcRenderer.invoke(IpcChannel.eventsUpdate, { profileId, id, changes }),
+  deleteEvent: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.eventsDelete, { profileId, id }),
+  restoreEvent: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.eventsRestore, { profileId, id }),
   appInfo: () => ipcRenderer.invoke(IpcChannel.appInfo),
 };
 

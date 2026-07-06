@@ -21,6 +21,11 @@ export const IpcChannel = {
   tasksSetDone: "tasks:set-done",
   tasksDelete: "tasks:delete",
   tasksRestore: "tasks:restore",
+  eventsList: "events:list",
+  eventsCreate: "events:create",
+  eventsUpdate: "events:update",
+  eventsDelete: "events:delete",
+  eventsRestore: "events:restore",
   appInfo: "app:info",
 } as const;
 
@@ -140,6 +145,72 @@ export interface TasksRestoreRequest {
   id: string;
 }
 
+/**
+ * A calendar event as seen by the renderer (mirrors the `events` table via the
+ * store's mapping, PRD 04). Redeclared here so the renderer never imports DB code.
+ */
+export interface Event {
+  id: string;
+  profileId: string;
+  title: string;
+  description: string | null;
+  startAt: string;
+  endAt: string | null;
+  allDay: boolean;
+  location: string | null;
+  category: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Fields for a new event; only `title` and `startAt` are required (CAL-001). The main process revalidates each. */
+export interface NewEventFields {
+  title: string;
+  startAt: string;
+  endAt?: string | null;
+  allDay?: boolean;
+  location?: string | null;
+  description?: string | null;
+  category?: string | null;
+}
+
+/** A partial edit of an event's own fields; an omitted key is untouched, `null` clears it. */
+export interface EventFieldChanges {
+  title?: string;
+  startAt?: string;
+  endAt?: string | null;
+  allDay?: boolean;
+  location?: string | null;
+  description?: string | null;
+  category?: string | null;
+}
+
+export interface EventsListRequest {
+  profileId: string;
+}
+
+export interface EventsCreateRequest {
+  profileId: string;
+  event: NewEventFields;
+}
+
+export interface EventsUpdateRequest {
+  profileId: string;
+  id: string;
+  changes: EventFieldChanges;
+}
+
+export interface EventsDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
+/** Undo of a soft delete: restores a previously deleted event. */
+export interface EventsRestoreRequest {
+  profileId: string;
+  id: string;
+}
+
 /** Runtime and environment facts, proving the main-process path end to end. */
 export interface AppInfo {
   name: string;
@@ -169,5 +240,10 @@ export interface NexusApi {
   setTaskDone(profileId: string, id: string, done: boolean): Promise<Task>;
   deleteTask(profileId: string, id: string): Promise<void>;
   restoreTask(profileId: string, id: string): Promise<void>;
+  listEvents(profileId: string): Promise<Event[]>;
+  createEvent(profileId: string, event: NewEventFields): Promise<Event>;
+  updateEvent(profileId: string, id: string, changes: EventFieldChanges): Promise<Event>;
+  deleteEvent(profileId: string, id: string): Promise<void>;
+  restoreEvent(profileId: string, id: string): Promise<void>;
   appInfo(): Promise<AppInfo>;
 }

@@ -2,17 +2,21 @@ import { join } from "node:path";
 import { app, BrowserWindow, ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import {
+  EventStore,
   openDatabase,
   SqliteFlagStore,
   TaskStore,
   TASK_PRIORITIES,
   TASK_STATUSES,
   uuidv7,
+  type CreateEventInput,
   type CreateTaskInput,
+  type Event,
   type NexusDatabase,
   type Task,
   type TaskPriority,
   type TaskStatus,
+  type UpdateEventFields,
   type UpdateTaskFields,
 } from "@nexus/db";
 import {
@@ -202,6 +206,53 @@ function asTaskFieldChanges(value: unknown): UpdateTaskFields {
   return patch;
 }
 
+/**
+ * Validates a `NewEventFields` payload into a store input; only present keys are
+ * carried. Structural checks only — semantic date/range validation stays in the
+ * store, the same division of labour as the task validators.
+ */
+function asNewEventInput(value: unknown): CreateEventInput {
+  const event = asRecord(value);
+  const input: CreateEventInput = {
+    title: asNonEmptyString(event.title, "event.title"),
+    startAt: asNonEmptyString(event.startAt, "event.startAt"),
+  };
+  if (event.endAt !== undefined) input.endAt = asNullableString(event.endAt, "event.endAt");
+  if (event.allDay !== undefined) input.allDay = asBoolean(event.allDay, "event.allDay");
+  if (event.location !== undefined) {
+    input.location = asNullableString(event.location, "event.location");
+  }
+  if (event.description !== undefined) {
+    input.description = asNullableString(event.description, "event.description");
+  }
+  if (event.category !== undefined) {
+    input.category = asNullableString(event.category, "event.category");
+  }
+  return input;
+}
+
+/** Validates an `EventFieldChanges` payload into a store patch; an omitted key stays omitted. */
+function asEventFieldChanges(value: unknown): UpdateEventFields {
+  const changes = asRecord(value);
+  const patch: UpdateEventFields = {};
+  if (changes.title !== undefined) patch.title = asNonEmptyString(changes.title, "changes.title");
+  if (changes.startAt !== undefined) {
+    patch.startAt = asNonEmptyString(changes.startAt, "changes.startAt");
+  }
+  if (changes.endAt !== undefined) patch.endAt = asNullableString(changes.endAt, "changes.endAt");
+  if (changes.allDay !== undefined) patch.allDay = asBoolean(changes.allDay, "changes.allDay");
+  if (changes.location !== undefined) {
+    patch.location = asNullableString(changes.location, "changes.location");
+  }
+  if (changes.description !== undefined) {
+    patch.description = asNullableString(changes.description, "changes.description");
+  }
+  if (changes.category !== undefined) {
+    patch.category = asNullableString(changes.category, "changes.category");
+  }
+  return patch;
+}
+
 function requireDb(): NexusDatabase {
   if (!db) throw new Error("Database is not open.");
   return db;
@@ -209,6 +260,10 @@ function requireDb(): NexusDatabase {
 
 function taskStore(profileId: string): TaskStore {
   return new TaskStore(requireDb().raw, profileId);
+}
+
+function eventStore(profileId: string): EventStore {
+  return new EventStore(requireDb().raw, profileId);
 }
 
 function registerIpc(): void {
@@ -284,6 +339,43 @@ function registerIpc(): void {
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const id = asNonEmptyString(body.id, "id");
     taskStore(profileId).restore(id);
+  });
+
+  ipcMain.handle(IpcChannel.eventsList, (event, payload): Event[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return eventStore(profileId).listActive();
+  });
+
+  ipcMain.handle(IpcChannel.eventsCreate, (event, payload): Event => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return eventStore(profileId).create(asNewEventInput(body.event));
+  });
+
+  ipcMain.handle(IpcChannel.eventsUpdate, (event, payload): Event => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return eventStore(profileId).update(id, asEventFieldChanges(body.changes));
+  });
+
+  ipcMain.handle(IpcChannel.eventsDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    eventStore(profileId).softDelete(id);
+  });
+
+  ipcMain.handle(IpcChannel.eventsRestore, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    eventStore(profileId).restore(id);
   });
 
   ipcMain.handle(IpcChannel.appInfo, (event): AppInfo => {
