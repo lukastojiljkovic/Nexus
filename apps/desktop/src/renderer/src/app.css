@@ -277,6 +277,27 @@ body {
   gap: var(--nx-space-4);
 }
 
+/* View toggle (Agenda | Dokumenta) — typographic active state, mirrors tasks. */
+.cal__views {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex: none;
+}
+.cal__view.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.cal__view.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
+}
+.cal__view--active.nx-button {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+
 /* Event form (create + edit) — one wrapping row; the title takes the slack. */
 .cal__form {
   display: flex;
@@ -383,4 +404,161 @@ body {
 .cal__delete.nx-button:hover {
   background: var(--nx-danger-soft);
   color: var(--nx-danger);
+}
+
+/* Documents (CAL Dokumenta panel) ------------------------------------- */
+.documents {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+
+/* Add/edit form — one wrapping row; the label field takes the slack. */
+.documents__form {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+.documents__label-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+/* Native select matched to the textfield input (tokens only, no custom arrow). */
+.documents__select {
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  padding: 7px 13px;
+  transition: border-color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.documents__select:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+
+/* Edit-mode cancel: a quiet ghost beside the primary submit (text feel). */
+.documents__cancel.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.documents__cancel.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
+}
+
+/* Delete + undo: inline, token-styled undo bar (mirrors the tasks pattern). */
+.documents__undo {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.documents__undo-text {
+  flex: 1;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+.documents__undo-dismiss.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.documents__undo-dismiss.nx-button:hover {
+  background: var(--nx-surface);
+  color: var(--nx-text);
+}
+
+/* List: rows ordered by soonest expiry, each led by a derived status chip. */
+.documents__list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Row content: label + type on the heading line, expiry + days-until below. */
+.documents__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.documents__heading {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+.documents__doc-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--nx-font-weight-medium);
+}
+.documents__type {
+  flex: none;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+.documents__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+.documents__days {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Trailing: renew/edit/delete affordances, quiet until hovered (cal pattern). */
+.documents__row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.documents__renew-start.nx-button,
+.documents__edit.nx-button,
+.documents__delete.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.documents__renew-start.nx-button:hover,
+.documents__edit.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.documents__delete.nx-button:hover {
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+}
+
+/* Inline renew: a compact date input + confirm, replacing the row actions. */
+.documents__renew {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.documents__renew-input {
+  width: auto;
+}
+.documents__renew-cancel.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.documents__renew-cancel.nx-button:hover {
+  background: var(--nx-surface);
+  color: var(--nx-text);
 }

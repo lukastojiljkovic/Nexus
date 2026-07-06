@@ -78,6 +78,9 @@ export const strings = {
   },
 
   calendar: {
+    viewLabel: "Prikaz",
+    viewAgenda: "Agenda",
+    viewDokumenta: "Dokumenta",
     titlePlaceholder: "Naziv događaja",
     titleLabel: "Naziv događaja",
     dateLabel: "Datum",
@@ -96,6 +99,56 @@ export const strings = {
     deletedNotice: "Događaj obrisan",
     undo: "Vrati",
     dismiss: "Zatvori",
+  },
+
+  documents: {
+    /** Type-label map, keyed by document type value (labels are presentation). */
+    type: {
+      licna_karta: "Lična karta",
+      pasos: "Pasoš",
+      vozacka: "Vozačka dozvola",
+      registracija: "Registracija vozila",
+      kartica: "Bankovna kartica",
+      polisa: "Polisa osiguranja",
+      custom: "Ostalo",
+    },
+    /** Status-chip labels, keyed by derived expiry status value. */
+    status: {
+      ok: "U redu",
+      uskoro: "Uskoro ističe",
+      istekao: "Isteklo",
+    },
+    typeLabel: "Vrsta dokumenta",
+    labelPlaceholder: "Naziv dokumenta",
+    labelLabel: "Naziv dokumenta",
+    expiryLabel: "Ističe",
+    notesPlaceholder: "Beleška (opciono)",
+    notesLabel: "Beleška",
+    add: "Dodaj",
+    save: "Sačuvaj",
+    cancel: "Otkaži",
+    renew: "Obnovi",
+    renewLabel: "Novi datum isteka",
+    renewConfirm: "Potvrdi",
+    renewCancel: "Otkaži obnovu",
+    editLabel: "Izmeni dokument",
+    deleteLabel: "Obriši dokument",
+    emptyTitle: "Nema dokumenata",
+    emptyDescription:
+      "Dodaj prvi dokument u formi iznad — vrsta, naziv i datum isteka su dovoljni.",
+    loadError: "Dokumenti se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
+    deletedNotice: "Dokument obrisan",
+    undo: "Vrati",
+    dismiss: "Zatvori",
+    /** Days-until phrasing; "za N dana" / "isteklo pre N dan(a)" build inline. */
+    days: {
+      tomorrow: "sutra",
+      today: "danas ističe",
+      future: "za",
+      pastPrefix: "isteklo pre",
+      unitOne: "dan",
+      unitMany: "dana",
+    },
   },
 
   diagnostics: {

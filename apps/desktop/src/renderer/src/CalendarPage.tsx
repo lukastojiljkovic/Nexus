@@ -2,7 +2,25 @@ import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { Button, Checkbox, Chip, EmptyState, ListRow, TextField } from "@nexus/ui";
 import type { Event, EventFieldChanges, NewEventFields } from "../../shared/ipc.js";
+import { DocumentsPanel } from "./DocumentsPanel.js";
 import { strings } from "./strings.js";
+
+// --- Per-profile view memory (interim, mirrors TasksPage) -------------------
+//
+// Agenda vs Dokumenta is a lightweight UI preference, persisted per profile in
+// localStorage exactly like the tasks list/kanban toggle. The month grid is a
+// later slice; this toggle only picks between the agenda and the documents panel.
+type CalendarView = "agenda" | "dokumenta";
+const VIEW_KEY_PREFIX = "nexus.calendar.view.";
+
+function readStoredView(profileId: string): CalendarView {
+  return localStorage.getItem(VIEW_KEY_PREFIX + profileId) === "dokumenta"
+    ? "dokumenta"
+    : "agenda";
+}
+function persistView(profileId: string, view: CalendarView): void {
+  localStorage.setItem(VIEW_KEY_PREFIX + profileId, view);
+}
 
 // --- Agenda grouping (page-level, not the views engine) ---------------------
 //
@@ -67,6 +85,7 @@ export interface CalendarPageProps {
 export function CalendarPage({ profileId }: CalendarPageProps) {
   const [events, setEvents] = useState<Event[] | null>(null);
   const [failed, setFailed] = useState(false);
+  const [view, setView] = useState<CalendarView>(() => readStoredView(profileId));
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
 
   // One form serves both modes; a non-null editingId means "editing that event".
@@ -93,6 +112,11 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
       active = false;
     };
   }, [profileId]);
+
+  function selectView(next: CalendarView): void {
+    setView(next);
+    persistView(profileId, next);
+  }
 
   function resetForm(): void {
     setEditingId(null);
@@ -181,116 +205,139 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
 
   return (
     <div className="cal">
-      <form className="cal__form" onSubmit={submitForm}>
-        <input
-          ref={titleRef}
-          className="nx-textfield__input cal__title"
-          value={title}
-          placeholder={strings.calendar.titlePlaceholder}
-          aria-label={strings.calendar.titleLabel}
-          autoFocus
-          onChange={(event: ChangeEvent<HTMLInputElement>) => setTitle(event.target.value)}
-        />
-        <TextField
-          type="date"
-          value={date}
-          required
-          aria-label={strings.calendar.dateLabel}
-          onChange={(event) => setDate(event.target.value)}
-        />
-        {!allDay && (
-          <TextField
-            type="time"
-            value={time}
-            aria-label={strings.calendar.timeLabel}
-            onChange={(event) => setTime(event.target.value)}
-          />
-        )}
-        <TextField
-          type="text"
-          value={location}
-          placeholder={strings.calendar.locationPlaceholder}
-          aria-label={strings.calendar.locationLabel}
-          onChange={(event) => setLocation(event.target.value)}
-        />
-        <Checkbox checked={allDay} onChange={(event) => setAllDay(event.target.checked)}>
-          {strings.calendar.allDay}
-        </Checkbox>
-        <Button type="submit" variant="primary">
-          {editingId != null ? strings.calendar.save : strings.calendar.add}
-        </Button>
-        {editingId != null && (
-          <Button type="button" className="cal__cancel" onClick={resetForm}>
-            {strings.calendar.cancel}
-          </Button>
-        )}
-      </form>
-
-      {pendingUndoId != null && (
-        <div className="cal__undo" role="status">
-          <span className="cal__undo-text">{strings.calendar.deletedNotice}</span>
-          <Button size="sm" className="cal__undo-action" onClick={() => void undo()}>
-            {strings.calendar.undo}
-          </Button>
+      <div className="cal__views" role="group" aria-label={strings.calendar.viewLabel}>
+        {(["agenda", "dokumenta"] as const).map((option) => (
           <Button
+            key={option}
             size="sm"
-            className="cal__undo-dismiss"
-            aria-label={strings.calendar.dismiss}
-            onClick={() => setPendingUndoId(null)}
+            className={view === option ? "cal__view cal__view--active" : "cal__view"}
+            aria-pressed={view === option}
+            onClick={() => selectView(option)}
           >
-            ×
+            {option === "agenda" ? strings.calendar.viewAgenda : strings.calendar.viewDokumenta}
           </Button>
-        </div>
-      )}
+        ))}
+      </div>
 
-      {failed ? (
-        <EmptyState title={strings.calendar.emptyTitle} description={strings.calendar.loadError} />
-      ) : events === null ? (
-        <p className="app__muted">{strings.app.loading}</p>
-      ) : events.length === 0 ? (
-        <EmptyState
-          title={strings.calendar.emptyTitle}
-          description={strings.calendar.emptyDescription}
-        />
+      {view === "dokumenta" ? (
+        <DocumentsPanel profileId={profileId} />
       ) : (
-        <div className="cal__agenda">
-          {groupByDay(events).map(([key, dayEvents]) => (
-            <section key={key} className="cal__day">
-              <h2 className="cal__day-header">{formatDay(key)}</h2>
-              {dayEvents.map((event) => (
-                <ListRow
-                  key={event.id}
-                  leading={<span className="cal__time">{formatTime(event)}</span>}
-                  trailing={
-                    <span className="cal__row-actions">
-                      <Button
-                        size="sm"
-                        className="cal__edit"
-                        aria-label={strings.calendar.editLabel}
-                        onClick={() => startEdit(event)}
-                      >
-                        ✎
-                      </Button>
-                      <Button
-                        size="sm"
-                        className="cal__delete"
-                        aria-label={strings.calendar.deleteLabel}
-                        onClick={() => void remove(event)}
-                      >
-                        ×
-                      </Button>
-                    </span>
-                  }
-                >
-                  <span className="cal__event">
-                    <span className="cal__event-title">{event.title}</span>
-                    {event.location ? <Chip variant="data">{event.location}</Chip> : null}
-                  </span>
-                </ListRow>
+        <>
+          <form className="cal__form" onSubmit={submitForm}>
+            <input
+              ref={titleRef}
+              className="nx-textfield__input cal__title"
+              value={title}
+              placeholder={strings.calendar.titlePlaceholder}
+              aria-label={strings.calendar.titleLabel}
+              autoFocus
+              onChange={(event: ChangeEvent<HTMLInputElement>) => setTitle(event.target.value)}
+            />
+            <TextField
+              type="date"
+              value={date}
+              required
+              aria-label={strings.calendar.dateLabel}
+              onChange={(event) => setDate(event.target.value)}
+            />
+            {!allDay && (
+              <TextField
+                type="time"
+                value={time}
+                aria-label={strings.calendar.timeLabel}
+                onChange={(event) => setTime(event.target.value)}
+              />
+            )}
+            <TextField
+              type="text"
+              value={location}
+              placeholder={strings.calendar.locationPlaceholder}
+              aria-label={strings.calendar.locationLabel}
+              onChange={(event) => setLocation(event.target.value)}
+            />
+            <Checkbox checked={allDay} onChange={(event) => setAllDay(event.target.checked)}>
+              {strings.calendar.allDay}
+            </Checkbox>
+            <Button type="submit" variant="primary">
+              {editingId != null ? strings.calendar.save : strings.calendar.add}
+            </Button>
+            {editingId != null && (
+              <Button type="button" className="cal__cancel" onClick={resetForm}>
+                {strings.calendar.cancel}
+              </Button>
+            )}
+          </form>
+
+          {pendingUndoId != null && (
+            <div className="cal__undo" role="status">
+              <span className="cal__undo-text">{strings.calendar.deletedNotice}</span>
+              <Button size="sm" className="cal__undo-action" onClick={() => void undo()}>
+                {strings.calendar.undo}
+              </Button>
+              <Button
+                size="sm"
+                className="cal__undo-dismiss"
+                aria-label={strings.calendar.dismiss}
+                onClick={() => setPendingUndoId(null)}
+              >
+                ×
+              </Button>
+            </div>
+          )}
+
+          {failed ? (
+            <EmptyState
+              title={strings.calendar.emptyTitle}
+              description={strings.calendar.loadError}
+            />
+          ) : events === null ? (
+            <p className="app__muted">{strings.app.loading}</p>
+          ) : events.length === 0 ? (
+            <EmptyState
+              title={strings.calendar.emptyTitle}
+              description={strings.calendar.emptyDescription}
+            />
+          ) : (
+            <div className="cal__agenda">
+              {groupByDay(events).map(([key, dayEvents]) => (
+                <section key={key} className="cal__day">
+                  <h2 className="cal__day-header">{formatDay(key)}</h2>
+                  {dayEvents.map((event) => (
+                    <ListRow
+                      key={event.id}
+                      leading={<span className="cal__time">{formatTime(event)}</span>}
+                      trailing={
+                        <span className="cal__row-actions">
+                          <Button
+                            size="sm"
+                            className="cal__edit"
+                            aria-label={strings.calendar.editLabel}
+                            onClick={() => startEdit(event)}
+                          >
+                            ✎
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="cal__delete"
+                            aria-label={strings.calendar.deleteLabel}
+                            onClick={() => void remove(event)}
+                          >
+                            ×
+                          </Button>
+                        </span>
+                      }
+                    >
+                      <span className="cal__event">
+                        <span className="cal__event-title">{event.title}</span>
+                        {event.location ? <Chip variant="data">{event.location}</Chip> : null}
+                      </span>
+                    </ListRow>
+                  ))}
+                </section>
               ))}
-            </section>
-          ))}
-        </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
