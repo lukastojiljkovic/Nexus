@@ -22,3 +22,19 @@ export class DatabaseKeyError extends DatabaseError {}
  * refuse rather than risk corrupting data written by a newer app.
  */
 export class SchemaVersionError extends DatabaseError {}
+
+/**
+ * Thrown when a write is rejected at a store boundary because its input breaks a
+ * domain rule the UI is expected to have caught already — an empty task title, a
+ * value outside a closed enum, or a malformed timestamp (TASK-001). The store
+ * revalidates because renderer input is untrusted (SEC-EL-02).
+ */
+export class TaskValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a task operation targets an id that is not an active row in the
+ * store's own profile — unknown, soft-deleted (for a mutation), or owned by
+ * another profile. Surfacing this uniformly keeps one profile's tasks invisible
+ * to a store scoped to another.
+ */
+export class TaskNotFoundError extends DatabaseError {}

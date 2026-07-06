@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { SchemaVersionError } from "../errors.js";
 import { migration001 } from "./001-initial.js";
+import { migration002 } from "./002-tasks.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -11,7 +12,7 @@ export interface Migration {
 }
 
 /** All known migrations, ascending by version. */
-export const MIGRATIONS: readonly Migration[] = [migration001];
+export const MIGRATIONS: readonly Migration[] = [migration001, migration002];
 
 /**
  * Applies every migration whose version is greater than the file's current
