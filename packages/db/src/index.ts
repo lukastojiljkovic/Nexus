@@ -5,6 +5,8 @@ export {
   DatabaseError,
   DatabaseKeyError,
   DatabaseLockedError,
+  DocumentNotFoundError,
+  DocumentValidationError,
   EventNotFoundError,
   EventValidationError,
   SchemaVersionError,
@@ -28,5 +30,19 @@ export type {
 
 export { EventStore } from "./events/eventStore.js";
 export type { CreateEventInput, Event, UpdateEventFields } from "./events/eventStore.js";
+
+export {
+  DocumentStore,
+  DOCUMENT_TYPES,
+  DEFAULT_REMINDER_LADDERS,
+} from "./documents/documentStore.js";
+export type {
+  CreateDocumentInput,
+  DocumentRenewal,
+  DocumentStatus,
+  DocumentType,
+  TrackedDocument,
+  UpdateDocumentFields,
+} from "./documents/documentStore.js";
 
 export { uuidv7 } from "./ids.js";

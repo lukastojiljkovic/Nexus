@@ -3,6 +3,7 @@ import { SchemaVersionError } from "../errors.js";
 import { migration001 } from "./001-initial.js";
 import { migration002 } from "./002-tasks.js";
 import { migration003 } from "./003-events.js";
+import { migration004 } from "./004-documents.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -13,7 +14,12 @@ export interface Migration {
 }
 
 /** All known migrations, ascending by version. */
-export const MIGRATIONS: readonly Migration[] = [migration001, migration002, migration003];
+export const MIGRATIONS: readonly Migration[] = [
+  migration001,
+  migration002,
+  migration003,
+  migration004,
+];
 
 /**
  * Applies every migration whose version is greater than the file's current

@@ -54,3 +54,20 @@ export class EventValidationError extends DatabaseError {}
  * to a store scoped to another.
  */
 export class EventNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a document write is rejected at the store boundary because its
+ * input breaks a domain rule the UI is expected to have caught already — an
+ * empty label, an unknown document type, a malformed expiry date, or a reminder
+ * ladder that is not a list of non-negative integers (CAL-004). The store
+ * revalidates because renderer input is untrusted (SEC-EL-02).
+ */
+export class DocumentValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a document operation targets an id that is not an active row in the
+ * store's own profile — unknown, soft-deleted (for a mutation), or owned by
+ * another profile. Surfacing this uniformly keeps one profile's documents
+ * invisible to a store scoped to another.
+ */
+export class DocumentNotFoundError extends DatabaseError {}
