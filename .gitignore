@@ -1,0 +1,18 @@
+# Private documentation — never committed or pushed (founder decision, 2026-07-04)
+docs/
+
+# Dependencies & build output
+node_modules/
+dist/
+out/
+.turbo/
+*.tsbuildinfo
+packages/tokens/gen/
+
+# Environment & local state
+.env
+.env.*
+
+# OS junk
+.DS_Store
+Thumbs.db
