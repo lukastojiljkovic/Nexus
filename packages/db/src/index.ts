@@ -5,6 +5,8 @@ export {
   DatabaseError,
   DatabaseKeyError,
   DatabaseLockedError,
+  EventNotFoundError,
+  EventValidationError,
   SchemaVersionError,
   TaskNotFoundError,
   TaskValidationError,
@@ -23,5 +25,8 @@ export type {
   TaskStatus,
   UpdateTaskFields,
 } from "./tasks/taskStore.js";
+
+export { EventStore } from "./events/eventStore.js";
+export type { CreateEventInput, Event, UpdateEventFields } from "./events/eventStore.js";
 
 export { uuidv7 } from "./ids.js";

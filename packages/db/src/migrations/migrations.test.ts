@@ -29,10 +29,10 @@ function insertProfile(db: NexusDatabase, id: string): void {
 }
 
 describe("migration 002 — tasks", () => {
-  it("creates the tasks table and stamps user_version 2 on a fresh database", () => {
+  it("creates the tasks table and stamps the latest user_version on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("tasks");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(2);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(3);
     db.close();
   });
 
@@ -43,7 +43,7 @@ describe("migration 002 — tasks", () => {
     first.close();
 
     const second = openDatabase({ path });
-    expect(second.raw.pragma("user_version", { simple: true })).toBe(2);
+    expect(second.raw.pragma("user_version", { simple: true })).toBe(3);
     expect(tableNames(second)).toContain("tasks");
     expect(
       (second.raw.prepare("SELECT count(*) AS n FROM profiles").get() as { n: number }).n,
@@ -84,6 +84,61 @@ describe("migration 002 — tasks", () => {
     db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
     expect(
       (db.raw.prepare("SELECT count(*) AS n FROM tasks").get() as { n: number }).n,
+    ).toBe(0);
+    db.close();
+  });
+});
+
+describe("migration 003 — events", () => {
+  it("creates the events table and stamps user_version 3 on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    expect(tableNames(db)).toContain("events");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(3);
+    db.close();
+  });
+
+  it("enforces the all_day flag with a 0/1 CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check.db") });
+    insertProfile(db, "p1");
+    const now = new Date().toISOString();
+    const insert = db.raw.prepare(
+      `INSERT INTO events (id, profile_id, title, start_at, all_day, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    );
+
+    // all_day outside {0, 1} -> rejected by the CHECK.
+    expect(() => insert.run("e1", "p1", "x", now, 2, now, now)).toThrow();
+    // the two boolean encodings are accepted.
+    expect(() => insert.run("e2", "p1", "x", now, 0, now, now)).not.toThrow();
+    expect(() => insert.run("e3", "p1", "x", now, 1, now, now)).not.toThrow();
+    db.close();
+  });
+
+  it("creates the events_profile_active partial index", () => {
+    const db = openDatabase({ path: join(dir, "index.db") });
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("events_profile_active");
+    db.close();
+  });
+
+  it("cascades event deletion when the owning profile is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade.db") });
+    insertProfile(db, "p1");
+    const now = new Date().toISOString();
+    db.raw
+      .prepare(
+        `INSERT INTO events (id, profile_id, title, start_at, all_day, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run("e1", "p1", "x", now, 0, now, now);
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM events").get() as { n: number }).n,
     ).toBe(0);
     db.close();
   });

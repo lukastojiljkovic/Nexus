@@ -38,3 +38,19 @@ export class TaskValidationError extends DatabaseError {}
  * to a store scoped to another.
  */
 export class TaskNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a calendar write is rejected at the store boundary because its
+ * input breaks a domain rule the UI is expected to have caught already — an
+ * empty event title, a malformed timestamp, or an end that precedes its start
+ * (CAL-001). The store revalidates because renderer input is untrusted (SEC-EL-02).
+ */
+export class EventValidationError extends DatabaseError {}
+
+/**
+ * Thrown when an event operation targets an id that is not an active row in the
+ * store's own profile — unknown, soft-deleted (for a mutation), or owned by
+ * another profile. Surfacing this uniformly keeps one profile's events invisible
+ * to a store scoped to another.
+ */
+export class EventNotFoundError extends DatabaseError {}
