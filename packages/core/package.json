@@ -1,0 +1,18 @@
+{
+  "name": "@nexus/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Nexus platform-free domain foundation: module registry, feature-module contract types, and feature flags. No React, DOM, or Node APIs.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  }
+}
