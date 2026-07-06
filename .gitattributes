@@ -1,0 +1,2 @@
+# Store all text as LF in the repository; checkout per platform default.
+* text=auto
