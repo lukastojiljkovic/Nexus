@@ -278,6 +278,14 @@ function registerIpc(): void {
     taskStore(profileId).softDelete(id);
   });
 
+  ipcMain.handle(IpcChannel.tasksRestore, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    taskStore(profileId).restore(id);
+  });
+
   ipcMain.handle(IpcChannel.appInfo, (event): AppInfo => {
     assertTrustedSender(event);
     return appInfo();

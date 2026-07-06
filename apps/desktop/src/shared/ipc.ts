@@ -20,6 +20,7 @@ export const IpcChannel = {
   tasksUpdate: "tasks:update",
   tasksSetDone: "tasks:set-done",
   tasksDelete: "tasks:delete",
+  tasksRestore: "tasks:restore",
   appInfo: "app:info",
 } as const;
 
@@ -133,6 +134,12 @@ export interface TasksDeleteRequest {
   id: string;
 }
 
+/** Undo of a soft delete (TASK-011): restores a previously deleted task. */
+export interface TasksRestoreRequest {
+  profileId: string;
+  id: string;
+}
+
 /** Runtime and environment facts, proving the main-process path end to end. */
 export interface AppInfo {
   name: string;
@@ -161,5 +168,6 @@ export interface NexusApi {
   updateTask(profileId: string, id: string, changes: TaskFieldChanges): Promise<Task>;
   setTaskDone(profileId: string, id: string, done: boolean): Promise<Task>;
   deleteTask(profileId: string, id: string): Promise<void>;
+  restoreTask(profileId: string, id: string): Promise<void>;
   appInfo(): Promise<AppInfo>;
 }

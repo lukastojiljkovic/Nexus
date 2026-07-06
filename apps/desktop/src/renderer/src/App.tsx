@@ -3,6 +3,7 @@ import { Button, Card, EmptyState, NavItem } from "@nexus/ui";
 import type { ThemeName } from "@nexus/tokens";
 import type { AppInfo, Profile } from "../../shared/ipc.js";
 import { Onboarding } from "./Onboarding.js";
+import { TasksPage } from "./TasksPage.js";
 import { createModuleRegistry } from "./modules.js";
 import { persistTheme, readStoredTheme } from "./theme.js";
 import { strings } from "./strings.js";
@@ -131,6 +132,8 @@ export function App() {
         <main className="app__main">
           {activeId === "dashboard" ? (
             <DashboardPage info={info} />
+          ) : activeId === "tasks" && activeProfile ? (
+            <TasksPage profileId={activeProfile.id} />
           ) : (
             <ModulePage id={activeId} />
           )}

@@ -48,6 +48,35 @@ export const strings = {
       "Ovaj modul stiže tokom v0 izgradnje. Navigacija je već spremna — sadržaj sledi.",
   },
 
+  tasks: {
+    quickAddPlaceholder: "Novi zadatak — upiši i pritisni Enter",
+    quickAddSubmit: "Dodaj",
+    quickAddLabel: "Novi zadatak",
+    viewLabel: "Prikaz",
+    viewList: "Lista",
+    viewKanban: "Tabla",
+    emptyTitle: "Nema zadataka",
+    emptyDescription:
+      "Zapiši prvi zadatak u polje iznad — dovoljno je ime i Enter.",
+    loadError: "Zadaci se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
+    deleteLabel: "Obriši zadatak",
+    deletedNotice: "Zadatak obrisan",
+    undo: "Vrati",
+    dismiss: "Zatvori",
+    /** Kanban column titles, keyed by task status value (labels are presentation). */
+    status: {
+      todo: "Za rad",
+      doing: "U toku",
+      done: "Završeno",
+    },
+    /** Priority chip labels; 'none' has no chip, so it is intentionally absent. */
+    priority: {
+      low: "Nizak",
+      medium: "Srednji",
+      high: "Visok",
+    },
+  },
+
   diagnostics: {
     title: "Stanje sistema",
     version: "Verzija",

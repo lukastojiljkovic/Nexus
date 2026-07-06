@@ -174,3 +174,98 @@ body {
   color: var(--nx-danger);
   font-size: var(--nx-font-size-body-sm);
 }
+
+/* Tasks (TASK page) --------------------------------------------------- */
+.tasks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+
+/* Quick-add + view toggle share one row; the toggle stays right-aligned. */
+.tasks__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-4);
+  flex-wrap: wrap;
+}
+.tasks__quick-add {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex: 1;
+  min-width: 240px;
+}
+.tasks__quick-add .nx-textfield__input {
+  flex: 1;
+}
+
+/* View toggle — active state is typographic (accent + weight), no glow or
+   side-bar, per the direction brief; the ghost frame is dropped to a text feel. */
+.tasks__views {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex: none;
+}
+.tasks__view.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.tasks__view.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
+}
+.tasks__view--active.nx-button {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+/* Delete + undo (TASK-011): an inline, token-styled undo bar above the list. */
+.tasks__undo {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.tasks__undo-text {
+  flex: 1;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+.tasks__undo-dismiss.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.tasks__undo-dismiss.nx-button:hover {
+  background: var(--nx-surface);
+  color: var(--nx-text);
+}
+
+/* Row trailing: priority/due chips next to a quiet per-row delete affordance. */
+.tasks__row-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.tasks__chips {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.tasks__delete.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.tasks__delete.nx-button:hover {
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+}
