@@ -1,0 +1,21 @@
+{
+  "theme": "noc",
+  "semantic": {
+    "bg": "{color.night.900}",
+    "surface": "{color.night.800}",
+    "surfaceAlt": "{color.night.700}",
+    "border": "{color.night.600}",
+    "text": "{color.night.50}",
+    "textMuted": "{color.night.300}",
+    "accent": "{color.gold.400}",
+    "accentSoft": "{color.gold.tintNoc}",
+    "accentStrong": "{color.gold.300}",
+    "data": "{color.jade.300}",
+    "dataSoft": "{color.jade.tintNoc}",
+    "success": "{color.jade.300}",
+    "danger": "{color.garnet.300}",
+    "dangerSoft": "{color.garnet.tintNoc}",
+    "businessAccent": "{color.garnet.400}",
+    "shadow": "0 2px 10px rgba(0, 0, 0, 0.35)"
+  }
+}
