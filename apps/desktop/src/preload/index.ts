@@ -14,6 +14,15 @@ const api: NexusApi = {
   getFlags: (profileId) => ipcRenderer.invoke(IpcChannel.flagsGet, { profileId }),
   setFlag: (profileId, moduleId, enabled) =>
     ipcRenderer.invoke(IpcChannel.flagsSet, { profileId, moduleId, enabled }),
+  listTasks: (profileId) => ipcRenderer.invoke(IpcChannel.tasksList, { profileId }),
+  createTask: (profileId, task) =>
+    ipcRenderer.invoke(IpcChannel.tasksCreate, { profileId, task }),
+  updateTask: (profileId, id, changes) =>
+    ipcRenderer.invoke(IpcChannel.tasksUpdate, { profileId, id, changes }),
+  setTaskDone: (profileId, id, done) =>
+    ipcRenderer.invoke(IpcChannel.tasksSetDone, { profileId, id, done }),
+  deleteTask: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.tasksDelete, { profileId, id }),
   appInfo: () => ipcRenderer.invoke(IpcChannel.appInfo),
 };
 

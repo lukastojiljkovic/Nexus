@@ -15,6 +15,11 @@ export const IpcChannel = {
   profilesRename: "profiles:rename",
   flagsGet: "flags:get",
   flagsSet: "flags:set",
+  tasksList: "tasks:list",
+  tasksCreate: "tasks:create",
+  tasksUpdate: "tasks:update",
+  tasksSetDone: "tasks:set-done",
+  tasksDelete: "tasks:delete",
   appInfo: "app:info",
 } as const;
 
@@ -55,6 +60,79 @@ export interface ProfilesRenameRequest {
   name: string;
 }
 
+/** Closed task status domain (mirrors `@nexus/db`; redeclared so the renderer never imports DB code). */
+export type TaskStatus = "todo" | "doing" | "done";
+
+/** Closed task priority domain — the four levels of TASK-001. */
+export type TaskPriority = "none" | "low" | "medium" | "high";
+
+/**
+ * A task as seen by the renderer (mirrors the `tasks` table via the store's
+ * mapping, PRD 03). Field keys line up with a views-engine `CollectionSchema`.
+ */
+export interface Task {
+  id: string;
+  profileId: string;
+  parentId: string | null;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  done: boolean;
+  dueDate: string | null;
+  startDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+}
+
+/** Fields for a new task; only `title` is required (TASK-001). The main process revalidates each. */
+export interface NewTaskFields {
+  title: string;
+  description?: string | null;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  dueDate?: string | null;
+  startDate?: string | null;
+  parentId?: string | null;
+}
+
+/** A partial edit of a task's own fields; an omitted key is untouched, `null` clears it. */
+export interface TaskFieldChanges {
+  title?: string;
+  description?: string | null;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  dueDate?: string | null;
+  startDate?: string | null;
+}
+
+export interface TasksListRequest {
+  profileId: string;
+}
+
+export interface TasksCreateRequest {
+  profileId: string;
+  task: NewTaskFields;
+}
+
+export interface TasksUpdateRequest {
+  profileId: string;
+  id: string;
+  changes: TaskFieldChanges;
+}
+
+export interface TasksSetDoneRequest {
+  profileId: string;
+  id: string;
+  done: boolean;
+}
+
+export interface TasksDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
 /** Runtime and environment facts, proving the main-process path end to end. */
 export interface AppInfo {
   name: string;
@@ -78,5 +156,10 @@ export interface NexusApi {
   renameProfile(id: string, name: string): Promise<void>;
   getFlags(profileId: string): Promise<FlagState>;
   setFlag(profileId: string, moduleId: string, enabled: boolean): Promise<void>;
+  listTasks(profileId: string): Promise<Task[]>;
+  createTask(profileId: string, task: NewTaskFields): Promise<Task>;
+  updateTask(profileId: string, id: string, changes: TaskFieldChanges): Promise<Task>;
+  setTaskDone(profileId: string, id: string, done: boolean): Promise<Task>;
+  deleteTask(profileId: string, id: string): Promise<void>;
   appInfo(): Promise<AppInfo>;
 }

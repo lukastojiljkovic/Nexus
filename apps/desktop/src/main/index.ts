@@ -4,8 +4,16 @@ import type { IpcMainInvokeEvent } from "electron";
 import {
   openDatabase,
   SqliteFlagStore,
+  TaskStore,
+  TASK_PRIORITIES,
+  TASK_STATUSES,
   uuidv7,
+  type CreateTaskInput,
   type NexusDatabase,
+  type Task,
+  type TaskPriority,
+  type TaskStatus,
+  type UpdateTaskFields,
 } from "@nexus/db";
 import {
   IpcChannel,
@@ -136,9 +144,71 @@ function asProfileName(value: unknown, field: string): string {
   return trimmed;
 }
 
+/** A nullable optional string field: either a string or an explicit null. */
+function asNullableString(value: unknown, field: string): string | null {
+  if (value === null || typeof value === "string") return value;
+  throw new Error(`Invalid IPC payload: "${field}" must be a string or null.`);
+}
+
+function asTaskStatus(value: unknown, field: string): TaskStatus {
+  if (typeof value === "string" && (TASK_STATUSES as readonly string[]).includes(value)) {
+    return value as TaskStatus;
+  }
+  throw new Error(`Invalid IPC payload: "${field}" is not a valid task status.`);
+}
+
+function asTaskPriority(value: unknown, field: string): TaskPriority {
+  if (typeof value === "string" && (TASK_PRIORITIES as readonly string[]).includes(value)) {
+    return value as TaskPriority;
+  }
+  throw new Error(`Invalid IPC payload: "${field}" is not a valid task priority.`);
+}
+
+/** Validates a `NewTaskFields` payload into a store input; only present keys are carried. */
+function asNewTaskInput(value: unknown): CreateTaskInput {
+  const task = asRecord(value);
+  const input: CreateTaskInput = { title: asNonEmptyString(task.title, "task.title") };
+  if (task.description !== undefined) {
+    input.description = asNullableString(task.description, "task.description");
+  }
+  if (task.status !== undefined) input.status = asTaskStatus(task.status, "task.status");
+  if (task.priority !== undefined) input.priority = asTaskPriority(task.priority, "task.priority");
+  if (task.dueDate !== undefined) input.dueDate = asNullableString(task.dueDate, "task.dueDate");
+  if (task.startDate !== undefined) {
+    input.startDate = asNullableString(task.startDate, "task.startDate");
+  }
+  if (task.parentId !== undefined) input.parentId = asNullableString(task.parentId, "task.parentId");
+  return input;
+}
+
+/** Validates a `TaskFieldChanges` payload into a store patch; an omitted key stays omitted. */
+function asTaskFieldChanges(value: unknown): UpdateTaskFields {
+  const changes = asRecord(value);
+  const patch: UpdateTaskFields = {};
+  if (changes.title !== undefined) patch.title = asNonEmptyString(changes.title, "changes.title");
+  if (changes.description !== undefined) {
+    patch.description = asNullableString(changes.description, "changes.description");
+  }
+  if (changes.status !== undefined) patch.status = asTaskStatus(changes.status, "changes.status");
+  if (changes.priority !== undefined) {
+    patch.priority = asTaskPriority(changes.priority, "changes.priority");
+  }
+  if (changes.dueDate !== undefined) {
+    patch.dueDate = asNullableString(changes.dueDate, "changes.dueDate");
+  }
+  if (changes.startDate !== undefined) {
+    patch.startDate = asNullableString(changes.startDate, "changes.startDate");
+  }
+  return patch;
+}
+
 function requireDb(): NexusDatabase {
   if (!db) throw new Error("Database is not open.");
   return db;
+}
+
+function taskStore(profileId: string): TaskStore {
+  return new TaskStore(requireDb().raw, profileId);
 }
 
 function registerIpc(): void {
@@ -168,6 +238,44 @@ function registerIpc(): void {
     const moduleId = asNonEmptyString(body.moduleId, "moduleId");
     const enabled = asBoolean(body.enabled, "enabled");
     await new SqliteFlagStore(requireDb().raw, profileId).set(moduleId, enabled);
+  });
+
+  ipcMain.handle(IpcChannel.tasksList, (event, payload): Task[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return taskStore(profileId).listActive();
+  });
+
+  ipcMain.handle(IpcChannel.tasksCreate, (event, payload): Task => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return taskStore(profileId).create(asNewTaskInput(body.task));
+  });
+
+  ipcMain.handle(IpcChannel.tasksUpdate, (event, payload): Task => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return taskStore(profileId).update(id, asTaskFieldChanges(body.changes));
+  });
+
+  ipcMain.handle(IpcChannel.tasksSetDone, (event, payload): Task => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const done = asBoolean(body.done, "done");
+    return taskStore(profileId).setDone(id, done);
+  });
+
+  ipcMain.handle(IpcChannel.tasksDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    taskStore(profileId).softDelete(id);
   });
 
   ipcMain.handle(IpcChannel.appInfo, (event): AppInfo => {
