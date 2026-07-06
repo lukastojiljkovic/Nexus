@@ -1,0 +1,127 @@
+/* Desktop shell chrome only — component styling lives in @nexus/ui. Tokens
+   exclusively; raw color values are forbidden outside @nexus/tokens. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 0;
+}
+
+/* Topbar -------------------------------------------------------------- */
+.app__topbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 44px;
+  padding: 0 var(--nx-space-4);
+  border-bottom: 1px solid var(--nx-border);
+  background: var(--nx-surface);
+}
+.app__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.app__brand-mark {
+  color: var(--nx-accent);
+  font-size: var(--nx-font-size-title);
+  line-height: 1;
+}
+.app__brand-name {
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-normal);
+}
+
+/* Body: sidebar + main ----------------------------------------------- */
+.app__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.app__sidebar {
+  flex: none;
+  width: 220px;
+  padding: var(--nx-space-4) var(--nx-space-3);
+  border-right: 1px solid var(--nx-border);
+  background: var(--nx-surface);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.app__main {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: var(--nx-space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+}
+
+/* Diagnostics -------------------------------------------------------- */
+.app__facts {
+  margin: 0;
+  display: grid;
+  gap: var(--nx-space-2);
+}
+.app__facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--nx-space-4);
+  font-size: var(--nx-font-size-body-sm);
+}
+.app__facts dt {
+  color: var(--nx-text-muted);
+}
+.app__facts dd {
+  margin: 0;
+  font-family: var(--nx-font-family-mono);
+  text-align: right;
+}
+.app__path {
+  word-break: break-all;
+}
+.app__muted {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+/* Profiles ----------------------------------------------------------- */
+.app__profiles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.app__profile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+}
+.app__profile-kind {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-label);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+}

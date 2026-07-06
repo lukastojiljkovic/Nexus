@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "esModuleInterop": true
+  },
+  "include": ["src/main", "src/preload", "src/shared", "electron.vite.config.ts"]
+}
