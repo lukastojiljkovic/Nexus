@@ -23,6 +23,12 @@ export interface KanbanViewProps<T extends Record<string, unknown>> {
   onMove: (item: T, patch: Record<string, string | null>) => void;
   /** Column title for the trailing bucket of items without a known groupBy value. */
   ungroupedTitle?: string;
+  /**
+   * Maps a column's groupBy value to a display title (labels are presentation;
+   * the engine groups by value). Identity by default, so callers with
+   * human-ready option values need not pass it.
+   */
+  columnTitle?: (value: string) => string;
   /** Stable React key per item; falls back to the render index. */
   itemKey?: (item: T) => string | number;
 }
@@ -47,6 +53,7 @@ export function KanbanView<T extends Record<string, unknown>>({
   renderCard,
   onMove,
   ungroupedTitle = "—",
+  columnTitle,
   itemKey,
 }: KanbanViewProps<T>) {
   const dragged = useRef<T | null>(null);
@@ -68,6 +75,12 @@ export function KanbanView<T extends Record<string, unknown>>({
       {groups.map((group, index) => {
         if (group.value === null && group.items.length === 0) return null;
         const isDropTarget = index === dropIndex;
+        const title =
+          group.value === null
+            ? ungroupedTitle
+            : columnTitle
+              ? columnTitle(group.value)
+              : group.value;
         return (
           <div
             key={group.value ?? "__ungrouped__"}
@@ -95,7 +108,7 @@ export function KanbanView<T extends Record<string, unknown>>({
               finishDrag();
             }}
           >
-            <KanbanColumn title={group.value ?? ungroupedTitle} count={group.items.length}>
+            <KanbanColumn title={title} count={group.items.length}>
               {group.items.map((item, itemIndex) => (
                 <div
                   key={itemKey ? itemKey(item) : itemIndex}
