@@ -34,6 +34,19 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.eventsDelete, { profileId, id }),
   restoreEvent: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.eventsRestore, { profileId, id }),
+  listDocuments: (profileId) => ipcRenderer.invoke(IpcChannel.documentsList, { profileId }),
+  createDocument: (profileId, document) =>
+    ipcRenderer.invoke(IpcChannel.documentsCreate, { profileId, document }),
+  updateDocument: (profileId, id, changes) =>
+    ipcRenderer.invoke(IpcChannel.documentsUpdate, { profileId, id, changes }),
+  deleteDocument: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.documentsDelete, { profileId, id }),
+  restoreDocument: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.documentsRestore, { profileId, id }),
+  renewDocument: (profileId, id, newExpiryDate) =>
+    ipcRenderer.invoke(IpcChannel.documentsRenew, { profileId, id, newExpiryDate }),
+  listDocumentRenewals: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.documentsRenewals, { profileId, id }),
   appInfo: () => ipcRenderer.invoke(IpcChannel.appInfo),
 };
 

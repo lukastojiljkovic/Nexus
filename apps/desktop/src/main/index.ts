@@ -2,6 +2,8 @@ import { join } from "node:path";
 import { app, BrowserWindow, ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import {
+  DOCUMENT_TYPES,
+  DocumentStore,
   EventStore,
   openDatabase,
   SqliteFlagStore,
@@ -9,13 +11,18 @@ import {
   TASK_PRIORITIES,
   TASK_STATUSES,
   uuidv7,
+  type CreateDocumentInput,
   type CreateEventInput,
   type CreateTaskInput,
+  type DocumentRenewal,
+  type DocumentType,
   type Event,
   type NexusDatabase,
   type Task,
   type TaskPriority,
   type TaskStatus,
+  type TrackedDocument,
+  type UpdateDocumentFields,
   type UpdateEventFields,
   type UpdateTaskFields,
 } from "@nexus/db";
@@ -253,6 +260,63 @@ function asEventFieldChanges(value: unknown): UpdateEventFields {
   return patch;
 }
 
+function asDocumentType(value: unknown, field: string): DocumentType {
+  if (typeof value === "string" && (DOCUMENT_TYPES as readonly string[]).includes(value)) {
+    return value as DocumentType;
+  }
+  throw new Error(`Invalid IPC payload: "${field}" is not a valid document type.`);
+}
+
+/** A reminder ladder: an array of non-negative integer day-counts (structural check only). */
+function asReminderOffsets(value: unknown, field: string): number[] {
+  if (
+    !Array.isArray(value) ||
+    !value.every((n) => typeof n === "number" && Number.isInteger(n) && n >= 0)
+  ) {
+    throw new Error(`Invalid IPC payload: "${field}" must be an array of non-negative integers.`);
+  }
+  return value as number[];
+}
+
+/**
+ * Validates a `NewDocumentFields` payload into a store input; only present keys
+ * are carried. Structural checks only — semantic date/ladder validation stays in
+ * the store, the same division of labour as the event validators.
+ */
+function asNewDocumentInput(value: unknown): CreateDocumentInput {
+  const document = asRecord(value);
+  const input: CreateDocumentInput = {
+    docType: asDocumentType(document.docType, "document.docType"),
+    label: asNonEmptyString(document.label, "document.label"),
+    expiryDate: asNonEmptyString(document.expiryDate, "document.expiryDate"),
+  };
+  if (document.reminderOffsets !== undefined) {
+    input.reminderOffsets = asReminderOffsets(document.reminderOffsets, "document.reminderOffsets");
+  }
+  if (document.notes !== undefined) {
+    input.notes = asNullableString(document.notes, "document.notes");
+  }
+  return input;
+}
+
+/** Validates a `DocumentFieldChanges` payload into a store patch; an omitted key stays omitted. */
+function asDocumentFieldChanges(value: unknown): UpdateDocumentFields {
+  const changes = asRecord(value);
+  const patch: UpdateDocumentFields = {};
+  if (changes.docType !== undefined) {
+    patch.docType = asDocumentType(changes.docType, "changes.docType");
+  }
+  if (changes.label !== undefined) patch.label = asNonEmptyString(changes.label, "changes.label");
+  if (changes.expiryDate !== undefined) {
+    patch.expiryDate = asNonEmptyString(changes.expiryDate, "changes.expiryDate");
+  }
+  if (changes.reminderOffsets !== undefined) {
+    patch.reminderOffsets = asReminderOffsets(changes.reminderOffsets, "changes.reminderOffsets");
+  }
+  if (changes.notes !== undefined) patch.notes = asNullableString(changes.notes, "changes.notes");
+  return patch;
+}
+
 function requireDb(): NexusDatabase {
   if (!db) throw new Error("Database is not open.");
   return db;
@@ -264,6 +328,10 @@ function taskStore(profileId: string): TaskStore {
 
 function eventStore(profileId: string): EventStore {
   return new EventStore(requireDb().raw, profileId);
+}
+
+function documentStore(profileId: string): DocumentStore {
+  return new DocumentStore(requireDb().raw, profileId);
 }
 
 function registerIpc(): void {
@@ -376,6 +444,60 @@ function registerIpc(): void {
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const id = asNonEmptyString(body.id, "id");
     eventStore(profileId).restore(id);
+  });
+
+  ipcMain.handle(IpcChannel.documentsList, (event, payload): TrackedDocument[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return documentStore(profileId).listActive();
+  });
+
+  ipcMain.handle(IpcChannel.documentsCreate, (event, payload): TrackedDocument => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return documentStore(profileId).create(asNewDocumentInput(body.document));
+  });
+
+  ipcMain.handle(IpcChannel.documentsUpdate, (event, payload): TrackedDocument => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return documentStore(profileId).update(id, asDocumentFieldChanges(body.changes));
+  });
+
+  ipcMain.handle(IpcChannel.documentsDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    documentStore(profileId).softDelete(id);
+  });
+
+  ipcMain.handle(IpcChannel.documentsRestore, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    documentStore(profileId).restore(id);
+  });
+
+  ipcMain.handle(IpcChannel.documentsRenew, (event, payload): TrackedDocument => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const newExpiryDate = asNonEmptyString(body.newExpiryDate, "newExpiryDate");
+    return documentStore(profileId).renew(id, newExpiryDate);
+  });
+
+  ipcMain.handle(IpcChannel.documentsRenewals, (event, payload): DocumentRenewal[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return documentStore(profileId).listRenewals(id);
   });
 
   ipcMain.handle(IpcChannel.appInfo, (event): AppInfo => {

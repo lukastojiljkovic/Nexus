@@ -26,6 +26,13 @@ export const IpcChannel = {
   eventsUpdate: "events:update",
   eventsDelete: "events:delete",
   eventsRestore: "events:restore",
+  documentsList: "documents:list",
+  documentsCreate: "documents:create",
+  documentsUpdate: "documents:update",
+  documentsDelete: "documents:delete",
+  documentsRestore: "documents:restore",
+  documentsRenew: "documents:renew",
+  documentsRenewals: "documents:renewals",
   appInfo: "app:info",
 } as const;
 
@@ -211,6 +218,102 @@ export interface EventsRestoreRequest {
   id: string;
 }
 
+/** Closed document-type domain (mirrors `@nexus/db`; redeclared so the renderer never imports DB code). */
+export type DocumentType =
+  | "licna_karta"
+  | "pasos"
+  | "vozacka"
+  | "registracija"
+  | "kartica"
+  | "polisa"
+  | "custom";
+
+/** Derived expiry state: on time, inside the reminder window, or already expired. */
+export type DocumentStatus = "ok" | "uskoro" | "istekao";
+
+/**
+ * A tracked document as seen by the renderer (mirrors the `tracked_documents`
+ * table via the store's mapping, CAL-004). `status` and `daysUntilExpiry` are
+ * derived at read time. Redeclared here so the renderer never imports DB code.
+ */
+export interface TrackedDocument {
+  id: string;
+  profileId: string;
+  docType: DocumentType;
+  label: string;
+  expiryDate: string;
+  reminderOffsets: number[];
+  notes: string | null;
+  status: DocumentStatus;
+  daysUntilExpiry: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A single renewal record — the expiry that was replaced and when (CAL-004 history). */
+export interface DocumentRenewal {
+  id: string;
+  documentId: string;
+  previousExpiry: string;
+  renewedAt: string;
+}
+
+/** Fields for a new document; `reminderOffsets` defaults from the type's ladder. The main process revalidates each. */
+export interface NewDocumentFields {
+  docType: DocumentType;
+  label: string;
+  expiryDate: string;
+  reminderOffsets?: number[];
+  notes?: string | null;
+}
+
+/** A partial edit of a document's own fields; an omitted key is untouched, `null` clears `notes`. */
+export interface DocumentFieldChanges {
+  docType?: DocumentType;
+  label?: string;
+  expiryDate?: string;
+  reminderOffsets?: number[];
+  notes?: string | null;
+}
+
+export interface DocumentsListRequest {
+  profileId: string;
+}
+
+export interface DocumentsCreateRequest {
+  profileId: string;
+  document: NewDocumentFields;
+}
+
+export interface DocumentsUpdateRequest {
+  profileId: string;
+  id: string;
+  changes: DocumentFieldChanges;
+}
+
+export interface DocumentsDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
+/** Undo of a soft delete: restores a previously deleted document. */
+export interface DocumentsRestoreRequest {
+  profileId: string;
+  id: string;
+}
+
+/** Moves a document's expiry forward, recording the previous expiry in history (CAL-004). */
+export interface DocumentsRenewRequest {
+  profileId: string;
+  id: string;
+  newExpiryDate: string;
+}
+
+export interface DocumentsRenewalsRequest {
+  profileId: string;
+  id: string;
+}
+
 /** Runtime and environment facts, proving the main-process path end to end. */
 export interface AppInfo {
   name: string;
@@ -245,5 +348,16 @@ export interface NexusApi {
   updateEvent(profileId: string, id: string, changes: EventFieldChanges): Promise<Event>;
   deleteEvent(profileId: string, id: string): Promise<void>;
   restoreEvent(profileId: string, id: string): Promise<void>;
+  listDocuments(profileId: string): Promise<TrackedDocument[]>;
+  createDocument(profileId: string, doc: NewDocumentFields): Promise<TrackedDocument>;
+  updateDocument(
+    profileId: string,
+    id: string,
+    changes: DocumentFieldChanges,
+  ): Promise<TrackedDocument>;
+  deleteDocument(profileId: string, id: string): Promise<void>;
+  restoreDocument(profileId: string, id: string): Promise<void>;
+  renewDocument(profileId: string, id: string, newExpiryDate: string): Promise<TrackedDocument>;
+  listDocumentRenewals(profileId: string, id: string): Promise<DocumentRenewal[]>;
   appInfo(): Promise<AppInfo>;
 }
