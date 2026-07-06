@@ -269,3 +269,118 @@ body {
   background: var(--nx-danger-soft);
   color: var(--nx-danger);
 }
+
+/* Calendar (CAL page) ------------------------------------------------- */
+.cal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+
+/* Event form (create + edit) — one wrapping row; the title takes the slack. */
+.cal__form {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+.cal__title {
+  flex: 1;
+  min-width: 240px;
+}
+/* Edit-mode cancel: a quiet ghost beside the primary submit (text feel). */
+.cal__cancel.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.cal__cancel.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
+}
+
+/* Delete + undo: inline, token-styled undo bar (mirrors the tasks pattern). */
+.cal__undo {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.cal__undo-text {
+  flex: 1;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+.cal__undo-dismiss.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.cal__undo-dismiss.nx-button:hover {
+  background: var(--nx-surface);
+  color: var(--nx-text);
+}
+
+/* Agenda: day sections in ascending order, each a quiet label over its rows. */
+.cal__agenda {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+}
+.cal__day {
+  display: flex;
+  flex-direction: column;
+}
+.cal__day-header {
+  margin: 0 0 var(--nx-space-1);
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+
+/* Row: a fixed time gutter, the title, and an optional location chip. */
+.cal__time {
+  min-width: 52px;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.cal__event {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+.cal__event-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Trailing: edit + delete affordances, quiet until hovered (tasks pattern). */
+.cal__row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.cal__edit.nx-button,
+.cal__delete.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.cal__edit.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.cal__delete.nx-button:hover {
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+}

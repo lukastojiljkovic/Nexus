@@ -4,6 +4,7 @@ import type { ThemeName } from "@nexus/tokens";
 import type { AppInfo, Profile } from "../../shared/ipc.js";
 import { Onboarding } from "./Onboarding.js";
 import { TasksPage } from "./TasksPage.js";
+import { CalendarPage } from "./CalendarPage.js";
 import { createModuleRegistry } from "./modules.js";
 import { persistTheme, readStoredTheme } from "./theme.js";
 import { strings } from "./strings.js";
@@ -134,6 +135,8 @@ export function App() {
             <DashboardPage info={info} />
           ) : activeId === "tasks" && activeProfile ? (
             <TasksPage profileId={activeProfile.id} />
+          ) : activeId === "calendar" && activeProfile ? (
+            <CalendarPage profileId={activeProfile.id} />
           ) : (
             <ModulePage id={activeId} />
           )}

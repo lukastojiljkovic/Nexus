@@ -77,6 +77,27 @@ export const strings = {
     },
   },
 
+  calendar: {
+    titlePlaceholder: "Naziv događaja",
+    titleLabel: "Naziv događaja",
+    dateLabel: "Datum",
+    timeLabel: "Vreme",
+    locationPlaceholder: "Mesto (opciono)",
+    locationLabel: "Mesto",
+    allDay: "Ceo dan",
+    add: "Dodaj",
+    save: "Sačuvaj",
+    cancel: "Otkaži",
+    editLabel: "Izmeni događaj",
+    deleteLabel: "Obriši događaj",
+    emptyTitle: "Nema događaja",
+    emptyDescription: "Dodaj prvi događaj u formi iznad — naziv i datum su dovoljni.",
+    loadError: "Događaji se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
+    deletedNotice: "Događaj obrisan",
+    undo: "Vrati",
+    dismiss: "Zatvori",
+  },
+
   diagnostics: {
     title: "Stanje sistema",
     version: "Verzija",
