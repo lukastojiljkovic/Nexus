@@ -12,6 +12,7 @@
 /** The only channels the preload bridge and the main handlers agree on. */
 export const IpcChannel = {
   profilesList: "profiles:list",
+  profilesRename: "profiles:rename",
   flagsGet: "flags:get",
   flagsSet: "flags:set",
   appInfo: "app:info",
@@ -44,6 +45,16 @@ export interface FlagsSetRequest {
   enabled: boolean;
 }
 
+/**
+ * Renames an existing profile (ONB lite: naming the first-run profile). The
+ * main process re-trims and re-validates the name (1–80 chars after trimming)
+ * and rejects unknown profile ids — renderer-side checks are UX only.
+ */
+export interface ProfilesRenameRequest {
+  id: string;
+  name: string;
+}
+
 /** Runtime and environment facts, proving the main-process path end to end. */
 export interface AppInfo {
   name: string;
@@ -64,6 +75,7 @@ export interface AppInfo {
  */
 export interface NexusApi {
   listProfiles(): Promise<Profile[]>;
+  renameProfile(id: string, name: string): Promise<void>;
   getFlags(profileId: string): Promise<FlagState>;
   setFlag(profileId: string, moduleId: string, enabled: boolean): Promise<void>;
   appInfo(): Promise<AppInfo>;

@@ -49,6 +49,16 @@ function listProfiles(database: NexusDatabase): Profile[] {
   }));
 }
 
+/** Renames an existing profile; throws when the id matches no row (ONB lite). */
+function renameProfile(database: NexusDatabase, id: string, name: string): void {
+  const result = database.raw
+    .prepare("UPDATE profiles SET name = ? WHERE id = ?")
+    .run(name, id);
+  if (result.changes === 0) {
+    throw new Error("Invalid IPC payload: unknown profile id.");
+  }
+}
+
 /**
  * First-run seeding: create exactly one personal profile if the table is empty.
  * The name is intentionally blank — profile naming belongs to onboarding (ONB)
@@ -112,6 +122,20 @@ function asBoolean(value: unknown, field: string): boolean {
   return value;
 }
 
+/** Profile display name: string, 1–80 chars after trimming; the trimmed value is stored. */
+function asProfileName(value: unknown, field: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`Invalid IPC payload: "${field}" must be a string.`);
+  }
+  const trimmed = value.trim();
+  if (trimmed.length < 1 || trimmed.length > 80) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be 1-80 characters after trimming.`,
+    );
+  }
+  return trimmed;
+}
+
 function requireDb(): NexusDatabase {
   if (!db) throw new Error("Database is not open.");
   return db;
@@ -121,6 +145,14 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.profilesList, (event): Profile[] => {
     assertTrustedSender(event);
     return listProfiles(requireDb());
+  });
+
+  ipcMain.handle(IpcChannel.profilesRename, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const id = asNonEmptyString(body.id, "id");
+    const name = asProfileName(body.name, "name");
+    renameProfile(requireDb(), id, name);
   });
 
   ipcMain.handle(IpcChannel.flagsGet, (event, payload): Promise<FlagState> => {

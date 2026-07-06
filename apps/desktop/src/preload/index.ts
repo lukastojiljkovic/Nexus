@@ -9,6 +9,8 @@ import { IpcChannel, type NexusApi } from "../shared/ipc.js";
  */
 const api: NexusApi = {
   listProfiles: () => ipcRenderer.invoke(IpcChannel.profilesList),
+  renameProfile: (id, name) =>
+    ipcRenderer.invoke(IpcChannel.profilesRename, { id, name }),
   getFlags: (profileId) => ipcRenderer.invoke(IpcChannel.flagsGet, { profileId }),
   setFlag: (profileId, moduleId, enabled) =>
     ipcRenderer.invoke(IpcChannel.flagsSet, { profileId, moduleId, enabled }),
