@@ -32,7 +32,7 @@ describe("migration 002 — tasks", () => {
   it("creates the tasks table and stamps the latest user_version on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("tasks");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(4);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(5);
     db.close();
   });
 
@@ -43,7 +43,7 @@ describe("migration 002 — tasks", () => {
     first.close();
 
     const second = openDatabase({ path });
-    expect(second.raw.pragma("user_version", { simple: true })).toBe(4);
+    expect(second.raw.pragma("user_version", { simple: true })).toBe(5);
     expect(tableNames(second)).toContain("tasks");
     expect(
       (second.raw.prepare("SELECT count(*) AS n FROM profiles").get() as { n: number }).n,
@@ -90,10 +90,10 @@ describe("migration 002 — tasks", () => {
 });
 
 describe("migration 003 — events", () => {
-  it("creates the events table and stamps user_version 4 on a fresh database", () => {
+  it("creates the events table and stamps user_version 5 on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("events");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(4);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(5);
     db.close();
   });
 
@@ -156,12 +156,12 @@ describe("migration 004 — documents", () => {
 
   const now = () => new Date().toISOString();
 
-  it("creates both document tables and stamps user_version 4 on a fresh database", () => {
+  it("creates both document tables and stamps user_version 5 on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     const names = tableNames(db);
     expect(names).toContain("tracked_documents");
     expect(names).toContain("document_renewals");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(4);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(5);
     db.close();
   });
 
@@ -213,6 +213,97 @@ describe("migration 004 — documents", () => {
     db.raw.prepare("DELETE FROM tracked_documents WHERE id = ?").run("d1");
     expect(
       (db.raw.prepare("SELECT count(*) AS n FROM document_renewals").get() as { n: number }).n,
+    ).toBe(0);
+    db.close();
+  });
+});
+
+describe("migration 005 — study", () => {
+  const now = () => new Date().toISOString();
+
+  const insertSubject = (db: NexusDatabase, id: string, profileId: string, color: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO subjects (id, profile_id, name, color, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, profileId, "x", color, now(), now());
+
+  const insertExam = (db: NexusDatabase, id: string, profileId: string, subjectId: string, examType: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO exams (id, profile_id, subject_id, exam_type, exam_date, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, profileId, subjectId, examType, "2026-09-01", now(), now());
+
+  it("creates both study tables and stamps user_version 5 on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    const names = tableNames(db);
+    expect(names).toContain("subjects");
+    expect(names).toContain("exams");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(5);
+    db.close();
+  });
+
+  it("rejects a subject colour outside the closed set with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-color.db") });
+    insertProfile(db, "p1");
+    // an unlisted colour -> rejected by the CHECK.
+    expect(() => insertSubject(db, "s1", "p1", "teal")).toThrow();
+    // an enumerated colour is accepted.
+    expect(() => insertSubject(db, "s2", "p1", "burgundy")).not.toThrow();
+    db.close();
+  });
+
+  it("rejects an exam_type outside the closed set with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-type.db") });
+    insertProfile(db, "p1");
+    insertSubject(db, "s1", "p1", "jade");
+    // an unlisted type -> rejected by the CHECK.
+    expect(() => insertExam(db, "e1", "p1", "s1", "esej")).toThrow();
+    // an enumerated type is accepted.
+    expect(() => insertExam(db, "e2", "p1", "s1", "pismeni")).not.toThrow();
+    db.close();
+  });
+
+  it("creates the subjects and exams partial indexes", () => {
+    const db = openDatabase({ path: join(dir, "index.db") });
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("subjects_profile_active");
+    expect(indexes).toContain("exams_profile_active");
+    db.close();
+  });
+
+  it("cascades subject and exam deletion when the owning profile is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade-profile.db") });
+    insertProfile(db, "p1");
+    insertSubject(db, "s1", "p1", "jade");
+    insertExam(db, "e1", "p1", "s1", "pismeni");
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM subjects").get() as { n: number }).n,
+    ).toBe(0);
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM exams").get() as { n: number }).n,
+    ).toBe(0);
+    db.close();
+  });
+
+  it("cascades exam deletion when the owning subject is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade-subject.db") });
+    insertProfile(db, "p1");
+    insertSubject(db, "s1", "p1", "jade");
+    insertExam(db, "e1", "p1", "s1", "pismeni");
+
+    db.raw.prepare("DELETE FROM subjects WHERE id = ?").run("s1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM exams").get() as { n: number }).n,
     ).toBe(0);
     db.close();
   });

@@ -71,3 +71,36 @@ export class DocumentValidationError extends DatabaseError {}
  * invisible to a store scoped to another.
  */
 export class DocumentNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a subject write is rejected at the store boundary because its input
+ * breaks a domain rule the UI is expected to have caught already — an empty name
+ * or a colour outside the closed palette (STUDY). The store revalidates because
+ * renderer input is untrusted (SEC-EL-02).
+ */
+export class SubjectValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a subject operation targets an id that is not an active row in the
+ * store's own profile — unknown, soft-deleted (for a mutation), or owned by
+ * another profile. Surfacing this uniformly keeps one profile's subjects
+ * invisible to a store scoped to another.
+ */
+export class SubjectNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when an exam write is rejected at the store boundary because its input
+ * breaks a domain rule the UI is expected to have caught already — an unknown
+ * exam type, a malformed exam date, or a `subjectId` that does not resolve to a
+ * subject in this profile (STUDY). The store revalidates because renderer input
+ * is untrusted (SEC-EL-02).
+ */
+export class ExamValidationError extends DatabaseError {}
+
+/**
+ * Thrown when an exam operation targets an id that is not an active row in the
+ * store's own profile — unknown, soft-deleted (for a mutation), or owned by
+ * another profile. Surfacing this uniformly keeps one profile's exams invisible
+ * to a store scoped to another.
+ */
+export class ExamNotFoundError extends DatabaseError {}

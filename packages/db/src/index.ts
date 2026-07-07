@@ -9,7 +9,11 @@ export {
   DocumentValidationError,
   EventNotFoundError,
   EventValidationError,
+  ExamNotFoundError,
+  ExamValidationError,
   SchemaVersionError,
+  SubjectNotFoundError,
+  SubjectValidationError,
   TaskNotFoundError,
   TaskValidationError,
 } from "./errors.js";
@@ -44,5 +48,21 @@ export type {
   TrackedDocument,
   UpdateDocumentFields,
 } from "./documents/documentStore.js";
+
+export { SubjectStore, SUBJECT_COLORS } from "./study/subjectStore.js";
+export type {
+  CreateSubjectInput,
+  Subject,
+  SubjectColor,
+  UpdateSubjectFields,
+} from "./study/subjectStore.js";
+
+export { ExamStore, EXAM_TYPES } from "./study/examStore.js";
+export type {
+  CreateExamInput,
+  Exam,
+  ExamType,
+  UpdateExamFields,
+} from "./study/examStore.js";
 
 export { uuidv7 } from "./ids.js";
