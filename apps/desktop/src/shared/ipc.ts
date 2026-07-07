@@ -33,6 +33,16 @@ export const IpcChannel = {
   documentsRestore: "documents:restore",
   documentsRenew: "documents:renew",
   documentsRenewals: "documents:renewals",
+  subjectsList: "subjects:list",
+  subjectsCreate: "subjects:create",
+  subjectsUpdate: "subjects:update",
+  subjectsDelete: "subjects:delete",
+  subjectsRestore: "subjects:restore",
+  examsList: "exams:list",
+  examsCreate: "exams:create",
+  examsUpdate: "exams:update",
+  examsDelete: "exams:delete",
+  examsRestore: "exams:restore",
   appInfo: "app:info",
 } as const;
 
@@ -314,6 +324,127 @@ export interface DocumentsRenewalsRequest {
   id: string;
 }
 
+/** Closed subject-colour domain (mirrors `@nexus/db`; redeclared so the renderer never imports DB code). */
+export type SubjectColor = "jade" | "gold" | "bronze" | "burgundy" | "crimson" | "graphite";
+
+/**
+ * A subject as seen by the renderer (mirrors the `subjects` table via the store's
+ * mapping, STUDY). `archived` subjects stay in the list. Redeclared here so the
+ * renderer never imports DB code.
+ */
+export interface Subject {
+  id: string;
+  profileId: string;
+  name: string;
+  color: SubjectColor;
+  semester: string | null;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Fields for a new subject; only `name` is required, colour defaults to 'jade'. The main process revalidates each. */
+export interface NewSubjectFields {
+  name: string;
+  color?: SubjectColor;
+  semester?: string | null;
+}
+
+/** A partial edit of a subject's own fields; an omitted key is untouched, `null` clears `semester`. */
+export interface SubjectFieldChanges {
+  name?: string;
+  color?: SubjectColor;
+  semester?: string | null;
+  archived?: boolean;
+}
+
+export interface SubjectsListRequest {
+  profileId: string;
+}
+
+export interface SubjectsCreateRequest {
+  profileId: string;
+  subject: NewSubjectFields;
+}
+
+export interface SubjectsUpdateRequest {
+  profileId: string;
+  id: string;
+  changes: SubjectFieldChanges;
+}
+
+export interface SubjectsDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
+/** Undo of a soft delete: restores a previously deleted subject. */
+export interface SubjectsRestoreRequest {
+  profileId: string;
+  id: string;
+}
+
+/** Closed exam-type domain (mirrors `@nexus/db`; redeclared so the renderer never imports DB code). */
+export type ExamType = "pismeni" | "usmeni" | "kolokvijum";
+
+/**
+ * An exam as seen by the renderer (mirrors the `exams` table via the store's
+ * mapping, STUDY). Its subject is carried by id. Redeclared here so the renderer
+ * never imports DB code.
+ */
+export interface Exam {
+  id: string;
+  profileId: string;
+  subjectId: string;
+  examType: ExamType;
+  examDate: string;
+  scope: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Fields for a new exam; `subjectId`, `examType` and `examDate` are required. The main process revalidates each. */
+export interface NewExamFields {
+  subjectId: string;
+  examType: ExamType;
+  examDate: string;
+  scope?: string | null;
+}
+
+/** A partial edit of an exam's own fields; an omitted key is untouched, `null` clears `scope`. */
+export interface ExamFieldChanges {
+  subjectId?: string;
+  examType?: ExamType;
+  examDate?: string;
+  scope?: string | null;
+}
+
+export interface ExamsListRequest {
+  profileId: string;
+}
+
+export interface ExamsCreateRequest {
+  profileId: string;
+  exam: NewExamFields;
+}
+
+export interface ExamsUpdateRequest {
+  profileId: string;
+  id: string;
+  changes: ExamFieldChanges;
+}
+
+export interface ExamsDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
+/** Undo of a soft delete: restores a previously deleted exam. */
+export interface ExamsRestoreRequest {
+  profileId: string;
+  id: string;
+}
+
 /** Runtime and environment facts, proving the main-process path end to end. */
 export interface AppInfo {
   name: string;
@@ -359,5 +490,15 @@ export interface NexusApi {
   restoreDocument(profileId: string, id: string): Promise<void>;
   renewDocument(profileId: string, id: string, newExpiryDate: string): Promise<TrackedDocument>;
   listDocumentRenewals(profileId: string, id: string): Promise<DocumentRenewal[]>;
+  listSubjects(profileId: string): Promise<Subject[]>;
+  createSubject(profileId: string, subject: NewSubjectFields): Promise<Subject>;
+  updateSubject(profileId: string, id: string, changes: SubjectFieldChanges): Promise<Subject>;
+  deleteSubject(profileId: string, id: string): Promise<void>;
+  restoreSubject(profileId: string, id: string): Promise<void>;
+  listExams(profileId: string): Promise<Exam[]>;
+  createExam(profileId: string, exam: NewExamFields): Promise<Exam>;
+  updateExam(profileId: string, id: string, changes: ExamFieldChanges): Promise<Exam>;
+  deleteExam(profileId: string, id: string): Promise<void>;
+  restoreExam(profileId: string, id: string): Promise<void>;
   appInfo(): Promise<AppInfo>;
 }

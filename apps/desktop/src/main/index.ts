@@ -5,25 +5,37 @@ import {
   DOCUMENT_TYPES,
   DocumentStore,
   EventStore,
+  EXAM_TYPES,
+  ExamStore,
   openDatabase,
   SqliteFlagStore,
+  SUBJECT_COLORS,
+  SubjectStore,
   TaskStore,
   TASK_PRIORITIES,
   TASK_STATUSES,
   uuidv7,
   type CreateDocumentInput,
   type CreateEventInput,
+  type CreateExamInput,
+  type CreateSubjectInput,
   type CreateTaskInput,
   type DocumentRenewal,
   type DocumentType,
   type Event,
+  type Exam,
+  type ExamType,
   type NexusDatabase,
+  type Subject,
+  type SubjectColor,
   type Task,
   type TaskPriority,
   type TaskStatus,
   type TrackedDocument,
   type UpdateDocumentFields,
   type UpdateEventFields,
+  type UpdateExamFields,
+  type UpdateSubjectFields,
   type UpdateTaskFields,
 } from "@nexus/db";
 import {
@@ -317,6 +329,80 @@ function asDocumentFieldChanges(value: unknown): UpdateDocumentFields {
   return patch;
 }
 
+function asSubjectColor(value: unknown, field: string): SubjectColor {
+  if (typeof value === "string" && (SUBJECT_COLORS as readonly string[]).includes(value)) {
+    return value as SubjectColor;
+  }
+  throw new Error(`Invalid IPC payload: "${field}" is not a valid subject colour.`);
+}
+
+/**
+ * Validates a `NewSubjectFields` payload into a store input; only present keys are
+ * carried. Structural checks only — the store owns the trim/enum revalidation, the
+ * same division of labour as the document validators.
+ */
+function asNewSubjectInput(value: unknown): CreateSubjectInput {
+  const subject = asRecord(value);
+  const input: CreateSubjectInput = { name: asNonEmptyString(subject.name, "subject.name") };
+  if (subject.color !== undefined) input.color = asSubjectColor(subject.color, "subject.color");
+  if (subject.semester !== undefined) {
+    input.semester = asNullableString(subject.semester, "subject.semester");
+  }
+  return input;
+}
+
+/** Validates a `SubjectFieldChanges` payload into a store patch; an omitted key stays omitted. */
+function asSubjectFieldChanges(value: unknown): UpdateSubjectFields {
+  const changes = asRecord(value);
+  const patch: UpdateSubjectFields = {};
+  if (changes.name !== undefined) patch.name = asNonEmptyString(changes.name, "changes.name");
+  if (changes.color !== undefined) patch.color = asSubjectColor(changes.color, "changes.color");
+  if (changes.semester !== undefined) {
+    patch.semester = asNullableString(changes.semester, "changes.semester");
+  }
+  if (changes.archived !== undefined) patch.archived = asBoolean(changes.archived, "changes.archived");
+  return patch;
+}
+
+function asExamType(value: unknown, field: string): ExamType {
+  if (typeof value === "string" && (EXAM_TYPES as readonly string[]).includes(value)) {
+    return value as ExamType;
+  }
+  throw new Error(`Invalid IPC payload: "${field}" is not a valid exam type.`);
+}
+
+/**
+ * Validates a `NewExamFields` payload into a store input; only present keys are
+ * carried. Structural checks only — semantic date validation and the same-profile
+ * subject-FK check stay in the store, the same division of labour as the document
+ * validators.
+ */
+function asNewExamInput(value: unknown): CreateExamInput {
+  const exam = asRecord(value);
+  const input: CreateExamInput = {
+    subjectId: asNonEmptyString(exam.subjectId, "exam.subjectId"),
+    examType: asExamType(exam.examType, "exam.examType"),
+    examDate: asNonEmptyString(exam.examDate, "exam.examDate"),
+  };
+  if (exam.scope !== undefined) input.scope = asNullableString(exam.scope, "exam.scope");
+  return input;
+}
+
+/** Validates an `ExamFieldChanges` payload into a store patch; an omitted key stays omitted. */
+function asExamFieldChanges(value: unknown): UpdateExamFields {
+  const changes = asRecord(value);
+  const patch: UpdateExamFields = {};
+  if (changes.subjectId !== undefined) {
+    patch.subjectId = asNonEmptyString(changes.subjectId, "changes.subjectId");
+  }
+  if (changes.examType !== undefined) patch.examType = asExamType(changes.examType, "changes.examType");
+  if (changes.examDate !== undefined) {
+    patch.examDate = asNonEmptyString(changes.examDate, "changes.examDate");
+  }
+  if (changes.scope !== undefined) patch.scope = asNullableString(changes.scope, "changes.scope");
+  return patch;
+}
+
 function requireDb(): NexusDatabase {
   if (!db) throw new Error("Database is not open.");
   return db;
@@ -332,6 +418,14 @@ function eventStore(profileId: string): EventStore {
 
 function documentStore(profileId: string): DocumentStore {
   return new DocumentStore(requireDb().raw, profileId);
+}
+
+function subjectStore(profileId: string): SubjectStore {
+  return new SubjectStore(requireDb().raw, profileId);
+}
+
+function examStore(profileId: string): ExamStore {
+  return new ExamStore(requireDb().raw, profileId);
 }
 
 function registerIpc(): void {
@@ -498,6 +592,80 @@ function registerIpc(): void {
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const id = asNonEmptyString(body.id, "id");
     return documentStore(profileId).listRenewals(id);
+  });
+
+  ipcMain.handle(IpcChannel.subjectsList, (event, payload): Subject[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return subjectStore(profileId).listActive();
+  });
+
+  ipcMain.handle(IpcChannel.subjectsCreate, (event, payload): Subject => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return subjectStore(profileId).create(asNewSubjectInput(body.subject));
+  });
+
+  ipcMain.handle(IpcChannel.subjectsUpdate, (event, payload): Subject => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return subjectStore(profileId).update(id, asSubjectFieldChanges(body.changes));
+  });
+
+  ipcMain.handle(IpcChannel.subjectsDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    subjectStore(profileId).softDelete(id);
+  });
+
+  ipcMain.handle(IpcChannel.subjectsRestore, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    subjectStore(profileId).restore(id);
+  });
+
+  ipcMain.handle(IpcChannel.examsList, (event, payload): Exam[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return examStore(profileId).listActive();
+  });
+
+  ipcMain.handle(IpcChannel.examsCreate, (event, payload): Exam => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return examStore(profileId).create(asNewExamInput(body.exam));
+  });
+
+  ipcMain.handle(IpcChannel.examsUpdate, (event, payload): Exam => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return examStore(profileId).update(id, asExamFieldChanges(body.changes));
+  });
+
+  ipcMain.handle(IpcChannel.examsDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    examStore(profileId).softDelete(id);
+  });
+
+  ipcMain.handle(IpcChannel.examsRestore, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    examStore(profileId).restore(id);
   });
 
   ipcMain.handle(IpcChannel.appInfo, (event): AppInfo => {

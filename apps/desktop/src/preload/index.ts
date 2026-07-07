@@ -47,6 +47,24 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.documentsRenew, { profileId, id, newExpiryDate }),
   listDocumentRenewals: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.documentsRenewals, { profileId, id }),
+  listSubjects: (profileId) => ipcRenderer.invoke(IpcChannel.subjectsList, { profileId }),
+  createSubject: (profileId, subject) =>
+    ipcRenderer.invoke(IpcChannel.subjectsCreate, { profileId, subject }),
+  updateSubject: (profileId, id, changes) =>
+    ipcRenderer.invoke(IpcChannel.subjectsUpdate, { profileId, id, changes }),
+  deleteSubject: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.subjectsDelete, { profileId, id }),
+  restoreSubject: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.subjectsRestore, { profileId, id }),
+  listExams: (profileId) => ipcRenderer.invoke(IpcChannel.examsList, { profileId }),
+  createExam: (profileId, exam) =>
+    ipcRenderer.invoke(IpcChannel.examsCreate, { profileId, exam }),
+  updateExam: (profileId, id, changes) =>
+    ipcRenderer.invoke(IpcChannel.examsUpdate, { profileId, id, changes }),
+  deleteExam: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.examsDelete, { profileId, id }),
+  restoreExam: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.examsRestore, { profileId, id }),
   appInfo: () => ipcRenderer.invoke(IpcChannel.appInfo),
 };
 
