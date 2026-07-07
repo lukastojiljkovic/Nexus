@@ -38,9 +38,30 @@ export const strings = {
   } as Record<string, string>,
 
   dashboard: {
-    emptyTitle: "Kontrolna tabla",
-    emptyDescription:
-      "Vidžeti stižu sa prvim modulima — zadaci, kalendar i plan učenja pojaviće se ovde čim budu spremni.",
+    /** Time-of-day salutations: jutro < 12h, dan 12–18h, veče ≥ 18h. */
+    greeting: {
+      jutro: "Dobro jutro",
+      dan: "Dobar dan",
+      vece: "Dobro veče",
+    },
+    /** Danas widget — today's events and tasks due today. */
+    today: {
+      title: "Danas",
+      empty: "Nema obaveza danas 🎉",
+      taskTag: "zadatak",
+    },
+    /** Predstojeći zadaci widget — the next active tasks. */
+    upcoming: {
+      title: "Predstojeći zadaci",
+      empty: "Nema aktivnih zadataka",
+    },
+    /** Dokumenta koja ističu widget — documents past the reminder threshold. */
+    expiring: {
+      title: "Dokumenta koja ističu",
+      empty: "Sva dokumenta su u redu ✅",
+    },
+    errorTitle: "Kontrolna tabla nije dostupna",
+    errorDescription: "Podaci se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
   },
 
   modulePlaceholder: {

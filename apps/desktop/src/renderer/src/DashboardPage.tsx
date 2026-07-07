@@ -1,0 +1,305 @@
+import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
+import { Card, Chip, EmptyState, ListRow } from "@nexus/ui";
+import type { AppInfo, DocumentStatus, Event, Task, TrackedDocument } from "../../shared/ipc.js";
+import { strings } from "./strings.js";
+
+// --- Formatting helpers (renderer-local, mirror the module pages) -----------
+//
+// DASH is a pure aggregation surface: it reads the same tasks/events/documents
+// the modules own and reformats them into "šta mi je danas bitno?" cards. The
+// date rules match the pages exactly — wall-clock ("today") is local, while a
+// bare calendar date (a due date, an all-day start) is treated as UTC so it does
+// not shift a day back when formatted in a negative-offset timezone.
+
+/** Local wall-clock day key "YYYY-MM-DD" — matches how the pages read "today". */
+function localDayKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/** Time-of-day salutation, personalized with the profile name when present. */
+function greeting(name: string, hour: number): string {
+  const g = strings.dashboard.greeting;
+  const salutation = hour < 12 ? g.jutro : hour < 18 ? g.dan : g.vece;
+  const trimmed = name.trim();
+  return trimmed.length > 0 ? `${salutation}, ${trimmed}` : salutation;
+}
+
+/** Row time label — "Ceo dan" for all-day, else HH:MM (mirrors CalendarPage). */
+function formatEventTime(event: Event): string {
+  if (event.allDay) return strings.calendar.allDay;
+  const date = new Date(event.startAt);
+  return Number.isNaN(date.getTime())
+    ? event.startAt
+    : new Intl.DateTimeFormat("sr-Latn", { hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+/** Compact due-date chip label — "15. jul"; UTC-parsed for the bare calendar date. */
+function formatDueDate(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime())
+    ? iso
+    : new Intl.DateTimeFormat("sr-Latn", { day: "2-digit", month: "short", timeZone: "UTC" }).format(
+        date,
+      );
+}
+
+// Status → Chip variant, reusing DocumentsPanel's mapping: on time reads as data,
+// the reminder window as accent, an expired document as danger.
+const STATUS_VARIANT: Record<DocumentStatus, "data" | "accent" | "danger"> = {
+  ok: "data",
+  uskoro: "accent",
+  istekao: "danger",
+};
+
+/**
+ * "Time to expiry" hint from the store's derived daysUntilExpiry, reusing the
+ * strings.documents.days phrasing so DASH and CAL never drift (decision #2: the
+ * launch-language pluralization stays the simple dan/dana split).
+ */
+function daysUntilLabel(days: number): string {
+  const d = strings.documents.days;
+  if (days > 1) return `${d.future} ${days} ${d.unitMany}`;
+  if (days === 1) return d.tomorrow;
+  if (days === 0) return d.today;
+  const ago = Math.abs(days);
+  return `${d.pastPrefix} ${ago} ${ago === 1 ? d.unitOne : d.unitMany}`;
+}
+
+/** A read-only widget row that deep-links into its module on click/Enter. */
+function DashRow({
+  onClick,
+  leading,
+  trailing,
+  children,
+}: {
+  onClick: () => void;
+  leading?: ReactNode;
+  trailing?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <button type="button" className="dash__row" onClick={onClick}>
+      <ListRow leading={leading} trailing={trailing}>
+        {children}
+      </ListRow>
+    </button>
+  );
+}
+
+export interface DashboardPageProps {
+  profileId: string;
+  profileName: string;
+  info: AppInfo | null;
+  onOpenModule: (id: string) => void;
+}
+
+/**
+ * The DASH home surface (DASH v0): a personalized greeting over three read-only
+ * widget cards that aggregate the data the modules already own — today's agenda,
+ * the next tasks, and documents nearing expiry — each row deep-linking into its
+ * module. Nothing here writes; it composes over the existing `window.nexus`
+ * reads. The system-diagnostics card stays at the bottom as the human-visible
+ * proof of the renderer -> main -> DB path (and what the --smoke harness loads).
+ */
+export function DashboardPage({ profileId, profileName, info, onOpenModule }: DashboardPageProps) {
+  const [tasks, setTasks] = useState<Task[] | null>(null);
+  const [events, setEvents] = useState<Event[] | null>(null);
+  const [documents, setDocuments] = useState<TrackedDocument[] | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const [nextTasks, nextEvents, nextDocuments] = await Promise.all([
+          window.nexus.listTasks(profileId),
+          window.nexus.listEvents(profileId),
+          window.nexus.listDocuments(profileId),
+        ]);
+        if (!active) return;
+        setTasks(nextTasks);
+        setEvents(nextEvents);
+        setDocuments(nextDocuments);
+      } catch (error) {
+        if (active) setFailed(true);
+        console.error("Nexus: failed to load dashboard:", error);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profileId]);
+
+  const now = new Date();
+  const todayKey = localDayKey(now);
+  const dateLine = new Intl.DateTimeFormat("sr-Latn", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(now);
+
+  // All three resolve together, so a single null is enough to mean "loading".
+  const loading = tasks === null || events === null || documents === null;
+
+  // Danas — today's events (chronological) then tasks due today. An all-day
+  // event's bare "YYYY-MM-DD" sorts before any timed start, matching the store.
+  const todayEvents = (events ?? [])
+    .filter((event) => event.startAt.slice(0, 10) === todayKey)
+    .sort((a, b) => a.startAt.localeCompare(b.startAt) || a.id.localeCompare(b.id));
+  const todayTasks = (tasks ?? []).filter(
+    (task) => !task.done && task.dueDate != null && task.dueDate.slice(0, 10) === todayKey,
+  );
+  const hasToday = todayEvents.length > 0 || todayTasks.length > 0;
+
+  // Predstojeći zadaci — next 5 active tasks by due date (nulls last), then age.
+  const upcomingTasks = (tasks ?? [])
+    .filter((task) => !task.done)
+    .sort((a, b) => {
+      if (a.dueDate == null && b.dueDate == null) return a.createdAt.localeCompare(b.createdAt);
+      if (a.dueDate == null) return 1;
+      if (b.dueDate == null) return -1;
+      return a.dueDate.localeCompare(b.dueDate) || a.createdAt.localeCompare(b.createdAt);
+    })
+    .slice(0, 5);
+
+  // Dokumenta koja ističu — anything past the reminder threshold, soonest first.
+  const expiringDocuments = (documents ?? [])
+    .filter((doc) => doc.status !== "ok")
+    .sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry || a.id.localeCompare(b.id));
+
+  return (
+    <div className="dash">
+      <header className="dash__greeting">
+        <h1 className="dash__hello">{greeting(profileName, now.getHours())}</h1>
+        <p className="dash__date">{dateLine}</p>
+      </header>
+
+      {failed ? (
+        <EmptyState
+          title={strings.dashboard.errorTitle}
+          description={strings.dashboard.errorDescription}
+        />
+      ) : loading ? (
+        <p className="app__muted">{strings.app.loading}</p>
+      ) : (
+        <div className="dash__grid">
+          <Card title={strings.dashboard.today.title}>
+            {hasToday ? (
+              <div className="dash__list">
+                {todayEvents.map((event) => (
+                  <DashRow
+                    key={`event-${event.id}`}
+                    onClick={() => onOpenModule("calendar")}
+                    leading={<span className="dash__time">{formatEventTime(event)}</span>}
+                  >
+                    <span className="dash__row-title">{event.title}</span>
+                  </DashRow>
+                ))}
+                {todayTasks.map((task) => (
+                  <DashRow
+                    key={`task-${task.id}`}
+                    onClick={() => onOpenModule("tasks")}
+                    leading={
+                      <span className="dash__time dash__time--tag">
+                        {strings.dashboard.today.taskTag}
+                      </span>
+                    }
+                  >
+                    <span className="dash__row-title">{task.title}</span>
+                  </DashRow>
+                ))}
+              </div>
+            ) : (
+              <p className="dash__empty">{strings.dashboard.today.empty}</p>
+            )}
+          </Card>
+
+          <Card title={strings.dashboard.upcoming.title}>
+            {upcomingTasks.length > 0 ? (
+              <div className="dash__list">
+                {upcomingTasks.map((task) => (
+                  <DashRow
+                    key={task.id}
+                    onClick={() => onOpenModule("tasks")}
+                    trailing={
+                      task.dueDate ? (
+                        <Chip variant="data">{formatDueDate(task.dueDate)}</Chip>
+                      ) : undefined
+                    }
+                  >
+                    <span className="dash__row-title">{task.title}</span>
+                  </DashRow>
+                ))}
+              </div>
+            ) : (
+              <p className="dash__empty">{strings.dashboard.upcoming.empty}</p>
+            )}
+          </Card>
+
+          <Card title={strings.dashboard.expiring.title}>
+            {expiringDocuments.length > 0 ? (
+              <div className="dash__list">
+                {expiringDocuments.map((doc) => (
+                  <DashRow
+                    key={doc.id}
+                    onClick={() => onOpenModule("calendar")}
+                    leading={
+                      <Chip variant={STATUS_VARIANT[doc.status]}>
+                        {strings.documents.status[doc.status]}
+                      </Chip>
+                    }
+                    trailing={
+                      <span className="dash__days">{daysUntilLabel(doc.daysUntilExpiry)}</span>
+                    }
+                  >
+                    <span className="dash__doc">
+                      <span className="dash__doc-type">{strings.documents.type[doc.docType]}</span>
+                      <span className="dash__doc-label">{doc.label}</span>
+                    </span>
+                  </DashRow>
+                ))}
+              </div>
+            ) : (
+              <p className="dash__empty">{strings.dashboard.expiring.empty}</p>
+            )}
+          </Card>
+        </div>
+      )}
+
+      <Card title={strings.diagnostics.title} className="dash__diagnostics">
+        {info ? (
+          <dl className="app__facts">
+            <div>
+              <dt>{strings.diagnostics.version}</dt>
+              <dd>
+                {info.name} {info.version}
+              </dd>
+            </div>
+            <div>
+              <dt>{strings.diagnostics.electron}</dt>
+              <dd>{info.versions.electron}</dd>
+            </div>
+            <div>
+              <dt>{strings.diagnostics.chromium}</dt>
+              <dd>{info.versions.chrome}</dd>
+            </div>
+            <div>
+              <dt>{strings.diagnostics.node}</dt>
+              <dd>{info.versions.node}</dd>
+            </div>
+            <div>
+              <dt>{strings.diagnostics.database}</dt>
+              <dd className="app__path">{info.databasePath}</dd>
+            </div>
+          </dl>
+        ) : (
+          <p className="app__muted">{strings.app.loading}</p>
+        )}
+      </Card>
+    </div>
+  );
+}

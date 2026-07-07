@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Button, Card, EmptyState, NavItem } from "@nexus/ui";
+import { Button, EmptyState, NavItem } from "@nexus/ui";
 import type { ThemeName } from "@nexus/tokens";
 import type { AppInfo, Profile } from "../../shared/ipc.js";
 import { Onboarding } from "./Onboarding.js";
+import { DashboardPage } from "./DashboardPage.js";
 import { TasksPage } from "./TasksPage.js";
 import { CalendarPage } from "./CalendarPage.js";
 import { createModuleRegistry } from "./modules.js";
@@ -131,8 +132,13 @@ export function App() {
         </nav>
 
         <main className="app__main">
-          {activeId === "dashboard" ? (
-            <DashboardPage info={info} />
+          {activeId === "dashboard" && activeProfile ? (
+            <DashboardPage
+              profileId={activeProfile.id}
+              profileName={activeProfile.name}
+              info={info}
+              onOpenModule={setActiveId}
+            />
           ) : activeId === "tasks" && activeProfile ? (
             <TasksPage profileId={activeProfile.id} />
           ) : activeId === "calendar" && activeProfile ? (
@@ -143,53 +149,6 @@ export function App() {
         </main>
       </div>
     </div>
-  );
-}
-
-/**
- * Dashboard placeholder: the widget grid (DASH-001) lands with the first
- * modules; until then an honest empty state plus the system diagnostics card
- * (the visible proof of the renderer -> main -> DB path).
- */
-function DashboardPage({ info }: { info: AppInfo | null }) {
-  return (
-    <>
-      <EmptyState
-        title={strings.dashboard.emptyTitle}
-        description={strings.dashboard.emptyDescription}
-      />
-
-      <Card title={strings.diagnostics.title} className="app__diagnostics">
-        {info ? (
-          <dl className="app__facts">
-            <div>
-              <dt>{strings.diagnostics.version}</dt>
-              <dd>
-                {info.name} {info.version}
-              </dd>
-            </div>
-            <div>
-              <dt>{strings.diagnostics.electron}</dt>
-              <dd>{info.versions.electron}</dd>
-            </div>
-            <div>
-              <dt>{strings.diagnostics.chromium}</dt>
-              <dd>{info.versions.chrome}</dd>
-            </div>
-            <div>
-              <dt>{strings.diagnostics.node}</dt>
-              <dd>{info.versions.node}</dd>
-            </div>
-            <div>
-              <dt>{strings.diagnostics.database}</dt>
-              <dd className="app__path">{info.databasePath}</dd>
-            </div>
-          </dl>
-        ) : (
-          <p className="app__muted">{strings.app.loading}</p>
-        )}
-      </Card>
-    </>
   );
 }
 

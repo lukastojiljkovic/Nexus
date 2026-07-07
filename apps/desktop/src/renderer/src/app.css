@@ -562,3 +562,126 @@ body {
   background: var(--nx-surface);
   color: var(--nx-text);
 }
+
+/* Dashboard (DASH v0 widgets) ----------------------------------------- */
+.dash {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+}
+
+/* Greeting header — the personalized "šta mi je danas bitno?" line. */
+.dash__greeting {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dash__hello {
+  margin: 0;
+  font-size: var(--nx-font-size-display);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-normal);
+}
+.dash__date {
+  margin: 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+.dash__date::first-letter {
+  text-transform: uppercase;
+}
+
+/* Widget grid — auto-fitting cards that reflow to one column when narrow. */
+.dash__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: var(--nx-space-4);
+  align-items: start;
+}
+
+/* Widget rows are read-only deep-links: a reset button wrapping a ListRow, so
+   the whole row is a keyboard-focusable target into its module. */
+.dash__list {
+  display: flex;
+  flex-direction: column;
+}
+.dash__row {
+  display: block;
+  width: 100%;
+  padding: 0 var(--nx-space-2);
+  margin: 0 calc(-1 * var(--nx-space-2));
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.dash__row:hover {
+  background: var(--nx-surface-alt);
+}
+.dash__row:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+/* Separators live between rows (ListRow's own last-child border is dropped, as
+   each row is a lone child of its button — mirrors the ListView wrapper rule). */
+.dash__row + .dash__row .nx-list-row {
+  border-top: 1px solid var(--nx-border);
+}
+.dash__row-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Danas: a fixed leading gutter — a time for events, a quiet tag for tasks. */
+.dash__time {
+  min-width: 56px;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.dash__time--tag {
+  font-variant-numeric: normal;
+}
+
+/* Dokumenta rows: type over label, with a soonest-expiry hint trailing. */
+.dash__doc {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+.dash__doc-type {
+  font-weight: var(--nx-font-weight-medium);
+}
+.dash__doc-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+.dash__days {
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* In-card empty state — a calm muted line, not the full EmptyState block. */
+.dash__empty {
+  margin: 0;
+  padding: var(--nx-space-2) 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+/* Diagnostics stays as the renderer -> main -> DB proof, but recedes: no
+   surface fill or shadow, so it reads as secondary beneath the widgets. */
+.dash__diagnostics {
+  background: transparent;
+  box-shadow: none;
+}
