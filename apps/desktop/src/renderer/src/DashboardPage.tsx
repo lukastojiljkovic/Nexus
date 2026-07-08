@@ -1,8 +1,17 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Card, Chip, EmptyState, ListRow } from "@nexus/ui";
-import type { AppInfo, DocumentStatus, Event, Task, TrackedDocument } from "../../shared/ipc.js";
-import { strings } from "./strings.js";
+import type {
+  AppInfo,
+  DocumentStatus,
+  Event,
+  Exam,
+  Subject,
+  Task,
+  TrackedDocument,
+} from "../../shared/ipc.js";
+import { daysUntilExam, examCountdownLabel, examCountdownVariant, formatExamDate } from "./examDates.js";
+import { dayUnit, strings } from "./strings.js";
 
 // --- Formatting helpers (renderer-local, mirror the module pages) -----------
 //
@@ -57,16 +66,16 @@ const STATUS_VARIANT: Record<DocumentStatus, "data" | "accent" | "danger"> = {
 
 /**
  * "Time to expiry" hint from the store's derived daysUntilExpiry, reusing the
- * strings.documents.days phrasing so DASH and CAL never drift (decision #2: the
- * launch-language pluralization stays the simple dan/dana split).
+ * strings.documents.days phrasing so DASH and CAL never drift. The dan/dana
+ * agreement comes from `dayUnit` (21 → "dan", 22 → "dana").
  */
 function daysUntilLabel(days: number): string {
   const d = strings.documents.days;
-  if (days > 1) return `${d.future} ${days} ${d.unitMany}`;
+  if (days > 1) return `${d.future} ${days} ${dayUnit(days, d.unitOne, d.unitMany)}`;
   if (days === 1) return d.tomorrow;
   if (days === 0) return d.today;
   const ago = Math.abs(days);
-  return `${d.pastPrefix} ${ago} ${ago === 1 ? d.unitOne : d.unitMany}`;
+  return `${d.pastPrefix} ${ago} ${dayUnit(ago, d.unitOne, d.unitMany)}`;
 }
 
 /** A read-only widget row that deep-links into its module on click/Enter. */
@@ -109,21 +118,27 @@ export function DashboardPage({ profileId, profileName, info, onOpenModule }: Da
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [events, setEvents] = useState<Event[] | null>(null);
   const [documents, setDocuments] = useState<TrackedDocument[] | null>(null);
+  const [subjects, setSubjects] = useState<Subject[] | null>(null);
+  const [exams, setExams] = useState<Exam[] | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let active = true;
     void (async () => {
       try {
-        const [nextTasks, nextEvents, nextDocuments] = await Promise.all([
+        const [nextTasks, nextEvents, nextDocuments, nextSubjects, nextExams] = await Promise.all([
           window.nexus.listTasks(profileId),
           window.nexus.listEvents(profileId),
           window.nexus.listDocuments(profileId),
+          window.nexus.listSubjects(profileId),
+          window.nexus.listExams(profileId),
         ]);
         if (!active) return;
         setTasks(nextTasks);
         setEvents(nextEvents);
         setDocuments(nextDocuments);
+        setSubjects(nextSubjects);
+        setExams(nextExams);
       } catch (error) {
         if (active) setFailed(true);
         console.error("Nexus: failed to load dashboard:", error);
@@ -142,8 +157,13 @@ export function DashboardPage({ profileId, profileName, info, onOpenModule }: Da
     month: "long",
   }).format(now);
 
-  // All three resolve together, so a single null is enough to mean "loading".
-  const loading = tasks === null || events === null || documents === null;
+  // All five resolve together, so a single null is enough to mean "loading".
+  const loading =
+    tasks === null ||
+    events === null ||
+    documents === null ||
+    subjects === null ||
+    exams === null;
 
   // Danas — today's events (chronological) then tasks due today. An all-day
   // event's bare "YYYY-MM-DD" sorts before any timed start, matching the store.
@@ -170,6 +190,23 @@ export function DashboardPage({ profileId, profileName, info, onOpenModule }: Da
   const expiringDocuments = (documents ?? [])
     .filter((doc) => doc.status !== "ok")
     .sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry || a.id.localeCompare(b.id));
+
+  // Ispiti — the next upcoming exams (today or later), soonest first, capped at
+  // 5. An orphaned exam (its subject was soft-deleted) is skipped rather than
+  // shown without a name.
+  const subjectsById = new Map((subjects ?? []).map((subject) => [subject.id, subject] as const));
+  const upcomingExams = (exams ?? [])
+    .map((exam) => ({
+      exam,
+      subject: subjectsById.get(exam.subjectId),
+      days: daysUntilExam(exam.examDate),
+    }))
+    .filter(
+      (entry): entry is { exam: Exam; subject: Subject; days: number } =>
+        entry.subject != null && entry.days >= 0,
+    )
+    .sort((a, b) => a.days - b.days || a.exam.id.localeCompare(b.exam.id))
+    .slice(0, 5);
 
   return (
     <div className="dash">
@@ -265,6 +302,32 @@ export function DashboardPage({ profileId, profileName, info, onOpenModule }: Da
               </div>
             ) : (
               <p className="dash__empty">{strings.dashboard.expiring.empty}</p>
+            )}
+          </Card>
+
+          <Card title={strings.study.dashboardTitle}>
+            {upcomingExams.length > 0 ? (
+              <div className="dash__list">
+                {upcomingExams.map(({ exam, subject, days }) => (
+                  <DashRow
+                    key={exam.id}
+                    onClick={() => onOpenModule("study")}
+                    trailing={
+                      <Chip variant={examCountdownVariant(days)}>{examCountdownLabel(days)}</Chip>
+                    }
+                  >
+                    <span className="dash__exam">
+                      <span className="dash__exam-subject">{subject.name}</span>
+                      <span className="dash__exam-meta">
+                        <span>{strings.study.examType[exam.examType]}</span>
+                        <span>{formatExamDate(exam.examDate)}</span>
+                      </span>
+                    </span>
+                  </DashRow>
+                ))}
+              </div>
+            ) : (
+              <p className="dash__empty">{strings.study.dashboardEmpty}</p>
             )}
           </Card>
         </div>

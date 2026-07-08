@@ -6,6 +6,7 @@ import { Onboarding } from "./Onboarding.js";
 import { DashboardPage } from "./DashboardPage.js";
 import { TasksPage } from "./TasksPage.js";
 import { CalendarPage } from "./CalendarPage.js";
+import { StudyPage } from "./StudyPage.js";
 import { createModuleRegistry } from "./modules.js";
 import { persistTheme, readStoredTheme } from "./theme.js";
 import { strings } from "./strings.js";
@@ -143,6 +144,8 @@ export function App() {
             <TasksPage profileId={activeProfile.id} />
           ) : activeId === "calendar" && activeProfile ? (
             <CalendarPage profileId={activeProfile.id} />
+          ) : activeId === "study" && activeProfile ? (
+            <StudyPage profileId={activeProfile.id} />
           ) : (
             <ModulePage id={activeId} />
           )}

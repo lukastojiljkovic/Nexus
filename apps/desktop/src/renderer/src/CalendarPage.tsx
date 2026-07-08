@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { Button, Checkbox, Chip, EmptyState, ListRow, TextField } from "@nexus/ui";
-import type { Event, EventFieldChanges, NewEventFields } from "../../shared/ipc.js";
+import type { Event, EventFieldChanges, Exam, NewEventFields, Subject } from "../../shared/ipc.js";
 import { DocumentsPanel } from "./DocumentsPanel.js";
+import { daysUntilExam, examCountdownLabel, examCountdownVariant } from "./examDates.js";
 import { strings } from "./strings.js";
 
 // --- Per-profile view memory (interim, mirrors TasksPage) -------------------
@@ -28,18 +29,48 @@ function persistView(profileId: string, view: CalendarView): void {
 // appends optimistically, so the display order is re-derived here rather than
 // trusted from insertion order. The rule matches the store's exactly — an
 // all-day event's bare "YYYY-MM-DD" sorts before any timed start on that day.
+// Exams (STUDY-002) are merged in as read-only rows: an exam's bare examDate
+// sorts the same way a bare all-day date does, ahead of any timed event.
 
-/** Events bucketed by calendar day, days and rows both ascending by startAt/id. */
-function groupByDay(events: Event[]): [string, Event[]][] {
-  const ordered = [...events].sort(
-    (a, b) => a.startAt.localeCompare(b.startAt) || a.id.localeCompare(b.id),
-  );
-  const groups = new Map<string, Event[]>();
-  for (const event of ordered) {
-    const key = event.startAt.slice(0, 10);
-    const bucket = groups.get(key);
-    if (bucket) bucket.push(event);
-    else groups.set(key, [event]);
+/** An agenda row is either a real event or a read-only exam (with its subject). */
+type AgendaEntry =
+  | { kind: "event"; sortKey: string; dayKey: string; event: Event }
+  | { kind: "exam"; sortKey: string; dayKey: string; exam: Exam; subject: Subject };
+
+/** Merges events and exams into one agenda stream; an orphaned exam (its subject
+ * was soft-deleted) is skipped rather than shown without a name/colour. */
+function buildAgendaEntries(events: Event[], exams: Exam[], subjects: Subject[]): AgendaEntry[] {
+  const subjectsById = new Map(subjects.map((subject) => [subject.id, subject] as const));
+  const eventEntries: AgendaEntry[] = events.map((event) => ({
+    kind: "event",
+    sortKey: event.startAt,
+    dayKey: event.startAt.slice(0, 10),
+    event,
+  }));
+  const examEntries: AgendaEntry[] = [];
+  for (const exam of exams) {
+    const subject = subjectsById.get(exam.subjectId);
+    if (!subject) continue;
+    const dayKey = exam.examDate.slice(0, 10);
+    examEntries.push({ kind: "exam", sortKey: dayKey, dayKey, exam, subject });
+  }
+  return [...eventEntries, ...examEntries];
+}
+
+/** Agenda entries bucketed by calendar day, days and rows both ascending. */
+function groupAgenda(entries: AgendaEntry[]): [string, AgendaEntry[]][] {
+  const ordered = [...entries].sort((a, b) => {
+    const cmp = a.sortKey.localeCompare(b.sortKey);
+    if (cmp !== 0) return cmp;
+    const aId = a.kind === "event" ? a.event.id : a.exam.id;
+    const bId = b.kind === "event" ? b.event.id : b.exam.id;
+    return aId.localeCompare(bId);
+  });
+  const groups = new Map<string, AgendaEntry[]>();
+  for (const entry of ordered) {
+    const bucket = groups.get(entry.dayKey);
+    if (bucket) bucket.push(entry);
+    else groups.set(entry.dayKey, [entry]);
   }
   return [...groups];
 }
@@ -81,9 +112,13 @@ export interface CalendarPageProps {
  * delete-with-undo. Every write goes through the events:* IPC allowlist, so the
  * store stays the single source of truth (e.g. it validates startAt and derives
  * updatedAt). endAt/description/category are deferred — the form stays minimal.
+ * Upcoming exams (STUDY-002) are merged into the same agenda as read-only rows —
+ * they are not editable here; editing lives in StudyPage.
  */
 export function CalendarPage({ profileId }: CalendarPageProps) {
   const [events, setEvents] = useState<Event[] | null>(null);
+  const [subjects, setSubjects] = useState<Subject[] | null>(null);
+  const [exams, setExams] = useState<Exam[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [view, setView] = useState<CalendarView>(() => readStoredView(profileId));
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
@@ -101,8 +136,15 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
     let active = true;
     void (async () => {
       try {
-        const list = await window.nexus.listEvents(profileId);
-        if (active) setEvents(list);
+        const [nextEvents, nextSubjects, nextExams] = await Promise.all([
+          window.nexus.listEvents(profileId),
+          window.nexus.listSubjects(profileId),
+          window.nexus.listExams(profileId),
+        ]);
+        if (!active) return;
+        setEvents(nextEvents);
+        setSubjects(nextSubjects);
+        setExams(nextExams);
       } catch (error) {
         if (active) setFailed(true);
         console.error("Nexus: failed to load events:", error);
@@ -203,6 +245,12 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
     }
   }
 
+  // All three resolve together (one Promise.all), so a single null means loading.
+  const agendaLoading = events === null || subjects === null || exams === null;
+  const agendaEntries = agendaLoading
+    ? []
+    : buildAgendaEntries(events, exams, subjects);
+
   return (
     <div className="cal">
       <div className="cal__views" role="group" aria-label={strings.calendar.viewLabel}>
@@ -290,49 +338,83 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
               title={strings.calendar.emptyTitle}
               description={strings.calendar.loadError}
             />
-          ) : events === null ? (
+          ) : agendaLoading ? (
             <p className="app__muted">{strings.app.loading}</p>
-          ) : events.length === 0 ? (
+          ) : agendaEntries.length === 0 ? (
             <EmptyState
               title={strings.calendar.emptyTitle}
               description={strings.calendar.emptyDescription}
             />
           ) : (
             <div className="cal__agenda">
-              {groupByDay(events).map(([key, dayEvents]) => (
+              {groupAgenda(agendaEntries).map(([key, dayEntries]) => (
                 <section key={key} className="cal__day">
                   <h2 className="cal__day-header">{formatDay(key)}</h2>
-                  {dayEvents.map((event) => (
-                    <ListRow
-                      key={event.id}
-                      leading={<span className="cal__time">{formatTime(event)}</span>}
-                      trailing={
-                        <span className="cal__row-actions">
-                          <Button
-                            size="sm"
-                            className="cal__edit"
-                            aria-label={strings.calendar.editLabel}
-                            onClick={() => startEdit(event)}
-                          >
-                            ✎
-                          </Button>
-                          <Button
-                            size="sm"
-                            className="cal__delete"
-                            aria-label={strings.calendar.deleteLabel}
-                            onClick={() => void remove(event)}
-                          >
-                            ×
-                          </Button>
+                  {dayEntries.map((entry) => {
+                    if (entry.kind === "event") {
+                      return (
+                        <ListRow
+                          key={`event-${entry.event.id}`}
+                          leading={<span className="cal__time">{formatTime(entry.event)}</span>}
+                          trailing={
+                            <span className="cal__row-actions">
+                              <Button
+                                size="sm"
+                                className="cal__edit"
+                                aria-label={strings.calendar.editLabel}
+                                onClick={() => startEdit(entry.event)}
+                              >
+                                ✎
+                              </Button>
+                              <Button
+                                size="sm"
+                                className="cal__delete"
+                                aria-label={strings.calendar.deleteLabel}
+                                onClick={() => void remove(entry.event)}
+                              >
+                                ×
+                              </Button>
+                            </span>
+                          }
+                        >
+                          <span className="cal__event">
+                            <span className="cal__event-title">{entry.event.title}</span>
+                            {entry.event.location ? (
+                              <Chip variant="data">{entry.event.location}</Chip>
+                            ) : null}
+                          </span>
+                        </ListRow>
+                      );
+                    }
+                    const days = daysUntilExam(entry.exam.examDate);
+                    return (
+                      <ListRow
+                        key={`exam-${entry.exam.id}`}
+                        muted={days < 0}
+                        leading={
+                          <span className="cal__time cal__exam-time">
+                            <span
+                              className={`study__dot study__dot--${entry.subject.color}`}
+                              aria-hidden="true"
+                            />
+                          </span>
+                        }
+                        trailing={
+                          <Chip variant={examCountdownVariant(days)}>
+                            {examCountdownLabel(days)}
+                          </Chip>
+                        }
+                      >
+                        <span className="cal__event">
+                          <Chip className="cal__exam-tag">{strings.study.calendarTag}</Chip>
+                          <span className="cal__event-title">
+                            {entry.subject.name} — {strings.study.examType[entry.exam.examType]}
+                          </span>
+                          {entry.exam.scope ? <Chip variant="data">{entry.exam.scope}</Chip> : null}
                         </span>
-                      }
-                    >
-                      <span className="cal__event">
-                        <span className="cal__event-title">{event.title}</span>
-                        {event.location ? <Chip variant="data">{event.location}</Chip> : null}
-                      </span>
-                    </ListRow>
-                  ))}
+                      </ListRow>
+                    );
+                  })}
                 </section>
               ))}
             </div>

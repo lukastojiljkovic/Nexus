@@ -8,7 +8,7 @@ import type {
   NewDocumentFields,
   TrackedDocument,
 } from "../../shared/ipc.js";
-import { strings } from "./strings.js";
+import { dayUnit, strings } from "./strings.js";
 
 // --- Field orderings (renderer mirror of @nexus/db) -------------------------
 //
@@ -53,16 +53,16 @@ function formatExpiry(iso: string): string {
 
 /**
  * Human "time to expiry" hint from the store's derived daysUntilExpiry: future
- * days, tomorrow, today, or how long ago it lapsed. Serbian pluralization is the
- * simple dan/dana split (decision #2: launch-language copy stays lightweight).
+ * days, tomorrow, today, or how long ago it lapsed. The dan/dana agreement comes
+ * from `dayUnit` (21 → "dan", 22 → "dana").
  */
 function daysUntilLabel(days: number): string {
   const d = strings.documents.days;
-  if (days > 1) return `${d.future} ${days} ${d.unitMany}`;
+  if (days > 1) return `${d.future} ${days} ${dayUnit(days, d.unitOne, d.unitMany)}`;
   if (days === 1) return d.tomorrow;
   if (days === 0) return d.today;
   const ago = Math.abs(days);
-  return `${d.pastPrefix} ${ago} ${ago === 1 ? d.unitOne : d.unitMany}`;
+  return `${d.pastPrefix} ${ago} ${dayUnit(ago, d.unitOne, d.unitMany)}`;
 }
 
 export interface DocumentsPanelProps {

@@ -180,4 +180,75 @@ export const strings = {
     node: "Node",
     database: "Baza podataka",
   },
+
+  study: {
+    title: "Predmeti",
+    nameLabel: "Naziv predmeta",
+    namePlaceholder: "Naziv predmeta",
+    semesterLabel: "Semestar",
+    semesterPlaceholder: "Semestar (opciono)",
+    colorLabel: "Boja",
+    /** Colour-dot names, keyed by subject colour value (labels are presentation). */
+    color: {
+      jade: "Žad",
+      gold: "Zlatna",
+      bronze: "Bronzana",
+      burgundy: "Bordo",
+      crimson: "Grimizna",
+      graphite: "Grafit",
+    },
+    add: "Dodaj predmet",
+    save: "Sačuvaj",
+    cancel: "Otkaži",
+    editLabel: "Izmeni predmet",
+    archiveLabel: "Arhiviraj",
+    unarchiveLabel: "Vrati iz arhive",
+    deleteLabel: "Obriši predmet",
+    deletedNotice: "Predmet obrisan",
+    undo: "Vrati",
+    dismiss: "Zatvori",
+    emptyTitle: "Nema predmeta",
+    emptyDescription: "Dodaj prvi predmet u formi iznad — naziv je dovoljan.",
+    loadError: "Predmeti se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
+    showArchived: "Prikaži arhivirano",
+    hideArchived: "Sakrij arhivirano",
+    noExams: "Nema zakazanih ispita za ovaj predmet.",
+    addExam: "Dodaj ispit",
+    saveExam: "Sačuvaj",
+    cancelExam: "Otkaži",
+    /** Exam-type labels, keyed by exam type value (labels are presentation). */
+    examType: {
+      pismeni: "Pismeni",
+      usmeni: "Usmeni",
+      kolokvijum: "Kolokvijum",
+    },
+    examTypeLabel: "Vrsta ispita",
+    examDateLabel: "Datum ispita",
+    examScopeLabel: "Gradivo",
+    examScopePlaceholder: "Gradivo (opciono)",
+    editExamLabel: "Izmeni ispit",
+    deleteExamLabel: "Obriši ispit",
+    deletedExamNotice: "Ispit obrisan",
+    /** Countdown chip phrasing; "za N dan(a)" builds inline via `dayUnit`. */
+    countdown: {
+      today: "danas",
+      tomorrow: "sutra",
+      future: "za",
+      unitOne: "dan",
+      unitMany: "dana",
+      past: "prošao",
+    },
+    calendarTag: "Ispit",
+    dashboardTitle: "Ispiti",
+    dashboardEmpty: "Nema zakazanih ispita.",
+  },
 } as const;
+
+/**
+ * Serbian numeral agreement for day counts: numbers ending in 1 — except 11 —
+ * take the singular ("za 21 dan"), everything else the genitive ("za 22 dana").
+ * Lives beside the copy because it is a fact of the language, not of any module.
+ */
+export function dayUnit(count: number, one: string, many: string): string {
+  return count % 10 === 1 && count % 100 !== 11 ? one : many;
+}
