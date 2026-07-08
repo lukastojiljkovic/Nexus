@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { app, BrowserWindow, ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
+import { autoUpdater } from "electron-updater";
 import {
   DOCUMENT_TYPES,
   DocumentStore,
@@ -51,6 +52,12 @@ const isSmoke = process.argv.includes("--smoke");
 // (%APPDATA%\Nexus) rather than the scoped package name. Set before any
 // getPath("userData") call.
 app.setName("Nexus");
+
+// Interim brand glyph (four-pointed star, see build/make-icon.ps1). Resolved
+// via getAppPath() so the same relative path works unpacked (dev/smoke, app
+// root = apps/desktop) and packaged (app root = the asar root; electron-builder
+// ships build/icon.ico alongside out/, see electron-builder.yml `files`).
+const iconPath = join(app.getAppPath(), "build/icon.ico");
 
 let db: NexusDatabase | null = null;
 let mainWindow: BrowserWindow | null = null;
@@ -681,6 +688,7 @@ function createWindow(): BrowserWindow {
     width: 1120,
     height: 720,
     show: false, // shown on ready-to-show to avoid a blank-white first paint
+    icon: iconPath,
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
       contextIsolation: true, // SEC-EL-01
@@ -739,6 +747,30 @@ async function runSmoke(win: BrowserWindow): Promise<void> {
   }
 }
 
+// --- Auto-update (SEC-EL-07) -------------------------------------------------
+//
+// The feed URL is baked into the packaged build from electron-builder.yml's
+// `publish` config (GitHub provider) — never runtime-configurable, so nothing
+// here can be pointed at an arbitrary update source. The `nexus-releases` feed
+// repo does not exist yet (founder decision pending), so every failure mode
+// (offline, no feed, 404) is expected right now and must stay completely
+// benign: logged, never thrown, never surfaced to the renderer. Both the
+// promise rejection and the "error" event are handled — electron-updater emits
+// the latter for some failure paths, and an unhandled EventEmitter "error"
+// would otherwise crash the process.
+function checkForUpdates(): void {
+  autoUpdater.on("error", (error: Error) => {
+    console.error(`Auto-update check failed (benign, no update feed yet): ${error.message}`);
+  });
+  autoUpdater.checkForUpdatesAndNotify().catch((error: unknown) => {
+    console.error(
+      `Auto-update check failed (benign, no update feed yet): ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  });
+}
+
 function shutdown(code: number): void {
   try {
     db?.close();
@@ -763,6 +795,9 @@ app.whenReady().then(() => {
     seedFirstRunProfile(db);
     registerIpc();
     mainWindow = createWindow();
+
+    // Never in dev, never during the smoke run — only a real packaged install.
+    if (app.isPackaged && !isSmoke) checkForUpdates();
 
     if (isSmoke) {
       mainWindow.webContents.once("did-finish-load", () => {

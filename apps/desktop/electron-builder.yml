@@ -1,0 +1,54 @@
+# electron-builder packaging config for @nexus/desktop.
+#
+# Kept as a standalone file (rather than package.json's "build" key) to match
+# the repo's style of separate, purpose-named configs (electron.vite.config.ts,
+# tsconfig.*.json).
+#
+# Native module: better-sqlite3-multiple-ciphers ships a prebuilt .node binary
+# (scripts/rebuild-native.mjs provisions the Electron-ABI one before packaging).
+# Node cannot require() a native addon from inside an asar archive, so it is
+# unpacked. npmRebuild is disabled — electron-builder's own @electron/rebuild
+# step would fight the ABI already provisioned by rebuild-native.mjs.
+#
+# publish: documented plan of record (GitHub provider, lukastojiljkovic/
+# nexus-releases). That repo does not exist yet (founder decision pending) —
+# local builds always pass --publish never (see scripts/dist.mjs) so a build
+# never attempts to reach it.
+
+appId: rs.stojiljkovic.nexus
+productName: Nexus
+copyright: Copyright © Luka Stojiljkovic
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - out/**/*
+  - package.json
+  - build/icon.ico
+
+asarUnpack:
+  - node_modules/better-sqlite3-multiple-ciphers/**/*
+
+npmRebuild: false
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.ico
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  artifactName: "Nexus-Setup-${version}.exe"
+
+publish:
+  provider: github
+  owner: lukastojiljkovic
+  repo: nexus-releases
