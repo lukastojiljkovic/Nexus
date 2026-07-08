@@ -42,10 +42,15 @@ and [docs/SPECIFICATION.md](docs/SPECIFICATION.md). For *where we are*:
   what exists, what's in progress, current problems, and what remains. Update it as
   part of finishing each piece of work — that is how the founder (and a non-technical
   PM) can understand the project at any moment without reading code.
-- **Subagent-driven.** The founder prefers work done by Opus subagents dispatched
-  one at a time, with Claude supervising: write a precise self-contained agent
-  prompt, then independently re-verify everything before committing. This saves
-  usage. Agents never touch git.
+- **Subagent-driven.** The founder prefers work done by **Sonnet** subagents
+  dispatched one at a time (Opus is too expensive — founder, 2026-07-08), with
+  Claude supervising: write a precise self-contained agent prompt, then
+  independently re-verify everything before committing. This saves usage.
+  Agents never touch git.
+- **Verify Sonnet output more strictly than Opus's** (founder, 2026-07-08):
+  Sonnet is a smaller model, so beyond the standard gates, read every changed
+  file in full and review UI work by eye against the design rules (tokens,
+  banned hues, patterns matching existing pages) before committing.
 - **Concise Serbian status updates** to the founder; the code, comments, and docs
   are in **English**.
 
