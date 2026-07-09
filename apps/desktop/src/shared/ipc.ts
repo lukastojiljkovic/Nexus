@@ -58,6 +58,15 @@ export const IpcChannel = {
   reviewGrade: "review:grade",
   reviewUndo: "review:undo",
   reviewPreview: "review:preview",
+  plansList: "plans:list",
+  plansCreate: "plans:create",
+  plansUpdate: "plans:update",
+  plansDelete: "plans:delete",
+  plansRestore: "plans:restore",
+  plansSyncAll: "plans:sync-all",
+  blocksListByPlan: "blocks:list-by-plan",
+  blocksRange: "blocks:range",
+  blocksSetStatus: "blocks:set-status",
   appInfo: "app:info",
 } as const;
 
@@ -639,6 +648,109 @@ export interface ReviewPreviewRequest {
   id: string;
 }
 
+/** Closed study-block status domain (mirrors `@nexus/db`'s `StudyBlockStatus`; redeclared so the renderer never imports DB code). `missed` is only ever set by main's sync, never accepted from `setBlockStatus`. */
+export type StudyBlockStatus = "planned" | "done" | "missed";
+
+/**
+ * A study plan as seen by the renderer (mirrors the `study_plans` table via the
+ * store's mapping, STUDY exam planner). Its exam is carried by id. Redeclared
+ * here so the renderer never imports DB code.
+ */
+export interface StudyPlan {
+  id: string;
+  profileId: string;
+  examId: string;
+  dailyMinutes: number;
+  startDate: string;
+  examWeekBoost: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Fields for a new plan; all four are required. The main process revalidates each and stamps `now`/`today` itself. */
+export interface NewPlanFields {
+  examId: string;
+  dailyMinutes: number;
+  startDate: string;
+  examWeekBoost: boolean;
+}
+
+/** A partial edit of a plan's own fields; an omitted key is untouched. */
+export interface PlanFieldChanges {
+  dailyMinutes?: number;
+  startDate?: string;
+  examWeekBoost?: boolean;
+}
+
+/**
+ * A single generated study session as seen by the renderer (mirrors the
+ * `study_blocks` table via the store's mapping). Redeclared here so the
+ * renderer never imports DB code.
+ */
+export interface StudyBlock {
+  id: string;
+  planId: string;
+  profileId: string;
+  blockDate: string;
+  minutes: number;
+  status: StudyBlockStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A block joined with its plan's exam id — the calendar-merge read path (`listBlocksInRange`). */
+export interface StudyBlockWithExam extends StudyBlock {
+  examId: string;
+}
+
+export interface PlansListRequest {
+  profileId: string;
+}
+
+export interface PlansCreateRequest {
+  profileId: string;
+  plan: NewPlanFields;
+}
+
+export interface PlansUpdateRequest {
+  profileId: string;
+  id: string;
+  changes: PlanFieldChanges;
+}
+
+export interface PlansDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
+/** Undo of a soft delete: restores a previously deleted plan. */
+export interface PlansRestoreRequest {
+  profileId: string;
+  id: string;
+}
+
+/** Syncs every active plan of this profile whose exam is still active. `now`/`today` are stamped by main, never accepted from the renderer. */
+export interface PlansSyncAllRequest {
+  profileId: string;
+}
+
+export interface BlocksListByPlanRequest {
+  profileId: string;
+  planId: string;
+}
+
+export interface BlocksRangeRequest {
+  profileId: string;
+  fromDate: string;
+  toDate: string;
+}
+
+export interface BlocksSetStatusRequest {
+  profileId: string;
+  id: string;
+  status: StudyBlockStatus;
+}
+
 /** Runtime and environment facts, proving the main-process path end to end. */
 export interface AppInfo {
   name: string;
@@ -709,5 +821,18 @@ export interface NexusApi {
   gradeReview(profileId: string, id: string, rating: CardRating): Promise<Card>;
   undoReview(profileId: string, id: string): Promise<Card>;
   previewReview(profileId: string, id: string): Promise<PreviewIntervals>;
+  listPlans(profileId: string): Promise<StudyPlan[]>;
+  createPlan(profileId: string, plan: NewPlanFields): Promise<StudyPlan>;
+  updatePlan(profileId: string, id: string, changes: PlanFieldChanges): Promise<StudyPlan>;
+  deletePlan(profileId: string, id: string): Promise<void>;
+  restorePlan(profileId: string, id: string): Promise<void>;
+  syncAllPlans(profileId: string): Promise<number>;
+  listBlocksByPlan(profileId: string, planId: string): Promise<StudyBlock[]>;
+  listBlocksInRange(
+    profileId: string,
+    fromDate: string,
+    toDate: string,
+  ): Promise<StudyBlockWithExam[]>;
+  setBlockStatus(profileId: string, id: string, status: StudyBlockStatus): Promise<StudyBlock>;
   appInfo(): Promise<AppInfo>;
 }

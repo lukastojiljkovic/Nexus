@@ -12,7 +12,9 @@ import {
   EXAM_TYPES,
   ExamStore,
   openDatabase,
+  PlanStore,
   SqliteFlagStore,
+  STUDY_BLOCK_STATUSES,
   SUBJECT_COLORS,
   SubjectStore,
   TaskStore,
@@ -26,6 +28,7 @@ import {
   type CreateDocumentInput,
   type CreateEventInput,
   type CreateExamInput,
+  type CreatePlanInput,
   type CreateSubjectInput,
   type CreateTaskInput,
   type Deck,
@@ -37,6 +40,10 @@ import {
   type ExamType,
   type NexusDatabase,
   type PreviewIntervals,
+  type StudyBlock,
+  type StudyBlockStatus,
+  type StudyBlockWithExam,
+  type StudyPlan,
   type Subject,
   type SubjectColor,
   type Task,
@@ -48,6 +55,7 @@ import {
   type UpdateDocumentFields,
   type UpdateEventFields,
   type UpdateExamFields,
+  type UpdatePlanFields,
   type UpdateSubjectFields,
   type UpdateTaskFields,
 } from "@nexus/db";
@@ -122,6 +130,21 @@ function seedFirstRunProfile(database: NexusDatabase): void {
   database.raw
     .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
     .run(uuidv7(), "personal", "", new Date().toISOString());
+}
+
+/**
+ * Today as a bare "YYYY-MM-DD", from the local wall clock (STUDY exam planner:
+ * `PlanStore` does all its date math in local calendar days). Deliberately
+ * built from `getFullYear()/getMonth()/getDate()`, never `toISOString().slice(0, 10)`
+ * — the latter is UTC and misdates the last hours of the day in every
+ * positive-UTC-offset timezone (including Belgrade).
+ */
+function localToday(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function appInfo(): AppInfo {
@@ -488,6 +511,47 @@ function asCardRating(value: unknown, field: string): CardRating {
   throw new Error(`Invalid IPC payload: "${field}" is not a valid review rating.`);
 }
 
+/**
+ * Validates a `NewPlanFields` payload into a store input; all four fields are
+ * required. Structural checks only — the store owns the exam-lookup, date-
+ * ordering, and `dailyMinutes`-range validation, the same division of labour
+ * as the exam/deck validators. `now`/`today` are never taken from this payload
+ * — they are stamped by main from its own clock.
+ */
+function asNewPlanInput(value: unknown): CreatePlanInput {
+  const plan = asRecord(value);
+  return {
+    examId: asNonEmptyString(plan.examId, "plan.examId"),
+    dailyMinutes: asInteger(plan.dailyMinutes, "plan.dailyMinutes"),
+    startDate: asNonEmptyString(plan.startDate, "plan.startDate"),
+    examWeekBoost: asBoolean(plan.examWeekBoost, "plan.examWeekBoost"),
+  };
+}
+
+/** Validates a `PlanFieldChanges` payload into a store patch; an omitted key stays omitted. */
+function asPlanFieldChanges(value: unknown): UpdatePlanFields {
+  const changes = asRecord(value);
+  const patch: UpdatePlanFields = {};
+  if (changes.dailyMinutes !== undefined) {
+    patch.dailyMinutes = asInteger(changes.dailyMinutes, "changes.dailyMinutes");
+  }
+  if (changes.startDate !== undefined) {
+    patch.startDate = asNonEmptyString(changes.startDate, "changes.startDate");
+  }
+  if (changes.examWeekBoost !== undefined) {
+    patch.examWeekBoost = asBoolean(changes.examWeekBoost, "changes.examWeekBoost");
+  }
+  return patch;
+}
+
+/** The closed study-block status domain; `setBlockStatus`'s own semantic check rejects "missed" (sync-only). */
+function asBlockStatus(value: unknown, field: string): StudyBlockStatus {
+  if (typeof value === "string" && (STUDY_BLOCK_STATUSES as readonly string[]).includes(value)) {
+    return value as StudyBlockStatus;
+  }
+  throw new Error(`Invalid IPC payload: "${field}" is not a valid block status.`);
+}
+
 function requireDb(): NexusDatabase {
   if (!db) throw new Error("Database is not open.");
   return db;
@@ -519,6 +583,10 @@ function deckStore(profileId: string): DeckStore {
 
 function cardStore(profileId: string): CardStore {
   return new CardStore(requireDb().raw, profileId);
+}
+
+function planStore(profileId: string): PlanStore {
+  return new PlanStore(requireDb().raw, profileId);
 }
 
 function registerIpc(): void {
@@ -879,6 +947,86 @@ function registerIpc(): void {
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const id = asNonEmptyString(body.id, "id");
     return cardStore(profileId).previewIntervals(id, new Date().toISOString());
+  });
+
+  // SEC-EL-02: `now`/`today` are always stamped here from the main process's own
+  // clock — the renderer never supplies either for plan/block date math.
+  ipcMain.handle(IpcChannel.plansList, (event, payload): StudyPlan[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return planStore(profileId).listActive();
+  });
+
+  ipcMain.handle(IpcChannel.plansCreate, (event, payload): StudyPlan => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return planStore(profileId).createPlan(
+      asNewPlanInput(body.plan),
+      new Date().toISOString(),
+      localToday(),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.plansUpdate, (event, payload): StudyPlan => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return planStore(profileId).updatePlan(
+      id,
+      asPlanFieldChanges(body.changes),
+      new Date().toISOString(),
+      localToday(),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.plansDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    planStore(profileId).softDelete(id, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.plansRestore, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    planStore(profileId).restore(id, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.plansSyncAll, (event, payload): number => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return planStore(profileId).syncAll(new Date().toISOString(), localToday());
+  });
+
+  ipcMain.handle(IpcChannel.blocksListByPlan, (event, payload): StudyBlock[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const planId = asNonEmptyString(body.planId, "planId");
+    return planStore(profileId).listBlocks(planId);
+  });
+
+  ipcMain.handle(IpcChannel.blocksRange, (event, payload): StudyBlockWithExam[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const fromDate = asNonEmptyString(body.fromDate, "fromDate");
+    const toDate = asNonEmptyString(body.toDate, "toDate");
+    return planStore(profileId).listBlocksInRange(fromDate, toDate);
+  });
+
+  ipcMain.handle(IpcChannel.blocksSetStatus, (event, payload): StudyBlock => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const status = asBlockStatus(body.status, "status");
+    return planStore(profileId).setBlockStatus(id, status, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.appInfo, (event): AppInfo => {

@@ -92,6 +92,20 @@ const api: NexusApi = {
   undoReview: (profileId, id) => ipcRenderer.invoke(IpcChannel.reviewUndo, { profileId, id }),
   previewReview: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.reviewPreview, { profileId, id }),
+  listPlans: (profileId) => ipcRenderer.invoke(IpcChannel.plansList, { profileId }),
+  createPlan: (profileId, plan) =>
+    ipcRenderer.invoke(IpcChannel.plansCreate, { profileId, plan }),
+  updatePlan: (profileId, id, changes) =>
+    ipcRenderer.invoke(IpcChannel.plansUpdate, { profileId, id, changes }),
+  deletePlan: (profileId, id) => ipcRenderer.invoke(IpcChannel.plansDelete, { profileId, id }),
+  restorePlan: (profileId, id) => ipcRenderer.invoke(IpcChannel.plansRestore, { profileId, id }),
+  syncAllPlans: (profileId) => ipcRenderer.invoke(IpcChannel.plansSyncAll, { profileId }),
+  listBlocksByPlan: (profileId, planId) =>
+    ipcRenderer.invoke(IpcChannel.blocksListByPlan, { profileId, planId }),
+  listBlocksInRange: (profileId, fromDate, toDate) =>
+    ipcRenderer.invoke(IpcChannel.blocksRange, { profileId, fromDate, toDate }),
+  setBlockStatus: (profileId, id, status) =>
+    ipcRenderer.invoke(IpcChannel.blocksSetStatus, { profileId, id, status }),
   appInfo: () => ipcRenderer.invoke(IpcChannel.appInfo),
 };
 
