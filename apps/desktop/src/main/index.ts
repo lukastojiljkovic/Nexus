@@ -3,6 +3,9 @@ import { app, BrowserWindow, ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import { autoUpdater } from "electron-updater";
 import {
+  CARD_RATINGS,
+  CardStore,
+  DeckStore,
   DOCUMENT_TYPES,
   DocumentStore,
   EventStore,
@@ -16,23 +19,32 @@ import {
   TASK_PRIORITIES,
   TASK_STATUSES,
   uuidv7,
+  type Card,
+  type CardRating,
+  type CreateCardInput,
+  type CreateDeckInput,
   type CreateDocumentInput,
   type CreateEventInput,
   type CreateExamInput,
   type CreateSubjectInput,
   type CreateTaskInput,
+  type Deck,
+  type DeckCounts,
   type DocumentRenewal,
   type DocumentType,
   type Event,
   type Exam,
   type ExamType,
   type NexusDatabase,
+  type PreviewIntervals,
   type Subject,
   type SubjectColor,
   type Task,
   type TaskPriority,
   type TaskStatus,
   type TrackedDocument,
+  type UpdateCardFields,
+  type UpdateDeckFields,
   type UpdateDocumentFields,
   type UpdateEventFields,
   type UpdateExamFields,
@@ -410,6 +422,72 @@ function asExamFieldChanges(value: unknown): UpdateExamFields {
   return patch;
 }
 
+/**
+ * Validates a `NewDeckFields` payload into a store input; only present keys are
+ * carried. Structural checks only — the store owns the trim/length and
+ * same-profile subject-FK checks, the same division of labour as the exam
+ * validators.
+ */
+function asNewDeckInput(value: unknown): CreateDeckInput {
+  const deck = asRecord(value);
+  return {
+    subjectId: asNonEmptyString(deck.subjectId, "deck.subjectId"),
+    name: asNonEmptyString(deck.name, "deck.name"),
+  };
+}
+
+/** Validates a `DeckFieldChanges` payload into a store patch; an omitted key stays omitted. */
+function asDeckFieldChanges(value: unknown): UpdateDeckFields {
+  const changes = asRecord(value);
+  const patch: UpdateDeckFields = {};
+  if (changes.subjectId !== undefined) {
+    patch.subjectId = asNonEmptyString(changes.subjectId, "changes.subjectId");
+  }
+  if (changes.name !== undefined) patch.name = asNonEmptyString(changes.name, "changes.name");
+  return patch;
+}
+
+/**
+ * Validates a `NewCardFields` payload into a store input; all three fields are
+ * required. Structural checks only — the store owns the trim/length and
+ * same-profile deck-FK checks. `front`/`back` may contain `$…$` KaTeX math and
+ * are passed through verbatim (no sanitizing).
+ */
+function asNewCardInput(value: unknown): CreateCardInput {
+  const card = asRecord(value);
+  return {
+    deckId: asNonEmptyString(card.deckId, "card.deckId"),
+    front: asNonEmptyString(card.front, "card.front"),
+    back: asNonEmptyString(card.back, "card.back"),
+  };
+}
+
+/** Validates a `CardFieldChanges` payload into a store patch; an omitted key stays omitted. */
+function asCardFieldChanges(value: unknown): UpdateCardFields {
+  const changes = asRecord(value);
+  const patch: UpdateCardFields = {};
+  if (changes.deckId !== undefined) patch.deckId = asNonEmptyString(changes.deckId, "changes.deckId");
+  if (changes.front !== undefined) patch.front = asNonEmptyString(changes.front, "changes.front");
+  if (changes.back !== undefined) patch.back = asNonEmptyString(changes.back, "changes.back");
+  return patch;
+}
+
+/** A plain integer field (structural check only; range validation stays in the store). */
+function asInteger(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw new Error(`Invalid IPC payload: "${field}" must be an integer.`);
+  }
+  return value;
+}
+
+/** The closed FSRS review-rating domain (Again/Hard/Good/Easy); Manual (0) and anything else is rejected. */
+function asCardRating(value: unknown, field: string): CardRating {
+  if (typeof value === "number" && (CARD_RATINGS as readonly number[]).includes(value)) {
+    return value as CardRating;
+  }
+  throw new Error(`Invalid IPC payload: "${field}" is not a valid review rating.`);
+}
+
 function requireDb(): NexusDatabase {
   if (!db) throw new Error("Database is not open.");
   return db;
@@ -433,6 +511,14 @@ function subjectStore(profileId: string): SubjectStore {
 
 function examStore(profileId: string): ExamStore {
   return new ExamStore(requireDb().raw, profileId);
+}
+
+function deckStore(profileId: string): DeckStore {
+  return new DeckStore(requireDb().raw, profileId);
+}
+
+function cardStore(profileId: string): CardStore {
+  return new CardStore(requireDb().raw, profileId);
 }
 
 function registerIpc(): void {
@@ -673,6 +759,126 @@ function registerIpc(): void {
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const id = asNonEmptyString(body.id, "id");
     examStore(profileId).restore(id);
+  });
+
+  ipcMain.handle(IpcChannel.decksList, (event, payload): Deck[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return deckStore(profileId).listActive();
+  });
+
+  ipcMain.handle(IpcChannel.decksCreate, (event, payload): Deck => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return deckStore(profileId).create(asNewDeckInput(body.deck));
+  });
+
+  ipcMain.handle(IpcChannel.decksUpdate, (event, payload): Deck => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return deckStore(profileId).update(id, asDeckFieldChanges(body.changes));
+  });
+
+  ipcMain.handle(IpcChannel.decksDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    deckStore(profileId).softDelete(id);
+  });
+
+  ipcMain.handle(IpcChannel.decksRestore, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    deckStore(profileId).restore(id);
+  });
+
+  ipcMain.handle(IpcChannel.cardsListByDeck, (event, payload): Card[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const deckId = asNonEmptyString(body.deckId, "deckId");
+    return cardStore(profileId).listByDeck(deckId);
+  });
+
+  ipcMain.handle(IpcChannel.cardsCreate, (event, payload): Card => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return cardStore(profileId).create(asNewCardInput(body.card), new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.cardsUpdate, (event, payload): Card => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return cardStore(profileId).update(id, asCardFieldChanges(body.changes));
+  });
+
+  ipcMain.handle(IpcChannel.cardsDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    cardStore(profileId).softDelete(id);
+  });
+
+  ipcMain.handle(IpcChannel.cardsRestore, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    cardStore(profileId).restore(id);
+  });
+
+  ipcMain.handle(IpcChannel.cardsCounts, (event, payload): DeckCounts[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return cardStore(profileId).countsByDeck(new Date().toISOString());
+  });
+
+  // SEC-EL-02: `now` is always stamped here from the main process's own clock —
+  // the renderer's `now` is never trusted for FSRS scheduling decisions.
+  ipcMain.handle(IpcChannel.reviewQueue, (event, payload): Card[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const scope: { deckId?: string; subjectId?: string; newLimit?: number } = {};
+    if (body.deckId !== undefined) scope.deckId = asNonEmptyString(body.deckId, "deckId");
+    if (body.subjectId !== undefined) scope.subjectId = asNonEmptyString(body.subjectId, "subjectId");
+    if (body.newLimit !== undefined) scope.newLimit = asInteger(body.newLimit, "newLimit");
+    return cardStore(profileId).dueQueue(scope, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.reviewGrade, (event, payload): Card => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const rating = asCardRating(body.rating, "rating");
+    return cardStore(profileId).review(id, rating, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.reviewUndo, (event, payload): Card => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return cardStore(profileId).undoLastReview(id, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.reviewPreview, (event, payload): PreviewIntervals => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return cardStore(profileId).previewIntervals(id, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.appInfo, (event): AppInfo => {

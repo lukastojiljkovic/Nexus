@@ -65,6 +65,33 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.examsDelete, { profileId, id }),
   restoreExam: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.examsRestore, { profileId, id }),
+  listDecks: (profileId) => ipcRenderer.invoke(IpcChannel.decksList, { profileId }),
+  createDeck: (profileId, deck) =>
+    ipcRenderer.invoke(IpcChannel.decksCreate, { profileId, deck }),
+  updateDeck: (profileId, id, changes) =>
+    ipcRenderer.invoke(IpcChannel.decksUpdate, { profileId, id, changes }),
+  deleteDeck: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.decksDelete, { profileId, id }),
+  restoreDeck: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.decksRestore, { profileId, id }),
+  listCardsByDeck: (profileId, deckId) =>
+    ipcRenderer.invoke(IpcChannel.cardsListByDeck, { profileId, deckId }),
+  createCard: (profileId, card) =>
+    ipcRenderer.invoke(IpcChannel.cardsCreate, { profileId, card }),
+  updateCard: (profileId, id, changes) =>
+    ipcRenderer.invoke(IpcChannel.cardsUpdate, { profileId, id, changes }),
+  deleteCard: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.cardsDelete, { profileId, id }),
+  restoreCard: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.cardsRestore, { profileId, id }),
+  cardCounts: (profileId) => ipcRenderer.invoke(IpcChannel.cardsCounts, { profileId }),
+  reviewQueue: (profileId, scope) =>
+    ipcRenderer.invoke(IpcChannel.reviewQueue, { profileId, ...scope }),
+  gradeReview: (profileId, id, rating) =>
+    ipcRenderer.invoke(IpcChannel.reviewGrade, { profileId, id, rating }),
+  undoReview: (profileId, id) => ipcRenderer.invoke(IpcChannel.reviewUndo, { profileId, id }),
+  previewReview: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.reviewPreview, { profileId, id }),
   appInfo: () => ipcRenderer.invoke(IpcChannel.appInfo),
 };
 

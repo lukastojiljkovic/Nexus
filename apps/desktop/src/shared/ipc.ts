@@ -43,6 +43,21 @@ export const IpcChannel = {
   examsUpdate: "exams:update",
   examsDelete: "exams:delete",
   examsRestore: "exams:restore",
+  decksList: "decks:list",
+  decksCreate: "decks:create",
+  decksUpdate: "decks:update",
+  decksDelete: "decks:delete",
+  decksRestore: "decks:restore",
+  cardsListByDeck: "cards:list-by-deck",
+  cardsCreate: "cards:create",
+  cardsUpdate: "cards:update",
+  cardsDelete: "cards:delete",
+  cardsRestore: "cards:restore",
+  cardsCounts: "cards:counts",
+  reviewQueue: "review:queue",
+  reviewGrade: "review:grade",
+  reviewUndo: "review:undo",
+  reviewPreview: "review:preview",
   appInfo: "app:info",
 } as const;
 
@@ -445,6 +460,185 @@ export interface ExamsRestoreRequest {
   id: string;
 }
 
+/**
+ * A deck as seen by the renderer (mirrors the `decks` table via the store's
+ * mapping, STUDY flashcards). Its subject is carried by id. Redeclared here so
+ * the renderer never imports DB code.
+ */
+export interface Deck {
+  id: string;
+  profileId: string;
+  subjectId: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Fields for a new deck; both `subjectId` and `name` are required. The main process revalidates each. */
+export interface NewDeckFields {
+  subjectId: string;
+  name: string;
+}
+
+/** A partial edit of a deck's own fields; an omitted key is untouched. */
+export interface DeckFieldChanges {
+  subjectId?: string;
+  name?: string;
+}
+
+export interface DecksListRequest {
+  profileId: string;
+}
+
+export interface DecksCreateRequest {
+  profileId: string;
+  deck: NewDeckFields;
+}
+
+export interface DecksUpdateRequest {
+  profileId: string;
+  id: string;
+  changes: DeckFieldChanges;
+}
+
+export interface DecksDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
+/** Undo of a soft delete: restores a previously deleted deck. */
+export interface DecksRestoreRequest {
+  profileId: string;
+  id: string;
+}
+
+/**
+ * Closed FSRS card-state domain (mirrors `@nexus/db`'s `CardState`, itself
+ * mirroring `ts-fsrs`'s `State` enum: New, Learning, Review, Relearning).
+ * Redeclared here so the renderer never imports DB code.
+ */
+export type CardState = 0 | 1 | 2 | 3;
+
+/**
+ * A flashcard as seen by the renderer (mirrors the `cards` table via the
+ * store's mapping, STUDY flashcards / FSRS). `front`/`back` may contain `$…$`
+ * KaTeX math, stored verbatim. Redeclared here so the renderer never imports
+ * DB code.
+ */
+export interface Card {
+  id: string;
+  profileId: string;
+  deckId: string;
+  front: string;
+  back: string;
+  due: string;
+  stability: number;
+  difficulty: number;
+  elapsedDays: number;
+  scheduledDays: number;
+  learningSteps: number;
+  reps: number;
+  lapses: number;
+  state: CardState;
+  lastReview: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Fields for a new card; `deckId`, `front` and `back` are all required. The main process revalidates each. */
+export interface NewCardFields {
+  deckId: string;
+  front: string;
+  back: string;
+}
+
+/** A partial edit of a card's own content/placement fields; never touches FSRS scheduling state. */
+export interface CardFieldChanges {
+  deckId?: string;
+  front?: string;
+  back?: string;
+}
+
+export interface CardsListByDeckRequest {
+  profileId: string;
+  deckId: string;
+}
+
+export interface CardsCreateRequest {
+  profileId: string;
+  card: NewCardFields;
+}
+
+export interface CardsUpdateRequest {
+  profileId: string;
+  id: string;
+  changes: CardFieldChanges;
+}
+
+export interface CardsDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
+/** Undo of a soft delete: restores a previously deleted card. */
+export interface CardsRestoreRequest {
+  profileId: string;
+  id: string;
+}
+
+export interface CardsCountsRequest {
+  profileId: string;
+}
+
+/** Per-deck review-queue badge counts (STUDY flashcards). */
+export interface DeckCounts {
+  deckId: string;
+  newCount: number;
+  dueCount: number;
+}
+
+/** Closed FSRS review-rating domain (Again/Hard/Good/Easy). Manual (0) is never accepted. */
+export type CardRating = 1 | 2 | 3 | 4;
+
+/** Optional scope for the review queue: at most one of `deckId`/`subjectId`, plus a cap on New cards. */
+export interface ReviewQueueScope {
+  deckId?: string;
+  subjectId?: string;
+  newLimit?: number;
+}
+
+/** The review queue: optionally scoped to one deck or one subject, plus a cap on New cards. `now` is stamped by main, never accepted from the renderer. */
+export interface ReviewQueueRequest extends ReviewQueueScope {
+  profileId: string;
+}
+
+/** Grades one review. `now` is stamped by main, never accepted from the renderer. */
+export interface ReviewGradeRequest {
+  profileId: string;
+  id: string;
+  rating: CardRating;
+}
+
+/** Undoes the most recent review of a card. `now` is stamped by main, never accepted from the renderer. */
+export interface ReviewUndoRequest {
+  profileId: string;
+  id: string;
+}
+
+/** The four would-be next due dates for a card, one per rating, without persisting anything. */
+export interface PreviewIntervals {
+  again: string;
+  hard: string;
+  good: string;
+  easy: string;
+}
+
+/** Previews the four would-be next due dates for a card. `now` is stamped by main, never accepted from the renderer. */
+export interface ReviewPreviewRequest {
+  profileId: string;
+  id: string;
+}
+
 /** Runtime and environment facts, proving the main-process path end to end. */
 export interface AppInfo {
   name: string;
@@ -500,5 +694,20 @@ export interface NexusApi {
   updateExam(profileId: string, id: string, changes: ExamFieldChanges): Promise<Exam>;
   deleteExam(profileId: string, id: string): Promise<void>;
   restoreExam(profileId: string, id: string): Promise<void>;
+  listDecks(profileId: string): Promise<Deck[]>;
+  createDeck(profileId: string, deck: NewDeckFields): Promise<Deck>;
+  updateDeck(profileId: string, id: string, changes: DeckFieldChanges): Promise<Deck>;
+  deleteDeck(profileId: string, id: string): Promise<void>;
+  restoreDeck(profileId: string, id: string): Promise<void>;
+  listCardsByDeck(profileId: string, deckId: string): Promise<Card[]>;
+  createCard(profileId: string, card: NewCardFields): Promise<Card>;
+  updateCard(profileId: string, id: string, changes: CardFieldChanges): Promise<Card>;
+  deleteCard(profileId: string, id: string): Promise<void>;
+  restoreCard(profileId: string, id: string): Promise<void>;
+  cardCounts(profileId: string): Promise<DeckCounts[]>;
+  reviewQueue(profileId: string, scope?: ReviewQueueScope): Promise<Card[]>;
+  gradeReview(profileId: string, id: string, rating: CardRating): Promise<Card>;
+  undoReview(profileId: string, id: string): Promise<Card>;
+  previewReview(profileId: string, id: string): Promise<PreviewIntervals>;
   appInfo(): Promise<AppInfo>;
 }
