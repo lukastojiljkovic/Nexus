@@ -21,6 +21,7 @@
     "@nexus/ui": "workspace:*",
     "better-sqlite3-multiple-ciphers": "^12.11.1",
     "electron-updater": "^6.8.9",
+    "katex": "^0.17.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

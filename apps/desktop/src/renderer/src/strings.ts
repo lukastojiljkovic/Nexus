@@ -241,6 +241,66 @@ export const strings = {
     calendarTag: "Ispit",
     dashboardTitle: "Ispiti",
     dashboardEmpty: "Nema zakazanih ispita.",
+
+    // --- Decks (Špilovi), under each subject --------------------------------
+    decksTitle: "Špilovi",
+    noDecks: "Nema špilova za ovaj predmet.",
+    addDeck: "Dodaj špil",
+    saveDeck: "Sačuvaj",
+    cancelDeck: "Otkaži",
+    deckNameLabel: "Naziv špila",
+    deckNamePlaceholder: "Naziv špila",
+    editDeckLabel: "Izmeni špil",
+    deleteDeckLabel: "Obriši špil",
+    deletedDeckNotice: "Špil obrisan",
+    newCount: "nove",
+    dueCount: "za ponavljanje",
+    openCards: "Kartice",
+    studyDeck: "Uči",
+    studyAll: "Uči sve",
+
+    // --- Card management (deck drill-in) ------------------------------------
+    cardsBack: "← Nazad",
+    cardsEmptyTitle: "Nema kartica",
+    cardsEmptyDescription:
+      "Dodaj prvu karticu u formi iznad — prednja i zadnja strana su dovoljne.",
+    loadCardsError: "Kartice se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
+    addCard: "Dodaj karticu",
+    saveCard: "Sačuvaj",
+    cancelCard: "Otkaži",
+    frontLabel: "Prednja strana",
+    frontPlaceholder: "Prednja strana",
+    backLabel: "Zadnja strana",
+    backPlaceholder: "Zadnja strana",
+    deckSelectLabel: "Špil",
+    mathHint: "Koristi $…$ za matematičke izraze.",
+    editCardLabel: "Izmeni karticu",
+    deleteCardLabel: "Obriši karticu",
+    deletedCardNotice: "Kartica obrisana",
+    /** Card-state chip labels; Learning and Relearning share one label (both "in progress"). */
+    cardState: {
+      new: "Nova",
+      learning: "Uči se",
+      review: "Na ponavljanju",
+    },
+    cardDueLabel: "Sledeće ponavljanje",
+
+    // --- Review session (keyboard-first) ------------------------------------
+    reviewTitle: "Učenje",
+    reviewExit: "Prekini",
+    revealAnswer: "Prikaži odgovor",
+    /** Grade-button labels, keyed by CardRating value (1–4, Again..Easy). */
+    rating: {
+      again: "Ponovo",
+      hard: "Teško",
+      good: "Dobro",
+      easy: "Lako",
+    },
+    reviewUndo: "Opozovi",
+    reviewHint: "Space — odgovor · 1–4 — ocena · U — opozovi · Esc — izlaz",
+    reviewCompleteTitle: "Sve obnovljeno za sada.",
+    reviewCompleteLabel: "Ocenjeno kartica",
+    reviewBack: "Nazad",
   },
 } as const;
 

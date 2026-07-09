@@ -2,24 +2,37 @@ import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { Button, Chip, EmptyState, ListRow, TextField } from "@nexus/ui";
 import type {
+  Card,
+  CardFieldChanges,
+  CardRating,
+  CardState,
+  Deck,
+  DeckCounts,
+  DeckFieldChanges,
   Exam,
   ExamFieldChanges,
   ExamType,
+  NewCardFields,
+  NewDeckFields,
   NewExamFields,
   NewSubjectFields,
+  PreviewIntervals,
+  ReviewQueueScope,
   Subject,
   SubjectColor,
   SubjectFieldChanges,
 } from "../../shared/ipc.js";
 import { daysUntilExam, examCountdownLabel, examCountdownVariant, formatExamDate } from "./examDates.js";
+import { MathText } from "./MathText.js";
+import { intervalLabel, isDueWithinSession } from "./reviewIntervals.js";
 import { strings } from "./strings.js";
 
 // --- Field orderings (renderer mirror of @nexus/db) -------------------------
 //
 // The renderer never imports DB/Node code (SEC-EL-02: the wire contract stays
 // self-contained), so the option orders are redeclared here, matching
-// SUBJECT_COLORS / EXAM_TYPES in @nexus/db. The Serbian labels live in
-// strings.ts, applied at render time.
+// SUBJECT_COLORS / EXAM_TYPES / CARD_RATINGS in @nexus/db. The Serbian labels
+// live in strings.ts, applied at render time.
 const SUBJECT_COLORS: readonly SubjectColor[] = [
   "jade",
   "gold",
@@ -29,10 +42,63 @@ const SUBJECT_COLORS: readonly SubjectColor[] = [
   "graphite",
 ];
 const EXAM_TYPES: readonly ExamType[] = ["pismeni", "usmeni", "kolokvijum"];
+const CARD_RATINGS: readonly CardRating[] = [1, 2, 3, 4];
+const RATING_KEYS: Record<CardRating, keyof typeof strings.study.rating> = {
+  1: "again",
+  2: "hard",
+  3: "good",
+  4: "easy",
+};
 
-// Serbian Latin collation for subject names (mirrors @nexus/core's views engine
-// collator) — plain "sr" resolves to the Cyrillic tailoring and misorders š/č/ć.
+/** Mirrors CardStore's MAX_TEXT_LENGTH — client-side parity with the store's own validation. */
+const MAX_CARD_TEXT_LENGTH = 10000;
+
+// Serbian Latin collation for subject/deck names (mirrors @nexus/core's views
+// engine collator) — plain "sr" resolves to the Cyrillic tailoring and
+// misorders š/č/ć.
 const collator = new Intl.Collator(["sr-Latn", "sr"]);
+
+/** Card-state chip label; Learning (1) and Relearning (3) share one label — both read as "in progress". */
+function cardStateLabel(state: CardState): string {
+  const labels = strings.study.cardState;
+  if (state === 0) return labels.new;
+  if (state === 2) return labels.review;
+  return labels.learning;
+}
+
+/** Card-state chip variant: New is quiet, Learning/Relearning reads as needing attention (gold), Review as settled (jade). */
+function cardStateVariant(state: CardState): "neutral" | "data" | "accent" {
+  if (state === 0) return "neutral";
+  if (state === 2) return "data";
+  return "accent";
+}
+
+/** Deck badge chip variant: quiet at zero, the given accent once there is actually something to act on. */
+function countVariant(count: number, whenPositive: "data" | "accent"): "neutral" | "data" | "accent" {
+  return count > 0 ? whenPositive : "neutral";
+}
+
+/** Absolute next-due date+time for a non-New card, Serbian Latin; degrades to the raw string on bad input. */
+function formatCardDue(due: string): string {
+  const date = new Date(due);
+  return Number.isNaN(date.getTime())
+    ? due
+    : new Intl.DateTimeFormat("sr-Latn", {
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(date);
+}
+
+/** Returns `list` with the first card matching `id` removed (used to drop a requeued copy on undo). */
+function removeFirst(list: Card[], id: string): Card[] {
+  const index = list.findIndex((card) => card.id === id);
+  if (index === -1) return list;
+  const next = list.slice();
+  next.splice(index, 1);
+  return next;
+}
 
 /** A row of colour-dot toggle buttons over the six closed `SubjectColor` keys. */
 function ColorPicker({
@@ -65,17 +131,18 @@ export interface StudyPageProps {
 }
 
 /**
- * The STUDY module page (v0 basics): a subject hub. One form both adds and
- * edits subjects (name, colour, optional semester); each subject is a card
- * listing its exams (sorted soonest first) with a countdown chip, and its own
- * inline add/edit exam form. Archiving moves a subject into a collapsed
- * secondary section without deleting it; both subjects and exams support
- * delete-with-undo. Every write goes through the subjects:* / exams:* IPC
- * allowlist, so the store stays the single source of truth.
+ * The STUDY module page: a subject hub (subjects, exams, decks), a deck
+ * drill-in for card management, and a keyboard-first review session — one
+ * internal route, no router. Every write goes through the subjects:* /
+ * exams:* / decks:* / cards:* / review:* IPC allowlist, so the store stays
+ * the single source of truth; `now` for FSRS scheduling is always stamped by
+ * the main process.
  */
 export function StudyPage({ profileId }: StudyPageProps) {
   const [subjects, setSubjects] = useState<Subject[] | null>(null);
   const [exams, setExams] = useState<Exam[] | null>(null);
+  const [decks, setDecks] = useState<Deck[] | null>(null);
+  const [deckCounts, setDeckCounts] = useState<DeckCounts[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [archivedOpen, setArchivedOpen] = useState(false);
 
@@ -96,17 +163,44 @@ export function StudyPage({ profileId }: StudyPageProps) {
   const [examScope, setExamScope] = useState("");
   const [pendingUndoExamId, setPendingUndoExamId] = useState<string | null>(null);
 
+  // The deck form mirrors the exam form's idiom exactly (inline reveal, one
+  // subject at a time).
+  const [deckFormSubjectId, setDeckFormSubjectId] = useState<string | null>(null);
+  const [editingDeckId, setEditingDeckId] = useState<string | null>(null);
+  const [deckName, setDeckName] = useState("");
+  const [pendingUndoDeckId, setPendingUndoDeckId] = useState<string | null>(null);
+
+  // Internal routing: the hub, a deck's card-management drill-in, or a review
+  // session. No router — a discriminated union kept in component state.
+  const [route, setRoute] = useState<
+    { kind: "hub" } | { kind: "deck"; deckId: string } | { kind: "review"; scope: ReviewQueueScope }
+  >({ kind: "hub" });
+  const activeDeckId = route.kind === "deck" ? route.deckId : null;
+
+  const [cards, setCards] = useState<Card[] | null>(null);
+  const [cardsFailed, setCardsFailed] = useState(false);
+  const [cardFormVisible, setCardFormVisible] = useState(false);
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const [cardFront, setCardFront] = useState("");
+  const [cardBack, setCardBack] = useState("");
+  const [cardDeckId, setCardDeckId] = useState("");
+  const [pendingUndoCardId, setPendingUndoCardId] = useState<string | null>(null);
+
   useEffect(() => {
     let active = true;
     void (async () => {
       try {
-        const [nextSubjects, nextExams] = await Promise.all([
+        const [nextSubjects, nextExams, nextDecks, nextCounts] = await Promise.all([
           window.nexus.listSubjects(profileId),
           window.nexus.listExams(profileId),
+          window.nexus.listDecks(profileId),
+          window.nexus.cardCounts(profileId),
         ]);
         if (!active) return;
         setSubjects(nextSubjects);
         setExams(nextExams);
+        setDecks(nextDecks);
+        setDeckCounts(nextCounts);
       } catch (error) {
         if (active) setFailed(true);
         console.error("Nexus: failed to load study data:", error);
@@ -117,12 +211,43 @@ export function StudyPage({ profileId }: StudyPageProps) {
     };
   }, [profileId]);
 
+  useEffect(() => {
+    if (activeDeckId == null) return;
+    let active = true;
+    setCards(null);
+    setCardsFailed(false);
+    void (async () => {
+      try {
+        const list = await window.nexus.listCardsByDeck(profileId, activeDeckId);
+        if (active) setCards(list);
+      } catch (error) {
+        if (active) setCardsFailed(true);
+        console.error("Nexus: failed to load cards:", error);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profileId, activeDeckId]);
+
   async function reloadSubjects(): Promise<void> {
     setSubjects(await window.nexus.listSubjects(profileId));
   }
 
   async function reloadExams(): Promise<void> {
     setExams(await window.nexus.listExams(profileId));
+  }
+
+  async function reloadDecks(): Promise<void> {
+    setDecks(await window.nexus.listDecks(profileId));
+  }
+
+  async function reloadDeckCounts(): Promise<void> {
+    setDeckCounts(await window.nexus.cardCounts(profileId));
+  }
+
+  async function reloadCards(deckId: string): Promise<void> {
+    setCards(await window.nexus.listCardsByDeck(profileId, deckId));
   }
 
   function resetSubjectForm(): void {
@@ -185,9 +310,14 @@ export function StudyPage({ profileId }: StudyPageProps) {
     try {
       await window.nexus.deleteSubject(profileId, subject.id);
       setSubjects((prev) => prev && prev.filter((s) => s.id !== subject.id));
-      // Never leave the subject form or an exam form bound to a gone subject.
+      // Never leave a form, or the deck view, bound to a gone subject.
       if (editingSubjectId === subject.id) resetSubjectForm();
       if (examFormSubjectId === subject.id) closeExamForm();
+      if (deckFormSubjectId === subject.id) closeDeckForm();
+      if (route.kind === "deck") {
+        const openDeck = decks?.find((d) => d.id === route.deckId);
+        if (openDeck?.subjectId === subject.id) setRoute({ kind: "hub" });
+      }
       // One pending undo at a time — a fresh delete replaces the previous offer.
       setPendingUndoSubjectId(subject.id);
     } catch (error) {
@@ -283,7 +413,163 @@ export function StudyPage({ profileId }: StudyPageProps) {
     }
   }
 
-  const loading = subjects === null || exams === null;
+  function closeDeckForm(): void {
+    setDeckFormSubjectId(null);
+    setEditingDeckId(null);
+    setDeckName("");
+  }
+
+  function startAddDeck(subjectId: string): void {
+    setDeckFormSubjectId(subjectId);
+    setEditingDeckId(null);
+    setDeckName("");
+  }
+
+  function startEditDeck(deck: Deck): void {
+    setDeckFormSubjectId(deck.subjectId);
+    setEditingDeckId(deck.id);
+    setDeckName(deck.name);
+  }
+
+  async function submitDeckForm(
+    event: FormEvent<HTMLFormElement>,
+    subjectId: string,
+  ): Promise<void> {
+    event.preventDefault();
+    const trimmedName = deckName.trim();
+    if (trimmedName.length === 0) return;
+
+    try {
+      if (editingDeckId != null) {
+        const changes: DeckFieldChanges = { name: trimmedName };
+        const updated = await window.nexus.updateDeck(profileId, editingDeckId, changes);
+        setDecks((prev) => prev && prev.map((d) => (d.id === updated.id ? updated : d)));
+      } else {
+        const fields: NewDeckFields = { subjectId, name: trimmedName };
+        const created = await window.nexus.createDeck(profileId, fields);
+        setDecks((prev) => (prev ? [...prev, created] : [created]));
+        await reloadDeckCounts();
+      }
+      closeDeckForm();
+    } catch (error) {
+      console.error("Nexus: failed to save deck:", error);
+    }
+  }
+
+  async function removeDeck(deck: Deck): Promise<void> {
+    try {
+      await window.nexus.deleteDeck(profileId, deck.id);
+      setDecks((prev) => prev && prev.filter((d) => d.id !== deck.id));
+      if (editingDeckId === deck.id) closeDeckForm();
+      if (route.kind === "deck" && route.deckId === deck.id) setRoute({ kind: "hub" });
+      // One pending undo at a time — a fresh delete replaces the previous offer.
+      setPendingUndoDeckId(deck.id);
+      await reloadDeckCounts();
+    } catch (error) {
+      console.error("Nexus: failed to delete deck:", error);
+    }
+  }
+
+  async function undoDeck(): Promise<void> {
+    if (!pendingUndoDeckId) return;
+    try {
+      await window.nexus.restoreDeck(profileId, pendingUndoDeckId);
+      setPendingUndoDeckId(null);
+      await Promise.all([reloadDecks(), reloadDeckCounts()]);
+    } catch (error) {
+      console.error("Nexus: failed to restore deck:", error);
+    }
+  }
+
+  function closeCardForm(): void {
+    setCardFormVisible(false);
+    setEditingCardId(null);
+    setCardFront("");
+    setCardBack("");
+    setCardDeckId("");
+  }
+
+  function startAddCard(deckId: string): void {
+    setCardFormVisible(true);
+    setEditingCardId(null);
+    setCardFront("");
+    setCardBack("");
+    setCardDeckId(deckId);
+  }
+
+  function startEditCard(card: Card): void {
+    setCardFormVisible(true);
+    setEditingCardId(card.id);
+    setCardFront(card.front);
+    setCardBack(card.back);
+    setCardDeckId(card.deckId);
+  }
+
+  async function submitCardForm(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    const trimmedFront = cardFront.trim();
+    const trimmedBack = cardBack.trim();
+    if (trimmedFront.length === 0 || trimmedBack.length === 0) return;
+    if (trimmedFront.length > MAX_CARD_TEXT_LENGTH || trimmedBack.length > MAX_CARD_TEXT_LENGTH) return;
+
+    try {
+      if (editingCardId != null) {
+        const changes: CardFieldChanges = { deckId: cardDeckId, front: trimmedFront, back: trimmedBack };
+        const updated = await window.nexus.updateCard(profileId, editingCardId, changes);
+        setCards((prev) => {
+          if (!prev) return prev;
+          // Moved to a different deck: it leaves this drill-in's list.
+          if (activeDeckId != null && updated.deckId !== activeDeckId) {
+            return prev.filter((c) => c.id !== updated.id);
+          }
+          return prev.map((c) => (c.id === updated.id ? updated : c));
+        });
+      } else {
+        const fields: NewCardFields = { deckId: cardDeckId, front: trimmedFront, back: trimmedBack };
+        const created = await window.nexus.createCard(profileId, fields);
+        setCards((prev) => (prev ? [...prev, created] : [created]));
+      }
+      closeCardForm();
+      await reloadDeckCounts();
+    } catch (error) {
+      console.error("Nexus: failed to save card:", error);
+    }
+  }
+
+  async function removeCard(card: Card): Promise<void> {
+    try {
+      await window.nexus.deleteCard(profileId, card.id);
+      setCards((prev) => prev && prev.filter((c) => c.id !== card.id));
+      if (editingCardId === card.id) closeCardForm();
+      // One pending undo at a time — a fresh delete replaces the previous offer.
+      setPendingUndoCardId(card.id);
+      await reloadDeckCounts();
+    } catch (error) {
+      console.error("Nexus: failed to delete card:", error);
+    }
+  }
+
+  async function undoCard(): Promise<void> {
+    if (!pendingUndoCardId || activeDeckId == null) return;
+    try {
+      await window.nexus.restoreCard(profileId, pendingUndoCardId);
+      setPendingUndoCardId(null);
+      await Promise.all([reloadCards(activeDeckId), reloadDeckCounts()]);
+    } catch (error) {
+      console.error("Nexus: failed to restore card:", error);
+    }
+  }
+
+  function startReview(scope: ReviewQueueScope): void {
+    setRoute({ kind: "review", scope });
+  }
+
+  function exitReview(): void {
+    setRoute({ kind: "hub" });
+    void reloadDeckCounts();
+  }
+
+  const loading = subjects === null || exams === null || decks === null || deckCounts === null;
   const sortedSubjects = subjects ? [...subjects].sort((a, b) => collator.compare(a.name, b.name)) : [];
   const activeSubjects = sortedSubjects.filter((s) => !s.archived);
   const archivedSubjects = sortedSubjects.filter((s) => s.archived);
@@ -295,6 +581,185 @@ export function StudyPage({ profileId }: StudyPageProps) {
       .sort((a, b) => a.examDate.localeCompare(b.examDate) || a.id.localeCompare(b.id));
   }
 
+  /** This subject's decks, sr-Latn sorted (create appends optimistically). */
+  function decksForSubject(subjectId: string): Deck[] {
+    return (decks ?? [])
+      .filter((deck) => deck.subjectId === subjectId)
+      .sort((a, b) => collator.compare(a.name, b.name));
+  }
+
+  function countsFor(deckId: string): DeckCounts {
+    return deckCounts?.find((c) => c.deckId === deckId) ?? { deckId, newCount: 0, dueCount: 0 };
+  }
+
+  /** True once at least one of this subject's decks has a new or due card ("Uči sve"). */
+  function subjectHasStudiable(subjectId: string): boolean {
+    return decksForSubject(subjectId).some((deck) => {
+      const counts = countsFor(deck.id);
+      return counts.newCount > 0 || counts.dueCount > 0;
+    });
+  }
+
+  // --- Review session route --------------------------------------------------
+  if (route.kind === "review") {
+    return <ReviewSession profileId={profileId} scope={route.scope} onExit={exitReview} />;
+  }
+
+  // --- Deck drill-in route (card management) ---------------------------------
+  if (route.kind === "deck") {
+    const deck = decks?.find((d) => d.id === route.deckId);
+    const deckSubject = deck ? subjects?.find((s) => s.id === deck.subjectId) : undefined;
+    const deckOptions = deck ? decksForSubject(deck.subjectId) : [];
+
+    return (
+      <div className="study">
+        <div className="study__deck-view-header">
+          <Button size="sm" className="study__back" onClick={() => setRoute({ kind: "hub" })}>
+            {strings.study.cardsBack}
+          </Button>
+          {deck && (
+            <span className="study__deck-view-heading">
+              <span className="study__deck-view-name">{deck.name}</span>
+              {deckSubject && <span className="study__deck-view-subject">{deckSubject.name}</span>}
+            </span>
+          )}
+        </div>
+
+        {pendingUndoCardId != null && (
+          <div className="study__undo" role="status">
+            <span className="study__undo-text">{strings.study.deletedCardNotice}</span>
+            <Button size="sm" className="study__undo-action" onClick={() => void undoCard()}>
+              {strings.study.undo}
+            </Button>
+            <Button
+              size="sm"
+              className="study__undo-dismiss"
+              aria-label={strings.study.dismiss}
+              onClick={() => setPendingUndoCardId(null)}
+            >
+              ×
+            </Button>
+          </div>
+        )}
+
+        {cardsFailed ? (
+          <EmptyState title={strings.study.cardsEmptyTitle} description={strings.study.loadCardsError} />
+        ) : cards === null ? (
+          <p className="app__muted">{strings.app.loading}</p>
+        ) : (
+          <>
+            {cards.length === 0 ? (
+              <EmptyState
+                title={strings.study.cardsEmptyTitle}
+                description={strings.study.cardsEmptyDescription}
+              />
+            ) : (
+              <div className="study__cards">
+                {cards.map((card) => (
+                  <ListRow
+                    key={card.id}
+                    trailing={
+                      <span className="study__card-actions">
+                        <Chip variant={cardStateVariant(card.state)}>{cardStateLabel(card.state)}</Chip>
+                        {card.state !== 0 && (
+                          <span className="study__card-due">{formatCardDue(card.due)}</span>
+                        )}
+                        <Button
+                          size="sm"
+                          className="study__edit"
+                          aria-label={strings.study.editCardLabel}
+                          onClick={() => startEditCard(card)}
+                        >
+                          ✎
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="study__delete"
+                          aria-label={strings.study.deleteCardLabel}
+                          onClick={() => void removeCard(card)}
+                        >
+                          ×
+                        </Button>
+                      </span>
+                    }
+                  >
+                    <MathText text={card.front} className="study__card-front" />
+                  </ListRow>
+                ))}
+              </div>
+            )}
+
+            {cardFormVisible ? (
+              <form className="study__card-form" onSubmit={(e) => void submitCardForm(e)}>
+                <div className="study__card-field">
+                  <textarea
+                    className="nx-textfield__input study__textarea"
+                    value={cardFront}
+                    placeholder={strings.study.frontPlaceholder}
+                    aria-label={strings.study.frontLabel}
+                    maxLength={MAX_CARD_TEXT_LENGTH}
+                    autoFocus
+                    onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setCardFront(event.target.value)}
+                  />
+                  {cardFront.trim().length > 0 && (
+                    <div className="study__math-preview">
+                      <MathText text={cardFront} />
+                    </div>
+                  )}
+                </div>
+                <div className="study__card-field">
+                  <textarea
+                    className="nx-textfield__input study__textarea"
+                    value={cardBack}
+                    placeholder={strings.study.backPlaceholder}
+                    aria-label={strings.study.backLabel}
+                    maxLength={MAX_CARD_TEXT_LENGTH}
+                    onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setCardBack(event.target.value)}
+                  />
+                  {cardBack.trim().length > 0 && (
+                    <div className="study__math-preview">
+                      <MathText text={cardBack} />
+                    </div>
+                  )}
+                </div>
+                <p className="study__math-hint">{strings.study.mathHint}</p>
+                {editingCardId != null && (
+                  <select
+                    className="study__select"
+                    value={cardDeckId}
+                    aria-label={strings.study.deckSelectLabel}
+                    onChange={(event: ChangeEvent<HTMLSelectElement>) => setCardDeckId(event.target.value)}
+                  >
+                    {deckOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <div className="study__card-form-actions">
+                  <Button type="submit" variant="primary" size="sm">
+                    {editingCardId != null ? strings.study.saveCard : strings.study.addCard}
+                  </Button>
+                  <Button type="button" size="sm" className="study__cancel" onClick={closeCardForm}>
+                    {strings.study.cancelCard}
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              deck && (
+                <Button size="sm" className="study__add-exam" onClick={() => startAddCard(deck.id)}>
+                  {strings.study.addCard}
+                </Button>
+              )
+            )}
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // --- Hub route (subjects, exams, decks) -------------------------------------
   return (
     <div className="study">
       <h1 className="study__title">{strings.study.title}</h1>
@@ -361,6 +826,23 @@ export function StudyPage({ profileId }: StudyPageProps) {
         </div>
       )}
 
+      {pendingUndoDeckId != null && (
+        <div className="study__undo" role="status">
+          <span className="study__undo-text">{strings.study.deletedDeckNotice}</span>
+          <Button size="sm" className="study__undo-action" onClick={() => void undoDeck()}>
+            {strings.study.undo}
+          </Button>
+          <Button
+            size="sm"
+            className="study__undo-dismiss"
+            aria-label={strings.study.dismiss}
+            onClick={() => setPendingUndoDeckId(null)}
+          >
+            ×
+          </Button>
+        </div>
+      )}
+
       {failed ? (
         <EmptyState title={strings.study.emptyTitle} description={strings.study.loadError} />
       ) : loading ? (
@@ -372,6 +854,7 @@ export function StudyPage({ profileId }: StudyPageProps) {
           <div className="study__subjects">
             {activeSubjects.map((subject) => {
               const subjectExams = examsForSubject(subject.id);
+              const subjectDecks = decksForSubject(subject.id);
               return (
                 <div key={subject.id} className="study__subject-card">
                   <div className="study__subject-header">
@@ -502,6 +985,99 @@ export function StudyPage({ profileId }: StudyPageProps) {
                       {strings.study.addExam}
                     </Button>
                   )}
+
+                  <div className="study__decks">
+                    <div className="study__decks-header">
+                      <h3 className="study__decks-title">{strings.study.decksTitle}</h3>
+                      {subjectHasStudiable(subject.id) && (
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          onClick={() => startReview({ subjectId: subject.id })}
+                        >
+                          {strings.study.studyAll}
+                        </Button>
+                      )}
+                    </div>
+                    {subjectDecks.length === 0 ? (
+                      <p className="study__decks-empty">{strings.study.noDecks}</p>
+                    ) : (
+                      subjectDecks.map((deck) => {
+                        const counts = countsFor(deck.id);
+                        const canStudy = counts.newCount > 0 || counts.dueCount > 0;
+                        return (
+                          <ListRow
+                            key={deck.id}
+                            trailing={
+                              <span className="study__deck-actions">
+                                <Chip variant={countVariant(counts.newCount, "data")}>
+                                  {counts.newCount} {strings.study.newCount}
+                                </Chip>
+                                <Chip variant={countVariant(counts.dueCount, "accent")}>
+                                  {counts.dueCount} {strings.study.dueCount}
+                                </Chip>
+                                <Button
+                                  size="sm"
+                                  className="study__edit"
+                                  aria-label={strings.study.editDeckLabel}
+                                  onClick={() => startEditDeck(deck)}
+                                >
+                                  ✎
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  className="study__delete"
+                                  aria-label={strings.study.deleteDeckLabel}
+                                  onClick={() => void removeDeck(deck)}
+                                >
+                                  ×
+                                </Button>
+                                <Button size="sm" onClick={() => setRoute({ kind: "deck", deckId: deck.id })}>
+                                  {strings.study.openCards}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="primary"
+                                  disabled={!canStudy}
+                                  onClick={() => startReview({ deckId: deck.id })}
+                                >
+                                  {strings.study.studyDeck}
+                                </Button>
+                              </span>
+                            }
+                          >
+                            <span className="study__deck-name">{deck.name}</span>
+                          </ListRow>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {deckFormSubjectId === subject.id ? (
+                    <form
+                      className="study__deck-form"
+                      onSubmit={(e) => void submitDeckForm(e, subject.id)}
+                    >
+                      <input
+                        className="nx-textfield__input study__deck-name-input"
+                        value={deckName}
+                        placeholder={strings.study.deckNamePlaceholder}
+                        aria-label={strings.study.deckNameLabel}
+                        autoFocus
+                        onChange={(event: ChangeEvent<HTMLInputElement>) => setDeckName(event.target.value)}
+                      />
+                      <Button type="submit" variant="primary" size="sm">
+                        {editingDeckId != null ? strings.study.saveDeck : strings.study.addDeck}
+                      </Button>
+                      <Button type="button" size="sm" className="study__cancel" onClick={closeDeckForm}>
+                        {strings.study.cancelDeck}
+                      </Button>
+                    </form>
+                  ) : (
+                    <Button size="sm" className="study__add-exam" onClick={() => startAddDeck(subject.id)}>
+                      {strings.study.addDeck}
+                    </Button>
+                  )}
                 </div>
               );
             })}
@@ -553,6 +1129,236 @@ export function StudyPage({ profileId }: StudyPageProps) {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+// --- Review session -----------------------------------------------------
+
+interface ReviewSessionProps {
+  profileId: string;
+  scope: ReviewQueueScope;
+  onExit: () => void;
+}
+
+interface GradeHistoryEntry {
+  cardId: string;
+  /** Whether grading this card requeued it at the end of the session (vs. leaving permanently). */
+  requeued: boolean;
+}
+
+/**
+ * A keyboard-first review session over `reviewQueue(profileId, scope)`,
+ * fetched once. Grading a Learning/Relearning card whose next due is within
+ * 15 minutes re-queues it at the end of the session queue; anything else
+ * leaves permanently. A session-local stack of graded card ids backs
+ * multi-level undo: it pops one grade at a time, rolling the DB back via
+ * `undoReview` and dropping any requeued copy from the queue.
+ */
+function ReviewSession({ profileId, scope, onExit }: ReviewSessionProps) {
+  const [queue, setQueue] = useState<Card[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [completedCount, setCompletedCount] = useState(0);
+  const [revealed, setRevealed] = useState(false);
+  const [preview, setPreview] = useState<PreviewIntervals | null>(null);
+  const historyRef = useRef<GradeHistoryEntry[]>([]);
+  const scopeRef = useRef(scope);
+  // Guards against a held-down grade key (auto-repeat) or a double-click firing
+  // a second gradeReview for the same card before the first one lands — state
+  // (`revealed`) only flips after the await, so it can't serve as the guard.
+  const gradingRef = useRef(false);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const initial = await window.nexus.reviewQueue(profileId, scopeRef.current);
+        if (!active) return;
+        setQueue(initial);
+        setTotal(initial.length);
+      } catch (error) {
+        console.error("Nexus: failed to load review queue:", error);
+        if (active) {
+          setQueue([]);
+          setTotal(0);
+        }
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profileId]);
+
+  const current = queue && queue.length > 0 ? queue[0] : null;
+
+  async function reveal(): Promise<void> {
+    if (!current || revealed) return;
+    setRevealed(true);
+    try {
+      setPreview(await window.nexus.previewReview(profileId, current.id));
+    } catch (error) {
+      console.error("Nexus: failed to preview review intervals:", error);
+      setPreview(null);
+    }
+  }
+
+  async function grade(rating: CardRating): Promise<void> {
+    if (!current || !revealed || !queue || gradingRef.current) return;
+    gradingRef.current = true;
+    try {
+      const now = new Date().toISOString();
+      const graded = await window.nexus.gradeReview(profileId, current.id, rating);
+      const requeue = (graded.state === 1 || graded.state === 3) && isDueWithinSession(now, graded.due);
+
+      historyRef.current.push({ cardId: current.id, requeued: requeue });
+      const rest = queue.slice(1);
+      setQueue(requeue ? [...rest, graded] : rest);
+      if (!requeue) setCompletedCount((n) => n + 1);
+      setRevealed(false);
+      setPreview(null);
+    } catch (error) {
+      console.error("Nexus: failed to grade review:", error);
+    } finally {
+      gradingRef.current = false;
+    }
+  }
+
+  async function undoLast(): Promise<void> {
+    const entry = historyRef.current.pop();
+    if (!entry) return;
+    try {
+      const restored = await window.nexus.undoReview(profileId, entry.cardId);
+      setQueue((prev) => {
+        const base = prev ?? [];
+        const withoutRequeuedCopy = entry.requeued ? removeFirst(base, restored.id) : base;
+        return [restored, ...withoutRequeuedCopy];
+      });
+      if (!entry.requeued) setCompletedCount((n) => Math.max(0, n - 1));
+      setRevealed(false);
+      setPreview(null);
+    } catch (error) {
+      console.error("Nexus: failed to undo review:", error);
+      // The undo did not take effect — put the entry back so a retry is possible.
+      historyRef.current.push(entry);
+    }
+  }
+
+  // Keyboard is the primary interface here — no inputs exist in this view, so
+  // no target-type filtering is needed. Re-subscribing every render keeps the
+  // closures (queue/revealed/current) fresh without threading everything
+  // through refs.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onExit();
+        return;
+      }
+      if (event.key === "u" || event.key === "U") {
+        event.preventDefault();
+        void undoLast();
+        return;
+      }
+      if ((event.key === " " || event.key === "Enter") && !revealed) {
+        event.preventDefault();
+        void reveal();
+        return;
+      }
+      if (revealed && (event.key === "1" || event.key === "2" || event.key === "3" || event.key === "4")) {
+        event.preventDefault();
+        void grade(Number(event.key) as CardRating);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
+  if (queue === null) {
+    return (
+      <div className="review">
+        <p className="app__muted">{strings.app.loading}</p>
+      </div>
+    );
+  }
+
+  if (current == null) {
+    return (
+      <div className="review review--complete">
+        <p className="review__complete-title">{strings.study.reviewCompleteTitle}</p>
+        <p className="review__complete-count">
+          {strings.study.reviewCompleteLabel}: {completedCount}
+        </p>
+        <div className="review__complete-actions">
+          {historyRef.current.length > 0 && (
+            <Button onClick={() => void undoLast()}>{strings.study.reviewUndo}</Button>
+          )}
+          <Button variant="primary" onClick={onExit}>
+            {strings.study.reviewBack}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const now = new Date().toISOString();
+
+  return (
+    <div className="review">
+      <div className="review__topbar">
+        <span className="review__title">{strings.study.reviewTitle}</span>
+        <span className="review__progress">
+          {Math.min(completedCount + 1, total)} / {total}
+        </span>
+        <Button size="sm" className="review__exit" onClick={onExit}>
+          {strings.study.reviewExit}
+        </Button>
+      </div>
+
+      <div className="review__card">
+        <div className="review__front">
+          <MathText text={current.front} />
+        </div>
+        {revealed && (
+          <>
+            <div className="review__divider" />
+            <div className="review__back">
+              <MathText text={current.back} />
+            </div>
+          </>
+        )}
+      </div>
+
+      {!revealed ? (
+        <Button variant="primary" className="review__reveal" onClick={() => void reveal()}>
+          {strings.study.revealAnswer}
+        </Button>
+      ) : (
+        <div className="review__grades">
+          {CARD_RATINGS.map((rating) => {
+            const key = RATING_KEYS[rating];
+            return (
+              <Button
+                key={rating}
+                variant={rating === 1 ? "danger" : "ghost"}
+                className={`review__grade review__grade--${key}`}
+                onClick={() => void grade(rating)}
+              >
+                <span className="review__grade-label">{strings.study.rating[key]}</span>
+                {preview && <span className="review__grade-interval">{intervalLabel(now, preview[key])}</span>}
+              </Button>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="review__footer">
+        {historyRef.current.length > 0 && (
+          <Button size="sm" className="review__undo" onClick={() => void undoLast()}>
+            {strings.study.reviewUndo}
+          </Button>
+        )}
+        <p className="review__hint">{strings.study.reviewHint}</p>
+      </div>
     </div>
   );
 }

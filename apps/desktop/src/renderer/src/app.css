@@ -973,3 +973,296 @@ body {
   display: flex;
   flex-direction: column;
 }
+
+/* Decks (Špilovi) under a subject — mirrors the exams section idiom. ---- */
+.study__decks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.study__decks-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
+}
+.study__decks-title {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.study__decks-empty {
+  margin: 0;
+  padding: var(--nx-space-2) 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__deck-name {
+  font-weight: var(--nx-font-weight-medium);
+}
+.study__deck-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.study__deck-form {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+.study__deck-name-input {
+  flex: 1;
+  min-width: 160px;
+}
+
+/* Deck drill-in (card management) --------------------------------------- */
+.study__deck-view-header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-3);
+}
+.study__back.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.study__back.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.study__deck-view-heading {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+.study__deck-view-name {
+  font-size: var(--nx-font-size-h1);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.study__deck-view-subject {
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+
+.study__cards {
+  display: flex;
+  flex-direction: column;
+}
+.study__card-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.study__card-due {
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+/* Long card content stays on one line in the row, ellipsized (STUDY flashcards). */
+.study__card-front {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60ch;
+}
+
+/* Card form (add/edit) --------------------------------------------------- */
+.study__card-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.study__card-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.study__textarea {
+  min-height: 72px;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.5;
+}
+.study__math-preview {
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-sm);
+  color: var(--nx-text);
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__math-hint {
+  margin: 0;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+}
+.study__card-form-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+
+/* KaTeX host (MathText) — no colour of its own, so its output inherits
+   currentColor and matches the surrounding themed text in both Dan and Noć. */
+.study__math {
+  display: inline;
+}
+.study__katex {
+  color: inherit;
+}
+
+/* Review session (STUDY flashcards) — minimal chrome, one card centred. - */
+.review {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nx-space-5);
+  max-width: 640px;
+  margin: 0 auto;
+  padding: var(--nx-space-6) 0;
+}
+.review__topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: var(--nx-space-3);
+}
+.review__title {
+  font-size: var(--nx-font-size-label);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.review__progress {
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+.review__exit.nx-button {
+  background: transparent;
+  border-color: var(--nx-border);
+}
+
+.review__card {
+  width: 100%;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--nx-space-4);
+  padding: var(--nx-space-6);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  box-shadow: var(--nx-shadow);
+  text-align: center;
+  font-size: var(--nx-font-size-title);
+}
+.review__divider {
+  width: 100%;
+  max-width: 240px;
+  border-top: 1px solid var(--nx-border);
+}
+.review__back {
+  color: var(--nx-text-muted);
+}
+
+.review__reveal.nx-button {
+  align-self: center;
+}
+
+.review__grades {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--nx-space-2);
+  width: 100%;
+}
+.review__grade.nx-button {
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--nx-space-2);
+}
+.review__grade-label {
+  font-weight: var(--nx-font-weight-medium);
+}
+.review__grade-interval {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+/* Semantic tint per rating, tokens only, applied over the ghost variant.
+   Again uses the house danger Button variant instead (persistent, not just
+   on hover). Hard stays neutral — no dedicated "warning" token exists yet. */
+.review__grade--good.nx-button {
+  border-color: var(--nx-data);
+  color: var(--nx-data);
+}
+.review__grade--good.nx-button:hover {
+  background: var(--nx-data-soft);
+}
+.review__grade--easy.nx-button {
+  border-color: var(--nx-accent);
+  color: var(--nx-accent-strong);
+}
+.review__grade--easy.nx-button:hover {
+  background: var(--nx-accent-soft);
+}
+
+.review__footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.review__hint {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.review__undo.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.review__undo.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+
+/* Session complete -------------------------------------------------------- */
+.review--complete {
+  text-align: center;
+}
+.review__complete-title {
+  font-size: var(--nx-font-size-title);
+  font-weight: var(--nx-font-weight-semibold);
+  margin: 0;
+}
+.review__complete-count {
+  margin: 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+.review__complete-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
