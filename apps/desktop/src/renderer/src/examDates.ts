@@ -29,6 +29,26 @@ export function daysUntilExam(examDate: string): number {
   return Math.round((utcDayMs(examDate) - todayMs) / MS_PER_DAY);
 }
 
+/**
+ * The local calendar day as a bare "YYYY-MM-DD" key — the same wall-clock
+ * y/m/d read `daysUntilExam` uses for "today" (and main's `localToday`), so
+ * every study-planner range query agrees with the countdown math.
+ */
+export function localTodayKey(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+/** The bare day key `days` after `dayKey` (negative shifts back) — UTC-midnight math, no timezone/DST drift. */
+export function shiftDayKey(dayKey: string, days: number): string {
+  const date = new Date(utcDayMs(dayKey) + days * MS_PER_DAY);
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${date.getUTCFullYear()}-${month}-${day}`;
+}
+
 /** Exam date for display — "8. jul 2026." in Serbian; raw string on bad input. */
 export function formatExamDate(examDate: string): string {
   const date = new Date(examDate.slice(0, 10));

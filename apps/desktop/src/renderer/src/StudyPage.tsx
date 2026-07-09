@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
-import { Button, Chip, EmptyState, ListRow, TextField } from "@nexus/ui";
+import { Button, Checkbox, Chip, EmptyState, ListRow, TextField } from "@nexus/ui";
 import type {
   Card,
   CardFieldChanges,
@@ -15,14 +15,26 @@ import type {
   NewCardFields,
   NewDeckFields,
   NewExamFields,
+  NewPlanFields,
   NewSubjectFields,
+  PlanFieldChanges,
   PreviewIntervals,
   ReviewQueueScope,
+  StudyBlock,
+  StudyBlockStatus,
+  StudyBlockWithExam,
+  StudyPlan,
   Subject,
   SubjectColor,
   SubjectFieldChanges,
 } from "../../shared/ipc.js";
-import { daysUntilExam, examCountdownLabel, examCountdownVariant, formatExamDate } from "./examDates.js";
+import {
+  daysUntilExam,
+  examCountdownLabel,
+  examCountdownVariant,
+  formatExamDate,
+  localTodayKey,
+} from "./examDates.js";
 import { MathText } from "./MathText.js";
 import { intervalLabel, isDueWithinSession } from "./reviewIntervals.js";
 import { strings } from "./strings.js";
@@ -52,6 +64,10 @@ const RATING_KEYS: Record<CardRating, keyof typeof strings.study.rating> = {
 
 /** Mirrors CardStore's MAX_TEXT_LENGTH — client-side parity with the store's own validation. */
 const MAX_CARD_TEXT_LENGTH = 10000;
+
+/** Mirrors PlanStore's daily-minutes bounds — client-side parity with the store's own validation. */
+const MIN_PLAN_MINUTES = 15;
+const MAX_PLAN_MINUTES = 480;
 
 // Serbian Latin collation for subject/deck names (mirrors @nexus/core's views
 // engine collator) — plain "sr" resolves to the Cyrillic tailoring and
@@ -100,6 +116,53 @@ function removeFirst(list: Card[], id: string): Card[] {
   return next;
 }
 
+/**
+ * Study-block status chip variant: done reads as settled (jade/data), planned
+ * and missed stay quiet — a missed row is additionally muted, mirroring the
+ * past-exam affordance (never a glow, never a hand-rolled colour).
+ */
+function blockStatusVariant(status: StudyBlockStatus): "neutral" | "data" {
+  return status === "done" ? "data" : "neutral";
+}
+
+/**
+ * Block-date label for a plan's list — "sreda, 8. jul" (mirrors the calendar's
+ * day headings); raw key on bad input. The key is a bare calendar day, so it is
+ * parsed and formatted in UTC to avoid a negative-offset day shift.
+ */
+function formatBlockDay(key: string): string {
+  const date = new Date(key);
+  return Number.isNaN(date.getTime())
+    ? key
+    : new Intl.DateTimeFormat("sr-Latn", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        timeZone: "UTC",
+      }).format(date);
+}
+
+/**
+ * Maps a PlanStore/IPC failure onto the Serbian plan-form copy by matching the
+ * store's known validation messages (they cross IPC inside the error text);
+ * anything unrecognized falls back to the generic line. UX only — the store
+ * remains the source of truth for what is rejected.
+ */
+function planErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  const copy = strings.study.planError;
+  if (
+    message.includes("already has an active study plan") ||
+    message.includes("another active plan already exists")
+  ) {
+    return copy.duplicate;
+  }
+  if (message.includes("must be strictly after today")) return copy.examPast;
+  if (message.includes("must be strictly before the exam date")) return copy.startAfterExam;
+  if (message.includes('"dailyMinutes"')) return copy.minutesRange;
+  return copy.generic;
+}
+
 /** A row of colour-dot toggle buttons over the six closed `SubjectColor` keys. */
 function ColorPicker({
   value,
@@ -131,12 +194,13 @@ export interface StudyPageProps {
 }
 
 /**
- * The STUDY module page: a subject hub (subjects, exams, decks), a deck
- * drill-in for card management, and a keyboard-first review session — one
- * internal route, no router. Every write goes through the subjects:* /
- * exams:* / decks:* / cards:* / review:* IPC allowlist, so the store stays
- * the single source of truth; `now` for FSRS scheduling is always stamped by
- * the main process.
+ * The STUDY module page: a subject hub (subjects, exams, decks, study plans),
+ * a deck drill-in for card management, and a keyboard-first review session —
+ * one internal route, no router. Every write goes through the subjects:* /
+ * exams:* / decks:* / cards:* / review:* / plans:* / blocks:* IPC allowlist,
+ * so the store stays the single source of truth; `now`/`today` for FSRS
+ * scheduling and block generation are always stamped by the main process
+ * (`syncAllPlans` runs before every plan read so missed blocks are labelled).
  */
 export function StudyPage({ profileId }: StudyPageProps) {
   const [subjects, setSubjects] = useState<Subject[] | null>(null);
@@ -170,6 +234,23 @@ export function StudyPage({ profileId }: StudyPageProps) {
   const [deckName, setDeckName] = useState("");
   const [pendingUndoDeckId, setPendingUndoDeckId] = useState<string | null>(null);
 
+  // Study plans (Planovi učenja): every plan's blocks are kept loaded so each
+  // card can show its progress; expansion is a pure UI toggle. The plan form is
+  // one inline reveal (exam/deck idiom); a non-null editingPlanId means
+  // "editing that plan" — its exam is fixed (PlanFieldChanges carries no examId).
+  const [plans, setPlans] = useState<StudyPlan[] | null>(null);
+  const [todayBlocks, setTodayBlocks] = useState<StudyBlockWithExam[] | null>(null);
+  const [blocksByPlan, setBlocksByPlan] = useState<Record<string, StudyBlock[]>>({});
+  const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
+  const [planFormVisible, setPlanFormVisible] = useState(false);
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+  const [planExamId, setPlanExamId] = useState("");
+  const [planStartDate, setPlanStartDate] = useState("");
+  const [planMinutes, setPlanMinutes] = useState("60");
+  const [planBoost, setPlanBoost] = useState(true);
+  const [planError, setPlanError] = useState<string | null>(null);
+  const [pendingUndoPlanId, setPendingUndoPlanId] = useState<string | null>(null);
+
   // Internal routing: the hub, a deck's card-management drill-in, or a review
   // session. No router — a discriminated union kept in component state.
   const [route, setRoute] = useState<
@@ -190,17 +271,32 @@ export function StudyPage({ profileId }: StudyPageProps) {
     let active = true;
     void (async () => {
       try {
-        const [nextSubjects, nextExams, nextDecks, nextCounts] = await Promise.all([
-          window.nexus.listSubjects(profileId),
-          window.nexus.listExams(profileId),
-          window.nexus.listDecks(profileId),
-          window.nexus.cardCounts(profileId),
-        ]);
+        // Sync every plan before any read so past blocks are already labelled
+        // `missed` when the today strip and the plan lists render.
+        await window.nexus.syncAllPlans(profileId);
+        const today = localTodayKey();
+        const [nextSubjects, nextExams, nextDecks, nextCounts, nextPlans, nextTodayBlocks] =
+          await Promise.all([
+            window.nexus.listSubjects(profileId),
+            window.nexus.listExams(profileId),
+            window.nexus.listDecks(profileId),
+            window.nexus.cardCounts(profileId),
+            window.nexus.listPlans(profileId),
+            window.nexus.listBlocksInRange(profileId, today, today),
+          ]);
+        const blockLists = await Promise.all(
+          nextPlans.map((plan) => window.nexus.listBlocksByPlan(profileId, plan.id)),
+        );
         if (!active) return;
         setSubjects(nextSubjects);
         setExams(nextExams);
         setDecks(nextDecks);
         setDeckCounts(nextCounts);
+        setPlans(nextPlans);
+        setTodayBlocks(nextTodayBlocks);
+        setBlocksByPlan(
+          Object.fromEntries(nextPlans.map((plan, index) => [plan.id, blockLists[index] ?? []])),
+        );
       } catch (error) {
         if (active) setFailed(true);
         console.error("Nexus: failed to load study data:", error);
@@ -481,6 +577,146 @@ export function StudyPage({ profileId }: StudyPageProps) {
     }
   }
 
+  /** Re-syncs every plan (missed labelling), then re-fetches plans, the today strip and each plan's blocks. */
+  async function refreshPlans(): Promise<void> {
+    await window.nexus.syncAllPlans(profileId);
+    const today = localTodayKey();
+    const [nextPlans, nextTodayBlocks] = await Promise.all([
+      window.nexus.listPlans(profileId),
+      window.nexus.listBlocksInRange(profileId, today, today),
+    ]);
+    const blockLists = await Promise.all(
+      nextPlans.map((plan) => window.nexus.listBlocksByPlan(profileId, plan.id)),
+    );
+    setPlans(nextPlans);
+    setTodayBlocks(nextTodayBlocks);
+    setBlocksByPlan(
+      Object.fromEntries(nextPlans.map((plan, index) => [plan.id, blockLists[index] ?? []])),
+    );
+  }
+
+  function closePlanForm(): void {
+    setPlanFormVisible(false);
+    setEditingPlanId(null);
+    setPlanExamId("");
+    setPlanStartDate("");
+    setPlanMinutes("60");
+    setPlanBoost(true);
+    setPlanError(null);
+  }
+
+  function startAddPlan(firstExamId: string): void {
+    setPlanFormVisible(true);
+    setEditingPlanId(null);
+    setPlanExamId(firstExamId);
+    setPlanStartDate(localTodayKey());
+    setPlanMinutes("60");
+    setPlanBoost(true);
+    setPlanError(null);
+  }
+
+  function startEditPlan(plan: StudyPlan): void {
+    setPlanFormVisible(true);
+    setEditingPlanId(plan.id);
+    setPlanExamId(plan.examId);
+    setPlanStartDate(plan.startDate.slice(0, 10));
+    setPlanMinutes(String(plan.dailyMinutes));
+    setPlanBoost(plan.examWeekBoost);
+    setPlanError(null);
+  }
+
+  async function submitPlanForm(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (planStartDate.length === 0) return;
+    const dailyMinutes = Number(planMinutes);
+    // Client-side parity with PlanStore's 15–480 range (UX only; main revalidates).
+    if (
+      !Number.isInteger(dailyMinutes) ||
+      dailyMinutes < MIN_PLAN_MINUTES ||
+      dailyMinutes > MAX_PLAN_MINUTES
+    ) {
+      setPlanError(strings.study.planError.minutesRange);
+      return;
+    }
+
+    try {
+      if (editingPlanId != null) {
+        const changes: PlanFieldChanges = {
+          dailyMinutes,
+          startDate: planStartDate,
+          examWeekBoost: planBoost,
+        };
+        await window.nexus.updatePlan(profileId, editingPlanId, changes);
+      } else {
+        if (planExamId.length === 0) return;
+        const fields: NewPlanFields = {
+          examId: planExamId,
+          dailyMinutes,
+          startDate: planStartDate,
+          examWeekBoost: planBoost,
+        };
+        await window.nexus.createPlan(profileId, fields);
+      }
+      closePlanForm();
+      await refreshPlans();
+    } catch (error) {
+      console.error("Nexus: failed to save study plan:", error);
+      setPlanError(planErrorMessage(error));
+    }
+  }
+
+  async function removePlan(planId: string): Promise<void> {
+    try {
+      await window.nexus.deletePlan(profileId, planId);
+      if (editingPlanId === planId) closePlanForm();
+      if (expandedPlanId === planId) setExpandedPlanId(null);
+      // One pending undo at a time — a fresh delete replaces the previous offer.
+      setPendingUndoPlanId(planId);
+      await refreshPlans();
+    } catch (error) {
+      console.error("Nexus: failed to delete study plan:", error);
+    }
+  }
+
+  async function undoPlan(): Promise<void> {
+    if (!pendingUndoPlanId) return;
+    try {
+      await window.nexus.restorePlan(profileId, pendingUndoPlanId);
+      setPendingUndoPlanId(null);
+      await refreshPlans();
+    } catch (error) {
+      // Mirrors the other restore paths. A collision with a newer active plan
+      // for the same exam (PlanValidationError) lands here; the offer stays up.
+      console.error("Nexus: failed to restore study plan:", error);
+    }
+  }
+
+  /** Done ↔ planned toggle for a block (a missed block marked done is a late completion). */
+  async function toggleBlockDone(blockId: string, done: boolean): Promise<void> {
+    try {
+      const updated = await window.nexus.setBlockStatus(profileId, blockId, done ? "done" : "planned");
+      setTodayBlocks(
+        (prev) =>
+          prev &&
+          prev.map((block) =>
+            block.id === updated.id
+              ? { ...block, status: updated.status, updatedAt: updated.updatedAt }
+              : block,
+          ),
+      );
+      setBlocksByPlan((prev) => {
+        const list = prev[updated.planId];
+        if (!list) return prev;
+        return {
+          ...prev,
+          [updated.planId]: list.map((block) => (block.id === updated.id ? updated : block)),
+        };
+      });
+    } catch (error) {
+      console.error("Nexus: failed to set block status:", error);
+    }
+  }
+
   function closeCardForm(): void {
     setCardFormVisible(false);
     setEditingCardId(null);
@@ -569,7 +805,13 @@ export function StudyPage({ profileId }: StudyPageProps) {
     void reloadDeckCounts();
   }
 
-  const loading = subjects === null || exams === null || decks === null || deckCounts === null;
+  const loading =
+    subjects === null ||
+    exams === null ||
+    decks === null ||
+    deckCounts === null ||
+    plans === null ||
+    todayBlocks === null;
   const sortedSubjects = subjects ? [...subjects].sort((a, b) => collator.compare(a.name, b.name)) : [];
   const activeSubjects = sortedSubjects.filter((s) => !s.archived);
   const archivedSubjects = sortedSubjects.filter((s) => s.archived);
@@ -599,6 +841,53 @@ export function StudyPage({ profileId }: StudyPageProps) {
       return counts.newCount > 0 || counts.dueCount > 0;
     });
   }
+
+  // --- Study-plan joins (client-side, over the already-loaded exams/subjects) --
+  const examsById = new Map((exams ?? []).map((exam) => [exam.id, exam] as const));
+  const subjectsById = new Map((subjects ?? []).map((subject) => [subject.id, subject] as const));
+
+  /** Active plans joined with exam + subject, soonest exam first; an orphaned plan (exam/subject gone) is skipped like an orphaned exam. */
+  const planEntries = (plans ?? [])
+    .flatMap((plan) => {
+      const exam = examsById.get(plan.examId);
+      const subject = exam ? subjectsById.get(exam.subjectId) : undefined;
+      return exam && subject ? [{ plan, exam, subject }] : [];
+    })
+    .sort(
+      (a, b) =>
+        a.exam.examDate.localeCompare(b.exam.examDate) || a.plan.id.localeCompare(b.plan.id),
+    );
+
+  /** Today's blocks joined the same way, sr-Latn by subject name (orphans skipped). */
+  const todayEntries = (todayBlocks ?? [])
+    .flatMap((block) => {
+      const exam = examsById.get(block.examId);
+      const subject = exam ? subjectsById.get(exam.subjectId) : undefined;
+      return exam && subject ? [{ block, exam, subject }] : [];
+    })
+    .sort(
+      (a, b) =>
+        collator.compare(a.subject.name, b.subject.name) || a.block.id.localeCompare(b.block.id),
+    );
+
+  /** Future exams with no active plan — the create-select's option set, soonest first. */
+  const plannedExamIds = new Set((plans ?? []).map((plan) => plan.examId));
+  const plannableExams = (exams ?? [])
+    .flatMap((exam) => {
+      const subject = subjectsById.get(exam.subjectId);
+      return subject && !plannedExamIds.has(exam.id) && daysUntilExam(exam.examDate) > 0
+        ? [{ exam, subject }]
+        : [];
+    })
+    .sort(
+      (a, b) => a.exam.examDate.localeCompare(b.exam.examDate) || a.exam.id.localeCompare(b.exam.id),
+    );
+
+  /** The plan being edited, resolved for the form's static exam label. */
+  const editingPlanEntry =
+    editingPlanId != null
+      ? planEntries.find((entry) => entry.plan.id === editingPlanId)
+      : undefined;
 
   // --- Review session route --------------------------------------------------
   if (route.kind === "review") {
@@ -837,6 +1126,23 @@ export function StudyPage({ profileId }: StudyPageProps) {
             className="study__undo-dismiss"
             aria-label={strings.study.dismiss}
             onClick={() => setPendingUndoDeckId(null)}
+          >
+            ×
+          </Button>
+        </div>
+      )}
+
+      {pendingUndoPlanId != null && (
+        <div className="study__undo" role="status">
+          <span className="study__undo-text">{strings.study.deletedPlanNotice}</span>
+          <Button size="sm" className="study__undo-action" onClick={() => void undoPlan()}>
+            {strings.study.undo}
+          </Button>
+          <Button
+            size="sm"
+            className="study__undo-dismiss"
+            aria-label={strings.study.dismiss}
+            onClick={() => setPendingUndoPlanId(null)}
           >
             ×
           </Button>
@@ -1127,6 +1433,194 @@ export function StudyPage({ profileId }: StudyPageProps) {
               )}
             </div>
           )}
+
+          <div className="study__plans">
+            <h2 className="study__plans-title">{strings.study.plansTitle}</h2>
+
+            <div className="study__today">
+              <h3 className="study__today-heading">{strings.study.todayTitle}</h3>
+              {todayEntries.length === 0 ? (
+                <p className="study__today-empty">{strings.study.todayEmpty}</p>
+              ) : (
+                <div className="study__today-list">
+                  {todayEntries.map(({ block, exam, subject }) => (
+                    <ListRow
+                      key={block.id}
+                      trailing={
+                        <span className="study__block-minutes">
+                          {block.minutes} {strings.study.minutesUnit}
+                        </span>
+                      }
+                    >
+                      <Checkbox
+                        checked={block.status === "done"}
+                        done={block.status === "done"}
+                        onChange={(event) => void toggleBlockDone(block.id, event.target.checked)}
+                      >
+                        {subject.name} — {strings.study.examType[exam.examType]}
+                      </Checkbox>
+                    </ListRow>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {planEntries.length === 0 ? (
+              <p className="study__plans-empty">{strings.study.plansEmpty}</p>
+            ) : (
+              planEntries.map(({ plan, exam, subject }) => {
+                const blocks = blocksByPlan[plan.id] ?? [];
+                const doneCount = blocks.filter((block) => block.status === "done").length;
+                const days = daysUntilExam(exam.examDate);
+                const expanded = expandedPlanId === plan.id;
+                return (
+                  <div key={plan.id} className="study__plan-card">
+                    <div className="study__plan-header">
+                      <span
+                        className={`study__dot study__dot--${subject.color}`}
+                        aria-hidden="true"
+                      />
+                      <span className="study__plan-title">
+                        {subject.name} — {strings.study.examType[exam.examType]}
+                      </span>
+                      <Chip variant={examCountdownVariant(days)}>{examCountdownLabel(days)}</Chip>
+                      <span className="study__plan-actions">
+                        <Button size="sm" className="study__edit" onClick={() => startEditPlan(plan)}>
+                          {strings.study.planEdit}
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="study__delete"
+                          onClick={() => void removePlan(plan.id)}
+                        >
+                          {strings.study.planDelete}
+                        </Button>
+                      </span>
+                    </div>
+                    <div className="study__plan-meta">
+                      <span>
+                        {plan.dailyMinutes} {strings.study.planPerDay}
+                        {plan.examWeekBoost && ` · ${strings.study.planBoostSummary}`}
+                      </span>
+                      <span>
+                        {doneCount} {strings.study.planProgressOf} {blocks.length}{" "}
+                        {strings.study.planProgressDone}
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      className="study__plan-toggle"
+                      onClick={() => setExpandedPlanId(expanded ? null : plan.id)}
+                    >
+                      {expanded ? strings.study.planHideBlocks : strings.study.planShowBlocks}
+                    </Button>
+                    {expanded && (
+                      <div className="study__plan-blocks">
+                        {blocks.map((block) => (
+                          <ListRow
+                            key={block.id}
+                            muted={block.status === "missed"}
+                            trailing={
+                              <span className="study__block-meta">
+                                <span className="study__block-minutes">
+                                  {block.minutes} {strings.study.minutesUnit}
+                                </span>
+                                <Chip variant={blockStatusVariant(block.status)}>
+                                  {strings.study.blockStatus[block.status]}
+                                </Chip>
+                              </span>
+                            }
+                          >
+                            <Checkbox
+                              checked={block.status === "done"}
+                              done={block.status === "done"}
+                              aria-label={strings.study.blockDoneLabel}
+                              onChange={(event) =>
+                                void toggleBlockDone(block.id, event.target.checked)
+                              }
+                            >
+                              {formatBlockDay(block.blockDate)}
+                            </Checkbox>
+                          </ListRow>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+
+            {planFormVisible ? (
+              <form className="study__plan-form" onSubmit={(e) => void submitPlanForm(e)}>
+                {editingPlanId != null ? (
+                  <span className="study__plan-form-exam">
+                    {editingPlanEntry
+                      ? `${editingPlanEntry.subject.name} — ${
+                          strings.study.examType[editingPlanEntry.exam.examType]
+                        }`
+                      : ""}
+                  </span>
+                ) : (
+                  <select
+                    className="study__select"
+                    value={planExamId}
+                    aria-label={strings.study.planExamLabel}
+                    onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                      setPlanExamId(event.target.value)
+                    }
+                  >
+                    {plannableExams.map(({ exam, subject }) => (
+                      <option key={exam.id} value={exam.id}>
+                        {subject.name} — {strings.study.examType[exam.examType]} —{" "}
+                        {formatExamDate(exam.examDate)}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <TextField
+                  type="date"
+                  value={planStartDate}
+                  required
+                  aria-label={strings.study.planStartLabel}
+                  onChange={(event) => setPlanStartDate(event.target.value)}
+                />
+                <TextField
+                  type="number"
+                  className="study__minutes-input"
+                  value={planMinutes}
+                  required
+                  min={MIN_PLAN_MINUTES}
+                  max={MAX_PLAN_MINUTES}
+                  aria-label={strings.study.planMinutesLabel}
+                  onChange={(event) => setPlanMinutes(event.target.value)}
+                />
+                <Checkbox checked={planBoost} onChange={(event) => setPlanBoost(event.target.checked)}>
+                  {strings.study.planBoostLabel}
+                </Checkbox>
+                <Button type="submit" variant="primary" size="sm">
+                  {editingPlanId != null ? strings.study.savePlan : strings.study.addPlan}
+                </Button>
+                <Button type="button" size="sm" className="study__cancel" onClick={closePlanForm}>
+                  {strings.study.cancelPlan}
+                </Button>
+                {planError != null && (
+                  <p className="study__plan-error" role="alert">
+                    {planError}
+                  </p>
+                )}
+              </form>
+            ) : plannableExams.length > 0 ? (
+              <Button
+                size="sm"
+                className="study__add-exam"
+                onClick={() => startAddPlan(plannableExams[0]?.exam.id ?? "")}
+              >
+                {strings.study.newPlan}
+              </Button>
+            ) : (
+              <p className="study__plans-empty">{strings.study.noPlannableExams}</p>
+            )}
+          </div>
         </>
       )}
     </div>

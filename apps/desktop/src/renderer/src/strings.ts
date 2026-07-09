@@ -301,6 +301,50 @@ export const strings = {
     reviewCompleteTitle: "Sve obnovljeno za sada.",
     reviewCompleteLabel: "Ocenjeno kartica",
     reviewBack: "Nazad",
+
+    // --- Exam study plans (Planovi učenja, STUDY piece 3b) -------------------
+    plansTitle: "Planovi učenja",
+    todayTitle: "Danas za učenje",
+    todayEmpty: "Danas nema planiranih blokova učenja.",
+    newPlan: "Novi plan",
+    addPlan: "Dodaj plan",
+    savePlan: "Sačuvaj",
+    cancelPlan: "Otkaži",
+    planExamLabel: "Ispit",
+    planStartLabel: "Početak učenja",
+    planMinutesLabel: "Minuta dnevno",
+    planBoostLabel: "Duplo vremena poslednjih 7 dana",
+    planEdit: "Izmeni",
+    planDelete: "Obriši",
+    deletedPlanNotice: "Plan obrisan",
+    plansEmpty: "Još nema planova učenja.",
+    noPlannableExams: "Nema predstojećih ispita za novi plan.",
+    /** Plan summary building blocks — "60 min/dan · duplo poslednjih 7 dana". */
+    planPerDay: "min/dan",
+    planBoostSummary: "duplo poslednjih 7 dana",
+    /** Progress phrasing — "3 od 12 urađeno" builds inline. */
+    planProgressOf: "od",
+    planProgressDone: "urađeno",
+    minutesUnit: "min",
+    planShowBlocks: "Prikaži blokove",
+    planHideBlocks: "Sakrij blokove",
+    blockDoneLabel: "Označi blok kao urađen",
+    /** Study-block status chip labels, keyed by status value (labels are presentation). */
+    blockStatus: {
+      planned: "planirano",
+      done: "urađeno",
+      missed: "propušteno",
+    },
+    /** Tag chip on read-only study-block rows in the calendar agenda. */
+    planCalendarTag: "Učenje",
+    /** PlanStore/IPC validation failures mapped to Serbian; `generic` is the fallback. */
+    planError: {
+      duplicate: "Ovaj ispit već ima aktivan plan.",
+      examPast: "Ispit mora biti u budućnosti.",
+      startAfterExam: "Početak učenja mora biti pre datuma ispita.",
+      minutesRange: "Dnevni minuti moraju biti između 15 i 480.",
+      generic: "Čuvanje plana nije uspelo. Pokušaj ponovo.",
+    },
   },
 } as const;
 

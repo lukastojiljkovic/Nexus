@@ -416,6 +416,12 @@ body {
   font-weight: var(--nx-font-weight-semibold);
 }
 
+/* Study-block rows (STUDY-003): read-only like exam rows — the subject dot in
+   the time gutter, an "Učenje" tag chip; check-off lives on the Study page. */
+.cal__block-tag {
+  font-weight: var(--nx-font-weight-semibold);
+}
+
 /* Documents (CAL Dokumenta panel) ------------------------------------- */
 .documents {
   display: flex;
@@ -1019,6 +1025,141 @@ body {
 .study__deck-name-input {
   flex: 1;
   min-width: 160px;
+}
+
+/* Study plans (Planovi učenja, STUDY piece 3b) — a top-level hub section: a
+   "Danas za učenje" strip, one card per active plan (countdown chip via the
+   shared exam-date math), and the inline plan form (exam-form idiom). Done
+   reads as jade (data chip / checkbox strike-through); missed is a muted row —
+   never a glow, never a hand-rolled colour. ------------------------------- */
+.study__plans {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+.study__plans-title {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.study__plans-empty {
+  margin: 0;
+  padding: var(--nx-space-2) 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__today {
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  padding: var(--nx-space-3) var(--nx-space-4);
+  box-shadow: var(--nx-shadow);
+}
+.study__today-heading {
+  margin: 0 0 var(--nx-space-1);
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.study__today-empty {
+  margin: 0;
+  padding: var(--nx-space-1) 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__today-list {
+  display: flex;
+  flex-direction: column;
+}
+.study__plan-card {
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  padding: var(--nx-space-3) var(--nx-space-4);
+  box-shadow: var(--nx-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.study__plan-header {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.study__plan-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-title);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.study__plan-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex: none;
+}
+.study__plan-meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-3);
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+/* Expand/collapse toggle for the block list — quiet text affordance. */
+.study__plan-toggle.nx-button {
+  align-self: flex-start;
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.study__plan-toggle.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.study__plan-blocks {
+  display: flex;
+  flex-direction: column;
+}
+.study__block-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.study__block-minutes {
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.study__plan-form {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+/* Edit mode shows the plan's exam as static text — the exam is not changeable. */
+.study__plan-form-exam {
+  font-size: var(--nx-font-size-body-sm);
+  font-weight: var(--nx-font-weight-medium);
+}
+.study__minutes-input {
+  width: 110px;
+  flex: none;
+}
+/* Mapped store-validation message — full-width line under the form controls. */
+.study__plan-error {
+  margin: 0;
+  flex-basis: 100%;
+  color: var(--nx-danger);
+  font-size: var(--nx-font-size-body-sm);
 }
 
 /* Deck drill-in (card management) --------------------------------------- */

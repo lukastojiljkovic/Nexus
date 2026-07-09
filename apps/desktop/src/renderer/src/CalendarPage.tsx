@@ -1,9 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { Button, Checkbox, Chip, EmptyState, ListRow, TextField } from "@nexus/ui";
-import type { Event, EventFieldChanges, Exam, NewEventFields, Subject } from "../../shared/ipc.js";
+import type {
+  Event,
+  EventFieldChanges,
+  Exam,
+  NewEventFields,
+  StudyBlockWithExam,
+  Subject,
+} from "../../shared/ipc.js";
 import { DocumentsPanel } from "./DocumentsPanel.js";
-import { daysUntilExam, examCountdownLabel, examCountdownVariant } from "./examDates.js";
+import {
+  daysUntilExam,
+  examCountdownLabel,
+  examCountdownVariant,
+  localTodayKey,
+  shiftDayKey,
+} from "./examDates.js";
 import { strings } from "./strings.js";
 
 // --- Per-profile view memory (interim, mirrors TasksPage) -------------------
@@ -29,18 +42,49 @@ function persistView(profileId: string, view: CalendarView): void {
 // appends optimistically, so the display order is re-derived here rather than
 // trusted from insertion order. The rule matches the store's exactly — an
 // all-day event's bare "YYYY-MM-DD" sorts before any timed start on that day.
-// Exams (STUDY-002) are merged in as read-only rows: an exam's bare examDate
-// sorts the same way a bare all-day date does, ahead of any timed event.
+// Exams (STUDY-002) and study blocks (STUDY-003) are merged in as read-only
+// rows: their bare dates sort the same way a bare all-day date does, ahead of
+// any timed event; within one bare date, kind rank keeps the order
+// deterministic (events, then exams, then blocks — blocks sit next to exams).
 
-/** An agenda row is either a real event or a read-only exam (with its subject). */
+// Study blocks are fetched over a bounded window around today (the agenda
+// itself has no explicit bounds): a month back covers recently missed blocks,
+// a year ahead outruns any plannable exam distance.
+const BLOCKS_PAST_DAYS = 31;
+const BLOCKS_FUTURE_DAYS = 365;
+
+/** An agenda row: a real event, a read-only exam, or a read-only study block. */
 type AgendaEntry =
   | { kind: "event"; sortKey: string; dayKey: string; event: Event }
-  | { kind: "exam"; sortKey: string; dayKey: string; exam: Exam; subject: Subject };
+  | { kind: "exam"; sortKey: string; dayKey: string; exam: Exam; subject: Subject }
+  | {
+      kind: "block";
+      sortKey: string;
+      dayKey: string;
+      block: StudyBlockWithExam;
+      exam: Exam;
+      subject: Subject;
+    };
 
-/** Merges events and exams into one agenda stream; an orphaned exam (its subject
- * was soft-deleted) is skipped rather than shown without a name/colour. */
-function buildAgendaEntries(events: Event[], exams: Exam[], subjects: Subject[]): AgendaEntry[] {
+/** Within one sortKey (a bare day), events come first, then exams, then blocks. */
+const KIND_RANK: Record<AgendaEntry["kind"], number> = { event: 0, exam: 1, block: 2 };
+
+function entryId(entry: AgendaEntry): string {
+  if (entry.kind === "event") return entry.event.id;
+  return entry.kind === "exam" ? entry.exam.id : entry.block.id;
+}
+
+/** Merges events, exams and study blocks into one agenda stream; an orphaned
+ * exam/block (its subject or exam was soft-deleted) is skipped rather than
+ * shown without a name/colour. */
+function buildAgendaEntries(
+  events: Event[],
+  exams: Exam[],
+  blocks: StudyBlockWithExam[],
+  subjects: Subject[],
+): AgendaEntry[] {
   const subjectsById = new Map(subjects.map((subject) => [subject.id, subject] as const));
+  const examsById = new Map(exams.map((exam) => [exam.id, exam] as const));
   const eventEntries: AgendaEntry[] = events.map((event) => ({
     kind: "event",
     sortKey: event.startAt,
@@ -54,7 +98,21 @@ function buildAgendaEntries(events: Event[], exams: Exam[], subjects: Subject[])
     const dayKey = exam.examDate.slice(0, 10);
     examEntries.push({ kind: "exam", sortKey: dayKey, dayKey, exam, subject });
   }
-  return [...eventEntries, ...examEntries];
+  const blockEntries: AgendaEntry[] = [];
+  for (const block of blocks) {
+    const exam = examsById.get(block.examId);
+    const subject = exam ? subjectsById.get(exam.subjectId) : undefined;
+    if (!exam || !subject) continue;
+    blockEntries.push({
+      kind: "block",
+      sortKey: block.blockDate,
+      dayKey: block.blockDate,
+      block,
+      exam,
+      subject,
+    });
+  }
+  return [...eventEntries, ...examEntries, ...blockEntries];
 }
 
 /** Agenda entries bucketed by calendar day, days and rows both ascending. */
@@ -62,9 +120,9 @@ function groupAgenda(entries: AgendaEntry[]): [string, AgendaEntry[]][] {
   const ordered = [...entries].sort((a, b) => {
     const cmp = a.sortKey.localeCompare(b.sortKey);
     if (cmp !== 0) return cmp;
-    const aId = a.kind === "event" ? a.event.id : a.exam.id;
-    const bId = b.kind === "event" ? b.event.id : b.exam.id;
-    return aId.localeCompare(bId);
+    const rank = KIND_RANK[a.kind] - KIND_RANK[b.kind];
+    if (rank !== 0) return rank;
+    return entryId(a).localeCompare(entryId(b));
   });
   const groups = new Map<string, AgendaEntry[]>();
   for (const entry of ordered) {
@@ -112,13 +170,15 @@ export interface CalendarPageProps {
  * delete-with-undo. Every write goes through the events:* IPC allowlist, so the
  * store stays the single source of truth (e.g. it validates startAt and derives
  * updatedAt). endAt/description/category are deferred — the form stays minimal.
- * Upcoming exams (STUDY-002) are merged into the same agenda as read-only rows —
- * they are not editable here; editing lives in StudyPage.
+ * Upcoming exams (STUDY-002) and study blocks (STUDY-003) are merged into the
+ * same agenda as read-only rows — they are not editable here; exam editing and
+ * block check-off live in StudyPage.
  */
 export function CalendarPage({ profileId }: CalendarPageProps) {
   const [events, setEvents] = useState<Event[] | null>(null);
   const [subjects, setSubjects] = useState<Subject[] | null>(null);
   const [exams, setExams] = useState<Exam[] | null>(null);
+  const [blocks, setBlocks] = useState<StudyBlockWithExam[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [view, setView] = useState<CalendarView>(() => readStoredView(profileId));
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
@@ -136,15 +196,25 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
     let active = true;
     void (async () => {
       try {
-        const [nextEvents, nextSubjects, nextExams] = await Promise.all([
+        // Sync every study plan first so past blocks are already labelled
+        // `missed` when the agenda reads them.
+        await window.nexus.syncAllPlans(profileId);
+        const today = localTodayKey();
+        const [nextEvents, nextSubjects, nextExams, nextBlocks] = await Promise.all([
           window.nexus.listEvents(profileId),
           window.nexus.listSubjects(profileId),
           window.nexus.listExams(profileId),
+          window.nexus.listBlocksInRange(
+            profileId,
+            shiftDayKey(today, -BLOCKS_PAST_DAYS),
+            shiftDayKey(today, BLOCKS_FUTURE_DAYS),
+          ),
         ]);
         if (!active) return;
         setEvents(nextEvents);
         setSubjects(nextSubjects);
         setExams(nextExams);
+        setBlocks(nextBlocks);
       } catch (error) {
         if (active) setFailed(true);
         console.error("Nexus: failed to load events:", error);
@@ -245,11 +315,11 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
     }
   }
 
-  // All three resolve together (one Promise.all), so a single null means loading.
-  const agendaLoading = events === null || subjects === null || exams === null;
+  // All four resolve together (one Promise.all), so a single null means loading.
+  const agendaLoading = events === null || subjects === null || exams === null || blocks === null;
   const agendaEntries = agendaLoading
     ? []
-    : buildAgendaEntries(events, exams, subjects);
+    : buildAgendaEntries(events, exams, blocks, subjects);
 
   return (
     <div className="cal">
@@ -386,11 +456,42 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
                         </ListRow>
                       );
                     }
-                    const days = daysUntilExam(entry.exam.examDate);
+                    if (entry.kind === "exam") {
+                      const days = daysUntilExam(entry.exam.examDate);
+                      return (
+                        <ListRow
+                          key={`exam-${entry.exam.id}`}
+                          muted={days < 0}
+                          leading={
+                            <span className="cal__time cal__exam-time">
+                              <span
+                                className={`study__dot study__dot--${entry.subject.color}`}
+                                aria-hidden="true"
+                              />
+                            </span>
+                          }
+                          trailing={
+                            <Chip variant={examCountdownVariant(days)}>
+                              {examCountdownLabel(days)}
+                            </Chip>
+                          }
+                        >
+                          <span className="cal__event">
+                            <Chip className="cal__exam-tag">{strings.study.calendarTag}</Chip>
+                            <span className="cal__event-title">
+                              {entry.subject.name} — {strings.study.examType[entry.exam.examType]}
+                            </span>
+                            {entry.exam.scope ? <Chip variant="data">{entry.exam.scope}</Chip> : null}
+                          </span>
+                        </ListRow>
+                      );
+                    }
+                    // Study-block row (STUDY-003): read-only — check-off lives on StudyPage.
+                    const status = entry.block.status;
                     return (
                       <ListRow
-                        key={`exam-${entry.exam.id}`}
-                        muted={days < 0}
+                        key={`block-${entry.block.id}`}
+                        muted={status === "missed"}
                         leading={
                           <span className="cal__time cal__exam-time">
                             <span
@@ -400,17 +501,21 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
                           </span>
                         }
                         trailing={
-                          <Chip variant={examCountdownVariant(days)}>
-                            {examCountdownLabel(days)}
-                          </Chip>
+                          status === "planned" ? undefined : (
+                            <Chip variant={status === "done" ? "data" : "neutral"}>
+                              {strings.study.blockStatus[status]}
+                            </Chip>
+                          )
                         }
                       >
                         <span className="cal__event">
-                          <Chip className="cal__exam-tag">{strings.study.calendarTag}</Chip>
+                          <Chip className="cal__block-tag">{strings.study.planCalendarTag}</Chip>
                           <span className="cal__event-title">
                             {entry.subject.name} — {strings.study.examType[entry.exam.examType]}
                           </span>
-                          {entry.exam.scope ? <Chip variant="data">{entry.exam.scope}</Chip> : null}
+                          <Chip>
+                            {entry.block.minutes} {strings.study.minutesUnit}
+                          </Chip>
                         </span>
                       </ListRow>
                     );
