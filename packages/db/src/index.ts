@@ -2,9 +2,13 @@ export { NexusDatabase, openDatabase } from "./database.js";
 export type { OpenDatabaseOptions } from "./database.js";
 
 export {
+  CardNotFoundError,
+  CardValidationError,
   DatabaseError,
   DatabaseKeyError,
   DatabaseLockedError,
+  DeckNotFoundError,
+  DeckValidationError,
   DocumentNotFoundError,
   DocumentValidationError,
   EventNotFoundError,
@@ -64,5 +68,20 @@ export type {
   ExamType,
   UpdateExamFields,
 } from "./study/examStore.js";
+
+export { DeckStore } from "./study/deckStore.js";
+export type { CreateDeckInput, Deck, UpdateDeckFields } from "./study/deckStore.js";
+
+export { CardStore, CARD_RATINGS } from "./study/cardStore.js";
+export type {
+  Card,
+  CardRating,
+  CardState,
+  CreateCardInput,
+  DueQueueOptions,
+  DeckCounts,
+  PreviewIntervals,
+  UpdateCardFields,
+} from "./study/cardStore.js";
 
 export { uuidv7 } from "./ids.js";

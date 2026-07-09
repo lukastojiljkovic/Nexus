@@ -104,3 +104,38 @@ export class ExamValidationError extends DatabaseError {}
  * to a store scoped to another.
  */
 export class ExamNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a deck write is rejected at the store boundary because its input
+ * breaks a domain rule the UI is expected to have caught already — an empty or
+ * too-long name, or a `subjectId` that does not resolve to a subject in this
+ * profile (STUDY flashcards). The store revalidates because renderer input is
+ * untrusted (SEC-EL-02).
+ */
+export class DeckValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a deck operation targets an id that is not an active row in the
+ * store's own profile — unknown, soft-deleted (for a mutation), or owned by
+ * another profile. Surfacing this uniformly keeps one profile's decks invisible
+ * to a store scoped to another.
+ */
+export class DeckNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a card write is rejected at the store boundary because its input
+ * breaks a domain rule the UI is expected to have caught already — empty/too-long
+ * front or back, a malformed `now`, an out-of-range review rating, a `deckId` that
+ * does not resolve to a deck in this profile, or an undo with no review to undo
+ * (STUDY flashcards / FSRS). The store revalidates because renderer input is
+ * untrusted (SEC-EL-02).
+ */
+export class CardValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a card operation targets an id that is not an active row in the
+ * store's own profile — unknown, soft-deleted (for a mutation), or owned by
+ * another profile. Surfacing this uniformly keeps one profile's cards invisible
+ * to a store scoped to another.
+ */
+export class CardNotFoundError extends DatabaseError {}
