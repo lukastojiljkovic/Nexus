@@ -15,6 +15,8 @@ export {
   EventValidationError,
   ExamNotFoundError,
   ExamValidationError,
+  PlanNotFoundError,
+  PlanValidationError,
   SchemaVersionError,
   SubjectNotFoundError,
   SubjectValidationError,
@@ -83,5 +85,15 @@ export type {
   PreviewIntervals,
   UpdateCardFields,
 } from "./study/cardStore.js";
+
+export { PlanStore, STUDY_BLOCK_STATUSES } from "./study/planStore.js";
+export type {
+  CreatePlanInput,
+  StudyBlock,
+  StudyBlockStatus,
+  StudyBlockWithExam,
+  StudyPlan,
+  UpdatePlanFields,
+} from "./study/planStore.js";
 
 export { uuidv7 } from "./ids.js";

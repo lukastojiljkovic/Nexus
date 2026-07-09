@@ -139,3 +139,24 @@ export class CardValidationError extends DatabaseError {}
  * to a store scoped to another.
  */
 export class CardNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a study-plan write is rejected at the store boundary because its
+ * input breaks a domain rule the UI is expected to have caught already — an
+ * exam that is not strictly in the future, a start date on/after the exam
+ * date, an out-of-range `dailyMinutes`, a malformed `now`/`today`, an `examId`
+ * that does not resolve to an active exam in this profile, a second active
+ * plan for an exam that already has one (including a restore that would
+ * collide with one created meanwhile), or an unknown block status (STUDY exam
+ * planner). The store revalidates because renderer input is untrusted
+ * (SEC-EL-02).
+ */
+export class PlanValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a study-plan or study-block operation targets an id that is not
+ * an active row in the store's own profile — unknown, soft-deleted (for a
+ * plan mutation), or owned by another profile. Surfacing this uniformly keeps
+ * one profile's plans/blocks invisible to a store scoped to another.
+ */
+export class PlanNotFoundError extends DatabaseError {}
