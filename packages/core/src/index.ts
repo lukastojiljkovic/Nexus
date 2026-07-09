@@ -44,3 +44,6 @@ export {
   ViewConfigError,
 } from "./views/engine.js";
 export type { KanbanGroup } from "./views/engine.js";
+
+export { planBlockDates } from "./study/planEngine.js";
+export type { PlanBlockDate, PlanBlockDatesInput } from "./study/planEngine.js";
