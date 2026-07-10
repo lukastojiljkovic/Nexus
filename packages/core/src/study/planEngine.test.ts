@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planBlockDates } from "./planEngine.js";
+import { distributeBacklog, planBlockDates, type PlanBlockDate } from "./planEngine.js";
 
 describe("planBlockDates", () => {
   it("returns one block per day from startDate through the day before examDate", () => {
@@ -174,5 +174,79 @@ describe("planBlockDates", () => {
         today: "2026-08-10",
       }),
     ).toEqual([]);
+  });
+});
+
+describe("distributeBacklog", () => {
+  it("splits the backlog evenly across blocks with no remainder", () => {
+    const blocks: PlanBlockDate[] = [
+      { date: "2026-08-05", minutes: 30 },
+      { date: "2026-08-06", minutes: 30 },
+      { date: "2026-08-07", minutes: 30 },
+      { date: "2026-08-08", minutes: 30 },
+    ];
+
+    expect(distributeBacklog(blocks, 60)).toEqual([
+      { date: "2026-08-05", minutes: 45 },
+      { date: "2026-08-06", minutes: 45 },
+      { date: "2026-08-07", minutes: 45 },
+      { date: "2026-08-08", minutes: 45 },
+    ]);
+  });
+
+  it("gives the remainder minute to the earliest blocks, ascending date order", () => {
+    const blocks: PlanBlockDate[] = [
+      { date: "2026-08-05", minutes: 30 },
+      { date: "2026-08-06", minutes: 30 },
+      { date: "2026-08-07", minutes: 30 },
+      { date: "2026-08-08", minutes: 30 },
+    ];
+
+    // 50 / 4 = 12 base, remainder 2 -> first two blocks get +13, the rest +12.
+    expect(distributeBacklog(blocks, 50)).toEqual([
+      { date: "2026-08-05", minutes: 43 },
+      { date: "2026-08-06", minutes: 43 },
+      { date: "2026-08-07", minutes: 42 },
+      { date: "2026-08-08", minutes: 42 },
+    ]);
+  });
+
+  it("returns the blocks unchanged for a zero or negative backlog", () => {
+    const blocks: PlanBlockDate[] = [
+      { date: "2026-08-05", minutes: 30 },
+      { date: "2026-08-06", minutes: 30 },
+    ];
+
+    expect(distributeBacklog(blocks, 0)).toEqual(blocks);
+    expect(distributeBacklog(blocks, -15)).toEqual(blocks);
+  });
+
+  it("returns an empty array unchanged regardless of backlog", () => {
+    expect(distributeBacklog([], 100)).toEqual([]);
+  });
+
+  it("puts the entire backlog onto a single block", () => {
+    const blocks: PlanBlockDate[] = [{ date: "2026-08-05", minutes: 30 }];
+    expect(distributeBacklog(blocks, 25)).toEqual([{ date: "2026-08-05", minutes: 55 }]);
+  });
+
+  it("preserves each block's own base minutes, including boosted ones, beneath the extra", () => {
+    const blocks: PlanBlockDate[] = [
+      { date: "2026-08-05", minutes: 30 },
+      { date: "2026-08-06", minutes: 60 }, // a boosted, doubled day
+    ];
+
+    // 11 / 2 = 5 base, remainder 1 -> the earliest block gets +6, the other +5.
+    expect(distributeBacklog(blocks, 11)).toEqual([
+      { date: "2026-08-05", minutes: 36 },
+      { date: "2026-08-06", minutes: 65 },
+    ]);
+  });
+
+  it("returns a new array rather than mutating the input", () => {
+    const blocks: PlanBlockDate[] = [{ date: "2026-08-05", minutes: 30 }];
+    const result = distributeBacklog(blocks, 10);
+    expect(result).not.toBe(blocks);
+    expect(blocks[0]!.minutes).toBe(30); // input untouched
   });
 });

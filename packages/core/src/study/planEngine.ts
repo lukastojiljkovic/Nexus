@@ -79,3 +79,32 @@ export function planBlockDates(input: PlanBlockDatesInput): PlanBlockDate[] {
   }
   return blocks;
 }
+
+/**
+ * Spreads `backlogMinutes` of missed study time across `blocks` evenly, with
+ * earlier days absorbing any remainder first — the STUDY catch-up replan:
+ * missed minutes are redistributed onto the remaining planned days with no
+ * daily cap. Every block gets `floor(backlogMinutes / n)` extra minutes on
+ * top of its own `minutes`, and the first `backlogMinutes % n` blocks (in the
+ * given order — callers pass `planBlockDates`'s own ascending-date output)
+ * get one further extra minute each, so the user catches up sooner.
+ *
+ * Precondition (the caller's responsibility, like `dailyMinutes` above):
+ * `backlogMinutes` is an integer. A `backlogMinutes` of zero or less, or an
+ * empty `blocks` array, returns the blocks unchanged (a new array, same
+ * values). Pure: no clock, no mutation of the input.
+ */
+export function distributeBacklog(
+  blocks: readonly PlanBlockDate[],
+  backlogMinutes: number,
+): PlanBlockDate[] {
+  if (backlogMinutes <= 0 || blocks.length === 0) return blocks.map((block) => ({ ...block }));
+
+  const base = Math.floor(backlogMinutes / blocks.length);
+  const remainder = backlogMinutes % blocks.length;
+
+  return blocks.map((block, index) => ({
+    ...block,
+    minutes: block.minutes + base + (index < remainder ? 1 : 0),
+  }));
+}
