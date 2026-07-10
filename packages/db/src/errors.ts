@@ -160,3 +160,22 @@ export class PlanValidationError extends DatabaseError {}
  * one profile's plans/blocks invisible to a store scoped to another.
  */
 export class PlanNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a focus-session write is rejected at the store boundary because
+ * its input breaks a domain rule the UI is expected to have caught already —
+ * a malformed `now`/`startedAt`/`endedAt`, an `endedAt` that does not strictly
+ * follow `startedAt`, a malformed `fromDate`/`toDate` range, or a `subjectId`
+ * that does not resolve to an active subject in this profile (STUDY stats /
+ * focus sessions). The store revalidates because renderer input is untrusted
+ * (SEC-EL-02).
+ */
+export class FocusValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a focus-session operation targets an id that is not an active
+ * row in the store's own profile — unknown, soft-deleted (for a mutation), or
+ * owned by another profile. Surfacing this uniformly keeps one profile's
+ * focus sessions invisible to a store scoped to another.
+ */
+export class FocusNotFoundError extends DatabaseError {}

@@ -15,6 +15,8 @@ export {
   EventValidationError,
   ExamNotFoundError,
   ExamValidationError,
+  FocusNotFoundError,
+  FocusValidationError,
   PlanNotFoundError,
   PlanValidationError,
   SchemaVersionError,
@@ -95,5 +97,11 @@ export type {
   StudyPlan,
   UpdatePlanFields,
 } from "./study/planStore.js";
+
+export { FocusStore } from "./study/focusStore.js";
+export type { CreateFocusSessionInput, FocusSession } from "./study/focusStore.js";
+
+export { StatsStore } from "./study/statsStore.js";
+export type { BlockTotals, ReviewCounts, SubjectMinutes } from "./study/statsStore.js";
 
 export { uuidv7 } from "./ids.js";

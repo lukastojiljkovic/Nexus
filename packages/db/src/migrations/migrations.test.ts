@@ -32,7 +32,7 @@ describe("migration 002 — tasks", () => {
   it("creates the tasks table and stamps the latest user_version on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("tasks");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(7);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(8);
     db.close();
   });
 
@@ -43,7 +43,7 @@ describe("migration 002 — tasks", () => {
     first.close();
 
     const second = openDatabase({ path });
-    expect(second.raw.pragma("user_version", { simple: true })).toBe(7);
+    expect(second.raw.pragma("user_version", { simple: true })).toBe(8);
     expect(tableNames(second)).toContain("tasks");
     expect(
       (second.raw.prepare("SELECT count(*) AS n FROM profiles").get() as { n: number }).n,
@@ -93,7 +93,7 @@ describe("migration 003 — events", () => {
   it("creates the events table and stamps the latest user_version on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("events");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(7);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(8);
     db.close();
   });
 
@@ -161,7 +161,7 @@ describe("migration 004 — documents", () => {
     const names = tableNames(db);
     expect(names).toContain("tracked_documents");
     expect(names).toContain("document_renewals");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(7);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(8);
     db.close();
   });
 
@@ -242,7 +242,7 @@ describe("migration 005 — study", () => {
     const names = tableNames(db);
     expect(names).toContain("subjects");
     expect(names).toContain("exams");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(7);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(8);
     db.close();
   });
 
@@ -362,7 +362,7 @@ describe("migration 006 — flashcards", () => {
     expect(names).toContain("decks");
     expect(names).toContain("cards");
     expect(names).toContain("review_log");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(7);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(8);
     db.close();
   });
 
@@ -520,7 +520,7 @@ describe("migration 007 — study plans", () => {
     const names = tableNames(db);
     expect(names).toContain("study_plans");
     expect(names).toContain("study_blocks");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(7);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(8);
     db.close();
   });
 
@@ -656,6 +656,97 @@ describe("migration 007 — study plans", () => {
     db.raw.prepare("DELETE FROM study_plans WHERE id = ?").run("pl1");
     expect(
       (db.raw.prepare("SELECT count(*) AS n FROM study_blocks").get() as { n: number }).n,
+    ).toBe(0);
+    db.close();
+  });
+});
+
+describe("migration 008 — focus sessions", () => {
+  const now = () => new Date().toISOString();
+
+  const insertSubject = (db: NexusDatabase, id: string, profileId: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO subjects (id, profile_id, name, color, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, profileId, "x", "jade", now(), now());
+
+  const insertSession = (
+    db: NexusDatabase,
+    id: string,
+    profileId: string,
+    subjectId: string,
+    startedAt: string,
+    endedAt: string,
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO focus_sessions
+           (id, profile_id, subject_id, started_at, ended_at, created_at, updated_at, deleted_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
+      )
+      .run(id, profileId, subjectId, startedAt, endedAt, now(), now());
+
+  it("creates the focus_sessions table and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    expect(tableNames(db)).toContain("focus_sessions");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(8);
+    db.close();
+  });
+
+  it("rejects ended_at <= started_at with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-order.db") });
+    insertProfile(db, "p1");
+    insertSubject(db, "s1", "p1");
+    // equal timestamps -> rejected by the CHECK.
+    expect(() =>
+      insertSession(db, "f1", "p1", "s1", "2026-07-08T12:00:00.000Z", "2026-07-08T12:00:00.000Z"),
+    ).toThrow();
+    // ended_at before started_at -> rejected.
+    expect(() =>
+      insertSession(db, "f2", "p1", "s1", "2026-07-08T12:00:00.000Z", "2026-07-08T11:00:00.000Z"),
+    ).toThrow();
+    // ended_at strictly after started_at -> accepted.
+    expect(() =>
+      insertSession(db, "f3", "p1", "s1", "2026-07-08T12:00:00.000Z", "2026-07-08T12:30:00.000Z"),
+    ).not.toThrow();
+    db.close();
+  });
+
+  it("creates the focus_sessions_profile_started partial index", () => {
+    const db = openDatabase({ path: join(dir, "index.db") });
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("focus_sessions_profile_started");
+    db.close();
+  });
+
+  it("cascades focus_session deletion when the owning profile is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade-profile.db") });
+    insertProfile(db, "p1");
+    insertSubject(db, "s1", "p1");
+    insertSession(db, "f1", "p1", "s1", "2026-07-08T12:00:00.000Z", "2026-07-08T12:30:00.000Z");
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM focus_sessions").get() as { n: number }).n,
+    ).toBe(0);
+    db.close();
+  });
+
+  it("cascades focus_session deletion when the owning subject is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade-subject.db") });
+    insertProfile(db, "p1");
+    insertSubject(db, "s1", "p1");
+    insertSession(db, "f1", "p1", "s1", "2026-07-08T12:00:00.000Z", "2026-07-08T12:30:00.000Z");
+
+    db.raw.prepare("DELETE FROM subjects WHERE id = ?").run("s1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM focus_sessions").get() as { n: number }).n,
     ).toBe(0);
     db.close();
   });

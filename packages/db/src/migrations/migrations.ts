@@ -7,6 +7,7 @@ import { migration004 } from "./004-documents.js";
 import { migration005 } from "./005-study.js";
 import { migration006 } from "./006-flashcards.js";
 import { migration007 } from "./007-study-plans.js";
+import { migration008 } from "./008-focus-sessions.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -25,6 +26,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration005,
   migration006,
   migration007,
+  migration008,
 ];
 
 /**
