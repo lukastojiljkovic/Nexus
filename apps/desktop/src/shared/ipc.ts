@@ -67,6 +67,14 @@ export const IpcChannel = {
   blocksListByPlan: "blocks:list-by-plan",
   blocksRange: "blocks:range",
   blocksSetStatus: "blocks:set-status",
+  focusStart: "focus:start",
+  focusStop: "focus:stop",
+  focusStatus: "focus:status",
+  focusCancel: "focus:cancel",
+  focusListRange: "focus:list-range",
+  focusDelete: "focus:delete",
+  focusRestore: "focus:restore",
+  statsStudy: "stats:study",
   appInfo: "app:info",
 } as const;
 
@@ -751,6 +759,86 @@ export interface BlocksSetStatusRequest {
   status: StudyBlockStatus;
 }
 
+/**
+ * A completed focus (study-timer) session as seen by the renderer (mirrors the
+ * `focus_sessions` table via the store's mapping, STUDY stats). Redeclared
+ * here so the renderer never imports DB code.
+ */
+export interface FocusSession {
+  id: string;
+  profileId: string;
+  subjectId: string;
+  startedAt: string;
+  endedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * The in-progress focus timer for one profile, as tracked by the main process
+ * in memory only — it is never a `focus_sessions` row (see that table's doc
+ * comment): a crash or app restart simply loses the running timer.
+ */
+export interface RunningFocusSession {
+  subjectId: string;
+  startedAt: string;
+}
+
+/** Starts a focus timer. `startedAt` is stamped by main, never accepted from the renderer. */
+export interface FocusStartRequest {
+  profileId: string;
+  subjectId: string;
+}
+
+/** Stops the running focus timer, persisting it (unless it ended in the same instant it started). */
+export interface FocusStopRequest {
+  profileId: string;
+}
+
+export interface FocusStatusRequest {
+  profileId: string;
+}
+
+/** Discards the running focus timer without saving anything. */
+export interface FocusCancelRequest {
+  profileId: string;
+}
+
+export interface FocusListRangeRequest {
+  profileId: string;
+  fromDate: string;
+  toDate: string;
+}
+
+export interface FocusDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
+/** Undo of a soft delete: restores a previously deleted focus session. */
+export interface FocusRestoreRequest {
+  profileId: string;
+  id: string;
+}
+
+/**
+ * The composed STUDY stats payload for one profile's date range: per-subject
+ * focus minutes, the set of days with any study activity, review counts, and
+ * study-block totals (STUDY stats).
+ */
+export interface StudyStats {
+  subjectMinutes: Array<{ subjectId: string; minutes: number }>;
+  activityDays: string[];
+  reviews: { total: number; perDay: Array<{ day: string; count: number }> };
+  blocks: { done: number; missed: number };
+}
+
+export interface StatsStudyRequest {
+  profileId: string;
+  fromDate: string;
+  toDate: string;
+}
+
 /** Runtime and environment facts, proving the main-process path end to end. */
 export interface AppInfo {
   name: string;
@@ -834,5 +922,13 @@ export interface NexusApi {
     toDate: string,
   ): Promise<StudyBlockWithExam[]>;
   setBlockStatus(profileId: string, id: string, status: StudyBlockStatus): Promise<StudyBlock>;
+  startFocus(profileId: string, subjectId: string): Promise<RunningFocusSession>;
+  stopFocus(profileId: string): Promise<FocusSession | null>;
+  focusStatus(profileId: string): Promise<RunningFocusSession | null>;
+  cancelFocus(profileId: string): Promise<void>;
+  listFocusRange(profileId: string, fromDate: string, toDate: string): Promise<FocusSession[]>;
+  deleteFocus(profileId: string, id: string): Promise<void>;
+  restoreFocus(profileId: string, id: string): Promise<void>;
+  studyStats(profileId: string, fromDate: string, toDate: string): Promise<StudyStats>;
   appInfo(): Promise<AppInfo>;
 }

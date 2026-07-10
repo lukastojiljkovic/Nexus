@@ -106,6 +106,17 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.blocksRange, { profileId, fromDate, toDate }),
   setBlockStatus: (profileId, id, status) =>
     ipcRenderer.invoke(IpcChannel.blocksSetStatus, { profileId, id, status }),
+  startFocus: (profileId, subjectId) =>
+    ipcRenderer.invoke(IpcChannel.focusStart, { profileId, subjectId }),
+  stopFocus: (profileId) => ipcRenderer.invoke(IpcChannel.focusStop, { profileId }),
+  focusStatus: (profileId) => ipcRenderer.invoke(IpcChannel.focusStatus, { profileId }),
+  cancelFocus: (profileId) => ipcRenderer.invoke(IpcChannel.focusCancel, { profileId }),
+  listFocusRange: (profileId, fromDate, toDate) =>
+    ipcRenderer.invoke(IpcChannel.focusListRange, { profileId, fromDate, toDate }),
+  deleteFocus: (profileId, id) => ipcRenderer.invoke(IpcChannel.focusDelete, { profileId, id }),
+  restoreFocus: (profileId, id) => ipcRenderer.invoke(IpcChannel.focusRestore, { profileId, id }),
+  studyStats: (profileId, fromDate, toDate) =>
+    ipcRenderer.invoke(IpcChannel.statsStudy, { profileId, fromDate, toDate }),
   appInfo: () => ipcRenderer.invoke(IpcChannel.appInfo),
 };
 

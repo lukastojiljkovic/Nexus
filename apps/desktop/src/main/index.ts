@@ -11,9 +11,11 @@ import {
   EventStore,
   EXAM_TYPES,
   ExamStore,
+  FocusStore,
   openDatabase,
   PlanStore,
   SqliteFlagStore,
+  StatsStore,
   STUDY_BLOCK_STATUSES,
   SUBJECT_COLORS,
   SubjectStore,
@@ -38,6 +40,7 @@ import {
   type Event,
   type Exam,
   type ExamType,
+  type FocusSession,
   type NexusDatabase,
   type PreviewIntervals,
   type StudyBlock,
@@ -64,6 +67,8 @@ import {
   type AppInfo,
   type FlagState,
   type Profile,
+  type RunningFocusSession,
+  type StudyStats,
 } from "../shared/ipc.js";
 
 const isSmoke = process.argv.includes("--smoke");
@@ -81,6 +86,14 @@ const iconPath = join(app.getAppPath(), "build/icon.ico");
 
 let db: NexusDatabase | null = null;
 let mainWindow: BrowserWindow | null = null;
+
+// STUDY focus timer (piece 4a): the *running* timer is deliberately never a
+// database row (see the `focus_sessions` migration's doc comment) — it lives
+// only as this main-process runtime state, keyed by profile id, so a crash or
+// app restart simply loses the in-progress timer instead of persisting a
+// fabricated duration. Only `FocusStore.create` (on `focus:stop`) ever writes
+// a `focus_sessions` row.
+const runningFocusSessions = new Map<string, RunningFocusSession>();
 
 // --- Database ---------------------------------------------------------------
 
@@ -589,6 +602,14 @@ function planStore(profileId: string): PlanStore {
   return new PlanStore(requireDb().raw, profileId);
 }
 
+function focusStore(profileId: string): FocusStore {
+  return new FocusStore(requireDb().raw, profileId);
+}
+
+function statsStore(profileId: string): StatsStore {
+  return new StatsStore(requireDb().raw, profileId);
+}
+
 function registerIpc(): void {
   ipcMain.handle(IpcChannel.profilesList, (event): Profile[] => {
     assertTrustedSender(event);
@@ -1027,6 +1048,95 @@ function registerIpc(): void {
     const id = asNonEmptyString(body.id, "id");
     const status = asBlockStatus(body.status, "status");
     return planStore(profileId).setBlockStatus(id, status, new Date().toISOString());
+  });
+
+  // SEC-EL-02: `startedAt`/`endedAt`/`now` are always stamped here from the
+  // main process's own clock — the renderer never supplies a timer boundary.
+  // The running timer itself lives only in `runningFocusSessions` (see its
+  // declaration); a crash or restart loses it honestly, never a fabricated row.
+  ipcMain.handle(IpcChannel.focusStart, (event, payload): RunningFocusSession => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const subjectId = asNonEmptyString(body.subjectId, "subjectId");
+    if (runningFocusSessions.has(profileId)) {
+      throw new Error("A focus session is already running for this profile.");
+    }
+    // Validates the subject before recording — a running timer is never
+    // started against an unknown/foreign/soft-deleted subject.
+    focusStore(profileId).resolveSubject(subjectId);
+    const running: RunningFocusSession = { subjectId, startedAt: new Date().toISOString() };
+    runningFocusSessions.set(profileId, running);
+    return running;
+  });
+
+  ipcMain.handle(IpcChannel.focusStop, (event, payload): FocusSession | null => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const running = runningFocusSessions.get(profileId);
+    if (!running) {
+      throw new Error("No focus session is running for this profile.");
+    }
+    runningFocusSessions.delete(profileId);
+
+    const endedAt = new Date().toISOString();
+    if (endedAt <= running.startedAt) return null; // sub-millisecond stop: discarded, not persisted
+    return focusStore(profileId).create(
+      { subjectId: running.subjectId, startedAt: running.startedAt, endedAt },
+      endedAt,
+    );
+  });
+
+  ipcMain.handle(IpcChannel.focusStatus, (event, payload): RunningFocusSession | null => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return runningFocusSessions.get(profileId) ?? null;
+  });
+
+  ipcMain.handle(IpcChannel.focusCancel, (event, payload): void => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    runningFocusSessions.delete(profileId);
+  });
+
+  ipcMain.handle(IpcChannel.focusListRange, (event, payload): FocusSession[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const fromDate = asNonEmptyString(body.fromDate, "fromDate");
+    const toDate = asNonEmptyString(body.toDate, "toDate");
+    return focusStore(profileId).listRange(fromDate, toDate);
+  });
+
+  ipcMain.handle(IpcChannel.focusDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    focusStore(profileId).softDelete(id, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.focusRestore, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    focusStore(profileId).restore(id, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.statsStudy, (event, payload): StudyStats => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const fromDate = asNonEmptyString(body.fromDate, "fromDate");
+    const toDate = asNonEmptyString(body.toDate, "toDate");
+    const stats = statsStore(profileId);
+    return {
+      subjectMinutes: stats.subjectMinutes(fromDate, toDate),
+      activityDays: stats.activityDays(fromDate, toDate),
+      reviews: stats.reviewCounts(fromDate, toDate),
+      blocks: stats.blockTotals(fromDate, toDate),
+    };
   });
 
   ipcMain.handle(IpcChannel.appInfo, (event): AppInfo => {
