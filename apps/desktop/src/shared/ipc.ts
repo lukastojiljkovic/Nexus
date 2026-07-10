@@ -75,6 +75,13 @@ export const IpcChannel = {
   focusDelete: "focus:delete",
   focusRestore: "focus:restore",
   statsStudy: "stats:study",
+  notificationsCenterList: "notifications:center-list",
+  notificationsSnooze: "notifications:snooze",
+  notificationsDismiss: "notifications:dismiss",
+  notificationsSettingsGet: "notifications:settings-get",
+  notificationsSettingsUpdate: "notifications:settings-update",
+  notificationsSourceToggle: "notifications:source-toggle",
+  notificationsChanged: "notifications:changed",
   appInfo: "app:info",
 } as const;
 
@@ -839,6 +846,81 @@ export interface StatsStudyRequest {
   toDate: string;
 }
 
+/** The three NTF-001..003 source kinds (mirrors `@nexus/core`'s `NotificationSource`; redeclared here so the renderer never imports core/DB code). */
+export type NotificationSource = "document" | "exam" | "study-day";
+
+/** Closed ledger-status domain (mirrors `@nexus/db`'s `NotificationStatus`). Dismissal is terminal. */
+export type NotificationStatus = "delivered" | "snoozed" | "dismissed";
+
+/** The four snooze presets offered on a reminder; main resolves each to an absolute `until` from its own clock. */
+export type SnoozePreset = "10m" | "1h" | "tonight" | "tomorrow-morning";
+
+/**
+ * A notification-ledger row as seen by the renderer (mirrors the
+ * `notifications` table via `NotificationStore`'s mapping, NTF). Redeclared
+ * here so the renderer never imports DB code.
+ */
+export interface NotificationRecord {
+  id: string;
+  profileId: string;
+  source: NotificationSource;
+  entityId: string;
+  occurrenceKey: string;
+  title: string;
+  body: string;
+  status: NotificationStatus;
+  snoozedUntil: string | null;
+  deliveredAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** This profile's resolved NTF preferences (mirrors `@nexus/db`'s `NotificationSettings`). */
+export interface NotificationSettings {
+  quietFrom: string | null;
+  quietTo: string | null;
+  morningHour: string;
+  enabledSources: NotificationSource[];
+}
+
+/** A partial patch of NTF settings; an omitted key is left untouched, `null` clears a quiet-hours bound. */
+export interface NotificationSettingsChanges {
+  quietFrom?: string | null;
+  quietTo?: string | null;
+  morningHour?: string;
+}
+
+export interface NotificationsCenterListRequest {
+  profileId: string;
+}
+
+/** Snoozes a notification until an absolute time main resolves from `preset` and its own clock — never accepted from the renderer. */
+export interface NotificationsSnoozeRequest {
+  profileId: string;
+  id: string;
+  preset: SnoozePreset;
+}
+
+export interface NotificationsDismissRequest {
+  profileId: string;
+  id: string;
+}
+
+export interface NotificationsSettingsGetRequest {
+  profileId: string;
+}
+
+export interface NotificationsSettingsUpdateRequest {
+  profileId: string;
+  changes: NotificationSettingsChanges;
+}
+
+export interface NotificationsSourceToggleRequest {
+  profileId: string;
+  source: NotificationSource;
+  enabled: boolean;
+}
+
 /** Runtime and environment facts, proving the main-process path end to end. */
 export interface AppInfo {
   name: string;
@@ -930,5 +1012,29 @@ export interface NexusApi {
   deleteFocus(profileId: string, id: string): Promise<void>;
   restoreFocus(profileId: string, id: string): Promise<void>;
   studyStats(profileId: string, fromDate: string, toDate: string): Promise<StudyStats>;
+  listCenterNotifications(profileId: string): Promise<NotificationRecord[]>;
+  snoozeNotification(
+    profileId: string,
+    id: string,
+    preset: SnoozePreset,
+  ): Promise<NotificationRecord>;
+  dismissNotification(profileId: string, id: string): Promise<void>;
+  getNotificationSettings(profileId: string): Promise<NotificationSettings>;
+  updateNotificationSettings(
+    profileId: string,
+    changes: NotificationSettingsChanges,
+  ): Promise<NotificationSettings>;
+  setNotificationSourceEnabled(
+    profileId: string,
+    source: NotificationSource,
+    enabled: boolean,
+  ): Promise<void>;
+  /**
+   * Subscribes to the single `notifications:changed` push event (no payload —
+   * the listener re-fetches). Returns an unsubscribe function. The one
+   * deliberate exception to "one method per channel": this is still exactly
+   * one fixed channel, never a generic `on(channel, ...)` passthrough.
+   */
+  onNotificationsChanged(listener: () => void): () => void;
   appInfo(): Promise<AppInfo>;
 }

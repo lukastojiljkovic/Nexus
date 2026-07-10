@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { app, BrowserWindow, ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import { autoUpdater } from "electron-updater";
+import type { NotificationSource } from "@nexus/core";
 import {
   CARD_RATINGS,
   CardStore,
@@ -12,6 +13,7 @@ import {
   EXAM_TYPES,
   ExamStore,
   FocusStore,
+  NotificationStore,
   openDatabase,
   PlanStore,
   SqliteFlagStore,
@@ -42,6 +44,8 @@ import {
   type ExamType,
   type FocusSession,
   type NexusDatabase,
+  type NotificationRecord,
+  type NotificationSettings,
   type PreviewIntervals,
   type StudyBlock,
   type StudyBlockStatus,
@@ -58,16 +62,20 @@ import {
   type UpdateDocumentFields,
   type UpdateEventFields,
   type UpdateExamFields,
+  type UpdateNotificationSettingsInput,
   type UpdatePlanFields,
   type UpdateSubjectFields,
   type UpdateTaskFields,
 } from "@nexus/db";
+import { localToday } from "./clock.js";
+import { startNotificationScheduler, stopNotificationScheduler } from "./notifications.js";
 import {
   IpcChannel,
   type AppInfo,
   type FlagState,
   type Profile,
   type RunningFocusSession,
+  type SnoozePreset,
   type StudyStats,
 } from "../shared/ipc.js";
 
@@ -143,21 +151,6 @@ function seedFirstRunProfile(database: NexusDatabase): void {
   database.raw
     .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
     .run(uuidv7(), "personal", "", new Date().toISOString());
-}
-
-/**
- * Today as a bare "YYYY-MM-DD", from the local wall clock (STUDY exam planner:
- * `PlanStore` does all its date math in local calendar days). Deliberately
- * built from `getFullYear()/getMonth()/getDate()`, never `toISOString().slice(0, 10)`
- * — the latter is UTC and misdates the last hours of the day in every
- * positive-UTC-offset timezone (including Belgrade).
- */
-function localToday(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }
 
 function appInfo(): AppInfo {
@@ -565,6 +558,77 @@ function asBlockStatus(value: unknown, field: string): StudyBlockStatus {
   throw new Error(`Invalid IPC payload: "${field}" is not a valid block status.`);
 }
 
+/**
+ * The three NTF source kinds (mirrors `@nexus/core`'s `NotificationSource`).
+ * Not re-exported from `@nexus/db`, so the closed set is declared here, the
+ * same division of labour as every other closed-enum validator in this file.
+ */
+const NOTIFICATION_SOURCES: readonly NotificationSource[] = ["document", "exam", "study-day"];
+
+/** The four snooze presets `notifications:snooze` accepts; main resolves each to an absolute `until` from its own clock. */
+const SNOOZE_PRESETS: readonly SnoozePreset[] = ["10m", "1h", "tonight", "tomorrow-morning"];
+
+function asNotificationSource(value: unknown, field: string): NotificationSource {
+  if (typeof value === "string" && (NOTIFICATION_SOURCES as readonly string[]).includes(value)) {
+    return value as NotificationSource;
+  }
+  throw new Error(`Invalid IPC payload: "${field}" is not a valid notification source.`);
+}
+
+function asSnoozePreset(value: unknown, field: string): SnoozePreset {
+  if (typeof value === "string" && (SNOOZE_PRESETS as readonly string[]).includes(value)) {
+    return value as SnoozePreset;
+  }
+  throw new Error(`Invalid IPC payload: "${field}" is not a valid snooze preset.`);
+}
+
+/** Validates a `notifications:settings-update` payload's `changes`; an omitted key stays omitted. Structural checks only — the store owns "HH:MM"/coherence validation. */
+function asNotificationSettingsChanges(value: unknown): UpdateNotificationSettingsInput {
+  const changes = asRecord(value);
+  const patch: UpdateNotificationSettingsInput = {};
+  if (changes.quietFrom !== undefined) {
+    patch.quietFrom = asNullableString(changes.quietFrom, "changes.quietFrom");
+  }
+  if (changes.quietTo !== undefined) {
+    patch.quietTo = asNullableString(changes.quietTo, "changes.quietTo");
+  }
+  if (changes.morningHour !== undefined) {
+    patch.morningHour = asNonEmptyString(changes.morningHour, "changes.morningHour");
+  }
+  return patch;
+}
+
+/**
+ * Resolves a snooze preset to an absolute ISO-8601 `until`, entirely from
+ * main's own clock (SEC-EL-02: the renderer never supplies a snooze
+ * deadline). `10m`/`1h` are fixed offsets; `tonight` is today at 18:00 local
+ * (the store's own "`until` must be strictly after `now`" check rejects it
+ * once evening has already passed — the UI disables the preset then);
+ * `tomorrow-morning` is tomorrow at the profile's configured morning hour.
+ */
+function computeSnoozeUntil(preset: SnoozePreset, now: Date, morningHour: string): string {
+  switch (preset) {
+    case "10m":
+      return new Date(now.getTime() + 10 * 60_000).toISOString();
+    case "1h":
+      return new Date(now.getTime() + 60 * 60_000).toISOString();
+    case "tonight":
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18, 0, 0, 0).toISOString();
+    case "tomorrow-morning": {
+      const [hour, minute] = morningHour.split(":").map(Number);
+      return new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() + 1,
+        hour,
+        minute,
+        0,
+        0,
+      ).toISOString();
+    }
+  }
+}
+
 function requireDb(): NexusDatabase {
   if (!db) throw new Error("Database is not open.");
   return db;
@@ -608,6 +672,10 @@ function focusStore(profileId: string): FocusStore {
 
 function statsStore(profileId: string): StatsStore {
   return new StatsStore(requireDb().raw, profileId);
+}
+
+function notificationStore(profileId: string): NotificationStore {
+  return new NotificationStore(requireDb().raw, profileId);
 }
 
 function registerIpc(): void {
@@ -1139,6 +1207,58 @@ function registerIpc(): void {
     };
   });
 
+  ipcMain.handle(IpcChannel.notificationsCenterList, (event, payload): NotificationRecord[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return notificationStore(profileId).listCenter();
+  });
+
+  ipcMain.handle(IpcChannel.notificationsSnooze, (event, payload): NotificationRecord => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const preset = asSnoozePreset(body.preset, "preset");
+    const store = notificationStore(profileId);
+    const now = new Date();
+    const until = computeSnoozeUntil(preset, now, store.getSettings().morningHour);
+    const record = store.snooze(id, until, now.toISOString());
+    mainWindow?.webContents.send(IpcChannel.notificationsChanged);
+    return record;
+  });
+
+  ipcMain.handle(IpcChannel.notificationsDismiss, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    notificationStore(profileId).dismiss(id, new Date().toISOString());
+    mainWindow?.webContents.send(IpcChannel.notificationsChanged);
+  });
+
+  ipcMain.handle(IpcChannel.notificationsSettingsGet, (event, payload): NotificationSettings => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return notificationStore(profileId).getSettings();
+  });
+
+  ipcMain.handle(IpcChannel.notificationsSettingsUpdate, (event, payload): NotificationSettings => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const changes = asNotificationSettingsChanges(body.changes);
+    return notificationStore(profileId).updateSettings(changes, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.notificationsSourceToggle, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const source = asNotificationSource(body.source, "source");
+    const enabled = asBoolean(body.enabled, "enabled");
+    notificationStore(profileId).setSourceEnabled(source, enabled, new Date().toISOString());
+  });
+
   ipcMain.handle(IpcChannel.appInfo, (event): AppInfo => {
     assertTrustedSender(event);
     return appInfo();
@@ -1236,6 +1356,7 @@ function checkForUpdates(): void {
 }
 
 function shutdown(code: number): void {
+  stopNotificationScheduler();
   try {
     db?.close();
   } catch {
@@ -1262,6 +1383,21 @@ app.whenReady().then(() => {
 
     // Never in dev, never during the smoke run — only a real packaged install.
     if (app.isPackaged && !isSmoke) checkForUpdates();
+
+    // NTF piece a2: the periodic reminder check. Never during the smoke run —
+    // a scheduled check firing an OS notification mid-smoke would make the
+    // deterministic exit flaky and is pointless noise for a CI run anyway.
+    if (!isSmoke) {
+      startNotificationScheduler({
+        listProfiles: () => listProfiles(requireDb()),
+        documentStore,
+        examStore,
+        subjectStore,
+        planStore,
+        notificationStore,
+        getMainWindow: () => mainWindow,
+      });
+    }
 
     if (isSmoke) {
       mainWindow.webContents.once("did-finish-load", () => {
@@ -1297,6 +1433,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("will-quit", () => {
+  stopNotificationScheduler();
   try {
     db?.close();
   } catch {

@@ -117,6 +117,23 @@ const api: NexusApi = {
   restoreFocus: (profileId, id) => ipcRenderer.invoke(IpcChannel.focusRestore, { profileId, id }),
   studyStats: (profileId, fromDate, toDate) =>
     ipcRenderer.invoke(IpcChannel.statsStudy, { profileId, fromDate, toDate }),
+  listCenterNotifications: (profileId) =>
+    ipcRenderer.invoke(IpcChannel.notificationsCenterList, { profileId }),
+  snoozeNotification: (profileId, id, preset) =>
+    ipcRenderer.invoke(IpcChannel.notificationsSnooze, { profileId, id, preset }),
+  dismissNotification: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.notificationsDismiss, { profileId, id }),
+  getNotificationSettings: (profileId) =>
+    ipcRenderer.invoke(IpcChannel.notificationsSettingsGet, { profileId }),
+  updateNotificationSettings: (profileId, changes) =>
+    ipcRenderer.invoke(IpcChannel.notificationsSettingsUpdate, { profileId, changes }),
+  setNotificationSourceEnabled: (profileId, source, enabled) =>
+    ipcRenderer.invoke(IpcChannel.notificationsSourceToggle, { profileId, source, enabled }),
+  onNotificationsChanged: (listener) => {
+    const handler = (): void => listener();
+    ipcRenderer.on(IpcChannel.notificationsChanged, handler);
+    return () => ipcRenderer.removeListener(IpcChannel.notificationsChanged, handler);
+  },
   appInfo: () => ipcRenderer.invoke(IpcChannel.appInfo),
 };
 
