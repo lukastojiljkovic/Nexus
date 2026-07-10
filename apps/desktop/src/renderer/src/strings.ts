@@ -387,6 +387,44 @@ export const strings = {
     deleteFocusSessionLabel: "Obriši sesiju fokusa",
     deletedFocusSessionNotice: "Sesija fokusa obrisana",
   },
+
+  notifications: {
+    bellLabel: "Obaveštenja",
+    empty: "Nema novih obaveštenja.",
+    dismissLabel: "Ukloni obaveštenje",
+    snoozedUntil: "odloženo do",
+    /** Source tag chip on each center row, keyed by NotificationSource value. */
+    sourceTag: {
+      document: "Dokument",
+      exam: "Ispit",
+      "study-day": "Učenje",
+    },
+    /** Snooze preset button labels, keyed by SnoozePreset value. */
+    snoozePreset: {
+      "10m": "10 min",
+      "1h": "1 h",
+      tonight: "Večeras",
+      "tomorrow-morning": "Sutra ujutru",
+    },
+    settings: {
+      show: "Podešavanja obaveštenja",
+      hide: "Sakrij podešavanja",
+      quietFromLabel: "Tiho od",
+      quietToLabel: "Tiho do",
+      quietSave: "Sačuvaj",
+      quietClear: "Očisti",
+      quietHint: "Podsetnici sačekaju kraj tihih sati; poslednje upozorenje ipak stiže.",
+      quietPairingError: "Oba vremena moraju biti popunjena, ili oba prazna.",
+      morningHourLabel: "Jutarnji podsetnik u",
+      /** Source toggle checkbox labels, keyed by NotificationSource value. */
+      sourceToggle: {
+        document: "Dokumenta",
+        exam: "Ispiti",
+        "study-day": "Učenje",
+      },
+      saveError: "Čuvanje podešavanja nije uspelo. Pokušaj ponovo.",
+    },
+  },
 } as const;
 
 /**

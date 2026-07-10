@@ -7,6 +7,7 @@ import { DashboardPage } from "./DashboardPage.js";
 import { TasksPage } from "./TasksPage.js";
 import { CalendarPage } from "./CalendarPage.js";
 import { StudyPage } from "./StudyPage.js";
+import { NotificationCenter } from "./NotificationCenter.js";
 import { createModuleRegistry } from "./modules.js";
 import { persistTheme, readStoredTheme } from "./theme.js";
 import { strings } from "./strings.js";
@@ -130,6 +131,9 @@ export function App() {
               ))}
             </div>
           ))}
+          {activeProfile && (
+            <NotificationCenter profileId={activeProfile.id} onNavigate={setActiveId} />
+          )}
         </nav>
 
         <main className="app__main">

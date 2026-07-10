@@ -1628,3 +1628,207 @@ body {
   align-items: center;
   gap: var(--nx-space-2);
 }
+
+/* Notifications (NTF bell + center panel, piece a3) --------------------- */
+/* Sidebar footer: pinned to the bottom of the nav column (flex auto-margin),
+   a hairline separator above it, and the anchor for the overlay panel. */
+.app__sidebar-footer {
+  position: relative;
+  margin-top: auto;
+  padding-top: var(--nx-space-2);
+  border-top: 1px solid var(--nx-border);
+}
+
+/* The bell: full-width, typographic like a nav item — open state is gold
+   text + weight (the direction brief's selection idiom), never a glow or
+   fill. The unread count is plain gold-accent text, never a filled blob. */
+.ntf__bell.nx-button {
+  width: 100%;
+  justify-content: space-between;
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.ntf__bell.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.ntf__bell--open.nx-button {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.ntf__bell-count {
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-accent-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Center panel: anchored above the bell, a bordered/shadowed surface (never
+   a glow), scrolling internally so it never outgrows the viewport. */
+.ntf__panel {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + var(--nx-space-2));
+  width: 360px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  box-shadow: var(--nx-shadow);
+  z-index: 20;
+}
+.ntf__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.ntf__empty {
+  margin: 0;
+  padding: var(--nx-space-4);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+.ntf__row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  padding: var(--nx-space-3) var(--nx-space-4);
+  border-bottom: 1px solid var(--nx-border);
+}
+.ntf__row:last-child {
+  border-bottom: none;
+}
+/* The clickable deep-link zone: title/body/meta only, no nested interactive
+   controls (actions live as a sibling, never inside this button). */
+.ntf__row-open {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.ntf__row-open:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.ntf__row-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
+}
+.ntf__row-title {
+  font-weight: var(--nx-font-weight-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.ntf__row-body {
+  margin: 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: 1.4;
+}
+.ntf__row-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.ntf__row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
+  margin-top: var(--nx-space-1);
+}
+.ntf__snooze-presets {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
+}
+.ntf__snooze-presets .nx-button {
+  background: transparent;
+  border-color: var(--nx-border);
+  color: var(--nx-text-muted);
+}
+.ntf__snooze-presets .nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.ntf__dismiss.nx-button {
+  background: transparent;
+  border-color: var(--nx-border);
+  color: var(--nx-text-muted);
+}
+.ntf__dismiss.nx-button:hover {
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+}
+
+/* Settings disclosure — mirrors the study__archived/plan-toggle idiom
+   exactly: a Button whose label switches between the show/hide phrasing. */
+.ntf__settings {
+  flex: none;
+  border-top: 1px solid var(--nx-border);
+  padding: var(--nx-space-3) var(--nx-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+.ntf__settings-toggle.nx-button {
+  align-self: flex-start;
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.ntf__settings-toggle.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.ntf__settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+.ntf__settings-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+.ntf__settings-time {
+  width: auto;
+}
+.ntf__settings-hint {
+  margin: 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+}
+.ntf__settings-error {
+  margin: 0;
+  color: var(--nx-danger);
+  font-size: var(--nx-font-size-body-sm);
+}
+.ntf__settings-sources {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
