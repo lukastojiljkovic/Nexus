@@ -345,6 +345,35 @@ export const strings = {
       minutesRange: "Dnevni minuti moraju biti između 15 i 480.",
       generic: "Čuvanje plana nije uspelo. Pokušaj ponovo.",
     },
+
+    // --- Study stats + focus timer (Statistika i fokus, STUDY piece 4b) ------
+    statsTitle: "Statistika i fokus",
+    focusTitle: "Tajmer fokusa",
+    focusSubjectLabel: "Predmet za fokus",
+    focusStart: "Pokreni fokus",
+    focusStop: "Zaustavi",
+    focusDiscard: "Odbaci",
+    focusNoSubjects: "Nema aktivnih predmeta — dodaj predmet da bi pokrenuo tajmer fokusa.",
+    focusUnknownSubject: "Nepoznat predmet",
+    /** Streak line — "Niz učenja: N dana" + "Najduži niz: M" building blocks. */
+    streakLabel: "Niz učenja",
+    streakUnitOne: "dan",
+    streakUnitMany: "dana",
+    streakZero: "Još nema niza učenja — počni danas.",
+    streakBestLabel: "Najduži niz",
+    statsRecentTitle: "Poslednjih 30 dana",
+    statsMinutesTitle: "Minuti po predmetu",
+    statsOtherSubject: "Ostalo",
+    statsEmpty: "Još nema podataka o učenju u poslednjih 30 dana.",
+    statsReviewsLabel: "Ponavljanja",
+    /** Block summary — "Blokovi: 5 urađeno · 2 propušteno" builds inline. */
+    statsBlocksLabel: "Blokovi",
+    statsBlocksDone: "urađeno",
+    statsBlocksMissed: "propušteno",
+    focusSessionsTitle: "Nedavne sesije fokusa",
+    focusSessionsEmpty: "Nema sesija fokusa u poslednjih 7 dana.",
+    deleteFocusSessionLabel: "Obriši sesiju fokusa",
+    deletedFocusSessionNotice: "Sesija fokusa obrisana",
   },
 } as const;
 

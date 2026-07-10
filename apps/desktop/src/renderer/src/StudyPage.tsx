@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
+import { computeStreak } from "@nexus/core";
 import { Button, Checkbox, Chip, EmptyState, ListRow, TextField } from "@nexus/ui";
 import type {
   Card,
@@ -12,6 +13,7 @@ import type {
   Exam,
   ExamFieldChanges,
   ExamType,
+  FocusSession,
   NewCardFields,
   NewDeckFields,
   NewExamFields,
@@ -20,10 +22,12 @@ import type {
   PlanFieldChanges,
   PreviewIntervals,
   ReviewQueueScope,
+  RunningFocusSession,
   StudyBlock,
   StudyBlockStatus,
   StudyBlockWithExam,
   StudyPlan,
+  StudyStats,
   Subject,
   SubjectColor,
   SubjectFieldChanges,
@@ -34,10 +38,12 @@ import {
   examCountdownVariant,
   formatExamDate,
   localTodayKey,
+  shiftDayKey,
 } from "./examDates.js";
+import { focusSessionMinutes, formatDurationMinutes, formatElapsed, formatFocusSessionWhen } from "./focusFormat.js";
 import { MathText } from "./MathText.js";
 import { intervalLabel, isDueWithinSession } from "./reviewIntervals.js";
-import { strings } from "./strings.js";
+import { dayUnit, strings } from "./strings.js";
 
 // --- Field orderings (renderer mirror of @nexus/db) -------------------------
 //
@@ -140,6 +146,43 @@ function formatBlockDay(key: string): string {
         month: "long",
         timeZone: "UTC",
       }).format(date);
+}
+
+/** One row of the "minutes per subject" summary (STUDY stats, piece 4b). */
+interface SubjectMinutesRow {
+  id: string;
+  label: string;
+  minutes: number;
+  muted: boolean;
+}
+
+/**
+ * Joins the stats payload's `subjectMinutes` with the loaded subjects
+ * client-side — an archived subject still resolves by name (its minutes still
+ * count), while a subjectId matching no loaded subject (a hard-deleted or
+ * foreign row, shouldn't happen but the renderer trusts nothing) rolls into
+ * one muted `otherLabel` row instead of being silently dropped. Sorted by
+ * minutes descending, ties broken sr-Latn by label.
+ */
+function joinSubjectMinutes(
+  subjectMinutes: StudyStats["subjectMinutes"],
+  subjectsById: Map<string, Subject>,
+  otherLabel: string,
+): SubjectMinutesRow[] {
+  const rows: SubjectMinutesRow[] = [];
+  let otherMinutes = 0;
+  for (const entry of subjectMinutes) {
+    const subject = subjectsById.get(entry.subjectId);
+    if (subject) {
+      rows.push({ id: entry.subjectId, label: subject.name, minutes: entry.minutes, muted: false });
+    } else {
+      otherMinutes += entry.minutes;
+    }
+  }
+  if (otherMinutes > 0) {
+    rows.push({ id: "__other__", label: otherLabel, minutes: otherMinutes, muted: true });
+  }
+  return rows.sort((a, b) => b.minutes - a.minutes || collator.compare(a.label, b.label));
 }
 
 /**
@@ -251,6 +294,20 @@ export function StudyPage({ profileId }: StudyPageProps) {
   const [planError, setPlanError] = useState<string | null>(null);
   const [pendingUndoPlanId, setPendingUndoPlanId] = useState<string | null>(null);
 
+  // Study stats + focus timer (Statistika i fokus, STUDY piece 4b). `statsYear`
+  // covers the last 365 days (streak only — a streak longer than that window
+  // simply caps there); `statsRecent` covers the last 30 days and backs every
+  // other summary. `focusRunning` is restored on mount via `focusStatus` (the
+  // timer lives in the main process, so it survives navigation but not an app
+  // restart); `focusElapsedMs` is a display-only tick derived from it.
+  const [focusRunning, setFocusRunning] = useState<RunningFocusSession | null>(null);
+  const [focusSubjectId, setFocusSubjectId] = useState("");
+  const [focusElapsedMs, setFocusElapsedMs] = useState(0);
+  const [statsYear, setStatsYear] = useState<StudyStats | null>(null);
+  const [statsRecent, setStatsRecent] = useState<StudyStats | null>(null);
+  const [focusSessions, setFocusSessions] = useState<FocusSession[] | null>(null);
+  const [pendingUndoFocusId, setPendingUndoFocusId] = useState<string | null>(null);
+
   // Internal routing: the hub, a deck's card-management drill-in, or a review
   // session. No router — a discriminated union kept in component state.
   const [route, setRoute] = useState<
@@ -275,15 +332,30 @@ export function StudyPage({ profileId }: StudyPageProps) {
         // `missed` when the today strip and the plan lists render.
         await window.nexus.syncAllPlans(profileId);
         const today = localTodayKey();
-        const [nextSubjects, nextExams, nextDecks, nextCounts, nextPlans, nextTodayBlocks] =
-          await Promise.all([
-            window.nexus.listSubjects(profileId),
-            window.nexus.listExams(profileId),
-            window.nexus.listDecks(profileId),
-            window.nexus.cardCounts(profileId),
-            window.nexus.listPlans(profileId),
-            window.nexus.listBlocksInRange(profileId, today, today),
-          ]);
+        const [
+          nextSubjects,
+          nextExams,
+          nextDecks,
+          nextCounts,
+          nextPlans,
+          nextTodayBlocks,
+          nextFocusRunning,
+          nextStatsYear,
+          nextStatsRecent,
+          nextFocusSessions,
+        ] = await Promise.all([
+          window.nexus.listSubjects(profileId),
+          window.nexus.listExams(profileId),
+          window.nexus.listDecks(profileId),
+          window.nexus.cardCounts(profileId),
+          window.nexus.listPlans(profileId),
+          window.nexus.listBlocksInRange(profileId, today, today),
+          window.nexus.focusStatus(profileId),
+          // 365-day window for the streak only — a streak longer than that caps at it.
+          window.nexus.studyStats(profileId, shiftDayKey(today, -365), today),
+          window.nexus.studyStats(profileId, shiftDayKey(today, -29), today),
+          window.nexus.listFocusRange(profileId, shiftDayKey(today, -6), today),
+        ]);
         const blockLists = await Promise.all(
           nextPlans.map((plan) => window.nexus.listBlocksByPlan(profileId, plan.id)),
         );
@@ -297,6 +369,10 @@ export function StudyPage({ profileId }: StudyPageProps) {
         setBlocksByPlan(
           Object.fromEntries(nextPlans.map((plan, index) => [plan.id, blockLists[index] ?? []])),
         );
+        setFocusRunning(nextFocusRunning);
+        setStatsYear(nextStatsYear);
+        setStatsRecent(nextStatsRecent);
+        setFocusSessions(nextFocusSessions);
       } catch (error) {
         if (active) setFailed(true);
         console.error("Nexus: failed to load study data:", error);
@@ -306,6 +382,22 @@ export function StudyPage({ profileId }: StudyPageProps) {
       active = false;
     };
   }, [profileId]);
+
+  // Live elapsed readout for a running focus timer: ticks once a second from
+  // `startedAt`, display-only (the store never sees this value). Restarts
+  // whenever a fresh timer starts and clears on stop/unmount.
+  useEffect(() => {
+    if (!focusRunning) {
+      setFocusElapsedMs(0);
+      return;
+    }
+    const startedAtMs = new Date(focusRunning.startedAt).getTime();
+    setFocusElapsedMs(Date.now() - startedAtMs);
+    const id = window.setInterval(() => {
+      setFocusElapsedMs(Date.now() - startedAtMs);
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [focusRunning]);
 
   useEffect(() => {
     if (activeDeckId == null) return;
@@ -717,6 +809,70 @@ export function StudyPage({ profileId }: StudyPageProps) {
     }
   }
 
+  /** Re-fetches both stats windows and the last-7-days focus session list — called after every write that can move them (stop, delete, restore). */
+  async function refreshStats(): Promise<void> {
+    const today = localTodayKey();
+    const [nextStatsYear, nextStatsRecent, nextFocusSessions] = await Promise.all([
+      window.nexus.studyStats(profileId, shiftDayKey(today, -365), today),
+      window.nexus.studyStats(profileId, shiftDayKey(today, -29), today),
+      window.nexus.listFocusRange(profileId, shiftDayKey(today, -6), today),
+    ]);
+    setStatsYear(nextStatsYear);
+    setStatsRecent(nextStatsRecent);
+    setFocusSessions(nextFocusSessions);
+  }
+
+  async function beginFocus(subjectId: string): Promise<void> {
+    if (subjectId.length === 0) return;
+    try {
+      setFocusRunning(await window.nexus.startFocus(profileId, subjectId));
+    } catch (error) {
+      console.error("Nexus: failed to start focus timer:", error);
+    }
+  }
+
+  async function endFocus(): Promise<void> {
+    try {
+      const result = await window.nexus.stopFocus(profileId);
+      setFocusRunning(null);
+      if (result != null) await refreshStats();
+    } catch (error) {
+      console.error("Nexus: failed to stop focus timer:", error);
+    }
+  }
+
+  async function discardFocus(): Promise<void> {
+    try {
+      await window.nexus.cancelFocus(profileId);
+    } catch (error) {
+      console.error("Nexus: failed to discard focus timer:", error);
+    } finally {
+      setFocusRunning(null);
+    }
+  }
+
+  async function removeFocusSession(id: string): Promise<void> {
+    try {
+      await window.nexus.deleteFocus(profileId, id);
+      // One pending undo at a time — a fresh delete replaces the previous offer.
+      setPendingUndoFocusId(id);
+      await refreshStats();
+    } catch (error) {
+      console.error("Nexus: failed to delete focus session:", error);
+    }
+  }
+
+  async function undoFocusSession(): Promise<void> {
+    if (!pendingUndoFocusId) return;
+    try {
+      await window.nexus.restoreFocus(profileId, pendingUndoFocusId);
+      setPendingUndoFocusId(null);
+      await refreshStats();
+    } catch (error) {
+      console.error("Nexus: failed to restore focus session:", error);
+    }
+  }
+
   function closeCardForm(): void {
     setCardFormVisible(false);
     setEditingCardId(null);
@@ -811,7 +967,10 @@ export function StudyPage({ profileId }: StudyPageProps) {
     decks === null ||
     deckCounts === null ||
     plans === null ||
-    todayBlocks === null;
+    todayBlocks === null ||
+    statsYear === null ||
+    statsRecent === null ||
+    focusSessions === null;
   const sortedSubjects = subjects ? [...subjects].sort((a, b) => collator.compare(a.name, b.name)) : [];
   const activeSubjects = sortedSubjects.filter((s) => !s.archived);
   const archivedSubjects = sortedSubjects.filter((s) => s.archived);
@@ -888,6 +1047,33 @@ export function StudyPage({ profileId }: StudyPageProps) {
     editingPlanId != null
       ? planEntries.find((entry) => entry.plan.id === editingPlanId)
       : undefined;
+
+  // --- Study stats + focus timer (Statistika i fokus, piece 4b) --------------
+  const today = localTodayKey();
+
+  // The idle timer's select falls back to the sr-Latn-first active subject
+  // once the current pick is missing or no longer active/loaded.
+  const resolvedFocusSubjectId = activeSubjects.some((s) => s.id === focusSubjectId)
+    ? focusSubjectId
+    : (activeSubjects[0]?.id ?? "");
+
+  const streak = statsYear ? computeStreak(statsYear.activityDays, today) : null;
+
+  const subjectMinutesRows = statsRecent
+    ? joinSubjectMinutes(statsRecent.subjectMinutes, subjectsById, strings.study.statsOtherSubject)
+    : [];
+  const maxSubjectMinutes = Math.max(1, ...subjectMinutesRows.map((row) => row.minutes));
+  const statsAllZero =
+    subjectMinutesRows.length === 0 &&
+    (statsRecent?.reviews.total ?? 0) === 0 &&
+    (statsRecent?.blocks.done ?? 0) === 0 &&
+    (statsRecent?.blocks.missed ?? 0) === 0;
+
+  /** Last-7-days focus sessions joined with their subject (orphans skipped, like the plan/today joins); the store's own newest-first order is kept. */
+  const focusSessionEntries = (focusSessions ?? []).flatMap((session) => {
+    const subject = subjectsById.get(session.subjectId);
+    return subject ? [{ session, subject }] : [];
+  });
 
   // --- Review session route --------------------------------------------------
   if (route.kind === "review") {
@@ -1143,6 +1329,23 @@ export function StudyPage({ profileId }: StudyPageProps) {
             className="study__undo-dismiss"
             aria-label={strings.study.dismiss}
             onClick={() => setPendingUndoPlanId(null)}
+          >
+            ×
+          </Button>
+        </div>
+      )}
+
+      {pendingUndoFocusId != null && (
+        <div className="study__undo" role="status">
+          <span className="study__undo-text">{strings.study.deletedFocusSessionNotice}</span>
+          <Button size="sm" className="study__undo-action" onClick={() => void undoFocusSession()}>
+            {strings.study.undo}
+          </Button>
+          <Button
+            size="sm"
+            className="study__undo-dismiss"
+            aria-label={strings.study.dismiss}
+            onClick={() => setPendingUndoFocusId(null)}
           >
             ×
           </Button>
@@ -1620,6 +1823,157 @@ export function StudyPage({ profileId }: StudyPageProps) {
             ) : (
               <p className="study__plans-empty">{strings.study.noPlannableExams}</p>
             )}
+          </div>
+
+          <div className="study__stats">
+            <h2 className="study__stats-title">{strings.study.statsTitle}</h2>
+
+            <div className="study__focus-card">
+              <h3 className="study__focus-heading">{strings.study.focusTitle}</h3>
+              {focusRunning ? (
+                <div className="study__focus-running">
+                  <span className="study__focus-subject">
+                    {subjectsById.get(focusRunning.subjectId)?.name ?? strings.study.focusUnknownSubject}
+                  </span>
+                  <span className="study__focus-elapsed">{formatElapsed(focusElapsedMs)}</span>
+                  <span className="study__focus-actions">
+                    <Button size="sm" variant="primary" onClick={() => void endFocus()}>
+                      {strings.study.focusStop}
+                    </Button>
+                    <Button size="sm" className="study__cancel" onClick={() => void discardFocus()}>
+                      {strings.study.focusDiscard}
+                    </Button>
+                  </span>
+                </div>
+              ) : activeSubjects.length === 0 ? (
+                <p className="study__focus-empty">{strings.study.focusNoSubjects}</p>
+              ) : (
+                <div className="study__focus-idle">
+                  <select
+                    className="study__select"
+                    value={resolvedFocusSubjectId}
+                    aria-label={strings.study.focusSubjectLabel}
+                    onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                      setFocusSubjectId(event.target.value)
+                    }
+                  >
+                    {activeSubjects.map((subject) => (
+                      <option key={subject.id} value={subject.id}>
+                        {subject.name}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    onClick={() => void beginFocus(resolvedFocusSubjectId)}
+                  >
+                    {strings.study.focusStart}
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            <div className="study__stats-streak">
+              <span className="study__stats-streak-current">
+                {streak && streak.current > 0
+                  ? `${strings.study.streakLabel}: ${streak.current} ${dayUnit(
+                      streak.current,
+                      strings.study.streakUnitOne,
+                      strings.study.streakUnitMany,
+                    )}`
+                  : strings.study.streakZero}
+              </span>
+              {streak && streak.best > 0 && (
+                <span className="study__stats-streak-best">
+                  {strings.study.streakBestLabel}: {streak.best}
+                </span>
+              )}
+            </div>
+
+            <div className="study__stats-section">
+              <h3 className="study__stats-subheading">{strings.study.statsRecentTitle}</h3>
+              {statsAllZero ? (
+                <p className="study__stats-empty">{strings.study.statsEmpty}</p>
+              ) : (
+                <>
+                  {subjectMinutesRows.length > 0 && (
+                    <div className="study__stats-bars">
+                      <h4 className="study__stats-bars-heading">{strings.study.statsMinutesTitle}</h4>
+                      {subjectMinutesRows.map((row) => (
+                        <div key={row.id} className="study__stats-bar-row">
+                          <span
+                            className={`study__stats-bar-label${
+                              row.muted ? " study__stats-bar-label--muted" : ""
+                            }`}
+                          >
+                            {row.label}
+                          </span>
+                          <span className="study__stats-bar-track">
+                            <span
+                              className={`study__stats-bar-fill${
+                                row.muted ? " study__stats-bar-fill--muted" : ""
+                              }`}
+                              style={{ width: `${(row.minutes / maxSubjectMinutes) * 100}%` }}
+                            />
+                          </span>
+                          <span className="study__stats-bar-value">
+                            {formatDurationMinutes(row.minutes)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="study__stats-line">
+                    {strings.study.statsReviewsLabel}: {statsRecent?.reviews.total ?? 0}
+                  </p>
+                  <p className="study__stats-line">
+                    {strings.study.statsBlocksLabel}: {statsRecent?.blocks.done ?? 0}{" "}
+                    {strings.study.statsBlocksDone} ·{" "}
+                    <span className="study__stats-muted">
+                      {statsRecent?.blocks.missed ?? 0} {strings.study.statsBlocksMissed}
+                    </span>
+                  </p>
+                </>
+              )}
+            </div>
+
+            <div className="study__focus-sessions">
+              <h3 className="study__focus-sessions-heading">{strings.study.focusSessionsTitle}</h3>
+              {focusSessionEntries.length === 0 ? (
+                <p className="study__focus-sessions-empty">{strings.study.focusSessionsEmpty}</p>
+              ) : (
+                <div className="study__focus-sessions-list">
+                  {focusSessionEntries.map(({ session, subject }) => (
+                    <ListRow
+                      key={session.id}
+                      trailing={
+                        <span className="study__focus-session-actions">
+                          <Chip variant="data">
+                            {formatDurationMinutes(focusSessionMinutes(session))}
+                          </Chip>
+                          <Button
+                            size="sm"
+                            className="study__delete"
+                            aria-label={strings.study.deleteFocusSessionLabel}
+                            onClick={() => void removeFocusSession(session.id)}
+                          >
+                            ×
+                          </Button>
+                        </span>
+                      }
+                    >
+                      <span className="study__focus-session-info">
+                        <span className="study__focus-session-subject">{subject.name}</span>
+                        <span className="study__focus-session-time">
+                          {formatFocusSessionWhen(session.startedAt)}
+                        </span>
+                      </span>
+                    </ListRow>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </>
       )}

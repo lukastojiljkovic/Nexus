@@ -1162,6 +1162,210 @@ body {
   font-size: var(--nx-font-size-body-sm);
 }
 
+/* Study stats + focus timer (Statistika i fokus, STUDY piece 4b) — a
+   top-level hub section mirroring .study__plans' visual weight exactly: same
+   card surfaces, same muted section headings. Proportion rows replace
+   BarChart here (see StudyPage's join helper) since subject names are
+   variable-length and the subject count is unbounded — BarChart's fixed-width
+   equal columns are built for a short, constant label set (e.g. weekdays).
+   Missed blocks and the "Ostalo" rollup stay muted text, never red/glowing. */
+.study__stats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+.study__stats-title {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+.study__focus-card {
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  padding: var(--nx-space-3) var(--nx-space-4);
+  box-shadow: var(--nx-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.study__focus-heading {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.study__focus-empty {
+  margin: 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__focus-idle {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+.study__focus-running {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-3);
+  flex-wrap: wrap;
+}
+.study__focus-subject {
+  font-weight: var(--nx-font-weight-medium);
+}
+.study__focus-elapsed {
+  font-size: var(--nx-font-size-h1);
+  font-weight: var(--nx-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-accent-strong);
+}
+.study__focus-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  margin-left: auto;
+}
+
+.study__stats-streak {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-3);
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__stats-streak-current {
+  font-weight: var(--nx-font-weight-medium);
+}
+.study__stats-streak-best {
+  color: var(--nx-text-muted);
+}
+
+.study__stats-section {
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  padding: var(--nx-space-3) var(--nx-space-4);
+  box-shadow: var(--nx-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.study__stats-subheading {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.study__stats-empty {
+  margin: 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__stats-line {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__stats-muted {
+  color: var(--nx-text-muted);
+}
+
+.study__stats-bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.study__stats-bars-heading {
+  margin: 0;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.study__stats-bar-row {
+  display: grid;
+  grid-template-columns: minmax(88px, 26%) 1fr auto;
+  align-items: center;
+  gap: var(--nx-space-3);
+}
+.study__stats-bar-label {
+  font-size: var(--nx-font-size-body-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.study__stats-bar-label--muted {
+  color: var(--nx-text-muted);
+}
+.study__stats-bar-track {
+  position: relative;
+  height: 8px;
+  border-radius: var(--nx-radius-round);
+  background: var(--nx-surface-alt);
+  overflow: hidden;
+}
+.study__stats-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--nx-accent), var(--nx-data));
+}
+.study__stats-bar-fill--muted {
+  background: var(--nx-text-muted);
+  opacity: 0.5;
+}
+.study__stats-bar-value {
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+.study__focus-sessions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.study__focus-sessions-heading {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.study__focus-sessions-empty {
+  margin: 0;
+  padding: var(--nx-space-1) 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__focus-sessions-list {
+  display: flex;
+  flex-direction: column;
+}
+.study__focus-session-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.study__focus-session-time {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.study__focus-session-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+
 /* Deck drill-in (card management) --------------------------------------- */
 .study__deck-view-header {
   display: flex;
