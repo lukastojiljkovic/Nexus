@@ -50,3 +50,14 @@ export type { PlanBlockDate, PlanBlockDatesInput } from "./study/planEngine.js";
 
 export { computeStreak } from "./study/studyStats.js";
 export type { StreakResult } from "./study/studyStats.js";
+
+export { deriveNotificationCandidates } from "./notify/notificationEngine.js";
+export type {
+  DeriveNotificationCandidatesInput,
+  DocumentReminderInput,
+  ExamReminderInput,
+  NotificationCandidate,
+  NotificationPriority,
+  NotificationSource,
+  StudyDayReminderInput,
+} from "./notify/notificationEngine.js";
