@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3-multiple-ciphers";
-import { planBlockDates } from "@nexus/core";
+import { distributeBacklog, planBlockDates } from "@nexus/core";
 import { PlanNotFoundError, PlanValidationError } from "../errors.js";
 import { uuidv7 } from "../ids.js";
 
@@ -128,6 +128,7 @@ export class PlanStore {
   private readonly selectBlockById: Database.Statement;
   private readonly selectBlocksInRange: Database.Statement;
   private readonly selectBlockDatesForPlan: Database.Statement;
+  private readonly selectMissedMinutesForPlan: Database.Statement;
   private readonly deleteFuturePlannedBlocks: Database.Statement;
   private readonly markPastPlannedMissed: Database.Statement;
   private readonly updateBlockStatus: Database.Statement;
@@ -199,6 +200,10 @@ export class PlanStore {
     );
     this.selectBlockDatesForPlan = db.prepare(
       `SELECT block_date FROM study_blocks WHERE plan_id = ? AND profile_id = ?`,
+    );
+    this.selectMissedMinutesForPlan = db.prepare(
+      `SELECT COALESCE(SUM(minutes), 0) AS backlog FROM study_blocks
+       WHERE plan_id = ? AND profile_id = ? AND status = 'missed'`,
     );
     this.deleteFuturePlannedBlocks = db.prepare(
       `DELETE FROM study_blocks
@@ -300,8 +305,9 @@ export class PlanStore {
    * Applies a partial field patch to an active plan, then regenerates its
    * future blocks: existing `planned` blocks on/after `today` are dropped and
    * recomputed from the engine with the updated parameters, skipping any date
-   * that still has a row (a `done`/`missed` block, or a past block) — all in
-   * one transaction.
+   * that still has a row (a `done`/`missed` block, or a past block), with the
+   * plan's current missed-minutes backlog (if any) redistributed across them
+   * — all in one transaction.
    */
   updatePlan(id: string, changes: UpdatePlanFields, now: string, today: string): StudyPlan {
     const validNow = validateNow(now);
@@ -422,8 +428,12 @@ export class PlanStore {
    * Idempotent per-plan sync, in one transaction: (1) past `planned` blocks
    * become `missed`; (2) future `planned` blocks are dropped; (3) unless the
    * exam date is on/before `today`, they are regenerated from the engine,
-   * skipping any date that already has a row. Running this twice with the
-   * same `today` leaves the block set unchanged.
+   * skipping any date that already has a row. The catch-up replan: the plan's
+   * missed minutes (the `SUM(minutes)` of its `missed` blocks, including any
+   * freshly missed in step 1) are spread evenly across the regenerated future
+   * blocks with no daily cap — earlier days absorb any remainder first, so a
+   * missed block later completed late shrinks the backlog on the next sync.
+   * Running this twice with the same `today` leaves the block set unchanged.
    */
   sync(planId: string, now: string, today: string): void {
     const validNow = validateNow(now);
@@ -460,9 +470,14 @@ export class PlanStore {
 
   /**
    * Shared "drop future planned blocks, regenerate from the engine, skip dates
-   * that already have a row" step used by both `updatePlan` and `sync`.
-   * Regeneration is skipped entirely once the exam date is on/before `today`
-   * (the caller's future-block drop still runs beforehand).
+   * that already have a row" step used by both `updatePlan` and `sync`. The
+   * plan's current missed-minutes backlog (`SUM(minutes)` over its `missed`
+   * blocks) is then spread evenly across the surviving future blocks via
+   * `distributeBacklog` — no daily cap; earlier days absorb any remainder
+   * first — before they are inserted. Regeneration is skipped entirely once
+   * the exam date is on/before `today` (the caller's future-block drop still
+   * runs beforehand), in which case the backlog is left untouched: nothing
+   * absorbs it, and its missed blocks simply stay missed.
    */
   private regenerateBlocks(
     planId: string,
@@ -483,9 +498,15 @@ export class PlanStore {
       ),
     );
 
-    const blocks = planBlockDates({ examDate, startDate, dailyMinutes, examWeekBoost, today });
+    const generated = planBlockDates({ examDate, startDate, dailyMinutes, examWeekBoost, today });
+    const surviving = generated.filter((block) => !existingDates.has(block.date));
+
+    const { backlog } = this.selectMissedMinutesForPlan.get(planId, this.profileId) as {
+      backlog: number;
+    };
+    const blocks = distributeBacklog(surviving, backlog);
+
     for (const block of blocks) {
-      if (existingDates.has(block.date)) continue;
       this.insertBlock.run(
         uuidv7(),
         planId,

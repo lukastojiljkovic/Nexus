@@ -372,6 +372,29 @@ describe("PlanStore", () => {
         PlanValidationError,
       );
     });
+
+    it("applies the plan's current missed-minutes backlog when regenerating", () => {
+      const { plans, exams, subjectId } = fixture();
+      const examId = exams.create({ subjectId, examType: "pismeni", examDate: "2026-07-14" }).id;
+      const created = plans.createPlan(
+        { examId, dailyMinutes: 30, startDate: "2026-07-08", examWeekBoost: false },
+        T0,
+        TODAY,
+      );
+
+      // 07-08 and 07-09 fall behind "today" and become missed (60 backlog).
+      plans.sync(created.id, "2026-07-10T10:00:00.000Z", "2026-07-10");
+
+      // Changing dailyMinutes regenerates the 4 remaining future blocks from
+      // the new base, then spreads the unchanged 60-minute backlog over them.
+      plans.updatePlan(created.id, { dailyMinutes: 20 }, "2026-07-10T11:00:00.000Z", "2026-07-10");
+
+      const future = plans
+        .listBlocks(created.id)
+        .filter((b) => b.status === "planned")
+        .map((b) => b.minutes);
+      expect(future).toEqual([35, 35, 35, 35]); // 20 + 60/4
+    });
   });
 
   describe("softDelete / restore", () => {
@@ -605,6 +628,145 @@ describe("PlanStore", () => {
       plans.softDelete(created.id, T0);
       expect(() => plans.sync(created.id, T0, TODAY)).toThrow(PlanNotFoundError);
       expect(() => plans.sync("missing", T0, TODAY)).toThrow(PlanNotFoundError);
+    });
+
+    describe("catch-up replan (missed-minutes backlog)", () => {
+      it("redistributes the missed-minutes backlog evenly across future blocks, no daily cap", () => {
+        const { plans, exams, subjectId } = fixture();
+        const examId = exams.create({ subjectId, examType: "pismeni", examDate: "2026-07-14" }).id;
+        const created = plans.createPlan(
+          { examId, dailyMinutes: 30, startDate: "2026-07-08", examWeekBoost: false },
+          T0,
+          TODAY,
+        );
+
+        plans.sync(created.id, "2026-07-10T10:00:00.000Z", "2026-07-10");
+
+        const blocks = plans.listBlocks(created.id);
+        const missed = blocks.filter((b) => b.status === "missed");
+        expect(missed.map((b) => b.blockDate)).toEqual(["2026-07-08", "2026-07-09"]);
+        expect(missed.every((b) => b.minutes === 30)).toBe(true); // the backlog source itself is untouched
+
+        const future = blocks.filter((b) => b.status === "planned");
+        expect(future.map((b) => ({ date: b.blockDate, minutes: b.minutes }))).toEqual([
+          { date: "2026-07-10", minutes: 45 }, // 30 + 60/4
+          { date: "2026-07-11", minutes: 45 },
+          { date: "2026-07-12", minutes: 45 },
+          { date: "2026-07-13", minutes: 45 },
+        ]);
+      });
+
+      it("gives the remainder minute to the earliest future blocks when the backlog does not divide evenly", () => {
+        const { plans, exams, subjectId } = fixture();
+        const examId = exams.create({ subjectId, examType: "pismeni", examDate: "2026-07-14" }).id;
+        const created = plans.createPlan(
+          { examId, dailyMinutes: 25, startDate: "2026-07-08", examWeekBoost: false },
+          T0,
+          TODAY,
+        );
+
+        plans.sync(created.id, "2026-07-10T10:00:00.000Z", "2026-07-10");
+
+        const future = plans
+          .listBlocks(created.id)
+          .filter((b) => b.status === "planned")
+          .map((b) => b.minutes);
+        // Backlog 50 (2 x 25) over 4 future days: 50/4 = 12 base, remainder 2.
+        expect(future).toEqual([38, 38, 37, 37]); // 25 + 13, 25 + 13, 25 + 12, 25 + 12
+      });
+
+      it("stays idempotent for the same today while a backlog is being redistributed", () => {
+        const { plans, exams, subjectId } = fixture();
+        const examId = exams.create({ subjectId, examType: "pismeni", examDate: "2026-07-14" }).id;
+        const created = plans.createPlan(
+          { examId, dailyMinutes: 30, startDate: "2026-07-08", examWeekBoost: false },
+          T0,
+          TODAY,
+        );
+
+        plans.sync(created.id, "2026-07-10T10:00:00.000Z", "2026-07-10");
+        const firstPass = plans
+          .listBlocks(created.id)
+          .map((b) => ({ date: b.blockDate, minutes: b.minutes, status: b.status }));
+
+        plans.sync(created.id, "2026-07-10T10:00:00.000Z", "2026-07-10");
+        const secondPass = plans
+          .listBlocks(created.id)
+          .map((b) => ({ date: b.blockDate, minutes: b.minutes, status: b.status }));
+
+        expect(secondPass).toEqual(firstPass);
+      });
+
+      it("shrinks the redistributed backlog on the next sync once a missed block is completed late", () => {
+        const { plans, exams, subjectId } = fixture();
+        const examId = exams.create({ subjectId, examType: "pismeni", examDate: "2026-07-14" }).id;
+        const created = plans.createPlan(
+          { examId, dailyMinutes: 40, startDate: "2026-07-08", examWeekBoost: false },
+          T0,
+          TODAY,
+        );
+
+        plans.sync(created.id, "2026-07-10T10:00:00.000Z", "2026-07-10");
+        const beforeFuture = plans
+          .listBlocks(created.id)
+          .filter((b) => b.status === "planned")
+          .map((b) => b.minutes);
+        expect(beforeFuture).toEqual([60, 60, 60, 60]); // 40 + 80/4 (2 missed days x 40)
+
+        const firstMissed = plans.listBlocks(created.id).find((b) => b.blockDate === "2026-07-08")!;
+        plans.setBlockStatus(firstMissed.id, "done", "2026-07-10T12:00:00.000Z"); // late completion
+
+        plans.sync(created.id, "2026-07-10T13:00:00.000Z", "2026-07-10"); // same today: no new misses
+
+        const afterFuture = plans
+          .listBlocks(created.id)
+          .filter((b) => b.status === "planned")
+          .map((b) => b.minutes);
+        // Backlog dropped from 80 to 40 (one missed day left) over the same 4 days: 40/4 = 10 each.
+        expect(afterFuture).toEqual([50, 50, 50, 50]);
+      });
+
+      it("keeps boosted days' doubled base plus their share of the redistributed backlog", () => {
+        const { plans, exams, subjectId } = fixture();
+        const examId = exams.create({ subjectId, examType: "pismeni", examDate: "2026-07-14" }).id;
+        const created = plans.createPlan(
+          { examId, dailyMinutes: 20, startDate: "2026-07-01", examWeekBoost: true },
+          "2026-07-01T09:00:00.000Z",
+          "2026-07-01",
+        );
+
+        plans.sync(created.id, "2026-07-10T10:00:00.000Z", "2026-07-10");
+
+        const future = plans
+          .listBlocks(created.id)
+          .filter((b) => b.status === "planned")
+          .map((b) => ({ date: b.blockDate, minutes: b.minutes }));
+        // Missed: 07-01..06 unboosted (6 x 20 = 120) + 07-07..09 boosted (3 x 40 = 120) = 240 backlog.
+        // Future 07-10..13 are all within the boosted final week: 40 base + 240/4 = 60 extra = 100 each.
+        expect(future).toEqual([
+          { date: "2026-07-10", minutes: 100 },
+          { date: "2026-07-11", minutes: 100 },
+          { date: "2026-07-12", minutes: 100 },
+          { date: "2026-07-13", minutes: 100 },
+        ]);
+      });
+
+      it("leaves missed blocks alone with no error when no future blocks remain to absorb the backlog", () => {
+        const { plans, examId } = fixture(); // exam 2026-08-10
+        const created = plans.createPlan(
+          { examId, dailyMinutes: 30, startDate: "2026-08-05", examWeekBoost: false },
+          T0,
+          TODAY,
+        );
+
+        expect(() =>
+          plans.sync(created.id, "2026-08-10T10:00:00.000Z", "2026-08-10"),
+        ).not.toThrow();
+
+        const after = plans.listBlocks(created.id);
+        expect(after).toHaveLength(5);
+        expect(after.every((b) => b.status === "missed" && b.minutes === 30)).toBe(true);
+      });
     });
   });
 
