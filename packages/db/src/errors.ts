@@ -179,3 +179,24 @@ export class FocusValidationError extends DatabaseError {}
  * focus sessions invisible to a store scoped to another.
  */
 export class FocusNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a notification write is rejected at the store boundary because
+ * its input breaks a domain rule the caller is expected to have caught
+ * already — a malformed "HH:MM" quiet-hours/morning-hour time, quiet hours
+ * set on only one side of the pair, an unknown source, an empty or too-long
+ * title/body, a malformed `now`/`until`, an `until` that does not strictly
+ * follow `now`, or a UNIQUE collision on (profile, source, entity, occurrence)
+ * — an occurrence is recorded once; a re-fire after a snooze goes through
+ * `markRefired`, never a second `recordDelivered` (NTF). The store
+ * revalidates because renderer input is untrusted (SEC-EL-02).
+ */
+export class NotificationValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a notification-ledger operation targets an id that is not a row
+ * in the store's own profile — unknown, owned by another profile, or (for
+ * `markRefired`) not currently `snoozed`. Surfacing this uniformly keeps one
+ * profile's notifications invisible to a store scoped to another.
+ */
+export class NotificationNotFoundError extends DatabaseError {}

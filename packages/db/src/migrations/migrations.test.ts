@@ -32,7 +32,7 @@ describe("migration 002 — tasks", () => {
   it("creates the tasks table and stamps the latest user_version on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("tasks");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(8);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(9);
     db.close();
   });
 
@@ -43,7 +43,7 @@ describe("migration 002 — tasks", () => {
     first.close();
 
     const second = openDatabase({ path });
-    expect(second.raw.pragma("user_version", { simple: true })).toBe(8);
+    expect(second.raw.pragma("user_version", { simple: true })).toBe(9);
     expect(tableNames(second)).toContain("tasks");
     expect(
       (second.raw.prepare("SELECT count(*) AS n FROM profiles").get() as { n: number }).n,
@@ -93,7 +93,7 @@ describe("migration 003 — events", () => {
   it("creates the events table and stamps the latest user_version on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("events");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(8);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(9);
     db.close();
   });
 
@@ -161,7 +161,7 @@ describe("migration 004 — documents", () => {
     const names = tableNames(db);
     expect(names).toContain("tracked_documents");
     expect(names).toContain("document_renewals");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(8);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(9);
     db.close();
   });
 
@@ -242,7 +242,7 @@ describe("migration 005 — study", () => {
     const names = tableNames(db);
     expect(names).toContain("subjects");
     expect(names).toContain("exams");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(8);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(9);
     db.close();
   });
 
@@ -362,7 +362,7 @@ describe("migration 006 — flashcards", () => {
     expect(names).toContain("decks");
     expect(names).toContain("cards");
     expect(names).toContain("review_log");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(8);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(9);
     db.close();
   });
 
@@ -520,7 +520,7 @@ describe("migration 007 — study plans", () => {
     const names = tableNames(db);
     expect(names).toContain("study_plans");
     expect(names).toContain("study_blocks");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(8);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(9);
     db.close();
   });
 
@@ -691,7 +691,7 @@ describe("migration 008 — focus sessions", () => {
   it("creates the focus_sessions table and stamps the latest user_version on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("focus_sessions");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(8);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(9);
     db.close();
   });
 
@@ -747,6 +747,142 @@ describe("migration 008 — focus sessions", () => {
     db.raw.prepare("DELETE FROM subjects WHERE id = ?").run("s1");
     expect(
       (db.raw.prepare("SELECT count(*) AS n FROM focus_sessions").get() as { n: number }).n,
+    ).toBe(0);
+    db.close();
+  });
+});
+
+describe("migration 009 — notifications", () => {
+  const now = () => new Date().toISOString();
+
+  const insertNotification = (
+    db: NexusDatabase,
+    id: string,
+    profileId: string,
+    source: string,
+    status = "delivered",
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO notifications
+           (id, profile_id, source, entity_id, occurrence_key, title, body, status,
+            snoozed_until, delivered_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`,
+      )
+      .run(id, profileId, source, "e1", "d-1", "Title", "Body", status, now(), now(), now());
+
+  const insertNtfSettings = (db: NexusDatabase, profileId: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO ntf_settings (profile_id, quiet_from, quiet_to, morning_hour, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(profileId, "22:00", "07:00", "08:00", now(), now());
+
+  const insertNtfSourceSetting = (
+    db: NexusDatabase,
+    profileId: string,
+    source: string,
+    enabled: number,
+  ) =>
+    db.raw
+      .prepare(`INSERT INTO ntf_source_settings (profile_id, source, enabled) VALUES (?, ?, ?)`)
+      .run(profileId, source, enabled);
+
+  it("creates all three notification tables and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    const names = tableNames(db);
+    expect(names).toContain("notifications");
+    expect(names).toContain("ntf_settings");
+    expect(names).toContain("ntf_source_settings");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(9);
+    db.close();
+  });
+
+  it("rejects a notifications source outside the closed set with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-source.db") });
+    insertProfile(db, "p1");
+    // an unlisted source -> rejected by the CHECK.
+    expect(() => insertNotification(db, "n1", "p1", "bogus")).toThrow();
+    // an enumerated source is accepted.
+    expect(() => insertNotification(db, "n2", "p1", "exam")).not.toThrow();
+    db.close();
+  });
+
+  it("rejects a notifications status outside the closed set with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-status.db") });
+    insertProfile(db, "p1");
+    // an unlisted status -> rejected by the CHECK.
+    expect(() => insertNotification(db, "n1", "p1", "exam", "bogus")).toThrow();
+    // each enumerated status is accepted.
+    expect(() => insertNotification(db, "n2", "p1", "exam", "delivered")).not.toThrow();
+    expect(() => insertNotification(db, "n3", "p1", "document", "snoozed")).not.toThrow();
+    expect(() => insertNotification(db, "n4", "p1", "study-day", "dismissed")).not.toThrow();
+    db.close();
+  });
+
+  it("enforces UNIQUE(profile_id, source, entity_id, occurrence_key) on notifications", () => {
+    const db = openDatabase({ path: join(dir, "unique-occurrence.db") });
+    insertProfile(db, "p1");
+    insertNotification(db, "n1", "p1", "exam");
+    // the same (profile, source, entity, occurrence) combination collides.
+    expect(() => insertNotification(db, "n2", "p1", "exam")).toThrow();
+    db.close();
+  });
+
+  it("creates the notifications_profile_status_updated index", () => {
+    const db = openDatabase({ path: join(dir, "index.db") });
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("notifications_profile_status_updated");
+    db.close();
+  });
+
+  it("cascades notification deletion when the owning profile is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade-notifications.db") });
+    insertProfile(db, "p1");
+    insertNotification(db, "n1", "p1", "exam");
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM notifications").get() as { n: number }).n,
+    ).toBe(0);
+    db.close();
+  });
+
+  it("rejects an ntf_source_settings source outside the closed set with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-source-settings.db") });
+    insertProfile(db, "p1");
+    // an unlisted source -> rejected by the CHECK.
+    expect(() => insertNtfSourceSetting(db, "p1", "bogus", 1)).toThrow();
+    // an enumerated source is accepted.
+    expect(() => insertNtfSourceSetting(db, "p1", "study-day", 1)).not.toThrow();
+    db.close();
+  });
+
+  it("rejects an ntf_source_settings enabled value outside {0, 1} with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-enabled.db") });
+    insertProfile(db, "p1");
+    expect(() => insertNtfSourceSetting(db, "p1", "exam", 2)).toThrow();
+    expect(() => insertNtfSourceSetting(db, "p1", "exam", 0)).not.toThrow();
+    db.close();
+  });
+
+  it("cascades ntf_settings and ntf_source_settings deletion when the owning profile is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade-settings.db") });
+    insertProfile(db, "p1");
+    insertNtfSettings(db, "p1");
+    insertNtfSourceSetting(db, "p1", "exam", 0);
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM ntf_settings").get() as { n: number }).n,
+    ).toBe(0);
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM ntf_source_settings").get() as { n: number }).n,
     ).toBe(0);
     db.close();
   });

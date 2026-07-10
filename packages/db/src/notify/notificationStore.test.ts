@@ -1,0 +1,382 @@
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  NexusDatabase,
+  NotificationNotFoundError,
+  NotificationStore,
+  NotificationValidationError,
+  openDatabase,
+  uuidv7,
+} from "../index.js";
+
+let dir: string;
+let db: NexusDatabase;
+
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), "nexus-notify-"));
+  db = openDatabase({ path: join(dir, "notify.db") });
+});
+
+afterEach(() => {
+  db.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+function createProfile(): string {
+  const id = uuidv7();
+  db.raw
+    .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+    .run(id, "personal", "P", new Date().toISOString());
+  return id;
+}
+
+function fixture(): { notify: NotificationStore; profileId: string } {
+  const profileId = createProfile();
+  return { notify: new NotificationStore(db.raw, profileId), profileId };
+}
+
+const NOW = "2026-07-10T08:00:00.000Z";
+
+function deliver(
+  notify: NotificationStore,
+  overrides: Partial<{ entityId: string; occurrenceKey: string; source: "document" | "exam" | "study-day" }> = {},
+) {
+  return notify.recordDelivered(
+    {
+      source: overrides.source ?? "exam",
+      entityId: overrides.entityId ?? "exam1",
+      occurrenceKey: overrides.occurrenceKey ?? "d-1",
+      title: "Ispit sutra",
+      body: "Analiza 1 — pismeni",
+    },
+    NOW,
+  );
+}
+
+describe("NotificationStore", () => {
+  describe("getSettings", () => {
+    it("returns defaults when no settings rows exist: no quiet hours, 08:00 morning hour, all sources enabled", () => {
+      const { notify } = fixture();
+      expect(notify.getSettings()).toEqual({
+        quietFrom: null,
+        quietTo: null,
+        morningHour: "08:00",
+        enabledSources: ["document", "exam", "study-day"],
+      });
+    });
+
+    it("never writes on read (a second call sees the same defaults)", () => {
+      const { notify } = fixture();
+      notify.getSettings();
+      expect(notify.getSettings().morningHour).toBe("08:00");
+    });
+  });
+
+  describe("updateSettings", () => {
+    it("sets quiet hours and morning hour together, then persists across calls", () => {
+      const { notify } = fixture();
+      const updated = notify.updateSettings(
+        { quietFrom: "22:00", quietTo: "07:00", morningHour: "09:00" },
+        NOW,
+      );
+      expect(updated).toEqual({
+        quietFrom: "22:00",
+        quietTo: "07:00",
+        morningHour: "09:00",
+        enabledSources: ["document", "exam", "study-day"],
+      });
+      expect(notify.getSettings().quietFrom).toBe("22:00");
+    });
+
+    it("clears quiet hours by setting both to null", () => {
+      const { notify } = fixture();
+      notify.updateSettings({ quietFrom: "22:00", quietTo: "07:00" }, NOW);
+      notify.updateSettings({ quietFrom: null, quietTo: null }, NOW);
+      expect(notify.getSettings()).toMatchObject({ quietFrom: null, quietTo: null });
+    });
+
+    it("rejects setting exactly one side of the quiet-hours pair", () => {
+      const { notify } = fixture();
+      expect(() => notify.updateSettings({ quietFrom: "22:00" }, NOW)).toThrow(
+        NotificationValidationError,
+      );
+      notify.updateSettings({ quietFrom: "22:00", quietTo: "07:00" }, NOW);
+      expect(() => notify.updateSettings({ quietTo: null }, NOW)).toThrow(
+        NotificationValidationError,
+      );
+    });
+
+    it("rejects a malformed HH:MM for quietFrom/quietTo/morningHour", () => {
+      const { notify } = fixture();
+      expect(() => notify.updateSettings({ quietFrom: "22:00", quietTo: "25:00" }, NOW)).toThrow(
+        NotificationValidationError,
+      );
+      expect(() => notify.updateSettings({ quietFrom: "9:00", quietTo: "07:00" }, NOW)).toThrow(
+        NotificationValidationError,
+      );
+      expect(() => notify.updateSettings({ morningHour: "8:00" }, NOW)).toThrow(
+        NotificationValidationError,
+      );
+    });
+
+    it("upserts rather than duplicating: a second call updates the same row", () => {
+      const { notify } = fixture();
+      notify.updateSettings({ morningHour: "09:00" }, NOW);
+      notify.updateSettings({ morningHour: "10:00" }, "2026-07-11T08:00:00.000Z");
+      expect(notify.getSettings().morningHour).toBe("10:00");
+    });
+
+    it("leaves an omitted field untouched", () => {
+      const { notify } = fixture();
+      notify.updateSettings({ quietFrom: "22:00", quietTo: "07:00" }, NOW);
+      notify.updateSettings({ morningHour: "09:00" }, NOW);
+      expect(notify.getSettings()).toEqual({
+        quietFrom: "22:00",
+        quietTo: "07:00",
+        morningHour: "09:00",
+        enabledSources: ["document", "exam", "study-day"],
+      });
+    });
+  });
+
+  describe("setSourceEnabled", () => {
+    it("disables and re-enables a source, reflected in getSettings().enabledSources", () => {
+      const { notify } = fixture();
+      notify.setSourceEnabled("exam", false, NOW);
+      expect(notify.getSettings().enabledSources).toEqual(["document", "study-day"]);
+
+      notify.setSourceEnabled("exam", true, NOW);
+      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day"]);
+    });
+
+    it("upserts rather than duplicating on repeated toggles", () => {
+      const { notify } = fixture();
+      notify.setSourceEnabled("document", false, NOW);
+      notify.setSourceEnabled("document", false, NOW);
+      notify.setSourceEnabled("document", true, NOW);
+      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day"]);
+    });
+
+    it("rejects a source outside the closed set", () => {
+      const { notify } = fixture();
+      expect(() =>
+        notify.setSourceEnabled("bogus" as never, false, NOW),
+      ).toThrow(NotificationValidationError);
+    });
+  });
+
+  describe("recordDelivered", () => {
+    it("persists a delivered notification with delivered_at = now", () => {
+      const { notify } = fixture();
+      const record = deliver(notify);
+      expect(record).toMatchObject({
+        source: "exam",
+        entityId: "exam1",
+        occurrenceKey: "d-1",
+        title: "Ispit sutra",
+        body: "Analiza 1 — pismeni",
+        status: "delivered",
+        snoozedUntil: null,
+        deliveredAt: NOW,
+        createdAt: NOW,
+        updatedAt: NOW,
+      });
+      expect(record.id).toBeTruthy();
+    });
+
+    it("rejects an empty or over-500-char title/body", () => {
+      const { notify } = fixture();
+      expect(() =>
+        notify.recordDelivered(
+          { source: "exam", entityId: "e1", occurrenceKey: "d-1", title: "", body: "b" },
+          NOW,
+        ),
+      ).toThrow(NotificationValidationError);
+      expect(() =>
+        notify.recordDelivered(
+          { source: "exam", entityId: "e1", occurrenceKey: "d-1", title: "a".repeat(501), body: "b" },
+          NOW,
+        ),
+      ).toThrow(NotificationValidationError);
+    });
+
+    it("rejects a malformed now", () => {
+      const { notify } = fixture();
+      expect(() =>
+        notify.recordDelivered(
+          { source: "exam", entityId: "e1", occurrenceKey: "d-1", title: "t", body: "b" },
+          "not-a-date",
+        ),
+      ).toThrow(NotificationValidationError);
+    });
+
+    it("rejects a source outside the closed set", () => {
+      const { notify } = fixture();
+      expect(() =>
+        notify.recordDelivered(
+          { source: "bogus" as never, entityId: "e1", occurrenceKey: "d-1", title: "t", body: "b" },
+          NOW,
+        ),
+      ).toThrow(NotificationValidationError);
+    });
+
+    it("surfaces a UNIQUE(profile, source, entity, occurrence) collision as NotificationValidationError", () => {
+      const { notify } = fixture();
+      deliver(notify);
+      expect(() => deliver(notify)).toThrow(NotificationValidationError);
+    });
+
+    it("allows the same occurrence again for a different profile", () => {
+      const a = fixture();
+      const b = fixture();
+      deliver(a.notify);
+      expect(() => deliver(b.notify)).not.toThrow();
+    });
+  });
+
+  describe("listLedgerKeys", () => {
+    it("lists every ledger entry for this profile with its current status", () => {
+      const { notify } = fixture();
+      const r1 = deliver(notify, { entityId: "exam1", occurrenceKey: "d-1" });
+      deliver(notify, { entityId: "exam1", occurrenceKey: "d-0" });
+      notify.dismiss(r1.id, NOW);
+
+      const keys = notify.listLedgerKeys();
+      expect(keys).toEqual([
+        { source: "exam", entityId: "exam1", occurrenceKey: "d-0", status: "delivered" },
+        { source: "exam", entityId: "exam1", occurrenceKey: "d-1", status: "dismissed" },
+      ]);
+    });
+
+    it("isolates the ledger between profiles", () => {
+      const a = fixture();
+      const b = fixture();
+      deliver(a.notify);
+      expect(b.notify.listLedgerKeys()).toEqual([]);
+    });
+  });
+
+  describe("dueSnoozed", () => {
+    it("returns snoozed rows whose snoozed_until is at or before now, excluding others", () => {
+      const { notify } = fixture();
+      const snoozed = deliver(notify, { entityId: "exam1", occurrenceKey: "d-1" });
+      const stillFuture = deliver(notify, { entityId: "exam1", occurrenceKey: "d-0" });
+      deliver(notify, { entityId: "exam2", occurrenceKey: "d-1" }); // left delivered, never snoozed
+
+      notify.snooze(snoozed.id, "2026-07-10T09:00:00.000Z", NOW);
+      notify.snooze(stillFuture.id, "2026-07-11T09:00:00.000Z", NOW);
+
+      const due = notify.dueSnoozed("2026-07-10T09:00:00.000Z");
+      expect(due.map((r) => r.id)).toEqual([snoozed.id]);
+    });
+  });
+
+  describe("snooze / markRefired / dismiss lifecycle", () => {
+    it("snoozes a delivered notification, then re-fires it back to delivered", () => {
+      const { notify } = fixture();
+      const record = deliver(notify);
+
+      const snoozed = notify.snooze(record.id, "2026-07-10T09:00:00.000Z", NOW);
+      expect(snoozed).toMatchObject({ status: "snoozed", snoozedUntil: "2026-07-10T09:00:00.000Z" });
+
+      const refired = notify.markRefired(record.id, "2026-07-10T09:00:00.000Z");
+      expect(refired).toMatchObject({
+        status: "delivered",
+        snoozedUntil: null,
+        deliveredAt: "2026-07-10T09:00:00.000Z",
+      });
+    });
+
+    it("rejects an until that is not strictly after now", () => {
+      const { notify } = fixture();
+      const record = deliver(notify);
+      expect(() => notify.snooze(record.id, NOW, NOW)).toThrow(NotificationValidationError);
+      expect(() =>
+        notify.snooze(record.id, "2026-07-10T07:00:00.000Z", NOW),
+      ).toThrow(NotificationValidationError);
+    });
+
+    it("throws NotificationNotFoundError snoozing an unknown or cross-profile id", () => {
+      const a = fixture();
+      const b = fixture();
+      const record = deliver(b.notify);
+      expect(() => a.notify.snooze("missing", "2026-07-10T09:00:00.000Z", NOW)).toThrow(
+        NotificationNotFoundError,
+      );
+      expect(() => a.notify.snooze(record.id, "2026-07-10T09:00:00.000Z", NOW)).toThrow(
+        NotificationNotFoundError,
+      );
+    });
+
+    it("throws NotificationNotFoundError re-firing a row that is not currently snoozed", () => {
+      const { notify } = fixture();
+      const record = deliver(notify);
+      expect(() => notify.markRefired(record.id, NOW)).toThrow(NotificationNotFoundError);
+      expect(() => notify.markRefired("missing", NOW)).toThrow(NotificationNotFoundError);
+    });
+
+    it("dismisses a notification, terminally", () => {
+      const { notify } = fixture();
+      const record = deliver(notify);
+      notify.dismiss(record.id, NOW);
+      expect(notify.listCenter()[0]).toMatchObject({ id: record.id, status: "dismissed" });
+    });
+
+    it("treats dismissing an already-dismissed row as a no-op, not an error", () => {
+      const { notify } = fixture();
+      const record = deliver(notify);
+      notify.dismiss(record.id, NOW);
+      expect(() => notify.dismiss(record.id, "2026-07-11T08:00:00.000Z")).not.toThrow();
+      // the second dismiss did not re-stamp updated_at.
+      expect(notify.listCenter()[0]).toMatchObject({ updatedAt: NOW });
+    });
+
+    it("throws NotificationNotFoundError dismissing an unknown or cross-profile id", () => {
+      const a = fixture();
+      const b = fixture();
+      const record = deliver(b.notify);
+      expect(() => a.notify.dismiss("missing", NOW)).toThrow(NotificationNotFoundError);
+      expect(() => a.notify.dismiss(record.id, NOW)).toThrow(NotificationNotFoundError);
+    });
+
+    it("refuses to snooze a dismissed row — dismissal is terminal", () => {
+      const { notify } = fixture();
+      const record = deliver(notify);
+      notify.dismiss(record.id, NOW);
+      expect(() =>
+        notify.snooze(record.id, "2026-07-10T10:00:00.000Z", "2026-07-10T09:00:00.000Z"),
+      ).toThrow(NotificationNotFoundError);
+      expect(notify.listCenter()[0]).toMatchObject({ id: record.id, status: "dismissed" });
+    });
+  });
+
+  describe("listCenter", () => {
+    it("returns every status, newest updated_at first", () => {
+      const { notify } = fixture();
+      const first = deliver(notify, { entityId: "exam1", occurrenceKey: "d-1" });
+      const second = deliver(notify, { entityId: "exam1", occurrenceKey: "d-0" });
+      notify.dismiss(first.id, "2026-07-11T08:00:00.000Z");
+
+      const center = notify.listCenter();
+      expect(center.map((r) => r.id)).toEqual([first.id, second.id]);
+      expect(center[0]?.status).toBe("dismissed");
+    });
+
+    it("caps the result at the given limit", () => {
+      const { notify } = fixture();
+      deliver(notify, { entityId: "exam1", occurrenceKey: "d-1" });
+      deliver(notify, { entityId: "exam1", occurrenceKey: "d-0" });
+      deliver(notify, { entityId: "exam2", occurrenceKey: "d-1" });
+      expect(notify.listCenter(2)).toHaveLength(2);
+    });
+
+    it("isolates the center listing between profiles", () => {
+      const a = fixture();
+      const b = fixture();
+      deliver(a.notify);
+      expect(b.notify.listCenter()).toEqual([]);
+    });
+  });
+});

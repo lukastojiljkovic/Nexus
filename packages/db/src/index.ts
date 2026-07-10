@@ -17,6 +17,8 @@ export {
   ExamValidationError,
   FocusNotFoundError,
   FocusValidationError,
+  NotificationNotFoundError,
+  NotificationValidationError,
   PlanNotFoundError,
   PlanValidationError,
   SchemaVersionError,
@@ -103,5 +105,15 @@ export type { CreateFocusSessionInput, FocusSession } from "./study/focusStore.j
 
 export { StatsStore } from "./study/statsStore.js";
 export type { BlockTotals, ReviewCounts, SubjectMinutes } from "./study/statsStore.js";
+
+export { NotificationStore, NOTIFICATION_STATUSES } from "./notify/notificationStore.js";
+export type {
+  NotificationLedgerKey,
+  NotificationRecord,
+  NotificationSettings,
+  NotificationStatus,
+  RecordDeliveredInput,
+  UpdateNotificationSettingsInput,
+} from "./notify/notificationStore.js";
 
 export { uuidv7 } from "./ids.js";
