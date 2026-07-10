@@ -1,16 +1,27 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { computeStreak } from "@nexus/core";
 import { Card, Chip, EmptyState, ListRow } from "@nexus/ui";
 import type {
   AppInfo,
   DocumentStatus,
   Event,
   Exam,
+  FocusSession,
+  StudyStats,
   Subject,
   Task,
   TrackedDocument,
 } from "../../shared/ipc.js";
-import { daysUntilExam, examCountdownLabel, examCountdownVariant, formatExamDate } from "./examDates.js";
+import {
+  daysUntilExam,
+  examCountdownLabel,
+  examCountdownVariant,
+  formatExamDate,
+  localTodayKey,
+  shiftDayKey,
+} from "./examDates.js";
+import { focusSessionMinutes, formatDurationMinutes } from "./focusFormat.js";
 import { dayUnit, strings } from "./strings.js";
 
 // --- Formatting helpers (renderer-local, mirror the module pages) -----------
@@ -120,18 +131,35 @@ export function DashboardPage({ profileId, profileName, info, onOpenModule }: Da
   const [documents, setDocuments] = useState<TrackedDocument[] | null>(null);
   const [subjects, setSubjects] = useState<Subject[] | null>(null);
   const [exams, setExams] = useState<Exam[] | null>(null);
+  // Učenje widget: a 365-day stats window backs the streak (mirrors StudyPage's
+  // `statsYear`), and today's completed focus sessions back the focus minutes
+  // (a running timer deliberately doesn't count — only `listFocusRange`'s
+  // persisted, completed sessions).
+  const [studyStats, setStudyStats] = useState<StudyStats | null>(null);
+  const [todayFocusSessions, setTodayFocusSessions] = useState<FocusSession[] | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let active = true;
     void (async () => {
       try {
-        const [nextTasks, nextEvents, nextDocuments, nextSubjects, nextExams] = await Promise.all([
+        const today = localTodayKey();
+        const [
+          nextTasks,
+          nextEvents,
+          nextDocuments,
+          nextSubjects,
+          nextExams,
+          nextStudyStats,
+          nextTodayFocusSessions,
+        ] = await Promise.all([
           window.nexus.listTasks(profileId),
           window.nexus.listEvents(profileId),
           window.nexus.listDocuments(profileId),
           window.nexus.listSubjects(profileId),
           window.nexus.listExams(profileId),
+          window.nexus.studyStats(profileId, shiftDayKey(today, -365), today),
+          window.nexus.listFocusRange(profileId, today, today),
         ]);
         if (!active) return;
         setTasks(nextTasks);
@@ -139,6 +167,8 @@ export function DashboardPage({ profileId, profileName, info, onOpenModule }: Da
         setDocuments(nextDocuments);
         setSubjects(nextSubjects);
         setExams(nextExams);
+        setStudyStats(nextStudyStats);
+        setTodayFocusSessions(nextTodayFocusSessions);
       } catch (error) {
         if (active) setFailed(true);
         console.error("Nexus: failed to load dashboard:", error);
@@ -157,13 +187,15 @@ export function DashboardPage({ profileId, profileName, info, onOpenModule }: Da
     month: "long",
   }).format(now);
 
-  // All five resolve together, so a single null is enough to mean "loading".
+  // All seven resolve together, so a single null is enough to mean "loading".
   const loading =
     tasks === null ||
     events === null ||
     documents === null ||
     subjects === null ||
-    exams === null;
+    exams === null ||
+    studyStats === null ||
+    todayFocusSessions === null;
 
   // Danas — today's events (chronological) then tasks due today. An all-day
   // event's bare "YYYY-MM-DD" sorts before any timed start, matching the store.
@@ -207,6 +239,17 @@ export function DashboardPage({ profileId, profileName, info, onOpenModule }: Da
     )
     .sort((a, b) => a.days - b.days || a.exam.id.localeCompare(b.exam.id))
     .slice(0, 5);
+
+  // Učenje — the study streak (same 365-day-window rule as StudyPage) and
+  // today's completed focus minutes; either can be zero independently, and
+  // the widget shows the gentle zero copy only when both are.
+  const streak = studyStats ? computeStreak(studyStats.activityDays, todayKey) : null;
+  const focusMinutesToday = (todayFocusSessions ?? []).reduce(
+    (total, session) => total + focusSessionMinutes(session),
+    0,
+  );
+  const hasStreak = streak != null && streak.current > 0;
+  const hasFocusToday = focusMinutesToday > 0;
 
   return (
     <div className="dash">
@@ -328,6 +371,30 @@ export function DashboardPage({ profileId, profileName, info, onOpenModule }: Da
               </div>
             ) : (
               <p className="dash__empty">{strings.study.dashboardEmpty}</p>
+            )}
+          </Card>
+
+          <Card title={strings.study.dashboardStudyTitle}>
+            {hasStreak || hasFocusToday ? (
+              <div className="dash__list">
+                <DashRow onClick={() => onOpenModule("study")}>
+                  <span className="dash__study">
+                    {hasStreak && streak && (
+                      <span className="dash__study-line">
+                        {strings.study.streakLabel}: {streak.current}{" "}
+                        {dayUnit(streak.current, strings.study.streakUnitOne, strings.study.streakUnitMany)}
+                      </span>
+                    )}
+                    {hasFocusToday && (
+                      <span className="dash__study-line">
+                        {strings.study.dashboardFocusTodayLabel}: {formatDurationMinutes(focusMinutesToday)}
+                      </span>
+                    )}
+                  </span>
+                </DashRow>
+              </div>
+            ) : (
+              <p className="dash__empty">{strings.study.streakZero}</p>
             )}
           </Card>
         </div>

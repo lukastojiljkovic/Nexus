@@ -716,6 +716,18 @@ body {
   color: var(--nx-text-muted);
 }
 
+/* Učenje widget: streak + today's focus stacked as peer facts (unlike
+   dash__exam's title/subtitle pair, neither line outranks the other). */
+.dash__study {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.dash__study-line {
+  font-size: var(--nx-font-size-body-sm);
+}
+
 /* Diagnostics stays as the renderer -> main -> DB proof, but recedes: no
    surface fill or shadow, so it reads as secondary beneath the widgets. */
 .dash__diagnostics {
@@ -842,6 +854,11 @@ body {
 .study__undo-dismiss.nx-button:hover {
   background: var(--nx-surface);
   color: var(--nx-text);
+}
+/* A failed plan restore reuses the undo row's shell but has no action (a
+   stale offer can't be retried) — only the message, tinted danger, and dismiss. */
+.study__undo--error .study__undo-text {
+  color: var(--nx-danger);
 }
 
 /* Subject list: one bordered card per subject, stacked (mirrors nx-card). */

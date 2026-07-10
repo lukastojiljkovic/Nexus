@@ -206,6 +206,19 @@ function planErrorMessage(error: unknown): string {
   return copy.generic;
 }
 
+/**
+ * Maps a failed plan restore onto the Serbian undo-toast error copy. Distinct
+ * from `planErrorMessage` (a live form's validation): the only failure the
+ * store can throw on restore is a collision with a newer active plan for the
+ * same exam (`PlanValidationError`, "another active plan already exists");
+ * anything else (shouldn't happen) falls back to the generic line.
+ */
+function planRestoreErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  const copy = strings.study.planRestoreError;
+  return message.includes("another active plan already exists") ? copy.duplicate : copy.generic;
+}
+
 /** A row of colour-dot toggle buttons over the six closed `SubjectColor` keys. */
 function ColorPicker({
   value,
@@ -293,6 +306,10 @@ export function StudyPage({ profileId }: StudyPageProps) {
   const [planBoost, setPlanBoost] = useState(true);
   const [planError, setPlanError] = useState<string | null>(null);
   const [pendingUndoPlanId, setPendingUndoPlanId] = useState<string | null>(null);
+  // Set when a plan restore fails — unlike the other restore paths, a stale
+  // plan-undo offer can never succeed on retry (see `undoPlan`), so it is
+  // cleared and replaced by a visible message in the same toast slot.
+  const [planUndoError, setPlanUndoError] = useState<string | null>(null);
 
   // Study stats + focus timer (Statistika i fokus, STUDY piece 4b). `statsYear`
   // covers the last 365 days (streak only — a streak longer than that window
@@ -762,8 +779,10 @@ export function StudyPage({ profileId }: StudyPageProps) {
       await window.nexus.deletePlan(profileId, planId);
       if (editingPlanId === planId) closePlanForm();
       if (expandedPlanId === planId) setExpandedPlanId(null);
-      // One pending undo at a time — a fresh delete replaces the previous offer.
+      // One pending undo at a time — a fresh delete replaces the previous offer
+      // (and any error left over from a previous restore attempt).
       setPendingUndoPlanId(planId);
+      setPlanUndoError(null);
       await refreshPlans();
     } catch (error) {
       console.error("Nexus: failed to delete study plan:", error);
@@ -775,25 +794,40 @@ export function StudyPage({ profileId }: StudyPageProps) {
     try {
       await window.nexus.restorePlan(profileId, pendingUndoPlanId);
       setPendingUndoPlanId(null);
+      setPlanUndoError(null);
       await refreshPlans();
     } catch (error) {
-      // Mirrors the other restore paths. A collision with a newer active plan
-      // for the same exam (PlanValidationError) lands here; the offer stays up.
+      // Unlike the other restore paths, this offer can never succeed on a
+      // retry — the typical cause is a collision with a newer active plan for
+      // the same exam (PlanValidationError) — so the offer is cleared and a
+      // visible message takes its place instead of leaving a dead button up.
       console.error("Nexus: failed to restore study plan:", error);
+      setPendingUndoPlanId(null);
+      setPlanUndoError(planRestoreErrorMessage(error));
     }
   }
 
-  /** Done ↔ planned toggle for a block (a missed block marked done is a late completion). */
-  async function toggleBlockDone(blockId: string, done: boolean): Promise<void> {
+  /**
+   * Done ↔ planned toggle for a block (a missed block marked done is a late
+   * completion). Beyond the optimistic local update, a toggle that changes the
+   * plan's missed-minutes backlog — flipping a `missed` block, or reversing a
+   * late completion (a `done` block dated before today) — also re-fetches via
+   * `refreshPlans()`, so the catch-up replan's redistribution onto future
+   * blocks shows immediately instead of waiting for the next mount. A plain
+   * future-block toggle never touches the backlog, so it keeps the cheap
+   * local-only update.
+   */
+  async function toggleBlockDone(block: StudyBlock, done: boolean): Promise<void> {
+    const previousStatus = block.status;
     try {
-      const updated = await window.nexus.setBlockStatus(profileId, blockId, done ? "done" : "planned");
+      const updated = await window.nexus.setBlockStatus(profileId, block.id, done ? "done" : "planned");
       setTodayBlocks(
         (prev) =>
           prev &&
-          prev.map((block) =>
-            block.id === updated.id
-              ? { ...block, status: updated.status, updatedAt: updated.updatedAt }
-              : block,
+          prev.map((existing) =>
+            existing.id === updated.id
+              ? { ...existing, status: updated.status, updatedAt: updated.updatedAt }
+              : existing,
           ),
       );
       setBlocksByPlan((prev) => {
@@ -801,9 +835,13 @@ export function StudyPage({ profileId }: StudyPageProps) {
         if (!list) return prev;
         return {
           ...prev,
-          [updated.planId]: list.map((block) => (block.id === updated.id ? updated : block)),
+          [updated.planId]: list.map((existing) => (existing.id === updated.id ? updated : existing)),
         };
       });
+      const reversedLateCompletion = previousStatus === "done" && block.blockDate < localTodayKey();
+      if (previousStatus === "missed" || reversedLateCompletion) {
+        await refreshPlans();
+      }
     } catch (error) {
       console.error("Nexus: failed to set block status:", error);
     }
@@ -1335,6 +1373,20 @@ export function StudyPage({ profileId }: StudyPageProps) {
         </div>
       )}
 
+      {planUndoError != null && (
+        <div className="study__undo study__undo--error" role="alert">
+          <span className="study__undo-text">{planUndoError}</span>
+          <Button
+            size="sm"
+            className="study__undo-dismiss"
+            aria-label={strings.study.dismiss}
+            onClick={() => setPlanUndoError(null)}
+          >
+            ×
+          </Button>
+        </div>
+      )}
+
       {pendingUndoFocusId != null && (
         <div className="study__undo" role="status">
           <span className="study__undo-text">{strings.study.deletedFocusSessionNotice}</span>
@@ -1658,7 +1710,7 @@ export function StudyPage({ profileId }: StudyPageProps) {
                       <Checkbox
                         checked={block.status === "done"}
                         done={block.status === "done"}
-                        onChange={(event) => void toggleBlockDone(block.id, event.target.checked)}
+                        onChange={(event) => void toggleBlockDone(block, event.target.checked)}
                       >
                         {subject.name} — {strings.study.examType[exam.examType]}
                       </Checkbox>
@@ -1739,7 +1791,7 @@ export function StudyPage({ profileId }: StudyPageProps) {
                               done={block.status === "done"}
                               aria-label={strings.study.blockDoneLabel}
                               onChange={(event) =>
-                                void toggleBlockDone(block.id, event.target.checked)
+                                void toggleBlockDone(block, event.target.checked)
                               }
                             >
                               {formatBlockDay(block.blockDate)}

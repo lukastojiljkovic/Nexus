@@ -241,6 +241,9 @@ export const strings = {
     calendarTag: "Ispit",
     dashboardTitle: "Ispiti",
     dashboardEmpty: "Nema zakazanih ispita.",
+    /** Dashboard "Učenje" widget (streak + today's focus minutes). */
+    dashboardStudyTitle: "Učenje",
+    dashboardFocusTodayLabel: "Fokus danas",
 
     // --- Decks (Špilovi), under each subject --------------------------------
     decksTitle: "Špilovi",
@@ -344,6 +347,15 @@ export const strings = {
       startAfterExam: "Početak učenja mora biti pre datuma ispita.",
       minutesRange: "Dnevni minuti moraju biti između 15 i 480.",
       generic: "Čuvanje plana nije uspelo. Pokušaj ponovo.",
+    },
+    /**
+     * Plan-restore failure, mapped separately from `planError`: a stale undo
+     * offer that can never succeed again (typically the exam gained a newer
+     * active plan in the meantime) rather than a live form's validation.
+     */
+    planRestoreError: {
+      duplicate: "Plan nije vraćen — ispit u međuvremenu ima nov aktivan plan.",
+      generic: "Vraćanje plana nije uspelo.",
     },
 
     // --- Study stats + focus timer (Statistika i fokus, STUDY piece 4b) ------
