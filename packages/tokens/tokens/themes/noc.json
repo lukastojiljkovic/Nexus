@@ -17,5 +17,15 @@
     "dangerSoft": "{color.garnet.tintNoc}",
     "businessAccent": "{color.garnet.400}",
     "shadow": "0 2px 10px rgba(0, 0, 0, 0.35)"
+  },
+  "accents": {
+    "zlato":   { "accent": "{color.gold.400}",    "accentSoft": "{color.gold.tintNoc}",    "accentStrong": "{color.gold.300}" },
+    "bronza":  { "accent": "{color.bronza.400}",  "accentSoft": "{color.bronza.tintNoc}",  "accentStrong": "{color.bronza.300}" },
+    "maslina": { "accent": "{color.maslina.400}", "accentSoft": "{color.maslina.tintNoc}", "accentStrong": "{color.maslina.300}" },
+    "suma":    { "accent": "{color.suma.400}",    "accentSoft": "{color.suma.tintNoc}",    "accentStrong": "{color.suma.300}" },
+    "zad":     { "accent": "{color.jade.300}",    "accentSoft": "{color.jade.tintNoc}",    "accentStrong": "{color.jade.200}" },
+    "ruza":    { "accent": "{color.ruza.400}",    "accentSoft": "{color.ruza.tintNoc}",    "accentStrong": "{color.ruza.300}" },
+    "bordo":   { "accent": "{color.bordo.400}",   "accentSoft": "{color.bordo.tintNoc}",   "accentStrong": "{color.bordo.300}" },
+    "grafit":  { "accent": "{color.grafit.400}",  "accentSoft": "{color.grafit.tintNoc}",  "accentStrong": "{color.grafit.300}" }
   }
 }

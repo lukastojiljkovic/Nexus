@@ -35,6 +35,42 @@ function flatten(node, prefix) {
   );
 }
 
+// --- Accents -------------------------------------------------------------
+// Ids come from dan.json's key order (both themes are required to match it
+// exactly) so the picker's fixed order is a single source of truth, not a
+// hardcoded list drifting from the JSON.
+const accentIds = Object.keys(themes[0].accents);
+for (const { theme, accents } of themes) {
+  const ids = Object.keys(accents);
+  if (ids.length !== accentIds.length || ids.some((id, i) => id !== accentIds[i])) {
+    throw new Error(`Theme "${theme}" accent ids [${ids}] do not match dan's [${accentIds}]`);
+  }
+}
+
+const resolvedAccents = Object.fromEntries(
+  themes.map(({ theme, accents }) => [
+    theme,
+    Object.fromEntries(
+      Object.entries(accents).map(([id, slots]) => [
+        id,
+        Object.fromEntries(Object.entries(slots).map(([slot, value]) => [slot, resolveRef(value)])),
+      ]),
+    ),
+  ]),
+);
+
+// "zlato" is the default accent — it must never visually drift from the
+// theme's own semantic accent/accentSoft/accentStrong.
+for (const { theme, semantic } of themes) {
+  const zlato = resolvedAccents[theme].zlato;
+  const semanticAccent = ["accent", "accentSoft", "accentStrong"].map((key) => resolveRef(semantic[key]));
+  if (JSON.stringify(Object.values(zlato)) !== JSON.stringify(semanticAccent)) {
+    throw new Error(
+      `Theme "${theme}": "zlato" accent (${JSON.stringify(zlato)}) must equal semantic accent/accentSoft/accentStrong (${JSON.stringify(semanticAccent)})`,
+    );
+  }
+}
+
 // --- CSS ---------------------------------------------------------------
 const primitiveGroups = { font: global.font, radius: global.radius, space: global.space, motion: global.motion };
 const primitiveVars = Object.entries(primitiveGroups).flatMap(([group, node]) =>
@@ -51,7 +87,24 @@ for (const { theme, semantic } of themes) {
     `--nx-${kebab(key)}`,
     resolveRef(value),
   ]);
+  // Swatch vars let the picker show all 8 dots regardless of the active accent.
+  for (const id of accentIds) {
+    vars.push([`--nx-swatch-${id}`, resolvedAccents[theme][id].accent]);
+  }
   css += "\n" + block(`:root[data-theme="${theme}"], [data-theme="${theme}"]`, vars);
+
+  // One override block per accent (including "zlato", so the attribute value
+  // is always valid) — picking an accent just adds [data-accent] to <html>.
+  for (const id of accentIds) {
+    const { accent, accentSoft, accentStrong } = resolvedAccents[theme][id];
+    const overrideVars = [
+      ["--nx-accent", accent],
+      ["--nx-accent-soft", accentSoft],
+      ["--nx-accent-strong", accentStrong],
+    ];
+    const selector = `:root[data-theme="${theme}"][data-accent="${id}"], [data-theme="${theme}"][data-accent="${id}"]`;
+    css += "\n" + block(selector, overrideVars);
+  }
 }
 
 mkdirSync(join(root, "dist/css"), { recursive: true });
@@ -79,11 +132,14 @@ export type SemanticToken = keyof (typeof themes)["dan"];
 export function cssVar(token: SemanticToken): string {
   return "--nx-" + token.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
 }
+
+export const ACCENT_IDS = ${JSON.stringify(accentIds, null, 2)} as const;
+export type AccentId = (typeof ACCENT_IDS)[number];
 `;
 
 mkdirSync(join(root, "gen"), { recursive: true });
 writeFileSync(join(root, "gen/index.ts"), ts);
 
 console.log(
-  `tokens: ${primitiveVars.length} primitives, ${themes.length} themes → dist/css/tokens.css, gen/index.ts`,
+  `tokens: ${primitiveVars.length} primitives, ${themes.length} themes, ${accentIds.length} accents → dist/css/tokens.css, gen/index.ts`,
 );
