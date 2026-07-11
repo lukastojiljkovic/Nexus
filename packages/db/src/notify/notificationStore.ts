@@ -128,6 +128,7 @@ export class NotificationStore {
   private readonly selectLedgerKeys: Database.Statement;
   private readonly selectDueSnoozed: Database.Statement;
   private readonly selectCenter: Database.Statement;
+  private readonly selectAll: Database.Statement;
   private readonly updateSnoozedStatement: Database.Statement;
   private readonly updateRefiredStatement: Database.Statement;
   private readonly updateDismissedStatement: Database.Statement;
@@ -164,6 +165,11 @@ export class NotificationStore {
        WHERE profile_id = ?
        ORDER BY updated_at DESC, id DESC
        LIMIT ?`,
+    );
+    this.selectAll = db.prepare(
+      `SELECT ${COLUMNS} FROM notifications
+       WHERE profile_id = ?
+       ORDER BY delivered_at, id`,
     );
     this.updateSnoozedStatement = db.prepare(
       `UPDATE notifications SET status = 'snoozed', snoozed_until = ?, updated_at = ?
@@ -386,6 +392,16 @@ export class NotificationStore {
   listCenter(limit = 50): NotificationRecord[] {
     const validLimit = validateLimit(limit);
     const rows = this.selectCenter.all(this.profileId, validLimit) as NotificationRow[];
+    return rows.map(toRecord);
+  }
+
+  /**
+   * The full ledger of this profile, every status, no cap (IMEX full export —
+   * the delivered/snoozed/dismissed history IS user history), ordered by
+   * `deliveredAt` then id.
+   */
+  listAll(): NotificationRecord[] {
+    const rows = this.selectAll.all(this.profileId) as NotificationRow[];
     return rows.map(toRecord);
   }
 

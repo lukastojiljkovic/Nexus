@@ -379,4 +379,47 @@ describe("NotificationStore", () => {
       expect(b.notify.listCenter()).toEqual([]);
     });
   });
+
+  describe("listAll", () => {
+    it("returns the full ledger of this profile, every status, ordered by deliveredAt then id", () => {
+      const { notify } = fixture();
+      // Distinct `deliveredAt` values (rather than the shared `NOW` the
+      // `deliver` helper defaults to) so ordering is asserted on
+      // `delivered_at` itself, never on an id tie-break between two rows
+      // recorded in the same millisecond.
+      const first = notify.recordDelivered(
+        { source: "exam", entityId: "exam1", occurrenceKey: "d-1", title: "Ispit sutra", body: "B" },
+        "2026-07-10T08:00:00.000Z",
+      );
+      const second = notify.recordDelivered(
+        { source: "exam", entityId: "exam1", occurrenceKey: "d-0", title: "Ispit danas", body: "B" },
+        "2026-07-11T08:00:00.000Z",
+      );
+      notify.dismiss(first.id, "2026-07-11T08:00:00.000Z");
+
+      const all = notify.listAll();
+      expect(all.map((r) => r.id)).toEqual([first.id, second.id]);
+      expect(all.find((r) => r.id === first.id)?.status).toBe("dismissed");
+    });
+
+    it("returns an empty array when the ledger is empty", () => {
+      const { notify } = fixture();
+      expect(notify.listAll()).toEqual([]);
+    });
+
+    it("has no cap, unlike listCenter", () => {
+      const { notify } = fixture();
+      for (let i = 0; i < 60; i += 1) {
+        deliver(notify, { entityId: `exam${i}`, occurrenceKey: "d-1" });
+      }
+      expect(notify.listAll()).toHaveLength(60);
+    });
+
+    it("isolates the full ledger between profiles", () => {
+      const a = fixture();
+      const b = fixture();
+      deliver(a.notify);
+      expect(b.notify.listAll()).toEqual([]);
+    });
+  });
 });

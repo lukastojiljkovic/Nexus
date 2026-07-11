@@ -87,6 +87,7 @@ export type {
   DueQueueOptions,
   DeckCounts,
   PreviewIntervals,
+  ReviewLogEntry,
   UpdateCardFields,
 } from "./study/cardStore.js";
 

@@ -80,6 +80,28 @@ export interface DeckCounts {
   dueCount: number;
 }
 
+/**
+ * One `review_log` row as the store returns it: camelCase keys, one field per
+ * `ts-fsrs` `ReviewLog` property plus the row's own id/card id (IMEX export;
+ * mirrors `Card`'s field-for-field idiom for the same reasons).
+ */
+export interface ReviewLogEntry {
+  id: string;
+  profileId: string;
+  cardId: string;
+  rating: CardRating;
+  state: CardState;
+  due: string;
+  stability: number;
+  difficulty: number;
+  elapsedDays: number;
+  lastElapsedDays: number;
+  scheduledDays: number;
+  learningSteps: number;
+  review: string;
+  createdAt: string;
+}
+
 interface CardRow {
   id: string;
   profile_id: string;
@@ -115,9 +137,18 @@ interface ReviewLogRow {
   review: string;
 }
 
+interface ReviewLogFullRow extends ReviewLogRow {
+  profile_id: string;
+  created_at: string;
+}
+
 const CARD_COLUMNS =
   `id, profile_id, deck_id, front, back, due, stability, difficulty, elapsed_days, ` +
   `scheduled_days, learning_steps, reps, lapses, state, last_review, created_at, updated_at`;
+
+const REVIEW_LOG_FULL_COLUMNS =
+  "id, profile_id, card_id, rating, state, due, stability, difficulty, elapsed_days, " +
+  "last_elapsed_days, scheduled_days, learning_steps, review, created_at";
 
 const REVIEW_LOG_COLUMNS =
   "id, card_id, rating, state, due, stability, difficulty, elapsed_days, " +
@@ -159,6 +190,7 @@ export class CardStore {
   private readonly markRestored: Database.Statement;
   private readonly insertReviewLog: Database.Statement;
   private readonly selectLatestReviewLog: Database.Statement;
+  private readonly selectAllReviewLog: Database.Statement;
   private readonly deleteReviewLog: Database.Statement;
   private readonly countsByDeckStatement: Database.Statement;
   private readonly dueNoScope: Database.Statement;
@@ -225,6 +257,11 @@ export class CardStore {
        WHERE card_id = ? AND profile_id = ?
        ORDER BY review DESC, id DESC
        LIMIT 1`,
+    );
+    this.selectAllReviewLog = db.prepare(
+      `SELECT ${REVIEW_LOG_FULL_COLUMNS} FROM review_log
+       WHERE profile_id = ?
+       ORDER BY review, id`,
     );
     this.deleteReviewLog = db.prepare(`DELETE FROM review_log WHERE id = ? AND profile_id = ?`);
     this.countsByDeckStatement = db.prepare(
@@ -507,6 +544,17 @@ export class CardStore {
     }));
   }
 
+  /**
+   * Every `review_log` row of this profile (IMEX full export), ordered by
+   * review timestamp then id. `review_log` already carries its own
+   * `profile_id` column (migration 006), so this scopes directly rather than
+   * joining through cards/decks/subjects.
+   */
+  listReviewLog(): ReviewLogEntry[] {
+    const rows = this.selectAllReviewLog.all(this.profileId) as ReviewLogFullRow[];
+    return rows.map(toReviewLogEntry);
+  }
+
   /** Reads an active card in this profile or throws — enforces scope + existence. */
   private requireActive(id: string): Card {
     const row = this.selectActiveById.get(id, this.profileId) as CardRow | undefined;
@@ -560,6 +608,25 @@ function toCard(row: CardRow): Card {
     lastReview: row.last_review,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function toReviewLogEntry(row: ReviewLogFullRow): ReviewLogEntry {
+  return {
+    id: row.id,
+    profileId: row.profile_id,
+    cardId: row.card_id,
+    rating: row.rating,
+    state: row.state,
+    due: row.due,
+    stability: row.stability,
+    difficulty: row.difficulty,
+    elapsedDays: row.elapsed_days,
+    lastElapsedDays: row.last_elapsed_days,
+    scheduledDays: row.scheduled_days,
+    learningSteps: row.learning_steps,
+    review: row.review,
+    createdAt: row.created_at,
   };
 }
 

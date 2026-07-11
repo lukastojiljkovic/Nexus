@@ -57,6 +57,7 @@ export class FocusStore {
   private readonly insert: Database.Statement;
   private readonly selectSubjectActive: Database.Statement;
   private readonly selectInRange: Database.Statement;
+  private readonly selectAllActive: Database.Statement;
   private readonly markDeleted: Database.Statement;
   private readonly markRestored: Database.Statement;
 
@@ -77,6 +78,11 @@ export class FocusStore {
        WHERE profile_id = ? AND deleted_at IS NULL
          AND date(started_at, 'localtime') BETWEEN ? AND ?
        ORDER BY started_at DESC, id DESC`,
+    );
+    this.selectAllActive = db.prepare(
+      `SELECT ${COLUMNS} FROM focus_sessions
+       WHERE profile_id = ? AND deleted_at IS NULL
+       ORDER BY started_at, id`,
     );
     this.markDeleted = db.prepare(
       `UPDATE focus_sessions SET deleted_at = ?, updated_at = ?
@@ -125,6 +131,16 @@ export class FocusStore {
     const validFrom = validateBareDate(fromDate, "fromDate");
     const validTo = validateBareDate(toDate, "toDate");
     const rows = this.selectInRange.all(this.profileId, validFrom, validTo) as FocusSessionRow[];
+    return rows.map(toFocusSession);
+  }
+
+  /**
+   * Every active session of this profile, no date bounds (IMEX full export),
+   * ordered by start time then id — unlike `listRange`, never filtered to a
+   * local-day window.
+   */
+  listActive(): FocusSession[] {
+    const rows = this.selectAllActive.all(this.profileId) as FocusSessionRow[];
     return rows.map(toFocusSession);
   }
 

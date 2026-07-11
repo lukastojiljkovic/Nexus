@@ -216,6 +216,46 @@ describe("FocusStore", () => {
     });
   });
 
+  describe("listActive", () => {
+    it("returns every active session for this profile with no date bounds, ordered by startedAt then id", () => {
+      const { focus, subjectId } = fixture();
+      const earlier = focus.create(
+        { subjectId, startedAt: "2020-01-01T12:00:00.000Z", endedAt: "2020-01-01T13:00:00.000Z" },
+        "2020-01-01T13:00:00.000Z",
+      );
+      const later = focus.create(
+        { subjectId, startedAt: "2026-07-09T12:00:00.000Z", endedAt: "2026-07-09T13:00:00.000Z" },
+        "2026-07-09T13:00:00.000Z",
+      );
+
+      expect(focus.listActive().map((s) => s.id)).toEqual([earlier.id, later.id]);
+    });
+
+    it("excludes soft-deleted sessions", () => {
+      const { focus, subjectId } = fixture();
+      const created = focus.create(
+        { subjectId, startedAt: "2026-07-08T12:00:00.000Z", endedAt: "2026-07-08T13:00:00.000Z" },
+        "2026-07-08T13:00:00.000Z",
+      );
+      focus.softDelete(created.id, "2026-07-08T13:00:00.000Z");
+      expect(focus.listActive()).toEqual([]);
+    });
+
+    it("isolates sessions between profiles", () => {
+      const a = fixture();
+      const b = fixture();
+      a.focus.create(
+        {
+          subjectId: a.subjectId,
+          startedAt: "2026-07-08T12:00:00.000Z",
+          endedAt: "2026-07-08T13:00:00.000Z",
+        },
+        "2026-07-08T13:00:00.000Z",
+      );
+      expect(b.focus.listActive()).toEqual([]);
+    });
+  });
+
   describe("softDelete / restore", () => {
     it("throws FocusNotFoundError for operations on an unknown or wrong-state session", () => {
       const { focus, subjectId } = fixture();

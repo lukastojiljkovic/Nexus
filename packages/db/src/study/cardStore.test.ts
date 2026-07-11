@@ -430,4 +430,48 @@ describe("CardStore", () => {
       expect(forOtherDeck).toEqual({ deckId: otherDeckId, newCount: 0, dueCount: 0 });
     });
   });
+
+  describe("listReviewLog", () => {
+    it("returns every review_log row of this profile, ordered by review then id", () => {
+      const { cards, deckId } = fixture();
+      const cardA = cards.create({ deckId, front: "a", back: "a" }, T0);
+      const cardB = cards.create({ deckId, front: "b", back: "b" }, T0);
+
+      cards.review(cardB.id, 3, "2026-07-09T10:00:00.000Z");
+      cards.review(cardA.id, 4, "2026-07-08T10:00:00.000Z");
+
+      const log = cards.listReviewLog();
+
+      expect(log).toHaveLength(2);
+      expect(log.map((entry) => entry.cardId)).toEqual([cardA.id, cardB.id]); // earlier review first
+      const first = log[0]!;
+      expect(first.profileId).toBe(cardA.profileId);
+      expect(first.rating).toBe(4);
+      expect(first.state).toBe(0); // ts-fsrs logs the PRE-review state (New)
+      expect(typeof first.due).toBe("string");
+      expect(typeof first.stability).toBe("number");
+      expect(typeof first.difficulty).toBe("number");
+      expect(typeof first.elapsedDays).toBe("number");
+      expect(typeof first.lastElapsedDays).toBe("number");
+      expect(typeof first.scheduledDays).toBe("number");
+      expect(typeof first.learningSteps).toBe("number");
+      expect(first.review).toBe("2026-07-08T10:00:00.000Z");
+      expect(typeof first.createdAt).toBe("string");
+    });
+
+    it("returns an empty array when there are no reviews", () => {
+      const { cards } = fixture();
+      expect(cards.listReviewLog()).toEqual([]);
+    });
+
+    it("never returns another profile's review log rows", () => {
+      const { cards, deckId } = fixture();
+      const card = cards.create({ deckId, front: "q", back: "a" }, T0);
+      cards.review(card.id, 3, T0);
+
+      const otherProfileId = createProfile();
+      const otherCards = new CardStore(db.raw, otherProfileId);
+      expect(otherCards.listReviewLog()).toEqual([]);
+    });
+  });
 });
