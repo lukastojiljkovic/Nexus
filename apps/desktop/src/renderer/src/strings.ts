@@ -172,15 +172,6 @@ export const strings = {
     },
   },
 
-  diagnostics: {
-    title: "Stanje sistema",
-    version: "Verzija",
-    electron: "Electron",
-    chromium: "Chromium",
-    node: "Node",
-    database: "Baza podataka",
-  },
-
   study: {
     title: "Predmeti",
     nameLabel: "Naziv predmeta",
@@ -423,6 +414,60 @@ export const strings = {
         "study-day": "Učenje",
       },
       saveError: "Čuvanje podešavanja nije uspelo. Pokušaj ponovo.",
+    },
+  },
+
+  settings: {
+    // The page title reuses `strings.modules.settings` — no duplicate copy.
+    /** Section-card titles, in the order they appear on the page. */
+    sectionTitle: {
+      profile: "Profil",
+      appearance: "Izgled",
+      modules: "Moduli",
+      notifications: "Obaveštenja",
+      about: "O aplikaciji",
+    },
+    profile: {
+      nameLabel: "Ime",
+      save: "Sačuvaj",
+      saveError: "Čuvanje nije uspelo — ime mora imati 1–80 karaktera.",
+    },
+    /** Theme-preference option labels; Dan/Noć reuse `strings.app.themeDan/themeNoc`. */
+    appearance: {
+      system: "Sistemski",
+    },
+    /** One-line module descriptions for the gallery, keyed by module id. */
+    moduleDescriptions: {
+      dashboard: "Pregled dana na jednom mestu — obaveze, zadaci i dokumenta koja ističu.",
+      tasks: "Zadaci sa listom i tablom, prioritetima i rokovima.",
+      calendar: "Događaji, agenda i praćenje isteka dokumenata.",
+      settings: "Profil, izgled, moduli i obaveštenja.",
+      notes: "Uskoro — beleške sa organizacijom i pretragom stižu u narednoj fazi razvoja.",
+      study: "Predmeti, ispiti, kartice za učenje i planovi pripreme za ispite.",
+    } as Record<string, string>,
+    /** Category-group headings above the module gallery, keyed by registry category. */
+    moduleCategories: {
+      "Core experience": "Osnovno iskustvo",
+      "Content & knowledge": "Sadržaj i znanje",
+      "Life hubs": "Životni centri",
+      "Professional & utilities": "Profesionalno i alati",
+      "Growth & platform": "Rast i platforma",
+    } as Record<string, string>,
+    modulesAlwaysOn: "Uvek uključeno",
+    modulesToggleError: "Promena nije uspela. Pokušaj ponovo.",
+    /** NTF-008 appetite presets — shortcuts over the per-source toggles below. */
+    notificationPresets: {
+      minimal: "Minimalno",
+      normal: "Normalno",
+      all: "Sve",
+      caption: "Prečice za izvore ispod.",
+    },
+    about: {
+      version: "Verzija",
+      electron: "Electron",
+      chromium: "Chromium",
+      node: "Node",
+      dataLocation: "Lokacija podataka",
     },
   },
 } as const;

@@ -1,12 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Button, Checkbox, Chip, TextField } from "@nexus/ui";
-import type {
-  NotificationRecord,
-  NotificationSettings,
-  NotificationSource,
-  SnoozePreset,
-} from "../../shared/ipc.js";
+import { Button, Chip } from "@nexus/ui";
+import type { NotificationRecord, NotificationSource, SnoozePreset } from "../../shared/ipc.js";
 import { bellCountLabel, formatNotificationWhen } from "./notificationFormat.js";
+import { NotificationSettingsControls } from "./NotificationSettingsControls.js";
 import { strings } from "./strings.js";
 
 /** Deep-link target module per source (NTF a3: exam/study-day → study, document → calendar). */
@@ -17,7 +13,6 @@ const SOURCE_MODULE: Record<NotificationSource, string> = {
 };
 
 const SNOOZE_PRESETS: SnoozePreset[] = ["10m", "1h", "tonight", "tomorrow-morning"];
-const ALL_SOURCES: NotificationSource[] = ["document", "exam", "study-day"];
 
 export interface NotificationCenterProps {
   profileId: string;
@@ -31,21 +26,15 @@ export interface NotificationCenterProps {
  * count, capped "9+"; the panel lists `delivered`/`snoozed` rows (dismissed
  * stays in the ledger as history but never resurfaces here), each with
  * snooze-preset/dismiss actions and a deep link into its source module, plus
- * a collapsed settings section for quiet hours / morning hour / per-source
- * toggles. Every mutation re-fetches rather than guessing the next state
- * locally (`updateNotificationSettings` returns the resolved settings;
- * `setNotificationSourceEnabled` returns void, so that path re-fetches via
- * `getNotificationSettings` instead of reconstructing the array by hand).
+ * a collapsed disclosure that renders `NotificationSettingsControls` (quiet
+ * hours / morning hour / per-source toggles — extracted so SET's Settings
+ * page can render the identical controls, always expanded, alongside the
+ * NTF-008 appetite presets).
  */
 export function NotificationCenter({ profileId, onNavigate }: NotificationCenterProps) {
   const [notifications, setNotifications] = useState<NotificationRecord[] | null>(null);
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settings, setSettings] = useState<NotificationSettings | null>(null);
-  const [quietFromInput, setQuietFromInput] = useState("");
-  const [quietToInput, setQuietToInput] = useState("");
-  const [quietError, setQuietError] = useState<string | null>(null);
-  const [settingsError, setSettingsError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   async function reload(): Promise<void> {
@@ -56,21 +45,14 @@ export function NotificationCenter({ profileId, onNavigate }: NotificationCenter
     }
   }
 
-  // Initial load: the center list plus settings (so opening the settings
-  // disclosure never needs its own fetch).
+  // Initial load: just the center list — NTF settings are now
+  // NotificationSettingsControls's own concern (shared with SettingsPage).
   useEffect(() => {
     let active = true;
     void (async () => {
       try {
-        const [nextNotifications, nextSettings] = await Promise.all([
-          window.nexus.listCenterNotifications(profileId),
-          window.nexus.getNotificationSettings(profileId),
-        ]);
-        if (!active) return;
-        setNotifications(nextNotifications);
-        setSettings(nextSettings);
-        setQuietFromInput(nextSettings.quietFrom ?? "");
-        setQuietToInput(nextSettings.quietTo ?? "");
+        const nextNotifications = await window.nexus.listCenterNotifications(profileId);
+        if (active) setNotifications(nextNotifications);
       } catch (error) {
         console.error("Nexus: failed to load notification center:", error);
       }
@@ -138,67 +120,6 @@ export function NotificationCenter({ profileId, onNavigate }: NotificationCenter
   function navigate(record: NotificationRecord): void {
     onNavigate(SOURCE_MODULE[record.source]);
     setOpen(false);
-  }
-
-  async function saveQuietHours(): Promise<void> {
-    const from = quietFromInput.trim();
-    const to = quietToInput.trim();
-    if ((from.length === 0) !== (to.length === 0)) {
-      setQuietError(s.settings.quietPairingError);
-      return;
-    }
-    setQuietError(null);
-    setSettingsError(null);
-    try {
-      const next = await window.nexus.updateNotificationSettings(profileId, {
-        quietFrom: from.length > 0 ? from : null,
-        quietTo: to.length > 0 ? to : null,
-      });
-      setSettings(next);
-      setQuietFromInput(next.quietFrom ?? "");
-      setQuietToInput(next.quietTo ?? "");
-    } catch (error) {
-      setSettingsError(s.settings.saveError);
-      console.error("Nexus: failed to update quiet hours:", error);
-    }
-  }
-
-  async function clearQuietHours(): Promise<void> {
-    setQuietError(null);
-    setSettingsError(null);
-    try {
-      const next = await window.nexus.updateNotificationSettings(profileId, {
-        quietFrom: null,
-        quietTo: null,
-      });
-      setSettings(next);
-      setQuietFromInput("");
-      setQuietToInput("");
-    } catch (error) {
-      setSettingsError(s.settings.saveError);
-      console.error("Nexus: failed to clear quiet hours:", error);
-    }
-  }
-
-  async function saveMorningHour(hour: string): Promise<void> {
-    setSettingsError(null);
-    try {
-      setSettings(await window.nexus.updateNotificationSettings(profileId, { morningHour: hour }));
-    } catch (error) {
-      setSettingsError(s.settings.saveError);
-      console.error("Nexus: failed to update morning hour:", error);
-    }
-  }
-
-  async function toggleSource(source: NotificationSource, enabled: boolean): Promise<void> {
-    setSettingsError(null);
-    try {
-      await window.nexus.setNotificationSourceEnabled(profileId, source, enabled);
-      setSettings(await window.nexus.getNotificationSettings(profileId));
-    } catch (error) {
-      setSettingsError(s.settings.saveError);
-      console.error("Nexus: failed to update notification source:", error);
-    }
   }
 
   return (
@@ -275,56 +196,7 @@ export function NotificationCenter({ profileId, onNavigate }: NotificationCenter
             >
               {settingsOpen ? s.settings.hide : s.settings.show}
             </Button>
-            {settingsOpen && settings && (
-              <div className="ntf__settings-body">
-                <div className="ntf__settings-row">
-                  <TextField
-                    type="time"
-                    label={s.settings.quietFromLabel}
-                    className="ntf__settings-time"
-                    value={quietFromInput}
-                    onChange={(event) => setQuietFromInput(event.target.value)}
-                  />
-                  <TextField
-                    type="time"
-                    label={s.settings.quietToLabel}
-                    className="ntf__settings-time"
-                    value={quietToInput}
-                    onChange={(event) => setQuietToInput(event.target.value)}
-                  />
-                  <Button size="sm" onClick={() => void saveQuietHours()}>
-                    {s.settings.quietSave}
-                  </Button>
-                  <Button size="sm" onClick={() => void clearQuietHours()}>
-                    {s.settings.quietClear}
-                  </Button>
-                </div>
-                {quietError != null && <p className="ntf__settings-error">{quietError}</p>}
-                <p className="ntf__settings-hint">{s.settings.quietHint}</p>
-
-                <TextField
-                  type="time"
-                  label={s.settings.morningHourLabel}
-                  className="ntf__settings-time"
-                  value={settings.morningHour}
-                  onChange={(event) => void saveMorningHour(event.target.value)}
-                />
-
-                <div className="ntf__settings-sources">
-                  {ALL_SOURCES.map((source) => (
-                    <Checkbox
-                      key={source}
-                      checked={settings.enabledSources.includes(source)}
-                      onChange={(event) => void toggleSource(source, event.target.checked)}
-                    >
-                      {s.settings.sourceToggle[source]}
-                    </Checkbox>
-                  ))}
-                </div>
-
-                {settingsError != null && <p className="ntf__settings-error">{settingsError}</p>}
-              </div>
-            )}
+            {settingsOpen && <NotificationSettingsControls profileId={profileId} />}
           </div>
         </div>
       )}

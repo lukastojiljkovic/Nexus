@@ -1,15 +1,23 @@
 import { useEffect, useState } from "react";
+import { resolveEnabled } from "@nexus/core";
 import { Button, EmptyState, NavItem } from "@nexus/ui";
 import type { ThemeName } from "@nexus/tokens";
-import type { AppInfo, Profile } from "../../shared/ipc.js";
+import type { AppInfo, FlagState, Profile } from "../../shared/ipc.js";
 import { Onboarding } from "./Onboarding.js";
 import { DashboardPage } from "./DashboardPage.js";
 import { TasksPage } from "./TasksPage.js";
 import { CalendarPage } from "./CalendarPage.js";
 import { StudyPage } from "./StudyPage.js";
+import { SettingsPage } from "./SettingsPage.js";
 import { NotificationCenter } from "./NotificationCenter.js";
 import { createModuleRegistry } from "./modules.js";
-import { persistTheme, readStoredTheme } from "./theme.js";
+import {
+  persistThemePreference,
+  readStoredThemePreference,
+  resolveTheme,
+  subscribeSystemTheme,
+  type ThemePreference,
+} from "./theme.js";
 import { strings } from "./strings.js";
 
 // The registry is static, compiled-in data (ADR-008) — built once per renderer.
@@ -21,9 +29,15 @@ function moduleName(id: string): string {
 }
 
 export function App() {
-  const [theme, setTheme] = useState<ThemeName>(readStoredTheme);
+  const [preference, setPreference] = useState<ThemePreference>(readStoredThemePreference);
+  // The resolved theme lives in state (not derived inline) so an OS light/dark
+  // switch while in system mode re-renders the topbar toggle's label.
+  const [theme, setTheme] = useState<ThemeName>(() => resolveTheme(preference));
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [profiles, setProfiles] = useState<Profile[] | null>(null);
+  // Per-profile module overrides (SET-007). Empty until loaded — every v0
+  // module defaults enabled, so the pre-load render matches the common case.
+  const [flags, setFlags] = useState<FlagState>({});
   const [failed, setFailed] = useState(false);
   const [activeId, setActiveId] = useState("dashboard");
 
@@ -35,9 +49,12 @@ export function App() {
           window.nexus.appInfo(),
           window.nexus.listProfiles(),
         ]);
+        const firstProfile = nextProfiles[0];
+        const nextFlags = firstProfile ? await window.nexus.getFlags(firstProfile.id) : {};
         if (!active) return;
         setInfo(nextInfo);
         setProfiles(nextProfiles);
+        setFlags(nextFlags);
         // Signal the --smoke harness that the full renderer -> main -> DB path worked.
         window.__nexusReady = true;
         window.dispatchEvent(new Event("nexus-ready"));
@@ -53,11 +70,38 @@ export function App() {
     };
   }, []);
 
-  function toggleTheme(): void {
-    const next: ThemeName = theme === "noc" ? "dan" : "noc";
-    setTheme(next);
-    persistTheme(next);
+  // While in system mode, follow OS light/dark changes live (SET-004).
+  useEffect(() => {
+    if (preference !== "system") return;
+    return subscribeSystemTheme(() => {
+      persistThemePreference("system"); // re-applies the freshly resolved theme to <html>
+      setTheme(resolveTheme("system"));
+    });
+  }, [preference]);
+
+  // Route guard companion: when the active module gets disabled (or a deep
+  // link targets a disabled one), reset the state so the nav highlight is
+  // honest — `effectiveId` below already renders the dashboard either way.
+  useEffect(() => {
+    if (!new Set(resolveEnabled(registry, flags)).has(activeId)) {
+      setActiveId("dashboard");
+    }
+  }, [activeId, flags]);
+
+  function changePreference(next: ThemePreference): void {
+    persistThemePreference(next);
+    setPreference(next);
+    setTheme(resolveTheme(next));
   }
+
+  // The quick-toggle flips to the explicit opposite of the *resolved* theme,
+  // deliberately leaving system mode — a manual flip is an explicit choice.
+  function toggleTheme(): void {
+    changePreference(theme === "noc" ? "dan" : "noc");
+  }
+
+  const enabledIds = new Set(resolveEnabled(registry, flags));
+  const effectiveId = enabledIds.has(activeId) ? activeId : "dashboard";
 
   if (failed) {
     return (
@@ -87,7 +131,7 @@ export function App() {
         <Onboarding
           profileId={activeProfile.id}
           theme={theme}
-          onThemeChange={setTheme}
+          onThemeChange={changePreference}
           onComplete={(name) =>
             setProfiles(
               profiles.map((profile) =>
@@ -97,6 +141,16 @@ export function App() {
           }
         />
       </div>
+    );
+  }
+
+  /** Reflects a Settings-page rename in the shell's own profile state. */
+  function renameActiveProfile(name: string): void {
+    if (!profiles || !activeProfile) return;
+    setProfiles(
+      profiles.map((profile) =>
+        profile.id === activeProfile.id ? { ...profile, name } : profile,
+      ),
     );
   }
 
@@ -114,44 +168,60 @@ export function App() {
 
       <div className="app__body">
         <nav className="app__sidebar" aria-label={strings.app.navLabel}>
-          {[...registry.byCategory()].map(([category, members]) => (
-            <div key={category} className="app__nav-group">
-              {members.map((manifest) => (
-                <NavItem
-                  key={manifest.id}
-                  href="#"
-                  active={manifest.id === activeId}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    setActiveId(manifest.id);
-                  }}
-                >
-                  {moduleName(manifest.id)}
-                </NavItem>
-              ))}
-            </div>
-          ))}
+          {[...registry.byCategory()].map(([category, members]) => {
+            const visible = members.filter((manifest) => enabledIds.has(manifest.id));
+            if (visible.length === 0) return null;
+            return (
+              <div key={category} className="app__nav-group">
+                {visible.map((manifest) => (
+                  <NavItem
+                    key={manifest.id}
+                    href="#"
+                    active={manifest.id === effectiveId}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      setActiveId(manifest.id);
+                    }}
+                  >
+                    {moduleName(manifest.id)}
+                  </NavItem>
+                ))}
+              </div>
+            );
+          })}
           {activeProfile && (
             <NotificationCenter profileId={activeProfile.id} onNavigate={setActiveId} />
           )}
         </nav>
 
         <main className="app__main">
-          {activeId === "dashboard" && activeProfile ? (
+          {effectiveId === "dashboard" && activeProfile ? (
             <DashboardPage
               profileId={activeProfile.id}
               profileName={activeProfile.name}
-              info={info}
+              enabledModules={enabledIds}
               onOpenModule={setActiveId}
             />
-          ) : activeId === "tasks" && activeProfile ? (
+          ) : effectiveId === "tasks" && activeProfile ? (
             <TasksPage profileId={activeProfile.id} />
-          ) : activeId === "calendar" && activeProfile ? (
+          ) : effectiveId === "calendar" && activeProfile ? (
             <CalendarPage profileId={activeProfile.id} />
-          ) : activeId === "study" && activeProfile ? (
+          ) : effectiveId === "study" && activeProfile ? (
             <StudyPage profileId={activeProfile.id} />
+          ) : effectiveId === "settings" && activeProfile ? (
+            <SettingsPage
+              profileId={activeProfile.id}
+              profileName={activeProfile.name}
+              info={info}
+              flags={flags}
+              onFlagsChanged={setFlags}
+              onProfileRenamed={renameActiveProfile}
+              preference={preference}
+              onPreferenceChange={changePreference}
+              registry={registry}
+            />
           ) : (
-            <ModulePage id={activeId} />
+            <ModulePage id={effectiveId} />
           )}
         </main>
       </div>

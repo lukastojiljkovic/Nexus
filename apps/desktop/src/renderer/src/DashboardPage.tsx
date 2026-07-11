@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { computeStreak } from "@nexus/core";
 import { Card, Chip, EmptyState, ListRow } from "@nexus/ui";
 import type {
-  AppInfo,
   DocumentStatus,
   Event,
   Exam,
@@ -110,22 +109,42 @@ function DashRow({
   );
 }
 
+/** Empty stats used in place of a fetch when the study module is disabled. */
+const EMPTY_STUDY_STATS: StudyStats = {
+  subjectMinutes: [],
+  activityDays: [],
+  reviews: { total: 0, perDay: [] },
+  blocks: { done: 0, missed: 0 },
+};
+
 export interface DashboardPageProps {
   profileId: string;
   profileName: string;
-  info: AppInfo | null;
+  /** Modules enabled by SET-007 flags; a disabled module's widgets are hidden and never fetched. */
+  enabledModules: ReadonlySet<string>;
   onOpenModule: (id: string) => void;
 }
 
 /**
- * The DASH home surface (DASH v0): a personalized greeting over three read-only
- * widget cards that aggregate the data the modules already own — today's agenda,
- * the next tasks, and documents nearing expiry — each row deep-linking into its
- * module. Nothing here writes; it composes over the existing `window.nexus`
- * reads. The system-diagnostics card stays at the bottom as the human-visible
- * proof of the renderer -> main -> DB path (and what the --smoke harness loads).
+ * The DASH home surface (DASH v0): a personalized greeting over read-only
+ * widget cards that aggregate the data the modules already own — today's
+ * agenda, the next tasks, documents nearing expiry, upcoming exams, and the
+ * study streak — each row deep-linking into its module. Nothing here writes;
+ * it composes over the existing `window.nexus` reads. A widget whose owning
+ * module is disabled (SET-007) is hidden and its data is never fetched — a
+ * disabled fetch resolves to an empty value instead, so the shared loading
+ * gate still settles. (The old diagnostics card moved to Settings's
+ * "O aplikaciji" section.)
  */
-export function DashboardPage({ profileId, profileName, info, onOpenModule }: DashboardPageProps) {
+export function DashboardPage({
+  profileId,
+  profileName,
+  enabledModules,
+  onOpenModule,
+}: DashboardPageProps) {
+  const tasksEnabled = enabledModules.has("tasks");
+  const calendarEnabled = enabledModules.has("calendar");
+  const studyEnabled = enabledModules.has("study");
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [events, setEvents] = useState<Event[] | null>(null);
   const [documents, setDocuments] = useState<TrackedDocument[] | null>(null);
@@ -153,13 +172,15 @@ export function DashboardPage({ profileId, profileName, info, onOpenModule }: Da
           nextStudyStats,
           nextTodayFocusSessions,
         ] = await Promise.all([
-          window.nexus.listTasks(profileId),
-          window.nexus.listEvents(profileId),
-          window.nexus.listDocuments(profileId),
-          window.nexus.listSubjects(profileId),
-          window.nexus.listExams(profileId),
-          window.nexus.studyStats(profileId, shiftDayKey(today, -365), today),
-          window.nexus.listFocusRange(profileId, today, today),
+          tasksEnabled ? window.nexus.listTasks(profileId) : [],
+          calendarEnabled ? window.nexus.listEvents(profileId) : [],
+          calendarEnabled ? window.nexus.listDocuments(profileId) : [],
+          studyEnabled ? window.nexus.listSubjects(profileId) : [],
+          studyEnabled ? window.nexus.listExams(profileId) : [],
+          studyEnabled
+            ? window.nexus.studyStats(profileId, shiftDayKey(today, -365), today)
+            : EMPTY_STUDY_STATS,
+          studyEnabled ? window.nexus.listFocusRange(profileId, today, today) : [],
         ]);
         if (!active) return;
         setTasks(nextTasks);
@@ -177,7 +198,7 @@ export function DashboardPage({ profileId, profileName, info, onOpenModule }: Da
     return () => {
       active = false;
     };
-  }, [profileId]);
+  }, [profileId, tasksEnabled, calendarEnabled, studyEnabled]);
 
   const now = new Date();
   const todayKey = localDayKey(now);
@@ -267,169 +288,148 @@ export function DashboardPage({ profileId, profileName, info, onOpenModule }: Da
         <p className="app__muted">{strings.app.loading}</p>
       ) : (
         <div className="dash__grid">
-          <Card title={strings.dashboard.today.title}>
-            {hasToday ? (
-              <div className="dash__list">
-                {todayEvents.map((event) => (
-                  <DashRow
-                    key={`event-${event.id}`}
-                    onClick={() => onOpenModule("calendar")}
-                    leading={<span className="dash__time">{formatEventTime(event)}</span>}
-                  >
-                    <span className="dash__row-title">{event.title}</span>
-                  </DashRow>
-                ))}
-                {todayTasks.map((task) => (
-                  <DashRow
-                    key={`task-${task.id}`}
-                    onClick={() => onOpenModule("tasks")}
-                    leading={
-                      <span className="dash__time dash__time--tag">
-                        {strings.dashboard.today.taskTag}
+          {(tasksEnabled || calendarEnabled) && (
+            <Card title={strings.dashboard.today.title}>
+              {hasToday ? (
+                <div className="dash__list">
+                  {todayEvents.map((event) => (
+                    <DashRow
+                      key={`event-${event.id}`}
+                      onClick={() => onOpenModule("calendar")}
+                      leading={<span className="dash__time">{formatEventTime(event)}</span>}
+                    >
+                      <span className="dash__row-title">{event.title}</span>
+                    </DashRow>
+                  ))}
+                  {todayTasks.map((task) => (
+                    <DashRow
+                      key={`task-${task.id}`}
+                      onClick={() => onOpenModule("tasks")}
+                      leading={
+                        <span className="dash__time dash__time--tag">
+                          {strings.dashboard.today.taskTag}
+                        </span>
+                      }
+                    >
+                      <span className="dash__row-title">{task.title}</span>
+                    </DashRow>
+                  ))}
+                </div>
+              ) : (
+                <p className="dash__empty">{strings.dashboard.today.empty}</p>
+              )}
+            </Card>
+          )}
+
+          {tasksEnabled && (
+            <Card title={strings.dashboard.upcoming.title}>
+              {upcomingTasks.length > 0 ? (
+                <div className="dash__list">
+                  {upcomingTasks.map((task) => (
+                    <DashRow
+                      key={task.id}
+                      onClick={() => onOpenModule("tasks")}
+                      trailing={
+                        task.dueDate ? (
+                          <Chip variant="data">{formatDueDate(task.dueDate)}</Chip>
+                        ) : undefined
+                      }
+                    >
+                      <span className="dash__row-title">{task.title}</span>
+                    </DashRow>
+                  ))}
+                </div>
+              ) : (
+                <p className="dash__empty">{strings.dashboard.upcoming.empty}</p>
+              )}
+            </Card>
+          )}
+
+          {calendarEnabled && (
+            <Card title={strings.dashboard.expiring.title}>
+              {expiringDocuments.length > 0 ? (
+                <div className="dash__list">
+                  {expiringDocuments.map((doc) => (
+                    <DashRow
+                      key={doc.id}
+                      onClick={() => onOpenModule("calendar")}
+                      leading={
+                        <Chip variant={STATUS_VARIANT[doc.status]}>
+                          {strings.documents.status[doc.status]}
+                        </Chip>
+                      }
+                      trailing={
+                        <span className="dash__days">{daysUntilLabel(doc.daysUntilExpiry)}</span>
+                      }
+                    >
+                      <span className="dash__doc">
+                        <span className="dash__doc-type">{strings.documents.type[doc.docType]}</span>
+                        <span className="dash__doc-label">{doc.label}</span>
                       </span>
-                    }
-                  >
-                    <span className="dash__row-title">{task.title}</span>
-                  </DashRow>
-                ))}
-              </div>
-            ) : (
-              <p className="dash__empty">{strings.dashboard.today.empty}</p>
-            )}
-          </Card>
+                    </DashRow>
+                  ))}
+                </div>
+              ) : (
+                <p className="dash__empty">{strings.dashboard.expiring.empty}</p>
+              )}
+            </Card>
+          )}
 
-          <Card title={strings.dashboard.upcoming.title}>
-            {upcomingTasks.length > 0 ? (
-              <div className="dash__list">
-                {upcomingTasks.map((task) => (
-                  <DashRow
-                    key={task.id}
-                    onClick={() => onOpenModule("tasks")}
-                    trailing={
-                      task.dueDate ? (
-                        <Chip variant="data">{formatDueDate(task.dueDate)}</Chip>
-                      ) : undefined
-                    }
-                  >
-                    <span className="dash__row-title">{task.title}</span>
-                  </DashRow>
-                ))}
-              </div>
-            ) : (
-              <p className="dash__empty">{strings.dashboard.upcoming.empty}</p>
-            )}
-          </Card>
+          {studyEnabled && (
+            <Card title={strings.study.dashboardTitle}>
+              {upcomingExams.length > 0 ? (
+                <div className="dash__list">
+                  {upcomingExams.map(({ exam, subject, days }) => (
+                    <DashRow
+                      key={exam.id}
+                      onClick={() => onOpenModule("study")}
+                      trailing={
+                        <Chip variant={examCountdownVariant(days)}>{examCountdownLabel(days)}</Chip>
+                      }
+                    >
+                      <span className="dash__exam">
+                        <span className="dash__exam-subject">{subject.name}</span>
+                        <span className="dash__exam-meta">
+                          <span>{strings.study.examType[exam.examType]}</span>
+                          <span>{formatExamDate(exam.examDate)}</span>
+                        </span>
+                      </span>
+                    </DashRow>
+                  ))}
+                </div>
+              ) : (
+                <p className="dash__empty">{strings.study.dashboardEmpty}</p>
+              )}
+            </Card>
+          )}
 
-          <Card title={strings.dashboard.expiring.title}>
-            {expiringDocuments.length > 0 ? (
-              <div className="dash__list">
-                {expiringDocuments.map((doc) => (
-                  <DashRow
-                    key={doc.id}
-                    onClick={() => onOpenModule("calendar")}
-                    leading={
-                      <Chip variant={STATUS_VARIANT[doc.status]}>
-                        {strings.documents.status[doc.status]}
-                      </Chip>
-                    }
-                    trailing={
-                      <span className="dash__days">{daysUntilLabel(doc.daysUntilExpiry)}</span>
-                    }
-                  >
-                    <span className="dash__doc">
-                      <span className="dash__doc-type">{strings.documents.type[doc.docType]}</span>
-                      <span className="dash__doc-label">{doc.label}</span>
+          {studyEnabled && (
+            <Card title={strings.study.dashboardStudyTitle}>
+              {hasStreak || hasFocusToday ? (
+                <div className="dash__list">
+                  <DashRow onClick={() => onOpenModule("study")}>
+                    <span className="dash__study">
+                      {hasStreak && streak && (
+                        <span className="dash__study-line">
+                          {strings.study.streakLabel}: {streak.current}{" "}
+                          {dayUnit(streak.current, strings.study.streakUnitOne, strings.study.streakUnitMany)}
+                        </span>
+                      )}
+                      {hasFocusToday && (
+                        <span className="dash__study-line">
+                          {strings.study.dashboardFocusTodayLabel}: {formatDurationMinutes(focusMinutesToday)}
+                        </span>
+                      )}
                     </span>
                   </DashRow>
-                ))}
-              </div>
-            ) : (
-              <p className="dash__empty">{strings.dashboard.expiring.empty}</p>
-            )}
-          </Card>
-
-          <Card title={strings.study.dashboardTitle}>
-            {upcomingExams.length > 0 ? (
-              <div className="dash__list">
-                {upcomingExams.map(({ exam, subject, days }) => (
-                  <DashRow
-                    key={exam.id}
-                    onClick={() => onOpenModule("study")}
-                    trailing={
-                      <Chip variant={examCountdownVariant(days)}>{examCountdownLabel(days)}</Chip>
-                    }
-                  >
-                    <span className="dash__exam">
-                      <span className="dash__exam-subject">{subject.name}</span>
-                      <span className="dash__exam-meta">
-                        <span>{strings.study.examType[exam.examType]}</span>
-                        <span>{formatExamDate(exam.examDate)}</span>
-                      </span>
-                    </span>
-                  </DashRow>
-                ))}
-              </div>
-            ) : (
-              <p className="dash__empty">{strings.study.dashboardEmpty}</p>
-            )}
-          </Card>
-
-          <Card title={strings.study.dashboardStudyTitle}>
-            {hasStreak || hasFocusToday ? (
-              <div className="dash__list">
-                <DashRow onClick={() => onOpenModule("study")}>
-                  <span className="dash__study">
-                    {hasStreak && streak && (
-                      <span className="dash__study-line">
-                        {strings.study.streakLabel}: {streak.current}{" "}
-                        {dayUnit(streak.current, strings.study.streakUnitOne, strings.study.streakUnitMany)}
-                      </span>
-                    )}
-                    {hasFocusToday && (
-                      <span className="dash__study-line">
-                        {strings.study.dashboardFocusTodayLabel}: {formatDurationMinutes(focusMinutesToday)}
-                      </span>
-                    )}
-                  </span>
-                </DashRow>
-              </div>
-            ) : (
-              <p className="dash__empty">{strings.study.streakZero}</p>
-            )}
-          </Card>
+                </div>
+              ) : (
+                <p className="dash__empty">{strings.study.streakZero}</p>
+              )}
+            </Card>
+          )}
         </div>
       )}
-
-      <Card title={strings.diagnostics.title} className="dash__diagnostics">
-        {info ? (
-          <dl className="app__facts">
-            <div>
-              <dt>{strings.diagnostics.version}</dt>
-              <dd>
-                {info.name} {info.version}
-              </dd>
-            </div>
-            <div>
-              <dt>{strings.diagnostics.electron}</dt>
-              <dd>{info.versions.electron}</dd>
-            </div>
-            <div>
-              <dt>{strings.diagnostics.chromium}</dt>
-              <dd>{info.versions.chrome}</dd>
-            </div>
-            <div>
-              <dt>{strings.diagnostics.node}</dt>
-              <dd>{info.versions.node}</dd>
-            </div>
-            <div>
-              <dt>{strings.diagnostics.database}</dt>
-              <dd className="app__path">{info.databasePath}</dd>
-            </div>
-          </dl>
-        ) : (
-          <p className="app__muted">{strings.app.loading}</p>
-        )}
-      </Card>
     </div>
   );
 }

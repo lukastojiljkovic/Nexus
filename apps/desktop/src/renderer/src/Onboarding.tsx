@@ -2,7 +2,6 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { Button, Card, TextField } from "@nexus/ui";
 import type { ThemeName } from "@nexus/tokens";
-import { persistTheme } from "./theme.js";
 import { strings } from "./strings.js";
 
 /** Mirrors the main-process rule: 1–80 chars after trimming (UX-side only). */
@@ -11,6 +10,7 @@ const NAME_MAX = 80;
 export interface OnboardingProps {
   profileId: string;
   theme: ThemeName;
+  /** Persistence lives in the caller now (SET owns theme.ts's write path); this just reports the pick. */
   onThemeChange: (theme: ThemeName) => void;
   /** Called with the stored (trimmed) name once the rename lands in the DB. */
   onComplete: (name: string) => void;
@@ -30,7 +30,6 @@ export function Onboarding({ profileId, theme, onThemeChange, onComplete }: Onbo
   const valid = trimmed.length >= 1 && trimmed.length <= NAME_MAX;
 
   function pickTheme(next: ThemeName): void {
-    persistTheme(next);
     onThemeChange(next);
   }
 

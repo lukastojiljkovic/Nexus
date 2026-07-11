@@ -5,9 +5,9 @@ import "@nexus/ui/styles.css";
 import "katex/dist/katex.min.css";
 import "./app.css";
 import { App } from "./App.js";
-import { applyStoredTheme } from "./theme.js";
+import { applyStoredThemePreference } from "./theme.js";
 
-applyStoredTheme();
+applyStoredThemePreference();
 
 const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("Missing #root element");

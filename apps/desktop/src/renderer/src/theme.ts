@@ -1,24 +1,51 @@
 import type { ThemeName } from "@nexus/tokens";
 
 const STORAGE_KEY = "nexus.theme";
-const DEFAULT_THEME: ThemeName = "noc";
+const DARK_QUERY = "(prefers-color-scheme: dark)";
 
-// Theme is a user setting, not a feature flag, so it is NOT persisted through the
-// flags IPC. localStorage is a deliberate interim store — the SET (settings)
-// module owns theme persistence and cross-device sync later (ADR-008).
+// Noć is the product's identity theme (founder decision), so it stays the
+// default even though the *preference* default now includes "system".
+const DEFAULT_PREFERENCE: ThemePreference = "noc";
 
-export function readStoredTheme(): ThemeName {
+/**
+ * A user's theme choice: an explicit theme, or "system" to follow the OS's
+ * light/dark setting live. Persisted under the same `nexus.theme` key the
+ * earlier two-theme model used, so an existing stored "dan"/"noc" value keeps
+ * working unchanged, just as one of three preferences instead of the only two.
+ */
+export type ThemePreference = "system" | "dan" | "noc";
+
+export function readStoredThemePreference(): ThemePreference {
   const stored = localStorage.getItem(STORAGE_KEY);
-  return stored === "dan" || stored === "noc" ? stored : DEFAULT_THEME;
+  return stored === "dan" || stored === "noc" || stored === "system" ? stored : DEFAULT_PREFERENCE;
 }
 
-export function applyStoredTheme(): ThemeName {
-  const theme = readStoredTheme();
-  document.documentElement.setAttribute("data-theme", theme);
-  return theme;
+/** Resolves a preference to a concrete theme; "system" follows the OS dark-mode media query. */
+export function resolveTheme(preference: ThemePreference): ThemeName {
+  if (preference === "system") {
+    return window.matchMedia(DARK_QUERY).matches ? "noc" : "dan";
+  }
+  return preference;
 }
 
-export function persistTheme(theme: ThemeName): void {
-  localStorage.setItem(STORAGE_KEY, theme);
-  document.documentElement.setAttribute("data-theme", theme);
+/** Persists the preference and applies its resolved theme to the document root. */
+export function persistThemePreference(preference: ThemePreference): void {
+  localStorage.setItem(STORAGE_KEY, preference);
+  document.documentElement.setAttribute("data-theme", resolveTheme(preference));
+}
+
+/** Applies whatever preference is already stored (main.tsx, before first render — avoids a themed flash). */
+export function applyStoredThemePreference(): void {
+  persistThemePreference(readStoredThemePreference());
+}
+
+/**
+ * Subscribes to OS light/dark changes, returning an unsubscribe function.
+ * Only meaningful while the current preference is "system" — callers are
+ * responsible for gating the subscription accordingly.
+ */
+export function subscribeSystemTheme(onChange: () => void): () => void {
+  const media = window.matchMedia(DARK_QUERY);
+  media.addEventListener("change", onChange);
+  return () => media.removeEventListener("change", onChange);
 }

@@ -4,6 +4,10 @@
  * and snoozed-until fields, and the bell's capped unread-count label. Mirrors
  * focusFormat.ts's small-pure-helper-module idiom.
  */
+import type { NotificationSource } from "../../shared/ipc.js";
+
+/** The three NTF sources, in the fixed order every source list/loop uses. */
+export const ALL_NOTIFICATION_SOURCES: NotificationSource[] = ["document", "exam", "study-day"];
 
 function isSameLocalDay(a: Date, b: Date): boolean {
   return (

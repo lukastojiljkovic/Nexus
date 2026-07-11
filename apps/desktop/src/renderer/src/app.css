@@ -93,7 +93,7 @@ body {
   border-top: 1px solid var(--nx-border);
 }
 
-/* Diagnostics -------------------------------------------------------- */
+/* App-info facts (Settings "O aplikaciji") ---------------------------- */
 .app__facts {
   margin: 0;
   display: grid;
@@ -726,13 +726,6 @@ body {
 }
 .dash__study-line {
   font-size: var(--nx-font-size-body-sm);
-}
-
-/* Diagnostics stays as the renderer -> main -> DB proof, but recedes: no
-   surface fill or shadow, so it reads as secondary beneath the widgets. */
-.dash__diagnostics {
-  background: transparent;
-  box-shadow: none;
 }
 
 /* Study (STUDY page) --------------------------------------------------- */
@@ -1831,4 +1824,102 @@ body {
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-2);
+}
+
+/* Settings (SET page) --------------------------------------------------- */
+.set {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+}
+.set__title {
+  margin: 0;
+  font-size: var(--nx-font-size-h1);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-normal);
+}
+/* Section cards reuse nx-card's surface; this only spaces their innards. */
+.set__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+.set__section .nx-card__title {
+  margin-bottom: 0;
+}
+/* Profil: name field + save side by side (study__subject-form idiom). */
+.set__row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+.set__row .nx-textfield {
+  flex: 1;
+  min-width: 200px;
+  max-width: 320px;
+}
+/* Izgled: the three-way theme preference as a compact segmented row. */
+.set__segmented {
+  display: inline-flex;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
+}
+/* Moduli: category heading + one bordered row per module. */
+.set__module-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.set__module-group + .set__module-group {
+  margin-top: var(--nx-space-2);
+}
+.set__module-group-title {
+  margin: 0;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.set__module-list {
+  display: flex;
+  flex-direction: column;
+}
+.set__module-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-4);
+  padding: var(--nx-space-2) 0;
+}
+.set__module-row + .set__module-row {
+  border-top: 1px solid var(--nx-border);
+}
+.set__module-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.set__module-name {
+  font-weight: var(--nx-font-weight-medium);
+}
+.set__module-desc {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+/* Obaveštenja: NTF-008 preset shortcuts above the shared ntf controls. */
+.set__preset-row {
+  display: inline-flex;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
+}
+.set__section-caption {
+  margin: 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+}
+.set__error {
+  margin: 0;
+  color: var(--nx-danger);
+  font-size: var(--nx-font-size-body-sm);
 }
