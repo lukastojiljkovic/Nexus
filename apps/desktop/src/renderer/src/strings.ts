@@ -436,6 +436,18 @@ export const strings = {
     /** Theme-preference option labels; Dan/Noć reuse `strings.app.themeDan/themeNoc`. */
     appearance: {
       system: "Sistemski",
+      accentLabel: "Boja akcenta",
+      /** Accent swatch names, keyed by AccentId (SET's 8-accent palette). */
+      accentNames: {
+        zlato: "Zlato",
+        bronza: "Bronza",
+        maslina: "Maslina",
+        suma: "Šuma",
+        zad: "Žad",
+        ruza: "Ruža",
+        bordo: "Bordo",
+        grafit: "Grafit",
+      } as Record<string, string>,
     },
     /** One-line module descriptions for the gallery, keyed by module id. */
     moduleDescriptions: {

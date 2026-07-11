@@ -1865,6 +1865,24 @@ body {
   gap: var(--nx-space-1);
   flex-wrap: wrap;
 }
+/* Izgled: the 8-swatch accent picker below the theme segmented row. */
+.set__accent-row {
+  display: flex;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+.set__accent-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--nx-radius-round);
+  border: 1px solid var(--nx-border);
+  cursor: pointer;
+  padding: 0;
+  transition: border-color var(--nx-motion-base) var(--nx-motion-ease);
+}
+.set__accent-swatch--selected {
+  border: 2px solid var(--nx-text);
+}
 /* Moduli: category heading + one bordered row per module. */
 .set__module-group {
   display: flex;

@@ -6,8 +6,10 @@ import "katex/dist/katex.min.css";
 import "./app.css";
 import { App } from "./App.js";
 import { applyStoredThemePreference } from "./theme.js";
+import { applyStoredAccent } from "./accent.js";
 
 applyStoredThemePreference();
+applyStoredAccent();
 
 const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("Missing #root element");

@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { Button, Card, Checkbox, Chip, TextField } from "@nexus/ui";
 import type { ModuleRegistry } from "@nexus/core";
+import { ACCENT_IDS, type AccentId } from "@nexus/tokens";
 import type { AppInfo, FlagState, NotificationSource } from "../../shared/ipc.js";
 import { ALL_NOTIFICATION_SOURCES } from "./notificationFormat.js";
 import { NotificationSettingsControls } from "./NotificationSettingsControls.js";
 import type { ThemePreference } from "./theme.js";
+import { persistAccent, readStoredAccent } from "./accent.js";
 import { dayUnit, strings } from "./strings.js";
 
 /** Sidebar/page display name for a module id; mirrors App.tsx's private helper (kept local — App renders this page, so importing it back would be circular). */
@@ -168,6 +170,7 @@ export function SettingsPage({
   onPreferenceChange,
   registry,
 }: SettingsPageProps) {
+  const [accent, setAccent] = useState<AccentId>(() => readStoredAccent());
   const [modulesError, setModulesError] = useState<string | null>(null);
   const [notificationSources, setNotificationSources] = useState<NotificationSource[] | null>(null);
   const [presetError, setPresetError] = useState<string | null>(null);
@@ -247,6 +250,30 @@ export function SettingsPage({
               {themeOptionLabel(option)}
             </Button>
           ))}
+        </div>
+        <p className="set__section-caption">
+          {strings.settings.appearance.accentLabel} — {strings.settings.appearance.accentNames[accent] ?? accent}
+        </p>
+        <div className="set__accent-row" role="group" aria-label={strings.settings.appearance.accentLabel}>
+          {ACCENT_IDS.map((id) => {
+            const name = strings.settings.appearance.accentNames[id] ?? id;
+            const selected = accent === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                className={`set__accent-swatch${selected ? " set__accent-swatch--selected" : ""}`}
+                aria-pressed={selected}
+                title={name}
+                aria-label={name}
+                style={{ background: `var(--nx-swatch-${id})` }}
+                onClick={() => {
+                  persistAccent(id);
+                  setAccent(id);
+                }}
+              />
+            );
+          })}
         </div>
       </Card>
 
