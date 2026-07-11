@@ -47,6 +47,10 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   artifactName: "Nexus-Setup-${version}.exe"
+  # Uninstaller: build/installer.nsh's customUnInstall offers optional removal
+  # of the user's local data ($APPDATA\Nexus + updater cache), default keep;
+  # skipped entirely when the uninstall runs as part of an auto-update.
+  include: build/installer.nsh
 
 publish:
   provider: github
