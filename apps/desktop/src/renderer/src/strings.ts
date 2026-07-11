@@ -443,7 +443,6 @@ export const strings = {
       tasks: "Zadaci sa listom i tablom, prioritetima i rokovima.",
       calendar: "Događaji, agenda i praćenje isteka dokumenata.",
       settings: "Profil, izgled, moduli i obaveštenja.",
-      notes: "Uskoro — beleške sa organizacijom i pretragom stižu u narednoj fazi razvoja.",
       study: "Predmeti, ispiti, kartice za učenje i planovi pripreme za ispite.",
     } as Record<string, string>,
     /** Category-group headings above the module gallery, keyed by registry category. */

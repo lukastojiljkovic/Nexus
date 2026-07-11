@@ -6,13 +6,17 @@ import { ModuleRegistry, type ModuleManifest } from "@nexus/core";
  * each module's real implementation. Categories mirror the PRD 00 registry;
  * registration order follows the PRD numbering, and the sidebar groups them by
  * `MODULE_CATEGORIES` order with separators (DASH-008, decision #11).
+ *
+ * Only *built* modules are registered (founder decision 2026-07-12): an
+ * unbuilt module must not appear anywhere — not in the sidebar, not in the
+ * Settings module gallery — so nothing in the app leads to an empty page.
+ * A module's manifest is added here in the same slice that ships its page.
  */
 const V0_MODULES: ModuleManifest[] = [
   { id: "dashboard", prefix: "DASH", category: "Core experience", defaultEnabled: true },
   { id: "tasks", prefix: "TASK", category: "Core experience", defaultEnabled: true },
   { id: "calendar", prefix: "CAL", category: "Core experience", defaultEnabled: true },
   { id: "settings", prefix: "SET", category: "Core experience", defaultEnabled: true },
-  { id: "notes", prefix: "NOTE", category: "Content & knowledge", defaultEnabled: true },
   { id: "study", prefix: "STUDY", category: "Life hubs", defaultEnabled: true },
 ];
 
