@@ -63,3 +63,26 @@ export type {
 } from "./notify/notificationEngine.js";
 
 export { isWithinQuietHours } from "./notify/quietHours.js";
+
+export { toCsv } from "./imex/csv.js";
+export type { CsvValue } from "./imex/csv.js";
+
+export { buildExportArchive } from "./imex/exportArchive.js";
+export type {
+  ExportArchive,
+  ExportArchiveInput,
+  ExportCard,
+  ExportDeck,
+  ExportDocument,
+  ExportEvent,
+  ExportExam,
+  ExportFocusSession,
+  ExportNotification,
+  ExportRenewal,
+  ExportReviewLogEntry,
+  ExportSettings,
+  ExportStudyBlock,
+  ExportStudyPlan,
+  ExportSubject,
+  ExportTask,
+} from "./imex/exportArchive.js";
