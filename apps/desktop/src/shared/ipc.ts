@@ -82,6 +82,7 @@ export const IpcChannel = {
   notificationsSettingsUpdate: "notifications:settings-update",
   notificationsSourceToggle: "notifications:source-toggle",
   notificationsChanged: "notifications:changed",
+  imexExport: "imex:export",
   appInfo: "app:info",
 } as const;
 
@@ -921,6 +922,21 @@ export interface NotificationsSourceToggleRequest {
   enabled: boolean;
 }
 
+export interface ImexExportRequest {
+  profileId: string;
+}
+
+/**
+ * The outcome of a full-data export (IMEX slice a1, PRD 14 IMEX-001): either
+ * the user canceled the native save dialog, or the `.nexus.zip` archive was
+ * written to `path` with `totalRecords` interchange records inside it. The
+ * renderer never supplies `path` itself — it always comes back from the
+ * dialog main owns (SEC-EL: untrusted input never reaches the filesystem).
+ */
+export type ExportResult =
+  | { canceled: true }
+  | { canceled: false; path: string; totalRecords: number };
+
 /** Runtime and environment facts, proving the main-process path end to end. */
 export interface AppInfo {
   name: string;
@@ -1036,5 +1052,7 @@ export interface NexusApi {
    * one fixed channel, never a generic `on(channel, ...)` passthrough.
    */
   onNotificationsChanged(listener: () => void): () => void;
+  /** Full-data export to a `.nexus.zip` archive (IMEX slice a1). Resolves after the native save dialog is settled — canceled or written. */
+  exportData(profileId: string): Promise<ExportResult>;
   appInfo(): Promise<AppInfo>;
 }

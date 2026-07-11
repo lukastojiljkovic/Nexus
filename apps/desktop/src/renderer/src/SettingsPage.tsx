@@ -5,7 +5,7 @@ import type { AppInfo, FlagState, NotificationSource } from "../../shared/ipc.js
 import { ALL_NOTIFICATION_SOURCES } from "./notificationFormat.js";
 import { NotificationSettingsControls } from "./NotificationSettingsControls.js";
 import type { ThemePreference } from "./theme.js";
-import { strings } from "./strings.js";
+import { dayUnit, strings } from "./strings.js";
 
 /** Sidebar/page display name for a module id; mirrors App.tsx's private helper (kept local — App renders this page, so importing it back would be circular). */
 function moduleName(id: string): string {
@@ -84,6 +84,54 @@ function ProfileSection({ profileId, initialName, onProfileRenamed }: ProfileSec
           {strings.settings.profile.save}
         </Button>
       </div>
+      {error != null && <p className="set__error">{error}</p>}
+    </>
+  );
+}
+
+interface BackupSectionProps {
+  profileId: string;
+}
+
+/** Rezervna kopija section (IMEX slice a1): a single full-export button over `window.nexus.exportData`. */
+function BackupSection({ profileId }: BackupSectionProps) {
+  const [running, setRunning] = useState(false);
+  const [saved, setSaved] = useState<{ path: string; totalRecords: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function runExport(): Promise<void> {
+    if (running) return;
+    setRunning(true);
+    setError(null);
+    setSaved(null);
+    try {
+      const outcome = await window.nexus.exportData(profileId);
+      if (!outcome.canceled) {
+        setSaved({ path: outcome.path, totalRecords: outcome.totalRecords });
+      }
+    } catch (exportError) {
+      setError(strings.settings.backup.error);
+      console.error("Nexus: failed to export data:", exportError);
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <>
+      <p className="app__muted">{strings.settings.backup.description}</p>
+      <p className="app__muted">{strings.settings.backup.plaintextNotice}</p>
+      <Button size="sm" variant="primary" disabled={running} onClick={() => void runExport()}>
+        {strings.settings.backup.exportButton}
+      </Button>
+      {saved != null && (
+        <p className="set__section-caption">
+          {strings.settings.backup.savedPrefix} <span className="app__path">{saved.path}</span> (
+          {saved.totalRecords}{" "}
+          {dayUnit(saved.totalRecords, strings.settings.backup.recordsUnitOne, strings.settings.backup.recordsUnitMany)}
+          )
+        </p>
+      )}
       {error != null && <p className="set__error">{error}</p>}
     </>
   );
@@ -254,6 +302,10 @@ export function SettingsPage({
         <p className="set__section-caption">{strings.settings.notificationPresets.caption}</p>
         {presetError != null && <p className="set__error">{presetError}</p>}
         <NotificationSettingsControls profileId={profileId} refreshToken={refreshToken} />
+      </Card>
+
+      <Card title={strings.settings.sectionTitle.backup} className="set__section">
+        <BackupSection profileId={profileId} />
       </Card>
 
       <Card title={strings.settings.sectionTitle.about} className="set__section">

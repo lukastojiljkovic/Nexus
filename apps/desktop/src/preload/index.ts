@@ -134,6 +134,7 @@ const api: NexusApi = {
     ipcRenderer.on(IpcChannel.notificationsChanged, handler);
     return () => ipcRenderer.removeListener(IpcChannel.notificationsChanged, handler);
   },
+  exportData: (profileId) => ipcRenderer.invoke(IpcChannel.imexExport, { profileId }),
   appInfo: () => ipcRenderer.invoke(IpcChannel.appInfo),
 };
 

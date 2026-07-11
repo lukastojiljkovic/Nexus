@@ -425,6 +425,7 @@ export const strings = {
       appearance: "Izgled",
       modules: "Moduli",
       notifications: "Obaveštenja",
+      backup: "Rezervna kopija",
       about: "O aplikaciji",
     },
     profile: {
@@ -461,6 +462,19 @@ export const strings = {
       normal: "Normalno",
       all: "Sve",
       caption: "Prečice za izvore ispod.",
+    },
+    /** Rezervna kopija (IMEX slice a1) — full-export button + confirmation/error lines. */
+    backup: {
+      description:
+        "Izvezi sve svoje podatke u jednu .nexus.zip arhivu — otvoreni formati (JSON i CSV), čitljivi i upotrebljivi bez Nexusa.",
+      plaintextNotice:
+        "Arhiva nije šifrovana, isto kao baza podataka — šifrovanje stiže uz naloge (AUTH).",
+      exportButton: "Izvezi sve podatke…",
+      savedPrefix: "Sačuvano:",
+      /** "N zapis"/"N zapisa" — Serbian numeral agreement via `dayUnit`. */
+      recordsUnitOne: "zapis",
+      recordsUnitMany: "zapisa",
+      error: "Izvoz nije uspeo. Pokušaj ponovo.",
     },
     about: {
       version: "Verzija",

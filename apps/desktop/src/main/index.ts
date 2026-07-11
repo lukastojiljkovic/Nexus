@@ -68,10 +68,12 @@ import {
   type UpdateTaskFields,
 } from "@nexus/db";
 import { localToday } from "./clock.js";
+import { handleExport } from "./imex.js";
 import { startNotificationScheduler, stopNotificationScheduler } from "./notifications.js";
 import {
   IpcChannel,
   type AppInfo,
+  type ExportResult,
   type FlagState,
   type Profile,
   type RunningFocusSession,
@@ -126,6 +128,15 @@ function listProfiles(database: NexusDatabase): Profile[] {
     name: row.name,
     createdAt: row.created_at,
   }));
+}
+
+/** Reads one profile by id; throws when it matches no row (IMEX export needs the profile's name for the manifest). */
+function requireProfile(database: NexusDatabase, id: string): Profile {
+  const profile = listProfiles(database).find((candidate) => candidate.id === id);
+  if (!profile) {
+    throw new Error("Invalid IPC payload: unknown profile id.");
+  }
+  return profile;
 }
 
 /** Renames an existing profile; throws when the id matches no row (ONB lite). */
@@ -676,6 +687,10 @@ function statsStore(profileId: string): StatsStore {
 
 function notificationStore(profileId: string): NotificationStore {
   return new NotificationStore(requireDb().raw, profileId);
+}
+
+function flagStore(profileId: string): SqliteFlagStore {
+  return new SqliteFlagStore(requireDb().raw, profileId);
 }
 
 function registerIpc(): void {
@@ -1257,6 +1272,32 @@ function registerIpc(): void {
     const source = asNotificationSource(body.source, "source");
     const enabled = asBoolean(body.enabled, "enabled");
     notificationStore(profileId).setSourceEnabled(source, enabled, new Date().toISOString());
+  });
+
+  // IMEX slice a1 (PRD 14 IMEX-001): gathers this profile's data and streams a
+  // `.nexus.zip` to a path the native save dialog returns — never a path the
+  // renderer supplies (SEC-EL).
+  ipcMain.handle(IpcChannel.imexExport, (event, payload): Promise<ExportResult> => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profile = requireProfile(requireDb(), profileId);
+    return handleExport(
+      {
+        taskStore,
+        eventStore,
+        documentStore,
+        subjectStore,
+        examStore,
+        deckStore,
+        cardStore,
+        planStore,
+        focusStore,
+        notificationStore,
+        flagStore,
+        getMainWindow: () => mainWindow,
+      },
+      profile,
+    );
   });
 
   ipcMain.handle(IpcChannel.appInfo, (event): AppInfo => {
