@@ -24,7 +24,8 @@
     "katex": "^0.17.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "yazl": "^3.3.1"
+    "yazl": "^3.3.1",
+    "yjs": "^13.6.31"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
