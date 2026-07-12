@@ -19,6 +19,8 @@ export {
   FocusValidationError,
   NotificationNotFoundError,
   NotificationValidationError,
+  NoteNotFoundError,
+  NoteValidationError,
   PlanNotFoundError,
   PlanValidationError,
   SchemaVersionError,
@@ -116,5 +118,8 @@ export type {
   RecordDeliveredInput,
   UpdateNotificationSettingsInput,
 } from "./notify/notificationStore.js";
+
+export { NoteStore, MAX_NOTE_UPDATE_BYTES } from "./notes/noteStore.js";
+export type { NoteCompactionRead, NoteDoc, NoteMeta } from "./notes/noteStore.js";
 
 export { uuidv7 } from "./ids.js";

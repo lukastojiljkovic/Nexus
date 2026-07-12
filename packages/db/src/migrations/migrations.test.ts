@@ -32,7 +32,7 @@ describe("migration 002 — tasks", () => {
   it("creates the tasks table and stamps the latest user_version on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("tasks");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(9);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(10);
     db.close();
   });
 
@@ -43,7 +43,7 @@ describe("migration 002 — tasks", () => {
     first.close();
 
     const second = openDatabase({ path });
-    expect(second.raw.pragma("user_version", { simple: true })).toBe(9);
+    expect(second.raw.pragma("user_version", { simple: true })).toBe(10);
     expect(tableNames(second)).toContain("tasks");
     expect(
       (second.raw.prepare("SELECT count(*) AS n FROM profiles").get() as { n: number }).n,
@@ -93,7 +93,7 @@ describe("migration 003 — events", () => {
   it("creates the events table and stamps the latest user_version on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("events");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(9);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(10);
     db.close();
   });
 
@@ -161,7 +161,7 @@ describe("migration 004 — documents", () => {
     const names = tableNames(db);
     expect(names).toContain("tracked_documents");
     expect(names).toContain("document_renewals");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(9);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(10);
     db.close();
   });
 
@@ -242,7 +242,7 @@ describe("migration 005 — study", () => {
     const names = tableNames(db);
     expect(names).toContain("subjects");
     expect(names).toContain("exams");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(9);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(10);
     db.close();
   });
 
@@ -362,7 +362,7 @@ describe("migration 006 — flashcards", () => {
     expect(names).toContain("decks");
     expect(names).toContain("cards");
     expect(names).toContain("review_log");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(9);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(10);
     db.close();
   });
 
@@ -520,7 +520,7 @@ describe("migration 007 — study plans", () => {
     const names = tableNames(db);
     expect(names).toContain("study_plans");
     expect(names).toContain("study_blocks");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(9);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(10);
     db.close();
   });
 
@@ -691,7 +691,7 @@ describe("migration 008 — focus sessions", () => {
   it("creates the focus_sessions table and stamps the latest user_version on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("focus_sessions");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(9);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(10);
     db.close();
   });
 
@@ -795,7 +795,7 @@ describe("migration 009 — notifications", () => {
     expect(names).toContain("notifications");
     expect(names).toContain("ntf_settings");
     expect(names).toContain("ntf_source_settings");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(9);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(10);
     db.close();
   });
 
@@ -883,6 +883,105 @@ describe("migration 009 — notifications", () => {
     ).toBe(0);
     expect(
       (db.raw.prepare("SELECT count(*) AS n FROM ntf_source_settings").get() as { n: number }).n,
+    ).toBe(0);
+    db.close();
+  });
+});
+
+describe("migration 010 — notes", () => {
+  const now = () => new Date().toISOString();
+
+  const insertNote = (db: NexusDatabase, id: string, profileId: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO notes (id, profile_id, title, created_at, updated_at, deleted_at)
+         VALUES (?, ?, '', ?, ?, NULL)`,
+      )
+      .run(id, profileId, now(), now());
+
+  const insertUpdate = (db: NexusDatabase, noteId: string, seq: number) =>
+    db.raw
+      .prepare(
+        `INSERT INTO note_updates (note_id, seq, update_blob, created_at)
+         VALUES (?, ?, ?, ?)`,
+      )
+      .run(noteId, seq, Buffer.from([1, 2, 3]), now());
+
+  const insertSnapshot = (db: NexusDatabase, noteId: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO note_snapshots (note_id, snapshot, plaintext, covered_seq, updated_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(noteId, Buffer.from([4, 5, 6]), "text", 1, now());
+
+  it("creates all three note tables and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    const names = tableNames(db);
+    expect(names).toContain("notes");
+    expect(names).toContain("note_updates");
+    expect(names).toContain("note_snapshots");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(10);
+    db.close();
+  });
+
+  it("creates the notes_profile_active partial index", () => {
+    const db = openDatabase({ path: join(dir, "index.db") });
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("notes_profile_active");
+    db.close();
+  });
+
+  it("enforces PRIMARY KEY (note_id, seq) on note_updates", () => {
+    const db = openDatabase({ path: join(dir, "unique-seq.db") });
+    insertProfile(db, "p1");
+    insertNote(db, "n1", "p1");
+    insertUpdate(db, "n1", 1);
+    // the same (note, seq) pair collides.
+    expect(() => insertUpdate(db, "n1", 1)).toThrow();
+    // a different seq for the same note is fine.
+    expect(() => insertUpdate(db, "n1", 2)).not.toThrow();
+    db.close();
+  });
+
+  it("allows at most one snapshot row per note", () => {
+    const db = openDatabase({ path: join(dir, "unique-snapshot.db") });
+    insertProfile(db, "p1");
+    insertNote(db, "n1", "p1");
+    insertSnapshot(db, "n1");
+    expect(() => insertSnapshot(db, "n1")).toThrow();
+    db.close();
+  });
+
+  it("cascades note deletion when the owning profile is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade-profile.db") });
+    insertProfile(db, "p1");
+    insertNote(db, "n1", "p1");
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM notes").get() as { n: number }).n,
+    ).toBe(0);
+    db.close();
+  });
+
+  it("cascades update and snapshot deletion when the owning note is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade-note.db") });
+    insertProfile(db, "p1");
+    insertNote(db, "n1", "p1");
+    insertUpdate(db, "n1", 1);
+    insertSnapshot(db, "n1");
+
+    db.raw.prepare("DELETE FROM notes WHERE id = ?").run("n1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM note_updates").get() as { n: number }).n,
+    ).toBe(0);
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM note_snapshots").get() as { n: number }).n,
     ).toBe(0);
     db.close();
   });

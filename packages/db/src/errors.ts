@@ -200,3 +200,22 @@ export class NotificationValidationError extends DatabaseError {}
  * profile's notifications invisible to a store scoped to another.
  */
 export class NotificationNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a note write is rejected at the store boundary because its input
+ * breaks a domain rule the caller is expected to have caught already — an
+ * empty or over-256 KB Yjs update blob, a title longer than 200 characters
+ * after trimming, a malformed `now`, or a compaction whose `coveredSeq` would
+ * regress below the snapshot already stored (NOTE / ADR-012). The store
+ * revalidates because renderer input is untrusted (SEC-EL-02).
+ */
+export class NoteValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a note operation targets an id that is not an active row in the
+ * store's own profile — unknown, soft-deleted, or owned by another profile.
+ * Every update/snapshot access is gated through this check (`requireActive`),
+ * so one profile's notes and their child rows are invisible to a store scoped
+ * to another.
+ */
+export class NoteNotFoundError extends DatabaseError {}
