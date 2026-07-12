@@ -134,6 +134,16 @@ const api: NexusApi = {
     ipcRenderer.on(IpcChannel.notificationsChanged, handler);
     return () => ipcRenderer.removeListener(IpcChannel.notificationsChanged, handler);
   },
+  listNotes: (profileId) => ipcRenderer.invoke(IpcChannel.notesList, { profileId }),
+  createNote: (profileId) => ipcRenderer.invoke(IpcChannel.notesCreate, { profileId }),
+  loadNote: (profileId, noteId) =>
+    ipcRenderer.invoke(IpcChannel.notesLoad, { profileId, id: noteId }),
+  appendNoteUpdate: (profileId, noteId, update, title) =>
+    ipcRenderer.invoke(IpcChannel.notesAppendUpdate, { profileId, id: noteId, update, title }),
+  deleteNote: (profileId, noteId) =>
+    ipcRenderer.invoke(IpcChannel.notesDelete, { profileId, id: noteId }),
+  restoreNote: (profileId, noteId) =>
+    ipcRenderer.invoke(IpcChannel.notesRestore, { profileId, id: noteId }),
   exportData: (profileId) => ipcRenderer.invoke(IpcChannel.imexExport, { profileId }),
   appInfo: () => ipcRenderer.invoke(IpcChannel.appInfo),
 };

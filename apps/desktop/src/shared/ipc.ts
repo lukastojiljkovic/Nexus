@@ -82,6 +82,12 @@ export const IpcChannel = {
   notificationsSettingsUpdate: "notifications:settings-update",
   notificationsSourceToggle: "notifications:source-toggle",
   notificationsChanged: "notifications:changed",
+  notesList: "notes:list",
+  notesCreate: "notes:create",
+  notesLoad: "notes:load",
+  notesAppendUpdate: "notes:append-update",
+  notesDelete: "notes:delete",
+  notesRestore: "notes:restore",
   imexExport: "imex:export",
   appInfo: "app:info",
 } as const;
@@ -922,6 +928,74 @@ export interface NotificationsSourceToggleRequest {
   enabled: boolean;
 }
 
+/**
+ * A note's metadata as seen by the renderer (mirrors the `notes` table via
+ * `NoteStore`'s mapping, NOTE slice a1 / ADR-012). The document itself is
+ * never carried here — that is `notes:load`'s payload. Redeclared here so the
+ * renderer never imports DB code.
+ */
+export interface NoteMeta {
+  id: string;
+  profileId: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One note's persisted Yjs document state (ADR-012): the merged snapshot (or
+ * null before the first compaction) plus every update past it, in order. The
+ * renderer replays them onto a fresh `Y.Doc` and binds the editor.
+ *
+ * Binary crosses this boundary as `Uint8Array` over Electron's structured
+ * clone — never base64, never JSON. The renderer only ever *sends* opaque
+ * update blobs (`notes:append-update`) and *receives* this payload; the
+ * per-note `seq` ordering and the compaction lifecycle are owned entirely by
+ * the main process and the store (SEC-EL-02) — no renderer input reaches them.
+ */
+export interface NoteDocPayload {
+  title: string;
+  snapshot: Uint8Array | null;
+  updates: Uint8Array[];
+}
+
+export interface NotesListRequest {
+  profileId: string;
+}
+
+export interface NotesCreateRequest {
+  profileId: string;
+}
+
+export interface NotesLoadRequest {
+  profileId: string;
+  id: string;
+}
+
+/**
+ * Appends one batched Yjs update (1..256 KB, validated in main AND re-checked
+ * in the store) plus the renderer-derived `title` (first non-empty line,
+ * ≤ 200 chars after trimming — trust-consistent: the renderer authors the
+ * content itself). `now` is stamped by main, never accepted from the renderer.
+ */
+export interface NotesAppendUpdateRequest {
+  profileId: string;
+  id: string;
+  update: Uint8Array;
+  title: string;
+}
+
+export interface NotesDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
+/** Undo of a soft delete: restores a previously deleted note. */
+export interface NotesRestoreRequest {
+  profileId: string;
+  id: string;
+}
+
 export interface ImexExportRequest {
   profileId: string;
 }
@@ -1052,6 +1126,17 @@ export interface NexusApi {
    * one fixed channel, never a generic `on(channel, ...)` passthrough.
    */
   onNotificationsChanged(listener: () => void): () => void;
+  listNotes(profileId: string): Promise<NoteMeta[]>;
+  createNote(profileId: string): Promise<NoteMeta>;
+  loadNote(profileId: string, noteId: string): Promise<NoteDocPayload>;
+  appendNoteUpdate(
+    profileId: string,
+    noteId: string,
+    update: Uint8Array,
+    title: string,
+  ): Promise<void>;
+  deleteNote(profileId: string, noteId: string): Promise<void>;
+  restoreNote(profileId: string, noteId: string): Promise<void>;
   /** Full-data export to a `.nexus.zip` archive (IMEX slice a1). Resolves after the native save dialog is settled — canceled or written. */
   exportData(profileId: string): Promise<ExportResult>;
   appInfo(): Promise<AppInfo>;

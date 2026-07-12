@@ -13,7 +13,9 @@ import {
   EXAM_TYPES,
   ExamStore,
   FocusStore,
+  MAX_NOTE_UPDATE_BYTES,
   NotificationStore,
+  NoteStore,
   openDatabase,
   PlanStore,
   SqliteFlagStore,
@@ -46,6 +48,7 @@ import {
   type NexusDatabase,
   type NotificationRecord,
   type NotificationSettings,
+  type NoteMeta,
   type PreviewIntervals,
   type StudyBlock,
   type StudyBlockStatus,
@@ -69,12 +72,14 @@ import {
 } from "@nexus/db";
 import { localToday } from "./clock.js";
 import { handleExport } from "./imex.js";
+import { compactIfNeeded } from "./notes.js";
 import { startNotificationScheduler, stopNotificationScheduler } from "./notifications.js";
 import {
   IpcChannel,
   type AppInfo,
   type ExportResult,
   type FlagState,
+  type NoteDocPayload,
   type Profile,
   type RunningFocusSession,
   type SnoozePreset,
@@ -208,6 +213,30 @@ function asNonEmptyString(value: unknown, field: string): string {
 function asBoolean(value: unknown, field: string): boolean {
   if (typeof value !== "boolean") {
     throw new Error(`Invalid IPC payload: "${field}" must be a boolean.`);
+  }
+  return value;
+}
+
+/** A plain string field that may be empty (structural check only; semantics stay in the store). */
+function asString(value: unknown, field: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`Invalid IPC payload: "${field}" must be a string.`);
+  }
+  return value;
+}
+
+/**
+ * A binary field crossing the boundary over structured clone: must arrive as
+ * a genuine, non-empty `Uint8Array` no larger than `maxBytes`. The size cap is
+ * enforced here AND re-checked in the store (SEC-EL-02: renderer input is
+ * untrusted, and the cap is the wire contract, not a UI courtesy).
+ */
+function asUint8Array(value: unknown, field: string, maxBytes: number): Uint8Array {
+  if (!(value instanceof Uint8Array) || value.byteLength === 0) {
+    throw new Error(`Invalid IPC payload: "${field}" must be a non-empty Uint8Array.`);
+  }
+  if (value.byteLength > maxBytes) {
+    throw new Error(`Invalid IPC payload: "${field}" must not exceed ${maxBytes} bytes.`);
   }
   return value;
 }
@@ -687,6 +716,10 @@ function statsStore(profileId: string): StatsStore {
 
 function notificationStore(profileId: string): NotificationStore {
   return new NotificationStore(requireDb().raw, profileId);
+}
+
+function noteStore(profileId: string): NoteStore {
+  return new NoteStore(requireDb().raw, profileId);
 }
 
 function flagStore(profileId: string): SqliteFlagStore {
@@ -1272,6 +1305,58 @@ function registerIpc(): void {
     const source = asNotificationSource(body.source, "source");
     const enabled = asBoolean(body.enabled, "enabled");
     notificationStore(profileId).setSourceEnabled(source, enabled, new Date().toISOString());
+  });
+
+  // NOTE slice a1 (ADR-012): binary Yjs updates cross this boundary as
+  // Uint8Array over structured clone. The store assigns the per-note seq and
+  // main owns the compaction lifecycle — neither ever takes renderer input —
+  // and `now` is always stamped here from main's own clock (SEC-EL-02).
+  ipcMain.handle(IpcChannel.notesList, (event, payload): NoteMeta[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return noteStore(profileId).list();
+  });
+
+  ipcMain.handle(IpcChannel.notesCreate, (event, payload): NoteMeta => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return noteStore(profileId).create(new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.notesLoad, (event, payload): NoteDocPayload => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return noteStore(profileId).load(id);
+  });
+
+  ipcMain.handle(IpcChannel.notesAppendUpdate, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const update = asUint8Array(body.update, "update", MAX_NOTE_UPDATE_BYTES);
+    const title = asString(body.title, "title");
+    const store = noteStore(profileId);
+    store.appendUpdate(id, update, title, new Date().toISOString());
+    compactIfNeeded(store, id);
+  });
+
+  ipcMain.handle(IpcChannel.notesDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    noteStore(profileId).softDelete(id, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.notesRestore, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    noteStore(profileId).restore(id, new Date().toISOString());
   });
 
   // IMEX slice a1 (PRD 14 IMEX-001): gathers this profile's data and streams a
