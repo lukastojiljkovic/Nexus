@@ -14,7 +14,9 @@ import {
   ExamStore,
   FocusStore,
   MAX_NOTE_UPDATE_BYTES,
+  NOTE_FOLDER_COLORS,
   NotificationStore,
+  NoteOrgStore,
   NoteStore,
   openDatabase,
   PlanStore,
@@ -48,7 +50,11 @@ import {
   type NexusDatabase,
   type NotificationRecord,
   type NotificationSettings,
+  type NoteFolder,
+  type NoteFolderColor,
   type NoteMeta,
+  type NoteTag,
+  type NoteTagLink,
   type PreviewIntervals,
   type StudyBlock,
   type StudyBlockStatus,
@@ -452,6 +458,44 @@ function asSubjectFieldChanges(value: unknown): UpdateSubjectFields {
   return patch;
 }
 
+function asNoteFolderColor(value: unknown, field: string): NoteFolderColor {
+  if (typeof value === "string" && (NOTE_FOLDER_COLORS as readonly string[]).includes(value)) {
+    return value as NoteFolderColor;
+  }
+  throw new Error(`Invalid IPC payload: "${field}" is not a valid note folder colour.`);
+}
+
+function asNullableNoteFolderColor(value: unknown, field: string): NoteFolderColor | null {
+  return value === null ? null : asNoteFolderColor(value, field);
+}
+
+/** Validates a note-folder create input; only `parentId`/`name`/`color` are structurally checked — the store owns the trim/enum/parent-FK revalidation. */
+function asNoteFolderCreateInput(value: unknown): {
+  parentId: string | null;
+  name: string;
+  color: NoteFolderColor | null;
+} {
+  const input = asRecord(value);
+  return {
+    parentId: asNullableString(input.parentId, "input.parentId"),
+    name: asString(input.name, "input.name"),
+    color: asNullableNoteFolderColor(input.color, "input.color"),
+  };
+}
+
+/**
+ * Validates a note-folder `fields` patch; an omitted key stays omitted, an
+ * explicit `color: null` clears the colour — presence is checked with `in`,
+ * never `!== undefined`, so the two cases are distinguishable.
+ */
+function asNoteFolderFieldChanges(value: unknown): { name?: string; color?: NoteFolderColor | null } {
+  const rec = asRecord(value);
+  const patch: { name?: string; color?: NoteFolderColor | null } = {};
+  if ("name" in rec) patch.name = asString(rec.name, "name");
+  if ("color" in rec) patch.color = asNullableNoteFolderColor(rec.color, "color");
+  return patch;
+}
+
 function asExamType(value: unknown, field: string): ExamType {
   if (typeof value === "string" && (EXAM_TYPES as readonly string[]).includes(value)) {
     return value as ExamType;
@@ -720,6 +764,10 @@ function notificationStore(profileId: string): NotificationStore {
 
 function noteStore(profileId: string): NoteStore {
   return new NoteStore(requireDb().raw, profileId);
+}
+
+function noteOrgStore(profileId: string): NoteOrgStore {
+  return new NoteOrgStore(requireDb().raw, profileId);
 }
 
 function flagStore(profileId: string): SqliteFlagStore {
@@ -1313,8 +1361,10 @@ function registerIpc(): void {
   // and `now` is always stamped here from main's own clock (SEC-EL-02).
   ipcMain.handle(IpcChannel.notesList, (event, payload): NoteMeta[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
-    return noteStore(profileId).list();
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const filter = "folderId" in body ? { folderId: asNullableString(body.folderId, "folderId") } : undefined;
+    return noteStore(profileId).list(filter);
   });
 
   ipcMain.handle(IpcChannel.notesCreate, (event, payload): NoteMeta => {
@@ -1357,6 +1407,124 @@ function registerIpc(): void {
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const id = asNonEmptyString(body.id, "id");
     noteStore(profileId).restore(id, new Date().toISOString());
+  });
+
+  // NOTE-002 (organization): folders/tags/pins. `now` is always stamped here
+  // from main's own clock, never accepted from the renderer (SEC-EL-02).
+  ipcMain.handle(IpcChannel.noteFoldersList, (event, payload): NoteFolder[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return noteOrgStore(profileId).listFolders();
+  });
+
+  ipcMain.handle(IpcChannel.noteFoldersCreate, (event, payload): NoteFolder => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return noteOrgStore(profileId).createFolder(
+      asNoteFolderCreateInput(body.input),
+      new Date().toISOString(),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.noteFoldersUpdate, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    noteOrgStore(profileId).updateFolder(
+      id,
+      asNoteFolderFieldChanges(body.fields),
+      new Date().toISOString(),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.noteFoldersMove, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const newParentId = asNullableString(body.newParentId, "newParentId");
+    noteOrgStore(profileId).moveFolder(id, newParentId, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.noteFoldersDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    noteOrgStore(profileId).deleteFolder(id, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.noteTagsList, (event, payload): NoteTag[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return noteOrgStore(profileId).listTags();
+  });
+
+  ipcMain.handle(IpcChannel.noteTagsCreate, (event, payload): NoteTag => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return noteOrgStore(profileId).createTag(asString(body.name, "name"), new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.noteTagsRename, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    noteOrgStore(profileId).renameTag(id, asString(body.name, "name"));
+  });
+
+  ipcMain.handle(IpcChannel.noteTagsDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    noteOrgStore(profileId).deleteTag(id);
+  });
+
+  ipcMain.handle(IpcChannel.noteTagLinksList, (event, payload): NoteTagLink[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return noteOrgStore(profileId).listTagLinks();
+  });
+
+  ipcMain.handle(IpcChannel.noteTagsAttach, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const noteId = asNonEmptyString(body.noteId, "noteId");
+    const tagId = asNonEmptyString(body.tagId, "tagId");
+    noteOrgStore(profileId).attachTag(noteId, tagId);
+  });
+
+  ipcMain.handle(IpcChannel.noteTagsDetach, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const noteId = asNonEmptyString(body.noteId, "noteId");
+    const tagId = asNonEmptyString(body.tagId, "tagId");
+    noteOrgStore(profileId).detachTag(noteId, tagId);
+  });
+
+  ipcMain.handle(IpcChannel.notesSetFolder, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const noteId = asNonEmptyString(body.noteId, "noteId");
+    const folderId = asNullableString(body.folderId, "folderId");
+    noteStore(profileId).setFolder(noteId, folderId);
+  });
+
+  ipcMain.handle(IpcChannel.notesSetPinned, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const noteId = asNonEmptyString(body.noteId, "noteId");
+    const pinned = asBoolean(body.pinned, "pinned");
+    noteStore(profileId).setPinned(noteId, pinned);
   });
 
   // IMEX slice a1 (PRD 14 IMEX-001): gathers this profile's data and streams a

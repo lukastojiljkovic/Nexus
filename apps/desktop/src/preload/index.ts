@@ -134,7 +134,11 @@ const api: NexusApi = {
     ipcRenderer.on(IpcChannel.notificationsChanged, handler);
     return () => ipcRenderer.removeListener(IpcChannel.notificationsChanged, handler);
   },
-  listNotes: (profileId) => ipcRenderer.invoke(IpcChannel.notesList, { profileId }),
+  listNotes: (profileId, filter) =>
+    ipcRenderer.invoke(
+      IpcChannel.notesList,
+      filter && "folderId" in filter ? { profileId, folderId: filter.folderId } : { profileId },
+    ),
   createNote: (profileId) => ipcRenderer.invoke(IpcChannel.notesCreate, { profileId }),
   loadNote: (profileId, noteId) =>
     ipcRenderer.invoke(IpcChannel.notesLoad, { profileId, id: noteId }),
@@ -144,6 +148,31 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.notesDelete, { profileId, id: noteId }),
   restoreNote: (profileId, noteId) =>
     ipcRenderer.invoke(IpcChannel.notesRestore, { profileId, id: noteId }),
+  listNoteFolders: (profileId) => ipcRenderer.invoke(IpcChannel.noteFoldersList, { profileId }),
+  createNoteFolder: (profileId, input) =>
+    ipcRenderer.invoke(IpcChannel.noteFoldersCreate, { profileId, input }),
+  updateNoteFolder: (profileId, id, fields) =>
+    ipcRenderer.invoke(IpcChannel.noteFoldersUpdate, { profileId, id, fields }),
+  moveNoteFolder: (profileId, id, newParentId) =>
+    ipcRenderer.invoke(IpcChannel.noteFoldersMove, { profileId, id, newParentId }),
+  deleteNoteFolder: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.noteFoldersDelete, { profileId, id }),
+  listNoteTags: (profileId) => ipcRenderer.invoke(IpcChannel.noteTagsList, { profileId }),
+  createNoteTag: (profileId, name) =>
+    ipcRenderer.invoke(IpcChannel.noteTagsCreate, { profileId, name }),
+  renameNoteTag: (profileId, id, name) =>
+    ipcRenderer.invoke(IpcChannel.noteTagsRename, { profileId, id, name }),
+  deleteNoteTag: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.noteTagsDelete, { profileId, id }),
+  listNoteTagLinks: (profileId) => ipcRenderer.invoke(IpcChannel.noteTagLinksList, { profileId }),
+  attachNoteTag: (profileId, noteId, tagId) =>
+    ipcRenderer.invoke(IpcChannel.noteTagsAttach, { profileId, noteId, tagId }),
+  detachNoteTag: (profileId, noteId, tagId) =>
+    ipcRenderer.invoke(IpcChannel.noteTagsDetach, { profileId, noteId, tagId }),
+  setNoteFolder: (profileId, noteId, folderId) =>
+    ipcRenderer.invoke(IpcChannel.notesSetFolder, { profileId, noteId, folderId }),
+  setNotePinned: (profileId, noteId, pinned) =>
+    ipcRenderer.invoke(IpcChannel.notesSetPinned, { profileId, noteId, pinned }),
   exportData: (profileId) => ipcRenderer.invoke(IpcChannel.imexExport, { profileId }),
   appInfo: () => ipcRenderer.invoke(IpcChannel.appInfo),
 };

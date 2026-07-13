@@ -88,6 +88,20 @@ export const IpcChannel = {
   notesAppendUpdate: "notes:append-update",
   notesDelete: "notes:delete",
   notesRestore: "notes:restore",
+  noteFoldersList: "note-folders:list",
+  noteFoldersCreate: "note-folders:create",
+  noteFoldersUpdate: "note-folders:update",
+  noteFoldersMove: "note-folders:move",
+  noteFoldersDelete: "note-folders:delete",
+  noteTagsList: "note-tags:list",
+  noteTagsCreate: "note-tags:create",
+  noteTagsRename: "note-tags:rename",
+  noteTagsDelete: "note-tags:delete",
+  noteTagsAttach: "note-tags:attach",
+  noteTagsDetach: "note-tags:detach",
+  noteTagLinksList: "note-tag-links:list",
+  notesSetFolder: "notes:set-folder",
+  notesSetPinned: "notes:set-pinned",
   imexExport: "imex:export",
   appInfo: "app:info",
 } as const;
@@ -949,6 +963,8 @@ export interface NoteMeta {
   id: string;
   profileId: string;
   title: string;
+  folderId: string | null;
+  pinned: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -970,8 +986,15 @@ export interface NoteDocPayload {
   updates: Uint8Array[];
 }
 
+/**
+ * An optional note-list filter (NOTE-002): omitted = every active note,
+ * `{ folderId: null }` = unfiled notes, `{ folderId: "<id>" }` = one folder's
+ * notes. Presence of the `folderId` key — not its value — distinguishes "all"
+ * from "unfiled", so the wire payload either carries the key or omits it.
+ */
 export interface NotesListRequest {
   profileId: string;
+  folderId?: string | null;
 }
 
 export interface NotesCreateRequest {
@@ -1005,6 +1028,130 @@ export interface NotesDeleteRequest {
 export interface NotesRestoreRequest {
   profileId: string;
   id: string;
+}
+
+/** Closed note-folder colour domain (mirrors `@nexus/db`; redeclared so the renderer never imports DB code). */
+export type NoteFolderColor =
+  | "zlato"
+  | "bronza"
+  | "maslina"
+  | "suma"
+  | "zad"
+  | "ruza"
+  | "bordo"
+  | "grafit";
+
+/**
+ * A note folder as seen by the renderer (mirrors the `note_folders` table via
+ * `NoteOrgStore`'s mapping, NOTE-002). `parentId` is null at the tree's root.
+ * Redeclared here so the renderer never imports DB code.
+ */
+export interface NoteFolder {
+  id: string;
+  profileId: string;
+  parentId: string | null;
+  name: string;
+  color: NoteFolderColor | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * A note tag as seen by the renderer (mirrors the `note_tags` table via
+ * `NoteOrgStore`'s mapping, NOTE-002) — a per-profile label, unique by name.
+ * Redeclared here so the renderer never imports DB code.
+ */
+export interface NoteTag {
+  id: string;
+  profileId: string;
+  name: string;
+  createdAt: string;
+}
+
+/** One note-tag attachment (mirrors the `note_tag_links` join table, NOTE-002). */
+export interface NoteTagLink {
+  noteId: string;
+  tagId: string;
+}
+
+export interface NoteFoldersListRequest {
+  profileId: string;
+}
+
+export interface NoteFoldersCreateRequest {
+  profileId: string;
+  input: { parentId: string | null; name: string; color: NoteFolderColor | null };
+}
+
+/** A partial edit of a folder's own fields; an omitted key is untouched, `null` clears `color`. */
+export interface NoteFolderFieldChanges {
+  name?: string;
+  color?: NoteFolderColor | null;
+}
+
+export interface NoteFoldersUpdateRequest {
+  profileId: string;
+  id: string;
+  fields: NoteFolderFieldChanges;
+}
+
+export interface NoteFoldersMoveRequest {
+  profileId: string;
+  id: string;
+  newParentId: string | null;
+}
+
+export interface NoteFoldersDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
+export interface NoteTagsListRequest {
+  profileId: string;
+}
+
+export interface NoteTagsCreateRequest {
+  profileId: string;
+  name: string;
+}
+
+export interface NoteTagsRenameRequest {
+  profileId: string;
+  id: string;
+  name: string;
+}
+
+export interface NoteTagsDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
+export interface NoteTagLinksListRequest {
+  profileId: string;
+}
+
+export interface NoteTagsAttachRequest {
+  profileId: string;
+  noteId: string;
+  tagId: string;
+}
+
+export interface NoteTagsDetachRequest {
+  profileId: string;
+  noteId: string;
+  tagId: string;
+}
+
+export interface NotesSetFolderRequest {
+  profileId: string;
+  noteId: string;
+  folderId: string | null;
+}
+
+export interface NotesSetPinnedRequest {
+  profileId: string;
+  noteId: string;
+  pinned: boolean;
 }
 
 export interface ImexExportRequest {
@@ -1137,7 +1284,7 @@ export interface NexusApi {
    * one fixed channel, never a generic `on(channel, ...)` passthrough.
    */
   onNotificationsChanged(listener: () => void): () => void;
-  listNotes(profileId: string): Promise<NoteMeta[]>;
+  listNotes(profileId: string, filter?: { folderId?: string | null }): Promise<NoteMeta[]>;
   createNote(profileId: string): Promise<NoteMeta>;
   loadNote(profileId: string, noteId: string): Promise<NoteDocPayload>;
   appendNoteUpdate(
@@ -1148,6 +1295,27 @@ export interface NexusApi {
   ): Promise<void>;
   deleteNote(profileId: string, noteId: string): Promise<void>;
   restoreNote(profileId: string, noteId: string): Promise<void>;
+  listNoteFolders(profileId: string): Promise<NoteFolder[]>;
+  createNoteFolder(
+    profileId: string,
+    input: { parentId: string | null; name: string; color: NoteFolderColor | null },
+  ): Promise<NoteFolder>;
+  updateNoteFolder(
+    profileId: string,
+    id: string,
+    fields: NoteFolderFieldChanges,
+  ): Promise<void>;
+  moveNoteFolder(profileId: string, id: string, newParentId: string | null): Promise<void>;
+  deleteNoteFolder(profileId: string, id: string): Promise<void>;
+  listNoteTags(profileId: string): Promise<NoteTag[]>;
+  createNoteTag(profileId: string, name: string): Promise<NoteTag>;
+  renameNoteTag(profileId: string, id: string, name: string): Promise<void>;
+  deleteNoteTag(profileId: string, id: string): Promise<void>;
+  listNoteTagLinks(profileId: string): Promise<NoteTagLink[]>;
+  attachNoteTag(profileId: string, noteId: string, tagId: string): Promise<void>;
+  detachNoteTag(profileId: string, noteId: string, tagId: string): Promise<void>;
+  setNoteFolder(profileId: string, noteId: string, folderId: string | null): Promise<void>;
+  setNotePinned(profileId: string, noteId: string, pinned: boolean): Promise<void>;
   /** Full-data export to a `.nexus.zip` archive (IMEX slice a1). Resolves after the native save dialog is settled — canceled or written. */
   exportData(profileId: string): Promise<ExportResult>;
   appInfo(): Promise<AppInfo>;
