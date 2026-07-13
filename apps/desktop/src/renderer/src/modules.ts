@@ -17,6 +17,7 @@ const V0_MODULES: ModuleManifest[] = [
   { id: "tasks", prefix: "TASK", category: "Core experience", defaultEnabled: true },
   { id: "calendar", prefix: "CAL", category: "Core experience", defaultEnabled: true },
   { id: "settings", prefix: "SET", category: "Core experience", defaultEnabled: true },
+  { id: "notes", prefix: "NOTE", category: "Content & knowledge", defaultEnabled: true },
   { id: "study", prefix: "STUDY", category: "Life hubs", defaultEnabled: true },
 ];
 

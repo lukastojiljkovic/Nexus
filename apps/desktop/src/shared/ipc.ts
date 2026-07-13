@@ -929,6 +929,17 @@ export interface NotificationsSourceToggleRequest {
 }
 
 /**
+ * Maximum size, in bytes, of a single Yjs update accepted by
+ * `notes:append-update`. The renderer uses it pre-flight — a merged batch that
+ * would exceed it is sent as its individual updates instead — while the main
+ * process and the store re-check it authoritatively (renderer input is
+ * untrusted, SEC-EL-02). MUST equal `MAX_NOTE_UPDATE_BYTES` in `@nexus/db`:
+ * the same wire limit, declared on both sides so neither imports the other
+ * (the renderer never pulls DB/Node code into its bundle).
+ */
+export const NOTE_UPDATE_MAX_BYTES = 262_144;
+
+/**
  * A note's metadata as seen by the renderer (mirrors the `notes` table via
  * `NoteStore`'s mapping, NOTE slice a1 / ADR-012). The document itself is
  * never carried here — that is `notes:load`'s payload. Redeclared here so the

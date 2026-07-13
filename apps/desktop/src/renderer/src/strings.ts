@@ -98,6 +98,39 @@ export const strings = {
     },
   },
 
+  notes: {
+    newNote: "Nova beleška",
+    untitled: "Bez naslova",
+    listEmptyTitle: "Nema beležaka",
+    listEmptyDescription:
+      "Kreiraj prvu belešku dugmetom iznad — piše se u editoru sa desne strane.",
+    noSelectionTitle: "Nijedna beleška nije izabrana",
+    noSelectionDescription: "Izaberi belešku sa leve strane ili kreiraj novu.",
+    placeholder: "Počni da pišeš, ili otkucaj „/” za komande…",
+    deleteLabel: "Obriši belešku",
+    deletedNotice: "Beleška obrisana",
+    undo: "Vrati",
+    dismiss: "Zatvori",
+    loadError: "Beleške se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
+    editorLoadError: "Beleška se ne može učitati. Pokušaj ponovo.",
+    saveError: "Čuvanje beleške nije uspelo — pokušaćemo ponovo pri sledećoj izmeni.",
+    saveTooLarge:
+      "Deo beleške je prevelik da bi se sačuvao odjednom. Podeli veliki umetnuti sadržaj na manje delove.",
+    /** Slash-menu command labels (block conversions), in menu order. */
+    slash: {
+      paragraph: "Paragraf",
+      heading1: "Naslov 1",
+      heading2: "Naslov 2",
+      heading3: "Naslov 3",
+      bulletList: "Lista",
+      orderedList: "Numerisana lista",
+      taskList: "Lista zadataka",
+      blockquote: "Citat",
+      codeBlock: "Blok koda",
+      divider: "Razdvajač",
+    },
+  },
+
   calendar: {
     viewLabel: "Prikaz",
     viewAgenda: "Agenda",
@@ -455,6 +488,7 @@ export const strings = {
       tasks: "Zadaci sa listom i tablom, prioritetima i rokovima.",
       calendar: "Događaji, agenda i praćenje isteka dokumenata.",
       settings: "Profil, izgled, moduli i obaveštenja.",
+      notes: "Beleške sa blok-editorom — markdown prečice i „/” meni za formatiranje.",
       study: "Predmeti, ispiti, kartice za učenje i planovi pripreme za ispite.",
     } as Record<string, string>,
     /** Category-group headings above the module gallery, keyed by registry category. */

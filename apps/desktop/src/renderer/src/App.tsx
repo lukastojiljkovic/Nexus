@@ -7,6 +7,7 @@ import { Onboarding } from "./Onboarding.js";
 import { DashboardPage } from "./DashboardPage.js";
 import { TasksPage } from "./TasksPage.js";
 import { CalendarPage } from "./CalendarPage.js";
+import { NotesPage } from "./NotesPage.js";
 import { StudyPage } from "./StudyPage.js";
 import { SettingsPage } from "./SettingsPage.js";
 import { NotificationCenter } from "./NotificationCenter.js";
@@ -206,6 +207,8 @@ export function App() {
             <TasksPage profileId={activeProfile.id} />
           ) : effectiveId === "calendar" && activeProfile ? (
             <CalendarPage profileId={activeProfile.id} />
+          ) : effectiveId === "notes" && activeProfile ? (
+            <NotesPage profileId={activeProfile.id} />
           ) : effectiveId === "study" && activeProfile ? (
             <StudyPage profileId={activeProfile.id} />
           ) : effectiveId === "settings" && activeProfile ? (

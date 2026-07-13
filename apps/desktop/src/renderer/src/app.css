@@ -1941,3 +1941,335 @@ body {
   color: var(--nx-danger);
   font-size: var(--nx-font-size-body-sm);
 }
+
+/* Notes (NOTE page, slice a2) ------------------------------------------ */
+/* Two panes fill the main column: a fixed note list on the left, the block
+   editor on the right. Each pane scrolls internally so the page never grows. */
+.note {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: var(--nx-space-5);
+}
+
+/* Left pane: "Nova beleška" + the note list, ordered newest-updated first. */
+.note__list-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  min-height: 0;
+  padding-right: var(--nx-space-4);
+  border-right: 1px solid var(--nx-border);
+}
+.note__new.nx-button {
+  width: 100%;
+  justify-content: center;
+}
+
+/* Delete + undo: the inline, token-styled undo bar (mirrors the tasks pattern). */
+.note__undo {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.note__undo-text {
+  flex: 1;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+.note__undo-dismiss.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.note__undo-dismiss.nx-button:hover {
+  background: var(--nx-surface);
+  color: var(--nx-text);
+}
+
+.note__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.note__item-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+/* Row is a focusable button; selection is typographic (gold title + weight),
+   never a background bar. Hover uses surface-alt like the nav/dashboard rows. */
+.note__item {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--nx-space-2);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__item:hover {
+  background: var(--nx-surface-alt);
+}
+.note__item:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+.note__item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body);
+}
+.note__item--active .note__item-title {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.note__item-date {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+/* Per-row delete stays hidden until the row is hovered or the button focused. */
+.note__delete.nx-button {
+  flex: none;
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+  opacity: 0;
+  transition: opacity var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__item-row:hover .note__delete.nx-button,
+.note__delete.nx-button:focus-visible {
+  opacity: 1;
+}
+.note__delete.nx-button:hover {
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+}
+
+/* Right pane: the editor, on a comfortable reading measure, centered. */
+.note__editor-pane {
+  min-height: 0;
+  overflow-y: auto;
+}
+.note__editor-empty {
+  height: 100%;
+  display: grid;
+  place-items: center;
+}
+.note__save-error {
+  max-width: 70ch;
+  margin: 0 auto var(--nx-space-3);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+  border-radius: var(--nx-radius-md);
+  font-size: var(--nx-font-size-body-sm);
+}
+.note__editor {
+  max-width: 70ch;
+  margin: 0 auto;
+  padding: var(--nx-space-4) var(--nx-space-2) var(--nx-space-8);
+}
+
+/* ProseMirror content — scoped under the editor container, tokens only. ---- */
+.note__editor .ProseMirror {
+  outline: none;
+  white-space: pre-wrap;
+  min-height: 60vh;
+  line-height: 1.6;
+  font-size: var(--nx-font-size-body);
+  color: var(--nx-text);
+  caret-color: var(--nx-text);
+}
+.note__editor .ProseMirror p {
+  margin: 0;
+}
+.note__editor .ProseMirror > * + * {
+  margin-top: var(--nx-space-3);
+}
+.note__editor .ProseMirror > * + :is(h1, h2, h3) {
+  margin-top: var(--nx-space-5);
+}
+.note__editor .ProseMirror h1,
+.note__editor .ProseMirror h2,
+.note__editor .ProseMirror h3 {
+  margin: 0;
+  font-weight: var(--nx-font-weight-semibold);
+  line-height: 1.3;
+  letter-spacing: var(--nx-font-tracking-normal);
+}
+.note__editor .ProseMirror h1 {
+  font-size: var(--nx-font-size-display);
+}
+.note__editor .ProseMirror h2 {
+  font-size: var(--nx-font-size-h1);
+}
+.note__editor .ProseMirror h3 {
+  font-size: var(--nx-font-size-title);
+}
+.note__editor .ProseMirror ul,
+.note__editor .ProseMirror ol {
+  margin: 0;
+  padding-left: var(--nx-space-5);
+}
+.note__editor .ProseMirror li {
+  margin: 0;
+}
+.note__editor .ProseMirror li > p {
+  margin: 0;
+}
+.note__editor .ProseMirror li + li {
+  margin-top: var(--nx-space-1);
+}
+/* Task list (visual checkboxes only): accent-coloured box, content beside it. */
+.note__editor .ProseMirror ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+.note__editor .ProseMirror ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nx-space-2);
+}
+.note__editor .ProseMirror ul[data-type="taskList"] li > label {
+  flex: none;
+  margin-top: 3px;
+}
+.note__editor .ProseMirror ul[data-type="taskList"] li > div {
+  flex: 1;
+  min-width: 0;
+}
+.note__editor .ProseMirror ul[data-type="taskList"] input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--nx-accent);
+}
+.note__editor .ProseMirror blockquote {
+  margin: 0;
+  padding-left: var(--nx-space-3);
+  border-left: 2px solid var(--nx-border);
+  color: var(--nx-text-muted);
+}
+.note__editor .ProseMirror code {
+  font-family: var(--nx-font-family-mono);
+  font-size: 0.9em;
+  background: var(--nx-surface-alt);
+  padding: 1px 4px;
+  border-radius: var(--nx-radius-xs);
+}
+.note__editor .ProseMirror pre {
+  margin: 0;
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: 1.5;
+  background: var(--nx-surface-alt);
+  padding: var(--nx-space-3);
+  border-radius: var(--nx-radius-md);
+  overflow-x: auto;
+}
+.note__editor .ProseMirror pre code {
+  padding: 0;
+  font-size: inherit;
+  background: none;
+}
+.note__editor .ProseMirror hr {
+  border: none;
+  border-top: 1px solid var(--nx-border);
+  margin: var(--nx-space-4) 0;
+}
+.note__editor .ProseMirror a {
+  color: var(--nx-accent-strong);
+  text-decoration: underline;
+  cursor: pointer;
+}
+/* The active "/query" range while the slash menu is open reads as a command. */
+.note__editor .ProseMirror .suggestion {
+  color: var(--nx-accent-strong);
+}
+/* Placeholder — shown only on the first line of an empty note (calm, muted). */
+.note__editor .ProseMirror .is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--nx-text-muted);
+  pointer-events: none;
+}
+/* Gapcursor (between block nodes) — token colour, adapted from the PM base. */
+.note__editor .ProseMirror-gapcursor {
+  display: none;
+  pointer-events: none;
+  position: absolute;
+}
+.note__editor .ProseMirror-gapcursor::after {
+  content: "";
+  display: block;
+  position: absolute;
+  top: -2px;
+  width: 20px;
+  border-top: 1px solid var(--nx-text);
+}
+.note__editor .ProseMirror-focused .ProseMirror-gapcursor {
+  display: block;
+}
+
+/* Slash menu — a floating, tokens-styled command panel at the caret (portal to
+   <body>). Active row is typographic (gold + weight) over a soft surface; no
+   glow, no inset side-bar. Positioned inline via the suggestion clientRect. */
+.note__slash {
+  position: fixed;
+  z-index: 40;
+  min-width: 208px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: var(--nx-space-1);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  box-shadow: var(--nx-shadow);
+}
+.note__slash-item {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-sm);
+  cursor: pointer;
+}
+.note__slash-item:hover {
+  background: var(--nx-surface-alt);
+}
+.note__slash-item--active {
+  background: var(--nx-surface-alt);
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
