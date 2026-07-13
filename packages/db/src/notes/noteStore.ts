@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3-multiple-ciphers";
-import { NoteNotFoundError, NoteValidationError } from "../errors.js";
+import { NoteFolderNotFoundError, NoteNotFoundError, NoteValidationError } from "../errors.js";
 import { uuidv7 } from "../ids.js";
 
 type DatabaseHandle = Database.Database;
@@ -9,6 +9,8 @@ export interface NoteMeta {
   id: string;
   profileId: string;
   title: string;
+  folderId: string | null;
+  pinned: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -30,6 +32,8 @@ interface NoteRow {
   id: string;
   profile_id: string;
   title: string;
+  folder_id: string | null;
+  pinned: number;
   created_at: string;
   updated_at: string;
 }
@@ -39,7 +43,7 @@ interface SnapshotRow {
   covered_seq: number;
 }
 
-const COLUMNS = "id, profile_id, title, created_at, updated_at";
+const COLUMNS = "id, profile_id, title, folder_id, pinned, created_at, updated_at";
 
 /** The renderer batches updates below this; the store re-checks it because renderer input is untrusted (SEC-EL-02). */
 export const MAX_NOTE_UPDATE_BYTES = 262_144;
@@ -71,6 +75,8 @@ const ISO_8601_DATETIME =
 export class NoteStore {
   private readonly insert: Database.Statement;
   private readonly selectActive: Database.Statement;
+  private readonly selectActiveUnfiled: Database.Statement;
+  private readonly selectActiveByFolder: Database.Statement;
   private readonly selectActiveById: Database.Statement;
   private readonly insertUpdate: Database.Statement;
   private readonly updateMeta: Database.Statement;
@@ -81,6 +87,9 @@ export class NoteStore {
   private readonly deleteCoveredUpdates: Database.Statement;
   private readonly markDeleted: Database.Statement;
   private readonly markRestored: Database.Statement;
+  private readonly selectFolderInProfile: Database.Statement;
+  private readonly updateFolderId: Database.Statement;
+  private readonly updatePinned: Database.Statement;
 
   constructor(
     private readonly db: DatabaseHandle,
@@ -93,7 +102,17 @@ export class NoteStore {
     this.selectActive = db.prepare(
       `SELECT ${COLUMNS} FROM notes
        WHERE profile_id = ? AND deleted_at IS NULL
-       ORDER BY updated_at DESC, id DESC`,
+       ORDER BY pinned DESC, updated_at DESC, id DESC`,
+    );
+    this.selectActiveUnfiled = db.prepare(
+      `SELECT ${COLUMNS} FROM notes
+       WHERE profile_id = ? AND deleted_at IS NULL AND folder_id IS NULL
+       ORDER BY pinned DESC, updated_at DESC, id DESC`,
+    );
+    this.selectActiveByFolder = db.prepare(
+      `SELECT ${COLUMNS} FROM notes
+       WHERE profile_id = ? AND deleted_at IS NULL AND folder_id = ?
+       ORDER BY pinned DESC, updated_at DESC, id DESC`,
     );
     this.selectActiveById = db.prepare(
       `SELECT ${COLUMNS} FROM notes
@@ -145,19 +164,52 @@ export class NoteStore {
       `UPDATE notes SET deleted_at = NULL, updated_at = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NOT NULL`,
     );
+    this.selectFolderInProfile = db.prepare(
+      `SELECT id FROM note_folders WHERE id = ? AND profile_id = ?`,
+    );
+    // Foldering/pinning are organizational (ADR-012 / NOTE-002), not content edits — neither
+    // statement touches `updated_at`, unlike every write above it.
+    this.updateFolderId = db.prepare(
+      `UPDATE notes SET folder_id = ?
+       WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
+    );
+    this.updatePinned = db.prepare(
+      `UPDATE notes SET pinned = ?
+       WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
+    );
   }
 
-  /** Inserts an empty note (title '', no document state yet) and returns its meta. */
+  /** Inserts an empty, unfiled, unpinned note (title '', no document state yet) and returns its meta. */
   create(now: string): NoteMeta {
     const validNow = validateDateTime(now, "now");
     const id = uuidv7();
     this.insert.run(id, this.profileId, validNow, validNow);
-    return { id, profileId: this.profileId, title: "", createdAt: validNow, updatedAt: validNow };
+    return {
+      id,
+      profileId: this.profileId,
+      title: "",
+      folderId: null,
+      pinned: false,
+      createdAt: validNow,
+      updatedAt: validNow,
+    };
   }
 
-  /** Active notes of this profile, newest `updatedAt` first (id descending tiebreak). */
-  list(): NoteMeta[] {
-    const rows = this.selectActive.all(this.profileId) as NoteRow[];
+  /**
+   * Active notes of this profile, pinned first, then newest `updatedAt` first
+   * (id descending tiebreak). With no `filter`, every active note is returned;
+   * `{ folderId: null }` narrows to unfiled notes, `{ folderId: <id> }` to one
+   * folder's notes.
+   */
+  list(filter?: { folderId?: string | null }): NoteMeta[] {
+    let rows: NoteRow[];
+    if (filter === undefined || !("folderId" in filter)) {
+      rows = this.selectActive.all(this.profileId) as NoteRow[];
+    } else if (filter.folderId === null) {
+      rows = this.selectActiveUnfiled.all(this.profileId) as NoteRow[];
+    } else {
+      rows = this.selectActiveByFolder.all(this.profileId, filter.folderId) as NoteRow[];
+    }
     return rows.map(toNoteMeta);
   }
 
@@ -266,6 +318,27 @@ export class NoteStore {
     }
   }
 
+  /**
+   * Files (or unfiles, with `null`) an active note into a folder of this
+   * profile — organizational, so `updated_at` is left untouched.
+   */
+  setFolder(id: string, folderId: string | null): void {
+    this.requireActive(id);
+    if (folderId !== null) {
+      const folder = this.selectFolderInProfile.get(folderId, this.profileId);
+      if (!folder) {
+        throw new NoteFolderNotFoundError(`No folder "${folderId}" in this profile.`);
+      }
+    }
+    this.updateFolderId.run(folderId, id, this.profileId);
+  }
+
+  /** Pins or unpins an active note — organizational, so `updated_at` is left untouched. */
+  setPinned(id: string, pinned: boolean): void {
+    this.requireActive(id);
+    this.updatePinned.run(pinned ? 1 : 0, id, this.profileId);
+  }
+
   /** Reads an active note in this profile or throws — the gate every update/snapshot access goes through. */
   private requireActive(id: string): NoteMeta {
     const row = this.selectActiveById.get(id, this.profileId) as NoteRow | undefined;
@@ -281,6 +354,8 @@ function toNoteMeta(row: NoteRow): NoteMeta {
     id: row.id,
     profileId: row.profile_id,
     title: row.title,
+    folderId: row.folder_id,
+    pinned: row.pinned === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

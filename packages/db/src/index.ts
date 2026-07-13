@@ -17,10 +17,14 @@ export {
   ExamValidationError,
   FocusNotFoundError,
   FocusValidationError,
+  NoteFolderNotFoundError,
+  NoteFolderValidationError,
+  NoteNotFoundError,
+  NoteTagNotFoundError,
+  NoteTagValidationError,
+  NoteValidationError,
   NotificationNotFoundError,
   NotificationValidationError,
-  NoteNotFoundError,
-  NoteValidationError,
   PlanNotFoundError,
   PlanValidationError,
   SchemaVersionError,
@@ -121,5 +125,8 @@ export type {
 
 export { NoteStore, MAX_NOTE_UPDATE_BYTES } from "./notes/noteStore.js";
 export type { NoteCompactionRead, NoteDoc, NoteMeta } from "./notes/noteStore.js";
+
+export { NoteOrgStore, NOTE_FOLDER_COLORS } from "./notes/noteOrgStore.js";
+export type { NoteFolder, NoteFolderColor, NoteTag, NoteTagLink } from "./notes/noteOrgStore.js";
 
 export { uuidv7 } from "./ids.js";

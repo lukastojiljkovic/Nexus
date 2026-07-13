@@ -32,7 +32,7 @@ describe("migration 002 — tasks", () => {
   it("creates the tasks table and stamps the latest user_version on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("tasks");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(10);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(11);
     db.close();
   });
 
@@ -43,7 +43,7 @@ describe("migration 002 — tasks", () => {
     first.close();
 
     const second = openDatabase({ path });
-    expect(second.raw.pragma("user_version", { simple: true })).toBe(10);
+    expect(second.raw.pragma("user_version", { simple: true })).toBe(11);
     expect(tableNames(second)).toContain("tasks");
     expect(
       (second.raw.prepare("SELECT count(*) AS n FROM profiles").get() as { n: number }).n,
@@ -93,7 +93,7 @@ describe("migration 003 — events", () => {
   it("creates the events table and stamps the latest user_version on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("events");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(10);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(11);
     db.close();
   });
 
@@ -161,7 +161,7 @@ describe("migration 004 — documents", () => {
     const names = tableNames(db);
     expect(names).toContain("tracked_documents");
     expect(names).toContain("document_renewals");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(10);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(11);
     db.close();
   });
 
@@ -242,7 +242,7 @@ describe("migration 005 — study", () => {
     const names = tableNames(db);
     expect(names).toContain("subjects");
     expect(names).toContain("exams");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(10);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(11);
     db.close();
   });
 
@@ -362,7 +362,7 @@ describe("migration 006 — flashcards", () => {
     expect(names).toContain("decks");
     expect(names).toContain("cards");
     expect(names).toContain("review_log");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(10);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(11);
     db.close();
   });
 
@@ -520,7 +520,7 @@ describe("migration 007 — study plans", () => {
     const names = tableNames(db);
     expect(names).toContain("study_plans");
     expect(names).toContain("study_blocks");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(10);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(11);
     db.close();
   });
 
@@ -691,7 +691,7 @@ describe("migration 008 — focus sessions", () => {
   it("creates the focus_sessions table and stamps the latest user_version on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("focus_sessions");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(10);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(11);
     db.close();
   });
 
@@ -795,7 +795,7 @@ describe("migration 009 — notifications", () => {
     expect(names).toContain("notifications");
     expect(names).toContain("ntf_settings");
     expect(names).toContain("ntf_source_settings");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(10);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(11);
     db.close();
   });
 
@@ -921,7 +921,7 @@ describe("migration 010 — notes", () => {
     expect(names).toContain("notes");
     expect(names).toContain("note_updates");
     expect(names).toContain("note_snapshots");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(10);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(11);
     db.close();
   });
 
@@ -982,6 +982,207 @@ describe("migration 010 — notes", () => {
     ).toBe(0);
     expect(
       (db.raw.prepare("SELECT count(*) AS n FROM note_snapshots").get() as { n: number }).n,
+    ).toBe(0);
+    db.close();
+  });
+});
+
+describe("migration 011 — notes organization", () => {
+  const now = () => new Date().toISOString();
+
+  const insertNote = (db: NexusDatabase, id: string, profileId: string, folderId: string | null = null) =>
+    db.raw
+      .prepare(
+        `INSERT INTO notes (id, profile_id, title, folder_id, created_at, updated_at, deleted_at)
+         VALUES (?, ?, '', ?, ?, ?, NULL)`,
+      )
+      .run(id, profileId, folderId, now(), now());
+
+  const insertFolder = (
+    db: NexusDatabase,
+    id: string,
+    profileId: string,
+    parentId: string | null = null,
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO note_folders (id, profile_id, parent_id, name, color, created_at, updated_at)
+         VALUES (?, ?, ?, ?, NULL, ?, ?)`,
+      )
+      .run(id, profileId, parentId, "x", now(), now());
+
+  const insertTag = (db: NexusDatabase, id: string, profileId: string, name: string) =>
+    db.raw
+      .prepare(`INSERT INTO note_tags (id, profile_id, name, created_at) VALUES (?, ?, ?, ?)`)
+      .run(id, profileId, name, now());
+
+  const insertLink = (db: NexusDatabase, noteId: string, tagId: string) =>
+    db.raw
+      .prepare(`INSERT INTO note_tag_links (note_id, tag_id) VALUES (?, ?)`)
+      .run(noteId, tagId);
+
+  const columnNames = (db: NexusDatabase, table: string): string[] =>
+    (db.raw.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(
+      (row) => row.name,
+    );
+
+  it("creates all three organization tables and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    const names = tableNames(db);
+    expect(names).toContain("note_folders");
+    expect(names).toContain("note_tags");
+    expect(names).toContain("note_tag_links");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(11);
+    db.close();
+  });
+
+  it("adds folder_id and pinned columns to notes, pinned defaulting to 0", () => {
+    const db = openDatabase({ path: join(dir, "notes-columns.db") });
+    const columns = columnNames(db, "notes");
+    expect(columns).toContain("folder_id");
+    expect(columns).toContain("pinned");
+
+    insertProfile(db, "p1");
+    insertNote(db, "n1", "p1");
+    const row = db.raw
+      .prepare("SELECT folder_id, pinned FROM notes WHERE id = ?")
+      .get("n1") as { folder_id: string | null; pinned: number };
+    expect(row.folder_id).toBeNull();
+    expect(row.pinned).toBe(0);
+    db.close();
+  });
+
+  it("rejects a pinned value outside {0, 1} with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-pinned.db") });
+    insertProfile(db, "p1");
+    expect(() =>
+      db.raw
+        .prepare(
+          `INSERT INTO notes (id, profile_id, title, pinned, created_at, updated_at, deleted_at)
+           VALUES (?, ?, '', ?, ?, ?, NULL)`,
+        )
+        .run("n1", "p1", 2, now(), now()),
+    ).toThrow();
+    db.close();
+  });
+
+  it("creates the note organization indexes", () => {
+    const db = openDatabase({ path: join(dir, "index.db") });
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("note_folders_profile_parent");
+    expect(indexes).toContain("note_tags_profile_name");
+    expect(indexes).toContain("note_tag_links_tag");
+    db.close();
+  });
+
+  it("enforces UNIQUE(profile_id, name) on note_tags", () => {
+    const db = openDatabase({ path: join(dir, "unique-tag.db") });
+    insertProfile(db, "p1");
+    insertProfile(db, "p2");
+    insertTag(db, "t1", "p1", "važno");
+    // the same name in the same profile collides.
+    expect(() => insertTag(db, "t2", "p1", "važno")).toThrow();
+    // the same name in a different profile is fine.
+    expect(() => insertTag(db, "t3", "p2", "važno")).not.toThrow();
+    db.close();
+  });
+
+  it("enforces PRIMARY KEY (note_id, tag_id) on note_tag_links", () => {
+    const db = openDatabase({ path: join(dir, "unique-link.db") });
+    insertProfile(db, "p1");
+    insertNote(db, "n1", "p1");
+    insertTag(db, "t1", "p1", "a");
+    insertLink(db, "n1", "t1");
+    // the same (note, tag) pair collides.
+    expect(() => insertLink(db, "n1", "t1")).toThrow();
+    db.close();
+  });
+
+  it("cascades folders, tags and links when the owning profile is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade-profile.db") });
+    insertProfile(db, "p1");
+    insertFolder(db, "f1", "p1");
+    insertNote(db, "n1", "p1");
+    insertTag(db, "t1", "p1", "a");
+    insertLink(db, "n1", "t1");
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM note_folders").get() as { n: number }).n,
+    ).toBe(0);
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM note_tags").get() as { n: number }).n,
+    ).toBe(0);
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM note_tag_links").get() as { n: number }).n,
+    ).toBe(0);
+    db.close();
+  });
+
+  it("cascades tag links when the owning note is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade-note-links.db") });
+    insertProfile(db, "p1");
+    insertNote(db, "n1", "p1");
+    insertTag(db, "t1", "p1", "a");
+    insertLink(db, "n1", "t1");
+
+    db.raw.prepare("DELETE FROM notes WHERE id = ?").run("n1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM note_tag_links").get() as { n: number }).n,
+    ).toBe(0);
+    // the tag itself survives — only the link is pruned.
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM note_tags").get() as { n: number }).n,
+    ).toBe(1);
+    db.close();
+  });
+
+  it("cascades tag links when the owning tag is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade-tag-links.db") });
+    insertProfile(db, "p1");
+    insertNote(db, "n1", "p1");
+    insertTag(db, "t1", "p1", "a");
+    insertLink(db, "n1", "t1");
+
+    db.raw.prepare("DELETE FROM note_tags WHERE id = ?").run("t1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM note_tag_links").get() as { n: number }).n,
+    ).toBe(0);
+    db.close();
+  });
+
+  it("SET-NULLs notes.folder_id when the folder row is deleted directly", () => {
+    const db = openDatabase({ path: join(dir, "folder-set-null.db") });
+    insertProfile(db, "p1");
+    insertFolder(db, "f1", "p1");
+    insertNote(db, "n1", "p1", "f1");
+
+    db.raw.prepare("DELETE FROM note_folders WHERE id = ?").run("f1");
+    const row = db.raw
+      .prepare("SELECT folder_id FROM notes WHERE id = ?")
+      .get("n1") as { folder_id: string | null };
+    expect(row.folder_id).toBeNull();
+    // the note itself is untouched.
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM notes").get() as { n: number }).n,
+    ).toBe(1);
+    db.close();
+  });
+
+  it("cascade-deletes child folders when a parent folder row is deleted directly", () => {
+    const db = openDatabase({ path: join(dir, "folder-cascade-child.db") });
+    insertProfile(db, "p1");
+    insertFolder(db, "f1", "p1");
+    insertFolder(db, "f2", "p1", "f1");
+    insertFolder(db, "f3", "p1", "f2");
+
+    db.raw.prepare("DELETE FROM note_folders WHERE id = ?").run("f1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM note_folders").get() as { n: number }).n,
     ).toBe(0);
     db.close();
   });

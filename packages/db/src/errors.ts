@@ -219,3 +219,38 @@ export class NoteValidationError extends DatabaseError {}
  * to another.
  */
 export class NoteNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a note-folder write is rejected at the store boundary because its
+ * input breaks a domain rule the caller is expected to have caught already — an
+ * empty or over-100-character name, a colour outside the closed palette, a
+ * malformed `now`, or a move that would make a folder its own ancestor (a cycle)
+ * (NOTE organization / ADR-012). The store revalidates because renderer input is
+ * untrusted (SEC-EL-02).
+ */
+export class NoteFolderValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a note-folder operation targets an id that is not a folder in the
+ * store's own profile — unknown or owned by another profile — including a
+ * `parentId`/`folderId` reference that does not resolve there. Surfacing this
+ * uniformly keeps one profile's folders invisible to a store scoped to another.
+ */
+export class NoteFolderNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a note-tag write is rejected at the store boundary because its
+ * input breaks a domain rule the caller is expected to have caught already — an
+ * empty or over-50-character name, or a rename that would collide with another
+ * tag's name in this profile (the UNIQUE(profile_id, name) index, surfaced as a
+ * domain error rather than a raw driver error) (NOTE organization). The store
+ * revalidates because renderer input is untrusted (SEC-EL-02).
+ */
+export class NoteTagValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a note-tag operation targets an id that is not a tag in the
+ * store's own profile — unknown or owned by another profile. Surfacing this
+ * uniformly keeps one profile's tags invisible to a store scoped to another.
+ */
+export class NoteTagNotFoundError extends DatabaseError {}

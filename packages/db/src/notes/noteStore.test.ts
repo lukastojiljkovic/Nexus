@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   NexusDatabase,
+  NoteFolderNotFoundError,
   NoteNotFoundError,
   NoteStore,
   NoteValidationError,
@@ -308,5 +309,118 @@ describe("NoteStore", () => {
     expect(() => b.softDelete(owned.id, T2)).toThrow(NoteNotFoundError);
     expect(a.list()).toHaveLength(1);
     expect(a.load(owned.id).title).toBe("Samo A");
+  });
+});
+
+/** Inserts a root folder for `profileId` directly (NoteStore does not own folders). */
+function insertFolder(profileId: string, id: string): string {
+  db.raw
+    .prepare(
+      `INSERT INTO note_folders (id, profile_id, parent_id, name, color, created_at, updated_at)
+       VALUES (?, ?, NULL, 'F', NULL, ?, ?)`,
+    )
+    .run(id, profileId, T0, T0);
+  return id;
+}
+
+describe("NoteStore — organization (folder_id, pinned)", () => {
+  function storeWithProfile(): { notes: NoteStore; profileId: string } {
+    const profileId = createProfile();
+    return { notes: new NoteStore(db.raw, profileId), profileId };
+  }
+
+  it("creates a note unfiled and unpinned", () => {
+    const notes = store();
+    const created = notes.create(T0);
+    expect(created.folderId).toBeNull();
+    expect(created.pinned).toBe(false);
+    expect(notes.list()[0]?.folderId).toBeNull();
+    expect(notes.list()[0]?.pinned).toBe(false);
+  });
+
+  it("orders pinned notes first, then by updated_at descending", () => {
+    const notes = store();
+    const first = notes.create(T0);
+    const second = notes.create(T1);
+    const third = notes.create(T2);
+
+    // Without pins: newest updated_at first.
+    expect(notes.list().map((n) => n.id)).toEqual([third.id, second.id, first.id]);
+
+    // Pinning the oldest floats it to the top; the rest keep updated_at order.
+    notes.setPinned(first.id, true);
+    expect(notes.list().map((n) => n.id)).toEqual([first.id, third.id, second.id]);
+  });
+
+  it("filters the list by folder: all, unfiled, and by-folder", () => {
+    const { notes, profileId } = storeWithProfile();
+    const folder = insertFolder(profileId, uuidv7());
+    const a = notes.create(T0);
+    const b = notes.create(T1);
+    const c = notes.create(T2);
+    notes.setFolder(a.id, folder);
+
+    // no filter -> every active note.
+    expect(notes.list().map((n) => n.id).sort()).toEqual([a.id, b.id, c.id].sort());
+    // null -> only unfiled notes.
+    expect(notes.list({ folderId: null }).map((n) => n.id)).toEqual([c.id, b.id]);
+    // a folder id -> only that folder's notes.
+    expect(notes.list({ folderId: folder }).map((n) => n.id)).toEqual([a.id]);
+  });
+
+  it("setFolder files a note and reports the folder id, then clears it with null", () => {
+    const { notes, profileId } = storeWithProfile();
+    const folder = insertFolder(profileId, uuidv7());
+    const note = notes.create(T0);
+
+    notes.setFolder(note.id, folder);
+    expect(notes.list({ folderId: folder })[0]?.folderId).toBe(folder);
+
+    notes.setFolder(note.id, null);
+    expect(notes.list({ folderId: null }).map((n) => n.id)).toContain(note.id);
+  });
+
+  it("setFolder rejects a folder that is not in this profile", () => {
+    const { notes } = storeWithProfile();
+    const otherProfile = createProfile();
+    const foreignFolder = insertFolder(otherProfile, uuidv7());
+    const note = notes.create(T0);
+
+    expect(() => notes.setFolder(note.id, "no-such-folder")).toThrow(NoteFolderNotFoundError);
+    expect(() => notes.setFolder(note.id, foreignFolder)).toThrow(NoteFolderNotFoundError);
+  });
+
+  it("setFolder rejects a note that is not active in this profile", () => {
+    const a = storeWithProfile();
+    const b = storeWithProfile();
+    const folderB = insertFolder(b.profileId, uuidv7());
+    const owned = a.notes.create(T0);
+
+    expect(() => b.notes.setFolder(owned.id, folderB)).toThrow(NoteNotFoundError);
+    expect(() => a.notes.setFolder("missing", null)).toThrow(NoteNotFoundError);
+  });
+
+  it("setPinned toggles the flag and surfaces it in the list", () => {
+    const notes = store();
+    const note = notes.create(T0);
+
+    notes.setPinned(note.id, true);
+    expect(notes.list()[0]?.pinned).toBe(true);
+    notes.setPinned(note.id, false);
+    expect(notes.list()[0]?.pinned).toBe(false);
+
+    expect(() => notes.setPinned("missing", true)).toThrow(NoteNotFoundError);
+  });
+
+  it("does not bump updated_at when foldering or pinning", () => {
+    const { notes, profileId } = storeWithProfile();
+    const folder = insertFolder(profileId, uuidv7());
+    const note = notes.create(T0);
+
+    notes.setFolder(note.id, folder);
+    notes.setPinned(note.id, true);
+
+    // Organizational changes never touch the content timestamp.
+    expect(notes.list()[0]?.updatedAt).toBe(T0);
   });
 });
