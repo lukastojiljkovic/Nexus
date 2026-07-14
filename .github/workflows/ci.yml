@@ -20,7 +20,7 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # pnpm version is read from the root package.json "packageManager" field.
       - uses: pnpm/action-setup@v4
