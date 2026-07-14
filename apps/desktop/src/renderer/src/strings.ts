@@ -116,6 +116,25 @@ export const strings = {
     saveError: "Čuvanje beleške nije uspelo — pokušaćemo ponovo pri sledećoj izmeni.",
     saveTooLarge:
       "Deo beleške je prevelik da bi se sačuvao odjednom. Podeli veliki umetnuti sadržaj na manje delove.",
+    /** Organizer (slice a3b): the folder tree, filters, per-note pin/move. */
+    allNotes: "Sve beleške",
+    unfiled: "Bez fascikle",
+    foldersLabel: "Fascikle",
+    newFolder: "Nova fascikla",
+    newSubfolder: "Nova podfascikla",
+    renameFolder: "Preimenuj",
+    recolorFolder: "Promeni boju",
+    deleteFolder: "Obriši fasciklu",
+    noColor: "Bez boje",
+    folderNamePlaceholder: "Naziv fascikle",
+    folderMenuLabel: "Radnje nad fasciklom",
+    moveToFolder: "Premesti u fasciklu",
+    noteMenuLabel: "Više opcija",
+    pin: "Zakači",
+    unpin: "Otkači",
+    save: "Sačuvaj",
+    cancel: "Otkaži",
+    folderError: "Radnja nad fasciklom nije uspela. Pokušaj ponovo.",
     /** Slash-menu command labels (block conversions), in menu order. */
     slash: {
       paragraph: "Paragraf",
