@@ -173,6 +173,10 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.notesSetFolder, { profileId, noteId, folderId }),
   setNotePinned: (profileId, noteId, pinned) =>
     ipcRenderer.invoke(IpcChannel.notesSetPinned, { profileId, noteId, pinned }),
+  setNoteLinks: (profileId, noteId, targetIds) =>
+    ipcRenderer.invoke(IpcChannel.notesSetLinks, { profileId, id: noteId, targetIds }),
+  listNoteBacklinks: (profileId, noteId) =>
+    ipcRenderer.invoke(IpcChannel.notesBacklinks, { profileId, id: noteId }),
   exportData: (profileId) => ipcRenderer.invoke(IpcChannel.imexExport, { profileId }),
   appInfo: () => ipcRenderer.invoke(IpcChannel.appInfo),
 };

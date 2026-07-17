@@ -13,6 +13,7 @@ import {
   EXAM_TYPES,
   ExamStore,
   FocusStore,
+  MAX_NOTE_LINKS,
   MAX_NOTE_UPDATE_BYTES,
   NOTE_FOLDER_COLORS,
   NotificationStore,
@@ -245,6 +246,34 @@ function asUint8Array(value: unknown, field: string, maxBytes: number): Uint8Arr
     throw new Error(`Invalid IPC payload: "${field}" must not exceed ${maxBytes} bytes.`);
   }
   return value;
+}
+
+/**
+ * An array of non-empty strings, each capped at `maxItemLength`, the array
+ * itself capped at `maxItems` (structural checks only; the store owns the
+ * self-link/unknown-id/cross-profile filtering, NOTE-004).
+ */
+function asStringArray(
+  value: unknown,
+  field: string,
+  maxItems: number,
+  maxItemLength: number,
+): string[] {
+  if (!Array.isArray(value) || value.length > maxItems) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be an array of at most ${maxItems} items.`,
+    );
+  }
+  if (
+    !value.every(
+      (item) => typeof item === "string" && item.length > 0 && item.length <= maxItemLength,
+    )
+  ) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must contain only non-empty strings of at most ${maxItemLength} characters.`,
+    );
+  }
+  return value as string[];
 }
 
 /** Profile display name: string, 1–80 chars after trimming; the trimmed value is stored. */
@@ -1525,6 +1554,26 @@ function registerIpc(): void {
     const noteId = asNonEmptyString(body.noteId, "noteId");
     const pinned = asBoolean(body.pinned, "pinned");
     noteStore(profileId).setPinned(noteId, pinned);
+  });
+
+  // NOTE-004: `targetIds` is renderer-declared like `title` on
+  // notes:append-update (the renderer authors its own document content); the
+  // store re-validates semantics (self-link, unknown id, cross-profile id).
+  ipcMain.handle(IpcChannel.notesSetLinks, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const targetIds = asStringArray(body.targetIds, "targetIds", MAX_NOTE_LINKS, 64);
+    noteStore(profileId).setOutboundLinks(id, targetIds);
+  });
+
+  ipcMain.handle(IpcChannel.notesBacklinks, (event, payload): NoteMeta[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return noteStore(profileId).listBacklinks(id);
   });
 
   // IMEX slice a1 (PRD 14 IMEX-001): gathers this profile's data and streams a

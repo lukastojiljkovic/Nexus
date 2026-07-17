@@ -102,6 +102,8 @@ export const IpcChannel = {
   noteTagLinksList: "note-tag-links:list",
   notesSetFolder: "notes:set-folder",
   notesSetPinned: "notes:set-pinned",
+  notesSetLinks: "notes:set-links",
+  notesBacklinks: "notes:backlinks",
   imexExport: "imex:export",
   appInfo: "app:info",
 } as const;
@@ -954,6 +956,13 @@ export interface NotificationsSourceToggleRequest {
 export const NOTE_UPDATE_MAX_BYTES = 262_144;
 
 /**
+ * Maximum number of outbound wiki-links `notes:set-links` accepts in one call.
+ * MUST equal `MAX_NOTE_LINKS` in `@nexus/db`: the same wire limit, declared on
+ * both sides so neither imports the other (NOTE-004).
+ */
+export const NOTE_LINKS_MAX_COUNT = 500;
+
+/**
  * A note's metadata as seen by the renderer (mirrors the `notes` table via
  * `NoteStore`'s mapping, NOTE slice a1 / ADR-012). The document itself is
  * never carried here — that is `notes:load`'s payload. Redeclared here so the
@@ -1154,6 +1163,24 @@ export interface NotesSetPinnedRequest {
   pinned: boolean;
 }
 
+/**
+ * Replaces a note's full outbound wiki-link set (NOTE-004). `targetIds` is
+ * renderer-declared like `title` on `notes:append-update` — the renderer
+ * authors its own document content — and main/the store re-validate: dropping
+ * a self-link, an unknown id, or one outside this profile, and capping the
+ * count at `NOTE_LINKS_MAX_COUNT` (SEC-EL-02).
+ */
+export interface NotesSetLinksRequest {
+  profileId: string;
+  id: string;
+  targetIds: string[];
+}
+
+export interface NotesBacklinksRequest {
+  profileId: string;
+  id: string;
+}
+
 export interface ImexExportRequest {
   profileId: string;
 }
@@ -1316,6 +1343,8 @@ export interface NexusApi {
   detachNoteTag(profileId: string, noteId: string, tagId: string): Promise<void>;
   setNoteFolder(profileId: string, noteId: string, folderId: string | null): Promise<void>;
   setNotePinned(profileId: string, noteId: string, pinned: boolean): Promise<void>;
+  setNoteLinks(profileId: string, noteId: string, targetIds: string[]): Promise<void>;
+  listNoteBacklinks(profileId: string, noteId: string): Promise<NoteMeta[]>;
   /** Full-data export to a `.nexus.zip` archive (IMEX slice a1). Resolves after the native save dialog is settled — canceled or written. */
   exportData(profileId: string): Promise<ExportResult>;
   appInfo(): Promise<AppInfo>;
