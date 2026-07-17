@@ -48,6 +48,9 @@ const COLUMNS = "id, profile_id, title, folder_id, pinned, created_at, updated_a
 /** The renderer batches updates below this; the store re-checks it because renderer input is untrusted (SEC-EL-02). */
 export const MAX_NOTE_UPDATE_BYTES = 262_144;
 
+/** The most outbound wiki-links `setOutboundLinks` accepts in one call (NOTE-004). */
+export const MAX_NOTE_LINKS = 500;
+
 const MAX_TITLE_LENGTH = 200;
 
 /** Accepts a full ISO-8601 date-time (the `now` every mutating method takes). */
@@ -71,6 +74,13 @@ const ISO_8601_DATETIME =
  * they merge into a document, what plaintext they derive — lives in
  * `mergeNoteState` (`@nexus/core`), called by the desktop main process's
  * compaction policy; the same pure-logic/storage seam IMEX uses.
+ *
+ * `setOutboundLinks`/`listBacklinks` (NOTE-004, migration 012) index the
+ * wiki-links a note's document authors as link nodes carrying only a target
+ * note's id: the renderer extracts that id set at flush time and reports it
+ * here, the same trust model as the `title` `appendUpdate` already carries
+ * (the renderer authors its own content). `note_links` is note-to-note, not a
+ * new organizational entity, so it lives here rather than in `NoteOrgStore`.
  */
 export class NoteStore {
   private readonly insert: Database.Statement;
@@ -90,6 +100,10 @@ export class NoteStore {
   private readonly selectFolderInProfile: Database.Statement;
   private readonly updateFolderId: Database.Statement;
   private readonly updatePinned: Database.Statement;
+  private readonly noteExistsInProfile: Database.Statement;
+  private readonly deleteOutboundLinks: Database.Statement;
+  private readonly insertLink: Database.Statement;
+  private readonly selectBacklinks: Database.Statement;
 
   constructor(
     private readonly db: DatabaseHandle,
@@ -176,6 +190,21 @@ export class NoteStore {
     this.updatePinned = db.prepare(
       `UPDATE notes SET pinned = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
+    );
+    // Deliberately NOT filtered by deleted_at: a link to a soft-deleted note
+    // must survive so undo/restore heals it (see the migration's doc comment).
+    this.noteExistsInProfile = db.prepare(
+      `SELECT EXISTS (SELECT 1 FROM notes WHERE id = ? AND profile_id = ?) AS found`,
+    );
+    this.deleteOutboundLinks = db.prepare(`DELETE FROM note_links WHERE source_note_id = ?`);
+    this.insertLink = db.prepare(
+      `INSERT INTO note_links (source_note_id, target_note_id) VALUES (?, ?)`,
+    );
+    this.selectBacklinks = db.prepare(
+      `SELECT ${COLUMNS} FROM notes
+       JOIN note_links ON note_links.source_note_id = notes.id
+       WHERE note_links.target_note_id = ? AND notes.profile_id = ? AND notes.deleted_at IS NULL
+       ORDER BY pinned DESC, updated_at DESC, id DESC`,
     );
   }
 
@@ -337,6 +366,52 @@ export class NoteStore {
   setPinned(id: string, pinned: boolean): void {
     this.requireActive(id);
     this.updatePinned.run(pinned ? 1 : 0, id, this.profileId);
+  }
+
+  /**
+   * Replaces an active note's full outbound wiki-link set in one transaction
+   * (NOTE-004): the renderer reports the complete target-id set it extracted
+   * from the document at flush time, and this call fully replaces whatever was
+   * indexed before — never a merge. The input is deduped, the source's own id
+   * is silently dropped (no self-links), and any id that does not resolve to a
+   * note in this profile is silently dropped too; a soft-deleted target is
+   * deliberately kept (its row still exists, just hidden — see the migration's
+   * doc comment) so restoring it heals the link. Does not bump `updated_at`:
+   * the content edit that produced the link set already did, via
+   * `appendUpdate`.
+   */
+  setOutboundLinks(id: string, targetIds: readonly string[]): void {
+    this.requireActive(id);
+    if (targetIds.length > MAX_NOTE_LINKS) {
+      throw new NoteValidationError(
+        `A note may not carry more than ${MAX_NOTE_LINKS} outbound links.`,
+      );
+    }
+
+    const resolved = [...new Set(targetIds)].filter(
+      (targetId) =>
+        targetId !== id &&
+        (this.noteExistsInProfile.get(targetId, this.profileId) as { found: number }).found === 1,
+    );
+
+    this.db.transaction(() => {
+      this.deleteOutboundLinks.run(id);
+      for (const targetId of resolved) {
+        this.insertLink.run(id, targetId);
+      }
+    })();
+  }
+
+  /**
+   * Every active note of this profile that links TO `id` (NOTE-004) — the
+   * reverse of `setOutboundLinks`, in the house list order (pinned first,
+   * then newest `updatedAt`). A soft-deleted source is excluded, the same way
+   * `list` excludes any other soft-deleted note.
+   */
+  listBacklinks(id: string): NoteMeta[] {
+    this.requireActive(id);
+    const rows = this.selectBacklinks.all(id, this.profileId) as NoteRow[];
+    return rows.map(toNoteMeta);
   }
 
   /** Reads an active note in this profile or throws — the gate every update/snapshot access goes through. */

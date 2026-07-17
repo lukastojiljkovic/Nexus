@@ -205,9 +205,10 @@ export class NotificationNotFoundError extends DatabaseError {}
  * Thrown when a note write is rejected at the store boundary because its input
  * breaks a domain rule the caller is expected to have caught already — an
  * empty or over-256 KB Yjs update blob, a title longer than 200 characters
- * after trimming, a malformed `now`, or a compaction whose `coveredSeq` would
- * regress below the snapshot already stored (NOTE / ADR-012). The store
- * revalidates because renderer input is untrusted (SEC-EL-02).
+ * after trimming, a malformed `now`, a compaction whose `coveredSeq` would
+ * regress below the snapshot already stored (NOTE / ADR-012), or more than
+ * 500 outbound wiki-links in one `setOutboundLinks` call (ADR-013 / NOTE-004).
+ * The store revalidates because renderer input is untrusted (SEC-EL-02).
  */
 export class NoteValidationError extends DatabaseError {}
 

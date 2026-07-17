@@ -123,7 +123,7 @@ export type {
   UpdateNotificationSettingsInput,
 } from "./notify/notificationStore.js";
 
-export { NoteStore, MAX_NOTE_UPDATE_BYTES } from "./notes/noteStore.js";
+export { NoteStore, MAX_NOTE_UPDATE_BYTES, MAX_NOTE_LINKS } from "./notes/noteStore.js";
 export type { NoteCompactionRead, NoteDoc, NoteMeta } from "./notes/noteStore.js";
 
 export { NoteOrgStore, NOTE_FOLDER_COLORS } from "./notes/noteOrgStore.js";

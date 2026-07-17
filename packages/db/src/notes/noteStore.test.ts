@@ -8,6 +8,7 @@ import {
   NoteNotFoundError,
   NoteStore,
   NoteValidationError,
+  MAX_NOTE_LINKS,
   openDatabase,
   uuidv7,
 } from "../index.js";
@@ -422,5 +423,176 @@ describe("NoteStore — organization (folder_id, pinned)", () => {
 
     // Organizational changes never touch the content timestamp.
     expect(notes.list()[0]?.updatedAt).toBe(T0);
+  });
+});
+
+describe("NoteStore — wiki-links (note_links)", () => {
+  it("replaces the full outbound set on each call", () => {
+    const notes = store();
+    const source = notes.create(T0);
+    const a = notes.create(T0);
+    const b = notes.create(T0);
+    const c = notes.create(T0);
+
+    notes.setOutboundLinks(source.id, [a.id, b.id]);
+    expect(notes.listBacklinks(a.id).map((n) => n.id)).toEqual([source.id]);
+    expect(notes.listBacklinks(b.id).map((n) => n.id)).toEqual([source.id]);
+
+    notes.setOutboundLinks(source.id, [c.id]);
+    expect(notes.listBacklinks(a.id)).toEqual([]);
+    expect(notes.listBacklinks(b.id)).toEqual([]);
+    expect(notes.listBacklinks(c.id).map((n) => n.id)).toEqual([source.id]);
+  });
+
+  it("dedupes repeated target ids", () => {
+    const notes = store();
+    const source = notes.create(T0);
+    const target = notes.create(T0);
+
+    notes.setOutboundLinks(source.id, [target.id, target.id, target.id]);
+    expect(notes.listBacklinks(target.id)).toHaveLength(1);
+  });
+
+  it("silently drops a self-link", () => {
+    const notes = store();
+    const source = notes.create(T0);
+    const target = notes.create(T0);
+
+    notes.setOutboundLinks(source.id, [source.id, target.id]);
+    expect(notes.listBacklinks(source.id)).toEqual([]);
+    expect(notes.listBacklinks(target.id).map((n) => n.id)).toEqual([source.id]);
+  });
+
+  it("silently drops an unknown target id", () => {
+    const notes = store();
+    const source = notes.create(T0);
+
+    expect(() => notes.setOutboundLinks(source.id, ["missing"])).not.toThrow();
+    expect(notes.listBacklinks(source.id)).toEqual([]);
+  });
+
+  it("silently drops a target owned by another profile", () => {
+    const a = new NoteStore(db.raw, createProfile());
+    const b = new NoteStore(db.raw, createProfile());
+    const source = a.create(T0);
+    const foreignTarget = b.create(T0);
+
+    expect(() => a.setOutboundLinks(source.id, [foreignTarget.id])).not.toThrow();
+    expect(a.listBacklinks(source.id)).toEqual([]);
+    expect(b.listBacklinks(foreignTarget.id)).toEqual([]);
+  });
+
+  it("keeps a link to a soft-deleted target, reappearing in backlinks after restore", () => {
+    const notes = store();
+    const source = notes.create(T0);
+    const target = notes.create(T0);
+    notes.setOutboundLinks(source.id, [target.id]);
+
+    notes.softDelete(target.id, T1);
+    notes.restore(target.id, T2);
+    // The link row survived the target's soft-delete/restore round trip.
+    expect(notes.listBacklinks(target.id).map((n) => n.id)).toEqual([source.id]);
+  });
+
+  it("excludes soft-deleted sources from backlinks, reappearing after restore", () => {
+    const notes = store();
+    const source = notes.create(T0);
+    const target = notes.create(T0);
+    notes.setOutboundLinks(source.id, [target.id]);
+
+    notes.softDelete(source.id, T1);
+    expect(notes.listBacklinks(target.id)).toEqual([]);
+
+    notes.restore(source.id, T2);
+    expect(notes.listBacklinks(target.id).map((n) => n.id)).toEqual([source.id]);
+  });
+
+  it("cascades link rows when the source note is hard-deleted, verified via the target's backlinks", () => {
+    const notes = store();
+    const source = notes.create(T0);
+    const target = notes.create(T0);
+    notes.setOutboundLinks(source.id, [target.id]);
+    expect(notes.listBacklinks(target.id)).toHaveLength(1);
+
+    db.raw.prepare("DELETE FROM notes WHERE id = ?").run(source.id);
+    expect(notes.listBacklinks(target.id)).toEqual([]);
+  });
+
+  it("cascades link rows when the target note is hard-deleted", () => {
+    const notes = store();
+    const source = notes.create(T0);
+    const target = notes.create(T0);
+    notes.setOutboundLinks(source.id, [target.id]);
+
+    db.raw.prepare("DELETE FROM notes WHERE id = ?").run(target.id);
+    expect(
+      (
+        db.raw
+          .prepare("SELECT count(*) AS n FROM note_links WHERE source_note_id = ?")
+          .get(source.id) as { n: number }
+      ).n,
+    ).toBe(0);
+  });
+
+  it("rejects more than 500 target ids, accepting exactly 500", () => {
+    const notes = store();
+    const source = notes.create(T0);
+    const tooMany = Array.from({ length: MAX_NOTE_LINKS + 1 }, () => uuidv7());
+    const exactlyMax = Array.from({ length: MAX_NOTE_LINKS }, () => uuidv7());
+
+    expect(() => notes.setOutboundLinks(source.id, tooMany)).toThrow(NoteValidationError);
+    expect(() => notes.setOutboundLinks(source.id, exactlyMax)).not.toThrow();
+  });
+
+  it("throws NoteNotFoundError from an unknown, soft-deleted, or cross-profile source", () => {
+    const a = new NoteStore(db.raw, createProfile());
+    const b = new NoteStore(db.raw, createProfile());
+    const ownedByB = b.create(T0);
+    const target = a.create(T0);
+    const deletable = a.create(T0);
+    a.softDelete(deletable.id, T1);
+
+    expect(() => a.setOutboundLinks("missing", [target.id])).toThrow(NoteNotFoundError);
+    expect(() => a.setOutboundLinks(ownedByB.id, [target.id])).toThrow(NoteNotFoundError);
+    expect(() => a.setOutboundLinks(deletable.id, [target.id])).toThrow(NoteNotFoundError);
+    expect(() => a.listBacklinks("missing")).toThrow(NoteNotFoundError);
+    expect(() => a.listBacklinks(ownedByB.id)).toThrow(NoteNotFoundError);
+    expect(() => a.listBacklinks(deletable.id)).toThrow(NoteNotFoundError);
+  });
+
+  it("does not bump updated_at", () => {
+    const notes = store();
+    const source = notes.create(T0);
+    const target = notes.create(T0);
+
+    notes.setOutboundLinks(source.id, [target.id]);
+    expect(notes.list().find((n) => n.id === source.id)?.updatedAt).toBe(T0);
+  });
+
+  it("clears all outbound links with an empty array", () => {
+    const notes = store();
+    const source = notes.create(T0);
+    const target = notes.create(T0);
+    notes.setOutboundLinks(source.id, [target.id]);
+    expect(notes.listBacklinks(target.id)).toHaveLength(1);
+
+    notes.setOutboundLinks(source.id, []);
+    expect(notes.listBacklinks(target.id)).toEqual([]);
+  });
+
+  it("orders backlinks by pinned desc, then updated_at desc, id desc — the house list order", () => {
+    const notes = store();
+    const target = notes.create(T0);
+    const s1 = notes.create(T0);
+    const s2 = notes.create(T1);
+    const s3 = notes.create(T2);
+    notes.setOutboundLinks(s1.id, [target.id]);
+    notes.setOutboundLinks(s2.id, [target.id]);
+    notes.setOutboundLinks(s3.id, [target.id]);
+
+    expect(notes.listBacklinks(target.id).map((n) => n.id)).toEqual([s3.id, s2.id, s1.id]);
+
+    notes.setPinned(s1.id, true);
+    expect(notes.listBacklinks(target.id).map((n) => n.id)).toEqual([s1.id, s3.id, s2.id]);
   });
 });
