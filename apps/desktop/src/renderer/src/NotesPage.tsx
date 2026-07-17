@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, EmptyState } from "@nexus/ui";
-import type { NoteFolder, NoteMeta } from "../../shared/ipc.js";
+import type { NoteFolder, NoteMeta, NoteTag, NoteTagLink } from "../../shared/ipc.js";
 import { NoteEditor } from "./NoteEditor.js";
 import { NoteOrganizer, type FolderSelection } from "./NoteOrganizer.js";
 import { NotePopover } from "./notePopover.js";
@@ -34,12 +34,13 @@ export interface NotesPageProps {
 }
 
 /**
- * The NOTE module page (slice a3b): a three-pane workspace — the folder
- * organizer (left), the note list filtered by the selected folder and ordered
- * pinned-first (middle), and the block editor for the selected note (right).
- * Folders, pinning, and foldering all go through the note organization IPC
- * allowlist; the editor owns the live Yjs doc, main owns storage. Writes are
- * await-then-refetch (never optimistic), the house style.
+ * The NOTE module page (slice a3b, tags in a3b-2): a three-pane workspace —
+ * the folder organizer (left, also hosting the tag filter and tag CRUD), the
+ * note list filtered by folder then narrowed client-side by the tag filter and
+ * ordered pinned-first (middle), and the block editor for the selected note
+ * (right). Folders, pinning, foldering, and tagging all go through the note
+ * organization IPC allowlist; the editor owns the live Yjs doc, main owns
+ * storage. Writes are await-then-refetch (never optimistic), the house style.
  */
 export function NotesPage({ profileId }: NotesPageProps) {
   const [folders, setFolders] = useState<NoteFolder[]>([]);
@@ -48,6 +49,9 @@ export function NotesPage({ profileId }: NotesPageProps) {
   const [failed, setFailed] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
+  const [tags, setTags] = useState<NoteTag[]>([]);
+  const [links, setLinks] = useState<NoteTagLink[]>([]);
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
 
   const loadFolders = useCallback(async () => {
     try {
@@ -72,6 +76,23 @@ export function NotesPage({ profileId }: NotesPageProps) {
     }
   }, [profileId, selection]);
 
+  // Fetches tags and links together, then prunes the active filter of ids the
+  // profile no longer has — deleting a tag can never leave a ghost filter.
+  const loadTags = useCallback(async () => {
+    try {
+      const [tagList, linkList] = await Promise.all([
+        window.nexus.listNoteTags(profileId),
+        window.nexus.listNoteTagLinks(profileId),
+      ]);
+      setTags(tagList);
+      setLinks(linkList);
+      const validIds = new Set(tagList.map((tag) => tag.id));
+      setTagFilter((current) => current.filter((id) => validIds.has(id)));
+    } catch (error) {
+      console.error("Nexus: failed to load tags:", error);
+    }
+  }, [profileId]);
+
   useEffect(() => {
     void loadFolders();
   }, [loadFolders]);
@@ -80,11 +101,56 @@ export function NotesPage({ profileId }: NotesPageProps) {
     void loadNotes();
   }, [loadNotes]);
 
+  useEffect(() => {
+    void loadTags();
+  }, [loadTags]);
+
   // A folder mutation may have promoted children/notes — refetch both panes.
   const onFoldersChanged = useCallback(async () => {
     await loadFolders();
     await loadNotes();
   }, [loadFolders, loadNotes]);
+
+  const tagsByNote = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const link of links) {
+      const set = map.get(link.noteId) ?? new Set<string>();
+      set.add(link.tagId);
+      map.set(link.noteId, set);
+    }
+    return map;
+  }, [links]);
+
+  // Folder scoping already happened via IPC; the tag filter narrows further,
+  // client-side, with AND semantics (a note must carry every selected tag).
+  const visibleNotes = useMemo(() => {
+    if (notes === null) return [];
+    if (tagFilter.length === 0) return notes;
+    return notes.filter((note) => tagFilter.every((id) => tagsByNote.get(note.id)?.has(id)));
+  }, [notes, tagFilter, tagsByNote]);
+
+  function onToggleTag(id: string): void {
+    setTagFilter((current) =>
+      current.includes(id) ? current.filter((tagId) => tagId !== id) : [...current, id],
+    );
+  }
+
+  function onClearTagFilter(): void {
+    setTagFilter([]);
+  }
+
+  async function toggleNoteTag(note: NoteMeta, tagId: string, attached: boolean): Promise<void> {
+    try {
+      if (attached) {
+        await window.nexus.detachNoteTag(profileId, note.id, tagId);
+      } else {
+        await window.nexus.attachNoteTag(profileId, note.id, tagId);
+      }
+      await loadTags();
+    } catch (error) {
+      console.error("Nexus: failed to toggle note tag:", error);
+    }
+  }
 
   async function create(): Promise<void> {
     try {
@@ -142,6 +208,7 @@ export function NotesPage({ profileId }: NotesPageProps) {
   }
 
   const sortedFolders = folders.slice().sort((a, b) => collator.compare(a.name, b.name));
+  const sortedTags = tags.slice().sort((a, b) => collator.compare(a.name, b.name));
 
   return (
     <div className="note">
@@ -151,6 +218,11 @@ export function NotesPage({ profileId }: NotesPageProps) {
         selection={selection}
         onSelect={setSelection}
         onChanged={onFoldersChanged}
+        tags={tags}
+        tagFilter={tagFilter}
+        onToggleTag={onToggleTag}
+        onClearTagFilter={onClearTagFilter}
+        onTagsChanged={loadTags}
       />
 
       <div className="note__list-pane">
@@ -184,9 +256,20 @@ export function NotesPage({ profileId }: NotesPageProps) {
             title={strings.notes.listEmptyTitle}
             description={strings.notes.listEmptyDescription}
           />
+        ) : visibleNotes.length === 0 ? (
+          <EmptyState
+            title={strings.notes.listEmptyTitle}
+            description={strings.notes.tagFilterEmptyDescription}
+          />
         ) : (
           <ul className="note__list">
-            {notes.map((note) => (
+            {visibleNotes.map((note) => {
+              const noteTagIds = tagsByNote.get(note.id);
+              const noteTags =
+                noteTagIds && noteTagIds.size > 0
+                  ? sortedTags.filter((tag) => noteTagIds.has(tag.id))
+                  : [];
+              return (
               <li key={note.id} className="note__item-row">
                 <button
                   type="button"
@@ -206,6 +289,15 @@ export function NotesPage({ profileId }: NotesPageProps) {
                   <span className="note__item-title">
                     {note.title.trim().length > 0 ? note.title : strings.notes.untitled}
                   </span>
+                  {noteTags.length > 0 && (
+                    <span className="note__item-tags">
+                      {noteTags.map((tag) => (
+                        <span key={tag.id} className="note__item-tag">
+                          {tag.name}
+                        </span>
+                      ))}
+                    </span>
+                  )}
                   <span className="note__item-date">{formatNoteDate(note.updatedAt)}</span>
                 </button>
                 <NotePopover label={strings.notes.noteMenuLabel} triggerClassName="note__row-menu">
@@ -237,6 +329,33 @@ export function NotesPage({ profileId }: NotesPageProps) {
                           {folder.name}
                         </button>
                       ))}
+                      {sortedTags.length > 0 && (
+                        <>
+                          <div className="note__menu-sep" role="separator" />
+                          <span className="note__menu-label">{strings.notes.tagsLabel}</span>
+                          {sortedTags.map((tag) => {
+                            const attached = tagsByNote.get(note.id)?.has(tag.id) ?? false;
+                            return (
+                              <button
+                                key={tag.id}
+                                className="note__menu-item note__menu-item--check"
+                                role="menuitemcheckbox"
+                                type="button"
+                                aria-checked={attached}
+                                onClick={() => void toggleNoteTag(note, tag.id, attached)}
+                              >
+                                <span
+                                  className={`note__menu-check${attached ? "" : " note__menu-check--hidden"}`}
+                                  aria-hidden="true"
+                                >
+                                  ✓
+                                </span>
+                                {tag.name}
+                              </button>
+                            );
+                          })}
+                        </>
+                      )}
                       <div className="note__menu-sep" role="separator" />
                       <button
                         className="note__menu-item note__menu-item--danger"
@@ -253,7 +372,8 @@ export function NotesPage({ profileId }: NotesPageProps) {
                   )}
                 </NotePopover>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </div>

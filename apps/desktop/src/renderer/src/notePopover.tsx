@@ -31,11 +31,18 @@ export function NotePopover({ label, triggerClassName, children }: NotePopoverPr
   const wrapRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
+  // Re-measured on every render while open: an action inside the panel can
+  // reflow the trigger's row (e.g. attaching a note's first tag adds a chip
+  // line), and the fixed-position panel must follow the trigger. Returning the
+  // previous object when nothing moved keeps the effect from looping.
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
-    setPos({ top: rect.bottom + 2, right: window.innerWidth - rect.right });
-  }, [open]);
+    setPos((prev) => {
+      const next = { top: rect.bottom + 2, right: window.innerWidth - rect.right };
+      return prev !== null && prev.top === next.top && prev.right === next.right ? prev : next;
+    });
+  });
 
   useEffect(() => {
     if (!open) return;

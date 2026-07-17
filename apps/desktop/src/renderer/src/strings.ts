@@ -135,6 +135,17 @@ export const strings = {
     save: "Sačuvaj",
     cancel: "Otkaži",
     folderError: "Radnja nad fasciklom nije uspela. Pokušaj ponovo.",
+    /** Tags (slice a3b-2): filter chips + tag CRUD + per-note tag editor. */
+    tagsLabel: "Oznake",
+    newTag: "Nova oznaka",
+    tagNamePlaceholder: "Naziv oznake",
+    renameTag: "Preimenuj",
+    deleteTag: "Obriši oznaku",
+    tagMenuLabel: "Radnje nad oznakom",
+    tagFilterLabel: "Filter po oznakama",
+    clearTagFilter: "Poništi",
+    tagError: "Radnja nad oznakom nije uspela. Pokušaj ponovo.",
+    tagFilterEmptyDescription: "Nijedna beleška ne odgovara izabranim oznakama.",
     /** Slash-menu command labels (block conversions), in menu order. */
     slash: {
       paragraph: "Paragraf",

@@ -1965,6 +1965,10 @@ body {
   border-right: 1px solid var(--nx-border);
 }
 .note__org-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
   margin: var(--nx-space-3) 0 var(--nx-space-1);
   padding: 0 var(--nx-space-2);
   font-size: var(--nx-font-size-caption);
@@ -2089,6 +2093,92 @@ body {
   line-height: 1;
 }
 
+/* Oznake (tags) section, below the folder tree (slice a3b-2): filter chips
+   with inline create/rename/delete, mirroring the folder actions above.
+   Selecting a tag for the filter is typographic (gold text + weight), never a
+   fill or glow — the house rule applied to chips instead of a nav row. */
+.note__tag-clear {
+  padding: 0;
+  background: transparent;
+  border: none;
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-regular);
+  letter-spacing: var(--nx-font-tracking-normal);
+  text-transform: none;
+  color: var(--nx-text-muted);
+  cursor: pointer;
+  transition: color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__tag-clear:hover {
+  color: var(--nx-text);
+}
+.note__tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-1) var(--nx-space-2);
+}
+.note__tag-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.note__tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+  background: transparent;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+  transition:
+    background var(--nx-motion-fast) var(--nx-motion-ease),
+    border-color var(--nx-motion-fast) var(--nx-motion-ease),
+    color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__tag:hover {
+  background: var(--nx-surface-alt);
+}
+.note__tag:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.note__tag--active {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+  border-color: var(--nx-accent);
+}
+/* The tag chip's "⋯" menu trigger stays quiet until the chip is hovered, the
+   trigger is focused, or its menu is open — mirrors .note__row-menu. */
+.note__tag-menu {
+  opacity: 0;
+}
+.note__tag-item:hover .note__tag-menu,
+.note__tag-menu[aria-expanded="true"],
+.note__tag-menu:focus-visible {
+  opacity: 1;
+}
+.note__new-tag.nx-button {
+  margin-top: var(--nx-space-1);
+  align-self: flex-start;
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.note__new-tag.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+/* Rename/new tag form: reuses .note__folder-form, but flex-basis: 100% makes
+   it take the whole wrap row instead of sitting beside the other chips. */
+.note__tag-form {
+  flex-basis: 100%;
+}
+
 /* Left pane: "Nova beleška" + the note list, ordered newest-updated first. */
 .note__list-pane {
   display: flex;
@@ -2183,6 +2273,20 @@ body {
   font-size: var(--nx-font-size-caption);
   color: var(--nx-text-muted);
   font-variant-numeric: tabular-nums;
+}
+/* Per-note tag chips (slice a3b-2): muted metadata under the title, never a
+   selection affordance — toggling tags lives in the row's "⋯" menu. */
+.note__item-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1);
+}
+.note__item-tag {
+  padding: 0 6px;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-sm);
 }
 /* Per-row delete stays hidden until the row is hovered or the button focused. */
 .note__delete.nx-button {
@@ -2299,6 +2403,21 @@ body {
 .note__menu-item--danger:hover {
   background: var(--nx-danger-soft);
   color: var(--nx-danger);
+}
+/* Per-note tag toggles (slice a3b-2): a checkmark column reserved even when
+   unchecked, so every tag label lines up regardless of attachment state. */
+.note__menu-item--check {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.note__menu-check {
+  flex: none;
+  width: 1em;
+  text-align: center;
+}
+.note__menu-check--hidden {
+  visibility: hidden;
 }
 .note__menu-sep {
   height: 1px;
