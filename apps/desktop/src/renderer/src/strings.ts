@@ -149,6 +149,16 @@ export const strings = {
     /** Wiki-links (slice b): the `[[` link menu + the backlinks panel. */
     backlinksTitle: "Povratne veze",
     wikiLinkMissing: "Nedostupna beleška",
+    /** Attachments (NOTE-003b): the Prilozi panel + in-document image blocks. */
+    attachmentsTitle: "Prilozi",
+    attach: "Priloži datoteku",
+    attachmentOpen: "Otvori",
+    attachmentSaveAs: "Sačuvaj kao…",
+    attachmentRemove: "Ukloni prilog",
+    attachmentMenuLabel: "Radnje nad prilogom",
+    attachmentTooLarge: "Datoteka je veća od 50 MB i ne može se priložiti.",
+    attachmentError: "Radnja nad prilogom nije uspela. Pokušaj ponovo.",
+    attachmentMissing: "Prilog je uklonjen.",
     /** Slash-menu command labels (block conversions), in menu order. */
     slash: {
       paragraph: "Paragraf",

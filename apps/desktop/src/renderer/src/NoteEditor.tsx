@@ -1,15 +1,31 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from "react";
 import * as Y from "yjs";
 import { EditorContent, useEditor } from "@tiptap/react";
+import type { Editor } from "@tiptap/core";
 import { StarterKit } from "@tiptap/starter-kit";
 import { Collaboration } from "@tiptap/extension-collaboration";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Placeholder } from "@tiptap/extensions";
-import { collectNoteLinkIds } from "@nexus/core";
+import { collectNoteLinkIds, isInlineImageMime } from "@nexus/core";
 import { EmptyState } from "@nexus/ui";
-import { NOTE_LINKS_MAX_COUNT, NOTE_UPDATE_MAX_BYTES, type NoteMeta } from "../../shared/ipc.js";
+import {
+  NOTE_ATTACHMENT_MAX_BYTES,
+  NOTE_LINKS_MAX_COUNT,
+  NOTE_UPDATE_MAX_BYTES,
+  type NoteAttachment,
+  type NoteMeta,
+} from "../../shared/ipc.js";
+import { AttachmentImage, NoteAttachmentProvider } from "./noteAttachmentImage.js";
 import { NoteLink, NoteLinkProvider } from "./noteLink.js";
 import { createNoteLinkExtension, NoteLinkMenu, type NoteLinkRenderState } from "./noteLinkMenu.js";
+import { NotePopover } from "./notePopover.js";
 import { createSlashExtension, SlashMenu, type SlashRenderState } from "./noteSlashMenu.js";
 import { strings } from "./strings.js";
 
@@ -82,6 +98,21 @@ function deriveTitle(doc: Y.Doc | null): string {
   return "";
 }
 
+/** Locale-aware one-decimal formatter for the KB/MB branches of `formatBytes`. */
+const BYTES_FORMATTER = new Intl.NumberFormat("sr-Latn", { maximumFractionDigits: 1 });
+
+/**
+ * Human-readable file size for the Prilozi panel: whole bytes under 1 KB,
+ * otherwise KB/MB with at most one decimal — no fabricated precision beyond
+ * what `Intl.NumberFormat` already rounds to.
+ */
+function formatBytes(sizeBytes: number): string {
+  if (sizeBytes < 1024) return `${sizeBytes} B`;
+  const kb = sizeBytes / 1024;
+  if (kb < 1024) return `${BYTES_FORMATTER.format(kb)} KB`;
+  return `${BYTES_FORMATTER.format(kb / 1024)} MB`;
+}
+
 /**
  * Ordered-set equality for the outbound wiki-link report (NOTE-004b): `null`
  * (unknown — e.g. the first flush after mount) is never equal, so the first
@@ -109,12 +140,17 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
   const [saveError, setSaveError] = useState<"generic" | "tooLarge" | null>(null);
   const [titles, setTitles] = useState<Map<string, string>>(new Map());
   const [backlinks, setBacklinks] = useState<NoteMeta[]>([]);
+  const [attachments, setAttachments] = useState<NoteAttachment[]>([]);
+  const [attachmentError, setAttachmentError] = useState<"generic" | "tooLarge" | null>(null);
+  const [dropActive, setDropActive] = useState(false);
 
   const pendingRef = useRef<Uint8Array[]>([]);
   const timerRef = useRef<number | null>(null);
   const inFlightRef = useRef(false);
   const docRef = useRef<Y.Doc | null>(null);
   const flushRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  const editorRef = useRef<Editor | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // The outbound wiki-link set as of the last successful `setNoteLinks` call —
   // `null` means unknown (nothing sent yet this mount), which always triggers
   // a send on the first flush.
@@ -124,25 +160,108 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
     onSavedRef.current = onSaved;
   }, [onSaved]);
 
-  // Refreshes the id->title map (every active note of the profile) and this
-  // note's backlinks. Failures keep the previous state — this is derived,
-  // read-only data, never a save error.
+  // Refreshes the id->title map (every active note of the profile), this
+  // note's backlinks, and its attachments. Failures keep the previous state —
+  // this is derived, read-only data, never a save error.
   const loadMeta = useCallback(async () => {
     try {
-      const [notes, backlinkNotes] = await Promise.all([
+      const [notes, backlinkNotes, noteAttachments] = await Promise.all([
         window.nexus.listNotes(profileId),
         window.nexus.listNoteBacklinks(profileId, noteId),
+        window.nexus.listNoteAttachments(profileId, noteId),
       ]);
       setTitles(new Map(notes.map((note) => [note.id, note.title])));
       setBacklinks(backlinkNotes);
+      setAttachments(noteAttachments);
     } catch (error) {
-      console.error("Nexus: failed to load note titles/backlinks:", error);
+      console.error("Nexus: failed to load note titles/backlinks/attachments:", error);
     }
   }, [profileId, noteId]);
 
   useEffect(() => {
     void loadMeta();
   }, [loadMeta]);
+
+  const attachmentsById = useMemo(
+    () => new Map(attachments.map((attachment) => [attachment.id, attachment])),
+    [attachments],
+  );
+
+  // Attaches one or more files sequentially (drag-drop or the file picker).
+  // A pre-flight size check skips oversize files without an IPC round-trip;
+  // an attached image additionally gets an `attachmentImage` block inserted
+  // at the caret. `attachmentError` is a separate, transient channel from
+  // `saveError` (the content-save path) and is cleared at the start of every
+  // new attach round.
+  const attachFiles = useCallback(
+    async (files: FileList | File[]) => {
+      setAttachmentError(null);
+      for (const file of Array.from(files)) {
+        if (file.size > NOTE_ATTACHMENT_MAX_BYTES) {
+          setAttachmentError("tooLarge");
+          continue;
+        }
+        try {
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          const name = file.name.trim().length > 0 ? file.name.slice(0, 255) : "prilog";
+          const created = await window.nexus.attachNoteFile(profileId, noteId, name, bytes);
+          // Optimistic append so the block inserted below resolves its row
+          // immediately — without it the image renders the removed-attachment
+          // placeholder until the whole round's final loadMeta lands.
+          setAttachments((previous) => [...previous, created]);
+          if (isInlineImageMime(created.mime)) {
+            editorRef.current
+              ?.chain()
+              .focus()
+              .insertContent({ type: "attachmentImage", attrs: { attachmentId: created.id } })
+              .run();
+          }
+        } catch (error) {
+          setAttachmentError("generic");
+          console.error("Nexus: failed to attach file:", error);
+        }
+      }
+      await loadMeta();
+    },
+    [profileId, noteId, loadMeta],
+  );
+
+  const openAttachment = useCallback(
+    async (attachmentId: string) => {
+      try {
+        await window.nexus.openNoteAttachment(profileId, noteId, attachmentId);
+      } catch (error) {
+        setAttachmentError("generic");
+        console.error("Nexus: failed to open attachment:", error);
+      }
+    },
+    [profileId, noteId],
+  );
+
+  const saveAttachmentAs = useCallback(
+    async (attachmentId: string) => {
+      try {
+        await window.nexus.saveNoteAttachmentAs(profileId, noteId, attachmentId);
+      } catch (error) {
+        setAttachmentError("generic");
+        console.error("Nexus: failed to save attachment as:", error);
+      }
+    },
+    [profileId, noteId],
+  );
+
+  const removeAttachment = useCallback(
+    async (attachmentId: string) => {
+      try {
+        await window.nexus.removeNoteAttachment(profileId, noteId, attachmentId);
+        await loadMeta();
+      } catch (error) {
+        setAttachmentError("generic");
+        console.error("Nexus: failed to remove attachment:", error);
+      }
+    },
+    [profileId, noteId, loadMeta],
+  );
 
   const scheduleFlush = useCallback(() => {
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
@@ -289,30 +408,142 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
           {saveError === "tooLarge" ? strings.notes.saveTooLarge : strings.notes.saveError}
         </div>
       )}
-      <EditorCanvas
-        doc={doc}
-        profileId={profileId}
-        noteId={noteId}
-        titles={titles}
-        onOpenNote={onOpenNote}
-      />
-      {backlinks.length > 0 && (
-        <section className="note__backlinks" aria-label={strings.notes.backlinksTitle}>
-          <h3 className="note__backlinks-title">
-            {strings.notes.backlinksTitle} ({backlinks.length})
-          </h3>
-          {backlinks.map((note) => (
+      <div
+        className={dropActive ? "note__editor-body note__editor-body--drop" : "note__editor-body"}
+        onDragOver={(event) => {
+          if (event.dataTransfer.types.includes("Files")) {
+            event.preventDefault();
+            setDropActive(true);
+          }
+        }}
+        onDragLeave={(event) => {
+          // Leaving to a child keeps the drop state (KanbanView's guard) —
+          // only a real exit from the wrapper clears it.
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+            setDropActive(false);
+          }
+        }}
+        onDrop={(event) => {
+          if (event.dataTransfer.files.length > 0) {
+            event.preventDefault();
+            setDropActive(false);
+            void attachFiles(event.dataTransfer.files);
+          }
+        }}
+      >
+        <EditorCanvas
+          doc={doc}
+          profileId={profileId}
+          noteId={noteId}
+          titles={titles}
+          onOpenNote={onOpenNote}
+          attachmentsById={attachmentsById}
+          editorRef={editorRef}
+        />
+        <section className="note__attachments" aria-label={strings.notes.attachmentsTitle}>
+          <div className="note__attachments-head">
+            <h3 className="note__attachments-title">
+              {strings.notes.attachmentsTitle}
+              {attachments.length > 0 ? ` (${attachments.length})` : ""}
+            </h3>
             <button
-              key={note.id}
               type="button"
-              className="note__backlink"
-              onClick={() => onOpenNote(note.id)}
+              className="note__attach"
+              onClick={() => fileInputRef.current?.click()}
             >
-              {note.title.trim().length > 0 ? note.title : strings.notes.untitled}
+              {strings.notes.attach}
             </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              hidden
+              onChange={(event) => {
+                const { files } = event.target;
+                if (files !== null && files.length > 0) void attachFiles(files);
+                event.target.value = "";
+              }}
+            />
+          </div>
+          {attachmentError !== null && (
+            <div className="note__attachment-error" role="status">
+              {attachmentError === "tooLarge"
+                ? strings.notes.attachmentTooLarge
+                : strings.notes.attachmentError}
+            </div>
+          )}
+          {attachments.map((attachment) => (
+            <div key={attachment.id} className="note__attachment">
+              {isInlineImageMime(attachment.mime) && (
+                <img
+                  className="note__attachment-thumb"
+                  src={`nx-blob://${attachment.sha256}`}
+                  alt={attachment.fileName}
+                />
+              )}
+              <span className="note__attachment-name">{attachment.fileName}</span>
+              <span className="note__attachment-size">{formatBytes(attachment.sizeBytes)}</span>
+              <NotePopover label={strings.notes.attachmentMenuLabel}>
+                {(close) => (
+                  <>
+                    <button
+                      type="button"
+                      className="note__menu-item"
+                      role="menuitem"
+                      onClick={() => {
+                        void openAttachment(attachment.id);
+                        close();
+                      }}
+                    >
+                      {strings.notes.attachmentOpen}
+                    </button>
+                    <button
+                      type="button"
+                      className="note__menu-item"
+                      role="menuitem"
+                      onClick={() => {
+                        void saveAttachmentAs(attachment.id);
+                        close();
+                      }}
+                    >
+                      {strings.notes.attachmentSaveAs}
+                    </button>
+                    <div className="note__menu-sep" role="separator" />
+                    <button
+                      type="button"
+                      className="note__menu-item note__menu-item--danger"
+                      role="menuitem"
+                      onClick={() => {
+                        void removeAttachment(attachment.id);
+                        close();
+                      }}
+                    >
+                      {strings.notes.attachmentRemove}
+                    </button>
+                  </>
+                )}
+              </NotePopover>
+            </div>
           ))}
         </section>
-      )}
+        {backlinks.length > 0 && (
+          <section className="note__backlinks" aria-label={strings.notes.backlinksTitle}>
+            <h3 className="note__backlinks-title">
+              {strings.notes.backlinksTitle} ({backlinks.length})
+            </h3>
+            {backlinks.map((note) => (
+              <button
+                key={note.id}
+                type="button"
+                className="note__backlink"
+                onClick={() => onOpenNote(note.id)}
+              >
+                {note.title.trim().length > 0 ? note.title : strings.notes.untitled}
+              </button>
+            ))}
+          </section>
+        )}
+      </div>
     </>
   );
 }
@@ -323,6 +554,9 @@ interface EditorCanvasProps {
   noteId: string;
   titles: ReadonlyMap<string, string>;
   onOpenNote: (id: string) => void;
+  attachmentsById: ReadonlyMap<string, NoteAttachment>;
+  /** Set from the live `useEditor` instance below, so the parent's attach flow can insert blocks. */
+  editorRef: MutableRefObject<Editor | null>;
 }
 
 /**
@@ -334,7 +568,15 @@ interface EditorCanvasProps {
  * keys, distinct render state — so only one is ever open at a time but
  * neither depends on the other's lifecycle.
  */
-function EditorCanvas({ doc, profileId, noteId, titles, onOpenNote }: EditorCanvasProps) {
+function EditorCanvas({
+  doc,
+  profileId,
+  noteId,
+  titles,
+  onOpenNote,
+  attachmentsById,
+  editorRef,
+}: EditorCanvasProps) {
   const [slash, setSlash] = useState<SlashRenderState | null>(null);
   const slashKeydownRef = useRef<((event: KeyboardEvent) => boolean) | null>(null);
   const [linkMenu, setLinkMenu] = useState<NoteLinkRenderState | null>(null);
@@ -360,6 +602,7 @@ function EditorCanvas({ doc, profileId, noteId, titles, onOpenNote }: EditorCanv
       Placeholder.configure({ placeholder: strings.notes.placeholder }),
       Collaboration.configure({ document: doc, field: "default" }),
       NoteLink,
+      AttachmentImage,
       createSlashExtension({
         onStart: setSlash,
         onUpdate: setSlash,
@@ -395,27 +638,38 @@ function EditorCanvas({ doc, profileId, noteId, titles, onOpenNote }: EditorCanv
     [doc],
   );
 
+  // Publishes the live editor instance to the parent's ref, so its attach
+  // flow can insert an `attachmentImage` block at the caret.
+  useEffect(() => {
+    editorRef.current = editor;
+    return () => {
+      if (editorRef.current === editor) editorRef.current = null;
+    };
+  }, [editor, editorRef]);
+
   return (
-    <NoteLinkProvider value={{ titles, onOpenNote }}>
-      <div className="note__editor">
-        <EditorContent editor={editor} />
-        {slash !== null && (
-          <SlashMenu
-            state={slash}
-            registerKeydown={(handler) => {
-              slashKeydownRef.current = handler;
-            }}
-          />
-        )}
-        {linkMenu !== null && (
-          <NoteLinkMenu
-            state={linkMenu}
-            registerKeydown={(handler) => {
-              linkMenuKeydownRef.current = handler;
-            }}
-          />
-        )}
-      </div>
-    </NoteLinkProvider>
+    <NoteAttachmentProvider value={{ byId: attachmentsById }}>
+      <NoteLinkProvider value={{ titles, onOpenNote }}>
+        <div className="note__editor">
+          <EditorContent editor={editor} />
+          {slash !== null && (
+            <SlashMenu
+              state={slash}
+              registerKeydown={(handler) => {
+                slashKeydownRef.current = handler;
+              }}
+            />
+          )}
+          {linkMenu !== null && (
+            <NoteLinkMenu
+              state={linkMenu}
+              registerKeydown={(handler) => {
+                linkMenuKeydownRef.current = handler;
+              }}
+            />
+          )}
+        </div>
+      </NoteLinkProvider>
+    </NoteAttachmentProvider>
   );
 }
