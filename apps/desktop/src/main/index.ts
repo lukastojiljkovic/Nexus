@@ -92,7 +92,7 @@ import {
 } from "./attachments.js";
 import { localToday } from "./clock.js";
 import { handleExport } from "./imex.js";
-import { compactIfNeeded } from "./notes.js";
+import { captureNoteVersion, compactIfNeeded } from "./notes.js";
 import { startNotificationScheduler, stopNotificationScheduler } from "./notifications.js";
 import {
   IpcChannel,
@@ -100,6 +100,7 @@ import {
   type ExportResult,
   type FlagState,
   type NoteDocPayload,
+  type NoteVersionMeta,
   type Profile,
   type RunningFocusSession,
   type SaveAttachmentResult,
@@ -653,6 +654,15 @@ function asInteger(value: unknown, field: string): number {
     throw new Error(`Invalid IPC payload: "${field}" must be an integer.`);
   }
   return value;
+}
+
+/** A `coveredSeq` field: an integer, and additionally ≥ 1 — seq 0 never names a version (ADR-015). */
+function asPositiveInteger(value: unknown, field: string): number {
+  const int = asInteger(value, field);
+  if (int < 1) {
+    throw new Error(`Invalid IPC payload: "${field}" must be a positive integer.`);
+  }
+  return int;
 }
 
 /** The closed FSRS review-rating domain (Again/Hard/Good/Easy); Manual (0) and anything else is rejected. */
@@ -1627,6 +1637,37 @@ function registerIpc(): void {
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const id = asNonEmptyString(body.id, "id");
     return noteStore(profileId).listBacklinks(id);
+  });
+
+  // NOTE-008 (version history, ADR-015): checkpoints cross this boundary as
+  // browse-list metadata (`notesVersions`) or an opaque snapshot blob
+  // (`notesVersionLoad`) — the renderer replays the latter onto a throwaway
+  // Y.Doc for a read-only preview. `notesVersionCapture` triggers the
+  // pre-restore safety checkpoint; main merges only stored state, so no
+  // renderer bytes are involved (the same bounded-harm shape as compaction).
+  ipcMain.handle(IpcChannel.notesVersions, (event, payload): NoteVersionMeta[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return noteStore(profileId).listVersions(id);
+  });
+
+  ipcMain.handle(IpcChannel.notesVersionLoad, (event, payload): Uint8Array => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const coveredSeq = asPositiveInteger(body.coveredSeq, "coveredSeq");
+    return noteStore(profileId).loadVersion(id, coveredSeq);
+  });
+
+  ipcMain.handle(IpcChannel.notesVersionCapture, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    captureNoteVersion(noteStore(profileId), id);
   });
 
   // NOTE-003 (attachments, slice 003-a, ADR-014): bytes are content-addressed

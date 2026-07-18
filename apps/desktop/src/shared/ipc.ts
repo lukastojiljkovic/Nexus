@@ -104,6 +104,9 @@ export const IpcChannel = {
   notesSetPinned: "notes:set-pinned",
   notesSetLinks: "notes:set-links",
   notesBacklinks: "notes:backlinks",
+  notesVersions: "notes:versions",
+  notesVersionLoad: "notes:version-load",
+  notesVersionCapture: "notes:version-capture",
   noteAttachmentsList: "note-attachments:list",
   noteAttachmentsAdd: "note-attachments:add",
   noteAttachmentsRemove: "note-attachments:remove",
@@ -1001,6 +1004,19 @@ export interface NoteDocPayload {
 }
 
 /**
+ * One version-history checkpoint's metadata as seen by the renderer (mirrors
+ * `note_versions` via `NoteStore`'s mapping, ADR-015 / NOTE-008). The
+ * snapshot blob itself is `notes:version-load`'s payload, never this one —
+ * `notes:versions` returns browse-list metadata only. Redeclared here so the
+ * renderer never imports DB code.
+ */
+export interface NoteVersionMeta {
+  coveredSeq: number;
+  title: string;
+  createdAt: string;
+}
+
+/**
  * An optional note-list filter (NOTE-002): omitted = every active note,
  * `{ folderId: null }` = unfiled notes, `{ folderId: "<id>" }` = one folder's
  * notes. Presence of the `folderId` key — not its value — distinguishes "all"
@@ -1182,6 +1198,23 @@ export interface NotesSetLinksRequest {
 }
 
 export interface NotesBacklinksRequest {
+  profileId: string;
+  id: string;
+}
+
+export interface NotesVersionsRequest {
+  profileId: string;
+  id: string;
+}
+
+export interface NotesVersionLoadRequest {
+  profileId: string;
+  id: string;
+  coveredSeq: number;
+}
+
+/** The pre-restore safety checkpoint (ADR-015): main merges only stored state, no renderer bytes involved. */
+export interface NotesVersionCaptureRequest {
   profileId: string;
   id: string;
 }
@@ -1422,6 +1455,12 @@ export interface NexusApi {
   setNotePinned(profileId: string, noteId: string, pinned: boolean): Promise<void>;
   setNoteLinks(profileId: string, noteId: string, targetIds: string[]): Promise<void>;
   listNoteBacklinks(profileId: string, noteId: string): Promise<NoteMeta[]>;
+  /** Browse-list metadata for this note's checkpoints, newest first (ADR-015 / NOTE-008). */
+  listNoteVersions(profileId: string, noteId: string): Promise<NoteVersionMeta[]>;
+  /** One checkpoint's full snapshot bytes, for a read-only version preview. */
+  loadNoteVersion(profileId: string, noteId: string, coveredSeq: number): Promise<Uint8Array>;
+  /** The pre-restore safety checkpoint — no age gate, deduped by covered_seq. */
+  captureNoteVersion(profileId: string, noteId: string): Promise<void>;
   listNoteAttachments(profileId: string, noteId: string): Promise<NoteAttachment[]>;
   /** Attaches a file to a note; main sniffs `bytes` for the real MIME type (SEC-FILE-02) — `fileName` is display-only. */
   attachNoteFile(

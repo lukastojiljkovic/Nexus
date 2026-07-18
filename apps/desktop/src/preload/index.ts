@@ -177,6 +177,12 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.notesSetLinks, { profileId, id: noteId, targetIds }),
   listNoteBacklinks: (profileId, noteId) =>
     ipcRenderer.invoke(IpcChannel.notesBacklinks, { profileId, id: noteId }),
+  listNoteVersions: (profileId, noteId) =>
+    ipcRenderer.invoke(IpcChannel.notesVersions, { profileId, id: noteId }),
+  loadNoteVersion: (profileId, noteId, coveredSeq) =>
+    ipcRenderer.invoke(IpcChannel.notesVersionLoad, { profileId, id: noteId, coveredSeq }),
+  captureNoteVersion: (profileId, noteId) =>
+    ipcRenderer.invoke(IpcChannel.notesVersionCapture, { profileId, id: noteId }),
   listNoteAttachments: (profileId, noteId) =>
     ipcRenderer.invoke(IpcChannel.noteAttachmentsList, { profileId, id: noteId }),
   attachNoteFile: (profileId, noteId, fileName, bytes) =>
