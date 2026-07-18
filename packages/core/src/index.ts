@@ -64,7 +64,7 @@ export type {
 
 export { isWithinQuietHours } from "./notify/quietHours.js";
 
-export { mergeNoteState } from "./notes/yjsMerge.js";
+export { collectNoteLinkIds, mergeNoteState } from "./notes/yjsMerge.js";
 export type { MergedNoteState } from "./notes/yjsMerge.js";
 
 export { toCsv } from "./imex/csv.js";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as Y from "yjs";
-import { mergeNoteState } from "./yjsMerge.js";
+import { collectNoteLinkIds, mergeNoteState } from "./yjsMerge.js";
 
 /** A fresh doc whose "default" fragment holds one paragraph per given text. */
 function docWithParagraphs(...texts: string[]): Y.Doc {
@@ -148,5 +148,84 @@ describe("mergeNoteState", () => {
     const docBa = new Y.Doc();
     Y.applyUpdate(docBa, baOrder.snapshot);
     expect(Y.encodeStateVector(docAb)).toEqual(Y.encodeStateVector(docBa));
+  });
+});
+
+/** A `noteLink` inline atom element, mirroring the TipTap wiki-link node's shape. */
+function noteLink(noteId: string | null): Y.XmlElement {
+  const link = new Y.XmlElement("noteLink");
+  if (noteId !== null) link.setAttribute("noteId", noteId);
+  return link;
+}
+
+describe("collectNoteLinkIds", () => {
+  it("returns an empty array for a doc with no fragment content", () => {
+    const doc = new Y.Doc();
+    expect(collectNoteLinkIds(doc)).toEqual([]);
+  });
+
+  it("returns an empty array when the default fragment has content but no links", () => {
+    const doc = docWithParagraphs("Obična beleška bez veza.");
+    expect(collectNoteLinkIds(doc)).toEqual([]);
+  });
+
+  it("collects a noteLink nested inline inside a paragraph", () => {
+    const doc = new Y.Doc();
+    const fragment = doc.getXmlFragment("default");
+    const paragraph = new Y.XmlElement("paragraph");
+    paragraph.insert(0, [new Y.XmlText("Vidi "), noteLink("note-1"), new Y.XmlText(" ovde.")]);
+    fragment.push([paragraph]);
+
+    expect(collectNoteLinkIds(doc)).toEqual(["note-1"]);
+  });
+
+  it("collects a noteLink nested inside a list item's paragraph", () => {
+    const doc = new Y.Doc();
+    const fragment = doc.getXmlFragment("default");
+    const list = new Y.XmlElement("bulletList");
+    const item = new Y.XmlElement("listItem");
+    const inner = new Y.XmlElement("paragraph");
+    inner.insert(0, [noteLink("note-nested")]);
+    item.insert(0, [inner]);
+    list.insert(0, [item]);
+    fragment.push([list]);
+
+    expect(collectNoteLinkIds(doc)).toEqual(["note-nested"]);
+  });
+
+  it("dedupes repeated links, keeping first-seen document order", () => {
+    const doc = new Y.Doc();
+    const fragment = doc.getXmlFragment("default");
+    const first = new Y.XmlElement("paragraph");
+    first.insert(0, [noteLink("note-a"), noteLink("note-b")]);
+    const second = new Y.XmlElement("paragraph");
+    second.insert(0, [noteLink("note-b"), noteLink("note-a"), noteLink("note-c")]);
+    fragment.push([first, second]);
+
+    expect(collectNoteLinkIds(doc)).toEqual(["note-a", "note-b", "note-c"]);
+  });
+
+  it("ignores noteLink elements without a noteId attribute", () => {
+    const doc = new Y.Doc();
+    const fragment = doc.getXmlFragment("default");
+    const paragraph = new Y.XmlElement("paragraph");
+    paragraph.insert(0, [noteLink(null), noteLink("note-real")]);
+    fragment.push([paragraph]);
+
+    expect(collectNoteLinkIds(doc)).toEqual(["note-real"]);
+  });
+
+  it("preserves document order across multiple top-level blocks", () => {
+    const doc = new Y.Doc();
+    const fragment = doc.getXmlFragment("default");
+    const first = new Y.XmlElement("paragraph");
+    first.insert(0, [noteLink("note-z")]);
+    const second = new Y.XmlElement("paragraph");
+    second.insert(0, [noteLink("note-y")]);
+    const third = new Y.XmlElement("paragraph");
+    third.insert(0, [noteLink("note-x")]);
+    fragment.push([first, second, third]);
+
+    expect(collectNoteLinkIds(doc)).toEqual(["note-z", "note-y", "note-x"]);
   });
 });

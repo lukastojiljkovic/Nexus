@@ -63,3 +63,30 @@ function nodeText(node: Y.XmlElement | Y.XmlText | Y.XmlHook): string {
   }
   return ""; // Y.XmlHook carries no text
 }
+
+/**
+ * All distinct `noteId` attrs of `noteLink` elements in the doc's "default"
+ * fragment, in document order (ADR-013 / NOTE-004b). Wiki-link nodes are
+ * inline atoms nested inside block elements (paragraphs, list items, …), so
+ * the walk is recursive; the same target linked more than once is deduped,
+ * keeping its first-seen position.
+ */
+export function collectNoteLinkIds(doc: Y.Doc): string[] {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+
+  function walk(node: Y.XmlElement | Y.XmlText | Y.XmlHook): void {
+    if (!(node instanceof Y.XmlElement)) return; // text leaves/hooks carry no links
+    if (node.nodeName === "noteLink") {
+      const noteId = node.getAttribute("noteId");
+      if (typeof noteId === "string" && noteId.length > 0 && !seen.has(noteId)) {
+        seen.add(noteId);
+        ids.push(noteId);
+      }
+    }
+    for (const child of node.toArray()) walk(child);
+  }
+
+  for (const child of doc.getXmlFragment("default").toArray()) walk(child);
+  return ids;
+}
