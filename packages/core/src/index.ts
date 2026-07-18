@@ -70,6 +70,8 @@ export type { MergedNoteState } from "./notes/yjsMerge.js";
 export { toCsv } from "./imex/csv.js";
 export type { CsvValue } from "./imex/csv.js";
 
+export { isInlineImageMime, sniffMime } from "./files/sniff.js";
+
 export { buildExportArchive } from "./imex/exportArchive.js";
 export type {
   ExportArchive,
