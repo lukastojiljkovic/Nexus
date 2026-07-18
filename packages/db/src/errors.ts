@@ -255,3 +255,24 @@ export class NoteTagValidationError extends DatabaseError {}
  * uniformly keeps one profile's tags invisible to a store scoped to another.
  */
 export class NoteTagNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a note-attachment write is rejected at the store boundary
+ * because its input breaks a domain rule the caller is expected to have
+ * caught already — an empty, over-255-character, or path-separator-carrying
+ * `fileName`, a malformed or over-100-character `mime`, a `sizeBytes` that is
+ * not a positive integer within `MAX_NOTE_ATTACHMENT_BYTES`, a malformed
+ * `sha256`, or a malformed `now` (ADR-014 / NOTE-003). The store revalidates
+ * because renderer input is untrusted (SEC-EL-02).
+ */
+export class NoteAttachmentValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a note-attachment operation targets a note that is not active
+ * in the store's own profile (unknown, soft-deleted, or owned by another
+ * profile — surfaced as `NoteNotFoundError`, the same gate every other note
+ * child table uses), or when `remove` targets an attachment id that is not a
+ * row of that note (unknown, or belonging to a different note) (ADR-014 /
+ * NOTE-003).
+ */
+export class NoteAttachmentNotFoundError extends DatabaseError {}
