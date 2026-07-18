@@ -1,5 +1,10 @@
 import type Database from "better-sqlite3-multiple-ciphers";
-import { NoteFolderNotFoundError, NoteNotFoundError, NoteValidationError } from "../errors.js";
+import {
+  NoteFolderNotFoundError,
+  NoteNotFoundError,
+  NoteValidationError,
+  NoteVersionNotFoundError,
+} from "../errors.js";
 import { uuidv7 } from "../ids.js";
 
 type DatabaseHandle = Database.Database;
@@ -22,10 +27,24 @@ export interface NoteDoc {
   updates: Uint8Array[];
 }
 
-/** The compaction read: the current snapshot plus every pending update with its seq, in seq order. */
+/**
+ * The compaction read: the current snapshot plus every pending update with
+ * its seq, in seq order. `coveredSeq` (additive, ADR-015 / NOTE-008) is the
+ * stored snapshot's own `covered_seq`, 0 when none is stored yet — how main's
+ * explicit pre-restore checkpoint knows which seq to stamp when there are no
+ * pending updates to merge.
+ */
 export interface NoteCompactionRead {
   snapshot: Uint8Array | null;
+  coveredSeq: number;
   updates: { seq: number; bytes: Uint8Array }[];
+}
+
+/** One checkpoint's metadata — the browse list row; the blob itself is `loadVersion`'s job (ADR-015). */
+export interface NoteVersionMeta {
+  coveredSeq: number;
+  title: string;
+  createdAt: string;
 }
 
 interface NoteRow {
@@ -43,6 +62,12 @@ interface SnapshotRow {
   covered_seq: number;
 }
 
+interface VersionMetaRow {
+  covered_seq: number;
+  title: string;
+  created_at: string;
+}
+
 const COLUMNS = "id, profile_id, title, folder_id, pinned, created_at, updated_at";
 
 /** The renderer batches updates below this; the store re-checks it because renderer input is untrusted (SEC-EL-02). */
@@ -50,6 +75,9 @@ export const MAX_NOTE_UPDATE_BYTES = 262_144;
 
 /** The most outbound wiki-links `setOutboundLinks` accepts in one call (NOTE-004). */
 export const MAX_NOTE_LINKS = 500;
+
+/** Checkpoints kept per note; `captureVersion` prunes the oldest beyond this in the same transaction (ADR-015). */
+export const MAX_NOTE_VERSIONS = 50;
 
 const MAX_TITLE_LENGTH = 200;
 
@@ -81,6 +109,13 @@ const ISO_8601_DATETIME =
  * here, the same trust model as the `title` `appendUpdate` already carries
  * (the renderer authors its own content). `note_links` is note-to-note, not a
  * new organizational entity, so it lives here rather than in `NoteOrgStore`.
+ *
+ * `captureVersion`/`listVersions`/`loadVersion`/`latestVersion` (NOTE-008,
+ * migration 014, ADR-015) manage `note_versions` — immutable, pruned
+ * checkpoints, a sibling of the mutable `note_snapshots` cache. The store
+ * owns mechanism only (dedupe-by-PK insert, retention prune, scoped reads);
+ * *when* to capture a checkpoint is `main/notes.ts`'s policy, the same
+ * division of labour compaction already uses.
  */
 export class NoteStore {
   private readonly insert: Database.Statement;
@@ -104,6 +139,11 @@ export class NoteStore {
   private readonly deleteOutboundLinks: Database.Statement;
   private readonly insertLink: Database.Statement;
   private readonly selectBacklinks: Database.Statement;
+  private readonly insertVersion: Database.Statement;
+  private readonly pruneVersions: Database.Statement;
+  private readonly selectVersions: Database.Statement;
+  private readonly selectVersionSnapshot: Database.Statement;
+  private readonly selectLatestVersion: Database.Statement;
 
   constructor(
     private readonly db: DatabaseHandle,
@@ -206,6 +246,29 @@ export class NoteStore {
        WHERE note_links.target_note_id = ? AND notes.profile_id = ? AND notes.deleted_at IS NULL
        ORDER BY pinned DESC, updated_at DESC, id DESC`,
     );
+    // INSERT OR IGNORE is the ADR-015 dedupe guard: a second capture at a
+    // covered_seq already checkpointed collapses to a no-op, keeping the
+    // first row's title/created_at.
+    this.insertVersion = db.prepare(
+      `INSERT OR IGNORE INTO note_versions (note_id, covered_seq, snapshot, title, created_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    );
+    this.pruneVersions = db.prepare(
+      `DELETE FROM note_versions WHERE note_id = ? AND covered_seq NOT IN (
+         SELECT covered_seq FROM note_versions WHERE note_id = ? ORDER BY covered_seq DESC LIMIT ?
+       )`,
+    );
+    this.selectVersions = db.prepare(
+      `SELECT covered_seq, title, created_at FROM note_versions
+       WHERE note_id = ? ORDER BY covered_seq DESC`,
+    );
+    this.selectVersionSnapshot = db.prepare(
+      `SELECT snapshot FROM note_versions WHERE note_id = ? AND covered_seq = ?`,
+    );
+    this.selectLatestVersion = db.prepare(
+      `SELECT covered_seq, title, created_at FROM note_versions
+       WHERE note_id = ? ORDER BY covered_seq DESC LIMIT 1`,
+    );
   }
 
   /** Inserts an empty, unfiled, unpinned note (title '', no document state yet) and returns its meta. */
@@ -298,6 +361,7 @@ export class NoteStore {
     }[];
     return {
       snapshot: snapshotRow ? new Uint8Array(snapshotRow.snapshot) : null,
+      coveredSeq: snapshotRow?.covered_seq ?? 0,
       updates: rows.map((row) => ({ seq: row.seq, bytes: new Uint8Array(row.update_blob) })),
     };
   }
@@ -414,6 +478,56 @@ export class NoteStore {
     return rows.map(toNoteMeta);
   }
 
+  /**
+   * Checkpoints `snapshot` at `coveredSeq` (ADR-015 / NOTE-008): the note's
+   * *current* title is captured with it (never a caller-supplied one — the
+   * list label always matches what the note was called at that moment), the
+   * PK dedupes a repeat capture of the same `coveredSeq` to a no-op, and the
+   * retention window is enforced in the same transaction so the table never
+   * drifts past `MAX_NOTE_VERSIONS` rows for this note. `snapshot` has no
+   * upper size cap — a merged full state legitimately exceeds the 256 KB
+   * per-update cap `appendUpdate` enforces.
+   */
+  captureVersion(id: string, snapshot: Uint8Array, coveredSeq: number, now: string): void {
+    const validNow = validateDateTime(now, "now");
+    const validSnapshot = validateVersionSnapshot(snapshot);
+    if (!Number.isInteger(coveredSeq) || coveredSeq < 1) {
+      throw new NoteValidationError('"coveredSeq" must be a positive integer.');
+    }
+    const note = this.requireActive(id);
+
+    this.db.transaction(() => {
+      this.insertVersion.run(id, coveredSeq, Buffer.from(validSnapshot), note.title, validNow);
+      this.pruneVersions.run(id, id, MAX_NOTE_VERSIONS);
+    })();
+  }
+
+  /** This note's checkpoints, newest `coveredSeq` first — metadata only, never the snapshot blob (ADR-015). */
+  listVersions(id: string): NoteVersionMeta[] {
+    this.requireActive(id);
+    const rows = this.selectVersions.all(id) as VersionMetaRow[];
+    return rows.map(toNoteVersionMeta);
+  }
+
+  /** One checkpoint's full snapshot bytes, or throws `NoteVersionNotFoundError` if `coveredSeq` was never captured (or has since been pruned). */
+  loadVersion(id: string, coveredSeq: number): Uint8Array {
+    this.requireActive(id);
+    const row = this.selectVersionSnapshot.get(id, coveredSeq) as { snapshot: Buffer } | undefined;
+    if (!row) {
+      throw new NoteVersionNotFoundError(
+        `No version at covered_seq ${coveredSeq} for note "${id}" in this profile.`,
+      );
+    }
+    return new Uint8Array(row.snapshot);
+  }
+
+  /** The newest checkpoint's metadata, or null if none exists yet — main's age gate for the compaction-time capture policy (ADR-015). */
+  latestVersion(id: string): NoteVersionMeta | null {
+    this.requireActive(id);
+    const row = this.selectLatestVersion.get(id) as VersionMetaRow | undefined;
+    return row ? toNoteVersionMeta(row) : null;
+  }
+
   /** Reads an active note in this profile or throws — the gate every update/snapshot access goes through. */
   private requireActive(id: string): NoteMeta {
     const row = this.selectActiveById.get(id, this.profileId) as NoteRow | undefined;
@@ -436,6 +550,10 @@ function toNoteMeta(row: NoteRow): NoteMeta {
   };
 }
 
+function toNoteVersionMeta(row: VersionMetaRow): NoteVersionMeta {
+  return { coveredSeq: row.covered_seq, title: row.title, createdAt: row.created_at };
+}
+
 function validateUpdate(value: Uint8Array): Uint8Array {
   if (!(value instanceof Uint8Array) || value.byteLength === 0) {
     throw new NoteValidationError("A note update must be a non-empty Uint8Array.");
@@ -444,6 +562,14 @@ function validateUpdate(value: Uint8Array): Uint8Array {
     throw new NoteValidationError(
       `A note update must not exceed ${MAX_NOTE_UPDATE_BYTES} bytes.`,
     );
+  }
+  return value;
+}
+
+/** Unlike `validateUpdate`, deliberately no upper bound (ADR-015): a merged full state may legitimately exceed the per-update cap. */
+function validateVersionSnapshot(value: Uint8Array): Uint8Array {
+  if (!(value instanceof Uint8Array) || value.byteLength === 0) {
+    throw new NoteValidationError("A note version snapshot must be a non-empty Uint8Array.");
   }
   return value;
 }

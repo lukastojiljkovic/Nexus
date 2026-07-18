@@ -13,6 +13,7 @@ import { migration010 } from "./010-notes.js";
 import { migration011 } from "./011-notes-organization.js";
 import { migration012 } from "./012-note-links.js";
 import { migration013 } from "./013-note-attachments.js";
+import { migration014 } from "./014-note-versions.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -37,6 +38,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration011,
   migration012,
   migration013,
+  migration014,
 ];
 
 /**

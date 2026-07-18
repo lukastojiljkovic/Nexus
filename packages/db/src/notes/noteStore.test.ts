@@ -8,7 +8,9 @@ import {
   NoteNotFoundError,
   NoteStore,
   NoteValidationError,
+  NoteVersionNotFoundError,
   MAX_NOTE_LINKS,
+  MAX_NOTE_VERSIONS,
   openDatabase,
   uuidv7,
 } from "../index.js";
@@ -594,5 +596,151 @@ describe("NoteStore — wiki-links (note_links)", () => {
 
     notes.setPinned(s1.id, true);
     expect(notes.listBacklinks(target.id).map((n) => n.id)).toEqual([s1.id, s3.id, s2.id]);
+  });
+});
+
+describe("NoteStore — version history (note_versions, ADR-015)", () => {
+  it("captureVersion inserts a checkpoint stamped with the note's current title", () => {
+    const notes = store();
+    const note = notes.create(T0);
+    notes.appendUpdate(note.id, bytes(4), "Naslov", T1);
+
+    notes.captureVersion(note.id, bytes(16, 1), 1, T2);
+
+    expect(notes.listVersions(note.id)).toEqual([{ coveredSeq: 1, title: "Naslov", createdAt: T2 }]);
+    expect(notes.loadVersion(note.id, 1)).toEqual(bytes(16, 1));
+  });
+
+  it("listVersions returns metadata only, newest coveredSeq first", () => {
+    const notes = store();
+    const note = notes.create(T0);
+    notes.captureVersion(note.id, bytes(8, 1), 1, T1);
+    notes.captureVersion(note.id, bytes(8, 2), 2, T2);
+    notes.captureVersion(note.id, bytes(8, 3), 3, T3);
+
+    expect(notes.listVersions(note.id)).toEqual([
+      { coveredSeq: 3, title: "", createdAt: T3 },
+      { coveredSeq: 2, title: "", createdAt: T2 },
+      { coveredSeq: 1, title: "", createdAt: T1 },
+    ]);
+  });
+
+  it("dedupes a repeated coveredSeq via INSERT OR IGNORE, keeping the first row", () => {
+    const notes = store();
+    const note = notes.create(T0);
+    notes.appendUpdate(note.id, bytes(4), "Prvi naslov", T1);
+    notes.captureVersion(note.id, bytes(16, 1), 1, T2);
+
+    // A later capture at the same coveredSeq (different title/snapshot/time) collapses into the first row.
+    notes.appendUpdate(note.id, bytes(4, 2), "Drugi naslov", T3);
+    notes.captureVersion(note.id, bytes(16, 9), 1, T3);
+
+    const versions = notes.listVersions(note.id);
+    expect(versions).toHaveLength(1);
+    expect(versions[0]).toEqual({ coveredSeq: 1, title: "Prvi naslov", createdAt: T2 });
+    expect(notes.loadVersion(note.id, 1)).toEqual(bytes(16, 1));
+  });
+
+  it("prunes to MAX_NOTE_VERSIONS in the same transaction, keeping the highest coveredSeqs", () => {
+    const notes = store();
+    const note = notes.create(T0);
+
+    for (let seq = 1; seq <= MAX_NOTE_VERSIONS + 5; seq += 1) {
+      notes.captureVersion(note.id, bytes(8, seq), seq, T1);
+    }
+
+    const versions = notes.listVersions(note.id);
+    expect(versions).toHaveLength(MAX_NOTE_VERSIONS);
+    expect(versions.map((v) => v.coveredSeq)).toEqual(
+      Array.from({ length: MAX_NOTE_VERSIONS }, (_, i) => MAX_NOTE_VERSIONS + 5 - i),
+    );
+    // The lowest 5 (seq 1..5) fell off the retention window.
+    expect(versions.some((v) => v.coveredSeq <= 5)).toBe(false);
+  });
+
+  it("rejects a non-positive or non-integer coveredSeq, an empty snapshot, and a malformed now", () => {
+    const notes = store();
+    const note = notes.create(T0);
+
+    expect(() => notes.captureVersion(note.id, bytes(8), 0, T1)).toThrow(NoteValidationError);
+    expect(() => notes.captureVersion(note.id, bytes(8), -1, T1)).toThrow(NoteValidationError);
+    expect(() => notes.captureVersion(note.id, bytes(8), 1.5, T1)).toThrow(NoteValidationError);
+    expect(() => notes.captureVersion(note.id, new Uint8Array(0), 1, T1)).toThrow(NoteValidationError);
+    expect(() => notes.captureVersion(note.id, bytes(8), 1, "not-a-date")).toThrow(NoteValidationError);
+    expect(() => notes.captureVersion(note.id, bytes(8), 1, T1)).not.toThrow();
+  });
+
+  it("accepts a snapshot far larger than the 256 KB update cap (no upper bound)", () => {
+    const notes = store();
+    const note = notes.create(T0);
+    const large = bytes(500_000, 3);
+
+    expect(() => notes.captureVersion(note.id, large, 1, T1)).not.toThrow();
+    expect(notes.loadVersion(note.id, 1)).toEqual(large);
+  });
+
+  it("round-trips loadVersion's snapshot bytes exactly", () => {
+    const notes = store();
+    const note = notes.create(T0);
+    const snapshot = bytes(2048, 3);
+    notes.captureVersion(note.id, snapshot, 1, T1);
+
+    const loaded = notes.loadVersion(note.id, 1);
+    expect(loaded).toBeInstanceOf(Uint8Array);
+    expect(loaded).toEqual(snapshot);
+  });
+
+  it("loadVersion throws NoteVersionNotFoundError for an uncaptured coveredSeq", () => {
+    const notes = store();
+    const note = notes.create(T0);
+    notes.captureVersion(note.id, bytes(8), 1, T1);
+
+    expect(() => notes.loadVersion(note.id, 2)).toThrow(NoteVersionNotFoundError);
+  });
+
+  it("latestVersion is null on a fresh note and the newest row afterward", () => {
+    const notes = store();
+    const note = notes.create(T0);
+    expect(notes.latestVersion(note.id)).toBeNull();
+
+    notes.captureVersion(note.id, bytes(8, 1), 1, T1);
+    notes.captureVersion(note.id, bytes(8, 2), 2, T2);
+
+    expect(notes.latestVersion(note.id)).toEqual({ coveredSeq: 2, title: "", createdAt: T2 });
+  });
+
+  it("rejects every version operation on a soft-deleted note", () => {
+    const notes = store();
+    const note = notes.create(T0);
+    notes.captureVersion(note.id, bytes(8), 1, T1);
+    notes.softDelete(note.id, T2);
+
+    expect(() => notes.captureVersion(note.id, bytes(8), 2, T3)).toThrow(NoteNotFoundError);
+    expect(() => notes.listVersions(note.id)).toThrow(NoteNotFoundError);
+    expect(() => notes.loadVersion(note.id, 1)).toThrow(NoteNotFoundError);
+    expect(() => notes.latestVersion(note.id)).toThrow(NoteNotFoundError);
+  });
+
+  it("isolates versions between profiles", () => {
+    const a = new NoteStore(db.raw, createProfile());
+    const b = new NoteStore(db.raw, createProfile());
+    const note = a.create(T0);
+    a.captureVersion(note.id, bytes(8), 1, T1);
+
+    expect(() => b.captureVersion(note.id, bytes(8), 1, T1)).toThrow(NoteNotFoundError);
+    expect(() => b.listVersions(note.id)).toThrow(NoteNotFoundError);
+    expect(() => b.loadVersion(note.id, 1)).toThrow(NoteNotFoundError);
+    expect(() => b.latestVersion(note.id)).toThrow(NoteNotFoundError);
+    expect(a.listVersions(note.id)).toHaveLength(1);
+  });
+
+  it("readForCompaction reports coveredSeq 0 before compaction and the stored covered_seq after", () => {
+    const notes = store();
+    const note = notes.create(T0);
+    notes.appendUpdate(note.id, bytes(4, 1), "", T1);
+    expect(notes.readForCompaction(note.id).coveredSeq).toBe(0);
+
+    notes.compact(note.id, bytes(8), "", 1, T2);
+    expect(notes.readForCompaction(note.id).coveredSeq).toBe(1);
   });
 });
