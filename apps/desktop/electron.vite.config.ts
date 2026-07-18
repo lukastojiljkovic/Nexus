@@ -18,7 +18,7 @@ function rendererHardening(): Plugin {
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data:",
+    "img-src 'self' data: nx-blob:", // ADR-014: inline attachment previews (slice 003-b)
     "font-src 'self' data:",
     "connect-src 'self'",
     "object-src 'none'",

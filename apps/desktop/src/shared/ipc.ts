@@ -104,6 +104,11 @@ export const IpcChannel = {
   notesSetPinned: "notes:set-pinned",
   notesSetLinks: "notes:set-links",
   notesBacklinks: "notes:backlinks",
+  noteAttachmentsList: "note-attachments:list",
+  noteAttachmentsAdd: "note-attachments:add",
+  noteAttachmentsRemove: "note-attachments:remove",
+  noteAttachmentsOpen: "note-attachments:open",
+  noteAttachmentsSaveAs: "note-attachments:save-as",
   imexExport: "imex:export",
   appInfo: "app:info",
 } as const;
@@ -1181,6 +1186,78 @@ export interface NotesBacklinksRequest {
   id: string;
 }
 
+/**
+ * Maximum size, in bytes, of one note attachment `note-attachments:add`
+ * accepts. MUST equal `MAX_NOTE_ATTACHMENT_BYTES` in `@nexus/db`: the same
+ * wire limit, declared on both sides so neither imports the other (ADR-014 /
+ * NOTE-003).
+ */
+export const NOTE_ATTACHMENT_MAX_BYTES = 52_428_800;
+
+/**
+ * A note attachment's index row as seen by the renderer (mirrors the
+ * `note_attachments` table via `NoteAttachmentStore`'s mapping, ADR-014 /
+ * NOTE-003 slice 003-a). The attachment's bytes never cross this boundary
+ * except once, at attach time (`attachNoteFile`'s `bytes` parameter) — every
+ * other read/write refers to the blob only by this row's `sha256` (e.g. an
+ * `nx-blob:<sha256>` URL for a future inline preview, slice 003-b).
+ * Redeclared here so the renderer never imports DB code.
+ */
+export interface NoteAttachment {
+  id: string;
+  noteId: string;
+  fileName: string;
+  mime: string;
+  sizeBytes: number;
+  sha256: string;
+  createdAt: string;
+}
+
+export interface NoteAttachmentsListRequest {
+  profileId: string;
+  id: string;
+}
+
+/**
+ * Attaches a file to a note: the renderer sends the raw `bytes` (≤
+ * `NOTE_ATTACHMENT_MAX_BYTES`) plus a display-only `fileName` — main sniffs
+ * the real MIME type from the bytes themselves (SEC-FILE-02) and never trusts
+ * the renderer's claim about what the file is.
+ */
+export interface NoteAttachmentsAddRequest {
+  profileId: string;
+  id: string;
+  fileName: string;
+  bytes: Uint8Array;
+}
+
+export interface NoteAttachmentsRemoveRequest {
+  profileId: string;
+  id: string;
+  attachmentId: string;
+}
+
+export interface NoteAttachmentsOpenRequest {
+  profileId: string;
+  id: string;
+  attachmentId: string;
+}
+
+export interface NoteAttachmentsSaveAsRequest {
+  profileId: string;
+  id: string;
+  attachmentId: string;
+}
+
+/**
+ * The outcome of a native "save attachment as" dialog (ADR-014 / NOTE-003):
+ * either the user canceled, or the blob was copied to `path`. Deliberately a
+ * shape of its own rather than a reuse of `ExportResult` — there is no
+ * `totalRecords` concept for a single saved file, so forcing that field onto
+ * this result would not fit.
+ */
+export type SaveAttachmentResult = { canceled: true } | { canceled: false; path: string };
+
 export interface ImexExportRequest {
   profileId: string;
 }
@@ -1345,6 +1422,23 @@ export interface NexusApi {
   setNotePinned(profileId: string, noteId: string, pinned: boolean): Promise<void>;
   setNoteLinks(profileId: string, noteId: string, targetIds: string[]): Promise<void>;
   listNoteBacklinks(profileId: string, noteId: string): Promise<NoteMeta[]>;
+  listNoteAttachments(profileId: string, noteId: string): Promise<NoteAttachment[]>;
+  /** Attaches a file to a note; main sniffs `bytes` for the real MIME type (SEC-FILE-02) — `fileName` is display-only. */
+  attachNoteFile(
+    profileId: string,
+    noteId: string,
+    fileName: string,
+    bytes: Uint8Array,
+  ): Promise<NoteAttachment>;
+  removeNoteAttachment(profileId: string, noteId: string, attachmentId: string): Promise<void>;
+  /** Copies the attachment's blob to a main-owned temp file and opens it with the OS default handler. */
+  openNoteAttachment(profileId: string, noteId: string, attachmentId: string): Promise<void>;
+  /** Copies the attachment's blob to a path chosen via a native save dialog. Resolves after the dialog is settled — canceled or written. */
+  saveNoteAttachmentAs(
+    profileId: string,
+    noteId: string,
+    attachmentId: string,
+  ): Promise<SaveAttachmentResult>;
   /** Full-data export to a `.nexus.zip` archive (IMEX slice a1). Resolves after the native save dialog is settled — canceled or written. */
   exportData(profileId: string): Promise<ExportResult>;
   appInfo(): Promise<AppInfo>;

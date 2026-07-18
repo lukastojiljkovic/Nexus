@@ -1,7 +1,8 @@
 import { join } from "node:path";
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, protocol } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import { autoUpdater } from "electron-updater";
+import { sniffMime } from "@nexus/core";
 import type { NotificationSource } from "@nexus/core";
 import {
   CARD_RATINGS,
@@ -13,9 +14,12 @@ import {
   EXAM_TYPES,
   ExamStore,
   FocusStore,
+  MAX_NOTE_ATTACHMENT_BYTES,
   MAX_NOTE_LINKS,
   MAX_NOTE_UPDATE_BYTES,
   NOTE_FOLDER_COLORS,
+  NoteAttachmentNotFoundError,
+  NoteAttachmentStore,
   NotificationStore,
   NoteOrgStore,
   NoteStore,
@@ -51,6 +55,7 @@ import {
   type NexusDatabase,
   type NotificationRecord,
   type NotificationSettings,
+  type NoteAttachment,
   type NoteFolder,
   type NoteFolderColor,
   type NoteMeta,
@@ -77,6 +82,14 @@ import {
   type UpdateSubjectFields,
   type UpdateTaskFields,
 } from "@nexus/db";
+import {
+  attachmentsDir,
+  deleteBlobIfOrphaned,
+  openExternally,
+  registerBlobProtocol,
+  saveAttachmentAs,
+  saveBlob,
+} from "./attachments.js";
 import { localToday } from "./clock.js";
 import { handleExport } from "./imex.js";
 import { compactIfNeeded } from "./notes.js";
@@ -89,11 +102,21 @@ import {
   type NoteDocPayload,
   type Profile,
   type RunningFocusSession,
+  type SaveAttachmentResult,
   type SnoozePreset,
   type StudyStats,
 } from "../shared/ipc.js";
 
 const isSmoke = process.argv.includes("--smoke");
+
+// SEC-EL: registers the `nx-blob:` scheme as privileged (ADR-014) — MUST run
+// at module scope, before the app's "ready" event, or Electron ignores it.
+// `standard` gives it normal URL parsing (so the attachment hash can be read
+// back off the host); `secure` + the CSP's `img-src` entry are what let a
+// future inline `<img src="nx-blob://...">` (slice 003-b) load at all.
+protocol.registerSchemesAsPrivileged([
+  { scheme: "nx-blob", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+]);
 
 // Stable product name so userData resolves to a clean, branded directory
 // (%APPDATA%\Nexus) rather than the scoped package name. Set before any
@@ -121,6 +144,16 @@ const runningFocusSessions = new Map<string, RunningFocusSession>();
 
 function databasePath(): string {
   return join(app.getPath("userData"), "nexus.db");
+}
+
+/** `<userData>/attachments` — the NOTE attachment blob store's root (ADR-014). */
+function attachmentsDirPath(): string {
+  return attachmentsDir(app.getPath("userData"));
+}
+
+/** `<userData>/tmp-open` — where `openExternally` copies a blob before handing it to the OS's default app. */
+function tmpOpenDirPath(): string {
+  return join(app.getPath("userData"), "tmp-open");
 }
 
 interface ProfileRow {
@@ -797,6 +830,26 @@ function noteStore(profileId: string): NoteStore {
 
 function noteOrgStore(profileId: string): NoteOrgStore {
   return new NoteOrgStore(requireDb().raw, profileId);
+}
+
+function noteAttachmentStore(profileId: string): NoteAttachmentStore {
+  return new NoteAttachmentStore(requireDb().raw, profileId);
+}
+
+/**
+ * Finds one attachment via `list` and throws `NoteAttachmentNotFoundError` if
+ * absent — `open`/`save-as` need the full row (file name, mime, hash) but the
+ * store has no separate `get`, and its `list` is already scoped to an active
+ * note in this profile, so this keeps that same profile/note gating intact.
+ */
+function requireNoteAttachment(profileId: string, noteId: string, attachmentId: string): NoteAttachment {
+  const found = noteAttachmentStore(profileId)
+    .list(noteId)
+    .find((attachment) => attachment.id === attachmentId);
+  if (!found) {
+    throw new NoteAttachmentNotFoundError(`No attachment "${attachmentId}" on note "${noteId}".`);
+  }
+  return found;
 }
 
 function flagStore(profileId: string): SqliteFlagStore {
@@ -1576,6 +1629,82 @@ function registerIpc(): void {
     return noteStore(profileId).listBacklinks(id);
   });
 
+  // NOTE-003 (attachments, slice 003-a, ADR-014): bytes are content-addressed
+  // on disk (main/attachments.ts) — only this index row crosses IPC as
+  // structured data; `mime` is always main-sniffed from `bytes` (SEC-FILE-02),
+  // never the renderer's claim, and `now` is stamped here, never accepted
+  // from the renderer.
+  ipcMain.handle(IpcChannel.noteAttachmentsList, (event, payload): NoteAttachment[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return noteAttachmentStore(profileId).list(id);
+  });
+
+  ipcMain.handle(IpcChannel.noteAttachmentsAdd, async (event, payload): Promise<NoteAttachment> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const fileName = asNonEmptyString(body.fileName, "fileName");
+    const bytes = asUint8Array(body.bytes, "bytes", MAX_NOTE_ATTACHMENT_BYTES);
+
+    const store = noteAttachmentStore(profileId);
+    const mime = sniffMime(bytes);
+    const { sha256 } = await saveBlob(attachmentsDirPath(), bytes);
+    try {
+      return store.add(
+        id,
+        { fileName, mime, sizeBytes: bytes.byteLength, sha256 },
+        new Date().toISOString(),
+      );
+    } catch (error) {
+      // The blob was already written (write-if-absent); if the row failed to
+      // insert (e.g. an unknown/soft-deleted note), GC it so a failed add
+      // never leaves an orphan file — but only if nothing else references it.
+      await deleteBlobIfOrphaned(attachmentsDirPath(), sha256, store.refCount(sha256));
+      throw error;
+    }
+  });
+
+  ipcMain.handle(IpcChannel.noteAttachmentsRemove, async (event, payload): Promise<void> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
+
+    const store = noteAttachmentStore(profileId);
+    const removed = store.remove(id, attachmentId);
+    await deleteBlobIfOrphaned(attachmentsDirPath(), removed.sha256, store.refCount(removed.sha256));
+  });
+
+  ipcMain.handle(IpcChannel.noteAttachmentsOpen, async (event, payload): Promise<void> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
+
+    const attachment = requireNoteAttachment(profileId, id, attachmentId);
+    await openExternally(attachmentsDirPath(), tmpOpenDirPath(), attachment);
+  });
+
+  ipcMain.handle(
+    IpcChannel.noteAttachmentsSaveAs,
+    (event, payload): Promise<SaveAttachmentResult> => {
+      assertTrustedSender(event);
+      const body = asRecord(payload);
+      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const id = asNonEmptyString(body.id, "id");
+      const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
+
+      const attachment = requireNoteAttachment(profileId, id, attachmentId);
+      return saveAttachmentAs(mainWindow, attachmentsDirPath(), attachment);
+    },
+  );
+
   // IMEX slice a1 (PRD 14 IMEX-001): gathers this profile's data and streams a
   // `.nexus.zip` to a path the native save dialog returns — never a path the
   // renderer supplies (SEC-EL).
@@ -1722,6 +1851,15 @@ app.whenReady().then(() => {
     db = openDatabase({ path: databasePath() });
     seedFirstRunProfile(db);
     registerIpc();
+
+    // ADR-014: the profileId argument is never read by `mimeForHash` — it is
+    // deliberately profile-agnostic (see `NoteAttachmentStore`'s doc comment),
+    // so any placeholder value is safe here.
+    registerBlobProtocol(
+      (sha256) => noteAttachmentStore("").mimeForHash(sha256),
+      attachmentsDirPath(),
+    );
+
     mainWindow = createWindow();
 
     // Never in dev, never during the smoke run — only a real packaged install.
