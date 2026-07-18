@@ -159,6 +159,14 @@ export const strings = {
     attachmentTooLarge: "Datoteka je veća od 50 MB i ne može se priložiti.",
     attachmentError: "Radnja nad prilogom nije uspela. Pokušaj ponovo.",
     attachmentMissing: "Prilog je uklonjen.",
+    /** Version history (NOTE-008b): the in-pane browser + restore flow. */
+    historyTitle: "Istorija verzija",
+    historyOpen: "Istorija verzija",
+    historyClose: "Nazad na uređivanje",
+    historyEmpty: "Još nema sačuvanih verzija — nastaju automatski tokom pisanja.",
+    historyRestore: "Vrati ovu verziju",
+    historyRestoreNote: "Trenutno stanje se automatski čuva kao verzija pre vraćanja.",
+    historyError: "Radnja nad verzijama nije uspela. Pokušaj ponovo.",
     /** Slash-menu command labels (block conversions), in menu order. */
     slash: {
       paragraph: "Paragraf",

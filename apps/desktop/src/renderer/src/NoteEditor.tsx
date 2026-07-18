@@ -13,7 +13,7 @@ import { StarterKit } from "@tiptap/starter-kit";
 import { Collaboration } from "@tiptap/extension-collaboration";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Placeholder } from "@tiptap/extensions";
-import { collectNoteLinkIds, isInlineImageMime } from "@nexus/core";
+import { collectNoteLinkIds, isInlineImageMime, replaceNoteContent } from "@nexus/core";
 import { EmptyState } from "@nexus/ui";
 import {
   NOTE_ATTACHMENT_MAX_BYTES,
@@ -27,6 +27,7 @@ import { NoteLink, NoteLinkProvider } from "./noteLink.js";
 import { createNoteLinkExtension, NoteLinkMenu, type NoteLinkRenderState } from "./noteLinkMenu.js";
 import { NotePopover } from "./notePopover.js";
 import { createSlashExtension, SlashMenu, type SlashRenderState } from "./noteSlashMenu.js";
+import { NoteVersionHistory } from "./noteVersionHistory.js";
 import { strings } from "./strings.js";
 
 /**
@@ -143,6 +144,9 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
   const [attachments, setAttachments] = useState<NoteAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState<"generic" | "tooLarge" | null>(null);
   const [dropActive, setDropActive] = useState(false);
+  const [mode, setMode] = useState<"edit" | "history">("edit");
+  const [restoring, setRestoring] = useState(false);
+  const [restoreError, setRestoreError] = useState(false);
 
   const pendingRef = useRef<Uint8Array[]>([]);
   const timerRef = useRef<number | null>(null);
@@ -261,6 +265,33 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
       }
     },
     [profileId, noteId, loadMeta],
+  );
+
+  // Restore flow (ADR-015 / NOTE-008b): flush pending keystrokes first so the
+  // safety checkpoint below includes them, capture that checkpoint, then
+  // rewrite the live doc forward to the selected version — `replaceNoteContent`
+  // deletes+re-inserts the "default" fragment's children in one transaction;
+  // the binding rebuilds the view and the normal debounced flush persists it,
+  // so this is never a destructive load of old bytes. `docRef.current === null`
+  // aborts silently (nothing to restore into); `restoring` ignores re-entry.
+  const restoreVersion = useCallback(
+    async (versionSnapshot: Uint8Array) => {
+      if (restoring || docRef.current === null) return;
+      setRestoring(true);
+      setRestoreError(false);
+      try {
+        await flushRef.current();
+        await window.nexus.captureNoteVersion(profileId, noteId);
+        replaceNoteContent(docRef.current, versionSnapshot);
+        setMode("edit");
+      } catch (error) {
+        setRestoreError(true);
+        console.error("Nexus: failed to restore note version:", error);
+      } finally {
+        setRestoring(false);
+      }
+    },
+    [profileId, noteId, restoring],
   );
 
   const scheduleFlush = useCallback(() => {
@@ -411,6 +442,9 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
       <div
         className={dropActive ? "note__editor-body note__editor-body--drop" : "note__editor-body"}
         onDragOver={(event) => {
+          // History mode has nothing to attach into — the file-drop surface
+          // only activates in edit mode.
+          if (mode === "history") return;
           if (event.dataTransfer.types.includes("Files")) {
             event.preventDefault();
             setDropActive(true);
@@ -424,6 +458,7 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
           }
         }}
         onDrop={(event) => {
+          if (mode === "history") return;
           if (event.dataTransfer.files.length > 0) {
             event.preventDefault();
             setDropActive(false);
@@ -431,117 +466,151 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
           }
         }}
       >
-        <EditorCanvas
-          doc={doc}
-          profileId={profileId}
-          noteId={noteId}
-          titles={titles}
-          onOpenNote={onOpenNote}
-          attachmentsById={attachmentsById}
-          editorRef={editorRef}
-        />
-        <section className="note__attachments" aria-label={strings.notes.attachmentsTitle}>
-          <div className="note__attachments-head">
-            <h3 className="note__attachments-title">
-              {strings.notes.attachmentsTitle}
-              {attachments.length > 0 ? ` (${attachments.length})` : ""}
-            </h3>
-            <button
-              type="button"
-              className="note__attach"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              {strings.notes.attach}
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              hidden
-              onChange={(event) => {
-                const { files } = event.target;
-                if (files !== null && files.length > 0) void attachFiles(files);
-                event.target.value = "";
-              }}
-            />
+        {restoreError && (
+          <div className="note__history-error" role="status">
+            {strings.notes.historyError}
           </div>
-          {attachmentError !== null && (
-            <div className="note__attachment-error" role="status">
-              {attachmentError === "tooLarge"
-                ? strings.notes.attachmentTooLarge
-                : strings.notes.attachmentError}
-            </div>
-          )}
-          {attachments.map((attachment) => (
-            <div key={attachment.id} className="note__attachment">
-              {isInlineImageMime(attachment.mime) && (
-                <img
-                  className="note__attachment-thumb"
-                  src={`nx-blob://${attachment.sha256}`}
-                  alt={attachment.fileName}
+        )}
+        <div className="note__editor-tools">
+          <button
+            type="button"
+            className="note__attach"
+            onClick={() => {
+              const next = mode === "edit" ? "history" : "edit";
+              setMode(next);
+              if (next === "history") setDropActive(false);
+            }}
+          >
+            {mode === "edit" ? strings.notes.historyOpen : strings.notes.historyClose}
+          </button>
+        </div>
+        {mode === "history" ? (
+          <NoteVersionHistory
+            profileId={profileId}
+            noteId={noteId}
+            titles={titles}
+            onOpenNote={onOpenNote}
+            attachmentsById={attachmentsById}
+            onRestore={(versionSnapshot) => void restoreVersion(versionSnapshot)}
+            restoring={restoring}
+          />
+        ) : (
+          <>
+            <EditorCanvas
+              doc={doc}
+              profileId={profileId}
+              noteId={noteId}
+              titles={titles}
+              onOpenNote={onOpenNote}
+              attachmentsById={attachmentsById}
+              editorRef={editorRef}
+            />
+            <section className="note__attachments" aria-label={strings.notes.attachmentsTitle}>
+              <div className="note__attachments-head">
+                <h3 className="note__attachments-title">
+                  {strings.notes.attachmentsTitle}
+                  {attachments.length > 0 ? ` (${attachments.length})` : ""}
+                </h3>
+                <button
+                  type="button"
+                  className="note__attach"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {strings.notes.attach}
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  hidden
+                  onChange={(event) => {
+                    const { files } = event.target;
+                    if (files !== null && files.length > 0) void attachFiles(files);
+                    event.target.value = "";
+                  }}
                 />
+              </div>
+              {attachmentError !== null && (
+                <div className="note__attachment-error" role="status">
+                  {attachmentError === "tooLarge"
+                    ? strings.notes.attachmentTooLarge
+                    : strings.notes.attachmentError}
+                </div>
               )}
-              <span className="note__attachment-name">{attachment.fileName}</span>
-              <span className="note__attachment-size">{formatBytes(attachment.sizeBytes)}</span>
-              <NotePopover label={strings.notes.attachmentMenuLabel}>
-                {(close) => (
-                  <>
-                    <button
-                      type="button"
-                      className="note__menu-item"
-                      role="menuitem"
-                      onClick={() => {
-                        void openAttachment(attachment.id);
-                        close();
-                      }}
-                    >
-                      {strings.notes.attachmentOpen}
-                    </button>
-                    <button
-                      type="button"
-                      className="note__menu-item"
-                      role="menuitem"
-                      onClick={() => {
-                        void saveAttachmentAs(attachment.id);
-                        close();
-                      }}
-                    >
-                      {strings.notes.attachmentSaveAs}
-                    </button>
-                    <div className="note__menu-sep" role="separator" />
-                    <button
-                      type="button"
-                      className="note__menu-item note__menu-item--danger"
-                      role="menuitem"
-                      onClick={() => {
-                        void removeAttachment(attachment.id);
-                        close();
-                      }}
-                    >
-                      {strings.notes.attachmentRemove}
-                    </button>
-                  </>
-                )}
-              </NotePopover>
-            </div>
-          ))}
-        </section>
-        {backlinks.length > 0 && (
-          <section className="note__backlinks" aria-label={strings.notes.backlinksTitle}>
-            <h3 className="note__backlinks-title">
-              {strings.notes.backlinksTitle} ({backlinks.length})
-            </h3>
-            {backlinks.map((note) => (
-              <button
-                key={note.id}
-                type="button"
-                className="note__backlink"
-                onClick={() => onOpenNote(note.id)}
-              >
-                {note.title.trim().length > 0 ? note.title : strings.notes.untitled}
-              </button>
-            ))}
-          </section>
+              {attachments.map((attachment) => (
+                <div key={attachment.id} className="note__attachment">
+                  {isInlineImageMime(attachment.mime) && (
+                    <img
+                      className="note__attachment-thumb"
+                      src={`nx-blob://${attachment.sha256}`}
+                      alt={attachment.fileName}
+                    />
+                  )}
+                  <span className="note__attachment-name">{attachment.fileName}</span>
+                  <span className="note__attachment-size">
+                    {formatBytes(attachment.sizeBytes)}
+                  </span>
+                  <NotePopover label={strings.notes.attachmentMenuLabel}>
+                    {(close) => (
+                      <>
+                        <button
+                          type="button"
+                          className="note__menu-item"
+                          role="menuitem"
+                          onClick={() => {
+                            void openAttachment(attachment.id);
+                            close();
+                          }}
+                        >
+                          {strings.notes.attachmentOpen}
+                        </button>
+                        <button
+                          type="button"
+                          className="note__menu-item"
+                          role="menuitem"
+                          onClick={() => {
+                            void saveAttachmentAs(attachment.id);
+                            close();
+                          }}
+                        >
+                          {strings.notes.attachmentSaveAs}
+                        </button>
+                        <div className="note__menu-sep" role="separator" />
+                        <button
+                          type="button"
+                          className="note__menu-item note__menu-item--danger"
+                          role="menuitem"
+                          onClick={() => {
+                            void removeAttachment(attachment.id);
+                            close();
+                          }}
+                        >
+                          {strings.notes.attachmentRemove}
+                        </button>
+                      </>
+                    )}
+                  </NotePopover>
+                </div>
+              ))}
+            </section>
+            {backlinks.length > 0 && (
+              <section className="note__backlinks" aria-label={strings.notes.backlinksTitle}>
+                <h3 className="note__backlinks-title">
+                  {strings.notes.backlinksTitle} ({backlinks.length})
+                </h3>
+                {backlinks.map((note) => (
+                  <button
+                    key={note.id}
+                    type="button"
+                    className="note__backlink"
+                    onClick={() => onOpenNote(note.id)}
+                  >
+                    {note.title.trim().length > 0 ? note.title : strings.notes.untitled}
+                  </button>
+                ))}
+              </section>
+            )}
+          </>
         )}
       </div>
     </>
