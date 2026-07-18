@@ -146,6 +146,9 @@ export const strings = {
     clearTagFilter: "Poništi",
     tagError: "Radnja nad oznakom nije uspela. Pokušaj ponovo.",
     tagFilterEmptyDescription: "Nijedna beleška ne odgovara izabranim oznakama.",
+    /** Wiki-links (slice b): the `[[` link menu + the backlinks panel. */
+    backlinksTitle: "Povratne veze",
+    wikiLinkMissing: "Nedostupna beleška",
     /** Slash-menu command labels (block conversions), in menu order. */
     slash: {
       paragraph: "Paragraf",

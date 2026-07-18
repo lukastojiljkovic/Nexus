@@ -5,8 +5,11 @@ import { StarterKit } from "@tiptap/starter-kit";
 import { Collaboration } from "@tiptap/extension-collaboration";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Placeholder } from "@tiptap/extensions";
+import { collectNoteLinkIds } from "@nexus/core";
 import { EmptyState } from "@nexus/ui";
-import { NOTE_UPDATE_MAX_BYTES } from "../../shared/ipc.js";
+import { NOTE_LINKS_MAX_COUNT, NOTE_UPDATE_MAX_BYTES, type NoteMeta } from "../../shared/ipc.js";
+import { NoteLink, NoteLinkProvider } from "./noteLink.js";
+import { createNoteLinkExtension, NoteLinkMenu, type NoteLinkRenderState } from "./noteLinkMenu.js";
 import { createSlashExtension, SlashMenu, type SlashRenderState } from "./noteSlashMenu.js";
 import { strings } from "./strings.js";
 
@@ -79,27 +82,67 @@ function deriveTitle(doc: Y.Doc | null): string {
   return "";
 }
 
+/**
+ * Ordered-set equality for the outbound wiki-link report (NOTE-004b): `null`
+ * (unknown — e.g. the first flush after mount) is never equal, so the first
+ * successful flush always sends. Otherwise the two id lists (already deduped
+ * by `collectNoteLinkIds`) must match position-for-position.
+ */
+function sameLinkSet(previous: string[] | null, next: readonly string[]): boolean {
+  if (previous === null) return false;
+  if (previous.length !== next.length) return false;
+  return previous.every((id, index) => id === next[index]);
+}
+
 export interface NoteEditorProps {
   profileId: string;
   noteId: string;
   /** Called after each successful flush so the page can refresh the note list. */
   onSaved: () => void;
+  /** Navigates to another note — wired from wiki-links and the backlinks panel. */
+  onOpenNote: (id: string) => void;
 }
 
-export function NoteEditor({ profileId, noteId, onSaved }: NoteEditorProps) {
+export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEditorProps) {
   const [doc, setDoc] = useState<Y.Doc | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [saveError, setSaveError] = useState<"generic" | "tooLarge" | null>(null);
+  const [titles, setTitles] = useState<Map<string, string>>(new Map());
+  const [backlinks, setBacklinks] = useState<NoteMeta[]>([]);
 
   const pendingRef = useRef<Uint8Array[]>([]);
   const timerRef = useRef<number | null>(null);
   const inFlightRef = useRef(false);
   const docRef = useRef<Y.Doc | null>(null);
   const flushRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  // The outbound wiki-link set as of the last successful `setNoteLinks` call —
+  // `null` means unknown (nothing sent yet this mount), which always triggers
+  // a send on the first flush.
+  const lastSentLinksRef = useRef<string[] | null>(null);
   const onSavedRef = useRef(onSaved);
   useEffect(() => {
     onSavedRef.current = onSaved;
   }, [onSaved]);
+
+  // Refreshes the id->title map (every active note of the profile) and this
+  // note's backlinks. Failures keep the previous state — this is derived,
+  // read-only data, never a save error.
+  const loadMeta = useCallback(async () => {
+    try {
+      const [notes, backlinkNotes] = await Promise.all([
+        window.nexus.listNotes(profileId),
+        window.nexus.listNoteBacklinks(profileId, noteId),
+      ]);
+      setTitles(new Map(notes.map((note) => [note.id, note.title])));
+      setBacklinks(backlinkNotes);
+    } catch (error) {
+      console.error("Nexus: failed to load note titles/backlinks:", error);
+    }
+  }, [profileId, noteId]);
+
+  useEffect(() => {
+    void loadMeta();
+  }, [loadMeta]);
 
   const scheduleFlush = useCallback(() => {
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
@@ -117,11 +160,36 @@ export function NoteEditor({ profileId, noteId, onSaved }: NoteEditorProps) {
     inFlightRef.current = true;
     const batch = pendingRef.current;
     pendingRef.current = [];
+    // Title AND outbound link ids are derived in this sync prologue, like the
+    // batch: the cleanup flush on unmount runs while the doc is still alive,
+    // but the doc is destroyed before `sendBatch` resolves — extracting after
+    // the await would silently skip the final link report of a closing note.
+    // (The store rejects raw arrays over the cap; a doc genuinely over it
+    // indexes only its first NOTE_LINKS_MAX_COUNT links, in document order.)
     const title = deriveTitle(docRef.current);
+    const ids =
+      docRef.current !== null
+        ? collectNoteLinkIds(docRef.current).slice(0, NOTE_LINKS_MAX_COUNT)
+        : null;
     try {
       await sendBatch(profileId, noteId, batch, title);
       setSaveError(null);
       onSavedRef.current();
+      void loadMeta();
+
+      // Outbound wiki-links are reported only when the set changed since the
+      // last successful send.
+      if (ids !== null && !sameLinkSet(lastSentLinksRef.current, ids)) {
+        try {
+          await window.nexus.setNoteLinks(profileId, noteId, ids);
+          lastSentLinksRef.current = ids;
+        } catch (error) {
+          // Never a content-save failure — the document itself was already
+          // persisted above. Leave the ref stale so the next flush retries.
+          console.error("Nexus: failed to update note links:", error);
+        }
+      }
+
       if (pendingRef.current.length > 0) scheduleFlush();
     } catch (error) {
       // Never drop: put the batch back (chronological) to retry on the next edit.
@@ -135,7 +203,7 @@ export function NoteEditor({ profileId, noteId, onSaved }: NoteEditorProps) {
     } finally {
       inFlightRef.current = false;
     }
-  }, [profileId, noteId, scheduleFlush]);
+  }, [profileId, noteId, scheduleFlush, loadMeta]);
 
   useEffect(() => {
     flushRef.current = flush;
@@ -160,6 +228,7 @@ export function NoteEditor({ profileId, noteId, onSaved }: NoteEditorProps) {
     setLoadFailed(false);
     setSaveError(null);
     pendingRef.current = [];
+    lastSentLinksRef.current = null;
 
     void (async () => {
       try {
@@ -220,20 +289,56 @@ export function NoteEditor({ profileId, noteId, onSaved }: NoteEditorProps) {
           {saveError === "tooLarge" ? strings.notes.saveTooLarge : strings.notes.saveError}
         </div>
       )}
-      <EditorCanvas doc={doc} />
+      <EditorCanvas
+        doc={doc}
+        profileId={profileId}
+        noteId={noteId}
+        titles={titles}
+        onOpenNote={onOpenNote}
+      />
+      {backlinks.length > 0 && (
+        <section className="note__backlinks" aria-label={strings.notes.backlinksTitle}>
+          <h3 className="note__backlinks-title">
+            {strings.notes.backlinksTitle} ({backlinks.length})
+          </h3>
+          {backlinks.map((note) => (
+            <button
+              key={note.id}
+              type="button"
+              className="note__backlink"
+              onClick={() => onOpenNote(note.id)}
+            >
+              {note.title.trim().length > 0 ? note.title : strings.notes.untitled}
+            </button>
+          ))}
+        </section>
+      )}
     </>
   );
+}
+
+interface EditorCanvasProps {
+  doc: Y.Doc;
+  profileId: string;
+  noteId: string;
+  titles: ReadonlyMap<string, string>;
+  onOpenNote: (id: string) => void;
 }
 
 /**
  * The bound editor surface. Mounts only once its `doc` is hydrated, so
  * `useEditor` always binds Collaboration to a ready document. StarterKit is
  * trimmed to the v1 block set; its undo/redo is disabled because Yjs owns undo
- * through Collaboration (Mod-Z / Mod-Y).
+ * through Collaboration (Mod-Z / Mod-Y). The slash menu (`/`) and the
+ * wiki-link menu (`[[`) are independent suggestion plugins — distinct plugin
+ * keys, distinct render state — so only one is ever open at a time but
+ * neither depends on the other's lifecycle.
  */
-function EditorCanvas({ doc }: { doc: Y.Doc }) {
+function EditorCanvas({ doc, profileId, noteId, titles, onOpenNote }: EditorCanvasProps) {
   const [slash, setSlash] = useState<SlashRenderState | null>(null);
   const slashKeydownRef = useRef<((event: KeyboardEvent) => boolean) | null>(null);
+  const [linkMenu, setLinkMenu] = useState<NoteLinkRenderState | null>(null);
+  const linkMenuKeydownRef = useRef<((event: KeyboardEvent) => boolean) | null>(null);
 
   const extensions = useMemo(
     () => [
@@ -254,6 +359,7 @@ function EditorCanvas({ doc }: { doc: Y.Doc }) {
       TaskItem.configure({ nested: true }),
       Placeholder.configure({ placeholder: strings.notes.placeholder }),
       Collaboration.configure({ document: doc, field: "default" }),
+      NoteLink,
       createSlashExtension({
         onStart: setSlash,
         onUpdate: setSlash,
@@ -263,8 +369,20 @@ function EditorCanvas({ doc }: { doc: Y.Doc }) {
         },
         onKeyDown: (event) => slashKeydownRef.current?.(event) ?? false,
       }),
+      createNoteLinkExtension(
+        {
+          onStart: setLinkMenu,
+          onUpdate: setLinkMenu,
+          onExit: () => {
+            setLinkMenu(null);
+            linkMenuKeydownRef.current = null;
+          },
+          onKeyDown: (event) => linkMenuKeydownRef.current?.(event) ?? false,
+        },
+        { profileId, currentNoteId: noteId },
+      ),
     ],
-    [doc],
+    [doc, profileId, noteId],
   );
 
   const editor = useEditor(
@@ -278,16 +396,26 @@ function EditorCanvas({ doc }: { doc: Y.Doc }) {
   );
 
   return (
-    <div className="note__editor">
-      <EditorContent editor={editor} />
-      {slash !== null && (
-        <SlashMenu
-          state={slash}
-          registerKeydown={(handler) => {
-            slashKeydownRef.current = handler;
-          }}
-        />
-      )}
-    </div>
+    <NoteLinkProvider value={{ titles, onOpenNote }}>
+      <div className="note__editor">
+        <EditorContent editor={editor} />
+        {slash !== null && (
+          <SlashMenu
+            state={slash}
+            registerKeydown={(handler) => {
+              slashKeydownRef.current = handler;
+            }}
+          />
+        )}
+        {linkMenu !== null && (
+          <NoteLinkMenu
+            state={linkMenu}
+            registerKeydown={(handler) => {
+              linkMenuKeydownRef.current = handler;
+            }}
+          />
+        )}
+      </div>
+    </NoteLinkProvider>
   );
 }

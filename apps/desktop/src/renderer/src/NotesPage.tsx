@@ -385,6 +385,7 @@ export function NotesPage({ profileId }: NotesPageProps) {
             profileId={profileId}
             noteId={selectedId}
             onSaved={() => void loadNotes()}
+            onOpenNote={setSelectedId}
           />
         ) : (
           <div className="note__editor-empty">

@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { Extension } from "@tiptap/core";
 import type { Editor, Range } from "@tiptap/core";
 import { Suggestion } from "@tiptap/suggestion";
 import type { SuggestionProps } from "@tiptap/suggestion";
+import { SuggestionMenu } from "./suggestionMenu.js";
 import { strings } from "./strings.js";
 
 /**
@@ -146,77 +145,20 @@ export interface SlashMenuProps {
 }
 
 /**
- * The floating command panel: a tokens-styled surface positioned at the caret,
- * portalled to `document.body`. Keyboard (↑/↓/Enter) is routed in from the
- * ProseMirror suggestion plugin; Escape is handled by the plugin itself (it
- * dispatches `onExit`). The active row is typographic (gold + weight) over a
- * soft surface — no glow, no inset bar.
+ * The floating command panel: thin wrapper delegating to the generic
+ * `SuggestionMenu` (extracted panel logic — portal/keyboard/active-row — is
+ * shared with the `[[` wiki-link menu, NOTE-004b). No behavior change.
  */
 export function SlashMenu({ state, registerKeydown }: SlashMenuProps) {
   const { items, command, rect } = state;
-  const [index, setIndex] = useState(0);
-  const indexRef = useRef(0);
-
-  // A fresh item set (query changed) resets the highlight to the first row.
-  useEffect(() => {
-    setIndex(0);
-    indexRef.current = 0;
-  }, [items]);
-
-  useEffect(() => {
-    indexRef.current = index;
-  }, [index]);
-
-  useEffect(() => {
-    registerKeydown((event) => {
-      if (items.length === 0) return false;
-      if (event.key === "ArrowDown") {
-        setIndex((current) => (current + 1) % items.length);
-        return true;
-      }
-      if (event.key === "ArrowUp") {
-        setIndex((current) => (current - 1 + items.length) % items.length);
-        return true;
-      }
-      if (event.key === "Enter") {
-        const selected = items[indexRef.current];
-        if (selected) command(selected);
-        return true;
-      }
-      return false;
-    });
-  }, [items, command, registerKeydown]);
-
-  if (!rect || items.length === 0) return null;
-
-  return createPortal(
-    <div
-      className="note__slash"
-      style={{ top: rect.bottom + 4, left: rect.left }}
-      role="listbox"
-    >
-      {items.map((item, position) => (
-        <button
-          key={item.key}
-          type="button"
-          role="option"
-          aria-selected={position === index}
-          className={
-            position === index
-              ? "note__slash-item note__slash-item--active"
-              : "note__slash-item"
-          }
-          // mousedown (not click) so the editor keeps its selection/focus.
-          onMouseDown={(event) => {
-            event.preventDefault();
-            command(item);
-          }}
-          onMouseEnter={() => setIndex(position)}
-        >
-          {item.label}
-        </button>
-      ))}
-    </div>,
-    document.body,
+  return (
+    <SuggestionMenu
+      items={items}
+      getKey={(item) => item.key}
+      getLabel={(item) => item.label}
+      command={command}
+      rect={rect}
+      registerKeydown={registerKeydown}
+    />
   );
 }

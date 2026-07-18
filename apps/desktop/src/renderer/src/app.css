@@ -2450,6 +2450,45 @@ body {
   padding: var(--nx-space-4) var(--nx-space-2) var(--nx-space-8);
 }
 
+/* Backlinks panel (NOTE-004b): the notes that link here, listed below the
+   editor on the same reading measure. Quiet rows — navigation, never a
+   selection affordance. */
+.note__backlinks {
+  max-width: 70ch;
+  margin: 0 auto;
+  padding: var(--nx-space-4) var(--nx-space-2) var(--nx-space-8);
+  border-top: 1px solid var(--nx-border);
+}
+.note__backlinks-title {
+  margin: 0 0 var(--nx-space-2);
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+.note__backlink {
+  display: block;
+  width: 100%;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__backlink:hover {
+  background: var(--nx-surface-alt);
+}
+.note__backlink:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+
 /* ProseMirror content — scoped under the editor container, tokens only. ---- */
 .note__editor .ProseMirror {
   outline: none;
@@ -2561,6 +2600,26 @@ body {
   color: var(--nx-accent-strong);
   text-decoration: underline;
   cursor: pointer;
+}
+/* Wiki-links (NOTE-004b): an inline atom resolved live from the id->title
+   map. Typographic only — no pill background, no border, no glow. */
+.note__wikilink {
+  cursor: pointer;
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-medium);
+  text-decoration: none;
+}
+.note__wikilink:hover,
+.note__wikilink:focus-visible {
+  text-decoration: underline;
+}
+.note__wikilink--missing {
+  color: var(--nx-text-muted);
+  cursor: default;
+}
+.note__wikilink--missing:hover,
+.note__wikilink--missing:focus-visible {
+  text-decoration: none;
 }
 /* The active "/query" range while the slash menu is open reads as a command. */
 .note__editor .ProseMirror .suggestion {
