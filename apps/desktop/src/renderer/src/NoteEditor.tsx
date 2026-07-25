@@ -13,16 +13,21 @@ import { StarterKit } from "@tiptap/starter-kit";
 import { Collaboration } from "@tiptap/extension-collaboration";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Placeholder } from "@tiptap/extensions";
-import { collectNoteLinkIds, isInlineImageMime, replaceNoteContent } from "@nexus/core";
+import { collectNoteCards, collectNoteLinkIds, isInlineImageMime, replaceNoteContent } from "@nexus/core";
 import { EmptyState } from "@nexus/ui";
 import {
   NOTE_ATTACHMENT_MAX_BYTES,
+  NOTE_CARDS_MAX_COUNT,
   NOTE_LINKS_MAX_COUNT,
   NOTE_UPDATE_MAX_BYTES,
+  type Deck,
   type NoteAttachment,
+  type NoteCardSpec,
   type NoteMeta,
+  type Subject,
 } from "../../shared/ipc.js";
 import { AttachmentImage, NoteAttachmentProvider } from "./noteAttachmentImage.js";
+import { countEditorCards, NoteFlashcard } from "./noteFlashcard.js";
 import { NoteLink, NoteLinkProvider } from "./noteLink.js";
 import { createNoteLinkExtension, NoteLinkMenu, type NoteLinkRenderState } from "./noteLinkMenu.js";
 import { NotePopover } from "./notePopover.js";
@@ -104,6 +109,9 @@ function deriveTitle(doc: Y.Doc | null): string {
 /** Locale-aware one-decimal formatter for the KB/MB branches of `formatBytes`. */
 const BYTES_FORMATTER = new Intl.NumberFormat("sr-Latn", { maximumFractionDigits: 1 });
 
+/** sr-Latn collation for the deck-mapping bar's subject/deck names — plain "sr" mis-tailors Latin š/č/ć. */
+const CARD_DECK_COLLATOR = new Intl.Collator(["sr-Latn", "sr"]);
+
 /**
  * Human-readable file size for the Prilozi panel: whole bytes under 1 KB,
  * otherwise KB/MB with at most one decimal — no fabricated precision beyond
@@ -128,6 +136,26 @@ function sameLinkSet(previous: string[] | null, next: readonly string[]): boolea
   return previous.every((id, index) => id === next[index]);
 }
 
+/**
+ * Ordered-set equality for the outbound card report (NOTE-006c / ADR-017),
+ * mirroring `sameLinkSet` above: `null` (nothing sent yet this mount) is
+ * never equal, otherwise equal length and equal `key`/`front`/`back` at
+ * every index.
+ */
+function sameCardSet(previous: NoteCardSpec[] | null, next: readonly NoteCardSpec[]): boolean {
+  if (previous === null) return false;
+  if (previous.length !== next.length) return false;
+  return previous.every((card, index) => {
+    const other = next[index];
+    return (
+      other !== undefined &&
+      card.key === other.key &&
+      card.front === other.front &&
+      card.back === other.back
+    );
+  });
+}
+
 export interface NoteEditorProps {
   profileId: string;
   noteId: string;
@@ -146,6 +174,17 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
   const [attachments, setAttachments] = useState<NoteAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState<"generic" | "tooLarge" | null>(null);
   const [dropActive, setDropActive] = useState(false);
+  // Inline flashcards (NOTE-006c / ADR-017): this note's deck mapping, the
+  // profile's decks/subjects for the picker, the live card count, and a
+  // transient error channel of its own — see the deck bar below.
+  const [cardDeckId, setCardDeckId] = useState<string | null>(null);
+  const [decks, setDecks] = useState<Deck[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [cardCount, setCardCount] = useState(0);
+  const [cardError, setCardError] = useState(false);
+  // Reveals the unmapped form for one re-pick, without touching `cardDeckId`
+  // until a new deck is actually chosen.
+  const [changingDeck, setChangingDeck] = useState(false);
   const [mode, setMode] = useState<"edit" | "history" | "templates">("edit");
   const [restoring, setRestoring] = useState(false);
   const [restoreError, setRestoreError] = useState(false);
@@ -170,6 +209,14 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
   // `null` means unknown (nothing sent yet this mount), which always triggers
   // a send on the first flush.
   const lastSentLinksRef = useRef<string[] | null>(null);
+  // Same idea, for the generated card set (NOTE-006c).
+  const lastSentCardsRef = useRef<NoteCardSpec[] | null>(null);
+  // `flush` reads the chosen deck through a ref, like every other mutable
+  // value that path reads — it is called from the unmount cleanup, after
+  // React has stopped re-rendering this component with fresh state. Kept in
+  // step with the *resolved* mapping (see `mappedDeck` below), never with the
+  // raw id.
+  const cardDeckRef = useRef<string | null>(null);
   const onSavedRef = useRef(onSaved);
   useEffect(() => {
     onSavedRef.current = onSaved;
@@ -188,6 +235,10 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
       setTitles(new Map(notes.map((note) => [note.id, note.title])));
       setBacklinks(backlinkNotes);
       setAttachments(noteAttachments);
+      // The card-deck mapping rides along with `listNotes` (NOTE-006c) — every
+      // row already carries `cardDeckId`, so no separate IPC call is needed.
+      const self = notes.find((note) => note.id === noteId);
+      if (self !== undefined) setCardDeckId(self.cardDeckId);
     } catch (error) {
       console.error("Nexus: failed to load note titles/backlinks/attachments:", error);
     }
@@ -196,6 +247,26 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
   useEffect(() => {
     void loadMeta();
   }, [loadMeta]);
+
+  // Feeds the deck bar's picker (NOTE-006c): every deck grouped by subject.
+  // Failure keeps the previous list and logs — like `loadMeta`, this is
+  // derived, read-only data, never a save error.
+  const loadDecks = useCallback(async () => {
+    try {
+      const [deckRows, subjectRows] = await Promise.all([
+        window.nexus.listDecks(profileId),
+        window.nexus.listSubjects(profileId),
+      ]);
+      setDecks(deckRows);
+      setSubjects(subjectRows);
+    } catch (error) {
+      console.error("Nexus: failed to load decks:", error);
+    }
+  }, [profileId]);
+
+  useEffect(() => {
+    void loadDecks();
+  }, [loadDecks]);
 
   // Feeds the slash menu (NOTE-009c). Failure keeps the previous list and
   // logs — like `loadMeta`, this is derived, read-only data, never a save
@@ -220,6 +291,64 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
   const attachmentsById = useMemo(
     () => new Map(attachments.map((attachment) => [attachment.id, attachment])),
     [attachments],
+  );
+
+  // The deck bar's picker groups by subject (NOTE-006c), sr-Latn ordered;
+  // decks within a subject get the same ordering. Subjects with no decks of
+  // their own contribute no optgroup.
+  const decksBySubject = useMemo(() => {
+    const map = new Map<string, Deck[]>();
+    for (const deck of decks) {
+      const list = map.get(deck.subjectId);
+      if (list === undefined) map.set(deck.subjectId, [deck]);
+      else list.push(deck);
+    }
+    for (const list of map.values()) list.sort((a, b) => CARD_DECK_COLLATOR.compare(a.name, b.name));
+    return map;
+  }, [decks]);
+  const orderedSubjects = useMemo(
+    () => [...subjects].sort((a, b) => CARD_DECK_COLLATOR.compare(a.name, b.name)),
+    [subjects],
+  );
+
+  // The mapping is resolved against the *live* deck list, never trusted as a
+  // bare id: STUDY soft-deletes a deck, and `notes.card_deck_id`'s
+  // ON DELETE SET NULL fires only on a hard delete, so a note can outlive the
+  // deck it points at. An unresolvable mapping therefore reads as unmapped —
+  // the picker comes back instead of every flush syncing into a deck that no
+  // longer exists. (`decks` is empty until `loadDecks` resolves, which only
+  // delays the bar by one round-trip.)
+  const mappedDeck = useMemo(
+    () => (cardDeckId === null ? undefined : decks.find((deck) => deck.id === cardDeckId)),
+    [cardDeckId, decks],
+  );
+  useEffect(() => {
+    cardDeckRef.current = mappedDeck?.id ?? null;
+  }, [mappedDeck]);
+
+  // Maps (or re-maps) this note's cards onto a deck, then syncs immediately
+  // (ADR-017): choosing a deck must not wait for the next keystroke. Failure
+  // covers both the mapping call and the sync that follows it — either way
+  // the note's own content is untouched, so it surfaces on `cardError`, never
+  // `saveError`.
+  const chooseDeck = useCallback(
+    async (deckId: string) => {
+      setCardError(false);
+      try {
+        await window.nexus.setNoteCardDeck(profileId, noteId, deckId);
+        setCardDeckId(deckId);
+        cardDeckRef.current = deckId;
+        if (docRef.current !== null) {
+          const cards = collectNoteCards(docRef.current).slice(0, NOTE_CARDS_MAX_COUNT);
+          await window.nexus.syncNoteCards(profileId, noteId, deckId, cards);
+          lastSentCardsRef.current = cards;
+        }
+      } catch (error) {
+        setCardError(true);
+        console.error("Nexus: failed to map note cards:", error);
+      }
+    },
+    [profileId, noteId],
   );
 
   // Attaches one or more files sequentially (drag-drop or the file picker).
@@ -345,16 +474,21 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
     inFlightRef.current = true;
     const batch = pendingRef.current;
     pendingRef.current = [];
-    // Title AND outbound link ids are derived in this sync prologue, like the
-    // batch: the cleanup flush on unmount runs while the doc is still alive,
-    // but the doc is destroyed before `sendBatch` resolves — extracting after
-    // the await would silently skip the final link report of a closing note.
-    // (The store rejects raw arrays over the cap; a doc genuinely over it
-    // indexes only its first NOTE_LINKS_MAX_COUNT links, in document order.)
+    // Title, outbound link ids, AND the generated card set are all derived in
+    // this sync prologue, like the batch: the cleanup flush on unmount runs
+    // while the doc is still alive, but the doc is destroyed before
+    // `sendBatch` resolves — extracting after the await would silently skip
+    // the final report of a closing note. (Each store rejects a raw array
+    // over its cap; a doc genuinely over it indexes only its first capped
+    // entries, in document order.)
     const title = deriveTitle(docRef.current);
     const ids =
       docRef.current !== null
         ? collectNoteLinkIds(docRef.current).slice(0, NOTE_LINKS_MAX_COUNT)
+        : null;
+    const cards =
+      docRef.current !== null
+        ? collectNoteCards(docRef.current).slice(0, NOTE_CARDS_MAX_COUNT)
         : null;
     try {
       await sendBatch(profileId, noteId, batch, title);
@@ -372,6 +506,21 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
           // Never a content-save failure — the document itself was already
           // persisted above. Leave the ref stale so the next flush retries.
           console.error("Nexus: failed to update note links:", error);
+        }
+      }
+
+      // Generated cards sync the same way as the link report above (ADR-017 /
+      // NOTE-006c): only once a deck is chosen, and only when the set changed
+      // since the last successful send.
+      const deckId = cardDeckRef.current;
+      if (cards !== null && deckId !== null && !sameCardSet(lastSentCardsRef.current, cards)) {
+        try {
+          await window.nexus.syncNoteCards(profileId, noteId, deckId, cards);
+          lastSentCardsRef.current = cards;
+        } catch (error) {
+          // Never a content-save failure — the document itself was already
+          // persisted above. Leave the ref stale so the next flush retries.
+          console.error("Nexus: failed to sync note cards:", error);
         }
       }
 
@@ -414,6 +563,7 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
     setSaveError(null);
     pendingRef.current = [];
     lastSentLinksRef.current = null;
+    lastSentCardsRef.current = null;
 
     void (async () => {
       try {
@@ -543,6 +693,80 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
             </button>
           )}
         </div>
+        {mode === "edit" && cardCount > 0 && (
+          <>
+            {cardError && (
+              <div className="note__cards-error" role="status">
+                {strings.notes.cardsError}
+              </div>
+            )}
+            <div className="note__cards-bar">
+              {mappedDeck !== undefined && !changingDeck ? (
+                <>
+                  <span>
+                    {`${strings.notes.cardsLabel} (${cardCount}) · ${strings.notes.cardsDeckPrefix}${mappedDeck.name}`}
+                  </span>
+                  <button type="button" className="note__attach" onClick={() => setChangingDeck(true)}>
+                    {strings.notes.cardsChangeDeck}
+                  </button>
+                </>
+              ) : (
+                <>
+                  {/* Re-picking keeps naming the current deck: the "no deck yet"
+                      copy would be a lie for a note that already has one. */}
+                  <span>
+                    {mappedDeck !== undefined
+                      ? `${strings.notes.cardsLabel} (${cardCount}) · ${strings.notes.cardsDeckPrefix}${mappedDeck.name}`
+                      : strings.notes.cardsUnmapped}
+                  </span>
+                  {decks.length === 0 ? (
+                    <span>{strings.notes.cardsNoDecks}</span>
+                  ) : (
+                    <select
+                      className="note__cards-select"
+                      aria-label={strings.notes.cardsDeckSelectLabel}
+                      value=""
+                      onChange={(event) => {
+                        const deckId = event.target.value;
+                        if (deckId.length === 0) return;
+                        setChangingDeck(false);
+                        void chooseDeck(deckId);
+                      }}
+                    >
+                      <option value="" disabled>
+                        {strings.notes.cardsDeckPlaceholder}
+                      </option>
+                      {orderedSubjects.map((subject) => {
+                        const subjectDecks = decksBySubject.get(subject.id);
+                        if (subjectDecks === undefined) return null;
+                        return (
+                          <optgroup key={subject.id} label={subject.name}>
+                            {subjectDecks.map((deck) => (
+                              <option key={deck.id} value={deck.id}>
+                                {deck.name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        );
+                      })}
+                    </select>
+                  )}
+                  {/* An accidental "Promeni špil" must have a way back — without
+                      this the bar can only be left by picking a deck. */}
+                  {changingDeck && (
+                    <button
+                      type="button"
+                      className="note__attach"
+                      onClick={() => setChangingDeck(false)}
+                    >
+                      {strings.notes.cardsCancelChange}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </>
+        )}
         {mode === "history" ? (
           <NoteVersionHistory
             profileId={profileId}
@@ -577,6 +801,7 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
               pendingTemplate={pendingTemplate}
               onTemplateApplied={onTemplateApplied}
               templates={templates}
+              onCardCount={setCardCount}
             />
             <section className="note__attachments" aria-label={strings.notes.attachmentsTitle}>
               <div className="note__attachments-head">
@@ -705,6 +930,8 @@ interface EditorCanvasProps {
   onTemplateApplied: () => void;
   /** The live template list for the slash menu (NOTE-009c) — read through a ref, see below. */
   templates: TemplateEntry[];
+  /** Reports the document's current card count on every create/update (NOTE-006c) — read through a ref, see below. */
+  onCardCount: (count: number) => void;
 }
 
 /**
@@ -727,6 +954,7 @@ function EditorCanvas({
   pendingTemplate,
   onTemplateApplied,
   templates,
+  onCardCount,
 }: EditorCanvasProps) {
   const [slash, setSlash] = useState<SlashRenderState | null>(null);
   const slashKeydownRef = useRef<((event: KeyboardEvent) => boolean) | null>(null);
@@ -742,6 +970,15 @@ function EditorCanvas({
   useEffect(() => {
     templatesRef.current = templates;
   }, [templates]);
+
+  // Same discipline for `onCardCount` (NOTE-006c): `useEditor`'s options
+  // object below is likewise built once per `[doc]`, so its `onCreate`/
+  // `onUpdate` callbacks must read the live prop through a ref rather than
+  // close over whichever `onCardCount` was in scope when the editor was built.
+  const onCardCountRef = useRef(onCardCount);
+  useEffect(() => {
+    onCardCountRef.current = onCardCount;
+  }, [onCardCount]);
 
   const extensions = useMemo(
     () => [
@@ -764,6 +1001,7 @@ function EditorCanvas({
       Collaboration.configure({ document: doc, field: "default" }),
       NoteLink,
       AttachmentImage,
+      NoteFlashcard,
       createSlashExtension(
         {
           onStart: setSlash,
@@ -803,6 +1041,10 @@ function EditorCanvas({
       // Avoids a first-render/StrictMode mismatch with the collaborative doc.
       immediatelyRender: false,
       editorProps: { attributes: { class: "note__prosemirror" } },
+      // Live card count for the deck bar (NOTE-006c) — the same parse the
+      // decoration plugin uses, recomputed on every create/update.
+      onCreate: ({ editor: created }) => onCardCountRef.current(countEditorCards(created.state.doc)),
+      onUpdate: ({ editor: updated }) => onCardCountRef.current(countEditorCards(updated.state.doc)),
     },
     [doc],
   );

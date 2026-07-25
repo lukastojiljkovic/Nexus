@@ -85,6 +85,14 @@ const SLASH_ITEMS: readonly SlashItem[] = [
     label: strings.notes.slash.divider,
     run: (editor, range) => editor.chain().focus().deleteRange(range).setHorizontalRule().run(),
   },
+  {
+    key: "flashcard",
+    label: strings.notes.slash.flashcard,
+    // The scaffold is text the author types over (NOTE-006c / ADR-017) — it
+    // immediately becomes a real card via `NoteFlashcard`'s key plugin.
+    run: (editor, range) =>
+      editor.chain().focus().deleteRange(range).insertContent(strings.notes.cardScaffold).run(),
+  },
 ];
 
 /**

@@ -206,7 +206,19 @@ export const strings = {
       blockquote: "Citat",
       codeBlock: "Blok koda",
       divider: "Razdvajač",
+      flashcard: "Kartica (pitanje :: odgovor)",
     },
+    /** Inline flashcards (NOTE-006c / ADR-017): the `::` / `{{…}}` syntax + the deck-mapping bar. */
+    cardsLabel: "Kartice",
+    cardsUnmapped: "Ova beleška pravi kartice za učenje. Izaberi špil:",
+    cardsDeckSelectLabel: "Špil za kartice",
+    cardsDeckPlaceholder: "Izaberi špil",
+    cardsNoDecks: "Napravi špil u modulu Učenje da bi kartice iz ove beleške imale gde da odu.",
+    cardsDeckPrefix: "Špil: ",
+    cardsChangeDeck: "Promeni špil",
+    cardsCancelChange: "Otkaži",
+    cardsError: "Kartice nisu sačuvane. Pokušaj ponovo.",
+    cardScaffold: "Pitanje :: Odgovor",
   },
 
   calendar: {
