@@ -245,6 +245,13 @@ function ColorPicker({
 
 export interface StudyPageProps {
   profileId: string;
+  /**
+   * Opens a note in Beleške — backs the source-link control on a
+   * note-generated card (ADR-017 / STUDY-008), the app's first cross-module
+   * deep link. Optional: without it, the source control degrades to plain
+   * muted text rather than a dead-end button.
+   */
+  onOpenNote?: (noteId: string) => void;
 }
 
 /**
@@ -256,7 +263,7 @@ export interface StudyPageProps {
  * scheduling and block generation are always stamped by the main process
  * (`syncAllPlans` runs before every plan read so missed blocks are labelled).
  */
-export function StudyPage({ profileId }: StudyPageProps) {
+export function StudyPage({ profileId, onOpenNote }: StudyPageProps) {
   const [subjects, setSubjects] = useState<Subject[] | null>(null);
   const [exams, setExams] = useState<Exam[] | null>(null);
   const [decks, setDecks] = useState<Deck[] | null>(null);
@@ -338,6 +345,9 @@ export function StudyPage({ profileId }: StudyPageProps) {
   const [cardBack, setCardBack] = useState("");
   const [cardDeckId, setCardDeckId] = useState("");
   const [pendingUndoCardId, setPendingUndoCardId] = useState<string | null>(null);
+  // Lazily loaded id -> title map backing the note-source link control
+  // (ADR-017); stays empty, and unfetched, for a deck with no generated cards.
+  const [noteTitles, setNoteTitles] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     let active = true;
@@ -422,6 +432,20 @@ export function StudyPage({ profileId }: StudyPageProps) {
     void (async () => {
       try {
         const list = await window.nexus.listCardsByDeck(profileId, activeDeckId);
+        // Note titles for the source-link control, fetched only when this deck
+        // actually holds a note-sourced card — so a profile with no generated
+        // cards never pays for the query — and resolved BEFORE the rows are
+        // handed to render, so a generated card never flashes "(nedostupna)"
+        // in the gap between the two reads. A failed fetch keeps the previous
+        // map: derived, read-only data, never an error banner.
+        if (list.some((card) => card.sourceNoteId !== null)) {
+          try {
+            const notes = await window.nexus.listNotes(profileId);
+            if (active) setNoteTitles(new Map(notes.map((note) => [note.id, note.title])));
+          } catch (error) {
+            console.error("Nexus: failed to load note titles:", error);
+          }
+        }
         if (active) setCards(list);
       } catch (error) {
         if (active) setCardsFailed(true);
@@ -1122,6 +1146,41 @@ export function StudyPage({ profileId }: StudyPageProps) {
     const deckSubject = deck ? subjects?.find((s) => s.id === deck.subjectId) : undefined;
     const deckOptions = deck ? decksForSubject(deck.subjectId) : [];
 
+    /**
+     * The trailing control for a note-sourced card (ADR-017 "STUDY: one
+     * source of truth"): STUDY withdraws edit/delete for a card whose text is
+     * owned by a note block, offering a link to that note instead. An id
+     * missing from `noteTitles` reads as unresolvable — a soft-deleted or
+     * trashed note, which by design (ADR-017) leaves its cards alone — and
+     * renders muted and inert, exactly like an unresolvable wiki-link chip.
+     * Degrades to plain muted text if the page was mounted without
+     * `onOpenNote`, rather than offering a button that goes nowhere.
+     */
+    function cardSourceControl(sourceNoteId: string) {
+      const title = noteTitles.get(sourceNoteId);
+      const resolvable = title !== undefined;
+      const label = resolvable
+        ? `${strings.study.cardSourcePrefix}${title || strings.notes.untitled}`
+        : strings.study.cardSourceMissing;
+
+      if (!onOpenNote) {
+        return <span className="study__card-source">{label}</span>;
+      }
+
+      return (
+        <Button
+          size="sm"
+          className="study__card-source"
+          disabled={!resolvable}
+          title={strings.study.cardSourceLabel}
+          aria-label={strings.study.cardSourceLabel}
+          onClick={resolvable ? () => onOpenNote(sourceNoteId) : undefined}
+        >
+          {label}
+        </Button>
+      );
+    }
+
     return (
       <div className="study">
         <div className="study__deck-view-header">
@@ -1175,22 +1234,28 @@ export function StudyPage({ profileId }: StudyPageProps) {
                         {card.state !== 0 && (
                           <span className="study__card-due">{formatCardDue(card.due)}</span>
                         )}
-                        <Button
-                          size="sm"
-                          className="study__edit"
-                          aria-label={strings.study.editCardLabel}
-                          onClick={() => startEditCard(card)}
-                        >
-                          ✎
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="study__delete"
-                          aria-label={strings.study.deleteCardLabel}
-                          onClick={() => void removeCard(card)}
-                        >
-                          ×
-                        </Button>
+                        {card.sourceNoteId !== null ? (
+                          cardSourceControl(card.sourceNoteId)
+                        ) : (
+                          <>
+                            <Button
+                              size="sm"
+                              className="study__edit"
+                              aria-label={strings.study.editCardLabel}
+                              onClick={() => startEditCard(card)}
+                            >
+                              ✎
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="study__delete"
+                              aria-label={strings.study.deleteCardLabel}
+                              onClick={() => void removeCard(card)}
+                            >
+                              ×
+                            </Button>
+                          </>
+                        )}
                       </span>
                     }
                   >

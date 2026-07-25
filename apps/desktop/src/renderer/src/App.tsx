@@ -41,6 +41,11 @@ export function App() {
   const [flags, setFlags] = useState<FlagState>({});
   const [failed, setFailed] = useState(false);
   const [activeId, setActiveId] = useState("dashboard");
+  // Pending cross-module deep-link target (STUDY -> a note, ADR-017 — the
+  // app's first). NotesPage selects it on arrival and reports back via
+  // onTargetOpened, which clears it here so a later return to Beleške never
+  // re-selects the same note.
+  const [noteTarget, setNoteTarget] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -99,6 +104,17 @@ export function App() {
   // deliberately leaving system mode — a manual flip is an explicit choice.
   function toggleTheme(): void {
     changePreference(theme === "noc" ? "dan" : "noc");
+  }
+
+  /**
+   * The app's first cross-module deep link (STUDY -> the note a flashcard was
+   * generated from, ADR-017): sets the pending target and switches the active
+   * module, extending NotificationCenter's `onNavigate={setActiveId}`
+   * precedent with a payload that NotesPage consumes on arrival.
+   */
+  function openNote(noteId: string): void {
+    setNoteTarget(noteId);
+    setActiveId("notes");
   }
 
   const enabledIds = new Set(resolveEnabled(registry, flags));
@@ -208,9 +224,13 @@ export function App() {
           ) : effectiveId === "calendar" && activeProfile ? (
             <CalendarPage profileId={activeProfile.id} />
           ) : effectiveId === "notes" && activeProfile ? (
-            <NotesPage profileId={activeProfile.id} />
+            <NotesPage
+              profileId={activeProfile.id}
+              targetNoteId={noteTarget}
+              onTargetOpened={() => setNoteTarget(null)}
+            />
           ) : effectiveId === "study" && activeProfile ? (
-            <StudyPage profileId={activeProfile.id} />
+            <StudyPage profileId={activeProfile.id} onOpenNote={openNote} />
           ) : effectiveId === "settings" && activeProfile ? (
             <SettingsPage
               profileId={activeProfile.id}

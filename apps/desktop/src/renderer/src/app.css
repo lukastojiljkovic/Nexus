@@ -1430,6 +1430,36 @@ body {
   white-space: nowrap;
   max-width: 60ch;
 }
+/* Note-source control replacing edit/delete on a note-generated card
+   (STUDY-008 / ADR-017): quiet and typographic, matching .note__wikilink's
+   muted/inert recipe for an unresolvable source. `.study__card-actions` is a
+   flex row, so the label is forced block-level (overriding .nx-button's
+   inline-flex) — an inline element ignores overflow/text-overflow, and
+   without this the ellipsis below would never trigger. */
+.study__card-source {
+  display: block;
+  max-width: 20ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-regular);
+  letter-spacing: var(--nx-font-tracking-normal);
+  color: var(--nx-text-muted);
+}
+.study__card-source.nx-button {
+  padding: 2px 0;
+  background: transparent;
+  border-color: transparent;
+}
+.study__card-source.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
+}
+.study__card-source.nx-button:disabled {
+  opacity: 1;
+  cursor: default;
+}
 
 /* Card form (add/edit) --------------------------------------------------- */
 .study__card-form {

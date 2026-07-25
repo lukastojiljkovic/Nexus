@@ -31,6 +31,17 @@ function filterFor(selection: FolderSelection): { folderId?: string | null } | u
 
 export interface NotesPageProps {
   profileId: string;
+  /**
+   * A pending cross-module deep-link target (STUDY -> a note, ADR-017): when
+   * non-null, that note is selected and the folder/tag filters are reset to
+   * "all"/none, so the middle pane actually shows the row the editor jumps to.
+   */
+  targetNoteId?: string | null;
+  /**
+   * Reports that the pending target above has been acted on, so the caller
+   * can clear it — otherwise a later return to Beleške would re-select it.
+   */
+  onTargetOpened?: () => void;
 }
 
 /**
@@ -42,7 +53,7 @@ export interface NotesPageProps {
  * organization IPC allowlist; the editor owns the live Yjs doc, main owns
  * storage. Writes are await-then-refetch (never optimistic), the house style.
  */
-export function NotesPage({ profileId }: NotesPageProps) {
+export function NotesPage({ profileId, targetNoteId, onTargetOpened }: NotesPageProps) {
   const [folders, setFolders] = useState<NoteFolder[]>([]);
   const [selection, setSelection] = useState<FolderSelection>({ kind: "all" });
   const [notes, setNotes] = useState<NoteMeta[] | null>(null);
@@ -104,6 +115,18 @@ export function NotesPage({ profileId }: NotesPageProps) {
   useEffect(() => {
     void loadTags();
   }, [loadTags]);
+
+  // A deep-linked target (STUDY -> a note, ADR-017): select it and reset both
+  // filters to "all"/none — otherwise the note opens in the editor pane while
+  // an active folder/tag filter leaves the middle pane showing no matching
+  // row. Reports back so the caller clears the target after hand-off.
+  useEffect(() => {
+    if (targetNoteId == null) return;
+    setSelectedId(targetNoteId);
+    setSelection({ kind: "all" });
+    setTagFilter([]);
+    onTargetOpened?.();
+  }, [targetNoteId, onTargetOpened]);
 
   // A folder mutation may have promoted children/notes — refetch both panes.
   const onFoldersChanged = useCallback(async () => {

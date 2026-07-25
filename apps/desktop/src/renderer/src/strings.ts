@@ -401,6 +401,10 @@ export const strings = {
       review: "Na ponavljanju",
     },
     cardDueLabel: "Sledeće ponavljanje",
+    /** Source-link control for a note-generated card (ADR-017 / STUDY-008). */
+    cardSourcePrefix: "Iz beleške: ",
+    cardSourceLabel: "Otvori izvornu belešku",
+    cardSourceMissing: "Iz beleške (nedostupna)",
 
     // --- Review session (keyboard-first) ------------------------------------
     reviewTitle: "Učenje",
