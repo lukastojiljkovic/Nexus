@@ -28,7 +28,7 @@ import { createNoteLinkExtension, NoteLinkMenu, type NoteLinkRenderState } from 
 import { NotePopover } from "./notePopover.js";
 import { createSlashExtension, SlashMenu, type SlashRenderState } from "./noteSlashMenu.js";
 import { NoteTemplatePane } from "./noteTemplatePane.js";
-import { stripAttachmentNodes } from "./noteTemplates.js";
+import { mergeTemplateEntries, stripAttachmentNodes, type TemplateEntry } from "./noteTemplates.js";
 import { NoteVersionHistory } from "./noteVersionHistory.js";
 import { strings } from "./strings.js";
 
@@ -155,6 +155,9 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
   // has no live editor to read from).
   const [pendingTemplate, setPendingTemplate] = useState<JSONContent[] | null>(null);
   const [templateSource, setTemplateSource] = useState<JSONContent | null>(null);
+  // Feeds the slash menu's live template list (NOTE-009c) — see `loadTemplates`
+  // below for the refresh-on-edit-entry policy.
+  const [templates, setTemplates] = useState<TemplateEntry[]>([]);
 
   const pendingRef = useRef<Uint8Array[]>([]);
   const timerRef = useRef<number | null>(null);
@@ -193,6 +196,26 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
   useEffect(() => {
     void loadMeta();
   }, [loadMeta]);
+
+  // Feeds the slash menu (NOTE-009c). Failure keeps the previous list and
+  // logs — like `loadMeta`, this is derived, read-only data, never a save
+  // error. Fetched whenever edit mode is entered rather than only on mount:
+  // that single rule is what makes returning from the Šabloni pane after a
+  // save, rename, or delete refresh the slash list too, with no second call
+  // site and no cross-component invalidation.
+  const loadTemplates = useCallback(async () => {
+    try {
+      const rows = await window.nexus.listNoteTemplates(profileId);
+      setTemplates(mergeTemplateEntries(rows));
+    } catch (error) {
+      console.error("Nexus: failed to load note templates:", error);
+    }
+  }, [profileId]);
+
+  useEffect(() => {
+    if (mode !== "edit") return;
+    void loadTemplates();
+  }, [loadTemplates, mode]);
 
   const attachmentsById = useMemo(
     () => new Map(attachments.map((attachment) => [attachment.id, attachment])),
@@ -553,6 +576,7 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
               editorRef={editorRef}
               pendingTemplate={pendingTemplate}
               onTemplateApplied={onTemplateApplied}
+              templates={templates}
             />
             <section className="note__attachments" aria-label={strings.notes.attachmentsTitle}>
               <div className="note__attachments-head">
@@ -679,6 +703,8 @@ interface EditorCanvasProps {
   pendingTemplate: JSONContent[] | null;
   /** Clears `pendingTemplate` once the apply effect below has run it. */
   onTemplateApplied: () => void;
+  /** The live template list for the slash menu (NOTE-009c) — read through a ref, see below. */
+  templates: TemplateEntry[];
 }
 
 /**
@@ -700,11 +726,22 @@ function EditorCanvas({
   editorRef,
   pendingTemplate,
   onTemplateApplied,
+  templates,
 }: EditorCanvasProps) {
   const [slash, setSlash] = useState<SlashRenderState | null>(null);
   const slashKeydownRef = useRef<((event: KeyboardEvent) => boolean) | null>(null);
   const [linkMenu, setLinkMenu] = useState<NoteLinkRenderState | null>(null);
   const linkMenuKeydownRef = useRef<((event: KeyboardEvent) => boolean) | null>(null);
+
+  // The slash extension's `getTemplates` closure reads this ref, never the
+  // `templates` prop directly: `useEditor`'s dep array below is `[doc]`, so
+  // an extension array that changed identity on every template edit would
+  // not rebuild the editor anyway. The ref is what keeps the live list
+  // visible to an extension instance that is built exactly once per editor.
+  const templatesRef = useRef<TemplateEntry[]>(templates);
+  useEffect(() => {
+    templatesRef.current = templates;
+  }, [templates]);
 
   const extensions = useMemo(
     () => [
@@ -727,15 +764,18 @@ function EditorCanvas({
       Collaboration.configure({ document: doc, field: "default" }),
       NoteLink,
       AttachmentImage,
-      createSlashExtension({
-        onStart: setSlash,
-        onUpdate: setSlash,
-        onExit: () => {
-          setSlash(null);
-          slashKeydownRef.current = null;
+      createSlashExtension(
+        {
+          onStart: setSlash,
+          onUpdate: setSlash,
+          onExit: () => {
+            setSlash(null);
+            slashKeydownRef.current = null;
+          },
+          onKeyDown: (event) => slashKeydownRef.current?.(event) ?? false,
         },
-        onKeyDown: (event) => slashKeydownRef.current?.(event) ?? false,
-      }),
+        () => templatesRef.current,
+      ),
       createNoteLinkExtension(
         {
           onStart: setLinkMenu,
@@ -749,6 +789,11 @@ function EditorCanvas({
         { profileId, currentNoteId: noteId },
       ),
     ],
+    // `templates` is deliberately NOT a dep: `useEditor` below keys off
+    // `[doc]` alone, so rebuilding this array on every template edit would
+    // not rebuild the editor anyway. `templatesRef` (above) is what keeps the
+    // slash extension's view of the template list live instead — do not "fix"
+    // this into a `templates` prop dep.
     [doc, profileId, noteId],
   );
 

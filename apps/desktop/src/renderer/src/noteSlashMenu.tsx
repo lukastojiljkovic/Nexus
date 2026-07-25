@@ -3,6 +3,7 @@ import type { Editor, Range } from "@tiptap/core";
 import { Suggestion } from "@tiptap/suggestion";
 import type { SuggestionProps } from "@tiptap/suggestion";
 import { SuggestionMenu } from "./suggestionMenu.js";
+import type { TemplateEntry } from "./noteTemplates.js";
 import { strings } from "./strings.js";
 
 /**
@@ -13,6 +14,13 @@ import { strings } from "./strings.js";
  * panel is absolutely positioned at the caret via the suggestion `clientRect`.
  * Executing an item deletes the typed `/query` range, then runs the block
  * command; task lists render visual checkboxes only (they are not TASK items).
+ *
+ * NOTE-009c appends a templates section after the ten block commands: every
+ * insertable template (ADR-016), fed live through a `getTemplates` accessor so
+ * the extension — built once per editor — always sees the current list even
+ * though the extension instance itself never changes. A template item's `run`
+ * inserts at the caret, replacing the typed `/query`: the caret-precise
+ * counterpart to the Šabloni pane's append-at-end placement.
  */
 
 /** One slash-menu command. `run` receives the live editor and the `/query` range. */
@@ -79,11 +87,42 @@ const SLASH_ITEMS: readonly SlashItem[] = [
   },
 ];
 
-/** Case-insensitive sr-Latn substring match on the labels. */
-function filterSlashItems(query: string): SlashItem[] {
+/**
+ * Turns the live template list into slash items, appended after the ten block
+ * commands, in `mergeTemplateEntries` order (built-ins first, then user
+ * templates). Keys are `template:`-prefixed so they never collide with a
+ * block command's key. An entry whose `content` failed to parse (`null`) is
+ * excluded — an unparseable template has nothing to insert.
+ */
+function templateSlashItems(templates: readonly TemplateEntry[]): SlashItem[] {
+  const items: SlashItem[] = [];
+  for (const entry of templates) {
+    if (entry.content === null) continue;
+    const blocks = entry.content.content ?? [];
+    items.push({
+      key: `template:${entry.id}`,
+      label: `${strings.notes.slashTemplatePrefix}${entry.name}`,
+      run: (editor, range) =>
+        // Caret-precise counterpart to the pane's append-at-end placement
+        // (ADR-016): an ordinary local edit that the Collaboration binding
+        // turns into Yjs ops, same as any typed keystroke.
+        editor.chain().focus().deleteRange(range).insertContent(blocks).run(),
+    });
+  }
+  return items;
+}
+
+/**
+ * Case-insensitive sr-Latn substring match over the combined list: the ten
+ * block commands, then every insertable template. Takes the template items
+ * rather than reaching for a module global, since the live set changes as
+ * templates are saved/renamed/deleted.
+ */
+function filterSlashItems(query: string, templates: readonly SlashItem[]): SlashItem[] {
+  const all = [...SLASH_ITEMS, ...templates];
   const needle = query.toLocaleLowerCase("sr-Latn");
-  if (needle.length === 0) return [...SLASH_ITEMS];
-  return SLASH_ITEMS.filter((item) => item.label.toLocaleLowerCase("sr-Latn").includes(needle));
+  if (needle.length === 0) return all;
+  return all.filter((item) => item.label.toLocaleLowerCase("sr-Latn").includes(needle));
 }
 
 /** The render snapshot handed to React on each open/update of the suggestion. */
@@ -111,10 +150,16 @@ function toState(props: SuggestionProps<SlashItem, SlashItem>): SlashRenderState
 }
 
 /**
- * Builds the slash-menu extension, wired to a set of React handlers. Created
- * once per editor (per opened note), so the handler closures stay stable.
+ * Builds the slash-menu extension, wired to a set of React handlers plus a
+ * `getTemplates` accessor. Created once per editor (per opened note), so the
+ * handler closures stay stable — but `getTemplates` is called on every `/`
+ * query, so the menu always reflects the current template list without the
+ * extension instance itself ever being rebuilt.
  */
-export function createSlashExtension(handlers: SlashHandlers): Extension {
+export function createSlashExtension(
+  handlers: SlashHandlers,
+  getTemplates: () => TemplateEntry[],
+): Extension {
   return Extension.create({
     name: "nexusSlashMenu",
     addProseMirrorPlugins() {
@@ -124,7 +169,7 @@ export function createSlashExtension(handlers: SlashHandlers): Extension {
           char: "/",
           // Default `allowedPrefixes` ([' ']) + `startOfLine: false` already
           // restricts the trigger to a block start or a `/` after whitespace.
-          items: ({ query }) => filterSlashItems(query),
+          items: ({ query }) => filterSlashItems(query, templateSlashItems(getTemplates())),
           command: ({ editor, range, props }) => props.run(editor, range),
           render: () => ({
             onStart: (props) => handlers.onStart(toState(props)),

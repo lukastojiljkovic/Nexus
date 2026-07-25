@@ -185,6 +185,8 @@ export const strings = {
     templateBroken: "Ovaj šablon se ne može prikazati.",
     templateTooLarge: "Beleška je prevelika da bi se sačuvala kao šablon.",
     templateError: "Radnja nad šablonima nije uspela. Pokušaj ponovo.",
+    /** Prefix for a template's slash-menu label (NOTE-009c), e.g. "Šablon: Sastanak". */
+    slashTemplatePrefix: "Šablon: ",
     templateBuiltins: {
       sastanak: "Sastanak",
       dnevnik: "Dnevnik",

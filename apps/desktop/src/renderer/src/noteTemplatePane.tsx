@@ -8,7 +8,7 @@ import { NOTE_TEMPLATE_MAX_BYTES, type NoteAttachment } from "../../shared/ipc.j
 import { AttachmentImage, NoteAttachmentProvider } from "./noteAttachmentImage.js";
 import { NoteLink, NoteLinkProvider } from "./noteLink.js";
 import { NotePopover } from "./notePopover.js";
-import { BUILTIN_TEMPLATES } from "./noteTemplates.js";
+import { mergeTemplateEntries, type TemplateEntry } from "./noteTemplates.js";
 import { strings } from "./strings.js";
 
 /**
@@ -20,20 +20,8 @@ import { strings } from "./strings.js";
  * machinery stay untouched underneath.
  */
 
-/** sr-Latn collation for user templates — plain "sr" mis-tailors Latin š/č/ć. */
-const collator = new Intl.Collator(["sr-Latn", "sr"]);
-
 /** Templates never carry attachments (ADR-016) — a stable empty map for the preview. */
 const EMPTY_ATTACHMENTS: ReadonlyMap<string, NoteAttachment> = new Map();
-
-/** One row of the picker, covering both the built-in and user-defined sources. */
-type TemplateEntry = {
-  id: string;
-  name: string;
-  builtin: boolean;
-  /** `null` for a stored row whose JSON failed to parse — the row still renders. */
-  content: JSONContent | null;
-};
 
 /** The pane's single in-place form: "Sačuvaj kao šablon", or renaming one row. */
 type FormState = null | { mode: "save" } | { mode: "rename"; id: string };
@@ -67,32 +55,14 @@ export function NoteTemplatePane({
   const [failed, setFailed] = useState(false);
   const [tooLarge, setTooLarge] = useState(false);
 
-  // Loads on mount and after every mutation. Built-ins are always present and
-  // listed first; user rows are sr-Latn sorted. A row whose stored JSON fails
-  // to parse is kept (content: null) rather than hidden, so a corrupt template
-  // is still visible to rename or delete.
+  // Loads on mount and after every mutation; `mergeTemplateEntries` (shared
+  // with the slash menu, 009-c) does the parse/sort/merge — built-ins first,
+  // then sr-Latn sorted user rows, with a corrupt stored row kept as
+  // `content: null` so it's still visible to rename or delete.
   const load = useCallback(async () => {
     try {
       const rows = await window.nexus.listNoteTemplates(profileId);
-      const userEntries: TemplateEntry[] = rows
-        .map((row): TemplateEntry => {
-          let content: JSONContent | null;
-          try {
-            content = JSON.parse(row.content) as JSONContent;
-          } catch (error) {
-            content = null;
-            console.error("Nexus: failed to parse template content:", error);
-          }
-          return { id: row.id, name: row.name, builtin: false, content };
-        })
-        .sort((a, b) => collator.compare(a.name, b.name));
-      const builtinEntries: TemplateEntry[] = BUILTIN_TEMPLATES.map((template) => ({
-        id: template.id,
-        name: template.name,
-        builtin: true,
-        content: template.content,
-      }));
-      setEntries([...builtinEntries, ...userEntries]);
+      setEntries(mergeTemplateEntries(rows));
       setListFailed(false);
     } catch (error) {
       setListFailed(true);

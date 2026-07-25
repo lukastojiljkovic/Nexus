@@ -32,6 +32,7 @@ export function SuggestionMenu<T>({
 }: SuggestionMenuProps<T>) {
   const [index, setIndex] = useState(0);
   const indexRef = useRef(0);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // A fresh item set (query changed) resets the highlight to the first row.
   useEffect(() => {
@@ -42,6 +43,23 @@ export function SuggestionMenu<T>({
   useEffect(() => {
     indexRef.current = index;
   }, [index]);
+
+  // Keeps the keyboard-active row inside the panel's 320px scroll window —
+  // reachable since NOTE-009c appends every template after the ten block
+  // commands, so the list now routinely outgrows the panel. Scrolled by hand
+  // rather than with `scrollIntoView`, which would also be free to scroll the
+  // editor pane behind this portalled, fixed-position panel.
+  useEffect(() => {
+    const panel = panelRef.current;
+    const active = panel?.children[index];
+    if (!panel || !(active instanceof HTMLElement)) return;
+    const bottom = active.offsetTop + active.offsetHeight;
+    if (active.offsetTop < panel.scrollTop) {
+      panel.scrollTop = active.offsetTop;
+    } else if (bottom > panel.scrollTop + panel.clientHeight) {
+      panel.scrollTop = bottom - panel.clientHeight;
+    }
+  }, [index, items]);
 
   useEffect(() => {
     registerKeydown((event) => {
@@ -67,6 +85,7 @@ export function SuggestionMenu<T>({
 
   return createPortal(
     <div
+      ref={panelRef}
       className="note__slash"
       style={{ top: rect.bottom + 4, left: rect.left }}
       role="listbox"

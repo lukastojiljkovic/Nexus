@@ -1,4 +1,5 @@
 import type { JSONContent } from "@tiptap/core";
+import type { NoteTemplate } from "../../shared/ipc.js";
 import { strings } from "./strings.js";
 
 /**
@@ -14,6 +15,11 @@ import { strings } from "./strings.js";
  * as any other renderer copy — it just is not extracted yet. Template
  * *names* are NOT an exception and stay in `strings.ts` like every other
  * label (`strings.notes.templateBuiltins.*`).
+ *
+ * Also home to `TemplateEntry` / `mergeTemplateEntries`: the shared shape that
+ * turns a profile's stored rows plus the built-ins above into the one ordered
+ * list both the Šabloni pane (009-b) and the slash menu (009-c) render from,
+ * so the parse/sort/merge logic exists exactly once.
  */
 
 export interface BuiltinTemplate {
@@ -135,6 +141,47 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
     ),
   },
 ];
+
+/** sr-Latn collation for user templates — plain "sr" mis-tailors Latin š/č/ć. */
+const collator = new Intl.Collator(["sr-Latn", "sr"]);
+
+/** One template row, covering both the built-in and user-defined sources. */
+export interface TemplateEntry {
+  id: string;
+  name: string;
+  builtin: boolean;
+  /** `null` for a stored row whose JSON failed to parse — the row still lists. */
+  content: JSONContent | null;
+}
+
+/**
+ * Built-ins first (their authored order above), then the profile's stored
+ * rows sr-Latn sorted by name. A row whose JSON fails to parse is kept with
+ * `content: null` rather than dropped, so a corrupt template is still visible
+ * to rename or delete. Shared by the Šabloni pane (009-b) and the slash menu
+ * (009-c) — the parse/sort/merge logic exists exactly once.
+ */
+export function mergeTemplateEntries(rows: readonly NoteTemplate[]): TemplateEntry[] {
+  const userEntries: TemplateEntry[] = rows
+    .map((row): TemplateEntry => {
+      let content: JSONContent | null;
+      try {
+        content = JSON.parse(row.content) as JSONContent;
+      } catch (error) {
+        content = null;
+        console.error("Nexus: failed to parse template content:", error);
+      }
+      return { id: row.id, name: row.name, builtin: false, content };
+    })
+    .sort((a, b) => collator.compare(a.name, b.name));
+  const builtinEntries: TemplateEntry[] = BUILTIN_TEMPLATES.map((template) => ({
+    id: template.id,
+    name: template.name,
+    builtin: true,
+    content: template.content,
+  }));
+  return [...builtinEntries, ...userEntries];
+}
 
 /**
  * Removes every `attachmentImage` node from a captured document (ADR-016): those
