@@ -32,7 +32,7 @@ describe("migration 002 — tasks", () => {
   it("creates the tasks table and stamps the latest user_version on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("tasks");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(14);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(15);
     db.close();
   });
 
@@ -43,7 +43,7 @@ describe("migration 002 — tasks", () => {
     first.close();
 
     const second = openDatabase({ path });
-    expect(second.raw.pragma("user_version", { simple: true })).toBe(14);
+    expect(second.raw.pragma("user_version", { simple: true })).toBe(15);
     expect(tableNames(second)).toContain("tasks");
     expect(
       (second.raw.prepare("SELECT count(*) AS n FROM profiles").get() as { n: number }).n,
@@ -93,7 +93,7 @@ describe("migration 003 — events", () => {
   it("creates the events table and stamps the latest user_version on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("events");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(14);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(15);
     db.close();
   });
 
@@ -161,7 +161,7 @@ describe("migration 004 — documents", () => {
     const names = tableNames(db);
     expect(names).toContain("tracked_documents");
     expect(names).toContain("document_renewals");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(14);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(15);
     db.close();
   });
 
@@ -242,7 +242,7 @@ describe("migration 005 — study", () => {
     const names = tableNames(db);
     expect(names).toContain("subjects");
     expect(names).toContain("exams");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(14);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(15);
     db.close();
   });
 
@@ -362,7 +362,7 @@ describe("migration 006 — flashcards", () => {
     expect(names).toContain("decks");
     expect(names).toContain("cards");
     expect(names).toContain("review_log");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(14);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(15);
     db.close();
   });
 
@@ -520,7 +520,7 @@ describe("migration 007 — study plans", () => {
     const names = tableNames(db);
     expect(names).toContain("study_plans");
     expect(names).toContain("study_blocks");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(14);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(15);
     db.close();
   });
 
@@ -691,7 +691,7 @@ describe("migration 008 — focus sessions", () => {
   it("creates the focus_sessions table and stamps the latest user_version on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("focus_sessions");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(14);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(15);
     db.close();
   });
 
@@ -795,7 +795,7 @@ describe("migration 009 — notifications", () => {
     expect(names).toContain("notifications");
     expect(names).toContain("ntf_settings");
     expect(names).toContain("ntf_source_settings");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(14);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(15);
     db.close();
   });
 
@@ -921,7 +921,7 @@ describe("migration 010 — notes", () => {
     expect(names).toContain("notes");
     expect(names).toContain("note_updates");
     expect(names).toContain("note_snapshots");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(14);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(15);
     db.close();
   });
 
@@ -1032,7 +1032,7 @@ describe("migration 011 — notes organization", () => {
     expect(names).toContain("note_folders");
     expect(names).toContain("note_tags");
     expect(names).toContain("note_tag_links");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(14);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(15);
     db.close();
   });
 
@@ -1207,7 +1207,7 @@ describe("migration 012 — note links", () => {
   it("creates the note_links table and stamps the latest user_version on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("note_links");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(14);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(15);
     db.close();
   });
 
@@ -1304,7 +1304,7 @@ describe("migration 013 — note attachments", () => {
   it("creates the note_attachments table and stamps the latest user_version on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("note_attachments");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(14);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(15);
     db.close();
   });
 
@@ -1386,7 +1386,7 @@ describe("migration 014 — note versions", () => {
     expect(columns).toEqual(
       expect.arrayContaining(["note_id", "covered_seq", "snapshot", "title", "created_at"]),
     );
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(14);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(15);
     db.close();
   });
 
@@ -1425,6 +1425,61 @@ describe("migration 014 — note versions", () => {
     db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
     expect(
       (db.raw.prepare("SELECT count(*) AS n FROM note_versions").get() as { n: number }).n,
+    ).toBe(0);
+    db.close();
+  });
+});
+
+describe("migration 015 — note templates", () => {
+  const now = () => new Date().toISOString();
+
+  const insertTemplate = (
+    db: NexusDatabase,
+    id: string,
+    profileId: string,
+    name: string,
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO note_templates (id, profile_id, name, content, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, profileId, name, '{"type":"doc"}', now(), now());
+
+  it("creates the note_templates table and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    const names = tableNames(db);
+    expect(names).toContain("note_templates");
+    const columns = (
+      db.raw.prepare("PRAGMA table_info(note_templates)").all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(columns).toEqual(
+      expect.arrayContaining(["id", "profile_id", "name", "content", "created_at", "updated_at"]),
+    );
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(15);
+    db.close();
+  });
+
+  it("enforces UNIQUE(profile_id, name) on note_templates", () => {
+    const db = openDatabase({ path: join(dir, "unique-name.db") });
+    insertProfile(db, "p1");
+    insertProfile(db, "p2");
+    insertTemplate(db, "t1", "p1", "Sastanak");
+    // the same name in the same profile collides.
+    expect(() => insertTemplate(db, "t2", "p1", "Sastanak")).toThrow();
+    // the same name in a different profile is fine.
+    expect(() => insertTemplate(db, "t3", "p2", "Sastanak")).not.toThrow();
+    db.close();
+  });
+
+  it("cascades template deletion when the owning profile is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade-profile.db") });
+    insertProfile(db, "p1");
+    insertTemplate(db, "t1", "p1", "Sastanak");
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM note_templates").get() as { n: number }).n,
     ).toBe(0);
     db.close();
   });

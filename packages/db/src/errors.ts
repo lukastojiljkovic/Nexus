@@ -285,3 +285,26 @@ export class NoteAttachmentNotFoundError extends DatabaseError {}
  * instead, the same gate every other note child table uses.
  */
 export class NoteVersionNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a note-template write is rejected at the store boundary
+ * because its input breaks a domain rule the caller is expected to have
+ * caught already — an empty or over-100-character name after trimming, a
+ * rename that would collide with another template's name in this profile
+ * (the UNIQUE(profile_id, name) index, surfaced as a domain error rather
+ * than a raw driver error — the `renameTag` precedent), empty content, a
+ * content string over `MAX_NOTE_TEMPLATE_BYTES`, content that is not valid
+ * JSON, or JSON that does not parse to an object with `type: "doc"` (ADR-016
+ * / NOTE-009). The store revalidates because renderer input is untrusted
+ * (SEC-EL-02); this is a semantic check of an otherwise opaque column, not a
+ * schema check of the document's own blocks.
+ */
+export class NoteTemplateValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a note-template operation targets an id that is not a
+ * template in the store's own profile — unknown or owned by another
+ * profile. Surfacing this uniformly keeps one profile's templates invisible
+ * to a store scoped to another (ADR-016 / NOTE-009).
+ */
+export class NoteTemplateNotFoundError extends DatabaseError {}

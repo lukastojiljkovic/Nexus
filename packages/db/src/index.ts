@@ -24,6 +24,8 @@ export {
   NoteNotFoundError,
   NoteTagNotFoundError,
   NoteTagValidationError,
+  NoteTemplateNotFoundError,
+  NoteTemplateValidationError,
   NoteValidationError,
   NoteVersionNotFoundError,
   NotificationNotFoundError,
@@ -139,5 +141,8 @@ export type { NoteFolder, NoteFolderColor, NoteTag, NoteTagLink } from "./notes/
 
 export { NoteAttachmentStore, MAX_NOTE_ATTACHMENT_BYTES } from "./notes/noteAttachmentStore.js";
 export type { AddNoteAttachmentInput, NoteAttachment } from "./notes/noteAttachmentStore.js";
+
+export { NoteTemplateStore, MAX_NOTE_TEMPLATE_BYTES } from "./notes/noteTemplateStore.js";
+export type { NoteTemplate } from "./notes/noteTemplateStore.js";
 
 export { uuidv7 } from "./ids.js";
