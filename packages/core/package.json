@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Nexus platform-free domain foundation: module registry, feature-module contract types, and feature flags. No React, DOM, or Node APIs.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./auth": "./src/auth/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -16,6 +17,7 @@
     "vitest": "^3.2.0"
   },
   "dependencies": {
+    "hash-wasm": "^4.12.0",
     "yjs": "^13.6.31"
   }
 }
