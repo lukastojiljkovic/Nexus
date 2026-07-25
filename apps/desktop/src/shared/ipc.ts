@@ -107,6 +107,10 @@ export const IpcChannel = {
   notesVersions: "notes:versions",
   notesVersionLoad: "notes:version-load",
   notesVersionCapture: "notes:version-capture",
+  notesTemplatesList: "notes:templates-list",
+  notesTemplateSave: "notes:template-save",
+  notesTemplateRename: "notes:template-rename",
+  notesTemplateDelete: "notes:template-delete",
   noteAttachmentsList: "note-attachments:list",
   noteAttachmentsAdd: "note-attachments:add",
   noteAttachmentsRemove: "note-attachments:remove",
@@ -1017,6 +1021,31 @@ export interface NoteVersionMeta {
 }
 
 /**
+ * Maximum size, in bytes, of one template's `content` that
+ * `notes:template-save` accepts. MUST equal `MAX_NOTE_TEMPLATE_BYTES` in
+ * `@nexus/db`: the same wire limit, declared on both sides so neither
+ * imports the other. The renderer uses it pre-flight; the store re-checks
+ * it authoritatively (renderer input is untrusted, SEC-EL-02).
+ */
+export const NOTE_TEMPLATE_MAX_BYTES = 262_144;
+
+/**
+ * A user-defined note template as seen by the renderer (mirrors the
+ * `note_templates` table via `NoteTemplateStore`'s mapping, ADR-016 /
+ * NOTE-009 slice 009-a). `content` is a ProseMirror document, JSON-encoded —
+ * never a Yjs snapshot, since a template is never concurrently edited.
+ * Redeclared here so the renderer never imports DB code.
+ */
+export interface NoteTemplate {
+  id: string;
+  profileId: string;
+  name: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
  * An optional note-list filter (NOTE-002): omitted = every active note,
  * `{ folderId: null }` = unfiled notes, `{ folderId: "<id>" }` = one folder's
  * notes. Presence of the `folderId` key — not its value — distinguishes "all"
@@ -1215,6 +1244,36 @@ export interface NotesVersionLoadRequest {
 
 /** The pre-restore safety checkpoint (ADR-015): main merges only stored state, no renderer bytes involved. */
 export interface NotesVersionCaptureRequest {
+  profileId: string;
+  id: string;
+}
+
+export interface NotesTemplatesListRequest {
+  profileId: string;
+}
+
+/**
+ * Saves the open note's content as a template (ADR-016 / NOTE-009). `content`
+ * is a JSON-encoded ProseMirror document the renderer authored — the same
+ * trust model as `title` on `notes:append-update` — capped at
+ * `NOTE_TEMPLATE_MAX_BYTES` on the wire and re-parsed by the store, which
+ * requires it to be an object with `type: "doc"`. Saving under an existing
+ * template's `name` replaces its content rather than adding a second row:
+ * naming IS the edit mechanism, since there is no template editor.
+ */
+export interface NotesTemplateSaveRequest {
+  profileId: string;
+  name: string;
+  content: string;
+}
+
+export interface NotesTemplateRenameRequest {
+  profileId: string;
+  id: string;
+  name: string;
+}
+
+export interface NotesTemplateDeleteRequest {
   profileId: string;
   id: string;
 }
@@ -1461,6 +1520,13 @@ export interface NexusApi {
   loadNoteVersion(profileId: string, noteId: string, coveredSeq: number): Promise<Uint8Array>;
   /** The pre-restore safety checkpoint — no age gate, deduped by covered_seq. */
   captureNoteVersion(profileId: string, noteId: string): Promise<void>;
+  /** This profile's user-defined templates, name-ordered (ADR-016 / NOTE-009); the renderer re-sorts with `Intl.Collator(["sr-Latn","sr"])`. */
+  listNoteTemplates(profileId: string): Promise<NoteTemplate[]>;
+  /** Upserts on name (ADR-016): saving under an existing template's name replaces its content, keeping the same id. */
+  saveNoteTemplate(profileId: string, name: string, content: string): Promise<NoteTemplate>;
+  /** Renaming to the template's own current name is a no-op; onto another template's name rejects. */
+  renameNoteTemplate(profileId: string, id: string, name: string): Promise<void>;
+  deleteNoteTemplate(profileId: string, id: string): Promise<void>;
   listNoteAttachments(profileId: string, noteId: string): Promise<NoteAttachment[]>;
   /** Attaches a file to a note; main sniffs `bytes` for the real MIME type (SEC-FILE-02) — `fileName` is display-only. */
   attachNoteFile(

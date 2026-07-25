@@ -183,6 +183,14 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.notesVersionLoad, { profileId, id: noteId, coveredSeq }),
   captureNoteVersion: (profileId, noteId) =>
     ipcRenderer.invoke(IpcChannel.notesVersionCapture, { profileId, id: noteId }),
+  listNoteTemplates: (profileId) =>
+    ipcRenderer.invoke(IpcChannel.notesTemplatesList, { profileId }),
+  saveNoteTemplate: (profileId, name, content) =>
+    ipcRenderer.invoke(IpcChannel.notesTemplateSave, { profileId, name, content }),
+  renameNoteTemplate: (profileId, id, name) =>
+    ipcRenderer.invoke(IpcChannel.notesTemplateRename, { profileId, id, name }),
+  deleteNoteTemplate: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.notesTemplateDelete, { profileId, id }),
   listNoteAttachments: (profileId, noteId) =>
     ipcRenderer.invoke(IpcChannel.noteAttachmentsList, { profileId, id: noteId }),
   attachNoteFile: (profileId, noteId, fileName, bytes) =>

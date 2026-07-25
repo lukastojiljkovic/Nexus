@@ -16,6 +16,7 @@ import {
   FocusStore,
   MAX_NOTE_ATTACHMENT_BYTES,
   MAX_NOTE_LINKS,
+  MAX_NOTE_TEMPLATE_BYTES,
   MAX_NOTE_UPDATE_BYTES,
   NOTE_FOLDER_COLORS,
   NoteAttachmentNotFoundError,
@@ -23,6 +24,7 @@ import {
   NotificationStore,
   NoteOrgStore,
   NoteStore,
+  NoteTemplateStore,
   openDatabase,
   PlanStore,
   SqliteFlagStore,
@@ -61,6 +63,7 @@ import {
   type NoteMeta,
   type NoteTag,
   type NoteTagLink,
+  type NoteTemplate,
   type PreviewIntervals,
   type StudyBlock,
   type StudyBlockStatus,
@@ -277,6 +280,21 @@ function asUint8Array(value: unknown, field: string, maxBytes: number): Uint8Arr
     throw new Error(`Invalid IPC payload: "${field}" must be a non-empty Uint8Array.`);
   }
   if (value.byteLength > maxBytes) {
+    throw new Error(`Invalid IPC payload: "${field}" must not exceed ${maxBytes} bytes.`);
+  }
+  return value;
+}
+
+/**
+ * A UTF-8 string field within a byte cap — the JSON-document payloads. The cap is
+ * enforced here AND re-checked in the store (SEC-EL-02: renderer input is
+ * untrusted, and the cap is the wire contract, not a UI courtesy).
+ */
+function asCappedString(value: unknown, field: string, maxBytes: number): string {
+  if (typeof value !== "string") {
+    throw new Error(`Invalid IPC payload: "${field}" must be a string.`);
+  }
+  if (Buffer.byteLength(value, "utf8") > maxBytes) {
     throw new Error(`Invalid IPC payload: "${field}" must not exceed ${maxBytes} bytes.`);
   }
   return value;
@@ -844,6 +862,10 @@ function noteOrgStore(profileId: string): NoteOrgStore {
 
 function noteAttachmentStore(profileId: string): NoteAttachmentStore {
   return new NoteAttachmentStore(requireDb().raw, profileId);
+}
+
+function noteTemplateStore(profileId: string): NoteTemplateStore {
+  return new NoteTemplateStore(requireDb().raw, profileId);
 }
 
 /**
@@ -1668,6 +1690,47 @@ function registerIpc(): void {
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const id = asNonEmptyString(body.id, "id");
     captureNoteVersion(noteStore(profileId), id);
+  });
+
+  // NOTE-009 (templates, slice 009-a, ADR-016): a template crosses this
+  // boundary as an opaque JSON-document string whose semantics the store
+  // re-validates (parses to `{ type: "doc", ... }`) — main only checks shape
+  // and the byte cap. `now` is stamped here, never accepted from the
+  // renderer. `name` is passed through `asString` (not `asNonEmptyString`)
+  // deliberately: emptiness after trimming is a domain rule the store owns
+  // and reports as `NoteTemplateValidationError`, the same treatment
+  // `noteTagsCreate`/`noteTagsRename` give tag names.
+  ipcMain.handle(IpcChannel.notesTemplatesList, (event, payload): NoteTemplate[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return noteTemplateStore(profileId).list();
+  });
+
+  ipcMain.handle(IpcChannel.notesTemplateSave, (event, payload): NoteTemplate => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const name = asString(body.name, "name");
+    const content = asCappedString(body.content, "content", MAX_NOTE_TEMPLATE_BYTES);
+    return noteTemplateStore(profileId).save(name, content, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.notesTemplateRename, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const name = asString(body.name, "name");
+    noteTemplateStore(profileId).rename(id, name, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.notesTemplateDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    noteTemplateStore(profileId).remove(id);
   });
 
   // NOTE-003 (attachments, slice 003-a, ADR-014): bytes are content-addressed
