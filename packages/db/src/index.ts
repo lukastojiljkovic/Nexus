@@ -1,4 +1,9 @@
-export { NexusDatabase, openDatabase } from "./database.js";
+export {
+  NexusDatabase,
+  encryptDatabaseInPlace,
+  isPlaintextDatabase,
+  openDatabase,
+} from "./database.js";
 export type { OpenDatabaseOptions } from "./database.js";
 
 export {

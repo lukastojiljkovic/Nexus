@@ -13,7 +13,13 @@ export class DatabaseError extends Error {
  */
 export class DatabaseLockedError extends DatabaseError {}
 
-/** Thrown when the supplied encryption key is not a valid 256-bit hex string. */
+/**
+ * Thrown when an encryption key cannot be applied: it is not a valid 256-bit
+ * hex string, or (ADR-018's `encryptDatabaseInPlace`) the target file is not
+ * the plaintext database that key was meant to convert. Both are "this key
+ * cannot be used here", as opposed to `DatabaseLockedError`'s "this key was
+ * used and it was the wrong one".
+ */
 export class DatabaseKeyError extends DatabaseError {}
 
 /**

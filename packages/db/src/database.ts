@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import Database from "better-sqlite3-multiple-ciphers";
 import { DatabaseKeyError, DatabaseLockedError } from "./errors.js";
 import { runMigrations } from "./migrations/migrations.js";
@@ -50,6 +51,58 @@ export function openDatabase(options: OpenDatabaseOptions): NexusDatabase {
 }
 
 /**
+ * True when the file exists and opens readable WITHOUT a key — i.e. it
+ * predates encryption (ADR-018). A missing file is `false`: there is nothing
+ * to migrate, not an error. Opens its own short-lived connection with
+ * `fileMustExist` so a concurrently-deleted path is never auto-created as a
+ * side effect of merely checking it.
+ */
+export function isPlaintextDatabase(path: string): boolean {
+  if (!existsSync(path)) return false;
+  const db = new Database(path, { fileMustExist: true });
+  try {
+    db.prepare("SELECT count(*) FROM sqlite_master").get();
+    return true;
+  } catch (error) {
+    if (isNotADatabaseError(error)) return false;
+    throw error;
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Encrypts an existing plaintext database in place (SQLCipher rekey), so an
+ * install made before passcodes existed gains encryption at rest without
+ * losing its data (ADR-018). Validates `encryptionKey` with the same raw-hex
+ * guard `openDatabase` uses, then runs the sequence probed against
+ * SQLite3MultipleCiphers before this ADR was written: `PRAGMA
+ * cipher='sqlcipher';` followed by `PRAGMA rekey="x'<hex>'";`, which rewrites
+ * the file under the new key and leaves it immediately readable.
+ *
+ * Refuses (throws `DatabaseKeyError`) when the file is not currently
+ * plaintext — missing, already encrypted, or not a database at all. Rekeying
+ * a file that is already encrypted, using a raw `key`/`rekey` pair the file
+ * was never opened with, does not fail loudly; it silently produces an
+ * unreadable file. Refusing up front is the only safe option.
+ */
+export function encryptDatabaseInPlace(path: string, encryptionKey: string): void {
+  assertValidKeyHex(encryptionKey);
+  if (!isPlaintextDatabase(path)) {
+    throw new DatabaseKeyError(
+      "Cannot encrypt: the file is missing, already encrypted, or not a valid SQLite database.",
+    );
+  }
+  const db = new Database(path, { fileMustExist: true });
+  try {
+    db.pragma("cipher = 'sqlcipher'");
+    db.pragma(`rekey = "x'${encryptionKey}'"`);
+  } finally {
+    db.close();
+  }
+}
+
+/**
  * Selects the SQLCipher-compatible cipher and installs the raw key BEFORE any
  * other statement touches the file. Sequence per the SQLite3MultipleCiphers
  * docs (cipher_sqlcipher): `PRAGMA cipher='sqlcipher';` then `PRAGMA key=...`.
@@ -58,13 +111,18 @@ export function openDatabase(options: OpenDatabaseOptions): NexusDatabase {
  * check above guarantees the interpolated value can carry no SQL.
  */
 function applyEncryptionKey(db: DatabaseHandle, key: string): void {
+  assertValidKeyHex(key);
+  db.pragma("cipher = 'sqlcipher'");
+  db.pragma(`key = "x'${key}'"`);
+}
+
+/** The one place both `openDatabase` and `encryptDatabaseInPlace` check that a key is a well-formed raw 256-bit hex string, so a bad value can carry no SQL into an interpolated PRAGMA. */
+function assertValidKeyHex(key: string): void {
   if (!RAW_KEY_HEX.test(key)) {
     throw new DatabaseKeyError(
       "encryptionKey must be a 256-bit key encoded as 64 hexadecimal characters.",
     );
   }
-  db.pragma("cipher = 'sqlcipher'");
-  db.pragma(`key = "x'${key}'"`);
 }
 
 /**
