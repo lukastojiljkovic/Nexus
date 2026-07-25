@@ -67,6 +67,9 @@ export { isWithinQuietHours } from "./notify/quietHours.js";
 export { collectNoteLinkIds, mergeNoteState } from "./notes/yjsMerge.js";
 export type { MergedNoteState } from "./notes/yjsMerge.js";
 
+export { collectNoteCards, NOTE_CARD_MAX_TEXT_LENGTH, parseCardBlock } from "./notes/noteCards.js";
+export type { CardSyntaxSpan, NoteCardSpec, ParsedBlock, ParsedCard } from "./notes/noteCards.js";
+
 export { replaceNoteContent } from "./notes/yjsRestore.js";
 
 export { toCsv } from "./imex/csv.js";
