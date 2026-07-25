@@ -191,6 +191,10 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.notesTemplateRename, { profileId, id, name }),
   deleteNoteTemplate: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.notesTemplateDelete, { profileId, id }),
+  syncNoteCards: (profileId, noteId, deckId, cards) =>
+    ipcRenderer.invoke(IpcChannel.notesCardsSync, { profileId, id: noteId, deckId, cards }),
+  setNoteCardDeck: (profileId, noteId, deckId) =>
+    ipcRenderer.invoke(IpcChannel.notesCardDeckSet, { profileId, id: noteId, deckId }),
   listNoteAttachments: (profileId, noteId) =>
     ipcRenderer.invoke(IpcChannel.noteAttachmentsList, { profileId, id: noteId }),
   attachNoteFile: (profileId, noteId, fileName, bytes) =>

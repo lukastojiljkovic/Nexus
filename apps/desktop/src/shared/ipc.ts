@@ -111,6 +111,8 @@ export const IpcChannel = {
   notesTemplateSave: "notes:template-save",
   notesTemplateRename: "notes:template-rename",
   notesTemplateDelete: "notes:template-delete",
+  notesCardsSync: "notes:cards-sync",
+  notesCardDeckSet: "notes:card-deck-set",
   noteAttachmentsList: "note-attachments:list",
   noteAttachmentsAdd: "note-attachments:add",
   noteAttachmentsRemove: "note-attachments:remove",
@@ -578,6 +580,9 @@ export interface DecksRestoreRequest {
  */
 export type CardState = 0 | 1 | 2 | 3;
 
+/** Maximum length of a card side — `CardStore`'s own cap, mirrored on the wire. */
+export const CARD_TEXT_MAX_LENGTH = 10_000;
+
 /**
  * A flashcard as seen by the renderer (mirrors the `cards` table via the
  * store's mapping, STUDY flashcards / FSRS). `front`/`back` may contain `$…$`
@@ -590,6 +595,14 @@ export interface Card {
   deckId: string;
   front: string;
   back: string;
+  /**
+   * The note and block this card was generated from, or both null for a
+   * hand-made card (NOTE-006). A note-sourced card's text is owned by that
+   * note's block — STUDY must not offer to edit it, since the next sync
+   * would overwrite the edit.
+   */
+  sourceNoteId: string | null;
+  sourceBlockKey: string | null;
   due: string;
   stability: number;
   difficulty: number;
@@ -974,6 +987,12 @@ export const NOTE_UPDATE_MAX_BYTES = 262_144;
  */
 export const NOTE_LINKS_MAX_COUNT = 500;
 
+/** Maximum number of generated flashcards `notes:cards-sync` accepts for one note. */
+export const NOTE_CARDS_MAX_COUNT = 500;
+
+/** Maximum length of a generated card's reconcile key (the block's `cardKey` plus a cloze ordinal). */
+export const NOTE_CARD_KEY_MAX_LENGTH = 200;
+
 /**
  * A note's metadata as seen by the renderer (mirrors the `notes` table via
  * `NoteStore`'s mapping, NOTE slice a1 / ADR-012). The document itself is
@@ -986,6 +1005,8 @@ export interface NoteMeta {
   title: string;
   folderId: string | null;
   pinned: boolean;
+  /** The deck this note's generated cards go to, null until the author picks one (NOTE-006). */
+  cardDeckId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1278,6 +1299,36 @@ export interface NotesTemplateDeleteRequest {
   id: string;
 }
 
+/** One generated flashcard as the editor reports it: the block's reconcile key plus the rendered sides. */
+export interface NoteCardSpec {
+  key: string;
+  front: string;
+  back: string;
+}
+
+/**
+ * Syncs this note's generated flashcards (NOTE-006): like `title` on
+ * `notes:append-update` and `targetIds` on `notes:set-links`, `cards` is
+ * renderer-declared derived data about the note's own content — the editor's
+ * current read of its `Pitanje :: Odgovor` / `{{cloze}}` blocks — and main
+ * plus `CardStore` re-validate it: the note and deck must both be live and in
+ * this profile, each key is capped and unique, and the whole call is rejected
+ * rather than partially applied.
+ */
+export interface NotesCardsSyncRequest {
+  profileId: string;
+  id: string;
+  deckId: string;
+  cards: NoteCardSpec[];
+}
+
+/** Points (or unpoints, with `null`) this note's generated cards at a deck (NOTE-006). */
+export interface NotesCardDeckSetRequest {
+  profileId: string;
+  id: string;
+  deckId: string | null;
+}
+
 /**
  * Maximum size, in bytes, of one note attachment `note-attachments:add`
  * accepts. MUST equal `MAX_NOTE_ATTACHMENT_BYTES` in `@nexus/db`: the same
@@ -1527,6 +1578,10 @@ export interface NexusApi {
   /** Renaming to the template's own current name is a no-op; onto another template's name rejects. */
   renameNoteTemplate(profileId: string, id: string, name: string): Promise<void>;
   deleteNoteTemplate(profileId: string, id: string): Promise<void>;
+  /** Syncs this note's generated flashcards: a full reconcile of its card-syntax blocks against `deckId`, keyed by each spec's `key` (NOTE-006). */
+  syncNoteCards(profileId: string, noteId: string, deckId: string, cards: NoteCardSpec[]): Promise<void>;
+  /** Points (or unpoints, with `null`) this note's generated cards at a deck (NOTE-006). */
+  setNoteCardDeck(profileId: string, noteId: string, deckId: string | null): Promise<void>;
   listNoteAttachments(profileId: string, noteId: string): Promise<NoteAttachment[]>;
   /** Attaches a file to a note; main sniffs `bytes` for the real MIME type (SEC-FILE-02) — `fileName` is display-only. */
   attachNoteFile(

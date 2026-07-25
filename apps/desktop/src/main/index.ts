@@ -98,10 +98,14 @@ import { handleExport } from "./imex.js";
 import { captureNoteVersion, compactIfNeeded } from "./notes.js";
 import { startNotificationScheduler, stopNotificationScheduler } from "./notifications.js";
 import {
+  CARD_TEXT_MAX_LENGTH,
   IpcChannel,
+  NOTE_CARD_KEY_MAX_LENGTH,
+  NOTE_CARDS_MAX_COUNT,
   type AppInfo,
   type ExportResult,
   type FlagState,
+  type NoteCardSpec,
   type NoteDocPayload,
   type NoteVersionMeta,
   type Profile,
@@ -326,6 +330,36 @@ function asStringArray(
     );
   }
   return value as string[];
+}
+
+/**
+ * Validates the renderer's generated-card array for `notes:cards-sync`
+ * (SEC-EL-02). Structural checks only — `key` uniqueness and the semantics of
+ * "new vs. reconciled vs. removed" stay in `CardStore.syncFromNote`'s own
+ * reconcile; emptiness after trimming is likewise a domain rule the store
+ * owns (the same division `noteTagsCreate` uses for tag names), so an empty
+ * `front`/`back` is not rejected here.
+ */
+function asNoteCardSpecArray(value: unknown, field: string): NoteCardSpec[] {
+  if (!Array.isArray(value) || value.length > NOTE_CARDS_MAX_COUNT) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be an array of at most ${NOTE_CARDS_MAX_COUNT} items.`,
+    );
+  }
+  return value.map((entry, index) => {
+    const spec = asRecord(entry);
+    const key = spec.key;
+    if (typeof key !== "string" || key.length === 0 || key.length > NOTE_CARD_KEY_MAX_LENGTH) {
+      throw new Error(
+        `Invalid IPC payload: "${field}[${index}].key" must be a non-empty string of at most ${NOTE_CARD_KEY_MAX_LENGTH} characters.`,
+      );
+    }
+    return {
+      key,
+      front: asCappedString(spec.front, `${field}[${index}].front`, CARD_TEXT_MAX_LENGTH),
+      back: asCappedString(spec.back, `${field}[${index}].back`, CARD_TEXT_MAX_LENGTH),
+    };
+  });
 }
 
 /** Profile display name: string, 1–80 chars after trimming; the trimmed value is stored. */
@@ -1731,6 +1765,32 @@ function registerIpc(): void {
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const id = asNonEmptyString(body.id, "id");
     noteTemplateStore(profileId).remove(id);
+  });
+
+  // NOTE-006 (inline flashcards): `cards` is renderer-declared derived data
+  // about the note's own content, the same trust model as `targetIds` on
+  // notes:set-links — main only checks shape/caps, and
+  // `CardStore.syncFromNote` re-validates that the note and deck are both
+  // live in this profile before reconciling. The returned create/update/
+  // remove counts are discarded: the editor already knows what it sent, and
+  // the counts exist for the store's own tests.
+  ipcMain.handle(IpcChannel.notesCardsSync, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const deckId = asNonEmptyString(body.deckId, "deckId");
+    const cards = asNoteCardSpecArray(body.cards, "cards");
+    cardStore(profileId).syncFromNote(id, deckId, cards, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.notesCardDeckSet, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const deckId = asNullableString(body.deckId, "deckId");
+    noteStore(profileId).setCardDeck(id, deckId, new Date().toISOString());
   });
 
   // NOTE-003 (attachments, slice 003-a, ADR-014): bytes are content-addressed

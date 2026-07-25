@@ -32,6 +32,7 @@ import type {
   SubjectColor,
   SubjectFieldChanges,
 } from "../../shared/ipc.js";
+import { CARD_TEXT_MAX_LENGTH } from "../../shared/ipc.js";
 import {
   daysUntilExam,
   examCountdownLabel,
@@ -67,9 +68,6 @@ const RATING_KEYS: Record<CardRating, keyof typeof strings.study.rating> = {
   3: "good",
   4: "easy",
 };
-
-/** Mirrors CardStore's MAX_TEXT_LENGTH — client-side parity with the store's own validation. */
-const MAX_CARD_TEXT_LENGTH = 10000;
 
 /** Mirrors PlanStore's daily-minutes bounds — client-side parity with the store's own validation. */
 const MIN_PLAN_MINUTES = 15;
@@ -940,7 +938,7 @@ export function StudyPage({ profileId }: StudyPageProps) {
     const trimmedFront = cardFront.trim();
     const trimmedBack = cardBack.trim();
     if (trimmedFront.length === 0 || trimmedBack.length === 0) return;
-    if (trimmedFront.length > MAX_CARD_TEXT_LENGTH || trimmedBack.length > MAX_CARD_TEXT_LENGTH) return;
+    if (trimmedFront.length > CARD_TEXT_MAX_LENGTH || trimmedBack.length > CARD_TEXT_MAX_LENGTH) return;
 
     try {
       if (editingCardId != null) {
@@ -1210,7 +1208,7 @@ export function StudyPage({ profileId }: StudyPageProps) {
                     value={cardFront}
                     placeholder={strings.study.frontPlaceholder}
                     aria-label={strings.study.frontLabel}
-                    maxLength={MAX_CARD_TEXT_LENGTH}
+                    maxLength={CARD_TEXT_MAX_LENGTH}
                     autoFocus
                     onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setCardFront(event.target.value)}
                   />
@@ -1226,7 +1224,7 @@ export function StudyPage({ profileId }: StudyPageProps) {
                     value={cardBack}
                     placeholder={strings.study.backPlaceholder}
                     aria-label={strings.study.backLabel}
-                    maxLength={MAX_CARD_TEXT_LENGTH}
+                    maxLength={CARD_TEXT_MAX_LENGTH}
                     onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setCardBack(event.target.value)}
                   />
                   {cardBack.trim().length > 0 && (
