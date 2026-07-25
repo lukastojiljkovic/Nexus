@@ -26,6 +26,10 @@ export interface Card {
   deckId: string;
   front: string;
   back: string;
+  /** The note this card was generated from, or null for a hand-made card (NOTE-006). */
+  sourceNoteId: string | null;
+  /** The source note's block key this card reconciles against, or null for a hand-made card (NOTE-006). */
+  sourceBlockKey: string | null;
   due: string;
   stability: number;
   difficulty: number;
@@ -64,6 +68,20 @@ export interface PreviewIntervals {
   hard: string;
   good: string;
   easy: string;
+}
+
+/** One generated card as the renderer reports it (mirrors `@nexus/core`'s `NoteCardSpec`). */
+export interface NoteCardSpecInput {
+  key: string;
+  front: string;
+  back: string;
+}
+
+/** What one reconcile changed. A restored-and-rewritten card counts as `updated`. */
+export interface SyncFromNoteResult {
+  created: number;
+  updated: number;
+  removed: number;
 }
 
 /** Optional scope for `dueQueue`: at most one of `deckId`/`subjectId`, plus a cap on New cards. */
@@ -108,6 +126,8 @@ interface CardRow {
   deck_id: string;
   front: string;
   back: string;
+  source_note_id: string | null;
+  source_block_key: string | null;
   due: string;
   stability: number;
   difficulty: number;
@@ -142,9 +162,20 @@ interface ReviewLogFullRow extends ReviewLogRow {
   created_at: string;
 }
 
+/** One existing generated card, as `syncFromNote`'s reconcile needs to see it — not the full `Card` shape. */
+interface SourceCardRow {
+  id: string;
+  deck_id: string;
+  front: string;
+  back: string;
+  deleted_at: string | null;
+  source_block_key: string | null;
+}
+
 const CARD_COLUMNS =
-  `id, profile_id, deck_id, front, back, due, stability, difficulty, elapsed_days, ` +
-  `scheduled_days, learning_steps, reps, lapses, state, last_review, created_at, updated_at`;
+  `id, profile_id, deck_id, front, back, source_note_id, source_block_key, due, stability, ` +
+  `difficulty, elapsed_days, scheduled_days, learning_steps, reps, lapses, state, last_review, ` +
+  `created_at, updated_at`;
 
 const REVIEW_LOG_FULL_COLUMNS =
   "id, profile_id, card_id, rating, state, due, stability, difficulty, elapsed_days, " +
@@ -157,6 +188,12 @@ const REVIEW_LOG_COLUMNS =
 const MAX_TEXT_LENGTH = 10000;
 const DEFAULT_NEW_LIMIT = 20;
 const MAX_NEW_LIMIT = 100;
+
+/** The renderer batches generated-card specs below this in one `syncFromNote` call; re-checked here (SEC-EL-02). */
+const MAX_NOTE_CARD_SPECS = 500;
+
+/** A generated card's reconcile key is a note-authored string, not a uuid — capped, not format-checked. */
+const MAX_CARD_KEY_LENGTH = 200;
 
 /** Accepts a full ISO-8601 date-time (the `now` the caller stamps every scheduling call with). */
 const ISO_8601_DATETIME =
@@ -184,7 +221,10 @@ export class CardStore {
   private readonly selectActiveByDeck: Database.Statement;
   private readonly selectDeck: Database.Statement;
   private readonly selectSubjectActive: Database.Statement;
+  private readonly selectNoteActive: Database.Statement;
+  private readonly selectCardsBySource: Database.Statement;
   private readonly updateContentFields: Database.Statement;
+  private readonly restoreWithContent: Database.Statement;
   private readonly updateScheduling: Database.Statement;
   private readonly markDeleted: Database.Statement;
   private readonly markRestored: Database.Statement;
@@ -206,10 +246,10 @@ export class CardStore {
   ) {
     this.insert = db.prepare(
       `INSERT INTO cards
-         (id, profile_id, deck_id, front, back, due, stability, difficulty,
-          elapsed_days, scheduled_days, learning_steps, reps, lapses, state,
-          last_review, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+         (id, profile_id, deck_id, front, back, source_note_id, source_block_key,
+          due, stability, difficulty, elapsed_days, scheduled_days, learning_steps,
+          reps, lapses, state, last_review, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.selectActiveById = db.prepare(
       `SELECT ${CARD_COLUMNS} FROM cards
@@ -226,9 +266,28 @@ export class CardStore {
     this.selectSubjectActive = db.prepare(
       `SELECT id FROM subjects WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
     );
+    // The deliberate cross-module read `syncFromNote` needs: a note is untrusted
+    // renderer input like any other id, so its existence in THIS profile is
+    // re-checked here rather than trusted from the caller (mirrors `selectDeck`).
+    this.selectNoteActive = db.prepare(
+      `SELECT id FROM notes WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
+    );
+    // Every row this note has ever generated, active or soft-deleted — `syncFromNote`
+    // needs both to tell "restore" apart from "create" and "no-op" apart from "update".
+    this.selectCardsBySource = db.prepare(
+      `SELECT id, deck_id, front, back, deleted_at, source_block_key FROM cards
+       WHERE profile_id = ? AND source_note_id = ?`,
+    );
     this.updateContentFields = db.prepare(
       `UPDATE cards SET deck_id = ?, front = ?, back = ?, updated_at = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
+    );
+    // Restore + rewrite in one statement (rule 3 of `syncFromNote`'s reconcile):
+    // undoing a deleted paragraph brings the same key back, and this is what
+    // returns its FSRS state (untouched here) along with the row.
+    this.restoreWithContent = db.prepare(
+      `UPDATE cards SET deck_id = ?, front = ?, back = ?, deleted_at = NULL, updated_at = ?
+       WHERE id = ? AND profile_id = ? AND deleted_at IS NOT NULL`,
     );
     this.updateScheduling = db.prepare(
       `UPDATE cards
@@ -319,6 +378,8 @@ export class CardStore {
       deckId,
       front,
       back,
+      null,
+      null,
       empty.due.toISOString(),
       empty.stability,
       empty.difficulty,
@@ -339,6 +400,8 @@ export class CardStore {
       deckId,
       front,
       back,
+      sourceNoteId: null,
+      sourceBlockKey: null,
       due: empty.due.toISOString(),
       stability: empty.stability,
       difficulty: empty.difficulty,
@@ -365,6 +428,115 @@ export class CardStore {
     this.updateContentFields.run(deckId, front, back, now, current.id, this.profileId);
 
     return { ...current, deckId, front, back, updatedAt: now };
+  }
+
+  /**
+   * Reconciles this note's generated cards against `specs` — the renderer's
+   * current read of its card-syntax blocks (mirrors `@nexus/core`'s
+   * `collectNoteCards`) — inside one transaction, keyed by `source_block_key`,
+   * never by any id the renderer supplies (SEC-EL-02): the renderer only ever
+   * names a *slot* inside a note it already owns, never a row's own primary
+   * key. This is what lets editing a card's text update the same row, FSRS
+   * history intact, instead of deleting and recreating it.
+   *
+   * Reconcile rules, against exactly this `(profile, note)`'s existing rows:
+   * a key with no existing row is a fresh card in `deckId`; a key matching an
+   * active row rewrites `front`/`back`/`deck_id` only when one of them
+   * actually changed (a no-op sync must not disturb `updated_at`); a key
+   * matching a *soft-deleted* row restores it with the new content — this is
+   * what makes editor undo work, since undoing a deleted paragraph brings the
+   * same key back and the card returns with its full review history; a row
+   * whose key is no longer present is soft-deleted (`review_log` survives —
+   * it is only ever removed by `undoLastReview`). FSRS scheduling columns are
+   * never touched by any of these branches.
+   *
+   * `noteId` is resolved against `notes` directly — the deliberate
+   * cross-module read named in `NoteStore.setCardDeck`'s own doc comment —
+   * because the renderer is untrusted and the foreign key alone does not
+   * scope by profile.
+   */
+  syncFromNote(
+    noteId: string,
+    deckId: string,
+    specs: readonly NoteCardSpecInput[],
+    now: string,
+  ): SyncFromNoteResult {
+    const validNow = validateNow(now);
+    const validNoteId = this.resolveNote(noteId);
+    const validDeckId = this.resolveDeck(deckId);
+    const validSpecs = validateNoteCardSpecs(specs);
+
+    return this.db.transaction((): SyncFromNoteResult => {
+      const existingRows = this.selectCardsBySource.all(
+        this.profileId,
+        validNoteId,
+      ) as SourceCardRow[];
+      const byKey = new Map(existingRows.map((row) => [row.source_block_key, row]));
+      const incomingKeys = new Set(validSpecs.map((spec) => spec.key));
+      const bookkeepingNow = new Date().toISOString();
+
+      let created = 0;
+      let updated = 0;
+      let removed = 0;
+
+      for (const spec of validSpecs) {
+        const row = byKey.get(spec.key);
+        if (!row) {
+          const empty = createEmptyCard(validNow);
+          this.insert.run(
+            uuidv7(),
+            this.profileId,
+            validDeckId,
+            spec.front,
+            spec.back,
+            validNoteId,
+            spec.key,
+            empty.due.toISOString(),
+            empty.stability,
+            empty.difficulty,
+            empty.elapsed_days,
+            empty.scheduled_days,
+            empty.learning_steps,
+            empty.reps,
+            empty.lapses,
+            empty.state,
+            empty.last_review ? empty.last_review.toISOString() : null,
+            bookkeepingNow,
+            bookkeepingNow,
+          );
+          created += 1;
+        } else if (row.deleted_at !== null) {
+          this.restoreWithContent.run(
+            validDeckId,
+            spec.front,
+            spec.back,
+            bookkeepingNow,
+            row.id,
+            this.profileId,
+          );
+          updated += 1;
+        } else if (row.deck_id !== validDeckId || row.front !== spec.front || row.back !== spec.back) {
+          this.updateContentFields.run(
+            validDeckId,
+            spec.front,
+            spec.back,
+            bookkeepingNow,
+            row.id,
+            this.profileId,
+          );
+          updated += 1;
+        }
+      }
+
+      for (const row of existingRows) {
+        if (row.deleted_at === null && row.source_block_key !== null && !incomingKeys.has(row.source_block_key)) {
+          this.markDeleted.run(bookkeepingNow, bookkeepingNow, row.id, this.profileId);
+          removed += 1;
+        }
+      }
+
+      return { created, updated, removed };
+    })();
   }
 
   /** Soft-deletes an active card (reversible via `restore`). */
@@ -587,6 +759,15 @@ export class CardStore {
     }
     return subjectId;
   }
+
+  /** Validates a note id references a non-deleted note in this profile (`syncFromNote`'s cross-module read). */
+  private resolveNote(noteId: string): string {
+    const note = this.selectNoteActive.get(noteId, this.profileId);
+    if (!note) {
+      throw new CardValidationError(`noteId "${noteId}" does not reference a note in this profile.`);
+    }
+    return noteId;
+  }
 }
 
 function toCard(row: CardRow): Card {
@@ -596,6 +777,8 @@ function toCard(row: CardRow): Card {
     deckId: row.deck_id,
     front: row.front,
     back: row.back,
+    sourceNoteId: row.source_note_id,
+    sourceBlockKey: row.source_block_key,
     due: row.due,
     stability: row.stability,
     difficulty: row.difficulty,
@@ -703,6 +886,39 @@ function validateRating(value: CardRating): CardRating {
     throw new CardValidationError(`"${value}" is not a valid review rating (expected 1-4).`);
   }
   return value;
+}
+
+/**
+ * Revalidates one `syncFromNote` call's specs end to end before anything is
+ * written (SEC-EL-02 — `@nexus/core`'s parser already guarantees all of
+ * this, but the renderer is untrusted): a bounded batch, each key a non-empty
+ * bounded string, each side through the existing `validateText`, and no two
+ * specs sharing a key — a duplicate would make the reconcile's per-key
+ * dedupe silently drop one of the caller's edits.
+ */
+function validateNoteCardSpecs(specs: readonly NoteCardSpecInput[]): NoteCardSpecInput[] {
+  if (specs.length > MAX_NOTE_CARD_SPECS) {
+    throw new CardValidationError(`A note may sync at most ${MAX_NOTE_CARD_SPECS} cards in one call.`);
+  }
+
+  const seenKeys = new Set<string>();
+  return specs.map((spec) => {
+    if (
+      typeof spec.key !== "string" ||
+      spec.key.length === 0 ||
+      spec.key.length > MAX_CARD_KEY_LENGTH
+    ) {
+      throw new CardValidationError(
+        `A generated card key must be a non-empty string of at most ${MAX_CARD_KEY_LENGTH} characters.`,
+      );
+    }
+    if (seenKeys.has(spec.key)) {
+      throw new CardValidationError(`Duplicate generated card key "${spec.key}" in one syncFromNote call.`);
+    }
+    seenKeys.add(spec.key);
+
+    return { key: spec.key, front: validateText(spec.front, "front"), back: validateText(spec.back, "back") };
+  });
 }
 
 function validateNewLimit(value: number | undefined): number {

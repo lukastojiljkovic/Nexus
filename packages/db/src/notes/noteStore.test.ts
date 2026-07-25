@@ -326,6 +326,24 @@ function insertFolder(profileId: string, id: string): string {
   return id;
 }
 
+/** Inserts a subject + deck for `profileId` directly (NoteStore does not own decks). */
+function insertDeck(profileId: string, id: string, deletedAt: string | null = null): string {
+  const subjectId = uuidv7();
+  db.raw
+    .prepare(
+      `INSERT INTO subjects (id, profile_id, name, color, created_at, updated_at)
+       VALUES (?, ?, 'S', 'jade', ?, ?)`,
+    )
+    .run(subjectId, profileId, T0, T0);
+  db.raw
+    .prepare(
+      `INSERT INTO decks (id, profile_id, subject_id, name, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, 'D', ?, ?, ?)`,
+    )
+    .run(id, profileId, subjectId, T0, T0, deletedAt);
+  return id;
+}
+
 describe("NoteStore — organization (folder_id, pinned)", () => {
   function storeWithProfile(): { notes: NoteStore; profileId: string } {
     const profileId = createProfile();
@@ -596,6 +614,89 @@ describe("NoteStore — wiki-links (note_links)", () => {
 
     notes.setPinned(s1.id, true);
     expect(notes.listBacklinks(target.id).map((n) => n.id)).toEqual([s1.id, s3.id, s2.id]);
+  });
+});
+
+describe("NoteStore — card deck mapping (card_deck_id)", () => {
+  function storeWithProfile(): { notes: NoteStore; profileId: string } {
+    const profileId = createProfile();
+    return { notes: new NoteStore(db.raw, profileId), profileId };
+  }
+
+  it("creates a note with no card deck mapped", () => {
+    const notes = store();
+    const created = notes.create(T0);
+    expect(created.cardDeckId).toBeNull();
+    expect(notes.list()[0]?.cardDeckId).toBeNull();
+  });
+
+  it("sets the mapping and round-trips it through list/meta", () => {
+    const { notes, profileId } = storeWithProfile();
+    const deckId = insertDeck(profileId, uuidv7());
+    const note = notes.create(T0);
+
+    notes.setCardDeck(note.id, deckId, T1);
+
+    expect(notes.list()[0]?.cardDeckId).toBe(deckId);
+  });
+
+  it("clears the mapping with null", () => {
+    const { notes, profileId } = storeWithProfile();
+    const deckId = insertDeck(profileId, uuidv7());
+    const note = notes.create(T0);
+    notes.setCardDeck(note.id, deckId, T1);
+
+    notes.setCardDeck(note.id, null, T2);
+    expect(notes.list()[0]?.cardDeckId).toBeNull();
+  });
+
+  it("bumps updated_at like every other note write", () => {
+    const { notes, profileId } = storeWithProfile();
+    const deckId = insertDeck(profileId, uuidv7());
+    const note = notes.create(T0);
+
+    notes.setCardDeck(note.id, deckId, T1);
+    expect(notes.list()[0]?.updatedAt).toBe(T1);
+  });
+
+  it("rejects an unknown or soft-deleted note", () => {
+    const { notes, profileId } = storeWithProfile();
+    const deckId = insertDeck(profileId, uuidv7());
+    const note = notes.create(T0);
+    notes.softDelete(note.id, T1);
+
+    expect(() => notes.setCardDeck("missing", deckId, T2)).toThrow(NoteNotFoundError);
+    expect(() => notes.setCardDeck(note.id, deckId, T2)).toThrow(NoteNotFoundError);
+  });
+
+  it("rejects a deck owned by another profile", () => {
+    const { notes } = storeWithProfile();
+    const otherProfile = createProfile();
+    const foreignDeck = insertDeck(otherProfile, uuidv7());
+    const note = notes.create(T0);
+
+    expect(() => notes.setCardDeck(note.id, foreignDeck, T1)).toThrow(NoteValidationError);
+  });
+
+  it("rejects an unknown deck id", () => {
+    const notes = store();
+    const note = notes.create(T0);
+    expect(() => notes.setCardDeck(note.id, "missing", T1)).toThrow(NoteValidationError);
+  });
+
+  it("rejects a soft-deleted deck", () => {
+    const { notes, profileId } = storeWithProfile();
+    const deckId = insertDeck(profileId, uuidv7(), T0); // deleted_at = T0
+    const note = notes.create(T0);
+
+    expect(() => notes.setCardDeck(note.id, deckId, T1)).toThrow(NoteValidationError);
+  });
+
+  it("rejects a malformed now", () => {
+    const { notes, profileId } = storeWithProfile();
+    const deckId = insertDeck(profileId, uuidv7());
+    const note = notes.create(T0);
+    expect(() => notes.setCardDeck(note.id, deckId, "not-a-date")).toThrow(NoteValidationError);
   });
 });
 

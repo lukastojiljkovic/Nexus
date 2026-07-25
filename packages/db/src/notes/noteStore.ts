@@ -16,6 +16,8 @@ export interface NoteMeta {
   title: string;
   folderId: string | null;
   pinned: boolean;
+  /** The STUDY deck this note's inline-flashcard blocks sync into, or null if unmapped (NOTE-006). */
+  cardDeckId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -53,6 +55,7 @@ interface NoteRow {
   title: string;
   folder_id: string | null;
   pinned: number;
+  card_deck_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -68,7 +71,7 @@ interface VersionMetaRow {
   created_at: string;
 }
 
-const COLUMNS = "id, profile_id, title, folder_id, pinned, created_at, updated_at";
+const COLUMNS = "id, profile_id, title, folder_id, pinned, card_deck_id, created_at, updated_at";
 
 /** The renderer batches updates below this; the store re-checks it because renderer input is untrusted (SEC-EL-02). */
 export const MAX_NOTE_UPDATE_BYTES = 262_144;
@@ -135,6 +138,8 @@ export class NoteStore {
   private readonly selectFolderInProfile: Database.Statement;
   private readonly updateFolderId: Database.Statement;
   private readonly updatePinned: Database.Statement;
+  private readonly selectDeckInProfile: Database.Statement;
+  private readonly updateCardDeckId: Database.Statement;
   private readonly noteExistsInProfile: Database.Statement;
   private readonly deleteOutboundLinks: Database.Statement;
   private readonly insertLink: Database.Statement;
@@ -231,6 +236,15 @@ export class NoteStore {
       `UPDATE notes SET pinned = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
     );
+    // Mirrors `CardStore.resolveDeck`: the FK alone does not scope by profile
+    // (see `setCardDeck`'s doc comment), so this lookup is the actual guard.
+    this.selectDeckInProfile = db.prepare(
+      `SELECT id FROM decks WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
+    );
+    this.updateCardDeckId = db.prepare(
+      `UPDATE notes SET card_deck_id = ?, updated_at = ?
+       WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
+    );
     // Deliberately NOT filtered by deleted_at: a link to a soft-deleted note
     // must survive so undo/restore heals it (see the migration's doc comment).
     this.noteExistsInProfile = db.prepare(
@@ -282,6 +296,7 @@ export class NoteStore {
       title: "",
       folderId: null,
       pinned: false,
+      cardDeckId: null,
       createdAt: validNow,
       updatedAt: validNow,
     };
@@ -433,6 +448,32 @@ export class NoteStore {
   }
 
   /**
+   * Points this note's generated cards at a deck (or clears the mapping with
+   * `null`) — the note's only deck selector (NOTE-006): choosing a deck
+   * chooses the subject for every card the note's blocks generate, so there
+   * is no second field to keep in sync. Unlike foldering/pinning, this bumps
+   * `updated_at`: re-pointing a note at another deck is what moves its
+   * generated cards with it (`CardStore.syncFromNote`'s rule), a content-level
+   * effect, not a purely organizational one.
+   *
+   * `deckId` is resolved against `decks` directly — a deliberate cross-module
+   * read of a STUDY table, the mirror image of `CardStore` reading `notes` in
+   * its own `syncFromNote` — because the `decks.id` foreign key alone does
+   * not scope by profile; only this explicit, profile-scoped lookup does.
+   */
+  setCardDeck(id: string, deckId: string | null, now: string): void {
+    const validNow = validateDateTime(now, "now");
+    this.requireActive(id);
+    if (deckId !== null) {
+      const deck = this.selectDeckInProfile.get(deckId, this.profileId);
+      if (!deck) {
+        throw new NoteValidationError(`deckId "${deckId}" does not reference a deck in this profile.`);
+      }
+    }
+    this.updateCardDeckId.run(deckId, validNow, id, this.profileId);
+  }
+
+  /**
    * Replaces an active note's full outbound wiki-link set in one transaction
    * (NOTE-004): the renderer reports the complete target-id set it extracted
    * from the document at flush time, and this call fully replaces whatever was
@@ -545,6 +586,7 @@ function toNoteMeta(row: NoteRow): NoteMeta {
     title: row.title,
     folderId: row.folder_id,
     pinned: row.pinned === 1,
+    cardDeckId: row.card_deck_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

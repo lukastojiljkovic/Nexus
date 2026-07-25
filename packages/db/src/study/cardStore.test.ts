@@ -52,13 +52,26 @@ function fixture(): {
   subjects: SubjectStore;
   deckId: string;
   subjectId: string;
+  profileId: string;
 } {
   const profileId = createProfile();
   const subjects = new SubjectStore(db.raw, profileId);
   const subjectId = subjects.create({ name: "Analiza 1" }).id;
   const decks = new DeckStore(db.raw, profileId);
   const deckId = decks.create({ subjectId, name: "Glava 1" }).id;
-  return { cards: new CardStore(db.raw, profileId), decks, subjects, deckId, subjectId };
+  return { cards: new CardStore(db.raw, profileId), decks, subjects, deckId, subjectId, profileId };
+}
+
+/** Inserts a note for `profileId` directly (CardStore does not own notes). */
+function insertNote(profileId: string, deletedAt: string | null = null): string {
+  const id = uuidv7();
+  db.raw
+    .prepare(
+      `INSERT INTO notes (id, profile_id, title, created_at, updated_at, deleted_at)
+       VALUES (?, ?, '', ?, ?, ?)`,
+    )
+    .run(id, profileId, T0, T0, deletedAt);
+  return id;
 }
 
 describe("CardStore", () => {
@@ -77,6 +90,13 @@ describe("CardStore", () => {
       expect(created.stability).toBe(0);
       expect(created.difficulty).toBe(0);
       expect(created.lastReview).toBeNull();
+    });
+
+    it("inserts NULL for sourceNoteId/sourceBlockKey on a hand-made card", () => {
+      const { cards, deckId } = fixture();
+      const created = cards.create({ deckId, front: "Q", back: "A" }, T0);
+      expect(created.sourceNoteId).toBeNull();
+      expect(created.sourceBlockKey).toBeNull();
     });
 
     it("trims front/back and stores $...$ KaTeX math verbatim (no sanitizing)", () => {
@@ -472,6 +492,226 @@ describe("CardStore", () => {
       const otherProfileId = createProfile();
       const otherCards = new CardStore(db.raw, otherProfileId);
       expect(otherCards.listReviewLog()).toEqual([]);
+    });
+  });
+
+  describe("syncFromNote", () => {
+    it("creates a fresh card per new key, seeded with a fresh FSRS state", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+
+      const result = cards.syncFromNote(
+        noteId,
+        deckId,
+        [
+          { key: "b1", front: "Q1", back: "A1" },
+          { key: "b2", front: "Q2", back: "A2" },
+        ],
+        T0,
+      );
+
+      expect(result).toEqual({ created: 2, updated: 0, removed: 0 });
+      const listed = cards.listByDeck(deckId);
+      expect(listed).toHaveLength(2);
+      expect(listed.map((c) => c.front).sort()).toEqual(["Q1", "Q2"]);
+      expect(listed.every((c) => c.sourceNoteId === noteId)).toBe(true);
+      expect(listed.map((c) => c.sourceBlockKey).sort()).toEqual(["b1", "b2"]);
+      expect(listed.every((c) => c.state === 0)).toBe(true);
+    });
+
+    it("is a no-op on an identical second sync: updated stays 0, updated_at is untouched", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+      const specs = [{ key: "b1", front: "Q", back: "A" }];
+      cards.syncFromNote(noteId, deckId, specs, T0);
+      const before = cards.listByDeck(deckId)[0]!;
+
+      const result = cards.syncFromNote(noteId, deckId, specs, "2026-07-08T11:00:00.000Z");
+
+      expect(result).toEqual({ created: 0, updated: 0, removed: 0 });
+      expect(cards.listByDeck(deckId)[0]?.updatedAt).toBe(before.updatedAt);
+    });
+
+    it("a changed front updates the row but leaves FSRS scheduling state untouched", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+      cards.syncFromNote(noteId, deckId, [{ key: "b1", front: "Q", back: "A" }], T0);
+      const created = cards.listByDeck(deckId)[0]!;
+      const reviewed = cards.review(created.id, 3, T0); // Good — moves state off New
+
+      const result = cards.syncFromNote(
+        noteId,
+        deckId,
+        [{ key: "b1", front: "Q2", back: "A" }],
+        "2026-07-08T11:00:00.000Z",
+      );
+
+      expect(result).toEqual({ created: 0, updated: 1, removed: 0 });
+      const after = cards.listByDeck(deckId)[0]!;
+      expect(after.front).toBe("Q2");
+      expect(after.due).toBe(reviewed.due);
+      expect(after.stability).toBe(reviewed.stability);
+      expect(after.reps).toBe(reviewed.reps);
+      expect(after.state).toBe(reviewed.state);
+    });
+
+    it("a vanished key soft-deletes its card, keeping the review_log", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+      cards.syncFromNote(noteId, deckId, [{ key: "b1", front: "Q", back: "A" }], T0);
+      const created = cards.listByDeck(deckId)[0]!;
+      cards.review(created.id, 3, T0);
+      expect(countReviewLogs(created.id)).toBe(1);
+
+      const result = cards.syncFromNote(noteId, deckId, [], "2026-07-08T11:00:00.000Z");
+
+      expect(result).toEqual({ created: 0, updated: 0, removed: 1 });
+      expect(cards.listByDeck(deckId)).toHaveLength(0);
+      expect(countReviewLogs(created.id)).toBe(1);
+    });
+
+    it("the key's return restores the same row id with its FSRS state intact", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+      cards.syncFromNote(noteId, deckId, [{ key: "b1", front: "Q", back: "A" }], T0);
+      const created = cards.listByDeck(deckId)[0]!;
+      const reviewed = cards.review(created.id, 3, T0);
+      cards.syncFromNote(noteId, deckId, [], "2026-07-08T11:00:00.000Z"); // removed
+
+      const result = cards.syncFromNote(
+        noteId,
+        deckId,
+        [{ key: "b1", front: "Q2", back: "A2" }],
+        "2026-07-08T12:00:00.000Z",
+      );
+
+      expect(result).toEqual({ created: 0, updated: 1, removed: 0 });
+      const restored = cards.listByDeck(deckId)[0]!;
+      expect(restored.id).toBe(created.id);
+      expect(restored.front).toBe("Q2");
+      expect(restored.back).toBe("A2");
+      expect(restored.due).toBe(reviewed.due);
+      expect(restored.stability).toBe(reviewed.stability);
+      expect(restored.reps).toBe(reviewed.reps);
+      expect(restored.state).toBe(reviewed.state);
+    });
+
+    it("changing deckId moves a note's generated cards to the new deck", () => {
+      const { cards, decks, subjectId, deckId, profileId } = fixture();
+      const otherDeckId = decks.create({ subjectId, name: "Glava 2" }).id;
+      const noteId = insertNote(profileId);
+      cards.syncFromNote(noteId, deckId, [{ key: "b1", front: "Q", back: "A" }], T0);
+
+      const result = cards.syncFromNote(
+        noteId,
+        otherDeckId,
+        [{ key: "b1", front: "Q", back: "A" }],
+        "2026-07-08T11:00:00.000Z",
+      );
+
+      expect(result).toEqual({ created: 0, updated: 1, removed: 0 });
+      expect(cards.listByDeck(deckId)).toHaveLength(0);
+      expect(cards.listByDeck(otherDeckId)).toHaveLength(1);
+    });
+
+    it("never touches hand-made cards in the same deck", () => {
+      const { cards, deckId, profileId } = fixture();
+      const handMade = cards.create({ deckId, front: "Manual Q", back: "Manual A" }, T0);
+      const noteId = insertNote(profileId);
+
+      cards.syncFromNote(noteId, deckId, [{ key: "b1", front: "Q", back: "A" }], T0);
+      cards.syncFromNote(noteId, deckId, [], "2026-07-08T11:00:00.000Z"); // removes the generated one
+
+      const listed = cards.listByDeck(deckId);
+      expect(listed).toHaveLength(1);
+      expect(listed[0]?.id).toBe(handMade.id);
+      expect(listed[0]?.sourceNoteId).toBeNull();
+    });
+
+    it("rejects a noteId or deckId from another profile", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+      const foreignProfile = createProfile();
+      const foreignNoteId = insertNote(foreignProfile);
+      const foreignSubjects = new SubjectStore(db.raw, foreignProfile);
+      const foreignSubjectId = foreignSubjects.create({ name: "Elsewhere" }).id;
+      const foreignDecks = new DeckStore(db.raw, foreignProfile);
+      const foreignDeckId = foreignDecks.create({ subjectId: foreignSubjectId, name: "x" }).id;
+
+      expect(() => cards.syncFromNote(foreignNoteId, deckId, [], T0)).toThrow(CardValidationError);
+      expect(() => cards.syncFromNote(noteId, foreignDeckId, [], T0)).toThrow(CardValidationError);
+    });
+
+    it("rejects duplicate keys within one call", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+      expect(() =>
+        cards.syncFromNote(
+          noteId,
+          deckId,
+          [
+            { key: "b1", front: "Q1", back: "A1" },
+            { key: "b1", front: "Q2", back: "A2" },
+          ],
+          T0,
+        ),
+      ).toThrow(CardValidationError);
+    });
+
+    it("rejects more than 500 specs, accepting exactly 500", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+      const tooMany = Array.from({ length: 501 }, (_, i) => ({
+        key: `k${i}`,
+        front: "Q",
+        back: "A",
+      }));
+      const exactly500 = Array.from({ length: 500 }, (_, i) => ({
+        key: `k${i}`,
+        front: "Q",
+        back: "A",
+      }));
+
+      expect(() => cards.syncFromNote(noteId, deckId, tooMany, T0)).toThrow(CardValidationError);
+      expect(() => cards.syncFromNote(noteId, deckId, exactly500, T0)).not.toThrow();
+    });
+
+    it("rejects an empty or over-cap front/back", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+      expect(() =>
+        cards.syncFromNote(noteId, deckId, [{ key: "b1", front: "", back: "A" }], T0),
+      ).toThrow(CardValidationError);
+      expect(() =>
+        cards.syncFromNote(
+          noteId,
+          deckId,
+          [{ key: "b1", front: "x".repeat(10001), back: "A" }],
+          T0,
+        ),
+      ).toThrow(CardValidationError);
+    });
+
+    it("rejects a malformed now", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+      expect(() => cards.syncFromNote(noteId, deckId, [], "not-a-date")).toThrow(
+        CardValidationError,
+      );
+    });
+
+    it("listByDeck and dueQueue include generated cards alongside hand-made ones", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+      cards.syncFromNote(noteId, deckId, [{ key: "b1", front: "Q", back: "A" }], T0);
+      const handMade = cards.create({ deckId, front: "Manual", back: "Manual" }, T0);
+
+      const listed = cards.listByDeck(deckId);
+      expect(listed.map((c) => c.front).sort()).toEqual(["Manual", "Q"]);
+
+      const generated = listed.find((c) => c.front === "Q")!;
+      const queue = cards.dueQueue({ deckId, newLimit: 10 }, T0);
+      expect(queue.map((c) => c.id).sort()).toEqual([handMade.id, generated.id].sort());
     });
   });
 });

@@ -97,8 +97,10 @@ export type {
   CreateCardInput,
   DueQueueOptions,
   DeckCounts,
+  NoteCardSpecInput,
   PreviewIntervals,
   ReviewLogEntry,
+  SyncFromNoteResult,
   UpdateCardFields,
 } from "./study/cardStore.js";
 
