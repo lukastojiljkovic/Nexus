@@ -8,7 +8,7 @@ import {
 } from "react";
 import * as Y from "yjs";
 import { EditorContent, useEditor } from "@tiptap/react";
-import type { Editor } from "@tiptap/core";
+import type { Editor, JSONContent } from "@tiptap/core";
 import { StarterKit } from "@tiptap/starter-kit";
 import { Collaboration } from "@tiptap/extension-collaboration";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
@@ -27,6 +27,8 @@ import { NoteLink, NoteLinkProvider } from "./noteLink.js";
 import { createNoteLinkExtension, NoteLinkMenu, type NoteLinkRenderState } from "./noteLinkMenu.js";
 import { NotePopover } from "./notePopover.js";
 import { createSlashExtension, SlashMenu, type SlashRenderState } from "./noteSlashMenu.js";
+import { NoteTemplatePane } from "./noteTemplatePane.js";
+import { stripAttachmentNodes } from "./noteTemplates.js";
 import { NoteVersionHistory } from "./noteVersionHistory.js";
 import { strings } from "./strings.js";
 
@@ -144,9 +146,15 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
   const [attachments, setAttachments] = useState<NoteAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState<"generic" | "tooLarge" | null>(null);
   const [dropActive, setDropActive] = useState(false);
-  const [mode, setMode] = useState<"edit" | "history">("edit");
+  const [mode, setMode] = useState<"edit" | "history" | "templates">("edit");
   const [restoring, setRestoring] = useState(false);
   const [restoreError, setRestoreError] = useState(false);
+  // The Šabloni pane's pending hand-off (ADR-016): the chosen template's block
+  // array, applied by `EditorCanvas` once it remounts in edit mode, and the
+  // open note's content as of the moment the pane was opened (the pane itself
+  // has no live editor to read from).
+  const [pendingTemplate, setPendingTemplate] = useState<JSONContent[] | null>(null);
+  const [templateSource, setTemplateSource] = useState<JSONContent | null>(null);
 
   const pendingRef = useRef<Uint8Array[]>([]);
   const timerRef = useRef<number | null>(null);
@@ -293,6 +301,10 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
     },
     [profileId, noteId, restoring],
   );
+
+  // Stable identity so `EditorCanvas`'s apply-effect (below) doesn't re-fire
+  // on every render — it clears the hand-off once the insert is applied.
+  const onTemplateApplied = useCallback(() => setPendingTemplate(null), []);
 
   const scheduleFlush = useCallback(() => {
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
@@ -442,9 +454,9 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
       <div
         className={dropActive ? "note__editor-body note__editor-body--drop" : "note__editor-body"}
         onDragOver={(event) => {
-          // History mode has nothing to attach into — the file-drop surface
-          // only activates in edit mode.
-          if (mode === "history") return;
+          // Neither pane mode (history or templates) has anything to attach
+          // into — the file-drop surface only activates in edit mode.
+          if (mode !== "edit") return;
           if (event.dataTransfer.types.includes("Files")) {
             event.preventDefault();
             setDropActive(true);
@@ -458,7 +470,7 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
           }
         }}
         onDrop={(event) => {
-          if (mode === "history") return;
+          if (mode !== "edit") return;
           if (event.dataTransfer.files.length > 0) {
             event.preventDefault();
             setDropActive(false);
@@ -472,17 +484,41 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
           </div>
         )}
         <div className="note__editor-tools">
-          <button
-            type="button"
-            className="note__attach"
-            onClick={() => {
-              const next = mode === "edit" ? "history" : "edit";
-              setMode(next);
-              if (next === "history") setDropActive(false);
-            }}
-          >
-            {mode === "edit" ? strings.notes.historyOpen : strings.notes.historyClose}
-          </button>
+          {mode === "edit" ? (
+            <>
+              <button
+                type="button"
+                className="note__attach"
+                onClick={() => {
+                  // Captured here, while EditorCanvas is still mounted: the
+                  // Šabloni pane unmounts it, so this click handler is the only
+                  // place the note's current content can be read for "Sačuvaj
+                  // kao šablon" (ADR-016).
+                  setTemplateSource(
+                    editorRef.current ? stripAttachmentNodes(editorRef.current.getJSON()) : null,
+                  );
+                  setMode("templates");
+                  setDropActive(false);
+                }}
+              >
+                {strings.notes.templatesOpen}
+              </button>
+              <button
+                type="button"
+                className="note__attach"
+                onClick={() => {
+                  setMode("history");
+                  setDropActive(false);
+                }}
+              >
+                {strings.notes.historyOpen}
+              </button>
+            </>
+          ) : (
+            <button type="button" className="note__attach" onClick={() => setMode("edit")}>
+              {strings.notes.backToEditing}
+            </button>
+          )}
         </div>
         {mode === "history" ? (
           <NoteVersionHistory
@@ -494,6 +530,17 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
             onRestore={(versionSnapshot) => void restoreVersion(versionSnapshot)}
             restoring={restoring}
           />
+        ) : mode === "templates" ? (
+          <NoteTemplatePane
+            profileId={profileId}
+            titles={titles}
+            onOpenNote={onOpenNote}
+            noteContent={templateSource}
+            onInsert={(blocks) => {
+              setPendingTemplate(blocks);
+              setMode("edit");
+            }}
+          />
         ) : (
           <>
             <EditorCanvas
@@ -504,6 +551,8 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
               onOpenNote={onOpenNote}
               attachmentsById={attachmentsById}
               editorRef={editorRef}
+              pendingTemplate={pendingTemplate}
+              onTemplateApplied={onTemplateApplied}
             />
             <section className="note__attachments" aria-label={strings.notes.attachmentsTitle}>
               <div className="note__attachments-head">
@@ -626,6 +675,10 @@ interface EditorCanvasProps {
   attachmentsById: ReadonlyMap<string, NoteAttachment>;
   /** Set from the live `useEditor` instance below, so the parent's attach flow can insert blocks. */
   editorRef: MutableRefObject<Editor | null>;
+  /** A chosen template's blocks, awaiting insertion (ADR-016 hand-off) — `null` when nothing is pending. */
+  pendingTemplate: JSONContent[] | null;
+  /** Clears `pendingTemplate` once the apply effect below has run it. */
+  onTemplateApplied: () => void;
 }
 
 /**
@@ -645,6 +698,8 @@ function EditorCanvas({
   onOpenNote,
   attachmentsById,
   editorRef,
+  pendingTemplate,
+  onTemplateApplied,
 }: EditorCanvasProps) {
   const [slash, setSlash] = useState<SlashRenderState | null>(null);
   const slashKeydownRef = useRef<((event: KeyboardEvent) => boolean) | null>(null);
@@ -715,6 +770,19 @@ function EditorCanvas({
       if (editorRef.current === editor) editorRef.current = null;
     };
   }, [editor, editorRef]);
+
+  // The ADR-016 hand-off: the Šabloni pane has no live editor of its own (this
+  // canvas is unmounted while it's open), so a chosen template's blocks are
+  // applied here, once the canvas remounts in edit mode. Always appended at
+  // the end, never at the caret, so applying a template never replaces or
+  // displaces existing content (PRD 09 §7). An ordinary local edit from here
+  // on — the ambient "update" listener enqueues it and the debounced flush
+  // persists it, same as any keystroke.
+  useEffect(() => {
+    if (editor === null || pendingTemplate === null) return;
+    editor.chain().focus("end").insertContent(pendingTemplate).run();
+    onTemplateApplied();
+  }, [editor, pendingTemplate, onTemplateApplied]);
 
   return (
     <NoteAttachmentProvider value={{ byId: attachmentsById }}>

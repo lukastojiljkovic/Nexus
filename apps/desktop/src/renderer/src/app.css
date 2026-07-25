@@ -2467,14 +2467,16 @@ body {
   background: var(--nx-accent-soft);
 }
 
-/* Toolbar row (NOTE-008b): the sole "Istorija verzija" toggle, right-aligned
-   above the canvas. Same reading measure as everything below it. */
+/* Toolbar row (NOTE-008b / NOTE-009b): the "Šabloni" and "Istorija verzija"
+   pane toggles, right-aligned above the canvas. Same reading measure as
+   everything below it. */
 .note__editor-tools {
   max-width: 70ch;
   margin: 0 auto;
   padding: var(--nx-space-2) var(--nx-space-2) 0;
   display: flex;
   justify-content: flex-end;
+  gap: var(--nx-space-3);
 }
 
 /* Backlinks panel (NOTE-004b): the notes that link here, listed below the
@@ -2695,6 +2697,133 @@ body {
   max-width: 70ch;
   margin: 0 auto;
   padding: var(--nx-space-4) var(--nx-space-2);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+/* Šabloni (NOTE-009b / ADR-016): the in-pane template picker that replaces
+   canvas + Prilozi + backlinks while `mode === "templates"` — the same grid
+   shape as .note__history* (fixed-width list column, fluid preview column).
+   Selecting a row is typographic only, same recipe as .note__history-item. */
+.note__templates {
+  max-width: 70ch;
+  margin: 0 auto;
+  padding: var(--nx-space-4) var(--nx-space-2) var(--nx-space-8);
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: var(--nx-space-4);
+}
+.note__templates-list {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.note__templates-title {
+  margin: 0 0 var(--nx-space-2);
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+/* Group label, the .note__backlinks-title recipe with a top margin so the
+   second group ("Moji šabloni") separates from the built-in rows above it. */
+.note__templates-group {
+  margin: var(--nx-space-2) 0 0;
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+.note__templates-item {
+  display: block;
+  width: 100%;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__templates-item:hover {
+  background: var(--nx-surface-alt);
+}
+.note__templates-item:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+/* `display: block` is load-bearing: the ellipsis recipe below only applies to
+   a block-level box, and this span's parent is a block button (unlike
+   .note__history-item-title, whose parent is a flex column, making it one). */
+.note__templates-item-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+.note__templates-item--selected .note__templates-item-name {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* Row + its popover trigger, the .note__tag-item shape. */
+.note__templates-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.note__templates-row .note__templates-item {
+  flex: 1;
+  min-width: 0;
+}
+.note__templates-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-1) var(--nx-space-3);
+}
+.note__templates-preview {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  padding: var(--nx-space-4);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+}
+.note__templates-actions {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-3);
+}
+/* Muted caption, the .note__history-note recipe — under the save form's
+   field and under the insert action. */
+.note__templates-note {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+/* Same recipe as .note__save-error, scoped to the templates channel. */
+.note__templates-error {
+  max-width: 70ch;
+  margin: 0 auto;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+  border-radius: var(--nx-radius-md);
+  font-size: var(--nx-font-size-body-sm);
+}
+.note__templates-empty {
+  margin: 0;
+  padding: var(--nx-space-2) var(--nx-space-3);
   color: var(--nx-text-muted);
   font-size: var(--nx-font-size-body-sm);
 }
