@@ -1,8 +1,15 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { resolveEnabled } from "@nexus/core";
 import { Button, EmptyState, NavItem } from "@nexus/ui";
 import type { ThemeName } from "@nexus/tokens";
-import type { AppInfo, AuthStatus, FlagState, Profile } from "../../shared/ipc.js";
+import type {
+  AppInfo,
+  AuthStatus,
+  FlagState,
+  Profile,
+  SearchKind,
+  SearchResult,
+} from "../../shared/ipc.js";
 import { AuthGate } from "./AuthGate.js";
 import { Onboarding } from "./Onboarding.js";
 import { DashboardPage } from "./DashboardPage.js";
@@ -12,6 +19,8 @@ import { NotesPage } from "./NotesPage.js";
 import { StudyPage } from "./StudyPage.js";
 import { SettingsPage } from "./SettingsPage.js";
 import { NotificationCenter } from "./NotificationCenter.js";
+import { SearchPalette } from "./SearchPalette.js";
+import { buildSearchCommands } from "./searchCommands.js";
 import { createModuleRegistry } from "./modules.js";
 import { persistAutoLock, readStoredAutoLock, type AutoLockMinutes } from "./autoLock.js";
 import {
@@ -32,10 +41,28 @@ const IDLE_RESET_THROTTLE_MS = 1000;
 // The registry is static, compiled-in data (ADR-008) — built once per renderer.
 const registry = createModuleRegistry();
 
-/** Sidebar/page display name for a module id; falls back to the id. */
-function moduleName(id: string): string {
+/** Sidebar/page display name for a module id; falls back to the id. Exported for `searchCommands.ts`'s "Idi na: <modul>" labels, so they are never re-spelled. */
+export function moduleName(id: string): string {
   return strings.modules[id] ?? id;
 }
+
+/**
+ * Maps a global-search result's kind to the module that owns it (021-d),
+ * mirroring `NotificationCenter`'s own `SOURCE_MODULE` idiom. "note" and
+ * "attachment" are handled separately in `onSearchResult` below since they
+ * use the `openNote` cross-module deep link (ADR-017) instead of a plain
+ * module switch — this map only covers the remaining seven kinds, and the
+ * `Exclude` keeps it that way at the type level.
+ */
+const RESULT_MODULE: Record<Exclude<SearchKind, "note" | "attachment">, string> = {
+  task: "tasks",
+  event: "calendar",
+  document: "calendar",
+  subject: "study",
+  exam: "study",
+  deck: "study",
+  card: "study",
+};
 
 export function App() {
   const [preference, setPreference] = useState<ThemePreference>(readStoredThemePreference);
@@ -58,6 +85,11 @@ export function App() {
   // first `getAuthStatus` round trip resolves.
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [autoLockMinutes, setAutoLockMinutes] = useState<AutoLockMinutes>(readStoredAutoLock);
+  // Global search palette (021-d). `searchStatus` is the rebuild command's
+  // Serbian confirmation/error text — owned here since this is where the
+  // command's `run` closure is built (see `buildSearchCommands` below).
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [searchStatus, setSearchStatus] = useState<string | null>(null);
 
   /** Loads everything that requires an open database. Only ever called once `auth:status` (or an unlock/create/recover result) has confirmed `state === "unlocked"`. */
   async function loadUnlockedData(): Promise<void> {
@@ -218,6 +250,86 @@ export function App() {
     setActiveId("notes");
   }
 
+  // Stable across renders: `SearchPalette`'s own auto-close effect (the
+  // rebuild command's confirmation timer) depends on this callback, and a
+  // fresh reference on every unrelated App re-render would restart that
+  // timer's cleanup/reschedule each time, quietly extending how long the
+  // confirmation stays up.
+  const closePalette = useCallback(() => {
+    setPaletteOpen(false);
+    setSearchStatus(null);
+  }, []);
+
+  /**
+   * Activates a global-search result (021-d). Only "note" gets a genuine
+   * deep link today, via the same cross-module `openNote` ADR-017 already
+   * uses from STUDY; every other kind lands on its owning module's page
+   * without revealing the specific entity — scrolling to/opening the exact
+   * task, event, card, etc. inside that page is the NEXT slice's job, not
+   * this one's, so this function deliberately stops at "the right page is
+   * now open" rather than stubbing a reveal that would only pretend to work.
+   */
+  function onSearchResult(result: SearchResult): void {
+    if (result.kind === "note") {
+      openNote(result.entityId);
+      return;
+    }
+    if (result.kind === "attachment") {
+      if (result.parentId) {
+        openNote(result.parentId);
+      } else {
+        console.error("Nexus: attachment search result has no parent note id:", result.entityId);
+      }
+      return;
+    }
+    setActiveId(RESULT_MODULE[result.kind]);
+  }
+
+  // Ctrl+K / Cmd+K opens the palette (only once truly unlocked and past
+  // onboarding — a shortcut firing over the lock screen or the name prompt
+  // would open a surface with nothing behind it to search). `preventDefault`
+  // stops Electron/Chromium's own default for the combo; a modifier-free "k"
+  // typed anywhere never matches, since ctrlKey/metaKey are false for that.
+  useEffect(() => {
+    const firstProfile = profiles?.[0];
+    const ready =
+      authStatus?.state === "unlocked" && firstProfile !== undefined && firstProfile.name.trim() !== "";
+    if (!ready) return;
+    function handleGlobalKeydown(event: KeyboardEvent): void {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen(true);
+      }
+    }
+    window.addEventListener("keydown", handleGlobalKeydown);
+    return () => window.removeEventListener("keydown", handleGlobalKeydown);
+  }, [authStatus?.state, profiles]);
+
+  // Rebuilt whenever the enabled-module set can change (flags), the active
+  // profile changes, or `theme` changes — the last one matters because
+  // `toggleTheme` reads `theme` directly from its own render's closure
+  // (`changePreference(theme === "noc" ? "dan" : "noc")`), so leaving it out
+  // of this list would let the "Promeni temu" command run against a stale
+  // theme once toggled from anywhere else (e.g. the topbar button) without
+  // `flags`/`profiles` also changing. `resolveEnabled` itself is a cheap
+  // array filter, so recomputing it here rather than threading the
+  // render-time `enabledIds` set into a hook (which sits after several
+  // conditional returns below) is the simpler option.
+  const searchCommands = useMemo(
+    () =>
+      buildSearchCommands({
+        profileId: profiles?.[0]?.id ?? "",
+        enabledModuleIds: resolveEnabled(registry, flags),
+        moduleName,
+        onNavigate: setActiveId,
+        onToggleTheme: toggleTheme,
+        onLock: () => void handleLock(),
+        onRebuildComplete: setSearchStatus,
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [flags, profiles, theme],
+  );
+
   const enabledIds = new Set(resolveEnabled(registry, flags));
   const effectiveId = enabledIds.has(activeId) ? activeId : "dashboard";
 
@@ -325,6 +437,16 @@ export function App() {
           })}
           {activeProfile && (
             <>
+              <NavItem
+                href="#"
+                badge={strings.search.shortcutHint}
+                onClick={(event) => {
+                  event.preventDefault();
+                  setPaletteOpen(true);
+                }}
+              >
+                {strings.search.navLabel}
+              </NavItem>
               <NotificationCenter profileId={activeProfile.id} onNavigate={setActiveId} />
               <NavItem
                 href="#"
@@ -378,6 +500,17 @@ export function App() {
           )}
         </main>
       </div>
+
+      {activeProfile && (
+        <SearchPalette
+          profileId={activeProfile.id}
+          open={paletteOpen}
+          onClose={closePalette}
+          commands={searchCommands}
+          onOpenResult={onSearchResult}
+          statusMessage={searchStatus}
+        />
+      )}
     </div>
   );
 }

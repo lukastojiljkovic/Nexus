@@ -740,6 +740,54 @@ export const strings = {
       dataLocation: "Lokacija podataka",
     },
   },
+
+  /** Global search palette (021-d / ADR-021): nav label + shortcut hint, the
+   *  input placeholder, kind labels (singular for a result row's own kind
+   *  tag; plural for both the filter chips and the per-kind group headings),
+   *  the two non-kind group headings, the key-hint footer, the empty-result
+   *  line, and the local command labels `searchCommands.ts` matches against. */
+  search: {
+    navLabel: "Pretraga",
+    shortcutHint: "Ctrl+K",
+    placeholder: "Pretraži zadatke, beleške, događaje…",
+    kindFilterLabel: "Filter po vrsti",
+    recentGroup: "Nedavno",
+    commandsGroup: "Komande",
+    emptyResults: "Nema rezultata.",
+    hint: "↑↓ kretanje · Enter otvori · Esc zatvori",
+    kindSingular: {
+      task: "Zadatak",
+      event: "Događaj",
+      note: "Beleška",
+      document: "Dokument",
+      subject: "Predmet",
+      exam: "Ispit",
+      deck: "Špil",
+      card: "Kartica",
+      attachment: "Prilog",
+    },
+    kindPlural: {
+      task: "Zadaci",
+      event: "Događaji",
+      note: "Beleške",
+      document: "Dokumenti",
+      subject: "Predmeti",
+      exam: "Ispiti",
+      deck: "Špilovi",
+      card: "Kartice",
+      attachment: "Prilozi",
+    },
+    /** `searchCommands.ts`'s fixed command list; "Promeni temu" itself reuses `strings.app.themeToggle` rather than duplicating it here. */
+    commands: {
+      goToPrefix: "Idi na: ",
+      lock: "Zaključaj aplikaciju",
+      rebuildIndex: "Ponovo izgradi indeks pretrage",
+      rebuildDonePrefix: "Indeks je ponovo izgrađen:",
+      rebuildRecordsUnitOne: "zapis",
+      rebuildRecordsUnitMany: "zapisa",
+      rebuildError: "Ponovno izgrađivanje indeksa nije uspelo.",
+    },
+  },
 } as const;
 
 /**

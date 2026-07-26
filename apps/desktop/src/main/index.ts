@@ -11,7 +11,7 @@ import {
   sniffMime,
   toFtsMatchExpression,
 } from "@nexus/core";
-import type { NotificationSource, SearchHit } from "@nexus/core";
+import type { NotificationSource, SearchHit, SearchKind } from "@nexus/core";
 import { MAX_PASSCODE_LENGTH, blobStorageName, deriveBlobKeys, type BlobKeys } from "@nexus/core/auth";
 import {
   CARD_RATINGS,
@@ -1187,9 +1187,19 @@ function toSearchResult(hit: SearchHit, terms: readonly string[]): SearchResult 
  * `rankSearchResults`, which would reorder them by kind prior/recency instead
  * of the plain "most recently touched" order an empty query is supposed to
  * show. Snippet terms are empty, so each snippet is just the head of its body.
+ *
+ * `kinds` matters because this is also where a *kind-only* query lands: the
+ * palette's chips send `z:` with no words behind it, which has no matchable
+ * term and so falls through here from `runSearchQuery`. Dropping the filter at
+ * that point would answer "show me only my tasks" with everything.
  */
-function runRecentSearch(profileId: string, limit: number): SearchResult[] {
-  const hits = searchStore(profileId).recent({ limit });
+function runRecentSearch(
+  profileId: string,
+  limit: number,
+  kinds: readonly SearchKind[] = [],
+): SearchResult[] {
+  const store = searchStore(profileId);
+  const hits = kinds.length > 0 ? store.recent({ limit, kinds }) : store.recent({ limit });
   return hits.map((hit) => toSearchResult(hit, []));
 }
 
@@ -1206,7 +1216,7 @@ function runRecentSearch(profileId: string, limit: number): SearchResult[] {
 function runSearchQuery(profileId: string, rawQuery: string, limit: number): SearchResult[] {
   const parsed = parseSearchQuery(rawQuery);
   const match = toFtsMatchExpression(parsed.terms, { prefixLast: parsed.prefixLast });
-  if (match === null) return runRecentSearch(profileId, limit);
+  if (match === null) return runRecentSearch(profileId, limit, parsed.kinds);
 
   const store = searchStore(profileId);
   const candidateLimit = limit * SEARCH_CANDIDATE_FACTOR;
@@ -2717,6 +2727,27 @@ function runSmokeSearchRehearsal(): void {
     const recent = runRecentSearch(profile.id, 10);
     if (!recent.some((result) => result.entityId === task.id)) {
       throw new Error("expected the freshly created task to appear in runRecentSearch");
+    }
+
+    // A kind chip clicked with nothing typed sends exactly this: a kind prefix
+    // and no words. It has no matchable term, so it falls through to the
+    // recent list — which still has to honour the filter, or "show me only my
+    // tasks" answers with everything.
+    const note = noteStore(profile.id).create(new Date().toISOString());
+    try {
+      const kindOnly = runSearchQuery(profile.id, "z:", 10);
+      if (!kindOnly.some((result) => result.entityId === task.id)) {
+        throw new Error('expected the kind-only query "z:" to still list the task');
+      }
+      if (kindOnly.some((result) => result.kind !== "task")) {
+        throw new Error(
+          `expected the kind-only query "z:" to return tasks only, got ${JSON.stringify(
+            kindOnly.map((result) => result.kind),
+          )}`,
+        );
+      }
+    } finally {
+      noteStore(profile.id).softDelete(note.id, new Date().toISOString());
     }
 
     const rawDb = requireDb().raw;

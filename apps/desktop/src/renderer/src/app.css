@@ -3757,3 +3757,172 @@ button.cal__grid-event {
   color: var(--nx-accent-strong);
   font-weight: var(--nx-font-weight-semibold);
 }
+
+/* Global search palette (021-d / ADR-021) — a Spotlight-style overlay
+   portalled to <body>, positioned toward the top of the viewport rather than
+   centred. The active row is typographic (gold + weight) over a soft
+   surface, exactly like .note__slash-item--active above: no glow, no inset
+   bar. Backdrop and panel are siblings, never ancestor/descendant — opacity
+   on a parent would wash out its children too, which is not what dimming the
+   page behind the panel means. */
+.search__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  /* Without this the panel is a flex item with `align-items: stretch`, so it
+     would take the full 70vh its max-height allows no matter how little is in
+     it — a nearly empty palette rendered as a tall box with the footer pinned
+     far below the last result. The panel must size to its content and only
+     then stop growing. */
+  align-items: flex-start;
+  padding-top: 12vh;
+}
+.search__backdrop {
+  position: absolute;
+  inset: 0;
+  /* A solid wash of the app's own background colour, not a raw black/white
+     scrim — dims whatever is behind the panel without introducing a colour
+     that isn't a token. */
+  background: var(--nx-bg);
+  opacity: 0.75;
+}
+.search__panel {
+  position: relative;
+  width: min(640px, 92vw);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  box-shadow: var(--nx-shadow);
+}
+.search__input-row {
+  padding: var(--nx-space-3) var(--nx-space-4) var(--nx-space-2);
+  border-bottom: 1px solid var(--nx-border);
+}
+.search__input.nx-textfield__input {
+  font-size: var(--nx-font-size-title);
+  border: none;
+  padding: var(--nx-space-1) 0;
+}
+/* Filter chips — same typographic-toggle idiom as .cal__source. */
+.search__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-1);
+  padding: var(--nx-space-2) var(--nx-space-4);
+  border-bottom: 1px solid var(--nx-border);
+}
+.search__chip.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.search__chip.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
+}
+.search__chip--active.nx-button {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.search__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--nx-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.search__group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.search__group-heading {
+  margin: var(--nx-space-1) var(--nx-space-2);
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.search__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-2);
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+}
+.search__row:hover {
+  background: var(--nx-surface-alt);
+}
+.search__row--active {
+  background: var(--nx-surface-alt);
+}
+.search__row--active .search__row-title {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.search__row-main {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+.search__row-kind {
+  flex: none;
+}
+.search__row-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.search__row-title {
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.search__row-snippet {
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.search__row-date,
+.search__row-hint {
+  flex: none;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.search__mark {
+  background: var(--nx-accent-soft);
+  color: var(--nx-accent-strong);
+  border-radius: var(--nx-radius-xs);
+  padding: 0 1px;
+}
+.search__empty {
+  margin: 0;
+  padding: var(--nx-space-4);
+  text-align: center;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+.search__footer {
+  padding: var(--nx-space-2) var(--nx-space-4);
+  border-top: 1px solid var(--nx-border);
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+}
