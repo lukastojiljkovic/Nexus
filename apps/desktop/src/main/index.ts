@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { app, BrowserWindow, ipcMain, protocol } from "electron";
@@ -6,7 +6,7 @@ import type { IpcMainInvokeEvent } from "electron";
 import { autoUpdater } from "electron-updater";
 import { sniffMime } from "@nexus/core";
 import type { NotificationSource } from "@nexus/core";
-import { MAX_PASSCODE_LENGTH } from "@nexus/core/auth";
+import { MAX_PASSCODE_LENGTH, blobStorageName, deriveBlobKeys, type BlobKeys } from "@nexus/core/auth";
 import {
   CARD_RATINGS,
   CardStore,
@@ -92,12 +92,15 @@ import {
   type UpdateTaskFields,
 } from "@nexus/db";
 import {
-  attachmentsDir,
+  blobStorePaths,
   deleteBlobIfOrphaned,
+  migrateLegacyBlobs,
   openExternally,
+  readBlob,
   registerBlobProtocol,
   saveAttachmentAs,
   saveBlob,
+  type BlobStorePaths,
 } from "./attachments.js";
 import {
   AuthError,
@@ -169,6 +172,23 @@ let mainWindow: BrowserWindow | null = null;
  */
 let unlockedDataKeyHex: string | null = null;
 
+/**
+ * The attachment blob store's keys (ADR-019), derived from `unlockedDataKeyHex`
+ * the moment it is adopted and sharing its lifetime exactly: set together in
+ * `adoptUnlockedKey`, cleared together in `performLock`. Nothing about the
+ * data key itself is recoverable from these — they are one-way HKDF outputs.
+ */
+let blobKeys: BlobKeys | null = null;
+
+/**
+ * The unlock's background legacy-blob migration, kept only so something can
+ * *wait* for it: nothing in the app does (that is the whole point of running it
+ * unawaited), but the smoke rehearsal must know the pass it did not start has
+ * finished before it writes a legacy blob of its own, or the two would race
+ * over the same directory and make the gate flaky.
+ */
+let legacyMigrationTask: Promise<unknown> = Promise.resolve();
+
 // STUDY focus timer (piece 4a): the *running* timer is deliberately never a
 // database row (see the `focus_sessions` migration's doc comment) — it lives
 // only as this main-process runtime state, keyed by profile id, so a crash or
@@ -183,14 +203,29 @@ function databasePath(): string {
   return join(app.getPath("userData"), "nexus.db");
 }
 
-/** `<userData>/attachments` — the NOTE attachment blob store's root (ADR-014). */
-function attachmentsDirPath(): string {
-  return attachmentsDir(app.getPath("userData"));
+/** `<userData>/blobs` (encrypted) + `<userData>/attachments` (legacy plaintext) — the NOTE attachment blob store's roots (ADR-014, encrypted at rest per ADR-019). */
+function blobStorePathsFor(): BlobStorePaths {
+  return blobStorePaths(app.getPath("userData"));
 }
 
 /** `<userData>/tmp-open` — where `openExternally` copies a blob before handing it to the OS's default app. */
 function tmpOpenDirPath(): string {
   return join(app.getPath("userData"), "tmp-open");
+}
+
+/**
+ * Wipes the decrypted copies `openExternally` leaves for the OS shell
+ * (ADR-019). Best-effort on purpose: on Windows a file still open in Word or a
+ * PDF viewer cannot be deleted, and `rmSync`'s `force` only forgives a missing
+ * path, not a busy one. Locking the app must never fail because a viewer is
+ * still holding a temp copy — the next lock or launch clears it.
+ */
+function wipeTmpOpenDir(): void {
+  try {
+    rmSync(tmpOpenDirPath(), { recursive: true, force: true });
+  } catch {
+    // Busy files stay behind until a later attempt; nothing here is worth failing a lock over.
+  }
 }
 
 /** The `userData` directory itself — what every `main/auth.ts` function takes as its first argument (`keychain.json` lives directly inside it, beside `nexus.db`). */
@@ -1002,6 +1037,12 @@ function requireDb(): NexusDatabase {
   return db;
 }
 
+/** Mirrors `requireDb()`'s idiom for the attachment blob store's keys (ADR-019): absent means the session is locked. */
+function requireBlobKeys(): BlobKeys {
+  if (!blobKeys) throw new Error("The attachment store is locked.");
+  return blobKeys;
+}
+
 function taskStore(profileId: string): TaskStore {
   return new TaskStore(requireDb().raw, profileId);
 }
@@ -1116,7 +1157,7 @@ function startUnlockedServices(): void {
   });
 }
 
-/** Closes the database, stops the scheduler, and drops the data key from memory. Shared by the `auth:lock` handler and the smoke run's own lock/unlock exercise. */
+/** Closes the database, stops the scheduler, and drops the data key (and the blob keys derived from it) from memory. Shared by the `auth:lock` handler and the smoke run's own lock/unlock exercise. */
 function performLock(): void {
   stopNotificationScheduler();
   try {
@@ -1126,6 +1167,44 @@ function performLock(): void {
   }
   db = null;
   unlockedDataKeyHex = null;
+  blobKeys = null;
+  // `openExternally` must hand the OS a real plaintext file to open with its
+  // default app, so its temp copies are an unavoidable plaintext residue
+  // living outside both blob stores. What IS controllable is that they never
+  // outlive the session that made them — wiped here on every lock, and once
+  // more at startup (`app.whenReady`) in case the process died before a lock
+  // ever ran.
+  wipeTmpOpenDir();
+}
+
+/**
+ * Adopts a freshly-verified data key for the rest of the unlocked session:
+ * remembers it (`unlockedDataKeyHex`), derives the attachment blob store's
+ * keys from it (ADR-019), and kicks off draining any legacy plaintext blobs
+ * in the background. Never awaited by its own caller — an unlock must not
+ * block on a potentially large migration — and a migration failure is logged
+ * and swallowed rather than left to crash the process as an unhandled
+ * rejection; the legacy directory simply stays put for the next unlock to
+ * try again.
+ */
+async function adoptUnlockedKey(dataKeyHex: string): Promise<void> {
+  unlockedDataKeyHex = dataKeyHex;
+  const sessionKeys = await deriveBlobKeys(dataKeyHex);
+  blobKeys = sessionKeys;
+  // Identity, not null-ness, is what "still this session" means: `performLock`
+  // clears `blobKeys`, and a later unlock installs a NEW object — so this pass
+  // stops both when the app locks and when it has been superseded, which is
+  // what keeps two passes from ever walking the same tree at once.
+  const stillThisSession = (): boolean => blobKeys === sessionKeys;
+  legacyMigrationTask = migrateLegacyBlobs(blobStorePathsFor(), sessionKeys, stillThisSession).catch(
+    (error: unknown) => {
+      console.error(
+        `Legacy attachment migration failed (will retry on the next unlock): ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    },
+  );
 }
 
 /** Converts an `AuthError` into the `AuthResult` the renderer branches on; a `"throttled"` reason additionally carries a freshly computed `lockedForMs` (the guard file was left untouched by the throttle check that raised it, so re-reading it here is exact, not stale). Anything that is NOT an `AuthError` is rethrown — an unexpected failure, not an expected refusal. */
@@ -1143,7 +1222,7 @@ async function handleAuthCreate(passcode: string): Promise<AuthResult> {
   try {
     const { dataKeyHex, recoveryCode } = await createAccount(userDataDir(), passcode);
     openEncrypted(dataKeyHex);
-    unlockedDataKeyHex = dataKeyHex;
+    await adoptUnlockedKey(dataKeyHex);
     startUnlockedServices();
     return { ok: true, recoveryCode };
   } catch (error) {
@@ -1162,7 +1241,7 @@ async function handleAuthUnlock(passcode: string): Promise<AuthResult> {
     // `unlockWithPasscode` already threw.)
     if (db === null) {
       openEncrypted(dataKeyHex);
-      unlockedDataKeyHex = dataKeyHex;
+      await adoptUnlockedKey(dataKeyHex);
       startUnlockedServices();
     }
     return { ok: true };
@@ -1180,7 +1259,7 @@ async function handleAuthRecover(recoveryCode: string, newPasscode: string): Pro
     // fully verified/applied above regardless of session state.
     if (db === null) {
       openEncrypted(dataKeyHex);
-      unlockedDataKeyHex = dataKeyHex;
+      await adoptUnlockedKey(dataKeyHex);
       startUnlockedServices();
     }
     return { ok: true };
@@ -2151,7 +2230,7 @@ function registerIpc(): void {
 
     const store = noteAttachmentStore(profileId);
     const mime = sniffMime(bytes);
-    const { sha256 } = await saveBlob(attachmentsDirPath(), bytes);
+    const { sha256 } = await saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes);
     try {
       return store.add(
         id,
@@ -2162,7 +2241,12 @@ function registerIpc(): void {
       // The blob was already written (write-if-absent); if the row failed to
       // insert (e.g. an unknown/soft-deleted note), GC it so a failed add
       // never leaves an orphan file — but only if nothing else references it.
-      await deleteBlobIfOrphaned(attachmentsDirPath(), sha256, store.refCount(sha256));
+      await deleteBlobIfOrphaned(
+        blobStorePathsFor(),
+        requireBlobKeys(),
+        sha256,
+        store.refCount(sha256),
+      );
       throw error;
     }
   });
@@ -2176,7 +2260,12 @@ function registerIpc(): void {
 
     const store = noteAttachmentStore(profileId);
     const removed = store.remove(id, attachmentId);
-    await deleteBlobIfOrphaned(attachmentsDirPath(), removed.sha256, store.refCount(removed.sha256));
+    await deleteBlobIfOrphaned(
+      blobStorePathsFor(),
+      requireBlobKeys(),
+      removed.sha256,
+      store.refCount(removed.sha256),
+    );
   });
 
   ipcMain.handle(IpcChannel.noteAttachmentsOpen, async (event, payload): Promise<void> => {
@@ -2187,7 +2276,7 @@ function registerIpc(): void {
     const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
 
     const attachment = requireNoteAttachment(profileId, id, attachmentId);
-    await openExternally(attachmentsDirPath(), tmpOpenDirPath(), attachment);
+    await openExternally(blobStorePathsFor(), requireBlobKeys(), tmpOpenDirPath(), attachment);
   });
 
   ipcMain.handle(
@@ -2200,7 +2289,7 @@ function registerIpc(): void {
       const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
 
       const attachment = requireNoteAttachment(profileId, id, attachmentId);
-      return saveAttachmentAs(mainWindow, attachmentsDirPath(), attachment);
+      return saveAttachmentAs(mainWindow, blobStorePathsFor(), requireBlobKeys(), attachment);
     },
   );
 
@@ -2368,6 +2457,93 @@ async function runSmokeMigrationRehearsal(): Promise<void> {
   }
 }
 
+/**
+ * Rehearses the ADR-019 attachment-encryption migration end to end against
+ * the real filesystem — the one flow that cannot be exercised by
+ * `@nexus/core/auth`'s own unit tests, because its whole point is what a real
+ * `<userData>/attachments` legacy tree looks like to `migrateLegacyBlobs`.
+ * Runs after `runSmokeMigrationRehearsal`, which leaves the app unlocked (its
+ * final step is a passcode unlock on the migrated account), so `blobKeys` is
+ * already populated here.
+ *
+ * Proves, in order: (1) a hand-written legacy plaintext blob is readable
+ * through the dual-read window before any migration runs; (2) migrating it
+ * moves it into the encrypted store as a genuine `NXB1` container and removes
+ * the now-empty legacy tree; (3) a fresh `saveBlob` never touches plaintext
+ * on disk either; (4) running the migration again is a true no-op.
+ */
+async function runSmokeBlobMigrationRehearsal(): Promise<void> {
+  const paths = blobStorePathsFor();
+  const keys = requireBlobKeys();
+  // The last unlock started a migration pass of its own; let it finish before
+  // planting a legacy blob, so the two never walk the tree at the same time.
+  await legacyMigrationTask;
+
+  // 1. The dual-read window.
+  const legacyBytes = Buffer.from("legacy attachment bytes for the smoke rehearsal");
+  const legacySha256 = createHash("sha256").update(legacyBytes).digest("hex");
+  const legacyFanoutDir = join(paths.legacyDir, legacySha256.slice(0, 2));
+  mkdirSync(legacyFanoutDir, { recursive: true });
+  writeFileSync(join(legacyFanoutDir, legacySha256), legacyBytes);
+
+  const beforeMigration = await readBlob(paths, keys, legacySha256);
+  if (beforeMigration === null || !Buffer.from(beforeMigration).equals(legacyBytes)) {
+    throw new Error("expected readBlob to serve the hand-written legacy blob before migration");
+  }
+
+  // 2. The migration.
+  const migrationResult = await migrateLegacyBlobs(paths, keys, () => true);
+  if (migrationResult.migrated < 1 || migrationResult.skipped !== 0) {
+    throw new Error(
+      `expected the migration to move at least one blob with nothing skipped, got ${JSON.stringify(migrationResult)}`,
+    );
+  }
+  if (existsSync(join(legacyFanoutDir, legacySha256))) {
+    throw new Error("expected the legacy blob file to be gone after migration");
+  }
+  if (existsSync(paths.legacyDir)) {
+    throw new Error("expected the legacy attachments directory to be removed after a clean migration");
+  }
+
+  const legacyStorageName = await blobStorageName(keys.nameKey, legacySha256);
+  const migratedContainer = readFileSync(
+    join(paths.dir, legacyStorageName.slice(0, 2), legacyStorageName),
+  );
+  if (migratedContainer.subarray(0, 4).toString("ascii") !== "NXB1") {
+    throw new Error("expected the migrated blob's on-disk container to start with the NXB1 magic");
+  }
+  if (migratedContainer.includes(legacyBytes)) {
+    throw new Error("expected the migrated blob's on-disk container to NOT contain its plaintext");
+  }
+
+  const afterMigration = await readBlob(paths, keys, legacySha256);
+  if (afterMigration === null || !Buffer.from(afterMigration).equals(legacyBytes)) {
+    throw new Error("expected readBlob to still serve the migrated blob's original bytes");
+  }
+
+  // 3. A fresh save is encrypted, never plaintext, on disk.
+  const freshBytes = Buffer.from("fresh attachment bytes written after unlock");
+  const { sha256: freshSha256 } = await saveBlob(paths, keys, freshBytes);
+  const freshStorageName = await blobStorageName(keys.nameKey, freshSha256);
+  const freshContainer = readFileSync(join(paths.dir, freshStorageName.slice(0, 2), freshStorageName));
+  if (freshContainer.subarray(0, 4).toString("ascii") !== "NXB1") {
+    throw new Error("expected a freshly saved blob's on-disk container to start with the NXB1 magic");
+  }
+  if (freshContainer.includes(freshBytes)) {
+    throw new Error("expected a freshly saved blob's on-disk container to NOT contain its plaintext");
+  }
+  const freshReadBack = await readBlob(paths, keys, freshSha256);
+  if (freshReadBack === null || !Buffer.from(freshReadBack).equals(freshBytes)) {
+    throw new Error("expected readBlob to round-trip a freshly saved blob");
+  }
+
+  // 4. Idempotence: nothing left to migrate, and it must not throw.
+  const secondPass = await migrateLegacyBlobs(paths, keys, () => true);
+  if (secondPass.migrated !== 0 || secondPass.skipped !== 0) {
+    throw new Error(`expected a second migration pass to be a no-op, got ${JSON.stringify(secondPass)}`);
+  }
+}
+
 async function runSmoke(win: BrowserWindow): Promise<void> {
   const profiles = listProfiles(requireDb());
   if (profiles.length < 1) {
@@ -2419,6 +2595,7 @@ async function runSmoke(win: BrowserWindow): Promise<void> {
   }
 
   await runSmokeMigrationRehearsal();
+  await runSmokeBlobMigrationRehearsal();
 }
 
 // --- Auto-update (SEC-EL-07) -------------------------------------------------
@@ -2474,6 +2651,12 @@ app.whenReady().then(async () => {
   }
 
   try {
+    // See `performLock`'s doc comment: `openExternally`'s temp copies are an
+    // unavoidable plaintext residue outside both blob stores. Wiping them once
+    // here catches whatever a previous run left behind if the process died
+    // before a lock ever ran (a graceful lock already wipes this directory).
+    wipeTmpOpenDir();
+
     // ADR-018: the main process starts LOCKED. No database is opened here —
     // `db` stays null until `auth:create`/`auth:unlock`/`auth:recover`
     // succeeds (via `openEncrypted`), so every data channel's `requireDb()`
@@ -2487,13 +2670,17 @@ app.whenReady().then(async () => {
     // here and turned into a clean 404 (`registerBlobProtocol` already 404s on
     // a null mime) rather than a generic network error surfacing in the
     // renderer for every attachment image while locked.
-    registerBlobProtocol((sha256) => {
-      try {
-        return noteAttachmentStore("").mimeForHash(sha256);
-      } catch {
-        return null;
-      }
-    }, attachmentsDirPath());
+    registerBlobProtocol(
+      (sha256) => {
+        try {
+          return noteAttachmentStore("").mimeForHash(sha256);
+        } catch {
+          return null;
+        }
+      },
+      blobStorePathsFor(),
+      () => blobKeys,
+    );
 
     if (isSmoke) {
       // Unlike a real launch, the smoke run cannot wait for a renderer-driven
