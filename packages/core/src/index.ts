@@ -120,3 +120,32 @@ export type {
   TimedItem,
   WeekStart,
 } from "./calendar/calendarGrid.js";
+
+export {
+  buildSearchSnippet,
+  DEFAULT_SNIPPET_RADIUS,
+  foldSearchText,
+  foldWithOffsets,
+} from "./search/searchText.js";
+export type { FoldedText, SearchSnippet } from "./search/searchText.js";
+
+export {
+  MAX_SEARCH_TERMS,
+  MAX_TERM_LENGTH,
+  parseSearchQuery,
+  SEARCH_KINDS,
+  SEARCH_KIND_PREFIXES,
+  toFtsMatchExpression,
+} from "./search/searchQuery.js";
+export type { ParsedSearchQuery, SearchKind } from "./search/searchQuery.js";
+
+export {
+  KIND_PRIOR,
+  rankSearchResults,
+  RECENCY_DECAY_DAYS,
+  RECENCY_WEIGHT,
+  RELEVANCE_WEIGHT,
+  TITLE_EXACT_BOOST,
+  TITLE_PREFIX_BOOST,
+} from "./search/searchRanking.js";
+export type { RankedSearchHit, SearchHit } from "./search/searchRanking.js";
