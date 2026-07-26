@@ -314,3 +314,16 @@ export class NoteTemplateValidationError extends DatabaseError {}
  * to a store scoped to another (ADR-016 / NOTE-009).
  */
 export class NoteTemplateNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a global-search read is rejected at the store boundary because
+ * its input breaks a domain rule the caller is expected to have caught
+ * already — an empty or whitespace-only `match`, an empty `kinds` array, an
+ * unknown search kind, a non-integer/zero/negative `limit`, or a malformed
+ * FTS5 MATCH expression the driver itself rejected (ADR-021). The store
+ * revalidates because renderer input is untrusted (SEC-EL-02): a
+ * well-formed expression from `toFtsMatchExpression` (`@nexus/core`) can
+ * never trigger the last case, but the store's boundary does not get to
+ * assume its caller built one correctly.
+ */
+export class SearchValidationError extends DatabaseError {}

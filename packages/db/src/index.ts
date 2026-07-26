@@ -38,6 +38,7 @@ export {
   PlanNotFoundError,
   PlanValidationError,
   SchemaVersionError,
+  SearchValidationError,
   SubjectNotFoundError,
   SubjectValidationError,
   TaskNotFoundError,
@@ -151,5 +152,15 @@ export type { AddNoteAttachmentInput, NoteAttachment } from "./notes/noteAttachm
 
 export { NoteTemplateStore, MAX_NOTE_TEMPLATE_BYTES } from "./notes/noteTemplateStore.js";
 export type { NoteTemplate } from "./notes/noteTemplateStore.js";
+
+export {
+  SearchStore,
+  BODY_BM25_WEIGHT,
+  DEFAULT_SEARCH_LIMIT,
+  MAX_SEARCH_LIMIT,
+  TITLE_BM25_WEIGHT,
+  rebuildSearchIndex,
+} from "./search/searchStore.js";
+export type { RecentOptions, SearchOptions } from "./search/searchStore.js";
 
 export { uuidv7 } from "./ids.js";
