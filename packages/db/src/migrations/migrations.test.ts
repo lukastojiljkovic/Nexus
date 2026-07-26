@@ -2,7 +2,25 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { NexusDatabase, openDatabase } from "../index.js";
+import { MIGRATIONS, NexusDatabase, openDatabase } from "../index.js";
+
+/**
+ * Derived, not spelled out sixteen times over: every migration's own suite
+ * asserts that a fresh database is stamped with the *latest* version, which is
+ * a statement about `MIGRATIONS`, not about any particular number. The number
+ * itself is pinned once, just below, so adding a migration is a one-line edit
+ * here instead of a sweep through every describe block.
+ */
+const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
+
+describe("the migration list", () => {
+  it("is at version 17 (search index), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(17);
+    expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
+      Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
+    );
+  });
+});
 
 let dir: string;
 
@@ -32,7 +50,7 @@ describe("migration 002 — tasks", () => {
   it("creates the tasks table and stamps the latest user_version on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("tasks");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(16);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
     db.close();
   });
 
@@ -43,7 +61,7 @@ describe("migration 002 — tasks", () => {
     first.close();
 
     const second = openDatabase({ path });
-    expect(second.raw.pragma("user_version", { simple: true })).toBe(16);
+    expect(second.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
     expect(tableNames(second)).toContain("tasks");
     expect(
       (second.raw.prepare("SELECT count(*) AS n FROM profiles").get() as { n: number }).n,
@@ -93,7 +111,7 @@ describe("migration 003 — events", () => {
   it("creates the events table and stamps the latest user_version on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("events");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(16);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
     db.close();
   });
 
@@ -161,7 +179,7 @@ describe("migration 004 — documents", () => {
     const names = tableNames(db);
     expect(names).toContain("tracked_documents");
     expect(names).toContain("document_renewals");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(16);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
     db.close();
   });
 
@@ -242,7 +260,7 @@ describe("migration 005 — study", () => {
     const names = tableNames(db);
     expect(names).toContain("subjects");
     expect(names).toContain("exams");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(16);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
     db.close();
   });
 
@@ -362,7 +380,7 @@ describe("migration 006 — flashcards", () => {
     expect(names).toContain("decks");
     expect(names).toContain("cards");
     expect(names).toContain("review_log");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(16);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
     db.close();
   });
 
@@ -520,7 +538,7 @@ describe("migration 007 — study plans", () => {
     const names = tableNames(db);
     expect(names).toContain("study_plans");
     expect(names).toContain("study_blocks");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(16);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
     db.close();
   });
 
@@ -691,7 +709,7 @@ describe("migration 008 — focus sessions", () => {
   it("creates the focus_sessions table and stamps the latest user_version on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("focus_sessions");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(16);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
     db.close();
   });
 
@@ -795,7 +813,7 @@ describe("migration 009 — notifications", () => {
     expect(names).toContain("notifications");
     expect(names).toContain("ntf_settings");
     expect(names).toContain("ntf_source_settings");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(16);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
     db.close();
   });
 
@@ -921,7 +939,7 @@ describe("migration 010 — notes", () => {
     expect(names).toContain("notes");
     expect(names).toContain("note_updates");
     expect(names).toContain("note_snapshots");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(16);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
     db.close();
   });
 
@@ -1032,7 +1050,7 @@ describe("migration 011 — notes organization", () => {
     expect(names).toContain("note_folders");
     expect(names).toContain("note_tags");
     expect(names).toContain("note_tag_links");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(16);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
     db.close();
   });
 
@@ -1207,7 +1225,7 @@ describe("migration 012 — note links", () => {
   it("creates the note_links table and stamps the latest user_version on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("note_links");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(16);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
     db.close();
   });
 
@@ -1304,7 +1322,7 @@ describe("migration 013 — note attachments", () => {
   it("creates the note_attachments table and stamps the latest user_version on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("note_attachments");
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(16);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
     db.close();
   });
 
@@ -1386,7 +1404,7 @@ describe("migration 014 — note versions", () => {
     expect(columns).toEqual(
       expect.arrayContaining(["note_id", "covered_seq", "snapshot", "title", "created_at"]),
     );
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(16);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
     db.close();
   });
 
@@ -1456,7 +1474,7 @@ describe("migration 015 — note templates", () => {
     expect(columns).toEqual(
       expect.arrayContaining(["id", "profile_id", "name", "content", "created_at", "updated_at"]),
     );
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(16);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
     db.close();
   });
 
@@ -1577,7 +1595,7 @@ describe("migration 016 — inline flashcards", () => {
     };
     expect(noteRow.card_deck_id).toBeNull();
 
-    expect(db.raw.pragma("user_version", { simple: true })).toBe(16);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
     db.close();
   });
 

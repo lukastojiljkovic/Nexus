@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import Database from "better-sqlite3-multiple-ciphers";
+import { foldSearchText } from "@nexus/core";
 import { DatabaseKeyError, DatabaseLockedError } from "./errors.js";
 import { runMigrations } from "./migrations/migrations.js";
 
@@ -42,6 +43,7 @@ export function openDatabase(options: OpenDatabaseOptions): NexusDatabase {
     assertReadable(db, options.encryptionKey !== undefined);
     db.pragma("journal_mode = WAL");
     db.pragma("foreign_keys = ON");
+    registerSearchFold(db);
     runMigrations(db);
   } catch (error) {
     db.close();
@@ -100,6 +102,25 @@ export function encryptDatabaseInPlace(path: string, encryptionKey: string): voi
   } finally {
     db.close();
   }
+}
+
+/**
+ * Registers `nx_fold` as a deterministic SQL function backed by `@nexus/core`'s
+ * `foldSearchText` (ADR-021). Global search's index (migration 017) is
+ * maintained entirely by triggers written in SQL, and folding — the one step
+ * SQLite's own FTS5 tokenizer cannot do for Serbian (it does not fold `đ`, and
+ * nothing at all for Cyrillic) — has to happen inside those triggers. This is
+ * the one place a connection acquires that ability. It runs BEFORE
+ * `runMigrations`: migration 017's one-time backfill of existing rows calls
+ * `nx_fold` directly, so the function must already exist when that migration
+ * runs, not just when the app's own trigger-driven writes happen later. A
+ * `NULL` input yields a `NULL` output rather than throwing or coercing to a
+ * string, matching ordinary SQL NULL-propagation semantics.
+ */
+function registerSearchFold(db: DatabaseHandle): void {
+  db.function("nx_fold", { deterministic: true }, (value: unknown) =>
+    typeof value === "string" ? foldSearchText(value) : null,
+  );
 }
 
 /**
