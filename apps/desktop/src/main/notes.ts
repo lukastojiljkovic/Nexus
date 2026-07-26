@@ -22,25 +22,32 @@ export const COMPACTION_THRESHOLD = 32;
 export const VERSION_MIN_AGE_MS = 600_000;
 
 /**
- * Folds a note's pending updates into a fresh snapshot once they reach the
- * threshold: read snapshot + pending updates, merge them purely, then hand
- * the result back to the store's atomic `compact` with the last update's seq
- * as the new `covered_seq`. A no-op below the threshold — called after every
- * `notes:append-update`, so the log never grows unboundedly.
- *
- * After a successful compaction, this doubles as the version-history cadence
- * (ADR-015): if the note has no checkpoint yet, or its latest one is older
- * than `VERSION_MIN_AGE_MS`, the freshly merged snapshot is captured as a new
- * version too. Compaction stays the primary duty — a checkpoint missed here
- * (e.g. a note edited in a single burst under the threshold) self-heals at
- * the next compaction that does cross it, so no separate scheduler is needed.
+ * Idle debounce (ms) before a note's pending updates are folded into a fresh
+ * snapshot even below `COMPACTION_THRESHOLD` (ADR-021 / PRD 08 SRCH-002). A
+ * note's searchable BODY comes from `note_snapshots.plaintext`, which
+ * otherwise only refreshes once `COMPACTION_THRESHOLD` updates pile up — an
+ * entire session's worth of typing, against SRCH-002's "updates within 1 s of
+ * an edit" (titles are always current; they come from `notes:append-update`'s
+ * own `title` argument, never from the snapshot). Scheduled from
+ * `notesAppendUpdate` via `scheduleIdleCompaction` and reset on every further
+ * keystroke, so continuous typing keeps pushing it out until the user
+ * actually pauses.
  */
-export function compactIfNeeded(store: NoteStore, noteId: string): void {
-  if (store.countPendingUpdates(noteId) < COMPACTION_THRESHOLD) return;
+export const IDLE_COMPACTION_MS = 2_000;
 
+/**
+ * Shared merge/capture body for `compactIfNeeded` and `compactNow`: reads the
+ * pending updates, merges them purely with the stored snapshot, hands the
+ * result to the store's atomic `compact` with the last update's seq as the
+ * new `covered_seq`, and self-heals the version-history checkpoint (ADR-015)
+ * on top — if the note has no checkpoint yet, or its latest one is older
+ * than `VERSION_MIN_AGE_MS`, the freshly merged snapshot is captured as a new
+ * version too. A no-op when there is nothing pending.
+ */
+function runCompaction(store: NoteStore, noteId: string): void {
   const { snapshot, updates } = store.readForCompaction(noteId);
   const last = updates.at(-1);
-  if (!last) return; // nothing pending after all — racing appends cannot occur (main is single-threaded), but stay honest
+  if (!last) return; // nothing pending — nothing to fold
 
   const merged = mergeNoteState(
     snapshot,
@@ -53,6 +60,79 @@ export function compactIfNeeded(store: NoteStore, noteId: string): void {
   if (!latest || now.getTime() - Date.parse(latest.createdAt) >= VERSION_MIN_AGE_MS) {
     store.captureVersion(noteId, merged.snapshot, last.seq, now.toISOString());
   }
+}
+
+/**
+ * Folds a note's pending updates into a fresh snapshot once they reach
+ * `COMPACTION_THRESHOLD` — called after every `notes:append-update`, so the
+ * log never grows unboundedly. A no-op below the threshold. See
+ * `runCompaction` for what the fold itself does, including the
+ * version-history self-heal.
+ */
+export function compactIfNeeded(store: NoteStore, noteId: string): void {
+  if (store.countPendingUpdates(noteId) < COMPACTION_THRESHOLD) return;
+  runCompaction(store, noteId);
+}
+
+/**
+ * The same fold `compactIfNeeded` does, WITHOUT the `COMPACTION_THRESHOLD`
+ * gate — run once `IDLE_COMPACTION_MS` has passed since the note's last edit
+ * (`scheduleIdleCompaction`), so a note's searchable body catches up even in
+ * a session that never crosses the threshold. This changes compaction
+ * CADENCE only: the version-history capture inside `runCompaction` keeps its
+ * own `VERSION_MIN_AGE_MS` gate untouched, and a note with nothing pending is
+ * still a no-op (never rewrites a snapshot for nothing).
+ */
+export function compactNow(store: NoteStore, noteId: string): void {
+  runCompaction(store, noteId);
+}
+
+/**
+ * Per-key debounce timers for `scheduleIdleCompaction`/`cancelIdleCompactions`.
+ * Deliberately owns no store reference — only a caller-defined key (main uses
+ * `${profileId}:${noteId}`) and the callback to run — so `cancelIdleCompactions`
+ * can drop every pending timer on lock without needing to know anything about
+ * what each one would have done or which database it targeted.
+ */
+const idleCompactionTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/**
+ * Schedules `run` to fire after `IDLE_COMPACTION_MS`, replacing any timer
+ * already pending for the same `key` — continuous typing on the same note
+ * keeps pushing its idle compaction out rather than piling up duplicate
+ * timers.
+ */
+export function scheduleIdleCompaction(key: string, run: () => void): void {
+  const existing = idleCompactionTimers.get(key);
+  if (existing) clearTimeout(existing);
+  idleCompactionTimers.set(
+    key,
+    setTimeout(() => {
+      idleCompactionTimers.delete(key);
+      try {
+        run();
+      } catch (error) {
+        // A throw inside a timer is an uncaughtException — it takes the whole
+        // main process down, with no renderer call to surface it to. And this
+        // one is reachable by an ordinary action: edit a note, delete it
+        // within the debounce, and the compaction finds no active note.
+        // Losing one background compaction is nothing; the next edit (or the
+        // threshold path) folds those updates anyway.
+        console.error(`Idle compaction for "${key}" failed:`, error);
+      }
+    }, IDLE_COMPACTION_MS),
+  );
+}
+
+/**
+ * Clears every pending idle-compaction timer. Called on lock (and app quit):
+ * a timer left running would otherwise fire against a database the lock just
+ * closed, throwing where nothing can observe it AND holding open exactly the
+ * kind of background work a lock is supposed to stop.
+ */
+export function cancelIdleCompactions(): void {
+  for (const timer of idleCompactionTimers.values()) clearTimeout(timer);
+  idleCompactionTimers.clear();
 }
 
 /**

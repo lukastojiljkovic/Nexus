@@ -214,6 +214,12 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.noteAttachmentsOpen, { profileId, id: noteId, attachmentId }),
   saveNoteAttachmentAs: (profileId, noteId, attachmentId) =>
     ipcRenderer.invoke(IpcChannel.noteAttachmentsSaveAs, { profileId, id: noteId, attachmentId }),
+  searchQuery: (profileId, query, limit) =>
+    ipcRenderer.invoke(IpcChannel.searchQuery, { profileId, query, limit }),
+  searchRecent: (profileId, limit) =>
+    ipcRenderer.invoke(IpcChannel.searchRecent, { profileId, limit }),
+  rebuildSearchIndex: (profileId) =>
+    ipcRenderer.invoke(IpcChannel.searchRebuild, { profileId }),
   exportData: (profileId) => ipcRenderer.invoke(IpcChannel.imexExport, { profileId }),
   appInfo: () => ipcRenderer.invoke(IpcChannel.appInfo),
 };

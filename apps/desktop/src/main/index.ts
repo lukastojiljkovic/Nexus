@@ -4,8 +4,14 @@ import { join } from "node:path";
 import { app, BrowserWindow, ipcMain, protocol } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import { autoUpdater } from "electron-updater";
-import { sniffMime } from "@nexus/core";
-import type { NotificationSource } from "@nexus/core";
+import {
+  buildSearchSnippet,
+  parseSearchQuery,
+  rankSearchResults,
+  sniffMime,
+  toFtsMatchExpression,
+} from "@nexus/core";
+import type { NotificationSource, SearchHit } from "@nexus/core";
 import { MAX_PASSCODE_LENGTH, blobStorageName, deriveBlobKeys, type BlobKeys } from "@nexus/core/auth";
 import {
   CARD_RATINGS,
@@ -33,6 +39,8 @@ import {
   NoteTemplateStore,
   openDatabase,
   PlanStore,
+  rebuildSearchIndex,
+  SearchStore,
   SqliteFlagStore,
   StatsStore,
   STUDY_BLOCK_STATUSES,
@@ -113,13 +121,21 @@ import {
 } from "./auth.js";
 import { localToday } from "./clock.js";
 import { handleExport } from "./imex.js";
-import { captureNoteVersion, compactIfNeeded } from "./notes.js";
+import {
+  cancelIdleCompactions,
+  captureNoteVersion,
+  compactIfNeeded,
+  compactNow,
+  scheduleIdleCompaction,
+} from "./notes.js";
 import { startNotificationScheduler, stopNotificationScheduler } from "./notifications.js";
 import {
   CARD_TEXT_MAX_LENGTH,
   IpcChannel,
   NOTE_CARD_KEY_MAX_LENGTH,
   NOTE_CARDS_MAX_COUNT,
+  SEARCH_QUERY_MAX_BYTES,
+  SEARCH_RESULT_MAX_LIMIT,
   type AppInfo,
   type AuthResult,
   type AuthStatus,
@@ -131,6 +147,7 @@ import {
   type Profile,
   type RunningFocusSession,
   type SaveAttachmentResult,
+  type SearchResult,
   type SnoozePreset,
   type StudyStats,
 } from "../shared/ipc.js";
@@ -1103,6 +1120,10 @@ function noteTemplateStore(profileId: string): NoteTemplateStore {
   return new NoteTemplateStore(requireDb().raw, profileId);
 }
 
+function searchStore(profileId: string): SearchStore {
+  return new SearchStore(requireDb().raw, profileId);
+}
+
 /**
  * Finds one attachment via `list` and throws `NoteAttachmentNotFoundError` if
  * absent — `open`/`save-as` need the full row (file name, mime, hash) but the
@@ -1121,6 +1142,81 @@ function requireNoteAttachment(profileId: string, noteId: string, attachmentId: 
 
 function flagStore(profileId: string): SqliteFlagStore {
   return new SqliteFlagStore(requireDb().raw, profileId);
+}
+
+// --- Search (ADR-021): the query pipeline -----------------------------------
+//
+// Extracted as named functions rather than closures inside `ipcMain.handle`,
+// because `runSmokeSearchRehearsal` below calls the exact same code path the
+// renderer does.
+
+/** How many bm25 candidates the store is asked for per requested result: `rankSearchResults` re-orders by recency/kind prior/title on top of bm25, and it can only re-order what it was given. */
+const SEARCH_CANDIDATE_FACTOR = 3;
+
+/** Radius (chars) `buildSearchSnippet` reaches around a title's first match — generous enough that most titles fit whole, while still bounding a pathologically long one. */
+const TITLE_SNIPPET_RADIUS = 120;
+
+/**
+ * Maps one store hit to the wire shape. Reusing `buildSearchSnippet` for the
+ * TITLE too is deliberate: it is the same operation as for the body — find
+ * the matched span, return the surrounding text plus highlight ranges — and
+ * it doubles as a bound on a pathologically long title. `title`/`titleRanges`
+ * and `snippet`/`snippetRanges` are each internally consistent (the ranges
+ * index into their own returned string), never into the source entity's full
+ * text.
+ */
+function toSearchResult(hit: SearchHit, terms: readonly string[]): SearchResult {
+  const title = buildSearchSnippet(hit.title, terms, { radius: TITLE_SNIPPET_RADIUS });
+  const snippet = buildSearchSnippet(hit.body, terms);
+  return {
+    kind: hit.kind,
+    entityId: hit.entityId,
+    parentId: hit.parentId,
+    title: title.text,
+    titleRanges: [...title.ranges],
+    snippet: snippet.text,
+    snippetRanges: [...snippet.ranges],
+    contextDate: hit.contextDate,
+    updatedAt: hit.updatedAt,
+  };
+}
+
+/**
+ * The profile's most recently touched entries, already in their FINAL order
+ * (`SearchStore.recent`) — deliberately NOT passed through
+ * `rankSearchResults`, which would reorder them by kind prior/recency instead
+ * of the plain "most recently touched" order an empty query is supposed to
+ * show. Snippet terms are empty, so each snippet is just the head of its body.
+ */
+function runRecentSearch(profileId: string, limit: number): SearchResult[] {
+  const hits = searchStore(profileId).recent({ limit });
+  return hits.map((hit) => toSearchResult(hit, []));
+}
+
+/**
+ * Parses the raw query, asks the store for bm25 candidates (more than
+ * `limit` — see `SEARCH_CANDIDATE_FACTOR` — since `rankSearchResults` can
+ * only re-order what it was given), re-ranks them with recency/kind
+ * prior/title boosts on top of bm25, then truncates to `limit`. Falls back to
+ * `runRecentSearch` when the query has no matchable terms:
+ * `toFtsMatchExpression` returns null for exactly that case, precisely so an
+ * empty or punctuation-only query never reaches the store as a malformed FTS
+ * expression.
+ */
+function runSearchQuery(profileId: string, rawQuery: string, limit: number): SearchResult[] {
+  const parsed = parseSearchQuery(rawQuery);
+  const match = toFtsMatchExpression(parsed.terms, { prefixLast: parsed.prefixLast });
+  if (match === null) return runRecentSearch(profileId, limit);
+
+  const store = searchStore(profileId);
+  const candidateLimit = limit * SEARCH_CANDIDATE_FACTOR;
+  const candidates =
+    parsed.kinds.length > 0
+      ? store.search({ match, limit: candidateLimit, kinds: parsed.kinds })
+      : store.search({ match, limit: candidateLimit });
+
+  const ranked = rankSearchResults(candidates, { now: new Date().toISOString(), query: parsed });
+  return ranked.slice(0, limit).map((hit) => toSearchResult(hit, parsed.terms));
 }
 
 // --- Auth (ADR-018): the local account gate ---------------------------------
@@ -1160,6 +1256,11 @@ function startUnlockedServices(): void {
 /** Closes the database, stops the scheduler, and drops the data key (and the blob keys derived from it) from memory. Shared by the `auth:lock` handler and the smoke run's own lock/unlock exercise. */
 function performLock(): void {
   stopNotificationScheduler();
+  // A pending idle-compaction timer (scheduled from `notesAppendUpdate`) would
+  // otherwise fire against a database this lock is about to close — throwing
+  // where nothing can observe it, and holding open exactly the kind of
+  // background work a lock is supposed to stop.
+  cancelIdleCompactions();
   try {
     db?.close();
   } catch {
@@ -1953,6 +2054,16 @@ function registerIpc(): void {
     const store = noteStore(profileId);
     store.appendUpdate(id, update, title, new Date().toISOString());
     compactIfNeeded(store, id);
+    // ADR-021 / SRCH-002 freshness fix: below the compaction threshold the
+    // note's searchable body would otherwise only catch up at the NEXT
+    // compaction, which could be an entire session away. Re-resolved through
+    // `noteStore` rather than closing over `store` so a lock+relock between
+    // now and the timer firing can never hand `compactNow` a store built on a
+    // stale/closed database handle.
+    scheduleIdleCompaction(`${profileId}:${id}`, () => {
+      if (!db) return; // locked/closed by the time the timer fired — nothing to do
+      compactNow(noteStore(profileId), id);
+    });
   });
 
   ipcMain.handle(IpcChannel.notesDelete, (event, payload): void => {
@@ -2293,6 +2404,39 @@ function registerIpc(): void {
     },
   );
 
+  // Global search (ADR-021 / PRD 08 SRCH-001/002): `runSearchQuery`/
+  // `runRecentSearch` own the actual pipeline (see their doc comments) so the
+  // smoke rehearsal can call the exact same code the renderer does.
+  ipcMain.handle(IpcChannel.searchQuery, (event, payload): SearchResult[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const query = asCappedString(body.query, "query", SEARCH_QUERY_MAX_BYTES);
+    const limit = Math.min(asPositiveInteger(body.limit, "limit"), SEARCH_RESULT_MAX_LIMIT);
+    return runSearchQuery(profileId, query, limit);
+  });
+
+  ipcMain.handle(IpcChannel.searchRecent, (event, payload): SearchResult[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const limit = Math.min(asPositiveInteger(body.limit, "limit"), SEARCH_RESULT_MAX_LIMIT);
+    return runRecentSearch(profileId, limit);
+  });
+
+  /**
+   * Rebuilds the ENTIRE file's search index (`rebuildSearchIndex`), not just
+   * this profile's slice of it — deliberately whole-file, since the index is
+   * derived data and a repair cannot be half-done. `profileId` is validated
+   * only to prove the caller is in a real, unlocked session; it plays no part
+   * in what gets rebuilt.
+   */
+  ipcMain.handle(IpcChannel.searchRebuild, (event, payload): number => {
+    assertTrustedSender(event);
+    asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return rebuildSearchIndex(requireDb().raw);
+  });
+
   // IMEX slice a1 (PRD 14 IMEX-001): gathers this profile's data and streams a
   // `.nexus.zip` to a path the native save dialog returns — never a path the
   // renderer supplies (SEC-EL).
@@ -2544,6 +2688,57 @@ async function runSmokeBlobMigrationRehearsal(): Promise<void> {
   }
 }
 
+/**
+ * Rehearses global search end to end (ADR-021 / PRD 08 SRCH-002) through the
+ * real store, `runSearchQuery`/`runRecentSearch` and `rebuildSearchIndex` —
+ * the diacritic fold is the one thing that is worth proving against the
+ * packaged app's own connection (the `nx_fold` SQL function `openDatabase`
+ * registers), not just against `@nexus/core`'s pure functions in isolation.
+ */
+function runSmokeSearchRehearsal(): void {
+  const [profile] = listProfiles(requireDb());
+  if (!profile) throw new Error("expected at least one profile for the search rehearsal");
+
+  const task = taskStore(profile.id).create({ title: "Rešenje za Đorđa" });
+  try {
+    for (const query of ["resenje", "djordja"]) {
+      const results = runSearchQuery(profile.id, query, 10);
+      const hit = results.find((result) => result.entityId === task.id);
+      if (!hit) {
+        throw new Error(
+          `expected query "${query}" to find the diacritic task, got ${JSON.stringify(results)}`,
+        );
+      }
+      if (hit.titleRanges.length === 0) {
+        throw new Error(`expected query "${query}" to produce a non-empty titleRanges`);
+      }
+    }
+
+    const recent = runRecentSearch(profile.id, 10);
+    if (!recent.some((result) => result.entityId === task.id)) {
+      throw new Error("expected the freshly created task to appear in runRecentSearch");
+    }
+
+    const rawDb = requireDb().raw;
+    const rebuiltCount = rebuildSearchIndex(rawDb);
+    const { count: indexedCount } = rawDb
+      .prepare("SELECT count(*) AS count FROM search_entries")
+      .get() as { count: number };
+    if (rebuiltCount !== indexedCount) {
+      throw new Error(
+        `expected rebuildSearchIndex's returned count (${rebuiltCount}) to match search_entries' row count (${indexedCount})`,
+      );
+    }
+
+    const afterRebuild = runSearchQuery(profile.id, "resenje", 10);
+    if (!afterRebuild.some((result) => result.entityId === task.id)) {
+      throw new Error("expected the task to still be findable after rebuildSearchIndex");
+    }
+  } finally {
+    taskStore(profile.id).softDelete(task.id);
+  }
+}
+
 async function runSmoke(win: BrowserWindow): Promise<void> {
   const profiles = listProfiles(requireDb());
   if (profiles.length < 1) {
@@ -2596,6 +2791,7 @@ async function runSmoke(win: BrowserWindow): Promise<void> {
 
   await runSmokeMigrationRehearsal();
   await runSmokeBlobMigrationRehearsal();
+  runSmokeSearchRehearsal();
 }
 
 // --- Auto-update (SEC-EL-07) -------------------------------------------------
@@ -2624,6 +2820,7 @@ function checkForUpdates(): void {
 
 function shutdown(code: number): void {
   stopNotificationScheduler();
+  cancelIdleCompactions(); // same reasoning as `performLock` — about to close `db`
   try {
     db?.close();
   } catch {
@@ -2730,6 +2927,7 @@ app.on("window-all-closed", () => {
 
 app.on("will-quit", () => {
   stopNotificationScheduler();
+  cancelIdleCompactions(); // same reasoning as `performLock` — about to close `db`
   try {
     db?.close();
   } catch {

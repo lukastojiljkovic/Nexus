@@ -125,6 +125,9 @@ export const IpcChannel = {
   noteAttachmentsRemove: "note-attachments:remove",
   noteAttachmentsOpen: "note-attachments:open",
   noteAttachmentsSaveAs: "note-attachments:save-as",
+  searchQuery: "search:query",
+  searchRecent: "search:recent",
+  searchRebuild: "search:rebuild",
   imexExport: "imex:export",
   appInfo: "app:info",
 } as const;
@@ -1495,6 +1498,81 @@ export interface NoteAttachmentsSaveAsRequest {
  */
 export type SaveAttachmentResult = { canceled: true } | { canceled: false; path: string };
 
+/**
+ * Global search (ADR-021 / PRD 08 SRCH-001/002). The index itself (migration
+ * 017) and its read-only store already exist; these three channels are the
+ * palette's entire main-process surface: a typed query, the recency-ordered
+ * list an empty query shows, and a from-scratch repair.
+ */
+
+/** Hard cap on the raw query string the renderer may send. A palette input is a few words; anything longer is a paste, and the parser caps terms anyway. */
+export const SEARCH_QUERY_MAX_BYTES = 500;
+/** Hard cap on how many results one request may return. */
+export const SEARCH_RESULT_MAX_LIMIT = 100;
+
+/**
+ * The kinds of entity global search indexes. MUST equal `SearchKind` in
+ * `@nexus/core`: declared on both sides so neither imports the other, the same
+ * rule the byte caps above follow. Unlike those, this one cannot drift
+ * silently — main assigns a core `SearchKind` into `SearchResult.kind` below,
+ * so a member added on one side and not the other fails to compile.
+ */
+export type SearchKind =
+  | "task"
+  | "event"
+  | "note"
+  | "document"
+  | "subject"
+  | "exam"
+  | "deck"
+  | "card"
+  | "attachment";
+
+/** A half-open `[start, end)` range into the string it accompanies, for highlighting the matched part. */
+export type SearchHighlight = readonly [number, number];
+
+/**
+ * One displayable global-search result (ADR-021). `title`/`snippet` are the
+ * ORIGINAL text with highlight ranges computed by core, never the folded
+ * matching form — `titleRanges`/`snippetRanges` index into their OWN string
+ * (`title`/`snippet` respectively), not into the source entity's full text.
+ * `parentId` is what the deep link needs for a card's deck or an attachment's
+ * note (null when the kind has none); `contextDate` is whatever date that
+ * kind carries — due/start/expiry/exam date, null when the kind has none.
+ */
+export interface SearchResult {
+  kind: SearchKind;
+  entityId: string;
+  parentId: string | null;
+  title: string;
+  titleRanges: SearchHighlight[];
+  snippet: string;
+  snippetRanges: SearchHighlight[];
+  contextDate: string | null;
+  updatedAt: string;
+}
+
+export interface SearchQueryRequest {
+  profileId: string;
+  query: string;
+  /**
+   * Required, never optional: an optional numeric field plus
+   * `exactOptionalPropertyTypes` is a trap for no benefit, and the caller
+   * always knows its own page size.
+   */
+  limit: number;
+}
+
+export interface SearchRecentRequest {
+  profileId: string;
+  limit: number;
+}
+
+/** `profileId` only proves the caller is in a real session — the rebuild itself is whole-file, not scoped to it (see the handler's own doc comment). */
+export interface SearchRebuildRequest {
+  profileId: string;
+}
+
 export interface ImexExportRequest {
   profileId: string;
 }
@@ -1707,6 +1785,12 @@ export interface NexusApi {
     noteId: string,
     attachmentId: string,
   ): Promise<SaveAttachmentResult>;
+  /** Runs the query pipeline (parse -> FTS match -> bm25 candidates -> rank), falling back to `searchRecent`'s order when the query has no matchable terms (ADR-021). */
+  searchQuery(profileId: string, query: string, limit: number): Promise<SearchResult[]>;
+  /** The profile's most recently touched entries, already in their final order — no ranking pass, unlike `searchQuery`. */
+  searchRecent(profileId: string, limit: number): Promise<SearchResult[]>;
+  /** Rebuilds the ENTIRE file's search index from scratch (corruption recovery, not a per-profile operation); returns the resulting row count. */
+  rebuildSearchIndex(profileId: string): Promise<number>;
   /** Full-data export to a `.nexus.zip` archive (IMEX slice a1). Resolves after the native save dialog is settled — canceled or written. */
   exportData(profileId: string): Promise<ExportResult>;
   appInfo(): Promise<AppInfo>;
