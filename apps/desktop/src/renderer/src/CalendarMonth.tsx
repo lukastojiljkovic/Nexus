@@ -3,6 +3,7 @@ import type { DragEvent, MouseEvent, ReactNode } from "react";
 import { layoutMonthBars, monthGridDays } from "@nexus/core";
 import type { MonthGridDay, SpanItem } from "@nexus/core";
 import type { Event } from "../../shared/ipc.js";
+import { formatClock, isMutedItem, isSpanItem, isTimedEventItem } from "./calendarItems.js";
 import type { CalendarItem } from "./calendarItems.js";
 import { strings } from "./strings.js";
 
@@ -19,6 +20,8 @@ export interface CalendarMonthProps {
   items: readonly CalendarItem[];
   /** Click on a day cell's empty area — the page prefills the form's date. */
   onSelectDay: (dayKey: string) => void;
+  /** Click on a day cell's number — the page switches to that day's Dan view. */
+  onOpenDay: (dayKey: string) => void;
   /** Click on an event bar/chip — the page loads it into the form. */
   onEditEvent: (event: Event) => void;
   /** A drag finished on `dayKey`; only events and tasks are draggable. */
@@ -48,8 +51,8 @@ function chunkWeeks(days: readonly MonthGridDay[]): MonthGridDay[][] {
   return weeks;
 }
 
-/** Display text shared by bars and chips — the subject-bearing kinds reuse the agenda's own phrasing. */
-function itemLabel(item: CalendarItem): string {
+/** Display text shared by bars and chips — the subject-bearing kinds reuse the agenda's own phrasing. Exported for the week/day grid, which draws the same bars. */
+export function itemLabel(item: CalendarItem): string {
   switch (item.kind) {
     case "event":
       return item.event.title;
@@ -61,8 +64,8 @@ function itemLabel(item: CalendarItem): string {
   }
 }
 
-/** A subject-swatch dot (exam/block) or nothing, followed by the ellipsized label. */
-function renderBarContent(item: CalendarItem): ReactNode {
+/** A subject-swatch dot (exam/block) or nothing, followed by the ellipsized label. Exported for the week/day grid's all-day band, which reuses these very classes. */
+export function renderBarContent(item: CalendarItem): ReactNode {
   switch (item.kind) {
     case "exam":
     case "block":
@@ -77,25 +80,6 @@ function renderBarContent(item: CalendarItem): ReactNode {
   }
 }
 
-function isMuted(item: CalendarItem): boolean {
-  if (item.kind === "task") return item.task.done;
-  if (item.kind === "block") return item.block.status === "missed";
-  return false;
-}
-
-function formatClock(minutes: number): string {
-  const hours = String(Math.floor(minutes / 60)).padStart(2, "0");
-  const mins = String(minutes % 60).padStart(2, "0");
-  return `${hours}:${mins}`;
-}
-
-/** Single-day timed events only — every other kind is always day-granular and renders as a bar instead. */
-function isTimedChip(
-  item: CalendarItem,
-): item is CalendarItem & { kind: "event"; startMinutes: number } {
-  return item.kind === "event" && item.startMinutes !== null && item.endKey === item.startKey;
-}
-
 /**
  * Month grid (ADR-020). A pure function of `items`: geometry comes entirely
  * from `@nexus/core`'s calendarGrid module (percent-based bar placement, no
@@ -108,6 +92,7 @@ export function CalendarMonth({
   todayKey,
   items,
   onSelectDay,
+  onOpenDay,
   onEditEvent,
   onMoveItem,
 }: CalendarMonthProps) {
@@ -127,9 +112,9 @@ export function CalendarMonth({
   const weeks = chunkWeeks(monthGridDays(monthKey, WEEK_START));
   const itemById = new Map(items.map((item) => [item.id, item] as const));
   const barItems: SpanItem[] = items
-    .filter((item) => item.startMinutes === null || item.endKey !== item.startKey)
+    .filter(isSpanItem)
     .map((item) => ({ id: item.id, startKey: item.startKey, endKey: item.endKey }));
-  const chipItems = items.filter(isTimedChip);
+  const chipItems = items.filter(isTimedEventItem);
 
   function toggleWeek(weekIndex: number): void {
     setExpandedWeeks((prev) => {
@@ -247,13 +232,18 @@ export function CalendarMonth({
                     onDragLeave={(e) => dayDragLeave(e, day.key)}
                     onDrop={(e) => dayDrop(e, day.key)}
                   >
-                    <span
+                    <button
+                      type="button"
                       className={
                         "cal__month-day-number" + (isToday ? " cal__month-day-number--today" : "")
                       }
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenDay(day.key);
+                      }}
                     >
                       {Number(day.key.slice(8, 10))}
-                    </span>
+                    </button>
                     <div
                       className="cal__month-spacer"
                       style={{ height: `calc(var(--cal-bar-h) * ${laneCount})` }}
@@ -305,7 +295,7 @@ export function CalendarMonth({
                 const classes = ["cal__month-bar", `cal__month-bar--${item.kind}`];
                 if (bar.continuesBefore) classes.push("cal__month-bar--continues-before");
                 if (bar.continuesAfter) classes.push("cal__month-bar--continues-after");
-                if (isMuted(item)) classes.push("cal__month-bar--muted");
+                if (isMutedItem(item)) classes.push("cal__month-bar--muted");
 
                 if (item.kind === "event") {
                   return (

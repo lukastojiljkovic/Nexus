@@ -189,6 +189,36 @@ export function buildCalendarItems(
   return items;
 }
 
+/** Minutes since midnight → "HH:MM". */
+export function formatClock(minutes: number): string {
+  const hours = String(Math.floor(minutes / 60)).padStart(2, "0");
+  const mins = String(minutes % 60).padStart(2, "0");
+  return `${hours}:${mins}`;
+}
+
+/**
+ * Day-granular or multi-day — the items every grid draws as a horizontal bar
+ * (a month cell's stack, a week's all-day band) rather than as something with
+ * a position in the hour grid.
+ */
+export function isSpanItem(item: CalendarItem): boolean {
+  return item.startMinutes === null || item.endKey !== item.startKey;
+}
+
+/** The exact complement of `isSpanItem`: a single-day timed event, the only kind that lands in the hour grid. */
+export function isTimedEventItem(
+  item: CalendarItem,
+): item is CalendarItem & { kind: "event"; startMinutes: number } {
+  return item.kind === "event" && item.startMinutes !== null && item.endKey === item.startKey;
+}
+
+/** Quietened rather than hidden: a task already done, a study block already missed. */
+export function isMutedItem(item: CalendarItem): boolean {
+  if (item.kind === "task") return item.task.done;
+  if (item.kind === "block") return item.block.status === "missed";
+  return false;
+}
+
 const SOURCES_KEY_PREFIX = "nexus.calendar.sources.";
 
 /**

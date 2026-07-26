@@ -296,12 +296,18 @@ export const strings = {
   calendar: {
     viewLabel: "Prikaz",
     viewMesec: "Mesec",
+    viewNedelja: "Nedelja",
+    viewDan: "Dan",
     viewAgenda: "Agenda",
     viewDokumenta: "Dokumenta",
     titlePlaceholder: "Naziv događaja",
     titleLabel: "Naziv događaja",
     dateLabel: "Datum",
     timeLabel: "Vreme",
+    /** End-time field (week/day view, ADR-020) — next to the start-time field, timed events only. */
+    endTimeLabel: "Do",
+    /** Client-side guard mirroring EventStore's own "end must not be before start" check. */
+    endBeforeStart: "Vreme završetka mora biti posle vremena početka.",
     locationPlaceholder: "Mesto (opciono)",
     locationLabel: "Mesto",
     allDay: "Ceo dan",
@@ -324,9 +330,9 @@ export const strings = {
     sourceBlocks: "Učenje",
     /** Tag chip on a read-only task row in the agenda (ADR-020). */
     taskTag: "Zadatak",
-    /** Month navigation (ADR-020): prev/today/next + the "+N još" overflow toggle. */
-    prevMonth: "Prethodni mesec",
-    nextMonth: "Sledeći mesec",
+    /** Grid navigation (ADR-020): prev/today/next — one pair of labels shared by Mesec/Nedelja/Dan, since each shifts by its own period. */
+    prevPeriod: "Prethodni period",
+    nextPeriod: "Sledeći period",
     today: "Danas",
     showMore: "još",
     showLess: "Prikaži manje",

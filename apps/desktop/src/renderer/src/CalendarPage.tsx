@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent, KeyboardEvent } from "react";
 import { Button, Checkbox, Chip, EmptyState, ListRow, TextField } from "@nexus/ui";
-import { monthKeyOf, shiftDayKey, shiftMonthKey } from "@nexus/core";
+import { monthKeyOf, shiftDayKey, shiftMonthKey, weekDayKeys } from "@nexus/core";
 import type {
   Event,
   EventFieldChanges,
@@ -12,9 +12,11 @@ import type {
   Task,
 } from "../../shared/ipc.js";
 import { CalendarMonth } from "./CalendarMonth.js";
+import { CalendarTimeGrid } from "./CalendarTimeGrid.js";
 import {
   buildCalendarItems,
   CALENDAR_SOURCES,
+  formatClock,
   persistSources,
   readStoredSources,
 } from "./calendarItems.js";
@@ -25,14 +27,19 @@ import { strings } from "./strings.js";
 
 // --- Per-profile view memory (interim, mirrors TasksPage) -------------------
 //
-// Mesec / Agenda / Dokumenta is a lightweight UI preference, persisted per
-// profile in localStorage exactly like the tasks list/kanban toggle.
-type CalendarView = "mesec" | "agenda" | "dokumenta";
+// Mesec / Nedelja / Dan / Agenda / Dokumenta is a lightweight UI preference,
+// persisted per profile in localStorage exactly like the tasks list/kanban
+// toggle.
+type CalendarView = "mesec" | "nedelja" | "dan" | "agenda" | "dokumenta";
 const VIEW_KEY_PREFIX = "nexus.calendar.view.";
+/** Monday-first, the Serbian default (mirrors CalendarMonth's own WEEK_START). */
+const WEEK_START = 1;
 
 function readStoredView(profileId: string): CalendarView {
   const raw = localStorage.getItem(VIEW_KEY_PREFIX + profileId);
-  return raw === "agenda" || raw === "dokumenta" ? raw : "mesec";
+  return raw === "nedelja" || raw === "dan" || raw === "agenda" || raw === "dokumenta"
+    ? raw
+    : "mesec";
 }
 function persistView(profileId: string, view: CalendarView): void {
   localStorage.setItem(VIEW_KEY_PREFIX + profileId, view);
@@ -114,6 +121,48 @@ function formatMonthLabel(key: string): string {
   return Number.isNaN(date.getTime()) ? key : monthLabelFormatter.format(date);
 }
 
+const monthNameFormatter = new Intl.DateTimeFormat("sr-Latn", { month: "long", timeZone: "UTC" });
+
+/** Bare month name (e.g. "avgust"); degrades to the key's month digits on bad input. */
+function formatMonthName(key: string): string {
+  const date = new Date(key);
+  return Number.isNaN(date.getTime()) ? key.slice(5, 7) : monthNameFormatter.format(date);
+}
+
+/**
+ * Week nav label: "3 — 9. avgust 2026" within one month, "31. avgust — 6.
+ * septembar 2026" when the row crosses a month boundary. Built from day
+ * numbers + a bare month name rather than one combined Intl call, because
+ * sr-Latn's day+month+year pattern trails a period after the year too (see
+ * formatExamDate) — not what either example above shows.
+ */
+function formatWeekLabel(weekKeys: readonly string[]): string {
+  const start = weekKeys[0];
+  const end = weekKeys[6];
+  if (start === undefined || end === undefined) return "";
+  const startDay = Number(start.slice(8, 10));
+  const endDay = Number(end.slice(8, 10));
+  const year = end.slice(0, 4);
+  if (start.slice(0, 7) === end.slice(0, 7)) {
+    return `${startDay} — ${endDay}. ${formatMonthName(end)} ${year}`;
+  }
+  return `${startDay}. ${formatMonthName(start)} — ${endDay}. ${formatMonthName(end)} ${year}`;
+}
+
+const dayLabelFormatter = new Intl.DateTimeFormat("sr-Latn", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+/** Day nav label, e.g. "sreda, 8. jul 2026." */
+function formatDayLabel(key: string): string {
+  const date = new Date(key);
+  return Number.isNaN(date.getTime()) ? key : dayLabelFormatter.format(date);
+}
+
 const MS_PER_DAY = 86_400_000;
 
 /** Whole-day delta between two bare day keys, UTC-midnight math (no timezone/DST drift). */
@@ -161,7 +210,11 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
   const [sources, setSources] = useState<ReadonlySet<CalendarSource>>(() =>
     readStoredSources(profileId),
   );
-  const [monthKey, setMonthKey] = useState<string>(() => monthKeyOf(localTodayKey()));
+  // The single anchor day every grid view derives from: the month view takes
+  // its month, the week view its Monday-first week, the day view the key
+  // itself — so "Danas" and the keyboard shortcuts have exactly one thing to
+  // reset regardless of which of the three is showing.
+  const [anchorKey, setAnchorKey] = useState<string>(() => localTodayKey());
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
 
   // One form serves both modes; a non-null editingId means "editing that event".
@@ -170,7 +223,9 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
   const [allDay, setAllDay] = useState(false);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
+  const [endTime, setEndTime] = useState("");
   const [location, setLocation] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -229,7 +284,9 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
     setAllDay(false);
     setDate("");
     setTime("");
+    setEndTime("");
     setLocation("");
+    setFormError(null);
   }
 
   /** Loads an event into the shared form and switches it to edit mode. */
@@ -239,7 +296,9 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
     setAllDay(event.allDay);
     setDate(event.startAt.slice(0, 10));
     setTime(event.allDay ? "" : event.startAt.slice(11, 16));
+    setEndTime(!event.allDay && event.endAt ? event.endAt.slice(11, 16) : "");
     setLocation(event.location ?? "");
+    setFormError(null);
     titleRef.current?.focus();
   }
 
@@ -250,23 +309,48 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
     setAllDay(false);
     setDate(dayKey);
     setTime("");
+    setEndTime("");
     setLocation("");
+    setFormError(null);
     titleRef.current?.focus();
   }
 
-  function shiftMonth(delta: number): void {
-    setMonthKey((prev) => shiftMonthKey(prev, delta));
+  /** Click on empty hour-grid space (week/day view): prefill date, a default hour-long span, and focus the title. */
+  function selectSlot(dayKey: string, minutes: number): void {
+    setEditingId(null);
+    setTitle("");
+    setAllDay(false);
+    setDate(dayKey);
+    setTime(formatClock(minutes));
+    setEndTime(formatClock(Math.min(minutes + 60, 23 * 60 + 59)));
+    setLocation("");
+    setFormError(null);
+    titleRef.current?.focus();
+  }
+
+  /** Click on a column header (week/day) or a month day-number: jump to that day's Dan view. */
+  function openDay(dayKey: string): void {
+    setAnchorKey(dayKey);
+    selectView("dan");
+  }
+
+  function shiftPeriod(delta: number): void {
+    setAnchorKey((prev) => {
+      if (view === "mesec") return `${shiftMonthKey(monthKeyOf(prev), delta)}-01`;
+      if (view === "nedelja") return shiftDayKey(prev, delta * 7);
+      return shiftDayKey(prev, delta);
+    });
   }
   function goToday(): void {
-    setMonthKey(monthKeyOf(localTodayKey()));
+    setAnchorKey(localTodayKey());
   }
-  function handleMonthKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
+  function handleGridKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     if (event.key === "ArrowLeft") {
       event.preventDefault();
-      shiftMonth(-1);
+      shiftPeriod(-1);
     } else if (event.key === "ArrowRight") {
       event.preventDefault();
-      shiftMonth(1);
+      shiftPeriod(1);
     } else if (event.key === "Home") {
       event.preventDefault();
       goToday();
@@ -284,25 +368,41 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
 
     // Assemble startAt: all-day is the bare date; timed appends the time (09:00
     // by default) so the "YYYY-MM-DDTHH:MM" form clears the store's ISO check.
-    const startAt = allDay ? date : `${date}T${time || "09:00"}`;
+    const effectiveTime = time || "09:00";
+    const startAt = allDay ? date : `${date}T${effectiveTime}`;
     const trimmedLocation = location.trim();
+    const trimmedEndTime = endTime.trim();
+
+    // The store throws on an end that doesn't strictly follow the start —
+    // caught after the fact isn't good enough, so a bad pair never leaves
+    // this form at all.
+    if (!allDay && trimmedEndTime.length > 0 && trimmedEndTime <= effectiveTime) {
+      setFormError(strings.calendar.endBeforeStart);
+      return;
+    }
+    // Null clears a stored end time exactly like `location` already clears —
+    // but only for a timed event: all-day has no end-time field to begin
+    // with, so `endAt` is left out of the payload entirely rather than
+    // nulling whatever end DATE a multi-day all-day event might carry.
+    const timedEndAt = trimmedEndTime.length > 0 ? `${date}T${trimmedEndTime}` : null;
 
     try {
       if (editingId != null) {
-        // Empty location clears the stored value; a non-empty one sets it.
         const changes: EventFieldChanges = {
           title: trimmedTitle,
           startAt,
           allDay,
           location: trimmedLocation.length > 0 ? trimmedLocation : null,
         };
+        if (!allDay) changes.endAt = timedEndAt;
         const updated = await window.nexus.updateEvent(profileId, editingId, changes);
         setEvents((prev) => prev && prev.map((e) => (e.id === updated.id ? updated : e)));
         resetForm();
       } else {
         const fields: NewEventFields = { title: trimmedTitle, startAt, allDay };
-        // Only send location when present (exactOptionalPropertyTypes).
+        // Only send location/endAt when present (exactOptionalPropertyTypes).
         if (trimmedLocation.length > 0) fields.location = trimmedLocation;
+        if (!allDay && timedEndAt != null) fields.endAt = timedEndAt;
         const created = await window.nexus.createEvent(profileId, fields);
         setEvents((prev) => (prev ? [...prev, created] : [created]));
         resetForm();
@@ -379,10 +479,24 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
     : buildCalendarItems({ events, tasks, exams, blocks, subjects }, sources);
   const todayKey = localTodayKey();
 
+  // Every grid view derives from the one anchor day; cheap to compute both
+  // unconditionally rather than branch on `view` twice below.
+  const monthKey = monthKeyOf(anchorKey);
+  const weekKeys = weekDayKeys(anchorKey, WEEK_START);
+  const isGridView = view === "mesec" || view === "nedelja" || view === "dan";
+  const periodLabel =
+    view === "mesec"
+      ? formatMonthLabel(monthKey)
+      : view === "nedelja"
+        ? formatWeekLabel(weekKeys)
+        : view === "dan"
+          ? formatDayLabel(anchorKey)
+          : "";
+
   return (
     <div className="cal">
       <div className="cal__views" role="group" aria-label={strings.calendar.viewLabel}>
-        {(["mesec", "agenda", "dokumenta"] as const).map((option) => (
+        {(["mesec", "nedelja", "dan", "agenda", "dokumenta"] as const).map((option) => (
           <Button
             key={option}
             size="sm"
@@ -392,9 +506,13 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
           >
             {option === "mesec"
               ? strings.calendar.viewMesec
-              : option === "agenda"
-                ? strings.calendar.viewAgenda
-                : strings.calendar.viewDokumenta}
+              : option === "nedelja"
+                ? strings.calendar.viewNedelja
+                : option === "dan"
+                  ? strings.calendar.viewDan
+                  : option === "agenda"
+                    ? strings.calendar.viewAgenda
+                    : strings.calendar.viewDokumenta}
           </Button>
         ))}
       </div>
@@ -437,12 +555,20 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
               onChange={(event) => setDate(event.target.value)}
             />
             {!allDay && (
-              <TextField
-                type="time"
-                value={time}
-                aria-label={strings.calendar.timeLabel}
-                onChange={(event) => setTime(event.target.value)}
-              />
+              <>
+                <TextField
+                  type="time"
+                  value={time}
+                  aria-label={strings.calendar.timeLabel}
+                  onChange={(event) => setTime(event.target.value)}
+                />
+                <TextField
+                  type="time"
+                  value={endTime}
+                  aria-label={strings.calendar.endTimeLabel}
+                  onChange={(event) => setEndTime(event.target.value)}
+                />
+              </>
             )}
             <TextField
               type="text"
@@ -461,6 +587,11 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
               <Button type="button" className="cal__cancel" onClick={resetForm}>
                 {strings.calendar.cancel}
               </Button>
+            )}
+            {formError != null && (
+              <p className="cal__form-error" role="alert">
+                {formError}
+              </p>
             )}
           </form>
 
@@ -488,15 +619,15 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
             />
           ) : dataLoading ? (
             <p className="app__muted">{strings.app.loading}</p>
-          ) : view === "mesec" ? (
-            <div className="cal__month" onKeyDown={handleMonthKeyDown}>
+          ) : isGridView ? (
+            <div className="cal__month" onKeyDown={handleGridKeyDown}>
               <div className="cal__month-nav">
-                <span className="cal__month-label">{formatMonthLabel(monthKey)}</span>
+                <span className="cal__month-label">{periodLabel}</span>
                 <span className="cal__month-nav-actions">
                   <Button
                     size="sm"
-                    aria-label={strings.calendar.prevMonth}
-                    onClick={() => shiftMonth(-1)}
+                    aria-label={strings.calendar.prevPeriod}
+                    onClick={() => shiftPeriod(-1)}
                   >
                     ‹
                   </Button>
@@ -505,21 +636,33 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
                   </Button>
                   <Button
                     size="sm"
-                    aria-label={strings.calendar.nextMonth}
-                    onClick={() => shiftMonth(1)}
+                    aria-label={strings.calendar.nextPeriod}
+                    onClick={() => shiftPeriod(1)}
                   >
                     ›
                   </Button>
                 </span>
               </div>
-              <CalendarMonth
-                monthKey={monthKey}
-                todayKey={todayKey}
-                items={calendarItems}
-                onSelectDay={selectDay}
-                onEditEvent={startEdit}
-                onMoveItem={(item, dayKey) => void moveItem(item, dayKey)}
-              />
+              {view === "mesec" ? (
+                <CalendarMonth
+                  monthKey={monthKey}
+                  todayKey={todayKey}
+                  items={calendarItems}
+                  onSelectDay={selectDay}
+                  onOpenDay={openDay}
+                  onEditEvent={startEdit}
+                  onMoveItem={(item, dayKey) => void moveItem(item, dayKey)}
+                />
+              ) : (
+                <CalendarTimeGrid
+                  dayKeys={view === "nedelja" ? weekKeys : [anchorKey]}
+                  todayKey={todayKey}
+                  items={calendarItems}
+                  onSelectSlot={selectSlot}
+                  onOpenDay={openDay}
+                  onEditEvent={startEdit}
+                />
+              )}
             </div>
           ) : calendarItems.length === 0 ? (
             <EmptyState

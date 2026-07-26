@@ -810,6 +810,204 @@ button.cal__month-bar--event {
   color: var(--nx-text);
 }
 
+/* The day-number affordance is now also a button (ADR-020's second overflow
+   escape: jump straight to that day's Dan view) — reset the button's UA
+   defaults only; the existing .cal__month-day-number(--today) rules above
+   still carry height/line-height/colour/weight via the plain class match. */
+button.cal__month-day-number {
+  display: block;
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+button.cal__month-day-number:hover {
+  text-decoration: underline;
+}
+
+/* Event-form validation (end-time vs. start-time, ADR-020) — same idiom as
+   StudyPage's .study__plan-error: a full-width line under the form's fields. */
+.cal__form-error {
+  margin: 0;
+  flex-basis: 100%;
+  color: var(--nx-danger);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+/* Week/day time grid (CAL Nedelja/Dan views, ADR-020) ------------------ */
+/* Three local geometry constants, same idiom as .cal__month-grid's own
+   --cal-bar-h: the all-day band reuses that exact value so a bar looks
+   identical whether it is drawn here or in the month grid; --cal-hour-h and
+   --cal-gutter-w are new to this component. */
+.cal__grid {
+  --cal-bar-h: 20px;
+  --cal-hour-h: 44px;
+  --cal-gutter-w: 56px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  overflow: hidden;
+  background: var(--nx-surface);
+}
+.cal__grid:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+
+.cal__grid-gutter-spacer,
+.cal__grid-gutter {
+  flex: none;
+  width: var(--cal-gutter-w);
+}
+
+/* Column headers: weekday + day number, each a button (click → Dan view). */
+.cal__grid-header-row {
+  display: flex;
+  border-bottom: 1px solid var(--nx-border);
+}
+.cal__grid-headers {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+button.cal__grid-header {
+  flex: 1;
+  display: block;
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  text-align: center;
+  padding: var(--nx-space-1) var(--nx-space-2);
+  border: none;
+  border-left: 1px solid var(--nx-border);
+  background: transparent;
+  color: var(--nx-text-muted);
+  cursor: pointer;
+}
+.cal__grid-headers > button.cal__grid-header:first-child {
+  border-left: none;
+}
+.cal__grid-header:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+/* Today reads as typographic emphasis only — accent + weight, never a ring or glow. */
+.cal__grid-header--today {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+/* All-day band: day-granular/multi-day items, drawn with the month grid's own
+   .cal__month-bar* classes (see CalendarTimeGrid) so the two views agree
+   pixel-for-pixel. Grows with its lane count — this band never collapses. */
+.cal__grid-band-row {
+  display: flex;
+  border-bottom: 1px solid var(--nx-border);
+}
+.cal__grid-band {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+/* No drag affordance in the time grid (there is no onMoveItem here) — reset
+   the grab cursor the reused .cal__month-bar--task rule implies elsewhere. */
+.cal__grid-band .cal__month-bar--task {
+  cursor: default;
+}
+
+/* Hour grid: a fixed label gutter + one column per day, both 24 rows of
+   var(--cal-hour-h) with a hairline between hours. Only this part scrolls. */
+.cal__grid-body {
+  display: flex;
+  overflow-y: auto;
+  max-height: calc(var(--cal-hour-h) * 14);
+}
+.cal__grid-hour-label {
+  height: var(--cal-hour-h);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 var(--nx-space-2);
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+  border-top: 1px solid var(--nx-border);
+}
+.cal__grid-gutter > .cal__grid-hour-label:first-child {
+  border-top: none;
+}
+.cal__grid-columns {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+.cal__grid-column {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  border-left: 1px solid var(--nx-border);
+  cursor: pointer;
+}
+.cal__grid-columns > .cal__grid-column:first-child {
+  border-left: none;
+}
+.cal__grid-hour-cell {
+  height: var(--cal-hour-h);
+  border-top: 1px solid var(--nx-border);
+}
+.cal__grid-column > .cal__grid-hour-cell:first-child {
+  border-top: none;
+}
+
+/* A timed event, absolutely positioned from layoutTimedColumns' clamped
+   output — same accent-soft treatment as the month grid's timed chips. */
+button.cal__grid-event {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+  padding: 2px 4px;
+  border: none;
+  border-radius: var(--nx-radius-xs);
+  background: var(--nx-accent-soft);
+  color: var(--nx-accent-strong);
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+  text-align: left;
+  cursor: pointer;
+}
+.cal__grid-event:hover {
+  text-decoration: underline;
+}
+.cal__grid-event:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 1px;
+}
+.cal__grid-event-time {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--nx-font-weight-semibold);
+}
+.cal__grid-event-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The current-time rule — a plain 1px line, never animated, click-through so
+   it never blocks the slot-creation click underneath it. */
+.cal__grid-now {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--nx-accent);
+  pointer-events: none;
+}
+
 /* Documents (CAL Dokumenta panel) ------------------------------------- */
 .documents {
   display: flex;
