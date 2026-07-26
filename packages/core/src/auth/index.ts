@@ -40,3 +40,12 @@ export {
   remainingLockMs,
 } from "./unlockThrottle.js";
 export type { AttemptState } from "./unlockThrottle.js";
+
+export {
+  BlobDecryptError,
+  blobStorageName,
+  decryptBlob,
+  deriveBlobKeys,
+  encryptBlob,
+} from "./blobCrypto.js";
+export type { BlobKeys } from "./blobCrypto.js";
