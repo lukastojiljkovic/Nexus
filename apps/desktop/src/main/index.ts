@@ -1,19 +1,25 @@
+import { randomBytes } from "node:crypto";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { app, BrowserWindow, ipcMain, protocol } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import { autoUpdater } from "electron-updater";
 import { sniffMime } from "@nexus/core";
 import type { NotificationSource } from "@nexus/core";
+import { MAX_PASSCODE_LENGTH } from "@nexus/core/auth";
 import {
   CARD_RATINGS,
   CardStore,
+  DatabaseLockedError,
   DeckStore,
   DOCUMENT_TYPES,
   DocumentStore,
+  encryptDatabaseInPlace,
   EventStore,
   EXAM_TYPES,
   ExamStore,
   FocusStore,
+  isPlaintextDatabase,
   MAX_NOTE_ATTACHMENT_BYTES,
   MAX_NOTE_LINKS,
   MAX_NOTE_TEMPLATE_BYTES,
@@ -93,6 +99,15 @@ import {
   saveAttachmentAs,
   saveBlob,
 } from "./attachments.js";
+import {
+  AuthError,
+  changePasscode,
+  createAccount,
+  readStatus,
+  regenerateRecoveryCode,
+  unlockWithPasscode,
+  unlockWithRecovery,
+} from "./auth.js";
 import { localToday } from "./clock.js";
 import { handleExport } from "./imex.js";
 import { captureNoteVersion, compactIfNeeded } from "./notes.js";
@@ -103,6 +118,8 @@ import {
   NOTE_CARD_KEY_MAX_LENGTH,
   NOTE_CARDS_MAX_COUNT,
   type AppInfo,
+  type AuthResult,
+  type AuthStatus,
   type ExportResult,
   type FlagState,
   type NoteCardSpec,
@@ -116,6 +133,9 @@ import {
 } from "../shared/ipc.js";
 
 const isSmoke = process.argv.includes("--smoke");
+
+/** Fixed passcode the smoke run creates its own throwaway account with (ADR-018) — satisfies `validatePasscode` (8+ chars, letter and digit) and is never used for anything but the smoke harness's own disposable `userData/smoke` directory. */
+const SMOKE_PASSCODE = "smoke-passcode-1";
 
 // SEC-EL: registers the `nx-blob:` scheme as privileged (ADR-014) — MUST run
 // at module scope, before the app's "ready" event, or Electron ignores it.
@@ -140,6 +160,15 @@ const iconPath = join(app.getAppPath(), "build/icon.ico");
 let db: NexusDatabase | null = null;
 let mainWindow: BrowserWindow | null = null;
 
+/**
+ * The unlocked session's data key (hex), held only for as long as the
+ * database is open — needed by `auth:regenerate-recovery`, which rewraps the
+ * Recovery Kit without asking for the passcode again (the caller already
+ * proved possession once this session). `auth:lock` (and nothing else) drops
+ * it. Nothing besides that one handler ever reads it.
+ */
+let unlockedDataKeyHex: string | null = null;
+
 // STUDY focus timer (piece 4a): the *running* timer is deliberately never a
 // database row (see the `focus_sessions` migration's doc comment) — it lives
 // only as this main-process runtime state, keyed by profile id, so a crash or
@@ -162,6 +191,109 @@ function attachmentsDirPath(): string {
 /** `<userData>/tmp-open` — where `openExternally` copies a blob before handing it to the OS's default app. */
 function tmpOpenDirPath(): string {
   return join(app.getPath("userData"), "tmp-open");
+}
+
+/** The `userData` directory itself — what every `main/auth.ts` function takes as its first argument (`keychain.json` lives directly inside it, beside `nexus.db`). */
+function userDataDir(): string {
+  return app.getPath("userData");
+}
+
+const SIDECAR_SUFFIXES = ["-wal", "-shm"] as const;
+
+/**
+ * Copies a SQLite main file plus whichever of its WAL/SHM sidecars currently
+ * exist, so the destination is a complete, self-consistent snapshot even when
+ * the source is a WAL-mode database with writes not yet checkpointed into the
+ * main file (`openDatabase` always turns on `journal_mode = WAL`, so a plain
+ * `nexus.db` file copy alone could silently miss the most recent transactions
+ * — this is the difference between a backup that is actually restorable and
+ * one that merely looks like it is). Nothing is writing to `from` at any point
+ * this runs (the app that owns this call has exclusive access), so a plain
+ * filesystem copy of all three files is a valid snapshot. Any sidecar at the
+ * destination with no matching source file is removed — left over from
+ * whatever used to be there, and otherwise able to silently reintroduce stale
+ * WAL frames the next time SQLite opens the destination.
+ */
+function copyDatabaseTriplet(from: string, to: string): void {
+  copyFileSync(from, to);
+  for (const suffix of SIDECAR_SUFFIXES) {
+    const src = `${from}${suffix}`;
+    const dst = `${to}${suffix}`;
+    if (existsSync(src)) copyFileSync(src, dst);
+    else rmSync(dst, { force: true });
+  }
+}
+
+/** Removes a SQLite main file and its WAL/SHM sidecars (if any) — the inverse of the snapshot `copyDatabaseTriplet` makes, used once a migration or a restore no longer needs it. */
+function removeDatabaseTriplet(path: string): void {
+  rmSync(path, { force: true });
+  for (const suffix of SIDECAR_SUFFIXES) rmSync(`${path}${suffix}`, { force: true });
+}
+
+/**
+ * Encrypts a plaintext `nexus.db` in place (ADR-018 step 2): back it up first
+ * (2a — the source is already plaintext, so the copy adds no exposure, and it
+ * is the difference between an interrupted rekey being an inconvenience and
+ * being total data loss), rekey it (2b), reopen it with the new key to prove
+ * the rekey actually took (2c), and only then discard the backup (2d).
+ */
+function migratePlaintextInPlace(path: string, backupPath: string, dataKeyHex: string): void {
+  copyDatabaseTriplet(path, backupPath); // 2a
+  encryptDatabaseInPlace(path, dataKeyHex); // 2b
+  db = openDatabase({ path, encryptionKey: dataKeyHex }); // 2c
+  removeDatabaseTriplet(backupPath); // 2d
+}
+
+/**
+ * Opens `nexus.db` under `dataKeyHex`, encrypting/migrating/recovering it as
+ * needed, and sets the module-level `db`. Used by every unlock path
+ * (`auth:create`/`auth:unlock`/`auth:recover`, and the smoke harness's own
+ * setup) — never called with the database already open.
+ *
+ * Order of operations, in the order they are tried:
+ *
+ * 1. No `nexus.db` at all → `openDatabase` creates it already encrypted.
+ *    Nothing else to do.
+ * 2. `nexus.db` exists and is plaintext → this install predates encryption
+ *    (or a previous attempt died before finishing this same step — see the
+ *    crash-recovery branch below, which lands back here after restoring a
+ *    known-good backup). `migratePlaintextInPlace` runs the full
+ *    backup/rekey/reopen/discard sequence.
+ * 3. Otherwise the file is already encrypted — the ordinary case on every
+ *    later launch. Just open it.
+ * 4. Crash recovery: if step 3 throws `DatabaseLockedError` AND a leftover
+ *    `nexus.db.pre-encryption` exists, the previous run's rekey (step 2b)
+ *    started rewriting `nexus.db` and never finished — a partially rekeyed
+ *    file opens as neither valid plaintext (so step 2's check already said
+ *    false) nor validly encrypted (so this open just failed). The backup is
+ *    the last known-good plaintext snapshot; restoring it and retrying the
+ *    whole migration from step 2 turns "total data loss" into "redo one
+ *    rekey". Done at most once — a second failure after a fresh restore is a
+ *    real error, not a transient crash artifact, and must not be masked by
+ *    retrying forever.
+ */
+function openEncrypted(dataKeyHex: string): void {
+  const path = databasePath();
+  const backupPath = `${path}.pre-encryption`;
+
+  if (!existsSync(path)) {
+    db = openDatabase({ path, encryptionKey: dataKeyHex }); // 1
+  } else if (isPlaintextDatabase(path)) {
+    migratePlaintextInPlace(path, backupPath, dataKeyHex); // 2
+  } else {
+    try {
+      db = openDatabase({ path, encryptionKey: dataKeyHex }); // 3
+    } catch (error) {
+      if (!(error instanceof DatabaseLockedError) || !existsSync(backupPath)) {
+        throw error;
+      }
+      copyDatabaseTriplet(backupPath, path); // 4: restore...
+      migratePlaintextInPlace(path, backupPath, dataKeyHex); // ...then redo the migration once.
+    }
+  }
+
+  // Can only run once the database is open.
+  seedFirstRunProfile(requireDb());
 }
 
 interface ProfileRow {
@@ -269,6 +401,34 @@ function asBoolean(value: unknown, field: string): boolean {
 function asString(value: unknown, field: string): string {
   if (typeof value !== "string") {
     throw new Error(`Invalid IPC payload: "${field}" must be a string.`);
+  }
+  return value;
+}
+
+/**
+ * A passcode field: a non-empty string capped at `MAX_PASSCODE_LENGTH`
+ * (`@nexus/core/auth`) before it ever reaches Argon2id (SEC-EL-02) — the real
+ * length/character-class policy (`validatePasscode`) is `main/auth.ts`'s job,
+ * not this structural check's.
+ */
+function asPasscode(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.length === 0 || value.length > MAX_PASSCODE_LENGTH) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be a non-empty string of at most ${MAX_PASSCODE_LENGTH} characters.`,
+    );
+  }
+  return value;
+}
+
+/** The formatted Recovery Kit code is 39 characters (32 + 7 dashes); 64 is generous headroom for stray whitespace, before `normalizeRecoveryCode` rejects anything that still isn't a valid code. */
+const MAX_RECOVERY_CODE_LENGTH = 64;
+
+/** A recovery-code field: a non-empty string capped at `MAX_RECOVERY_CODE_LENGTH`, before it ever reaches Argon2id (SEC-EL-02). */
+function asRecoveryCodeInput(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.length === 0 || value.length > MAX_RECOVERY_CODE_LENGTH) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be a non-empty string of at most ${MAX_RECOVERY_CODE_LENGTH} characters.`,
+    );
   }
   return value;
 }
@@ -838,7 +998,7 @@ function computeSnoozeUntil(preset: SnoozePreset, now: Date, morningHour: string
 }
 
 function requireDb(): NexusDatabase {
-  if (!db) throw new Error("Database is not open.");
+  if (!db) throw new Error("Database is locked.");
   return db;
 }
 
@@ -922,7 +1082,182 @@ function flagStore(profileId: string): SqliteFlagStore {
   return new SqliteFlagStore(requireDb().raw, profileId);
 }
 
+// --- Auth (ADR-018): the local account gate ---------------------------------
+//
+// `main/auth.ts` owns the keychain file and the OS keystore; everything here
+// composes its functions with this process's own state (`db`, the
+// notification scheduler) and turns its thrown `AuthError`s into the wire-safe
+// `AuthResult` every expected refusal returns. An unexpected failure (a
+// corrupt database, a filesystem error) is left to throw — the renderer's
+// generic error path exists for those, and `AuthError` narrowing below is
+// exactly what tells the two apart.
+
+/**
+ * `auth.readStatus` can only ever report "uninitialized" or "locked" — it has
+ * no way to know the database is open in this process. Only `db !== null`
+ * means genuinely unlocked this session, so that is layered on top here.
+ */
+function computeAuthStatus(): AuthStatus {
+  const fileStatus = readStatus(userDataDir());
+  return db !== null ? { ...fileStatus, state: "unlocked" } : fileStatus;
+}
+
+/** Starts everything that only makes sense once the database is open. Never during the smoke run — a scheduled check firing mid-smoke would make its deterministic exit flaky, the same reason `app.whenReady` used to skip it. */
+function startUnlockedServices(): void {
+  if (isSmoke) return;
+  startNotificationScheduler({
+    listProfiles: () => listProfiles(requireDb()),
+    documentStore,
+    examStore,
+    subjectStore,
+    planStore,
+    notificationStore,
+    getMainWindow: () => mainWindow,
+  });
+}
+
+/** Closes the database, stops the scheduler, and drops the data key from memory. Shared by the `auth:lock` handler and the smoke run's own lock/unlock exercise. */
+function performLock(): void {
+  stopNotificationScheduler();
+  try {
+    db?.close();
+  } catch {
+    // best-effort close; we are locking regardless
+  }
+  db = null;
+  unlockedDataKeyHex = null;
+}
+
+/** Converts an `AuthError` into the `AuthResult` the renderer branches on; a `"throttled"` reason additionally carries a freshly computed `lockedForMs` (the guard file was left untouched by the throttle check that raised it, so re-reading it here is exact, not stale). Anything that is NOT an `AuthError` is rethrown — an unexpected failure, not an expected refusal. */
+function authResultFromError(error: unknown): AuthResult {
+  if (error instanceof AuthError) {
+    if (error.reason === "throttled") {
+      return { ok: false, reason: error.reason, lockedForMs: readStatus(userDataDir()).lockedForMs };
+    }
+    return { ok: false, reason: error.reason };
+  }
+  throw error;
+}
+
+async function handleAuthCreate(passcode: string): Promise<AuthResult> {
+  try {
+    const { dataKeyHex, recoveryCode } = await createAccount(userDataDir(), passcode);
+    openEncrypted(dataKeyHex);
+    unlockedDataKeyHex = dataKeyHex;
+    startUnlockedServices();
+    return { ok: true, recoveryCode };
+  } catch (error) {
+    return authResultFromError(error);
+  }
+}
+
+async function handleAuthUnlock(passcode: string): Promise<AuthResult> {
+  try {
+    const dataKeyHex = await unlockWithPasscode(userDataDir(), passcode);
+    // The passcode is always fully verified above, regardless of session
+    // state — only the database (re)open is idempotent: a redundant-but-
+    // correct unlock while already unlocked must not call `openDatabase` a
+    // second time, which would leak the first connection's file handle
+    // without ever closing it. (A WRONG passcode never reaches this line —
+    // `unlockWithPasscode` already threw.)
+    if (db === null) {
+      openEncrypted(dataKeyHex);
+      unlockedDataKeyHex = dataKeyHex;
+      startUnlockedServices();
+    }
+    return { ok: true };
+  } catch (error) {
+    return authResultFromError(error);
+  }
+}
+
+async function handleAuthRecover(recoveryCode: string, newPasscode: string): Promise<AuthResult> {
+  try {
+    const dataKeyHex = await unlockWithRecovery(userDataDir(), recoveryCode, newPasscode);
+    // Same idempotent-open discipline as `handleAuthUnlock` — the recovered
+    // data key is unchanged from whatever is already open, so there is
+    // nothing to reopen, but the recovery code and new passcode are always
+    // fully verified/applied above regardless of session state.
+    if (db === null) {
+      openEncrypted(dataKeyHex);
+      unlockedDataKeyHex = dataKeyHex;
+      startUnlockedServices();
+    }
+    return { ok: true };
+  } catch (error) {
+    return authResultFromError(error);
+  }
+}
+
+async function handleAuthChangePasscode(currentPasscode: string, nextPasscode: string): Promise<AuthResult> {
+  try {
+    await changePasscode(userDataDir(), currentPasscode, nextPasscode);
+    return { ok: true };
+  } catch (error) {
+    return authResultFromError(error);
+  }
+}
+
+async function handleAuthRegenerateRecovery(): Promise<AuthResult> {
+  if (unlockedDataKeyHex === null) {
+    // Only reachable via a renderer bug (the Settings action that calls this
+    // does not exist while locked) — not a user-facing "expected refusal", so
+    // this throws rather than returning an `AuthResult`; no `AuthErrorReason`
+    // fits "you are not even unlocked".
+    throw new Error("Cannot regenerate the recovery code while locked.");
+  }
+  try {
+    const recoveryCode = await regenerateRecoveryCode(userDataDir(), unlockedDataKeyHex);
+    return { ok: true, recoveryCode };
+  } catch (error) {
+    return authResultFromError(error);
+  }
+}
+
 function registerIpc(): void {
+  ipcMain.handle(IpcChannel.authStatus, (event): AuthStatus => {
+    assertTrustedSender(event);
+    return computeAuthStatus();
+  });
+
+  ipcMain.handle(IpcChannel.authCreate, (event, payload): Promise<AuthResult> => {
+    assertTrustedSender(event);
+    const passcode = asPasscode(asRecord(payload).passcode, "passcode");
+    return handleAuthCreate(passcode);
+  });
+
+  ipcMain.handle(IpcChannel.authUnlock, (event, payload): Promise<AuthResult> => {
+    assertTrustedSender(event);
+    const passcode = asPasscode(asRecord(payload).passcode, "passcode");
+    return handleAuthUnlock(passcode);
+  });
+
+  ipcMain.handle(IpcChannel.authRecover, (event, payload): Promise<AuthResult> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const recoveryCode = asRecoveryCodeInput(body.recoveryCode, "recoveryCode");
+    const newPasscode = asPasscode(body.newPasscode, "newPasscode");
+    return handleAuthRecover(recoveryCode, newPasscode);
+  });
+
+  ipcMain.handle(IpcChannel.authChangePasscode, (event, payload): Promise<AuthResult> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const currentPasscode = asPasscode(body.currentPasscode, "currentPasscode");
+    const nextPasscode = asPasscode(body.nextPasscode, "nextPasscode");
+    return handleAuthChangePasscode(currentPasscode, nextPasscode);
+  });
+
+  ipcMain.handle(IpcChannel.authRegenerateRecovery, (event): Promise<AuthResult> => {
+    assertTrustedSender(event);
+    return handleAuthRegenerateRecovery();
+  });
+
+  ipcMain.handle(IpcChannel.authLock, (event): void => {
+    assertTrustedSender(event);
+    performLock();
+  });
+
   ipcMain.handle(IpcChannel.profilesList, (event): Profile[] => {
     assertTrustedSender(event);
     return listProfiles(requireDb());
@@ -1946,6 +2281,92 @@ function createWindow(): BrowserWindow {
 // renderer completed a real window.nexus round trip (renderer -> preload -> IPC
 // -> DB -> renderer). No extra IPC channel is added: the renderer flags its own
 // readiness on `window`, which main reads via executeJavaScript.
+//
+// ADR-018: the app now starts locked, so the renderer's own round trip needs
+// the database open before the window even loads — `runSmokeAuthSetup` (called
+// from `app.whenReady` before `createWindow`) creates the smoke run's own
+// throwaway account for exactly that reason. This function then proves the
+// rest of the auth cycle for real: unlocked -> lock -> locked -> unlock (right
+// passcode) -> unlock (wrong passcode) -> still-working data channel.
+
+/** Runs before the window exists: creates the smoke run's own account so the renderer's readiness round-trip (which calls a data channel) has something to succeed against. */
+async function runSmokeAuthSetup(): Promise<void> {
+  const before = readStatus(userDataDir());
+  if (before.state !== "uninitialized") {
+    throw new Error(`expected an uninitialized account before smoke setup, got "${before.state}"`);
+  }
+  const created = await handleAuthCreate(SMOKE_PASSCODE);
+  if (!created.ok) {
+    throw new Error(`smoke account creation failed: ${created.reason}`);
+  }
+  if (created.recoveryCode === undefined) {
+    throw new Error("account creation returned no Recovery Kit code");
+  }
+  smokeRecoveryCode = created.recoveryCode;
+}
+
+/**
+ * The Recovery Kit code the smoke account was created with — kept only so the
+ * migration rehearsal below can use it. A real account hands the code to the
+ * user once and never holds on to it.
+ */
+let smokeRecoveryCode = "";
+
+/** The passcode the migration rehearsal sets while recovering, to prove the re-bound wrap actually works afterwards. */
+const SMOKE_MIGRATED_PASSCODE = "migrated-passcode-2";
+
+/**
+ * Rehearses the device-migration path (ADR-018) end to end against the real OS
+ * keystore — the one flow that cannot be unit-tested, because its whole point
+ * is what DPAPI does with a blob it did not produce.
+ *
+ * Carrying `nexus.db` + `keychain.json` to another machine (or another Windows
+ * account) is simulated by overwriting `guard` with bytes this machine's DPAPI
+ * cannot decrypt, which is exactly what a foreign blob looks like from here.
+ * The passcode must then refuse with `otherDevice` rather than lie about being
+ * wrong, the Recovery Kit must still open the database, and the new passcode it
+ * sets must be usable on the next lock — that last step is what proves recovery
+ * re-bound the wrap to *this* device instead of leaving the account permanently
+ * recovery-only.
+ */
+async function runSmokeMigrationRehearsal(): Promise<void> {
+  performLock();
+
+  const keychainFile = join(userDataDir(), "keychain.json");
+  const parsed: unknown = JSON.parse(readFileSync(keychainFile, "utf8"));
+  const foreignGuard = { ...(parsed as Record<string, unknown>), guard: randomBytes(64).toString("base64") };
+  writeFileSync(keychainFile, JSON.stringify(foreignGuard, null, 2));
+
+  const migratedStatus = computeAuthStatus();
+  if (!migratedStatus.requiresRecovery || migratedStatus.state !== "locked") {
+    throw new Error(
+      `expected a foreign guard to read as locked + requiresRecovery, got ${JSON.stringify(migratedStatus)}`,
+    );
+  }
+
+  const passcodeOnOtherDevice = await handleAuthUnlock(SMOKE_PASSCODE);
+  if (passcodeOnOtherDevice.ok || passcodeOnOtherDevice.reason !== "otherDevice") {
+    throw new Error(
+      `expected the passcode to refuse with "otherDevice", got ${JSON.stringify(passcodeOnOtherDevice)}`,
+    );
+  }
+
+  const recovered = await handleAuthRecover(smokeRecoveryCode, SMOKE_MIGRATED_PASSCODE);
+  if (!recovered.ok) {
+    throw new Error(`expected the Recovery Kit to open a migrated account, got reason "${recovered.reason}"`);
+  }
+  if (listProfiles(requireDb()).length < 1) {
+    throw new Error("expected the profile to be readable after recovery");
+  }
+
+  performLock();
+  const afterMigration = await handleAuthUnlock(SMOKE_MIGRATED_PASSCODE);
+  if (!afterMigration.ok) {
+    throw new Error(
+      `expected the passcode set during recovery to work on this device, got reason "${afterMigration.reason}"`,
+    );
+  }
+}
 
 async function runSmoke(win: BrowserWindow): Promise<void> {
   const profiles = listProfiles(requireDb());
@@ -1965,6 +2386,39 @@ async function runSmoke(win: BrowserWindow): Promise<void> {
   if (rendererOk !== true) {
     throw new Error("renderer IPC round-trip did not succeed");
   }
+
+  const unlockedStatus = computeAuthStatus();
+  if (unlockedStatus.state !== "unlocked") {
+    throw new Error(`expected "unlocked" status, got "${unlockedStatus.state}"`);
+  }
+
+  performLock();
+  const lockedStatus = computeAuthStatus();
+  if (lockedStatus.state !== "locked") {
+    throw new Error(`expected "locked" status after auth:lock, got "${lockedStatus.state}"`);
+  }
+
+  const rightUnlock = await handleAuthUnlock(SMOKE_PASSCODE);
+  if (!rightUnlock.ok) {
+    throw new Error(`expected the correct passcode to unlock, got reason "${rightUnlock.reason}"`);
+  }
+
+  const wrongUnlock = await handleAuthUnlock("definitely-wrong-1");
+  if (wrongUnlock.ok || wrongUnlock.reason !== "wrongPasscode") {
+    throw new Error(
+      `expected a wrong passcode to return { ok: false, reason: "wrongPasscode" }, got ${JSON.stringify(wrongUnlock)}`,
+    );
+  }
+
+  // The existing profile/renderer checks still pass after the lock/unlock
+  // cycle — proves re-unlocking after a lock reopens a genuinely working
+  // database, not just a non-null handle.
+  const profilesAfterRelock = listProfiles(requireDb());
+  if (profilesAfterRelock.length < 1) {
+    throw new Error("expected the profile to still be readable after re-unlocking");
+  }
+
+  await runSmokeMigrationRehearsal();
 }
 
 // --- Auto-update (SEC-EL-07) -------------------------------------------------
@@ -2005,44 +2459,54 @@ function shutdown(code: number): void {
 
 // --- Lifecycle --------------------------------------------------------------
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  if (isSmoke) {
+    // Never the developer's real `%APPDATA%\Nexus` — a nested, disposable
+    // directory. Wiped up front (Electron only auto-creates the DEFAULT
+    // userData path, not one redirected here, and a leftover keychain.json
+    // from a previous run would make the very first smoke assertion below
+    // false on the second run onward) then recreated, since nothing else
+    // will create it before the first file write into it.
+    const smokeUserDataPath = join(app.getPath("userData"), "smoke");
+    rmSync(smokeUserDataPath, { recursive: true, force: true });
+    mkdirSync(smokeUserDataPath, { recursive: true });
+    app.setPath("userData", smokeUserDataPath);
+  }
+
   try {
-    // ADR-001 / SEC-EL: the database lives ONLY in the main process; the renderer
-    // reaches it exclusively through the typed IPC allowlist above.
-    // ADR-004: PIN/keystore-derived key derivation is not built yet, so the file
-    // is opened WITHOUT an encryptionKey. This is the honest current state, not a
-    // placeholder — encryption at rest (SEC-DAR-01) lands with ADR-004.
-    db = openDatabase({ path: databasePath() });
-    seedFirstRunProfile(db);
+    // ADR-018: the main process starts LOCKED. No database is opened here —
+    // `db` stays null until `auth:create`/`auth:unlock`/`auth:recover`
+    // succeeds (via `openEncrypted`), so every data channel's `requireDb()`
+    // genuinely has nothing to hand back until the passcode is verified.
     registerIpc();
 
     // ADR-014: the profileId argument is never read by `mimeForHash` — it is
     // deliberately profile-agnostic (see `NoteAttachmentStore`'s doc comment),
-    // so any placeholder value is safe here.
-    registerBlobProtocol(
-      (sha256) => noteAttachmentStore("").mimeForHash(sha256),
-      attachmentsDirPath(),
-    );
+    // so any placeholder value is safe here. The lookup itself is wrapped: while
+    // locked, `noteAttachmentStore("")` throws through `requireDb()` — caught
+    // here and turned into a clean 404 (`registerBlobProtocol` already 404s on
+    // a null mime) rather than a generic network error surfacing in the
+    // renderer for every attachment image while locked.
+    registerBlobProtocol((sha256) => {
+      try {
+        return noteAttachmentStore("").mimeForHash(sha256);
+      } catch {
+        return null;
+      }
+    }, attachmentsDirPath());
+
+    if (isSmoke) {
+      // Unlike a real launch, the smoke run cannot wait for a renderer-driven
+      // auth:create/auth:unlock call: the renderer's own readiness round-trip
+      // (below, after the window loads) calls a data channel, so the database
+      // must already be open before `createWindow` runs.
+      await runSmokeAuthSetup();
+    }
 
     mainWindow = createWindow();
 
     // Never in dev, never during the smoke run — only a real packaged install.
     if (app.isPackaged && !isSmoke) checkForUpdates();
-
-    // NTF piece a2: the periodic reminder check. Never during the smoke run —
-    // a scheduled check firing an OS notification mid-smoke would make the
-    // deterministic exit flaky and is pointless noise for a CI run anyway.
-    if (!isSmoke) {
-      startNotificationScheduler({
-        listProfiles: () => listProfiles(requireDb()),
-        documentStore,
-        examStore,
-        subjectStore,
-        planStore,
-        notificationStore,
-        getMainWindow: () => mainWindow,
-      });
-    }
 
     if (isSmoke) {
       mainWindow.webContents.once("did-finish-load", () => {

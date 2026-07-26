@@ -11,6 +11,13 @@
 
 /** The only channels the preload bridge and the main handlers agree on. */
 export const IpcChannel = {
+  authStatus: "auth:status",
+  authCreate: "auth:create",
+  authUnlock: "auth:unlock",
+  authRecover: "auth:recover",
+  authChangePasscode: "auth:change-passcode",
+  authRegenerateRecovery: "auth:regenerate-recovery",
+  authLock: "auth:lock",
   profilesList: "profiles:list",
   profilesRename: "profiles:rename",
   flagsGet: "flags:get",
@@ -123,6 +130,93 @@ export const IpcChannel = {
 } as const;
 
 export type IpcChannel = (typeof IpcChannel)[keyof typeof IpcChannel];
+
+/**
+ * The local account's session state (ADR-018): `"uninitialized"` (no account
+ * yet), `"locked"` (an account exists but the database is not open), or
+ * `"unlocked"`. Computed by combining what is on disk with main's own runtime
+ * knowledge of whether the database is currently open — never from disk
+ * alone, since "is the database open in this process" cannot be recovered
+ * from a file.
+ */
+export type AuthState = "uninitialized" | "locked" | "unlocked";
+
+/**
+ * Why an auth call was refused. Mirrors `@nexus/core/auth`'s `AuthErrorReason`
+ * exactly; redeclared here (the same pattern every other closed domain in
+ * this file follows) so the renderer never imports the core auth subpath —
+ * its Argon2id WASM has no business in a renderer bundle for every screen
+ * that isn't the lock screen.
+ */
+export type AuthErrorReason =
+  | "notInitialized"
+  | "alreadyInitialized"
+  | "wrongPasscode"
+  | "wrongRecoveryCode"
+  | "throttled"
+  | "weakPasscode"
+  | "keystoreUnavailable"
+  | "otherDevice"
+  | "corruptKeychain";
+
+/**
+ * Minimum passcode length (founder decision 2026-07-26, ADR-018). Mirrors
+ * `@nexus/core/auth`'s `MIN_PASSCODE_LENGTH` — redeclared here, like every
+ * other closed domain in this file, so the renderer can pre-check a passcode
+ * without importing the core auth subpath and dragging Argon2id's WASM into
+ * its bundle. `validatePasscode` in the main process stays authoritative.
+ */
+export const PASSCODE_MIN_LENGTH = 8;
+
+/** The local account's status (ADR-018) — the first thing the renderer asks about, before profiles or flags. */
+export interface AuthStatus {
+  state: AuthState;
+  /** Milliseconds still to wait before another attempt is accepted; 0 when none. */
+  lockedForMs: number;
+  /** False when the OS keystore is unavailable — account creation is refused rather than silently downgraded. */
+  keystoreAvailable: boolean;
+  /**
+   * True when this data was carried over from another machine or Windows
+   * account: its OS-bound guard cannot be read here, so the passcode is
+   * unusable and only the Recovery Kit can open it (ADR-018 — the Kit is
+   * deliberately not device-bound precisely for this). The lock screen shows
+   * the recovery form instead of the passcode form.
+   */
+  requiresRecovery: boolean;
+}
+
+/**
+ * The outcome of every auth mutation (create/unlock/recover/change-passcode/
+ * regenerate-recovery): a discriminated result rather than a thrown error for
+ * every EXPECTED refusal. Electron's IPC serializes a thrown `Error`'s
+ * `message` only, and the renderer needs `reason` to pick its Serbian copy —
+ * a raw thrown error gives it nothing to branch on. An unexpected failure (a
+ * corrupt database, a filesystem error) still throws; that is the renderer's
+ * generic error path, not this one.
+ */
+export type AuthResult =
+  | { ok: true; recoveryCode?: string }
+  | { ok: false; reason: AuthErrorReason; lockedForMs?: number };
+
+export interface AuthCreateRequest {
+  passcode: string;
+}
+
+export interface AuthUnlockRequest {
+  passcode: string;
+}
+
+/** Recovering without setting a new passcode in the same call would lock the user out again next launch, so both arrive together. */
+export interface AuthRecoverRequest {
+  recoveryCode: string;
+  newPasscode: string;
+}
+
+/** Re-verifies `currentPasscode` before rewrapping under `nextPasscode` — a defense against someone at an already-unlocked session changing the passcode without knowing it. */
+export interface AuthChangePasscodeRequest {
+  currentPasscode: string;
+  nextPasscode: string;
+}
 
 /** A profile row as seen by the renderer (mirrors the `profiles` table, ADR-001). */
 export interface Profile {
@@ -1435,6 +1529,20 @@ export interface AppInfo {
  * generic. Frozen at exposure time (see preload).
  */
 export interface NexusApi {
+  /** ADR-018: the local account's status. The first thing the renderer asks about, before profiles or flags — there is no code path where a data channel is called before this. */
+  getAuthStatus(): Promise<AuthStatus>;
+  /** First run: creates the local account (encrypting an existing plaintext database in place if one predates this) and returns the one-time Recovery Kit code on success — the only time it is ever handed back. */
+  createAccount(passcode: string): Promise<AuthResult>;
+  /** Opens the database with the passcode-derived key, or a throttled/wrong-passcode refusal. */
+  unlockWithPasscode(passcode: string): Promise<AuthResult>;
+  /** Recovers from a forgotten passcode: verifies the Recovery Kit code and sets a new passcode in the same call. */
+  unlockWithRecovery(recoveryCode: string, newPasscode: string): Promise<AuthResult>;
+  /** Rewraps the data key under a new passcode; never re-encrypts the database, never touches the Recovery Kit already written down. */
+  changePasscode(currentPasscode: string, nextPasscode: string): Promise<AuthResult>;
+  /** Issues a fresh Recovery Kit code, invalidating the old one. Unlocked session only. */
+  regenerateRecoveryCode(): Promise<AuthResult>;
+  /** Closes the database and drops the data key from memory. */
+  lock(): Promise<void>;
   listProfiles(): Promise<Profile[]>;
   renameProfile(id: string, name: string): Promise<void>;
   getFlags(profileId: string): Promise<FlagState>;

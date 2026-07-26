@@ -8,6 +8,15 @@ import { IpcChannel, type NexusApi } from "../shared/ipc.js";
  * cannot reshape the surface after exposure.
  */
 const api: NexusApi = {
+  getAuthStatus: () => ipcRenderer.invoke(IpcChannel.authStatus),
+  createAccount: (passcode) => ipcRenderer.invoke(IpcChannel.authCreate, { passcode }),
+  unlockWithPasscode: (passcode) => ipcRenderer.invoke(IpcChannel.authUnlock, { passcode }),
+  unlockWithRecovery: (recoveryCode, newPasscode) =>
+    ipcRenderer.invoke(IpcChannel.authRecover, { recoveryCode, newPasscode }),
+  changePasscode: (currentPasscode, nextPasscode) =>
+    ipcRenderer.invoke(IpcChannel.authChangePasscode, { currentPasscode, nextPasscode }),
+  regenerateRecoveryCode: () => ipcRenderer.invoke(IpcChannel.authRegenerateRecovery),
+  lock: () => ipcRenderer.invoke(IpcChannel.authLock),
   listProfiles: () => ipcRenderer.invoke(IpcChannel.profilesList),
   renameProfile: (id, name) =>
     ipcRenderer.invoke(IpcChannel.profilesRename, { id, name }),
