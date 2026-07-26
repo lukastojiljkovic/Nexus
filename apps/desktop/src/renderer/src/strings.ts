@@ -295,6 +295,7 @@ export const strings = {
 
   calendar: {
     viewLabel: "Prikaz",
+    viewMesec: "Mesec",
     viewAgenda: "Agenda",
     viewDokumenta: "Dokumenta",
     titlePlaceholder: "Naziv događaja",
@@ -315,6 +316,20 @@ export const strings = {
     deletedNotice: "Događaj obrisan",
     undo: "Vrati",
     dismiss: "Zatvori",
+    /** Source-filter toggle chips (month grid + agenda share one set of toggles). */
+    sourcesLabel: "Izvori",
+    sourceEvents: "Događaji",
+    sourceTasks: "Zadaci",
+    sourceExams: "Ispiti",
+    sourceBlocks: "Učenje",
+    /** Tag chip on a read-only task row in the agenda (ADR-020). */
+    taskTag: "Zadatak",
+    /** Month navigation (ADR-020): prev/today/next + the "+N još" overflow toggle. */
+    prevMonth: "Prethodni mesec",
+    nextMonth: "Sledeći mesec",
+    today: "Danas",
+    showMore: "još",
+    showLess: "Prikaži manje",
   },
 
   documents: {

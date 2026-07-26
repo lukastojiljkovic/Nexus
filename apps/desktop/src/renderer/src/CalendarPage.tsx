@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import type { ChangeEvent, FormEvent } from "react";
+import type { ChangeEvent, FormEvent, KeyboardEvent } from "react";
 import { Button, Checkbox, Chip, EmptyState, ListRow, TextField } from "@nexus/ui";
+import { monthKeyOf, shiftDayKey, shiftMonthKey } from "@nexus/core";
 import type {
   Event,
   EventFieldChanges,
@@ -8,33 +9,41 @@ import type {
   NewEventFields,
   StudyBlockWithExam,
   Subject,
+  Task,
 } from "../../shared/ipc.js";
-import { DocumentsPanel } from "./DocumentsPanel.js";
+import { CalendarMonth } from "./CalendarMonth.js";
 import {
-  daysUntilExam,
-  examCountdownLabel,
-  examCountdownVariant,
-  localTodayKey,
-  shiftDayKey,
-} from "./examDates.js";
+  buildCalendarItems,
+  CALENDAR_SOURCES,
+  persistSources,
+  readStoredSources,
+} from "./calendarItems.js";
+import type { CalendarItem, CalendarSource } from "./calendarItems.js";
+import { DocumentsPanel } from "./DocumentsPanel.js";
+import { daysUntilExam, examCountdownLabel, examCountdownVariant, localTodayKey } from "./examDates.js";
 import { strings } from "./strings.js";
 
 // --- Per-profile view memory (interim, mirrors TasksPage) -------------------
 //
-// Agenda vs Dokumenta is a lightweight UI preference, persisted per profile in
-// localStorage exactly like the tasks list/kanban toggle. The month grid is a
-// later slice; this toggle only picks between the agenda and the documents panel.
-type CalendarView = "agenda" | "dokumenta";
+// Mesec / Agenda / Dokumenta is a lightweight UI preference, persisted per
+// profile in localStorage exactly like the tasks list/kanban toggle.
+type CalendarView = "mesec" | "agenda" | "dokumenta";
 const VIEW_KEY_PREFIX = "nexus.calendar.view.";
 
 function readStoredView(profileId: string): CalendarView {
-  return localStorage.getItem(VIEW_KEY_PREFIX + profileId) === "dokumenta"
-    ? "dokumenta"
-    : "agenda";
+  const raw = localStorage.getItem(VIEW_KEY_PREFIX + profileId);
+  return raw === "agenda" || raw === "dokumenta" ? raw : "mesec";
 }
 function persistView(profileId: string, view: CalendarView): void {
   localStorage.setItem(VIEW_KEY_PREFIX + profileId, view);
 }
+
+const SOURCE_LABEL: Record<CalendarSource, string> = {
+  events: strings.calendar.sourceEvents,
+  tasks: strings.calendar.sourceTasks,
+  exams: strings.calendar.sourceExams,
+  blocks: strings.calendar.sourceBlocks,
+};
 
 // --- Agenda grouping (page-level, not the views engine) ---------------------
 //
@@ -42,93 +51,26 @@ function persistView(profileId: string, view: CalendarView): void {
 // appends optimistically, so the display order is re-derived here rather than
 // trusted from insertion order. The rule matches the store's exactly — an
 // all-day event's bare "YYYY-MM-DD" sorts before any timed start on that day.
-// Exams (STUDY-002) and study blocks (STUDY-003) are merged in as read-only
-// rows: their bare dates sort the same way a bare all-day date does, ahead of
-// any timed event; within one bare date, kind rank keeps the order
-// deterministic (events, then exams, then blocks — blocks sit next to exams).
+// Tasks, exams (STUDY-002) and study blocks (STUDY-003) are merged in as
+// read-only rows: their bare dates sort the same way a bare all-day date
+// does, ahead of any timed event; within one bare date, kind rank keeps the
+// order deterministic (events, then tasks, then exams, then blocks).
+const KIND_RANK: Record<CalendarItem["kind"], number> = { event: 0, task: 1, exam: 2, block: 3 };
 
-// Study blocks are fetched over a bounded window around today (the agenda
-// itself has no explicit bounds): a month back covers recently missed blocks,
-// a year ahead outruns any plannable exam distance.
-const BLOCKS_PAST_DAYS = 31;
-const BLOCKS_FUTURE_DAYS = 365;
-
-/** An agenda row: a real event, a read-only exam, or a read-only study block. */
-type AgendaEntry =
-  | { kind: "event"; sortKey: string; dayKey: string; event: Event }
-  | { kind: "exam"; sortKey: string; dayKey: string; exam: Exam; subject: Subject }
-  | {
-      kind: "block";
-      sortKey: string;
-      dayKey: string;
-      block: StudyBlockWithExam;
-      exam: Exam;
-      subject: Subject;
-    };
-
-/** Within one sortKey (a bare day), events come first, then exams, then blocks. */
-const KIND_RANK: Record<AgendaEntry["kind"], number> = { event: 0, exam: 1, block: 2 };
-
-function entryId(entry: AgendaEntry): string {
-  if (entry.kind === "event") return entry.event.id;
-  return entry.kind === "exam" ? entry.exam.id : entry.block.id;
-}
-
-/** Merges events, exams and study blocks into one agenda stream; an orphaned
- * exam/block (its subject or exam was soft-deleted) is skipped rather than
- * shown without a name/colour. */
-function buildAgendaEntries(
-  events: Event[],
-  exams: Exam[],
-  blocks: StudyBlockWithExam[],
-  subjects: Subject[],
-): AgendaEntry[] {
-  const subjectsById = new Map(subjects.map((subject) => [subject.id, subject] as const));
-  const examsById = new Map(exams.map((exam) => [exam.id, exam] as const));
-  const eventEntries: AgendaEntry[] = events.map((event) => ({
-    kind: "event",
-    sortKey: event.startAt,
-    dayKey: event.startAt.slice(0, 10),
-    event,
-  }));
-  const examEntries: AgendaEntry[] = [];
-  for (const exam of exams) {
-    const subject = subjectsById.get(exam.subjectId);
-    if (!subject) continue;
-    const dayKey = exam.examDate.slice(0, 10);
-    examEntries.push({ kind: "exam", sortKey: dayKey, dayKey, exam, subject });
-  }
-  const blockEntries: AgendaEntry[] = [];
-  for (const block of blocks) {
-    const exam = examsById.get(block.examId);
-    const subject = exam ? subjectsById.get(exam.subjectId) : undefined;
-    if (!exam || !subject) continue;
-    blockEntries.push({
-      kind: "block",
-      sortKey: block.blockDate,
-      dayKey: block.blockDate,
-      block,
-      exam,
-      subject,
-    });
-  }
-  return [...eventEntries, ...examEntries, ...blockEntries];
-}
-
-/** Agenda entries bucketed by calendar day, days and rows both ascending. */
-function groupAgenda(entries: AgendaEntry[]): [string, AgendaEntry[]][] {
-  const ordered = [...entries].sort((a, b) => {
+/** Calendar items bucketed by calendar day, days and rows both ascending. */
+function groupAgenda(items: readonly CalendarItem[]): [string, CalendarItem[]][] {
+  const ordered = [...items].sort((a, b) => {
     const cmp = a.sortKey.localeCompare(b.sortKey);
     if (cmp !== 0) return cmp;
     const rank = KIND_RANK[a.kind] - KIND_RANK[b.kind];
     if (rank !== 0) return rank;
-    return entryId(a).localeCompare(entryId(b));
+    return a.id.localeCompare(b.id);
   });
-  const groups = new Map<string, AgendaEntry[]>();
-  for (const entry of ordered) {
-    const bucket = groups.get(entry.dayKey);
-    if (bucket) bucket.push(entry);
-    else groups.set(entry.dayKey, [entry]);
+  const groups = new Map<string, CalendarItem[]>();
+  for (const item of ordered) {
+    const bucket = groups.get(item.startKey);
+    if (bucket) bucket.push(item);
+    else groups.set(item.startKey, [item]);
   }
   return [...groups];
 }
@@ -160,27 +102,66 @@ function formatTime(event: Event): string {
     : new Intl.DateTimeFormat("sr-Latn", { hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
+const monthLabelFormatter = new Intl.DateTimeFormat("sr-Latn", {
+  month: "long",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+/** Nav header label, e.g. "jul 2026" — Serbian month names are already lower-case. */
+function formatMonthLabel(key: string): string {
+  const date = new Date(key);
+  return Number.isNaN(date.getTime()) ? key : monthLabelFormatter.format(date);
+}
+
+const MS_PER_DAY = 86_400_000;
+
+/** Whole-day delta between two bare day keys, UTC-midnight math (no timezone/DST drift). */
+function daysBetween(fromKey: string, toKey: string): number {
+  const from = Date.UTC(
+    Number(fromKey.slice(0, 4)),
+    Number(fromKey.slice(5, 7)) - 1,
+    Number(fromKey.slice(8, 10)),
+  );
+  const to = Date.UTC(
+    Number(toKey.slice(0, 4)),
+    Number(toKey.slice(5, 7)) - 1,
+    Number(toKey.slice(8, 10)),
+  );
+  return Math.round((to - from) / MS_PER_DAY);
+}
+
+// Study blocks are fetched over a bounded window around today (the agenda
+// itself has no explicit bounds): a month back covers recently missed blocks,
+// a year ahead outruns any plannable exam distance.
+const BLOCKS_PAST_DAYS = 31;
+const BLOCKS_FUTURE_DAYS = 365;
+
 export interface CalendarPageProps {
   profileId: string;
 }
 
 /**
- * The CAL module page (v0 basics): a single form that both adds and edits
- * events, and a day-grouped chronological agenda with per-row edit and
- * delete-with-undo. Every write goes through the events:* IPC allowlist, so the
- * store stays the single source of truth (e.g. it validates startAt and derives
- * updatedAt). endAt/description/category are deferred — the form stays minimal.
- * Upcoming exams (STUDY-002) and study blocks (STUDY-003) are merged into the
- * same agenda as read-only rows — they are not editable here; exam editing and
- * block check-off live in StudyPage.
+ * The CAL module page: a month grid, an agenda, and a Dokumenta panel over one
+ * shared item stream (ADR-020). The event form both adds and edits; every
+ * write goes through the events:* and tasks:* IPC allowlists, so the store
+ * stays the single source of truth (e.g. it validates startAt and derives
+ * updatedAt). Upcoming exams (STUDY-002) and study blocks (STUDY-003) are
+ * merged in as read-only rows; tasks are read-only too apart from a due-date
+ * drag — editing any of them lives on their own pages.
  */
 export function CalendarPage({ profileId }: CalendarPageProps) {
   const [events, setEvents] = useState<Event[] | null>(null);
+  const [tasks, setTasks] = useState<Task[] | null>(null);
   const [subjects, setSubjects] = useState<Subject[] | null>(null);
   const [exams, setExams] = useState<Exam[] | null>(null);
   const [blocks, setBlocks] = useState<StudyBlockWithExam[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [view, setView] = useState<CalendarView>(() => readStoredView(profileId));
+  const [sources, setSources] = useState<ReadonlySet<CalendarSource>>(() =>
+    readStoredSources(profileId),
+  );
+  const [monthKey, setMonthKey] = useState<string>(() => monthKeyOf(localTodayKey()));
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
 
   // One form serves both modes; a non-null editingId means "editing that event".
@@ -197,11 +178,12 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
     void (async () => {
       try {
         // Sync every study plan first so past blocks are already labelled
-        // `missed` when the agenda reads them.
+        // `missed` when the agenda/grid reads them.
         await window.nexus.syncAllPlans(profileId);
         const today = localTodayKey();
-        const [nextEvents, nextSubjects, nextExams, nextBlocks] = await Promise.all([
+        const [nextEvents, nextTasks, nextSubjects, nextExams, nextBlocks] = await Promise.all([
           window.nexus.listEvents(profileId),
+          window.nexus.listTasks(profileId),
           window.nexus.listSubjects(profileId),
           window.nexus.listExams(profileId),
           window.nexus.listBlocksInRange(
@@ -212,6 +194,7 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
         ]);
         if (!active) return;
         setEvents(nextEvents);
+        setTasks(nextTasks);
         setSubjects(nextSubjects);
         setExams(nextExams);
         setBlocks(nextBlocks);
@@ -228,6 +211,16 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
   function selectView(next: CalendarView): void {
     setView(next);
     persistView(profileId, next);
+  }
+
+  function toggleSource(source: CalendarSource): void {
+    setSources((prev) => {
+      const next = new Set(prev);
+      if (next.has(source)) next.delete(source);
+      else next.add(source);
+      persistSources(profileId, next);
+      return next;
+    });
   }
 
   function resetForm(): void {
@@ -248,6 +241,36 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
     setTime(event.allDay ? "" : event.startAt.slice(11, 16));
     setLocation(event.location ?? "");
     titleRef.current?.focus();
+  }
+
+  /** Click on a month-grid day cell's empty area: prefill the form's date and focus the title. */
+  function selectDay(dayKey: string): void {
+    setEditingId(null);
+    setTitle("");
+    setAllDay(false);
+    setDate(dayKey);
+    setTime("");
+    setLocation("");
+    titleRef.current?.focus();
+  }
+
+  function shiftMonth(delta: number): void {
+    setMonthKey((prev) => shiftMonthKey(prev, delta));
+  }
+  function goToday(): void {
+    setMonthKey(monthKeyOf(localTodayKey()));
+  }
+  function handleMonthKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      shiftMonth(-1);
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      shiftMonth(1);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      goToday();
+    }
   }
 
   async function reload(): Promise<void> {
@@ -315,16 +338,51 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
     }
   }
 
-  // All four resolve together (one Promise.all), so a single null means loading.
-  const agendaLoading = events === null || subjects === null || exams === null || blocks === null;
-  const agendaEntries = agendaLoading
+  /** A month-grid drag finished on `dayKey`: shift an event's date part (time preserved), or retarget a task's due date. */
+  async function moveItem(item: CalendarItem, dayKey: string): Promise<void> {
+    if (item.kind === "event") {
+      const delta = daysBetween(item.startKey, dayKey);
+      if (delta === 0) return;
+      const event = item.event;
+      const newStartDate = shiftDayKey(event.startAt.slice(0, 10), delta);
+      const changes: EventFieldChanges = {
+        startAt: event.allDay ? newStartDate : `${newStartDate}T${event.startAt.slice(11, 16)}`,
+      };
+      if (event.endAt) {
+        const newEndDate = shiftDayKey(event.endAt.slice(0, 10), delta);
+        changes.endAt = event.allDay ? newEndDate : `${newEndDate}T${event.endAt.slice(11, 16)}`;
+      }
+      try {
+        const updated = await window.nexus.updateEvent(profileId, event.id, changes);
+        setEvents((prev) => prev && prev.map((e) => (e.id === updated.id ? updated : e)));
+      } catch (error) {
+        console.error("Nexus: failed to move event:", error);
+      }
+      return;
+    }
+    if (item.kind === "task") {
+      if (item.startKey === dayKey) return;
+      try {
+        const updated = await window.nexus.updateTask(profileId, item.task.id, { dueDate: dayKey });
+        setTasks((prev) => prev && prev.map((t) => (t.id === updated.id ? updated : t)));
+      } catch (error) {
+        console.error("Nexus: failed to move task:", error);
+      }
+    }
+  }
+
+  // All five resolve together (one Promise.all), so a single null means loading.
+  const dataLoading =
+    events === null || tasks === null || subjects === null || exams === null || blocks === null;
+  const calendarItems = dataLoading
     ? []
-    : buildAgendaEntries(events, exams, blocks, subjects);
+    : buildCalendarItems({ events, tasks, exams, blocks, subjects }, sources);
+  const todayKey = localTodayKey();
 
   return (
     <div className="cal">
       <div className="cal__views" role="group" aria-label={strings.calendar.viewLabel}>
-        {(["agenda", "dokumenta"] as const).map((option) => (
+        {(["mesec", "agenda", "dokumenta"] as const).map((option) => (
           <Button
             key={option}
             size="sm"
@@ -332,10 +390,30 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
             aria-pressed={view === option}
             onClick={() => selectView(option)}
           >
-            {option === "agenda" ? strings.calendar.viewAgenda : strings.calendar.viewDokumenta}
+            {option === "mesec"
+              ? strings.calendar.viewMesec
+              : option === "agenda"
+                ? strings.calendar.viewAgenda
+                : strings.calendar.viewDokumenta}
           </Button>
         ))}
       </div>
+
+      {view !== "dokumenta" && (
+        <div className="cal__sources" role="group" aria-label={strings.calendar.sourcesLabel}>
+          {CALENDAR_SOURCES.map((source) => (
+            <Button
+              key={source}
+              size="sm"
+              className={sources.has(source) ? "cal__source cal__source--active" : "cal__source"}
+              aria-pressed={sources.has(source)}
+              onClick={() => toggleSource(source)}
+            >
+              {SOURCE_LABEL[source]}
+            </Button>
+          ))}
+        </div>
+      )}
 
       {view === "dokumenta" ? (
         <DocumentsPanel profileId={profileId} />
@@ -408,31 +486,64 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
               title={strings.calendar.emptyTitle}
               description={strings.calendar.loadError}
             />
-          ) : agendaLoading ? (
+          ) : dataLoading ? (
             <p className="app__muted">{strings.app.loading}</p>
-          ) : agendaEntries.length === 0 ? (
+          ) : view === "mesec" ? (
+            <div className="cal__month" onKeyDown={handleMonthKeyDown}>
+              <div className="cal__month-nav">
+                <span className="cal__month-label">{formatMonthLabel(monthKey)}</span>
+                <span className="cal__month-nav-actions">
+                  <Button
+                    size="sm"
+                    aria-label={strings.calendar.prevMonth}
+                    onClick={() => shiftMonth(-1)}
+                  >
+                    ‹
+                  </Button>
+                  <Button size="sm" onClick={goToday}>
+                    {strings.calendar.today}
+                  </Button>
+                  <Button
+                    size="sm"
+                    aria-label={strings.calendar.nextMonth}
+                    onClick={() => shiftMonth(1)}
+                  >
+                    ›
+                  </Button>
+                </span>
+              </div>
+              <CalendarMonth
+                monthKey={monthKey}
+                todayKey={todayKey}
+                items={calendarItems}
+                onSelectDay={selectDay}
+                onEditEvent={startEdit}
+                onMoveItem={(item, dayKey) => void moveItem(item, dayKey)}
+              />
+            </div>
+          ) : calendarItems.length === 0 ? (
             <EmptyState
               title={strings.calendar.emptyTitle}
               description={strings.calendar.emptyDescription}
             />
           ) : (
             <div className="cal__agenda">
-              {groupAgenda(agendaEntries).map(([key, dayEntries]) => (
+              {groupAgenda(calendarItems).map(([key, dayItems]) => (
                 <section key={key} className="cal__day">
                   <h2 className="cal__day-header">{formatDay(key)}</h2>
-                  {dayEntries.map((entry) => {
-                    if (entry.kind === "event") {
+                  {dayItems.map((item) => {
+                    if (item.kind === "event") {
                       return (
                         <ListRow
-                          key={`event-${entry.event.id}`}
-                          leading={<span className="cal__time">{formatTime(entry.event)}</span>}
+                          key={item.id}
+                          leading={<span className="cal__time">{formatTime(item.event)}</span>}
                           trailing={
                             <span className="cal__row-actions">
                               <Button
                                 size="sm"
                                 className="cal__edit"
                                 aria-label={strings.calendar.editLabel}
-                                onClick={() => startEdit(entry.event)}
+                                onClick={() => startEdit(item.event)}
                               >
                                 ✎
                               </Button>
@@ -440,7 +551,7 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
                                 size="sm"
                                 className="cal__delete"
                                 aria-label={strings.calendar.deleteLabel}
-                                onClick={() => void remove(entry.event)}
+                                onClick={() => void remove(item.event)}
                               >
                                 ×
                               </Button>
@@ -448,24 +559,38 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
                           }
                         >
                           <span className="cal__event">
-                            <span className="cal__event-title">{entry.event.title}</span>
-                            {entry.event.location ? (
-                              <Chip variant="data">{entry.event.location}</Chip>
+                            <span className="cal__event-title">{item.event.title}</span>
+                            {item.event.location ? (
+                              <Chip variant="data">{item.event.location}</Chip>
                             ) : null}
                           </span>
                         </ListRow>
                       );
                     }
-                    if (entry.kind === "exam") {
-                      const days = daysUntilExam(entry.exam.examDate);
+                    if (item.kind === "task") {
                       return (
                         <ListRow
-                          key={`exam-${entry.exam.id}`}
+                          key={item.id}
+                          muted={item.task.done}
+                          leading={<span className="cal__time" />}
+                        >
+                          <span className="cal__event">
+                            <Chip className="cal__task-tag">{strings.calendar.taskTag}</Chip>
+                            <span className="cal__event-title">{item.task.title}</span>
+                          </span>
+                        </ListRow>
+                      );
+                    }
+                    if (item.kind === "exam") {
+                      const days = daysUntilExam(item.exam.examDate);
+                      return (
+                        <ListRow
+                          key={item.id}
                           muted={days < 0}
                           leading={
                             <span className="cal__time cal__exam-time">
                               <span
-                                className={`study__dot study__dot--${entry.subject.color}`}
+                                className={`study__dot study__dot--${item.subject.color}`}
                                 aria-hidden="true"
                               />
                             </span>
@@ -479,23 +604,23 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
                           <span className="cal__event">
                             <Chip className="cal__exam-tag">{strings.study.calendarTag}</Chip>
                             <span className="cal__event-title">
-                              {entry.subject.name} — {strings.study.examType[entry.exam.examType]}
+                              {item.subject.name} — {strings.study.examType[item.exam.examType]}
                             </span>
-                            {entry.exam.scope ? <Chip variant="data">{entry.exam.scope}</Chip> : null}
+                            {item.exam.scope ? <Chip variant="data">{item.exam.scope}</Chip> : null}
                           </span>
                         </ListRow>
                       );
                     }
                     // Study-block row (STUDY-003): read-only — check-off lives on StudyPage.
-                    const status = entry.block.status;
+                    const status = item.block.status;
                     return (
                       <ListRow
-                        key={`block-${entry.block.id}`}
+                        key={item.id}
                         muted={status === "missed"}
                         leading={
                           <span className="cal__time cal__exam-time">
                             <span
-                              className={`study__dot study__dot--${entry.subject.color}`}
+                              className={`study__dot study__dot--${item.subject.color}`}
                               aria-hidden="true"
                             />
                           </span>
@@ -511,10 +636,10 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
                         <span className="cal__event">
                           <Chip className="cal__block-tag">{strings.study.planCalendarTag}</Chip>
                           <span className="cal__event-title">
-                            {entry.subject.name} — {strings.study.examType[entry.exam.examType]}
+                            {item.subject.name} — {strings.study.examType[item.exam.examType]}
                           </span>
                           <Chip>
-                            {entry.block.minutes} {strings.study.minutesUnit}
+                            {item.block.minutes} {strings.study.minutesUnit}
                           </Chip>
                         </span>
                       </ListRow>

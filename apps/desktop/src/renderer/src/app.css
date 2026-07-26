@@ -493,6 +493,323 @@ body {
   font-weight: var(--nx-font-weight-semibold);
 }
 
+/* Task rows (dated tasks merged into the agenda, ADR-020): same quiet tag
+   idiom as the exam/block rows above; muted when done. */
+.cal__task-tag {
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+/* Source-filter toggle chips (Događaji/Zadaci/Ispiti/Učenje, ADR-020) — same
+   typographic active state as .cal__view; applies to the month grid and the
+   agenda alike, so it lives beside the view toggle rather than either view. */
+.cal__sources {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
+}
+.cal__source.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.cal__source.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
+}
+.cal__source--active.nx-button {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+/* Month grid (CAL Mesec view, ADR-020) --------------------------------- */
+.cal__month {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+/* Nav header: the period label (left) + ‹ / Danas / › (right, quiet ghosts). */
+.cal__month-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+  flex-wrap: wrap;
+}
+.cal__month-label {
+  font-size: var(--nx-font-size-title);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.cal__month-nav-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+
+/* Grid shell — two local geometry constants drive every bar/spacer calc
+   below: the fixed-height date-number line, and one bar "lane" row. Neither
+   is a token (they are compact, component-local layout constants, same as
+   e.g. .app__topbar's 44px), and neither needs any DOM measurement. */
+.cal__month-grid {
+  --cal-daynum-h: 20px;
+  --cal-bar-h: 20px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  overflow: hidden;
+  background: var(--nx-surface);
+}
+.cal__month-grid:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+
+.cal__month-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border-bottom: 1px solid var(--nx-border);
+}
+.cal__month-weekday {
+  padding: var(--nx-space-1) var(--nx-space-2);
+  text-align: center;
+  font-size: var(--nx-font-size-label);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+/* One week row: the 7-column cell grid (normal flow) plus one absolutely-
+   positioned bar overlay sharing its coordinate space — see .cal__month-bars. */
+.cal__month-week {
+  position: relative;
+  border-top: 1px solid var(--nx-border);
+}
+.cal__month-week:first-child {
+  border-top: none;
+}
+.cal__month-cells {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.cal__month-day {
+  position: relative;
+  min-height: 92px;
+  padding: var(--nx-space-1);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-left: 1px solid var(--nx-border);
+  cursor: pointer;
+  transition:
+    background var(--nx-motion-fast) var(--nx-motion-ease),
+    border-color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.cal__month-cells > .cal__month-day:first-child {
+  border-left: none;
+}
+.cal__month-day:hover {
+  background: var(--nx-surface-alt);
+}
+.cal__month-day--out {
+  color: var(--nx-text-muted);
+}
+.cal__month-day--out .cal__month-day-number {
+  color: var(--nx-text-muted);
+}
+/* Drop target = accent border + soft background, matching KanbanView's
+   .nx-kanban-view__col--drop exactly — never a glow. An inset outline rather
+   than `border-color`, because a cell only draws its left border: recolouring
+   that alone would mark the day with a single stripe instead of a target. */
+.cal__month-day--drop {
+  outline: 1px solid var(--nx-accent);
+  outline-offset: -1px;
+  background: var(--nx-accent-soft);
+}
+
+/* While a drag is in flight the bars and chips stop intercepting pointer
+   events, so a drop aimed at a day that already holds something lands on the
+   day cell instead of dying on the item drawn over it. */
+.cal__month-grid--dragging .cal__month-bar,
+.cal__month-grid--dragging .cal__month-chip {
+  pointer-events: none;
+}
+
+/* The way back out of an expanded week row (see CalendarMonth). */
+button.cal__month-collapse {
+  display: block;
+  width: 100%;
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+  text-align: center;
+  padding: var(--nx-space-1);
+  border: none;
+  border-top: 1px solid var(--nx-border);
+  background: var(--nx-surface-alt);
+  color: var(--nx-text-muted);
+  cursor: pointer;
+}
+.cal__month-collapse:hover {
+  color: var(--nx-text);
+}
+
+.cal__month-day-number {
+  display: block;
+  height: var(--cal-daynum-h);
+  line-height: var(--cal-daynum-h);
+  font-size: var(--nx-font-size-body-sm);
+  font-variant-numeric: tabular-nums;
+}
+.cal__month-day-number--today {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* Today can land in a leading/trailing (out-of-month) week — the accent
+   marker still wins over the muted treatment, matching specificity. */
+.cal__month-day--out .cal__month-day-number--today {
+  color: var(--nx-accent-strong);
+}
+
+/* Reserves the vertical space the bar overlay's lanes occupy for this row —
+   height is set inline per-cell (`laneCount * var(--cal-bar-h)`), since the
+   engine's lane count is per-week data, not a static value. */
+.cal__month-spacer {
+  flex: none;
+}
+
+.cal__month-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+button.cal__month-chip {
+  display: block;
+  width: 100%;
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+  text-align: left;
+  padding: 1px 4px;
+  border: none;
+  border-radius: var(--nx-radius-xs);
+  background: var(--nx-accent-soft);
+  color: var(--nx-accent-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.cal__month-chip:hover {
+  text-decoration: underline;
+}
+.cal__month-chip:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 1px;
+}
+
+button.cal__month-more {
+  display: block;
+  width: 100%;
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+  text-align: left;
+  padding: 1px 4px;
+  border: none;
+  background: transparent;
+  color: var(--nx-text-muted);
+  cursor: pointer;
+}
+.cal__month-more:hover {
+  color: var(--nx-text);
+  text-decoration: underline;
+}
+
+/* Bar overlay: one element per row, offset below the date-number line; each
+   bar then positions itself with `top: calc(lane * var(--cal-bar-h))`
+   relative to that already-offset origin. Non-interactive bars (exam/block)
+   stay click-through so the cell underneath still selects that day. */
+.cal__month-bars {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: var(--cal-daynum-h);
+  pointer-events: none;
+}
+.cal__month-bar {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  height: calc(var(--cal-bar-h) - 3px);
+  margin-top: 1px;
+  padding: 0 6px;
+  border-radius: var(--nx-radius-xs);
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+}
+.cal__month-bar-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+/* A multi-day bar flattens the edge that continues into the next/previous
+   row, so it reads as one uninterrupted span across week boundaries. */
+.cal__month-bar--continues-before {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.cal__month-bar--continues-after {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+/* Done task / missed block — quiet, never a colour change (mirrors
+   .study__stats-bar-fill--muted's exact opacity). */
+.cal__month-bar--muted {
+  opacity: 0.5;
+}
+
+button.cal__month-bar--event {
+  border: none;
+  text-align: left;
+  pointer-events: auto;
+  cursor: pointer;
+  background: var(--nx-accent-soft);
+  color: var(--nx-accent-strong);
+}
+.cal__month-bar--event:hover {
+  text-decoration: underline;
+}
+.cal__month-bar--event:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 1px;
+}
+/* Draggable but not clickable — pointer-events stays on so native HTML5 drag
+   can start, the grab cursor (not pointer) signals "drag", not "click". */
+.cal__month-bar--task {
+  pointer-events: auto;
+  cursor: grab;
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  color: var(--nx-text);
+}
+.cal__month-bar--task:active {
+  cursor: grabbing;
+}
+/* Fully inert: neither clickable nor draggable, so clicks pass through to
+   the day cell beneath (day-select still works under an exam/block bar). */
+.cal__month-bar--exam,
+.cal__month-bar--block {
+  pointer-events: none;
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  color: var(--nx-text);
+}
+
 /* Documents (CAL Dokumenta panel) ------------------------------------- */
 .documents {
   display: flex;
