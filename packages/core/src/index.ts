@@ -96,3 +96,27 @@ export type {
   ExportSubject,
   ExportTask,
 } from "./imex/exportArchive.js";
+
+export {
+  MAX_SPAN_DAYS,
+  MIN_TIMED_MINUTES,
+  MINUTES_PER_DAY,
+  daySpanKeys,
+  layoutMonthBars,
+  layoutTimedColumns,
+  monthGridDays,
+  monthKeyOf,
+  shiftDayKey,
+  shiftMonthKey,
+  weekDayKeys,
+} from "./calendar/calendarGrid.js";
+export type {
+  DayKey,
+  MonthBar,
+  MonthGridDay,
+  MonthKey,
+  SpanItem,
+  TimedColumn,
+  TimedItem,
+  WeekStart,
+} from "./calendar/calendarGrid.js";
