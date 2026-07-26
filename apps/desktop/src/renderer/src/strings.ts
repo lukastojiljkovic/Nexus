@@ -27,6 +27,78 @@ export const strings = {
     saveError: "Čuvanje nije uspelo. Pokušaj ponovo.",
   },
 
+  /** Local account lock screen (ADR-018 / AUTH-002..005): create → Kit za oporavak → unlock → recovery, plus the shared error map and the sidebar lock action. */
+  auth: {
+    validation: {
+      tooWeak: "Pristupni kod mora imati bar 8 karaktera, uz najmanje jedno slovo i jednu cifru.",
+      mismatch: "Kodovi se ne poklapaju.",
+    },
+    create: {
+      title: "Zaštiti svoj Nexus",
+      intro: "Postavi pristupni kod koji će štititi sve tvoje podatke na ovom računaru.",
+      passcodeLabel: "Pristupni kod",
+      passcodePlaceholder: "Najmanje 8 karaktera, slovo i cifra",
+      confirmLabel: "Potvrdi pristupni kod",
+      confirmPlaceholder: "Ponovi pristupni kod",
+      note: "Svi podaci se šifruju ovim kodom. Ako ga zaboraviš, jedini put nazad je Kit za oporavak koji dobijaš u sledećem koraku — bez koda i bez Kita podaci ostaju trajno nedostupni.",
+      submit: "Napravi nalog",
+    },
+    keystoreUnavailable: {
+      title: "Sistemski trezor nije dostupan",
+      description:
+        "Nexus čuva deo ključa za šifrovanje u sistemskom trezoru Windows-a, a on trenutno nije dostupan na ovom Windows nalogu — bez njega se lokalni nalog ne može napraviti. Proveri da li je ovaj Windows nalog ispravno postavljen i pokušaj ponovo.",
+    },
+    recoveryKit: {
+      title: "Kit za oporavak",
+      description:
+        "Ovaj kod se prikazuje samo jednom. Zapiši ga i sačuvaj odvojeno od računara — ako ikada zaboraviš pristupni kod, ovo je jedini način da ponovo uđeš u svoje podatke.",
+      copy: "Kopiraj",
+      copied: "Kopirano",
+      // Gender-neutral by construction: Serbian past participles agree with the
+      // speaker, and "Zapisao sam" would address only half the users.
+      confirmCheckbox: "Kod je zapisan i sačuvan",
+      continue: "Nastavi",
+    },
+    unlock: {
+      title: "Nexus je zaključan",
+      description: "Unesi pristupni kod da nastaviš.",
+      passcodeLabel: "Pristupni kod",
+      passcodePlaceholder: "Upiši pristupni kod",
+      submit: "Otključaj",
+      forgot: "Zaboravljen pristupni kod?",
+      retryPrefix: "Previše pokušaja — probaj ponovo za",
+    },
+    recovery: {
+      title: "Oporavak pristupa",
+      descriptionForgot:
+        "Unesi kod iz svog Kita za oporavak i postavi novi pristupni kod za ovaj uređaj.",
+      descriptionOtherDevice:
+        "Ovi podaci dolaze sa drugog računara ili Windows naloga, pa pristupni kod odavde ne važi. Otključaj ih Kitom za oporavak izdatim pri pravljenju naloga i postavi novi pristupni kod za ovaj uređaj.",
+      codeLabel: "Kod za oporavak",
+      codePlaceholder: "Upiši kod za oporavak",
+      newPasscodeLabel: "Novi pristupni kod",
+      newPasscodePlaceholder: "Najmanje 8 karaktera, slovo i cifra",
+      confirmLabel: "Potvrdi novi pristupni kod",
+      confirmPlaceholder: "Ponovi novi pristupni kod",
+      submit: "Otključaj",
+      back: "Nazad na otključavanje",
+    },
+    /** AuthErrorReason → Serbian, one sentence each; `generic` is the exhaustive-switch fallback. */
+    error: {
+      notInitialized: "Nalog na ovom uređaju još ne postoji.",
+      alreadyInitialized: "Nalog na ovom uređaju već postoji.",
+      wrongPasscode: "Pogrešan pristupni kod.",
+      wrongRecoveryCode: "Kod za oporavak nije ispravan.",
+      throttled: "Previše pokušaja — sačekaj da prođe vreme ispod.",
+      weakPasscode: "Pristupni kod mora imati bar 8 karaktera, uz najmanje jedno slovo i jednu cifru.",
+      keystoreUnavailable: "Sistemski trezor za ključeve nije dostupan na ovom Windows nalogu.",
+      otherDevice: "Ovi podaci dolaze sa drugog računara ili Windows naloga — otključaj Kitom za oporavak.",
+      corruptKeychain: "Fajl sa ključevima je oštećen i ne može se pročitati.",
+      generic: "Radnja nije uspela. Pokušaj ponovo.",
+    },
+    lockAction: "Zaključaj",
+  },
+
   /** Display names for registered modules, keyed by module id. */
   modules: {
     dashboard: "Kontrolna tabla",
@@ -549,6 +621,7 @@ export const strings = {
     /** Section-card titles, in the order they appear on the page. */
     sectionTitle: {
       profile: "Profil",
+      security: "Sigurnost",
       appearance: "Izgled",
       modules: "Moduli",
       notifications: "Obaveštenja",
@@ -559,6 +632,29 @@ export const strings = {
       nameLabel: "Ime",
       save: "Sačuvaj",
       saveError: "Čuvanje nije uspelo — ime mora imati 1–80 karaktera.",
+    },
+    /** Sigurnost section (ADR-018 / AUTH): change passcode, regenerate the Recovery Kit, idle auto-lock. */
+    security: {
+      changeTitle: "Promeni pristupni kod",
+      currentLabel: "Trenutni kod",
+      newLabel: "Novi kod",
+      confirmLabel: "Potvrdi novi kod",
+      save: "Sačuvaj",
+      changeSuccess: "Pristupni kod je promenjen.",
+      recoveryTitle: "Novi kod za oporavak",
+      recoveryWarning:
+        "Pravljenje novog koda odmah poništava stari — ako je stari negde zapisan, prepiši preko njega novi.",
+      regenerate: "Napravi novi kod za oporavak",
+      autoLockTitle: "Automatsko zaključavanje",
+      autoLockHint: "Nexus se sam zaključava posle ovoliko neaktivnosti.",
+      /** AUTO_LOCK_MINUTES values as select option labels, keyed by the numeric value as a string. */
+      autoLockOptions: {
+        "5": "Posle 5 minuta",
+        "15": "Posle 15 minuta",
+        "30": "Posle 30 minuta",
+        "60": "Posle 1 sata",
+        "0": "Nikad",
+      } as Record<string, string>,
     },
     /** Theme-preference option labels; Dan/Noć reuse `strings.app.themeDan/themeNoc`. */
     appearance: {
@@ -607,7 +703,7 @@ export const strings = {
       description:
         "Izvezi sve svoje podatke u jednu .nexus.zip arhivu — otvoreni formati (JSON i CSV), čitljivi i upotrebljivi bez Nexusa.",
       plaintextNotice:
-        "Arhiva nije šifrovana, isto kao baza podataka — šifrovanje stiže uz naloge (AUTH).",
+        "Baza podataka je šifrovana tvojim pristupnim kodom, ali ova arhiva nije — čuvaj je na sigurnom mestu.",
       exportButton: "Izvezi sve podatke…",
       savedPrefix: "Sačuvano:",
       /** "N zapis"/"N zapisa" — Serbian numeral agreement via `dayUnit`. */

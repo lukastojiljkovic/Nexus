@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { Button, Card, Checkbox, Chip, TextField } from "@nexus/ui";
 import type { ModuleRegistry } from "@nexus/core";
 import { ACCENT_IDS, type AccentId } from "@nexus/tokens";
 import type { AppInfo, FlagState, NotificationSource } from "../../shared/ipc.js";
+import { authErrorMessage, passcodeMeetsPolicy, RecoveryKitPanel } from "./AuthGate.js";
 import { ALL_NOTIFICATION_SOURCES } from "./notificationFormat.js";
 import { NotificationSettingsControls } from "./NotificationSettingsControls.js";
 import type { ThemePreference } from "./theme.js";
+import { AUTO_LOCK_MINUTES, type AutoLockMinutes } from "./autoLock.js";
 import { persistAccent, readStoredAccent } from "./accent.js";
 import { dayUnit, strings } from "./strings.js";
 
@@ -139,6 +142,158 @@ function BackupSection({ profileId }: BackupSectionProps) {
   );
 }
 
+/** A settings-form result line: green-ish caption on success, `.set__error` on failure — same idiom as `ProfileSection`/`BackupSection`, just shared across the two Sigurnost sub-forms. */
+interface SecurityMessage {
+  text: string;
+  failed: boolean;
+}
+
+interface SecuritySectionProps {
+  autoLockMinutes: AutoLockMinutes;
+  onAutoLockChange: (value: AutoLockMinutes) => void;
+}
+
+/**
+ * Sigurnost section (ADR-018 / AUTH): change the passcode, regenerate the
+ * Recovery Kit (reusing `AuthGate`'s own panel — never a second one), and the
+ * idle auto-lock preference. Auth is whole-account, not per-profile, so unlike
+ * every other section here this one takes no `profileId`.
+ */
+function SecuritySection({ autoLockMinutes, onAutoLockChange }: SecuritySectionProps) {
+  const [currentPasscode, setCurrentPasscode] = useState("");
+  const [nextPasscode, setNextPasscode] = useState("");
+  const [confirmPasscode, setConfirmPasscode] = useState("");
+  const [changing, setChanging] = useState(false);
+  const [changeMessage, setChangeMessage] = useState<SecurityMessage | null>(null);
+
+  async function submitChange(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (changing) return;
+    setChangeMessage(null);
+    if (!passcodeMeetsPolicy(nextPasscode)) {
+      setChangeMessage({ text: strings.auth.validation.tooWeak, failed: true });
+      return;
+    }
+    if (nextPasscode !== confirmPasscode) {
+      setChangeMessage({ text: strings.auth.validation.mismatch, failed: true });
+      return;
+    }
+    setChanging(true);
+    try {
+      const result = await window.nexus.changePasscode(currentPasscode, nextPasscode);
+      if (result.ok) {
+        setChangeMessage({ text: strings.settings.security.changeSuccess, failed: false });
+        setCurrentPasscode("");
+        setNextPasscode("");
+        setConfirmPasscode("");
+      } else {
+        setChangeMessage({ text: authErrorMessage(result.reason), failed: true });
+      }
+    } catch (error) {
+      setChangeMessage({ text: strings.auth.error.generic, failed: true });
+      console.error("Nexus: failed to change the passcode:", error);
+    } finally {
+      setChanging(false);
+    }
+  }
+
+  const [regenerating, setRegenerating] = useState(false);
+  const [newRecoveryCode, setNewRecoveryCode] = useState<string | null>(null);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+
+  async function regenerate(): Promise<void> {
+    if (regenerating) return;
+    setRegenerating(true);
+    setRecoveryError(null);
+    try {
+      const result = await window.nexus.regenerateRecoveryCode();
+      if (result.ok && result.recoveryCode) {
+        setNewRecoveryCode(result.recoveryCode);
+      } else {
+        setRecoveryError(result.ok ? strings.auth.error.generic : authErrorMessage(result.reason));
+      }
+    } catch (error) {
+      setRecoveryError(strings.auth.error.generic);
+      console.error("Nexus: failed to regenerate the recovery code:", error);
+    } finally {
+      setRegenerating(false);
+    }
+  }
+
+  const s = strings.settings.security;
+
+  return (
+    <>
+      <div className="set__security-block">
+        <h3 className="set__module-group-title">{s.changeTitle}</h3>
+        <form className="set__security-form" onSubmit={(event) => void submitChange(event)}>
+          <TextField
+            type="password"
+            label={s.currentLabel}
+            value={currentPasscode}
+            required
+            onChange={(event) => setCurrentPasscode(event.target.value)}
+          />
+          <TextField
+            type="password"
+            label={s.newLabel}
+            value={nextPasscode}
+            required
+            onChange={(event) => setNextPasscode(event.target.value)}
+          />
+          <TextField
+            type="password"
+            label={s.confirmLabel}
+            value={confirmPasscode}
+            required
+            onChange={(event) => setConfirmPasscode(event.target.value)}
+          />
+          <Button type="submit" size="sm" variant="primary" disabled={changing}>
+            {s.save}
+          </Button>
+        </form>
+        {changeMessage != null && (
+          <p className={changeMessage.failed ? "set__error" : "set__section-caption"}>
+            {changeMessage.text}
+          </p>
+        )}
+      </div>
+
+      <div className="set__security-block">
+        <h3 className="set__module-group-title">{s.recoveryTitle}</h3>
+        {newRecoveryCode != null ? (
+          <RecoveryKitPanel code={newRecoveryCode} onContinue={() => setNewRecoveryCode(null)} />
+        ) : (
+          <>
+            <p className="set__section-caption">{s.recoveryWarning}</p>
+            <Button size="sm" variant="primary" disabled={regenerating} onClick={() => void regenerate()}>
+              {s.regenerate}
+            </Button>
+            {recoveryError != null && <p className="set__error">{recoveryError}</p>}
+          </>
+        )}
+      </div>
+
+      <div className="set__security-block">
+        <h3 className="set__module-group-title">{s.autoLockTitle}</h3>
+        <p className="set__section-caption">{s.autoLockHint}</p>
+        <select
+          className="set__select"
+          value={autoLockMinutes}
+          aria-label={s.autoLockTitle}
+          onChange={(event) => onAutoLockChange(Number(event.target.value) as AutoLockMinutes)}
+        >
+          {AUTO_LOCK_MINUTES.map((minutes) => (
+            <option key={minutes} value={minutes}>
+              {s.autoLockOptions[String(minutes)] ?? String(minutes)}
+            </option>
+          ))}
+        </select>
+      </div>
+    </>
+  );
+}
+
 export interface SettingsPageProps {
   profileId: string;
   profileName: string;
@@ -149,6 +304,8 @@ export interface SettingsPageProps {
   preference: ThemePreference;
   onPreferenceChange: (preference: ThemePreference) => void;
   registry: ModuleRegistry;
+  autoLockMinutes: AutoLockMinutes;
+  onAutoLockChange: (value: AutoLockMinutes) => void;
 }
 
 /**
@@ -169,6 +326,8 @@ export function SettingsPage({
   preference,
   onPreferenceChange,
   registry,
+  autoLockMinutes,
+  onAutoLockChange,
 }: SettingsPageProps) {
   const [accent, setAccent] = useState<AccentId>(() => readStoredAccent());
   const [modulesError, setModulesError] = useState<string | null>(null);
@@ -235,6 +394,10 @@ export function SettingsPage({
           initialName={profileName}
           onProfileRenamed={onProfileRenamed}
         />
+      </Card>
+
+      <Card title={strings.settings.sectionTitle.security} className="set__section">
+        <SecuritySection autoLockMinutes={autoLockMinutes} onAutoLockChange={onAutoLockChange} />
       </Card>
 
       <Card title={strings.settings.sectionTitle.appearance} className="set__section">

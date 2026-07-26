@@ -175,6 +175,77 @@ body {
   font-size: var(--nx-font-size-body-sm);
 }
 
+/* Local account lock screen (AUTH, ADR-018) ---------------------------- */
+/* Mirrors .onb's shell exactly (centered grid, 400px card) so the first
+   screen a user ever sees matches the second (Onboarding). */
+.auth {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: var(--nx-space-6);
+}
+.auth__card {
+  width: 100%;
+  max-width: 400px;
+}
+/* Outer wrapper for all four screens (brand glyph + whichever screen is
+   active); .auth__form is the same recipe, used by the three actual <form>
+   elements — screens b/keystore-unavailable render plain content instead. */
+.auth__shell,
+.auth__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+.auth__brand {
+  color: var(--nx-accent);
+  font-size: var(--nx-font-size-display);
+  line-height: 1;
+}
+.auth__title {
+  margin: 0;
+  font-size: var(--nx-font-size-display);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-normal);
+}
+/* Quiet informational line — the create-screen encryption notice, the
+   unlock-screen throttle countdown, the recovery-screen explanation. */
+.auth__note {
+  margin: 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: 1.5;
+}
+/* Same recipe as .note__save-error, scoped to the auth channel. */
+.auth__error {
+  margin: 0;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+  border-radius: var(--nx-radius-md);
+  font-size: var(--nx-font-size-body-sm);
+}
+.auth__recovery-kit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+/* Selectable monospace block for the one-time Recovery Kit code. */
+.auth__code {
+  margin: 0;
+  padding: var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  -webkit-user-select: all;
+  user-select: all;
+}
+
 /* Tasks (TASK page) --------------------------------------------------- */
 .tasks {
   display: flex;
@@ -1970,6 +2041,40 @@ body {
   margin: 0;
   color: var(--nx-danger);
   font-size: var(--nx-font-size-body-sm);
+}
+/* Sigurnost: change-passcode form, Recovery Kit regenerate, auto-lock select. */
+.set__security-block + .set__security-block {
+  margin-top: var(--nx-space-4);
+}
+.set__security-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.set__security-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  max-width: 320px;
+}
+.set__security-form .nx-button {
+  align-self: flex-start;
+}
+/* Native select matched to the textfield input (tokens only, no custom arrow; mirrors .study__select). */
+.set__select {
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  padding: 7px 13px;
+  align-self: flex-start;
+  transition: border-color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.set__select:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
 }
 
 /* Notes (NOTE page, slice a2) ------------------------------------------ */

@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { resolveEnabled } from "@nexus/core";
 import { Button, EmptyState, NavItem } from "@nexus/ui";
 import type { ThemeName } from "@nexus/tokens";
-import type { AppInfo, FlagState, Profile } from "../../shared/ipc.js";
+import type { AppInfo, AuthStatus, FlagState, Profile } from "../../shared/ipc.js";
+import { AuthGate } from "./AuthGate.js";
 import { Onboarding } from "./Onboarding.js";
 import { DashboardPage } from "./DashboardPage.js";
 import { TasksPage } from "./TasksPage.js";
@@ -12,6 +13,7 @@ import { StudyPage } from "./StudyPage.js";
 import { SettingsPage } from "./SettingsPage.js";
 import { NotificationCenter } from "./NotificationCenter.js";
 import { createModuleRegistry } from "./modules.js";
+import { persistAutoLock, readStoredAutoLock, type AutoLockMinutes } from "./autoLock.js";
 import {
   persistThemePreference,
   readStoredThemePreference,
@@ -20,6 +22,12 @@ import {
   type ThemePreference,
 } from "./theme.js";
 import { strings } from "./strings.js";
+
+/** Idle events that count as activity for the auto-lock timer (AUTH-005). */
+const IDLE_ACTIVITY_EVENTS = ["mousemove", "keydown", "mousedown", "wheel"] as const;
+// A mousemove storm must not rebuild the lock timer on every pixel — activity
+// resets it at most once per this window.
+const IDLE_RESET_THROTTLE_MS = 1000;
 
 // The registry is static, compiled-in data (ADR-008) — built once per renderer.
 const registry = createModuleRegistry();
@@ -46,25 +54,44 @@ export function App() {
   // onTargetOpened, which clears it here so a later return to Beleške never
   // re-selects the same note.
   const [noteTarget, setNoteTarget] = useState<string | null>(null);
+  // The local account's lock state (ADR-018). `null` only until the very
+  // first `getAuthStatus` round trip resolves.
+  const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
+  const [autoLockMinutes, setAutoLockMinutes] = useState<AutoLockMinutes>(readStoredAutoLock);
 
+  /** Loads everything that requires an open database. Only ever called once `auth:status` (or an unlock/create/recover result) has confirmed `state === "unlocked"`. */
+  async function loadUnlockedData(): Promise<void> {
+    const [nextInfo, nextProfiles] = await Promise.all([
+      window.nexus.appInfo(),
+      window.nexus.listProfiles(),
+    ]);
+    const firstProfile = nextProfiles[0];
+    const nextFlags = firstProfile ? await window.nexus.getFlags(firstProfile.id) : {};
+    setInfo(nextInfo);
+    setProfiles(nextProfiles);
+    setFlags(nextFlags);
+    // Signal the --smoke harness that the full renderer -> main -> DB path worked.
+    window.__nexusReady = true;
+    window.dispatchEvent(new Event("nexus-ready"));
+  }
+
+  // ADR-018: `auth:status` is the FIRST thing the renderer asks about — before
+  // profiles, before flags. Only when it reports "unlocked" (the smoke run's
+  // own path, which unlocks before the window loads) does this go on to load
+  // app data; a locked/uninitialized status renders `AuthGate` instead
+  // (below), and `__nexusReady` is deliberately never set from that branch.
   useEffect(() => {
     let active = true;
     void (async () => {
       try {
-        const [nextInfo, nextProfiles] = await Promise.all([
-          window.nexus.appInfo(),
-          window.nexus.listProfiles(),
-        ]);
-        const firstProfile = nextProfiles[0];
-        const nextFlags = firstProfile ? await window.nexus.getFlags(firstProfile.id) : {};
+        const status = await window.nexus.getAuthStatus();
         if (!active) return;
-        setInfo(nextInfo);
-        setProfiles(nextProfiles);
-        setFlags(nextFlags);
-        // Signal the --smoke harness that the full renderer -> main -> DB path worked.
-        window.__nexusReady = true;
-        window.dispatchEvent(new Event("nexus-ready"));
+        setAuthStatus(status);
+        if (status.state === "unlocked") {
+          await loadUnlockedData();
+        }
       } catch (error) {
+        if (!active) return;
         window.__nexusError = true;
         window.dispatchEvent(new Event("nexus-error"));
         setFailed(true);
@@ -75,6 +102,80 @@ export function App() {
       active = false;
     };
   }, []);
+
+  /** `AuthGate`'s `onUnlocked`: re-reads status and, once it is genuinely "unlocked", loads app data — the same path the bootstrap effect takes when the smoke run is already unlocked at load. */
+  async function handleUnlocked(): Promise<void> {
+    try {
+      const status = await window.nexus.getAuthStatus();
+      setAuthStatus(status);
+      if (status.state === "unlocked") {
+        await loadUnlockedData();
+      }
+    } catch (error) {
+      window.__nexusError = true;
+      window.dispatchEvent(new Event("nexus-error"));
+      setFailed(true);
+      console.error("Nexus IPC bridge failed:", error);
+    }
+  }
+
+  /** The sidebar's manual Zaključaj action, and the idle auto-lock's own trigger. */
+  async function handleLock(): Promise<void> {
+    try {
+      await window.nexus.lock();
+    } catch (error) {
+      console.error("Nexus: failed to lock:", error);
+    }
+    setAuthStatus((previous) => ({
+      state: "locked",
+      lockedForMs: 0,
+      keystoreAvailable: previous?.keystoreAvailable ?? true,
+      requiresRecovery: false,
+    }));
+  }
+
+  // Idle auto-lock (AUTH-005): only while genuinely unlocked, and only when
+  // the preference is not "never". Listeners are attached once per
+  // (unlocked-state, preference) pair and torn down on every cleanup —
+  // including the one that fires the instant `handleLock` flips `authStatus`
+  // away from "unlocked" — so a stray timer can never fire a second lock
+  // after the app is already locked.
+  useEffect(() => {
+    if (authStatus?.state !== "unlocked" || autoLockMinutes === 0) return;
+
+    let lockTimeout: ReturnType<typeof setTimeout> | undefined;
+    let throttleTimeout: ReturnType<typeof setTimeout> | undefined;
+
+    function scheduleLock(): void {
+      lockTimeout = setTimeout(() => void handleLock(), autoLockMinutes * 60_000);
+    }
+
+    function resetTimer(): void {
+      if (throttleTimeout !== undefined) return; // within the throttle window — ignore this burst
+      throttleTimeout = setTimeout(() => {
+        throttleTimeout = undefined;
+      }, IDLE_RESET_THROTTLE_MS);
+      clearTimeout(lockTimeout);
+      scheduleLock();
+    }
+
+    scheduleLock();
+    for (const eventName of IDLE_ACTIVITY_EVENTS) {
+      window.addEventListener(eventName, resetTimer);
+    }
+    return () => {
+      for (const eventName of IDLE_ACTIVITY_EVENTS) {
+        window.removeEventListener(eventName, resetTimer);
+      }
+      clearTimeout(lockTimeout);
+      clearTimeout(throttleTimeout);
+    };
+  }, [authStatus?.state, autoLockMinutes]);
+
+  function changeAutoLock(value: AutoLockMinutes): void {
+    persistAutoLock(value);
+    setAutoLockMinutes(value);
+  }
 
   // While in system mode, follow OS light/dark changes live (SET-004).
   useEffect(() => {
@@ -127,6 +228,22 @@ export function App() {
           title={strings.app.loadErrorTitle}
           description={strings.app.loadErrorDescription}
         />
+      </div>
+    );
+  }
+
+  if (!authStatus) {
+    return (
+      <div className="nx-app app app--center">
+        <p className="app__muted">{strings.app.loading}</p>
+      </div>
+    );
+  }
+
+  if (authStatus.state !== "unlocked") {
+    return (
+      <div className="nx-app app">
+        <AuthGate status={authStatus} onUnlocked={() => void handleUnlocked()} />
       </div>
     );
   }
@@ -207,7 +324,18 @@ export function App() {
             );
           })}
           {activeProfile && (
-            <NotificationCenter profileId={activeProfile.id} onNavigate={setActiveId} />
+            <>
+              <NotificationCenter profileId={activeProfile.id} onNavigate={setActiveId} />
+              <NavItem
+                href="#"
+                onClick={(event) => {
+                  event.preventDefault();
+                  void handleLock();
+                }}
+              >
+                {strings.auth.lockAction}
+              </NavItem>
+            </>
           )}
         </nav>
 
@@ -242,6 +370,8 @@ export function App() {
               preference={preference}
               onPreferenceChange={changePreference}
               registry={registry}
+              autoLockMinutes={autoLockMinutes}
+              onAutoLockChange={changeAutoLock}
             />
           ) : (
             <ModulePage id={effectiveId} />
