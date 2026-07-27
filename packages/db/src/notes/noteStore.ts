@@ -129,6 +129,7 @@ export class NoteStore {
   private readonly insertUpdate: Database.Statement;
   private readonly updateMeta: Database.Statement;
   private readonly selectSnapshot: Database.Statement;
+  private readonly selectPlaintext: Database.Statement;
   private readonly selectUpdatesPastSeq: Database.Statement;
   private readonly countUpdatesPastSeq: Database.Statement;
   private readonly upsertSnapshot: Database.Statement;
@@ -194,6 +195,13 @@ export class NoteStore {
     );
     this.selectSnapshot = db.prepare(
       `SELECT snapshot, covered_seq FROM note_snapshots WHERE note_id = ?`,
+    );
+    // A separate statement from `selectSnapshot` on purpose: that one sits on
+    // hot paths (`load`, `countPendingUpdates` after every append) and must
+    // not start dragging a note-sized TEXT column along for a query that
+    // never wants it.
+    this.selectPlaintext = db.prepare(
+      `SELECT plaintext FROM note_snapshots WHERE note_id = ?`,
     );
     this.selectUpdatesPastSeq = db.prepare(
       `SELECT seq, update_blob FROM note_updates
@@ -379,6 +387,13 @@ export class NoteStore {
       coveredSeq: snapshotRow?.covered_seq ?? 0,
       updates: rows.map((row) => ({ seq: row.seq, bytes: new Uint8Array(row.update_blob) })),
     };
+  }
+
+  /** The plaintext currently stored alongside the note's snapshot, or null when the note has never been compacted. */
+  storedPlaintext(id: string): string | null {
+    this.requireActive(id);
+    const row = this.selectPlaintext.get(id) as { plaintext: string } | undefined;
+    return row?.plaintext ?? null;
   }
 
   /**

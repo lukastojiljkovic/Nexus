@@ -257,6 +257,30 @@ describe("NoteStore", () => {
     expect(notes.load(note.id).updates).toEqual([bytes(4, 3)]);
   });
 
+  it("storedPlaintext is null before any compaction and reflects the stored value afterward", () => {
+    const notes = store();
+    const note = notes.create(T0);
+    expect(notes.storedPlaintext(note.id)).toBeNull();
+
+    notes.appendUpdate(note.id, bytes(4, 1), "", T1);
+    notes.compact(note.id, bytes(8), "sadržaj beleške", 1, T2);
+    expect(notes.storedPlaintext(note.id)).toBe("sadržaj beleške");
+
+    // A second compact replaces the stored plaintext, same as the snapshot.
+    notes.appendUpdate(note.id, bytes(4, 2), "", T2);
+    notes.compact(note.id, bytes(8), "novi sadržaj", 2, T3);
+    expect(notes.storedPlaintext(note.id)).toBe("novi sadržaj");
+  });
+
+  it("storedPlaintext throws NoteNotFoundError for an unknown or soft-deleted note", () => {
+    const notes = store();
+    const note = notes.create(T0);
+    notes.softDelete(note.id, T1);
+
+    expect(() => notes.storedPlaintext("missing")).toThrow(NoteNotFoundError);
+    expect(() => notes.storedPlaintext(note.id)).toThrow(NoteNotFoundError);
+  });
+
   it("hides soft-deleted notes from the list and blocks every child operation", () => {
     const notes = store();
     const note = notes.create(T0);
