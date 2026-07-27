@@ -126,6 +126,7 @@ import {
   captureNoteVersion,
   compactIfNeeded,
   compactNow,
+  healNotes,
   scheduleIdleCompaction,
 } from "./notes.js";
 import { startNotificationScheduler, stopNotificationScheduler } from "./notifications.js";
@@ -1260,6 +1261,25 @@ function startUnlockedServices(): void {
     planStore,
     notificationStore,
     getMainWindow: () => mainWindow,
+  });
+
+  // The one-time note-healing sweep (see `notes.ts`'s doc comment).
+  // Unawaited, mirroring `adoptUnlockedKey`'s legacy-blob drain: an unlock
+  // must not block on walking every note of every profile. Identity, not
+  // null-ness, is "still this session" — `performLock` sets `db = null` and a
+  // later unlock installs a NEW instance, so this stops the sweep both on
+  // lock and when a newer session has superseded it.
+  const session = requireDb();
+  const stores = listProfiles(session).map((profile) => ({
+    notes: noteStore(profile.id),
+    cards: cardStore(profile.id),
+  }));
+  healNotes(stores, () => db === session).catch((error: unknown) => {
+    console.error(
+      `Note healing sweep failed (will retry on the next unlock): ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
   });
 }
 

@@ -1,5 +1,9 @@
-import { mergeNoteState } from "@nexus/core";
-import type { NoteStore } from "@nexus/db";
+import * as Y from "yjs";
+import { collectNoteCards, mergeNoteState } from "@nexus/core";
+import type { NoteCardSpec } from "@nexus/core";
+import { CardValidationError } from "@nexus/db";
+import type { CardStore, NoteMeta, NoteStore } from "@nexus/db";
+import { NOTE_CARDS_MAX_COUNT } from "../shared/ipc.js";
 
 /**
  * NOTE slice a1's compaction policy (ADR-012) plus NOTE-008's version-history
@@ -13,6 +17,13 @@ import type { NoteStore } from "@nexus/db";
  * prune). Main owns *when* to compact and *when* to checkpoint, and stamps
  * the clock for both; the renderer never controls seq assignment,
  * compaction, or checkpoint cadence (SEC-EL-02).
+ *
+ * `healNote`/`healNotes` are a third policy living here for the same reason: a
+ * one-time repair sweep for what a since-fixed bug in the text walks left
+ * corrupted — mark-up leaking into `note_snapshots.plaintext` (which SRCH
+ * indexes and snippets directly) and into the text of generated flashcards —
+ * in notes the edit-triggered paths will never revisit because nobody happens
+ * to edit them again.
  */
 
 /** How many pending updates a note may accumulate before main folds them into a new snapshot. */
@@ -171,4 +182,142 @@ export function captureNoteVersion(store: NoteStore, noteId: string): void {
     read.updates.map((update) => update.bytes),
   );
   store.captureVersion(noteId, merged.snapshot, coveredSeq, now);
+}
+
+/** One profile's stores, as the healing sweep needs them: notes to re-derive from, cards to repair. */
+export interface HealingStores {
+  notes: NoteStore;
+  cards: CardStore;
+}
+
+/**
+ * Heals one note's two *derived* artefacts from its own persisted state —
+ * snapshot + pending updates already in the DB, no renderer bytes involved,
+ * the same shape `captureNoteVersion` reads. The document is merged once and
+ * both derivations are recomputed from it:
+ *
+ * - the stored plaintext SRCH indexes and snippets from, rewritten only when
+ *   it actually differs. Comparing first — rather than always recompacting —
+ *   is what keeps this from churning migration 017's FTS triggers (every
+ *   `note_snapshots` write fires them) on every launch once a note is healed.
+ * - the flashcards the note's blocks generate, when it is mapped to a deck.
+ *   Reconciled by `source_block_key`, so a repaired side updates the same row
+ *   with its FSRS history intact (ADR-017), and an already-correct note
+ *   reconciles to nothing — `syncFromNote` leaves `updated_at` alone when
+ *   neither side changed.
+ *
+ * Deliberately does NOT capture a version checkpoint the way `runCompaction`
+ * does: this repairs derived data, it is not a user edit, and manufacturing a
+ * checkpoint for it would misrepresent the note's actual history.
+ *
+ * Returns whether anything was written.
+ */
+export function healNote(stores: HealingStores, note: NoteMeta): boolean {
+  const read = stores.notes.readForCompaction(note.id);
+  const coveredSeq = read.updates.at(-1)?.seq ?? read.coveredSeq;
+  if (coveredSeq === 0) return false; // nothing persisted yet — nothing to derive from
+
+  const merged = mergeNoteState(
+    read.snapshot,
+    read.updates.map((update) => update.bytes),
+  );
+
+  let wrote = false;
+  if (merged.plaintext !== stores.notes.storedPlaintext(note.id)) {
+    stores.notes.compact(
+      note.id,
+      merged.snapshot,
+      merged.plaintext,
+      coveredSeq,
+      new Date().toISOString(),
+    );
+    wrote = true;
+  }
+
+  if (note.cardDeckId !== null) {
+    wrote = healNoteCards(stores.cards, note.id, note.cardDeckId, merged.snapshot) || wrote;
+  }
+  return wrote;
+}
+
+/**
+ * The card half of `healNote`, kept separate for its one load-bearing rule:
+ * an EMPTY parse is never synced. `syncFromNote` soft-deletes every card whose
+ * key the specs no longer carry — correct when the editor reports it, because
+ * the user really did delete those blocks, but here the specs come from a
+ * background re-read, and anything that made this document parse to nothing
+ * (a merge that failed, a schema we no longer understand) would silently empty
+ * the note's deck. A note that genuinely lost its last card block is
+ * reconciled by its next edit, exactly as before this sweep existed.
+ */
+function healNoteCards(
+  cards: CardStore,
+  noteId: string,
+  deckId: string,
+  state: Uint8Array,
+): boolean {
+  const specs = parseCardsFromState(state);
+  if (specs.length === 0) return false;
+
+  try {
+    const result = cards.syncFromNote(noteId, deckId, specs, new Date().toISOString());
+    return result.created + result.updated + result.removed > 0;
+  } catch (error) {
+    // A note still pointing at a deck the user has since deleted: soft-deleting
+    // a deck leaves `notes.card_deck_id` alone (no FK action fires on it), so
+    // this is an ordinary, permanent state — not a fault worth logging on
+    // every unlock for the rest of the note's life. Anything else is.
+    if (error instanceof CardValidationError) return false;
+    throw error;
+  }
+}
+
+/** The cards a merged snapshot's blocks author, capped exactly as the editor caps its own report, with the throwaway document always released. */
+function parseCardsFromState(state: Uint8Array): NoteCardSpec[] {
+  const doc = new Y.Doc();
+  try {
+    Y.applyUpdate(doc, state);
+    return collectNoteCards(doc).slice(0, NOTE_CARDS_MAX_COUNT);
+  } finally {
+    doc.destroy();
+  }
+}
+
+/**
+ * Walks every note of every profile once, healing each (`healNote`) — the
+ * one-time repair for whatever a since-fixed derivation walk left corrupted in
+ * `note_snapshots.plaintext` and in generated flashcard text, for notes nobody
+ * happens to edit again (which would otherwise never revisit the editor's own
+ * report path and so would carry the corruption forever).
+ *
+ * `stillThisSession` is checked before every single note — not just once per
+ * store — and the pass yields to the event loop between notes, so a sweep
+ * across thousands of notes can never block the main process, and stops the
+ * instant the database it is reading has been locked (or superseded by a newer
+ * unlock) out from under it: the same background-work-outliving-a-lock hazard
+ * `cancelIdleCompactions` exists for. A per-note failure (the note was deleted
+ * concurrently, say) is logged and skipped rather than aborting the whole
+ * sweep. Returns how many notes were actually written to.
+ */
+export async function healNotes(
+  stores: Iterable<HealingStores>,
+  stillThisSession: () => boolean,
+): Promise<number> {
+  let healed = 0;
+  for (const profileStores of stores) {
+    // Guarded before `list()` too, not only per note: a lock during the
+    // previous profile's sweep would otherwise make this read throw against a
+    // closed connection rather than simply stopping.
+    if (!stillThisSession()) return healed;
+    for (const note of profileStores.notes.list()) {
+      if (!stillThisSession()) return healed;
+      try {
+        if (healNote(profileStores, note)) healed++;
+      } catch (error) {
+        console.error(`Healing note "${note.id}" failed:`, error);
+      }
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+  }
+  return healed;
 }
