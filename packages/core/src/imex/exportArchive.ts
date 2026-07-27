@@ -2,11 +2,13 @@
  * Pure builder for the IMEX full-export archive (PRD 14 IMEX-001, ADR-009's
  * container layout). Takes plain data arrays plus everything time/version-ish
  * the caller already knows (`createdAt`, `appVersion`, a `hash` function) and
- * returns the archive's files as an in-memory map — no clock reads, no file
- * IO, no `node:` imports. `apps/desktop`'s main process is the only caller: it
- * gathers rows from `@nexus/db`'s stores, stamps `createdAt`/`appVersion`,
- * injects a real sha256 `hash`, and streams the returned files into a
- * `.nexus.zip` with `yazl`.
+ * returns the archive's text files as an in-memory map, plus a DECLARED
+ * inventory of its binary entries — no clock reads, no file IO, no `node:`
+ * imports. `apps/desktop`'s main process is the only caller: it gathers rows
+ * from `@nexus/db`'s stores, stamps `createdAt`/`appVersion`, injects a real
+ * sha256 `hash`, and streams the result into a `.nexus.zip` with `yazl`,
+ * resolving each declared binary entry (reading and decrypting attachment
+ * blobs one at a time) as it goes — see `ExportBinaryEntry`.
  *
  * Row shapes are declared as minimal structural interfaces (only the fields
  * this module serializes) rather than imported from `@nexus/db` — `@nexus/core`
@@ -18,7 +20,10 @@
  * deliberately, not incidentally.
  */
 
+import { claimUniqueName, sanitizePathSegment, UNTITLED_NOTE_NAME } from "./archivePaths.js";
 import { toCsv } from "./csv.js";
+import { renderNoteMarkdown } from "./noteMarkdown.js";
+import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown.js";
 
 /** IMEX-004: the archive's own semver — the first public interchange version. */
 const SCHEMA_VERSION = "1.0.0";
@@ -191,6 +196,73 @@ export interface ExportNotification {
   updatedAt: string;
 }
 
+/** A note's metadata row (ADR-022 section 3 / NOTE). */
+export interface ExportNote {
+  id: string;
+  profileId: string;
+  title: string;
+  folderId: string | null;
+  pinned: boolean;
+  cardDeckId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  /** The note's merged Yjs state, or null when it has never been edited. Emitted as `data/notes/<id>.ydoc`; stripped from the NDJSON row (bytes are not JSON) and used as the Markdown mirror's source. */
+  snapshot: Uint8Array | null;
+}
+
+export interface ExportNoteFolder {
+  id: string;
+  profileId: string;
+  parentId: string | null;
+  name: string;
+  color: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExportNoteTag {
+  id: string;
+  profileId: string;
+  name: string;
+  createdAt: string;
+}
+
+/** One note-tag attachment. */
+export interface ExportNoteTagLink {
+  noteId: string;
+  tagId: string;
+}
+
+/** `content` is a JSON-encoded ProseMirror document (ADR-016) — a template is not a note and carries no Yjs state. */
+export interface ExportNoteTemplate {
+  id: string;
+  profileId: string;
+  name: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** The index row only; the bytes are declared as a binary entry, content-addressed by `sha256`. */
+export interface ExportNoteAttachment {
+  id: string;
+  noteId: string;
+  fileName: string;
+  mime: string;
+  sizeBytes: number;
+  sha256: string;
+  createdAt: string;
+}
+
+export interface ExportNoteVersion {
+  noteId: string;
+  coveredSeq: number;
+  title: string;
+  createdAt: string;
+  /** The checkpoint's Yjs state — emitted as `data/note-versions/<noteId>/<coveredSeq>.ydoc`, stripped from the NDJSON row. */
+  snapshot: Uint8Array;
+}
+
 /** Everything the manifest's "settings" section carries (founder decision #11: flags + NTF settings ship with the export). */
 export interface ExportSettings {
   flags: Record<string, boolean>;
@@ -223,16 +295,39 @@ export interface ExportArchiveInput {
     blocks: readonly ExportStudyBlock[];
     focusSessions: readonly ExportFocusSession[];
     notifications: readonly ExportNotification[];
+    // Required, like every field above, and deliberately so: this archive
+    // shipped for two weeks writing zero notes because the export simply had
+    // no place to put them and nobody's compiler ever said a word. A module
+    // the caller forgets must be a type error, not a quiet omission.
+    notes: readonly ExportNote[];
+    noteFolders: readonly ExportNoteFolder[];
+    noteTags: readonly ExportNoteTag[];
+    noteTagLinks: readonly ExportNoteTagLink[];
+    noteTemplates: readonly ExportNoteTemplate[];
+    noteAttachments: readonly ExportNoteAttachment[];
+    noteVersions: readonly ExportNoteVersion[];
   };
   /** sha256 hex over a UTF-8 string, injected so this module never imports `node:crypto`. */
   hash: (content: string) => string;
 }
+
+/**
+ * An archive entry whose content is bytes rather than text. `buildExportArchive`
+ * DECLARES these; it never holds their content beyond what its input already
+ * carries — an attachment can be 50 MB of encrypted bytes on disk, so it is
+ * named by hash and left for the writer to read, decrypt and stream one at a
+ * time (ADR-022).
+ */
+export type ExportBinaryEntry =
+  | { kind: "bytes"; path: string; bytes: Uint8Array }
+  | { kind: "attachment"; path: string; sha256: string; sizeBytes: number };
 
 /** The built archive: every file's exact content, plus the counts the manifest itself also carries (for the caller's own reporting, e.g. the Settings page's confirmation line). */
 export interface ExportArchive {
   files: Map<string, string>;
   totalRecords: number;
   byModule: Record<string, number>;
+  binaries: ExportBinaryEntry[];
 }
 
 const DATA_FILES = [
@@ -240,11 +335,17 @@ const DATA_FILES = [
   "data/calendar.ndjson",
   "data/study.ndjson",
   "data/notifications.ndjson",
+  "data/notes.ndjson",
 ] as const;
 
 /** Builds the full `.nexus.zip` contents in memory (IMEX-001). Deterministic: identical input always yields identical file content and checksums. */
 export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   const files = new Map<string, string>();
+
+  // Read once and named locally — the note section below reaches for these
+  // often enough that `input.data.` on every line only adds noise.
+  const { notes, noteFolders, noteTags, noteTagLinks, noteTemplates, noteAttachments, noteVersions } =
+    input.data;
 
   const tasksNdjson = toNdjson(input.data.tasks.map((row) => ({ type: "task", ...row })));
   const calendarNdjson = toNdjson([
@@ -265,11 +366,68 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   const notificationsNdjson = toNdjson(
     input.data.notifications.map((row) => ({ type: "notification", ...row })),
   );
+  // Bytes are not JSON: `snapshot` is destructured off before the row joins
+  // the NDJSON (it travels instead as a `bytes` binary entry below, keyed by
+  // the same id/coveredSeq the path encodes).
+  const notesNdjson = toNdjson([
+    ...noteFolders.map((row) => ({ type: "note-folder", ...row })),
+    ...noteTags.map((row) => ({ type: "note-tag", ...row })),
+    ...notes.map((row) => {
+      const { snapshot: _snapshot, ...rest } = row;
+      return { type: "note", ...rest };
+    }),
+    ...noteTagLinks.map((row) => ({ type: "note-tag-link", ...row })),
+    ...noteAttachments.map((row) => ({ type: "note-attachment", ...row })),
+    ...noteVersions.map((row) => {
+      const { snapshot: _snapshot, ...rest } = row;
+      return { type: "note-version", ...rest };
+    }),
+    ...noteTemplates.map((row) => ({ type: "note-template", ...row })),
+  ]);
 
   files.set("data/tasks.ndjson", tasksNdjson);
   files.set("data/calendar.ndjson", calendarNdjson);
   files.set("data/study.ndjson", studyNdjson);
   files.set("data/notifications.ndjson", notificationsNdjson);
+  files.set("data/notes.ndjson", notesNdjson);
+
+  // --- Notes: Markdown mirror + binary entries (ADR-022 section 3) -------
+  const binaries: ExportBinaryEntry[] = [];
+  const notePaths = buildNotePaths(notes, noteFolders);
+  const attachmentsByNote = groupAttachmentsByNote(noteAttachments);
+
+  for (const note of notes) {
+    const pathInfo = notePaths.get(note.id);
+    if (!pathInfo) continue; // buildNotePaths assigns one entry per input note; defensive
+    const context: NoteMarkdownContext = {
+      attachments: attachmentsByNote.get(note.id) ?? EMPTY_NOTE_ATTACHMENTS,
+      rootPrefix: pathInfo.rootPrefix,
+    };
+    files.set(pathInfo.path, note.snapshot !== null ? renderNoteMarkdown(note.snapshot, context) : "");
+    if (note.snapshot !== null) {
+      binaries.push({ kind: "bytes", path: `data/notes/${note.id}.ydoc`, bytes: note.snapshot });
+    }
+  }
+  for (const version of noteVersions) {
+    binaries.push({
+      kind: "bytes",
+      path: `data/note-versions/${version.noteId}/${version.coveredSeq}.ydoc`,
+      bytes: version.snapshot,
+    });
+  }
+  // Blobs are content-addressed and deduplicated: two attachment rows
+  // sharing a hash (even across notes) declare ONE binary entry, not two.
+  const blobSizeBySha = new Map<string, number>();
+  for (const attachment of noteAttachments) {
+    if (blobSizeBySha.has(attachment.sha256)) continue;
+    blobSizeBySha.set(attachment.sha256, attachment.sizeBytes);
+    binaries.push({
+      kind: "attachment",
+      path: `blobs/${attachment.sha256}`,
+      sha256: attachment.sha256,
+      sizeBytes: attachment.sizeBytes,
+    });
+  }
 
   files.set("tables/tasks.csv", tasksCsv(input.data.tasks));
   files.set("tables/events.csv", eventsCsv(input.data.events));
@@ -294,6 +452,14 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
       input.data.blocks.length +
       input.data.focusSessions.length,
     notifications: input.data.notifications.length,
+    notes:
+      notes.length +
+      noteFolders.length +
+      noteTags.length +
+      noteTagLinks.length +
+      noteTemplates.length +
+      noteAttachments.length +
+      noteVersions.length,
   };
   const totalRecords = Object.values(byModule).reduce((sum, count) => sum + count, 0);
 
@@ -301,6 +467,12 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   for (const path of DATA_FILES) {
     checksums[path] = input.hash(files.get(path) ?? "");
   }
+
+  // Sha256-sorted so the manifest reads identically regardless of which note
+  // happened to reference a given blob first.
+  const blobs = [...blobSizeBySha.entries()]
+    .map(([sha256, sizeBytes]) => ({ sha256, sizeBytes }))
+    .sort((a, b) => (a.sha256 < b.sha256 ? -1 : a.sha256 > b.sha256 ? 1 : 0));
 
   const manifest = {
     schemaVersion: SCHEMA_VERSION,
@@ -313,12 +485,110 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
       { id: "calendar", records: byModule.calendar },
       { id: "study", records: byModule.study },
       { id: "notifications", records: byModule.notifications },
+      { id: "notes", records: byModule.notes },
     ],
     checksums,
+    blobs,
   };
   files.set("manifest.json", JSON.stringify(manifest, null, 2));
 
-  return { files, totalRecords, byModule };
+  return { files, totalRecords, byModule, binaries };
+}
+
+// --- Notes: path resolution ------------------------------------------------
+
+/** One note's resolved Markdown mirror path plus the `rootPrefix` its image links need. */
+interface NotePathInfo {
+  path: string;
+  rootPrefix: string;
+}
+
+const EMPTY_NOTE_ATTACHMENTS: ReadonlyMap<string, NoteMarkdownAttachment> = new Map();
+
+/**
+ * Resolves every note's Markdown mirror path (ADR-022 section 3). Folder
+ * segments are claimed first, in `folders`' own input order, then note file
+ * names in `notes`' own input order — this makes the archive deterministic:
+ * the same input always claims the same names in the same order. Each
+ * directory's name registry (via `claimUniqueName`) is shared between its
+ * subfolders and its `.md` files, so a folder named "Plan" and a note titled
+ * "Plan" in the same parent cannot both become `Plan`.
+ *
+ * A note whose `folderId` is null, or points at a folder absent from
+ * `folders`, lands directly under `notes/`. A folder's own `parentId` chain
+ * is resolved (and memoized) recursively; a cycle — never produced by
+ * `NoteOrgStore`, but defensive here — is broken by treating the re-entrant
+ * folder as a root folder rather than recursing forever.
+ */
+function buildNotePaths(
+  notes: readonly ExportNote[],
+  folders: readonly ExportNoteFolder[],
+): Map<string, NotePathInfo> {
+  const folderById = new Map(folders.map((folder) => [folder.id, folder]));
+  const registries = new Map<string, Set<string>>();
+  const folderDirs = new Map<string, string>();
+  const resolving = new Set<string>();
+
+  function registryFor(dir: string): Set<string> {
+    let registry = registries.get(dir);
+    if (registry === undefined) {
+      registry = new Set<string>();
+      registries.set(dir, registry);
+    }
+    return registry;
+  }
+
+  function resolveFolderDir(folderId: string): string {
+    const cached = folderDirs.get(folderId);
+    if (cached !== undefined) return cached;
+
+    const folder = folderById.get(folderId);
+    if (folder === undefined || resolving.has(folderId)) return "notes";
+
+    resolving.add(folderId);
+    const parentDir = folder.parentId !== null ? resolveFolderDir(folder.parentId) : "notes";
+    const name = claimUniqueName(registryFor(parentDir), sanitizePathSegment(folder.name, "Fascikla"), "");
+    const dir = `${parentDir}/${name}`;
+    resolving.delete(folderId);
+
+    folderDirs.set(folderId, dir);
+    return dir;
+  }
+
+  for (const folder of folders) resolveFolderDir(folder.id);
+
+  const notePaths = new Map<string, NotePathInfo>();
+  for (const note of notes) {
+    const dir =
+      note.folderId !== null && folderById.has(note.folderId)
+        ? resolveFolderDir(note.folderId)
+        : "notes";
+    const fileName = claimUniqueName(
+      registryFor(dir),
+      sanitizePathSegment(note.title, UNTITLED_NOTE_NAME),
+      ".md",
+    );
+    const path = `${dir}/${fileName}`;
+    const depth = path.split("/").length - 1; // directory segments only, not the file name
+    notePaths.set(note.id, { path, rootPrefix: "../".repeat(depth) });
+  }
+  return notePaths;
+}
+
+/** Attachment rows grouped by their note, in the shape `renderNoteMarkdown`'s context wants. */
+function groupAttachmentsByNote(
+  attachments: readonly ExportNoteAttachment[],
+): Map<string, Map<string, NoteMarkdownAttachment>> {
+  const byNote = new Map<string, Map<string, NoteMarkdownAttachment>>();
+  for (const attachment of attachments) {
+    let forNote = byNote.get(attachment.noteId);
+    if (forNote === undefined) {
+      forNote = new Map<string, NoteMarkdownAttachment>();
+      byNote.set(attachment.noteId, forNote);
+    }
+    forNote.set(attachment.id, { fileName: attachment.fileName, sha256: attachment.sha256 });
+  }
+  return byNote;
 }
 
 /** One JSON object per line, `\n`-joined with a trailing newline; zero rows renders as the empty string (predictable "empty module" shape). */

@@ -719,10 +719,10 @@ export const strings = {
       all: "Sve",
       caption: "Prečice za izvore ispod.",
     },
-    /** Rezervna kopija (IMEX slice a1) — full-export button + confirmation/error lines. */
+    /** Rezervna kopija (IMEX slice a1, prošireno NOTE-om ADR-022) — full-export button + confirmation/error lines. */
     backup: {
       description:
-        "Izvezi sve svoje podatke u jednu .nexus.zip arhivu — otvoreni formati (JSON i CSV), čitljivi i upotrebljivi bez Nexusa.",
+        "Izvezi sve svoje podatke u jednu .nexus.zip arhivu — otvoreni formati (JSON i CSV), beleške kao Markdown fajlovi i prilozi u originalnom obliku, sve čitljivo i upotrebljivo bez Nexusa.",
       plaintextNotice:
         "Baza podataka je šifrovana tvojim pristupnim kodom, ali ova arhiva nije — čuvaj je na sigurnom mestu.",
       exportButton: "Izvezi sve podatke…",
@@ -730,6 +730,17 @@ export const strings = {
       /** "N zapis"/"N zapisa" — Serbian numeral agreement via `dayUnit`. */
       recordsUnitOne: "zapis",
       recordsUnitMany: "zapisa",
+      /**
+       * Shown only when `missingAttachments > 0` (ADR-022): "Nedostaje N
+       * prilog(a) — arhiva je ipak sačuvana." Numeral agreement via `dayUnit`,
+       * mirroring `recordsUnitOne`/`recordsUnitMany`. The closing clause
+       * deliberately carries no pronoun: "bez njih" would be wrong at a count
+       * of one, and this line has to read correctly at every count.
+       */
+      missingAttachmentsPrefix: "Nedostaje",
+      missingAttachmentsUnitOne: "prilog",
+      missingAttachmentsUnitMany: "priloga",
+      missingAttachmentsSuffix: "— arhiva je ipak sačuvana.",
       error: "Izvoz nije uspeo. Pokušaj ponovo.",
     },
     about: {

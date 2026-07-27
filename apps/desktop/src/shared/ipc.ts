@@ -1583,10 +1583,15 @@ export interface ImexExportRequest {
  * written to `path` with `totalRecords` interchange records inside it. The
  * renderer never supplies `path` itself — it always comes back from the
  * dialog main owns (SEC-EL: untrusted input never reaches the filesystem).
+ *
+ * `missingAttachments` (ADR-022) is non-zero when one or more NOTE attachment
+ * blobs were not found in the blob store: the archive is otherwise complete,
+ * just missing that many attachment files — a lost blob never fails the whole
+ * export.
  */
 export type ExportResult =
   | { canceled: true }
-  | { canceled: false; path: string; totalRecords: number };
+  | { canceled: false; path: string; totalRecords: number; missingAttachments: number };
 
 /** Runtime and environment facts, proving the main-process path end to end. */
 export interface AppInfo {

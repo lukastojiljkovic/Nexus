@@ -101,7 +101,9 @@ interface BackupSectionProps {
 /** Rezervna kopija section (IMEX slice a1): a single full-export button over `window.nexus.exportData`. */
 function BackupSection({ profileId }: BackupSectionProps) {
   const [running, setRunning] = useState(false);
-  const [saved, setSaved] = useState<{ path: string; totalRecords: number } | null>(null);
+  const [saved, setSaved] = useState<{ path: string; totalRecords: number; missingAttachments: number } | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
 
   async function runExport(): Promise<void> {
@@ -112,7 +114,11 @@ function BackupSection({ profileId }: BackupSectionProps) {
     try {
       const outcome = await window.nexus.exportData(profileId);
       if (!outcome.canceled) {
-        setSaved({ path: outcome.path, totalRecords: outcome.totalRecords });
+        setSaved({
+          path: outcome.path,
+          totalRecords: outcome.totalRecords,
+          missingAttachments: outcome.missingAttachments,
+        });
       }
     } catch (exportError) {
       setError(strings.settings.backup.error);
@@ -135,6 +141,17 @@ function BackupSection({ profileId }: BackupSectionProps) {
           {saved.totalRecords}{" "}
           {dayUnit(saved.totalRecords, strings.settings.backup.recordsUnitOne, strings.settings.backup.recordsUnitMany)}
           )
+        </p>
+      )}
+      {saved != null && saved.missingAttachments > 0 && (
+        <p className="set__error">
+          {strings.settings.backup.missingAttachmentsPrefix} {saved.missingAttachments}{" "}
+          {dayUnit(
+            saved.missingAttachments,
+            strings.settings.backup.missingAttachmentsUnitOne,
+            strings.settings.backup.missingAttachmentsUnitMany,
+          )}{" "}
+          {strings.settings.backup.missingAttachmentsSuffix}
         </p>
       )}
       {error != null && <p className="set__error">{error}</p>}

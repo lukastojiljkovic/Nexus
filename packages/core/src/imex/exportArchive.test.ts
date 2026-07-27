@@ -1,6 +1,13 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { buildExportArchive, type ExportArchiveInput } from "./exportArchive.js";
+import * as Y from "yjs";
+import {
+  buildExportArchive,
+  type ExportArchiveInput,
+  type ExportNote,
+  type ExportNoteAttachment,
+  type ExportNoteFolder,
+} from "./exportArchive.js";
 
 /** The test's own sha256 hex — mirrors the shape `main` injects, kept out of `@nexus/core`. */
 function sha256(content: string): string {
@@ -30,9 +37,96 @@ function emptyInput(): ExportArchiveInput {
       blocks: [],
       focusSessions: [],
       notifications: [],
+      notes: [],
+      noteFolders: [],
+      noteTags: [],
+      noteTagLinks: [],
+      noteTemplates: [],
+      noteAttachments: [],
+      noteVersions: [],
     },
     hash: sha256,
   };
+}
+
+/** A minimal `ExportNote` row, defaulting to an unfiled, never-edited note — override just the fields a test cares about. */
+function noteRow(overrides: {
+  id: string;
+  title: string;
+  folderId?: string | null;
+  snapshot?: Uint8Array | null;
+}): ExportNote {
+  return {
+    id: overrides.id,
+    profileId: "profile1",
+    title: overrides.title,
+    folderId: overrides.folderId ?? null,
+    pinned: false,
+    cardDeckId: null,
+    createdAt: "2026-07-01T00:00:00.000Z",
+    updatedAt: "2026-07-01T00:00:00.000Z",
+    snapshot: overrides.snapshot ?? null,
+  };
+}
+
+/** A minimal `ExportNoteFolder` row. */
+function folderRow(overrides: {
+  id: string;
+  name: string;
+  parentId?: string | null;
+}): ExportNoteFolder {
+  return {
+    id: overrides.id,
+    profileId: "profile1",
+    parentId: overrides.parentId ?? null,
+    name: overrides.name,
+    color: null,
+    createdAt: "2026-07-01T00:00:00.000Z",
+    updatedAt: "2026-07-01T00:00:00.000Z",
+  };
+}
+
+/** A minimal `ExportNoteAttachment` row. */
+function attachmentRow(overrides: {
+  id: string;
+  noteId: string;
+  sha256: string;
+  sizeBytes?: number;
+}): ExportNoteAttachment {
+  return {
+    id: overrides.id,
+    noteId: overrides.noteId,
+    fileName: "slika.png",
+    mime: "image/png",
+    sizeBytes: overrides.sizeBytes ?? 10,
+    sha256: overrides.sha256,
+    createdAt: "2026-07-01T00:00:00.000Z",
+  };
+}
+
+/**
+ * A validly-encoded (empty) Yjs update — placeholder content for a test where
+ * a note merely needs SOME non-null snapshot to exercise the "has been
+ * edited" path. `renderNoteMarkdown` decodes it via `Y.applyUpdate`, so an
+ * arbitrary byte array (e.g. `new Uint8Array([1, 2, 3])`) is not a valid
+ * stand-in — it is not a real encoded Yjs update and fails to decode.
+ */
+function emptyNoteSnapshot(): Uint8Array {
+  const doc = new Y.Doc();
+  const snapshot = Y.encodeStateAsUpdate(doc);
+  doc.destroy();
+  return snapshot;
+}
+
+/** Encodes a doc whose "default" fragment holds a single `attachmentImage` node referencing `attachmentId`, as a note snapshot. */
+function snapshotWithAttachmentImage(attachmentId: string): Uint8Array {
+  const doc = new Y.Doc();
+  const el = new Y.XmlElement("attachmentImage");
+  el.setAttribute("attachmentId", attachmentId);
+  doc.getXmlFragment("default").push([el]);
+  const snapshot = Y.encodeStateAsUpdate(doc);
+  doc.destroy();
+  return snapshot;
 }
 
 function parseNdjson(content: string): unknown[] {
@@ -55,6 +149,7 @@ describe("buildExportArchive", () => {
           "data/calendar.ndjson",
           "data/study.ndjson",
           "data/notifications.ndjson",
+          "data/notes.ndjson",
           "tables/tasks.csv",
           "tables/events.csv",
           "tables/documents.csv",
@@ -71,6 +166,7 @@ describe("buildExportArchive", () => {
       expect(archive.files.get("data/calendar.ndjson")).toBe("");
       expect(archive.files.get("data/study.ndjson")).toBe("");
       expect(archive.files.get("data/notifications.ndjson")).toBe("");
+      expect(archive.files.get("data/notes.ndjson")).toBe("");
 
       // CSV mirrors still carry their header row.
       expect(archive.files.get("tables/tasks.csv")).toMatch(/^id,/);
@@ -79,7 +175,8 @@ describe("buildExportArchive", () => {
       );
 
       expect(archive.totalRecords).toBe(0);
-      expect(archive.byModule).toEqual({ tasks: 0, calendar: 0, study: 0, notifications: 0 });
+      expect(archive.byModule).toEqual({ tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0 });
+      expect(archive.binaries).toEqual([]);
     });
   });
 
@@ -102,13 +199,16 @@ describe("buildExportArchive", () => {
         { id: "calendar", records: 0 },
         { id: "study", records: 0 },
         { id: "notifications", records: 0 },
+        { id: "notes", records: 0 },
       ]);
       expect(manifest.checksums).toEqual({
         "data/tasks.ndjson": sha256(""),
         "data/calendar.ndjson": sha256(""),
         "data/study.ndjson": sha256(""),
         "data/notifications.ndjson": sha256(""),
+        "data/notes.ndjson": sha256(""),
       });
+      expect(manifest.blobs).toEqual([]);
     });
 
     it("is pretty-printed (indented) JSON", () => {
@@ -347,8 +447,178 @@ describe("buildExportArchive", () => {
         },
       ];
       const archive = buildExportArchive(input);
-      expect(archive.byModule).toEqual({ tasks: 1, calendar: 0, study: 0, notifications: 1 });
+      expect(archive.byModule).toEqual({ tasks: 1, calendar: 0, study: 0, notifications: 1, notes: 0 });
       expect(archive.totalRecords).toBe(2);
+    });
+  });
+
+  describe("notes", () => {
+    it("writes type-discriminated rows in dependency order and counts them into byModule.notes", () => {
+      const input = emptyInput();
+      input.data.noteFolders = [folderRow({ id: "f1", name: "Fascikla" })];
+      input.data.noteTags = [{ id: "tag1", profileId: "profile1", name: "posao", createdAt: "2026-07-01T00:00:00.000Z" }];
+      input.data.notes = [noteRow({ id: "n1", title: "Prva beleska", folderId: "f1", snapshot: emptyNoteSnapshot() })];
+      input.data.noteTagLinks = [{ noteId: "n1", tagId: "tag1" }];
+      input.data.noteAttachments = [attachmentRow({ id: "att1", noteId: "n1", sha256: "a".repeat(64) })];
+      input.data.noteVersions = [
+        { noteId: "n1", coveredSeq: 3, title: "Prva beleska", createdAt: "2026-07-01T12:00:00.000Z", snapshot: new Uint8Array([9, 9]) },
+      ];
+      input.data.noteTemplates = [
+        { id: "tmpl1", profileId: "profile1", name: "Sablon", content: '{"type":"doc","content":[]}', createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z" },
+      ];
+
+      const archive = buildExportArchive(input);
+      const rows = parseNdjson(archive.files.get("data/notes.ndjson") ?? "") as Array<{ type: string }>;
+      expect(rows.map((row) => row.type)).toEqual([
+        "note-folder",
+        "note-tag",
+        "note",
+        "note-tag-link",
+        "note-attachment",
+        "note-version",
+        "note-template",
+      ]);
+      expect(archive.byModule.notes).toBe(7);
+      expect(archive.totalRecords).toBe(7);
+    });
+
+    it("never puts snapshot bytes in the NDJSON", () => {
+      const input = emptyInput();
+      input.data.notes = [noteRow({ id: "n1", title: "Beleska sa sadrzajem", snapshot: emptyNoteSnapshot() })];
+      input.data.noteVersions = [
+        {
+          noteId: "n1",
+          coveredSeq: 1,
+          title: "Beleska sa sadrzajem",
+          createdAt: "2026-07-01T00:00:00.000Z",
+          snapshot: new Uint8Array([4, 5]), // version snapshots are never decoded — an opaque blob is fine here
+        },
+      ];
+      const archive = buildExportArchive(input);
+      // The word "snapshot" must not appear anywhere in the NDJSON — not as a
+      // JSON key/value (it isn't) and not by coincidence in a title either.
+      expect(archive.files.get("data/notes.ndjson") ?? "").not.toContain("snapshot");
+    });
+
+    it("declares a bytes binary entry per note snapshot and per version, at their archive paths", () => {
+      const input = emptyInput();
+      const noteSnapshot = emptyNoteSnapshot();
+      input.data.notes = [noteRow({ id: "n1", title: "A", snapshot: noteSnapshot })];
+      input.data.noteVersions = [
+        { noteId: "n1", coveredSeq: 2, title: "A", createdAt: "2026-07-01T00:00:00.000Z", snapshot: new Uint8Array([8]) },
+      ];
+      const archive = buildExportArchive(input);
+      expect(archive.binaries).toContainEqual({ kind: "bytes", path: "data/notes/n1.ydoc", bytes: noteSnapshot });
+      expect(archive.binaries).toContainEqual({
+        kind: "bytes",
+        path: "data/note-versions/n1/2.ydoc",
+        bytes: new Uint8Array([8]),
+      });
+    });
+
+    it("emits no binary entry for a note that has never been edited", () => {
+      const input = emptyInput();
+      input.data.notes = [noteRow({ id: "n1", title: "Prazna", snapshot: null })];
+      const archive = buildExportArchive(input);
+      expect(archive.binaries).toEqual([]);
+      expect(archive.files.get("notes/Prazna.md")).toBe("");
+    });
+
+    it("resolves a nested folder's Markdown mirror path and threads its rootPrefix into an attachment image link", () => {
+      const input = emptyInput();
+      input.data.noteFolders = [
+        folderRow({ id: "root", name: "Posao" }),
+        folderRow({ id: "child", name: "Projekti", parentId: "root" }),
+      ];
+      input.data.notes = [
+        noteRow({
+          id: "n1",
+          title: "Plan",
+          folderId: "child",
+          snapshot: snapshotWithAttachmentImage("att1"),
+        }),
+      ];
+      input.data.noteAttachments = [attachmentRow({ id: "att1", noteId: "n1", sha256: "b".repeat(64) })];
+
+      const archive = buildExportArchive(input);
+      expect(archive.files.has("notes/Posao/Projekti/Plan.md")).toBe(true);
+      // "notes/Posao/Projekti/Plan.md" has 3 directory segments (notes, Posao, Projekti).
+      expect(archive.files.get("notes/Posao/Projekti/Plan.md")).toBe(
+        `![slika.png](../../../blobs/${"b".repeat(64)})\n`,
+      );
+    });
+
+    it("numbers a second note with the same title in the same folder", () => {
+      const input = emptyInput();
+      input.data.notes = [
+        noteRow({ id: "n1", title: "Plan" }),
+        noteRow({ id: "n2", title: "Plan" }),
+      ];
+      const archive = buildExportArchive(input);
+      expect(archive.files.has("notes/Plan.md")).toBe(true);
+      expect(archive.files.has("notes/Plan (2).md")).toBe(true);
+    });
+
+    it("lands a note whose folderId references a missing folder directly under notes/", () => {
+      const input = emptyInput();
+      input.data.notes = [noteRow({ id: "n1", title: "Siroce", folderId: "ne-postoji" })];
+      const archive = buildExportArchive(input);
+      expect(archive.files.has("notes/Siroce.md")).toBe(true);
+    });
+
+    it("declares one attachment binary entry per distinct sha256, not one per row", () => {
+      const input = emptyInput();
+      const sha = "c".repeat(64);
+      input.data.notes = [noteRow({ id: "n1", title: "A" }), noteRow({ id: "n2", title: "B" })];
+      input.data.noteAttachments = [
+        attachmentRow({ id: "att1", noteId: "n1", sha256: sha, sizeBytes: 10 }),
+        attachmentRow({ id: "att2", noteId: "n2", sha256: sha, sizeBytes: 10 }),
+      ];
+      const archive = buildExportArchive(input);
+      const attachmentBinaries = archive.binaries.filter((entry) => entry.kind === "attachment");
+      expect(attachmentBinaries).toEqual([{ kind: "attachment", path: `blobs/${sha}`, sha256: sha, sizeBytes: 10 }]);
+    });
+
+    it("carries the notes module count and a sha256-sorted blobs inventory in the manifest", () => {
+      const input = emptyInput();
+      input.data.notes = [noteRow({ id: "n1", title: "A" })];
+      input.data.noteAttachments = [
+        attachmentRow({ id: "att2", noteId: "n1", sha256: "b".repeat(64), sizeBytes: 20 }),
+        attachmentRow({ id: "att1", noteId: "n1", sha256: "a".repeat(64), sizeBytes: 10 }),
+      ];
+      const archive = buildExportArchive(input);
+      const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
+
+      expect(manifest.modules).toContainEqual({ id: "notes", records: archive.byModule.notes });
+      expect(manifest.blobs).toEqual([
+        { sha256: "a".repeat(64), sizeBytes: 10 },
+        { sha256: "b".repeat(64), sizeBytes: 20 },
+      ]);
+      expect((manifest.checksums as Record<string, string>)["data/notes.ndjson"]).toBe(
+        sha256(archive.files.get("data/notes.ndjson") ?? ""),
+      );
+    });
+
+    it("is deterministic: two builds of the same input produce identical files and binaries", () => {
+      const input = emptyInput();
+      input.data.noteFolders = [
+        folderRow({ id: "f1", name: "Posao" }),
+        folderRow({ id: "f2", name: "Licno" }),
+      ];
+      input.data.notes = [
+        noteRow({ id: "n1", title: "Prva", folderId: "f1", snapshot: emptyNoteSnapshot() }),
+        noteRow({ id: "n2", title: "Druga", folderId: "f2" }),
+      ];
+      input.data.noteVersions = [
+        { noteId: "n1", coveredSeq: 1, title: "Prva", createdAt: "2026-07-01T00:00:00.000Z", snapshot: new Uint8Array([2]) },
+      ];
+      input.data.noteAttachments = [attachmentRow({ id: "att1", noteId: "n1", sha256: "d".repeat(64) })];
+
+      const first = buildExportArchive(input);
+      const second = buildExportArchive(input);
+
+      expect([...first.files.entries()]).toEqual([...second.files.entries()]);
+      expect(first.binaries).toEqual(second.binaries);
     });
   });
 });

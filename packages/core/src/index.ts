@@ -72,6 +72,8 @@ export type { CardSyntaxSpan, NoteCardSpec, ParsedBlock, ParsedCard } from "./no
 
 export { replaceNoteContent } from "./notes/yjsRestore.js";
 
+export { claimUniqueName, sanitizePathSegment, UNTITLED_NOTE_NAME } from "./imex/archivePaths.js";
+
 export { toCsv } from "./imex/csv.js";
 export type { CsvValue } from "./imex/csv.js";
 
@@ -81,12 +83,20 @@ export { buildExportArchive } from "./imex/exportArchive.js";
 export type {
   ExportArchive,
   ExportArchiveInput,
+  ExportBinaryEntry,
   ExportCard,
   ExportDeck,
   ExportDocument,
   ExportEvent,
   ExportExam,
   ExportFocusSession,
+  ExportNote,
+  ExportNoteAttachment,
+  ExportNoteFolder,
+  ExportNoteTag,
+  ExportNoteTagLink,
+  ExportNoteTemplate,
+  ExportNoteVersion,
   ExportNotification,
   ExportRenewal,
   ExportReviewLogEntry,
@@ -96,6 +106,9 @@ export type {
   ExportSubject,
   ExportTask,
 } from "./imex/exportArchive.js";
+
+export { renderNoteMarkdown } from "./imex/noteMarkdown.js";
+export type { NoteMarkdownAttachment, NoteMarkdownContext } from "./imex/noteMarkdown.js";
 
 export {
   MAX_SPAN_DAYS,
