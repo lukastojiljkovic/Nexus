@@ -25,10 +25,32 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # SEC-SC-04 wants a dependency scan blocking the merge; SEC-VER-03 sets the
+  # bar it blocks at — "any known-exploitable dependency vulnerability". Two
+  # commands, because "exploitable" means something different on either side of
+  # the packaging boundary.
   audit:
     name: Dependency audit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
-      - run: pnpm audit --audit-level high
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24 # matches the root package.json engines field
+
+      # What lands on a user's machine. Reachable by definition, so the bar is
+      # every severity down to `low` and there are no exceptions — this command
+      # must never grow an `--ignore`. It is also why `pnpm-workspace.yaml`
+      # carries no `auditConfig.ignoreGhsas`: an ignore there would apply here.
+      - name: Shipped dependencies
+        run: pnpm audit --prod --audit-level low
+
+      # The rest of the tree, which is the build toolchain — plus electron
+      # itself, a devDependency that very much ships, so it is covered here.
+      # Blocks on every high and critical advisory except the ones the script's
+      # allow-list names, each with its reasoning and the condition that
+      # retires it; an allowance that stops matching fails the job too, so a
+      # spent excuse cannot linger. See the script for why this is not a flag.
+      - name: Build toolchain
+        run: node .github/scripts/audit-toolchain.mjs
