@@ -103,6 +103,120 @@ describe("mergeNoteState", () => {
     expect(plaintextOf(doc)).toBe("Stavka\nKraj");
   });
 
+  it("derives marked text with no pseudo-XML mark tags leaking in", () => {
+    const doc = new Y.Doc();
+    const fragment = doc.getXmlFragment("default");
+    const paragraph = new Y.XmlElement("paragraph");
+    const text = new Y.XmlText();
+    paragraph.insert(0, [text]);
+    fragment.push([paragraph]);
+    // A Y.XmlText must be integrated into the doc before `.length` reflects
+    // real content — otherwise these three inserts all queue at index 0
+    // (pending until integration) and land in reverse order.
+    text.insert(0, "važan", { bold: {} });
+    text.insert(text.length, " sastanak", { italic: {} });
+    text.insert(text.length, " kod", { code: {} });
+
+    expect(plaintextOf(doc)).toBe("važan sastanak kod");
+  });
+
+  it("derives a link's text with no <link> wrapper", () => {
+    const doc = new Y.Doc();
+    const fragment = doc.getXmlFragment("default");
+    const paragraph = new Y.XmlElement("paragraph");
+    const text = new Y.XmlText();
+    text.insert(0, "otvori vezu", { link: { href: "https://example.com" } });
+    paragraph.insert(0, [text]);
+    fragment.push([paragraph]);
+
+    expect(plaintextOf(doc)).toBe("otvori vezu");
+  });
+
+  it("derives a bulletList's listItems as three separate lines, not fused", () => {
+    const doc = new Y.Doc();
+    const fragment = doc.getXmlFragment("default");
+    const list = new Y.XmlElement("bulletList");
+    const items = ["mleko", "hleb", "jaja"].map((word) => {
+      const item = new Y.XmlElement("listItem");
+      const paragraph = new Y.XmlElement("paragraph");
+      paragraph.insert(0, [new Y.XmlText(word)]);
+      item.insert(0, [paragraph]);
+      return item;
+    });
+    list.insert(0, items);
+    fragment.push([list]);
+
+    expect(plaintextOf(doc)).toBe("mleko\nhleb\njaja");
+  });
+
+  it("derives a blockquote's two paragraphs as two separate lines", () => {
+    const doc = new Y.Doc();
+    const fragment = doc.getXmlFragment("default");
+    const quote = new Y.XmlElement("blockquote");
+    const first = new Y.XmlElement("paragraph");
+    first.insert(0, [new Y.XmlText("Prvi citat")]);
+    const second = new Y.XmlElement("paragraph");
+    second.insert(0, [new Y.XmlText("Drugi citat")]);
+    quote.insert(0, [first, second]);
+    fragment.push([quote]);
+
+    expect(plaintextOf(doc)).toBe("Prvi citat\nDrugi citat");
+  });
+
+  it("derives hardBreak as a newline, not fusing the words on either side", () => {
+    const doc = new Y.Doc();
+    const fragment = doc.getXmlFragment("default");
+    const paragraph = new Y.XmlElement("paragraph");
+    paragraph.insert(0, [
+      new Y.XmlText("Prva"),
+      new Y.XmlElement("hardBreak"),
+      new Y.XmlText("druga"),
+    ]);
+    fragment.push([paragraph]);
+
+    expect(plaintextOf(doc)).toBe("Prva\ndruga");
+  });
+
+  it("derives a noteLink's label as part of its surrounding paragraph's line", () => {
+    const doc = new Y.Doc();
+    const fragment = doc.getXmlFragment("default");
+    const paragraph = new Y.XmlElement("paragraph");
+    const link = new Y.XmlElement("noteLink");
+    link.setAttribute("noteId", "note-1");
+    link.setAttribute("label", "Moja beleška");
+    paragraph.insert(0, [new Y.XmlText("Vidi "), link, new Y.XmlText(" ovde.")]);
+    fragment.push([paragraph]);
+
+    expect(plaintextOf(doc)).toBe("Vidi Moja beleška ovde.");
+  });
+
+  it("derives an attachmentImage block as contributing no text", () => {
+    const doc = new Y.Doc();
+    const fragment = doc.getXmlFragment("default");
+    const before = new Y.XmlElement("paragraph");
+    before.insert(0, [new Y.XmlText("Pre slike")]);
+    const image = new Y.XmlElement("attachmentImage");
+    image.setAttribute("attachmentId", "att-1");
+    const after = new Y.XmlElement("paragraph");
+    after.insert(0, [new Y.XmlText("Posle slike")]);
+    fragment.push([before, image, after]);
+
+    expect(plaintextOf(doc)).toBe("Pre slike\nPosle slike");
+  });
+
+  it("produces no blank line for an empty paragraph between two non-empty ones", () => {
+    const doc = new Y.Doc();
+    const fragment = doc.getXmlFragment("default");
+    const first = new Y.XmlElement("paragraph");
+    first.insert(0, [new Y.XmlText("Prvi")]);
+    const empty = new Y.XmlElement("paragraph"); // no children at all
+    const second = new Y.XmlElement("paragraph");
+    second.insert(0, [new Y.XmlText("Drugi")]);
+    fragment.push([first, empty, second]);
+
+    expect(plaintextOf(doc)).toBe("Prvi\nDrugi");
+  });
+
   it("returns a merged snapshot that is itself re-applicable (round-trip)", () => {
     const source = docWithParagraphs("A", "B");
     const merged = mergeNoteState(encode(source), []);

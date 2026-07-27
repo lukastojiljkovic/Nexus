@@ -1,5 +1,7 @@
 import * as Y from "yjs";
 
+import { xmlTextContent } from "./yjsText.js";
+
 /**
  * Pure parsers for inline flashcard syntax authored directly in a note's text
  * (NOTE-006 slice a). One block's text yields zero or more cards through
@@ -187,14 +189,23 @@ export function collectNoteCards(doc: Y.Doc): NoteCardSpec[] {
 }
 
 /**
- * The concatenated text of one XML node. Deliberately a local copy of
- * `yjsMerge.ts`'s private `nodeText` rather than a shared export: the two
- * walks serve different callers (plaintext derivation vs. card parsing) and
- * must stay free to diverge without one caller quietly changing the other's
- * behaviour.
+ * The concatenated text of one XML node, deliberately mirroring ProseMirror's
+ * own `Node.textContent`: text runs concatenated, every non-text node — an
+ * inline atom like `noteLink`, a `hardBreak` — contributing nothing, and no
+ * separator at a block boundary. That parity is the whole point: the editor's
+ * decoration plugin parses `node.textContent` while persistence parses this,
+ * and ADR-017's guarantee is that ONE parser sees the same string both times.
+ * A hardBreak yielding "\n" here would be *nicer* text and would silently make
+ * a line a card in the database that the editor never highlighted.
+ *
+ * So this stays a separate walk from `yjsMerge.ts`'s (which does want readable
+ * lines) — but not a separate way of reading a text run: both go through
+ * `xmlTextContent`, because a mark leaking in as `<bold>…</bold>` is wrong for
+ * either of them, and here it would land verbatim on the front or back of a
+ * flashcard the user then studies.
  */
 function nodeText(node: Y.XmlElement | Y.XmlText | Y.XmlHook): string {
-  if (node instanceof Y.XmlText) return node.toString();
+  if (node instanceof Y.XmlText) return xmlTextContent(node);
   if (node instanceof Y.XmlElement) {
     let text = "";
     for (const child of node.toArray()) text += nodeText(child);

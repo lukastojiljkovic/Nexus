@@ -105,6 +105,34 @@ function docWithBlocks(...blocks: Y.XmlElement[]): Y.Doc {
   return doc;
 }
 
+/** One run of a marked paragraph: the text, and the marks a real editor would have written over it. */
+interface MarkedRun {
+  text: string;
+  marks?: Record<string, unknown>;
+}
+
+/**
+ * A doc holding one keyed paragraph whose text is assembled from marked runs.
+ * The element is pushed into the document *before* anything is inserted into
+ * its text: an unintegrated `Y.XmlText` queues its inserts and keeps reporting
+ * `length` 0, so formatting one before attaching it lands every run at index 0,
+ * in reverse.
+ */
+function markedCardDoc(runs: readonly MarkedRun[], cardKey: string): Y.Doc {
+  const doc = new Y.Doc();
+  const paragraphEl = new Y.XmlElement("paragraph");
+  const text = new Y.XmlText();
+  paragraphEl.insert(0, [text]);
+  paragraphEl.setAttribute("cardKey", cardKey);
+  doc.getXmlFragment("default").push([paragraphEl]);
+
+  for (const run of runs) {
+    if (run.marks) text.insert(text.length, run.text, run.marks);
+    else text.insert(text.length, run.text);
+  }
+  return doc;
+}
+
 describe("collectNoteCards", () => {
   it("returns nothing for an empty doc", () => {
     expect(collectNoteCards(new Y.Doc())).toEqual([]);
@@ -149,6 +177,49 @@ describe("collectNoteCards", () => {
   it("yields nothing for a keyed block with no card syntax", () => {
     const doc = docWithBlocks(paragraph("Obična rečenica.", "key-plain"));
     expect(collectNoteCards(doc)).toEqual([]);
+  });
+
+  it("drops marks from a card's sides — a bolded answer is text, not <bold>…</bold>", () => {
+    const doc = markedCardDoc(
+      [{ text: "Glavni grad Francuske :: " }, { text: "Pariz", marks: { bold: {} } }],
+      "key-bold",
+    );
+    expect(collectNoteCards(doc)).toEqual([
+      { key: "key-bold", front: "Glavni grad Francuske", back: "Pariz" },
+    ]);
+  });
+
+  it("drops a code mark too — the form a programming note reaches for most", () => {
+    const doc = markedCardDoc(
+      [{ text: "Prazan vektor :: " }, { text: "std::vector<int> v;", marks: { code: {} } }],
+      "key-code",
+    );
+    expect(collectNoteCards(doc)).toEqual([
+      { key: "key-code", front: "Prazan vektor", back: "std::vector<int> v;" },
+    ]);
+  });
+
+  it("gives a hardBreak no text, matching the editor's own textContent", () => {
+    const el = new Y.XmlElement("paragraph");
+    el.setAttribute("cardKey", "key-break");
+    el.insert(0, [new Y.XmlText("Pitanje ::"), new Y.XmlElement("hardBreak"), new Y.XmlText("Odgovor")]);
+    // The decoration plugin parses ProseMirror's `textContent`, where a
+    // hardBreak is empty as well — it sees "Pitanje ::Odgovor", whose `::` has
+    // no whitespace after it, and highlights nothing. Persisting a card here
+    // would create one the user was never shown.
+    expect(collectNoteCards(docWithBlocks(el))).toEqual([]);
+  });
+
+  it("gives a noteLink no text, matching the editor's own textContent", () => {
+    const link = new Y.XmlElement("noteLink");
+    link.setAttribute("noteId", "note-1");
+    link.setAttribute("label", "Druga beleška");
+    const el = new Y.XmlElement("paragraph");
+    el.setAttribute("cardKey", "key-link");
+    el.insert(0, [new Y.XmlText("Pitanje :: "), link]);
+    // Same parity rule: an inline atom contributes no text, so the back is
+    // empty and this is not a card — for the editor and for the database alike.
+    expect(collectNoteCards(docWithBlocks(el))).toEqual([]);
   });
 
   it("expands cloze deletions into separate, ordinal-suffixed specs", () => {
