@@ -780,6 +780,11 @@ export const strings = {
     /** `searchCommands.ts`'s fixed command list; "Promeni temu" itself reuses `strings.app.themeToggle` rather than duplicating it here. */
     commands: {
       goToPrefix: "Idi na: ",
+      // PRD 08 SRCH-003: one quick-create command per creatable entity,
+      // between the "Idi na" group and the theme toggle.
+      newTask: "Novi zadatak",
+      newEvent: "Novi događaj",
+      newNote: "Nova beleška",
       lock: "Zaključaj aplikaciju",
       rebuildIndex: "Ponovo izgradi indeks pretrage",
       rebuildDonePrefix: "Indeks je ponovo izgrađen:",

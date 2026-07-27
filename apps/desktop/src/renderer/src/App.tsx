@@ -2,21 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { resolveEnabled } from "@nexus/core";
 import { Button, EmptyState, NavItem } from "@nexus/ui";
 import type { ThemeName } from "@nexus/tokens";
-import type {
-  AppInfo,
-  AuthStatus,
-  FlagState,
-  Profile,
-  SearchKind,
-  SearchResult,
-} from "../../shared/ipc.js";
+import type { AppInfo, AuthStatus, FlagState, Profile, SearchResult } from "../../shared/ipc.js";
 import { AuthGate } from "./AuthGate.js";
 import { Onboarding } from "./Onboarding.js";
 import { DashboardPage } from "./DashboardPage.js";
-import { TasksPage } from "./TasksPage.js";
-import { CalendarPage } from "./CalendarPage.js";
-import { NotesPage } from "./NotesPage.js";
-import { StudyPage } from "./StudyPage.js";
+import { TasksPage, type TasksIntent } from "./TasksPage.js";
+import { CalendarPage, type CalendarIntent } from "./CalendarPage.js";
+import { NotesPage, type NotesIntent } from "./NotesPage.js";
+import { StudyPage, type StudyIntent } from "./StudyPage.js";
 import { SettingsPage } from "./SettingsPage.js";
 import { NotificationCenter } from "./NotificationCenter.js";
 import { SearchPalette } from "./SearchPalette.js";
@@ -32,6 +25,19 @@ import {
 } from "./theme.js";
 import { strings } from "./strings.js";
 
+/**
+ * A pending page-level intent (021-e): one payload, tagged with the module
+ * that must consume it. One state rather than four keeps the invariant that
+ * only ever ONE intent is pending, and gives `clearIntent` a single job — the
+ * page reports back through `onIntentHandled` and this clears it, so returning
+ * to that module later never re-fires a stale reveal.
+ */
+type PendingIntent =
+  | { module: "tasks"; intent: TasksIntent }
+  | { module: "calendar"; intent: CalendarIntent }
+  | { module: "notes"; intent: NotesIntent }
+  | { module: "study"; intent: StudyIntent };
+
 /** Idle events that count as activity for the auto-lock timer (AUTH-005). */
 const IDLE_ACTIVITY_EVENTS = ["mousemove", "keydown", "mousedown", "wheel"] as const;
 // A mousemove storm must not rebuild the lock timer on every pixel — activity
@@ -46,24 +52,6 @@ export function moduleName(id: string): string {
   return strings.modules[id] ?? id;
 }
 
-/**
- * Maps a global-search result's kind to the module that owns it (021-d),
- * mirroring `NotificationCenter`'s own `SOURCE_MODULE` idiom. "note" and
- * "attachment" are handled separately in `onSearchResult` below since they
- * use the `openNote` cross-module deep link (ADR-017) instead of a plain
- * module switch — this map only covers the remaining seven kinds, and the
- * `Exclude` keeps it that way at the type level.
- */
-const RESULT_MODULE: Record<Exclude<SearchKind, "note" | "attachment">, string> = {
-  task: "tasks",
-  event: "calendar",
-  document: "calendar",
-  subject: "study",
-  exam: "study",
-  deck: "study",
-  card: "study",
-};
-
 export function App() {
   const [preference, setPreference] = useState<ThemePreference>(readStoredThemePreference);
   // The resolved theme lives in state (not derived inline) so an OS light/dark
@@ -76,11 +64,11 @@ export function App() {
   const [flags, setFlags] = useState<FlagState>({});
   const [failed, setFailed] = useState(false);
   const [activeId, setActiveId] = useState("dashboard");
-  // Pending cross-module deep-link target (STUDY -> a note, ADR-017 — the
-  // app's first). NotesPage selects it on arrival and reports back via
-  // onTargetOpened, which clears it here so a later return to Beleške never
-  // re-selects the same note.
-  const [noteTarget, setNoteTarget] = useState<string | null>(null);
+  // Pending page-level intent (021-e): reveal or create, tagged with the
+  // module that owns it. That page consumes it on arrival and reports back
+  // via onIntentHandled (`clearIntent`), so a later return to that module
+  // never re-fires the same intent.
+  const [pending, setPending] = useState<PendingIntent | null>(null);
   // The local account's lock state (ADR-018). `null` only until the very
   // first `getAuthStatus` round trip resolves.
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
@@ -224,6 +212,10 @@ export function App() {
   useEffect(() => {
     if (!new Set(resolveEnabled(registry, flags)).has(activeId)) {
       setActiveId("dashboard");
+      // A pending intent aimed at a now-disabled module has no page left to
+      // consume it and call onIntentHandled — clear it here instead, or it
+      // would sit pending forever.
+      setPending((current) => (current?.module === activeId ? null : current));
     }
   }, [activeId, flags]);
 
@@ -239,15 +231,26 @@ export function App() {
     changePreference(theme === "noc" ? "dan" : "noc");
   }
 
+  // Stable across renders: every page lists `onIntentHandled` (this) in its
+  // own intent-effect's dependency array, and a fresh reference on every
+  // unrelated App re-render would retrigger that effect for nothing.
+  const clearIntent = useCallback(() => setPending(null), []);
+
+  /** Sets the pending intent and switches to the module that owns it — the one place both happen together. */
+  function dispatchIntent(next: PendingIntent): void {
+    setPending(next);
+    setActiveId(next.module);
+  }
+
   /**
    * The app's first cross-module deep link (STUDY -> the note a flashcard was
-   * generated from, ADR-017): sets the pending target and switches the active
-   * module, extending NotificationCenter's `onNavigate={setActiveId}`
-   * precedent with a payload that NotesPage consumes on arrival.
+   * generated from, ADR-017): rides the shared intent mechanism (021-e) that
+   * every page now consumes the same way, extending NotificationCenter's
+   * `onNavigate={setActiveId}` precedent with a payload NotesPage consumes on
+   * arrival.
    */
   function openNote(noteId: string): void {
-    setNoteTarget(noteId);
-    setActiveId("notes");
+    dispatchIntent({ module: "notes", intent: { kind: "reveal", noteId } });
   }
 
   // Stable across renders: `SearchPalette`'s own auto-close effect (the
@@ -261,28 +264,54 @@ export function App() {
   }, []);
 
   /**
-   * Activates a global-search result (021-d). Only "note" gets a genuine
-   * deep link today, via the same cross-module `openNote` ADR-017 already
-   * uses from STUDY; every other kind lands on its owning module's page
-   * without revealing the specific entity — scrolling to/opening the exact
-   * task, event, card, etc. inside that page is the NEXT slice's job, not
-   * this one's, so this function deliberately stops at "the right page is
-   * now open" rather than stubbing a reveal that would only pretend to work.
+   * Activates a global-search result (021-d/021-e): dispatches the intent
+   * that reveals the exact entity on its owning module's page, rather than
+   * only switching to that module. "note" and "attachment" ride the same
+   * `openNote` cross-module link ADR-017 already uses from STUDY; every
+   * other kind maps directly to its module's own intent shape.
    */
   function onSearchResult(result: SearchResult): void {
-    if (result.kind === "note") {
-      openNote(result.entityId);
-      return;
+    switch (result.kind) {
+      case "note":
+        openNote(result.entityId);
+        return;
+      case "attachment":
+        if (result.parentId) {
+          openNote(result.parentId);
+        } else {
+          console.error("Nexus: attachment search result has no parent note id:", result.entityId);
+        }
+        return;
+      case "task":
+        dispatchIntent({ module: "tasks", intent: { kind: "reveal", taskId: result.entityId } });
+        return;
+      case "event":
+        dispatchIntent({
+          module: "calendar",
+          intent: { kind: "reveal-event", eventId: result.entityId },
+        });
+        return;
+      case "document":
+        dispatchIntent({
+          module: "calendar",
+          intent: { kind: "reveal-document", documentId: result.entityId },
+        });
+        return;
+      case "subject":
+      case "exam":
+      case "deck":
+      case "card":
+        dispatchIntent({
+          module: "study",
+          intent: {
+            kind: "reveal",
+            entity: result.kind,
+            id: result.entityId,
+            parentId: result.parentId,
+          },
+        });
+        return;
     }
-    if (result.kind === "attachment") {
-      if (result.parentId) {
-        openNote(result.parentId);
-      } else {
-        console.error("Nexus: attachment search result has no parent note id:", result.entityId);
-      }
-      return;
-    }
-    setActiveId(RESULT_MODULE[result.kind]);
   }
 
   // Ctrl+K / Cmd+K opens the palette (only once truly unlocked and past
@@ -322,6 +351,19 @@ export function App() {
         enabledModuleIds: resolveEnabled(registry, flags),
         moduleName,
         onNavigate: setActiveId,
+        onCreate: (moduleId) => {
+          switch (moduleId) {
+            case "tasks":
+              dispatchIntent({ module: "tasks", intent: { kind: "create" } });
+              return;
+            case "calendar":
+              dispatchIntent({ module: "calendar", intent: { kind: "create-event" } });
+              return;
+            case "notes":
+              dispatchIntent({ module: "notes", intent: { kind: "create" } });
+              return;
+          }
+        },
         onToggleTheme: toggleTheme,
         onLock: () => void handleLock(),
         onRebuildComplete: setSearchStatus,
@@ -470,17 +512,30 @@ export function App() {
               onOpenModule={setActiveId}
             />
           ) : effectiveId === "tasks" && activeProfile ? (
-            <TasksPage profileId={activeProfile.id} />
+            <TasksPage
+              profileId={activeProfile.id}
+              intent={pending?.module === "tasks" ? pending.intent : null}
+              onIntentHandled={clearIntent}
+            />
           ) : effectiveId === "calendar" && activeProfile ? (
-            <CalendarPage profileId={activeProfile.id} />
+            <CalendarPage
+              profileId={activeProfile.id}
+              intent={pending?.module === "calendar" ? pending.intent : null}
+              onIntentHandled={clearIntent}
+            />
           ) : effectiveId === "notes" && activeProfile ? (
             <NotesPage
               profileId={activeProfile.id}
-              targetNoteId={noteTarget}
-              onTargetOpened={() => setNoteTarget(null)}
+              intent={pending?.module === "notes" ? pending.intent : null}
+              onIntentHandled={clearIntent}
             />
           ) : effectiveId === "study" && activeProfile ? (
-            <StudyPage profileId={activeProfile.id} onOpenNote={openNote} />
+            <StudyPage
+              profileId={activeProfile.id}
+              onOpenNote={openNote}
+              intent={pending?.module === "study" ? pending.intent : null}
+              onIntentHandled={clearIntent}
+            />
           ) : effectiveId === "settings" && activeProfile ? (
             <SettingsPage
               profileId={activeProfile.id}

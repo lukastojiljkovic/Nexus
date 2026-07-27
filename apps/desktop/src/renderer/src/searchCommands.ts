@@ -3,8 +3,9 @@ import { dayUnit, strings } from "./strings.js";
 
 /**
  * The search palette's command registry (021-d): a fixed, locally-matched
- * list of shell actions — navigate to a module, flip the theme, lock the
- * app, or repair the search index (PRD 08 §7's "index corruption ->
+ * list of shell actions — navigate to a module, start a new entity in one,
+ * flip the theme, lock the app, or repair the search index (PRD 08 §7's
+ * "index corruption ->
  * transparent rebuild", the only user-facing trigger for one). Matching
  * (`matchCommands`) is synchronous and never touches IPC; only the rebuild
  * command's own `run` does.
@@ -26,6 +27,9 @@ export interface SearchCommand {
  */
 export const REBUILD_COMMAND_ID = "rebuild-search-index";
 
+/** The modules a palette command can create an entity in — the three whose pages accept a "create" intent (021-e). */
+export type CreatableModuleId = "tasks" | "calendar" | "notes";
+
 export interface SearchCommandsContext {
   /** Needed only by the rebuild command's own `rebuildSearchIndex` call. */
   profileId: string;
@@ -34,11 +38,34 @@ export interface SearchCommandsContext {
   /** The shell's own id -> Serbian display name lookup (`App.tsx`'s `moduleName`), reused rather than re-spelled here. */
   moduleName: (id: string) => string;
   onNavigate: (moduleId: string) => void;
+  /** Runs a quick-create command: switches to that module and asks it to start a fresh entity (PRD 08 SRCH-003). */
+  onCreate: (moduleId: CreatableModuleId) => void;
   onToggleTheme: () => void;
   onLock: () => void;
   /** Reports the rebuild's outcome as an already-Serbian-formatted string, for the palette's footer (see that component for why it owns the delayed close). */
   onRebuildComplete: (message: string) => void;
 }
+
+/**
+ * The modules that can create an entity straight from the palette (PRD 08
+ * SRCH-003), in display order. Each becomes a command only when its module is
+ * enabled — a command that switched to a disabled module would be a dead end.
+ * Keywords are matched through `foldSearchText`, so they are spelled already
+ * folded (plain ASCII); the label carries the real Serbian orthography.
+ */
+const CREATABLE = [
+  { moduleId: "tasks", label: strings.search.commands.newTask, keywords: ["dodaj", "zadatak"] },
+  {
+    moduleId: "calendar",
+    label: strings.search.commands.newEvent,
+    keywords: ["dodaj", "dogadjaj", "termin"],
+  },
+  { moduleId: "notes", label: strings.search.commands.newNote, keywords: ["dodaj", "beleska"] },
+] as const satisfies readonly {
+  moduleId: CreatableModuleId;
+  label: string;
+  keywords: readonly string[];
+}[];
 
 function formatRebuildDone(count: number): string {
   const c = strings.search.commands;
@@ -47,8 +74,9 @@ function formatRebuildDone(count: number): string {
 
 /**
  * Builds the fixed command list, in display order: one "Idi na: <modul>" per
- * enabled module, then theme toggle, lock, and index rebuild. Every `run` is
- * a plain callback into the shell except the rebuild's, which is the one
+ * enabled module, the quick-create commands (`CREATABLE` above), then theme
+ * toggle, lock, and index rebuild. Every `run` is a plain callback into the
+ * shell except the rebuild's, which is the one
  * command with no dedicated shell action to call — it talks to
  * `window.nexus.rebuildSearchIndex` directly.
  */
@@ -60,6 +88,16 @@ export function buildSearchCommands(context: SearchCommandsContext): SearchComma
     keywords: [],
     run: () => context.onNavigate(moduleId),
   }));
+
+  for (const entry of CREATABLE) {
+    if (!context.enabledModuleIds.includes(entry.moduleId)) continue;
+    commands.push({
+      id: `create-${entry.moduleId}`,
+      label: entry.label,
+      keywords: entry.keywords,
+      run: () => context.onCreate(entry.moduleId),
+    });
+  }
 
   commands.push(
     {

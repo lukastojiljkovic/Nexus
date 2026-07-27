@@ -43,6 +43,7 @@ import {
 } from "./examDates.js";
 import { focusSessionMinutes, formatDurationMinutes, formatElapsed, formatFocusSessionWhen } from "./focusFormat.js";
 import { MathText } from "./MathText.js";
+import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
 import { intervalLabel, isDueWithinSession } from "./reviewIntervals.js";
 import { dayUnit, strings } from "./strings.js";
 
@@ -243,6 +244,19 @@ function ColorPicker({
   );
 }
 
+/** A pending deep-link target (021-e global search): reveal one study entity. `parentId` is the exam's/deck's subject, or a card's deck — null for a subject. */
+export type StudyIntent = {
+  kind: "reveal";
+  entity: "subject" | "exam" | "deck" | "card";
+  id: string;
+  parentId: string | null;
+};
+
+/** DOM id for any revealable study row, for `scrollRevealedIntoView`. Ids are UUIDv7 and globally unique across the four entity kinds, so one namespace serves all of them. */
+function studyRowDomId(entityId: string): string {
+  return `study-row-${entityId}`;
+}
+
 export interface StudyPageProps {
   profileId: string;
   /**
@@ -252,6 +266,9 @@ export interface StudyPageProps {
    * muted text rather than a dead-end button.
    */
   onOpenNote?: (noteId: string) => void;
+  intent?: StudyIntent | null;
+  /** Reports that `intent` above has been acted on, so the caller (App.tsx) can clear it. */
+  onIntentHandled?: () => void;
 }
 
 /**
@@ -263,13 +280,14 @@ export interface StudyPageProps {
  * scheduling and block generation are always stamped by the main process
  * (`syncAllPlans` runs before every plan read so missed blocks are labelled).
  */
-export function StudyPage({ profileId, onOpenNote }: StudyPageProps) {
+export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: StudyPageProps) {
   const [subjects, setSubjects] = useState<Subject[] | null>(null);
   const [exams, setExams] = useState<Exam[] | null>(null);
   const [decks, setDecks] = useState<Deck[] | null>(null);
   const [deckCounts, setDeckCounts] = useState<DeckCounts[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [archivedOpen, setArchivedOpen] = useState(false);
+  const { revealedId, reveal } = useRevealedRow();
 
   // One form serves both add + edit; a non-null id means "editing that subject".
   const [editingSubjectId, setEditingSubjectId] = useState<string | null>(null);
@@ -407,6 +425,104 @@ export function StudyPage({ profileId, onOpenNote }: StudyPageProps) {
       active = false;
     };
   }, [profileId]);
+
+  // Consumes a pending deep-link (021-e): reveals one study entity that a
+  // global-search result pointed at. Keyed on the intent plus every list and
+  // piece of navigation state the branches below read, rather than mount, so
+  // a search fired while STUDY is already open retriggers this exactly like
+  // one that switches modules here does, and a load race (the target arrives
+  // before the relevant list has fetched, or before a route/section switch
+  // has taken effect) resolves itself once that state changes instead of
+  // being dropped.
+  useEffect(() => {
+    if (!intent) return;
+
+    if (intent.entity === "card") {
+      // A card only exists inside its deck's drill-in.
+      if (intent.parentId === null) {
+        onIntentHandled?.(); // nothing to navigate into
+        return;
+      }
+      if (route.kind !== "deck" || route.deckId !== intent.parentId) {
+        setRoute({ kind: "deck", deckId: intent.parentId });
+        return; // re-runs once the drill-in has switched; the card-loading effect fetches `cards`
+      }
+      if (cards === null) return; // still loading — wait rather than deciding it's missing
+      const card = cards.find((c) => c.id === intent.id);
+      if (!card) {
+        onIntentHandled?.(); // deleted between indexing and clicking
+        return;
+      }
+      reveal(card.id);
+      scrollRevealedIntoView(studyRowDomId(card.id));
+      onIntentHandled?.();
+      return;
+    }
+
+    // subject / exam / deck all live on the hub.
+    if (route.kind !== "hub") {
+      setRoute({ kind: "hub" });
+      return;
+    }
+    if (subjects === null) return; // still loading — wait rather than deciding it's missing
+
+    if (intent.entity === "subject") {
+      const subject = subjects.find((s) => s.id === intent.id);
+      if (!subject) {
+        onIntentHandled?.(); // deleted between indexing and clicking
+        return;
+      }
+      if (subject.archived && !archivedOpen) {
+        setArchivedOpen(true);
+        return; // re-runs once the archived section is open
+      }
+      reveal(subject.id);
+      scrollRevealedIntoView(studyRowDomId(subject.id));
+      onIntentHandled?.();
+      return;
+    }
+
+    if (intent.entity === "exam") {
+      if (exams === null) return; // still loading — wait rather than deciding it's missing
+      const exam = exams.find((e) => e.id === intent.id);
+      if (!exam) {
+        onIntentHandled?.(); // deleted between indexing and clicking
+        return;
+      }
+      // An exam only renders inside its subject's ACTIVE card — an archived
+      // subject renders as a flat row with no exams — so unlike the subject
+      // branch above, opening the archived section cannot make this exam
+      // appear. The hub is still the right landing spot; there is just
+      // nothing to reveal.
+      const parentSubject = subjects.find((s) => s.id === intent.parentId);
+      if (parentSubject?.archived) {
+        onIntentHandled?.();
+        return;
+      }
+      reveal(exam.id);
+      scrollRevealedIntoView(studyRowDomId(exam.id));
+      onIntentHandled?.();
+      return;
+    }
+
+    // deck — same shape as exam above (a deck of an archived subject has
+    // nothing to reveal either, for the same reason).
+    if (decks === null) return; // still loading — wait rather than deciding it's missing
+    const deck = decks.find((d) => d.id === intent.id);
+    if (!deck) {
+      onIntentHandled?.(); // deleted between indexing and clicking
+      return;
+    }
+    const parentSubject = subjects.find((s) => s.id === intent.parentId);
+    if (parentSubject?.archived) {
+      onIntentHandled?.();
+      return;
+    }
+    reveal(deck.id);
+    scrollRevealedIntoView(studyRowDomId(deck.id));
+    onIntentHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intent, subjects, exams, decks, cards, route, archivedOpen, reveal, onIntentHandled]);
 
   // Live elapsed readout for a running focus timer: ticks once a second from
   // `startedAt`, display-only (the store never sees this value). Restarts
@@ -1259,7 +1375,12 @@ export function StudyPage({ profileId, onOpenNote }: StudyPageProps) {
                       </span>
                     }
                   >
-                    <MathText text={card.front} className="study__card-front" />
+                    <span
+                      id={studyRowDomId(card.id)}
+                      className={revealedId === card.id ? "nx-revealed" : undefined}
+                    >
+                      <MathText text={card.front} className="study__card-front" />
+                    </span>
                   </ListRow>
                 ))}
               </div>
@@ -1480,7 +1601,15 @@ export function StudyPage({ profileId, onOpenNote }: StudyPageProps) {
               const subjectExams = examsForSubject(subject.id);
               const subjectDecks = decksForSubject(subject.id);
               return (
-                <div key={subject.id} className="study__subject-card">
+                <div
+                  key={subject.id}
+                  id={studyRowDomId(subject.id)}
+                  className={
+                    revealedId === subject.id
+                      ? "study__subject-card nx-revealed"
+                      : "study__subject-card"
+                  }
+                >
                   <div className="study__subject-header">
                     <span
                       className={`study__dot study__dot--${subject.color}`}
@@ -1547,7 +1676,14 @@ export function StudyPage({ profileId, onOpenNote }: StudyPageProps) {
                               </span>
                             }
                           >
-                            <span className="study__exam-item">
+                            <span
+                              id={studyRowDomId(exam.id)}
+                              className={
+                                revealedId === exam.id
+                                  ? "study__exam-item nx-revealed"
+                                  : "study__exam-item"
+                              }
+                            >
                               <span className="study__exam-heading">
                                 <span className="study__exam-type">
                                   {strings.study.examType[exam.examType]}
@@ -1670,7 +1806,16 @@ export function StudyPage({ profileId, onOpenNote }: StudyPageProps) {
                               </span>
                             }
                           >
-                            <span className="study__deck-name">{deck.name}</span>
+                            <span
+                              id={studyRowDomId(deck.id)}
+                              className={
+                                revealedId === deck.id
+                                  ? "study__deck-name nx-revealed"
+                                  : "study__deck-name"
+                              }
+                            >
+                              {deck.name}
+                            </span>
                           </ListRow>
                         );
                       })
@@ -1741,7 +1886,16 @@ export function StudyPage({ profileId, onOpenNote }: StudyPageProps) {
                         </span>
                       }
                     >
-                      <span className="study__subject-name">{subject.name}</span>
+                      <span
+                        id={studyRowDomId(subject.id)}
+                        className={
+                          revealedId === subject.id
+                            ? "study__subject-name nx-revealed"
+                            : "study__subject-name"
+                        }
+                      >
+                        {subject.name}
+                      </span>
                       {subject.semester && (
                         <span className="study__subject-semester">{subject.semester}</span>
                       )}

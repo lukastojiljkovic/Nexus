@@ -8,6 +8,7 @@ import type {
   NewDocumentFields,
   TrackedDocument,
 } from "../../shared/ipc.js";
+import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
 import { dayUnit, strings } from "./strings.js";
 
 // --- Field orderings (renderer mirror of @nexus/db) -------------------------
@@ -65,8 +66,27 @@ function daysUntilLabel(days: number): string {
   return `${d.pastPrefix} ${ago} ${dayUnit(ago, d.unitOne, d.unitMany)}`;
 }
 
+/** DOM id for a document's row, for `scrollRevealedIntoView`. */
+function documentRowDomId(documentId: string): string {
+  return `document-row-${documentId}`;
+}
+
 export interface DocumentsPanelProps {
   profileId: string;
+  /**
+   * A pending deep-link target (021-e, CAL's own "document" search results):
+   * loads that document into the edit form and marks its row, once. A bare
+   * id/handler pair rather than a TasksIntent-style union, since a document
+   * has exactly one reveal path — no "create" variant in this slice. Owned by
+   * `CalendarPage`, which is also the one that switches to this panel's own
+   * Dokumenta view in the first place.
+   */
+  revealDocumentId?: string | null;
+  // `| undefined` is explicit (not just the bare optional `?`) because
+  // `CalendarPage` forwards its OWN optional `onIntentHandled` prop here
+  // as-is — under `exactOptionalPropertyTypes`, a plain `() => void` rejects
+  // that forwarded value even though the property itself is optional.
+  onRevealHandled?: (() => void) | undefined;
 }
 
 /**
@@ -77,10 +97,15 @@ export interface DocumentsPanelProps {
  * single source of truth (it derives status/daysUntilExpiry and applies the
  * per-type reminder ladder). Per-document ladder editing is deferred.
  */
-export function DocumentsPanel({ profileId }: DocumentsPanelProps) {
+export function DocumentsPanel({
+  profileId,
+  revealDocumentId,
+  onRevealHandled,
+}: DocumentsPanelProps) {
   const [documents, setDocuments] = useState<TrackedDocument[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
+  const { revealedId, reveal } = useRevealedRow();
 
   // One form serves both modes; a non-null editingId means "editing that doc".
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -127,6 +152,27 @@ export function DocumentsPanel({ profileId }: DocumentsPanelProps) {
     setNotes(doc.notes ?? "");
     labelRef.current?.focus();
   }
+
+  // Consumes a pending deep-link (021-e, CAL's "document" search results):
+  // loads the same edit path a row's ✎ button uses, then marks the row. Keyed
+  // on `revealDocumentId`/`documents` rather than mount, so a search fired
+  // while Dokumenta is already open retriggers this exactly like one that
+  // switches CalendarPage into this view does, and a load race (the target
+  // arrives before this panel's own list has fetched) resolves itself once
+  // `documents` changes instead of being dropped.
+  useEffect(() => {
+    if (revealDocumentId == null) return;
+    if (documents === null) return; // still loading — wait rather than deciding it's missing
+    const doc = documents.find((d) => d.id === revealDocumentId);
+    if (!doc) {
+      onRevealHandled?.(); // deleted between indexing and clicking — do nothing else
+      return;
+    }
+    startEdit(doc);
+    reveal(doc.id);
+    scrollRevealedIntoView(documentRowDomId(doc.id));
+    onRevealHandled?.();
+  }, [revealDocumentId, documents, reveal, onRevealHandled]);
 
   async function reload(): Promise<void> {
     setDocuments(await window.nexus.listDocuments(profileId));
@@ -365,7 +411,12 @@ export function DocumentsPanel({ profileId }: DocumentsPanelProps) {
                 )
               }
             >
-              <span className="documents__item">
+              <span
+                id={documentRowDomId(doc.id)}
+                className={
+                  revealedId === doc.id ? "documents__item nx-revealed" : "documents__item"
+                }
+              >
                 <span className="documents__heading">
                   <span className="documents__doc-label">{doc.label}</span>
                   <span className="documents__type">{strings.documents.type[doc.docType]}</span>

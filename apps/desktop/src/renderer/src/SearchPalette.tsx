@@ -317,18 +317,35 @@ export function SearchPalette({
     });
   }
 
-  function activateResult(result: SearchResult): void {
-    onOpenResult(result);
+  /**
+   * Closing because the user went somewhere, not because they dismissed the
+   * palette: dropping the remembered element turns the restore below into a
+   * no-op. Otherwise it would fight the destination — a "Novi zadatak"
+   * command focuses the quick-add input, and the restore (which runs last,
+   * since the palette is rendered after `<main>`) would immediately yank
+   * focus back to whatever the palette was opened from (021-e).
+   */
+  function leaveFor(action: () => void): void {
+    previousFocusRef.current = null;
+    action();
     onClose();
   }
 
+  function activateResult(result: SearchResult): void {
+    leaveFor(() => onOpenResult(result));
+  }
+
   function activateCommand(command: SearchCommand): void {
-    command.run();
     // The rebuild command is the one exception: it stays open until its
     // Serbian confirmation (`statusMessage`) arrives and the effect above
     // closes it. Closing here immediately would race the async IPC round
-    // trip and the count would never be shown.
-    if (command.id !== REBUILD_COMMAND_ID) onClose();
+    // trip and the count would never be shown — and it genuinely goes
+    // nowhere, so its close does restore focus like a dismissal.
+    if (command.id === REBUILD_COMMAND_ID) {
+      command.run();
+      return;
+    }
+    leaveFor(() => command.run());
   }
 
   function activateRow(row: PaletteRow | undefined): void {

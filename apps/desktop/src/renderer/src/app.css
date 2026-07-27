@@ -17,6 +17,38 @@ body {
   margin: 0;
 }
 
+/* Global "you found it" mark for a global-search reveal (021-e), applied by
+   `useRevealedRow` (reveal.ts) to whichever row a palette result points at.
+   Same idiom as .cal__month-day--drop below — accent border + soft
+   background, never a glow — but momentary, which is why it is an animation
+   and not a transition: a class that is added and then removed can only
+   transition IN, and this mark has to fade back OUT by itself. Keyframes
+   also outrank the marked element's own declarations whatever the
+   specificity, which this block (sitting above every page's styles) would
+   otherwise lose the tie to — .study__subject-card sets its own background.
+   The overlay is a flat gradient rather than background-color so it layers
+   over that background instead of replacing it, leaving nothing to flash
+   back when the class goes. Duration matches REVEAL_DURATION_MS, which is
+   what removes the class once the fade has finished. */
+.nx-revealed {
+  outline: 1px solid transparent;
+  outline-offset: 2px;
+  border-radius: var(--nx-radius-xs);
+  animation: nx-reveal 2000ms var(--nx-motion-ease) forwards;
+}
+
+@keyframes nx-reveal {
+  0%,
+  75% {
+    outline-color: var(--nx-accent);
+    background-image: linear-gradient(var(--nx-accent-soft), var(--nx-accent-soft));
+  }
+  100% {
+    outline-color: transparent;
+    background-image: linear-gradient(transparent, transparent);
+  }
+}
+
 .app {
   display: flex;
   flex-direction: column;

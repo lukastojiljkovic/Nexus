@@ -12,6 +12,7 @@ import {
 } from "@nexus/ui";
 import type { CollectionSchema, KanbanViewConfig, ListViewConfig } from "@nexus/core";
 import type { Task, TaskPriority, TaskStatus } from "../../shared/ipc.js";
+import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
 import { strings } from "./strings.js";
 
 // --- Field orderings (renderer mirror of @nexus/db) -------------------------
@@ -100,8 +101,19 @@ function taskChips(task: TaskFields): ReactNode {
   return chips.length > 0 ? <span className="tasks__chips">{chips}</span> : null;
 }
 
+/** A pending deep-link target (021-e global search / palette commands): reveal one task, or focus the quick-add input for a fresh one. */
+export type TasksIntent = { kind: "reveal"; taskId: string } | { kind: "create" };
+
+/** DOM id for a task's row — shared by both the list and kanban renderings (only one is ever mounted at a time), so `scrollRevealedIntoView` has one stable target regardless of which view is active. */
+function taskRowDomId(taskId: string): string {
+  return `task-row-${taskId}`;
+}
+
 export interface TasksPageProps {
   profileId: string;
+  intent?: TasksIntent | null;
+  /** Reports that `intent` above has been acted on, so the caller (App.tsx) can clear it. */
+  onIntentHandled?: () => void;
 }
 
 /**
@@ -110,13 +122,14 @@ export interface TasksPageProps {
  * ordering/grouping; every write goes through the tasks:* IPC allowlist, so the
  * store stays the single source of truth (e.g. it derives completed_at).
  */
-export function TasksPage({ profileId }: TasksPageProps) {
+export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps) {
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [view, setView] = useState<TaskView>(() => readStoredView(profileId));
   const [draft, setDraft] = useState("");
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { revealedId, reveal } = useRevealedRow();
 
   useEffect(() => {
     let active = true;
@@ -133,6 +146,32 @@ export function TasksPage({ profileId }: TasksPageProps) {
       active = false;
     };
   }, [profileId]);
+
+  // Consumes a pending deep-link (021-e): "create" focuses the quick-add
+  // input; "reveal" scrolls to and marks a task's row. Both the list and the
+  // kanban view always render every loaded task — v0 has no filter/sort UI
+  // yet (see the top-of-file comment) — so unlike CAL/STUDY there is no view
+  // or filter state to adjust here; the reveal has nothing to hide from.
+  // Keyed on `intent`/`tasks` rather than mount, so a search fired while
+  // already on Zadaci retriggers this exactly like one that switches modules
+  // here does, and so a load race (intent arrives before the list has
+  // fetched) resolves itself once `tasks` changes instead of dropping it.
+  useEffect(() => {
+    if (!intent) return;
+    if (intent.kind === "create") {
+      inputRef.current?.focus();
+      onIntentHandled?.();
+      return;
+    }
+    if (tasks === null) return; // still loading — wait rather than deciding it's missing
+    if (!tasks.some((task) => task.id === intent.taskId)) {
+      onIntentHandled?.(); // deleted between indexing and clicking — do nothing else
+      return;
+    }
+    reveal(intent.taskId);
+    scrollRevealedIntoView(taskRowDomId(intent.taskId));
+    onIntentHandled?.();
+  }, [intent, tasks, reveal, onIntentHandled]);
 
   function selectView(next: TaskView): void {
     setView(next);
@@ -288,7 +327,17 @@ export function TasksPage({ profileId }: TasksPageProps) {
                 done={task.done}
                 onChange={(event) => void toggleDone(task, event.target.checked)}
               >
-                {task.title}
+                {/* The id/reveal mark sits on this inner span rather than on
+                    `ListRow` itself: `ListRow`/`ListView` cannot take extra
+                    props, and wrapping `ListRow` in an owned div would break
+                    its `:last-child` border-bottom CSS (packages/ui/src/
+                    styles.css — out of scope for this slice). */}
+                <span
+                  id={taskRowDomId(task.id)}
+                  className={revealedId === task.id ? "nx-revealed" : undefined}
+                >
+                  {task.title}
+                </span>
               </Checkbox>
             </ListRow>
           )}
@@ -300,7 +349,16 @@ export function TasksPage({ profileId }: TasksPageProps) {
           config={KANBAN_CONFIG}
           columnTitle={statusTitle}
           itemKey={(task) => task.id}
-          renderCard={(task) => <KanbanCard tag={taskChips(task)}>{task.title}</KanbanCard>}
+          renderCard={(task) => (
+            <KanbanCard tag={taskChips(task)}>
+              <span
+                id={taskRowDomId(task.id)}
+                className={revealedId === task.id ? "nx-revealed" : undefined}
+              >
+                {task.title}
+              </span>
+            </KanbanCard>
+          )}
           onMove={(task, patch) => {
             const next = patch.status;
             // Ungrouped drops never occur — every task has a valid status — so

@@ -29,19 +29,14 @@ function filterFor(selection: FolderSelection): { folderId?: string | null } | u
   }
 }
 
+/** A pending deep-link target (021-e): reveal one note, or create a fresh one. Also backs the STUDY -> a note cross-module link (ADR-017), the app's first. */
+export type NotesIntent = { kind: "reveal"; noteId: string } | { kind: "create" };
+
 export interface NotesPageProps {
   profileId: string;
-  /**
-   * A pending cross-module deep-link target (STUDY -> a note, ADR-017): when
-   * non-null, that note is selected and the folder/tag filters are reset to
-   * "all"/none, so the middle pane actually shows the row the editor jumps to.
-   */
-  targetNoteId?: string | null;
-  /**
-   * Reports that the pending target above has been acted on, so the caller
-   * can clear it — otherwise a later return to Beleške would re-select it.
-   */
-  onTargetOpened?: () => void;
+  intent?: NotesIntent | null;
+  /** Reports that `intent` above has been acted on, so the caller (App.tsx) can clear it. */
+  onIntentHandled?: () => void;
 }
 
 /**
@@ -53,7 +48,7 @@ export interface NotesPageProps {
  * organization IPC allowlist; the editor owns the live Yjs doc, main owns
  * storage. Writes are await-then-refetch (never optimistic), the house style.
  */
-export function NotesPage({ profileId, targetNoteId, onTargetOpened }: NotesPageProps) {
+export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps) {
   const [folders, setFolders] = useState<NoteFolder[]>([]);
   const [selection, setSelection] = useState<FolderSelection>({ kind: "all" });
   const [notes, setNotes] = useState<NoteMeta[] | null>(null);
@@ -116,17 +111,27 @@ export function NotesPage({ profileId, targetNoteId, onTargetOpened }: NotesPage
     void loadTags();
   }, [loadTags]);
 
-  // A deep-linked target (STUDY -> a note, ADR-017): select it and reset both
-  // filters to "all"/none — otherwise the note opens in the editor pane while
-  // an active folder/tag filter leaves the middle pane showing no matching
-  // row. Reports back so the caller clears the target after hand-off.
+  // Consumes a pending deep-link (021-e): "create" starts a fresh note;
+  // "reveal" (also the STUDY -> a note cross-module link, ADR-017) selects an
+  // existing one and resets both filters to "all"/none — otherwise the note
+  // opens in the editor pane while an active folder/tag filter leaves the
+  // middle pane showing no matching row.
   useEffect(() => {
-    if (targetNoteId == null) return;
-    setSelectedId(targetNoteId);
+    if (!intent) return;
+    if (intent.kind === "create") {
+      // `create()` is async (it awaits the IPC round trip and refetches), but
+      // the intent is reported handled right away — the caller only needs to
+      // know it was consumed, not that the note has finished being created.
+      void create();
+      onIntentHandled?.();
+      return;
+    }
+    setSelectedId(intent.noteId);
     setSelection({ kind: "all" });
     setTagFilter([]);
-    onTargetOpened?.();
-  }, [targetNoteId, onTargetOpened]);
+    onIntentHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intent, onIntentHandled]);
 
   // A folder mutation may have promoted children/notes — refetch both panes.
   const onFoldersChanged = useCallback(async () => {

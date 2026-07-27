@@ -186,8 +186,22 @@ function daysBetween(fromKey: string, toKey: string): number {
 const BLOCKS_PAST_DAYS = 31;
 const BLOCKS_FUTURE_DAYS = 365;
 
+/**
+ * A pending deep-link target (021-e global search / palette commands).
+ * `reveal-document` only carries the view switch here — `DocumentsPanel`
+ * (rendered below with `revealDocumentId`) owns loading it into its own form
+ * and marking its row, since that is where its edit path and its rows live.
+ */
+export type CalendarIntent =
+  | { kind: "reveal-event"; eventId: string }
+  | { kind: "reveal-document"; documentId: string }
+  | { kind: "create-event" };
+
 export interface CalendarPageProps {
   profileId: string;
+  intent?: CalendarIntent | null;
+  /** Reports that `intent` above has been acted on, so the caller (App.tsx) can clear it. */
+  onIntentHandled?: () => void;
 }
 
 /**
@@ -199,7 +213,7 @@ export interface CalendarPageProps {
  * merged in as read-only rows; tasks are read-only too apart from a due-date
  * drag — editing any of them lives on their own pages.
  */
-export function CalendarPage({ profileId }: CalendarPageProps) {
+export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPageProps) {
   const [events, setEvents] = useState<Event[] | null>(null);
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [subjects, setSubjects] = useState<Subject[] | null>(null);
@@ -301,6 +315,55 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
     setFormError(null);
     titleRef.current?.focus();
   }
+
+  // Consumes a pending deep-link (021-e): "create-event" and "reveal-event"
+  // are handled entirely here, reusing `startEdit`/`resetForm` rather than a
+  // second path into the form; "reveal-document" only switches to the
+  // Dokumenta view — `DocumentsPanel` below (given `revealDocumentId`) owns
+  // loading the document into ITS form and marking its row, since neither
+  // its edit path nor its rows live here, and reports completion through the
+  // very same `onIntentHandled` this effect would otherwise call. Keyed on
+  // `intent`/`events`/`view` rather than mount, so a search fired while
+  // already on Kalendar retriggers this exactly like one that switches
+  // modules here does, and a load race (the target arrives before `events`
+  // has fetched) resolves itself once `events` changes instead of dropping it.
+  //
+  // Neither CalendarMonth nor CalendarTimeGrid is in this slice's file list,
+  // so an event reveal cannot mark a bar/chip inside the grid the way a task
+  // or study row can — landing on the right day with the event loaded into
+  // the (now visibly populated) form is the whole of "obvious which one".
+  useEffect(() => {
+    if (!intent) return;
+    if (intent.kind === "create-event") {
+      if (view === "dokumenta") {
+        selectView("agenda");
+        return; // wait for the form to actually mount before focusing it
+      }
+      resetForm();
+      titleRef.current?.focus();
+      onIntentHandled?.();
+      return;
+    }
+    if (intent.kind === "reveal-document") {
+      if (view !== "dokumenta") selectView("dokumenta");
+      return; // DocumentsPanel calls onIntentHandled once it has acted
+    }
+    // reveal-event
+    if (events === null) return; // still loading — wait rather than deciding it's missing
+    const event = events.find((e) => e.id === intent.eventId);
+    if (!event) {
+      onIntentHandled?.(); // deleted between indexing and clicking — do nothing else
+      return;
+    }
+    if (view === "dokumenta") {
+      selectView("agenda");
+      return; // wait for the form to mount before loading the event into it
+    }
+    setAnchorKey(event.startAt.slice(0, 10));
+    startEdit(event);
+    onIntentHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intent, events, view, onIntentHandled]);
 
   /** Click on a month-grid day cell's empty area: prefill the form's date and focus the title. */
   function selectDay(dayKey: string): void {
@@ -534,7 +597,11 @@ export function CalendarPage({ profileId }: CalendarPageProps) {
       )}
 
       {view === "dokumenta" ? (
-        <DocumentsPanel profileId={profileId} />
+        <DocumentsPanel
+          profileId={profileId}
+          revealDocumentId={intent?.kind === "reveal-document" ? intent.documentId : null}
+          onRevealHandled={onIntentHandled}
+        />
       ) : (
         <>
           <form className="cal__form" onSubmit={submitForm}>
