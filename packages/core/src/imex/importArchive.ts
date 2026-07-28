@@ -484,6 +484,17 @@ function parseCard(raw: Record<string, unknown>): ExportCard {
   const deckId = nonEmptyStr(raw.deckId, "deckId");
   const front = nonEmptyStr(raw.front, "front");
   const back = nonEmptyStr(raw.back, "back");
+  const sourceNoteId = nullableNonEmptyStr(raw.sourceNoteId, "sourceNoteId");
+  const sourceBlockKey = nullableNonEmptyStr(raw.sourceBlockKey, "sourceBlockKey");
+  // Both or neither. No SQL CHECK backs this — `CardStore` enforces it
+  // structurally instead (`create` writes two nulls, `syncFromNote` writes two
+  // values, and nothing else ever touches these columns), which is exactly why
+  // an archive has to be checked: a half-set pair would sit in
+  // `syncFromNote`'s reconcile map under the key `null`, match no block, and
+  // get soft-deleted the first time the user opened the note.
+  if ((sourceNoteId === null) !== (sourceBlockKey === null)) {
+    throw new InvalidFieldError("sourceBlockKey");
+  }
   const due = isoDateTime(raw.due, "due");
   const stability = finiteNumber(raw.stability, "stability");
   const difficulty = finiteNumber(raw.difficulty, "difficulty");
@@ -497,8 +508,9 @@ function parseCard(raw: Record<string, unknown>): ExportCard {
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
   return {
-    id, profileId, deckId, front, back, due, stability, difficulty, elapsedDays,
-    scheduledDays, learningSteps, reps, lapses, state, lastReview, createdAt, updatedAt,
+    id, profileId, deckId, front, back, sourceNoteId, sourceBlockKey, due, stability,
+    difficulty, elapsedDays, scheduledDays, learningSteps, reps, lapses, state,
+    lastReview, createdAt, updatedAt,
   };
 }
 
@@ -1259,6 +1271,7 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
   checkReference(collections.exams, (row) => row.subjectId, "subjectId", subjectIds, problems);
   checkReference(collections.decks, (row) => row.subjectId, "subjectId", subjectIds, problems);
   checkReference(collections.cards, (row) => row.deckId, "deckId", deckIds, problems);
+  checkReference(collections.cards, (row) => row.sourceNoteId, "sourceNoteId", noteIds, problems);
   checkReference(collections.reviewLog, (row) => row.cardId, "cardId", cardIds, problems);
   checkReference(collections.plans, (row) => row.examId, "examId", examIds, problems);
   checkReference(collections.blocks, (row) => row.planId, "planId", planIds, problems);

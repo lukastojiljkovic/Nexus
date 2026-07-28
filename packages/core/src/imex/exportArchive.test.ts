@@ -326,7 +326,8 @@ describe("buildExportArchive", () => {
       ];
       input.data.cards = [
         {
-          id: "c1", profileId: "profile1", deckId: "dk1", front: "Q", back: "A", due: "2026-01-02T00:00:00.000Z",
+          id: "c1", profileId: "profile1", deckId: "dk1", front: "Q", back: "A",
+          sourceNoteId: null, sourceBlockKey: null, due: "2026-01-02T00:00:00.000Z",
           stability: 1, difficulty: 2, elapsedDays: 0, scheduledDays: 1, learningSteps: 0, reps: 0, lapses: 0,
           state: 0, lastReview: null, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z",
         },
@@ -404,7 +405,8 @@ describe("buildExportArchive", () => {
       const input = emptyInput();
       input.data.cards = [
         {
-          id: "c1", profileId: "profile1", deckId: "dk1", front: "Q", back: "A", due: "2026-01-02T00:00:00.000Z",
+          id: "c1", profileId: "profile1", deckId: "dk1", front: "Q", back: "A",
+          sourceNoteId: null, sourceBlockKey: null, due: "2026-01-02T00:00:00.000Z",
           stability: 1.2345, difficulty: 2, elapsedDays: 0, scheduledDays: 1, learningSteps: 0, reps: 0, lapses: 0,
           state: 0, lastReview: null, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z",
         },

@@ -118,6 +118,20 @@ export interface ExportCard {
   deckId: string;
   front: string;
   back: string;
+  /**
+   * The note that generated this card, and the block key it reconciles
+   * against (NOTE-006/ADR-017) — both null for a hand-made card, and never
+   * one without the other.
+   *
+   * Declared late (this contract shipped without them) because a card's
+   * origin is not decoration: `syncFromNote` reconciles a note's cards by
+   * `sourceBlockKey`, so a restore that dropped these would leave every
+   * note-sourced card orphaned, and the next time the user opened that note
+   * it would generate a second card per block — the original's FSRS history
+   * stranded on a row nothing points at any more.
+   */
+  sourceNoteId: string | null;
+  sourceBlockKey: string | null;
   due: string;
   stability: number;
   difficulty: number;

@@ -133,9 +133,21 @@ function richProfileData(): ProfileData {
     cards: [
       {
         id: "card-1", profileId: "profile1", deckId: "deck-1", front: "Q1", back: "A1",
+        sourceNoteId: null, sourceBlockKey: null,
         due: "2026-01-02T00:00:00.000Z", stability: 1, difficulty: 2, elapsedDays: 0,
         scheduledDays: 1, learningSteps: 0, reps: 0, lapses: 0, state: 0, lastReview: null,
         createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+      // Note-sourced (NOTE-006): the pair the archive shipped without, and the
+      // reason the round trip below is the acceptance criterion rather than a
+      // formality — this card's FSRS history only survives while its origin does.
+      {
+        id: "card-2", profileId: "profile1", deckId: "deck-1", front: "Q2", back: "A2",
+        sourceNoteId: "note-1", sourceBlockKey: "blok-1",
+        due: "2026-01-05T00:00:00.000Z", stability: 4, difficulty: 6, elapsedDays: 2,
+        scheduledDays: 3, learningSteps: 1, reps: 5, lapses: 1, state: 2,
+        lastReview: "2026-01-02T00:00:00.000Z",
+        createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-02T00:00:00.000Z",
       },
     ],
     reviewLog: [
@@ -311,6 +323,24 @@ const VALID_NOTE = {
   cardDeckId: null, createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
 };
 
+const VALID_SUBJECT = {
+  type: "subject", id: "s1", profileId: "profile1", name: "Analiza", color: "jade", semester: null,
+  archived: false, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z",
+};
+
+const VALID_DECK = {
+  type: "deck", id: "dk1", profileId: "profile1", subjectId: "s1", name: "Glava 1",
+  createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z",
+};
+
+const VALID_CARD = {
+  type: "card", id: "c1", profileId: "profile1", deckId: "dk1", front: "Q", back: "A",
+  sourceNoteId: null, sourceBlockKey: null, due: "2026-01-02T00:00:00.000Z", stability: 1,
+  difficulty: 2, elapsedDays: 0, scheduledDays: 1, learningSteps: 0, reps: 0, lapses: 0,
+  state: 0, lastReview: null, createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+};
+
 describe("parseImportArchive — one test per problem code", () => {
   it("missing-manifest: manifest.json absent", () => {
     const result = parseImportArchive(emptyInputWith(new Map()));
@@ -430,6 +460,35 @@ describe("parseImportArchive — one test per problem code", () => {
     const cycleProblem = result.problems.find((p) => p.code === "reference-cycle");
     expect(cycleProblem).toMatchObject({ severity: "error", path: "data/tasks.ndjson" });
     expect(["a", "b"]).toContain(cycleProblem?.detail);
+    expect(result.data).toBeNull();
+  });
+
+  it("unknown-reference: a card whose sourceNoteId names no restored note", () => {
+    const card = { ...VALID_CARD, sourceNoteId: "ghost", sourceBlockKey: "blok-1" };
+    const files = baseFiles({
+      fileContents: { "data/study.ndjson": ndjson([VALID_SUBJECT, VALID_DECK, card]) },
+    });
+    const result = parseImportArchive(emptyInputWith(files));
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "unknown-reference", path: "data/study.ndjson", line: 3,
+      detail: "sourceNoteId=ghost",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  it("invalid-record: a card carrying a source note but no block key to reconcile it against", () => {
+    const card = { ...VALID_CARD, sourceNoteId: "n1", sourceBlockKey: null };
+    const files = baseFiles({
+      fileContents: {
+        "data/notes.ndjson": ndjson([VALID_NOTE]),
+        "data/study.ndjson": ndjson([VALID_SUBJECT, VALID_DECK, card]),
+      },
+    });
+    const result = parseImportArchive(emptyInputWith(files));
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "invalid-record", path: "data/study.ndjson", line: 3,
+      detail: "sourceBlockKey",
+    });
     expect(result.data).toBeNull();
   });
 
