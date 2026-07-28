@@ -719,14 +719,34 @@ export const strings = {
       all: "Sve",
       caption: "Prečice za izvore ispod.",
     },
-    /** Rezervna kopija (IMEX slice a1, prošireno NOTE-om ADR-022) — full-export button + confirmation/error lines. */
+    /**
+     * Rezervna kopija (IMEX slice a1, extended to NOTE and then to archive
+     * encryption by ADR-022) — the full-export button plus its confirmation
+     * and error lines. `encryptedNotice` and `plaintextNotice` are
+     * ALTERNATIVES, one per branch of the encrypt checkbox: never both at
+     * once, and the plaintext one is only ever reached through its own
+     * separate confirmation.
+     */
     backup: {
       description:
-        "Izvezi sve svoje podatke u jednu .nexus.zip arhivu — otvoreni formati (JSON i CSV), beleške kao Markdown fajlovi i prilozi u originalnom obliku, sve čitljivo i upotrebljivo bez Nexusa.",
+        "Izvezi sve svoje podatke u jednu arhivu — otvoreni formati (JSON i CSV), beleške kao Markdown fajlovi i prilozi u originalnom obliku, sve čitljivo i upotrebljivo bez Nexusa.",
+      encryptLabel: "Zaštiti arhivu lozinkom",
+      encryptedNotice:
+        "Arhiva se šifruje tvojom lozinkom — Argon2id i AES-256-GCM. Lozinku ne čuvamo nigde.",
+      passphraseLabel: "Lozinka",
+      passphraseConfirmLabel: "Potvrdi lozinku",
+      passphraseHint:
+        "Najmanje 12 karaktera. Ako je izgubiš, arhiva se više ne može otvoriti — ni mi je ne možemo otvoriti umesto tebe.",
+      passphraseTooShort: "Lozinka mora imati najmanje 12 karaktera.",
+      passphraseTooLong: "Lozinka može imati najviše 256 karaktera.",
+      passphraseMismatch: "Lozinke se ne poklapaju.",
       plaintextNotice:
         "Baza podataka je šifrovana tvojim pristupnim kodom, ali ova arhiva nije — čuvaj je na sigurnom mestu.",
+      plaintextConfirmLabel:
+        "Razumem da arhiva neće biti šifrovana i da je može otvoriti svako ko dođe do fajla.",
       exportButton: "Izvezi sve podatke…",
       savedPrefix: "Sačuvano:",
+      savedEncryptedSuffix: "šifrovano",
       /** "N zapis"/"N zapisa" — Serbian numeral agreement via `dayUnit`. */
       recordsUnitOne: "zapis",
       recordsUnitMany: "zapisa",

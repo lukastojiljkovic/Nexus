@@ -10,6 +10,7 @@ import {
   rankSearchResults,
   sniffMime,
   toFtsMatchExpression,
+  validateArchivePassphrase,
 } from "@nexus/core";
 import type { NotificationSource, SearchHit, SearchKind } from "@nexus/core";
 import { MAX_PASSCODE_LENGTH, blobStorageName, deriveBlobKeys, type BlobKeys } from "@nexus/core/auth";
@@ -593,6 +594,20 @@ function asProfileName(value: unknown, field: string): string {
 function asNullableString(value: unknown, field: string): string | null {
   if (value === null || typeof value === "string") return value;
   throw new Error(`Invalid IPC payload: "${field}" must be a string or null.`);
+}
+
+/**
+ * `imex:export`'s passphrase field (ADR-022): `null` for the explicitly-
+ * confirmed plaintext export, otherwise a string that must itself pass
+ * `validateArchivePassphrase` — the renderer's own form validation is UX only,
+ * never trusted here.
+ */
+function asArchivePassphrase(value: unknown, field: string): string | null {
+  if (value === null) return null;
+  if (typeof value !== "string" || validateArchivePassphrase(value) !== null) {
+    throw new Error(`Invalid IPC payload: "${field}" must be null or a valid archive passphrase.`);
+  }
+  return value;
 }
 
 function asTaskStatus(value: unknown, field: string): TaskStatus {
@@ -2467,12 +2482,16 @@ function registerIpc(): void {
     return rebuildSearchIndex(requireDb().raw);
   });
 
-  // IMEX slice a1 (PRD 14 IMEX-001): gathers this profile's data and streams a
-  // `.nexus.zip` to a path the native save dialog returns — never a path the
-  // renderer supplies (SEC-EL).
+  // IMEX slice a1 (PRD 14 IMEX-001, extended by ADR-022): gathers this
+  // profile's data and streams it to a path the native save dialog returns —
+  // never a path the renderer supplies (SEC-EL) — either as a plain
+  // `.nexus.zip` or, when `passphrase` is non-null, sealed into an `.nexus`
+  // `NXA1` container under a key derived from it.
   ipcMain.handle(IpcChannel.imexExport, (event, payload): Promise<ExportResult> => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const passphrase = asArchivePassphrase(body.passphrase, "passphrase");
     const profile = requireProfile(requireDb(), profileId);
     return handleExport(
       {
@@ -2495,6 +2514,7 @@ function registerIpc(): void {
         getMainWindow: () => mainWindow,
       },
       profile,
+      passphrase,
     );
   });
 

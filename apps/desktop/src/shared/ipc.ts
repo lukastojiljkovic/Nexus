@@ -1573,25 +1573,45 @@ export interface SearchRebuildRequest {
   profileId: string;
 }
 
+/**
+ * `passphrase` is renderer-declared like every other explicit user choice on
+ * this wire (SEC-EL-02: untrusted input, re-validated in main) — `null` is
+ * the explicitly-confirmed plaintext export, a non-null string is re-checked
+ * against `validateArchivePassphrase` before it ever reaches `deriveArchiveKey`.
+ */
 export interface ImexExportRequest {
   profileId: string;
+  passphrase: string | null;
 }
 
 /**
- * The outcome of a full-data export (IMEX slice a1, PRD 14 IMEX-001): either
- * the user canceled the native save dialog, or the `.nexus.zip` archive was
- * written to `path` with `totalRecords` interchange records inside it. The
- * renderer never supplies `path` itself — it always comes back from the
- * dialog main owns (SEC-EL: untrusted input never reaches the filesystem).
+ * The outcome of a full-data export (IMEX slice a1, PRD 14 IMEX-001, extended
+ * by ADR-022): either the user canceled the native save dialog, or the
+ * archive was written to `path` with `totalRecords` interchange records
+ * inside it. The renderer never supplies `path` itself — it always comes back
+ * from the dialog main owns (SEC-EL: untrusted input never reaches the
+ * filesystem).
  *
  * `missingAttachments` (ADR-022) is non-zero when one or more NOTE attachment
  * blobs were not found in the blob store: the archive is otherwise complete,
  * just missing that many attachment files — a lost blob never fails the whole
  * export.
+ *
+ * `encrypted` (ADR-022) is true when the archive was sealed under a
+ * passphrase-derived key — an `.nexus` `NXA1` container — and false for the
+ * explicitly-confirmed plaintext `.nexus.zip`. The renderer reports honestly
+ * which kind of archive it wrote, since the two need different follow-up copy
+ * (`settings.backup.savedEncryptedSuffix` vs. nothing extra).
  */
 export type ExportResult =
   | { canceled: true }
-  | { canceled: false; path: string; totalRecords: number; missingAttachments: number };
+  | {
+      canceled: false;
+      path: string;
+      totalRecords: number;
+      missingAttachments: number;
+      encrypted: boolean;
+    };
 
 /** Runtime and environment facts, proving the main-process path end to end. */
 export interface AppInfo {
@@ -1796,7 +1816,13 @@ export interface NexusApi {
   searchRecent(profileId: string, limit: number): Promise<SearchResult[]>;
   /** Rebuilds the ENTIRE file's search index from scratch (corruption recovery, not a per-profile operation); returns the resulting row count. */
   rebuildSearchIndex(profileId: string): Promise<number>;
-  /** Full-data export to a `.nexus.zip` archive (IMEX slice a1). Resolves after the native save dialog is settled — canceled or written. */
-  exportData(profileId: string): Promise<ExportResult>;
+  /**
+   * Full-data export (IMEX slice a1, extended by ADR-022). `passphrase` seals
+   * the archive under a passphrase-derived key (an `.nexus` `NXA1`
+   * container); `null` means the explicitly-confirmed plaintext `.nexus.zip`
+   * export. Resolves after the native save dialog is settled — canceled or
+   * written.
+   */
+  exportData(profileId: string, passphrase: string | null): Promise<ExportResult>;
   appInfo(): Promise<AppInfo>;
 }

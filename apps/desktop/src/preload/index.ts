@@ -220,7 +220,8 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.searchRecent, { profileId, limit }),
   rebuildSearchIndex: (profileId) =>
     ipcRenderer.invoke(IpcChannel.searchRebuild, { profileId }),
-  exportData: (profileId) => ipcRenderer.invoke(IpcChannel.imexExport, { profileId }),
+  exportData: (profileId, passphrase) =>
+    ipcRenderer.invoke(IpcChannel.imexExport, { profileId, passphrase }),
   appInfo: () => ipcRenderer.invoke(IpcChannel.appInfo),
 };
 

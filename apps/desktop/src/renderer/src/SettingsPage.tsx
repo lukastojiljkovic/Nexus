@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Button, Card, Checkbox, Chip, TextField } from "@nexus/ui";
-import type { ModuleRegistry } from "@nexus/core";
+import { validateArchivePassphrase, type ModuleRegistry } from "@nexus/core";
 import { ACCENT_IDS, type AccentId } from "@nexus/tokens";
 import type { AppInfo, FlagState, NotificationSource } from "../../shared/ipc.js";
 import { authErrorMessage, passcodeMeetsPolicy, RecoveryKitPanel } from "./AuthGate.js";
@@ -98,60 +98,143 @@ interface BackupSectionProps {
   profileId: string;
 }
 
-/** Rezervna kopija section (IMEX slice a1): a single full-export button over `window.nexus.exportData`. */
+/**
+ * Rezervna kopija section (IMEX slice a1, extended by ADR-022): a full-export
+ * button over `window.nexus.exportData`, gated by an encrypt-by-default
+ * choice. Checked (default): a passphrase pair, validated the same way main
+ * will re-validate it. Unchecked: the plaintext path stays reachable only
+ * through its own separate, unchecked-by-default confirmation — the export
+ * button is disabled until that box is ticked, so shipping data in the clear
+ * is always something the user opts into, never something they click past.
+ */
 function BackupSection({ profileId }: BackupSectionProps) {
+  const s = strings.settings.backup;
+
   const [running, setRunning] = useState(false);
-  const [saved, setSaved] = useState<{ path: string; totalRecords: number; missingAttachments: number } | null>(
-    null,
-  );
+  const [saved, setSaved] = useState<{
+    path: string;
+    totalRecords: number;
+    missingAttachments: number;
+    encrypted: boolean;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [encrypt, setEncrypt] = useState(true);
+  const [passphrase, setPassphrase] = useState("");
+  const [confirmPassphrase, setConfirmPassphrase] = useState("");
+  const [plaintextConfirmed, setPlaintextConfirmed] = useState(false);
 
   async function runExport(): Promise<void> {
     if (running) return;
-    setRunning(true);
     setError(null);
     setSaved(null);
+
+    if (encrypt) {
+      const problem = validateArchivePassphrase(passphrase);
+      if (problem === "tooShort") {
+        setError(s.passphraseTooShort);
+        return;
+      }
+      if (problem === "tooLong") {
+        setError(s.passphraseTooLong);
+        return;
+      }
+      if (passphrase !== confirmPassphrase) {
+        setError(s.passphraseMismatch);
+        return;
+      }
+    }
+
+    setRunning(true);
     try {
-      const outcome = await window.nexus.exportData(profileId);
+      const outcome = await window.nexus.exportData(profileId, encrypt ? passphrase : null);
       if (!outcome.canceled) {
         setSaved({
           path: outcome.path,
           totalRecords: outcome.totalRecords,
           missingAttachments: outcome.missingAttachments,
+          encrypted: outcome.encrypted,
         });
       }
     } catch (exportError) {
-      setError(strings.settings.backup.error);
+      setError(s.error);
       console.error("Nexus: failed to export data:", exportError);
     } finally {
       setRunning(false);
+      // A used passphrase has no business surviving in component state,
+      // whether the export succeeded, was canceled, or failed.
+      setPassphrase("");
+      setConfirmPassphrase("");
+      // The plaintext confirmation is consumed along with it. Left standing,
+      // it would arm the NEXT export too: one click, another copy of every
+      // note in the clear, with the deliberate act it was meant to require
+      // already spent on a different file.
+      setPlaintextConfirmed(false);
     }
   }
 
+  const disabled = running || (!encrypt && !plaintextConfirmed);
+
   return (
     <>
-      <p className="app__muted">{strings.settings.backup.description}</p>
-      <p className="app__muted">{strings.settings.backup.plaintextNotice}</p>
-      <Button size="sm" variant="primary" disabled={running} onClick={() => void runExport()}>
-        {strings.settings.backup.exportButton}
+      <p className="app__muted">{s.description}</p>
+      <Checkbox
+        checked={encrypt}
+        onChange={(event) => {
+          setEncrypt(event.target.checked);
+          // Turning encryption back on drops any plaintext confirmation with
+          // it: otherwise it survives as hidden state and silently re-arms the
+          // button the moment the box is unticked again.
+          if (event.target.checked) setPlaintextConfirmed(false);
+        }}
+      >
+        {s.encryptLabel}
+      </Checkbox>
+      {encrypt ? (
+        <>
+          <div className="set__security-form">
+            <TextField
+              type="password"
+              label={s.passphraseLabel}
+              value={passphrase}
+              onChange={(event) => setPassphrase(event.target.value)}
+            />
+            <TextField
+              type="password"
+              label={s.passphraseConfirmLabel}
+              value={confirmPassphrase}
+              onChange={(event) => setConfirmPassphrase(event.target.value)}
+            />
+          </div>
+          <p className="set__section-caption">{s.passphraseHint}</p>
+          <p className="app__muted">{s.encryptedNotice}</p>
+        </>
+      ) : (
+        <>
+          <p className="app__muted">{s.plaintextNotice}</p>
+          <Checkbox
+            checked={plaintextConfirmed}
+            onChange={(event) => setPlaintextConfirmed(event.target.checked)}
+          >
+            {s.plaintextConfirmLabel}
+          </Checkbox>
+        </>
+      )}
+      <Button size="sm" variant="primary" disabled={disabled} onClick={() => void runExport()}>
+        {s.exportButton}
       </Button>
       {saved != null && (
         <p className="set__section-caption">
-          {strings.settings.backup.savedPrefix} <span className="app__path">{saved.path}</span> (
-          {saved.totalRecords}{" "}
-          {dayUnit(saved.totalRecords, strings.settings.backup.recordsUnitOne, strings.settings.backup.recordsUnitMany)}
-          )
+          {s.savedPrefix} <span className="app__path">{saved.path}</span> (
+          {saved.totalRecords} {dayUnit(saved.totalRecords, s.recordsUnitOne, s.recordsUnitMany)}
+          {saved.encrypted ? <> · {s.savedEncryptedSuffix}</> : null})
         </p>
       )}
       {saved != null && saved.missingAttachments > 0 && (
         <p className="set__error">
-          {strings.settings.backup.missingAttachmentsPrefix} {saved.missingAttachments}{" "}
-          {dayUnit(
-            saved.missingAttachments,
-            strings.settings.backup.missingAttachmentsUnitOne,
-            strings.settings.backup.missingAttachmentsUnitMany,
-          )}{" "}
-          {strings.settings.backup.missingAttachmentsSuffix}
+          {s.missingAttachmentsPrefix} {saved.missingAttachments}{" "}
+          {dayUnit(saved.missingAttachments, s.missingAttachmentsUnitOne, s.missingAttachmentsUnitMany)}{" "}
+          {s.missingAttachmentsSuffix}
         </p>
       )}
       {error != null && <p className="set__error">{error}</p>}
