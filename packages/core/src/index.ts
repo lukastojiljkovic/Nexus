@@ -67,6 +67,8 @@ export { isWithinQuietHours } from "./notify/quietHours.js";
 export { collectNoteLinkIds, mergeNoteState } from "./notes/yjsMerge.js";
 export type { MergedNoteState } from "./notes/yjsMerge.js";
 
+export { extractNoteLinkTargets } from "./notes/noteLinks.js";
+
 export { collectNoteCards, NOTE_CARD_MAX_TEXT_LENGTH, parseCardBlock } from "./notes/noteCards.js";
 export type { CardSyntaxSpan, NoteCardSpec, ParsedBlock, ParsedCard } from "./notes/noteCards.js";
 
@@ -79,7 +81,7 @@ export type { CsvValue } from "./imex/csv.js";
 
 export { isInlineImageMime, sniffMime } from "./files/sniff.js";
 
-export { buildExportArchive } from "./imex/exportArchive.js";
+export { buildExportArchive, DATA_FILES } from "./imex/exportArchive.js";
 export type {
   ExportArchive,
   ExportArchiveInput,
@@ -105,7 +107,17 @@ export type {
   ExportStudyPlan,
   ExportSubject,
   ExportTask,
+  ProfileData,
 } from "./imex/exportArchive.js";
+
+export { INTERCHANGE_SCHEMA_VERSION, parseImportArchive } from "./imex/importArchive.js";
+export type {
+  ImportArchiveInput,
+  ImportArchiveResult,
+  ImportManifest,
+  ImportProblem,
+  ImportProblemCode,
+} from "./imex/importArchive.js";
 
 export { renderNoteMarkdown } from "./imex/noteMarkdown.js";
 export type { NoteMarkdownAttachment, NoteMarkdownContext } from "./imex/noteMarkdown.js";

@@ -274,6 +274,39 @@ export interface ExportSettings {
   };
 }
 
+/**
+ * Every non-derived row of one profile: what an archive carries, what the
+ * exporter gathers, and what a restore writes. One shape, deliberately shared
+ * by all three, so a module that one of them forgets is a type error in the
+ * other two rather than a silent omission.
+ */
+export interface ProfileData {
+  tasks: readonly ExportTask[];
+  events: readonly ExportEvent[];
+  documents: readonly ExportDocument[];
+  renewals: readonly ExportRenewal[];
+  subjects: readonly ExportSubject[];
+  exams: readonly ExportExam[];
+  decks: readonly ExportDeck[];
+  cards: readonly ExportCard[];
+  reviewLog: readonly ExportReviewLogEntry[];
+  plans: readonly ExportStudyPlan[];
+  blocks: readonly ExportStudyBlock[];
+  focusSessions: readonly ExportFocusSession[];
+  notifications: readonly ExportNotification[];
+  // Required, like every field above, and deliberately so: this archive
+  // shipped for two weeks writing zero notes because the export simply had
+  // no place to put them and nobody's compiler ever said a word. A module
+  // the caller forgets must be a type error, not a quiet omission.
+  notes: readonly ExportNote[];
+  noteFolders: readonly ExportNoteFolder[];
+  noteTags: readonly ExportNoteTag[];
+  noteTagLinks: readonly ExportNoteTagLink[];
+  noteTemplates: readonly ExportNoteTemplate[];
+  noteAttachments: readonly ExportNoteAttachment[];
+  noteVersions: readonly ExportNoteVersion[];
+}
+
 export interface ExportArchiveInput {
   profile: { id: string; name: string };
   /** `app.getVersion()` — stamped by the caller, never read from here. */
@@ -281,32 +314,7 @@ export interface ExportArchiveInput {
   /** ISO-8601, stamped by the caller — this module never reads a clock. */
   createdAt: string;
   settings: ExportSettings;
-  data: {
-    tasks: readonly ExportTask[];
-    events: readonly ExportEvent[];
-    documents: readonly ExportDocument[];
-    renewals: readonly ExportRenewal[];
-    subjects: readonly ExportSubject[];
-    exams: readonly ExportExam[];
-    decks: readonly ExportDeck[];
-    cards: readonly ExportCard[];
-    reviewLog: readonly ExportReviewLogEntry[];
-    plans: readonly ExportStudyPlan[];
-    blocks: readonly ExportStudyBlock[];
-    focusSessions: readonly ExportFocusSession[];
-    notifications: readonly ExportNotification[];
-    // Required, like every field above, and deliberately so: this archive
-    // shipped for two weeks writing zero notes because the export simply had
-    // no place to put them and nobody's compiler ever said a word. A module
-    // the caller forgets must be a type error, not a quiet omission.
-    notes: readonly ExportNote[];
-    noteFolders: readonly ExportNoteFolder[];
-    noteTags: readonly ExportNoteTag[];
-    noteTagLinks: readonly ExportNoteTagLink[];
-    noteTemplates: readonly ExportNoteTemplate[];
-    noteAttachments: readonly ExportNoteAttachment[];
-    noteVersions: readonly ExportNoteVersion[];
-  };
+  data: ProfileData;
   /** sha256 hex over a UTF-8 string, injected so this module never imports `node:crypto`. */
   hash: (content: string) => string;
 }
@@ -330,7 +338,8 @@ export interface ExportArchive {
   binaries: ExportBinaryEntry[];
 }
 
-const DATA_FILES = [
+/** The five checksummed NDJSON files, in manifest order. Exported so `importArchive.ts` verifies checksums against exactly the list this module produces them from — never a second, hand-copied literal that could drift. */
+export const DATA_FILES = [
   "data/tasks.ndjson",
   "data/calendar.ndjson",
   "data/study.ndjson",

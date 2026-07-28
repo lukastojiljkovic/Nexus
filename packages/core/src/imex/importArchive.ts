@@ -1,0 +1,1312 @@
+import * as Y from "yjs";
+
+import { DATA_FILES } from "./exportArchive.js";
+import type {
+  ExportCard,
+  ExportDeck,
+  ExportDocument,
+  ExportEvent,
+  ExportExam,
+  ExportFocusSession,
+  ExportNote,
+  ExportNoteAttachment,
+  ExportNoteFolder,
+  ExportNoteTag,
+  ExportNoteTagLink,
+  ExportNoteTemplate,
+  ExportNoteVersion,
+  ExportNotification,
+  ExportRenewal,
+  ExportReviewLogEntry,
+  ExportSettings,
+  ExportStudyBlock,
+  ExportStudyPlan,
+  ExportSubject,
+  ExportTask,
+  ProfileData,
+} from "./exportArchive.js";
+
+/**
+ * Pure reader for the IMEX full-export archive (ADR-022, IMEX-002). Takes an
+ * archive's already-extracted text/binary entries — never a zip, never
+ * ciphertext, never a filesystem — and turns them into a `ProfileData` a
+ * restore can write, or a precise list of what is wrong with them. The zip
+ * container, the `.nexus.zip` decryption, and the database writes are all
+ * separate slices; this module's only job is: are these bytes a Nexus
+ * archive this build understands, and if so, what do they say?
+ *
+ * `ExportTask`/`ExportEvent`/… (`exportArchive.ts`) ARE the interchange
+ * contract this module parses back — the same row shapes, field for field,
+ * validated against exactly what the writer emits and nothing looser. Every
+ * `CHECK` constraint in `packages/db`'s migrations that this row shape could
+ * violate is re-validated here, so a bad archive is a precise, structured
+ * `ImportProblem` instead of a raw SQLite error three layers deep inside a
+ * restore transaction.
+ */
+
+/** Machine-readable problem codes. The renderer maps these to Serbian copy; this module never produces user-facing prose. */
+export type ImportProblemCode =
+  | "missing-manifest"
+  | "invalid-manifest"
+  | "unsupported-schema-version"
+  | "missing-data-file"
+  | "checksum-mismatch"
+  | "invalid-json"
+  | "unknown-record-type"
+  | "invalid-record"
+  | "duplicate-id"
+  | "unknown-reference"
+  | "reference-cycle"
+  | "invalid-ydoc"
+  | "missing-ydoc"
+  | "missing-blob";
+
+export interface ImportProblem {
+  severity: "error" | "warning";
+  code: ImportProblemCode;
+  /** The archive path the problem was found in, when it belongs to one. */
+  path?: string;
+  /** 1-based line number within an NDJSON file, when it belongs to one. */
+  line?: number;
+  /** A short English machine-ish detail: the record type, field name, or id at fault. Never a sentence for a user. */
+  detail?: string;
+}
+
+export interface ImportManifest {
+  schemaVersion: string;
+  appVersion: string;
+  createdAt: string;
+  profile: { id: string; name: string };
+  settings: ExportSettings;
+  modules: readonly { id: string; records: number }[];
+  blobs: readonly { sha256: string; sizeBytes: number }[];
+}
+
+export interface ImportArchiveInput {
+  /** Text entries by archive path (`manifest.json`, `data/*.ndjson`). Entries the archive lacks are simply absent. */
+  files: ReadonlyMap<string, string>;
+  /** Yjs state by archive path: `data/notes/<noteId>.ydoc` and `data/note-versions/<noteId>/<coveredSeq>.ydoc`. */
+  ydocs: ReadonlyMap<string, Uint8Array>;
+  /** Names of `blobs/<name>` entries the caller has already read AND verified hash to their own name. Bytes never reach this module. */
+  blobNames: ReadonlySet<string>;
+  /** sha256 hex over a UTF-8 string — injected exactly as `buildExportArchive` injects it, so this module imports no crypto. */
+  hash: (content: string) => string;
+}
+
+export interface ImportArchiveResult {
+  /** Every problem found, in discovery order. */
+  problems: readonly ImportProblem[];
+  /** The manifest, when it parsed — available even when `data` is null, so a caller can name the archive in an error report. */
+  manifest: ImportManifest | null;
+  /** Non-null only when NO problem has severity "error". Warnings do not withhold it. */
+  data: ProfileData | null;
+}
+
+/**
+ * The schema version this build writes and is the newest it accepts. `1.0.0`
+ * is the only interchange schema ever released (ADR-009/IMEX-004), so there
+ * is nothing yet to migrate an older major forward from — a migration
+ * framework for a major that has never shipped would be speculative
+ * machinery with nothing to exercise it.
+ */
+export const INTERCHANGE_SCHEMA_VERSION = "1.0.0";
+
+// --- Small, cast-free validation primitives ---------------------------------
+//
+// Each `expect*`/`parse*` helper below either returns a validated, correctly
+// typed value or throws `InvalidFieldError(field)`. Every record parser is a
+// straight-line sequence of these calls in the row interface's own field
+// order, so the FIRST bad field is what a caller sees — deliberately, so
+// `invalid-record`'s `detail` always names something a person can go fix.
+
+class InvalidFieldError extends Error {
+  constructor(public readonly field: string) {
+    super(`Invalid field: ${field}`);
+    this.name = "InvalidFieldError";
+  }
+}
+
+/** Runs `parse` and converts a thrown `InvalidFieldError` into `{ detail }`; anything else escapes (a genuine bug, not a data problem). */
+function tryParse<T>(parse: () => T): { ok: true; value: T } | { ok: false; detail: string } {
+  try {
+    return { ok: true, value: parse() };
+  } catch (error) {
+    if (error instanceof InvalidFieldError) return { ok: false, detail: error.field };
+    throw error;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function expectRecord(value: unknown, field: string): Record<string, unknown> {
+  if (!isRecord(value)) throw new InvalidFieldError(field);
+  return value;
+}
+
+function str(value: unknown, field: string): string {
+  if (typeof value !== "string") throw new InvalidFieldError(field);
+  return value;
+}
+
+function nonEmptyStr(value: unknown, field: string): string {
+  const s = str(value, field);
+  if (s.length === 0) throw new InvalidFieldError(field);
+  return s;
+}
+
+function nullableStr(value: unknown, field: string): string | null {
+  return value === null ? null : str(value, field);
+}
+
+function nullableNonEmptyStr(value: unknown, field: string): string | null {
+  return value === null ? null : nonEmptyStr(value, field);
+}
+
+function bool(value: unknown, field: string): boolean {
+  if (typeof value !== "boolean") throw new InvalidFieldError(field);
+  return value;
+}
+
+function finiteNumber(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) throw new InvalidFieldError(field);
+  return value;
+}
+
+function int(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value)) throw new InvalidFieldError(field);
+  return value;
+}
+
+function intInRange(value: unknown, field: string, min: number, max: number): number {
+  const n = int(value, field);
+  if (n < min || n > max) throw new InvalidFieldError(field);
+  return n;
+}
+
+function nonNegativeInt(value: unknown, field: string): number {
+  return intInRange(value, field, 0, Number.MAX_SAFE_INTEGER);
+}
+
+function positiveInt(value: unknown, field: string): number {
+  return intInRange(value, field, 1, Number.MAX_SAFE_INTEGER);
+}
+
+/**
+ * Membership-checks against a closed, typed list without ever widening `T` to
+ * `string` (which would need an `as T` to narrow back) — a plain `===` loop
+ * compiles cleanly because `T extends string` already makes the two sides
+ * comparable, and returning `candidate` (typed `T`) needs no assertion at all.
+ */
+function enumStr<T extends string>(value: unknown, field: string, allowed: readonly T[]): T {
+  const s = str(value, field);
+  for (const candidate of allowed) {
+    if (candidate === s) return candidate;
+  }
+  throw new InvalidFieldError(field);
+}
+
+function enumInt<T extends number>(value: unknown, field: string, allowed: readonly T[]): T {
+  const n = int(value, field);
+  for (const candidate of allowed) {
+    if (candidate === n) return candidate;
+  }
+  throw new InvalidFieldError(field);
+}
+
+function isOneOf<T extends string>(value: string, allowed: readonly T[]): value is T {
+  return allowed.some((candidate) => candidate === value);
+}
+
+/** `Date.parse` accepting the string is the whole test — good enough for a full ISO-8601 instant, unlike a bare date, which needs its own calendar check (see `bareDate`). */
+function isoDateTime(value: unknown, field: string): string {
+  const s = nonEmptyStr(value, field);
+  if (Number.isNaN(Date.parse(s))) throw new InvalidFieldError(field);
+  return s;
+}
+
+function nullableIsoDateTime(value: unknown, field: string): string | null {
+  return value === null ? null : isoDateTime(value, field);
+}
+
+const BARE_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** Exactly `YYYY-MM-DD`, AND a real calendar date — `Date.parse` alone would silently accept `2026-02-30` (JS rolls it into March), which is precisely the kind of corrupt-but-parseable value a restore must reject rather than write. */
+function bareDate(value: unknown, field: string): string {
+  const s = nonEmptyStr(value, field);
+  const match = BARE_DATE.exec(s);
+  if (!match || match[1] === undefined || match[2] === undefined || match[3] === undefined) {
+    throw new InvalidFieldError(field);
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const asDate = new Date(Date.UTC(year, month - 1, day));
+  if (asDate.getUTCFullYear() !== year || asDate.getUTCMonth() !== month - 1 || asDate.getUTCDate() !== day) {
+    throw new InvalidFieldError(field);
+  }
+  return s;
+}
+
+function nullableBareDate(value: unknown, field: string): string | null {
+  return value === null ? null : bareDate(value, field);
+}
+
+function nonNegativeIntArray(value: unknown, field: string): number[] {
+  if (!Array.isArray(value)) throw new InvalidFieldError(field);
+  return value.map((item, index) => nonNegativeInt(item, `${field}[${index}]`));
+}
+
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** Exactly `HH:MM` on a 24-hour clock — the shape `NotificationStore`'s own `validateHHMM` enforces on every write. No SQL CHECK backs it, which is precisely why it has to be checked here: an archive is the one way a value can reach that table without passing through the store. */
+function hhmm(value: unknown, field: string): string {
+  const s = nonEmptyStr(value, field);
+  if (!HHMM.test(s)) throw new InvalidFieldError(field);
+  return s;
+}
+
+function nullableHhmm(value: unknown, field: string): string | null {
+  return value === null ? null : hhmm(value, field);
+}
+
+/** `content` is a JSON-encoded ProseMirror document (ADR-016) — valid JSON, and specifically a JSON *object*, not an array/string/number. */
+function jsonObjectString(value: unknown, field: string): string {
+  const s = nonEmptyStr(value, field);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(s);
+  } catch {
+    throw new InvalidFieldError(field);
+  }
+  if (!isRecord(parsed)) throw new InvalidFieldError(field);
+  return s;
+}
+
+/**
+ * Mirrors `NOTE_FOLDER_COLORS` in `@nexus/db`'s `notes/noteOrgStore.ts`
+ * (copied, not imported — `@nexus/core` must not depend on `@nexus/db`).
+ * Keep this list in sync by hand if the palette ever changes.
+ */
+const NOTE_FOLDER_COLORS = ["zlato", "bronza", "maslina", "suma", "zad", "ruza", "bordo", "grafit"] as const;
+
+function nullableFolderColor(value: unknown, field: string): string | null {
+  return value === null ? null : enumStr(value, field, NOTE_FOLDER_COLORS);
+}
+
+// --- Enum domains mirroring `packages/db/src/migrations/*.ts` CHECKs -------
+
+const TASK_STATUSES = ["todo", "doing", "done"] as const;
+const TASK_PRIORITIES = ["none", "low", "medium", "high"] as const;
+const DOC_TYPES = ["licna_karta", "pasos", "vozacka", "registracija", "kartica", "polisa", "custom"] as const;
+const SUBJECT_COLORS = ["jade", "gold", "bronze", "burgundy", "crimson", "graphite"] as const;
+const EXAM_TYPES = ["pismeni", "usmeni", "kolokvijum"] as const;
+const CARD_STATES = [0, 1, 2, 3] as const;
+const REVIEW_RATINGS = [1, 2, 3, 4] as const;
+const STUDY_BLOCK_STATUSES = ["planned", "done", "missed"] as const;
+const NOTIFICATION_SOURCES = ["document", "exam", "study-day"] as const;
+const NOTIFICATION_STATUSES = ["delivered", "snoozed", "dismissed"] as const;
+
+// --- Record type discriminants ----------------------------------------------
+
+type RecordType =
+  | "task"
+  | "event"
+  | "document"
+  | "renewal"
+  | "subject"
+  | "exam"
+  | "deck"
+  | "card"
+  | "review"
+  | "plan"
+  | "block"
+  | "focus-session"
+  | "notification"
+  | "note-folder"
+  | "note-tag"
+  | "note"
+  | "note-tag-link"
+  | "note-attachment"
+  | "note-version"
+  | "note-template";
+
+const ALL_RECORD_TYPES: readonly RecordType[] = [
+  "task",
+  "event",
+  "document",
+  "renewal",
+  "subject",
+  "exam",
+  "deck",
+  "card",
+  "review",
+  "plan",
+  "block",
+  "focus-session",
+  "notification",
+  "note-folder",
+  "note-tag",
+  "note",
+  "note-tag-link",
+  "note-attachment",
+  "note-version",
+  "note-template",
+];
+
+type DataFilePath = (typeof DATA_FILES)[number];
+
+/** Which record types the writer puts in each of the five NDJSON files — a type in any OTHER file is `invalid-record` (detail `"type"`), not silently accepted (ADR-022). */
+const FILE_RECORD_TYPES: Record<DataFilePath, readonly RecordType[]> = {
+  "data/tasks.ndjson": ["task"],
+  "data/calendar.ndjson": ["event", "document", "renewal"],
+  "data/study.ndjson": ["subject", "exam", "deck", "card", "review", "plan", "block", "focus-session"],
+  "data/notifications.ndjson": ["notification"],
+  "data/notes.ndjson": [
+    "note-folder",
+    "note-tag",
+    "note",
+    "note-tag-link",
+    "note-attachment",
+    "note-version",
+    "note-template",
+  ],
+};
+
+// --- Per-record parsers, one field validator call per interface field, in --
+// --- the interface's own declared order (see the class comment above). ----
+
+function parseTask(raw: Record<string, unknown>): ExportTask {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const parentId = nullableNonEmptyStr(raw.parentId, "parentId");
+  const title = nonEmptyStr(raw.title, "title");
+  const description = nullableStr(raw.description, "description");
+  const status = enumStr(raw.status, "status", TASK_STATUSES);
+  const priority = enumStr(raw.priority, "priority", TASK_PRIORITIES);
+  const done = bool(raw.done, "done");
+  const dueDate = nullableBareDate(raw.dueDate, "dueDate");
+  const startDate = nullableBareDate(raw.startDate, "startDate");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  const completedAt = nullableIsoDateTime(raw.completedAt, "completedAt");
+  // `done` is a denormalized read of `status`, and migration 002's CHECK ties
+  // `status = 'done'` to `completed_at IS NOT NULL` — both invariants must
+  // hold for the row to be writable back at all.
+  if (done !== (status === "done")) throw new InvalidFieldError("done");
+  if ((status === "done") !== (completedAt !== null)) throw new InvalidFieldError("completedAt");
+  return {
+    id, profileId, parentId, title, description, status, priority, done,
+    dueDate, startDate, createdAt, updatedAt, completedAt,
+  };
+}
+
+function parseEvent(raw: Record<string, unknown>): ExportEvent {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const title = nonEmptyStr(raw.title, "title");
+  const description = nullableStr(raw.description, "description");
+  const startAt = isoDateTime(raw.startAt, "startAt");
+  const endAt = nullableIsoDateTime(raw.endAt, "endAt");
+  const allDay = bool(raw.allDay, "allDay");
+  const location = nullableStr(raw.location, "location");
+  const category = nullableStr(raw.category, "category");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  // No cross-field end->=start check: migration 003 deliberately carries no
+  // SQL CHECK for it either (comparing ISO strings across mixed zones is
+  // fragile), so there is no invariant here to mirror.
+  return { id, profileId, title, description, startAt, endAt, allDay, location, category, createdAt, updatedAt };
+}
+
+function parseDocument(raw: Record<string, unknown>): ExportDocument {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const docType = enumStr(raw.docType, "docType", DOC_TYPES);
+  const label = nonEmptyStr(raw.label, "label");
+  const expiryDate = bareDate(raw.expiryDate, "expiryDate");
+  const reminderOffsets = nonNegativeIntArray(raw.reminderOffsets, "reminderOffsets");
+  const notes = nullableStr(raw.notes, "notes");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, profileId, docType, label, expiryDate, reminderOffsets, notes, createdAt, updatedAt };
+}
+
+function parseRenewal(raw: Record<string, unknown>): ExportRenewal {
+  const id = nonEmptyStr(raw.id, "id");
+  const documentId = nonEmptyStr(raw.documentId, "documentId");
+  // `previous_expiry` (migration 004) is the same kind of value as
+  // `expiry_date` — a bare calendar date, not an instant — so it gets the
+  // same validator.
+  const previousExpiry = bareDate(raw.previousExpiry, "previousExpiry");
+  const renewedAt = isoDateTime(raw.renewedAt, "renewedAt");
+  return { id, documentId, previousExpiry, renewedAt };
+}
+
+function parseSubject(raw: Record<string, unknown>): ExportSubject {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const name = nonEmptyStr(raw.name, "name");
+  const color = enumStr(raw.color, "color", SUBJECT_COLORS);
+  const semester = nullableStr(raw.semester, "semester");
+  const archived = bool(raw.archived, "archived");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, profileId, name, color, semester, archived, createdAt, updatedAt };
+}
+
+function parseExam(raw: Record<string, unknown>): ExportExam {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const subjectId = nonEmptyStr(raw.subjectId, "subjectId");
+  const examType = enumStr(raw.examType, "examType", EXAM_TYPES);
+  const examDate = bareDate(raw.examDate, "examDate");
+  const scope = nullableStr(raw.scope, "scope");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, profileId, subjectId, examType, examDate, scope, createdAt, updatedAt };
+}
+
+function parseDeck(raw: Record<string, unknown>): ExportDeck {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const subjectId = nonEmptyStr(raw.subjectId, "subjectId");
+  const name = nonEmptyStr(raw.name, "name");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, profileId, subjectId, name, createdAt, updatedAt };
+}
+
+function parseCard(raw: Record<string, unknown>): ExportCard {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const deckId = nonEmptyStr(raw.deckId, "deckId");
+  const front = nonEmptyStr(raw.front, "front");
+  const back = nonEmptyStr(raw.back, "back");
+  const due = isoDateTime(raw.due, "due");
+  const stability = finiteNumber(raw.stability, "stability");
+  const difficulty = finiteNumber(raw.difficulty, "difficulty");
+  const elapsedDays = int(raw.elapsedDays, "elapsedDays");
+  const scheduledDays = int(raw.scheduledDays, "scheduledDays");
+  const learningSteps = int(raw.learningSteps, "learningSteps");
+  const reps = int(raw.reps, "reps");
+  const lapses = int(raw.lapses, "lapses");
+  const state = enumInt(raw.state, "state", CARD_STATES);
+  const lastReview = nullableIsoDateTime(raw.lastReview, "lastReview");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return {
+    id, profileId, deckId, front, back, due, stability, difficulty, elapsedDays,
+    scheduledDays, learningSteps, reps, lapses, state, lastReview, createdAt, updatedAt,
+  };
+}
+
+function parseReview(raw: Record<string, unknown>): ExportReviewLogEntry {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const cardId = nonEmptyStr(raw.cardId, "cardId");
+  const rating = enumInt(raw.rating, "rating", REVIEW_RATINGS);
+  const state = enumInt(raw.state, "state", CARD_STATES);
+  const due = isoDateTime(raw.due, "due");
+  const stability = finiteNumber(raw.stability, "stability");
+  const difficulty = finiteNumber(raw.difficulty, "difficulty");
+  const elapsedDays = int(raw.elapsedDays, "elapsedDays");
+  const lastElapsedDays = int(raw.lastElapsedDays, "lastElapsedDays");
+  const scheduledDays = int(raw.scheduledDays, "scheduledDays");
+  const learningSteps = int(raw.learningSteps, "learningSteps");
+  const review = isoDateTime(raw.review, "review");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  return {
+    id, profileId, cardId, rating, state, due, stability, difficulty, elapsedDays,
+    lastElapsedDays, scheduledDays, learningSteps, review, createdAt,
+  };
+}
+
+function parsePlan(raw: Record<string, unknown>): ExportStudyPlan {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const examId = nonEmptyStr(raw.examId, "examId");
+  const dailyMinutes = intInRange(raw.dailyMinutes, "dailyMinutes", 15, 480);
+  const startDate = bareDate(raw.startDate, "startDate");
+  const examWeekBoost = bool(raw.examWeekBoost, "examWeekBoost");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, profileId, examId, dailyMinutes, startDate, examWeekBoost, createdAt, updatedAt };
+}
+
+function parseBlock(raw: Record<string, unknown>): ExportStudyBlock {
+  const id = nonEmptyStr(raw.id, "id");
+  const planId = nonEmptyStr(raw.planId, "planId");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const blockDate = bareDate(raw.blockDate, "blockDate");
+  const minutes = positiveInt(raw.minutes, "minutes");
+  const status = enumStr(raw.status, "status", STUDY_BLOCK_STATUSES);
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, planId, profileId, blockDate, minutes, status, createdAt, updatedAt };
+}
+
+function parseFocusSession(raw: Record<string, unknown>): ExportFocusSession {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const subjectId = nonEmptyStr(raw.subjectId, "subjectId");
+  const startedAt = isoDateTime(raw.startedAt, "startedAt");
+  const endedAt = isoDateTime(raw.endedAt, "endedAt");
+  // Migration 008's CHECK: `ended_at > started_at` — every persisted session
+  // has a genuine, positive duration. Compared as STRINGS, because that CHECK
+  // is a SQLite TEXT comparison: mirroring it exactly means this rejects
+  // precisely what the database would reject, rather than what is merely
+  // backwards in wall-clock terms.
+  if (!(endedAt > startedAt)) throw new InvalidFieldError("endedAt");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, profileId, subjectId, startedAt, endedAt, createdAt, updatedAt };
+}
+
+function parseNotification(raw: Record<string, unknown>): ExportNotification {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const source = enumStr(raw.source, "source", NOTIFICATION_SOURCES);
+  // `entityId` is deliberately NOT reference-checked: it points at several
+  // different tables and at rows that may legitimately be gone by now.
+  const entityId = nonEmptyStr(raw.entityId, "entityId");
+  const occurrenceKey = nonEmptyStr(raw.occurrenceKey, "occurrenceKey");
+  const title = nonEmptyStr(raw.title, "title");
+  const body = nonEmptyStr(raw.body, "body");
+  const status = enumStr(raw.status, "status", NOTIFICATION_STATUSES);
+  const snoozedUntil = nullableIsoDateTime(raw.snoozedUntil, "snoozedUntil");
+  const deliveredAt = isoDateTime(raw.deliveredAt, "deliveredAt");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return {
+    id, profileId, source, entityId, occurrenceKey, title, body, status,
+    snoozedUntil, deliveredAt, createdAt, updatedAt,
+  };
+}
+
+function parseNoteFolder(raw: Record<string, unknown>): ExportNoteFolder {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const parentId = nullableNonEmptyStr(raw.parentId, "parentId");
+  const name = nonEmptyStr(raw.name, "name");
+  const color = nullableFolderColor(raw.color, "color");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, profileId, parentId, name, color, createdAt, updatedAt };
+}
+
+function parseNoteTag(raw: Record<string, unknown>): ExportNoteTag {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const name = nonEmptyStr(raw.name, "name");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  return { id, profileId, name, createdAt };
+}
+
+/** Metadata only — `snapshot` is attached afterward from `input.ydocs` (rule 7 of the reader's spec). */
+function parseNoteMeta(raw: Record<string, unknown>): Omit<ExportNote, "snapshot"> {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  // Deliberately `str`, not `nonEmptyStr`: `NoteStore.create` inserts a note
+  // with `title = ''` and `appendUpdate` documents the title as "may be
+  // empty" — a never-titled or freshly-cleared note is legitimate data, not
+  // a corrupt row.
+  const title = str(raw.title, "title");
+  const folderId = nullableNonEmptyStr(raw.folderId, "folderId");
+  const pinned = bool(raw.pinned, "pinned");
+  const cardDeckId = nullableNonEmptyStr(raw.cardDeckId, "cardDeckId");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, profileId, title, folderId, pinned, cardDeckId, createdAt, updatedAt };
+}
+
+function parseNoteTagLink(raw: Record<string, unknown>): ExportNoteTagLink {
+  const noteId = nonEmptyStr(raw.noteId, "noteId");
+  const tagId = nonEmptyStr(raw.tagId, "tagId");
+  return { noteId, tagId };
+}
+
+function parseNoteTemplate(raw: Record<string, unknown>): ExportNoteTemplate {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const name = nonEmptyStr(raw.name, "name");
+  const content = jsonObjectString(raw.content, "content");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, profileId, name, content, createdAt, updatedAt };
+}
+
+function parseNoteAttachment(raw: Record<string, unknown>): ExportNoteAttachment {
+  const id = nonEmptyStr(raw.id, "id");
+  const noteId = nonEmptyStr(raw.noteId, "noteId");
+  const fileName = nonEmptyStr(raw.fileName, "fileName");
+  const mime = nonEmptyStr(raw.mime, "mime");
+  const sizeBytes = positiveInt(raw.sizeBytes, "sizeBytes");
+  const sha256 = nonEmptyStr(raw.sha256, "sha256");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  return { id, noteId, fileName, mime, sizeBytes, sha256, createdAt };
+}
+
+/** Metadata only — `snapshot` is attached afterward from `input.ydocs`, and is REQUIRED (rule 7), unlike a note's. */
+function parseNoteVersionMeta(raw: Record<string, unknown>): Omit<ExportNoteVersion, "snapshot"> {
+  const noteId = nonEmptyStr(raw.noteId, "noteId");
+  const coveredSeq = nonNegativeInt(raw.coveredSeq, "coveredSeq");
+  // Same "may be empty" reasoning as a note's own title — a version captures
+  // whatever the note was titled at that moment.
+  const title = str(raw.title, "title");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  return { noteId, coveredSeq, title, createdAt };
+}
+
+// --- Collecting parsed rows with their archive origin -----------------------
+
+/** One parsed row plus where it came from — needed after the fact, to attach `path`/`line` to a reference or cycle problem discovered only once every row is known. */
+interface Located<T> {
+  row: T;
+  path: string;
+  line: number;
+}
+
+function locate<T>(row: T, path: string, line: number): Located<T> {
+  return { row, path, line };
+}
+
+/** One bucket per collection: its rows (in file order) and the id-keys already seen, for `duplicate-id`. */
+interface Bucket<T> {
+  entries: Located<T>[];
+  seenKeys: Set<string>;
+}
+
+function newBucket<T>(): Bucket<T> {
+  return { entries: [], seenKeys: new Set() };
+}
+
+/** Records `row` into `bucket`, reporting `duplicate-id` (but still keeping the row) if `key` was already seen — a duplicate makes the whole import an error regardless, so keeping it does no harm and keeps this function simple. */
+function pushRow<T>(
+  bucket: Bucket<T>,
+  key: string,
+  row: T,
+  path: string,
+  line: number,
+  problems: ImportProblem[],
+): void {
+  if (bucket.seenKeys.has(key)) {
+    problems.push(problem("error", "duplicate-id", { path, line, detail: key }));
+  } else {
+    bucket.seenKeys.add(key);
+  }
+  bucket.entries.push(locate(row, path, line));
+}
+
+function rowsOf<T>(bucket: Bucket<T>): T[] {
+  return bucket.entries.map((entry) => entry.row);
+}
+
+interface Collections {
+  tasks: Bucket<ExportTask>;
+  events: Bucket<ExportEvent>;
+  documents: Bucket<ExportDocument>;
+  renewals: Bucket<ExportRenewal>;
+  subjects: Bucket<ExportSubject>;
+  exams: Bucket<ExportExam>;
+  decks: Bucket<ExportDeck>;
+  cards: Bucket<ExportCard>;
+  reviewLog: Bucket<ExportReviewLogEntry>;
+  plans: Bucket<ExportStudyPlan>;
+  blocks: Bucket<ExportStudyBlock>;
+  focusSessions: Bucket<ExportFocusSession>;
+  notifications: Bucket<ExportNotification>;
+  noteFolders: Bucket<ExportNoteFolder>;
+  noteTags: Bucket<ExportNoteTag>;
+  notes: Bucket<Omit<ExportNote, "snapshot">>;
+  noteTagLinks: Bucket<ExportNoteTagLink>;
+  noteAttachments: Bucket<ExportNoteAttachment>;
+  noteVersions: Bucket<Omit<ExportNoteVersion, "snapshot">>;
+  noteTemplates: Bucket<ExportNoteTemplate>;
+}
+
+function newCollections(): Collections {
+  return {
+    tasks: newBucket(), events: newBucket(), documents: newBucket(), renewals: newBucket(),
+    subjects: newBucket(), exams: newBucket(), decks: newBucket(), cards: newBucket(),
+    reviewLog: newBucket(), plans: newBucket(), blocks: newBucket(), focusSessions: newBucket(),
+    notifications: newBucket(), noteFolders: newBucket(), noteTags: newBucket(), notes: newBucket(),
+    noteTagLinks: newBucket(), noteAttachments: newBucket(), noteVersions: newBucket(),
+    noteTemplates: newBucket(),
+  };
+}
+
+/** Parses `raw` per its `type` and files it into the matching bucket. Throws `InvalidFieldError` on a bad field — the line loop turns that into `invalid-record`. */
+function dispatchRecord(
+  type: RecordType,
+  raw: Record<string, unknown>,
+  path: string,
+  line: number,
+  collections: Collections,
+  problems: ImportProblem[],
+): void {
+  switch (type) {
+    case "task": {
+      const row = parseTask(raw);
+      pushRow(collections.tasks, row.id, row, path, line, problems);
+      return;
+    }
+    case "event": {
+      const row = parseEvent(raw);
+      pushRow(collections.events, row.id, row, path, line, problems);
+      return;
+    }
+    case "document": {
+      const row = parseDocument(raw);
+      pushRow(collections.documents, row.id, row, path, line, problems);
+      return;
+    }
+    case "renewal": {
+      const row = parseRenewal(raw);
+      pushRow(collections.renewals, row.id, row, path, line, problems);
+      return;
+    }
+    case "subject": {
+      const row = parseSubject(raw);
+      pushRow(collections.subjects, row.id, row, path, line, problems);
+      return;
+    }
+    case "exam": {
+      const row = parseExam(raw);
+      pushRow(collections.exams, row.id, row, path, line, problems);
+      return;
+    }
+    case "deck": {
+      const row = parseDeck(raw);
+      pushRow(collections.decks, row.id, row, path, line, problems);
+      return;
+    }
+    case "card": {
+      const row = parseCard(raw);
+      pushRow(collections.cards, row.id, row, path, line, problems);
+      return;
+    }
+    case "review": {
+      const row = parseReview(raw);
+      pushRow(collections.reviewLog, row.id, row, path, line, problems);
+      return;
+    }
+    case "plan": {
+      const row = parsePlan(raw);
+      pushRow(collections.plans, row.id, row, path, line, problems);
+      return;
+    }
+    case "block": {
+      const row = parseBlock(raw);
+      pushRow(collections.blocks, row.id, row, path, line, problems);
+      return;
+    }
+    case "focus-session": {
+      const row = parseFocusSession(raw);
+      pushRow(collections.focusSessions, row.id, row, path, line, problems);
+      return;
+    }
+    case "notification": {
+      const row = parseNotification(raw);
+      pushRow(collections.notifications, row.id, row, path, line, problems);
+      return;
+    }
+    case "note-folder": {
+      const row = parseNoteFolder(raw);
+      pushRow(collections.noteFolders, row.id, row, path, line, problems);
+      return;
+    }
+    case "note-tag": {
+      const row = parseNoteTag(raw);
+      pushRow(collections.noteTags, row.id, row, path, line, problems);
+      return;
+    }
+    case "note": {
+      const row = parseNoteMeta(raw);
+      pushRow(collections.notes, row.id, row, path, line, problems);
+      return;
+    }
+    case "note-tag-link": {
+      const row = parseNoteTagLink(raw);
+      pushRow(collections.noteTagLinks, `noteId=${row.noteId},tagId=${row.tagId}`, row, path, line, problems);
+      return;
+    }
+    case "note-attachment": {
+      const row = parseNoteAttachment(raw);
+      pushRow(collections.noteAttachments, row.id, row, path, line, problems);
+      return;
+    }
+    case "note-version": {
+      const row = parseNoteVersionMeta(raw);
+      pushRow(
+        collections.noteVersions,
+        `noteId=${row.noteId},coveredSeq=${row.coveredSeq}`,
+        row,
+        path,
+        line,
+        problems,
+      );
+      return;
+    }
+    case "note-template": {
+      const row = parseNoteTemplate(raw);
+      pushRow(collections.noteTemplates, row.id, row, path, line, problems);
+      return;
+    }
+  }
+}
+
+// --- Manifest parsing --------------------------------------------------------
+
+function parseSettings(value: unknown): ExportSettings {
+  const root = expectRecord(value, "settings");
+
+  const flagsRoot = expectRecord(root.flags, "settings.flags");
+  const flags: Record<string, boolean> = {};
+  for (const [key, flagValue] of Object.entries(flagsRoot)) {
+    flags[key] = bool(flagValue, `settings.flags.${key}`);
+  }
+
+  const notifRoot = expectRecord(root.notifications, "settings.notifications");
+  const quietFrom = nullableHhmm(notifRoot.quietFrom, "settings.notifications.quietFrom");
+  const quietTo = nullableHhmm(notifRoot.quietTo, "settings.notifications.quietTo");
+  // `NotificationStore.saveSettings`' own pair rule: quiet hours are both set
+  // or both cleared. A half-set pair is not a cosmetic oddity — the quiet-hours
+  // window is what holds a notification back, and half of one has no meaning.
+  if ((quietFrom === null) !== (quietTo === null)) {
+    throw new InvalidFieldError("settings.notifications.quietTo");
+  }
+  const sourcesRaw = notifRoot.enabledSources;
+  if (!Array.isArray(sourcesRaw)) throw new InvalidFieldError("settings.notifications.enabledSources");
+  const notifications = {
+    quietFrom,
+    quietTo,
+    morningHour: hhmm(notifRoot.morningHour, "settings.notifications.morningHour"),
+    // Migration 009's `ntf_source_settings.source` CHECK. Settings ride in the
+    // manifest rather than an NDJSON row, which is exactly how this constraint
+    // could have been overlooked — a restore writes these values into that
+    // table just the same.
+    enabledSources: sourcesRaw.map((item, index) =>
+      enumStr(item, `settings.notifications.enabledSources[${index}]`, NOTIFICATION_SOURCES),
+    ),
+  };
+
+  return { flags, notifications };
+}
+
+function parseModules(value: unknown): { id: string; records: number }[] {
+  if (!Array.isArray(value)) throw new InvalidFieldError("modules");
+  return value.map((item, index) => {
+    const entry = expectRecord(item, `modules[${index}]`);
+    return {
+      id: nonEmptyStr(entry.id, `modules[${index}].id`),
+      records: nonNegativeInt(entry.records, `modules[${index}].records`),
+    };
+  });
+}
+
+/** Not part of the public `ImportManifest` shape (checksums are this module's own concern), but must be well-formed for checksum verification (step 4) to mean anything. */
+function parseChecksums(value: unknown): Record<string, string> {
+  const root = expectRecord(value, "checksums");
+  const checksums: Record<string, string> = {};
+  for (const [key, checksumValue] of Object.entries(root)) {
+    checksums[key] = nonEmptyStr(checksumValue, `checksums.${key}`);
+  }
+  return checksums;
+}
+
+function parseBlobs(value: unknown): { sha256: string; sizeBytes: number }[] {
+  if (!Array.isArray(value)) throw new InvalidFieldError("blobs");
+  return value.map((item, index) => {
+    const entry = expectRecord(item, `blobs[${index}]`);
+    return {
+      sha256: nonEmptyStr(entry.sha256, `blobs[${index}].sha256`),
+      sizeBytes: positiveInt(entry.sizeBytes, `blobs[${index}].sizeBytes`),
+    };
+  });
+}
+
+/** `checksums` rides along internally (step 4 needs it) but is stripped before the manifest is handed back — it is not part of the public `ImportManifest` contract. */
+function parseManifest(
+  text: string,
+): { ok: true; manifest: ImportManifest; checksums: Record<string, string> } | { ok: false; detail?: string } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return { ok: false };
+  }
+
+  const outcome = tryParse(() => {
+    const root = expectRecord(parsed, "(root)");
+
+    const schemaVersion = nonEmptyStr(root.schemaVersion, "schemaVersion");
+    const appVersion = nonEmptyStr(root.appVersion, "appVersion");
+    const createdAt = isoDateTime(root.createdAt, "createdAt");
+
+    const profileRoot = expectRecord(root.profile, "profile");
+    const profile = {
+      id: nonEmptyStr(profileRoot.id, "profile.id"),
+      name: nonEmptyStr(profileRoot.name, "profile.name"),
+    };
+
+    const settings = parseSettings(root.settings);
+    const modules = parseModules(root.modules);
+    const checksums = parseChecksums(root.checksums);
+    const blobs = parseBlobs(root.blobs);
+
+    const manifest: ImportManifest = { schemaVersion, appVersion, createdAt, profile, settings, modules, blobs };
+    return { manifest, checksums };
+  });
+
+  if (!outcome.ok) return { ok: false, detail: outcome.detail };
+  return { ok: true, manifest: outcome.value.manifest, checksums: outcome.value.checksums };
+}
+
+const SEMVER = /^(\d+)\.(\d+)\.(\d+)$/;
+
+function parseSemver(value: string): { major: number; minor: number; patch: number } | null {
+  const match = SEMVER.exec(value);
+  if (!match || match[1] === undefined || match[2] === undefined || match[3] === undefined) return null;
+  return { major: Number(match[1]), minor: Number(match[2]), patch: Number(match[3]) };
+}
+
+/**
+ * Refuses a `schemaVersion` that is newer than `INTERCHANGE_SCHEMA_VERSION` in
+ * major or minor (patch may be anything — the writer's own patch bumps carry
+ * no meaning a reader needs to reject on), or whose major isn't `1` at all.
+ * `1.0.0` is the only major this build has ever written, so there is no older
+ * major to accept via a migration path yet (see the constant's own doc).
+ */
+function isSupportedSchemaVersion(schemaVersion: string): boolean {
+  const candidate = parseSemver(schemaVersion);
+  if (candidate === null) return false;
+  if (candidate.major !== 1) return false;
+  const current = parseSemver(INTERCHANGE_SCHEMA_VERSION);
+  if (current === null) throw new Error("INTERCHANGE_SCHEMA_VERSION is not valid semver.");
+  return candidate.minor <= current.minor;
+}
+
+// --- NDJSON line splitting ---------------------------------------------------
+
+/** The writer ends every non-empty file with exactly one trailing `\n` (`toNdjson`) and renders zero rows as `""` — dropping one trailing empty element after a plain split handles both shapes uniformly. */
+function splitNdjsonLines(content: string): string[] {
+  const parts = content.split("\n");
+  const last = parts[parts.length - 1];
+  if (parts.length > 0 && last === "") parts.pop();
+  return parts;
+}
+
+// --- Small problem-builder ---------------------------------------------------
+
+function problem(
+  severity: ImportProblem["severity"],
+  code: ImportProblemCode,
+  options: { path?: string; line?: number; detail?: string } = {},
+): ImportProblem {
+  return {
+    severity,
+    code,
+    ...(options.path !== undefined ? { path: options.path } : {}),
+    ...(options.line !== undefined ? { line: options.line } : {}),
+    ...(options.detail !== undefined ? { detail: options.detail } : {}),
+  };
+}
+
+// --- Yjs decode check ---------------------------------------------------------
+
+/** Whether `bytes` decode as a Yjs update at all — a throwaway `Y.Doc`, applied once and destroyed, exactly the `mergeNoteState`/`extractNoteLinkTargets` ceremony, just discarding the result instead of reading it. */
+function isValidYUpdate(bytes: Uint8Array): boolean {
+  const probe = new Y.Doc();
+  try {
+    Y.applyUpdate(probe, bytes);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    probe.destroy();
+  }
+}
+
+// --- Reference integrity & cycle detection -----------------------------------
+
+/** Every row in `bucket` whose `getRef` result is non-null must resolve inside `targetIds`, else `unknown-reference` naming `field` and the dangling id. */
+function checkReference<T>(
+  bucket: Bucket<T>,
+  getRef: (row: T) => string | null,
+  field: string,
+  targetIds: ReadonlySet<string>,
+  problems: ImportProblem[],
+): void {
+  for (const entry of bucket.entries) {
+    const ref = getRef(entry.row);
+    if (ref === null) continue;
+    if (!targetIds.has(ref)) {
+      problems.push(
+        problem("error", "unknown-reference", { path: entry.path, line: entry.line, detail: `${field}=${ref}` }),
+      );
+    }
+  }
+}
+
+/**
+ * Detects a cycle in a self-referencing parent chain (`task.parentId`,
+ * `note-folder.parentId`) via three-colour DFS: a back-edge to a node still
+ * "visiting" is a cycle, reported once (not once per node on it); a dangling
+ * reference (already reported by `checkReference`) just ends the walk, since
+ * an absent id can never be part of a cycle.
+ */
+function checkParentCycle<T>(
+  bucket: Bucket<T>,
+  getId: (row: T) => string,
+  getParentId: (row: T) => string | null,
+  path: string,
+  problems: ImportProblem[],
+): void {
+  const parentOf = new Map<string, string | null>();
+  for (const entry of bucket.entries) parentOf.set(getId(entry.row), getParentId(entry.row));
+
+  const state = new Map<string, "visiting" | "done">();
+  for (const startId of parentOf.keys()) {
+    if (state.get(startId) === "done") continue;
+
+    const visitedThisWalk: string[] = [];
+    let current: string | null = startId;
+    while (current !== null) {
+      const currentState = state.get(current);
+      if (currentState === "visiting") {
+        problems.push(problem("error", "reference-cycle", { path, detail: current }));
+        break;
+      }
+      if (currentState === "done") break;
+      state.set(current, "visiting");
+      visitedThisWalk.push(current);
+      current = parentOf.get(current) ?? null;
+    }
+    for (const visited of visitedThisWalk) state.set(visited, "done");
+  }
+}
+
+// --- Main entry point ---------------------------------------------------------
+
+export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResult {
+  const problems: ImportProblem[] = [];
+
+  const manifestText = input.files.get("manifest.json");
+  if (manifestText === undefined) {
+    problems.push(problem("error", "missing-manifest", { path: "manifest.json" }));
+    return { problems, manifest: null, data: null };
+  }
+
+  const manifestOutcome = parseManifest(manifestText);
+  if (!manifestOutcome.ok) {
+    problems.push(
+      problem(
+        "error",
+        "invalid-manifest",
+        manifestOutcome.detail !== undefined
+          ? { path: "manifest.json", detail: manifestOutcome.detail }
+          : { path: "manifest.json" },
+      ),
+    );
+    return { problems, manifest: null, data: null };
+  }
+  const { manifest, checksums } = manifestOutcome;
+
+  if (!isSupportedSchemaVersion(manifest.schemaVersion)) {
+    problems.push(
+      problem("error", "unsupported-schema-version", { path: "manifest.json", detail: manifest.schemaVersion }),
+    );
+    return { problems, manifest, data: null };
+  }
+
+  // --- Checksums (rule 4). Iterating the UNION of the files this build knows
+  // about and the files the manifest actually declares is what makes this both
+  // airtight and version-proof. Iterating `DATA_FILES` alone would let a
+  // manifest that simply omits a checksum entry hand us a data file nothing
+  // covers; iterating the declared checksums alone would do the same for a
+  // manifest that declares none. An older archive within the supported range
+  // legitimately declares FEWER files than this build writes, and is accepted:
+  // absent-and-undeclared is nothing at all, while present-and-undeclared is
+  // data no checksum covers, which is unverifiable and therefore unrestorable.
+  // Absence is always checked before comparison, never inferred as "matches
+  // the hash of the empty string".
+  for (const path of new Set<string>([...DATA_FILES, ...Object.keys(checksums)])) {
+    const expected = checksums[path];
+    const content = input.files.get(path);
+    if (expected === undefined) {
+      if (content !== undefined) {
+        problems.push(problem("error", "checksum-mismatch", { path, detail: "undeclared" }));
+      }
+      continue;
+    }
+    if (content === undefined) {
+      problems.push(problem("error", "missing-data-file", { path }));
+      continue;
+    }
+    if (input.hash(content) !== expected) {
+      problems.push(problem("error", "checksum-mismatch", { path }));
+    }
+  }
+
+  // --- Records: parse every present data file, line by line.
+  const collections = newCollections();
+  for (const path of DATA_FILES) {
+    const content = input.files.get(path);
+    if (content === undefined) continue; // already reported above; nothing to parse
+    const allowedTypes = FILE_RECORD_TYPES[path];
+
+    splitNdjsonLines(content).forEach((line, index) => {
+      const lineNumber = index + 1;
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(line);
+      } catch {
+        problems.push(problem("error", "invalid-json", { path, line: lineNumber }));
+        return;
+      }
+      if (!isRecord(parsed)) {
+        problems.push(problem("error", "invalid-json", { path, line: lineNumber }));
+        return;
+      }
+      const root = parsed;
+      if (typeof root.type !== "string") {
+        problems.push(problem("error", "invalid-json", { path, line: lineNumber }));
+        return;
+      }
+      const type = root.type;
+
+      // An ERROR, not a tolerated warning. "Ignore what you do not recognise"
+      // is the right rule for additive schema evolution — but it is
+      // unreachable here, because the version gate above already refuses any
+      // archive newer than this build in major or minor, and an OLDER archive
+      // can only ever carry FEWER types than this build knows. So a type we do
+      // not recognise is never a newer Nexus; it is a damaged or hand-edited
+      // file. Skipping the line would then quietly drop real rows from a
+      // backup, which is the exact failure this whole reader exists to refuse.
+      if (!isOneOf(type, ALL_RECORD_TYPES)) {
+        problems.push(problem("error", "unknown-record-type", { path, line: lineNumber, detail: type }));
+        return;
+      }
+      if (!allowedTypes.includes(type)) {
+        problems.push(problem("error", "invalid-record", { path, line: lineNumber, detail: "type" }));
+        return;
+      }
+
+      const dispatchOutcome = tryParse(() => dispatchRecord(type, root, path, lineNumber, collections, problems));
+      if (!dispatchOutcome.ok) {
+        problems.push(
+          problem("error", "invalid-record", { path, line: lineNumber, detail: dispatchOutcome.detail }),
+        );
+      }
+    });
+  }
+
+  // --- Yjs (rule 7): attach a note's snapshot when present; a note-version's
+  // snapshot is required.
+  const notes: ExportNote[] = collections.notes.entries.map((entry) => {
+    const meta = entry.row;
+    const ydocPath = `data/notes/${meta.id}.ydoc`;
+    const bytes = input.ydocs.get(ydocPath);
+    if (bytes === undefined) return { ...meta, snapshot: null };
+    if (!isValidYUpdate(bytes)) {
+      problems.push(problem("error", "invalid-ydoc", { path: ydocPath }));
+      return { ...meta, snapshot: null };
+    }
+    return { ...meta, snapshot: bytes };
+  });
+
+  const noteVersions: ExportNoteVersion[] = [];
+  for (const entry of collections.noteVersions.entries) {
+    const meta = entry.row;
+    const ydocPath = `data/note-versions/${meta.noteId}/${meta.coveredSeq}.ydoc`;
+    const bytes = input.ydocs.get(ydocPath);
+    if (bytes === undefined) {
+      problems.push(problem("error", "missing-ydoc", { path: ydocPath }));
+      continue;
+    }
+    if (!isValidYUpdate(bytes)) {
+      problems.push(problem("error", "invalid-ydoc", { path: ydocPath }));
+      continue;
+    }
+    noteVersions.push({ ...meta, snapshot: bytes });
+  }
+
+  // --- Blobs (rule 8): a missing blob is a warning — the row still restores.
+  for (const entry of collections.noteAttachments.entries) {
+    const attachment = entry.row;
+    if (!input.blobNames.has(attachment.sha256)) {
+      problems.push(
+        problem("warning", "missing-blob", { path: `blobs/${attachment.sha256}`, detail: attachment.id }),
+      );
+    }
+  }
+
+  // --- Reference integrity ----------------------------------------------------
+  const taskIds = new Set(rowsOf(collections.tasks).map((row) => row.id));
+  const subjectIds = new Set(rowsOf(collections.subjects).map((row) => row.id));
+  const examIds = new Set(rowsOf(collections.exams).map((row) => row.id));
+  const deckIds = new Set(rowsOf(collections.decks).map((row) => row.id));
+  const cardIds = new Set(rowsOf(collections.cards).map((row) => row.id));
+  const planIds = new Set(rowsOf(collections.plans).map((row) => row.id));
+  const documentIds = new Set(rowsOf(collections.documents).map((row) => row.id));
+  const noteIds = new Set(rowsOf(collections.notes).map((row) => row.id));
+  const folderIds = new Set(rowsOf(collections.noteFolders).map((row) => row.id));
+  const tagIds = new Set(rowsOf(collections.noteTags).map((row) => row.id));
+
+  checkReference(collections.tasks, (row) => row.parentId, "parentId", taskIds, problems);
+  checkReference(collections.exams, (row) => row.subjectId, "subjectId", subjectIds, problems);
+  checkReference(collections.decks, (row) => row.subjectId, "subjectId", subjectIds, problems);
+  checkReference(collections.cards, (row) => row.deckId, "deckId", deckIds, problems);
+  checkReference(collections.reviewLog, (row) => row.cardId, "cardId", cardIds, problems);
+  checkReference(collections.plans, (row) => row.examId, "examId", examIds, problems);
+  checkReference(collections.blocks, (row) => row.planId, "planId", planIds, problems);
+  checkReference(collections.focusSessions, (row) => row.subjectId, "subjectId", subjectIds, problems);
+  checkReference(collections.renewals, (row) => row.documentId, "documentId", documentIds, problems);
+  checkReference(collections.notes, (row) => row.folderId, "folderId", folderIds, problems);
+  checkReference(collections.notes, (row) => row.cardDeckId, "cardDeckId", deckIds, problems);
+  checkReference(collections.noteFolders, (row) => row.parentId, "parentId", folderIds, problems);
+  checkReference(collections.noteTagLinks, (row) => row.noteId, "noteId", noteIds, problems);
+  checkReference(collections.noteTagLinks, (row) => row.tagId, "tagId", tagIds, problems);
+  checkReference(collections.noteAttachments, (row) => row.noteId, "noteId", noteIds, problems);
+  checkReference(collections.noteVersions, (row) => row.noteId, "noteId", noteIds, problems);
+
+  // --- Cycles: the two self-referencing parent chains.
+  checkParentCycle(collections.tasks, (row) => row.id, (row) => row.parentId, "data/tasks.ndjson", problems);
+  checkParentCycle(
+    collections.noteFolders,
+    (row) => row.id,
+    (row) => row.parentId,
+    "data/notes.ndjson",
+    problems,
+  );
+
+  const hasError = problems.some((p) => p.severity === "error");
+  const data: ProfileData | null = hasError
+    ? null
+    : {
+        tasks: rowsOf(collections.tasks),
+        events: rowsOf(collections.events),
+        documents: rowsOf(collections.documents),
+        renewals: rowsOf(collections.renewals),
+        subjects: rowsOf(collections.subjects),
+        exams: rowsOf(collections.exams),
+        decks: rowsOf(collections.decks),
+        cards: rowsOf(collections.cards),
+        reviewLog: rowsOf(collections.reviewLog),
+        plans: rowsOf(collections.plans),
+        blocks: rowsOf(collections.blocks),
+        focusSessions: rowsOf(collections.focusSessions),
+        notifications: rowsOf(collections.notifications),
+        notes,
+        noteFolders: rowsOf(collections.noteFolders),
+        noteTags: rowsOf(collections.noteTags),
+        noteTagLinks: rowsOf(collections.noteTagLinks),
+        noteTemplates: rowsOf(collections.noteTemplates),
+        noteAttachments: rowsOf(collections.noteAttachments),
+        noteVersions,
+      };
+
+  return { problems, manifest, data };
+}
