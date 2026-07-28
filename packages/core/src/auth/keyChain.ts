@@ -1,4 +1,5 @@
 import { argon2id } from "hash-wasm";
+import { normalizeArchivePassphrase } from "../imex/archivePassphrase.js";
 import { normalizePasscode } from "./passcode.js";
 
 /**
@@ -34,6 +35,25 @@ export const DEFAULT_KDF_PARAMS: KdfParams = {
   algorithm: "argon2id",
   memoryKiB: 64 * 1024,
   iterations: 3,
+  parallelism: 1,
+};
+
+/**
+ * Argon2id parameters for an export archive (ADR-022) — deliberately heavier
+ * than `DEFAULT_KDF_PARAMS` (128 MiB, t=4, p=1 vs. 64 MiB, t=3, p=1). The
+ * passcode's KEK is device-bound (see this file's header comment on
+ * `derivePasscodeKey`), so a stolen database file is not offline-attackable
+ * at all without the OS keystore secret; an archive carries its own salt in
+ * its own header and travels anywhere, so it is offline-attackable forever,
+ * and the KDF's work factor is the *only* defence standing between the file
+ * and its contents. Export is also a deliberate, one-off action, not
+ * something on the unlock hot path, so paying roughly a second of Argon2id
+ * here is an acceptable trade the passcode's UX cannot afford.
+ */
+export const ARCHIVE_KDF_PARAMS: KdfParams = {
+  algorithm: "argon2id",
+  memoryKiB: 128 * 1024,
+  iterations: 4,
   parallelism: 1,
 };
 
@@ -160,6 +180,25 @@ export async function deriveRecoveryKey(
   params: KdfParams,
 ): Promise<Uint8Array> {
   return runArgon2id(code, salt, params);
+}
+
+/**
+ * Argon2id over the export-archive passphrase alone — no HKDF, no device
+ * binding, the same deliberate omission as `deriveRecoveryKey` and for the
+ * same reason: an archive must open on a machine that has never seen this
+ * installation's OS keystore, so there is nothing to bind it to. Normalizes
+ * through `normalizeArchivePassphrase` (imported from `../imex/`, not
+ * duplicated here) so the form used to derive a key can never drift from the
+ * form `validateArchivePassphrase` judged when the user typed it — two
+ * different normalizations of "the same" passphrase would otherwise derive
+ * two different keys.
+ */
+export async function deriveArchiveKey(
+  passphrase: string,
+  salt: Uint8Array,
+  params: KdfParams,
+): Promise<Uint8Array> {
+  return runArgon2id(normalizeArchivePassphrase(passphrase), salt, params);
 }
 
 /** Wraps `dataKey` with AES-256-GCM under `kek`, using a fresh random nonce every call. */

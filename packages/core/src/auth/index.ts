@@ -20,9 +20,11 @@ export {
 } from "./recoveryCode.js";
 
 export {
+  ARCHIVE_KDF_PARAMS,
   DEFAULT_KDF_PARAMS,
   KeyUnwrapError,
   dataKeyToHex,
+  deriveArchiveKey,
   derivePasscodeKey,
   deriveRecoveryKey,
   generateDataKey,

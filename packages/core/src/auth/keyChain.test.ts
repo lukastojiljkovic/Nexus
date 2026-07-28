@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  ARCHIVE_KDF_PARAMS,
   DEFAULT_KDF_PARAMS,
   KeyUnwrapError,
   dataKeyToHex,
+  deriveArchiveKey,
   deriveRecoveryKey,
   derivePasscodeKey,
   generateDataKey,
@@ -162,4 +164,55 @@ describe("derivePasscodeKey / deriveRecoveryKey / wrapDataKey / unwrapDataKey", 
     },
     20_000,
   );
+});
+
+describe("deriveArchiveKey", () => {
+  it("has heavier parameters than the passcode's default — an archive is offline-attackable forever", () => {
+    expect(ARCHIVE_KDF_PARAMS).toEqual({
+      algorithm: "argon2id",
+      memoryKiB: 128 * 1024,
+      iterations: 4,
+      parallelism: 1,
+    });
+  });
+
+  it("returns a 32-byte key", async () => {
+    const key = await deriveArchiveKey(
+      "correct horse battery staple",
+      generateSalt(),
+      FAST_KDF_PARAMS,
+    );
+    expect(key).toHaveLength(32);
+  });
+
+  it("is deterministic: the same passphrase and salt derive the same key", async () => {
+    const salt = generateSalt();
+    const a = await deriveArchiveKey("correct horse battery staple", salt, FAST_KDF_PARAMS);
+    const b = await deriveArchiveKey("correct horse battery staple", salt, FAST_KDF_PARAMS);
+    expect(a).toEqual(b);
+  });
+
+  it("derives a different key for a different salt", async () => {
+    const a = await deriveArchiveKey(
+      "correct horse battery staple",
+      generateSalt(),
+      FAST_KDF_PARAMS,
+    );
+    const b = await deriveArchiveKey(
+      "correct horse battery staple",
+      generateSalt(),
+      FAST_KDF_PARAMS,
+    );
+    expect(a).not.toEqual(b);
+  });
+
+  it("NFKC-normalizes: a passphrase differing only by Unicode composition derives the same key", async () => {
+    const salt = generateSalt();
+    // Fullwidth "Ａ1" (U+FF21, U+FF11) normalizes to ASCII "A1" under NFKC —
+    // proves this really routes through normalizeArchivePassphrase rather
+    // than hashing the raw string.
+    const a = await deriveArchiveKey("Ａ１correct horse", salt, FAST_KDF_PARAMS);
+    const b = await deriveArchiveKey("A1correct horse", salt, FAST_KDF_PARAMS);
+    expect(a).toEqual(b);
+  });
 });

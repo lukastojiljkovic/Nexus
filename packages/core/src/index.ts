@@ -111,6 +111,35 @@ export { renderNoteMarkdown } from "./imex/noteMarkdown.js";
 export type { NoteMarkdownAttachment, NoteMarkdownContext } from "./imex/noteMarkdown.js";
 
 export {
+  MAX_ARCHIVE_PASSPHRASE_LENGTH,
+  MIN_ARCHIVE_PASSPHRASE_LENGTH,
+  normalizeArchivePassphrase,
+  validateArchivePassphrase,
+} from "./imex/archivePassphrase.js";
+export type { ArchivePassphraseProblem } from "./imex/archivePassphrase.js";
+
+export {
+  ARCHIVE_CHUNK_BYTES,
+  ARCHIVE_FORMAT_VERSION,
+  ARCHIVE_MAGIC,
+  ARCHIVE_NONCE_PREFIX_BYTES,
+  ARCHIVE_SALT_BYTES,
+  ArchiveDecryptError,
+  ArchiveFormatError,
+  createArchiveReader,
+  createArchiveWriter,
+  parseArchiveHeader,
+  parseFramePrefix,
+} from "./imex/archiveContainer.js";
+export type {
+  ArchiveHeader,
+  ArchiveKdfParams,
+  ArchiveReader,
+  ArchiveWriter,
+  ArchiveWriterOptions,
+} from "./imex/archiveContainer.js";
+
+export {
   MAX_SPAN_DAYS,
   MIN_TIMED_MINUTES,
   MINUTES_PER_DAY,
