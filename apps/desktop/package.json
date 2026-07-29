@@ -9,6 +9,7 @@
     "build": "electron-vite build",
     "postinstall": "node scripts/ensure-electron.mjs",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "test": "vitest run",
     "smoke": "electron-vite build && node scripts/launch.mjs --smoke",
     "rebuild:electron": "node scripts/rebuild-native.mjs electron",
     "rebuild:node": "node scripts/rebuild-native.mjs node",
@@ -32,6 +33,7 @@
     "katex": "^0.18.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "yauzl": "^3.4.0",
     "yazl": "^3.3.1",
     "yjs": "^13.6.31"
   },
@@ -39,12 +41,14 @@
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/yauzl": "^3.4.0",
     "@types/yazl": "^3.3.1",
     "@vitejs/plugin-react": "^5.0.0",
     "electron": "^42.7.0",
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "typescript": "^5.8.0",
-    "vite": "^7.0.0"
+    "vite": "^7.0.0",
+    "vitest": "^3.2.6"
   }
 }
