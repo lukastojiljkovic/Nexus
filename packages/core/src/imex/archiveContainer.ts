@@ -111,6 +111,14 @@ export const ARCHIVE_SALT_BYTES = 16;
 /** The random half of every frame's nonce; the other 4 bytes are the frame index. */
 export const ARCHIVE_NONCE_PREFIX_BYTES = 8;
 
+/**
+ * The AES-GCM authentication tag appended to every frame body, so a frame's
+ * plaintext length is always `bodyLength - ARCHIVE_TAG_BYTES`. Exported
+ * because a random-access reader must size a frame's plaintext from its
+ * prefix alone, without decrypting it.
+ */
+export const ARCHIVE_TAG_BYTES = 16;
+
 const AES_KEY_BYTES = 32;
 const GCM_NONCE_BYTES = 12;
 const HEADER_HASH_BYTES = 32;
@@ -121,9 +129,18 @@ const FRAME_AAD_BYTES = HEADER_HASH_BYTES + FRAME_INDEX_BYTES + FINAL_FLAG_BYTES
 const HEADER_PREFIX_BYTES = ARCHIVE_MAGIC.length + 4; // magic + headerLength
 /** A hostile `headerLength` cannot be trusted to bound anything on its own — this is the hard ceiling regardless of what a file declares. */
 const MAX_HEADER_JSON_BYTES = 8192;
+
+/**
+ * The largest a header block can be: the 8-byte prefix plus the 8192-byte cap
+ * on header JSON. A caller reading a container off a filesystem can read this
+ * many bytes (or the whole file, if smaller) and hand them straight to
+ * `parseArchiveHeader`, which tolerates trailing bytes and reports the true
+ * `blockLength`.
+ */
+export const ARCHIVE_MAX_HEADER_BLOCK_BYTES = HEADER_PREFIX_BYTES + MAX_HEADER_JSON_BYTES;
+
 /** The largest `chunkBytes` a header may declare. A policy ceiling, not a structural one — 31 bits of length prefix would reach 2 GiB — chosen far above `ARCHIVE_CHUNK_BYTES` so the format has room to grow, and far below anything that would strain a reader. */
 const MAX_CHUNK_BYTES = 64 * 1024 * 1024;
-const GCM_TAG_BYTES = 16;
 /**
  * The hard ceiling on a frame body length read out of an untrusted prefix.
  * The caller's next move after `parseFramePrefix` is always to allocate a
@@ -133,7 +150,7 @@ const GCM_TAG_BYTES = 16;
  * different layer. No writer can produce more than `MAX_CHUNK_BYTES` of
  * plaintext plus a tag, so nothing legitimate is ever refused here.
  */
-const MAX_FRAME_BODY_BYTES = MAX_CHUNK_BYTES + GCM_TAG_BYTES;
+const MAX_FRAME_BODY_BYTES = MAX_CHUNK_BYTES + ARCHIVE_TAG_BYTES;
 const FRAME_FINAL_FLAG = 0x8000_0000;
 const FRAME_LENGTH_MASK = 0x7fff_ffff;
 /** `frameIndex` is a big-endian uint32; a writer or reader that reached this many frames has nowhere left to count. */
@@ -340,9 +357,9 @@ export function parseFramePrefix(prefix: Uint8Array): { bodyLength: number; fina
   const value = readUint32BE(prefix, 0);
   const final = (value & FRAME_FINAL_FLAG) !== 0;
   const bodyLength = value & FRAME_LENGTH_MASK;
-  if (bodyLength < GCM_TAG_BYTES) {
+  if (bodyLength < ARCHIVE_TAG_BYTES) {
     throw new ArchiveFormatError(
-      `Frame body length ${bodyLength} is shorter than a ${GCM_TAG_BYTES}-byte GCM tag — it cannot be a sealed frame.`,
+      `Frame body length ${bodyLength} is shorter than a ${ARCHIVE_TAG_BYTES}-byte GCM tag — it cannot be a sealed frame.`,
     );
   }
   if (bodyLength > MAX_FRAME_BODY_BYTES) {
@@ -642,6 +659,26 @@ export interface ArchiveReader {
    */
   openFrame(body: Uint8Array, final: boolean): Promise<Uint8Array>;
   /**
+   * Opens one frame body by an explicit `frameIndex`, for a caller that
+   * already owns a frame table — built by scanning the length prefixes ahead
+   * of time — and reads frames out of order (a random-access reader over a
+   * seekable file, e.g. `archivePlaintext.ts`).
+   *
+   * Unlike `openFrame`, this method tracks no sequence of its own and so
+   * provides **no truncation guard**: `assertComplete()` protects only the
+   * sequential `openFrame` counter, and calling it says nothing about frames
+   * opened here. A random-access caller must establish completeness
+   * structurally instead — the last frame in its table must carry the FINAL
+   * flag, and the container must end exactly where that frame's body ends.
+   *
+   * What per-frame authentication still guarantees, exactly as it does for
+   * `openFrame`: `frameIndex` and `final` are both bound into the frame's
+   * AAD, so opening frame *k*'s bytes while claiming a different index, or
+   * claiming the wrong final flag, fails the tag check and throws
+   * `ArchiveDecryptError` — regardless of the order frames are requested in.
+   */
+  openFrameAt(frameIndex: number, body: Uint8Array, final: boolean): Promise<Uint8Array>;
+  /**
    * Throws `ArchiveDecryptError` unless a final frame has already been
    * opened. THE truncation check (see the file header) — a caller that skips
    * this re-opens the exact hole the final flag exists to close, because
@@ -683,6 +720,39 @@ export async function createArchiveReader(
   let frameIndex = 0;
   let complete = false;
 
+  /**
+   * The one code path both `openFrame` and `openFrameAt` seal their
+   * decryption through: derive the nonce and AAD for `frameIndex`, decrypt
+   * `body`, and turn any tag-check failure into `ArchiveDecryptError`.
+   * Carries no sequencing state of its own — that is each public method's
+   * job, not this helper's.
+   */
+  async function openSealedFrame(
+    index: number,
+    body: Uint8Array,
+    final: boolean,
+  ): Promise<Uint8Array> {
+    assertFrameIndexInRange(index);
+
+    const nonce = buildNonce(noncePrefix, index);
+    const aad = buildAad(headerHash, index, final);
+
+    try {
+      return new Uint8Array(
+        await crypto.subtle.decrypt(
+          { name: "AES-GCM", iv: nonce, additionalData: aad },
+          cryptoKey,
+          toArrayBufferBytes(body),
+        ),
+      );
+    } catch (error) {
+      throw new ArchiveDecryptError(
+        "Could not open archive frame: wrong passphrase, edited bytes, or a reordered, foreign, or truncated stream.",
+        { cause: error },
+      );
+    }
+  }
+
   return {
     async openFrame(body: Uint8Array, final: boolean): Promise<Uint8Array> {
       if (complete) {
@@ -690,30 +760,13 @@ export async function createArchiveReader(
           "Archive frames continue past the final frame — the container has trailing bytes it should not have.",
         );
       }
-      assertFrameIndexInRange(frameIndex);
-
-      const nonce = buildNonce(noncePrefix, frameIndex);
-      const aad = buildAad(headerHash, frameIndex, final);
-
-      let plaintext: Uint8Array;
-      try {
-        plaintext = new Uint8Array(
-          await crypto.subtle.decrypt(
-            { name: "AES-GCM", iv: nonce, additionalData: aad },
-            cryptoKey,
-            toArrayBufferBytes(body),
-          ),
-        );
-      } catch (error) {
-        throw new ArchiveDecryptError(
-          "Could not open archive frame: wrong passphrase, edited bytes, or a reordered, foreign, or truncated stream.",
-          { cause: error },
-        );
-      }
-
+      const plaintext = await openSealedFrame(frameIndex, body, final);
       frameIndex += 1;
       if (final) complete = true;
       return plaintext;
+    },
+    openFrameAt(frameIndex: number, body: Uint8Array, final: boolean): Promise<Uint8Array> {
+      return openSealedFrame(frameIndex, body, final);
     },
     assertComplete(): void {
       if (!complete) {

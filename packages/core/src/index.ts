@@ -134,8 +134,10 @@ export {
   ARCHIVE_CHUNK_BYTES,
   ARCHIVE_FORMAT_VERSION,
   ARCHIVE_MAGIC,
+  ARCHIVE_MAX_HEADER_BLOCK_BYTES,
   ARCHIVE_NONCE_PREFIX_BYTES,
   ARCHIVE_SALT_BYTES,
+  ARCHIVE_TAG_BYTES,
   ArchiveDecryptError,
   ArchiveFormatError,
   createArchiveReader,
@@ -150,6 +152,9 @@ export type {
   ArchiveWriter,
   ArchiveWriterOptions,
 } from "./imex/archiveContainer.js";
+
+export { openArchivePlaintext } from "./imex/archivePlaintext.js";
+export type { ArchiveByteSource, ArchivePlaintext } from "./imex/archivePlaintext.js";
 
 export {
   MAX_SPAN_DAYS,

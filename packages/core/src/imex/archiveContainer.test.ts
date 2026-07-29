@@ -591,3 +591,110 @@ describe("parseFramePrefix", () => {
     expect(() => parseFramePrefix(prefix)).toThrow(ArchiveFormatError);
   });
 });
+
+describe("openFrameAt", () => {
+  it("reads frames out of order (2, then 0, then 1); each still decrypts to its own plaintext", async () => {
+    const key = randomKey();
+    const salt = randomBytes(ARCHIVE_SALT_BYTES);
+    const chunkA = new TextEncoder().encode("frame zero plaintext");
+    const chunkB = new TextEncoder().encode("frame one plaintext");
+    const chunkC = new TextEncoder().encode("frame two, the final plaintext");
+
+    const { headerBlock, frames } = await buildContainer(key, salt, [chunkA, chunkB, chunkC]);
+    const reader = await createArchiveReader(key, headerBlock);
+
+    async function openAt(index: number): Promise<Uint8Array> {
+      const frame = frames[index];
+      if (!frame) throw new Error("test setup: missing frame");
+      const { bodyLength, final } = parseFramePrefix(frame.subarray(0, 4));
+      return reader.openFrameAt(index, frame.subarray(4, 4 + bodyLength), final);
+    }
+
+    const plaintextTwo = await openAt(2);
+    const plaintextZero = await openAt(0);
+    const plaintextOne = await openAt(1);
+
+    expect(plaintextTwo).toEqual(chunkC);
+    expect(plaintextZero).toEqual(chunkA);
+    expect(plaintextOne).toEqual(chunkB);
+  });
+
+  it("is stateless: opening the same frame twice returns the same plaintext", async () => {
+    const key = randomKey();
+    const salt = randomBytes(ARCHIVE_SALT_BYTES);
+    const chunk = new TextEncoder().encode("repeat me");
+    const { headerBlock, frames } = await buildContainer(key, salt, [chunk]);
+    const [frame] = frames;
+    if (!frame) throw new Error("test setup: expected a frame");
+    const { bodyLength, final } = parseFramePrefix(frame.subarray(0, 4));
+
+    const reader = await createArchiveReader(key, headerBlock);
+    const first = await reader.openFrameAt(0, frame.subarray(4, 4 + bodyLength), final);
+    const second = await reader.openFrameAt(0, frame.subarray(4, 4 + bodyLength), final);
+    expect(first).toEqual(chunk);
+    expect(second).toEqual(chunk);
+  });
+
+  it("throws ArchiveDecryptError when the wrong index is claimed for a body", async () => {
+    const key = randomKey();
+    const salt = randomBytes(ARCHIVE_SALT_BYTES);
+    const { headerBlock, frames } = await buildContainer(key, salt, [
+      new TextEncoder().encode("frame zero"),
+      new TextEncoder().encode("frame one, the final frame"),
+    ]);
+    const [frameZero] = frames;
+    if (!frameZero) throw new Error("test setup: expected a frame");
+    const { bodyLength } = parseFramePrefix(frameZero.subarray(0, 4));
+
+    const reader = await createArchiveReader(key, headerBlock);
+    await expect(
+      reader.openFrameAt(1, frameZero.subarray(4, 4 + bodyLength), false),
+    ).rejects.toThrow(ArchiveDecryptError);
+  });
+
+  it("throws ArchiveDecryptError when the wrong final flag is claimed for a body", async () => {
+    const key = randomKey();
+    const salt = randomBytes(ARCHIVE_SALT_BYTES);
+    const { headerBlock, frames } = await buildContainer(key, salt, [
+      new TextEncoder().encode("not final"),
+      new TextEncoder().encode("the final frame"),
+    ]);
+    const [frameZero] = frames;
+    if (!frameZero) throw new Error("test setup: expected a frame");
+    const { bodyLength } = parseFramePrefix(frameZero.subarray(0, 4));
+
+    const reader = await createArchiveReader(key, headerBlock);
+    await expect(
+      reader.openFrameAt(0, frameZero.subarray(4, 4 + bodyLength), true),
+    ).rejects.toThrow(ArchiveDecryptError);
+  });
+
+  it("does not interfere with the sequential openFrame counter or its completion flag", async () => {
+    const key = randomKey();
+    const salt = randomBytes(ARCHIVE_SALT_BYTES);
+    const { headerBlock, frames } = await buildContainer(key, salt, [
+      new TextEncoder().encode("frame zero"),
+      new TextEncoder().encode("frame one, the final frame"),
+    ]);
+
+    const reader = await createArchiveReader(key, headerBlock);
+    for (const frame of frames) {
+      const { bodyLength, final } = parseFramePrefix(frame.subarray(0, 4));
+      await reader.openFrame(frame.subarray(4, 4 + bodyLength), final);
+    }
+    reader.assertComplete(); // sequential reading has already consumed the final frame
+
+    // openFrameAt must still work for random access after sequential completion —
+    // it has no counter and no `complete` flag of its own to be tripped by this.
+    const [frameZero, frameOne] = frames;
+    if (!frameZero || !frameOne) throw new Error("test setup: expected two frames");
+    const { bodyLength: lenZero } = parseFramePrefix(frameZero.subarray(0, 4));
+    const { bodyLength: lenOne, final: finalOne } = parseFramePrefix(frameOne.subarray(0, 4));
+
+    const plaintextZero = await reader.openFrameAt(0, frameZero.subarray(4, 4 + lenZero), false);
+    const plaintextOne = await reader.openFrameAt(1, frameOne.subarray(4, 4 + lenOne), finalOne);
+
+    expect(plaintextZero).toEqual(new TextEncoder().encode("frame zero"));
+    expect(plaintextOne).toEqual(new TextEncoder().encode("frame one, the final frame"));
+  });
+});
