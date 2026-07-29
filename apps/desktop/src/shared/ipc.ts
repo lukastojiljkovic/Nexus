@@ -36,6 +36,11 @@ export const IpcChannel = {
   tasksCompleteOccurrence: "tasks:complete-occurrence",
   eventsAddRecurrenceExdate: "events:add-recurrence-exdate",
   eventsSplitRecurrence: "events:split-recurrence",
+  peopleList: "people:list",
+  peopleCreate: "people:create",
+  peopleUpdate: "people:update",
+  peopleDelete: "people:delete",
+  peopleRestore: "people:restore",
   documentsList: "documents:list",
   documentsCreate: "documents:create",
   documentsUpdate: "documents:update",
@@ -479,6 +484,75 @@ export interface EventsSplitRecurrenceRequest {
   profileId: string;
   id: string;
   occurrenceDate: string;
+}
+
+/** Closed person-kind domain (mirrors `PERSON_KINDS` in `@nexus/db`; redeclared so the renderer never imports DB code). */
+export type PersonKind = "birthday" | "anniversary";
+
+/**
+ * A person as seen by the renderer (mirrors the `people` table via the store's
+ * mapping, CAL-007 / ADR-026). `month`/`day` are the yearless recurring fact —
+ * a birthday recurs forever and has no year attached; `year` is the separately
+ * known birth/start year, null when the user never supplied one. Redeclared
+ * here so the renderer never imports DB code.
+ */
+export interface Person {
+  id: string;
+  profileId: string;
+  name: string;
+  kind: PersonKind;
+  month: number;
+  day: number;
+  year: number | null;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Fields for a new person; only `year` and `note` are optional (CAL-007). The main process revalidates each. */
+export interface NewPersonFields {
+  name: string;
+  kind: PersonKind;
+  month: number;
+  day: number;
+  year?: number | null;
+  note?: string | null;
+}
+
+/** A partial edit of a person's own fields; an omitted key is untouched, `null` clears `year`/`note`. */
+export interface PersonFieldChanges {
+  name?: string;
+  kind?: PersonKind;
+  month?: number;
+  day?: number;
+  year?: number | null;
+  note?: string | null;
+}
+
+export interface PeopleListRequest {
+  profileId: string;
+}
+
+export interface PeopleCreateRequest {
+  profileId: string;
+  person: NewPersonFields;
+}
+
+export interface PeopleUpdateRequest {
+  profileId: string;
+  id: string;
+  changes: PersonFieldChanges;
+}
+
+export interface PeopleDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
+/** Undo of a soft delete: restores a previously deleted person. */
+export interface PeopleRestoreRequest {
+  profileId: string;
+  id: string;
 }
 
 /** Closed document-type domain (mirrors `@nexus/db`; redeclared so the renderer never imports DB code). */
@@ -1916,6 +1990,12 @@ export interface NexusApi {
    * are all this one call plus whatever the caller does next.
    */
   splitEventRecurrence(profileId: string, id: string, occurrenceDate: string): Promise<Event>;
+  /** This profile's people, name-ordered by SQLite's binary collation (CAL-007); the renderer re-sorts with `Intl.Collator(["sr-Latn","sr"])`. */
+  listPeople(profileId: string): Promise<Person[]>;
+  createPerson(profileId: string, person: NewPersonFields): Promise<Person>;
+  updatePerson(profileId: string, id: string, changes: PersonFieldChanges): Promise<Person>;
+  deletePerson(profileId: string, id: string): Promise<void>;
+  restorePerson(profileId: string, id: string): Promise<void>;
   listDocuments(profileId: string): Promise<TrackedDocument[]>;
   createDocument(profileId: string, doc: NewDocumentFields): Promise<TrackedDocument>;
   updateDocument(

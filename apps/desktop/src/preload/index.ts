@@ -49,6 +49,13 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.eventsAddRecurrenceExdate, { profileId, id, date }),
   splitEventRecurrence: (profileId, id, occurrenceDate) =>
     ipcRenderer.invoke(IpcChannel.eventsSplitRecurrence, { profileId, id, occurrenceDate }),
+  listPeople: (profileId) => ipcRenderer.invoke(IpcChannel.peopleList, { profileId }),
+  createPerson: (profileId, person) =>
+    ipcRenderer.invoke(IpcChannel.peopleCreate, { profileId, person }),
+  updatePerson: (profileId, id, changes) =>
+    ipcRenderer.invoke(IpcChannel.peopleUpdate, { profileId, id, changes }),
+  deletePerson: (profileId, id) => ipcRenderer.invoke(IpcChannel.peopleDelete, { profileId, id }),
+  restorePerson: (profileId, id) => ipcRenderer.invoke(IpcChannel.peopleRestore, { profileId, id }),
   listDocuments: (profileId) => ipcRenderer.invoke(IpcChannel.documentsList, { profileId }),
   createDocument: (profileId, document) =>
     ipcRenderer.invoke(IpcChannel.documentsCreate, { profileId, document }),

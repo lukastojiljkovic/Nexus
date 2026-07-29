@@ -653,7 +653,13 @@ body {
   font-weight: var(--nx-font-weight-semibold);
 }
 
-/* Source-filter toggle chips (Događaji/Zadaci/Ispiti/Učenje, ADR-020) — same
+/* Birthday rows (CAL-007): read-only like the exam/block/task rows — the same
+   quiet tag chip, carrying Rođendan/Godišnjica. */
+.cal__birthday-tag {
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+/* Source-filter toggle chips (Događaji/Zadaci/Ispiti/Učenje/Rođendani, ADR-020) — same
    typographic active state as .cal__view; applies to the month grid and the
    agenda alike, so it lives beside the view toggle rather than either view. */
 .cal__sources {
@@ -962,6 +968,24 @@ button.cal__month-bar--event {
   background: var(--nx-surface-alt);
   border: 1px solid var(--nx-border);
   color: var(--nx-text);
+}
+/* Clickable but never draggable (CAL-007): a birthday is not something you
+   move — the click leads to the Ljudi panel, where it is edited. Quiet surface
+   like the read-only bars, with the pointer affordance an event bar has. */
+button.cal__month-bar--birthday {
+  pointer-events: auto;
+  cursor: pointer;
+  text-align: left;
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  color: var(--nx-text);
+}
+.cal__month-bar--birthday:hover {
+  text-decoration: underline;
+}
+.cal__month-bar--birthday:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 1px;
 }
 
 /* The day-number affordance is now also a button (ADR-020's second overflow
@@ -1317,6 +1341,166 @@ button.cal__grid-event {
 .documents__renew-cancel.nx-button:hover {
   background: var(--nx-surface);
   color: var(--nx-text);
+}
+
+/* People (CAL Ljudi panel, CAL-007) ------------------------------------ */
+/* Deliberately the .documents panel's structure and spacing, class for class:
+   the two panels sit behind neighbouring tabs of one page, so anything but an
+   identical rhythm would read as an accident. */
+.people {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+
+/* Add/edit form — one wrapping row; the name field takes the slack. */
+.people__form {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+.people__name-input {
+  flex: 1;
+  min-width: 200px;
+}
+/* A year is four digits — it never needs the width a free-text field takes. */
+.people__year {
+  width: 120px;
+}
+
+/* Native selects matched to the textfield input (tokens only, no custom
+   arrow) — the kind, the day and the month all share one rule. */
+.people__select {
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  padding: 7px 13px;
+  transition: border-color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.people__select:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+
+/* Edit-mode cancel: a quiet ghost beside the primary submit (text feel). */
+.people__cancel.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.people__cancel.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
+}
+
+/* Form validation (an impossible day/month pair, a refused write) — same
+   full-width line under the fields as .cal__form-error. */
+.people__error {
+  margin: 0;
+  flex-basis: 100%;
+  color: var(--nx-danger);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+/* Delete + undo: inline, token-styled undo bar (mirrors the documents panel). */
+.people__undo {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.people__undo-text {
+  flex: 1;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+.people__undo-dismiss.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.people__undo-dismiss.nx-button:hover {
+  background: var(--nx-surface);
+  color: var(--nx-text);
+}
+
+/* List: rows in Serbian-collated name order, each led by its kind chip. */
+.people__list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Row content: name + recurring date on the heading line, year/age and the
+   note below. */
+.people__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.people__heading {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+.people__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--nx-font-weight-medium);
+}
+.people__date {
+  flex: none;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+.people__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  min-width: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+.people__years {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.people__note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Trailing: edit/delete affordances, quiet until hovered (documents pattern). */
+.people__row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.people__edit.nx-button,
+.people__delete.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.people__edit.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.people__delete.nx-button:hover {
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
 }
 
 /* Dashboard (DASH v0 widgets) ----------------------------------------- */

@@ -7,6 +7,7 @@ import type {
   EventFieldChanges,
   Exam,
   NewEventFields,
+  Person,
   RecurrenceRule,
   StudyBlockWithExam,
   Subject,
@@ -32,22 +33,32 @@ import { RecurrenceMark, RecurrencePicker } from "./RecurrencePicker.js";
 import { RecurrenceScopeDialog } from "./RecurrenceScopeDialog.js";
 import type { RecurrenceScope } from "./RecurrenceScopeDialog.js";
 import { DocumentsPanel } from "./DocumentsPanel.js";
+import { PeoplePanel } from "./PeoplePanel.js";
 import { daysUntilExam, examCountdownLabel, examCountdownVariant, localTodayKey } from "./examDates.js";
 import { dayUnit, strings } from "./strings.js";
 
 // --- Per-profile view memory (interim, mirrors TasksPage) -------------------
 //
-// Mesec / Nedelja / Dan / Agenda / Dokumenta is a lightweight UI preference,
-// persisted per profile in localStorage exactly like the tasks list/kanban
-// toggle.
-type CalendarView = "mesec" | "nedelja" | "dan" | "agenda" | "dokumenta";
+// Mesec / Nedelja / Dan / Agenda / Dokumenta / Ljudi is a lightweight UI
+// preference, persisted per profile in localStorage exactly like the tasks
+// list/kanban toggle.
+type CalendarView = "mesec" | "nedelja" | "dan" | "agenda" | "dokumenta" | "ljudi";
 const VIEW_KEY_PREFIX = "nexus.calendar.view.";
 /** Monday-first, the Serbian default (mirrors CalendarMonth's own WEEK_START). */
 const WEEK_START = 1;
 
+/** The two views that replace the whole event surface with a panel of their own. */
+function isPanelView(view: CalendarView): boolean {
+  return view === "dokumenta" || view === "ljudi";
+}
+
 function readStoredView(profileId: string): CalendarView {
   const raw = localStorage.getItem(VIEW_KEY_PREFIX + profileId);
-  return raw === "nedelja" || raw === "dan" || raw === "agenda" || raw === "dokumenta"
+  return raw === "nedelja" ||
+    raw === "dan" ||
+    raw === "agenda" ||
+    raw === "dokumenta" ||
+    raw === "ljudi"
     ? raw
     : "mesec";
 }
@@ -60,6 +71,7 @@ const SOURCE_LABEL: Record<CalendarSource, string> = {
   tasks: strings.calendar.sourceTasks,
   exams: strings.calendar.sourceExams,
   blocks: strings.calendar.sourceBlocks,
+  birthdays: strings.calendar.sourceBirthdays,
 };
 
 // --- Agenda grouping (page-level, not the views engine) ---------------------
@@ -68,11 +80,18 @@ const SOURCE_LABEL: Record<CalendarSource, string> = {
 // appends optimistically, so the display order is re-derived here rather than
 // trusted from insertion order. The rule matches the store's exactly — an
 // all-day event's bare "YYYY-MM-DD" sorts before any timed start on that day.
-// Tasks, exams (STUDY-002) and study blocks (STUDY-003) are merged in as
-// read-only rows: their bare dates sort the same way a bare all-day date
-// does, ahead of any timed event; within one bare date, kind rank keeps the
-// order deterministic (events, then tasks, then exams, then blocks).
-const KIND_RANK: Record<CalendarItem["kind"], number> = { event: 0, task: 1, exam: 2, block: 3 };
+// Tasks, exams (STUDY-002), study blocks (STUDY-003) and birthdays (CAL-007)
+// are merged in as read-only rows: their bare dates sort the same way a bare
+// all-day date does, ahead of any timed event; within one bare date, kind rank
+// keeps the order deterministic. Birthdays sit with the all-day cluster right
+// after events — a name is the first thing a day should say.
+const KIND_RANK: Record<CalendarItem["kind"], number> = {
+  event: 0,
+  birthday: 1,
+  task: 2,
+  exam: 3,
+  block: 4,
+};
 
 /** Calendar items bucketed by calendar day, days and rows both ascending. */
 function groupAgenda(items: readonly CalendarItem[]): [string, CalendarItem[]][] {
@@ -348,13 +367,14 @@ export interface CalendarPageProps {
 }
 
 /**
- * The CAL module page: a month grid, an agenda, and a Dokumenta panel over one
- * shared item stream (ADR-020). The event form both adds and edits; every
- * write goes through the events:* and tasks:* IPC allowlists, so the store
- * stays the single source of truth (e.g. it validates startAt and derives
- * updatedAt). Upcoming exams (STUDY-002) and study blocks (STUDY-003) are
- * merged in as read-only rows; tasks are read-only too apart from a due-date
- * drag — editing any of them lives on their own pages.
+ * The CAL module page: a month grid, an agenda, and the Dokumenta and Ljudi
+ * panels over one shared item stream (ADR-020). The event form both adds and
+ * edits; every write goes through the events:* and tasks:* IPC allowlists, so
+ * the store stays the single source of truth (e.g. it validates startAt and
+ * derives updatedAt). Upcoming exams (STUDY-002), study blocks (STUDY-003) and
+ * birthdays (CAL-007) are merged in as read-only rows; tasks are read-only too
+ * apart from a due-date drag — editing any of them lives on their own pages
+ * (a birthday's is the Ljudi panel a click on its bar switches to).
  */
 export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPageProps) {
   const [events, setEvents] = useState<Event[] | null>(null);
@@ -362,6 +382,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
   const [subjects, setSubjects] = useState<Subject[] | null>(null);
   const [exams, setExams] = useState<Exam[] | null>(null);
   const [blocks, setBlocks] = useState<StudyBlockWithExam[] | null>(null);
+  const [people, setPeople] = useState<Person[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [view, setView] = useState<CalendarView>(() => readStoredView(profileId));
   const [sources, setSources] = useState<ReadonlySet<CalendarSource>>(() =>
@@ -400,23 +421,26 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
         // `missed` when the agenda/grid reads them.
         await window.nexus.syncAllPlans(profileId);
         const today = localTodayKey();
-        const [nextEvents, nextTasks, nextSubjects, nextExams, nextBlocks] = await Promise.all([
-          window.nexus.listEvents(profileId),
-          window.nexus.listTasks(profileId),
-          window.nexus.listSubjects(profileId),
-          window.nexus.listExams(profileId),
-          window.nexus.listBlocksInRange(
-            profileId,
-            shiftDayKey(today, -BLOCKS_PAST_DAYS),
-            shiftDayKey(today, BLOCKS_FUTURE_DAYS),
-          ),
-        ]);
+        const [nextEvents, nextTasks, nextSubjects, nextExams, nextBlocks, nextPeople] =
+          await Promise.all([
+            window.nexus.listEvents(profileId),
+            window.nexus.listTasks(profileId),
+            window.nexus.listSubjects(profileId),
+            window.nexus.listExams(profileId),
+            window.nexus.listBlocksInRange(
+              profileId,
+              shiftDayKey(today, -BLOCKS_PAST_DAYS),
+              shiftDayKey(today, BLOCKS_FUTURE_DAYS),
+            ),
+            window.nexus.listPeople(profileId),
+          ]);
         if (!active) return;
         setEvents(nextEvents);
         setTasks(nextTasks);
         setSubjects(nextSubjects);
         setExams(nextExams);
         setBlocks(nextBlocks);
+        setPeople(nextPeople);
       } catch (error) {
         if (active) setFailed(true);
         console.error("Nexus: failed to load events:", error);
@@ -517,7 +541,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
   useEffect(() => {
     if (!intent) return;
     if (intent.kind === "create-event") {
-      if (view === "dokumenta") {
+      if (isPanelView(view)) {
         selectView("agenda");
         return; // wait for the form to actually mount before focusing it
       }
@@ -537,7 +561,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
       onIntentHandled?.(); // deleted between indexing and clicking — do nothing else
       return;
     }
-    if (view === "dokumenta") {
+    if (isPanelView(view)) {
       selectView("agenda");
       return; // wait for the form to mount before loading the event into it
     }
@@ -859,9 +883,14 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
     }
   }
 
-  // All five resolve together (one Promise.all), so a single null means loading.
+  // All six resolve together (one Promise.all), so a single null means loading.
   const dataLoading =
-    events === null || tasks === null || subjects === null || exams === null || blocks === null;
+    events === null ||
+    tasks === null ||
+    subjects === null ||
+    exams === null ||
+    blocks === null ||
+    people === null;
   const todayKey = localTodayKey();
 
   // Every grid view derives from the one anchor day; cheap to compute both
@@ -890,7 +919,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
             };
   const calendarItems = dataLoading
     ? []
-    : buildCalendarItems({ events, tasks, exams, blocks, subjects }, sources, expansionRange);
+    : buildCalendarItems({ events, tasks, exams, blocks, subjects, people }, sources, expansionRange);
   const periodLabel =
     view === "mesec"
       ? formatMonthLabel(monthKey)
@@ -911,7 +940,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
       )}
 
       <div className="cal__views" role="group" aria-label={strings.calendar.viewLabel}>
-        {(["mesec", "nedelja", "dan", "agenda", "dokumenta"] as const).map((option) => (
+        {(["mesec", "nedelja", "dan", "agenda", "dokumenta", "ljudi"] as const).map((option) => (
           <Button
             key={option}
             size="sm"
@@ -927,12 +956,14 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
                   ? strings.calendar.viewDan
                   : option === "agenda"
                     ? strings.calendar.viewAgenda
-                    : strings.calendar.viewDokumenta}
+                    : option === "dokumenta"
+                      ? strings.calendar.viewDokumenta
+                      : strings.calendar.viewLjudi}
           </Button>
         ))}
       </div>
 
-      {view !== "dokumenta" && (
+      {!isPanelView(view) && (
         <div className="cal__sources" role="group" aria-label={strings.calendar.sourcesLabel}>
           {CALENDAR_SOURCES.map((source) => (
             <Button
@@ -954,6 +985,8 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
           revealDocumentId={intent?.kind === "reveal-document" ? intent.documentId : null}
           onRevealHandled={onIntentHandled}
         />
+      ) : view === "ljudi" ? (
+        <PeoplePanel profileId={profileId} />
       ) : (
         <>
           <form className="cal__form" onSubmit={submitForm}>
@@ -1110,6 +1143,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
                   onSelectDay={selectDay}
                   onOpenDay={openDay}
                   onEditEvent={startEdit}
+                  onOpenPeople={() => selectView("ljudi")}
                   onMoveItem={(item, dayKey) => void moveItem(item, dayKey)}
                 />
               ) : (
@@ -1120,6 +1154,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
                   onSelectSlot={selectSlot}
                   onOpenDay={openDay}
                   onEditEvent={startEdit}
+                  onOpenPeople={() => selectView("ljudi")}
                 />
               )}
             </div>
@@ -1166,6 +1201,26 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
                             {item.event.location ? (
                               <Chip variant="data">{item.event.location}</Chip>
                             ) : null}
+                          </span>
+                        </ListRow>
+                      );
+                    }
+                    // Birthday row (CAL-007): read-only, like every other
+                    // non-event source here — a person is edited in the Ljudi
+                    // panel, never from a calendar surface.
+                    if (item.kind === "birthday") {
+                      return (
+                        <ListRow key={item.id} leading={<span className="cal__time" />}>
+                          <span className="cal__event">
+                            <Chip className="cal__birthday-tag">
+                              {strings.calendar.people.kind[item.person.kind]}
+                            </Chip>
+                            <span className="cal__event-title">{item.person.name}</span>
+                            {item.age !== null && (
+                              <Chip variant="data">
+                                {item.age} {strings.calendar.people.yearsUnit}
+                              </Chip>
+                            )}
                           </span>
                         </ListRow>
                       );

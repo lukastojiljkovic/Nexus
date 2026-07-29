@@ -30,6 +30,8 @@ export interface CalendarTimeGridProps {
   onOpenDay: (dayKey: string) => void;
   /** Click on a timed event — the page loads it into the form; `occurrence` is non-null for one occurrence of a series (ADR-024). */
   onEditEvent: (event: Event, occurrence: EventOccurrence | null) => void;
+  /** Click on a birthday bar in the all-day band — the page switches to its Ljudi panel (ADR-026). */
+  onOpenPeople: () => void;
 }
 
 const weekdayFormatter = new Intl.DateTimeFormat("sr-Latn", { weekday: "short", timeZone: "UTC" });
@@ -63,6 +65,7 @@ export function CalendarTimeGrid({
   onSelectSlot,
   onOpenDay,
   onEditEvent,
+  onOpenPeople,
 }: CalendarTimeGridProps) {
   const [nowMinutes, setNowMinutes] = useState(currentMinutes);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -135,6 +138,19 @@ export function CalendarTimeGrid({
           className={classes.join(" ")}
           style={geometry}
           onClick={() => onEditEvent(item.event, item.occurrence)}
+        >
+          {renderBarContent(item)}
+        </button>
+      );
+    }
+    if (item.kind === "birthday") {
+      return (
+        <button
+          key={item.id}
+          type="button"
+          className={classes.join(" ")}
+          style={geometry}
+          onClick={onOpenPeople}
         >
           {renderBarContent(item)}
         </button>

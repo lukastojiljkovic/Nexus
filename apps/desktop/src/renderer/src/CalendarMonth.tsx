@@ -29,6 +29,8 @@ export interface CalendarMonthProps {
    * so the page knows which day the edit is anchored on.
    */
   onEditEvent: (event: Event, occurrence: EventOccurrence | null) => void;
+  /** Click on a birthday bar — the page switches to its Ljudi panel (ADR-026); a birthday is edited there, never from the grid. */
+  onOpenPeople: () => void;
   /** A drag finished on `dayKey`; only events and tasks are draggable. */
   onMoveItem: (item: CalendarItem, dayKey: string) => void;
 }
@@ -66,6 +68,12 @@ export function itemLabel(item: CalendarItem): string {
     case "exam":
     case "block":
       return `${item.subject.name} — ${strings.study.examType[item.exam.examType]}`;
+    // Typographic, never an emoji: the name, plus the years this occurrence
+    // marks when the year is known ("Ana (30)"). A parenthesized number reads
+    // as an age for a birthday and as the anniversary's count for the other
+    // kind, so one composition serves both.
+    case "birthday":
+      return item.age === null ? item.person.name : `${item.person.name} (${item.age})`;
   }
 }
 
@@ -106,6 +114,7 @@ export function CalendarMonth({
   onSelectDay,
   onOpenDay,
   onEditEvent,
+  onOpenPeople,
   onMoveItem,
 }: CalendarMonthProps) {
   const [expandedWeeks, setExpandedWeeks] = useState<ReadonlySet<number>>(new Set());
@@ -321,6 +330,24 @@ export function CalendarMonth({
                       onClick={(e) => activateEvent(e, item)}
                       onDragStart={(e) => startDrag(e, item)}
                       onDragEnd={endDrag}
+                    >
+                      {renderBarContent(item)}
+                    </button>
+                  );
+                }
+                if (item.kind === "birthday") {
+                  return (
+                    <button
+                      key={bar.id}
+                      type="button"
+                      className={classes.join(" ")}
+                      style={style}
+                      onClick={(e) => {
+                        // Stops the click from also reaching the day cell's
+                        // onSelectDay beneath, exactly as an event bar does.
+                        e.stopPropagation();
+                        onOpenPeople();
+                      }}
                     >
                       {renderBarContent(item)}
                     </button>

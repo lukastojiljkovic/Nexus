@@ -7,6 +7,7 @@ import type {
   Event,
   Exam,
   FocusSession,
+  Person,
   StudyStats,
   Subject,
   Task,
@@ -112,13 +113,17 @@ function DashRow({
 }
 
 /**
- * "Danas" reads events through the calendar's own merge, for one reason: a
- * recurring event is a single stored master (ADR-024), and only that merge
- * knows how to expand it into the occurrence that falls today. Events are the
- * only source asked for — tasks, exams and blocks reach this page by their own
- * routes above.
+ * "Danas" reads events and birthdays through the calendar's own merge, for one
+ * reason: both are stored as a single row that only the merge knows how to
+ * expand into the occurrence falling today — a recurring event from its rule
+ * (ADR-024), a person from their yearless (month, day) (ADR-026). Those two are
+ * the only sources asked for; tasks, exams and blocks reach this page by their
+ * own routes above.
  */
-const EVENTS_ONLY: ReadonlySet<CalendarSource> = new Set<CalendarSource>(["events"]);
+const TODAY_SOURCES: ReadonlySet<CalendarSource> = new Set<CalendarSource>([
+  "events",
+  "birthdays",
+]);
 
 /** Empty stats used in place of a fetch when the study module is disabled. */
 const EMPTY_STUDY_STATS: StudyStats = {
@@ -159,6 +164,7 @@ export function DashboardPage({
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [events, setEvents] = useState<Event[] | null>(null);
   const [documents, setDocuments] = useState<TrackedDocument[] | null>(null);
+  const [people, setPeople] = useState<Person[] | null>(null);
   const [subjects, setSubjects] = useState<Subject[] | null>(null);
   const [exams, setExams] = useState<Exam[] | null>(null);
   // Učenje widget: a 365-day stats window backs the streak (mirrors StudyPage's
@@ -178,6 +184,7 @@ export function DashboardPage({
           nextTasks,
           nextEvents,
           nextDocuments,
+          nextPeople,
           nextSubjects,
           nextExams,
           nextStudyStats,
@@ -186,6 +193,7 @@ export function DashboardPage({
           tasksEnabled ? window.nexus.listTasks(profileId) : [],
           calendarEnabled ? window.nexus.listEvents(profileId) : [],
           calendarEnabled ? window.nexus.listDocuments(profileId) : [],
+          calendarEnabled ? window.nexus.listPeople(profileId) : [],
           studyEnabled ? window.nexus.listSubjects(profileId) : [],
           studyEnabled ? window.nexus.listExams(profileId) : [],
           studyEnabled
@@ -197,6 +205,7 @@ export function DashboardPage({
         setTasks(nextTasks);
         setEvents(nextEvents);
         setDocuments(nextDocuments);
+        setPeople(nextPeople);
         setSubjects(nextSubjects);
         setExams(nextExams);
         setStudyStats(nextStudyStats);
@@ -219,35 +228,41 @@ export function DashboardPage({
     month: "long",
   }).format(now);
 
-  // All seven resolve together, so a single null is enough to mean "loading".
+  // All eight resolve together, so a single null is enough to mean "loading".
   const loading =
     tasks === null ||
     events === null ||
     documents === null ||
+    people === null ||
     subjects === null ||
     exams === null ||
     studyStats === null ||
     todayFocusSessions === null;
 
-  // Danas — today's events (chronological) then tasks due today. An all-day
-  // event's bare "YYYY-MM-DD" sorts before any timed start, matching the store.
-  // Recurring masters are expanded over today alone, and each item's `event` is
-  // that occurrence's own copy, so the time shown is the time it happens at.
-  const todayEvents = buildCalendarItems(
-    { events: events ?? [], tasks: [], exams: [], blocks: [], subjects: [] },
-    EVENTS_ONLY,
+  // Danas — today's events (chronological), then whose birthday it is, then
+  // tasks due today. An all-day event's bare "YYYY-MM-DD" sorts before any
+  // timed start, matching the store. Recurring masters are expanded over today
+  // alone, and each item's `event` is that occurrence's own copy, so the time
+  // shown is the time it happens at.
+  const todayItems = buildCalendarItems(
+    { events: events ?? [], tasks: [], exams: [], blocks: [], subjects: [], people: people ?? [] },
+    TODAY_SOURCES,
     { from: todayKey, to: todayKey },
   )
-    .filter(
-      // Only events were asked for; the narrowing is what says so in the types.
-      (item): item is CalendarItem & { kind: "event" } =>
-        item.kind === "event" && item.startKey === todayKey,
-    )
+    .filter((item) => item.startKey === todayKey)
     .sort((a, b) => a.sortKey.localeCompare(b.sortKey) || a.id.localeCompare(b.id));
+  // Only events and birthdays were asked for; the narrowings are what say so in the types.
+  const todayEvents = todayItems.filter(
+    (item): item is CalendarItem & { kind: "event" } => item.kind === "event",
+  );
+  const todayBirthdays = todayItems.filter(
+    (item): item is CalendarItem & { kind: "birthday" } => item.kind === "birthday",
+  );
   const todayTasks = (tasks ?? []).filter(
     (task) => !task.done && task.dueDate != null && task.dueDate.slice(0, 10) === todayKey,
   );
-  const hasToday = todayEvents.length > 0 || todayTasks.length > 0;
+  const hasToday =
+    todayEvents.length > 0 || todayBirthdays.length > 0 || todayTasks.length > 0;
 
   // Predstojeći zadaci — next 5 active tasks by due date (nulls last), then age.
   const upcomingTasks = (tasks ?? [])
@@ -320,6 +335,26 @@ export function DashboardPage({
                       leading={<span className="dash__time">{formatEventTime(item.event)}</span>}
                     >
                       <span className="dash__row-title">{item.event.title}</span>
+                    </DashRow>
+                  ))}
+                  {todayBirthdays.map((item) => (
+                    <DashRow
+                      key={item.id}
+                      onClick={() => onOpenModule("calendar")}
+                      leading={
+                        <span className="dash__time dash__time--tag">
+                          {strings.dashboard.today.personTag[item.person.kind]}
+                        </span>
+                      }
+                      trailing={
+                        item.age !== null ? (
+                          <Chip variant="data">
+                            {item.age} {strings.calendar.people.yearsUnit}
+                          </Chip>
+                        ) : undefined
+                      }
+                    >
+                      <span className="dash__row-title">{item.person.name}</span>
                     </DashRow>
                   ))}
                   {todayTasks.map((task) => (

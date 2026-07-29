@@ -1,5 +1,11 @@
-import { isValidDayKey, occurrenceDatesInRange, shiftDayKey } from "@nexus/core";
-import type { Event, Exam, StudyBlockWithExam, Subject, Task } from "../../shared/ipc.js";
+import {
+  ageAtOccurrence,
+  birthdayOccurrencesInRange,
+  isValidDayKey,
+  occurrenceDatesInRange,
+  shiftDayKey,
+} from "@nexus/core";
+import type { Event, Exam, Person, StudyBlockWithExam, Subject, Task } from "../../shared/ipc.js";
 
 /**
  * Shared calendar source merge (ADR-020). Every calendar surface — the month
@@ -20,10 +26,28 @@ import type { Event, Exam, StudyBlockWithExam, Subject, Task } from "../../share
  * task, an exam, a study block) flows through untouched however far outside the
  * range it falls, exactly as before recurrence existed — a calendar surface that
  * showed everything yesterday still shows everything today.
+ *
+ * Birthdays (ADR-026) are the second range-bounded source, and for the same
+ * reason: a person is one stored row carrying a yearless (month, day), so the
+ * range is what says which years to celebrate. Unlike an event, a person has no
+ * "one-off" reading to fall back on — outside a usable range they simply do not
+ * appear.
  */
 
-export type CalendarSource = "events" | "tasks" | "exams" | "blocks";
-export const CALENDAR_SOURCES: readonly CalendarSource[] = ["events", "tasks", "exams", "blocks"];
+export type CalendarSource = "events" | "tasks" | "exams" | "blocks" | "birthdays";
+/**
+ * Chip order — and, because `persistSources` writes this order, the stored
+ * format's order too. New sources are APPENDED rather than slotted in beside a
+ * related one: every previously stored toggle set then still parses to exactly
+ * the sources it named.
+ */
+export const CALENDAR_SOURCES: readonly CalendarSource[] = [
+  "events",
+  "tasks",
+  "exams",
+  "blocks",
+  "birthdays",
+];
 
 const DAY_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -59,6 +83,8 @@ export type CalendarItem = CalendarItemBase &
     | { kind: "task"; task: Task }
     | { kind: "exam"; exam: Exam; subject: Subject }
     | { kind: "block"; block: StudyBlockWithExam; exam: Exam; subject: Subject }
+    /** One year's celebration of a person's date (ADR-026); `age` is null whenever the year is unknown. */
+    | { kind: "birthday"; person: Person; age: number | null }
   );
 
 export interface CalendarSourceRows {
@@ -67,6 +93,7 @@ export interface CalendarSourceRows {
   readonly exams: readonly Exam[];
   readonly blocks: readonly StudyBlockWithExam[];
   readonly subjects: readonly Subject[];
+  readonly people: readonly Person[];
 }
 
 /** The window a recurring master is expanded over — inclusive bare day keys. */
@@ -266,9 +293,46 @@ function buildBlockItems(
 }
 
 /**
+ * One all-day item per celebration of a person's date inside `range` (ADR-026)
+ * — the same window that bounds recurring-event expansion, so a view never
+ * pays for a reach it cannot show.
+ *
+ * A 29 February person is celebrated on the 28th in non-leap years; that
+ * clamping lives in `birthdayOccurrencesInRange`, which is also why the age is
+ * read off the OCCURRENCE's own year rather than recomputed here.
+ */
+function buildBirthdayItems(people: readonly Person[], range: CalendarRange): CalendarItem[] {
+  // Bounds the core helper would throw on: with nothing to expand over there
+  // is no birthday to show at all (unlike an event, whose master still stands
+  // on its own start day).
+  if (!isValidDayKey(range.from) || !isValidDayKey(range.to)) return [];
+
+  const items: CalendarItem[] = [];
+  for (const person of people) {
+    for (const date of birthdayOccurrencesInRange(person, range)) {
+      items.push({
+        // Occurrences of one person share its row id, so the day is what
+        // separates them — the same rule a recurring event's items follow.
+        id: `person-${person.id}@${date}`,
+        source: "birthdays",
+        kind: "birthday",
+        person,
+        age: ageAtOccurrence(person, date),
+        startKey: date,
+        endKey: date,
+        startMinutes: null,
+        endMinutes: null,
+        sortKey: date,
+      });
+    }
+  }
+  return items;
+}
+
+/**
  * Merges the enabled sources into one calendar stream; only requested sources
  * are built at all. `range` bounds the expansion of recurring event masters
- * and nothing else — see the file header.
+ * and of birthday occurrences, and nothing else — see the file header.
  */
 export function buildCalendarItems(
   rows: CalendarSourceRows,
@@ -283,6 +347,7 @@ export function buildCalendarItems(
   if (enabled.has("tasks")) items.push(...buildTaskItems(rows.tasks));
   if (enabled.has("exams")) items.push(...buildExamItems(rows.exams, subjectsById));
   if (enabled.has("blocks")) items.push(...buildBlockItems(rows.blocks, examsById, subjectsById));
+  if (enabled.has("birthdays")) items.push(...buildBirthdayItems(rows.people, range));
   return items;
 }
 
@@ -319,10 +384,14 @@ export function isMutedItem(item: CalendarItem): boolean {
 const SOURCES_KEY_PREFIX = "nexus.calendar.sources.";
 
 /**
- * Nothing stored, or nothing recognizable stored ⇒ all four enabled, the honest
- * default. An explicitly empty string is NOT that case: it is the user having
- * switched every source off, and reading it back as "all on" would quietly undo
- * a choice they made.
+ * Nothing stored, or nothing recognizable stored ⇒ every source enabled, the
+ * honest default. An explicitly empty string is NOT that case: it is the user
+ * having switched every source off, and reading it back as "all on" would
+ * quietly undo a choice they made.
+ *
+ * A profile that stored its toggles before a source existed keeps exactly the
+ * set it named, so a newly added source starts off there — the price of never
+ * re-enabling something the user switched off.
  */
 export function readStoredSources(profileId: string): Set<CalendarSource> {
   const raw = localStorage.getItem(SOURCES_KEY_PREFIX + profileId);

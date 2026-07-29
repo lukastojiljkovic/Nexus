@@ -122,11 +122,16 @@ export const strings = {
       dan: "Dobar dan",
       vece: "Dobro veče",
     },
-    /** Danas widget — today's events and tasks due today. */
+    /** Danas widget — today's events, birthdays, and tasks due today. */
     today: {
       title: "Danas",
       empty: "Nema obaveza danas 🎉",
       taskTag: "zadatak",
+      /** Leading tag on a birthday/anniversary row, in place of a time — same lower-case idiom as `taskTag`. */
+      personTag: {
+        birthday: "rođendan",
+        anniversary: "godišnjica",
+      },
     },
     /** Predstojeći zadaci widget — the next active tasks. */
     upcoming: {
@@ -397,6 +402,7 @@ export const strings = {
     viewDan: "Dan",
     viewAgenda: "Agenda",
     viewDokumenta: "Dokumenta",
+    viewLjudi: "Ljudi",
     titlePlaceholder: "Naziv događaja",
     titleLabel: "Naziv događaja",
     dateLabel: "Datum",
@@ -425,6 +431,7 @@ export const strings = {
     sourceTasks: "Zadaci",
     sourceExams: "Ispiti",
     sourceBlocks: "Učenje",
+    sourceBirthdays: "Rođendani",
     /**
      * The "Podsetnici" chip row on the event form (CAL-006). Every chip's label
      * is built from these by one formatter, so the fixed ladder and an offset
@@ -447,6 +454,48 @@ export const strings = {
     today: "Danas",
     showMore: "još",
     showLess: "Prikaži manje",
+    /**
+     * The Ljudi panel (CAL-007). Month names are NOT listed here: they are
+     * derived from `Intl.DateTimeFormat("sr-Latn", { month: "long" })`, the
+     * same source every other date label on this page already reads, so the
+     * select and the rows cannot drift from the calendar's own wording.
+     */
+    people: {
+      /** Kind labels, keyed by person-kind value (labels are presentation). */
+      kind: {
+        birthday: "Rođendan",
+        anniversary: "Godišnjica",
+      },
+      nameLabel: "Ime",
+      namePlaceholder: "Ime osobe",
+      kindLabel: "Vrsta",
+      dayLabel: "Dan",
+      monthLabel: "Mesec",
+      yearLabel: "Godina (opciono)",
+      notePlaceholder: "Beleška (opciono)",
+      noteLabel: "Beleška",
+      add: "Dodaj",
+      save: "Sačuvaj",
+      cancel: "Otkaži",
+      editLabel: "Izmeni osobu",
+      deleteLabel: "Obriši osobu",
+      emptyTitle: "Nema ljudi",
+      emptyDescription: "Dodaj prvu osobu u formi iznad — ime, vrsta i datum su dovoljni.",
+      loadError: "Ljudi se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
+      /** Client-side guard mirroring PeopleStore's own (month, day) pair check. */
+      invalidDate: "Taj datum ne postoji ni u jednom mesecu.",
+      saveError: "Osoba nije sačuvana. Pokušaj ponovo.",
+      deletedNotice: "Osoba obrisana",
+      undo: "Vrati",
+      dismiss: "Zatvori",
+      /**
+       * Age / anniversary count on a row: "1996 · 30 god." The abbreviated
+       * "god." is deliberate — it is correct at every number, while the spelled
+       * forms need three (1 godina / 2–4 godine / 5+ godina) and `dayUnit`
+       * knows two.
+       */
+      yearsUnit: "god.",
+    },
   },
 
   documents: {

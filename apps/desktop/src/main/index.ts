@@ -45,6 +45,7 @@ import {
   NoteTemplateStore,
   openDatabase,
   PeopleStore,
+  PERSON_KINDS,
   PlanStore,
   rebuildSearchIndex,
   RestoreStore,
@@ -65,6 +66,7 @@ import {
   type CreateDocumentInput,
   type CreateEventInput,
   type CreateExamInput,
+  type CreatePersonInput,
   type CreatePlanInput,
   type CreateSubjectInput,
   type CreateTaskInput,
@@ -86,6 +88,8 @@ import {
   type NoteTag,
   type NoteTagLink,
   type NoteTemplate,
+  type Person,
+  type PersonKind,
   type PreviewIntervals,
   type StudyBlock,
   type StudyBlockStatus,
@@ -103,6 +107,7 @@ import {
   type UpdateEventFields,
   type UpdateExamFields,
   type UpdateNotificationSettingsInput,
+  type UpdatePersonFields,
   type UpdatePlanFields,
   type UpdateSubjectFields,
   type UpdateTaskFields,
@@ -847,6 +852,70 @@ function asEventFieldChanges(value: unknown): UpdateEventFields {
       "changes.reminderOffsets",
     );
   }
+  return patch;
+}
+
+function asPersonKind(value: unknown, field: string): PersonKind {
+  if (typeof value === "string" && (PERSON_KINDS as readonly string[]).includes(value)) {
+    return value as PersonKind;
+  }
+  throw new Error(`Invalid IPC payload: "${field}" is not a valid person kind.`);
+}
+
+/** An integer field inside an inclusive structural range — the per-column halves of a person's yearless date. */
+function asBoundedInteger(value: unknown, field: string, min: number, max: number): number {
+  const int = asInteger(value, field);
+  if (int < min || int > max) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be a whole number between ${min} and ${max}.`,
+    );
+  }
+  return int;
+}
+
+/** An optional whole number: an explicit null, or an integer (any range check stays in the store). */
+function asNullableInteger(value: unknown, field: string): number | null {
+  return value === null ? null : asInteger(value, field);
+}
+
+// A person's date is (month, day) rather than a date string, so each half is
+// bounded on its own here. These are the PER-COLUMN bounds only — that the pair
+// names a real calendar day (never 30 February) and that a year falls inside
+// the store's 1900–2100 window are semantic checks, and `PeopleStore` owns
+// those, the same division of labour as the event/document validators above.
+const PERSON_MONTH_MIN = 1;
+const PERSON_MONTH_MAX = 12;
+const PERSON_DAY_MIN = 1;
+const PERSON_DAY_MAX = 31;
+
+/** Validates a `NewPersonFields` payload into a store input; only present keys are carried. */
+function asNewPersonInput(value: unknown): CreatePersonInput {
+  const person = asRecord(value);
+  const input: CreatePersonInput = {
+    name: asNonEmptyString(person.name, "person.name"),
+    kind: asPersonKind(person.kind, "person.kind"),
+    month: asBoundedInteger(person.month, "person.month", PERSON_MONTH_MIN, PERSON_MONTH_MAX),
+    day: asBoundedInteger(person.day, "person.day", PERSON_DAY_MIN, PERSON_DAY_MAX),
+  };
+  if (person.year !== undefined) input.year = asNullableInteger(person.year, "person.year");
+  if (person.note !== undefined) input.note = asNullableString(person.note, "person.note");
+  return input;
+}
+
+/** Validates a `PersonFieldChanges` payload into a store patch; an omitted key stays omitted. */
+function asPersonFieldChanges(value: unknown): UpdatePersonFields {
+  const changes = asRecord(value);
+  const patch: UpdatePersonFields = {};
+  if (changes.name !== undefined) patch.name = asNonEmptyString(changes.name, "changes.name");
+  if (changes.kind !== undefined) patch.kind = asPersonKind(changes.kind, "changes.kind");
+  if (changes.month !== undefined) {
+    patch.month = asBoundedInteger(changes.month, "changes.month", PERSON_MONTH_MIN, PERSON_MONTH_MAX);
+  }
+  if (changes.day !== undefined) {
+    patch.day = asBoundedInteger(changes.day, "changes.day", PERSON_DAY_MIN, PERSON_DAY_MAX);
+  }
+  if (changes.year !== undefined) patch.year = asNullableInteger(changes.year, "changes.year");
+  if (changes.note !== undefined) patch.note = asNullableString(changes.note, "changes.note");
   return patch;
 }
 
@@ -1839,6 +1908,51 @@ function registerIpc(): void {
     const id = asNonEmptyString(body.id, "id");
     const occurrenceDate = asBareDate(body.occurrenceDate, "occurrenceDate");
     return eventStore(profileId).splitRecurrence(id, occurrenceDate, new Date().toISOString());
+  });
+
+  // CAL-007 (ADR-026). `PeopleStore` takes `now` from its caller rather than
+  // reading the clock, so every mutating handler below stamps it here from
+  // main's own clock — when a person was added or edited is never the
+  // renderer's to say (SEC-EL-02), exactly as with the task/event writes above.
+  ipcMain.handle(IpcChannel.peopleList, (event, payload): Person[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return peopleStore(profileId).listActive();
+  });
+
+  ipcMain.handle(IpcChannel.peopleCreate, (event, payload): Person => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return peopleStore(profileId).create(asNewPersonInput(body.person), new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.peopleUpdate, (event, payload): Person => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return peopleStore(profileId).update(
+      id,
+      asPersonFieldChanges(body.changes),
+      new Date().toISOString(),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.peopleDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    peopleStore(profileId).softDelete(id, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.peopleRestore, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    peopleStore(profileId).restore(id, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.documentsList, (event, payload): TrackedDocument[] => {
