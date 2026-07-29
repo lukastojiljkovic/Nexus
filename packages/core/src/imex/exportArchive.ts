@@ -26,8 +26,17 @@ import { toCsv } from "./csv.js";
 import { renderNoteMarkdown } from "./noteMarkdown.js";
 import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown.js";
 
-/** IMEX-004: the archive's own semver — the first public interchange version. */
-const SCHEMA_VERSION = "1.0.0";
+/**
+ * IMEX-004: the archive's own semver. `1.1.0` adds the `person` record type
+ * (CAL-007 / ADR-026) to `data/calendar.ndjson` — a purely additive change, so
+ * a MINOR bump: an archive this build writes is refused by a 1.0 reader (which
+ * would silently drop every person), while a 1.0 archive still parses here.
+ * Kept in step with `INTERCHANGE_SCHEMA_VERSION` (`importArchive.ts`) — two
+ * constants rather than one import, since the reader already imports from this
+ * module and the cycle would be worse than the duplication; `importArchive.test.ts`
+ * pins them equal.
+ */
+const SCHEMA_VERSION = "1.1.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -99,6 +108,30 @@ export interface ExportRenewal {
   documentId: string;
   previousExpiry: string;
   renewedAt: string;
+}
+
+/**
+ * A birthday or anniversary (CAL-007 / ADR-026). `month`/`day` travel as the
+ * two integers the column holds rather than as a date string, for the reason
+ * migration 020 gives: the recurring fact has no year, and inventing one to
+ * fill a date's slot would put a lie in the interchange contract. `year` is
+ * the separately-known birth/start year, null when unknown.
+ *
+ * No `tables/*.csv` mirror: those are a curated subset for a human opening the
+ * archive in a spreadsheet (renewals have none either), and the NDJSON is the
+ * lossless layer (ADR-009).
+ */
+export interface ExportPerson {
+  id: string;
+  profileId: string;
+  name: string;
+  kind: string;
+  month: number;
+  day: number;
+  year: number | null;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ExportSubject {
@@ -320,6 +353,7 @@ export interface ProfileData {
   events: readonly ExportEvent[];
   documents: readonly ExportDocument[];
   renewals: readonly ExportRenewal[];
+  people: readonly ExportPerson[];
   subjects: readonly ExportSubject[];
   exams: readonly ExportExam[];
   decks: readonly ExportDeck[];
@@ -398,7 +432,8 @@ export type ArchiveModuleId = (typeof ARCHIVE_MODULE_IDS)[number];
 export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, number> {
   return {
     tasks: data.tasks.length,
-    calendar: data.events.length + data.documents.length + data.renewals.length,
+    calendar:
+      data.events.length + data.documents.length + data.renewals.length + data.people.length,
     study:
       data.subjects.length +
       data.exams.length +
@@ -434,6 +469,7 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     ...input.data.events.map((row) => ({ type: "event", ...row })),
     ...input.data.documents.map((row) => ({ type: "document", ...row })),
     ...input.data.renewals.map((row) => ({ type: "renewal", ...row })),
+    ...input.data.people.map((row) => ({ type: "person", ...row })),
   ]);
   const studyNdjson = toNdjson([
     ...input.data.subjects.map((row) => ({ type: "subject", ...row })),

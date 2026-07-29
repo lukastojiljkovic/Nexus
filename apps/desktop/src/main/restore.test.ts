@@ -31,6 +31,7 @@ import {
   NoteStore,
   NoteTemplateStore,
   NotificationStore,
+  PeopleStore,
   PlanStore,
   RestoreStore,
   SqliteFlagStore,
@@ -49,6 +50,7 @@ import type {
   NoteTag,
   NoteTemplate,
   NotificationRecord,
+  Person,
   RestoredNoteDerived,
   Subject,
   Task,
@@ -122,6 +124,7 @@ function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
   return {
     taskStore: (profileId) => new TaskStore(handle.raw, profileId),
     eventStore: (profileId) => new EventStore(handle.raw, profileId),
+    peopleStore: (profileId) => new PeopleStore(handle.raw, profileId),
     documentStore: (profileId) => new DocumentStore(handle.raw, profileId),
     subjectStore: (profileId) => new SubjectStore(handle.raw, profileId),
     examStore: (profileId) => new ExamStore(handle.raw, profileId),
@@ -232,6 +235,7 @@ interface SeededFixture {
   ids: {
     task: Task;
     event: Event;
+    person: Person;
     subject: Subject;
     exam: Exam;
     deck: Deck;
@@ -260,6 +264,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
 
   const taskStore = new TaskStore(handle.raw, profileId);
   const eventStore = new EventStore(handle.raw, profileId);
+  const peopleStore = new PeopleStore(handle.raw, profileId);
   const subjectStore = new SubjectStore(handle.raw, profileId);
   const examStore = new ExamStore(handle.raw, profileId);
   const deckStore = new DeckStore(handle.raw, profileId);
@@ -272,6 +277,12 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
 
   const task = taskStore.create({ title: `${label} task` });
   const event = eventStore.create({ title: `${label} event`, startAt: "2026-03-01T10:00:00.000Z" });
+  // A leap-day birthday (CAL-007): the pair migration 020's CHECKs cannot vet,
+  // so it is the person shape worth pushing through a whole zip round trip.
+  const person = peopleStore.create(
+    { name: `${label} person`, kind: "birthday", month: 2, day: 29, year: 1992, note: "Beleška" },
+    t0,
+  );
   const subject = subjectStore.create({ name: `${label} subject` });
   const exam = examStore.create({ subjectId: subject.id, examType: "pismeni", examDate: "2030-01-01" });
   const deck = deckStore.create({ subjectId: subject.id, name: `${label} deck` });
@@ -315,6 +326,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     events: eventStore.listActive(),
     documents: [],
     renewals: [],
+    people: peopleStore.listActive(),
     subjects: subjectStore.listActive(),
     exams: examStore.listActive(),
     decks: deckStore.listActive(),
@@ -356,7 +368,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     derived,
     settings,
     blobBytes,
-    ids: { task, event, subject, exam, deck, card, notification, note, linkedNote, folder, tag, template, attachmentSha },
+    ids: { task, event, person, subject, exam, deck, card, notification, note, linkedNote, folder, tag, template, attachmentSha },
   };
 }
 
@@ -478,6 +490,9 @@ describe("restore", () => {
       );
       expect(new EventStore(dbB.raw, profileB).listActive()).toEqual(
         fixtureA.data.events.map((row) => ({ ...row, profileId: profileB })),
+      );
+      expect(new PeopleStore(dbB.raw, profileB).listActive()).toEqual(
+        fixtureA.data.people.map((row) => ({ ...row, profileId: profileB })),
       );
       expect(new SubjectStore(dbB.raw, profileB).listActive()).toEqual(
         fixtureA.data.subjects.map((row) => ({ ...row, profileId: profileB })),

@@ -39,6 +39,7 @@ import type {
   NoteStore,
   NoteTemplateStore,
   NotificationStore,
+  PeopleStore,
   PlanStore,
   SqliteFlagStore,
   SubjectStore,
@@ -54,6 +55,7 @@ import type {
 export interface ProfileDataDeps {
   taskStore(profileId: string): TaskStore;
   eventStore(profileId: string): EventStore;
+  peopleStore(profileId: string): PeopleStore;
   documentStore(profileId: string): DocumentStore;
   subjectStore(profileId: string): SubjectStore;
   examStore(profileId: string): ExamStore;
@@ -160,6 +162,7 @@ export function gatherProfileData(deps: ProfileDataDeps, profileId: string): Pro
     events: deps.eventStore(profileId).listActive(),
     documents,
     renewals: documents.flatMap((document) => documentsStore.listRenewals(document.id)),
+    people: deps.peopleStore(profileId).listActive(),
     subjects: deps.subjectStore(profileId).listActive(),
     exams: deps.examStore(profileId).listActive(),
     decks,

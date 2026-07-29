@@ -16,8 +16,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 19 (event reminders), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(19);
+  it("is at version 20 (people), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(20);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -1899,6 +1899,98 @@ describe("migration 019 — event reminders", () => {
     expect(
       (db.raw.prepare("SELECT count(*) AS n FROM ntf_source_settings").get() as { n: number }).n,
     ).toBe(0);
+    db.close();
+  });
+});
+
+describe("migration 020 — people", () => {
+  const now = () => new Date().toISOString();
+
+  const insertPerson = (
+    db: NexusDatabase,
+    overrides: Partial<{
+      id: string;
+      name: string;
+      kind: string;
+      month: number;
+      day: number;
+      year: number | null;
+      note: string | null;
+    }> = {},
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO people (id, profile_id, name, kind, month, day, year, note, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        overrides.id ?? "pe1",
+        "p1",
+        overrides.name ?? "Marko",
+        overrides.kind ?? "birthday",
+        overrides.month ?? 3,
+        overrides.day ?? 14,
+        overrides.year === undefined ? 1990 : overrides.year,
+        overrides.note === undefined ? null : overrides.note,
+        now(),
+        now(),
+      );
+
+  it("creates the people table and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    expect(tableNames(db)).toContain("people");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("accepts both kinds and rejects anything outside the closed set", () => {
+    const db = openDatabase({ path: join(dir, "check-kind.db") });
+    insertProfile(db, "p1");
+    expect(() => insertPerson(db, { id: "pe1", kind: "birthday" })).not.toThrow();
+    expect(() => insertPerson(db, { id: "pe2", kind: "anniversary" })).not.toThrow();
+    expect(() => insertPerson(db, { id: "pe3", kind: "imendan" })).toThrow();
+    db.close();
+  });
+
+  it("bounds month to 1-12 and day to 1-31 with CHECKs", () => {
+    const db = openDatabase({ path: join(dir, "check-month-day.db") });
+    insertProfile(db, "p1");
+    expect(() => insertPerson(db, { id: "pe1", month: 1, day: 1 })).not.toThrow();
+    expect(() => insertPerson(db, { id: "pe2", month: 12, day: 31 })).not.toThrow();
+    expect(() => insertPerson(db, { id: "pe3", month: 0 })).toThrow();
+    expect(() => insertPerson(db, { id: "pe4", month: 13 })).toThrow();
+    expect(() => insertPerson(db, { id: "pe5", day: 0 })).toThrow();
+    expect(() => insertPerson(db, { id: "pe6", day: 32 })).toThrow();
+    db.close();
+  });
+
+  it("accepts a (month, day) pair that is no real calendar day — the store is the gate for that", () => {
+    const db = openDatabase({ path: join(dir, "pair-uncheckable.db") });
+    insertProfile(db, "p1");
+    // 31 April breaks no per-column range, so no CHECK can refuse it; see the
+    // migration's doc comment and `peopleStore.test.ts`.
+    expect(() => insertPerson(db, { month: 4, day: 31 })).not.toThrow();
+    db.close();
+  });
+
+  it("leaves year and note nullable — an unknown birth year is a normal person", () => {
+    const db = openDatabase({ path: join(dir, "nullable.db") });
+    insertProfile(db, "p1");
+    insertPerson(db, { year: null, note: null });
+    expect(db.raw.prepare("SELECT year, note FROM people WHERE id = ?").get("pe1")).toEqual({
+      year: null,
+      note: null,
+    });
+    db.close();
+  });
+
+  it("cascades a person's deletion when the owning profile is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade.db") });
+    insertProfile(db, "p1");
+    insertPerson(db);
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    expect((db.raw.prepare("SELECT count(*) AS n FROM people").get() as { n: number }).n).toBe(0);
     db.close();
   });
 });

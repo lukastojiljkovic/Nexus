@@ -35,6 +35,8 @@ export {
   NoteVersionNotFoundError,
   NotificationNotFoundError,
   NotificationValidationError,
+  PersonNotFoundError,
+  PersonValidationError,
   PlanNotFoundError,
   PlanValidationError,
   RestoreValidationError,
@@ -66,6 +68,14 @@ export {
   MAX_EVENT_REMINDER_MINUTES,
 } from "./events/eventStore.js";
 export type { CreateEventInput, Event, UpdateEventFields } from "./events/eventStore.js";
+
+export { PeopleStore, PERSON_KINDS } from "./people/peopleStore.js";
+export type {
+  CreatePersonInput,
+  Person,
+  PersonKind,
+  UpdatePersonFields,
+} from "./people/peopleStore.js";
 
 export {
   DocumentStore,

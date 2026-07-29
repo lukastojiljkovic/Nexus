@@ -24,6 +24,7 @@ import {
   NoteStore,
   NoteTemplateStore,
   NotificationStore,
+  PeopleStore,
   PlanStore,
   RestoreStore,
   RestoreValidationError,
@@ -45,6 +46,7 @@ import type {
   NoteTag,
   NoteTemplate,
   NotificationRecord,
+  Person,
   RestoredNoteDerived,
   RestoreProfileInput,
   StudyPlan,
@@ -100,6 +102,7 @@ function emptyProfileData(): ProfileData {
     events: [],
     documents: [],
     renewals: [],
+    people: [],
     subjects: [],
     exams: [],
     decks: [],
@@ -145,6 +148,7 @@ interface FixtureIds {
   parentTask: Task;
   childTask: Task;
   event: Event;
+  person: Person;
   document: TrackedDocument;
   subject: Subject;
   exam: Exam;
@@ -181,6 +185,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
 
   const taskStore = new TaskStore(handle.raw, profileId);
   const eventStore = new EventStore(handle.raw, profileId);
+  const peopleStore = new PeopleStore(handle.raw, profileId);
   const documentStore = new DocumentStore(handle.raw, profileId);
   const subjectStore = new SubjectStore(handle.raw, profileId);
   const examStore = new ExamStore(handle.raw, profileId);
@@ -208,6 +213,14 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     startAt: "2026-03-01T10:00:00.000Z",
     reminderOffsets: [15, 1440],
   });
+
+  // A leap-day birthday with a known year: the shape whose (month, day) pair
+  // no SQL CHECK can vet, so a restore that wrote it back wrong would be
+  // caught here rather than by a user in February 2028.
+  const person = peopleStore.create(
+    { name: `${name} person`, kind: "birthday", month: 2, day: 29, year: 1992, note: "Beleška" },
+    t0,
+  );
 
   const document = documentStore.create({
     docType: "pasos",
@@ -271,6 +284,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     events: eventStore.listActive(),
     documents: documentStore.listActive(),
     renewals: documentStore.listRenewals(document.id),
+    people: peopleStore.listActive(),
     subjects: subjectStore.listActive(),
     exams: examStore.listActive(),
     decks: deckStore.listActive(),
@@ -309,6 +323,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
       parentTask,
       childTask,
       event,
+      person,
       document,
       subject,
       exam,
@@ -388,6 +403,7 @@ function assertModulesMatch(
 
   expect(new TaskStore(handle.raw, readProfileId).listActive()).toEqual(remap(fixture.data.tasks));
   expect(new EventStore(handle.raw, readProfileId).listActive()).toEqual(remap(fixture.data.events));
+  expect(new PeopleStore(handle.raw, readProfileId).listActive()).toEqual(remap(fixture.data.people));
   // Stripped on BOTH sides: `seedFixture` gathers documents through
   // `listActive()`, so at runtime `fixture.data.documents` carries the derived
   // `status`/`daysUntilExpiry` that `ExportDocument` does not declare and that
@@ -525,6 +541,7 @@ describe("RestoreStore", () => {
 
     // Every module the archive carried zero rows for is empty, though B had one in each.
     expect(new EventStore(db.raw, profileB).listActive()).toEqual([]);
+    expect(new PeopleStore(db.raw, profileB).listActive()).toEqual([]);
     expect(new DocumentStore(db.raw, profileB).listActive()).toEqual([]);
     expect(new ExamStore(db.raw, profileB).listActive()).toEqual([]);
     expect(new DeckStore(db.raw, profileB).listActive()).toEqual([]);

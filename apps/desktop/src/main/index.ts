@@ -44,6 +44,7 @@ import {
   NoteStore,
   NoteTemplateStore,
   openDatabase,
+  PeopleStore,
   PlanStore,
   rebuildSearchIndex,
   RestoreStore,
@@ -1230,6 +1231,10 @@ function eventStore(profileId: string): EventStore {
   return new EventStore(requireDb().raw, profileId);
 }
 
+function peopleStore(profileId: string): PeopleStore {
+  return new PeopleStore(requireDb().raw, profileId);
+}
+
 function documentStore(profileId: string): DocumentStore {
   return new DocumentStore(requireDb().raw, profileId);
 }
@@ -1602,6 +1607,7 @@ function restoreDeps(): RestoreDeps {
   return {
     taskStore,
     eventStore,
+    peopleStore,
     documentStore,
     subjectStore,
     examStore,
@@ -2738,6 +2744,7 @@ function registerIpc(): void {
       {
         taskStore,
         eventStore,
+        peopleStore,
         documentStore,
         subjectStore,
         examStore,

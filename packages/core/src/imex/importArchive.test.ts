@@ -55,6 +55,7 @@ function emptyExportInput(): ExportArchiveInput {
       events: [],
       documents: [],
       renewals: [],
+      people: [],
       subjects: [],
       exams: [],
       decks: [],
@@ -115,6 +116,20 @@ function richProfileData(): ProfileData {
     ],
     renewals: [
       { id: "renewal-1", documentId: "doc-1", previousExpiry: "2020-01-01", renewedAt: "2026-01-01T00:00:00.000Z" },
+    ],
+    people: [
+      {
+        id: "person-1", profileId: "profile1", name: "Marko", kind: "birthday", month: 3, day: 14,
+        year: 1990, note: "Voli čaj", createdAt: "2026-07-01T00:00:00.000Z",
+        updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+      // A leap-day birthday with no known year and no note — the two shapes a
+      // person row can legitimately take beside the fully-filled one above.
+      {
+        id: "person-2", profileId: "profile1", name: "Prestupna", kind: "anniversary", month: 2, day: 29,
+        year: null, note: null, createdAt: "2026-07-01T00:00:00.000Z",
+        updatedAt: "2026-07-01T00:00:00.000Z",
+      },
     ],
     subjects: [
       {
@@ -333,6 +348,12 @@ const VALID_EVENT = {
 
 const WEEKLY_RULE = { freq: { kind: "weekly", interval: 1, days: [4] }, end: { kind: "never" } };
 
+const VALID_PERSON = {
+  type: "person", id: "pe1", profileId: "profile1", name: "Marko", kind: "birthday",
+  month: 3, day: 14, year: 1990, note: "Voli čaj", createdAt: "2026-07-01T00:00:00.000Z",
+  updatedAt: "2026-07-01T00:00:00.000Z",
+};
+
 const VALID_NOTE = {
   type: "note", id: "n1", profileId: "profile1", title: "Beleška", folderId: null, pinned: false,
   cardDeckId: null, createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
@@ -387,10 +408,10 @@ describe("parseImportArchive — one test per problem code", () => {
   });
 
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.1.0" });
+    const files = baseFiles({ schemaVersion: "1.2.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.1.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.2.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -665,39 +686,122 @@ describe("parseImportArchive — recurrence (ADR-024)", () => {
       expect(detailsFor("data/calendar.ndjson", { ...VALID_EVENT, ...row })).toContain(detail);
     });
   }
+
+  it("accepts a person with a known year and one with neither year nor note", () => {
+    const withoutYear = { ...VALID_PERSON, id: "pe2", kind: "anniversary", year: null, note: null };
+    const result = parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/calendar.ndjson": ndjson([VALID_PERSON, withoutYear]) } })),
+    );
+    expect(result.problems).toEqual([]);
+    expect(result.data?.people).toEqual([
+      {
+        id: "pe1", profileId: "profile1", name: "Marko", kind: "birthday", month: 3, day: 14,
+        year: 1990, note: "Voli čaj", createdAt: "2026-07-01T00:00:00.000Z",
+        updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+      {
+        id: "pe2", profileId: "profile1", name: "Marko", kind: "anniversary", month: 3, day: 14,
+        year: null, note: null, createdAt: "2026-07-01T00:00:00.000Z",
+        updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("accepts a leap-day person — 29 February is a real birthday", () => {
+    const result = parseImportArchive(
+      emptyInputWith(
+        baseFiles({
+          fileContents: { "data/calendar.ndjson": ndjson([{ ...VALID_PERSON, month: 2, day: 29 }]) },
+        }),
+      ),
+    );
+    expect(result.problems).toEqual([]);
+    expect(result.data?.people[0]?.day).toBe(29);
+  });
+
+  const BAD_PEOPLE: { name: string; row: Record<string, unknown>; detail: string }[] = [
+    { name: "an empty name", row: { name: "" }, detail: "name" },
+    { name: "an unknown kind", row: { kind: "imendan" }, detail: "kind" },
+    { name: "month 0", row: { month: 0 }, detail: "month" },
+    { name: "month 13", row: { month: 13 }, detail: "month" },
+    { name: "day 0", row: { day: 0 }, detail: "day" },
+    { name: "day 32", row: { day: 32 }, detail: "day" },
+    { name: "a fractional month", row: { month: 3.5 }, detail: "month" },
+    // The pair no SQL CHECK can see (migration 020): each column is in range
+    // and the day still does not exist in any year.
+    { name: "30 February", row: { month: 2, day: 30 }, detail: "day" },
+    { name: "31 April", row: { month: 4, day: 31 }, detail: "day" },
+    { name: "a year before 1900", row: { year: 1899 }, detail: "year" },
+    { name: "a typo'd year", row: { year: 19_858 }, detail: "year" },
+    { name: "a fractional year", row: { year: 1990.5 }, detail: "year" },
+    { name: "a missing timestamp", row: { updatedAt: undefined }, detail: "updatedAt" },
+  ];
+
+  for (const { name, row, detail } of BAD_PEOPLE) {
+    it(`refuses a person with ${name}`, () => {
+      expect(detailsFor("data/calendar.ndjson", { ...VALID_PERSON, ...row })).toContain(detail);
+    });
+  }
+
+  it("refuses a person record filed in the wrong data file", () => {
+    const result = parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/tasks.ndjson": ndjson([VALID_PERSON]) } })),
+    );
+    expect(result.problems).toContainEqual({
+      severity: "error",
+      code: "invalid-record",
+      path: "data/tasks.ndjson",
+      line: 1,
+      detail: "type",
+    });
+    expect(result.data).toBeNull();
+  });
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.0.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.0.0");
+  it("is 1.1.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.1.0");
+  });
+
+  it("is exactly what buildExportArchive stamps into its own manifest", () => {
+    const archive = buildExportArchive(emptyExportInput());
+    const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as { schemaVersion: string };
+    // Two constants, one contract: this is what stops the writer and the
+    // reader drifting a version apart (see either constant's own doc).
+    expect(manifest.schemaVersion).toBe(INTERCHANGE_SCHEMA_VERSION);
   });
 
   it("accepts the exact current version", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.1.0" })));
+    expect(result.problems).toEqual([]);
+    expect(result.data).not.toBeNull();
+  });
+
+  // The whole reason CAL-007 bumped the MINOR rather than the patch: an
+  // archive written before `person` existed carries strictly fewer record
+  // types than this build knows, so it still restores, unchanged.
+  it("accepts an older minor — a 1.0 archive still parses here", () => {
     const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.0.0" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
 
-  // INTERCHANGE_SCHEMA_VERSION's minor and patch are already 0 — semver
-  // components are non-negative, so there is no constructible version that is
-  // "older" on minor or patch without also being negative. Both cases are
-  // therefore degenerate with "equal" at this constant; a genuinely older
-  // build number will exist once the schema first revises past 1.0.0.
-  it("accepts what would be an older patch or minor, degenerate at the current 1.0.0 constant", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.0.0" })));
-    expect(result.problems).toEqual([]);
-  });
-
-  it("accepts a newer patch", () => {
+  it("accepts an older patch", () => {
     const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.0.7" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
 
+  it("accepts a newer patch", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.1.7" })));
+    expect(result.problems).toEqual([]);
+    expect(result.data).not.toBeNull();
+  });
+
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.1.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.2.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.1.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.2.0" },
     ]);
     expect(result.data).toBeNull();
   });

@@ -30,6 +30,7 @@ function emptyInput(): ExportArchiveInput {
       events: [],
       documents: [],
       renewals: [],
+      people: [],
       subjects: [],
       exams: [],
       decks: [],
@@ -188,7 +189,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.0.0");
+      expect(manifest.schemaVersion).toBe("1.1.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       expect(manifest.profile).toEqual({ id: "profile1", name: "Luka" });
@@ -290,7 +291,7 @@ describe("buildExportArchive", () => {
   });
 
   describe("data/calendar.ndjson", () => {
-    it("interleaves events, documents and renewals as type-discriminated records, in that order", () => {
+    it("interleaves events, documents, renewals and people as type-discriminated records, in that order", () => {
       const input = emptyInput();
       input.data.events = [
         {
@@ -326,6 +327,20 @@ describe("buildExportArchive", () => {
       input.data.renewals = [
         { id: "r1", documentId: "d1", previousExpiry: "2020-01-01", renewedAt: "2026-01-01T00:00:00.000Z" },
       ];
+      input.data.people = [
+        {
+          id: "pe1",
+          profileId: "profile1",
+          name: "Marko",
+          kind: "birthday",
+          month: 3,
+          day: 14,
+          year: 1990,
+          note: null,
+          createdAt: "2026-07-01T00:00:00.000Z",
+          updatedAt: "2026-07-01T00:00:00.000Z",
+        },
+      ];
 
       const archive = buildExportArchive(input);
       const rows = parseNdjson(archive.files.get("data/calendar.ndjson") ?? "") as Array<{
@@ -334,8 +349,22 @@ describe("buildExportArchive", () => {
         recurrenceExdates?: unknown;
         reminderOffsets?: unknown;
       }>;
-      expect(rows.map((row) => row.type)).toEqual(["event", "document", "renewal"]);
-      expect(archive.byModule.calendar).toBe(3);
+      expect(rows.map((row) => row.type)).toEqual(["event", "document", "renewal", "person"]);
+      expect(archive.byModule.calendar).toBe(4);
+      // The yearless recurring fact travels as its two integers (ADR-026).
+      expect(rows[3]).toEqual({
+        type: "person",
+        id: "pe1",
+        profileId: "profile1",
+        name: "Marko",
+        kind: "birthday",
+        month: 3,
+        day: 14,
+        year: 1990,
+        note: null,
+        createdAt: "2026-07-01T00:00:00.000Z",
+        updatedAt: "2026-07-01T00:00:00.000Z",
+      });
       // A series master travels with both halves of its recurrence (ADR-024).
       expect(rows[0]?.recurrence).toEqual({
         freq: { kind: "weekly", interval: 1, days: [5] },
@@ -498,7 +527,7 @@ describe("buildExportArchive", () => {
   });
 
   describe("countProfileModules", () => {
-    /** One row in every one of `ProfileData`'s 19 arrays, so each of the five buckets sums more than one field. */
+    /** One row in every one of `ProfileData`'s 20 arrays, so each of the five buckets sums more than one field. */
     function populatedData(): ProfileData {
       const t = "2026-01-01T00:00:00.000Z";
       return {
@@ -512,6 +541,9 @@ describe("buildExportArchive", () => {
           { id: "d1", profileId: "p1", docType: "licna_karta", label: "D", expiryDate: "2030-01-01", reminderOffsets: [], notes: null, createdAt: t, updatedAt: t },
         ],
         renewals: [{ id: "r1", documentId: "d1", previousExpiry: "2020-01-01", renewedAt: t }],
+        people: [
+          { id: "pe1", profileId: "p1", name: "Marko", kind: "birthday", month: 3, day: 14, year: 1990, note: null, createdAt: t, updatedAt: t },
+        ],
         subjects: [
           { id: "s1", profileId: "p1", name: "S", color: "jade", semester: null, archived: false, createdAt: t, updatedAt: t },
         ],
@@ -565,7 +597,7 @@ describe("buildExportArchive", () => {
       const data = populatedData();
       expect(countProfileModules(data)).toEqual({
         tasks: 1,
-        calendar: 3, // 1 event + 1 document + 1 renewal
+        calendar: 4, // 1 event + 1 document + 1 renewal + 1 person
         study: 8, // 1 each of subject/exam/deck/card/review/plan/block/focus-session
         notifications: 1,
         notes: 7, // 1 each of note/folder/tag/tag-link/template/attachment/version

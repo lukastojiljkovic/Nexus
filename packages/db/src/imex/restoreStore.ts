@@ -46,6 +46,7 @@ export const RESTORE_WIPE_TABLES = [
   "tracked_documents",
   "subjects",
   "events",
+  "people",
   "notifications",
   "tasks",
   "note_tag_links",
@@ -149,6 +150,7 @@ export class RestoreStore {
   private readonly insertRenewal: Database.Statement;
   private readonly insertTask: Database.Statement;
   private readonly insertEvent: Database.Statement;
+  private readonly insertPerson: Database.Statement;
   private readonly insertNotification: Database.Statement;
   private readonly insertPlan: Database.Statement;
   private readonly insertBlock: Database.Statement;
@@ -229,6 +231,11 @@ export class RestoreStore {
           location, category, created_at, updated_at, recurrence, recurrence_exdates,
           reminder_offsets, deleted_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    this.insertPerson = db.prepare(
+      `INSERT INTO people
+         (id, profile_id, name, kind, month, day, year, note, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertNotification = db.prepare(
       `INSERT INTO notifications
@@ -414,6 +421,14 @@ export class RestoreStore {
           event.allDay ? 1 : 0, event.location, event.category, event.createdAt, event.updatedAt,
           recurrenceText(event.recurrence), exdatesText(event.recurrenceExdates),
           offsetsText(event.reminderOffsets),
+        );
+        written += 1;
+      }
+
+      for (const person of input.data.people) {
+        this.insertPerson.run(
+          person.id, this.profileId, person.name, person.kind, person.month, person.day,
+          person.year, person.note, person.createdAt, person.updatedAt,
         );
         written += 1;
       }

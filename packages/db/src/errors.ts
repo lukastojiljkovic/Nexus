@@ -62,6 +62,26 @@ export class EventValidationError extends DatabaseError {}
 export class EventNotFoundError extends DatabaseError {}
 
 /**
+ * Thrown when a person write is rejected at the store boundary because its
+ * input breaks a domain rule the UI is expected to have caught already — an
+ * empty name, an unknown kind, a malformed `now`, a birth year outside the
+ * accepted range, or a (month, day) pair that is no calendar day in any year
+ * (CAL-007 / ADR-026). The last one is the reason this class exists at all:
+ * migration 020's per-column CHECKs cannot see the pair, so the store is the
+ * only gate for it. Inputs are revalidated here because the renderer is
+ * untrusted (SEC-EL-02).
+ */
+export class PersonValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a person operation targets an id that is not an active row in
+ * the store's own profile — unknown, soft-deleted (for a mutation), or owned
+ * by another profile. Surfacing this uniformly keeps one profile's people
+ * invisible to a store scoped to another.
+ */
+export class PersonNotFoundError extends DatabaseError {}
+
+/**
  * Thrown when a document write is rejected at the store boundary because its
  * input breaks a domain rule the UI is expected to have caught already — an
  * empty label, an unknown document type, a malformed expiry date, or a reminder

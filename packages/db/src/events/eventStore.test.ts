@@ -395,9 +395,13 @@ describe("EventStore — reminder offsets (CAL-006)", () => {
     expect(plain.reminderOffsets).toEqual([]);
 
     // Deliberately out of order: the column keeps the canonical ascending form.
+    // The later `startAt` is what makes the `listActive()` assertion below
+    // deterministic: `ORDER BY start_at, id` would otherwise tie on the shared
+    // instant and fall through to two same-millisecond uuidv7 ids, whose order
+    // is decided by their random suffix — a coin flip on every run.
     const reminded = events.create({
       title: "Sa podsetnicima",
-      startAt: "2026-07-10T09:00:00Z",
+      startAt: "2026-07-10T10:00:00Z",
       reminderOffsets: [1440, 0, 15],
     });
     expect(reminded.reminderOffsets).toEqual([0, 15, 1440]);

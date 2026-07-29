@@ -102,6 +102,7 @@ export type {
   ExportNoteTemplate,
   ExportNoteVersion,
   ExportNotification,
+  ExportPerson,
   ExportRenewal,
   ExportReviewLogEntry,
   ExportSettings,
@@ -182,6 +183,9 @@ export type {
   TimedItem,
   WeekStart,
 } from "./calendar/calendarGrid.js";
+
+export { ageAtOccurrence, birthdayOccurrencesInRange } from "./calendar/birthdays.js";
+export type { BirthdayPerson } from "./calendar/birthdays.js";
 
 export {
   DEFAULT_OCCURRENCE_LIMIT,

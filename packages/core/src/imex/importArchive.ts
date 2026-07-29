@@ -18,6 +18,7 @@ import type {
   ExportNoteTemplate,
   ExportNoteVersion,
   ExportNotification,
+  ExportPerson,
   ExportRenewal,
   ExportReviewLogEntry,
   ExportSettings,
@@ -105,13 +106,20 @@ export interface ImportArchiveResult {
 }
 
 /**
- * The schema version this build writes and is the newest it accepts. `1.0.0`
- * is the only interchange schema ever released (ADR-009/IMEX-004), so there
- * is nothing yet to migrate an older major forward from — a migration
- * framework for a major that has never shipped would be speculative
- * machinery with nothing to exercise it.
+ * The schema version this build writes and is the newest it accepts, kept in
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.1.0` added the
+ * `person` record type (CAL-007 / ADR-026): an additive change, hence a MINOR
+ * bump, which is exactly the compatibility mechanism `isSupportedSchemaVersion`
+ * implements — a 1.0 archive still parses here, while a 1.0 build refuses a
+ * 1.1 archive rather than silently dropping every person in it. That, in turn,
+ * is why an unrecognised record type below is an ERROR: the version gate makes
+ * "ignore what you do not know" unreachable.
+ *
+ * Major is still 1 throughout, so there is nothing yet to migrate an older
+ * major forward from — a migration framework for a major that has never
+ * shipped would be speculative machinery with nothing to exercise it.
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.0.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.1.0";
 
 // --- Small, cast-free validation primitives ---------------------------------
 //
@@ -349,6 +357,14 @@ const REVIEW_RATINGS = [1, 2, 3, 4] as const;
 const STUDY_BLOCK_STATUSES = ["planned", "done", "missed"] as const;
 const NOTIFICATION_SOURCES = ["document", "exam", "study-day", "event"] as const;
 const NOTIFICATION_STATUSES = ["delivered", "snoozed", "dismissed"] as const;
+const PERSON_KINDS = ["birthday", "anniversary"] as const;
+
+/**
+ * A leap year, used only by `parsePerson` to ask whether a (month, day) pair
+ * is a real day in SOME year — the twin of `PeopleStore`'s own `LEAP_YEAR`
+ * (`@nexus/db`), which is what keeps 29 February acceptable.
+ */
+const PERSON_LEAP_YEAR = "2024";
 
 /**
  * Mirrors `MAX_EVENT_REMINDER_MINUTES`/`MAX_EVENT_REMINDERS` in `@nexus/db`'s
@@ -365,6 +381,7 @@ type RecordType =
   | "event"
   | "document"
   | "renewal"
+  | "person"
   | "subject"
   | "exam"
   | "deck"
@@ -387,6 +404,7 @@ const ALL_RECORD_TYPES: readonly RecordType[] = [
   "event",
   "document",
   "renewal",
+  "person",
   "subject",
   "exam",
   "deck",
@@ -410,7 +428,7 @@ type DataFilePath = (typeof DATA_FILES)[number];
 /** Which record types the writer puts in each of the five NDJSON files — a type in any OTHER file is `invalid-record` (detail `"type"`), not silently accepted (ADR-022). */
 const FILE_RECORD_TYPES: Record<DataFilePath, readonly RecordType[]> = {
   "data/tasks.ndjson": ["task"],
-  "data/calendar.ndjson": ["event", "document", "renewal"],
+  "data/calendar.ndjson": ["event", "document", "renewal", "person"],
   "data/study.ndjson": ["subject", "exam", "deck", "card", "review", "plan", "block", "focus-session"],
   "data/notifications.ndjson": ["notification"],
   "data/notes.ndjson": [
@@ -521,6 +539,36 @@ function parseRenewal(raw: Record<string, unknown>): ExportRenewal {
   const previousExpiry = bareDate(raw.previousExpiry, "previousExpiry");
   const renewedAt = isoDateTime(raw.renewedAt, "renewedAt");
   return { id, documentId, previousExpiry, renewedAt };
+}
+
+/**
+ * The twin of `PeopleStore`'s own validation (`@nexus/db`), CAL-007/ADR-026.
+ * Migration 020's CHECKs cover each of `month`/`day` alone; nothing in SQL can
+ * see the PAIR, so `(2, 30)` and `(4, 31)` would sit in the table happily —
+ * which is precisely why an archive has to be checked. Validated against a
+ * leap year (`bareDate` already owns "is this a real calendar day"), so 29
+ * February passes: leap-day birthdays exist, and the calendar clamps them to
+ * the 28th in the years that lack a 29th.
+ *
+ * `year`'s 1900-2100 window mirrors the store's for the same reason it exists
+ * there: to catch a typo'd `19858`, not to model history.
+ */
+function parsePerson(raw: Record<string, unknown>): ExportPerson {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const name = nonEmptyStr(raw.name, "name");
+  const kind = enumStr(raw.kind, "kind", PERSON_KINDS);
+  const month = intInRange(raw.month, "month", 1, 12);
+  const day = intInRange(raw.day, "day", 1, 31);
+  bareDate(
+    `${PERSON_LEAP_YEAR}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+    "day",
+  );
+  const year = raw.year === null ? null : intInRange(raw.year, "year", 1900, 2100);
+  const note = nullableStr(raw.note, "note");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, profileId, name, kind, month, day, year, note, createdAt, updatedAt };
 }
 
 function parseSubject(raw: Record<string, unknown>): ExportSubject {
@@ -799,6 +847,7 @@ interface Collections {
   events: Bucket<ExportEvent>;
   documents: Bucket<ExportDocument>;
   renewals: Bucket<ExportRenewal>;
+  people: Bucket<ExportPerson>;
   subjects: Bucket<ExportSubject>;
   exams: Bucket<ExportExam>;
   decks: Bucket<ExportDeck>;
@@ -820,7 +869,7 @@ interface Collections {
 function newCollections(): Collections {
   return {
     tasks: newBucket(), events: newBucket(), documents: newBucket(), renewals: newBucket(),
-    subjects: newBucket(), exams: newBucket(), decks: newBucket(), cards: newBucket(),
+    people: newBucket(), subjects: newBucket(), exams: newBucket(), decks: newBucket(), cards: newBucket(),
     reviewLog: newBucket(), plans: newBucket(), blocks: newBucket(), focusSessions: newBucket(),
     notifications: newBucket(), noteFolders: newBucket(), noteTags: newBucket(), notes: newBucket(),
     noteTagLinks: newBucket(), noteAttachments: newBucket(), noteVersions: newBucket(),
@@ -856,6 +905,11 @@ function dispatchRecord(
     case "renewal": {
       const row = parseRenewal(raw);
       pushRow(collections.renewals, row.id, row, path, line, problems);
+      return;
+    }
+    case "person": {
+      const row = parsePerson(raw);
+      pushRow(collections.people, row.id, row, path, line, problems);
       return;
     }
     case "subject": {
@@ -1067,8 +1121,12 @@ function parseSemver(value: string): { major: number; minor: number; patch: numb
  * Refuses a `schemaVersion` that is newer than `INTERCHANGE_SCHEMA_VERSION` in
  * major or minor (patch may be anything — the writer's own patch bumps carry
  * no meaning a reader needs to reject on), or whose major isn't `1` at all.
- * `1.0.0` is the only major this build has ever written, so there is no older
- * major to accept via a migration path yet (see the constant's own doc).
+ * An OLDER minor within major 1 is accepted, and that is the whole point of
+ * bumping the minor when a record type is added: a 1.0 archive (written before
+ * `person` existed) restores here unchanged, because it can only ever carry
+ * FEWER types than this build knows. `1` is still the only major this build
+ * has ever written, so there is no older major to accept via a migration path
+ * yet (see the constant's own doc).
  */
 function isSupportedSchemaVersion(schemaVersion: string): boolean {
   const candidate = parseSemver(schemaVersion);
@@ -1382,6 +1440,7 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         events: rowsOf(collections.events),
         documents: rowsOf(collections.documents),
         renewals: rowsOf(collections.renewals),
+        people: rowsOf(collections.people),
         subjects: rowsOf(collections.subjects),
         exams: rowsOf(collections.exams),
         decks: rowsOf(collections.decks),
