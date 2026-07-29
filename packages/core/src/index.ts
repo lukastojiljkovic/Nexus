@@ -182,6 +182,23 @@ export type {
 } from "./calendar/calendarGrid.js";
 
 export {
+  DEFAULT_OCCURRENCE_LIMIT,
+  MAX_RECURRENCE_COUNT,
+  MAX_RECURRENCE_INTERVAL,
+  nextOccurrenceDate,
+  occurrenceDatesInRange,
+  serializeRecurrenceRule,
+  validateRecurrenceRule,
+} from "./recurrence/recurrence.js";
+export type {
+  RecurrenceEnd,
+  RecurrenceFreq,
+  RecurrenceOrdinal,
+  RecurrenceRule,
+  RecurrenceWeekday,
+} from "./recurrence/recurrence.js";
+
+export {
   buildSearchSnippet,
   DEFAULT_SNIPPET_RADIUS,
   foldSearchText,

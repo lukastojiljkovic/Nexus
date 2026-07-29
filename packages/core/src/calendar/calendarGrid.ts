@@ -79,20 +79,23 @@ const MS_PER_DAY = 86_400_000;
 const DAY_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_KEY_RE = /^\d{4}-\d{2}$/;
 
-/** Validates shape AND calendar reality (rejects "2026-02-30"); throws naming the offending value. */
-function assertValidDayKey(key: DayKey): void {
-  if (!DAY_KEY_RE.test(key)) {
-    throw new TypeError(`Invalid day key: "${key}"`);
-  }
+/** Shape AND calendar reality: "2026-02-30" is not a day, however parseable it looks. */
+export function isValidDayKey(key: string): boolean {
+  if (!DAY_KEY_RE.test(key)) return false;
   const year = Number(key.slice(0, 4));
   const month = Number(key.slice(5, 7));
   const day = Number(key.slice(8, 10));
   const roundTrip = new Date(Date.UTC(year, month - 1, day));
-  if (
-    roundTrip.getUTCFullYear() !== year ||
-    roundTrip.getUTCMonth() !== month - 1 ||
-    roundTrip.getUTCDate() !== day
-  ) {
+  return (
+    roundTrip.getUTCFullYear() === year &&
+    roundTrip.getUTCMonth() === month - 1 &&
+    roundTrip.getUTCDate() === day
+  );
+}
+
+/** The throwing form of `isValidDayKey`, naming the offending value. */
+function assertValidDayKey(key: DayKey): void {
+  if (!isValidDayKey(key)) {
     throw new TypeError(`Invalid day key: "${key}"`);
   }
 }
@@ -113,7 +116,8 @@ function assertIntegerArg(value: number, label: string): void {
   }
 }
 
-function dayKeyToUtcMs(key: DayKey): number {
+/** UTC-midnight ms for a bare day key; throws TypeError on anything that is not a real calendar day. */
+export function dayKeyToUtcMs(key: DayKey): number {
   assertValidDayKey(key);
   const year = Number(key.slice(0, 4));
   const month = Number(key.slice(5, 7));
@@ -121,7 +125,8 @@ function dayKeyToUtcMs(key: DayKey): number {
   return Date.UTC(year, month - 1, day);
 }
 
-function utcMsToDayKey(ms: number): DayKey {
+/** Formats UTC-midnight ms back into a bare day key — the inverse of `dayKeyToUtcMs`. */
+export function utcMsToDayKey(ms: number): DayKey {
   const date = new Date(ms);
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, "0");
