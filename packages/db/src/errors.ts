@@ -327,3 +327,15 @@ export class NoteTemplateNotFoundError extends DatabaseError {}
  * assume its caller built one correctly.
  */
 export class SearchValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a `RestoreStore.replaceProfileData` call is given a `ProfileData`
+ * that is internally inconsistent in a way `@nexus/core`'s `parseImportArchive`
+ * cannot check on its own — currently: a note whose `snapshot` is non-null with
+ * no matching entry in the caller-supplied `derived` map (IMEX / ADR-023). The
+ * parser validates one archive file at a time and has no way to demand a
+ * companion map of derived values from the caller; the restore boundary is what
+ * enforces that pairing before anything is written, rather than silently
+ * persisting a snapshot with an empty, unsearchable plaintext body.
+ */
+export class RestoreValidationError extends DatabaseError {}

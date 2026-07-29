@@ -37,6 +37,7 @@ export {
   NotificationValidationError,
   PlanNotFoundError,
   PlanValidationError,
+  RestoreValidationError,
   SchemaVersionError,
   SearchValidationError,
   SubjectNotFoundError,
@@ -126,7 +127,11 @@ export type { CreateFocusSessionInput, FocusSession } from "./study/focusStore.j
 export { StatsStore } from "./study/statsStore.js";
 export type { BlockTotals, ReviewCounts, SubjectMinutes } from "./study/statsStore.js";
 
-export { NotificationStore, NOTIFICATION_STATUSES } from "./notify/notificationStore.js";
+export {
+  NotificationStore,
+  NOTIFICATION_SOURCES,
+  NOTIFICATION_STATUSES,
+} from "./notify/notificationStore.js";
 export type {
   NotificationLedgerKey,
   NotificationRecord,
@@ -164,3 +169,6 @@ export {
 export type { RecentOptions, SearchOptions } from "./search/searchStore.js";
 
 export { uuidv7 } from "./ids.js";
+
+export { RestoreStore, RESTORE_WIPE_TABLES } from "./imex/restoreStore.js";
+export type { RestoreProfileInput, RestoredNoteDerived } from "./imex/restoreStore.js";

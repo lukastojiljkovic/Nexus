@@ -15,8 +15,8 @@ export const NOTIFICATION_STATUSES: readonly NotificationStatus[] = [
   "dismissed",
 ];
 
-/** The three source kinds this profile can toggle/derive from, in canonical order. */
-const NOTIFICATION_SOURCES: readonly NotificationSource[] = ["document", "exam", "study-day"];
+/** The three source kinds this profile can toggle/derive from, in canonical order. Exported like `NOTIFICATION_STATUSES` so `RestoreStore` writes `ntf_source_settings` from this list rather than a second copy of migration 009's CHECK. */
+export const NOTIFICATION_SOURCES: readonly NotificationSource[] = ["document", "exam", "study-day"];
 
 const DEFAULT_MORNING_HOUR = "08:00";
 const MAX_TEXT_LENGTH = 500;
