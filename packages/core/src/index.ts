@@ -81,8 +81,9 @@ export type { CsvValue } from "./imex/csv.js";
 
 export { isInlineImageMime, sniffMime } from "./files/sniff.js";
 
-export { buildExportArchive, DATA_FILES } from "./imex/exportArchive.js";
+export { ARCHIVE_MODULE_IDS, buildExportArchive, countProfileModules, DATA_FILES } from "./imex/exportArchive.js";
 export type {
+  ArchiveModuleId,
   ExportArchive,
   ExportArchiveInput,
   ExportBinaryEntry,

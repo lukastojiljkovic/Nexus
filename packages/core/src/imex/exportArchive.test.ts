@@ -3,10 +3,12 @@ import { describe, expect, it } from "vitest";
 import * as Y from "yjs";
 import {
   buildExportArchive,
+  countProfileModules,
   type ExportArchiveInput,
   type ExportNote,
   type ExportNoteAttachment,
   type ExportNoteFolder,
+  type ProfileData,
 } from "./exportArchive.js";
 
 /** The test's own sha256 hex — mirrors the shape `main` injects, kept out of `@nexus/core`. */
@@ -451,6 +453,95 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       expect(archive.byModule).toEqual({ tasks: 1, calendar: 0, study: 0, notifications: 1, notes: 0 });
       expect(archive.totalRecords).toBe(2);
+    });
+  });
+
+  describe("countProfileModules", () => {
+    /** One row in every one of `ProfileData`'s 19 arrays, so each of the five buckets sums more than one field. */
+    function populatedData(): ProfileData {
+      const t = "2026-01-01T00:00:00.000Z";
+      return {
+        tasks: [
+          { id: "t1", profileId: "p1", parentId: null, title: "T", description: null, status: "todo", priority: "none", done: false, dueDate: null, startDate: null, createdAt: t, updatedAt: t, completedAt: null },
+        ],
+        events: [
+          { id: "e1", profileId: "p1", title: "E", description: null, startAt: t, endAt: null, allDay: false, location: null, category: null, createdAt: t, updatedAt: t },
+        ],
+        documents: [
+          { id: "d1", profileId: "p1", docType: "licna_karta", label: "D", expiryDate: "2030-01-01", reminderOffsets: [], notes: null, createdAt: t, updatedAt: t },
+        ],
+        renewals: [{ id: "r1", documentId: "d1", previousExpiry: "2020-01-01", renewedAt: t }],
+        subjects: [
+          { id: "s1", profileId: "p1", name: "S", color: "jade", semester: null, archived: false, createdAt: t, updatedAt: t },
+        ],
+        exams: [
+          { id: "ex1", profileId: "p1", subjectId: "s1", examType: "pismeni", examDate: "2030-01-01", scope: null, createdAt: t, updatedAt: t },
+        ],
+        decks: [{ id: "dk1", profileId: "p1", subjectId: "s1", name: "Dk", createdAt: t, updatedAt: t }],
+        cards: [
+          {
+            id: "c1", profileId: "p1", deckId: "dk1", front: "Q", back: "A", sourceNoteId: null, sourceBlockKey: null,
+            due: t, stability: 1, difficulty: 2, elapsedDays: 0, scheduledDays: 1, learningSteps: 0, reps: 0, lapses: 0,
+            state: 0, lastReview: null, createdAt: t, updatedAt: t,
+          },
+        ],
+        reviewLog: [
+          {
+            id: "rl1", profileId: "p1", cardId: "c1", rating: 3, state: 2, due: t, stability: 1, difficulty: 2,
+            elapsedDays: 1, lastElapsedDays: 0, scheduledDays: 1, learningSteps: 0, review: t, createdAt: t,
+          },
+        ],
+        plans: [
+          { id: "pl1", profileId: "p1", examId: "ex1", dailyMinutes: 30, startDate: "2026-01-01", examWeekBoost: false, createdAt: t, updatedAt: t },
+        ],
+        blocks: [
+          { id: "b1", planId: "pl1", profileId: "p1", blockDate: "2026-01-02", minutes: 30, status: "planned", createdAt: t, updatedAt: t },
+        ],
+        focusSessions: [
+          { id: "f1", profileId: "p1", subjectId: "s1", startedAt: t, endedAt: t, createdAt: t, updatedAt: t },
+        ],
+        notifications: [
+          {
+            id: "n1", profileId: "p1", source: "exam", entityId: "ex1", occurrenceKey: "occ", title: "T", body: "B",
+            status: "delivered", snoozedUntil: null, deliveredAt: t, createdAt: t, updatedAt: t,
+          },
+        ],
+        notes: [noteRow({ id: "note1", title: "N" })],
+        noteFolders: [folderRow({ id: "f1", name: "F" })],
+        noteTags: [{ id: "tag1", profileId: "p1", name: "Tag", createdAt: t }],
+        noteTagLinks: [{ noteId: "note1", tagId: "tag1" }],
+        noteTemplates: [
+          { id: "tmpl1", profileId: "p1", name: "Tmpl", content: '{"type":"doc","content":[]}', createdAt: t, updatedAt: t },
+        ],
+        noteAttachments: [attachmentRow({ id: "att1", noteId: "note1", sha256: "e".repeat(64) })],
+        noteVersions: [
+          { noteId: "note1", coveredSeq: 1, title: "N", createdAt: t, snapshot: new Uint8Array([1]) },
+        ],
+      };
+    }
+
+    it("groups exactly as the manifest does, field by field", () => {
+      const data = populatedData();
+      expect(countProfileModules(data)).toEqual({
+        tasks: 1,
+        calendar: 3, // 1 event + 1 document + 1 renewal
+        study: 8, // 1 each of subject/exam/deck/card/review/plan/block/focus-session
+        notifications: 1,
+        notes: 7, // 1 each of note/folder/tag/tag-link/template/attachment/version
+      });
+    });
+
+    it("agrees with buildExportArchive's own byModule for the same data", () => {
+      const input = emptyInput();
+      input.data = populatedData();
+      const archive = buildExportArchive(input);
+      expect(archive.byModule).toEqual(countProfileModules(input.data));
+    });
+
+    it("counts every bucket as zero for empty data", () => {
+      expect(countProfileModules(emptyInput().data)).toEqual({
+        tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0,
+      });
     });
   });
 

@@ -348,7 +348,7 @@ export type ExportBinaryEntry =
 export interface ExportArchive {
   files: Map<string, string>;
   totalRecords: number;
-  byModule: Record<string, number>;
+  byModule: Record<ArchiveModuleId, number>;
   binaries: ExportBinaryEntry[];
 }
 
@@ -360,6 +360,44 @@ export const DATA_FILES = [
   "data/notifications.ndjson",
   "data/notes.ndjson",
 ] as const;
+
+/** The manifest's five module ids, in manifest order — the grouping `countProfileModules` counts by and `buildExportArchive` builds `manifest.modules` from, so the two can never disagree. */
+export const ARCHIVE_MODULE_IDS = ["tasks", "calendar", "study", "notifications", "notes"] as const;
+export type ArchiveModuleId = (typeof ARCHIVE_MODULE_IDS)[number];
+
+/**
+ * Counts one profile's rows into the manifest's five module buckets — the
+ * exact grouping `buildExportArchive` reports in `manifest.modules` and
+ * `ExportArchive.byModule`. Extracted to its own function (ADR-023) so a
+ * restore preview can count a profile and an archive by the SAME rule: two
+ * independently-written tallies (one here, one in a restore module) could
+ * only ever drift apart, and a preview that miscounts is worse than no
+ * preview at all.
+ */
+export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, number> {
+  return {
+    tasks: data.tasks.length,
+    calendar: data.events.length + data.documents.length + data.renewals.length,
+    study:
+      data.subjects.length +
+      data.exams.length +
+      data.decks.length +
+      data.cards.length +
+      data.reviewLog.length +
+      data.plans.length +
+      data.blocks.length +
+      data.focusSessions.length,
+    notifications: data.notifications.length,
+    notes:
+      data.notes.length +
+      data.noteFolders.length +
+      data.noteTags.length +
+      data.noteTagLinks.length +
+      data.noteTemplates.length +
+      data.noteAttachments.length +
+      data.noteVersions.length,
+  };
+}
 
 /** Builds the full `.nexus.zip` contents in memory (IMEX-001). Deterministic: identical input always yields identical file content and checksums. */
 export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
@@ -462,28 +500,7 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   files.set("tables/study-blocks.csv", blocksCsv(input.data.blocks));
   files.set("tables/focus-sessions.csv", focusSessionsCsv(input.data.focusSessions));
 
-  const byModule: Record<string, number> = {
-    tasks: input.data.tasks.length,
-    calendar: input.data.events.length + input.data.documents.length + input.data.renewals.length,
-    study:
-      input.data.subjects.length +
-      input.data.exams.length +
-      input.data.decks.length +
-      input.data.cards.length +
-      input.data.reviewLog.length +
-      input.data.plans.length +
-      input.data.blocks.length +
-      input.data.focusSessions.length,
-    notifications: input.data.notifications.length,
-    notes:
-      notes.length +
-      noteFolders.length +
-      noteTags.length +
-      noteTagLinks.length +
-      noteTemplates.length +
-      noteAttachments.length +
-      noteVersions.length,
-  };
+  const byModule = countProfileModules(input.data);
   const totalRecords = Object.values(byModule).reduce((sum, count) => sum + count, 0);
 
   const checksums: Record<string, string> = {};
@@ -503,13 +520,7 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     createdAt: input.createdAt,
     profile: input.profile,
     settings: input.settings,
-    modules: [
-      { id: "tasks", records: byModule.tasks },
-      { id: "calendar", records: byModule.calendar },
-      { id: "study", records: byModule.study },
-      { id: "notifications", records: byModule.notifications },
-      { id: "notes", records: byModule.notes },
-    ],
+    modules: ARCHIVE_MODULE_IDS.map((id) => ({ id, records: byModule[id] })),
     checksums,
     blobs,
   };
