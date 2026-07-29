@@ -4,134 +4,24 @@ import { Readable, Transform } from "node:stream";
 import type { BrowserWindow } from "electron";
 import { app, dialog } from "electron";
 import { ZipFile } from "yazl";
-import { buildExportArchive, createArchiveWriter, mergeNoteState } from "@nexus/core";
-import type {
-  ArchiveWriter,
-  ExportBinaryEntry,
-  ExportNote,
-  ExportNoteAttachment,
-  ExportNoteFolder,
-  ExportNoteTag,
-  ExportNoteTagLink,
-  ExportNoteTemplate,
-  ExportNoteVersion,
-} from "@nexus/core";
+import { buildExportArchive, createArchiveWriter } from "@nexus/core";
+import type { ArchiveWriter, ExportBinaryEntry } from "@nexus/core";
 // Main-process-only subpath (pulls in Argon2id's WASM) — see that module's own
 // header comment on why the renderer must never import it.
 import { ARCHIVE_KDF_PARAMS, deriveArchiveKey, generateSalt } from "@nexus/core/auth";
-import type {
-  CardStore,
-  DeckStore,
-  DocumentStore,
-  EventStore,
-  ExamStore,
-  FocusStore,
-  NoteAttachmentStore,
-  NoteOrgStore,
-  NoteStore,
-  NoteTemplateStore,
-  NotificationStore,
-  PlanStore,
-  SqliteFlagStore,
-  SubjectStore,
-  TaskStore,
-} from "@nexus/db";
 import { localToday } from "./clock.js";
+import { gatherProfileData, gatherProfileSettings, type ProfileDataDeps } from "./profileData.js";
 import type { ExportResult } from "../shared/ipc.js";
 
 /**
- * Everything `handleExport` reads through, as plain functions rather than a
- * direct `requireDb()` dependency — mirrors `NotificationSchedulerDeps`
- * (`main/notifications.ts`): keeps this module decoupled from
- * `main/index.ts`'s module-level state, with every store swap explicit at the
- * call site.
+ * Everything `handleExport` needs: one profile's whole state (`ProfileDataDeps`,
+ * shared verbatim with restore's undo snapshot — see `profileData.ts`), plus
+ * the two things only an export uses.
  */
-export interface ImexExportDeps {
-  taskStore(profileId: string): TaskStore;
-  eventStore(profileId: string): EventStore;
-  documentStore(profileId: string): DocumentStore;
-  subjectStore(profileId: string): SubjectStore;
-  examStore(profileId: string): ExamStore;
-  deckStore(profileId: string): DeckStore;
-  cardStore(profileId: string): CardStore;
-  planStore(profileId: string): PlanStore;
-  focusStore(profileId: string): FocusStore;
-  notificationStore(profileId: string): NotificationStore;
-  noteStore(profileId: string): NoteStore;
-  noteOrgStore(profileId: string): NoteOrgStore;
-  noteTemplateStore(profileId: string): NoteTemplateStore;
-  noteAttachmentStore(profileId: string): NoteAttachmentStore;
+export interface ImexExportDeps extends ProfileDataDeps {
   /** Decrypted attachment bytes by content hash, or null when the blob is missing from the store. Injected rather than reached for, so this module never touches blob paths or key material itself (mirrors the store getters above). */
   readBlob(sha256: string): Promise<Uint8Array | null>;
-  flagStore(profileId: string): SqliteFlagStore;
   getMainWindow(): BrowserWindow | null;
-}
-
-/** Every NOTE-module row `buildExportArchive`'s `data` requires (ADR-022 section 3) — `gatherNotes`'s return shape. */
-interface GatheredNoteData {
-  notes: ExportNote[];
-  noteFolders: ExportNoteFolder[];
-  noteTags: ExportNoteTag[];
-  noteTagLinks: ExportNoteTagLink[];
-  noteTemplates: ExportNoteTemplate[];
-  noteAttachments: ExportNoteAttachment[];
-  noteVersions: ExportNoteVersion[];
-}
-
-/**
- * Gathers every NOTE-module row for one profile (ADR-022 section 3) — kept out
- * of `handleExport` itself since the per-note version/attachment fan-out makes
- * it long enough on its own.
- *
- * `noteStore.list()` already excludes soft-deleted notes — its `selectActive`
- * statement filters `deleted_at IS NULL`, the same gate `requireActive` uses
- * everywhere else in `NoteStore` — so nothing extra is needed here for
- * ADR-022's "live rows only" rule.
- *
- * A note's merged Yjs state is computed only when there is something to
- * merge: a never-edited note (`snapshot === null` AND `updates.length === 0`)
- * exports `snapshot: null` rather than the encoding of an empty document —
- * that null is what tells `buildExportArchive` to skip the `.ydoc` file and
- * emit an empty Markdown mirror instead.
- */
-function gatherNotes(
-  deps: Pick<ImexExportDeps, "noteStore" | "noteOrgStore" | "noteTemplateStore" | "noteAttachmentStore">,
-  profileId: string,
-): GatheredNoteData {
-  const notesStore = deps.noteStore(profileId);
-  const orgStore = deps.noteOrgStore(profileId);
-  const attachmentStore = deps.noteAttachmentStore(profileId);
-
-  const notes: ExportNote[] = [];
-  const noteVersions: ExportNoteVersion[] = [];
-  const noteAttachments: ExportNoteAttachment[] = [];
-
-  for (const meta of notesStore.list()) {
-    const doc = notesStore.load(meta.id);
-    const hasState = doc.snapshot !== null || doc.updates.length > 0;
-    const snapshot = hasState ? mergeNoteState(doc.snapshot, doc.updates).snapshot : null;
-    notes.push({ ...meta, snapshot });
-
-    for (const version of notesStore.listVersions(meta.id)) {
-      noteVersions.push({
-        ...version,
-        noteId: meta.id,
-        snapshot: notesStore.loadVersion(meta.id, version.coveredSeq),
-      });
-    }
-
-    noteAttachments.push(...attachmentStore.list(meta.id));
-  }
-
-  return {
-    notes,
-    noteFolders: orgStore.listFolders(),
-    noteTags: orgStore.listTags(),
-    noteTagLinks: orgStore.listTagLinks(),
-    noteTemplates: deps.noteTemplateStore(profileId).list(),
-    noteAttachments,
-    noteVersions,
-  };
 }
 
 /**
@@ -191,53 +81,12 @@ export async function handleExport(
     writer = await createArchiveWriter({ key, salt, kdf: ARCHIVE_KDF_PARAMS });
   }
 
-  const documentsStore = deps.documentStore(profile.id);
-  const documents = documentsStore.listActive();
-
-  const decksStore = deps.deckStore(profile.id);
-  const decks = decksStore.listActive();
-
-  const cardsStore = deps.cardStore(profile.id);
-  const cards = decks.flatMap((deck) => cardsStore.listByDeck(deck.id));
-
-  const plansStore = deps.planStore(profile.id);
-  const plans = plansStore.listActive();
-  const blocks = plans.flatMap((plan) => plansStore.listBlocks(plan.id));
-
-  const notificationStore = deps.notificationStore(profile.id);
-  const notificationSettings = notificationStore.getSettings();
-
-  const noteData = gatherNotes(deps, profile.id);
-
   const archive = buildExportArchive({
     profile,
     appVersion: app.getVersion(),
     createdAt: new Date().toISOString(),
-    settings: {
-      flags: await deps.flagStore(profile.id).get(),
-      notifications: {
-        quietFrom: notificationSettings.quietFrom,
-        quietTo: notificationSettings.quietTo,
-        morningHour: notificationSettings.morningHour,
-        enabledSources: notificationSettings.enabledSources,
-      },
-    },
-    data: {
-      tasks: deps.taskStore(profile.id).listActive(),
-      events: deps.eventStore(profile.id).listActive(),
-      documents,
-      renewals: documents.flatMap((document) => documentsStore.listRenewals(document.id)),
-      subjects: deps.subjectStore(profile.id).listActive(),
-      exams: deps.examStore(profile.id).listActive(),
-      decks,
-      cards,
-      reviewLog: cardsStore.listReviewLog(),
-      plans,
-      blocks,
-      focusSessions: deps.focusStore(profile.id).listActive(),
-      notifications: notificationStore.listAll(),
-      ...noteData,
-    },
+    settings: await gatherProfileSettings(deps, profile.id),
+    data: gatherProfileData(deps, profile.id),
     hash: (content) => createHash("sha256").update(content, "utf8").digest("hex"),
   });
 
