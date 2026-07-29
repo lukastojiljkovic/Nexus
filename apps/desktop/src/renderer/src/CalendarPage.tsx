@@ -33,7 +33,7 @@ import { RecurrenceScopeDialog } from "./RecurrenceScopeDialog.js";
 import type { RecurrenceScope } from "./RecurrenceScopeDialog.js";
 import { DocumentsPanel } from "./DocumentsPanel.js";
 import { daysUntilExam, examCountdownLabel, examCountdownVariant, localTodayKey } from "./examDates.js";
-import { strings } from "./strings.js";
+import { dayUnit, strings } from "./strings.js";
 
 // --- Per-profile view memory (interim, mirrors TasksPage) -------------------
 //
@@ -187,6 +187,43 @@ const BLOCKS_FUTURE_DAYS = 365;
 const MONTH_RANGE_BEFORE = 7;
 const MONTH_RANGE_AFTER = 41;
 
+// --- Reminders (CAL-006) ----------------------------------------------------
+
+const MINUTES_PER_HOUR = 60;
+const MINUTES_PER_DAY = 1_440;
+
+/** The offered lead times, in minutes. Anything else an event already carries gets a chip of its own beside these. */
+const REMINDER_LADDER: readonly number[] = [0, 10, 30, 60, MINUTES_PER_DAY];
+
+/**
+ * A lead time as its chip label: "U vreme početka", "10 min ranije",
+ * "1 h ranije", "1 dan ranije". Whole days and whole hours take their own unit,
+ * so the ladder and any offset outside it (a restored archive, a longer lead
+ * set on another device) are worded by the one rule rather than two.
+ */
+function reminderLabel(minutes: number): string {
+  const s = strings.calendar.reminders;
+  if (minutes === 0) return s.atStart;
+  if (minutes % MINUTES_PER_DAY === 0) {
+    const days = minutes / MINUTES_PER_DAY;
+    return `${days} ${dayUnit(days, "dan", "dana")} ${s.before}`;
+  }
+  if (minutes % MINUTES_PER_HOUR === 0) {
+    return `${minutes / MINUTES_PER_HOUR} ${s.hoursUnit} ${s.before}`;
+  }
+  return `${minutes} ${s.minutesUnit} ${s.before}`;
+}
+
+/**
+ * The chips to draw: the fixed ladder plus every offset the edited event
+ * carries that the ladder cannot say, in ascending order. Without that union an
+ * edit would silently drop a lead time merely because no chip could express it.
+ */
+function reminderChoices(selected: readonly number[]): number[] {
+  const extra = selected.filter((minutes) => !REMINDER_LADDER.includes(minutes));
+  return [...new Set([...REMINDER_LADDER, ...extra])].sort((a, b) => a - b);
+}
+
 /**
  * Everything one submit of the event form asks for (ADR-024). Collected once,
  * then either written straight away (a one-off) or held while the scope dialog
@@ -204,6 +241,8 @@ interface EditedEventFields {
   endAt: string | null;
   location: string | null;
   recurrence: RecurrenceRule | null;
+  /** Lead times in whole minutes (CAL-006); empty clears every reminder. */
+  reminderOffsets: number[];
 }
 
 /**
@@ -236,6 +275,10 @@ function newEventFields(
     title: fields.title,
     startAt: fields.startAt,
     allDay: fields.allDay,
+    // The form CAN say this one, so it travels with the fields rather than
+    // being carried: a detached occurrence and a split-off master both keep the
+    // reminders the user was looking at when they hit save.
+    reminderOffsets: fields.reminderOffsets,
   };
   if (fields.location !== null) payload.location = fields.location;
   if (!fields.allDay && fields.endAt !== null) payload.endAt = fields.endAt;
@@ -275,6 +318,8 @@ function copyEventFields(
     title: event.title,
     startAt: moved.startAt ?? event.startAt,
     allDay: event.allDay,
+    // A copy that lost its reminders would silently stop notifying.
+    reminderOffsets: [...event.reminderOffsets],
   };
   if (moved.endAt != null) payload.endAt = moved.endAt;
   if (event.location !== null) payload.location = event.location;
@@ -342,6 +387,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
   const [endTime, setEndTime] = useState("");
   const [location, setLocation] = useState("");
   const [recurrence, setRecurrence] = useState<RecurrenceRule | null>(null);
+  const [reminderOffsets, setReminderOffsets] = useState<number[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [pendingSeries, setPendingSeries] = useState<PendingSeries | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -406,7 +452,15 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
     setEndTime("");
     setLocation("");
     setRecurrence(null);
+    setReminderOffsets([]);
     setFormError(null);
+  }
+
+  /** Adds or removes one lead time; the store owns ordering, so the set is kept as picked. */
+  function toggleReminder(minutes: number): void {
+    setReminderOffsets((prev) =>
+      prev.includes(minutes) ? prev.filter((current) => current !== minutes) : [...prev, minutes],
+    );
   }
 
   /**
@@ -426,6 +480,9 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
     setEndTime(!event.allDay && event.endAt ? event.endAt.slice(11, 16) : "");
     setLocation(event.location ?? "");
     setRecurrence(master.recurrence);
+    // Reminders belong to the stored row, so they are read off the master —
+    // the occurrence copy carries them, but the master is what a write reaches.
+    setReminderOffsets([...master.reminderOffsets]);
     setFormError(null);
     titleRef.current?.focus();
   }
@@ -572,6 +629,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
       endAt: !allDay && trimmedEndTime.length > 0 ? `${date}T${trimmedEndTime}` : null,
       location: trimmedLocation.length > 0 ? trimmedLocation : null,
       recurrence,
+      reminderOffsets,
     };
 
     // Editing one occurrence of a series never picks a scope silently (PRD 04):
@@ -589,6 +647,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
           allDay: fields.allDay,
           location: fields.location,
           recurrence: fields.recurrence,
+          reminderOffsets: fields.reminderOffsets,
         };
         if (!fields.allDay) changes.endAt = fields.endAt;
         const updated = await window.nexus.updateEvent(profileId, editingId, changes);
@@ -655,6 +714,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
         allDay: fields.allDay,
         location: fields.location,
         recurrence: fields.recurrence,
+        reminderOffsets: fields.reminderOffsets,
       };
       if (!fields.allDay) {
         changes.endAt = fields.endTime.length > 0 ? `${masterDay}T${fields.endTime}` : null;
@@ -954,6 +1014,31 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
               onChange={setRecurrence}
               anchor={date}
             />
+            <div className="cal__reminders">
+              <span className="cal__reminders-label">{strings.calendar.reminders.label}</span>
+              <div
+                className="cal__reminder-chips"
+                role="group"
+                aria-label={strings.calendar.reminders.label}
+              >
+                {reminderChoices(reminderOffsets).map((minutes) => {
+                  const selected = reminderOffsets.includes(minutes);
+                  return (
+                    <Button
+                      key={minutes}
+                      size="sm"
+                      className={
+                        selected ? "cal__reminder cal__reminder--active" : "cal__reminder"
+                      }
+                      aria-pressed={selected}
+                      onClick={() => toggleReminder(minutes)}
+                    >
+                      {reminderLabel(minutes)}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
             <Button type="submit" variant="primary">
               {editingId != null ? strings.calendar.save : strings.calendar.add}
             </Button>

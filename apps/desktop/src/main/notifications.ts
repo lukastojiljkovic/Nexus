@@ -1,9 +1,22 @@
 import type { BrowserWindow } from "electron";
 import { Notification, powerMonitor } from "electron";
-import { deriveNotificationCandidates, isWithinQuietHours } from "@nexus/core";
-import type { NotificationCandidate, NotificationSource, StudyDayReminderInput } from "@nexus/core";
+import {
+  deriveNotificationCandidates,
+  isValidDayKey,
+  isWithinQuietHours,
+  occurrenceDatesInRange,
+  shiftDayKey,
+} from "@nexus/core";
+import type {
+  EventReminderInput,
+  NotificationCandidate,
+  NotificationSource,
+  StudyDayReminderInput,
+} from "@nexus/core";
 import type {
   DocumentStore,
+  Event,
+  EventStore,
   Exam,
   ExamStore,
   NotificationStore,
@@ -15,6 +28,7 @@ import { localToday, localTime } from "./clock.js";
 import {
   documentNotificationCopy,
   emptyDigestCounts,
+  eventNotificationCopy,
   examNotificationCopy,
   groupedDigestCopy,
   studyDayNotificationCopy,
@@ -31,6 +45,7 @@ import { IpcChannel } from "../shared/ipc.js";
 export interface NotificationSchedulerDeps {
   listProfiles(): ReadonlyArray<{ id: string }>;
   documentStore(profileId: string): DocumentStore;
+  eventStore(profileId: string): EventStore;
   examStore(profileId: string): ExamStore;
   subjectStore(profileId: string): SubjectStore;
   planStore(profileId: string): PlanStore;
@@ -40,6 +55,8 @@ export interface NotificationSchedulerDeps {
 
 /** How often the periodic check runs, beyond the immediate on-start check and the `powerMonitor` "resume" hook. */
 const CHECK_INTERVAL_MS = 60_000;
+
+const MINUTES_PER_DAY = 1_440;
 
 /** At most this many notifications show individually; more than this collapses into one grouped digest (the storm guard). */
 const GROUP_THRESHOLD = 3;
@@ -118,6 +135,73 @@ function logCheckFailure(error: unknown): void {
   );
 }
 
+/**
+ * The "HH:MM" wall-clock part of an ISO start, or null when the row does not
+ * carry a real one. Mirrors `calendarItems.ts`: a malformed row is skipped, not
+ * thrown on — one bad event must never take down the whole check.
+ */
+function startClock(startAt: string): string | null {
+  const time = startAt.slice(11, 16);
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(time) ? time : null;
+}
+
+/**
+ * The events of one profile in the engine's one-row-per-occurrence shape
+ * (CAL-006): expansion is the scheduler's job, since the engine deliberately
+ * knows nothing about recurrence. An event with no reminders contributes
+ * nothing, and a row whose stored start is not a usable day/time is skipped
+ * rather than crashing the check.
+ *
+ * A ruled master is expanded from **today forward** only, far enough that every
+ * occurrence whose reminder could already be due is included: the longest lead
+ * time this event carries, rounded up to whole days, plus one for the day the
+ * lead time itself lands mid-way through. Nothing before today is needed, and
+ * that is worth stating because "yesterday's 20:00 occurrence with a 12-hour
+ * lead" looks like a counter-example: it is not, because such a reminder is
+ * only ever relevant while the occurrence has NOT started yet (see the engine's
+ * `relevant` for a timed occurrence), and an occurrence dated before today has
+ * necessarily already started. The same holds for all-day occurrences, which
+ * stay relevant only through their own day.
+ */
+function eventReminderInputs(events: readonly Event[], today: string): EventReminderInput[] {
+  const rows: EventReminderInput[] = [];
+  for (const event of events) {
+    if (event.reminderOffsets.length === 0) continue;
+
+    const anchor = event.startAt.slice(0, 10);
+    if (!isValidDayKey(anchor)) continue;
+    const startTime = event.allDay ? null : startClock(event.startAt);
+    if (!event.allDay && startTime === null) continue;
+
+    if (event.recurrence === null) {
+      rows.push({
+        id: event.id,
+        occurrenceDate: anchor,
+        startTime,
+        reminderOffsets: event.reminderOffsets,
+      });
+      continue;
+    }
+
+    const forwardDays = Math.ceil(Math.max(...event.reminderOffsets) / MINUTES_PER_DAY) + 1;
+    const dates = occurrenceDatesInRange(
+      event.recurrence,
+      anchor,
+      { from: today, to: shiftDayKey(today, forwardDays) },
+      new Set(event.recurrenceExdates),
+    );
+    for (const occurrenceDate of dates) {
+      rows.push({
+        id: event.id,
+        occurrenceDate,
+        startTime,
+        reminderOffsets: event.reminderOffsets,
+      });
+    }
+  }
+  return rows;
+}
+
 /** One profile's worth of the check: sync plans, derive candidates, fire/record survivors, re-fire or dismiss snoozed rows. */
 function checkProfile(
   deps: NotificationSchedulerDeps,
@@ -133,6 +217,7 @@ function checkProfile(
   const settings = ntf.getSettings();
 
   const documents = deps.documentStore(profileId).listActive();
+  const events = deps.eventStore(profileId).listActive();
   const exams = deps.examStore(profileId).listActive();
   const subjects = deps.subjectStore(profileId).listActive();
   const todaysBlocks = plans
@@ -157,10 +242,7 @@ function checkProfile(
       reminderOffsets: doc.reminderOffsets,
     })),
     exams: exams.map((exam) => ({ id: exam.id, examDate: exam.examDate })),
-    // CAL-006 event reminders are derived by the engine but not yet gathered
-    // here: expanding a recurring master into the occurrences this array wants
-    // is the scheduler's next slice.
-    events: [],
+    events: eventReminderInputs(events, today),
     studyDays,
     enabledSources: settings.enabledSources,
     today,
@@ -172,6 +254,7 @@ function checkProfile(
   const withinQuiet = isWithinQuietHours(nowTime, settings.quietFrom, settings.quietTo);
 
   const documentsById = new Map(documents.map((doc) => [doc.id, doc]));
+  const eventsById = new Map(events.map((event) => [event.id, event]));
   const examsById = new Map(exams.map((exam) => [exam.id, exam]));
   const subjectNameById = new Map(subjects.map((subject) => [subject.id, subject.name]));
   const studyDaysByDate = new Map(studyDays.map((day) => [day.date, day]));
@@ -183,7 +266,14 @@ function checkProfile(
     if (ledgerKeys.has(occurrenceKey(candidate))) continue; // already recorded, in any status
     if (candidate.priority !== "max" && withinQuiet) continue; // held; re-derives once quiet hours end
 
-    const copy = composeCopy(candidate, { documentsById, examsById, subjectNameById, studyDaysByDate, today });
+    const copy = composeCopy(candidate, {
+      documentsById,
+      eventsById,
+      examsById,
+      subjectNameById,
+      studyDaysByDate,
+      today,
+    });
     if (!copy) continue; // entity vanished between the reads above and here — skip, never crash
 
     ntf.recordDelivered(
@@ -225,6 +315,7 @@ function occurrenceKey(entry: { source: string; entityId: string; occurrenceKey:
 
 interface CopyContext {
   documentsById: Map<string, TrackedDocument>;
+  eventsById: Map<string, Event>;
   examsById: Map<string, Exam>;
   subjectNameById: Map<string, string>;
   studyDaysByDate: Map<string, StudyDayReminderInput>;
@@ -244,7 +335,22 @@ function composeCopy(candidate: NotificationCandidate, ctx: CopyContext): Notifi
     const subjectName = ctx.subjectNameById.get(exam.subjectId) ?? "Predmet";
     return examNotificationCopy(subjectName, exam.examType, candidate.occurrenceKey === "d-0" ? "d-0" : "d-1");
   }
-  if (candidate.source === "event") return null; // CAL-006 copy lands with the scheduler's next slice
+  if (candidate.source === "event") {
+    const event = ctx.eventsById.get(candidate.entityId);
+    if (!event) return null;
+    // The engine's own documented occurrence key: "<occurrenceDate> <offset>".
+    // Which occurrence of a series this is cannot be read off the row — the row
+    // is the master — so it is read back out of the key that identified it.
+    const [occurrenceDate, offsetMinutes] = candidate.occurrenceKey.split(" ");
+    if (occurrenceDate === undefined || offsetMinutes === undefined) return null;
+    return eventNotificationCopy(
+      event.title,
+      occurrenceDate,
+      ctx.today,
+      event.allDay ? null : startClock(event.startAt),
+      Number(offsetMinutes),
+    );
+  }
   const day = ctx.studyDaysByDate.get(candidate.entityId);
   if (!day) return null;
   return studyDayNotificationCopy(day.blockCount, day.totalMinutes);

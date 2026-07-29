@@ -24,6 +24,8 @@ const EXAM_TYPE_LABELS: Record<"pismeni" | "usmeni" | "kolokvijum", string> = {
 };
 
 const MS_PER_DAY = 86_400_000;
+const MINUTES_PER_DAY = 1_440;
+const MINUTES_PER_HOUR = 60;
 
 /** UTC-midnight ms for a bare "YYYY-MM-DD" prefix (mirrors the engine's own `utcDayMs`). */
 function utcDayMs(dateKey: string): number {
@@ -90,17 +92,70 @@ export function examNotificationCopy(
   return { title, body: `${subjectName} — ${EXAM_TYPE_LABELS[examType]}` };
 }
 
+/**
+ * A non-zero lead time as the user set it: "10 min ranije", "1 h ranije",
+ * "2 dana ranije". Whole days and whole hours get their own unit so a day-long
+ * lead never reads as "1440 min". The renderer's event form spells the very
+ * same ladder for its chips — kept in sync by hand, like `dayUnit` above, since
+ * main and renderer never share a module.
+ */
+function leadPhrase(offsetMinutes: number): string {
+  if (offsetMinutes % MINUTES_PER_DAY === 0) {
+    const days = offsetMinutes / MINUTES_PER_DAY;
+    return `${days} ${dayUnit(days)} ranije`;
+  }
+  if (offsetMinutes % MINUTES_PER_HOUR === 0) {
+    return `${offsetMinutes / MINUTES_PER_HOUR} h ranije`;
+  }
+  return `${offsetMinutes} min ranije`;
+}
+
+/**
+ * Event reminder copy (CAL-006). `occurrenceDate`/`today` are bare
+ * "YYYY-MM-DD" — for a recurring series that is the occurrence's own day, not
+ * the master's — and `startTime` is its "HH:MM" wall-clock start, or null for
+ * an all-day event.
+ *
+ * The body states when the event actually starts rather than how long is left:
+ * a reminder that came due while the app was closed surfaces on the next check,
+ * so anything phrased as a countdown would be a lie exactly when it matters.
+ * The lead time is still named — it is what the user set, and it is what tells
+ * two reminders for the SAME occurrence apart — but only for a timed one: an
+ * all-day occurrence's sub-day offsets all collapse onto its own morning
+ * (see the engine), so "10 min ranije" there would describe nothing.
+ */
+export function eventNotificationCopy(
+  title: string,
+  occurrenceDate: string,
+  today: string,
+  startTime: string | null,
+  offsetMinutes: number,
+): NotificationCopy {
+  const days = daysUntil(today, occurrenceDate);
+  const dayPhrase = days === 0 ? "danas" : days === 1 ? "sutra" : formatDate(occurrenceDate);
+
+  if (startTime === null) {
+    return { title: `Događaj: ${title}`, body: `Ceo dan · ${dayPhrase}` };
+  }
+  const startPhrase = days === 0 ? `Počinje u ${startTime}` : `Počinje ${dayPhrase} u ${startTime}`;
+  return {
+    title: `Događaj: ${title}`,
+    body: offsetMinutes > 0 ? `${startPhrase} · ${leadPhrase(offsetMinutes)}` : startPhrase,
+  };
+}
+
 /** Today's study-day reminder copy: how many blocks are planned and their total length. */
 export function studyDayNotificationCopy(blockCount: number, totalMinutes: number): NotificationCopy {
   const blockPhrase = pluralize(blockCount, "blok", "bloka", "blokova");
   return { title: "Učenje danas", body: `${blockCount} ${blockPhrase} · ${totalMinutes} min` };
 }
 
-/** Per-source counts for the grouped digest, in the fixed order documents/exams/study-days. */
+/** Per-source counts for the grouped digest, in the fixed order documents/exams/study-days/events. */
 export interface DigestCounts {
   document: number;
   exam: number;
   "study-day": number;
+  event: number;
 }
 
 /**
@@ -120,15 +175,13 @@ export function groupedDigestCopy(total: number, counts: DigestCounts): Notifica
   if (counts["study-day"] > 0) {
     parts.push(`${counts["study-day"]} ${pluralize(counts["study-day"], "učenje", "učenja", "učenja")}`);
   }
+  if (counts.event > 0) {
+    parts.push(`${counts.event} ${pluralize(counts.event, "događaj", "događaja", "događaja")}`);
+  }
   return { title, body: parts.join(" · ") };
 }
 
-/**
- * An empty per-source counter, keyed the same way as `@nexus/core`'s
- * `NotificationSource`. `event` (CAL-006) counts here but is not yet named in
- * `groupedDigestCopy` above — its Serbian copy arrives with the scheduler
- * slice that first derives event reminders at all.
- */
+/** An empty per-source counter, keyed the same way as `@nexus/core`'s `NotificationSource`. */
 export function emptyDigestCounts(): Record<NotificationSource, number> {
   return { document: 0, exam: 0, "study-day": 0, event: 0 };
 }

@@ -425,6 +425,20 @@ export const strings = {
     sourceTasks: "Zadaci",
     sourceExams: "Ispiti",
     sourceBlocks: "Učenje",
+    /**
+     * The "Podsetnici" chip row on the event form (CAL-006). Every chip's label
+     * is built from these by one formatter, so the fixed ladder and an offset
+     * loaded from a stored event read the same way: "U vreme početka",
+     * "10 min ranije", "1 h ranije", "1 dan ranije", "3 dana ranije".
+     */
+    reminders: {
+      label: "Podsetnici",
+      atStart: "U vreme početka",
+      minutesUnit: "min",
+      hoursUnit: "h",
+      /** Trailing word of every non-zero lead time; the day form takes `dayUnit`. */
+      before: "ranije",
+    },
     /** Tag chip on a read-only task row in the agenda (ADR-020). */
     taskTag: "Zadatak",
     /** Grid navigation (ADR-020): prev/today/next — one pair of labels shared by Mesec/Nedelja/Dan, since each shifts by its own period. */
@@ -706,6 +720,7 @@ export const strings = {
       document: "Dokument",
       exam: "Ispit",
       "study-day": "Učenje",
+      event: "Događaj",
     },
     /** Snooze preset button labels, keyed by SnoozePreset value. */
     snoozePreset: {
@@ -729,6 +744,7 @@ export const strings = {
         document: "Dokumenta",
         exam: "Ispiti",
         "study-day": "Učenje",
+        event: "Događaji",
       },
       saveError: "Čuvanje podešavanja nije uspelo. Pokušaj ponovo.",
     },

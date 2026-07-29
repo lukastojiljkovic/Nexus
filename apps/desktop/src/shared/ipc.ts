@@ -409,6 +409,8 @@ export interface Event {
   recurrence: RecurrenceRule | null;
   /** Bare `YYYY-MM-DD` occurrence dates removed from the series, ascending; empty whenever `recurrence` is null. Settable only through `addEventRecurrenceExdate`, never through create/update — hence its absence from the two shapes below. */
   recurrenceExdates: string[];
+  /** Whole minutes before the start at which to remind, ascending and duplicate-free (CAL-006); empty for an event with no reminders. Every occurrence of a series carries the master's ladder. */
+  reminderOffsets: number[];
 }
 
 /** Fields for a new event; only `title` and `startAt` are required (CAL-001). The main process revalidates each. */
@@ -421,6 +423,8 @@ export interface NewEventFields {
   description?: string | null;
   category?: string | null;
   recurrence?: RecurrenceRule | null;
+  /** Reminder lead times in whole minutes (CAL-006); omitted means none. The store canonicalizes and caps them. */
+  reminderOffsets?: number[];
 }
 
 /** A partial edit of an event's own fields; an omitted key is untouched, `null` clears it. */
@@ -433,6 +437,8 @@ export interface EventFieldChanges {
   description?: string | null;
   category?: string | null;
   recurrence?: RecurrenceRule | null;
+  /** Reminder lead times in whole minutes (CAL-006); an empty array clears every reminder. */
+  reminderOffsets?: number[];
 }
 
 export interface EventsListRequest {
@@ -1065,8 +1071,8 @@ export interface StatsStudyRequest {
   toDate: string;
 }
 
-/** The three NTF-001..003 source kinds (mirrors `@nexus/core`'s `NotificationSource`; redeclared here so the renderer never imports core/DB code). */
-export type NotificationSource = "document" | "exam" | "study-day";
+/** The four NTF-001..003/CAL-006 source kinds (mirrors `@nexus/core`'s `NotificationSource`; redeclared here so the renderer never imports core/DB code). */
+export type NotificationSource = "document" | "exam" | "study-day" | "event";
 
 /** Closed ledger-status domain (mirrors `@nexus/db`'s `NotificationStatus`). Dismissal is terminal. */
 export type NotificationStatus = "delivered" | "snoozed" | "dismissed";

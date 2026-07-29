@@ -496,6 +496,44 @@ body {
   flex: 1;
   min-width: 240px;
 }
+/* Podsetnici chip row (CAL-006) — the same typographic toggle as .cal__source
+   and .recur__day: accent text + weight when on, never a glow. Takes a full row
+   of the wrapping form, like .recur does, so a long ladder wraps under itself
+   instead of pushing the submit button around. */
+.cal__reminders {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+.cal__reminders-label {
+  flex: none;
+  font-size: var(--nx-font-size-label);
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+}
+.cal__reminder-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
+}
+.cal__reminder.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.cal__reminder.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
+}
+.cal__reminder--active.nx-button {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+
 /* Edit-mode cancel: a quiet ghost beside the primary submit (text feel). */
 .cal__cancel.nx-button {
   background: transparent;

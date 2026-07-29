@@ -30,6 +30,8 @@ import {
   ExamStore,
   FocusStore,
   isPlaintextDatabase,
+  MAX_EVENT_REMINDERS,
+  MAX_EVENT_REMINDER_MINUTES,
   MAX_NOTE_ATTACHMENT_BYTES,
   MAX_NOTE_LINKS,
   MAX_NOTE_TEMPLATE_BYTES,
@@ -755,6 +757,34 @@ function asTaskFieldChanges(value: unknown): UpdateTaskFields {
 }
 
 /**
+ * An event's reminder ladder (CAL-006): whole minutes of lead time, unique,
+ * within the store's own caps — which are imported from it rather than
+ * respelled here, so there is exactly one number to change. Distinct from
+ * `asReminderOffsets` below, which is the DOCUMENT ladder: whole days, and
+ * uncapped. Structural checks only; `EventStore` re-canonicalizes (sorts,
+ * revalidates) whatever it is handed.
+ */
+function asEventReminderOffsets(value: unknown, field: string): number[] {
+  if (
+    !Array.isArray(value) ||
+    value.length > MAX_EVENT_REMINDERS ||
+    !value.every(
+      (n) =>
+        typeof n === "number" &&
+        Number.isInteger(n) &&
+        n >= 0 &&
+        n <= MAX_EVENT_REMINDER_MINUTES,
+    ) ||
+    new Set(value).size !== value.length
+  ) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must hold at most ${MAX_EVENT_REMINDERS} distinct whole minutes between 0 and ${MAX_EVENT_REMINDER_MINUTES}.`,
+    );
+  }
+  return value as number[];
+}
+
+/**
  * Validates a `NewEventFields` payload into a store input; only present keys are
  * carried. Structural checks only — semantic date/range validation stays in the
  * store, the same division of labour as the task validators.
@@ -778,6 +808,12 @@ function asNewEventInput(value: unknown): CreateEventInput {
   }
   if (event.recurrence !== undefined) {
     input.recurrence = asRecurrenceRule(event.recurrence, "event.recurrence");
+  }
+  if (event.reminderOffsets !== undefined) {
+    input.reminderOffsets = asEventReminderOffsets(
+      event.reminderOffsets,
+      "event.reminderOffsets",
+    );
   }
   return input;
 }
@@ -803,6 +839,12 @@ function asEventFieldChanges(value: unknown): UpdateEventFields {
   }
   if (changes.recurrence !== undefined) {
     patch.recurrence = asRecurrenceRule(changes.recurrence, "changes.recurrence");
+  }
+  if (changes.reminderOffsets !== undefined) {
+    patch.reminderOffsets = asEventReminderOffsets(
+      changes.reminderOffsets,
+      "changes.reminderOffsets",
+    );
   }
   return patch;
 }
@@ -1093,11 +1135,17 @@ function asBlockStatus(value: unknown, field: string): StudyBlockStatus {
 }
 
 /**
- * The three NTF source kinds (mirrors `@nexus/core`'s `NotificationSource`).
- * Not re-exported from `@nexus/db`, so the closed set is declared here, the
- * same division of labour as every other closed-enum validator in this file.
+ * The four NTF/CAL-006 source kinds (mirrors `@nexus/core`'s
+ * `NotificationSource`). Not re-exported from `@nexus/db`, so the closed set is
+ * declared here, the same division of labour as every other closed-enum
+ * validator in this file.
  */
-const NOTIFICATION_SOURCES: readonly NotificationSource[] = ["document", "exam", "study-day"];
+const NOTIFICATION_SOURCES: readonly NotificationSource[] = [
+  "document",
+  "exam",
+  "study-day",
+  "event",
+];
 
 /** The four snooze presets `notifications:snooze` accepts; main resolves each to an absolute `until` from its own clock. */
 const SNOOZE_PRESETS: readonly SnoozePreset[] = ["10m", "1h", "tonight", "tomorrow-morning"];
@@ -1369,6 +1417,7 @@ function startUnlockedServices(): void {
   startNotificationScheduler({
     listProfiles: () => listProfiles(requireDb()),
     documentStore,
+    eventStore,
     examStore,
     subjectStore,
     planStore,
