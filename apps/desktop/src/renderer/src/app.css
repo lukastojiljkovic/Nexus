@@ -323,22 +323,63 @@ body {
   gap: var(--nx-space-4);
 }
 
-/* Quick-add + view toggle share one row; the toggle stays right-aligned. */
+/* Add/edit form + view toggle share one row; the toggle stays right-aligned and
+   top-aligned, since the form is now two lines (title, then the detail fields). */
 .tasks__toolbar {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--nx-space-4);
   flex-wrap: wrap;
+}
+/* One form serves create and edit (mirrors .cal__form): the title line alone is
+   still the quick-add — type a name, press Enter — and the detail fields below
+   it are what a task actually has. */
+.tasks__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  flex: 1;
+  min-width: 240px;
 }
 .tasks__quick-add {
   display: flex;
   align-items: center;
   gap: var(--nx-space-2);
-  flex: 1;
-  min-width: 240px;
 }
 .tasks__quick-add .nx-textfield__input {
   flex: 1;
+}
+.tasks__fields {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+/* Native select matched to the textfield input (tokens only, no custom arrow;
+   mirrors .documents__select). */
+.tasks__select {
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  padding: 7px 13px;
+  transition: border-color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.tasks__select:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+/* Edit-mode cancel: a quiet ghost beside the primary submit (text feel). */
+.tasks__cancel.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.tasks__cancel.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
 }
 
 /* View toggle — active state is typographic (accent + weight), no glow or
@@ -400,11 +441,16 @@ body {
   align-items: center;
   gap: var(--nx-space-1);
 }
+.tasks__edit.nx-button,
 .tasks__delete.nx-button {
   background: transparent;
   border-color: transparent;
   color: var(--nx-text-muted);
   padding: 2px 8px;
+}
+.tasks__edit.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
 }
 .tasks__delete.nx-button:hover {
   background: var(--nx-danger-soft);
@@ -4075,4 +4121,189 @@ button.cal__grid-event {
   border-top: 1px solid var(--nx-border);
   font-size: var(--nx-font-size-label);
   color: var(--nx-text-muted);
+}
+
+/* Recurrence field + scope dialog (ADR-024) ---------------------------- */
+/* Shared by the task form and the event form, so this family is its own
+   (`recur__`) rather than living under either page. Every control reuses the
+   existing form recipes: the selects match .documents__select, the number
+   inputs are plain .nx-textfield__input, and the weekday chips are the same
+   typographic toggle as .cal__source — accent text + weight, never a glow. */
+.recur {
+  /* Takes a full row inside the wrapping forms it sits in, so opening
+     Prilagođeno grows downward instead of shoving the submit button around. */
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+.recur__field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+.recur__label {
+  flex: none;
+  font-size: var(--nx-font-size-label);
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+}
+/* Native select matched to the textfield input (tokens only, no custom arrow;
+   mirrors .documents__select). */
+.recur__select {
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  padding: 7px 13px;
+  transition: border-color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.recur__select:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.recur__select:disabled {
+  color: var(--nx-text-muted);
+  cursor: not-allowed;
+}
+.recur__number.nx-textfield__input {
+  width: 72px;
+}
+.recur__counted {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.recur__unit {
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+.recur__caption {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+/* The Prilagođeno panel: its own full-width line under the preset select. */
+.recur__custom {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.recur__days {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
+}
+.recur__day.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.recur__day.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
+}
+.recur__day--active.nx-button {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* The "this repeats" marker: a quiet glyph, never an icon and never a colour
+   of its own beyond the muted text token. */
+.recur__mark {
+  flex: none;
+  font-size: var(--nx-font-size-label);
+  line-height: 1;
+  color: var(--nx-text-muted);
+}
+/* On the accent-tinted calendar surfaces the muted text token would read as
+   washed out, so there the marker takes the surface's own colour — it is a
+   density cue, not a second palette. The two inline contexts (a month chip and
+   a timed event's title) have no flex gap to space it, hence the margin. */
+.cal__month-bar--event .recur__mark,
+.cal__month-chip .recur__mark,
+.cal__grid-event-title .recur__mark {
+  color: inherit;
+}
+.cal__month-chip .recur__mark,
+.cal__grid-event-title .recur__mark {
+  margin-right: 3px;
+}
+
+/* Scope dialog — the same overlay recipe as the search palette (backdrop and
+   panel as siblings, a solid wash of the app background rather than a raw
+   scrim), centred because it is a question, not a search surface. */
+.recur-dialog__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--nx-space-6);
+}
+.recur-dialog__backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--nx-bg);
+  opacity: 0.75;
+}
+.recur-dialog__panel {
+  position: relative;
+  width: min(420px, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-5);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  box-shadow: var(--nx-shadow);
+}
+.recur-dialog__title {
+  margin: 0;
+  font-size: var(--nx-font-size-title);
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-text);
+}
+.recur-dialog__question {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+/* Three equal choices and no primary among them: the dialog exists so that
+   nothing here is picked by accident. */
+.recur-dialog__choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.recur-dialog__choice.nx-button {
+  justify-content: flex-start;
+  text-align: left;
+}
+.recur-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.recur-dialog__cancel.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.recur-dialog__cancel.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
 }

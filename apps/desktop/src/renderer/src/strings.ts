@@ -158,21 +158,112 @@ export const strings = {
     emptyDescription:
       "Zapiši prvi zadatak u polje iznad — dovoljno je ime i Enter.",
     loadError: "Zadaci se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
+    editLabel: "Izmeni zadatak",
     deleteLabel: "Obriši zadatak",
     deletedNotice: "Zadatak obrisan",
     undo: "Vrati",
     dismiss: "Zatvori",
+    /** Detail fields of the shared add/edit form (the quick-add line stays the fast path). */
+    dueDateLabel: "Rok",
+    priorityLabel: "Prioritet",
+    save: "Sačuvaj",
+    cancel: "Otkaži",
     /** Kanban column titles, keyed by task status value (labels are presentation). */
     status: {
       todo: "Za rad",
       doing: "U toku",
       done: "Završeno",
     },
-    /** Priority chip labels; 'none' has no chip, so it is intentionally absent. */
+    /**
+     * Priority labels. `none` is the form select's own "no priority" option and
+     * never becomes a chip — the row rendering skips that value entirely.
+     */
     priority: {
+      none: "Bez prioriteta",
       low: "Nizak",
       medium: "Srednji",
       high: "Visok",
+    },
+  },
+
+  /**
+   * Recurrence (ADR-024) — shared by the task form and the event form, so it
+   * belongs to neither. The custom controls are deliberately LABELLED FIELDS
+   * ("Na svakih: 3") rather than a sentence ("na svaka 3 dana"): Serbian
+   * numerals take three forms (1 / 2–4 / 5+) while `dayUnit` knows two, so a
+   * counted noun beside a freely typed number would be wrong at some counts.
+   * The one counted phrase that survives is "Posle N ponavljanja", where the
+   * genitive "ponavljanja" is the correct form at every N.
+   */
+  recurrence: {
+    fieldLabel: "Ponavljanje",
+    /** Shown in place of the controls while the form has no (valid) date to phase a rule from. */
+    needsDate: "Postavi datum da bi ponavljanje bilo moguće.",
+    /** The preset select, in menu order; `custom` opens the fields below it. */
+    preset: {
+      none: "Ne ponavlja se",
+      daily: "Svakog dana",
+      weekdays: "Radnim danima",
+      weekly: "Svake nedelje",
+      monthly: "Svakog meseca",
+      yearly: "Svake godine",
+      custom: "Prilagođeno…",
+    },
+    freqLabel: "Učestalost",
+    freq: {
+      daily: "Dnevno",
+      weekdays: "Radnim danima",
+      weekly: "Nedeljno",
+      monthly: "Mesečno",
+      yearly: "Godišnje",
+    },
+    intervalLabel: "Na svakih",
+    daysLabel: "Dani",
+    /** Monday-first, matching `RecurrenceWeekday`'s own 0 = Monday indexing. */
+    weekdayShort: ["Pon", "Uto", "Sre", "Čet", "Pet", "Sub", "Ned"],
+    weekday: ["ponedeljak", "utorak", "sreda", "četvrtak", "petak", "subota", "nedelja"],
+    monthlyModeLabel: "Način",
+    monthlyModeDate: "Po datumu",
+    monthlyModeOrdinal: "Po danu u nedelji",
+    monthDayLabel: "Dan u mesecu",
+    ordinalLabel: "Redosled",
+    /**
+     * Keyed by `RecurrenceOrdinal` as a string; `-1` is the month's last such
+     * weekday. Rendered as its own select beside the weekday's, never joined
+     * into a phrase — "prvi" agrees with utorak but not with sreda.
+     */
+    ordinal: {
+      "1": "prvi",
+      "2": "drugi",
+      "3": "treći",
+      "4": "četvrti",
+      "-1": "poslednji",
+    } as Record<string, string>,
+    weekdayLabel: "Dan",
+    endLabel: "Završetak",
+    endNever: "Nikad",
+    endUntil: "Do datuma",
+    endCount: "Posle N ponavljanja",
+    endUntilLabel: "Datum završetka",
+    endCountLabel: "Broj ponavljanja",
+    endCountUnit: "ponavljanja",
+    /** Accessible name of the ↻ marker on a recurring row/chip. */
+    marker: "Ponavlja se",
+    /** After completing one occurrence of a recurring task; the next date follows. */
+    nextOccurrence: "Sledeći put:",
+    /**
+     * The three-way scope dialog. PRD 04: editing or deleting one occurrence of
+     * a series never picks a scope silently, so this is a real choice with no
+     * default — Otkaži is the only way out that changes nothing.
+     */
+    scope: {
+      title: "Ponavljajući događaj",
+      questionEdit: "Na koje termine se izmena odnosi?",
+      questionDelete: "Koje termine treba obrisati?",
+      this: "Samo ovaj",
+      future: "Ovaj i budući",
+      all: "Svi",
+      cancel: "Otkaži",
     },
   },
 

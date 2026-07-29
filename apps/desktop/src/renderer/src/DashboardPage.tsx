@@ -12,6 +12,8 @@ import type {
   Task,
   TrackedDocument,
 } from "../../shared/ipc.js";
+import { buildCalendarItems } from "./calendarItems.js";
+import type { CalendarItem, CalendarSource } from "./calendarItems.js";
 import {
   daysUntilExam,
   examCountdownLabel,
@@ -108,6 +110,15 @@ function DashRow({
     </button>
   );
 }
+
+/**
+ * "Danas" reads events through the calendar's own merge, for one reason: a
+ * recurring event is a single stored master (ADR-024), and only that merge
+ * knows how to expand it into the occurrence that falls today. Events are the
+ * only source asked for — tasks, exams and blocks reach this page by their own
+ * routes above.
+ */
+const EVENTS_ONLY: ReadonlySet<CalendarSource> = new Set<CalendarSource>(["events"]);
 
 /** Empty stats used in place of a fetch when the study module is disabled. */
 const EMPTY_STUDY_STATS: StudyStats = {
@@ -220,9 +231,19 @@ export function DashboardPage({
 
   // Danas — today's events (chronological) then tasks due today. An all-day
   // event's bare "YYYY-MM-DD" sorts before any timed start, matching the store.
-  const todayEvents = (events ?? [])
-    .filter((event) => event.startAt.slice(0, 10) === todayKey)
-    .sort((a, b) => a.startAt.localeCompare(b.startAt) || a.id.localeCompare(b.id));
+  // Recurring masters are expanded over today alone, and each item's `event` is
+  // that occurrence's own copy, so the time shown is the time it happens at.
+  const todayEvents = buildCalendarItems(
+    { events: events ?? [], tasks: [], exams: [], blocks: [], subjects: [] },
+    EVENTS_ONLY,
+    { from: todayKey, to: todayKey },
+  )
+    .filter(
+      // Only events were asked for; the narrowing is what says so in the types.
+      (item): item is CalendarItem & { kind: "event" } =>
+        item.kind === "event" && item.startKey === todayKey,
+    )
+    .sort((a, b) => a.sortKey.localeCompare(b.sortKey) || a.id.localeCompare(b.id));
   const todayTasks = (tasks ?? []).filter(
     (task) => !task.done && task.dueDate != null && task.dueDate.slice(0, 10) === todayKey,
   );
@@ -292,13 +313,13 @@ export function DashboardPage({
             <Card title={strings.dashboard.today.title}>
               {hasToday ? (
                 <div className="dash__list">
-                  {todayEvents.map((event) => (
+                  {todayEvents.map((item) => (
                     <DashRow
-                      key={`event-${event.id}`}
+                      key={item.id}
                       onClick={() => onOpenModule("calendar")}
-                      leading={<span className="dash__time">{formatEventTime(event)}</span>}
+                      leading={<span className="dash__time">{formatEventTime(item.event)}</span>}
                     >
-                      <span className="dash__row-title">{event.title}</span>
+                      <span className="dash__row-title">{item.event.title}</span>
                     </DashRow>
                   ))}
                   {todayTasks.map((task) => (

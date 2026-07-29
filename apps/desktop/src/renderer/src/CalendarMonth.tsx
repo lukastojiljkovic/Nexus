@@ -4,7 +4,8 @@ import { layoutMonthBars, monthGridDays } from "@nexus/core";
 import type { MonthGridDay, SpanItem } from "@nexus/core";
 import type { Event } from "../../shared/ipc.js";
 import { formatClock, isMutedItem, isSpanItem, isTimedEventItem } from "./calendarItems.js";
-import type { CalendarItem } from "./calendarItems.js";
+import type { CalendarItem, EventOccurrence } from "./calendarItems.js";
+import { RecurrenceMark } from "./RecurrencePicker.js";
 import { strings } from "./strings.js";
 
 /** Lanes shown before a week row collapses its overflow into "+N još". */
@@ -22,8 +23,12 @@ export interface CalendarMonthProps {
   onSelectDay: (dayKey: string) => void;
   /** Click on a day cell's number — the page switches to that day's Dan view. */
   onOpenDay: (dayKey: string) => void;
-  /** Click on an event bar/chip — the page loads it into the form. */
-  onEditEvent: (event: Event) => void;
+  /**
+   * Click on an event bar/chip — the page loads it into the form. `occurrence`
+   * is non-null when the clicked bar is one occurrence of a series (ADR-024),
+   * so the page knows which day the edit is anchored on.
+   */
+  onEditEvent: (event: Event, occurrence: EventOccurrence | null) => void;
   /** A drag finished on `dayKey`; only events and tasks are draggable. */
   onMoveItem: (item: CalendarItem, dayKey: string) => void;
 }
@@ -64,7 +69,7 @@ export function itemLabel(item: CalendarItem): string {
   }
 }
 
-/** A subject-swatch dot (exam/block) or nothing, followed by the ellipsized label. Exported for the week/day grid's all-day band, which reuses these very classes. */
+/** A subject-swatch dot (exam/block) or a series marker (a recurring event's occurrence), followed by the ellipsized label. Exported for the week/day grid's all-day band, which reuses these very classes. */
 export function renderBarContent(item: CalendarItem): ReactNode {
   switch (item.kind) {
     case "exam":
@@ -72,6 +77,13 @@ export function renderBarContent(item: CalendarItem): ReactNode {
       return (
         <>
           <span className={`study__dot study__dot--${item.subject.color}`} aria-hidden="true" />
+          <span className="cal__month-bar-label">{itemLabel(item)}</span>
+        </>
+      );
+    case "event":
+      return (
+        <>
+          {item.occurrence !== null && <RecurrenceMark />}
           <span className="cal__month-bar-label">{itemLabel(item)}</span>
         </>
       );
@@ -125,10 +137,10 @@ export function CalendarMonth({
     });
   }
 
-  function activateEvent(event: MouseEvent, target: Event): void {
+  function activateEvent(event: MouseEvent, item: CalendarItem & { kind: "event" }): void {
     // Stops the click from also reaching the day cell's onSelectDay beneath.
     event.stopPropagation();
-    onEditEvent(target);
+    onEditEvent(item.event, item.occurrence);
   }
 
   function startDrag(event: DragEvent, item: CalendarItem): void {
@@ -256,10 +268,11 @@ export function CalendarMonth({
                             type="button"
                             className="cal__month-chip"
                             draggable
-                            onClick={(e) => activateEvent(e, item.event)}
+                            onClick={(e) => activateEvent(e, item)}
                             onDragStart={(e) => startDrag(e, item)}
                             onDragEnd={endDrag}
                           >
+                            {item.occurrence !== null && <RecurrenceMark />}
                             {formatClock(item.startMinutes)} — {item.event.title}
                           </button>
                         ))}
@@ -305,7 +318,7 @@ export function CalendarMonth({
                       className={classes.join(" ")}
                       style={style}
                       draggable
-                      onClick={(e) => activateEvent(e, item.event)}
+                      onClick={(e) => activateEvent(e, item)}
                       onDragStart={(e) => startDrag(e, item)}
                       onDragEnd={endDrag}
                     >

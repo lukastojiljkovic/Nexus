@@ -1,3 +1,4 @@
+import { isValidDayKey, occurrenceDatesInRange, shiftDayKey } from "@nexus/core";
 import type { Event, Exam, StudyBlockWithExam, Subject, Task } from "../../shared/ipc.js";
 
 /**
@@ -7,6 +8,18 @@ import type { Event, Exam, StudyBlockWithExam, Subject, Task } from "../../share
  * `TypeError` on a malformed day key, so this layer is the single place that
  * validates and normalizes a row's day key(s) before anything downstream ever
  * sees it.
+ *
+ * It is also where a recurring event becomes visible (ADR-024). A series is one
+ * stored master row; the calendar expands it here into one item per occurrence
+ * in the queried range, each a day-shifted copy of the master carrying the
+ * master itself alongside. Everything downstream — all four views, the agenda,
+ * the drag handlers, the scope dialog — therefore sees occurrences without
+ * knowing they are virtual.
+ *
+ * The range bounds **only that expansion**. Every other row (a one-off event, a
+ * task, an exam, a study block) flows through untouched however far outside the
+ * range it falls, exactly as before recurrence existed — a calendar surface that
+ * showed everything yesterday still shows everything today.
  */
 
 export type CalendarSource = "events" | "tasks" | "exams" | "blocks";
@@ -28,9 +41,21 @@ interface CalendarItemBase {
   readonly sortKey: string;
 }
 
+/**
+ * One virtual occurrence's own identity (ADR-024): the bare day it falls on and
+ * the stored master it was expanded from. The item's own `event` is a day-shifted
+ * copy of that master, so the views render the occurrence while the series
+ * operations — `addEventRecurrenceExdate`, `splitEventRecurrence`, an edit of
+ * the whole series — still have the row they must actually address.
+ */
+export interface EventOccurrence {
+  readonly date: string;
+  readonly master: Event;
+}
+
 export type CalendarItem = CalendarItemBase &
   (
-    | { kind: "event"; event: Event }
+    | { kind: "event"; event: Event; occurrence: EventOccurrence | null }
     | { kind: "task"; task: Task }
     | { kind: "exam"; exam: Exam; subject: Subject }
     | { kind: "block"; block: StudyBlockWithExam; exam: Exam; subject: Subject }
@@ -44,8 +69,31 @@ export interface CalendarSourceRows {
   readonly subjects: readonly Subject[];
 }
 
+/** The window a recurring master is expanded over — inclusive bare day keys. */
+export interface CalendarRange {
+  readonly from: string;
+  readonly to: string;
+}
+
 function isDayKey(key: string): boolean {
   return DAY_KEY_RE.test(key);
+}
+
+const MS_PER_DAY = 86_400_000;
+
+/** Whole-day delta between two bare day keys, UTC-midnight math (no timezone/DST drift). */
+export function daysBetweenKeys(fromKey: string, toKey: string): number {
+  const from = Date.UTC(
+    Number(fromKey.slice(0, 4)),
+    Number(fromKey.slice(5, 7)) - 1,
+    Number(fromKey.slice(8, 10)),
+  );
+  const to = Date.UTC(
+    Number(toKey.slice(0, 4)),
+    Number(toKey.slice(5, 7)) - 1,
+    Number(toKey.slice(8, 10)),
+  );
+  return Math.round((to - from) / MS_PER_DAY);
 }
 
 /** Minutes-from-midnight for an "HH:MM" fragment; null (never NaN) on anything unparseable. */
@@ -60,37 +108,81 @@ function parseMinutes(value: string): number | null {
   return hours * 60 + minutes;
 }
 
-function buildEventItems(events: readonly Event[]): CalendarItem[] {
+/** One event row (a one-off, or one occurrence of a series) as a calendar item; null when its start is not a usable day. */
+function eventItem(event: Event, occurrence: EventOccurrence | null): CalendarItem | null {
+  const startKey = event.startAt.slice(0, 10);
+  if (!isDayKey(startKey)) return null;
+
+  // A bad/missing endAt, or one that lands before startAt, collapses to a
+  // single-day span rather than feeding a negative range into the grid math.
+  let endKey = event.endAt ? event.endAt.slice(0, 10) : startKey;
+  if (!isDayKey(endKey) || endKey < startKey) endKey = startKey;
+
+  let startMinutes: number | null = null;
+  let endMinutes: number | null = null;
+  if (!event.allDay) {
+    startMinutes = parseMinutes(event.startAt.slice(11, 16));
+    if (event.endAt && event.endAt.slice(0, 10) === startKey) {
+      endMinutes = parseMinutes(event.endAt.slice(11, 16));
+    }
+  }
+
+  return {
+    // Occurrences of one master share its row id, so the day is what separates
+    // them; a one-off keeps the id it has always had.
+    id: occurrence === null ? `event-${event.id}` : `event-${event.id}@${occurrence.date}`,
+    source: "events",
+    kind: "event",
+    event,
+    occurrence,
+    startKey,
+    endKey,
+    startMinutes,
+    endMinutes,
+    sortKey: event.allDay ? startKey : event.startAt,
+  };
+}
+
+/**
+ * The master moved `delta` whole days: same time of day, same duration. Both
+ * endpoints shift together, which is what keeps a multi-day series' occurrences
+ * as long as the master — the day parts move, the "T14:30" tails do not.
+ */
+function shiftEventDays(event: Event, delta: number): Event {
+  const shifted: Event = {
+    ...event,
+    startAt: shiftDayKey(event.startAt.slice(0, 10), delta) + event.startAt.slice(10),
+  };
+  if (event.endAt !== null && isValidDayKey(event.endAt.slice(0, 10))) {
+    shifted.endAt = shiftDayKey(event.endAt.slice(0, 10), delta) + event.endAt.slice(10);
+  }
+  return shifted;
+}
+
+function buildEventItems(events: readonly Event[], range: CalendarRange): CalendarItem[] {
   const items: CalendarItem[] = [];
+  // Bounds that `occurrenceDatesInRange` would throw on disable expansion
+  // altogether rather than making every ruled event disappear: the master is
+  // still shown, as the one-off it looks like. Unreachable from the pages,
+  // which derive the range from their own (already valid) anchor day.
+  const expandable = isValidDayKey(range.from) && isValidDayKey(range.to);
+
   for (const event of events) {
-    const startKey = event.startAt.slice(0, 10);
-    if (!isDayKey(startKey)) continue;
-
-    // A bad/missing endAt, or one that lands before startAt, collapses to a
-    // single-day span rather than feeding a negative range into the grid math.
-    let endKey = event.endAt ? event.endAt.slice(0, 10) : startKey;
-    if (!isDayKey(endKey) || endKey < startKey) endKey = startKey;
-
-    let startMinutes: number | null = null;
-    let endMinutes: number | null = null;
-    if (!event.allDay) {
-      startMinutes = parseMinutes(event.startAt.slice(11, 16));
-      if (event.endAt && event.endAt.slice(0, 10) === startKey) {
-        endMinutes = parseMinutes(event.endAt.slice(11, 16));
-      }
+    const anchor = event.startAt.slice(0, 10);
+    if (event.recurrence === null || !expandable || !isValidDayKey(anchor)) {
+      const item = eventItem(event, null);
+      if (item !== null) items.push(item);
+      continue;
     }
 
-    items.push({
-      id: `event-${event.id}`,
-      source: "events",
-      kind: "event",
-      event,
-      startKey,
-      endKey,
-      startMinutes,
-      endMinutes,
-      sortKey: event.allDay ? startKey : event.startAt,
-    });
+    const exdates = new Set(event.recurrenceExdates);
+    for (const date of occurrenceDatesInRange(event.recurrence, anchor, range, exdates)) {
+      const item = eventItem(shiftEventDays(event, daysBetweenKeys(anchor, date)), {
+        date,
+        master: event,
+      });
+      if (item !== null) items.push(item);
+    }
   }
   return items;
 }
@@ -173,16 +265,21 @@ function buildBlockItems(
   return items;
 }
 
-/** Merges the enabled sources into one calendar stream; only requested sources are built at all. */
+/**
+ * Merges the enabled sources into one calendar stream; only requested sources
+ * are built at all. `range` bounds the expansion of recurring event masters
+ * and nothing else — see the file header.
+ */
 export function buildCalendarItems(
   rows: CalendarSourceRows,
   enabled: ReadonlySet<CalendarSource>,
+  range: CalendarRange,
 ): CalendarItem[] {
   const subjectsById = new Map(rows.subjects.map((subject) => [subject.id, subject] as const));
   const examsById = new Map(rows.exams.map((exam) => [exam.id, exam] as const));
 
   const items: CalendarItem[] = [];
-  if (enabled.has("events")) items.push(...buildEventItems(rows.events));
+  if (enabled.has("events")) items.push(...buildEventItems(rows.events, range));
   if (enabled.has("tasks")) items.push(...buildTaskItems(rows.tasks));
   if (enabled.has("exams")) items.push(...buildExamItems(rows.exams, subjectsById));
   if (enabled.has("blocks")) items.push(...buildBlockItems(rows.blocks, examsById, subjectsById));

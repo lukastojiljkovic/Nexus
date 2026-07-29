@@ -7,7 +7,8 @@ import type { Event } from "../../shared/ipc.js";
 // drifting apart the way two copies eventually would.
 import { renderBarContent } from "./CalendarMonth.js";
 import { formatClock, isMutedItem, isSpanItem, isTimedEventItem } from "./calendarItems.js";
-import type { CalendarItem } from "./calendarItems.js";
+import type { CalendarItem, EventOccurrence } from "./calendarItems.js";
+import { RecurrenceMark } from "./RecurrencePicker.js";
 import { strings } from "./strings.js";
 
 /** Click-to-create snaps to the half hour, same granularity FSRS-style apps default to. */
@@ -27,8 +28,8 @@ export interface CalendarTimeGridProps {
   onSelectSlot: (dayKey: string, minutes: number) => void;
   /** Click on a day's column header — the page switches to the day view. */
   onOpenDay: (dayKey: string) => void;
-  /** Click on a timed event — the page loads it into the form. */
-  onEditEvent: (event: Event) => void;
+  /** Click on a timed event — the page loads it into the form; `occurrence` is non-null for one occurrence of a series (ADR-024). */
+  onEditEvent: (event: Event, occurrence: EventOccurrence | null) => void;
 }
 
 const weekdayFormatter = new Intl.DateTimeFormat("sr-Latn", { weekday: "short", timeZone: "UTC" });
@@ -133,7 +134,7 @@ export function CalendarTimeGrid({
           type="button"
           className={classes.join(" ")}
           style={geometry}
-          onClick={() => onEditEvent(item.event)}
+          onClick={() => onEditEvent(item.event, item.occurrence)}
         >
           {renderBarContent(item)}
         </button>
@@ -251,11 +252,14 @@ export function CalendarTimeGrid({
                       }}
                       onClick={(event) => {
                         event.stopPropagation();
-                        onEditEvent(item.event);
+                        onEditEvent(item.event, item.occurrence);
                       }}
                     >
                       <span className="cal__grid-event-time">{formatClock(item.startMinutes)}</span>
-                      <span className="cal__grid-event-title">{item.event.title}</span>
+                      <span className="cal__grid-event-title">
+                        {item.occurrence !== null && <RecurrenceMark />}
+                        {item.event.title}
+                      </span>
                     </button>
                   );
                 })}

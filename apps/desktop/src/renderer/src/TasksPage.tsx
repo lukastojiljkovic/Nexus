@@ -9,9 +9,19 @@ import {
   KanbanView,
   ListRow,
   ListView,
+  TextField,
 } from "@nexus/ui";
+import { isValidDayKey } from "@nexus/core";
 import type { CollectionSchema, KanbanViewConfig, ListViewConfig } from "@nexus/core";
-import type { Task, TaskPriority, TaskStatus } from "../../shared/ipc.js";
+import type {
+  NewTaskFields,
+  RecurrenceRule,
+  Task,
+  TaskFieldChanges,
+  TaskPriority,
+  TaskStatus,
+} from "../../shared/ipc.js";
+import { RecurrenceMark, RecurrencePicker } from "./RecurrencePicker.js";
 import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
 import { strings } from "./strings.js";
 
@@ -68,22 +78,36 @@ function isTaskStatus(value: string): value is TaskStatus {
   return (TASK_STATUSES as readonly string[]).includes(value);
 }
 
+/** Membership against the closed list, narrowing the priority `<select>`'s raw string without an assertion. */
+function asPriority(value: string): TaskPriority {
+  for (const priority of TASK_PRIORITIES) if (priority === value) return priority;
+  return "none";
+}
+
 /** Kanban column title for a status value; falls back to the raw value. */
 function statusTitle(value: string): string {
   return isTaskStatus(value) ? STATUS_TITLES[value] : value;
 }
 
-/** Formats a due date for the chip; degrades to the raw string on bad input. */
+/**
+ * Formats a due date for the chip; degrades to the raw string on bad input. A
+ * due date is a bare calendar day, so it is formatted in UTC — the same rule
+ * DASH and CAL follow, and without it a negative-offset timezone would render
+ * every due date a day early.
+ */
 function formatDue(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime())
     ? iso
-    : new Intl.DateTimeFormat("sr-Latn", { day: "2-digit", month: "short" }).format(date);
+    : new Intl.DateTimeFormat("sr-Latn", { day: "2-digit", month: "short", timeZone: "UTC" }).format(
+        date,
+      );
 }
 
-/** Priority (when not 'none') + due-date (when set) chips; null when neither applies. */
+/** The series marker (when the task repeats), priority (when not 'none') and due-date (when set) chips; null when none apply. */
 function taskChips(task: TaskFields): ReactNode {
   const chips: ReactNode[] = [];
+  if (task.recurrence !== null) chips.push(<RecurrenceMark key="recurrence" />);
   if (task.priority !== "none") {
     chips.push(
       <Chip key="priority" variant={task.priority === "high" ? "accent" : "neutral"}>
@@ -117,17 +141,31 @@ export interface TasksPageProps {
 }
 
 /**
- * The TASK module page (v0 basics): quick-add, a list and a kanban view over the
+ * The TASK module page (v0 basics): one form that both adds and edits (its
+ * title line alone is still the quick-add), a list and a kanban view over the
  * shared views engine, per-row done toggle and delete-with-undo. The engine owns
  * ordering/grouping; every write goes through the tasks:* IPC allowlist, so the
  * store stays the single source of truth (e.g. it derives completed_at).
+ *
+ * Ticking a task off always goes through `completeTaskOccurrence` (ADR-024) —
+ * the checkbox and the kanban drop into "Završeno" alike. A one-off completes;
+ * a recurring one advances to its next due date and comes back open, which the
+ * notice bar reports because the row has moved rather than been struck through.
  */
 export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps) {
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [view, setView] = useState<TaskView>(() => readStoredView(profileId));
+  // One form serves both modes, as on Kalendar: a non-null editingId means
+  // "editing that task", and the title line alone still works as the quick-add.
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [priority, setPriority] = useState<TaskPriority>("none");
+  const [recurrence, setRecurrence] = useState<RecurrenceRule | null>(null);
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
+  /** Next due date of a recurring task that just advanced, or null — the row moved, so the page says where to. */
+  const [advancedTo, setAdvancedTo] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { revealedId, reveal } = useRevealedRow();
 
@@ -186,29 +224,96 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     setTasks(await window.nexus.listTasks(profileId));
   }
 
-  async function submitDraft(event: FormEvent<HTMLFormElement>): Promise<void> {
+  function resetForm(): void {
+    setEditingId(null);
+    setDraft("");
+    setDueDate("");
+    setPriority("none");
+    setRecurrence(null);
+  }
+
+  /** Loads a task into the shared form and switches it to edit mode. */
+  function startEdit(task: TaskFields): void {
+    setEditingId(task.id);
+    setDraft(task.title);
+    // The store accepts a date-time due date too, but this form only speaks in
+    // whole days, so it shows (and on save keeps) the day part.
+    setDueDate(task.dueDate === null ? "" : task.dueDate.slice(0, 10));
+    setPriority(task.priority);
+    setRecurrence(task.recurrence);
+    inputRef.current?.focus();
+  }
+
+  async function submitForm(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     const title = draft.trim();
     if (title.length === 0) return;
+    const due = dueDate.length > 0 ? dueDate : null;
+    // A rule phases from the due date, so there is no such thing as one without
+    // it; the picker is already disabled in that state, and this is the guard
+    // for the order the user could still reach it in (set a rule, clear the date).
+    const rule = isValidDayKey(dueDate) ? recurrence : null;
     try {
-      const created = await window.nexus.createTask(profileId, { title });
-      setTasks((prev) => (prev ? [...prev, created] : [created]));
-      setDraft("");
+      if (editingId != null) {
+        const changes: TaskFieldChanges = {
+          title,
+          dueDate: due,
+          priority,
+          recurrence: rule,
+        };
+        replaceTask(await window.nexus.updateTask(profileId, editingId, changes));
+      } else {
+        const fields: NewTaskFields = { title };
+        // Only send what is set (exactOptionalPropertyTypes).
+        if (due !== null) fields.dueDate = due;
+        if (priority !== "none") fields.priority = priority;
+        if (rule !== null) fields.recurrence = rule;
+        const created = await window.nexus.createTask(profileId, fields);
+        setTasks((prev) => (prev ? [...prev, created] : [created]));
+      }
+      resetForm();
       inputRef.current?.focus();
     } catch (error) {
-      console.error("Nexus: failed to create task:", error);
+      console.error("Nexus: failed to save task:", error);
+    }
+  }
+
+  /**
+   * "This occurrence is done" — the single completion path for every task
+   * (ADR-024). A one-off completes; a recurring one advances in place and comes
+   * back not-done at its next date, which is worth saying out loud, because the
+   * row the user just ticked has moved rather than been struck through.
+   */
+  async function completeTask(task: TaskFields): Promise<void> {
+    try {
+      const updated = await window.nexus.completeTaskOccurrence(profileId, task.id);
+      replaceTask(updated);
+      setAdvancedTo(!updated.done && updated.dueDate !== null ? updated.dueDate : null);
+    } catch (error) {
+      console.error("Nexus: failed to complete task:", error);
     }
   }
 
   async function toggleDone(task: TaskFields, done: boolean): Promise<void> {
+    if (done) {
+      await completeTask(task);
+      return;
+    }
     try {
-      replaceTask(await window.nexus.setTaskDone(profileId, task.id, done));
+      replaceTask(await window.nexus.setTaskDone(profileId, task.id, false));
     } catch (error) {
       console.error("Nexus: failed to toggle task:", error);
     }
   }
 
   async function moveToStatus(task: TaskFields, status: TaskStatus): Promise<void> {
+    // Dropping a card into "Završeno" is a completion like any other, so it
+    // takes the same path — `setTaskDone`/`update` refuse a recurring task
+    // precisely so the two cannot drift apart.
+    if (status === "done") {
+      await completeTask(task);
+      return;
+    }
     try {
       replaceTask(await window.nexus.updateTask(profileId, task.id, { status }));
     } catch (error) {
@@ -220,6 +325,8 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     try {
       await window.nexus.deleteTask(profileId, task.id);
       setTasks((prev) => prev && prev.filter((current) => current.id !== task.id));
+      // Never leave the form bound to a task that no longer exists.
+      if (editingId === task.id) resetForm();
       // One pending undo at a time — a fresh delete replaces the previous offer.
       setPendingUndoId(task.id);
     } catch (error) {
@@ -242,19 +349,61 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   return (
     <div className="tasks">
       <div className="tasks__toolbar">
-        <form className="tasks__quick-add" onSubmit={submitDraft}>
-          <input
-            ref={inputRef}
-            className="nx-textfield__input"
-            value={draft}
-            placeholder={strings.tasks.quickAddPlaceholder}
-            aria-label={strings.tasks.quickAddLabel}
-            autoFocus
-            onChange={(event: ChangeEvent<HTMLInputElement>) => setDraft(event.target.value)}
-          />
-          <Button type="submit" variant="primary">
-            {strings.tasks.quickAddSubmit}
-          </Button>
+        <form className="tasks__form" onSubmit={submitForm}>
+          <div className="tasks__quick-add">
+            <input
+              ref={inputRef}
+              className="nx-textfield__input"
+              value={draft}
+              placeholder={strings.tasks.quickAddPlaceholder}
+              aria-label={strings.tasks.quickAddLabel}
+              autoFocus
+              onChange={(event: ChangeEvent<HTMLInputElement>) => setDraft(event.target.value)}
+            />
+            <Button type="submit" variant="primary">
+              {editingId != null ? strings.tasks.save : strings.tasks.quickAddSubmit}
+            </Button>
+            {editingId != null && (
+              <Button type="button" className="tasks__cancel" onClick={resetForm}>
+                {strings.tasks.cancel}
+              </Button>
+            )}
+          </div>
+
+          <div className="tasks__fields">
+            <TextField
+              type="date"
+              value={dueDate}
+              aria-label={strings.tasks.dueDateLabel}
+              onChange={(event) => {
+                const next = event.target.value;
+                setDueDate(next);
+                // A rule has to phase from a real day, so clearing the due date
+                // clears the rule where the user can see it happen.
+                if (!isValidDayKey(next)) setRecurrence(null);
+              }}
+            />
+            <select
+              className="tasks__select"
+              value={priority}
+              aria-label={strings.tasks.priorityLabel}
+              onChange={(event) => setPriority(asPriority(event.target.value))}
+            >
+              {TASK_PRIORITIES.map((option) => (
+                <option key={option} value={option}>
+                  {strings.tasks.priority[option]}
+                </option>
+              ))}
+            </select>
+            {/* Keyed by the record being edited: switching tasks re-derives
+                whether the rule reads as a preset or as Prilagođeno. */}
+            <RecurrencePicker
+              key={editingId ?? "new"}
+              value={recurrence}
+              onChange={setRecurrence}
+              anchor={dueDate}
+            />
+          </div>
         </form>
 
         <div className="tasks__views" role="group" aria-label={strings.tasks.viewLabel}>
@@ -291,6 +440,22 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         </div>
       )}
 
+      {advancedTo != null && (
+        <div className="tasks__undo" role="status">
+          <span className="tasks__undo-text">
+            {strings.recurrence.nextOccurrence} {formatDue(advancedTo)}
+          </span>
+          <Button
+            size="sm"
+            className="tasks__undo-dismiss"
+            aria-label={strings.tasks.dismiss}
+            onClick={() => setAdvancedTo(null)}
+          >
+            ×
+          </Button>
+        </div>
+      )}
+
       {failed ? (
         <EmptyState title={strings.tasks.emptyTitle} description={strings.tasks.loadError} />
       ) : tasks === null ? (
@@ -311,6 +476,14 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
               trailing={
                 <span className="tasks__row-meta">
                   {taskChips(task)}
+                  <Button
+                    size="sm"
+                    className="tasks__edit"
+                    aria-label={strings.tasks.editLabel}
+                    onClick={() => startEdit(task)}
+                  >
+                    ✎
+                  </Button>
                   <Button
                     size="sm"
                     className="tasks__delete"

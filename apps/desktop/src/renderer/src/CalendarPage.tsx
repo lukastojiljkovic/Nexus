@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent, KeyboardEvent } from "react";
 import { Button, Checkbox, Chip, EmptyState, ListRow, TextField } from "@nexus/ui";
-import { monthKeyOf, shiftDayKey, shiftMonthKey, weekDayKeys } from "@nexus/core";
+import { isValidDayKey, monthKeyOf, shiftDayKey, shiftMonthKey, weekDayKeys } from "@nexus/core";
 import type {
   Event,
   EventFieldChanges,
   Exam,
   NewEventFields,
+  RecurrenceRule,
   StudyBlockWithExam,
   Subject,
   Task,
@@ -16,11 +17,20 @@ import { CalendarTimeGrid } from "./CalendarTimeGrid.js";
 import {
   buildCalendarItems,
   CALENDAR_SOURCES,
+  daysBetweenKeys,
   formatClock,
   persistSources,
   readStoredSources,
 } from "./calendarItems.js";
-import type { CalendarItem, CalendarSource } from "./calendarItems.js";
+import type {
+  CalendarItem,
+  CalendarRange,
+  CalendarSource,
+  EventOccurrence,
+} from "./calendarItems.js";
+import { RecurrenceMark, RecurrencePicker } from "./RecurrencePicker.js";
+import { RecurrenceScopeDialog } from "./RecurrenceScopeDialog.js";
+import type { RecurrenceScope } from "./RecurrenceScopeDialog.js";
 import { DocumentsPanel } from "./DocumentsPanel.js";
 import { daysUntilExam, examCountdownLabel, examCountdownVariant, localTodayKey } from "./examDates.js";
 import { strings } from "./strings.js";
@@ -163,28 +173,116 @@ function formatDayLabel(key: string): string {
   return Number.isNaN(date.getTime()) ? key : dayLabelFormatter.format(date);
 }
 
-const MS_PER_DAY = 86_400_000;
-
-/** Whole-day delta between two bare day keys, UTC-midnight math (no timezone/DST drift). */
-function daysBetween(fromKey: string, toKey: string): number {
-  const from = Date.UTC(
-    Number(fromKey.slice(0, 4)),
-    Number(fromKey.slice(5, 7)) - 1,
-    Number(fromKey.slice(8, 10)),
-  );
-  const to = Date.UTC(
-    Number(toKey.slice(0, 4)),
-    Number(toKey.slice(5, 7)) - 1,
-    Number(toKey.slice(8, 10)),
-  );
-  return Math.round((to - from) / MS_PER_DAY);
-}
-
 // Study blocks are fetched over a bounded window around today (the agenda
 // itself has no explicit bounds): a month back covers recently missed blocks,
 // a year ahead outruns any plannable exam distance.
 const BLOCKS_PAST_DAYS = 31;
 const BLOCKS_FUTURE_DAYS = 365;
+
+/**
+ * A month grid is six whole weeks: it opens at most six days before the 1st and
+ * runs 42 days from there. Padding by a week on the near side keeps the bound
+ * honest without recomputing the grid the month view builds for itself.
+ */
+const MONTH_RANGE_BEFORE = 7;
+const MONTH_RANGE_AFTER = 41;
+
+/**
+ * Everything one submit of the event form asks for (ADR-024). Collected once,
+ * then either written straight away (a one-off) or held while the scope dialog
+ * asks which occurrences the edit reaches.
+ */
+interface EditedEventFields {
+  title: string;
+  /** The form's own day key — for an occurrence edit, where the user moved it to. */
+  date: string;
+  time: string;
+  endTime: string;
+  allDay: boolean;
+  startAt: string;
+  /** Timed events only; null clears a stored end time (all-day never sends one). */
+  endAt: string | null;
+  location: string | null;
+  recurrence: RecurrenceRule | null;
+}
+
+/**
+ * A series operation waiting on the "Samo ovaj / Ovaj i budući / Svi" answer.
+ * Each variant carries everything its own branch needs, so the dialog's answer
+ * is all that is still missing when it arrives.
+ */
+type PendingSeries =
+  | { kind: "edit"; occurrence: EventOccurrence; fields: EditedEventFields }
+  | { kind: "delete"; occurrence: EventOccurrence }
+  | { kind: "move"; occurrence: EventOccurrence; event: Event; fromKey: string; toKey: string };
+
+/**
+ * The form's collected fields as a create payload; only present values are sent
+ * (exactOptionalPropertyTypes).
+ *
+ * `carry` is the row this one is being split off from — the master, when an
+ * occurrence is detached or a series restarted. Editing an existing event
+ * normally leaves everything the form does not show alone, but these two flows
+ * CREATE a row, so whatever the form cannot express has to be carried across
+ * explicitly or it is lost: the description, the category, and the day span of
+ * a multi-day all-day event (which has no end field in this form at all).
+ */
+function newEventFields(
+  fields: EditedEventFields,
+  rule: RecurrenceRule | null,
+  carry: Event | null,
+): NewEventFields {
+  const payload: NewEventFields = {
+    title: fields.title,
+    startAt: fields.startAt,
+    allDay: fields.allDay,
+  };
+  if (fields.location !== null) payload.location = fields.location;
+  if (!fields.allDay && fields.endAt !== null) payload.endAt = fields.endAt;
+  if (carry !== null) {
+    if (carry.description !== null) payload.description = carry.description;
+    if (carry.category !== null) payload.category = carry.category;
+    if (fields.allDay && carry.endAt !== null) {
+      const span = daysBetweenKeys(carry.startAt.slice(0, 10), carry.endAt.slice(0, 10));
+      if (span > 0) payload.endAt = shiftDayKey(fields.date, span);
+    }
+  }
+  if (rule !== null) payload.recurrence = rule;
+  return payload;
+}
+
+/** An event's start/end moved `delta` whole days, time of day and duration untouched. */
+function shiftEventChanges(event: Event, delta: number): EventFieldChanges {
+  const newStartDate = shiftDayKey(event.startAt.slice(0, 10), delta);
+  const changes: EventFieldChanges = {
+    startAt: event.allDay ? newStartDate : `${newStartDate}T${event.startAt.slice(11, 16)}`,
+  };
+  if (event.endAt) {
+    const newEndDate = shiftDayKey(event.endAt.slice(0, 10), delta);
+    changes.endAt = event.allDay ? newEndDate : `${newEndDate}T${event.endAt.slice(11, 16)}`;
+  }
+  return changes;
+}
+
+/** A full copy of an event moved `delta` whole days — what a detached occurrence or a new series master is created from. */
+function copyEventFields(
+  event: Event,
+  delta: number,
+  rule: RecurrenceRule | null,
+): NewEventFields {
+  const moved = shiftEventChanges(event, delta);
+  const payload: NewEventFields = {
+    title: event.title,
+    startAt: moved.startAt ?? event.startAt,
+    allDay: event.allDay,
+  };
+  if (moved.endAt != null) payload.endAt = moved.endAt;
+  if (event.location !== null) payload.location = event.location;
+  if (event.description !== null) payload.description = event.description;
+  if (event.category !== null) payload.category = event.category;
+  if (rule !== null) payload.recurrence = rule;
+  return payload;
+}
 
 /**
  * A pending deep-link target (021-e global search / palette commands).
@@ -232,14 +330,20 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
 
   // One form serves both modes; a non-null editingId means "editing that event".
+  // When that event is one occurrence of a series, `editingOccurrence` says
+  // which day it is — the form still edits the master's row, but every write
+  // has to know where in the series the user was standing.
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingOccurrence, setEditingOccurrence] = useState<EventOccurrence | null>(null);
   const [title, setTitle] = useState("");
   const [allDay, setAllDay] = useState(false);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [location, setLocation] = useState("");
+  const [recurrence, setRecurrence] = useState<RecurrenceRule | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [pendingSeries, setPendingSeries] = useState<PendingSeries | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -294,26 +398,47 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
 
   function resetForm(): void {
     setEditingId(null);
+    setEditingOccurrence(null);
     setTitle("");
     setAllDay(false);
     setDate("");
     setTime("");
     setEndTime("");
     setLocation("");
+    setRecurrence(null);
     setFormError(null);
   }
 
-  /** Loads an event into the shared form and switches it to edit mode. */
-  function startEdit(event: Event): void {
-    setEditingId(event.id);
+  /**
+   * Loads an event into the shared form and switches it to edit mode. The
+   * `event` handed in is what the user clicked — for a series that is the
+   * occurrence's own day-shifted copy, so the form shows the day they aimed at
+   * while `occurrence.master` stays the row every write addresses.
+   */
+  function startEdit(event: Event, occurrence: EventOccurrence | null): void {
+    const master = occurrence?.master ?? event;
+    setEditingId(master.id);
+    setEditingOccurrence(occurrence);
     setTitle(event.title);
     setAllDay(event.allDay);
     setDate(event.startAt.slice(0, 10));
     setTime(event.allDay ? "" : event.startAt.slice(11, 16));
     setEndTime(!event.allDay && event.endAt ? event.endAt.slice(11, 16) : "");
     setLocation(event.location ?? "");
+    setRecurrence(master.recurrence);
     setFormError(null);
     titleRef.current?.focus();
+  }
+
+  /**
+   * A series master reached without a grid item behind it (the search deep-link
+   * below): its own start day is its first occurrence, which is the one an edit
+   * from there is anchored on.
+   */
+  function occurrenceOfMaster(event: Event): EventOccurrence | null {
+    return event.recurrence === null
+      ? null
+      : { date: event.startAt.slice(0, 10), master: event };
   }
 
   // Consumes a pending deep-link (021-e): "create-event" and "reveal-event"
@@ -360,34 +485,24 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
       return; // wait for the form to mount before loading the event into it
     }
     setAnchorKey(event.startAt.slice(0, 10));
-    startEdit(event);
+    startEdit(event, occurrenceOfMaster(event));
     onIntentHandled?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intent, events, view, onIntentHandled]);
 
   /** Click on a month-grid day cell's empty area: prefill the form's date and focus the title. */
   function selectDay(dayKey: string): void {
-    setEditingId(null);
-    setTitle("");
-    setAllDay(false);
+    resetForm();
     setDate(dayKey);
-    setTime("");
-    setEndTime("");
-    setLocation("");
-    setFormError(null);
     titleRef.current?.focus();
   }
 
   /** Click on empty hour-grid space (week/day view): prefill date, a default hour-long span, and focus the title. */
   function selectSlot(dayKey: string, minutes: number): void {
-    setEditingId(null);
-    setTitle("");
-    setAllDay(false);
+    resetForm();
     setDate(dayKey);
     setTime(formatClock(minutes));
     setEndTime(formatClock(Math.min(minutes + 60, 23 * 60 + 59)));
-    setLocation("");
-    setFormError(null);
     titleRef.current?.focus();
   }
 
@@ -432,7 +547,6 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
     // Assemble startAt: all-day is the bare date; timed appends the time (09:00
     // by default) so the "YYYY-MM-DDTHH:MM" form clears the store's ISO check.
     const effectiveTime = time || "09:00";
-    const startAt = allDay ? date : `${date}T${effectiveTime}`;
     const trimmedLocation = location.trim();
     const trimmedEndTime = endTime.trim();
 
@@ -443,30 +557,48 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
       setFormError(strings.calendar.endBeforeStart);
       return;
     }
-    // Null clears a stored end time exactly like `location` already clears —
-    // but only for a timed event: all-day has no end-time field to begin
-    // with, so `endAt` is left out of the payload entirely rather than
-    // nulling whatever end DATE a multi-day all-day event might carry.
-    const timedEndAt = trimmedEndTime.length > 0 ? `${date}T${trimmedEndTime}` : null;
+
+    const fields: EditedEventFields = {
+      title: trimmedTitle,
+      date,
+      time: effectiveTime,
+      endTime: trimmedEndTime,
+      allDay,
+      startAt: allDay ? date : `${date}T${effectiveTime}`,
+      // Null clears a stored end time exactly like `location` already clears —
+      // but only for a timed event: all-day has no end-time field to begin
+      // with, so `endAt` is left out of the payload entirely rather than
+      // nulling whatever end DATE a multi-day all-day event might carry.
+      endAt: !allDay && trimmedEndTime.length > 0 ? `${date}T${trimmedEndTime}` : null,
+      location: trimmedLocation.length > 0 ? trimmedLocation : null,
+      recurrence,
+    };
+
+    // Editing one occurrence of a series never picks a scope silently (PRD 04):
+    // the write waits for the dialog's answer.
+    if (editingId != null && editingOccurrence != null) {
+      setPendingSeries({ kind: "edit", occurrence: editingOccurrence, fields });
+      return;
+    }
 
     try {
       if (editingId != null) {
         const changes: EventFieldChanges = {
-          title: trimmedTitle,
-          startAt,
-          allDay,
-          location: trimmedLocation.length > 0 ? trimmedLocation : null,
+          title: fields.title,
+          startAt: fields.startAt,
+          allDay: fields.allDay,
+          location: fields.location,
+          recurrence: fields.recurrence,
         };
-        if (!allDay) changes.endAt = timedEndAt;
+        if (!fields.allDay) changes.endAt = fields.endAt;
         const updated = await window.nexus.updateEvent(profileId, editingId, changes);
         setEvents((prev) => prev && prev.map((e) => (e.id === updated.id ? updated : e)));
         resetForm();
       } else {
-        const fields: NewEventFields = { title: trimmedTitle, startAt, allDay };
-        // Only send location/endAt when present (exactOptionalPropertyTypes).
-        if (trimmedLocation.length > 0) fields.location = trimmedLocation;
-        if (!allDay && timedEndAt != null) fields.endAt = timedEndAt;
-        const created = await window.nexus.createEvent(profileId, fields);
+        const created = await window.nexus.createEvent(
+          profileId,
+          newEventFields(fields, fields.recurrence, null),
+        );
         setEvents((prev) => (prev ? [...prev, created] : [created]));
         resetForm();
         titleRef.current?.focus();
@@ -476,7 +608,12 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
     }
   }
 
-  async function remove(event: Event): Promise<void> {
+  async function remove(event: Event, occurrence: EventOccurrence | null): Promise<void> {
+    // Deleting one occurrence of a series asks what "delete" means here first.
+    if (occurrence !== null) {
+      setPendingSeries({ kind: "delete", occurrence });
+      return;
+    }
     try {
       await window.nexus.deleteEvent(profileId, event.id);
       setEvents((prev) => prev && prev.filter((current) => current.id !== event.id));
@@ -486,6 +623,127 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
       setPendingUndoId(event.id);
     } catch (error) {
       console.error("Nexus: failed to delete event:", error);
+    }
+  }
+
+  // --- Series operations (ADR-024) ------------------------------------------
+  //
+  // All three read the same way: "Samo ovaj" excepts the occurrence's date and
+  // then does whatever the user asked for on that day alone, "Ovaj i budući"
+  // truncates the master there and starts a fresh one, and "Svi" edits the
+  // master itself. Each finishes with a full re-fetch rather than a local
+  // patch: a split at a master's first occurrence soft-deletes that master, so
+  // the row set after a series operation is not something the renderer can
+  // reliably guess.
+
+  async function applyEditScope(
+    scope: RecurrenceScope,
+    occurrence: EventOccurrence,
+    fields: EditedEventFields,
+  ): Promise<void> {
+    const master = occurrence.master;
+    if (scope === "all") {
+      // Moving this occurrence's date moves the whole series with it: the
+      // master's anchor shifts by exactly the same whole-day delta.
+      const masterDay = shiftDayKey(
+        master.startAt.slice(0, 10),
+        daysBetweenKeys(occurrence.date, fields.date),
+      );
+      const changes: EventFieldChanges = {
+        title: fields.title,
+        startAt: fields.allDay ? masterDay : `${masterDay}T${fields.time}`,
+        allDay: fields.allDay,
+        location: fields.location,
+        recurrence: fields.recurrence,
+      };
+      if (!fields.allDay) {
+        changes.endAt = fields.endTime.length > 0 ? `${masterDay}T${fields.endTime}` : null;
+      }
+      await window.nexus.updateEvent(profileId, master.id, changes);
+    } else {
+      // "Samo ovaj" detaches a one-off; "Ovaj i budući" opens a new series at
+      // the edited date, carrying whatever rule the picker now holds. The copy
+      // is created FIRST: if the pair is interrupted between its two writes,
+      // create-then-except leaves a briefly duplicated occurrence the user can
+      // delete, while except-then-create would leave one silently vanished —
+      // recoverable beats gone.
+      await window.nexus.createEvent(
+        profileId,
+        newEventFields(fields, scope === "this" ? null : fields.recurrence, master),
+      );
+      if (scope === "this") {
+        await window.nexus.addEventRecurrenceExdate(profileId, master.id, occurrence.date);
+      } else {
+        await window.nexus.splitEventRecurrence(profileId, master.id, occurrence.date);
+      }
+    }
+    await reload();
+    resetForm();
+  }
+
+  async function applyDeleteScope(
+    scope: RecurrenceScope,
+    occurrence: EventOccurrence,
+  ): Promise<void> {
+    const master = occurrence.master;
+    if (scope === "this") {
+      await window.nexus.addEventRecurrenceExdate(profileId, master.id, occurrence.date);
+    } else if (scope === "future") {
+      await window.nexus.splitEventRecurrence(profileId, master.id, occurrence.date);
+    } else {
+      await window.nexus.deleteEvent(profileId, master.id);
+      // Only "Svi" is a soft delete, so it is the only one with an undo to
+      // offer — an excepted or truncated series is taken back by editing it.
+      setPendingUndoId(master.id);
+    }
+    if (editingId === master.id) resetForm();
+    await reload();
+  }
+
+  async function applyMoveScope(
+    scope: RecurrenceScope,
+    pending: Extract<PendingSeries, { kind: "move" }>,
+  ): Promise<void> {
+    const master = pending.occurrence.master;
+    const delta = daysBetweenKeys(pending.fromKey, pending.toKey);
+    if (scope === "all") {
+      await window.nexus.updateEvent(profileId, master.id, shiftEventChanges(master, delta));
+    } else {
+      // Copied from the OCCURRENCE, not the master, so the new row keeps this
+      // occurrence's own duration and time of day rather than the series'.
+      // Created FIRST, for the same reason `applyEditScope` creates first: an
+      // interruption between the pair then duplicates rather than vanishes.
+      await window.nexus.createEvent(
+        profileId,
+        copyEventFields(pending.event, delta, scope === "this" ? null : master.recurrence),
+      );
+      if (scope === "this") {
+        await window.nexus.addEventRecurrenceExdate(
+          profileId,
+          master.id,
+          pending.occurrence.date,
+        );
+      } else {
+        await window.nexus.splitEventRecurrence(profileId, master.id, pending.occurrence.date);
+      }
+    }
+    await reload();
+  }
+
+  async function resolveSeries(scope: RecurrenceScope): Promise<void> {
+    const pending = pendingSeries;
+    if (pending === null) return;
+    setPendingSeries(null);
+    try {
+      if (pending.kind === "edit") {
+        await applyEditScope(scope, pending.occurrence, pending.fields);
+      } else if (pending.kind === "delete") {
+        await applyDeleteScope(scope, pending.occurrence);
+      } else {
+        await applyMoveScope(scope, pending);
+      }
+    } catch (error) {
+      console.error("Nexus: failed to change the recurring event:", error);
     }
   }
 
@@ -504,19 +762,26 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
   /** A month-grid drag finished on `dayKey`: shift an event's date part (time preserved), or retarget a task's due date. */
   async function moveItem(item: CalendarItem, dayKey: string): Promise<void> {
     if (item.kind === "event") {
-      const delta = daysBetween(item.startKey, dayKey);
+      const delta = daysBetweenKeys(item.startKey, dayKey);
       if (delta === 0) return;
-      const event = item.event;
-      const newStartDate = shiftDayKey(event.startAt.slice(0, 10), delta);
-      const changes: EventFieldChanges = {
-        startAt: event.allDay ? newStartDate : `${newStartDate}T${event.startAt.slice(11, 16)}`,
-      };
-      if (event.endAt) {
-        const newEndDate = shiftDayKey(event.endAt.slice(0, 10), delta);
-        changes.endAt = event.allDay ? newEndDate : `${newEndDate}T${event.endAt.slice(11, 16)}`;
+      // Dragging one occurrence somewhere else is an edit, so it asks the same
+      // question an edit does rather than quietly moving the whole series.
+      if (item.occurrence !== null) {
+        setPendingSeries({
+          kind: "move",
+          occurrence: item.occurrence,
+          event: item.event,
+          fromKey: item.startKey,
+          toKey: dayKey,
+        });
+        return;
       }
       try {
-        const updated = await window.nexus.updateEvent(profileId, event.id, changes);
+        const updated = await window.nexus.updateEvent(
+          profileId,
+          item.event.id,
+          shiftEventChanges(item.event, delta),
+        );
         setEvents((prev) => prev && prev.map((e) => (e.id === updated.id ? updated : e)));
       } catch (error) {
         console.error("Nexus: failed to move event:", error);
@@ -537,9 +802,6 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
   // All five resolve together (one Promise.all), so a single null means loading.
   const dataLoading =
     events === null || tasks === null || subjects === null || exams === null || blocks === null;
-  const calendarItems = dataLoading
-    ? []
-    : buildCalendarItems({ events, tasks, exams, blocks, subjects }, sources);
   const todayKey = localTodayKey();
 
   // Every grid view derives from the one anchor day; cheap to compute both
@@ -547,6 +809,28 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
   const monthKey = monthKeyOf(anchorKey);
   const weekKeys = weekDayKeys(anchorKey, WEEK_START);
   const isGridView = view === "mesec" || view === "nedelja" || view === "dan";
+
+  // How far a recurring master is expanded (ADR-024): exactly what this view can
+  // show, so no view pays for another's reach. The agenda has no bounds of its
+  // own, so it borrows the study-block window — the horizon this page already
+  // treats as "the part of the calendar worth loading".
+  const expansionRange: CalendarRange =
+    view === "mesec"
+      ? {
+          from: shiftDayKey(`${monthKey}-01`, -MONTH_RANGE_BEFORE),
+          to: shiftDayKey(`${monthKey}-01`, MONTH_RANGE_AFTER),
+        }
+      : view === "nedelja"
+        ? { from: weekKeys[0] ?? anchorKey, to: weekKeys[6] ?? anchorKey }
+        : view === "dan"
+          ? { from: anchorKey, to: anchorKey }
+          : {
+              from: shiftDayKey(todayKey, -BLOCKS_PAST_DAYS),
+              to: shiftDayKey(todayKey, BLOCKS_FUTURE_DAYS),
+            };
+  const calendarItems = dataLoading
+    ? []
+    : buildCalendarItems({ events, tasks, exams, blocks, subjects }, sources, expansionRange);
   const periodLabel =
     view === "mesec"
       ? formatMonthLabel(monthKey)
@@ -558,6 +842,14 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
 
   return (
     <div className="cal">
+      {pendingSeries !== null && (
+        <RecurrenceScopeDialog
+          action={pendingSeries.kind === "delete" ? "delete" : "edit"}
+          onChoose={(scope) => void resolveSeries(scope)}
+          onCancel={() => setPendingSeries(null)}
+        />
+      )}
+
       <div className="cal__views" role="group" aria-label={strings.calendar.viewLabel}>
         {(["mesec", "nedelja", "dan", "agenda", "dokumenta"] as const).map((option) => (
           <Button
@@ -619,7 +911,14 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
               value={date}
               required
               aria-label={strings.calendar.dateLabel}
-              onChange={(event) => setDate(event.target.value)}
+              onChange={(event) => {
+                const next = event.target.value;
+                setDate(next);
+                // A rule has to phase from a real day, so clearing the date
+                // clears the rule where the user can see it happen, rather than
+                // dropping it silently at submit time.
+                if (!isValidDayKey(next)) setRecurrence(null);
+              }}
             />
             {!allDay && (
               <>
@@ -647,6 +946,14 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
             <Checkbox checked={allDay} onChange={(event) => setAllDay(event.target.checked)}>
               {strings.calendar.allDay}
             </Checkbox>
+            {/* Keyed by the record being edited: switching events re-derives
+                whether the rule reads as a preset or as Prilagođeno. */}
+            <RecurrencePicker
+              key={editingId ?? "new"}
+              value={recurrence}
+              onChange={setRecurrence}
+              anchor={date}
+            />
             <Button type="submit" variant="primary">
               {editingId != null ? strings.calendar.save : strings.calendar.add}
             </Button>
@@ -753,7 +1060,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
                                 size="sm"
                                 className="cal__edit"
                                 aria-label={strings.calendar.editLabel}
-                                onClick={() => startEdit(item.event)}
+                                onClick={() => startEdit(item.event, item.occurrence)}
                               >
                                 ✎
                               </Button>
@@ -761,7 +1068,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
                                 size="sm"
                                 className="cal__delete"
                                 aria-label={strings.calendar.deleteLabel}
-                                onClick={() => void remove(item.event)}
+                                onClick={() => void remove(item.event, item.occurrence)}
                               >
                                 ×
                               </Button>
@@ -769,6 +1076,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
                           }
                         >
                           <span className="cal__event">
+                            {item.occurrence !== null && <RecurrenceMark />}
                             <span className="cal__event-title">{item.event.title}</span>
                             {item.event.location ? (
                               <Chip variant="data">{item.event.location}</Chip>
