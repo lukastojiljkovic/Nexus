@@ -1,5 +1,7 @@
 import * as Y from "yjs";
 
+import { validateRecurrenceRule } from "../recurrence/recurrence.js";
+import type { RecurrenceRule } from "../recurrence/recurrence.js";
 import { DATA_FILES } from "./exportArchive.js";
 import type {
   ExportCard,
@@ -253,6 +255,28 @@ function nullableBareDate(value: unknown, field: string): string | null {
   return value === null ? null : bareDate(value, field);
 }
 
+/** Every element a real bare calendar date. Order is not required on the way in — the stores keep exceptions sorted, a hand-written archive need not. */
+function bareDateArray(value: unknown, field: string): string[] {
+  if (!Array.isArray(value)) throw new InvalidFieldError(field);
+  const entries: readonly unknown[] = value;
+  return entries.map((item, index) => bareDate(item, `${field}[${index}]`));
+}
+
+/**
+ * `null`, or a recurrence rule in the exact language this build's engine
+ * speaks. Deliberately `validateRecurrenceRule` itself rather than a re-spelled
+ * copy of its rules: the archive's rule language and the app's are the same
+ * language, and two validators for one grammar could only ever drift apart.
+ * Returns the canonical form, so an archive whose rule members arrived in some
+ * other order restores as though the store had written it.
+ */
+function nullableRecurrenceRule(value: unknown, field: string): RecurrenceRule | null {
+  if (value === null) return null;
+  const rule = validateRecurrenceRule(value);
+  if (rule === null) throw new InvalidFieldError(field);
+  return rule;
+}
+
 function nonNegativeIntArray(value: unknown, field: string): number[] {
   if (!Array.isArray(value)) throw new InvalidFieldError(field);
   return value.map((item, index) => nonNegativeInt(item, `${field}[${index}]`));
@@ -391,14 +415,21 @@ function parseTask(raw: Record<string, unknown>): ExportTask {
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
   const completedAt = nullableIsoDateTime(raw.completedAt, "completedAt");
+  const recurrence = nullableRecurrenceRule(raw.recurrence, "recurrence");
   // `done` is a denormalized read of `status`, and migration 002's CHECK ties
   // `status = 'done'` to `completed_at IS NOT NULL` — both invariants must
   // hold for the row to be writable back at all.
   if (done !== (status === "done")) throw new InvalidFieldError("done");
   if ((status === "done") !== (completedAt !== null)) throw new InvalidFieldError("completedAt");
+  // A recurring task advances its own due date on completion (ADR-024), so the
+  // rule phases from that date and `TaskStore` refuses the pair in both
+  // directions. No SQL CHECK backs it — the store is the gate — which is
+  // exactly why an archive has to be checked: a dateless rule would be a series
+  // with nothing to advance.
+  if (recurrence !== null && dueDate === null) throw new InvalidFieldError("recurrence");
   return {
     id, profileId, parentId, title, description, status, priority, done,
-    dueDate, startDate, createdAt, updatedAt, completedAt,
+    dueDate, startDate, createdAt, updatedAt, completedAt, recurrence,
   };
 }
 
@@ -414,10 +445,26 @@ function parseEvent(raw: Record<string, unknown>): ExportEvent {
   const category = nullableStr(raw.category, "category");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  const recurrence = nullableRecurrenceRule(raw.recurrence, "recurrence");
+  const recurrenceExdates = bareDateArray(raw.recurrenceExdates, "recurrenceExdates");
   // No cross-field end->=start check: migration 003 deliberately carries no
   // SQL CHECK for it either (comparing ISO strings across mixed zones is
   // fragile), so there is no invariant here to mirror.
-  return { id, profileId, title, description, startAt, endAt, allDay, location, category, createdAt, updatedAt };
+  //
+  // The two recurrence invariants below ARE mirrored, from `EventStore`:
+  // exceptions belong to a series (clearing the rule clears them, so a row
+  // carrying exceptions without a rule is one the store could not have
+  // written), and a master anchors on its own start DAY, so that day has to
+  // exist — `2026-02-30T09:00:00Z` parses as an instant but is nothing to
+  // phase a series from.
+  if (recurrence === null && recurrenceExdates.length > 0) {
+    throw new InvalidFieldError("recurrenceExdates");
+  }
+  if (recurrence !== null) bareDate(startAt.slice(0, 10), "startAt");
+  return {
+    id, profileId, title, description, startAt, endAt, allDay, location, category,
+    createdAt, updatedAt, recurrence, recurrenceExdates,
+  };
 }
 
 function parseDocument(raw: Record<string, unknown>): ExportDocument {

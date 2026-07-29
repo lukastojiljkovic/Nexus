@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3-multiple-ciphers";
-import type { ExportSettings, ProfileData } from "@nexus/core";
+import { serializeRecurrenceRule } from "@nexus/core";
+import type { ExportSettings, ProfileData, RecurrenceRule } from "@nexus/core";
 import { RestoreValidationError } from "../errors.js";
 import { NOTIFICATION_SOURCES } from "../notify/notificationStore.js";
 
@@ -78,6 +79,28 @@ const SCOPED_THROUGH_PARENT: Partial<Record<WipeTable, string>> = {
 /** Every wipe statement takes exactly one bound parameter: this store's own `profileId` (R4) — never the archive's. */
 function wipeSqlFor(table: WipeTable): string {
   return SCOPED_THROUGH_PARENT[table] ?? `DELETE FROM ${table} WHERE profile_id = ?`;
+}
+
+/**
+ * A parsed rule as the column stores it. `parseImportArchive` already returned
+ * the rule in canonical form, so this re-serialization is the same text the
+ * store itself would have written — which is what lets `TaskStore`/`EventStore`
+ * treat any non-canonical value they later read as corruption.
+ */
+function recurrenceText(rule: RecurrenceRule | null): string | null {
+  return rule === null ? null : serializeRecurrenceRule(rule);
+}
+
+/**
+ * An event's recurrence exceptions as the column stores them: ascending, which
+ * `EventStore` documents as the column's canonical form and its own writes
+ * always produce. The parser accepts an archive that lists them in any order
+ * (order carries no meaning), so sorting here is what keeps a restored master
+ * indistinguishable from one the store wrote itself. Day keys are fixed-width,
+ * so a plain lexicographic sort IS chronological.
+ */
+function exdatesText(exdates: readonly string[]): string {
+  return JSON.stringify([...exdates].sort());
 }
 
 /**
@@ -186,14 +209,14 @@ export class RestoreStore {
     this.insertTask = db.prepare(
       `INSERT INTO tasks
          (id, profile_id, parent_id, title, description, status, priority,
-          due_date, start_date, created_at, updated_at, completed_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+          due_date, start_date, created_at, updated_at, completed_at, recurrence, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertEvent = db.prepare(
       `INSERT INTO events
          (id, profile_id, title, description, start_at, end_at, all_day,
-          location, category, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+          location, category, created_at, updated_at, recurrence, recurrence_exdates, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertNotification = db.prepare(
       `INSERT INTO notifications
@@ -368,7 +391,7 @@ export class RestoreStore {
         this.insertTask.run(
           task.id, this.profileId, task.parentId, task.title, task.description,
           task.status, task.priority, task.dueDate, task.startDate,
-          task.createdAt, task.updatedAt, task.completedAt,
+          task.createdAt, task.updatedAt, task.completedAt, recurrenceText(task.recurrence),
         );
         written += 1;
       }
@@ -377,6 +400,7 @@ export class RestoreStore {
         this.insertEvent.run(
           event.id, this.profileId, event.title, event.description, event.startAt, event.endAt,
           event.allDay ? 1 : 0, event.location, event.category, event.createdAt, event.updatedAt,
+          recurrenceText(event.recurrence), exdatesText(event.recurrenceExdates),
         );
         written += 1;
       }

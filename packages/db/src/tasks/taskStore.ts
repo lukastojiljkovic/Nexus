@@ -1,4 +1,11 @@
 import type Database from "better-sqlite3-multiple-ciphers";
+import {
+  isValidDayKey,
+  nextOccurrenceDate,
+  serializeRecurrenceRule,
+  validateRecurrenceRule,
+} from "@nexus/core";
+import type { RecurrenceRule } from "@nexus/core";
 import { TaskNotFoundError, TaskValidationError } from "../errors.js";
 import { uuidv7 } from "../ids.js";
 
@@ -40,6 +47,12 @@ export interface Task {
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+  /**
+   * The rule this task advances by when an occurrence is completed (ADR-024),
+   * or null for a one-off. Never non-null without a bare-date `dueDate` — the
+   * date the rule phases from (`assertRecurrenceAnchor`).
+   */
+  recurrence: RecurrenceRule | null;
 }
 
 /** Fields accepted when creating a task; only `title` is required (TASK-001). */
@@ -51,6 +64,7 @@ export interface CreateTaskInput {
   dueDate?: string | null;
   startDate?: string | null;
   parentId?: string | null;
+  recurrence?: RecurrenceRule | null;
 }
 
 /**
@@ -65,6 +79,7 @@ export interface UpdateTaskFields {
   priority?: TaskPriority;
   dueDate?: string | null;
   startDate?: string | null;
+  recurrence?: RecurrenceRule | null;
 }
 
 interface TaskRow {
@@ -80,11 +95,12 @@ interface TaskRow {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+  recurrence: string | null;
 }
 
 const COLUMNS =
   "id, profile_id, parent_id, title, description, status, priority, " +
-  "due_date, start_date, created_at, updated_at, completed_at";
+  "due_date, start_date, created_at, updated_at, completed_at, recurrence";
 
 /** Accepts ISO-8601 date ('2026-07-08') or date-time, optionally zoned (PRD §7). */
 const ISO_8601 =
@@ -104,16 +120,17 @@ export class TaskStore {
   private readonly updateFields: Database.Statement;
   private readonly markDeleted: Database.Statement;
   private readonly markRestored: Database.Statement;
+  private readonly reopenSubtasks: Database.Statement;
 
   constructor(
-    db: DatabaseHandle,
+    private readonly db: DatabaseHandle,
     private readonly profileId: string,
   ) {
     this.insert = db.prepare(
       `INSERT INTO tasks
          (id, profile_id, parent_id, title, description, status, priority,
-          due_date, start_date, created_at, updated_at, completed_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+          due_date, start_date, created_at, updated_at, completed_at, recurrence, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.selectActive = db.prepare(
       `SELECT ${COLUMNS} FROM tasks
@@ -127,7 +144,7 @@ export class TaskStore {
     this.updateFields = db.prepare(
       `UPDATE tasks
          SET title = ?, description = ?, status = ?, priority = ?,
-             due_date = ?, start_date = ?, completed_at = ?, updated_at = ?
+             due_date = ?, start_date = ?, recurrence = ?, completed_at = ?, updated_at = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
     );
     this.markDeleted = db.prepare(
@@ -137,6 +154,13 @@ export class TaskStore {
     this.markRestored = db.prepare(
       `UPDATE tasks SET deleted_at = NULL, updated_at = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NOT NULL`,
+    );
+    // A fresh occurrence starts with a fresh checklist: every live subtask goes
+    // back to open, whatever it was. `deleted_at IS NULL` is what keeps a
+    // subtask the user deleted from being resurrected by the next occurrence.
+    this.reopenSubtasks = db.prepare(
+      `UPDATE tasks SET status = 'todo', completed_at = NULL, updated_at = ?
+       WHERE parent_id = ? AND profile_id = ? AND deleted_at IS NULL`,
     );
   }
 
@@ -154,6 +178,8 @@ export class TaskStore {
     const description = normalizeOptional(input.description);
     const dueDate = validateDate(input.dueDate, "dueDate");
     const startDate = validateDate(input.startDate, "startDate");
+    const recurrence = validateRecurrence(input.recurrence);
+    assertRecurrenceAnchor(recurrence, dueDate);
     const parentId = this.resolveParent(input.parentId);
     const now = new Date().toISOString();
     const completedAt = status === "done" ? now : null;
@@ -161,26 +187,39 @@ export class TaskStore {
 
     this.insert.run(
       id, this.profileId, parentId, title, description, status, priority,
-      dueDate, startDate, now, now, completedAt,
+      dueDate, startDate, now, now, completedAt, serializeRecurrence(recurrence),
     );
 
     return {
       id, profileId: this.profileId, parentId, title, description, status,
       priority, done: status === "done", dueDate, startDate,
-      createdAt: now, updatedAt: now, completedAt,
+      createdAt: now, updatedAt: now, completedAt, recurrence,
     };
   }
 
   /** Applies a partial field patch to an active task (TASK-001 editing). */
   update(id: string, fields: UpdateTaskFields): Task {
     const current = this.requireActive(id);
+    const status = fields.status !== undefined ? validateStatus(fields.status) : current.status;
+    const recurrence =
+      fields.recurrence !== undefined ? validateRecurrence(fields.recurrence) : current.recurrence;
+    // The same refusal `setDone` makes, against the MERGED pair: the generic
+    // field editor is the kanban drag's write path, and dragging a recurring
+    // task into Done means "this occurrence is done", never "end the series".
+    // Only the transition is refused — an already-done task (an exhausted
+    // series keeps its rule as inert history) still takes ordinary edits.
+    if (status === "done" && current.status !== "done" && recurrence !== null) {
+      throw new TaskValidationError(
+        `Task "${id}" recurs; complete this occurrence with completeOccurrence instead.`,
+      );
+    }
     return this.writeFields(current, {
       title: fields.title !== undefined ? validateTitle(fields.title) : current.title,
       description:
         fields.description !== undefined
           ? normalizeOptional(fields.description)
           : current.description,
-      status: fields.status !== undefined ? validateStatus(fields.status) : current.status,
+      status,
       priority:
         fields.priority !== undefined ? validatePriority(fields.priority) : current.priority,
       dueDate:
@@ -189,23 +228,93 @@ export class TaskStore {
         fields.startDate !== undefined
           ? validateDate(fields.startDate, "startDate")
           : current.startDate,
+      recurrence,
     });
   }
 
   /**
    * Checks a task off or reopens it (TASK-008). `true` sets status 'done';
    * `false` reverts to 'todo'. The completion timestamp follows (PRD §7).
+   *
+   * Checking off a **recurring** task is refused outright: what the user means
+   * there is "this occurrence is done", which is `completeOccurrence` — a
+   * different write entirely (ADR-024). Every caller of this method predates
+   * recurrence, so failing loudly is what stops one of them from silently
+   * ending a series the user only meant to tick off for today. Reopening
+   * (`false`) is never ambiguous and stays available.
    */
   setDone(id: string, done: boolean): Task {
     const current = this.requireActive(id);
+    if (done && current.recurrence !== null) {
+      throw new TaskValidationError(
+        `Task "${id}" recurs; complete this occurrence with completeOccurrence instead.`,
+      );
+    }
     return this.writeFields(current, {
-      title: current.title,
-      description: current.description,
+      ...ownFields(current),
       status: done ? "done" : "todo",
-      priority: current.priority,
-      dueDate: current.dueDate,
-      startDate: current.startDate,
     });
+  }
+
+  /**
+   * Completes the *current occurrence* of a task (ADR-024, the Todoist model:
+   * a recurring task advances in place rather than spawning rows). Returns the
+   * task as it now stands — for a series that continues, that is the same row
+   * carrying its next `dueDate`, which is what a caller reports to the user.
+   *
+   * `now` is the caller's clock (every write below shares it, so the parent
+   * and its subtasks carry the same stamp).
+   *
+   * Three outcomes:
+   *  - No rule: exactly `setDone(id, true)`, delegated so there is one
+   *    completion path and not two.
+   *  - Rule exhausted (`nextOccurrenceDate` returns null, or a `count` with
+   *    nothing left after this one): the task genuinely completes, and **keeps
+   *    its rule** as inert history — clearing it would erase what the task was.
+   *  - Otherwise: one transaction moves `dueDate` to the next occurrence, ticks
+   *    a `count` end down by one, resets the task's own status to `todo` (a
+   *    fresh occurrence has not been started, so `doing` cycles back), and
+   *    reopens every live subtask — recurrence copies structure, never
+   *    completion state.
+   *
+   * The anchor is the task's *current* `dueDate`, so each advance re-anchors:
+   * moving a recurring task moves the rest of its series with it.
+   */
+  completeOccurrence(id: string, now: string): Task {
+    const current = this.requireActive(id);
+    const rule = current.recurrence;
+    if (rule === null) return this.setDone(id, true);
+
+    // Every write path upholds rule-implies-due-date; re-read as a value here
+    // because the type cannot say so, and because a hand-edited row must not
+    // reach the engine (which throws `TypeError` on a non-day-key anchor).
+    const anchor = requireRecurrenceAnchor(current.dueDate);
+
+    const next = nextOccurrenceDate(rule, anchor, anchor);
+    // `total - 1`, or null when the rule does not end by count. A count of 1
+    // normally makes `next` null on its own; the guard also covers the rule
+    // whose anchor sits outside its own pattern, where the engine still finds a
+    // later occurrence and a plain decrement would store an invalid `total` 0.
+    const remaining = rule.end.kind === "count" ? rule.end.total - 1 : null;
+    if (next === null || (remaining !== null && remaining < 1)) {
+      return this.writeFields(current, { ...ownFields(current), status: "done" }, now);
+    }
+
+    return this.db.transaction((): Task => {
+      const advanced = this.writeFields(
+        current,
+        {
+          ...ownFields(current),
+          status: "todo",
+          dueDate: next,
+          recurrence:
+            remaining === null ? rule : { freq: rule.freq, end: { kind: "count", total: remaining } },
+        },
+        now,
+      );
+      this.reopenSubtasks.run(now, id, this.profileId);
+      return advanced;
+    })();
   }
 
   /** Soft-deletes an active task (PRD delete semantics; reversible via `restore`). */
@@ -239,16 +348,25 @@ export class TaskStore {
    * Writes a fully-resolved field set, deriving the completion timestamp from the
    * target status: stamped when a task becomes done (its original stamp kept if
    * it already was), cleared otherwise — the single place that upholds the
-   * status/completed_at invariant the schema also CHECKs.
+   * status/completed_at invariant the schema also CHECKs, and (since the schema
+   * cannot) the rule/due-date invariant against the MERGED pair, so a patch that
+   * clears the date of a recurring task is caught just as a patch that adds a
+   * rule to a dateless one is.
+   *
+   * `at` defaults to the wall clock; `completeOccurrence` passes its caller's
+   * `now` so a parent and its subtasks carry one stamp.
    */
-  private writeFields(current: Task, next: Required<UpdateTaskFields>): Task {
-    const now = new Date().toISOString();
-    const completedAt =
-      next.status === "done" ? (current.completedAt ?? now) : null;
+  private writeFields(
+    current: Task,
+    next: Required<UpdateTaskFields>,
+    at: string = new Date().toISOString(),
+  ): Task {
+    assertRecurrenceAnchor(next.recurrence, next.dueDate);
+    const completedAt = next.status === "done" ? (current.completedAt ?? at) : null;
 
     this.updateFields.run(
       next.title, next.description, next.status, next.priority,
-      next.dueDate, next.startDate, completedAt, now,
+      next.dueDate, next.startDate, serializeRecurrence(next.recurrence), completedAt, at,
       current.id, this.profileId,
     );
 
@@ -257,7 +375,7 @@ export class TaskStore {
       ...next,
       done: next.status === "done",
       completedAt,
-      updatedAt: now,
+      updatedAt: at,
     };
   }
 
@@ -289,6 +407,20 @@ function toTask(row: TaskRow): Task {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     completedAt: row.completed_at,
+    recurrence: parseStoredRecurrence(row.recurrence, row.id),
+  };
+}
+
+/** A task's own patchable fields as they currently stand — the base every full-row write starts from. */
+function ownFields(task: Task): Required<UpdateTaskFields> {
+  return {
+    title: task.title,
+    description: task.description,
+    status: task.status,
+    priority: task.priority,
+    dueDate: task.dueDate,
+    startDate: task.startDate,
+    recurrence: task.recurrence,
   };
 }
 
@@ -320,6 +452,70 @@ function validateDate(value: string | null | undefined, field: string): string |
     throw new TaskValidationError(`"${field}" must be an ISO-8601 date or date-time.`);
   }
   return value;
+}
+
+/**
+ * Structural validation of a recurrence rule from an untrusted caller
+ * (SEC-EL-02), returning the canonical form the column stores. An already-typed
+ * rule object goes through the validator too: the type says nothing about an
+ * interval of 0 or a `count` of 5000.
+ */
+function validateRecurrence(value: RecurrenceRule | null | undefined): RecurrenceRule | null {
+  if (value === undefined || value === null) return null;
+  const rule = validateRecurrenceRule(value);
+  if (rule === null) {
+    throw new TaskValidationError('"recurrence" is not a valid recurrence rule.');
+  }
+  return rule;
+}
+
+/**
+ * A recurring task phases from its own due date, so there must BE one, and it
+ * must be a bare calendar day the engine can anchor on — a timestamped due date
+ * has no place in a day-to-day series (and is not what the interchange contract
+ * declares for a task's `dueDate` either). Returns it, so the one caller that
+ * needs the anchor as a value gets it without re-narrowing.
+ */
+function requireRecurrenceAnchor(dueDate: string | null): string {
+  if (dueDate === null) {
+    throw new TaskValidationError("A recurring task must have a dueDate for its rule to advance.");
+  }
+  if (!isValidDayKey(dueDate)) {
+    throw new TaskValidationError(
+      `A recurring task's dueDate must be a bare calendar date (got "${dueDate}").`,
+    );
+  }
+  return dueDate;
+}
+
+/** The same invariant as a precondition on a write: only a ruled task needs an anchor. */
+function assertRecurrenceAnchor(rule: RecurrenceRule | null, dueDate: string | null): void {
+  if (rule !== null) requireRecurrenceAnchor(dueDate);
+}
+
+function serializeRecurrence(rule: RecurrenceRule | null): string | null {
+  return rule === null ? null : serializeRecurrenceRule(rule);
+}
+
+/**
+ * Reads the stored column back. This store writes only `serializeRecurrenceRule`
+ * output, so anything that fails to validate is corruption (a hand-edited file,
+ * a bad restore) rather than input to be coerced — reading it as `null` would
+ * silently turn a user's series into a one-off, so it throws naming the row.
+ */
+function parseStoredRecurrence(text: string | null, id: string): RecurrenceRule | null {
+  if (text === null) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    parsed = null;
+  }
+  const rule = validateRecurrenceRule(parsed);
+  if (rule === null) {
+    throw new TaskValidationError(`Task "${id}" carries a stored recurrence rule that is not valid.`);
+  }
+  return rule;
 }
 
 /** Normalizes an optional string: absent/empty/whitespace-only collapses to null. */

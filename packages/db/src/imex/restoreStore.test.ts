@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
+  ExportEvent,
   ExportNote,
   ExportNoteFolder,
   ExportSettings,
@@ -342,7 +343,7 @@ function freshArchiveData(): ProfileData {
       {
         id: uuidv7(), profileId: "ignored", parentId: null, title: "Fresh task", description: null,
         status: "todo", priority: "none", done: false, dueDate: null, startDate: null,
-        completedAt: null, ...timestamps,
+        completedAt: null, recurrence: null, ...timestamps,
       },
     ],
     subjects: [
@@ -584,6 +585,7 @@ describe("RestoreStore", () => {
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
       completedAt: null,
+      recurrence: null,
     };
     const child: ExportTask = { id: childId, profileId: "ignored", parentId, title: "Child", ...base };
     const parent: ExportTask = { id: parentId, profileId: "ignored", parentId: null, title: "Parent", ...base };
@@ -685,6 +687,7 @@ describe("RestoreStore", () => {
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
       completedAt: null,
+      recurrence: null,
     };
 
     const data: ProfileData = { ...emptyProfileData(), notes: [note], tasks: [task] };
@@ -853,6 +856,41 @@ describe("RestoreStore", () => {
 
     assertModulesMatch(db, profileA, fixtureA, profileA);
     assertModulesMatch(db, profileB, fixtureB, profileB);
+  });
+
+  it("restores a recurring task's rule and a series master's rule and exceptions verbatim (ADR-024)", () => {
+    const profileB = createProfile(db, "recurrence");
+    const timestamps = { createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" };
+    const task: ExportTask = {
+      id: uuidv7(), profileId: "ignored", parentId: null, title: "Prvog u mesecu", description: null,
+      status: "todo", priority: "none", done: false, dueDate: "2026-08-01", startDate: null,
+      completedAt: null,
+      recurrence: { freq: { kind: "monthly-date", interval: 1, day: 1 }, end: { kind: "count", total: 12 } },
+      ...timestamps,
+    };
+    const event: ExportEvent = {
+      id: uuidv7(), profileId: "ignored", title: "Petkom", description: null,
+      startAt: "2026-07-10T09:00:00.000Z", endAt: null, allDay: false, location: null, category: null,
+      recurrence: { freq: { kind: "weekly", interval: 1, days: [4] }, end: { kind: "never" } },
+      recurrenceExdates: ["2026-08-14", "2026-07-17"], // deliberately unsorted; order carries no meaning in an archive
+      ...timestamps,
+    };
+    const data: ProfileData = { ...emptyProfileData(), tasks: [task], events: [event] };
+
+    new RestoreStore(db.raw, profileB).replaceProfileData(
+      { profileName: "Recurrence", settings: emptySettings(), data, derived: new Map() },
+      NOW,
+    );
+
+    // Read back through the stores, so this also proves the restore wrote the
+    // exact canonical text those stores accept — anything else reads as
+    // corruption and throws rather than returning a row.
+    expect(new TaskStore(db.raw, profileB).listActive()).toEqual([{ ...task, profileId: profileB }]);
+    // The exceptions come back ascending: the column is canonical however the
+    // archive happened to list them.
+    expect(new EventStore(db.raw, profileB).listActive()).toEqual([
+      { ...event, profileId: profileB, recurrenceExdates: ["2026-07-17", "2026-08-14"] },
+    ]);
   });
 
   it("throws RestoreValidationError when a note has a non-null snapshot but no matching entry in derived (R9)", () => {

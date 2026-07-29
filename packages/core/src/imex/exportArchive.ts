@@ -20,6 +20,7 @@
  * deliberately, not incidentally.
  */
 
+import type { RecurrenceRule } from "../recurrence/recurrence.js";
 import { claimUniqueName, sanitizePathSegment, UNTITLED_NOTE_NAME } from "./archivePaths.js";
 import { toCsv } from "./csv.js";
 import { renderNoteMarkdown } from "./noteMarkdown.js";
@@ -44,6 +45,14 @@ export interface ExportTask {
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+  /**
+   * The rule this task advances by when an occurrence is completed (ADR-024),
+   * or null for a one-off. Required, like every field above: a recurring task
+   * restored without its rule is a task the user would silently stop being
+   * reminded of, and a required field makes forgetting it a type error rather
+   * than a quiet omission.
+   */
+  recurrence: RecurrenceRule | null;
 }
 
 export interface ExportEvent {
@@ -58,6 +67,10 @@ export interface ExportEvent {
   category: string | null;
   createdAt: string;
   updatedAt: string;
+  /** The rule that makes this row a series master the calendar expands (ADR-024), or null for a one-off. Required, for the same reason as a task's. */
+  recurrence: RecurrenceRule | null;
+  /** Bare `YYYY-MM-DD` occurrence dates removed from the series, ascending; always empty when `recurrence` is null. */
+  recurrenceExdates: string[];
 }
 
 /** Only the persisted fields — `status`/`daysUntilExpiry` are derived at read time, never stored, so they are not part of the interchange row. */

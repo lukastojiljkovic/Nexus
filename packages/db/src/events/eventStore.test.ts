@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { RecurrenceRule } from "@nexus/core";
 import {
   EventNotFoundError,
   EventStore,
@@ -208,5 +209,179 @@ describe("EventStore", () => {
     expect(() => b.update(owned.id, { title: "hijack" })).toThrow(EventNotFoundError);
     expect(() => b.softDelete(owned.id)).toThrow(EventNotFoundError);
     expect(a.listActive()).toHaveLength(1);
+  });
+});
+
+describe("EventStore — recurrence (ADR-024)", () => {
+  const NOW = "2026-07-15T12:00:00.000Z";
+  const WEEKLY: RecurrenceRule = {
+    freq: { kind: "weekly", interval: 1, days: [4] },
+    end: { kind: "never" },
+  };
+
+  /** A recurring master starting Friday 2026-07-10, with `count` exdates already excepted. */
+  function recurringEvent(events: EventStore, exdates: readonly string[] = []) {
+    const created = events.create({
+      title: "Petak",
+      startAt: "2026-07-10T09:00:00Z",
+      recurrence: WEEKLY,
+    });
+    let current = created;
+    for (const date of exdates) current = events.addRecurrenceExdate(created.id, date, NOW);
+    return current;
+  }
+
+  it("creates a series master and reads the canonical rule and an empty exdate list back", () => {
+    const events = store();
+    const created = events.create({
+      title: "Sastanak",
+      startAt: "2026-07-10T09:00:00Z",
+      // Deliberately out of order: the store stores the canonical form.
+      recurrence: { freq: { kind: "weekly", interval: 1, days: [4, 0] }, end: { kind: "never" } },
+    });
+
+    expect(created.recurrence).toEqual({
+      freq: { kind: "weekly", interval: 1, days: [0, 4] },
+      end: { kind: "never" },
+    });
+    expect(created.recurrenceExdates).toEqual([]);
+    expect(events.listActive()[0]).toEqual(created);
+  });
+
+  it("defaults recurrence to null and round-trips a rule through an ordinary update", () => {
+    const events = store();
+    const created = events.create({ title: "x", startAt: "2026-07-10T09:00:00Z" });
+    expect(created.recurrence).toBeNull();
+    expect(created.recurrenceExdates).toEqual([]);
+
+    const ruled = events.update(created.id, { recurrence: WEEKLY });
+    expect(ruled.recurrence).toEqual(WEEKLY);
+    expect(events.update(created.id, { title: "y" }).recurrence).toEqual(WEEKLY);
+  });
+
+  it("refuses a structurally invalid rule, and a rule on a start the engine cannot anchor on", () => {
+    const events = store();
+    expect(() =>
+      events.create({
+        title: "x",
+        startAt: "2026-07-10T09:00:00Z",
+        recurrence: { freq: { kind: "weekly", interval: 1, days: [] }, end: { kind: "never" } },
+      }),
+    ).toThrow(EventValidationError);
+    // Shaped like a date, but not a day that exists — nothing to phase from.
+    expect(() =>
+      events.create({ title: "x", startAt: "2026-02-30T09:00:00Z", recurrence: WEEKLY }),
+    ).toThrow(EventValidationError);
+  });
+
+  it("clears the exdates when the rule is cleared — exceptions without a series are meaningless", () => {
+    const events = store();
+    const master = recurringEvent(events, ["2026-07-17"]);
+    expect(master.recurrenceExdates).toEqual(["2026-07-17"]);
+
+    const cleared = events.update(master.id, { recurrence: null });
+    expect(cleared.recurrence).toBeNull();
+    expect(cleared.recurrenceExdates).toEqual([]);
+    expect(events.listActive()[0]).toEqual(cleared);
+  });
+
+  it("keeps the exdates across an unrelated patch", () => {
+    const events = store();
+    const master = recurringEvent(events, ["2026-07-17"]);
+    expect(events.update(master.id, { title: "Novi naslov" }).recurrenceExdates).toEqual([
+      "2026-07-17",
+    ]);
+  });
+
+  it("adds exdates, keeps them sorted, and is idempotent", () => {
+    const events = store();
+    const master = recurringEvent(events);
+
+    const first = events.addRecurrenceExdate(master.id, "2026-07-24", NOW);
+    expect(first.recurrenceExdates).toEqual(["2026-07-24"]);
+    expect(first.updatedAt).toBe(NOW);
+
+    const second = events.addRecurrenceExdate(master.id, "2026-07-17", NOW);
+    expect(second.recurrenceExdates).toEqual(["2026-07-17", "2026-07-24"]); // ascending
+
+    const again = events.addRecurrenceExdate(master.id, "2026-07-17", "2026-08-01T00:00:00.000Z");
+    expect(again.recurrenceExdates).toEqual(["2026-07-17", "2026-07-24"]);
+    expect(again.updatedAt).toBe(NOW); // a no-op does not restamp the row
+    expect(events.listActive()[0]).toEqual(again);
+  });
+
+  it("refuses an exdate that is not a real calendar day, and one on an event with no rule", () => {
+    const events = store();
+    const master = recurringEvent(events);
+    expect(() => events.addRecurrenceExdate(master.id, "2026-02-30", NOW)).toThrow(
+      EventValidationError,
+    );
+    expect(() => events.addRecurrenceExdate(master.id, "2026-07-17T00:00:00Z", NOW)).toThrow(
+      EventValidationError,
+    );
+
+    const oneOff = events.create({ title: "Jednokratno", startAt: "2026-07-10T09:00:00Z" });
+    expect(() => events.addRecurrenceExdate(oneOff.id, "2026-07-17", NOW)).toThrow(
+      EventValidationError,
+    );
+    expect(() => events.addRecurrenceExdate("missing", "2026-07-17", NOW)).toThrow(
+      EventNotFoundError,
+    );
+  });
+
+  it("splits a series by truncating the master to the day before the split occurrence", () => {
+    const events = store();
+    const master = recurringEvent(events, ["2026-07-17"]);
+
+    const truncated = events.splitRecurrence(master.id, "2026-07-24", NOW);
+    expect(truncated.recurrence).toEqual({
+      freq: { kind: "weekly", interval: 1, days: [4] },
+      end: { kind: "until", date: "2026-07-23" },
+    });
+    expect(truncated.recurrenceExdates).toEqual(["2026-07-17"]); // the past keeps its exceptions
+    expect(truncated.updatedAt).toBe(NOW);
+    expect(events.listActive()).toEqual([truncated]);
+  });
+
+  it("soft-deletes the master when the split lands on its own first occurrence", () => {
+    const events = store();
+    const master = recurringEvent(events);
+
+    // until would be 2026-07-09, before the master's own 2026-07-10 anchor: a
+    // series with no occurrences left should not linger as an unreachable row.
+    const removed = events.splitRecurrence(master.id, "2026-07-10", NOW);
+    expect(removed.updatedAt).toBe(NOW);
+    expect(events.listActive()).toEqual([]);
+
+    events.restore(master.id);
+    // Splitting even earlier is the same case.
+    events.splitRecurrence(master.id, "2026-07-01", NOW);
+    expect(events.listActive()).toEqual([]);
+  });
+
+  it("refuses a split on an event with no rule, on a date that is not a real day, and on an unknown event", () => {
+    const events = store();
+    const oneOff = events.create({ title: "Jednokratno", startAt: "2026-07-10T09:00:00Z" });
+    expect(() => events.splitRecurrence(oneOff.id, "2026-07-24", NOW)).toThrow(EventValidationError);
+
+    const master = recurringEvent(events);
+    expect(() => events.splitRecurrence(master.id, "2026-02-30", NOW)).toThrow(EventValidationError);
+    expect(() => events.splitRecurrence("missing", "2026-07-24", NOW)).toThrow(EventNotFoundError);
+  });
+
+  it("throws when a stored rule or exdate list no longer validates — that is corruption, not input", () => {
+    const events = store();
+    const master = recurringEvent(events, ["2026-07-17"]);
+
+    db.raw.prepare("UPDATE events SET recurrence = ? WHERE id = ?").run("{not json", master.id);
+    expect(() => events.listActive()).toThrow(EventValidationError);
+
+    db.raw
+      .prepare("UPDATE events SET recurrence = ?, recurrence_exdates = ? WHERE id = ?")
+      .run('{"freq":{"kind":"weekly","interval":1,"days":[4]},"end":{"kind":"never"}}', '["nope"]', master.id);
+    expect(() => events.listActive()).toThrow(EventValidationError);
+
+    db.raw.prepare("UPDATE events SET recurrence_exdates = ? WHERE id = ?").run('"2026-07-17"', master.id);
+    expect(() => events.listActive()).toThrow(EventValidationError);
   });
 });

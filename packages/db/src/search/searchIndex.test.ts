@@ -415,11 +415,15 @@ describe("global search index (migration 017)", () => {
       typeof value === "string" ? foldSearchText(value) : null,
     );
 
-    // Derived from the list rather than spelled out, so migration 18 does not
-    // have to remember this file: `migrations.test.ts` pins that versions run
-    // 1..N gap-free, which is what makes length and version interchangeable.
-    runMigrations(rawDb, MIGRATIONS.slice(0, -1));
-    expect(rawDb.pragma("user_version", { simple: true })).toBe(MIGRATIONS.length - 1);
+    // Selected by VERSION, not by position: "every migration before the search
+    // index" is what this file needs, and slicing the last entry off the list
+    // only said that while 017 happened to be the newest migration — the day a
+    // migration 018 landed, the "pre-migration-017" file silently became a
+    // post-017 one. `migrations.test.ts` pins that versions run 1..N gap-free,
+    // so the count below and the stamped version agree by construction.
+    const beforeSearchIndex = MIGRATIONS.filter((migration) => migration.version < 17);
+    runMigrations(rawDb, beforeSearchIndex);
+    expect(rawDb.pragma("user_version", { simple: true })).toBe(16);
 
     const profileId = uuidv7();
     rawDb

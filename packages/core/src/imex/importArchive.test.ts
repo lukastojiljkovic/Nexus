@@ -80,17 +80,19 @@ function emptyExportInput(): ExportArchiveInput {
 function richProfileData(): ProfileData {
   return {
     tasks: [
+      // Recurring (ADR-024): the rule and the due date it phases from travel together.
       {
         id: "task-parent", profileId: "profile1", parentId: null, title: "Roditeljski zadatak",
         description: null, status: "todo", priority: "none", done: false, dueDate: "2026-08-01",
         startDate: null, createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
         completedAt: null,
+        recurrence: { freq: { kind: "monthly-date", interval: 1, day: 1 }, end: { kind: "count", total: 12 } },
       },
       {
         id: "task-child", profileId: "profile1", parentId: "task-parent", title: "Podzadatak",
         description: "Opis", status: "done", priority: "high", done: true, dueDate: null,
         startDate: "2026-07-05", createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-02T00:00:00.000Z",
-        completedAt: "2026-07-02T00:00:00.000Z",
+        completedAt: "2026-07-02T00:00:00.000Z", recurrence: null,
       },
     ],
     events: [
@@ -99,6 +101,8 @@ function richProfileData(): ProfileData {
         startAt: "2026-07-11T10:00:00.000Z", endAt: "2026-07-11T11:00:00.000Z", allDay: false,
         location: "Kancelarija", category: "posao", createdAt: "2026-07-01T00:00:00.000Z",
         updatedAt: "2026-07-01T00:00:00.000Z",
+        recurrence: { freq: { kind: "weekly", interval: 1, days: [5] }, end: { kind: "until", date: "2026-12-31" } },
+        recurrenceExdates: ["2026-07-18", "2026-08-15"],
       },
     ],
     documents: [
@@ -316,7 +320,17 @@ const VALID_TASK = {
   type: "task", id: "t1", profileId: "profile1", parentId: null, title: "A", description: null,
   status: "todo", priority: "none", done: false, dueDate: null, startDate: null,
   createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z", completedAt: null,
+  recurrence: null,
 };
+
+const VALID_EVENT = {
+  type: "event", id: "e1", profileId: "profile1", title: "Sastanak", description: null,
+  startAt: "2026-07-10T09:00:00.000Z", endAt: null, allDay: false, location: null, category: null,
+  createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+  recurrence: null, recurrenceExdates: [],
+};
+
+const WEEKLY_RULE = { freq: { kind: "weekly", interval: 1, days: [4] }, end: { kind: "never" } };
 
 const VALID_NOTE = {
   type: "note", id: "n1", profileId: "profile1", title: "Beleška", folderId: null, pinned: false,
@@ -529,6 +543,107 @@ describe("parseImportArchive — one test per problem code", () => {
       { id: "att1", noteId: "n1", fileName: "slika.png", mime: "image/png", sizeBytes: 10, sha256: "a".repeat(64), createdAt: "2026-07-01T00:00:00.000Z" },
     ]);
   });
+});
+
+describe("parseImportArchive — recurrence (ADR-024)", () => {
+  /** The `invalid-record` details a one-row file produced, in discovery order. */
+  function detailsFor(path: string, row: Record<string, unknown>): (string | undefined)[] {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ fileContents: { [path]: ndjson([row]) } })));
+    expect(result.data).toBeNull();
+    return result.problems.filter((problem) => problem.code === "invalid-record").map((p) => p.detail);
+  }
+
+  it("accepts a task whose rule sits beside the due date it phases from, and canonicalizes it", () => {
+    const task = {
+      ...VALID_TASK,
+      dueDate: "2026-08-01",
+      // Weekday list out of order: the reader returns the engine's canonical form.
+      recurrence: { freq: { kind: "weekly", interval: 2, days: [4, 1] }, end: { kind: "never" } },
+    };
+    const result = parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/tasks.ndjson": ndjson([task]) } })),
+    );
+    expect(result.problems).toEqual([]);
+    expect(result.data?.tasks[0]?.recurrence).toEqual({
+      freq: { kind: "weekly", interval: 2, days: [1, 4] },
+      end: { kind: "never" },
+    });
+  });
+
+  const BAD_TASKS: { name: string; row: Record<string, unknown>; detail: string }[] = [
+    { name: "the field is absent entirely", row: { recurrence: undefined }, detail: "recurrence" },
+    { name: "the rule is not an object", row: { recurrence: "daily" }, detail: "recurrence" },
+    {
+      name: "an interval outside the engine's bounds",
+      row: { dueDate: "2026-08-01", recurrence: { freq: { kind: "daily", interval: 0 }, end: { kind: "never" } } },
+      detail: "recurrence",
+    },
+    {
+      name: "an unknown frequency kind",
+      row: { dueDate: "2026-08-01", recurrence: { freq: { kind: "hourly", interval: 1 }, end: { kind: "never" } } },
+      detail: "recurrence",
+    },
+    {
+      name: "an until date that is not a real calendar day",
+      row: {
+        dueDate: "2026-08-01",
+        recurrence: { freq: { kind: "daily", interval: 1 }, end: { kind: "until", date: "2026-02-30" } },
+      },
+      detail: "recurrence",
+    },
+    {
+      name: "a rule with no due date to advance",
+      row: { dueDate: null, recurrence: { freq: { kind: "daily", interval: 1 }, end: { kind: "never" } } },
+      detail: "recurrence",
+    },
+  ];
+
+  for (const { name, row, detail } of BAD_TASKS) {
+    it(`refuses a task with ${name}`, () => {
+      expect(detailsFor("data/tasks.ndjson", { ...VALID_TASK, ...row })).toContain(detail);
+    });
+  }
+
+  it("accepts an event master with a rule and its exceptions", () => {
+    const event = { ...VALID_EVENT, recurrence: WEEKLY_RULE, recurrenceExdates: ["2026-07-17"] };
+    const result = parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/calendar.ndjson": ndjson([event]) } })),
+    );
+    expect(result.problems).toEqual([]);
+    expect(result.data?.events[0]?.recurrence).toEqual(WEEKLY_RULE);
+    expect(result.data?.events[0]?.recurrenceExdates).toEqual(["2026-07-17"]);
+  });
+
+  const BAD_EVENTS: { name: string; row: Record<string, unknown>; detail: string }[] = [
+    { name: "no exdate list at all", row: { recurrenceExdates: undefined }, detail: "recurrenceExdates" },
+    { name: "an exdate list that is not an array", row: { recurrenceExdates: "2026-07-17" }, detail: "recurrenceExdates" },
+    {
+      name: "an exdate that is not a real calendar day",
+      row: { recurrence: WEEKLY_RULE, recurrenceExdates: ["2026-02-30"] },
+      detail: "recurrenceExdates[0]",
+    },
+    {
+      name: "an exdate that is an instant rather than a date",
+      row: { recurrence: WEEKLY_RULE, recurrenceExdates: ["2026-07-17T00:00:00.000Z"] },
+      detail: "recurrenceExdates[0]",
+    },
+    {
+      name: "exceptions but no series to except them from",
+      row: { recurrence: null, recurrenceExdates: ["2026-07-17"] },
+      detail: "recurrenceExdates",
+    },
+    {
+      name: "a rule on a start whose own day does not exist",
+      row: { startAt: "2026-02-30T09:00:00.000Z", recurrence: WEEKLY_RULE },
+      detail: "startAt",
+    },
+  ];
+
+  for (const { name, row, detail } of BAD_EVENTS) {
+    it(`refuses an event with ${name}`, () => {
+      expect(detailsFor("data/calendar.ndjson", { ...VALID_EVENT, ...row })).toContain(detail);
+    });
+  }
 });
 
 describe("parseImportArchive — schema version", () => {

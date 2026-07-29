@@ -238,6 +238,7 @@ describe("buildExportArchive", () => {
           createdAt: "2026-07-01T00:00:00.000Z",
           updatedAt: "2026-07-01T00:00:00.000Z",
           completedAt: null,
+          recurrence: null,
         },
       ];
       const archive = buildExportArchive(input);
@@ -258,11 +259,33 @@ describe("buildExportArchive", () => {
           createdAt: "2026-07-01T00:00:00.000Z",
           updatedAt: "2026-07-01T00:00:00.000Z",
           completedAt: null,
+          recurrence: null,
         },
       ]);
       expect(Object.keys(rows[0] as object)[0]).toBe("type");
       expect(archive.byModule.tasks).toBe(1);
       expect(archive.totalRecords).toBe(1);
+    });
+
+    it("carries a recurring task's whole rule (ADR-024)", () => {
+      const input = emptyInput();
+      input.data.tasks = [
+        {
+          id: "t1", profileId: "profile1", parentId: null, title: "Ponedeljkom", description: null,
+          status: "todo", priority: "none", done: false, dueDate: "2026-07-13", startDate: null,
+          createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+          completedAt: null,
+          recurrence: { freq: { kind: "weekly", interval: 1, days: [0] }, end: { kind: "count", total: 10 } },
+        },
+      ];
+      const archive = buildExportArchive(input);
+      const rows = parseNdjson(archive.files.get("data/tasks.ndjson") ?? "") as Array<{
+        recurrence: unknown;
+      }>;
+      expect(rows[0]?.recurrence).toEqual({
+        freq: { kind: "weekly", interval: 1, days: [0] },
+        end: { kind: "count", total: 10 },
+      });
     });
   });
 
@@ -282,6 +305,8 @@ describe("buildExportArchive", () => {
           category: null,
           createdAt: "2026-07-01T00:00:00.000Z",
           updatedAt: "2026-07-01T00:00:00.000Z",
+          recurrence: { freq: { kind: "weekly", interval: 1, days: [5] }, end: { kind: "never" } },
+          recurrenceExdates: ["2026-07-18"],
         },
       ];
       input.data.documents = [
@@ -302,9 +327,19 @@ describe("buildExportArchive", () => {
       ];
 
       const archive = buildExportArchive(input);
-      const rows = parseNdjson(archive.files.get("data/calendar.ndjson") ?? "") as Array<{ type: string }>;
+      const rows = parseNdjson(archive.files.get("data/calendar.ndjson") ?? "") as Array<{
+        type: string;
+        recurrence?: unknown;
+        recurrenceExdates?: unknown;
+      }>;
       expect(rows.map((row) => row.type)).toEqual(["event", "document", "renewal"]);
       expect(archive.byModule.calendar).toBe(3);
+      // A series master travels with both halves of its recurrence (ADR-024).
+      expect(rows[0]?.recurrence).toEqual({
+        freq: { kind: "weekly", interval: 1, days: [5] },
+        end: { kind: "never" },
+      });
+      expect(rows[0]?.recurrenceExdates).toEqual(["2026-07-18"]);
     });
   });
 
@@ -394,6 +429,7 @@ describe("buildExportArchive", () => {
           id: "t1", profileId: "profile1", parentId: null, title: "Sa, zarezom", description: null,
           status: "todo", priority: "high", done: false, dueDate: "2026-07-20", startDate: null,
           createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z", completedAt: null,
+          recurrence: null,
         },
       ];
       const archive = buildExportArchive(input);
@@ -441,6 +477,7 @@ describe("buildExportArchive", () => {
           id: "t1", profileId: "profile1", parentId: null, title: "A", description: null, status: "todo",
           priority: "none", done: false, dueDate: null, startDate: null,
           createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z", completedAt: null,
+          recurrence: null,
         },
       ];
       input.data.notifications = [
@@ -462,10 +499,10 @@ describe("buildExportArchive", () => {
       const t = "2026-01-01T00:00:00.000Z";
       return {
         tasks: [
-          { id: "t1", profileId: "p1", parentId: null, title: "T", description: null, status: "todo", priority: "none", done: false, dueDate: null, startDate: null, createdAt: t, updatedAt: t, completedAt: null },
+          { id: "t1", profileId: "p1", parentId: null, title: "T", description: null, status: "todo", priority: "none", done: false, dueDate: null, startDate: null, createdAt: t, updatedAt: t, completedAt: null, recurrence: null },
         ],
         events: [
-          { id: "e1", profileId: "p1", title: "E", description: null, startAt: t, endAt: null, allDay: false, location: null, category: null, createdAt: t, updatedAt: t },
+          { id: "e1", profileId: "p1", title: "E", description: null, startAt: t, endAt: null, allDay: false, location: null, category: null, createdAt: t, updatedAt: t, recurrence: null, recurrenceExdates: [] },
         ],
         documents: [
           { id: "d1", profileId: "p1", docType: "licna_karta", label: "D", expiryDate: "2030-01-01", reminderOffsets: [], notes: null, createdAt: t, updatedAt: t },

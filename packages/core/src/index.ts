@@ -162,6 +162,7 @@ export {
   MIN_TIMED_MINUTES,
   MINUTES_PER_DAY,
   daySpanKeys,
+  isValidDayKey,
   layoutMonthBars,
   layoutTimedColumns,
   monthGridDays,

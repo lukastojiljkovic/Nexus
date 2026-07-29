@@ -1,4 +1,6 @@
 import type Database from "better-sqlite3-multiple-ciphers";
+import { isValidDayKey, serializeRecurrenceRule, shiftDayKey, validateRecurrenceRule } from "@nexus/core";
+import type { RecurrenceRule } from "@nexus/core";
 import { EventNotFoundError, EventValidationError } from "../errors.js";
 import { uuidv7 } from "../ids.js";
 
@@ -21,6 +23,19 @@ export interface Event {
   category: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * The rule that makes this row a **series master** the calendar expands
+   * virtually (ADR-024), or null for a one-off. Anchored on `startAt`'s own
+   * day, so a master's start must be a day the engine can phase from.
+   */
+  recurrence: RecurrenceRule | null;
+  /**
+   * Bare `YYYY-MM-DD` occurrence dates the user removed from the series
+   * (deleted or detached into their own event), ascending. Empty whenever
+   * `recurrence` is null — an exception without a series means nothing.
+   * Settable only through `addRecurrenceExdate`, never through create/update.
+   */
+  recurrenceExdates: string[];
 }
 
 /** Fields accepted when creating an event; only `title` and `startAt` are required (CAL-001). */
@@ -32,11 +47,13 @@ export interface CreateEventInput {
   location?: string | null;
   description?: string | null;
   category?: string | null;
+  recurrence?: RecurrenceRule | null;
 }
 
 /**
  * A partial patch of an event's own fields. An omitted key is left untouched; an
- * explicit `null` clears a nullable field. Soft delete/restore have their own
+ * explicit `null` clears a nullable field. Soft delete/restore and the two
+ * series operations (`addRecurrenceExdate`, `splitRecurrence`) have their own
  * methods.
  */
 export interface UpdateEventFields {
@@ -47,6 +64,7 @@ export interface UpdateEventFields {
   location?: string | null;
   description?: string | null;
   category?: string | null;
+  recurrence?: RecurrenceRule | null;
 }
 
 interface EventRow {
@@ -61,11 +79,13 @@ interface EventRow {
   category: string | null;
   created_at: string;
   updated_at: string;
+  recurrence: string | null;
+  recurrence_exdates: string;
 }
 
 const COLUMNS =
   "id, profile_id, title, description, start_at, end_at, all_day, " +
-  "location, category, created_at, updated_at";
+  "location, category, created_at, updated_at, recurrence, recurrence_exdates";
 
 /** Accepts ISO-8601 date ('2026-07-08') or date-time, optionally zoned (PRD §7). */
 const ISO_8601 =
@@ -85,16 +105,19 @@ export class EventStore {
   private readonly updateFields: Database.Statement;
   private readonly markDeleted: Database.Statement;
   private readonly markRestored: Database.Statement;
+  private readonly updateExdates: Database.Statement;
 
   constructor(
     db: DatabaseHandle,
     private readonly profileId: string,
   ) {
+    // A brand-new series has no exceptions yet, so `recurrence_exdates` is the
+    // literal empty list here rather than a bound value: it is not an input.
     this.insert = db.prepare(
       `INSERT INTO events
          (id, profile_id, title, description, start_at, end_at, all_day,
-          location, category, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+          location, category, created_at, updated_at, recurrence, recurrence_exdates, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', NULL)`,
     );
     this.selectActive = db.prepare(
       `SELECT ${COLUMNS} FROM events
@@ -108,7 +131,8 @@ export class EventStore {
     this.updateFields = db.prepare(
       `UPDATE events
          SET title = ?, description = ?, start_at = ?, end_at = ?,
-             all_day = ?, location = ?, category = ?, updated_at = ?
+             all_day = ?, location = ?, category = ?, recurrence = ?,
+             recurrence_exdates = ?, updated_at = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
     );
     this.markDeleted = db.prepare(
@@ -118,6 +142,10 @@ export class EventStore {
     this.markRestored = db.prepare(
       `UPDATE events SET deleted_at = NULL, updated_at = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NOT NULL`,
+    );
+    this.updateExdates = db.prepare(
+      `UPDATE events SET recurrence_exdates = ?, updated_at = ?
+       WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
     );
   }
 
@@ -137,17 +165,20 @@ export class EventStore {
     const description = normalizeOptional(input.description);
     const location = normalizeOptional(input.location);
     const category = normalizeOptional(input.category);
+    const recurrence = validateRecurrence(input.recurrence);
+    assertRecurrenceAnchor(recurrence, startAt);
     const now = new Date().toISOString();
     const id = uuidv7();
 
     this.insert.run(
       id, this.profileId, title, description, startAt, endAt,
-      allDay ? 1 : 0, location, category, now, now,
+      allDay ? 1 : 0, location, category, now, now, serializeRecurrence(recurrence),
     );
 
     return {
       id, profileId: this.profileId, title, description, startAt, endAt,
       allDay, location, category, createdAt: now, updatedAt: now,
+      recurrence, recurrenceExdates: [],
     };
   }
 
@@ -171,7 +202,64 @@ export class EventStore {
           : current.description,
       category:
         fields.category !== undefined ? normalizeOptional(fields.category) : current.category,
+      recurrence:
+        fields.recurrence !== undefined
+          ? validateRecurrence(fields.recurrence)
+          : current.recurrence,
     });
+  }
+
+  /**
+   * Excepts one occurrence date from a series (ADR-024) — the user deleted that
+   * occurrence, or detached it into its own event. Idempotent: adding a date
+   * the series already excepts returns the row untouched, without restamping
+   * `updated_at`. Stored ascending, so the column is canonical however the
+   * exceptions were made.
+   */
+  addRecurrenceExdate(id: string, date: string, now: string): Event {
+    const current = this.requireRecurring(id);
+    const exdate = validateExdate(date, "date");
+    if (current.recurrenceExdates.includes(exdate)) return current;
+
+    // Day keys are fixed-width, so a plain lexicographic sort IS chronological.
+    const recurrenceExdates = [...current.recurrenceExdates, exdate].sort();
+    this.updateExdates.run(JSON.stringify(recurrenceExdates), now, id, this.profileId);
+    return { ...current, recurrenceExdates, updatedAt: now };
+  }
+
+  /**
+   * The "this and future occurrences" primitive (ADR-024): truncates the master
+   * so its last occurrence is the day before `occurrenceDate`, and returns it.
+   * Creating the new master that carries the edited fields forward is the
+   * caller's job, through the ordinary `create` — this method only truncates,
+   * so a split, a "delete from here on", and a "change the rule from here on"
+   * are all the same one operation plus whatever the caller does next.
+   *
+   * Splitting at the master's own first occurrence would leave an `until`
+   * before its start: a series with no occurrences at all. Rather than leave
+   * that unreachable row in the table (invisible to the calendar, visible to
+   * every list), the master is soft-deleted instead, and the returned row is
+   * that master as it now stands — rule untouched, since there is no truncated
+   * `until` to report.
+   */
+  splitRecurrence(id: string, occurrenceDate: string, now: string): Event {
+    const current = this.requireRecurring(id);
+    const occurrence = validateExdate(occurrenceDate, "occurrenceDate");
+    const until = shiftDayKey(occurrence, -1);
+
+    if (until < anchorDayOf(current.startAt)) {
+      this.markDeleted.run(now, now, id, this.profileId);
+      return { ...current, updatedAt: now };
+    }
+
+    return this.writeFields(
+      current,
+      {
+        ...ownFields(current),
+        recurrence: { freq: current.recurrence.freq, end: { kind: "until", date: until } },
+      },
+      now,
+    );
   }
 
   /** Soft-deletes an active event (PRD delete semantics; reversible via `restore`). */
@@ -201,23 +289,44 @@ export class EventStore {
     return toEvent(row);
   }
 
+  /** As `requireActive`, plus the series precondition both operations above share — narrowing `recurrence` to non-null for the caller, without a cast. */
+  private requireRecurring(id: string): Event & { recurrence: RecurrenceRule } {
+    const current = this.requireActive(id);
+    const { recurrence } = current;
+    if (recurrence === null) {
+      throw new EventValidationError(`Event "${id}" carries no recurrence rule.`);
+    }
+    return { ...current, recurrence };
+  }
+
   /**
    * Writes a fully-resolved field set, re-checking the start/end range against
    * the merged pair — the single place that upholds the end ≥ start invariant the
    * schema deliberately does not CHECK, so a patch that moves only one endpoint is
-   * still validated against the other.
+   * still validated against the other. The rule's anchor is checked against the
+   * same merged pair, for the same reason: moving a master's start off a real
+   * calendar day would strand its whole series.
+   *
+   * `at` defaults to the wall clock; `splitRecurrence` passes its caller's `now`.
    */
-  private writeFields(current: Event, next: Required<UpdateEventFields>): Event {
+  private writeFields(
+    current: Event,
+    next: Required<UpdateEventFields>,
+    at: string = new Date().toISOString(),
+  ): Event {
     validateRange(next.startAt, next.endAt);
-    const now = new Date().toISOString();
+    assertRecurrenceAnchor(next.recurrence, next.startAt);
+    // Exceptions belong to a series: clearing the rule clears them with it.
+    const recurrenceExdates = next.recurrence === null ? [] : current.recurrenceExdates;
 
     this.updateFields.run(
       next.title, next.description, next.startAt, next.endAt,
-      next.allDay ? 1 : 0, next.location, next.category, now,
+      next.allDay ? 1 : 0, next.location, next.category,
+      serializeRecurrence(next.recurrence), JSON.stringify(recurrenceExdates), at,
       current.id, this.profileId,
     );
 
-    return { ...current, ...next, updatedAt: now };
+    return { ...current, ...next, recurrenceExdates, updatedAt: at };
   }
 }
 
@@ -234,7 +343,34 @@ function toEvent(row: EventRow): Event {
     category: row.category,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    recurrence: parseStoredRecurrence(row.recurrence, row.id),
+    recurrenceExdates: parseStoredExdates(row.recurrence_exdates, row.id),
   };
+}
+
+/** An event's own patchable fields as they currently stand — the base every full-row write starts from. */
+function ownFields(event: Event): Required<UpdateEventFields> {
+  return {
+    title: event.title,
+    startAt: event.startAt,
+    endAt: event.endAt,
+    allDay: event.allDay,
+    location: event.location,
+    description: event.description,
+    category: event.category,
+    recurrence: event.recurrence,
+  };
+}
+
+/**
+ * The day a series phases from: the date part of `startAt`, exactly as
+ * `calendarItems.ts` derives an event's day key. The app's timestamps are
+ * zone-less wall-clock strings, so re-interpreting them through `Date` would
+ * put a master's anchor on a different day than the one the calendar draws it
+ * on — the two must agree or the expansion lands beside the event.
+ */
+function anchorDayOf(startAt: string): string {
+  return startAt.slice(0, 10);
 }
 
 function validateTitle(value: string): string {
@@ -265,6 +401,87 @@ function validateRange(startAt: string, endAt: string | null): void {
   if (endAt !== null && new Date(endAt).getTime() < new Date(startAt).getTime()) {
     throw new EventValidationError("Event end must not be before its start.");
   }
+}
+
+/**
+ * Structural validation of a recurrence rule from an untrusted caller
+ * (SEC-EL-02), returning the canonical form the column stores. An already-typed
+ * rule object goes through the validator too: the type says nothing about an
+ * interval of 0 or an empty weekday list.
+ */
+function validateRecurrence(value: RecurrenceRule | null | undefined): RecurrenceRule | null {
+  if (value === undefined || value === null) return null;
+  const rule = validateRecurrenceRule(value);
+  if (rule === null) {
+    throw new EventValidationError('"recurrence" is not a valid recurrence rule.');
+  }
+  return rule;
+}
+
+/** A master phases from its own start day, so that day has to exist — `2026-02-30T09:00Z` parses but is nothing to anchor on. */
+function assertRecurrenceAnchor(rule: RecurrenceRule | null, startAt: string): void {
+  if (rule === null) return;
+  if (!isValidDayKey(anchorDayOf(startAt))) {
+    throw new EventValidationError(
+      `A recurring event's startAt must begin with a real calendar date (got "${startAt}").`,
+    );
+  }
+}
+
+/** An exception (or split point) names one occurrence DATE — a bare, real calendar day, never an instant. */
+function validateExdate(value: string, field: string): string {
+  if (!isValidDayKey(value)) {
+    throw new EventValidationError(`"${field}" must be a bare calendar date (got "${value}").`);
+  }
+  return value;
+}
+
+function serializeRecurrence(rule: RecurrenceRule | null): string | null {
+  return rule === null ? null : serializeRecurrenceRule(rule);
+}
+
+/**
+ * Reads the stored rule back. This store writes only `serializeRecurrenceRule`
+ * output, so anything that fails to validate is corruption (a hand-edited file,
+ * a bad restore) rather than input to be coerced — reading it as `null` would
+ * silently turn a user's series into a one-off, so it throws naming the row.
+ */
+function parseStoredRecurrence(text: string | null, id: string): RecurrenceRule | null {
+  if (text === null) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    parsed = null;
+  }
+  const rule = validateRecurrenceRule(parsed);
+  if (rule === null) {
+    throw new EventValidationError(
+      `Event "${id}" carries a stored recurrence rule that is not valid.`,
+    );
+  }
+  return rule;
+}
+
+/** Same reasoning as `parseStoredRecurrence`: only this store writes the column, and it writes an array of day keys. */
+function parseStoredExdates(text: string, id: string): string[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    parsed = null;
+  }
+  const invalid = new EventValidationError(
+    `Event "${id}" carries stored recurrence exceptions that are not a list of calendar dates.`,
+  );
+  if (!Array.isArray(parsed)) throw invalid;
+  const entries: readonly unknown[] = parsed;
+  const exdates: string[] = [];
+  for (const entry of entries) {
+    if (typeof entry !== "string" || !isValidDayKey(entry)) throw invalid;
+    exdates.push(entry);
+  }
+  return exdates;
 }
 
 /** Normalizes an optional string: absent/empty/whitespace-only collapses to null. */

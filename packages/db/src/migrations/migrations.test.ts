@@ -14,8 +14,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase } from "../index.js";
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 17 (search index), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(17);
+  it("is at version 18 (recurrence), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(18);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -1650,6 +1650,82 @@ describe("migration 016 — inline flashcards", () => {
       card_deck_id: string | null;
     };
     expect(row.card_deck_id).toBeNull();
+    db.close();
+  });
+});
+
+describe("migration 018 — recurrence", () => {
+  const now = () => new Date().toISOString();
+
+  const columnNames = (db: NexusDatabase, table: string): string[] =>
+    (db.raw.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(
+      (row) => row.name,
+    );
+
+  const insertTask = (db: NexusDatabase, id: string, profileId: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO tasks (id, profile_id, title, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, profileId, "x", "todo", now(), now());
+
+  const insertEvent = (db: NexusDatabase, id: string, profileId: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO events (id, profile_id, title, start_at, all_day, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, profileId, "x", "2026-07-08", 0, now(), now());
+
+  it("adds recurrence to tasks and events plus recurrence_exdates to events, and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    expect(columnNames(db, "tasks")).toContain("recurrence");
+    expect(columnNames(db, "events")).toEqual(
+      expect.arrayContaining(["recurrence", "recurrence_exdates"]),
+    );
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("defaults a task's and an event's recurrence to NULL and an event's exdates to the empty JSON array", () => {
+    const db = openDatabase({ path: join(dir, "defaults.db") });
+    insertProfile(db, "p1");
+    insertTask(db, "t1", "p1");
+    insertEvent(db, "e1", "p1");
+
+    const task = db.raw.prepare("SELECT recurrence FROM tasks WHERE id = ?").get("t1") as {
+      recurrence: string | null;
+    };
+    expect(task.recurrence).toBeNull();
+
+    const event = db.raw
+      .prepare("SELECT recurrence, recurrence_exdates FROM events WHERE id = ?")
+      .get("e1") as { recurrence: string | null; recurrence_exdates: string };
+    expect(event.recurrence).toBeNull();
+    expect(event.recurrence_exdates).toBe("[]");
+    db.close();
+  });
+
+  it("rejects a NULL recurrence_exdates — the column is NOT NULL, so a row always carries at least an empty list", () => {
+    const db = openDatabase({ path: join(dir, "exdates-not-null.db") });
+    insertProfile(db, "p1");
+    insertEvent(db, "e1", "p1");
+    expect(() =>
+      db.raw.prepare("UPDATE events SET recurrence_exdates = NULL WHERE id = ?").run("e1"),
+    ).toThrow();
+    db.close();
+  });
+
+  it("stores rule JSON verbatim — no SQL CHECK can validate it, which is why the stores are the gate", () => {
+    const db = openDatabase({ path: join(dir, "no-json-check.db") });
+    insertProfile(db, "p1");
+    insertTask(db, "t1", "p1");
+    // Deliberately nonsense: the schema accepts it, and `TaskStore` is what
+    // refuses to read it back (see taskStore.test.ts).
+    expect(() =>
+      db.raw.prepare("UPDATE tasks SET recurrence = ? WHERE id = ?").run("{not-json", "t1"),
+    ).not.toThrow();
     db.close();
   });
 });
