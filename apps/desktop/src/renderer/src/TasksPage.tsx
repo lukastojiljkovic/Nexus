@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { ChangeEvent, FormEvent, ReactNode } from "react";
 import {
   Button,
@@ -123,10 +124,79 @@ function formatQuickDate(dayKey: string): string {
       }).format(date);
 }
 
-/** The series marker (when the task repeats), priority (when not 'none') and due-date (when set) chips; null when none apply. */
-function taskChips(task: TaskFields): ReactNode {
+// --- Subtask tree (TASK-008) ------------------------------------------------
+
+/** Shared empty result for a childless task, so a render never allocates one. */
+const NO_CHILDREN: readonly TaskFields[] = [];
+
+/**
+ * How many steps a subtask is allowed to move right. Deeper nesting still
+ * renders in full — it just stops indenting: past three steps the indent starts
+ * eating the row instead of explaining it.
+ */
+const MAX_INDENT_DEPTH = 3;
+
+/** Class for a row's indent spacer at `depth` (never called with depth 0 — a top-level row has no spacer). */
+function indentClass(depth: number): string {
+  return `tasks__indent tasks__indent--${Math.min(depth, MAX_INDENT_DEPTH)}`;
+}
+
+/**
+ * Splits the flat task list into the rows that render at top level and a
+ * parent → direct-children index, both keeping the order `listTasks` returned.
+ *
+ * A task whose `parentId` names a row that is not in the list — the usual case
+ * being a deleted parent, whose children the store deliberately leaves
+ * untouched — counts as top level. A subtask must never disappear because its
+ * parent did; restoring the parent (the undo bar) re-nests it on the next load.
+ */
+function buildTaskTree(tasks: readonly TaskFields[]): {
+  roots: TaskFields[];
+  children: ReadonlyMap<string, TaskFields[]>;
+} {
+  const ids = new Set(tasks.map((task) => task.id));
+  const roots: TaskFields[] = [];
+  const children = new Map<string, TaskFields[]>();
+  for (const task of tasks) {
+    if (task.parentId === null || !ids.has(task.parentId)) {
+      roots.push(task);
+      continue;
+    }
+    const siblings = children.get(task.parentId);
+    if (siblings) siblings.push(task);
+    else children.set(task.parentId, [task]);
+  }
+  return { roots, children };
+}
+
+/**
+ * The `2/5` roll-up on a task that has subtasks (TASK-008); null when it has
+ * none.
+ *
+ * DIRECT children only. A recursive total counts a nested checklist's items
+ * among this row's own, so "2/5" would stop meaning "two of the five things
+ * listed under this row" — the only reading a bare number on a row can carry.
+ */
+function progressChip(children: readonly TaskFields[]): ReactNode {
+  if (children.length === 0) return null;
+  const done = children.reduce((count, child) => (child.done ? count + 1 : count), 0);
+  return (
+    <Chip
+      key="progress"
+      className={done === children.length ? "tasks__progress-done" : undefined}
+      title={strings.tasks.subtaskProgressTitle}
+    >
+      {done}/{children.length}
+    </Chip>
+  );
+}
+
+/** The series marker (when the task repeats), subtask roll-up (when it has children), priority (when not 'none') and due-date (when set) chips; null when none apply. */
+function taskChips(task: TaskFields, children: readonly TaskFields[]): ReactNode {
   const chips: ReactNode[] = [];
   if (task.recurrence !== null) chips.push(<RecurrenceMark key="recurrence" />);
+  const rollUp = progressChip(children);
+  if (rollUp !== null) chips.push(rollUp);
   if (task.priority !== "none") {
     chips.push(
       <Chip key="priority" variant={task.priority === "high" ? "accent" : "neutral"}>
@@ -142,6 +212,79 @@ function taskChips(task: TaskFields): ReactNode {
     );
   }
   return chips.length > 0 ? <span className="tasks__chips">{chips}</span> : null;
+}
+
+/** What "Završeno" means for a task that still has open subtasks under it. */
+type SubtaskCompletion = "all" | "one";
+
+interface SubtaskCompletionDialogProps {
+  onChoose: (choice: SubtaskCompletion) => void;
+  onCancel: () => void;
+}
+
+/**
+ * "Zadatak ima otvorene podzadatke." (PRD 03 §4) — the same house dialog as the
+ * recurrence scope question (`RecurrenceScopeDialog`), and for the same reason:
+ * ticking this row off would reach records the user did not tick, so it is
+ * asked rather than assumed. It shares that dialog's CSS recipe outright rather
+ * than restating it; only the wording and the number of choices differ.
+ *
+ * Deliberately without a default: no primary button, and Enter picks nothing.
+ * Escape, the backdrop and Otkaži all cancel and change nothing.
+ */
+function SubtaskCompletionDialog({ onChoose, onCancel }: SubtaskCompletionDialogProps) {
+  const s = strings.tasks.subtasks;
+  const choicesRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const questionId = useId();
+
+  // Focus lands on the first choice, not on a default: answerable from the
+  // keyboard without any key already meaning "and the subtasks too".
+  useEffect(() => {
+    choicesRef.current?.querySelector("button")?.focus();
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCancel();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onCancel]);
+
+  return createPortal(
+    <div className="tasks__dialog-overlay">
+      <div className="tasks__dialog-backdrop" onClick={onCancel} />
+      <div
+        className="tasks__dialog-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={questionId}
+      >
+        <h2 id={titleId} className="tasks__dialog-title">
+          {s.title}
+        </h2>
+        <p id={questionId} className="tasks__dialog-question">
+          {s.question}
+        </p>
+        <div className="tasks__dialog-choices" ref={choicesRef}>
+          <Button className="tasks__dialog-choice" onClick={() => onChoose("all")}>
+            {s.completeAll}
+          </Button>
+          <Button className="tasks__dialog-choice" onClick={() => onChoose("one")}>
+            {s.completeOne}
+          </Button>
+        </div>
+        <div className="tasks__dialog-actions">
+          <Button className="tasks__dialog-cancel" onClick={onCancel}>
+            {s.cancel}
+          </Button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
 }
 
 /** A pending deep-link target (021-e global search / palette commands): reveal one task, or focus the quick-add input for a fresh one. */
@@ -187,8 +330,22 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
   /** Next due date of a recurring task that just advanced, or null — the row moved, so the page says where to. */
   const [advancedTo, setAdvancedTo] = useState<string | null>(null);
+  // The inline "new subtask" line (TASK-008): which row it hangs under, and
+  // what has been typed into it. Kept apart from the add/edit form above on
+  // purpose — opening a subtask line is not an edit, so it resets nothing.
+  const [subtaskParentId, setSubtaskParentId] = useState<string | null>(null);
+  const [subtaskDraft, setSubtaskDraft] = useState("");
+  /** The task whose completion is waiting on the open-subtasks question, or null. */
+  const [completePrompt, setCompletePrompt] = useState<TaskFields | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const subtaskInputRef = useRef<HTMLInputElement>(null);
   const { revealedId, reveal } = useRevealedRow();
+
+  // Rebuilt from the flat list on every render: it is one pass over an array
+  // the page already holds, so there is nothing worth memoising.
+  const { roots, children } = buildTaskTree(tasks ?? []);
+  const childrenOf = (taskId: string): readonly TaskFields[] =>
+    children.get(taskId) ?? NO_CHILDREN;
 
   useEffect(() => {
     let active = true;
@@ -336,20 +493,131 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
       const updated = await window.nexus.completeTaskOccurrence(profileId, task.id);
       replaceTask(updated);
       setAdvancedTo(!updated.done && updated.dueDate !== null ? updated.dueDate : null);
+      // A recurring task that ADVANCED also reopened every live subtask in the
+      // same store transaction (ADR-024). Those rows are not in the reply, so
+      // without a refetch the subtasks would keep rendering ticked under a task
+      // that has already moved on to its next occurrence.
+      if (!updated.done && childrenOf(task.id).length > 0) await reload();
     } catch (error) {
       console.error("Nexus: failed to complete task:", error);
     }
   }
 
-  async function toggleDone(task: TaskFields, done: boolean): Promise<void> {
-    if (done) {
+  /**
+   * Every not-done task below this one, deepest first.
+   *
+   * The whole subtree rather than just the direct children: completing a parent
+   * over an open GRANDchild is the same silent reach PRD 03 §4 forbids, and
+   * deepest-first is the order the cascade runs in, so a subtask is never
+   * ticked off after the task it belongs to.
+   */
+  function openDescendants(task: TaskFields): TaskFields[] {
+    const found: TaskFields[] = [];
+    // `parentId` is create-only on the wire, so a fresh id can never close a
+    // loop; `seen` is here so a malformed row (a hand-edited archive, say)
+    // costs a skipped subtask rather than a hung renderer.
+    const seen = new Set<string>([task.id]);
+    const visit = (current: TaskFields): void => {
+      for (const child of childrenOf(current.id)) {
+        if (seen.has(child.id)) continue;
+        seen.add(child.id);
+        visit(child);
+        if (!child.done) found.push(child);
+      }
+    };
+    visit(task);
+    return found;
+  }
+
+  /**
+   * The single entry point for "this is done" — the checkbox and the kanban
+   * drop into Završeno alike.
+   *
+   * A RECURRING task is never asked about: `completeTaskOccurrence` advances it
+   * to its next date instead of finishing it, and the same store transaction
+   * reopens its live subtasks (ADR-024). There is nothing to cascade — the
+   * subtasks are meant to come back open with the next occurrence.
+   */
+  async function requestComplete(task: TaskFields): Promise<void> {
+    if (task.recurrence !== null || openDescendants(task).length === 0) {
       await completeTask(task);
       return;
     }
+    setCompletePrompt(task);
+  }
+
+  /**
+   * "Završi i podzadatke" — every open descendant, then the task itself, each
+   * awaited in turn so the store applies them in that order.
+   *
+   * A recurring DESCENDANT goes through the same `completeTaskOccurrence` as
+   * everything else, which ADVANCES it rather than ending it: this offer
+   * completes one occurrence of a repeating subtask, it does not close its
+   * series. Ending a series stays the recurrence scope dialog's job.
+   */
+  async function completeWithSubtasks(task: TaskFields): Promise<void> {
+    try {
+      for (const descendant of openDescendants(task)) {
+        await window.nexus.completeTaskOccurrence(profileId, descendant.id);
+      }
+      await window.nexus.completeTaskOccurrence(profileId, task.id);
+    } catch (error) {
+      console.error("Nexus: failed to complete task with subtasks:", error);
+    }
+    // Refetch either way: the cascade moves many rows while replying only about
+    // the last one, and a failure part-way through leaves the ones already done
+    // — so what the page shows is whatever the store now holds.
+    try {
+      await reload();
+      setAdvancedTo(null);
+    } catch (error) {
+      console.error("Nexus: failed to reload tasks:", error);
+    }
+  }
+
+  async function toggleDone(task: TaskFields, done: boolean): Promise<void> {
+    if (done) {
+      await requestComplete(task);
+      return;
+    }
+    // Un-ticking never cascades: reopening a parent says nothing about work
+    // that was genuinely finished under it.
     try {
       replaceTask(await window.nexus.setTaskDone(profileId, task.id, false));
     } catch (error) {
       console.error("Nexus: failed to toggle task:", error);
+    }
+  }
+
+  /** Opens the inline subtask line under a row. Always opens, never toggles: the click's own blur may already have closed an empty line, and a toggle would then reopen what the user meant to shut. */
+  function openSubtaskInput(taskId: string): void {
+    // Re-clicking the row already being typed under must not wipe the draft —
+    // it only hands focus back to the line the click just blurred.
+    if (subtaskParentId === taskId) {
+      subtaskInputRef.current?.focus();
+      return;
+    }
+    setSubtaskParentId(taskId);
+    setSubtaskDraft("");
+  }
+
+  function closeSubtaskInput(): void {
+    setSubtaskParentId(null);
+    setSubtaskDraft("");
+  }
+
+  /** Appends a bare subtask under `parentId` — the inline line only ever adds, so the add/edit form above is left exactly as the user had it. */
+  async function addSubtask(parentId: string): Promise<void> {
+    const title = subtaskDraft.trim();
+    if (title.length === 0) return;
+    try {
+      const created = await window.nexus.createTask(profileId, { title, parentId });
+      setTasks((prev) => (prev ? [...prev, created] : [created]));
+      // The line stays open on an empty draft: a checklist is written in one
+      // go, and blurring it empty is what closes it.
+      setSubtaskDraft("");
+    } catch (error) {
+      console.error("Nexus: failed to add subtask:", error);
     }
   }
 
@@ -358,7 +626,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     // takes the same path — `setTaskDone`/`update` refuse a recurring task
     // precisely so the two cannot drift apart.
     if (status === "done") {
-      await completeTask(task);
+      await requestComplete(task);
       return;
     }
     try {
@@ -372,8 +640,12 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     try {
       await window.nexus.deleteTask(profileId, task.id);
       setTasks((prev) => prev && prev.filter((current) => current.id !== task.id));
-      // Never leave the form bound to a task that no longer exists.
+      // Never leave the form — or the inline subtask line — bound to a task
+      // that no longer exists. The children themselves are left alone: the
+      // store soft-deletes this row only, so they re-render at top level by the
+      // orphan rule in `buildTaskTree` and re-nest when the undo restores it.
       if (editingId === task.id) resetForm();
+      if (subtaskParentId === task.id) closeSubtaskInput();
       // One pending undo at a time — a fresh delete replaces the previous offer.
       setPendingUndoId(task.id);
     } catch (error) {
@@ -391,6 +663,118 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     } catch (error) {
       console.error("Nexus: failed to restore task:", error);
     }
+  }
+
+  /** One task's row, indented by `depth`; `children` is its direct children, already looked up by the caller. */
+  function renderRow(task: TaskFields, depth: number, children: readonly TaskFields[]): ReactNode {
+    return (
+      <ListRow
+        key={task.id}
+        leading={depth > 0 ? <span className={indentClass(depth)} aria-hidden="true" /> : undefined}
+        trailing={
+          <span className="tasks__row-meta">
+            {taskChips(task, children)}
+            <Button
+              size="sm"
+              className="tasks__add-subtask"
+              aria-label={strings.tasks.addSubtaskLabel}
+              onClick={() => openSubtaskInput(task.id)}
+            >
+              +
+            </Button>
+            <Button
+              size="sm"
+              className="tasks__edit"
+              aria-label={strings.tasks.editLabel}
+              onClick={() => startEdit(task)}
+            >
+              ✎
+            </Button>
+            <Button
+              size="sm"
+              className="tasks__delete"
+              aria-label={strings.tasks.deleteLabel}
+              onClick={() => void remove(task)}
+            >
+              ×
+            </Button>
+          </span>
+        }
+      >
+        <Checkbox
+          checked={task.done}
+          done={task.done}
+          onChange={(event) => void toggleDone(task, event.target.checked)}
+        >
+          {/* The id/reveal mark sits on this inner span rather than on
+              `ListRow` itself: `ListRow`/`ListView` cannot take extra
+              props, and wrapping `ListRow` in an owned div would break
+              its `:last-child` border-bottom CSS (packages/ui/src/
+              styles.css — out of scope for this slice). */}
+          <span
+            id={taskRowDomId(task.id)}
+            className={revealedId === task.id ? "nx-revealed" : undefined}
+          >
+            {task.title}
+          </span>
+        </Checkbox>
+      </ListRow>
+    );
+  }
+
+  /** The inline "new subtask" line under a row, indented to where its result will land. */
+  function renderSubtaskInput(parentId: string, depth: number): ReactNode {
+    return (
+      <div className="tasks__subtask-add" key={`add-${parentId}`}>
+        <span className={indentClass(depth)} aria-hidden="true" />
+        <input
+          ref={subtaskInputRef}
+          className="nx-textfield__input tasks__subtask-input"
+          value={subtaskDraft}
+          placeholder={strings.tasks.subtaskPlaceholder}
+          aria-label={strings.tasks.addSubtaskLabel}
+          autoFocus
+          onChange={(event: ChangeEvent<HTMLInputElement>) => setSubtaskDraft(event.target.value)}
+          onKeyDown={(event) => {
+            // Its own Enter/Escape handling — the line sits outside the
+            // add/edit <form>, so neither key reaches that form from here.
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void addSubtask(parentId);
+            } else if (event.key === "Escape") {
+              event.preventDefault();
+              closeSubtaskInput();
+            }
+          }}
+          onBlur={() => {
+            if (subtaskDraft.trim().length === 0) closeSubtaskInput();
+          }}
+        />
+      </div>
+    );
+  }
+
+  /**
+   * One task row plus everything hanging off it: its inline subtask line when
+   * open, then its children, recursively.
+   *
+   * Children are emitted as SIBLING rows inside their root's single `ListView`
+   * item rather than handed to the engine as items of their own. The list
+   * config sorts and groups whatever it is given, and a child sorted away from
+   * its parent is an orphan on screen — so the engine keeps ordering top-level
+   * rows (which is what a task list is a list of) and the page keeps every
+   * subtree attached to the row it belongs to.
+   */
+  function renderBranch(task: TaskFields, depth: number, seen: Set<string>): ReactNode[] {
+    // See `openDescendants`: a loop is unreachable through the wire, and this
+    // guard is what keeps a malformed row from becoming an infinite render.
+    if (seen.has(task.id)) return [];
+    seen.add(task.id);
+    const children = childrenOf(task.id);
+    const nodes: ReactNode[] = [renderRow(task, depth, children)];
+    if (subtaskParentId === task.id) nodes.push(renderSubtaskInput(task.id, depth + 1));
+    for (const child of children) nodes.push(...renderBranch(child, depth + 1, seen));
+    return nodes;
   }
 
   return (
@@ -543,56 +927,20 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
           description={strings.tasks.emptyDescription}
         />
       ) : view === "list" ? (
+        // Only the top-level rows are handed to the engine; each one renders
+        // its own subtree (see `renderBranch`).
         <ListView<TaskFields>
-          items={tasks}
+          items={roots}
           schema={TASK_SCHEMA}
           config={LIST_CONFIG}
           itemKey={(task) => task.id}
-          renderItem={(task) => (
-            <ListRow
-              trailing={
-                <span className="tasks__row-meta">
-                  {taskChips(task)}
-                  <Button
-                    size="sm"
-                    className="tasks__edit"
-                    aria-label={strings.tasks.editLabel}
-                    onClick={() => startEdit(task)}
-                  >
-                    ✎
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="tasks__delete"
-                    aria-label={strings.tasks.deleteLabel}
-                    onClick={() => void remove(task)}
-                  >
-                    ×
-                  </Button>
-                </span>
-              }
-            >
-              <Checkbox
-                checked={task.done}
-                done={task.done}
-                onChange={(event) => void toggleDone(task, event.target.checked)}
-              >
-                {/* The id/reveal mark sits on this inner span rather than on
-                    `ListRow` itself: `ListRow`/`ListView` cannot take extra
-                    props, and wrapping `ListRow` in an owned div would break
-                    its `:last-child` border-bottom CSS (packages/ui/src/
-                    styles.css — out of scope for this slice). */}
-                <span
-                  id={taskRowDomId(task.id)}
-                  className={revealedId === task.id ? "nx-revealed" : undefined}
-                >
-                  {task.title}
-                </span>
-              </Checkbox>
-            </ListRow>
-          )}
+          renderItem={(task) => renderBranch(task, 0, new Set())}
         />
       ) : (
+        // The board stays flat: a subtask is a real task with a status of its
+        // own, and a card in Za rad whose parent sits in U toku belongs in Za
+        // rad. Only the roll-up chip travels here, so a parent card still says
+        // how much of it is actually finished.
         <KanbanView<TaskFields>
           items={tasks}
           schema={TASK_SCHEMA}
@@ -600,7 +948,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
           columnTitle={statusTitle}
           itemKey={(task) => task.id}
           renderCard={(task) => (
-            <KanbanCard tag={taskChips(task)}>
+            <KanbanCard tag={taskChips(task, childrenOf(task.id))}>
               <span
                 id={taskRowDomId(task.id)}
                 className={revealedId === task.id ? "nx-revealed" : undefined}
@@ -615,6 +963,17 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
             // the patch is always a real status; main revalidates regardless.
             if (next != null && isTaskStatus(next)) void moveToStatus(task, next);
           }}
+        />
+      )}
+
+      {completePrompt !== null && (
+        <SubtaskCompletionDialog
+          onChoose={(choice) => {
+            const task = completePrompt;
+            setCompletePrompt(null);
+            void (choice === "all" ? completeWithSubtasks(task) : completeTask(task));
+          }}
+          onCancel={() => setCompletePrompt(null)}
         />
       )}
     </div>

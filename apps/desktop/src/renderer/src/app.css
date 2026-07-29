@@ -463,6 +463,7 @@ body {
   align-items: center;
   gap: var(--nx-space-1);
 }
+.tasks__add-subtask.nx-button,
 .tasks__edit.nx-button,
 .tasks__delete.nx-button {
   background: transparent;
@@ -470,6 +471,7 @@ body {
   color: var(--nx-text-muted);
   padding: 2px 8px;
 }
+.tasks__add-subtask.nx-button:hover,
 .tasks__edit.nx-button:hover {
   background: var(--nx-surface-alt);
   color: var(--nx-text);
@@ -477,6 +479,57 @@ body {
 .tasks__delete.nx-button:hover {
   background: var(--nx-danger-soft);
   color: var(--nx-danger);
+}
+
+/* Subtasks (TASK-008) ---------------------------------------------------
+   Nesting is carried by indentation alone — no rails, no glow: a subtask row
+   is the same row, one step in. The depth is capped (MAX_INDENT_DEPTH in
+   TasksPage); past three steps the indent starts eating the row instead of
+   explaining it, so deeper subtasks render at the third step's offset.
+
+   The spacer is purely horizontal — it is a flex item in both places it
+   appears (a row's leading slot and the subtask line), so it needs no height
+   of its own. */
+.tasks__indent {
+  flex: none;
+}
+.tasks__indent--1 {
+  width: var(--nx-space-4);
+}
+.tasks__indent--2 {
+  width: calc(var(--nx-space-4) * 2);
+}
+.tasks__indent--3 {
+  width: calc(var(--nx-space-4) * 3);
+}
+
+/* Every row of a top-level task's subtree lives inside ONE .nx-list-view__item
+   (renderBranch emits them as siblings), so the engine's "the last item drops
+   its separator" rule would strip the separators from the whole last subtree.
+   Put them back for every row but the visually last one. */
+.tasks .nx-list-view__item:last-child > .nx-list-row:not(:last-child) {
+  border-bottom: 1px solid var(--nx-border);
+}
+
+/* Inline "new subtask" line, directly under the row it belongs to. It borrows
+   the quick-add input rather than inventing a second field; the padding is
+   tighter than a row's because the input already carries its own, and the
+   indent puts its left edge exactly where the new subtask's checkbox lands. */
+.tasks__subtask-add {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-1) 0;
+}
+.tasks__subtask-input.nx-textfield__input {
+  flex: 1;
+}
+
+/* Roll-up chip: neutral like the rest of the cluster. Every direct subtask
+   done takes the module's own done treatment — the struck-through label of a
+   ticked checkbox (packages/ui .nx-checkbox--done) — never a new colour. */
+.tasks__progress-done {
+  text-decoration: line-through;
 }
 
 /* Calendar (CAL page) ------------------------------------------------- */
@@ -4486,10 +4539,14 @@ button.cal__grid-event {
   margin-right: 3px;
 }
 
-/* Scope dialog — the same overlay recipe as the search palette (backdrop and
+/* House dialog recipe — the recurrence scope question (.recur-dialog__*) and
+   the open-subtasks question (.tasks__dialog-*, TASK-008) share it outright:
+   both ask "this reaches records you did not pick", and one look for that
+   question is the point. The same overlay as the search palette (backdrop and
    panel as siblings, a solid wash of the app background rather than a raw
    scrim), centred because it is a question, not a search surface. */
-.recur-dialog__overlay {
+.recur-dialog__overlay,
+.tasks__dialog-overlay {
   position: fixed;
   inset: 0;
   z-index: 60;
@@ -4498,13 +4555,15 @@ button.cal__grid-event {
   justify-content: center;
   padding: var(--nx-space-6);
 }
-.recur-dialog__backdrop {
+.recur-dialog__backdrop,
+.tasks__dialog-backdrop {
   position: absolute;
   inset: 0;
   background: var(--nx-bg);
   opacity: 0.75;
 }
-.recur-dialog__panel {
+.recur-dialog__panel,
+.tasks__dialog-panel {
   position: relative;
   width: min(420px, 92vw);
   display: flex;
@@ -4516,38 +4575,45 @@ button.cal__grid-event {
   border-radius: var(--nx-radius-lg);
   box-shadow: var(--nx-shadow);
 }
-.recur-dialog__title {
+.recur-dialog__title,
+.tasks__dialog-title {
   margin: 0;
   font-size: var(--nx-font-size-title);
   font-weight: var(--nx-font-weight-semibold);
   color: var(--nx-text);
 }
-.recur-dialog__question {
+.recur-dialog__question,
+.tasks__dialog-question {
   margin: 0;
   font-size: var(--nx-font-size-body-sm);
   color: var(--nx-text-muted);
 }
-/* Three equal choices and no primary among them: the dialog exists so that
-   nothing here is picked by accident. */
-.recur-dialog__choices {
+/* Equal choices and no primary among them: the dialog exists so that nothing
+   here is picked by accident. */
+.recur-dialog__choices,
+.tasks__dialog-choices {
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-2);
 }
-.recur-dialog__choice.nx-button {
+.recur-dialog__choice.nx-button,
+.tasks__dialog-choice.nx-button {
   justify-content: flex-start;
   text-align: left;
 }
-.recur-dialog__actions {
+.recur-dialog__actions,
+.tasks__dialog-actions {
   display: flex;
   justify-content: flex-end;
 }
-.recur-dialog__cancel.nx-button {
+.recur-dialog__cancel.nx-button,
+.tasks__dialog-cancel.nx-button {
   background: transparent;
   border-color: transparent;
   color: var(--nx-text-muted);
 }
-.recur-dialog__cancel.nx-button:hover {
+.recur-dialog__cancel.nx-button:hover,
+.tasks__dialog-cancel.nx-button:hover {
   background: transparent;
   color: var(--nx-text);
 }

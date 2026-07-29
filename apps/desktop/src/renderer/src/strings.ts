@@ -185,6 +185,23 @@ export const strings = {
     priorityLabel: "Prioritet",
     save: "Sačuvaj",
     cancel: "Otkaži",
+    /** Per-row „+” and the inline line it opens (TASK-008). A subtask starts as a bare name; rok/prioritet/ponavljanje are set afterwards through the ✎ form, like on any task. */
+    addSubtaskLabel: "Dodaj podzadatak",
+    subtaskPlaceholder: "Novi podzadatak — upiši i pritisni Enter",
+    /** Tooltip on the `2/5` roll-up chip; the number alone cannot say what it counts. */
+    subtaskProgressTitle: "Završeni podzadaci",
+    /**
+     * The open-subtasks question (PRD 03 §4). Completing a parent reaches rows
+     * the user did not tick, so it is asked rather than assumed — no default,
+     * and Otkaži is the way out that changes nothing.
+     */
+    subtasks: {
+      title: "Podzadaci",
+      question: "Zadatak ima otvorene podzadatke.",
+      completeAll: "Završi i podzadatke",
+      completeOne: "Završi samo zadatak",
+      cancel: "Otkaži",
+    },
     /** Kanban column titles, keyed by task status value (labels are presentation). */
     status: {
       todo: "Za rad",
