@@ -11,7 +11,7 @@ import {
   ListView,
   TextField,
 } from "@nexus/ui";
-import { isValidDayKey } from "@nexus/core";
+import { isValidDayKey, parseQuickAddDate } from "@nexus/core";
 import type { CollectionSchema, KanbanViewConfig, ListViewConfig } from "@nexus/core";
 import type {
   NewTaskFields,
@@ -21,6 +21,7 @@ import type {
   TaskPriority,
   TaskStatus,
 } from "../../shared/ipc.js";
+import { localTodayKey } from "./examDates.js";
 import { RecurrenceMark, RecurrencePicker } from "./RecurrencePicker.js";
 import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
 import { strings } from "./strings.js";
@@ -104,6 +105,24 @@ function formatDue(iso: string): string {
       );
 }
 
+/**
+ * The date recognised in the quick-add line, with its weekday spelled out —
+ * "pet, 15. avg". Same bare-day/UTC rule as `formatDue`, plus the weekday:
+ * what the user typed is often a WORD ("u petak"), and the chip is only
+ * checkable against it at a glance if it names the day back.
+ */
+function formatQuickDate(dayKey: string): string {
+  const date = new Date(dayKey);
+  return Number.isNaN(date.getTime())
+    ? dayKey
+    : new Intl.DateTimeFormat("sr-Latn", {
+        weekday: "short",
+        day: "2-digit",
+        month: "short",
+        timeZone: "UTC",
+      }).format(date);
+}
+
 /** The series marker (when the task repeats), priority (when not 'none') and due-date (when set) chips; null when none apply. */
 function taskChips(task: TaskFields): ReactNode {
   const chips: ReactNode[] = [];
@@ -163,6 +182,8 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const [dueDate, setDueDate] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("none");
   const [recurrence, setRecurrence] = useState<RecurrenceRule | null>(null);
+  /** The quick-add phrase the user waved away, or null — see `activeQuickDate`. */
+  const [dismissedPhrase, setDismissedPhrase] = useState<string | null>(null);
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
   /** Next due date of a recurring task that just advanced, or null — the row moved, so the page says where to. */
   const [advancedTo, setAdvancedTo] = useState<string | null>(null);
@@ -211,6 +232,18 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     onIntentHandled?.();
   }, [intent, tasks, reveal, onIntentHandled]);
 
+  // A due date read straight out of the title (TASK-007). Derived plainly on
+  // every render — the scan is a handful of regexes over a title-length string,
+  // so there is nothing worth memoising or debouncing — and ONLY while
+  // creating: editing an existing task must never start eating words out of a
+  // title the user already saved.
+  const quickDate = editingId === null ? parseQuickAddDate(draft, localTodayKey()) : null;
+  // Dismissal is remembered by the exact phrase, not by a boolean: the chip
+  // stays gone while that phrase stands, and comes back the moment the user
+  // edits it into a different one.
+  const activeQuickDate =
+    quickDate !== null && quickDate.phrase !== dismissedPhrase ? quickDate : null;
+
   function selectView(next: TaskView): void {
     setView(next);
     persistView(profileId, next);
@@ -230,12 +263,14 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     setDueDate("");
     setPriority("none");
     setRecurrence(null);
+    setDismissedPhrase(null);
   }
 
   /** Loads a task into the shared form and switches it to edit mode. */
   function startEdit(task: TaskFields): void {
     setEditingId(task.id);
     setDraft(task.title);
+    setDismissedPhrase(null);
     // The store accepts a date-time due date too, but this form only speaks in
     // whole days, so it shows (and on save keeps) the day part.
     setDueDate(task.dueDate === null ? "" : task.dueDate.slice(0, 10));
@@ -246,12 +281,24 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
 
   async function submitForm(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    const title = draft.trim();
-    if (title.length === 0) return;
-    const due = dueDate.length > 0 ? dueDate : null;
+    const typed = draft.trim();
+    if (typed.length === 0) return;
+    // A recognised date takes its phrase out of the title — unless the phrase
+    // IS the whole title ("sutra"), where stripping it would save a task with
+    // no name; then the raw draft stands in and only the date is taken.
+    const title =
+      activeQuickDate !== null && activeQuickDate.strippedTitle.length > 0
+        ? activeQuickDate.strippedTitle
+        : typed;
+    // The date field always wins: it is the explicit correction the user makes
+    // when the reading is wrong.
+    const due = dueDate.length > 0 ? dueDate : (activeQuickDate?.date ?? null);
     // A rule phases from the due date, so there is no such thing as one without
     // it; the picker is already disabled in that state, and this is the guard
     // for the order the user could still reach it in (set a rule, clear the date).
+    // Deliberately read off the FIELD, not off `due`: the picker is anchored to
+    // the field too, and a second anchor mid-edit would let a rule phase from a
+    // date the form does not show.
     const rule = isValidDayKey(dueDate) ? recurrence : null;
     try {
       if (editingId != null) {
@@ -369,6 +416,36 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
               </Button>
             )}
           </div>
+
+          {activeQuickDate !== null && (
+            <div
+              className="tasks__quick-date"
+              role="status"
+              aria-label={strings.tasks.quickDate.regionLabel}
+            >
+              <span className="tasks__quick-date-mark" aria-hidden="true">
+                →
+              </span>
+              <Chip variant="data" title={strings.tasks.quickDate.chipTitle}>
+                {formatQuickDate(activeQuickDate.date)}
+              </Chip>
+              <Button
+                type="button"
+                size="sm"
+                className="tasks__quick-date-dismiss"
+                aria-label={strings.tasks.quickDate.dismissLabel}
+                onClick={() => {
+                  setDismissedPhrase(activeQuickDate.phrase);
+                  // The button it sits on is about to unmount, so focus has to
+                  // be handed somewhere deliberate — back to the line the user
+                  // was typing in.
+                  inputRef.current?.focus();
+                }}
+              >
+                ×
+              </Button>
+            </div>
+          )}
 
           <div className="tasks__fields">
             <TextField

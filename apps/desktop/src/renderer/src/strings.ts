@@ -168,6 +168,18 @@ export const strings = {
     deletedNotice: "Zadatak obrisan",
     undo: "Vrati",
     dismiss: "Zatvori",
+    /**
+     * A due date recognised in the quick-add line itself (TASK-007) — "Kupi
+     * mleko sutra". The chip shows what will be saved before Enter is pressed,
+     * so the reading is always correctable rather than surprising.
+     */
+    quickDate: {
+      /** Names the live region that announces the recognised date. */
+      regionLabel: "Prepoznat rok",
+      /** Tooltip on the chip — says what happens on save. */
+      chipTitle: "Rok prepoznat iz naslova — primeniće se pri čuvanju",
+      dismissLabel: "Zanemari prepoznat rok",
+    },
     /** Detail fields of the shared add/edit form (the quick-add line stays the fast path). */
     dueDateLabel: "Rok",
     priorityLabel: "Prioritet",

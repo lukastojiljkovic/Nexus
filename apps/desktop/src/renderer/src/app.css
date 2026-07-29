@@ -355,6 +355,28 @@ body {
   gap: var(--nx-space-2);
   flex-wrap: wrap;
 }
+/* Due date read out of the quick-add line itself (TASK-007): a quiet row under
+   the title input, borrowing the undo bar's dismiss idiom rather than inventing
+   a second one. The arrow is typographic — no icon, no glow. */
+.tasks__quick-date {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.tasks__quick-date-mark {
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+.tasks__quick-date-dismiss.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.tasks__quick-date-dismiss.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
 /* Native select matched to the textfield input (tokens only, no custom arrow;
    mirrors .documents__select). */
 .tasks__select {

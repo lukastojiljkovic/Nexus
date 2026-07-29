@@ -232,3 +232,6 @@ export {
   TITLE_PREFIX_BOOST,
 } from "./search/searchRanking.js";
 export type { RankedSearchHit, SearchHit } from "./search/searchRanking.js";
+
+export { MAX_RELATIVE_DAYS, parseQuickAddDate } from "./tasks/quickAddDate.js";
+export type { QuickAddDateMatch } from "./tasks/quickAddDate.js";
