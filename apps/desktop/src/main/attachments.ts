@@ -61,12 +61,17 @@ function legacyBlobPath(legacyDir: string, sha256: string): string {
  * no-op). The write itself is atomic: a random-suffixed temp file next to the
  * final path, then an OS-level rename, so a crash mid-write can never leave a
  * half-written blob at the real path. Never writes to `paths.legacyDir`.
+ *
+ * `created` is false on the write-if-absent early return and true only when
+ * this call actually encrypted and wrote the blob — a restore (`main/restore.ts`,
+ * ADR-023) needs to know precisely which blobs IT introduced, since undo may
+ * only ever remove those, never one that merely already existed.
  */
 export async function saveBlob(
   paths: BlobStorePaths,
   keys: BlobKeys,
   bytes: Uint8Array,
-): Promise<{ sha256: string }> {
+): Promise<{ sha256: string; created: boolean }> {
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const storageName = await blobStorageName(keys.nameKey, sha256);
   const path = encryptedBlobPath(paths.dir, storageName);
@@ -75,14 +80,14 @@ export async function saveBlob(
     () => true,
     () => false,
   );
-  if (alreadyPresent) return { sha256 };
+  if (alreadyPresent) return { sha256, created: false };
 
   const container = await encryptBlob(keys.contentKey, bytes, sha256);
   await mkdir(dirname(path), { recursive: true });
   const tempPath = `${path}.tmp-${randomBytes(8).toString("hex")}`;
   await writeFile(tempPath, container);
   await rename(tempPath, path);
-  return { sha256 };
+  return { sha256, created: true };
 }
 
 async function readLegacyBlob(legacyDir: string, sha256: string): Promise<Uint8Array | null> {

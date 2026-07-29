@@ -64,15 +64,11 @@ import {
 } from "@nexus/core";
 import { deriveArchiveKey } from "@nexus/core/auth";
 
-import { NOTE_ATTACHMENT_MAX_BYTES } from "../shared/ipc.js";
+import { NOTE_ATTACHMENT_MAX_BYTES, type ArchiveReadErrorCode } from "../shared/ipc.js";
 
-/** Why an archive could not be opened. The renderer maps these to Serbian copy; this module never produces user-facing prose. */
-export type ArchiveReadErrorCode =
-  | "not-an-archive" // neither an NXA1 container nor a readable zip
-  | "passphrase-required" // an NXA1 container, and no passphrase was supplied
-  | "passphrase-wrong" // an NXA1 container whose frames do not authenticate under the derived key
-  | "damaged" // structurally broken: truncated, corrupt central directory, duplicate entries
-  | "too-large"; // a limit below was exceeded
+// Declared in `shared/ipc.ts` (the one file every wire shape lives in) and
+// re-exported here so this module's existing consumers are unaffected.
+export type { ArchiveReadErrorCode };
 
 export class ArchiveReadError extends Error {
   constructor(

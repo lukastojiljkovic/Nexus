@@ -1613,6 +1613,128 @@ export type ExportResult =
       encrypted: boolean;
     };
 
+/**
+ * Why an archive could not be opened (IMEX slice 3c, ADR-023). Lives here
+ * rather than in `main/archiveReader.ts` — the module that actually produces
+ * it — because this file is the one place every wire shape is declared once;
+ * `archiveReader.ts` imports it type-only and re-exports it, so its existing
+ * consumers see no difference. The renderer maps these to Serbian copy; this
+ * module never produces user-facing prose.
+ */
+export type ArchiveReadErrorCode =
+  | "not-an-archive" // neither an NXA1 container nor a readable zip
+  | "passphrase-required" // an NXA1 container, and no passphrase was supplied
+  | "passphrase-wrong" // an NXA1 container whose frames do not authenticate under the derived key
+  | "damaged" // structurally broken: truncated, corrupt central directory, duplicate entries
+  | "too-large"; // a limit below was exceeded
+
+/**
+ * Mirrors `@nexus/core`'s `ImportProblemCode` exactly. Redeclared rather than
+ * imported — the same pattern `AuthErrorReason` follows — because this file
+ * deliberately imports nothing. `main/restore.ts` assigns a core
+ * `ImportProblemCode` to this type, so a code added in core and forgotten here
+ * is a compile error rather than a silent gap.
+ */
+export type RestoreProblemCode =
+  | "missing-manifest"
+  | "invalid-manifest"
+  | "unsupported-schema-version"
+  | "missing-data-file"
+  | "checksum-mismatch"
+  | "invalid-json"
+  | "unknown-record-type"
+  | "invalid-record"
+  | "duplicate-id"
+  | "unknown-reference"
+  | "reference-cycle"
+  | "invalid-ydoc"
+  | "missing-ydoc"
+  | "missing-blob";
+
+/** One thing wrong with an archive. `detail` is a machine-ish English fragment (a field name, an id) — never a sentence for a user; the renderer owns all Serbian copy. */
+export interface RestoreProblem {
+  severity: "error" | "warning";
+  code: RestoreProblemCode;
+  path?: string;
+  line?: number;
+  detail?: string;
+}
+
+/** Record counts per archive module — exactly `buildExportArchive`'s own manifest grouping (`countProfileModules`, `@nexus/core`). */
+export interface RestoreModuleCounts {
+  tasks: number;
+  calendar: number;
+  study: number;
+  notifications: number;
+  notes: number;
+}
+
+/** The outcome of the native "pick a restore archive" dialog (IMEX slice 3c). Mirrors `SaveAttachmentResult`'s shape, plus what a restore preview needs before it can even ask for a passphrase: the file's display name and whether it is an `NXA1` container. */
+export type RestorePickResult =
+  | { canceled: true }
+  | { canceled: false; path: string; fileName: string; encrypted: boolean };
+
+/**
+ * A dry run of a real restore, computed by actually parsing the picked
+ * archive (ADR-023 section 1) — never an estimate. `current`/`incoming` are
+ * the SAME module grouping (`countProfileModules`), so the confirmation
+ * screen compares like with like.
+ */
+export interface RestorePreview {
+  /** Identifies this exact parse. `applyRestore` refuses any other value, so a stale screen can never apply a preview the user did not see. */
+  token: string;
+  fileName: string;
+  encrypted: boolean;
+  /** From the archive's manifest. */
+  createdAt: string;
+  appVersion: string;
+  sourceProfileName: string;
+  /** The profile about to be overwritten, as it is right now. */
+  targetProfileName: string;
+  current: RestoreModuleCounts;
+  incoming: RestoreModuleCounts;
+  /** Warning-severity problems only (today: a `missing-blob` per attachment row whose file the archive lacks). Errors never reach a preview — they refuse it. */
+  warnings: RestoreProblem[];
+  /** Blobs present in the archive whose bytes did not hash to their own name: their attachment rows restore, their files do not. */
+  corruptBlobs: number;
+}
+
+/**
+ * `"no-file"` when nothing has been picked yet; `"unreadable"` when the
+ * archive itself could not be opened (wrong/missing passphrase, damage,
+ * limits); `"invalid"` when it opened but failed validation (a bad manifest,
+ * a checksum mismatch, an unknown record) — every error-severity problem
+ * found, never withheld; `"ready"` is the only state `applyRestore` accepts.
+ */
+export type RestorePreviewResult =
+  | { status: "no-file" }
+  | { status: "unreadable"; code: ArchiveReadErrorCode }
+  | { status: "invalid"; problems: RestoreProblem[] }
+  | { status: "ready"; preview: RestorePreview };
+
+/** What a completed restore actually wrote (ADR-023 section 1: applying writes exactly what the preview showed — nothing is re-read or re-validated). */
+export interface RestoreApplyResult {
+  restored: RestoreModuleCounts;
+  /** Every row `RestoreStore.replaceProfileData` wrote, across all tables — not just the five modules above. */
+  rowsWritten: number;
+  /** Attachment blobs whose bytes were new to the store. A blob already present is not counted, and is not undone. */
+  blobsAdded: number;
+  /** Attachment rows restored whose blob the archive did not carry (or carried corrupt): the rows exist, the files do not. */
+  missingBlobs: number;
+}
+
+/** What undoing a restore actually wrote (ADR-023 section 3: undo removes only the blobs the restore itself added, and only once nothing else references them). */
+export interface RestoreUndoResult {
+  rowsWritten: number;
+  /** Blobs the restore had added and that nothing references anymore. */
+  blobsRemoved: number;
+}
+
+/** What a freshly reloaded renderer asks for, since the reload replaced the screen that would have shown the undo banner (IMEX-006). */
+export interface RestoreStatus {
+  undo: { appliedAt: string; summary: RestoreApplyResult } | null;
+}
+
 /** Runtime and environment facts, proving the main-process path end to end. */
 export interface AppInfo {
   name: string;
