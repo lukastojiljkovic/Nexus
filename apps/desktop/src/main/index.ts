@@ -1,11 +1,12 @@
 import { createHash, randomBytes } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { app, BrowserWindow, ipcMain, protocol } from "electron";
-import type { IpcMainInvokeEvent } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, protocol } from "electron";
+import type { IpcMainInvokeEvent, OpenDialogOptions } from "electron";
 import { autoUpdater } from "electron-updater";
 import {
   buildSearchSnippet,
+  MAX_ARCHIVE_PASSPHRASE_LENGTH,
   parseSearchQuery,
   rankSearchResults,
   sniffMime,
@@ -41,6 +42,7 @@ import {
   openDatabase,
   PlanStore,
   rebuildSearchIndex,
+  RestoreStore,
   SearchStore,
   SqliteFlagStore,
   StatsStore,
@@ -132,6 +134,16 @@ import {
 } from "./notes.js";
 import { startNotificationScheduler, stopNotificationScheduler } from "./notifications.js";
 import {
+  applyRestore,
+  cancelRestore,
+  clearRestoreState,
+  pickRestoreFile,
+  previewRestore,
+  restoreStatus,
+  undoRestore,
+  type RestoreDeps,
+} from "./restore.js";
+import {
   CARD_TEXT_MAX_LENGTH,
   IpcChannel,
   NOTE_CARD_KEY_MAX_LENGTH,
@@ -147,6 +159,11 @@ import {
   type NoteDocPayload,
   type NoteVersionMeta,
   type Profile,
+  type RestoreApplyResult,
+  type RestorePickResult,
+  type RestorePreviewResult,
+  type RestoreStatus,
+  type RestoreUndoResult,
   type RunningFocusSession,
   type SaveAttachmentResult,
   type SearchResult,
@@ -606,6 +623,45 @@ function asArchivePassphrase(value: unknown, field: string): string | null {
   if (value === null) return null;
   if (typeof value !== "string" || validateArchivePassphrase(value) !== null) {
     throw new Error(`Invalid IPC payload: "${field}" must be null or a valid archive passphrase.`);
+  }
+  return value;
+}
+
+/**
+ * `imex:restore-preview`'s passphrase field (ADR-023): `null` for a plain
+ * `.nexus.zip`, otherwise a non-empty string capped at
+ * `MAX_ARCHIVE_PASSPHRASE_LENGTH`. Deliberately NOT held to
+ * `validateArchivePassphrase` the way `asArchivePassphrase` above is: that one
+ * guards what we WRITE — we refuse to seal an archive under a weak passphrase
+ * — while this one is only an attempt at a file that already exists. The file
+ * on disk is the authority on what opens it, so an archive written under an
+ * older, laxer policy must stay openable, and a wrong guess simply fails AEAD
+ * authentication. The cap is the SEC-EL-02 half, mirroring `asPasscode`: it
+ * bounds what can ever reach Argon2id.
+ */
+function asRestorePassphrase(value: unknown, field: string): string | null {
+  if (value === null) return null;
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.length > MAX_ARCHIVE_PASSPHRASE_LENGTH
+  ) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be null or a non-empty string of at most ${MAX_ARCHIVE_PASSPHRASE_LENGTH} characters.`,
+    );
+  }
+  return value;
+}
+
+/** A restore token is 32 hex characters (`randomBytes(16)`, `main/restore.ts`); 64 is headroom, and the point is only that an opaque value echoed back by the renderer can never grow unbounded. */
+const MAX_RESTORE_TOKEN_LENGTH = 64;
+
+/** `imex:restore-apply`'s token field: a non-empty string within `MAX_RESTORE_TOKEN_LENGTH`. Whether it is the CURRENT preview's token is `applyRestore`'s call, not this structural check's — the same division `asRecoveryCodeInput` follows. */
+function asRestoreToken(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.length === 0 || value.length > MAX_RESTORE_TOKEN_LENGTH) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be a non-empty string of at most ${MAX_RESTORE_TOKEN_LENGTH} characters.`,
+    );
   }
   return value;
 }
@@ -1306,6 +1362,9 @@ function performLock(): void {
   // where nothing can observe it, and holding open exactly the kind of
   // background work a lock is supposed to stop.
   cancelIdleCompactions();
+  // A picked archive holds decrypted bytes and an undo snapshot holds a whole
+  // profile's plaintext — both must die with the session's keys (ADR-023).
+  clearRestoreState();
   try {
     db?.close();
   } catch {
@@ -1437,6 +1496,65 @@ async function handleAuthRegenerateRecovery(): Promise<AuthResult> {
   } catch (error) {
     return authResultFromError(error);
   }
+}
+
+/**
+ * Everything `main/restore.ts` runs on (ADR-023 slice 3c): the same store
+ * getters the `imex:export` handler hands `handleExport` — that shared shape is
+ * exactly why undo's snapshot and an ordinary export are provably identical
+ * (`profileData.ts`) — plus the pieces only a restore needs. Built fresh per
+ * call, like the export handler's own deps literal: every getter resolves
+ * `requireDb()`/`requireBlobKeys()` at use time, so a deps object can never
+ * outlive the session that made it.
+ */
+function restoreDeps(): RestoreDeps {
+  return {
+    taskStore,
+    eventStore,
+    documentStore,
+    subjectStore,
+    examStore,
+    deckStore,
+    cardStore,
+    planStore,
+    focusStore,
+    notificationStore,
+    noteStore,
+    noteOrgStore,
+    noteTemplateStore,
+    noteAttachmentStore,
+    flagStore,
+    restoreStore: (profileId) => new RestoreStore(requireDb().raw, profileId),
+    getProfile: (profileId) => requireProfile(requireDb(), profileId),
+    pickArchiveFile: async () => {
+      // One filter for both archive kinds: an encrypted export is `.nexus` and
+      // a plaintext one `.nexus.zip`, and the reader tells them apart by the
+      // file's own magic bytes, never by its extension.
+      const options: OpenDialogOptions = {
+        properties: ["openFile"],
+        filters: [{ name: "Nexus arhiva", extensions: ["nexus", "zip"] }],
+      };
+      const { canceled, filePaths } = mainWindow
+        ? await dialog.showOpenDialog(mainWindow, options)
+        : await dialog.showOpenDialog(options);
+      return canceled ? null : (filePaths[0] ?? null);
+    },
+    // The renderer comes back UNLOCKED: main keeps the open database and the
+    // data key across this reload (ADR-023 section 7) — all it discards is the
+    // renderer's own view of a profile that just changed under it.
+    reloadRenderer: () => {
+      mainWindow?.webContents.reload();
+    },
+    // Discarded, never persisted — exactly what `focus:cancel` does, and for a
+    // sharper reason here: the row it would have written is about to be wiped
+    // by the very restore asking for this.
+    cancelFocusSession: (profileId) => {
+      runningFocusSessions.delete(profileId);
+    },
+    saveBlob: (bytes) => saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes),
+    deleteBlobIfOrphaned: (sha256, refCount) =>
+      deleteBlobIfOrphaned(blobStorePathsFor(), requireBlobKeys(), sha256, refCount),
+  };
 }
 
 function registerIpc(): void {
@@ -2518,6 +2636,49 @@ function registerIpc(): void {
     );
   });
 
+  // IMEX restore (ADR-023, slice 3c). Each of these is a thin validation shim
+  // over `main/restore.ts`, which owns the whole sequence — pick, dry-run
+  // preview, apply, undo — and holds the only state involved. The renderer
+  // never supplies a filesystem path: `imex:restore-pick` is the sole source of
+  // one, and every later call refers to that pick without naming it (SEC-EL).
+  ipcMain.handle(IpcChannel.imexRestorePick, (event): Promise<RestorePickResult> => {
+    assertTrustedSender(event);
+    return pickRestoreFile(restoreDeps());
+  });
+
+  ipcMain.handle(IpcChannel.imexRestorePreview, (event, payload): Promise<RestorePreviewResult> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const passphrase = asRestorePassphrase(body.passphrase, "passphrase");
+    return previewRestore(restoreDeps(), profileId, passphrase);
+  });
+
+  ipcMain.handle(IpcChannel.imexRestoreApply, (event, payload): Promise<RestoreApplyResult> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const token = asRestoreToken(body.token, "token");
+    return applyRestore(restoreDeps(), profileId, token);
+  });
+
+  ipcMain.handle(IpcChannel.imexRestoreUndo, (event, payload): Promise<RestoreUndoResult> => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return undoRestore(restoreDeps(), profileId);
+  });
+
+  ipcMain.handle(IpcChannel.imexRestoreStatus, (event, payload): RestoreStatus => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return restoreStatus(profileId);
+  });
+
+  ipcMain.handle(IpcChannel.imexRestoreCancel, (event): Promise<void> => {
+    assertTrustedSender(event);
+    return cancelRestore();
+  });
+
   ipcMain.handle(IpcChannel.appInfo, (event): AppInfo => {
     assertTrustedSender(event);
     return appInfo();
@@ -3004,6 +3165,7 @@ app.on("window-all-closed", () => {
 app.on("will-quit", () => {
   stopNotificationScheduler();
   cancelIdleCompactions(); // same reasoning as `performLock` — about to close `db`
+  clearRestoreState(); // likewise: decrypted archive bytes and a plaintext undo snapshot must not outlive the session
   try {
     db?.close();
   } catch {

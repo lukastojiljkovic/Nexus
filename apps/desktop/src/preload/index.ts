@@ -222,6 +222,14 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.searchRebuild, { profileId }),
   exportData: (profileId, passphrase) =>
     ipcRenderer.invoke(IpcChannel.imexExport, { profileId, passphrase }),
+  pickRestoreArchive: () => ipcRenderer.invoke(IpcChannel.imexRestorePick),
+  previewRestore: (profileId, passphrase) =>
+    ipcRenderer.invoke(IpcChannel.imexRestorePreview, { profileId, passphrase }),
+  applyRestore: (profileId, token) =>
+    ipcRenderer.invoke(IpcChannel.imexRestoreApply, { profileId, token }),
+  undoRestore: (profileId) => ipcRenderer.invoke(IpcChannel.imexRestoreUndo, { profileId }),
+  restoreStatus: (profileId) => ipcRenderer.invoke(IpcChannel.imexRestoreStatus, { profileId }),
+  cancelRestore: () => ipcRenderer.invoke(IpcChannel.imexRestoreCancel),
   appInfo: () => ipcRenderer.invoke(IpcChannel.appInfo),
 };
 

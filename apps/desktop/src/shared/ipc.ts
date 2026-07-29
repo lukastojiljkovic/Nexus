@@ -129,6 +129,12 @@ export const IpcChannel = {
   searchRecent: "search:recent",
   searchRebuild: "search:rebuild",
   imexExport: "imex:export",
+  imexRestorePick: "imex:restore-pick",
+  imexRestorePreview: "imex:restore-preview",
+  imexRestoreApply: "imex:restore-apply",
+  imexRestoreUndo: "imex:restore-undo",
+  imexRestoreStatus: "imex:restore-status",
+  imexRestoreCancel: "imex:restore-cancel",
   appInfo: "app:info",
 } as const;
 
@@ -1735,6 +1741,41 @@ export interface RestoreStatus {
   undo: { appliedAt: string; summary: RestoreApplyResult } | null;
 }
 
+/**
+ * Picking an archive (`imex:restore-pick`) and dropping the picked one
+ * (`imex:restore-cancel`) carry no payload at all — main holds the pick, so
+ * there is nothing for the renderer to name — and so declare no request shape
+ * here.
+ */
+export interface ImexRestorePreviewRequest {
+  profileId: string;
+  /**
+   * `null` for a plain `.nexus.zip`, which needs none. Deliberately NOT held
+   * to `validateArchivePassphrase`, unlike `ImexExportRequest`'s: an EXPORT
+   * passphrase is a policy decision — we refuse to WRITE a weak archive — while
+   * a RESTORE passphrase is merely an attempt at a file that already exists.
+   * The file on disk is the authority on what opens it, so main only bounds
+   * this value's length and never policy-checks it; a wrong one simply fails
+   * AEAD authentication (`deriveArchiveKey` canonicalizes through
+   * `normalizeArchivePassphrase`, so form differences never matter).
+   */
+  passphrase: string | null;
+}
+
+/** `token` names the exact preview being confirmed — main refuses any other value, so a stale screen can never apply a parse the user did not see. */
+export interface ImexRestoreApplyRequest {
+  profileId: string;
+  token: string;
+}
+
+export interface ImexRestoreUndoRequest {
+  profileId: string;
+}
+
+export interface ImexRestoreStatusRequest {
+  profileId: string;
+}
+
 /** Runtime and environment facts, proving the main-process path end to end. */
 export interface AppInfo {
   name: string;
@@ -1946,5 +1987,17 @@ export interface NexusApi {
    * written.
    */
   exportData(profileId: string, passphrase: string | null): Promise<ExportResult>;
+  /** Opens the native "pick a restore archive" dialog (IMEX slice 3c, ADR-023). Main remembers the pick, which is why nothing below ever names a path. */
+  pickRestoreArchive(): Promise<RestorePickResult>;
+  /** Dry-runs the restore by really parsing the picked archive — never an estimate. `passphrase` is `null` for a plain `.nexus.zip`; a wrong one comes back as `{ status: "unreadable", code: "passphrase-wrong" }` rather than as a rejection. */
+  previewRestore(profileId: string, passphrase: string | null): Promise<RestorePreviewResult>;
+  /** Confirms the preview `token` names, replacing this profile's entire contents. The renderer is reloaded shortly AFTER this resolves, so nothing may depend on the reload having already happened. */
+  applyRestore(profileId: string, token: string): Promise<RestoreApplyResult>;
+  /** Puts the profile back exactly as it was before the last applied restore (ADR-023 section 3). Rejects when there is nothing to undo. */
+  undoRestore(profileId: string): Promise<RestoreUndoResult>;
+  /** Whether a restore is still undoable — the first thing a reloaded renderer asks, since the reload replaced the screen that would have shown the banner. */
+  restoreStatus(profileId: string): Promise<RestoreStatus>;
+  /** Drops the picked archive without applying it, releasing the OS file lock an opened one holds. */
+  cancelRestore(): Promise<void>;
   appInfo(): Promise<AppInfo>;
 }
