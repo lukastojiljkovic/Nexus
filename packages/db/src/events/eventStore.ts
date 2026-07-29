@@ -7,6 +7,17 @@ import { uuidv7 } from "../ids.js";
 type DatabaseHandle = Database.Database;
 
 /**
+ * CAL-006: the longest lead time one reminder may carry — 30 days, in minutes.
+ * Exported (and re-exported from the package barrel) so the IPC validator that
+ * guards this store from an untrusted renderer checks the very same bound
+ * rather than a second copy of it.
+ */
+export const MAX_EVENT_REMINDER_MINUTES = 43_200;
+
+/** CAL-006: how many reminders one event may carry. Exported for the same reason as the cap above. */
+export const MAX_EVENT_REMINDERS = 8;
+
+/**
  * A calendar event as the store returns it: camelCase keys that map straight
  * onto a views engine `CollectionSchema` (title → text, startAt/endAt → date,
  * allDay → boolean) with no adapter. `allDay` is decoded from the 0/1 column.
@@ -36,6 +47,13 @@ export interface Event {
    * Settable only through `addRecurrenceExdate`, never through create/update.
    */
   recurrenceExdates: string[];
+  /**
+   * Whole minutes before an occurrence's start at which to remind (CAL-006),
+   * ascending. Unlike `recurrenceExdates` these ARE ordinary user input — a
+   * ladder like a document's — so create/update set them, and they are
+   * independent of `recurrence`: a one-off event reminds too.
+   */
+  reminderOffsets: number[];
 }
 
 /** Fields accepted when creating an event; only `title` and `startAt` are required (CAL-001). */
@@ -48,6 +66,7 @@ export interface CreateEventInput {
   description?: string | null;
   category?: string | null;
   recurrence?: RecurrenceRule | null;
+  reminderOffsets?: number[];
 }
 
 /**
@@ -65,6 +84,7 @@ export interface UpdateEventFields {
   description?: string | null;
   category?: string | null;
   recurrence?: RecurrenceRule | null;
+  reminderOffsets?: number[];
 }
 
 interface EventRow {
@@ -81,11 +101,12 @@ interface EventRow {
   updated_at: string;
   recurrence: string | null;
   recurrence_exdates: string;
+  reminder_offsets: string;
 }
 
 const COLUMNS =
   "id, profile_id, title, description, start_at, end_at, all_day, " +
-  "location, category, created_at, updated_at, recurrence, recurrence_exdates";
+  "location, category, created_at, updated_at, recurrence, recurrence_exdates, reminder_offsets";
 
 /** Accepts ISO-8601 date ('2026-07-08') or date-time, optionally zoned (PRD §7). */
 const ISO_8601 =
@@ -113,11 +134,13 @@ export class EventStore {
   ) {
     // A brand-new series has no exceptions yet, so `recurrence_exdates` is the
     // literal empty list here rather than a bound value: it is not an input.
+    // `reminder_offsets` IS one, so it is bound like every other field.
     this.insert = db.prepare(
       `INSERT INTO events
          (id, profile_id, title, description, start_at, end_at, all_day,
-          location, category, created_at, updated_at, recurrence, recurrence_exdates, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', NULL)`,
+          location, category, created_at, updated_at, recurrence, recurrence_exdates,
+          reminder_offsets, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, NULL)`,
     );
     this.selectActive = db.prepare(
       `SELECT ${COLUMNS} FROM events
@@ -132,7 +155,7 @@ export class EventStore {
       `UPDATE events
          SET title = ?, description = ?, start_at = ?, end_at = ?,
              all_day = ?, location = ?, category = ?, recurrence = ?,
-             recurrence_exdates = ?, updated_at = ?
+             recurrence_exdates = ?, reminder_offsets = ?, updated_at = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
     );
     this.markDeleted = db.prepare(
@@ -167,18 +190,20 @@ export class EventStore {
     const category = normalizeOptional(input.category);
     const recurrence = validateRecurrence(input.recurrence);
     assertRecurrenceAnchor(recurrence, startAt);
+    const reminderOffsets = validateReminderOffsets(input.reminderOffsets);
     const now = new Date().toISOString();
     const id = uuidv7();
 
     this.insert.run(
       id, this.profileId, title, description, startAt, endAt,
       allDay ? 1 : 0, location, category, now, now, serializeRecurrence(recurrence),
+      JSON.stringify(reminderOffsets),
     );
 
     return {
       id, profileId: this.profileId, title, description, startAt, endAt,
       allDay, location, category, createdAt: now, updatedAt: now,
-      recurrence, recurrenceExdates: [],
+      recurrence, recurrenceExdates: [], reminderOffsets,
     };
   }
 
@@ -206,6 +231,10 @@ export class EventStore {
         fields.recurrence !== undefined
           ? validateRecurrence(fields.recurrence)
           : current.recurrence,
+      reminderOffsets:
+        fields.reminderOffsets !== undefined
+          ? validateReminderOffsets(fields.reminderOffsets)
+          : current.reminderOffsets,
     });
   }
 
@@ -322,7 +351,8 @@ export class EventStore {
     this.updateFields.run(
       next.title, next.description, next.startAt, next.endAt,
       next.allDay ? 1 : 0, next.location, next.category,
-      serializeRecurrence(next.recurrence), JSON.stringify(recurrenceExdates), at,
+      serializeRecurrence(next.recurrence), JSON.stringify(recurrenceExdates),
+      JSON.stringify(next.reminderOffsets), at,
       current.id, this.profileId,
     );
 
@@ -345,6 +375,7 @@ function toEvent(row: EventRow): Event {
     updatedAt: row.updated_at,
     recurrence: parseStoredRecurrence(row.recurrence, row.id),
     recurrenceExdates: parseStoredExdates(row.recurrence_exdates, row.id),
+    reminderOffsets: parseStoredOffsets(row.reminder_offsets, row.id),
   };
 }
 
@@ -359,6 +390,7 @@ function ownFields(event: Event): Required<UpdateEventFields> {
     description: event.description,
     category: event.category,
     recurrence: event.recurrence,
+    reminderOffsets: event.reminderOffsets,
   };
 }
 
@@ -428,6 +460,40 @@ function assertRecurrenceAnchor(rule: RecurrenceRule | null, startAt: string): v
   }
 }
 
+/**
+ * A reminder ladder from an untrusted caller (SEC-EL-02), returning the
+ * canonical form the column stores: ascending, so the ladder reads the same
+ * however the user entered it. Absent means "no reminders", the default. The
+ * rules — unique, whole minutes, 0..`MAX_EVENT_REMINDER_MINUTES`, at most
+ * `MAX_EVENT_REMINDERS` of them — cannot be a SQL CHECK over a JSON column, so
+ * this function is the gate (with `parseImportArchive`'s twin covering the one
+ * other way a value reaches the column).
+ */
+function validateReminderOffsets(value: readonly number[] | undefined): number[] {
+  if (value === undefined) return [];
+  if (value.length > MAX_EVENT_REMINDERS) {
+    throw new EventValidationError(
+      `An event may carry at most ${MAX_EVENT_REMINDERS} reminders (got ${value.length}).`,
+    );
+  }
+  for (const offset of value) {
+    if (!isReminderOffset(offset)) {
+      throw new EventValidationError(
+        `"reminderOffsets" must hold whole minutes between 0 and ${MAX_EVENT_REMINDER_MINUTES} (got ${offset}).`,
+      );
+    }
+  }
+  if (new Set(value).size !== value.length) {
+    throw new EventValidationError('"reminderOffsets" must not repeat the same lead time.');
+  }
+  return [...value].sort((a, b) => a - b);
+}
+
+/** One lead time's own shape — shared by the write validator above and the stored-value reader below. */
+function isReminderOffset(value: number): boolean {
+  return Number.isInteger(value) && value >= 0 && value <= MAX_EVENT_REMINDER_MINUTES;
+}
+
 /** An exception (or split point) names one occurrence DATE — a bare, real calendar day, never an instant. */
 function validateExdate(value: string, field: string): string {
   if (!isValidDayKey(value)) {
@@ -482,6 +548,27 @@ function parseStoredExdates(text: string, id: string): string[] {
     exdates.push(entry);
   }
   return exdates;
+}
+
+/** Same reasoning as `parseStoredExdates`: only this store writes the column, and it writes a list of whole-minute lead times. */
+function parseStoredOffsets(text: string, id: string): number[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    parsed = null;
+  }
+  const invalid = new EventValidationError(
+    `Event "${id}" carries stored reminder offsets that are not a list of whole-minute lead times.`,
+  );
+  if (!Array.isArray(parsed)) throw invalid;
+  const entries: readonly unknown[] = parsed;
+  const offsets: number[] = [];
+  for (const entry of entries) {
+    if (typeof entry !== "number" || !isReminderOffset(entry)) throw invalid;
+    offsets.push(entry);
+  }
+  return offsets;
 }
 
 /** Normalizes an optional string: absent/empty/whitespace-only collapses to null. */

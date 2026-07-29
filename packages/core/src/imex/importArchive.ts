@@ -282,6 +282,24 @@ function nonNegativeIntArray(value: unknown, field: string): number[] {
   return value.map((item, index) => nonNegativeInt(item, `${field}[${index}]`));
 }
 
+/**
+ * As `nonNegativeIntArray`, plus a per-element cap, a length cap and a
+ * no-duplicates rule — the twin of `EventStore`'s own `validateReminderOffsets`
+ * (`@nexus/db`). No SQL CHECK can express any of it over a JSON column, so an
+ * archive is the one way such a value could reach the column unchecked. Order
+ * is NOT required on the way in, mirroring `bareDateArray`: the store keeps the
+ * ladder ascending, a hand-written archive need not, and the restore sorts it.
+ */
+function boundedIntArray(value: unknown, field: string, max: number, maxLength: number): number[] {
+  const items = nonNegativeIntArray(value, field);
+  if (items.length > maxLength) throw new InvalidFieldError(field);
+  items.forEach((item, index) => {
+    if (item > max) throw new InvalidFieldError(`${field}[${index}]`);
+  });
+  if (new Set(items).size !== items.length) throw new InvalidFieldError(field);
+  return items;
+}
+
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 /** Exactly `HH:MM` on a 24-hour clock — the shape `NotificationStore`'s own `validateHHMM` enforces on every write. No SQL CHECK backs it, which is precisely why it has to be checked here: an archive is the one way a value can reach that table without passing through the store. */
@@ -329,8 +347,16 @@ const EXAM_TYPES = ["pismeni", "usmeni", "kolokvijum"] as const;
 const CARD_STATES = [0, 1, 2, 3] as const;
 const REVIEW_RATINGS = [1, 2, 3, 4] as const;
 const STUDY_BLOCK_STATUSES = ["planned", "done", "missed"] as const;
-const NOTIFICATION_SOURCES = ["document", "exam", "study-day"] as const;
+const NOTIFICATION_SOURCES = ["document", "exam", "study-day", "event"] as const;
 const NOTIFICATION_STATUSES = ["delivered", "snoozed", "dismissed"] as const;
+
+/**
+ * Mirrors `MAX_EVENT_REMINDER_MINUTES`/`MAX_EVENT_REMINDERS` in `@nexus/db`'s
+ * `events/eventStore.ts` (copied, not imported — `@nexus/core` must not depend
+ * on `@nexus/db`), the same arrangement as `NOTE_FOLDER_COLORS` above.
+ */
+const MAX_EVENT_REMINDER_MINUTES = 43_200;
+const MAX_EVENT_REMINDERS = 8;
 
 // --- Record type discriminants ----------------------------------------------
 
@@ -447,6 +473,12 @@ function parseEvent(raw: Record<string, unknown>): ExportEvent {
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
   const recurrence = nullableRecurrenceRule(raw.recurrence, "recurrence");
   const recurrenceExdates = bareDateArray(raw.recurrenceExdates, "recurrenceExdates");
+  const reminderOffsets = boundedIntArray(
+    raw.reminderOffsets,
+    "reminderOffsets",
+    MAX_EVENT_REMINDER_MINUTES,
+    MAX_EVENT_REMINDERS,
+  );
   // No cross-field end->=start check: migration 003 deliberately carries no
   // SQL CHECK for it either (comparing ISO strings across mixed zones is
   // fragile), so there is no invariant here to mirror.
@@ -463,7 +495,7 @@ function parseEvent(raw: Record<string, unknown>): ExportEvent {
   if (recurrence !== null) bareDate(startAt.slice(0, 10), "startAt");
   return {
     id, profileId, title, description, startAt, endAt, allDay, location, category,
-    createdAt, updatedAt, recurrence, recurrenceExdates,
+    createdAt, updatedAt, recurrence, recurrenceExdates, reminderOffsets,
   };
 }
 

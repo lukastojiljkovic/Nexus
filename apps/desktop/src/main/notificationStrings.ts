@@ -123,7 +123,12 @@ export function groupedDigestCopy(total: number, counts: DigestCounts): Notifica
   return { title, body: parts.join(" · ") };
 }
 
-/** An empty per-source counter, keyed the same way as `@nexus/core`'s `NotificationSource`. */
+/**
+ * An empty per-source counter, keyed the same way as `@nexus/core`'s
+ * `NotificationSource`. `event` (CAL-006) counts here but is not yet named in
+ * `groupedDigestCopy` above — its Serbian copy arrives with the scheduler
+ * slice that first derives event reminders at all.
+ */
 export function emptyDigestCounts(): Record<NotificationSource, number> {
-  return { document: 0, exam: 0, "study-day": 0 };
+  return { document: 0, exam: 0, "study-day": 0, event: 0 };
 }

@@ -55,6 +55,7 @@ export { deriveNotificationCandidates } from "./notify/notificationEngine.js";
 export type {
   DeriveNotificationCandidatesInput,
   DocumentReminderInput,
+  EventReminderInput,
   ExamReminderInput,
   NotificationCandidate,
   NotificationPriority,

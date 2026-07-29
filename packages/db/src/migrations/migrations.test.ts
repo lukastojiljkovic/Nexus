@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { MIGRATIONS, NexusDatabase, openDatabase } from "../index.js";
+import Database from "better-sqlite3-multiple-ciphers";
+import { foldSearchText } from "@nexus/core";
+import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index.js";
 
 /**
  * Derived, not spelled out sixteen times over: every migration's own suite
@@ -14,8 +16,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase } from "../index.js";
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 18 (recurrence), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(18);
+  it("is at version 19 (event reminders), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(19);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -1726,6 +1728,177 @@ describe("migration 018 — recurrence", () => {
     expect(() =>
       db.raw.prepare("UPDATE tasks SET recurrence = ? WHERE id = ?").run("{not-json", "t1"),
     ).not.toThrow();
+    db.close();
+  });
+});
+
+describe("migration 019 — event reminders", () => {
+  type Handle = Database.Database;
+
+  const now = () => new Date().toISOString();
+
+  const columnNames = (raw: Handle, table: string): string[] =>
+    (raw.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((row) => row.name);
+
+  const objectNames = (raw: Handle, type: "table" | "index"): string[] =>
+    (raw.prepare("SELECT name FROM sqlite_master WHERE type = ?").all(type) as { name: string }[]).map(
+      (row) => row.name,
+    );
+
+  const seedProfile = (raw: Handle, id: string) =>
+    raw
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run(id, "personal", "P", now());
+
+  const seedEvent = (raw: Handle, id: string, profileId: string) =>
+    raw
+      .prepare(
+        `INSERT INTO events (id, profile_id, title, start_at, all_day, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, profileId, "Sastanak", "2026-07-08T10:00:00.000Z", 0, now(), now());
+
+  const seedNotification = (
+    raw: Handle,
+    id: string,
+    profileId: string,
+    source: string,
+    occurrenceKey = "d-1",
+  ) =>
+    raw
+      .prepare(
+        `INSERT INTO notifications
+           (id, profile_id, source, entity_id, occurrence_key, title, body, status,
+            snoozed_until, delivered_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'delivered', NULL, ?, ?, ?)`,
+      )
+      .run(id, profileId, source, "entity-1", occurrenceKey, "Naslov", "Telo", now(), now(), now());
+
+  const seedSourceSetting = (raw: Handle, profileId: string, source: string, enabled: number) =>
+    raw
+      .prepare("INSERT INTO ntf_source_settings (profile_id, source, enabled) VALUES (?, ?, ?)")
+      .run(profileId, source, enabled);
+
+  /**
+   * A connection held at exactly `version`, set up the way `openDatabase` sets
+   * one up (WAL, foreign keys ON, and `nx_fold` registered — migration 017's
+   * backfill calls it). `openDatabase` always migrates to the newest version,
+   * so this is the only way to hold a file at an older schema, which is what an
+   * upgrade test needs.
+   */
+  function openAtVersion(path: string, version: number): Handle {
+    const raw = new Database(path);
+    raw.pragma("journal_mode = WAL");
+    raw.pragma("foreign_keys = ON");
+    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
+      typeof value === "string" ? foldSearchText(value) : null,
+    );
+    runMigrations(
+      raw,
+      MIGRATIONS.filter((migration) => migration.version <= version),
+    );
+    return raw;
+  }
+
+  it("adds reminder_offsets to events, defaulting to the empty JSON array, and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    expect(columnNames(db.raw, "events")).toContain("reminder_offsets");
+
+    insertProfile(db, "p1");
+    seedEvent(db.raw, "e1", "p1");
+    expect(
+      db.raw.prepare("SELECT reminder_offsets FROM events WHERE id = ?").get("e1"),
+    ).toEqual({ reminder_offsets: "[]" });
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("rejects a NULL reminder_offsets — the column is NOT NULL, so a row always carries at least an empty list", () => {
+    const db = openDatabase({ path: join(dir, "offsets-not-null.db") });
+    insertProfile(db, "p1");
+    seedEvent(db.raw, "e1", "p1");
+    expect(() =>
+      db.raw.prepare("UPDATE events SET reminder_offsets = NULL WHERE id = ?").run("e1"),
+    ).toThrow();
+    db.close();
+  });
+
+  it("widens the notifications source CHECK to accept 'event', still rejecting anything outside the set", () => {
+    const db = openDatabase({ path: join(dir, "check-source.db") });
+    insertProfile(db, "p1");
+    expect(() => seedNotification(db.raw, "n1", "p1", "event")).not.toThrow();
+    // the three original sources still pass, and an unlisted one still does not.
+    expect(() => seedNotification(db.raw, "n2", "p1", "document", "7")).not.toThrow();
+    expect(() => seedNotification(db.raw, "n3", "p1", "exam", "d-0")).not.toThrow();
+    expect(() => seedNotification(db.raw, "n4", "p1", "study-day", "day")).not.toThrow();
+    expect(() => seedNotification(db.raw, "n5", "p1", "bogus", "x")).toThrow();
+    db.close();
+  });
+
+  it("widens the ntf_source_settings source CHECK to accept 'event', still rejecting anything outside the set", () => {
+    const db = openDatabase({ path: join(dir, "check-source-settings.db") });
+    insertProfile(db, "p1");
+    expect(() => seedSourceSetting(db.raw, "p1", "event", 0)).not.toThrow();
+    expect(() => seedSourceSetting(db.raw, "p1", "bogus", 1)).toThrow();
+    // the 0/1 CHECK on `enabled` came back with the rebuilt table too.
+    expect(() => seedSourceSetting(db.raw, "p1", "exam", 2)).toThrow();
+    db.close();
+  });
+
+  it("leaves no rebuild scaffolding behind and keeps the notifications UNIQUE tuple and its index", () => {
+    const db = openDatabase({ path: join(dir, "rebuilt.db") });
+    const tables = objectNames(db.raw, "table");
+    expect(tables).not.toContain("notifications_new");
+    expect(tables).not.toContain("ntf_source_settings_new");
+    expect(objectNames(db.raw, "index")).toContain("notifications_profile_status_updated");
+
+    insertProfile(db, "p1");
+    seedNotification(db.raw, "n1", "p1", "event");
+    // the same (profile, source, entity, occurrence) tuple still collides.
+    expect(() => seedNotification(db.raw, "n2", "p1", "event")).toThrow();
+    db.close();
+  });
+
+  it("carries a seeded 018 database's ledger, source settings and events through the rebuild untouched", () => {
+    const path = join(dir, "upgrade.db");
+    const before = openAtVersion(path, 18);
+    seedProfile(before, "p1");
+    seedNotification(before, "n1", "p1", "exam");
+    seedNotification(before, "n2", "p1", "study-day", "day");
+    seedSourceSetting(before, "p1", "document", 0);
+    seedEvent(before, "e1", "p1");
+    expect(before.pragma("user_version", { simple: true })).toBe(18);
+    before.close();
+
+    const db = openDatabase({ path });
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    expect(
+      db.raw
+        .prepare("SELECT id, source, occurrence_key, title, status FROM notifications ORDER BY id")
+        .all(),
+    ).toEqual([
+      { id: "n1", source: "exam", occurrence_key: "d-1", title: "Naslov", status: "delivered" },
+      { id: "n2", source: "study-day", occurrence_key: "day", title: "Naslov", status: "delivered" },
+    ]);
+    expect(db.raw.prepare("SELECT profile_id, source, enabled FROM ntf_source_settings").all()).toEqual([
+      { profile_id: "p1", source: "document", enabled: 0 },
+    ]);
+    // The row that predates the column gains it at its default.
+    expect(
+      db.raw.prepare("SELECT reminder_offsets FROM events WHERE id = ?").get("e1"),
+    ).toEqual({ reminder_offsets: "[]" });
+
+    // The rebuilt table's own constraints and index came back with it...
+    expect(objectNames(db.raw, "index")).toContain("notifications_profile_status_updated");
+    expect(() => seedNotification(db.raw, "n3", "p1", "exam")).toThrow(); // same UNIQUE tuple as n1
+    // ...including the foreign key to `profiles`, cascade and all.
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM notifications").get() as { n: number }).n,
+    ).toBe(0);
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM ntf_source_settings").get() as { n: number }).n,
+    ).toBe(0);
     db.close();
   });
 });

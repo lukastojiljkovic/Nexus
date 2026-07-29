@@ -71,6 +71,14 @@ export interface ExportEvent {
   recurrence: RecurrenceRule | null;
   /** Bare `YYYY-MM-DD` occurrence dates removed from the series, ascending; always empty when `recurrence` is null. */
   recurrenceExdates: string[];
+  /**
+   * Whole minutes before an occurrence's start at which the user is reminded
+   * (CAL-006), ascending. Required, like every field above: an event restored
+   * without its ladder is an event the user would silently stop being reminded
+   * of — and a required member makes a forgotten gather a type error rather
+   * than a quiet omission.
+   */
+  reminderOffsets: number[];
 }
 
 /** Only the persisted fields — `status`/`daysUntilExpiry` are derived at read time, never stored, so they are not part of the interchange row. */

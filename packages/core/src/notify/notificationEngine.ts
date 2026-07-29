@@ -25,12 +25,21 @@
  * never shifts by a day regardless of the host's timezone. Dates that carry a
  * time part (documents/exams may, per their stores' ISO-8601 columns) are
  * reduced to their bare "YYYY-MM-DD" prefix before any comparison or math.
+ *
+ * Three of the four sources are day-granular: they fire at the profile's
+ * `morningHour` on a bare `fireDate`. Event reminders (CAL-006, ADR-025) are
+ * the exception — "15 minutes before" is meaningless rounded to a day — so a
+ * timed occurrence carries a fire INSTANT instead, and the same UTC math is
+ * simply carried down to the minute. Both live in one `Occurrence` shape and
+ * one `isDue`, so the day-granular sources' behaviour is untouched.
  */
 
 const MS_PER_DAY = 86_400_000;
+const MS_PER_MINUTE = 60_000;
+const MINUTES_PER_DAY = 1_440;
 
-/** The three NTF-001..003 source kinds this slice derives from; NTF-006/007 (private notes, security) have no sources yet. */
-export type NotificationSource = "document" | "exam" | "study-day";
+/** The four NTF-001..003/CAL-006 source kinds this engine derives from; NTF-006/007 (private notes, security) have no sources yet. */
+export type NotificationSource = "document" | "exam" | "study-day" | "event";
 
 /** `max` bypasses quiet hours (the PRD's "final warning" exception); everything else is `normal`. */
 export type NotificationPriority = "normal" | "max";
@@ -67,9 +76,26 @@ export interface StudyDayReminderInput {
   totalMinutes: number;
 }
 
+/**
+ * One event occurrence's reminder-relevant fields — for a recurring series the
+ * CALLER (main's scheduler) expands the master and passes one row per
+ * occurrence; `occurrenceDate` is that occurrence's own bare date (a one-off
+ * passes its start date).
+ */
+export interface EventReminderInput {
+  id: string;
+  /** Bare "YYYY-MM-DD". */
+  occurrenceDate: string;
+  /** Wall-clock "HH:MM" start on that date, or null for an all-day event. */
+  startTime: string | null;
+  /** Whole minutes before the start (mirrors `EventStore`'s `reminderOffsets`). */
+  reminderOffsets: readonly number[];
+}
+
 export interface DeriveNotificationCandidatesInput {
   documents: ReadonlyArray<DocumentReminderInput>;
   exams: ReadonlyArray<ExamReminderInput>;
+  events: ReadonlyArray<EventReminderInput>;
   studyDays: ReadonlyArray<StudyDayReminderInput>;
   enabledSources: ReadonlyArray<NotificationSource>;
   /** Bare "YYYY-MM-DD", the caller's local today. */
@@ -80,9 +106,16 @@ export interface DeriveNotificationCandidatesInput {
   morningHour: string;
 }
 
-/** An occurrence before the due-time filter: `NotificationCandidate` plus whether it is still relevant at all. */
+/**
+ * An occurrence before the due-time filter: `NotificationCandidate`, whether it
+ * is still relevant at all, and — for the minute-granular source only — the
+ * exact local instant it fires at ("YYYY-MM-DDTHH:MM"). `null` means
+ * day-granular: fire at `morningHour` on `fireDate`, the model the other three
+ * sources speak.
+ */
 interface Occurrence extends NotificationCandidate {
   relevant: boolean;
+  fireInstant: string | null;
 }
 
 /** UTC-midnight ms for a bare "YYYY-MM-DD" prefix (mirrors `planEngine.ts`'s `utcDayMs`). */
@@ -105,32 +138,56 @@ function bareDate(value: string): string {
   return value.slice(0, 10);
 }
 
+/** The same UTC-midnight math as `utcDayMs`, carried down to the minute by an "HH:MM" wall-clock time. */
+function utcMinuteMs(dateKey: string, time: string): number {
+  const [hourPart, minutePart] = time.split(":");
+  return utcDayMs(dateKey) + (Number(hourPart) * 60 + Number(minutePart)) * MS_PER_MINUTE;
+}
+
 /**
- * Derives every due notification occurrence across the three sources,
+ * Formats UTC ms back into a fixed-width local wall-clock instant,
+ * "YYYY-MM-DDTHH:MM". Fixed width is the whole point: two of these compare
+ * lexicographically exactly as the instants they denote compare, which is what
+ * lets `isDue` stay a string comparison like every other branch.
+ */
+function utcInstantKey(ms: number): string {
+  const d = new Date(ms);
+  const hour = String(d.getUTCHours()).padStart(2, "0");
+  const minute = String(d.getUTCMinutes()).padStart(2, "0");
+  return `${utcDateKey(ms)}T${hour}:${minute}`;
+}
+
+/**
+ * Derives every due notification occurrence across the four sources,
  * deterministically ordered by source, then entity id, then occurrence key.
  * An occurrence is due when it is still relevant to its entity's current
- * state AND either its fire date has already passed (came due while the app
- * was off) or it fires today at/after `morningHour` ("HH:MM" strings compare
- * lexicographically). Sources absent from `enabledSources` contribute
- * nothing. Pure: no clock reads, no mutation of the input.
+ * state AND its fire moment has arrived — for the three day-granular sources
+ * that means its fire date has already passed (came due while the app was off)
+ * or it fires today at/after `morningHour`; for a timed event reminder it
+ * means its fire instant is at or before now ("HH:MM" and the fixed-width
+ * instants both compare lexicographically). Sources absent from
+ * `enabledSources` contribute nothing. Pure: no clock reads, no mutation of
+ * the input.
  */
 export function deriveNotificationCandidates(
   input: DeriveNotificationCandidatesInput,
 ): NotificationCandidate[] {
   const enabled = new Set(input.enabledSources);
+  const now = `${input.today}T${input.nowLocalTime}`;
   const occurrences: Occurrence[] = [
     ...(enabled.has("document") ? documentOccurrences(input.documents, input.today) : []),
     ...(enabled.has("exam") ? examOccurrences(input.exams, input.today) : []),
     ...(enabled.has("study-day") ? studyDayOccurrences(input.studyDays, input.today) : []),
+    ...(enabled.has("event") ? eventOccurrences(input.events, input.today, now) : []),
   ];
 
   const due = occurrences.filter((occurrence) =>
-    isDue(occurrence, input.today, input.nowLocalTime, input.morningHour),
+    isDue(occurrence, input.today, input.nowLocalTime, input.morningHour, now),
   );
 
   due.sort((a, b) => (sortKey(a) < sortKey(b) ? -1 : sortKey(a) > sortKey(b) ? 1 : 0));
 
-  return due.map(({ relevant: _relevant, ...candidate }) => candidate);
+  return due.map(({ relevant: _relevant, fireInstant: _fireInstant, ...candidate }) => candidate);
 }
 
 /**
@@ -159,6 +216,7 @@ function documentOccurrences(
         fireDate: utcDateKey(expiryMs - offset * MS_PER_DAY),
         priority: offset === minOffset ? "max" : "normal",
         relevant,
+        fireInstant: null,
       });
     }
   }
@@ -185,6 +243,7 @@ function examOccurrences(exams: ReadonlyArray<ExamReminderInput>, today: string)
       fireDate: utcDateKey(examMs - MS_PER_DAY),
       priority: "normal",
       relevant,
+      fireInstant: null,
     });
     occurrences.push({
       source: "exam",
@@ -193,6 +252,7 @@ function examOccurrences(exams: ReadonlyArray<ExamReminderInput>, today: string)
       fireDate: examDateKey,
       priority: "normal",
       relevant,
+      fireInstant: null,
     });
   }
   return occurrences;
@@ -214,17 +274,76 @@ function studyDayOccurrences(
     fireDate: day.date,
     priority: "normal",
     relevant: today === day.date,
+    fireInstant: null,
   }));
 }
 
-/** Due = relevant AND (fireDate already past — missed while off — OR firing today at/after the morning hour). */
+/**
+ * One occurrence per (event row, offset), keyed by the occurrence's own date
+ * and that offset — a recurring master arrives already expanded, one row per
+ * occurrence, so the date is what tells two occurrences of one series apart.
+ * Priority is always `normal`: an event reminder is never the PRD's
+ * quiet-hours "final warning" exception, which belongs to expiring documents.
+ *
+ * A **timed** occurrence is minute-granular: it fires `offset` minutes before
+ * its start instant and stays relevant until that start — so one missed while
+ * the app was closed still fires afterwards (the occurrence has not happened
+ * yet), and a lead time longer than the start's time of day simply lands on an
+ * earlier day, which is why `fireDate` is read off the fire instant rather
+ * than the occurrence.
+ *
+ * An **all-day** occurrence has no start instant to count back from, so it
+ * degrades to the day-granular model the other three sources speak: whole days
+ * back (a partial day rounds down to none), firing at `morningHour`, relevant
+ * for the whole of its own day.
+ */
+function eventOccurrences(
+  events: ReadonlyArray<EventReminderInput>,
+  today: string,
+  now: string,
+): Occurrence[] {
+  const occurrences: Occurrence[] = [];
+  for (const event of events) {
+    const occurrenceDate = bareDate(event.occurrenceDate);
+    const startTime = event.startTime;
+    const timed = startTime !== null;
+    const relevant = timed ? now <= `${occurrenceDate}T${startTime}` : today <= occurrenceDate;
+    const startMs = timed ? utcMinuteMs(occurrenceDate, startTime) : 0;
+
+    for (const offset of event.reminderOffsets) {
+      const fireInstant = timed ? utcInstantKey(startMs - offset * MS_PER_MINUTE) : null;
+      occurrences.push({
+        source: "event",
+        entityId: event.id,
+        occurrenceKey: `${occurrenceDate} ${offset}`,
+        fireDate:
+          fireInstant !== null
+            ? bareDate(fireInstant)
+            : utcDateKey(utcDayMs(occurrenceDate) - Math.floor(offset / MINUTES_PER_DAY) * MS_PER_DAY),
+        priority: "normal",
+        relevant,
+        fireInstant,
+      });
+    }
+  }
+  return occurrences;
+}
+
+/**
+ * Due = relevant AND its fire moment has arrived. A minute-granular occurrence
+ * (an event reminder) compares its fire instant against `now`; a day-granular
+ * one is due once its fire date is past — missed while the app was off — or
+ * once it is today and the morning hour has come.
+ */
 function isDue(
   occurrence: Occurrence,
   today: string,
   nowLocalTime: string,
   morningHour: string,
+  now: string,
 ): boolean {
   if (!occurrence.relevant) return false;
+  if (occurrence.fireInstant !== null) return occurrence.fireInstant <= now;
   if (occurrence.fireDate < today) return true;
   return occurrence.fireDate === today && nowLocalTime >= morningHour;
 }

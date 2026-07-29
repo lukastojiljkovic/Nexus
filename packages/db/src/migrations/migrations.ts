@@ -18,6 +18,7 @@ import { migration015 } from "./015-note-templates.js";
 import { migration016 } from "./016-note-cards.js";
 import { migration017 } from "./017-search-index.js";
 import { migration018 } from "./018-recurrence.js";
+import { migration019 } from "./019-event-reminders.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -47,6 +48,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration016,
   migration017,
   migration018,
+  migration019,
 ];
 
 /**

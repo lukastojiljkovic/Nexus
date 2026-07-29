@@ -307,6 +307,7 @@ describe("buildExportArchive", () => {
           updatedAt: "2026-07-01T00:00:00.000Z",
           recurrence: { freq: { kind: "weekly", interval: 1, days: [5] }, end: { kind: "never" } },
           recurrenceExdates: ["2026-07-18"],
+          reminderOffsets: [15, 1440],
         },
       ];
       input.data.documents = [
@@ -331,6 +332,7 @@ describe("buildExportArchive", () => {
         type: string;
         recurrence?: unknown;
         recurrenceExdates?: unknown;
+        reminderOffsets?: unknown;
       }>;
       expect(rows.map((row) => row.type)).toEqual(["event", "document", "renewal"]);
       expect(archive.byModule.calendar).toBe(3);
@@ -340,6 +342,8 @@ describe("buildExportArchive", () => {
         end: { kind: "never" },
       });
       expect(rows[0]?.recurrenceExdates).toEqual(["2026-07-18"]);
+      // ...and with its reminder ladder (CAL-006).
+      expect(rows[0]?.reminderOffsets).toEqual([15, 1440]);
     });
   });
 
@@ -502,7 +506,7 @@ describe("buildExportArchive", () => {
           { id: "t1", profileId: "p1", parentId: null, title: "T", description: null, status: "todo", priority: "none", done: false, dueDate: null, startDate: null, createdAt: t, updatedAt: t, completedAt: null, recurrence: null },
         ],
         events: [
-          { id: "e1", profileId: "p1", title: "E", description: null, startAt: t, endAt: null, allDay: false, location: null, category: null, createdAt: t, updatedAt: t, recurrence: null, recurrenceExdates: [] },
+          { id: "e1", profileId: "p1", title: "E", description: null, startAt: t, endAt: null, allDay: false, location: null, category: null, createdAt: t, updatedAt: t, recurrence: null, recurrenceExdates: [], reminderOffsets: [] },
         ],
         documents: [
           { id: "d1", profileId: "p1", docType: "licna_karta", label: "D", expiryDate: "2030-01-01", reminderOffsets: [], notes: null, createdAt: t, updatedAt: t },

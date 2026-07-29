@@ -103,6 +103,7 @@ function richProfileData(): ProfileData {
         updatedAt: "2026-07-01T00:00:00.000Z",
         recurrence: { freq: { kind: "weekly", interval: 1, days: [5] }, end: { kind: "until", date: "2026-12-31" } },
         recurrenceExdates: ["2026-07-18", "2026-08-15"],
+        reminderOffsets: [10, 1440],
       },
     ],
     documents: [
@@ -327,7 +328,7 @@ const VALID_EVENT = {
   type: "event", id: "e1", profileId: "profile1", title: "Sastanak", description: null,
   startAt: "2026-07-10T09:00:00.000Z", endAt: null, allDay: false, location: null, category: null,
   createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
-  recurrence: null, recurrenceExdates: [],
+  recurrence: null, recurrenceExdates: [], reminderOffsets: [],
 };
 
 const WEEKLY_RULE = { freq: { kind: "weekly", interval: 1, days: [4] }, end: { kind: "never" } };
@@ -604,14 +605,21 @@ describe("parseImportArchive — recurrence (ADR-024)", () => {
     });
   }
 
-  it("accepts an event master with a rule and its exceptions", () => {
-    const event = { ...VALID_EVENT, recurrence: WEEKLY_RULE, recurrenceExdates: ["2026-07-17"] };
+  it("accepts an event master with a rule, its exceptions and a reminder ladder in any order", () => {
+    const event = {
+      ...VALID_EVENT,
+      recurrence: WEEKLY_RULE,
+      recurrenceExdates: ["2026-07-17"],
+      reminderOffsets: [1440, 15],
+    };
     const result = parseImportArchive(
       emptyInputWith(baseFiles({ fileContents: { "data/calendar.ndjson": ndjson([event]) } })),
     );
     expect(result.problems).toEqual([]);
     expect(result.data?.events[0]?.recurrence).toEqual(WEEKLY_RULE);
     expect(result.data?.events[0]?.recurrenceExdates).toEqual(["2026-07-17"]);
+    // Order carries no meaning on the way in — `RestoreStore` writes it sorted.
+    expect(result.data?.events[0]?.reminderOffsets).toEqual([1440, 15]);
   });
 
   const BAD_EVENTS: { name: string; row: Record<string, unknown>; detail: string }[] = [
@@ -636,6 +644,19 @@ describe("parseImportArchive — recurrence (ADR-024)", () => {
       name: "a rule on a start whose own day does not exist",
       row: { startAt: "2026-02-30T09:00:00.000Z", recurrence: WEEKLY_RULE },
       detail: "startAt",
+    },
+    // CAL-006: the ladder's rules are `EventStore`'s, re-checked here because
+    // an archive is the one way a value reaches the column without the store.
+    { name: "no reminder ladder at all", row: { reminderOffsets: undefined }, detail: "reminderOffsets" },
+    { name: "a reminder ladder that is not an array", row: { reminderOffsets: 15 }, detail: "reminderOffsets" },
+    { name: "a negative lead time", row: { reminderOffsets: [-1] }, detail: "reminderOffsets[0]" },
+    { name: "a fractional lead time", row: { reminderOffsets: [15, 1.5] }, detail: "reminderOffsets[1]" },
+    { name: "a lead time beyond the 30-day cap", row: { reminderOffsets: [43_201] }, detail: "reminderOffsets[0]" },
+    { name: "the same lead time twice", row: { reminderOffsets: [15, 15] }, detail: "reminderOffsets" },
+    {
+      name: "more lead times than an event may carry",
+      row: { reminderOffsets: [0, 1, 2, 3, 4, 5, 6, 7, 8] },
+      detail: "reminderOffsets",
     },
   ];
 

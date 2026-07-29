@@ -15,8 +15,13 @@ export const NOTIFICATION_STATUSES: readonly NotificationStatus[] = [
   "dismissed",
 ];
 
-/** The three source kinds this profile can toggle/derive from, in canonical order. Exported like `NOTIFICATION_STATUSES` so `RestoreStore` writes `ntf_source_settings` from this list rather than a second copy of migration 009's CHECK. */
-export const NOTIFICATION_SOURCES: readonly NotificationSource[] = ["document", "exam", "study-day"];
+/** The four source kinds this profile can toggle/derive from, in canonical order — `"event"` last, appended by migration 019 (CAL-006), so the three original sources keep the order every existing settings list and UI already shows. Exported like `NOTIFICATION_STATUSES` so `RestoreStore` writes `ntf_source_settings` from this list rather than a second copy of the migration's CHECK. */
+export const NOTIFICATION_SOURCES: readonly NotificationSource[] = [
+  "document",
+  "exam",
+  "study-day",
+  "event",
+];
 
 const DEFAULT_MORNING_HOUR = "08:00";
 const MAX_TEXT_LENGTH = 500;

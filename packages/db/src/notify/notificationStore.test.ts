@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { NotificationSource } from "@nexus/core";
 import {
   NexusDatabase,
   NotificationNotFoundError,
@@ -41,7 +42,7 @@ const NOW = "2026-07-10T08:00:00.000Z";
 
 function deliver(
   notify: NotificationStore,
-  overrides: Partial<{ entityId: string; occurrenceKey: string; source: "document" | "exam" | "study-day" }> = {},
+  overrides: Partial<{ entityId: string; occurrenceKey: string; source: NotificationSource }> = {},
 ) {
   return notify.recordDelivered(
     {
@@ -63,7 +64,7 @@ describe("NotificationStore", () => {
         quietFrom: null,
         quietTo: null,
         morningHour: "08:00",
-        enabledSources: ["document", "exam", "study-day"],
+        enabledSources: ["document", "exam", "study-day", "event"],
       });
     });
 
@@ -85,7 +86,7 @@ describe("NotificationStore", () => {
         quietFrom: "22:00",
         quietTo: "07:00",
         morningHour: "09:00",
-        enabledSources: ["document", "exam", "study-day"],
+        enabledSources: ["document", "exam", "study-day", "event"],
       });
       expect(notify.getSettings().quietFrom).toBe("22:00");
     });
@@ -136,7 +137,7 @@ describe("NotificationStore", () => {
         quietFrom: "22:00",
         quietTo: "07:00",
         morningHour: "09:00",
-        enabledSources: ["document", "exam", "study-day"],
+        enabledSources: ["document", "exam", "study-day", "event"],
       });
     });
   });
@@ -145,10 +146,10 @@ describe("NotificationStore", () => {
     it("disables and re-enables a source, reflected in getSettings().enabledSources", () => {
       const { notify } = fixture();
       notify.setSourceEnabled("exam", false, NOW);
-      expect(notify.getSettings().enabledSources).toEqual(["document", "study-day"]);
+      expect(notify.getSettings().enabledSources).toEqual(["document", "study-day", "event"]);
 
       notify.setSourceEnabled("exam", true, NOW);
-      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day"]);
+      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day", "event"]);
     });
 
     it("upserts rather than duplicating on repeated toggles", () => {
@@ -156,7 +157,7 @@ describe("NotificationStore", () => {
       notify.setSourceEnabled("document", false, NOW);
       notify.setSourceEnabled("document", false, NOW);
       notify.setSourceEnabled("document", true, NOW);
-      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day"]);
+      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day", "event"]);
     });
 
     it("rejects a source outside the closed set", () => {
@@ -164,6 +165,15 @@ describe("NotificationStore", () => {
       expect(() =>
         notify.setSourceEnabled("bogus" as never, false, NOW),
       ).toThrow(NotificationValidationError);
+    });
+
+    it("toggles the event source added by migration 019 (CAL-006) like any other", () => {
+      const { notify } = fixture();
+      notify.setSourceEnabled("event", false, NOW);
+      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day"]);
+
+      notify.setSourceEnabled("event", true, NOW);
+      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day", "event"]);
     });
   });
 
@@ -184,6 +194,26 @@ describe("NotificationStore", () => {
         updatedAt: NOW,
       });
       expect(record.id).toBeTruthy();
+    });
+
+    it("round-trips a ledger row whose source is 'event' (CAL-006), occurrence key and all", () => {
+      const { notify } = fixture();
+      const record = deliver(notify, {
+        source: "event",
+        entityId: "event1",
+        occurrenceKey: "2026-08-01 15",
+      });
+      expect(record).toMatchObject({
+        source: "event",
+        entityId: "event1",
+        occurrenceKey: "2026-08-01 15",
+      });
+      expect(notify.listLedgerKeys()).toContainEqual({
+        source: "event",
+        entityId: "event1",
+        occurrenceKey: "2026-08-01 15",
+        status: "delivered",
+      });
     });
 
     it("rejects an empty or over-500-char title/body", () => {

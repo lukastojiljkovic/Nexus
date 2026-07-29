@@ -104,6 +104,17 @@ function exdatesText(exdates: readonly string[]): string {
 }
 
 /**
+ * An event's reminder ladder as the column stores it: ascending, for exactly
+ * the reason `exdatesText` sorts — the parser accepts any order (order carries
+ * no meaning in an archive), and `EventStore` reads back only what it would
+ * have written itself. Minutes are numbers, so this needs a numeric comparator
+ * where day keys got the default lexicographic one.
+ */
+function offsetsText(offsets: readonly number[]): string {
+  return JSON.stringify([...offsets].sort((a, b) => a - b));
+}
+
+/**
  * Writes a parsed, already-validated `ProfileData` (`@nexus/core`'s
  * `parseImportArchive`, ADR-022/023) into one profile's tables, replacing
  * everything that profile had (ADR-023 / IMEX-003). This is deliberately NOT
@@ -215,8 +226,9 @@ export class RestoreStore {
     this.insertEvent = db.prepare(
       `INSERT INTO events
          (id, profile_id, title, description, start_at, end_at, all_day,
-          location, category, created_at, updated_at, recurrence, recurrence_exdates, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+          location, category, created_at, updated_at, recurrence, recurrence_exdates,
+          reminder_offsets, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertNotification = db.prepare(
       `INSERT INTO notifications
@@ -401,6 +413,7 @@ export class RestoreStore {
           event.id, this.profileId, event.title, event.description, event.startAt, event.endAt,
           event.allDay ? 1 : 0, event.location, event.category, event.createdAt, event.updatedAt,
           recurrenceText(event.recurrence), exdatesText(event.recurrenceExdates),
+          offsetsText(event.reminderOffsets),
         );
         written += 1;
       }

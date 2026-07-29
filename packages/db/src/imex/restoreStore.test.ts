@@ -203,7 +203,11 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   const parentTask = taskStore.create({ title: `${name} parent task` });
   const childTask = taskStore.create({ title: `${name} child task`, parentId: parentTask.id });
 
-  const event = eventStore.create({ title: `${name} event`, startAt: "2026-03-01T10:00:00.000Z" });
+  const event = eventStore.create({
+    title: `${name} event`,
+    startAt: "2026-03-01T10:00:00.000Z",
+    reminderOffsets: [15, 1440],
+  });
 
   const document = documentStore.create({
     docType: "pasos",
@@ -858,7 +862,7 @@ describe("RestoreStore", () => {
     assertModulesMatch(db, profileB, fixtureB, profileB);
   });
 
-  it("restores a recurring task's rule and a series master's rule and exceptions verbatim (ADR-024)", () => {
+  it("restores a recurring task's rule and a series master's rule, exceptions and reminder ladder verbatim (ADR-024/CAL-006)", () => {
     const profileB = createProfile(db, "recurrence");
     const timestamps = { createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" };
     const task: ExportTask = {
@@ -873,6 +877,7 @@ describe("RestoreStore", () => {
       startAt: "2026-07-10T09:00:00.000Z", endAt: null, allDay: false, location: null, category: null,
       recurrence: { freq: { kind: "weekly", interval: 1, days: [4] }, end: { kind: "never" } },
       recurrenceExdates: ["2026-08-14", "2026-07-17"], // deliberately unsorted; order carries no meaning in an archive
+      reminderOffsets: [1440, 15], // likewise unsorted — and 1440 > 15 proves the sort is numeric, not lexical
       ...timestamps,
     };
     const data: ProfileData = { ...emptyProfileData(), tasks: [task], events: [event] };
@@ -886,10 +891,15 @@ describe("RestoreStore", () => {
     // exact canonical text those stores accept — anything else reads as
     // corruption and throws rather than returning a row.
     expect(new TaskStore(db.raw, profileB).listActive()).toEqual([{ ...task, profileId: profileB }]);
-    // The exceptions come back ascending: the column is canonical however the
-    // archive happened to list them.
+    // The exceptions and the reminder ladder come back ascending: both columns
+    // are canonical however the archive happened to list them.
     expect(new EventStore(db.raw, profileB).listActive()).toEqual([
-      { ...event, profileId: profileB, recurrenceExdates: ["2026-07-17", "2026-08-14"] },
+      {
+        ...event,
+        profileId: profileB,
+        recurrenceExdates: ["2026-07-17", "2026-08-14"],
+        reminderOffsets: [15, 1440],
+      },
     ]);
   });
 

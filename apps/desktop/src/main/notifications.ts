@@ -157,6 +157,10 @@ function checkProfile(
       reminderOffsets: doc.reminderOffsets,
     })),
     exams: exams.map((exam) => ({ id: exam.id, examDate: exam.examDate })),
+    // CAL-006 event reminders are derived by the engine but not yet gathered
+    // here: expanding a recurring master into the occurrences this array wants
+    // is the scheduler's next slice.
+    events: [],
     studyDays,
     enabledSources: settings.enabledSources,
     today,
@@ -240,6 +244,7 @@ function composeCopy(candidate: NotificationCandidate, ctx: CopyContext): Notifi
     const subjectName = ctx.subjectNameById.get(exam.subjectId) ?? "Predmet";
     return examNotificationCopy(subjectName, exam.examType, candidate.occurrenceKey === "d-0" ? "d-0" : "d-1");
   }
+  if (candidate.source === "event") return null; // CAL-006 copy lands with the scheduler's next slice
   const day = ctx.studyDaysByDate.get(candidate.entityId);
   if (!day) return null;
   return studyDayNotificationCopy(day.blockCount, day.totalMinutes);

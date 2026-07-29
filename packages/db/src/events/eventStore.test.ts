@@ -7,6 +7,8 @@ import {
   EventNotFoundError,
   EventStore,
   EventValidationError,
+  MAX_EVENT_REMINDER_MINUTES,
+  MAX_EVENT_REMINDERS,
   NexusDatabase,
   openDatabase,
   uuidv7,
@@ -383,5 +385,97 @@ describe("EventStore — recurrence (ADR-024)", () => {
 
     db.raw.prepare("UPDATE events SET recurrence_exdates = ? WHERE id = ?").run('"2026-07-17"', master.id);
     expect(() => events.listActive()).toThrow(EventValidationError);
+  });
+});
+
+describe("EventStore — reminder offsets (CAL-006)", () => {
+  it("defaults to no reminders and stores a supplied ladder ascending", () => {
+    const events = store();
+    const plain = events.create({ title: "Bez podsetnika", startAt: "2026-07-10T09:00:00Z" });
+    expect(plain.reminderOffsets).toEqual([]);
+
+    // Deliberately out of order: the column keeps the canonical ascending form.
+    const reminded = events.create({
+      title: "Sa podsetnicima",
+      startAt: "2026-07-10T09:00:00Z",
+      reminderOffsets: [1440, 0, 15],
+    });
+    expect(reminded.reminderOffsets).toEqual([0, 15, 1440]);
+    expect(events.listActive().map((event) => event.reminderOffsets)).toEqual([[], [0, 15, 1440]]);
+  });
+
+  it("patches the ladder through update, leaves it alone when omitted, and clears it with an empty array", () => {
+    const events = store();
+    const created = events.create({
+      title: "x",
+      startAt: "2026-07-10T09:00:00Z",
+      reminderOffsets: [30],
+    });
+
+    expect(events.update(created.id, { title: "y" }).reminderOffsets).toEqual([30]);
+    expect(events.update(created.id, { reminderOffsets: [120, 10] }).reminderOffsets).toEqual([10, 120]);
+    expect(events.update(created.id, { reminderOffsets: [] }).reminderOffsets).toEqual([]);
+    expect(events.listActive()[0]?.reminderOffsets).toEqual([]);
+  });
+
+  it("keeps reminders independent of recurrence — a one-off reminds, and clearing a rule does not clear them", () => {
+    const events = store();
+    const master = events.create({
+      title: "Petkom",
+      startAt: "2026-07-10T09:00:00Z",
+      reminderOffsets: [15],
+      recurrence: { freq: { kind: "weekly", interval: 1, days: [4] }, end: { kind: "never" } },
+    });
+    expect(master.reminderOffsets).toEqual([15]);
+
+    const cleared = events.update(master.id, { recurrence: null });
+    expect(cleared.recurrence).toBeNull();
+    expect(cleared.recurrenceExdates).toEqual([]); // exceptions belong to the series...
+    expect(cleared.reminderOffsets).toEqual([15]); // ...reminders do not
+  });
+
+  it("refuses a ladder that is not unique whole minutes within range, or that is too long", () => {
+    const events = store();
+    const bad: number[][] = [
+      [-1], // negative lead time
+      [1.5], // not whole minutes
+      [MAX_EVENT_REMINDER_MINUTES + 1], // beyond the 30-day cap
+      [10, 10], // the same lead time twice
+      Array.from({ length: MAX_EVENT_REMINDERS + 1 }, (_, index) => index), // one too many
+    ];
+    for (const reminderOffsets of bad) {
+      expect(() =>
+        events.create({ title: "x", startAt: "2026-07-10T09:00:00Z", reminderOffsets }),
+      ).toThrow(EventValidationError);
+    }
+
+    // The bounds themselves are inclusive, and a full ladder is fine.
+    const created = events.create({
+      title: "x",
+      startAt: "2026-07-10T09:00:00Z",
+      reminderOffsets: Array.from({ length: MAX_EVENT_REMINDERS }, (_, index) => index),
+    });
+    expect(created.reminderOffsets).toHaveLength(MAX_EVENT_REMINDERS);
+    expect(
+      events.update(created.id, { reminderOffsets: [0, MAX_EVENT_REMINDER_MINUTES] }).reminderOffsets,
+    ).toEqual([0, MAX_EVENT_REMINDER_MINUTES]);
+    // A rejected patch leaves the stored ladder untouched.
+    expect(() => events.update(created.id, { reminderOffsets: [-5] })).toThrow(EventValidationError);
+    expect(events.listActive()[0]?.reminderOffsets).toEqual([0, MAX_EVENT_REMINDER_MINUTES]);
+  });
+
+  it("throws when the stored ladder no longer validates — that is corruption, not input", () => {
+    const events = store();
+    const created = events.create({
+      title: "x",
+      startAt: "2026-07-10T09:00:00Z",
+      reminderOffsets: [15],
+    });
+
+    const corrupt = ["{not json", '"15"', "[[15]]", '["15"]', "[-15]", "[1.5]", "[43201]"];
+    for (const value of corrupt) {
+      db.raw.prepare("UPDATE events SET reminder_offsets = ? WHERE id = ?").run(value, created.id);
+      expect(() => events.listActive()).toThrow(EventValidationError);
+    }
   });
 });

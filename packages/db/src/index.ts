@@ -60,7 +60,11 @@ export type {
   UpdateTaskFields,
 } from "./tasks/taskStore.js";
 
-export { EventStore } from "./events/eventStore.js";
+export {
+  EventStore,
+  MAX_EVENT_REMINDERS,
+  MAX_EVENT_REMINDER_MINUTES,
+} from "./events/eventStore.js";
 export type { CreateEventInput, Event, UpdateEventFields } from "./events/eventStore.js";
 
 export {
