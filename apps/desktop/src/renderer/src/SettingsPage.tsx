@@ -1,9 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Button, Card, Checkbox, Chip, TextField } from "@nexus/ui";
 import { validateArchivePassphrase, type ModuleRegistry } from "@nexus/core";
 import { ACCENT_IDS, type AccentId } from "@nexus/tokens";
-import type { AppInfo, FlagState, NotificationSource } from "../../shared/ipc.js";
+import type {
+  AppInfo,
+  FlagState,
+  NotificationSource,
+  RestoreModuleCounts,
+  RestorePreview,
+  RestoreProblem,
+} from "../../shared/ipc.js";
 import { authErrorMessage, passcodeMeetsPolicy, RecoveryKitPanel } from "./AuthGate.js";
 import { ALL_NOTIFICATION_SOURCES } from "./notificationFormat.js";
 import { NotificationSettingsControls } from "./NotificationSettingsControls.js";
@@ -239,6 +246,368 @@ function BackupSection({ profileId }: BackupSectionProps) {
       )}
       {error != null && <p className="set__error">{error}</p>}
     </>
+  );
+}
+
+/** The picked archive as this section remembers it. Never a path: main holds the pick, and the renderer refers to it without naming it (SEC-EL). */
+interface PickedArchive {
+  fileName: string;
+  /** Straight from the pick — an `NXA1` container needs a passphrase, a plain `.nexus.zip` does not, so one is asked for only when it is actually needed. */
+  encrypted: boolean;
+}
+
+/**
+ * The restore flow's entire state, as one discriminated union rather than a
+ * handful of independent booleans: "picked but not previewed", "previewed and
+ * refused" and "previewed and ready" are then mutually exclusive by
+ * construction, and one phase's buttons can never render over another's data.
+ */
+type RestoreState =
+  | { phase: "idle"; error: string | null }
+  | {
+      phase: "picked";
+      pick: PickedArchive;
+      needsPassphrase: boolean;
+      busy: boolean;
+      error: string | null;
+    }
+  | { phase: "invalid"; pick: PickedArchive; problems: RestoreProblem[] }
+  | { phase: "ready"; pick: PickedArchive; preview: RestorePreview; error: string | null }
+  | { phase: "applying"; pick: PickedArchive; preview: RestorePreview }
+  | { phase: "applied" };
+
+/** The counts table's five rows, in the order they are shown. */
+const RESTORE_MODULES: (keyof RestoreModuleCounts)[] = [
+  "tasks",
+  "calendar",
+  "study",
+  "notifications",
+  "notes",
+];
+
+/**
+ * An instant as a full sr-Latn day + time label ("8. jul 2026. 14:32").
+ * Mirrors `focusFormat.ts`'s `formatFocusSessionWhen`, but carries the year:
+ * a focus session is recent by nature, while a restore archive can have been
+ * written at any time and its age is exactly what the user is judging.
+ * Exported for App.tsx's undo banner, which formats the same kind of instant
+ * (the `AuthGate` precedent: a helper lives with the screen that owns it and
+ * is imported, never re-spelled). Raw input on an unparseable string.
+ */
+export function formatArchiveInstant(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const day = new Intl.DateTimeFormat("sr-Latn", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+  const time = new Intl.DateTimeFormat("sr-Latn", { hour: "2-digit", minute: "2-digit" }).format(date);
+  return `${day} ${time}`;
+}
+
+/** The machine-readable half of a problem — `data/tasks.ndjson:12 · <detail>` — or empty when it carries none. */
+function problemFragment(problem: RestoreProblem): string {
+  const parts: string[] = [];
+  if (problem.path != null) {
+    parts.push(problem.line != null ? `${problem.path}:${problem.line}` : problem.path);
+  } else if (problem.line != null) {
+    parts.push(String(problem.line));
+  }
+  if (problem.detail != null) parts.push(problem.detail);
+  return parts.join(" · ");
+}
+
+/** One problem row: the code's Serbian sentence, plus its muted machine fragment when it has one. Shared by the refusal list and the preview's warnings, which differ only in tone. */
+function RestoreProblemRow({ problem, tone }: { problem: RestoreProblem; tone: "error" | "muted" }) {
+  const fragment = problemFragment(problem);
+  return (
+    <li className={tone === "error" ? "set__error" : "set__section-caption"}>
+      {strings.settings.restore.problems[problem.code]}
+      {fragment !== "" && <span className="set__restore-fragment"> {fragment}</span>}
+    </li>
+  );
+}
+
+interface RestoreSectionProps {
+  profileId: string;
+}
+
+/**
+ * Vraćanje iz arhive (IMEX slice 3d, ADR-023): pick an archive, dry-run it,
+ * and — only from the preview the user actually saw — replace this profile's
+ * entire contents with it.
+ *
+ * The preview IS the confirmation screen: a restore is destructive, so what
+ * makes it safe is seeing the archive's own facts beside the target profile's
+ * current counts, not another "are you sure" on top. A second dialog would add
+ * a click and no information.
+ *
+ * After a successful apply main reloads this renderer (ADR-023) — which is why
+ * nothing here navigates, clears, or otherwise depends on its own state
+ * surviving. The undo banner the reloaded app shows is driven by
+ * `restoreStatus` in App.tsx, never by this component.
+ */
+function RestoreSection({ profileId }: RestoreSectionProps) {
+  const s = strings.settings.restore;
+
+  const [state, setState] = useState<RestoreState>({ phase: "idle", error: null });
+  // Deliberately outside the state machine: a wrong passphrase comes back as a
+  // status, not a rejection, and puts the section back in "picked" — where the
+  // user corrects the value already typed rather than retyping it.
+  const [passphrase, setPassphrase] = useState("");
+  // Read by the unmount cleanup only. An apply in flight must never be
+  // cancelled from here: main is copying blobs out of the very archive
+  // `cancelRestore` would close under it.
+  const applying = useRef(false);
+
+  // Backing out of a restore by leaving the page still has to release the
+  // picked file — an opened archive keeps it locked on Windows. Once an apply
+  // has completed, main has already dropped the pick, so this is a no-op.
+  useEffect(() => {
+    return () => {
+      if (applying.current) return;
+      void window.nexus.cancelRestore().catch((error: unknown) => {
+        console.error("Nexus: failed to release the picked archive:", error);
+      });
+    };
+  }, []);
+
+  async function runPreview(pick: PickedArchive, phrase: string | null): Promise<void> {
+    setState({ phase: "picked", pick, needsPassphrase: phrase !== null, busy: true, error: null });
+    try {
+      const result = await window.nexus.previewRestore(profileId, phrase);
+      switch (result.status) {
+        case "ready":
+          // The passphrase has done its job — main holds the opened archive
+          // now, and nothing after this point ever needs it again
+          // (`BackupSection`'s own hygiene rule).
+          setPassphrase("");
+          setState({ phase: "ready", pick, preview: result.preview, error: null });
+          return;
+        case "invalid":
+          setState({ phase: "invalid", pick, problems: result.problems });
+          return;
+        case "unreadable":
+          setState({
+            phase: "picked",
+            pick,
+            // An archive that turns out to want a passphrase gets the field
+            // even if the pick did not say so — otherwise the message asks for
+            // something this screen offers no way to give.
+            needsPassphrase: pick.encrypted || result.code === "passphrase-required",
+            busy: false,
+            error: s.unreadable[result.code],
+          });
+          return;
+        case "no-file":
+          setState({ phase: "idle", error: s.noFileError });
+          return;
+      }
+    } catch (previewError) {
+      setState({
+        phase: "picked",
+        pick,
+        needsPassphrase: pick.encrypted,
+        busy: false,
+        error: s.readError,
+      });
+      console.error("Nexus: failed to preview a restore archive:", previewError);
+    }
+  }
+
+  /** Picking from any phase starts over — main closes the superseded pick itself. */
+  async function choose(): Promise<void> {
+    setState({ phase: "idle", error: null });
+    setPassphrase("");
+    try {
+      const picked = await window.nexus.pickRestoreArchive();
+      if (picked.canceled) return;
+      const pick: PickedArchive = { fileName: picked.fileName, encrypted: picked.encrypted };
+      if (pick.encrypted) {
+        setState({ phase: "picked", pick, needsPassphrase: true, busy: false, error: null });
+        return;
+      }
+      // Nothing left to ask for: a plain archive previews itself on the spot.
+      await runPreview(pick, null);
+    } catch (pickError) {
+      setState({ phase: "idle", error: s.readError });
+      console.error("Nexus: failed to pick a restore archive:", pickError);
+    }
+  }
+
+  async function apply(pick: PickedArchive, preview: RestorePreview): Promise<void> {
+    applying.current = true;
+    setState({ phase: "applying", pick, preview });
+    try {
+      await window.nexus.applyRestore(profileId, preview.token);
+      // Main reloads this renderer moments after the reply lands, so the
+      // success line simply stands until the whole screen is replaced.
+      setState({ phase: "applied" });
+    } catch (applyError) {
+      // A failed apply leaves the preview — and the token main accepts —
+      // untouched, so the screen goes back to it rather than to idle.
+      setState({ phase: "ready", pick, preview, error: s.error });
+      console.error("Nexus: failed to apply a restore:", applyError);
+    } finally {
+      applying.current = false;
+    }
+  }
+
+  async function cancel(): Promise<void> {
+    setState({ phase: "idle", error: null });
+    setPassphrase("");
+    try {
+      await window.nexus.cancelRestore();
+    } catch (cancelError) {
+      console.error("Nexus: failed to release the picked archive:", cancelError);
+    }
+  }
+
+  const previewing = state.phase === "ready" || state.phase === "applying";
+
+  return (
+    <div className="set__restore-block">
+      <h3 className="set__module-group-title">{s.title}</h3>
+      <p className="app__muted">{s.description}</p>
+
+      {!previewing && state.phase !== "applied" && (
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={state.phase === "picked" && state.busy}
+          onClick={() => void choose()}
+        >
+          {s.pickButton}
+        </Button>
+      )}
+
+      {state.phase === "idle" && state.error != null && <p className="set__error">{state.error}</p>}
+
+      {state.phase === "picked" && (
+        <>
+          <p className="set__section-caption">
+            {s.pickedPrefix} <span className="app__path">{state.pick.fileName}</span>
+          </p>
+          {state.needsPassphrase && (
+            <form
+              className="set__security-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void runPreview(state.pick, passphrase);
+              }}
+            >
+              <TextField
+                type="password"
+                label={s.passphraseLabel}
+                value={passphrase}
+                disabled={state.busy}
+                onChange={(event) => setPassphrase(event.target.value)}
+              />
+              <Button type="submit" size="sm" variant="primary" disabled={state.busy || passphrase === ""}>
+                {s.previewButton}
+              </Button>
+            </form>
+          )}
+          {state.busy && <p className="app__muted">{s.previewRunning}</p>}
+          {state.error != null && <p className="set__error">{state.error}</p>}
+        </>
+      )}
+
+      {state.phase === "invalid" && (
+        <>
+          <p className="set__section-caption">
+            {s.pickedPrefix} <span className="app__path">{state.pick.fileName}</span>
+          </p>
+          <ul className="set__restore-problems">
+            {state.problems.map((problem, index) => (
+              <RestoreProblemRow key={`${problem.code}-${index}`} problem={problem} tone="error" />
+            ))}
+          </ul>
+        </>
+      )}
+
+      {previewing && (
+        <>
+          <div className="set__restore-head">
+            <span className="app__path">{state.preview.fileName}</span>
+            <span className="set__restore-meta">
+              {s.createdLabel}: {formatArchiveInstant(state.preview.createdAt)}
+            </span>
+            <span className="set__restore-meta">
+              {s.versionLabel}: {state.preview.appVersion}
+            </span>
+            <span className="set__restore-meta">
+              {s.sourceLabel}: {state.preview.sourceProfileName}
+            </span>
+          </div>
+
+          <p className="set__restore-warning">
+            {s.replaceWarningPrefix} <strong>{state.preview.targetProfileName}</strong>{" "}
+            {s.replaceWarningSuffix}
+          </p>
+
+          <table className="set__restore-table">
+            <thead>
+              <tr>
+                {/* The row-header column's own corner cell: a module name needs no heading. */}
+                <td />
+                <th scope="col">{s.columnCurrent}</th>
+                <th scope="col">{s.columnIncoming}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {RESTORE_MODULES.map((key) => (
+                <tr key={key}>
+                  <th scope="row">{s.modules[key]}</th>
+                  <td>{state.preview.current[key]}</td>
+                  <td>{state.preview.incoming[key]}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {state.preview.warnings.length > 0 && (
+            <ul className="set__restore-problems">
+              {state.preview.warnings.map((warning, index) => (
+                <RestoreProblemRow key={`${warning.code}-${index}`} problem={warning} tone="muted" />
+              ))}
+            </ul>
+          )}
+          {state.preview.corruptBlobs > 0 && (
+            <p className="set__section-caption">
+              {s.corruptBlobsPrefix} {state.preview.corruptBlobs}{" "}
+              {dayUnit(state.preview.corruptBlobs, s.corruptBlobsUnitOne, s.corruptBlobsUnitMany)}{" "}
+              {s.corruptBlobsSuffix}
+            </p>
+          )}
+
+          <div className="set__restore-actions">
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={state.phase === "applying"}
+              onClick={() => void apply(state.pick, state.preview)}
+            >
+              {s.applyButton}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={state.phase === "applying"}
+              onClick={() => void cancel()}
+            >
+              {s.cancelButton}
+            </Button>
+          </div>
+
+          {state.phase === "applying" && <p className="app__muted">{s.applying}</p>}
+          {state.phase === "ready" && state.error != null && <p className="set__error">{state.error}</p>}
+        </>
+      )}
+
+      {state.phase === "applied" && <p className="set__section-caption">{s.applied}</p>}
+    </div>
   );
 }
 
@@ -596,6 +965,7 @@ export function SettingsPage({
 
       <Card title={strings.settings.sectionTitle.backup} className="set__section">
         <BackupSection profileId={profileId} />
+        <RestoreSection profileId={profileId} />
       </Card>
 
       <Card title={strings.settings.sectionTitle.about} className="set__section">

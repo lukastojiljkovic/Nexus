@@ -3,6 +3,12 @@
  * founder decision #2). Centralized so the later i18n extraction is a mechanical
  * move of this table into the i18n layer — no framework yet, by design.
  */
+import type {
+  ArchiveReadErrorCode,
+  RestoreModuleCounts,
+  RestoreProblemCode,
+} from "../../shared/ipc.js";
+
 export const strings = {
   app: {
     brand: "Nexus",
@@ -762,6 +768,113 @@ export const strings = {
       missingAttachmentsUnitMany: "priloga",
       missingAttachmentsSuffix: "— arhiva je ipak sačuvana.",
       error: "Izvoz nije uspeo. Pokušaj ponovo.",
+    },
+    /**
+     * Vraćanje iz arhive (IMEX slice 3d, ADR-023) — the restore flow that sits
+     * below the export in the same "Rezervna kopija" card, plus the post-reload
+     * undo banner the app shell renders (`App.tsx`).
+     *
+     * `description` says the two things the user must know before picking a
+     * file, in plain words: a restore REPLACES this profile's contents, and the
+     * one-step undo lasts only until the app is locked or closed.
+     *
+     * `unreadable` and `problems` are typed against the wire's own closed code
+     * domains, so a code added in `shared/ipc.ts` is a compile error here rather
+     * than a silently missing sentence at the moment a user needs it.
+     */
+    restore: {
+      title: "Vraćanje iz arhive",
+      description:
+        "Vrati podatke iz arhive napravljene izvozom iznad. Sve što je sada u ovom profilu biće obrisano i zamenjeno sadržajem arhive — vraćanje možeš opozvati jednim klikom, ali samo dok ne zaključaš ili ne zatvoriš aplikaciju.",
+      pickButton: "Izaberi arhivu…",
+      pickedPrefix: "Izabrano:",
+      passphraseLabel: "Lozinka arhive",
+      previewButton: "Prikaži pregled",
+      previewRunning: "Čitanje arhive…",
+      /** Preview header: the archive's own manifest facts, beside its file name. */
+      createdLabel: "Napravljena",
+      versionLabel: "Verzija",
+      sourceLabel: "Profil u arhivi",
+      /**
+       * The replace warning, composed around the target profile's name in JSX
+       * (the `savedPrefix` idiom) rather than through a placeholder — there is
+       * no interpolation layer here, and inventing one for a single sentence
+       * would outlive its usefulness.
+       */
+      replaceWarningPrefix: "Sve što je sada u profilu",
+      replaceWarningSuffix: "biće obrisano i zamenjeno sadržajem arhive.",
+      /**
+       * Row labels of the current-vs-incoming table, keyed by
+       * `RestoreModuleCounts`'s own five keys — deliberately NOT
+       * `strings.modules`, whose key set is the module registry's, not this one.
+       */
+      modules: {
+        tasks: "Zadaci",
+        calendar: "Kalendar",
+        study: "Učenje",
+        notifications: "Obaveštenja",
+        notes: "Beleške",
+      } satisfies Record<keyof RestoreModuleCounts, string>,
+      columnCurrent: "Sada",
+      columnIncoming: "Iz arhive",
+      /**
+       * Shown only when `corruptBlobs > 0`: "Arhiva sadrži N prilog(a) sa
+       * oštećenim sadržajem — …". Numeral agreement via `dayUnit`, and the
+       * qualifier deliberately sits OUTSIDE the counted phrase — "N oštećen
+       * prilog" and "N oštećenih priloga" would need three forms, while a
+       * bare "prilog"/"priloga" reads correctly at every count.
+       */
+      corruptBlobsPrefix: "Arhiva sadrži",
+      corruptBlobsUnitOne: "prilog",
+      corruptBlobsUnitMany: "priloga",
+      corruptBlobsSuffix: "sa oštećenim sadržajem — te datoteke neće biti vraćene.",
+      applyButton: "Vrati podatke",
+      cancelButton: "Otkaži",
+      applying: "Vraćanje u toku…",
+      applied: "Podaci su vraćeni. Aplikacija se osvežava…",
+      /** A rejected pick/preview call (not one of the typed statuses below). */
+      readError: "Čitanje arhive nije uspelo. Pokušaj ponovo.",
+      /** A rejected apply call; the preview itself stays valid, so this invites a retry. */
+      error: "Vraćanje nije uspelo. Pokušaj ponovo.",
+      /** `{ status: "no-file" }`: main no longer holds the pick this screen was showing. */
+      noFileError: "Arhiva više nije izabrana. Izaberi je ponovo.",
+      /** The post-reload banner (App.tsx), shown for as long as the undo is live. */
+      undoBanner: "Podaci su vraćeni iz rezervne kopije.",
+      undoButton: "Opozovi",
+      undoDismiss: "Sakrij obaveštenje",
+      undoError: "Opoziv nije uspeo. Pokušaj ponovo.",
+      /** One sentence per `ArchiveReadErrorCode`: the archive could not be opened at all. */
+      unreadable: {
+        "not-an-archive": "Ovaj fajl nije Nexus arhiva.",
+        "passphrase-required": "Arhiva je zaštićena lozinkom — upiši lozinku arhive.",
+        "passphrase-wrong": "Pogrešna lozinka za ovu arhivu.",
+        damaged: "Arhiva je oštećena i ne može se pročitati.",
+        "too-large": "Arhiva prelazi bezbednosna ograničenja i zato je odbijena.",
+      } satisfies Record<ArchiveReadErrorCode, string>,
+      /**
+       * One sentence per `RestoreProblemCode`: the archive opened, but its
+       * contents did not check out. Honest about what is wrong without naming
+       * internals — the machine-readable part (file, line, field) is rendered
+       * beside each sentence, muted, straight from the problem itself.
+       */
+      problems: {
+        "missing-manifest": "Arhivi nedostaje manifest — bez njega se ne zna šta sadrži.",
+        "invalid-manifest": "Manifest arhive nije ispravan.",
+        "unsupported-schema-version":
+          "Arhiva je napravljena u novijoj verziji Nexusa i ova verzija ne može da je pročita.",
+        "missing-data-file": "Arhivi nedostaje fajl sa podacima koji njen manifest navodi.",
+        "checksum-mismatch":
+          "Sadržaj fajla se ne poklapa sa njegovim kontrolnim zbirom — arhiva je oštećena ili je menjana.",
+        "invalid-json": "Fajl sa podacima nije ispravan JSON.",
+        "unknown-record-type": "Arhiva sadrži vrstu zapisa koju ova verzija ne poznaje.",
+        "invalid-record": "Zapis u arhivi nije ispravan.",
+        "duplicate-id": "Isti zapis se u arhivi pojavljuje više puta.",
+        "unknown-reference": "Zapis upućuje na nešto čega u arhivi nema.",
+        "reference-cycle": "Zapisi u arhivi upućuju jedni na druge u krug.",
+        "invalid-ydoc": "Sadržaj beleške u arhivi nije ispravan.",
+        "missing-ydoc": "Belešci u arhivi nedostaje sadržaj.",
+        "missing-blob": "Prilogu nedostaje datoteka u arhivi — zapis se vraća bez nje.",
+      } satisfies Record<RestoreProblemCode, string>,
     },
     about: {
       version: "Verzija",

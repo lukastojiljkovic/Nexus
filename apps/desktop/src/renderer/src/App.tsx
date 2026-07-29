@@ -10,7 +10,7 @@ import { TasksPage, type TasksIntent } from "./TasksPage.js";
 import { CalendarPage, type CalendarIntent } from "./CalendarPage.js";
 import { NotesPage, type NotesIntent } from "./NotesPage.js";
 import { StudyPage, type StudyIntent } from "./StudyPage.js";
-import { SettingsPage } from "./SettingsPage.js";
+import { SettingsPage, formatArchiveInstant } from "./SettingsPage.js";
 import { NotificationCenter } from "./NotificationCenter.js";
 import { SearchPalette } from "./SearchPalette.js";
 import { buildSearchCommands } from "./searchCommands.js";
@@ -78,6 +78,19 @@ export function App() {
   // command's `run` closure is built (see `buildSearchCommands` below).
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [searchStatus, setSearchStatus] = useState<string | null>(null);
+  // The post-reload restore banner (IMEX slice 3d, ADR-023). Applying a
+  // restore reloads this renderer, so the screen that ran it is gone by the
+  // time there is anything to say — `restoreStatus` below is how the fresh
+  // renderer learns an undo is still available.
+  const [restoreUndoAt, setRestoreUndoAt] = useState<string | null>(null);
+  // Dismissal is presentational and session-only: it hides the banner, it does
+  // NOT cancel the undo — main keeps that until the app is locked or closed,
+  // and a locked session drops it anyway. Deliberately not persisted: the next
+  // unlock has no undo left to offer, so there is nothing for a remembered
+  // dismissal to suppress.
+  const [restoreBannerHidden, setRestoreBannerHidden] = useState(false);
+  const [undoingRestore, setUndoingRestore] = useState(false);
+  const [restoreUndoError, setRestoreUndoError] = useState<string | null>(null);
 
   /** Loads everything that requires an open database. Only ever called once `auth:status` (or an unlock/create/recover result) has confirmed `state === "unlocked"`. */
   async function loadUnlockedData(): Promise<void> {
@@ -195,6 +208,46 @@ export function App() {
   function changeAutoLock(value: AutoLockMinutes): void {
     persistAutoLock(value);
     setAutoLockMinutes(value);
+  }
+
+  // v0 runs a single profile; this is the same one every page below is handed.
+  const activeProfileId = profiles?.[0]?.id;
+
+  // Asked once per unlocked session, and only after profiles are known: main
+  // holds the undo in memory, so a locked or freshly launched app has nothing
+  // to report and the banner never appears.
+  useEffect(() => {
+    if (authStatus?.state !== "unlocked" || activeProfileId === undefined) return;
+    let active = true;
+    void (async () => {
+      try {
+        const status = await window.nexus.restoreStatus(activeProfileId);
+        if (active) setRestoreUndoAt(status.undo?.appliedAt ?? null);
+      } catch (error) {
+        console.error("Nexus: failed to read the restore status:", error);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [authStatus?.state, activeProfileId]);
+
+  /** The banner's "Opozovi": puts the profile back exactly as it was before the restore. */
+  async function undoRestore(): Promise<void> {
+    if (activeProfileId === undefined || undoingRestore) return;
+    setUndoingRestore(true);
+    setRestoreUndoError(null);
+    try {
+      await window.nexus.undoRestore(activeProfileId);
+      // Main reloads this renderer moments after the reply lands (ADR-023).
+      // Nothing is cleared here on purpose — the reloaded app asks
+      // `restoreStatus` again and finds no undo left — and `undoingRestore`
+      // stays true so the button cannot be pressed twice in that window.
+    } catch (error) {
+      setRestoreUndoError(strings.settings.restore.undoError);
+      console.error("Nexus: failed to undo the restore:", error);
+      setUndoingRestore(false);
+    }
   }
 
   // While in system mode, follow OS light/dark changes live (SET-004).
@@ -504,6 +557,33 @@ export function App() {
         </nav>
 
         <main className="app__main">
+          {restoreUndoAt != null && !restoreBannerHidden && (
+            <div className="app__restore-banner" role="status">
+              <span className="app__restore-banner-text">
+                {strings.settings.restore.undoBanner}{" "}
+                <span className="app__restore-banner-when">{formatArchiveInstant(restoreUndoAt)}</span>
+              </span>
+              {restoreUndoError != null && (
+                <span className="app__restore-banner-error">{restoreUndoError}</span>
+              )}
+              <Button
+                size="sm"
+                variant="primary"
+                disabled={undoingRestore}
+                onClick={() => void undoRestore()}
+              >
+                {strings.settings.restore.undoButton}
+              </Button>
+              <Button
+                size="sm"
+                className="app__restore-banner-dismiss"
+                aria-label={strings.settings.restore.undoDismiss}
+                onClick={() => setRestoreBannerHidden(true)}
+              >
+                ×
+              </Button>
+            </div>
+          )}
           {effectiveId === "dashboard" && activeProfile ? (
             <DashboardPage
               profileId={activeProfile.id}
