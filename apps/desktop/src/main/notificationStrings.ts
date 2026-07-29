@@ -150,12 +150,14 @@ export function studyDayNotificationCopy(blockCount: number, totalMinutes: numbe
   return { title: "Učenje danas", body: `${blockCount} ${blockPhrase} · ${totalMinutes} min` };
 }
 
-/** Per-source counts for the grouped digest, in the fixed order documents/exams/study-days/events. */
+/** Per-source counts for the grouped digest, in the fixed order documents/exams/study-days/events/tasks. */
 export interface DigestCounts {
   document: number;
   exam: number;
   "study-day": number;
   event: number;
+  /** ADR-028; `groupedDigestCopy` gets its Serbian phrase in the next slice, with the rest of the task copy. */
+  task: number;
 }
 
 /**
@@ -183,5 +185,5 @@ export function groupedDigestCopy(total: number, counts: DigestCounts): Notifica
 
 /** An empty per-source counter, keyed the same way as `@nexus/core`'s `NotificationSource`. */
 export function emptyDigestCounts(): Record<NotificationSource, number> {
-  return { document: 0, exam: 0, "study-day": 0, event: 0 };
+  return { document: 0, exam: 0, "study-day": 0, event: 0, task: 0 };
 }

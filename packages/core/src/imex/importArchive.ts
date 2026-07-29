@@ -40,11 +40,13 @@ import type {
  *
  * `ExportTask`/`ExportEvent`/… (`exportArchive.ts`) ARE the interchange
  * contract this module parses back — the same row shapes, field for field,
- * validated against exactly what the writer emits and nothing looser. Every
- * `CHECK` constraint in `packages/db`'s migrations that this row shape could
- * violate is re-validated here, so a bad archive is a precise, structured
- * `ImportProblem` instead of a raw SQLite error three layers deep inside a
- * restore transaction.
+ * validated against exactly what the writer emits and nothing looser — with
+ * one deliberate allowance: a field an OLDER writer did not emit yet may be
+ * absent, and is defaulted rather than refused (see `ArchiveEra`), because a
+ * backup that cannot be restored is not a backup. Every `CHECK` constraint in
+ * `packages/db`'s migrations that this row shape could violate is re-validated
+ * here, so a bad archive is a precise, structured `ImportProblem` instead of a
+ * raw SQLite error three layers deep inside a restore transaction.
  */
 
 /** Machine-readable problem codes. The renderer maps these to Serbian copy; this module never produces user-facing prose. */
@@ -107,19 +109,77 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.1.0` added the
- * `person` record type (CAL-007 / ADR-026): an additive change, hence a MINOR
- * bump, which is exactly the compatibility mechanism `isSupportedSchemaVersion`
- * implements — a 1.0 archive still parses here, while a 1.0 build refuses a
- * 1.1 archive rather than silently dropping every person in it. That, in turn,
- * is why an unrecognised record type below is an ERROR: the version gate makes
- * "ignore what you do not know" unreachable.
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.2.0` added a task's
+ * `reminderOffsets` (ADR-028) after `1.1.0` added the `person` record type
+ * (CAL-007 / ADR-026): additive changes, hence MINOR bumps, which is exactly
+ * the compatibility mechanism `isSupportedSchemaVersion` implements — an older
+ * minor within major 1 still passes the gate here, while an older build refuses
+ * a newer archive rather than silently dropping what it cannot see (every
+ * person, or every task's ladder). That, in turn, is why an unrecognised record
+ * type below is an ERROR: the version gate makes "ignore what you do not know"
+ * unreachable.
  *
  * Major is still 1 throughout, so there is nothing yet to migrate an older
  * major forward from — a migration framework for a major that has never
  * shipped would be speculative machinery with nothing to exercise it.
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.1.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.2.0";
+
+// --- Archive era: what a declared version guarantees its rows CARRY ---------
+//
+// A backup's whole point is that it restores. Every REQUIRED field added to an
+// existing record type since the first release would otherwise make every
+// archive written before it unreadable — "refuse the whole thing because a
+// field that did not exist yet is absent" is exactly the promise the additive
+// MINOR bump exists to keep. So the declared version is read once, up front,
+// into the capability record below, and a field the writer of that era did not
+// yet emit is DEFAULTED instead of refused.
+//
+// Leniency covers ABSENCE only (`undefined` — the key is not in the row at
+// all), never a malformed value and never an explicit `null`: a writer that
+// emitted the key meant it, so it is validated strictly in every era.
+
+/**
+ * What the writer of an archive at a given `schemaVersion` is known to have
+ * always written. One boolean per "field added after the first release", not
+ * one per version, because the two groups were added under different
+ * disciplines and only the version can tell them apart.
+ */
+interface ArchiveEra {
+  /**
+   * Task/event `recurrence` (ADR-024), event `recurrenceExdates` (ADR-024) and
+   * event `reminderOffsets` (CAL-006). All three shipped INSIDE `1.0.x`,
+   * without a minor bump — so the version alone cannot tell a `1.0.0` archive
+   * written before them from one written after, and `1.0.x` is the one era
+   * where their absence is genuinely ambiguous. Leniency is confined to it:
+   * from `1.1.0` on the writer always wrote them, so absence there is a damaged
+   * row and stays `invalid-record`.
+   */
+  writesRecurrenceAndEventReminders: boolean;
+  /**
+   * Task `reminderOffsets` (ADR-028) — added AT the `1.2.0` bump, which is what
+   * the honest bump buys: below `1.2.0` its absence is expected and defaults to
+   * `[]`, at `1.2.0` and above it is required.
+   */
+  writesTaskReminders: boolean;
+}
+
+/**
+ * Reads an archive's era off its declared `schemaVersion`. Only ever called
+ * after `isSupportedSchemaVersion` has accepted the value, so the unparseable
+ * branch is unreachable — and it answers "the writer wrote everything" anyway,
+ * because a version this module cannot read is never a reason to validate less.
+ */
+function eraOf(schemaVersion: string): ArchiveEra {
+  const version = parseSemver(schemaVersion);
+  if (version === null) {
+    return { writesRecurrenceAndEventReminders: true, writesTaskReminders: true };
+  }
+  return {
+    writesRecurrenceAndEventReminders: version.minor >= 1,
+    writesTaskReminders: version.minor >= 2,
+  };
+}
 
 // --- Small, cast-free validation primitives ---------------------------------
 //
@@ -144,6 +204,25 @@ function tryParse<T>(parse: () => T): { ok: true; value: T } | { ok: false; deta
     if (error instanceof InvalidFieldError) return { ok: false, detail: error.field };
     throw error;
   }
+}
+
+/**
+ * A field that older archives may not carry at all. `parse` runs whenever the
+ * key is PRESENT — strictly, in every era, so a malformed or explicitly-null
+ * value is refused exactly as before; `fallback` is returned only when the key
+ * is absent AND `writerAlwaysWrote` says this archive's era predates the field
+ * (see `ArchiveEra`). An absent key at an era that DID write it falls through
+ * to `parse(undefined)`, which throws `InvalidFieldError` naming the field —
+ * the pre-existing behaviour, kept for exactly the rows that deserve it.
+ */
+function eraDefault<T>(
+  value: unknown,
+  writerAlwaysWrote: boolean,
+  parse: (value: unknown) => T,
+  fallback: T,
+): T {
+  if (value === undefined && !writerAlwaysWrote) return fallback;
+  return parse(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -355,7 +434,7 @@ const EXAM_TYPES = ["pismeni", "usmeni", "kolokvijum"] as const;
 const CARD_STATES = [0, 1, 2, 3] as const;
 const REVIEW_RATINGS = [1, 2, 3, 4] as const;
 const STUDY_BLOCK_STATUSES = ["planned", "done", "missed"] as const;
-const NOTIFICATION_SOURCES = ["document", "exam", "study-day", "event"] as const;
+const NOTIFICATION_SOURCES = ["document", "exam", "study-day", "event", "task"] as const;
 const NOTIFICATION_STATUSES = ["delivered", "snoozed", "dismissed"] as const;
 const PERSON_KINDS = ["birthday", "anniversary"] as const;
 
@@ -373,6 +452,15 @@ const PERSON_LEAP_YEAR = "2024";
  */
 const MAX_EVENT_REMINDER_MINUTES = 43_200;
 const MAX_EVENT_REMINDERS = 8;
+
+/**
+ * Mirrors `MAX_TASK_REMINDER_DAYS`/`MAX_TASK_REMINDERS` in `@nexus/db`'s
+ * `tasks/taskStore.ts` (copied, not imported — `@nexus/core` must not depend
+ * on `@nexus/db`), the same arrangement as the event caps above. Days, not
+ * minutes: a task's ladder counts back from a bare-date due date (ADR-028).
+ */
+const MAX_TASK_REMINDER_DAYS = 365;
+const MAX_TASK_REMINDERS = 8;
 
 // --- Record type discriminants ----------------------------------------------
 
@@ -445,7 +533,7 @@ const FILE_RECORD_TYPES: Record<DataFilePath, readonly RecordType[]> = {
 // --- Per-record parsers, one field validator call per interface field, in --
 // --- the interface's own declared order (see the class comment above). ----
 
-function parseTask(raw: Record<string, unknown>): ExportTask {
+function parseTask(raw: Record<string, unknown>, era: ArchiveEra): ExportTask {
   const id = nonEmptyStr(raw.id, "id");
   const profileId = nonEmptyStr(raw.profileId, "profileId");
   const parentId = nullableNonEmptyStr(raw.parentId, "parentId");
@@ -459,7 +547,18 @@ function parseTask(raw: Record<string, unknown>): ExportTask {
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
   const completedAt = nullableIsoDateTime(raw.completedAt, "completedAt");
-  const recurrence = nullableRecurrenceRule(raw.recurrence, "recurrence");
+  const recurrence = eraDefault(
+    raw.recurrence,
+    era.writesRecurrenceAndEventReminders,
+    (value) => nullableRecurrenceRule(value, "recurrence"),
+    null,
+  );
+  const reminderOffsets = eraDefault(
+    raw.reminderOffsets,
+    era.writesTaskReminders,
+    (value) => boundedIntArray(value, "reminderOffsets", MAX_TASK_REMINDER_DAYS, MAX_TASK_REMINDERS),
+    [],
+  );
   // `done` is a denormalized read of `status`, and migration 002's CHECK ties
   // `status = 'done'` to `completed_at IS NOT NULL` — both invariants must
   // hold for the row to be writable back at all.
@@ -471,13 +570,21 @@ function parseTask(raw: Record<string, unknown>): ExportTask {
   // exactly why an archive has to be checked: a dateless rule would be a series
   // with nothing to advance.
   if (recurrence !== null && dueDate === null) throw new InvalidFieldError("recurrence");
+  // ADR-028: a reminder ladder counts whole days BACK from the due date, so a
+  // laddered task must HAVE one, and it must be a bare calendar day to count
+  // from — the pair rule `TaskStore` enforces in both directions, backed by no
+  // SQL CHECK, which is exactly why an archive has to be checked for it.
+  // `bareDate` is the whole test: `dueDate` reached here through
+  // `nullableBareDate`, so the only case still left to refuse is `null`, and
+  // refusing it through the same helper keeps the rule one statement, not two.
+  if (reminderOffsets.length > 0) bareDate(dueDate, "dueDate");
   return {
     id, profileId, parentId, title, description, status, priority, done,
-    dueDate, startDate, createdAt, updatedAt, completedAt, recurrence,
+    dueDate, startDate, createdAt, updatedAt, completedAt, recurrence, reminderOffsets,
   };
 }
 
-function parseEvent(raw: Record<string, unknown>): ExportEvent {
+function parseEvent(raw: Record<string, unknown>, era: ArchiveEra): ExportEvent {
   const id = nonEmptyStr(raw.id, "id");
   const profileId = nonEmptyStr(raw.profileId, "profileId");
   const title = nonEmptyStr(raw.title, "title");
@@ -489,13 +596,24 @@ function parseEvent(raw: Record<string, unknown>): ExportEvent {
   const category = nullableStr(raw.category, "category");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
-  const recurrence = nullableRecurrenceRule(raw.recurrence, "recurrence");
-  const recurrenceExdates = bareDateArray(raw.recurrenceExdates, "recurrenceExdates");
-  const reminderOffsets = boundedIntArray(
+  const recurrence = eraDefault(
+    raw.recurrence,
+    era.writesRecurrenceAndEventReminders,
+    (value) => nullableRecurrenceRule(value, "recurrence"),
+    null,
+  );
+  const recurrenceExdates = eraDefault(
+    raw.recurrenceExdates,
+    era.writesRecurrenceAndEventReminders,
+    (value) => bareDateArray(value, "recurrenceExdates"),
+    [],
+  );
+  const reminderOffsets = eraDefault(
     raw.reminderOffsets,
-    "reminderOffsets",
-    MAX_EVENT_REMINDER_MINUTES,
-    MAX_EVENT_REMINDERS,
+    era.writesRecurrenceAndEventReminders,
+    (value) =>
+      boundedIntArray(value, "reminderOffsets", MAX_EVENT_REMINDER_MINUTES, MAX_EVENT_REMINDERS),
+    [],
   );
   // No cross-field end->=start check: migration 003 deliberately carries no
   // SQL CHECK for it either (comparing ISO strings across mixed zones is
@@ -877,7 +995,7 @@ function newCollections(): Collections {
   };
 }
 
-/** Parses `raw` per its `type` and files it into the matching bucket. Throws `InvalidFieldError` on a bad field — the line loop turns that into `invalid-record`. */
+/** Parses `raw` per its `type` and files it into the matching bucket. Throws `InvalidFieldError` on a bad field — the line loop turns that into `invalid-record`. `era` reaches only the two parsers whose rows gained fields after the first release (see `ArchiveEra`). */
 function dispatchRecord(
   type: RecordType,
   raw: Record<string, unknown>,
@@ -885,15 +1003,16 @@ function dispatchRecord(
   line: number,
   collections: Collections,
   problems: ImportProblem[],
+  era: ArchiveEra,
 ): void {
   switch (type) {
     case "task": {
-      const row = parseTask(raw);
+      const row = parseTask(raw, era);
       pushRow(collections.tasks, row.id, row, path, line, problems);
       return;
     }
     case "event": {
-      const row = parseEvent(raw);
+      const row = parseEvent(raw, era);
       pushRow(collections.events, row.id, row, path, line, problems);
       return;
     }
@@ -1299,7 +1418,11 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
     }
   }
 
-  // --- Records: parse every present data file, line by line.
+  // --- Records: parse every present data file, line by line. The era is read
+  // once here, off the version the gate above just accepted, and carried into
+  // every row: which fields this archive's writer is known to have written is a
+  // property of the ARCHIVE, never of an individual line.
+  const era = eraOf(manifest.schemaVersion);
   const collections = newCollections();
   for (const path of DATA_FILES) {
     const content = input.files.get(path);
@@ -1343,7 +1466,9 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         return;
       }
 
-      const dispatchOutcome = tryParse(() => dispatchRecord(type, root, path, lineNumber, collections, problems));
+      const dispatchOutcome = tryParse(() =>
+        dispatchRecord(type, root, path, lineNumber, collections, problems, era),
+      );
       if (!dispatchOutcome.ok) {
         problems.push(
           problem("error", "invalid-record", { path, line: lineNumber, detail: dispatchOutcome.detail }),

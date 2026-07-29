@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { RecurrenceRule } from "@nexus/core";
 import {
+  MAX_TASK_REMINDERS,
+  MAX_TASK_REMINDER_DAYS,
   NexusDatabase,
   TaskNotFoundError,
   TaskStore,
@@ -454,5 +456,129 @@ describe("TaskStore — recurrence (ADR-024)", () => {
   it("throws TaskNotFoundError when completing an occurrence of an unknown task", () => {
     const tasks = store();
     expect(() => tasks.completeOccurrence("missing", NOW)).toThrow(TaskNotFoundError);
+  });
+});
+
+describe("TaskStore — reminder offsets (ADR-028)", () => {
+  const NOW = "2026-07-10T12:00:00.000Z";
+  const DAILY: RecurrenceRule = { freq: { kind: "daily", interval: 1 }, end: { kind: "never" } };
+
+  it("defaults to no reminders and stores a supplied ladder ascending", () => {
+    const tasks = store();
+    const plain = tasks.create({ title: "Bez podsetnika" });
+    expect(plain.reminderOffsets).toEqual([]);
+
+    // Deliberately out of order: the column keeps the canonical ascending form.
+    const reminded = tasks.create({
+      title: "Sa podsetnicima",
+      dueDate: "2026-08-10",
+      reminderOffsets: [7, 0, 1],
+    });
+    expect(reminded.reminderOffsets).toEqual([0, 1, 7]);
+    // Keyed rather than positional: `listActive` ties on `created_at` within a
+    // millisecond and falls through to two random uuidv7 suffixes.
+    const stored = new Map(tasks.listActive().map((task) => [task.id, task.reminderOffsets]));
+    expect(stored.get(plain.id)).toEqual([]);
+    expect(stored.get(reminded.id)).toEqual([0, 1, 7]);
+  });
+
+  it("patches the ladder through update, leaves it alone when omitted, and clears it with an empty array", () => {
+    const tasks = store();
+    const created = tasks.create({ title: "x", dueDate: "2026-08-10", reminderOffsets: [3] });
+
+    expect(tasks.update(created.id, { title: "y" }).reminderOffsets).toEqual([3]);
+    expect(tasks.update(created.id, { reminderOffsets: [14, 1] }).reminderOffsets).toEqual([1, 14]);
+    expect(tasks.update(created.id, { reminderOffsets: [] }).reminderOffsets).toEqual([]);
+    expect(tasks.listActive()[0]?.reminderOffsets).toEqual([]);
+    // With the ladder gone the due date is free again.
+    expect(tasks.update(created.id, { dueDate: null }).dueDate).toBeNull();
+  });
+
+  it("refuses a ladder without a bare-date due date, in both directions", () => {
+    const tasks = store();
+    expect(() => tasks.create({ title: "x", reminderOffsets: [3] })).toThrow(TaskValidationError);
+    // A ladder counts whole days back, so a timestamped due date has no anchor.
+    expect(() =>
+      tasks.create({ title: "x", dueDate: "2026-08-10T09:00:00Z", reminderOffsets: [3] }),
+    ).toThrow(TaskValidationError);
+    // Shaped like a date, but not a day that exists.
+    expect(() => tasks.create({ title: "x", dueDate: "2026-02-30", reminderOffsets: [3] })).toThrow(
+      TaskValidationError,
+    );
+
+    const dateless = tasks.create({ title: "dateless" });
+    expect(() => tasks.update(dateless.id, { reminderOffsets: [3] })).toThrow(TaskValidationError);
+
+    const reminded = tasks.create({ title: "reminded", dueDate: "2026-08-10", reminderOffsets: [3] });
+    expect(() => tasks.update(reminded.id, { dueDate: null })).toThrow(TaskValidationError);
+    // and the refused update wrote nothing.
+    expect(tasks.listActive().find((t) => t.id === reminded.id)?.dueDate).toBe("2026-08-10");
+    // Clearing the ladder is always allowed, whatever the date is.
+    expect(tasks.update(reminded.id, { reminderOffsets: [] }).reminderOffsets).toEqual([]);
+  });
+
+  it("refuses a ladder that is not unique whole days within range, or that is too long", () => {
+    const tasks = store();
+    const bad: number[][] = [
+      [-1], // negative
+      [1.5], // not whole days
+      [MAX_TASK_REMINDER_DAYS + 1], // beyond the one-year cap
+      [3, 3], // the same lead time twice
+      Array.from({ length: MAX_TASK_REMINDERS + 1 }, (_, index) => index), // one too many
+    ];
+    for (const reminderOffsets of bad) {
+      expect(() => tasks.create({ title: "x", dueDate: "2026-08-10", reminderOffsets })).toThrow(
+        TaskValidationError,
+      );
+    }
+
+    // The bounds themselves are inclusive, and a full ladder is fine.
+    const created = tasks.create({
+      title: "x",
+      dueDate: "2026-08-10",
+      reminderOffsets: Array.from({ length: MAX_TASK_REMINDERS }, (_, index) => index),
+    });
+    expect(created.reminderOffsets).toHaveLength(MAX_TASK_REMINDERS);
+    expect(
+      tasks.update(created.id, { reminderOffsets: [0, MAX_TASK_REMINDER_DAYS] }).reminderOffsets,
+    ).toEqual([0, MAX_TASK_REMINDER_DAYS]);
+    // A rejected patch leaves the stored ladder untouched.
+    expect(() => tasks.update(created.id, { reminderOffsets: [-5] })).toThrow(TaskValidationError);
+    expect(tasks.listActive()[0]?.reminderOffsets).toEqual([0, MAX_TASK_REMINDER_DAYS]);
+  });
+
+  it("throws when the stored ladder no longer validates — that is corruption, not input", () => {
+    const tasks = store();
+    const created = tasks.create({ title: "x", dueDate: "2026-08-10", reminderOffsets: [3] });
+
+    const corrupt = ["{not json", '"3"', "[[3]]", '["3"]', "[-3]", "[1.5]", "[366]"];
+    for (const value of corrupt) {
+      db.raw.prepare("UPDATE tasks SET reminder_offsets = ? WHERE id = ?").run(value, created.id);
+      expect(() => tasks.listActive()).toThrow(TaskValidationError);
+    }
+  });
+
+  it("carries the ladder through a recurring task's advance untouched — the moved due date re-anchors it", () => {
+    const tasks = store();
+    const created = tasks.create({
+      title: "Svakog dana",
+      dueDate: "2026-07-10",
+      recurrence: DAILY,
+      reminderOffsets: [0, 2],
+    });
+
+    const advanced = tasks.completeOccurrence(created.id, NOW);
+    expect(advanced.dueDate).toBe("2026-07-11");
+    expect(advanced.reminderOffsets).toEqual([0, 2]);
+    expect(tasks.listActive().find((t) => t.id === created.id)?.reminderOffsets).toEqual([0, 2]);
+  });
+
+  it("keeps the ladder through the completion paths a one-off takes", () => {
+    const tasks = store();
+    const created = tasks.create({ title: "Jednokratno", dueDate: "2026-08-10", reminderOffsets: [1] });
+
+    expect(tasks.setDone(created.id, true).reminderOffsets).toEqual([1]);
+    expect(tasks.setDone(created.id, false).reminderOffsets).toEqual([1]);
+    expect(tasks.completeOccurrence(created.id, NOW).reminderOffsets).toEqual([1]);
   });
 });

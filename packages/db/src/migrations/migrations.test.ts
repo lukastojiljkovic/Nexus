@@ -16,8 +16,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 20 (people), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(20);
+  it("is at version 21 (task reminders), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(21);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -1991,6 +1991,184 @@ describe("migration 020 — people", () => {
 
     db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
     expect((db.raw.prepare("SELECT count(*) AS n FROM people").get() as { n: number }).n).toBe(0);
+    db.close();
+  });
+});
+
+describe("migration 021 — task reminders", () => {
+  type Handle = Database.Database;
+
+  const now = () => new Date().toISOString();
+
+  const columnNames = (raw: Handle, table: string): string[] =>
+    (raw.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((row) => row.name);
+
+  const objectNames = (raw: Handle, type: "table" | "index"): string[] =>
+    (raw.prepare("SELECT name FROM sqlite_master WHERE type = ?").all(type) as { name: string }[]).map(
+      (row) => row.name,
+    );
+
+  const seedProfile = (raw: Handle, id: string) =>
+    raw
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run(id, "personal", "P", now());
+
+  const seedTask = (raw: Handle, id: string, profileId: string) =>
+    raw
+      .prepare(
+        `INSERT INTO tasks (id, profile_id, title, status, due_date, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, profileId, "Zadatak", "todo", "2026-08-10", now(), now());
+
+  const seedNotification = (
+    raw: Handle,
+    id: string,
+    profileId: string,
+    source: string,
+    occurrenceKey = "d-1",
+  ) =>
+    raw
+      .prepare(
+        `INSERT INTO notifications
+           (id, profile_id, source, entity_id, occurrence_key, title, body, status,
+            snoozed_until, delivered_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'delivered', NULL, ?, ?, ?)`,
+      )
+      .run(id, profileId, source, "entity-1", occurrenceKey, "Naslov", "Telo", now(), now(), now());
+
+  const seedSourceSetting = (raw: Handle, profileId: string, source: string, enabled: number) =>
+    raw
+      .prepare("INSERT INTO ntf_source_settings (profile_id, source, enabled) VALUES (?, ?, ?)")
+      .run(profileId, source, enabled);
+
+  /** As migration 019's own helper: a connection held at exactly `version`, set up the way `openDatabase` sets one up. */
+  function openAtVersion(path: string, version: number): Handle {
+    const raw = new Database(path);
+    raw.pragma("journal_mode = WAL");
+    raw.pragma("foreign_keys = ON");
+    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
+      typeof value === "string" ? foldSearchText(value) : null,
+    );
+    runMigrations(
+      raw,
+      MIGRATIONS.filter((migration) => migration.version <= version),
+    );
+    return raw;
+  }
+
+  it("adds reminder_offsets to tasks, defaulting to the empty JSON array, and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    expect(columnNames(db.raw, "tasks")).toContain("reminder_offsets");
+
+    insertProfile(db, "p1");
+    seedTask(db.raw, "t1", "p1");
+    expect(db.raw.prepare("SELECT reminder_offsets FROM tasks WHERE id = ?").get("t1")).toEqual({
+      reminder_offsets: "[]",
+    });
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("rejects a NULL reminder_offsets — the column is NOT NULL, so a row always carries at least an empty list", () => {
+    const db = openDatabase({ path: join(dir, "task-offsets-not-null.db") });
+    insertProfile(db, "p1");
+    seedTask(db.raw, "t1", "p1");
+    expect(() =>
+      db.raw.prepare("UPDATE tasks SET reminder_offsets = NULL WHERE id = ?").run("t1"),
+    ).toThrow();
+    db.close();
+  });
+
+  it("stores the ladder JSON verbatim — no SQL CHECK can validate it, which is why TaskStore is the gate", () => {
+    const db = openDatabase({ path: join(dir, "task-offsets-no-check.db") });
+    insertProfile(db, "p1");
+    seedTask(db.raw, "t1", "p1");
+    // Deliberately nonsense: the schema accepts it, and `TaskStore` is what
+    // refuses to read it back (see taskStore.test.ts).
+    expect(() =>
+      db.raw.prepare("UPDATE tasks SET reminder_offsets = ? WHERE id = ?").run("[-5]", "t1"),
+    ).not.toThrow();
+    db.close();
+  });
+
+  it("widens the notifications source CHECK to accept 'task', still rejecting anything outside the set", () => {
+    const db = openDatabase({ path: join(dir, "check-source-task.db") });
+    insertProfile(db, "p1");
+    expect(() => seedNotification(db.raw, "n1", "p1", "task", "2026-08-10 3")).not.toThrow();
+    // the four earlier sources still pass, and an unlisted one still does not.
+    expect(() => seedNotification(db.raw, "n2", "p1", "document", "7")).not.toThrow();
+    expect(() => seedNotification(db.raw, "n3", "p1", "exam", "d-0")).not.toThrow();
+    expect(() => seedNotification(db.raw, "n4", "p1", "study-day", "day")).not.toThrow();
+    expect(() => seedNotification(db.raw, "n5", "p1", "event", "2026-08-01 15")).not.toThrow();
+    expect(() => seedNotification(db.raw, "n6", "p1", "bogus", "x")).toThrow();
+    db.close();
+  });
+
+  it("widens the ntf_source_settings source CHECK to accept 'task', still rejecting anything outside the set", () => {
+    const db = openDatabase({ path: join(dir, "check-source-settings-task.db") });
+    insertProfile(db, "p1");
+    expect(() => seedSourceSetting(db.raw, "p1", "task", 0)).not.toThrow();
+    expect(() => seedSourceSetting(db.raw, "p1", "bogus", 1)).toThrow();
+    // the 0/1 CHECK on `enabled` came back with the rebuilt table too.
+    expect(() => seedSourceSetting(db.raw, "p1", "event", 2)).toThrow();
+    db.close();
+  });
+
+  it("leaves no rebuild scaffolding behind and keeps the notifications UNIQUE tuple and its index", () => {
+    const db = openDatabase({ path: join(dir, "rebuilt-021.db") });
+    const tables = objectNames(db.raw, "table");
+    expect(tables).not.toContain("notifications_new");
+    expect(tables).not.toContain("ntf_source_settings_new");
+    expect(objectNames(db.raw, "index")).toContain("notifications_profile_status_updated");
+
+    insertProfile(db, "p1");
+    seedNotification(db.raw, "n1", "p1", "task", "2026-08-10 3");
+    // the same (profile, source, entity, occurrence) tuple still collides.
+    expect(() => seedNotification(db.raw, "n2", "p1", "task", "2026-08-10 3")).toThrow();
+    db.close();
+  });
+
+  it("carries a seeded 020 database's ledger, source settings and tasks through the rebuild untouched", () => {
+    const path = join(dir, "upgrade-021.db");
+    const before = openAtVersion(path, 20);
+    seedProfile(before, "p1");
+    seedNotification(before, "n1", "p1", "exam");
+    seedNotification(before, "n2", "p1", "event", "2026-08-01 15");
+    seedSourceSetting(before, "p1", "study-day", 0);
+    seedTask(before, "t1", "p1");
+    expect(before.pragma("user_version", { simple: true })).toBe(20);
+    before.close();
+
+    const db = openDatabase({ path });
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    expect(
+      db.raw
+        .prepare("SELECT id, source, occurrence_key, title, status FROM notifications ORDER BY id")
+        .all(),
+    ).toEqual([
+      { id: "n1", source: "exam", occurrence_key: "d-1", title: "Naslov", status: "delivered" },
+      { id: "n2", source: "event", occurrence_key: "2026-08-01 15", title: "Naslov", status: "delivered" },
+    ]);
+    expect(db.raw.prepare("SELECT profile_id, source, enabled FROM ntf_source_settings").all()).toEqual([
+      { profile_id: "p1", source: "study-day", enabled: 0 },
+    ]);
+    // The row that predates the column gains it at its default.
+    expect(db.raw.prepare("SELECT reminder_offsets FROM tasks WHERE id = ?").get("t1")).toEqual({
+      reminder_offsets: "[]",
+    });
+
+    // The rebuilt table's own constraints and index came back with it...
+    expect(objectNames(db.raw, "index")).toContain("notifications_profile_status_updated");
+    expect(() => seedNotification(db.raw, "n3", "p1", "exam")).toThrow(); // same UNIQUE tuple as n1
+    // ...including the foreign key to `profiles`, cascade and all.
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM notifications").get() as { n: number }).n,
+    ).toBe(0);
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM ntf_source_settings").get() as { n: number }).n,
+    ).toBe(0);
     db.close();
   });
 });

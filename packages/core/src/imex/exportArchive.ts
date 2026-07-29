@@ -27,16 +27,17 @@ import { renderNoteMarkdown } from "./noteMarkdown.js";
 import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown.js";
 
 /**
- * IMEX-004: the archive's own semver. `1.1.0` adds the `person` record type
- * (CAL-007 / ADR-026) to `data/calendar.ndjson` — a purely additive change, so
- * a MINOR bump: an archive this build writes is refused by a 1.0 reader (which
- * would silently drop every person), while a 1.0 archive still parses here.
- * Kept in step with `INTERCHANGE_SCHEMA_VERSION` (`importArchive.ts`) — two
- * constants rather than one import, since the reader already imports from this
- * module and the cycle would be worse than the duplication; `importArchive.test.ts`
- * pins them equal.
+ * IMEX-004: the archive's own semver. `1.2.0` adds `reminderOffsets` to the
+ * `task` record (ADR-028) — a new field, so a MINOR bump by the same honesty
+ * that made `1.1.0` (the `person` record type, CAL-007 / ADR-026) one: an
+ * archive this build writes is refused by a 1.1 reader, which would otherwise
+ * parse every task and silently drop the reminder ladder the user set. Kept in
+ * step with
+ * `INTERCHANGE_SCHEMA_VERSION` (`importArchive.ts`) — two constants rather than
+ * one import, since the reader already imports from this module and the cycle
+ * would be worse than the duplication; `importArchive.test.ts` pins them equal.
  */
-const SCHEMA_VERSION = "1.1.0";
+const SCHEMA_VERSION = "1.2.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -62,6 +63,14 @@ export interface ExportTask {
    * than a quiet omission.
    */
   recurrence: RecurrenceRule | null;
+  /**
+   * Whole DAYS before `dueDate` at which the user is reminded (ADR-028),
+   * ascending; always empty when `dueDate` is null. Days rather than an event's
+   * minutes because a task's deadline is a day, not an instant. Required, for
+   * exactly the reason the rule above is: a task restored without its ladder
+   * goes quiet, and quiet is the one failure a reminder feature cannot report.
+   */
+  reminderOffsets: number[];
 }
 
 export interface ExportEvent {

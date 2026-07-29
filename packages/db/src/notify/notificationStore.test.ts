@@ -64,7 +64,7 @@ describe("NotificationStore", () => {
         quietFrom: null,
         quietTo: null,
         morningHour: "08:00",
-        enabledSources: ["document", "exam", "study-day", "event"],
+        enabledSources: ["document", "exam", "study-day", "event", "task"],
       });
     });
 
@@ -86,7 +86,7 @@ describe("NotificationStore", () => {
         quietFrom: "22:00",
         quietTo: "07:00",
         morningHour: "09:00",
-        enabledSources: ["document", "exam", "study-day", "event"],
+        enabledSources: ["document", "exam", "study-day", "event", "task"],
       });
       expect(notify.getSettings().quietFrom).toBe("22:00");
     });
@@ -137,7 +137,7 @@ describe("NotificationStore", () => {
         quietFrom: "22:00",
         quietTo: "07:00",
         morningHour: "09:00",
-        enabledSources: ["document", "exam", "study-day", "event"],
+        enabledSources: ["document", "exam", "study-day", "event", "task"],
       });
     });
   });
@@ -146,10 +146,10 @@ describe("NotificationStore", () => {
     it("disables and re-enables a source, reflected in getSettings().enabledSources", () => {
       const { notify } = fixture();
       notify.setSourceEnabled("exam", false, NOW);
-      expect(notify.getSettings().enabledSources).toEqual(["document", "study-day", "event"]);
+      expect(notify.getSettings().enabledSources).toEqual(["document", "study-day", "event", "task"]);
 
       notify.setSourceEnabled("exam", true, NOW);
-      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day", "event"]);
+      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day", "event", "task"]);
     });
 
     it("upserts rather than duplicating on repeated toggles", () => {
@@ -157,7 +157,7 @@ describe("NotificationStore", () => {
       notify.setSourceEnabled("document", false, NOW);
       notify.setSourceEnabled("document", false, NOW);
       notify.setSourceEnabled("document", true, NOW);
-      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day", "event"]);
+      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day", "event", "task"]);
     });
 
     it("rejects a source outside the closed set", () => {
@@ -170,10 +170,19 @@ describe("NotificationStore", () => {
     it("toggles the event source added by migration 019 (CAL-006) like any other", () => {
       const { notify } = fixture();
       notify.setSourceEnabled("event", false, NOW);
-      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day"]);
+      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day", "task"]);
 
       notify.setSourceEnabled("event", true, NOW);
+      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day", "event", "task"]);
+    });
+
+    it("toggles the task source added by migration 021 (ADR-028) like any other", () => {
+      const { notify } = fixture();
+      notify.setSourceEnabled("task", false, NOW);
       expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day", "event"]);
+
+      notify.setSourceEnabled("task", true, NOW);
+      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day", "event", "task"]);
     });
   });
 
@@ -212,6 +221,26 @@ describe("NotificationStore", () => {
         source: "event",
         entityId: "event1",
         occurrenceKey: "2026-08-01 15",
+        status: "delivered",
+      });
+    });
+
+    it("round-trips a ledger row whose source is 'task' (ADR-028), due-date-keyed occurrence and all", () => {
+      const { notify } = fixture();
+      const record = deliver(notify, {
+        source: "task",
+        entityId: "task1",
+        occurrenceKey: "2026-08-10 3",
+      });
+      expect(record).toMatchObject({
+        source: "task",
+        entityId: "task1",
+        occurrenceKey: "2026-08-10 3",
+      });
+      expect(notify.listLedgerKeys()).toContainEqual({
+        source: "task",
+        entityId: "task1",
+        occurrenceKey: "2026-08-10 3",
         status: "delivered",
       });
     });

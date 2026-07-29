@@ -53,7 +53,13 @@ export type { Migration } from "./migrations/migrations.js";
 
 export { SqliteFlagStore } from "./flags/sqliteFlagStore.js";
 
-export { TaskStore, TASK_PRIORITIES, TASK_STATUSES } from "./tasks/taskStore.js";
+export {
+  TaskStore,
+  MAX_TASK_REMINDERS,
+  MAX_TASK_REMINDER_DAYS,
+  TASK_PRIORITIES,
+  TASK_STATUSES,
+} from "./tasks/taskStore.js";
 export type {
   CreateTaskInput,
   Task,

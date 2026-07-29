@@ -205,7 +205,13 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   const editedSnapshot = bytes(8, 99);
   const editedPlaintext = `${name} note plaintext`;
 
-  const parentTask = taskStore.create({ title: `${name} parent task` });
+  // Dated and laddered (ADR-028), so the full round trip below carries a task
+  // whose reminders have somewhere to count back from.
+  const parentTask = taskStore.create({
+    title: `${name} parent task`,
+    dueDate: "2026-09-01",
+    reminderOffsets: [1, 0],
+  });
   const childTask = taskStore.create({ title: `${name} child task`, parentId: parentTask.id });
 
   const event = eventStore.create({
@@ -362,7 +368,7 @@ function freshArchiveData(): ProfileData {
       {
         id: uuidv7(), profileId: "ignored", parentId: null, title: "Fresh task", description: null,
         status: "todo", priority: "none", done: false, dueDate: null, startDate: null,
-        completedAt: null, recurrence: null, ...timestamps,
+        completedAt: null, recurrence: null, reminderOffsets: [], ...timestamps,
       },
     ],
     subjects: [
@@ -607,6 +613,7 @@ describe("RestoreStore", () => {
       updatedAt: "2026-01-01T00:00:00.000Z",
       completedAt: null,
       recurrence: null,
+      reminderOffsets: [],
     };
     const child: ExportTask = { id: childId, profileId: "ignored", parentId, title: "Child", ...base };
     const parent: ExportTask = { id: parentId, profileId: "ignored", parentId: null, title: "Parent", ...base };
@@ -709,6 +716,7 @@ describe("RestoreStore", () => {
       updatedAt: "2026-01-01T00:00:00.000Z",
       completedAt: null,
       recurrence: null,
+      reminderOffsets: [],
     };
 
     const data: ProfileData = { ...emptyProfileData(), notes: [note], tasks: [task] };
@@ -879,7 +887,7 @@ describe("RestoreStore", () => {
     assertModulesMatch(db, profileB, fixtureB, profileB);
   });
 
-  it("restores a recurring task's rule and a series master's rule, exceptions and reminder ladder verbatim (ADR-024/CAL-006)", () => {
+  it("restores a recurring task's rule and ladder, and a series master's rule, exceptions and ladder verbatim (ADR-024/CAL-006/ADR-028)", () => {
     const profileB = createProfile(db, "recurrence");
     const timestamps = { createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" };
     const task: ExportTask = {
@@ -887,6 +895,7 @@ describe("RestoreStore", () => {
       status: "todo", priority: "none", done: false, dueDate: "2026-08-01", startDate: null,
       completedAt: null,
       recurrence: { freq: { kind: "monthly-date", interval: 1, day: 1 }, end: { kind: "count", total: 12 } },
+      reminderOffsets: [7, 0], // deliberately unsorted, like the event's below
       ...timestamps,
     };
     const event: ExportEvent = {
@@ -907,7 +916,9 @@ describe("RestoreStore", () => {
     // Read back through the stores, so this also proves the restore wrote the
     // exact canonical text those stores accept — anything else reads as
     // corruption and throws rather than returning a row.
-    expect(new TaskStore(db.raw, profileB).listActive()).toEqual([{ ...task, profileId: profileB }]);
+    expect(new TaskStore(db.raw, profileB).listActive()).toEqual([
+      { ...task, profileId: profileB, reminderOffsets: [0, 7] },
+    ]);
     // The exceptions and the reminder ladder come back ascending: both columns
     // are canonical however the archive happened to list them.
     expect(new EventStore(db.raw, profileB).listActive()).toEqual([

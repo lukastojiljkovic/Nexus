@@ -189,7 +189,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.1.0");
+      expect(manifest.schemaVersion).toBe("1.2.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       expect(manifest.profile).toEqual({ id: "profile1", name: "Luka" });
@@ -240,6 +240,7 @@ describe("buildExportArchive", () => {
           updatedAt: "2026-07-01T00:00:00.000Z",
           completedAt: null,
           recurrence: null,
+          reminderOffsets: [],
         },
       ];
       const archive = buildExportArchive(input);
@@ -261,6 +262,7 @@ describe("buildExportArchive", () => {
           updatedAt: "2026-07-01T00:00:00.000Z",
           completedAt: null,
           recurrence: null,
+          reminderOffsets: [],
         },
       ]);
       expect(Object.keys(rows[0] as object)[0]).toBe("type");
@@ -277,6 +279,7 @@ describe("buildExportArchive", () => {
           createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
           completedAt: null,
           recurrence: { freq: { kind: "weekly", interval: 1, days: [0] }, end: { kind: "count", total: 10 } },
+          reminderOffsets: [],
         },
       ];
       const archive = buildExportArchive(input);
@@ -287,6 +290,23 @@ describe("buildExportArchive", () => {
         freq: { kind: "weekly", interval: 1, days: [0] },
         end: { kind: "count", total: 10 },
       });
+    });
+
+    it("carries a task's reminder ladder (ADR-028)", () => {
+      const input = emptyInput();
+      input.data.tasks = [
+        {
+          id: "t1", profileId: "profile1", parentId: null, title: "Prijava ispita", description: null,
+          status: "todo", priority: "none", done: false, dueDate: "2026-08-10", startDate: null,
+          createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+          completedAt: null, recurrence: null, reminderOffsets: [0, 3, 7],
+        },
+      ];
+      const archive = buildExportArchive(input);
+      const rows = parseNdjson(archive.files.get("data/tasks.ndjson") ?? "") as Array<{
+        reminderOffsets: unknown;
+      }>;
+      expect(rows[0]?.reminderOffsets).toEqual([0, 3, 7]);
     });
   });
 
@@ -462,7 +482,7 @@ describe("buildExportArchive", () => {
           id: "t1", profileId: "profile1", parentId: null, title: "Sa, zarezom", description: null,
           status: "todo", priority: "high", done: false, dueDate: "2026-07-20", startDate: null,
           createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z", completedAt: null,
-          recurrence: null,
+          recurrence: null, reminderOffsets: [],
         },
       ];
       const archive = buildExportArchive(input);
@@ -510,7 +530,7 @@ describe("buildExportArchive", () => {
           id: "t1", profileId: "profile1", parentId: null, title: "A", description: null, status: "todo",
           priority: "none", done: false, dueDate: null, startDate: null,
           createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z", completedAt: null,
-          recurrence: null,
+          recurrence: null, reminderOffsets: [],
         },
       ];
       input.data.notifications = [
@@ -532,7 +552,7 @@ describe("buildExportArchive", () => {
       const t = "2026-01-01T00:00:00.000Z";
       return {
         tasks: [
-          { id: "t1", profileId: "p1", parentId: null, title: "T", description: null, status: "todo", priority: "none", done: false, dueDate: null, startDate: null, createdAt: t, updatedAt: t, completedAt: null, recurrence: null },
+          { id: "t1", profileId: "p1", parentId: null, title: "T", description: null, status: "todo", priority: "none", done: false, dueDate: null, startDate: null, createdAt: t, updatedAt: t, completedAt: null, recurrence: null, reminderOffsets: [] },
         ],
         events: [
           { id: "e1", profileId: "p1", title: "E", description: null, startAt: t, endAt: null, allDay: false, location: null, category: null, createdAt: t, updatedAt: t, recurrence: null, recurrenceExdates: [], reminderOffsets: [] },

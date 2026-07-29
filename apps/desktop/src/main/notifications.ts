@@ -244,6 +244,10 @@ function checkProfile(
     exams: exams.map((exam) => ({ id: exam.id, examDate: exam.examDate })),
     events: eventReminderInputs(events, today),
     studyDays,
+    // ADR-028 landed the engine's task source and the store column behind it;
+    // the next slice gathers them (undone tasks with a bare-date due date and a
+    // non-empty ladder) and gives them their Serbian copy.
+    tasks: [],
     enabledSources: settings.enabledSources,
     today,
     nowLocalTime: nowTime,
@@ -350,6 +354,12 @@ function composeCopy(candidate: NotificationCandidate, ctx: CopyContext): Notifi
       event.allDay ? null : startClock(event.startAt),
       Number(offsetMinutes),
     );
+  }
+  if (candidate.source === "task") {
+    // ADR-028 landed the engine's task source and the store column behind it;
+    // the next slice gathers them and gives them their Serbian copy. Until it
+    // does, `tasks: []` above means no task candidate can reach here at all.
+    return null;
   }
   const day = ctx.studyDaysByDate.get(candidate.entityId);
   if (!day) return null;

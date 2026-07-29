@@ -105,11 +105,13 @@ function exdatesText(exdates: readonly string[]): string {
 }
 
 /**
- * An event's reminder ladder as the column stores it: ascending, for exactly
- * the reason `exdatesText` sorts — the parser accepts any order (order carries
- * no meaning in an archive), and `EventStore` reads back only what it would
- * have written itself. Minutes are numbers, so this needs a numeric comparator
- * where day keys got the default lexicographic one.
+ * A reminder ladder as its column stores it — an event's whole minutes
+ * (CAL-006) or a task's whole days (ADR-028), one function because the shape is
+ * the same: ascending, for exactly the reason `exdatesText` sorts — the parser
+ * accepts any order (order carries no meaning in an archive), and
+ * `EventStore`/`TaskStore` read back only what they would have written
+ * themselves. Lead times are numbers, so this needs a numeric comparator where
+ * day keys got the default lexicographic one.
  */
 function offsetsText(offsets: readonly number[]): string {
   return JSON.stringify([...offsets].sort((a, b) => a - b));
@@ -222,8 +224,9 @@ export class RestoreStore {
     this.insertTask = db.prepare(
       `INSERT INTO tasks
          (id, profile_id, parent_id, title, description, status, priority,
-          due_date, start_date, created_at, updated_at, completed_at, recurrence, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+          due_date, start_date, created_at, updated_at, completed_at, recurrence,
+          reminder_offsets, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertEvent = db.prepare(
       `INSERT INTO events
@@ -411,6 +414,7 @@ export class RestoreStore {
           task.id, this.profileId, task.parentId, task.title, task.description,
           task.status, task.priority, task.dueDate, task.startDate,
           task.createdAt, task.updatedAt, task.completedAt, recurrenceText(task.recurrence),
+          offsetsText(task.reminderOffsets),
         );
         written += 1;
       }

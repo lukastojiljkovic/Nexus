@@ -275,7 +275,13 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   const attachmentStore = new NoteAttachmentStore(handle.raw, profileId);
   const templateStore = new NoteTemplateStore(handle.raw, profileId);
 
-  const task = taskStore.create({ title: `${label} task` });
+  // Dated and laddered (ADR-028), so the whole zip round trip below carries a
+  // task's reminder ladder as well as its plain fields.
+  const task = taskStore.create({
+    title: `${label} task`,
+    dueDate: "2026-03-05",
+    reminderOffsets: [0, 3],
+  });
   const event = eventStore.create({ title: `${label} event`, startAt: "2026-03-01T10:00:00.000Z" });
   // A leap-day birthday (CAL-007): the pair migration 020's CHECKs cannot vet,
   // so it is the person shape worth pushing through a whole zip round trip.

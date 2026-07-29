@@ -61,6 +61,7 @@ export type {
   NotificationPriority,
   NotificationSource,
   StudyDayReminderInput,
+  TaskReminderInput,
 } from "./notify/notificationEngine.js";
 
 export { isWithinQuietHours } from "./notify/quietHours.js";

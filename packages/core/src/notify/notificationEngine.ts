@@ -26,20 +26,23 @@
  * time part (documents/exams may, per their stores' ISO-8601 columns) are
  * reduced to their bare "YYYY-MM-DD" prefix before any comparison or math.
  *
- * Three of the four sources are day-granular: they fire at the profile's
- * `morningHour` on a bare `fireDate`. Event reminders (CAL-006, ADR-025) are
- * the exception — "15 minutes before" is meaningless rounded to a day — so a
- * timed occurrence carries a fire INSTANT instead, and the same UTC math is
- * simply carried down to the minute. Both live in one `Occurrence` shape and
- * one `isDue`, so the day-granular sources' behaviour is untouched.
+ * Four of the five sources are day-granular: they fire at the profile's
+ * `morningHour` on a bare `fireDate`. Task reminders (ADR-028) are the newest
+ * of those four and deliberately the document model, days-before-due and all,
+ * because a task's due date is itself a bare day. Event reminders (CAL-006,
+ * ADR-025) are the one exception — "15 minutes before" is meaningless rounded
+ * to a day — so a timed occurrence carries a fire INSTANT instead, and the
+ * same UTC math is simply carried down to the minute. Both live in one
+ * `Occurrence` shape and one `isDue`, so the day-granular sources' behaviour
+ * is untouched.
  */
 
 const MS_PER_DAY = 86_400_000;
 const MS_PER_MINUTE = 60_000;
 const MINUTES_PER_DAY = 1_440;
 
-/** The four NTF-001..003/CAL-006 source kinds this engine derives from; NTF-006/007 (private notes, security) have no sources yet. */
-export type NotificationSource = "document" | "exam" | "study-day" | "event";
+/** The five NTF-001..003/CAL-006/ADR-028 source kinds this engine derives from; NTF-006/007 (private notes, security) have no sources yet. */
+export type NotificationSource = "document" | "exam" | "study-day" | "event" | "task";
 
 /** `max` bypasses quiet hours (the PRD's "final warning" exception); everything else is `normal`. */
 export type NotificationPriority = "normal" | "max";
@@ -49,7 +52,7 @@ export interface NotificationCandidate {
   source: NotificationSource;
   /** Document id / exam id / the bare study date, depending on `source`. */
   entityId: string;
-  /** A deterministic per-occurrence key: the offset (documents), "d-1"/"d-0" (exams), or "day" (study days). */
+  /** A deterministic per-occurrence key: the offset (documents), "d-1"/"d-0" (exams), "day" (study days), or "<date> <offset>" — the occurrence's own date for an event, the due date for a task. */
   occurrenceKey: string;
   /** Bare "YYYY-MM-DD" the occurrence belongs to. */
   fireDate: string;
@@ -92,11 +95,22 @@ export interface EventReminderInput {
   reminderOffsets: readonly number[];
 }
 
+/**
+ * A dated task's reminder-relevant fields. The caller passes only tasks that
+ * are not done, carry a bare-date due date and a non-empty ladder.
+ */
+export interface TaskReminderInput {
+  id: string;
+  dueDate: string;
+  reminderOffsets: readonly number[];
+}
+
 export interface DeriveNotificationCandidatesInput {
   documents: ReadonlyArray<DocumentReminderInput>;
   exams: ReadonlyArray<ExamReminderInput>;
   events: ReadonlyArray<EventReminderInput>;
   studyDays: ReadonlyArray<StudyDayReminderInput>;
+  tasks: ReadonlyArray<TaskReminderInput>;
   enabledSources: ReadonlyArray<NotificationSource>;
   /** Bare "YYYY-MM-DD", the caller's local today. */
   today: string;
@@ -158,10 +172,10 @@ function utcInstantKey(ms: number): string {
 }
 
 /**
- * Derives every due notification occurrence across the four sources,
+ * Derives every due notification occurrence across the five sources,
  * deterministically ordered by source, then entity id, then occurrence key.
  * An occurrence is due when it is still relevant to its entity's current
- * state AND its fire moment has arrived — for the three day-granular sources
+ * state AND its fire moment has arrived — for the four day-granular sources
  * that means its fire date has already passed (came due while the app was off)
  * or it fires today at/after `morningHour`; for a timed event reminder it
  * means its fire instant is at or before now ("HH:MM" and the fixed-width
@@ -179,6 +193,7 @@ export function deriveNotificationCandidates(
     ...(enabled.has("exam") ? examOccurrences(input.exams, input.today) : []),
     ...(enabled.has("study-day") ? studyDayOccurrences(input.studyDays, input.today) : []),
     ...(enabled.has("event") ? eventOccurrences(input.events, input.today, now) : []),
+    ...(enabled.has("task") ? taskOccurrences(input.tasks, input.today) : []),
   ];
 
   const due = occurrences.filter((occurrence) =>
@@ -323,6 +338,46 @@ function eventOccurrences(
         priority: "normal",
         relevant,
         fireInstant,
+      });
+    }
+  }
+  return occurrences;
+}
+
+/**
+ * One occurrence per (task, offset): fireDate = dueDate - offset days, keyed by
+ * the task's own due date and that offset. The due date is IN the key
+ * deliberately: a recurring task advances in place (ADR-024), so each advance
+ * re-keys the next occurrence's reminders for free. Priority is always
+ * `normal` — the PRD's quiet-hours "final warning" exception belongs to
+ * expiring documents, where the deadline is external and unmovable.
+ *
+ * Relevant while `today <= dueDate`; the caller has already filtered out done
+ * tasks (see `TaskReminderInput`). Catch-up is therefore bounded by the due
+ * date itself: a reminder missed while the app was closed still fires, but
+ * only up to the day the task is due. Past that, an undone task is
+ * OVERDUE-nudge territory — a different occurrence type, on its own cadence,
+ * deliberately not derived here.
+ */
+function taskOccurrences(
+  tasks: ReadonlyArray<TaskReminderInput>,
+  today: string,
+): Occurrence[] {
+  const occurrences: Occurrence[] = [];
+  for (const task of tasks) {
+    const dueDateKey = bareDate(task.dueDate);
+    const dueMs = utcDayMs(dueDateKey);
+    const relevant = today <= dueDateKey;
+
+    for (const offset of task.reminderOffsets) {
+      occurrences.push({
+        source: "task",
+        entityId: task.id,
+        occurrenceKey: `${dueDateKey} ${offset}`,
+        fireDate: utcDateKey(dueMs - offset * MS_PER_DAY),
+        priority: "normal",
+        relevant,
+        fireInstant: null,
       });
     }
   }

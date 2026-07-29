@@ -28,6 +28,17 @@ export const TASK_STATUSES: readonly TaskStatus[] = ["todo", "doing", "done"];
 export const TASK_PRIORITIES: readonly TaskPriority[] = ["none", "low", "medium", "high"];
 
 /**
+ * ADR-028: the longest lead time one task reminder may carry — a year, in
+ * DAYS. Exported (and re-exported from the package barrel) so the IPC validator
+ * that guards this store from an untrusted renderer checks the very same bound
+ * rather than a second copy of it.
+ */
+export const MAX_TASK_REMINDER_DAYS = 365;
+
+/** ADR-028: how many reminders one task may carry. Exported for the same reason as the cap above. */
+export const MAX_TASK_REMINDERS = 8;
+
+/**
  * A task as the store returns it: camelCase keys that map straight onto a views
  * engine `CollectionSchema` (status/priority → select, dueDate → date, title →
  * text, done → boolean) with no adapter. `done` is derived from `status`.
@@ -50,9 +61,17 @@ export interface Task {
   /**
    * The rule this task advances by when an occurrence is completed (ADR-024),
    * or null for a one-off. Never non-null without a bare-date `dueDate` — the
-   * date the rule phases from (`assertRecurrenceAnchor`).
+   * date the rule phases from (`assertDueDateAnchors`).
    */
   recurrence: RecurrenceRule | null;
+  /**
+   * Whole days before `dueDate` at which to remind (ADR-028), ascending. Never
+   * non-empty without a bare-date `dueDate` either — the day the ladder counts
+   * back FROM is the same anchor a rule phases from, so one helper upholds
+   * both. Days rather than minutes because a task's deadline is a day, not an
+   * instant: this is the document-expiry model, not the event one.
+   */
+  reminderOffsets: number[];
 }
 
 /** Fields accepted when creating a task; only `title` is required (TASK-001). */
@@ -65,6 +84,7 @@ export interface CreateTaskInput {
   startDate?: string | null;
   parentId?: string | null;
   recurrence?: RecurrenceRule | null;
+  reminderOffsets?: number[];
 }
 
 /**
@@ -80,6 +100,7 @@ export interface UpdateTaskFields {
   dueDate?: string | null;
   startDate?: string | null;
   recurrence?: RecurrenceRule | null;
+  reminderOffsets?: number[];
 }
 
 interface TaskRow {
@@ -96,11 +117,12 @@ interface TaskRow {
   updated_at: string;
   completed_at: string | null;
   recurrence: string | null;
+  reminder_offsets: string;
 }
 
 const COLUMNS =
   "id, profile_id, parent_id, title, description, status, priority, " +
-  "due_date, start_date, created_at, updated_at, completed_at, recurrence";
+  "due_date, start_date, created_at, updated_at, completed_at, recurrence, reminder_offsets";
 
 /** Accepts ISO-8601 date ('2026-07-08') or date-time, optionally zoned (PRD §7). */
 const ISO_8601 =
@@ -129,8 +151,9 @@ export class TaskStore {
     this.insert = db.prepare(
       `INSERT INTO tasks
          (id, profile_id, parent_id, title, description, status, priority,
-          due_date, start_date, created_at, updated_at, completed_at, recurrence, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+          due_date, start_date, created_at, updated_at, completed_at, recurrence,
+          reminder_offsets, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.selectActive = db.prepare(
       `SELECT ${COLUMNS} FROM tasks
@@ -144,7 +167,8 @@ export class TaskStore {
     this.updateFields = db.prepare(
       `UPDATE tasks
          SET title = ?, description = ?, status = ?, priority = ?,
-             due_date = ?, start_date = ?, recurrence = ?, completed_at = ?, updated_at = ?
+             due_date = ?, start_date = ?, recurrence = ?, reminder_offsets = ?,
+             completed_at = ?, updated_at = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
     );
     this.markDeleted = db.prepare(
@@ -179,7 +203,8 @@ export class TaskStore {
     const dueDate = validateDate(input.dueDate, "dueDate");
     const startDate = validateDate(input.startDate, "startDate");
     const recurrence = validateRecurrence(input.recurrence);
-    assertRecurrenceAnchor(recurrence, dueDate);
+    const reminderOffsets = validateReminderOffsets(input.reminderOffsets);
+    assertDueDateAnchors(recurrence, reminderOffsets, dueDate);
     const parentId = this.resolveParent(input.parentId);
     const now = new Date().toISOString();
     const completedAt = status === "done" ? now : null;
@@ -188,12 +213,13 @@ export class TaskStore {
     this.insert.run(
       id, this.profileId, parentId, title, description, status, priority,
       dueDate, startDate, now, now, completedAt, serializeRecurrence(recurrence),
+      JSON.stringify(reminderOffsets),
     );
 
     return {
       id, profileId: this.profileId, parentId, title, description, status,
       priority, done: status === "done", dueDate, startDate,
-      createdAt: now, updatedAt: now, completedAt, recurrence,
+      createdAt: now, updatedAt: now, completedAt, recurrence, reminderOffsets,
     };
   }
 
@@ -229,6 +255,10 @@ export class TaskStore {
           ? validateDate(fields.startDate, "startDate")
           : current.startDate,
       recurrence,
+      reminderOffsets:
+        fields.reminderOffsets !== undefined
+          ? validateReminderOffsets(fields.reminderOffsets)
+          : current.reminderOffsets,
     });
   }
 
@@ -288,7 +318,7 @@ export class TaskStore {
     // Every write path upholds rule-implies-due-date; re-read as a value here
     // because the type cannot say so, and because a hand-edited row must not
     // reach the engine (which throws `TypeError` on a non-day-key anchor).
-    const anchor = requireRecurrenceAnchor(current.dueDate);
+    const anchor = requireDueDateAnchor(current.dueDate, "a recurrence rule");
 
     const next = nextOccurrenceDate(rule, anchor, anchor);
     // `total - 1`, or null when the rule does not end by count. A count of 1
@@ -304,6 +334,12 @@ export class TaskStore {
       const advanced = this.writeFields(
         current,
         {
+          // `ownFields` carries the reminder ladder through the advance like
+          // every other field, and that is all the reminder logic an advance
+          // needs (ADR-028): the ladder counts days back from `dueDate`, and
+          // the engine keys each occurrence by that same date — so moving the
+          // date below re-anchors AND re-keys the next occurrence's reminders
+          // in one step, with nothing to reset and no stale key left behind.
           ...ownFields(current),
           status: "todo",
           dueDate: next,
@@ -349,9 +385,9 @@ export class TaskStore {
    * target status: stamped when a task becomes done (its original stamp kept if
    * it already was), cleared otherwise — the single place that upholds the
    * status/completed_at invariant the schema also CHECKs, and (since the schema
-   * cannot) the rule/due-date invariant against the MERGED pair, so a patch that
-   * clears the date of a recurring task is caught just as a patch that adds a
-   * rule to a dateless one is.
+   * cannot) the rule-or-ladder/due-date invariant against the MERGED pair, so a
+   * patch that clears the date of a recurring or reminded task is caught just as
+   * a patch that adds a rule or a ladder to a dateless one is.
    *
    * `at` defaults to the wall clock; `completeOccurrence` passes its caller's
    * `now` so a parent and its subtasks carry one stamp.
@@ -361,12 +397,13 @@ export class TaskStore {
     next: Required<UpdateTaskFields>,
     at: string = new Date().toISOString(),
   ): Task {
-    assertRecurrenceAnchor(next.recurrence, next.dueDate);
+    assertDueDateAnchors(next.recurrence, next.reminderOffsets, next.dueDate);
     const completedAt = next.status === "done" ? (current.completedAt ?? at) : null;
 
     this.updateFields.run(
       next.title, next.description, next.status, next.priority,
-      next.dueDate, next.startDate, serializeRecurrence(next.recurrence), completedAt, at,
+      next.dueDate, next.startDate, serializeRecurrence(next.recurrence),
+      JSON.stringify(next.reminderOffsets), completedAt, at,
       current.id, this.profileId,
     );
 
@@ -408,6 +445,7 @@ function toTask(row: TaskRow): Task {
     updatedAt: row.updated_at,
     completedAt: row.completed_at,
     recurrence: parseStoredRecurrence(row.recurrence, row.id),
+    reminderOffsets: parseStoredOffsets(row.reminder_offsets, row.id),
   };
 }
 
@@ -421,6 +459,7 @@ function ownFields(task: Task): Required<UpdateTaskFields> {
     dueDate: task.dueDate,
     startDate: task.startDate,
     recurrence: task.recurrence,
+    reminderOffsets: task.reminderOffsets,
   };
 }
 
@@ -470,27 +509,74 @@ function validateRecurrence(value: RecurrenceRule | null | undefined): Recurrenc
 }
 
 /**
- * A recurring task phases from its own due date, so there must BE one, and it
- * must be a bare calendar day the engine can anchor on — a timestamped due date
- * has no place in a day-to-day series (and is not what the interchange contract
- * declares for a task's `dueDate` either). Returns it, so the one caller that
- * needs the anchor as a value gets it without re-narrowing.
+ * The bare calendar day a task's day-phased features anchor on. A recurrence
+ * rule phases FROM the due date (ADR-024) and a reminder ladder counts days
+ * BACK from it (ADR-028) — one anchor, two readers — so there must BE one, and
+ * it must be a day the engine can work in: a timestamped due date has no place
+ * in day-to-day arithmetic (and is not what the interchange contract declares
+ * for a task's `dueDate` either). `needs` names the feature that requires it,
+ * so the refusal says which of the two the caller tripped. Returns the anchor,
+ * so the one caller that needs it as a value gets it without re-narrowing.
  */
-function requireRecurrenceAnchor(dueDate: string | null): string {
+function requireDueDateAnchor(dueDate: string | null, needs: string): string {
   if (dueDate === null) {
-    throw new TaskValidationError("A recurring task must have a dueDate for its rule to advance.");
+    throw new TaskValidationError(`A task with ${needs} must have a dueDate to anchor on.`);
   }
   if (!isValidDayKey(dueDate)) {
     throw new TaskValidationError(
-      `A recurring task's dueDate must be a bare calendar date (got "${dueDate}").`,
+      `A task with ${needs} must have a bare calendar date as its dueDate (got "${dueDate}").`,
     );
   }
   return dueDate;
 }
 
-/** The same invariant as a precondition on a write: only a ruled task needs an anchor. */
-function assertRecurrenceAnchor(rule: RecurrenceRule | null, dueDate: string | null): void {
-  if (rule !== null) requireRecurrenceAnchor(dueDate);
+/**
+ * The same invariant as a precondition on a write, checked for each feature
+ * that carries it: only a task that actually HAS a rule or a ladder needs the
+ * anchor, so clearing both frees the due date again.
+ */
+function assertDueDateAnchors(
+  rule: RecurrenceRule | null,
+  reminderOffsets: readonly number[],
+  dueDate: string | null,
+): void {
+  if (rule !== null) requireDueDateAnchor(dueDate, "a recurrence rule");
+  if (reminderOffsets.length > 0) requireDueDateAnchor(dueDate, "reminders");
+}
+
+/**
+ * A reminder ladder from an untrusted caller (SEC-EL-02), returning the
+ * canonical form the column stores: ascending, so the ladder reads the same
+ * however the user entered it. Absent means "no reminders", the default. The
+ * rules — unique, whole days, 0..`MAX_TASK_REMINDER_DAYS`, at most
+ * `MAX_TASK_REMINDERS` of them — cannot be a SQL CHECK over a JSON column, so
+ * this function is the gate (with `parseImportArchive`'s twin covering the one
+ * other way a value reaches the column). Mirrors `EventStore`'s own validator,
+ * in days rather than minutes.
+ */
+function validateReminderOffsets(value: readonly number[] | undefined): number[] {
+  if (value === undefined) return [];
+  if (value.length > MAX_TASK_REMINDERS) {
+    throw new TaskValidationError(
+      `A task may carry at most ${MAX_TASK_REMINDERS} reminders (got ${value.length}).`,
+    );
+  }
+  for (const offset of value) {
+    if (!isReminderOffset(offset)) {
+      throw new TaskValidationError(
+        `"reminderOffsets" must hold whole days between 0 and ${MAX_TASK_REMINDER_DAYS} (got ${offset}).`,
+      );
+    }
+  }
+  if (new Set(value).size !== value.length) {
+    throw new TaskValidationError('"reminderOffsets" must not repeat the same lead time.');
+  }
+  return [...value].sort((a, b) => a - b);
+}
+
+/** One lead time's own shape — shared by the write validator above and the stored-value reader below. */
+function isReminderOffset(value: number): boolean {
+  return Number.isInteger(value) && value >= 0 && value <= MAX_TASK_REMINDER_DAYS;
 }
 
 function serializeRecurrence(rule: RecurrenceRule | null): string | null {
@@ -516,6 +602,27 @@ function parseStoredRecurrence(text: string | null, id: string): RecurrenceRule 
     throw new TaskValidationError(`Task "${id}" carries a stored recurrence rule that is not valid.`);
   }
   return rule;
+}
+
+/** Same reasoning as `parseStoredRecurrence`: only this store writes the column, and it writes a list of whole-day lead times. */
+function parseStoredOffsets(text: string, id: string): number[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    parsed = null;
+  }
+  const invalid = new TaskValidationError(
+    `Task "${id}" carries stored reminder offsets that are not a list of whole-day lead times.`,
+  );
+  if (!Array.isArray(parsed)) throw invalid;
+  const entries: readonly unknown[] = parsed;
+  const offsets: number[] = [];
+  for (const entry of entries) {
+    if (typeof entry !== "number" || !isReminderOffset(entry)) throw invalid;
+    offsets.push(entry);
+  }
+  return offsets;
 }
 
 /** Normalizes an optional string: absent/empty/whitespace-only collapses to null. */

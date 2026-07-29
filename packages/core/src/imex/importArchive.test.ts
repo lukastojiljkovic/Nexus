@@ -81,19 +81,21 @@ function emptyExportInput(): ExportArchiveInput {
 function richProfileData(): ProfileData {
   return {
     tasks: [
-      // Recurring (ADR-024): the rule and the due date it phases from travel together.
+      // Recurring (ADR-024), and reminded (ADR-028): the rule, the ladder and
+      // the due date both of them anchor on travel together.
       {
         id: "task-parent", profileId: "profile1", parentId: null, title: "Roditeljski zadatak",
         description: null, status: "todo", priority: "none", done: false, dueDate: "2026-08-01",
         startDate: null, createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
         completedAt: null,
         recurrence: { freq: { kind: "monthly-date", interval: 1, day: 1 }, end: { kind: "count", total: 12 } },
+        reminderOffsets: [0, 3],
       },
       {
         id: "task-child", profileId: "profile1", parentId: "task-parent", title: "Podzadatak",
         description: "Opis", status: "done", priority: "high", done: true, dueDate: null,
         startDate: "2026-07-05", createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-02T00:00:00.000Z",
-        completedAt: "2026-07-02T00:00:00.000Z", recurrence: null,
+        completedAt: "2026-07-02T00:00:00.000Z", recurrence: null, reminderOffsets: [],
       },
     ],
     events: [
@@ -336,7 +338,7 @@ const VALID_TASK = {
   type: "task", id: "t1", profileId: "profile1", parentId: null, title: "A", description: null,
   status: "todo", priority: "none", done: false, dueDate: null, startDate: null,
   createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z", completedAt: null,
-  recurrence: null,
+  recurrence: null, reminderOffsets: [],
 };
 
 const VALID_EVENT = {
@@ -408,10 +410,10 @@ describe("parseImportArchive — one test per problem code", () => {
   });
 
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.2.0" });
+    const files = baseFiles({ schemaVersion: "1.3.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.2.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.3.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -618,6 +620,25 @@ describe("parseImportArchive — recurrence (ADR-024)", () => {
       row: { dueDate: null, recurrence: { freq: { kind: "daily", interval: 1 }, end: { kind: "never" } } },
       detail: "recurrence",
     },
+    // ADR-028: the ladder's rules are `TaskStore`'s, re-checked here because
+    // an archive is the one way a value reaches the column without the store.
+    { name: "no reminder ladder at all", row: { reminderOffsets: undefined }, detail: "reminderOffsets" },
+    { name: "a reminder ladder that is not an array", row: { reminderOffsets: 3 }, detail: "reminderOffsets" },
+    { name: "a negative lead time", row: { dueDate: "2026-08-01", reminderOffsets: [-1] }, detail: "reminderOffsets[0]" },
+    { name: "a fractional lead time", row: { dueDate: "2026-08-01", reminderOffsets: [3, 1.5] }, detail: "reminderOffsets[1]" },
+    {
+      name: "a lead time beyond the one-year cap",
+      row: { dueDate: "2026-08-01", reminderOffsets: [366] },
+      detail: "reminderOffsets[0]",
+    },
+    { name: "the same lead time twice", row: { dueDate: "2026-08-01", reminderOffsets: [3, 3] }, detail: "reminderOffsets" },
+    {
+      name: "more lead times than a task may carry",
+      row: { dueDate: "2026-08-01", reminderOffsets: [0, 1, 2, 3, 4, 5, 6, 7, 8] },
+      detail: "reminderOffsets",
+    },
+    // The cross-field half: a ladder with nothing to count back from.
+    { name: "a ladder with no due date to count back from", row: { dueDate: null, reminderOffsets: [3] }, detail: "dueDate" },
   ];
 
   for (const { name, row, detail } of BAD_TASKS) {
@@ -625,6 +646,16 @@ describe("parseImportArchive — recurrence (ADR-024)", () => {
       expect(detailsFor("data/tasks.ndjson", { ...VALID_TASK, ...row })).toContain(detail);
     });
   }
+
+  it("accepts a task whose reminder ladder sits beside the due date it counts back from, in any order", () => {
+    const task = { ...VALID_TASK, dueDate: "2026-08-10", reminderOffsets: [7, 0] };
+    const result = parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/tasks.ndjson": ndjson([task]) } })),
+    );
+    expect(result.problems).toEqual([]);
+    // Order carries no meaning on the way in — `RestoreStore` writes it sorted.
+    expect(result.data?.tasks[0]?.reminderOffsets).toEqual([7, 0]);
+  });
 
   it("accepts an event master with a rule, its exceptions and a reminder ladder in any order", () => {
     const event = {
@@ -758,9 +789,158 @@ describe("parseImportArchive — recurrence (ADR-024)", () => {
   });
 });
 
+/**
+ * A backup's whole point is that it restores. Four REQUIRED fields have been
+ * added to existing record types since the first release — task/event
+ * `recurrence`, event `recurrenceExdates`, event `reminderOffsets` (all three
+ * inside `1.0.x`, with no bump) and task `reminderOffsets` (at the `1.2.0`
+ * bump) — and without the era gate every archive written before each of them
+ * would be refused outright for a field that did not exist yet.
+ */
+describe("parseImportArchive — older eras (fields added after the first release)", () => {
+  /** `VALID_TASK` as a 1.0.0 writer emitted it: derived by REMOVING the fields added since, so this fixture cannot drift from the current row shape. */
+  function eraTask(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    const { recurrence: _recurrence, reminderOffsets: _reminderOffsets, ...rest } = VALID_TASK;
+    return { ...rest, ...overrides };
+  }
+
+  /** `VALID_EVENT` as a 1.0.0 writer emitted it — same derivation, three fields. */
+  function eraEvent(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    const {
+      recurrence: _recurrence,
+      recurrenceExdates: _recurrenceExdates,
+      reminderOffsets: _reminderOffsets,
+      ...rest
+    } = VALID_EVENT;
+    return { ...rest, ...overrides };
+  }
+
+  /** Parses `tasks`/`events` under a manifest declaring `schemaVersion` — the one variable every case below turns. */
+  function parseAt(
+    schemaVersion: string,
+    tasks: readonly Record<string, unknown>[],
+    events: readonly Record<string, unknown>[] = [],
+  ) {
+    return parseImportArchive(
+      emptyInputWith(
+        baseFiles({
+          schemaVersion,
+          fileContents: {
+            "data/tasks.ndjson": ndjson(tasks),
+            "data/calendar.ndjson": ndjson(events),
+          },
+        }),
+      ),
+    );
+  }
+
+  const invalidDetails = (result: ReturnType<typeof parseAt>): (string | undefined)[] =>
+    result.problems.filter((problem) => problem.code === "invalid-record").map((p) => p.detail);
+
+  it("parses a 1.0.0 archive whose rows predate all four fields, defaulting each", () => {
+    const result = parseAt("1.0.0", [eraTask()], [eraEvent()]);
+
+    expect(result.problems).toEqual([]);
+    expect(result.data?.tasks[0]).toMatchObject({ recurrence: null, reminderOffsets: [] });
+    expect(result.data?.events[0]).toMatchObject({
+      recurrence: null,
+      recurrenceExdates: [],
+      reminderOffsets: [],
+    });
+  });
+
+  it("refuses those very same rows under a 1.2.0 manifest, naming the missing field", () => {
+    const result = parseAt("1.2.0", [eraTask()], [eraEvent()]);
+
+    // Each parser reports its FIRST missing field, in the row's own field order.
+    expect(invalidDetails(result)).toEqual(["recurrence", "recurrence"]);
+    expect(result.data).toBeNull();
+  });
+
+  it("refuses each field individually at the era that writes it", () => {
+    const { reminderOffsets: _ladder, ...taskWithoutLadder } = VALID_TASK;
+    const { recurrenceExdates: _exdates, ...eventWithoutExdates } = VALID_EVENT;
+    const { reminderOffsets: _eventLadder, ...eventWithoutLadder } = VALID_EVENT;
+
+    expect(invalidDetails(parseAt("1.2.0", [taskWithoutLadder]))).toEqual(["reminderOffsets"]);
+    expect(invalidDetails(parseAt("1.2.0", [], [eventWithoutExdates]))).toEqual(["recurrenceExdates"]);
+    expect(invalidDetails(parseAt("1.2.0", [], [eventWithoutLadder]))).toEqual(["reminderOffsets"]);
+  });
+
+  it("lets a 1.1.0 archive omit only what the 1.2.0 bump added", () => {
+    const { reminderOffsets: _ladder, ...taskWithoutLadder } = VALID_TASK;
+    const accepted = parseAt("1.1.0", [taskWithoutLadder]);
+    expect(accepted.problems).toEqual([]);
+    expect(accepted.data?.tasks[0]?.reminderOffsets).toEqual([]);
+
+    // The three that shipped inside 1.0.x were always written by a 1.1 writer,
+    // so their absence there is a damaged row, not an older archive.
+    const { recurrence: _rule, ...eventWithoutRule } = VALID_EVENT;
+    const refused = parseAt("1.1.0", [], [eventWithoutRule]);
+    expect(refused.problems).toContainEqual({
+      severity: "error",
+      code: "invalid-record",
+      path: "data/calendar.ndjson",
+      line: 1,
+      detail: "recurrence",
+    });
+    expect(refused.data).toBeNull();
+  });
+
+  it("applies the cross-field rules to the defaulted values", () => {
+    // A 1.0.x master with a rule but no exdates key: the exceptions default to
+    // `[]`, which satisfies the "exceptions belong to a series" pair rule —
+    // defaulting can only ever produce the empty, always-valid side of it.
+    const accepted = parseAt("1.0.0", [], [eraEvent({ recurrence: WEEKLY_RULE })]);
+    expect(accepted.problems).toEqual([]);
+    expect(accepted.data?.events[0]).toMatchObject({
+      recurrence: WEEKLY_RULE,
+      recurrenceExdates: [],
+      reminderOffsets: [],
+    });
+
+    // And a lenient era does not weaken a cross-field rule for a field that IS
+    // present: a rule still needs a due date, a ladder still needs one to count
+    // back from.
+    const dailyRule = { freq: { kind: "daily", interval: 1 }, end: { kind: "never" } };
+    expect(invalidDetails(parseAt("1.0.0", [eraTask({ recurrence: dailyRule })]))).toEqual([
+      "recurrence",
+    ]);
+    expect(invalidDetails(parseAt("1.0.0", [eraTask({ reminderOffsets: [3] })]))).toEqual(["dueDate"]);
+  });
+
+  it("validates a PRESENT value strictly in every era — leniency covers absence only", () => {
+    // Based on the FULL rows, so each case turns exactly one field and the
+    // assertion cannot be satisfied by some earlier field being absent.
+    for (const schemaVersion of ["1.0.0", "1.1.0", "1.2.0"]) {
+      const task = (overrides: Record<string, unknown>) => ({ ...VALID_TASK, ...overrides });
+      const event = (overrides: Record<string, unknown>) => ({ ...VALID_EVENT, ...overrides });
+
+      // Malformed.
+      expect(invalidDetails(parseAt(schemaVersion, [task({ recurrence: "daily" })]))).toEqual([
+        "recurrence",
+      ]);
+      expect(
+        invalidDetails(parseAt(schemaVersion, [task({ dueDate: "2026-08-01", reminderOffsets: [-1] })])),
+      ).toEqual(["reminderOffsets[0]"]);
+      expect(invalidDetails(parseAt(schemaVersion, [], [event({ reminderOffsets: 15 })]))).toEqual([
+        "reminderOffsets",
+      ]);
+      // An explicit `null` is PRESENT, not absent: a writer that emitted the key
+      // meant it, and `null` is not a list.
+      expect(
+        invalidDetails(parseAt(schemaVersion, [], [event({ recurrenceExdates: null })])),
+      ).toEqual(["recurrenceExdates"]);
+      expect(invalidDetails(parseAt(schemaVersion, [task({ reminderOffsets: null })]))).toEqual([
+        "reminderOffsets",
+      ]);
+    }
+  });
+});
+
 describe("parseImportArchive — schema version", () => {
-  it("is 1.1.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.1.0");
+  it("is 1.2.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.2.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -772,7 +952,7 @@ describe("parseImportArchive — schema version", () => {
   });
 
   it("accepts the exact current version", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.1.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.2.0" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
@@ -786,6 +966,13 @@ describe("parseImportArchive — schema version", () => {
     expect(result.data).not.toBeNull();
   });
 
+  // And the same for the minor ADR-028 has just superseded.
+  it("accepts an older minor — a 1.1 archive still parses here", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.1.0" })));
+    expect(result.problems).toEqual([]);
+    expect(result.data).not.toBeNull();
+  });
+
   it("accepts an older patch", () => {
     const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.0.7" })));
     expect(result.problems).toEqual([]);
@@ -793,15 +980,15 @@ describe("parseImportArchive — schema version", () => {
   });
 
   it("accepts a newer patch", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.1.7" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.2.7" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
 
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.2.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.3.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.2.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.3.0" },
     ]);
     expect(result.data).toBeNull();
   });

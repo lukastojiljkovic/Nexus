@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { deriveNotificationCandidates } from "./notificationEngine.js";
 
-const ALL_SOURCES = ["document", "exam", "study-day", "event"] as const;
+const ALL_SOURCES = ["document", "exam", "study-day", "event", "task"] as const;
 
 describe("deriveNotificationCandidates", () => {
   describe("documents", () => {
@@ -11,6 +11,7 @@ describe("deriveNotificationCandidates", () => {
         exams: [],
         events: [],
         studyDays: [],
+        tasks: [],
         enabledSources: ALL_SOURCES,
         today: "2026-07-27", // 2026-08-10 - 14 days
         nowLocalTime: "08:00",
@@ -34,6 +35,7 @@ describe("deriveNotificationCandidates", () => {
         exams: [],
         events: [],
         studyDays: [],
+        tasks: [],
         enabledSources: ALL_SOURCES,
         today: "2026-08-03", // offset 7's fire date; offset 30's (2026-07-11) is already past
         nowLocalTime: "08:00",
@@ -53,6 +55,7 @@ describe("deriveNotificationCandidates", () => {
         exams: [],
         events: [],
         studyDays: [],
+        tasks: [],
         enabledSources: ALL_SOURCES,
         today: "2026-08-11", // the day after expiry; the offset-90 fire date is long past
         nowLocalTime: "08:00",
@@ -70,6 +73,7 @@ describe("deriveNotificationCandidates", () => {
         exams: [{ id: "exam1", examDate: "2026-09-01" }],
         events: [],
         studyDays: [],
+        tasks: [],
         enabledSources: ALL_SOURCES,
         today: "2026-08-31", // d-1's fire date; d-0's (2026-09-01) is still in the future
         nowLocalTime: "07:59",
@@ -82,6 +86,7 @@ describe("deriveNotificationCandidates", () => {
         exams: [{ id: "exam1", examDate: "2026-09-01" }],
         events: [],
         studyDays: [],
+        tasks: [],
         enabledSources: ALL_SOURCES,
         today: "2026-08-31",
         nowLocalTime: "08:00",
@@ -98,6 +103,7 @@ describe("deriveNotificationCandidates", () => {
         exams: [{ id: "exam1", examDate: "2026-09-01" }],
         events: [],
         studyDays: [],
+        tasks: [],
         enabledSources: ALL_SOURCES,
         today: "2026-09-01",
         nowLocalTime: "09:00",
@@ -117,6 +123,7 @@ describe("deriveNotificationCandidates", () => {
         exams: [{ id: "exam1", examDate: "2026-09-01" }],
         events: [],
         studyDays: [],
+        tasks: [],
         enabledSources: ALL_SOURCES,
         today: "2026-09-02",
         nowLocalTime: "09:00",
@@ -134,6 +141,7 @@ describe("deriveNotificationCandidates", () => {
         exams: [],
         events: [],
         studyDays: [{ date: "2026-07-11", blockCount: 2, totalMinutes: 60 }],
+        tasks: [],
         enabledSources: ALL_SOURCES,
         today: "2026-07-11",
         nowLocalTime: "08:00",
@@ -151,6 +159,7 @@ describe("deriveNotificationCandidates", () => {
         exams: [],
         events: [],
         studyDays: [{ date: "2026-07-11", blockCount: 2, totalMinutes: 60 }],
+        tasks: [],
         enabledSources: ALL_SOURCES,
         today: "2026-07-12",
         nowLocalTime: "08:00",
@@ -175,6 +184,7 @@ describe("deriveNotificationCandidates", () => {
         exams: [],
         events: [{ id: "ev1", occurrenceDate, startTime, reminderOffsets }],
         studyDays: [],
+        tasks: [],
         enabledSources: ALL_SOURCES,
         today,
         nowLocalTime,
@@ -258,6 +268,7 @@ describe("deriveNotificationCandidates", () => {
         exams: [],
         events: [{ id: "ev1", occurrenceDate: "2026-08-01", startTime: "10:00", reminderOffsets: [15] }],
         studyDays: [],
+        tasks: [],
         enabledSources: ["document", "exam", "study-day"],
         today: "2026-08-01",
         nowLocalTime: "09:50",
@@ -277,6 +288,7 @@ describe("deriveNotificationCandidates", () => {
           { id: "ev-a", occurrenceDate: "2026-08-10", startTime: null, reminderOffsets: [10080] },
         ],
         studyDays: [{ date: "2026-08-03", blockCount: 1, totalMinutes: 30 }],
+        tasks: [],
         enabledSources: ALL_SOURCES,
         today: "2026-08-03",
         nowLocalTime: "09:56", // past both of ev-b's fire instants (09:30 and 09:55), before its 10:00 start
@@ -296,6 +308,118 @@ describe("deriveNotificationCandidates", () => {
     });
   });
 
+  describe("tasks", () => {
+    /** One dated task carrying `reminderOffsets`, plus the clock, in the shape every case below varies. */
+    function dated(
+      reminderOffsets: readonly number[],
+      today: string,
+      nowLocalTime = "08:00",
+      dueDate = "2026-08-10",
+    ) {
+      return deriveNotificationCandidates({
+        documents: [],
+        exams: [],
+        events: [],
+        studyDays: [],
+        tasks: [{ id: "task1", dueDate, reminderOffsets }],
+        enabledSources: ALL_SOURCES,
+        today,
+        nowLocalTime,
+        morningHour: "08:00",
+      });
+    }
+
+    /** The fixed part of every expectation below: one occurrence of `task1`'s 2026-08-10 ladder. */
+    const key = (offset: number) => ({
+      source: "task",
+      entityId: "task1",
+      occurrenceKey: `2026-08-10 ${offset}`,
+      priority: "normal",
+    });
+
+    it("derives an occurrence per offset, keyed by the due date and that offset, firing at dueDate - offset days", () => {
+      expect(dated([0, 3], "2026-08-10")).toEqual([
+        { ...key(0), fireDate: "2026-08-10" },
+        { ...key(3), fireDate: "2026-08-07" }, // its fire date is past; it catches up
+      ]);
+    });
+
+    it("fires at the morning hour on its own fire date, and not before", () => {
+      expect(dated([7], "2026-08-02")).toEqual([]); // a day early
+      expect(dated([7], "2026-08-03", "07:59")).toEqual([]); // the right day, too early
+      expect(dated([7], "2026-08-03", "08:00")).toEqual([{ ...key(7), fireDate: "2026-08-03" }]);
+    });
+
+    it("treats offset 0 as 'on the morning it is due'", () => {
+      expect(dated([0], "2026-08-09")).toEqual([]);
+      expect(dated([0], "2026-08-10", "07:59")).toEqual([]);
+      expect(dated([0], "2026-08-10", "08:00")).toEqual([{ ...key(0), fireDate: "2026-08-10" }]);
+    });
+
+    it("catches up any time up to the due date, and derives nothing once today is past it", () => {
+      // Missed while the app was closed a month ago: still due, right up to the
+      // due date itself.
+      expect(dated([30], "2026-08-10", "23:00")).toEqual([{ ...key(30), fireDate: "2026-07-11" }]);
+      // The day after, nothing — an undone task is overdue then, which is a
+      // different kind of nudge entirely (deliberately not derived here).
+      expect(dated([30], "2026-08-11")).toEqual([]);
+      expect(dated([0], "2026-08-11")).toEqual([]);
+    });
+
+    it("keys by the due date, so a recurring task's advance re-keys its whole ladder", () => {
+      expect(dated([1], "2026-08-09").map((candidate) => candidate.occurrenceKey)).toEqual([
+        "2026-08-10 1",
+      ]);
+      // The same row after `completeOccurrence` moved its due date on (ADR-024):
+      // same id, same ladder, a brand-new key — so the ledger cannot mistake the
+      // next occurrence's reminder for one already delivered.
+      expect(
+        dated([1], "2026-08-16", "08:00", "2026-08-17").map((candidate) => candidate.occurrenceKey),
+      ).toEqual(["2026-08-17 1"]);
+    });
+
+    it("contributes nothing when the task source is disabled", () => {
+      const result = deriveNotificationCandidates({
+        documents: [],
+        exams: [],
+        events: [],
+        studyDays: [],
+        tasks: [{ id: "task1", dueDate: "2026-08-10", reminderOffsets: [0] }],
+        enabledSources: ["document", "exam", "study-day", "event"],
+        today: "2026-08-10",
+        nowLocalTime: "08:00",
+        morningHour: "08:00",
+      });
+      expect(result).toEqual([]);
+    });
+
+    it("orders one occurrence per (task, offset) deterministically, and sorts after every other source", () => {
+      const result = deriveNotificationCandidates({
+        documents: [{ id: "doc-1", expiryDate: "2026-08-10", reminderOffsets: [7] }],
+        exams: [],
+        events: [],
+        studyDays: [{ date: "2026-08-03", blockCount: 1, totalMinutes: 30 }],
+        tasks: [
+          { id: "task-b", dueDate: "2026-08-05", reminderOffsets: [2, 14] },
+          { id: "task-a", dueDate: "2026-08-03", reminderOffsets: [0] },
+        ],
+        enabledSources: ALL_SOURCES,
+        today: "2026-08-03",
+        nowLocalTime: "08:00",
+        morningHour: "08:00",
+      });
+
+      expect(result).toEqual([
+        { source: "document", entityId: "doc-1", occurrenceKey: "7", fireDate: "2026-08-03", priority: "max" },
+        { source: "study-day", entityId: "2026-08-03", occurrenceKey: "day", fireDate: "2026-08-03", priority: "normal" },
+        { source: "task", entityId: "task-a", occurrenceKey: "2026-08-03 0", fireDate: "2026-08-03", priority: "normal" },
+        // Within one task the offsets order lexically ("14" < "2").
+        { source: "task", entityId: "task-b", occurrenceKey: "2026-08-05 14", fireDate: "2026-07-22", priority: "normal" },
+        { source: "task", entityId: "task-b", occurrenceKey: "2026-08-05 2", fireDate: "2026-08-03", priority: "normal" },
+      ]);
+    });
+  });
+
   describe("enabledSources", () => {
     it("omits every occurrence of a source absent from enabledSources", () => {
       const result = deriveNotificationCandidates({
@@ -303,6 +427,7 @@ describe("deriveNotificationCandidates", () => {
         exams: [{ id: "exam1", examDate: "2026-08-04" }],
         events: [],
         studyDays: [{ date: "2026-08-03", blockCount: 1, totalMinutes: 30 }],
+        tasks: [],
         enabledSources: ["exam"],
         today: "2026-08-03",
         nowLocalTime: "08:00",
@@ -325,6 +450,7 @@ describe("deriveNotificationCandidates", () => {
         exams: [{ id: "exam-1", examDate: "2026-08-04" }],
         events: [],
         studyDays: [{ date: "2026-08-03", blockCount: 1, totalMinutes: 30 }],
+        tasks: [],
         enabledSources: ALL_SOURCES,
         today: "2026-08-03",
         nowLocalTime: "08:00",
