@@ -33,6 +33,9 @@ export const IpcChannel = {
   eventsUpdate: "events:update",
   eventsDelete: "events:delete",
   eventsRestore: "events:restore",
+  tasksCompleteOccurrence: "tasks:complete-occurrence",
+  eventsAddRecurrenceExdate: "events:add-recurrence-exdate",
+  eventsSplitRecurrence: "events:split-recurrence",
   documentsList: "documents:list",
   documentsCreate: "documents:create",
   documentsUpdate: "documents:update",
@@ -262,6 +265,41 @@ export interface ProfilesRenameRequest {
   name: string;
 }
 
+/** Weekday index, 0 = Monday … 6 = Sunday — Monday-first, as everything Serbian in Nexus is. */
+export type RecurrenceWeekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+/** Which occurrence of a weekday inside a month; `-1` is the last one. */
+export type RecurrenceOrdinal = 1 | 2 | 3 | 4 | -1;
+
+/** How often a series fires; every `interval` is 1..99 and every period that cannot hold the pattern is skipped, never clamped (ADR-024). */
+export type RecurrenceFreq =
+  | { kind: "daily"; interval: number }
+  | { kind: "weekdays" }
+  | { kind: "weekly"; interval: number; days: RecurrenceWeekday[] }
+  | { kind: "monthly-date"; interval: number; day: number }
+  | { kind: "monthly-ordinal"; interval: number; ordinal: RecurrenceOrdinal; weekday: RecurrenceWeekday }
+  | { kind: "yearly"; interval: number };
+
+/** When a series stops: never, on an inclusive bare `YYYY-MM-DD` date, or after a total number of occurrences (the first one included). */
+export type RecurrenceEnd =
+  | { kind: "never" }
+  | { kind: "until"; date: string }
+  | { kind: "count"; total: number };
+
+/**
+ * The rule language shared by recurring tasks and recurring events (ADR-024).
+ * Mirrors `@nexus/core`'s `RecurrenceRule` exactly. Redeclared rather than
+ * imported — the same pattern `AuthErrorReason` and `RestoreProblemCode`
+ * follow — because this file deliberately imports nothing. `main/index.ts`
+ * assigns core's `RecurrenceRule` to this type and hands the result on to the
+ * stores, which take core's, so drift in either direction is a compile error
+ * rather than a wire that quietly carries a rule the engine cannot run.
+ */
+export interface RecurrenceRule {
+  freq: RecurrenceFreq;
+  end: RecurrenceEnd;
+}
+
 /** Closed task status domain (mirrors `@nexus/db`; redeclared so the renderer never imports DB code). */
 export type TaskStatus = "todo" | "doing" | "done";
 
@@ -286,6 +324,8 @@ export interface Task {
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+  /** The rule this task advances by when an occurrence is completed (ADR-024), or null for a one-off. Never non-null without a bare-date `dueDate` — the date the rule phases from. */
+  recurrence: RecurrenceRule | null;
 }
 
 /** Fields for a new task; only `title` is required (TASK-001). The main process revalidates each. */
@@ -297,6 +337,7 @@ export interface NewTaskFields {
   dueDate?: string | null;
   startDate?: string | null;
   parentId?: string | null;
+  recurrence?: RecurrenceRule | null;
 }
 
 /** A partial edit of a task's own fields; an omitted key is untouched, `null` clears it. */
@@ -307,6 +348,7 @@ export interface TaskFieldChanges {
   priority?: TaskPriority;
   dueDate?: string | null;
   startDate?: string | null;
+  recurrence?: RecurrenceRule | null;
 }
 
 export interface TasksListRequest {
@@ -341,6 +383,12 @@ export interface TasksRestoreRequest {
   id: string;
 }
 
+/** "This occurrence is done" (ADR-024) — the one completion path for every task. `now` is stamped by main, never accepted from the renderer. */
+export interface TasksCompleteOccurrenceRequest {
+  profileId: string;
+  id: string;
+}
+
 /**
  * A calendar event as seen by the renderer (mirrors the `events` table via the
  * store's mapping, PRD 04). Redeclared here so the renderer never imports DB code.
@@ -357,6 +405,10 @@ export interface Event {
   category: string | null;
   createdAt: string;
   updatedAt: string;
+  /** The rule that makes this row a series master the calendar expands virtually (ADR-024), or null for a one-off. Anchored on `startAt`'s own day. */
+  recurrence: RecurrenceRule | null;
+  /** Bare `YYYY-MM-DD` occurrence dates removed from the series, ascending; empty whenever `recurrence` is null. Settable only through `addEventRecurrenceExdate`, never through create/update — hence its absence from the two shapes below. */
+  recurrenceExdates: string[];
 }
 
 /** Fields for a new event; only `title` and `startAt` are required (CAL-001). The main process revalidates each. */
@@ -368,6 +420,7 @@ export interface NewEventFields {
   location?: string | null;
   description?: string | null;
   category?: string | null;
+  recurrence?: RecurrenceRule | null;
 }
 
 /** A partial edit of an event's own fields; an omitted key is untouched, `null` clears it. */
@@ -379,6 +432,7 @@ export interface EventFieldChanges {
   location?: string | null;
   description?: string | null;
   category?: string | null;
+  recurrence?: RecurrenceRule | null;
 }
 
 export interface EventsListRequest {
@@ -405,6 +459,20 @@ export interface EventsDeleteRequest {
 export interface EventsRestoreRequest {
   profileId: string;
   id: string;
+}
+
+/** Excepts one bare `YYYY-MM-DD` occurrence from a series (ADR-024). Idempotent; `now` is stamped by main, never accepted from the renderer. */
+export interface EventsAddRecurrenceExdateRequest {
+  profileId: string;
+  id: string;
+  date: string;
+}
+
+/** Truncates a series so its last occurrence is the day before `occurrenceDate` (ADR-024). `now` is stamped by main, never accepted from the renderer. */
+export interface EventsSplitRecurrenceRequest {
+  profileId: string;
+  id: string;
+  occurrenceDate: string;
 }
 
 /** Closed document-type domain (mirrors `@nexus/db`; redeclared so the renderer never imports DB code). */
@@ -1819,11 +1887,29 @@ export interface NexusApi {
   setTaskDone(profileId: string, id: string, done: boolean): Promise<Task>;
   deleteTask(profileId: string, id: string): Promise<void>;
   restoreTask(profileId: string, id: string): Promise<void>;
+  /**
+   * "This occurrence is done" (ADR-024): a one-off completes, while a recurring
+   * task advances in place to its next due date and comes back as `todo` again.
+   * This is the checkbox/kanban path for EVERY task — the caller never needs to
+   * know whether the task recurs, and `setTaskDone(…, true)` refuses a
+   * recurring one precisely so the two paths cannot drift apart.
+   */
+  completeTaskOccurrence(profileId: string, id: string): Promise<Task>;
   listEvents(profileId: string): Promise<Event[]>;
   createEvent(profileId: string, event: NewEventFields): Promise<Event>;
   updateEvent(profileId: string, id: string, changes: EventFieldChanges): Promise<Event>;
   deleteEvent(profileId: string, id: string): Promise<void>;
   restoreEvent(profileId: string, id: string): Promise<void>;
+  /** Removes one occurrence date from a series (ADR-024) — the "delete just this one" / "detach it into its own event" primitive. Adding a date the series already excepts changes nothing. */
+  addEventRecurrenceExdate(profileId: string, id: string, date: string): Promise<Event>;
+  /**
+   * The "this and future occurrences" truncation (ADR-024): the master's series
+   * ends the day before `occurrenceDate`, and the truncated master comes back.
+   * Carrying the edited fields forward is a separate, ordinary `createEvent` —
+   * so a split, a "delete from here on", and a "change the rule from here on"
+   * are all this one call plus whatever the caller does next.
+   */
+  splitEventRecurrence(profileId: string, id: string, occurrenceDate: string): Promise<Event>;
   listDocuments(profileId: string): Promise<TrackedDocument[]>;
   createDocument(profileId: string, doc: NewDocumentFields): Promise<TrackedDocument>;
   updateDocument(

@@ -6,12 +6,14 @@ import type { IpcMainInvokeEvent, OpenDialogOptions } from "electron";
 import { autoUpdater } from "electron-updater";
 import {
   buildSearchSnippet,
+  isValidDayKey,
   MAX_ARCHIVE_PASSPHRASE_LENGTH,
   parseSearchQuery,
   rankSearchResults,
   sniffMime,
   toFtsMatchExpression,
   validateArchivePassphrase,
+  validateRecurrenceRule,
 } from "@nexus/core";
 import type { NotificationSource, SearchHit, SearchKind } from "@nexus/core";
 import { MAX_PASSCODE_LENGTH, blobStorageName, deriveBlobKeys, type BlobKeys } from "@nexus/core/auth";
@@ -159,6 +161,7 @@ import {
   type NoteDocPayload,
   type NoteVersionMeta,
   type Profile,
+  type RecurrenceRule,
   type RestoreApplyResult,
   type RestorePickResult,
   type RestorePreviewResult,
@@ -666,6 +669,33 @@ function asRestoreToken(value: unknown, field: string): string {
   return value;
 }
 
+/**
+ * A recurrence rule field (ADR-024): `null` is "no rule" (and, on a patch,
+ * clears one), anything else must satisfy `validateRecurrenceRule`. What is
+ * passed on is the CANONICAL rule the validator rebuilds — never the
+ * renderer's own object, which is untrusted (SEC-EL-02) and may carry a
+ * different member order or a duplicated weekday. The canonical form is the
+ * only one whose serialization describes what the engine will actually do, so
+ * it is the only form the stores should ever see.
+ */
+function asRecurrenceRule(value: unknown, field: string): RecurrenceRule | null {
+  if (value === null) return null;
+  const rule = validateRecurrenceRule(value);
+  if (rule === null) {
+    throw new Error(`Invalid IPC payload: "${field}" must be null or a valid recurrence rule.`);
+  }
+  return rule;
+}
+
+/** A bare "YYYY-MM-DD" day field: a real calendar day, so `2026-02-30` is rejected rather than silently rolled into March. */
+function asBareDate(value: unknown, field: string): string {
+  const date = asNonEmptyString(value, field);
+  if (!isValidDayKey(date)) {
+    throw new Error(`Invalid IPC payload: "${field}" must be a "YYYY-MM-DD" calendar day.`);
+  }
+  return date;
+}
+
 function asTaskStatus(value: unknown, field: string): TaskStatus {
   if (typeof value === "string" && (TASK_STATUSES as readonly string[]).includes(value)) {
     return value as TaskStatus;
@@ -694,6 +724,9 @@ function asNewTaskInput(value: unknown): CreateTaskInput {
     input.startDate = asNullableString(task.startDate, "task.startDate");
   }
   if (task.parentId !== undefined) input.parentId = asNullableString(task.parentId, "task.parentId");
+  if (task.recurrence !== undefined) {
+    input.recurrence = asRecurrenceRule(task.recurrence, "task.recurrence");
+  }
   return input;
 }
 
@@ -714,6 +747,9 @@ function asTaskFieldChanges(value: unknown): UpdateTaskFields {
   }
   if (changes.startDate !== undefined) {
     patch.startDate = asNullableString(changes.startDate, "changes.startDate");
+  }
+  if (changes.recurrence !== undefined) {
+    patch.recurrence = asRecurrenceRule(changes.recurrence, "changes.recurrence");
   }
   return patch;
 }
@@ -740,6 +776,9 @@ function asNewEventInput(value: unknown): CreateEventInput {
   if (event.category !== undefined) {
     input.category = asNullableString(event.category, "event.category");
   }
+  if (event.recurrence !== undefined) {
+    input.recurrence = asRecurrenceRule(event.recurrence, "event.recurrence");
+  }
   return input;
 }
 
@@ -761,6 +800,9 @@ function asEventFieldChanges(value: unknown): UpdateEventFields {
   }
   if (changes.category !== undefined) {
     patch.category = asNullableString(changes.category, "changes.category");
+  }
+  if (changes.recurrence !== undefined) {
+    patch.recurrence = asRecurrenceRule(changes.recurrence, "changes.recurrence");
   }
   return patch;
 }
@@ -1675,6 +1717,17 @@ function registerIpc(): void {
     taskStore(profileId).restore(id);
   });
 
+  // SEC-EL-02: `now` is stamped here from main's own clock — when an occurrence
+  // was completed (and so where a series continues from) is never the
+  // renderer's to say.
+  ipcMain.handle(IpcChannel.tasksCompleteOccurrence, (event, payload): Task => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return taskStore(profileId).completeOccurrence(id, new Date().toISOString());
+  });
+
   ipcMain.handle(IpcChannel.eventsList, (event, payload): Event[] => {
     assertTrustedSender(event);
     const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
@@ -1710,6 +1763,27 @@ function registerIpc(): void {
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const id = asNonEmptyString(body.id, "id");
     eventStore(profileId).restore(id);
+  });
+
+  // ADR-024: the two series operations. The occurrence date is the renderer's
+  // (it names a day the user pointed at), but `now` is stamped here from main's
+  // own clock, as everywhere else on this wire.
+  ipcMain.handle(IpcChannel.eventsAddRecurrenceExdate, (event, payload): Event => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const date = asBareDate(body.date, "date");
+    return eventStore(profileId).addRecurrenceExdate(id, date, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.eventsSplitRecurrence, (event, payload): Event => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const occurrenceDate = asBareDate(body.occurrenceDate, "occurrenceDate");
+    return eventStore(profileId).splitRecurrence(id, occurrenceDate, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.documentsList, (event, payload): TrackedDocument[] => {

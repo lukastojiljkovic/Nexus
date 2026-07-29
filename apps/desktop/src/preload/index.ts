@@ -34,6 +34,8 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.tasksDelete, { profileId, id }),
   restoreTask: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.tasksRestore, { profileId, id }),
+  completeTaskOccurrence: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.tasksCompleteOccurrence, { profileId, id }),
   listEvents: (profileId) => ipcRenderer.invoke(IpcChannel.eventsList, { profileId }),
   createEvent: (profileId, event) =>
     ipcRenderer.invoke(IpcChannel.eventsCreate, { profileId, event }),
@@ -43,6 +45,10 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.eventsDelete, { profileId, id }),
   restoreEvent: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.eventsRestore, { profileId, id }),
+  addEventRecurrenceExdate: (profileId, id, date) =>
+    ipcRenderer.invoke(IpcChannel.eventsAddRecurrenceExdate, { profileId, id, date }),
+  splitEventRecurrence: (profileId, id, occurrenceDate) =>
+    ipcRenderer.invoke(IpcChannel.eventsSplitRecurrence, { profileId, id, occurrenceDate }),
   listDocuments: (profileId) => ipcRenderer.invoke(IpcChannel.documentsList, { profileId }),
   createDocument: (profileId, document) =>
     ipcRenderer.invoke(IpcChannel.documentsCreate, { profileId, document }),
