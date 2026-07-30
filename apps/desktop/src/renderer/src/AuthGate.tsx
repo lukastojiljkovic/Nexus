@@ -255,11 +255,13 @@ function CreateForm({ status, additional, onBack, onCreated }: CreateFormProps) 
 
 interface AccountPickerProps {
   status: AuthStatus;
-  /** A rename answers with the whole status; the gate holds it so the list redraws without another round trip. */
+  /** A rename or a delete answers with the whole status; the gate holds it so the list redraws without another round trip. */
   onStatusChange: (next: AuthStatus) => void;
   /** Main has switched: the gate decides whether that account wants the passcode form or the recovery one. */
   onSelected: (next: AuthStatus) => void;
   onAdd: () => void;
+  /** The account just deleted was the last one: there is no picker left to redraw, so the gate has to move to the create screen itself (ADR-048). */
+  onEmptied: () => void;
 }
 
 /**
@@ -271,13 +273,21 @@ interface AccountPickerProps {
  * Built from the house list recipe (`ListRow`), with the account's own NAME as
  * the button that opens it: the row's action and its identity are the same
  * thing, so there is nothing to label „Otvori" separately, and the row needs no
- * click handler competing with the „Preimenuj" beside it. Renaming takes over
- * the whole card in the `.auth__form` shape every other screen here uses,
- * rather than cramming a field and two buttons into one row.
+ * click handler competing with the „Preimenuj" and „Obriši" beside it. Both of
+ * those take over the whole card in the `.auth__form` shape every other screen
+ * here uses, rather than cramming a field and two buttons into one row.
+ *
+ * Deletion (ADR-048) lives here and nowhere else: it is a thing you do to an
+ * account you are NOT in, from the one screen that lists them all. Its gate is
+ * typing the account's own label — no passcode, because an account that
+ * `requiresRecovery` could never answer one on this device, and the accounts
+ * users most want gone are exactly those.
  */
-function AccountPicker({ status, onStatusChange, onSelected, onAdd }: AccountPickerProps) {
+function AccountPicker({ status, onStatusChange, onSelected, onAdd, onEmptied }: AccountPickerProps) {
   const [renaming, setRenaming] = useState<AccountSummary | null>(null);
   const [draftLabel, setDraftLabel] = useState("");
+  const [deleting, setDeleting] = useState<AccountSummary | null>(null);
+  const [draftConfirm, setDraftConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -313,6 +323,66 @@ function AccountPicker({ status, onStatusChange, onSelected, onAdd }: AccountPic
     } finally {
       setBusy(false);
     }
+  }
+
+  async function submitDelete(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (busy || deleting === null || draftConfirm.trim() !== deleting.label) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const next = await window.nexus.deleteAccount(deleting.id);
+      onStatusChange(next);
+      // The picker cannot show an empty list — and the gate picks its screen
+      // once, at mount, so a fresh status alone would strand the user on one.
+      if (next.accounts.length === 0) onEmptied();
+      setDeleting(null);
+    } catch (deleteError) {
+      setError(strings.auth.picker.deleteError);
+      console.error("Nexus: failed to delete an account:", deleteError);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (deleting !== null) {
+    return (
+      <form
+        className="auth__form"
+        onSubmit={(event) => void submitDelete(event)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") setDeleting(null);
+        }}
+      >
+        <h1 className="auth__title">{strings.auth.picker.deleteTitle}</h1>
+        <p className="auth__note">
+          <strong>{deleting.label}</strong> — {strings.auth.picker.deleteWarning}
+        </p>
+        <p className="auth__note">{strings.auth.picker.deleteExportNote}</p>
+        <TextField
+          label={strings.auth.picker.deleteConfirmLabel}
+          placeholder={strings.auth.picker.deleteConfirmPlaceholder}
+          value={draftConfirm}
+          maxLength={MAX_ACCOUNT_LABEL_LENGTH}
+          autoFocus
+          required
+          onChange={(event) => setDraftConfirm(event.target.value)}
+        />
+        {error != null && (
+          <p className="auth__error" role="alert">
+            {error}
+          </p>
+        )}
+        {/* The typed label is a UX gate only: main re-checks the account id
+            against the registry, which is the check that actually matters. */}
+        <Button type="submit" variant="danger" disabled={busy || draftConfirm.trim() !== deleting.label}>
+          {strings.auth.picker.deleteSubmit}
+        </Button>
+        <Button variant="ghost" size="sm" type="button" disabled={busy} onClick={() => setDeleting(null)}>
+          {strings.auth.picker.deleteCancel}
+        </Button>
+      </form>
+    );
   }
 
   if (renaming !== null) {
@@ -352,17 +422,30 @@ function AccountPicker({ status, onStatusChange, onSelected, onAdd }: AccountPic
           <ListRow
             key={account.id}
             trailing={
-              <Button
-                size="sm"
-                disabled={busy}
-                onClick={() => {
-                  setRenaming(account);
-                  setDraftLabel(account.label);
-                  setError(null);
-                }}
-              >
-                {strings.auth.picker.rename}
-              </Button>
+              <span className="auth__row-actions">
+                <Button
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => {
+                    setRenaming(account);
+                    setDraftLabel(account.label);
+                    setError(null);
+                  }}
+                >
+                  {strings.auth.picker.rename}
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => {
+                    setDeleting(account);
+                    setDraftConfirm("");
+                    setError(null);
+                  }}
+                >
+                  {strings.auth.picker.delete}
+                </Button>
+              </span>
             }
           >
             {/* The name IS the button, with its state carried inside it: one
@@ -624,6 +707,7 @@ export function AuthGate({ status: initialStatus, onUnlocked }: AuthGateProps) {
               onStatusChange={setStatus}
               onSelected={adoptSelection}
               onAdd={() => setScreen("create")}
+              onEmptied={() => setScreen("create")}
             />
           )}
           {screen === "create" && (

@@ -100,6 +100,25 @@ export const strings = {
       renameSave: "Sačuvaj",
       renameCancel: "Otkaži",
       renameError: "Preimenovanje nije uspelo. Pokušaj ponovo.",
+      /**
+       * Deleting an account (ADR-048 / AUTH-022). Immediate, with no undo and
+       * no grace period, so every sentence here is written to be understood
+       * BEFORE the field is reached: what goes, that it cannot be taken back,
+       * and where an export would have to happen (advisory — never a
+       * precondition). The warning is composed around the account's own name in
+       * JSX, the `restore.replaceWarningPrefix` idiom.
+       */
+      delete: "Obriši",
+      deleteTitle: "Brisanje naloga",
+      deleteWarning: "Svi podaci naloga biće trajno obrisani. Ovo se ne može opozvati.",
+      deleteExportNote:
+        "Ako želiš izvoz podataka, otključaj nalog i uradi ga u Podešavanjima pre brisanja.",
+      /** The typed confirmation IS the gate — there is no passcode here (an account from another device could not answer one). */
+      deleteConfirmLabel: "Ime naloga za potvrdu",
+      deleteConfirmPlaceholder: "Upiši tačno ime naloga",
+      deleteSubmit: "Obriši nalog",
+      deleteCancel: "Otkaži",
+      deleteError: "Brisanje nije uspelo. Pokušaj ponovo.",
       add: "Dodaj nalog",
       back: "Nazad na izbor naloga",
     },

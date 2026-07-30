@@ -21,6 +21,7 @@ export const IpcChannel = {
   authSelectAccount: "auth:select-account",
   authCreateAdditional: "auth:create-additional",
   authRenameAccount: "auth:rename-account",
+  authDeleteAccount: "auth:delete-account",
   profilesList: "profiles:list",
   profilesRename: "profiles:rename",
   flagsGet: "flags:get",
@@ -347,6 +348,19 @@ export interface AuthSelectAccountRequest {
 export interface AuthRenameAccountRequest {
   accountId: string;
   label: string;
+}
+
+/**
+ * Deletes an account and everything it owns (ADR-048), immediately and
+ * irreversibly. There is deliberately NO passcode field: an account that
+ * `requiresRecovery` — one whose data came from another device — can produce no
+ * passcode proof here at all, so a PIN gate would make exactly the accounts
+ * users most want gone the only ones they could not delete, and every attempt
+ * would burn the unlock throttle. Intent is proved in the picker instead, by
+ * typing the account's own label.
+ */
+export interface AuthDeleteAccountRequest {
+  accountId: string;
 }
 
 export interface AuthUnlockRequest {
@@ -3063,6 +3077,8 @@ export interface NexusApi {
   selectAccount(accountId: string): Promise<AuthStatus>;
   /** Renames an account's lock-screen label; allowed while locked. Answers with the freshly computed status. */
   renameAccount(accountId: string, label: string): Promise<AuthStatus>;
+  /** Deletes an account and every byte it owns, immediately and with no undo (ADR-048). Answers with the freshly computed status — an empty `accounts` means that was the last one. */
+  deleteAccount(accountId: string): Promise<AuthStatus>;
   /** Opens the database with the passcode-derived key, or a throttled/wrong-passcode refusal. */
   unlockWithPasscode(passcode: string): Promise<AuthResult>;
   /** Recovers from a forgotten passcode: verifies the Recovery Kit code and sets a new passcode in the same call. */

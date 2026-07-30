@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   ACCOUNTS_REGISTRY_FILE_NAME,
+  DELETING_DIR_SUFFIX,
   DEFAULT_ACCOUNT_LABEL,
   MAX_ACCOUNT_LABEL_LENGTH,
   absorbLegacyFlatData,
@@ -13,6 +14,7 @@ import {
   accountExists,
   accountsRoot,
   beginAccountDir,
+  deleteAccount,
   loadRegistry,
   normalizeAccountLabel,
   readRegistry,
@@ -20,6 +22,7 @@ import {
   renameAccount,
   resumeAccountsMigration,
   selectAccount,
+  sweepDeletedAccountDirs,
 } from "./accounts.js";
 
 /**
@@ -226,6 +229,139 @@ describe("loadRegistry (reconciliation)", () => {
     const before = readFileSync(join(userData, ACCOUNTS_REGISTRY_FILE_NAME), "utf8");
     loadRegistry(userData);
     expect(readFileSync(join(userData, ACCOUNTS_REGISTRY_FILE_NAME), "utf8")).toBe(before);
+  });
+});
+
+/** A finished account: its directory, the key chain that makes it one, and its registry entry. */
+function writeFinishedAccount(label: string, createdAt: string): string {
+  const id = beginAccountDir(userData);
+  writeFileSync(join(accountDir(userData, id), "keychain.json"), '{"version":1}');
+  registerAccount(userData, id, label, createdAt);
+  return id;
+}
+
+/** The exact state a crash between `deleteAccount`'s rename and its registry write leaves behind: the tombstone on disk, the entry still in `accounts.json`. */
+function tombstoneOf(accountId: string): string {
+  return `${accountDir(userData, accountId)}${DELETING_DIR_SUFFIX}`;
+}
+
+describe("deleteAccount", () => {
+  it("drops the entry and removes the directory, tombstone and all", () => {
+    const id = writeFinishedAccount("Posao", "2026-07-30T10:00:00.000Z");
+
+    const registry = deleteAccount(userData, id);
+
+    expect(registry.accounts).toEqual([]);
+    expect(registry.lastActiveId).toBeNull();
+    expect(readRegistryFile()).toEqual(registry);
+    expect(existsSync(accountDir(userData, id))).toBe(false);
+    expect(existsSync(tombstoneOf(id))).toBe(false);
+  });
+
+  it("keeps the survivors in creation order when a middle account goes", () => {
+    const first = writeFinishedAccount("Prvi", "2026-07-30T10:00:00.000Z");
+    const second = writeFinishedAccount("Drugi", "2026-07-30T11:00:00.000Z");
+    const third = writeFinishedAccount("Treći", "2026-07-30T12:00:00.000Z");
+
+    const registry = deleteAccount(userData, second);
+
+    expect(registry.accounts.map((account) => account.id)).toEqual([first, third]);
+    expect(existsSync(accountDir(userData, first))).toBe(true);
+    expect(existsSync(accountDir(userData, third))).toBe(true);
+  });
+
+  it("re-points lastActiveId at the first survivor when the selected account goes", () => {
+    const first = writeFinishedAccount("Prvi", "2026-07-30T10:00:00.000Z");
+    const second = writeFinishedAccount("Drugi", "2026-07-30T11:00:00.000Z");
+    expect(readRegistry(userData).lastActiveId).toBe(second);
+
+    expect(deleteAccount(userData, second).lastActiveId).toBe(first);
+  });
+
+  it("leaves a lastActiveId that names another account exactly where it was", () => {
+    const first = writeFinishedAccount("Prvi", "2026-07-30T10:00:00.000Z");
+    const second = writeFinishedAccount("Drugi", "2026-07-30T11:00:00.000Z");
+    selectAccount(userData, first);
+
+    expect(deleteAccount(userData, second).lastActiveId).toBe(first);
+  });
+
+  it("empties the registry when the last account goes", () => {
+    const only = writeFinishedAccount("Jedini", "2026-07-30T10:00:00.000Z");
+
+    const registry = deleteAccount(userData, only);
+
+    expect(registry).toEqual({ version: 1, accounts: [], lastActiveId: null });
+    expect(accountExists(userData, only)).toBe(false);
+    expect(loadRegistry(userData).accounts).toEqual([]);
+  });
+
+  it("refuses to delete an unknown account", () => {
+    expect(() => deleteAccount(userData, "nope")).toThrow();
+  });
+
+  it("never re-adopts a tombstone as an account", () => {
+    // Crash after the rename, before the registry write: the tombstone still
+    // holds its key chain, and `loadRegistry`'s adoption rule must not read it
+    // as a create whose entry never landed.
+    const id = writeFinishedAccount("Obrisan", "2026-07-30T10:00:00.000Z");
+    renameSync(accountDir(userData, id), tombstoneOf(id));
+
+    const registry = loadRegistry(userData);
+
+    expect(registry.accounts).toEqual([]);
+    expect(registry.lastActiveId).toBeNull();
+  });
+
+  it("never resumes a create into a half-purged tombstone", () => {
+    // Crash mid-`rm -rf`: the key chain is gone but the encrypted database is
+    // not, so an unfiltered scan would call the tombstone "under construction"
+    // and brick the next account against the old database.
+    const id = writeFinishedAccount("Obrisan", "2026-07-30T10:00:00.000Z");
+    renameSync(accountDir(userData, id), tombstoneOf(id));
+    rmSync(join(tombstoneOf(id), "keychain.json"), { force: true });
+
+    const fresh = beginAccountDir(userData);
+
+    expect(fresh).not.toBe(id);
+    expect(fresh).not.toBe(`${id}${DELETING_DIR_SUFFIX}`);
+    expect(existsSync(tombstoneOf(id))).toBe(true);
+  });
+
+  it("self-heals a crash between the rename and the registry write", () => {
+    const first = writeFinishedAccount("Prvi", "2026-07-30T10:00:00.000Z");
+    const second = writeFinishedAccount("Drugi", "2026-07-30T11:00:00.000Z");
+    renameSync(accountDir(userData, second), tombstoneOf(second));
+
+    // Reconciliation rule 1 finishes what the delete started: the entry whose
+    // directory is gone is dropped, and `lastActiveId` stops naming it.
+    const registry = loadRegistry(userData);
+
+    expect(registry.accounts.map((account) => account.id)).toEqual([first]);
+    expect(registry.lastActiveId).toBeNull();
+    expect(readRegistryFile()).toEqual(registry);
+  });
+});
+
+describe("sweepDeletedAccountDirs", () => {
+  it("purges leftover tombstones and never touches a live account", () => {
+    const survivor = writeFinishedAccount("Prvi", "2026-07-30T10:00:00.000Z");
+    const deleted = writeFinishedAccount("Drugi", "2026-07-30T11:00:00.000Z");
+    renameSync(accountDir(userData, deleted), tombstoneOf(deleted));
+
+    sweepDeletedAccountDirs(userData);
+
+    expect(existsSync(tombstoneOf(deleted))).toBe(false);
+    expect(existsSync(join(accountDir(userData, survivor), "keychain.json"))).toBe(true);
+    expect(readRegistry(userData).accounts.map((account) => account.id)).toEqual([
+      survivor,
+      deleted,
+    ]);
+  });
+
+  it("does nothing on an install that has no accounts directory yet", () => {
+    expect(() => sweepDeletedAccountDirs(userData)).not.toThrow();
+    expect(existsSync(accountsRoot(userData))).toBe(false);
   });
 });
 

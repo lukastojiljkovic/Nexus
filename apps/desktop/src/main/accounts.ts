@@ -8,6 +8,7 @@ import {
   readdirSync,
   readFileSync,
   renameSync,
+  rmSync,
   writeSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -55,6 +56,16 @@ export const DEFAULT_ACCOUNT_LABEL = "Moj nalog";
 
 /** Same cap as a profile name (`asProfileName`) — the two are the same kind of short, user-chosen title. */
 export const MAX_ACCOUNT_LABEL_LENGTH = 80;
+
+/**
+ * What a deleted account's directory is renamed to (ADR-048). The suffix is the
+ * whole commit protocol: `accounts/<id>` → `accounts/<id>.deleting` is one
+ * same-volume `renameSync`, so the account either still exists or does not, and
+ * every scan below skips the tombstone from that instant on — which is what
+ * makes the erase that follows a mere cleanup rather than a step anything
+ * depends on.
+ */
+export const DELETING_DIR_SUFFIX = ".deleting";
 
 const KEYCHAIN_FILE_NAME = "keychain.json";
 const DATABASE_FILE_NAME = "nexus.db";
@@ -184,14 +195,49 @@ function writeRegistry(userData: string, registry: AccountRegistry): void {
   renameSync(tmpPath, path);
 }
 
-/** Every directory under `accounts/`, sorted, so every derived decision is deterministic. */
+/**
+ * Every LIVE directory under `accounts/`, sorted, so every derived decision is
+ * deterministic. Tombstones are excluded here rather than at each call site,
+ * which is what closes both of deletion's resurrection hazards at once: a
+ * tombstone that still holds its key chain would otherwise be ADOPTED by
+ * `loadRegistry` as „Moj nalog", and one whose key chain a half-finished erase
+ * already took would look "under construction" to `beginAccountDir`, which
+ * would resume a fresh account into it — on top of the old encrypted database.
+ */
 function accountDirNames(userData: string): string[] {
   const root = accountsRoot(userData);
   if (!existsSync(root)) return [];
   return readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
+    .filter((entry) => entry.isDirectory() && !entry.name.endsWith(DELETING_DIR_SUFFIX))
     .map((entry) => entry.name)
     .sort();
+}
+
+/**
+ * Erases a tombstone, forgiving a failure. On Windows a file another process
+ * still holds open cannot be removed, and `rmSync`'s `force` only forgives a
+ * missing path, not a busy one — but by the time this runs the account is
+ * already gone from every scan and from the registry, so a directory that
+ * outlives one attempt is residue, not a failed deletion. The boot sweep tries
+ * again.
+ */
+function purgeTombstone(path: string): void {
+  try {
+    rmSync(path, { recursive: true, force: true });
+  } catch {
+    // Left for `sweepDeletedAccountDirs` on a later launch.
+  }
+}
+
+/** Erases every tombstone a previous run could not finish erasing. Runs once at startup, beside the `tmp-open` sweep, and for the same reason: the process that made the residue is not around to clean it up. */
+export function sweepDeletedAccountDirs(userData: string): void {
+  const root = accountsRoot(userData);
+  if (!existsSync(root)) return;
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    if (entry.isDirectory() && entry.name.endsWith(DELETING_DIR_SUFFIX)) {
+      purgeTombstone(join(root, entry.name));
+    }
+  }
 }
 
 /**
@@ -304,6 +350,52 @@ export function renameAccount(userData: string, accountId: string, label: string
     ),
   };
   writeRegistry(userData, next);
+  return next;
+}
+
+/**
+ * Deletes an account and everything it owns (ADR-048), in the one order that
+ * survives a crash at every step — the migration ladder's own idiom, where a
+ * single same-volume `renameSync` is the commit point:
+ *
+ * 1. `accounts/<id>` → `accounts/<id>.deleting`. Atomic, and the instant it
+ *    lands the account is gone from every scan `accountDirNames` feeds — the
+ *    picker, the adoption rule and `beginAccountDir` alike.
+ * 2. Drop the registry entry, re-pointing `lastActiveId` at the first survivor
+ *    when it named the account being deleted. A crash between 1 and 2 needs no
+ *    resume of its own: reconciliation rule 1 already drops an entry whose
+ *    directory is gone, so the next `loadRegistry` finishes this by itself.
+ * 3. Erase the tombstone, best-effort. A Windows share violation leaves it on
+ *    disk and the deletion still succeeded — nothing can reach it, and the boot
+ *    sweep retries.
+ *
+ * There is deliberately no undo and no grace period: the account's contents are
+ * encrypted under its own key chain, which step 1 carries into the tombstone
+ * and step 3 destroys. Holding any of it back would mean holding a deleted
+ * account's plaintext, or its key, somewhere it could be found.
+ */
+export function deleteAccount(userData: string, accountId: string): AccountRegistry {
+  const registry = readRegistry(userData);
+  if (!registry.accounts.some((entry) => entry.id === accountId)) {
+    throw new Error("Unknown account id.");
+  }
+
+  const dir = accountDir(userData, accountId);
+  const tombstone = `${dir}${DELETING_DIR_SUFFIX}`;
+  // Absent only when a previous attempt already got this far and died before
+  // the registry write — its entry is what brought us back here.
+  if (existsSync(dir)) renameSync(dir, tombstone);
+
+  const accounts = registry.accounts.filter((entry) => entry.id !== accountId);
+  const next: AccountRegistry = {
+    version: 1,
+    accounts,
+    lastActiveId:
+      registry.lastActiveId === accountId ? (accounts[0]?.id ?? null) : registry.lastActiveId,
+  };
+  writeRegistry(userData, next);
+
+  purgeTombstone(tombstone);
   return next;
 }
 

@@ -278,6 +278,12 @@ body {
   font-weight: var(--nx-font-weight-semibold);
   letter-spacing: var(--nx-font-tracking-normal);
 }
+/* The picker row's two trailing actions („Preimenuj" + „Obriši"): the row's
+   trailing slot is a bare inline-flex, so the gap between them belongs here. */
+.auth__row-actions {
+  display: inline-flex;
+  gap: var(--nx-space-2);
+}
 /* Quiet informational line — the create-screen encryption notice, the
    unlock-screen throttle countdown, the recovery-screen explanation. */
 .auth__note {

@@ -173,16 +173,19 @@ import {
   type BlobStorePaths,
 } from "./attachments.js";
 import {
+  DELETING_DIR_SUFFIX,
   MAX_ACCOUNT_LABEL_LENGTH,
   absorbLegacyFlatData,
   accountDir,
   accountExists,
   beginAccountDir,
+  deleteAccount,
   readRegistry,
   registerAccount,
   renameAccount,
   resumeAccountsMigration,
   selectAccount,
+  sweepDeletedAccountDirs,
 } from "./accounts.js";
 import {
   AuthError,
@@ -2491,6 +2494,27 @@ function handleAuthRenameAccount(accountId: string, label: string): AuthStatus {
   return computeAuthStatus();
 }
 
+/**
+ * Deletes an account outright (ADR-048). The picker only offers this while
+ * locked, but the renderer is untrusted, so deleting the SELECTED account is
+ * handled properly rather than assumed away: it is `performLock()` first — the
+ * whole session teardown, exactly as switching is — because a `renameSync` over
+ * a directory whose `nexus.db` still has an open handle is precisely what
+ * Windows refuses.
+ *
+ * `activeAccountId` then moves by the boot rule, not by the registry's field
+ * alone: `lastActiveId` can legitimately be null (a fresh install that never
+ * selected anything) while accounts remain, and leaving the module pointing at
+ * nothing there would strand the picker on an account it cannot open.
+ */
+function handleAuthDeleteAccount(accountId: string): AuthStatus {
+  const wasActive = accountId === activeAccountId;
+  if (wasActive) performLock();
+  const registry = deleteAccount(userDataDir(), accountId);
+  if (wasActive) activeAccountId = registry.lastActiveId ?? registry.accounts[0]?.id ?? null;
+  return computeAuthStatus();
+}
+
 async function handleAuthUnlock(passcode: string): Promise<AuthResult> {
   try {
     const dataKeyHex = await unlockWithPasscode(activeAccountDir(), passcode);
@@ -2757,6 +2781,12 @@ function registerIpc(): void {
     const accountId = asAccountId(body.accountId, "accountId");
     const label = asAccountLabel(body.label, "label");
     return handleAuthRenameAccount(accountId, label);
+  });
+
+  ipcMain.handle(IpcChannel.authDeleteAccount, (event, payload): AuthStatus => {
+    assertTrustedSender(event);
+    const accountId = asAccountId(asRecord(payload).accountId, "accountId");
+    return handleAuthDeleteAccount(accountId);
   });
 
   ipcMain.handle(IpcChannel.authUnlock, (event, payload): Promise<AuthResult> => {
@@ -5007,6 +5037,31 @@ async function runSmokeMultiAccountRehearsal(): Promise<void> {
   if (renamed.selectedAccountId !== firstId || renamed.state !== "unlocked") {
     throw new Error(`expected a rename to leave the session alone, got ${JSON.stringify(renamed)}`);
   }
+
+  // Deletion (ADR-048) is immediate and total: the entry goes, the directory
+  // goes with it — tombstone included, since nothing here holds a handle on it
+  // — and the account that stayed behind is untouched.
+  const deleted = handleAuthDeleteAccount(secondId);
+  if (deleted.accounts.some((account) => account.id === secondId)) {
+    throw new Error(`expected the deleted account to leave the registry, got ${JSON.stringify(deleted.accounts)}`);
+  }
+  const erasedDir = accountDir(userDataDir(), secondId);
+  if (existsSync(erasedDir) || existsSync(`${erasedDir}${DELETING_DIR_SUFFIX}`)) {
+    throw new Error("expected a deleted account's directory and its tombstone to both be gone");
+  }
+  if (deleted.selectedAccountId !== firstId || deleted.state !== "unlocked") {
+    throw new Error(`expected deleting another account to leave the session alone, got ${JSON.stringify(deleted)}`);
+  }
+
+  // And the survivor still OPENS — not merely "was never closed".
+  performLock();
+  const survivor = await handleAuthUnlock(SMOKE_MIGRATED_PASSCODE);
+  if (!survivor.ok) {
+    throw new Error(`expected the surviving account to unlock after a delete, got reason "${survivor.reason}"`);
+  }
+  if (listProfiles(requireDb()).length < 1) {
+    throw new Error("expected the surviving account's own data to come back after a delete");
+  }
 }
 
 async function runSmoke(win: BrowserWindow): Promise<void> {
@@ -5134,6 +5189,13 @@ app.whenReady().then(async () => {
     // before a lock ever ran (a graceful lock already wipes this directory) —
     // across EVERY account, since nothing on disk records which one that was.
     wipeAllTmpOpenDirs();
+
+    // ADR-048, and for the same reason as the sweep above: a deletion whose
+    // final erase lost a race with a file another process still held open
+    // leaves a `.deleting` tombstone nothing will ever come back for. It is
+    // already unreachable — excluded from every scan and absent from the
+    // registry — so this is disk space, not correctness.
+    sweepDeletedAccountDirs(userDataDir());
 
     // ADR-018: the main process starts LOCKED. No database is opened here —
     // `db` stays null until `auth:create`/`auth:unlock`/`auth:recover`
