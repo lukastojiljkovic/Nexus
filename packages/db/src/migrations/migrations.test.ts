@@ -16,8 +16,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 28 (note folder preferences), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(28);
+  it("is at version 29 (task dependencies), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(29);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -2937,6 +2937,128 @@ describe("migration 028 — note folder preferences", () => {
         .all() as { name: string }[]
     ).map((row) => row.name);
     expect(indexes).toContain("note_folders_capture_default");
+    db.close();
+  });
+});
+
+describe("migration 029 — task dependencies", () => {
+  const now = () => new Date().toISOString();
+
+  /** A task seeded straight into the table — this migration adds nothing to `tasks`, so the Inbox `TaskStore` needs is beside the point here (migration 023's own helper). */
+  const insertTask = (db: NexusDatabase, id: string, profileId: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO tasks (id, profile_id, title, status, created_at, updated_at)
+         VALUES (?, ?, ?, 'todo', ?, ?)`,
+      )
+      .run(id, profileId, `Zadatak ${id}`, now(), now());
+
+  const insertEdge = (db: NexusDatabase, blockerId: string, blockedId: string) =>
+    db.raw
+      .prepare(`INSERT INTO task_dependencies (blocker_id, blocked_id) VALUES (?, ?)`)
+      .run(blockerId, blockedId);
+
+  const countOf = (db: NexusDatabase, table: string): number =>
+    (db.raw.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n;
+
+  it("creates the dependency table and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    expect(tableNames(db)).toContain("task_dependencies");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("creates the blocked_id index — the direction the edit form reads in", () => {
+    const db = openDatabase({ path: join(dir, "index.db") });
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("task_dependencies_blocked");
+    db.close();
+  });
+
+  it("enforces PRIMARY KEY (blocker_id, blocked_id)", () => {
+    const db = openDatabase({ path: join(dir, "unique-edge.db") });
+    insertProfile(db, "p1");
+    insertTask(db, "t1", "p1");
+    insertTask(db, "t2", "p1");
+    insertEdge(db, "t1", "t2");
+    // the same (blocker, blocked) pair collides.
+    expect(() => insertEdge(db, "t1", "t2")).toThrow();
+    // the REVERSE pair is a different edge as far as the schema is concerned —
+    // the cycle rule that refuses it lives in the store, not in SQL.
+    expect(() => insertEdge(db, "t2", "t1")).not.toThrow();
+    db.close();
+  });
+
+  it("refuses an edge pointing at no task on either end", () => {
+    const db = openDatabase({ path: join(dir, "fk-edge.db") });
+    insertProfile(db, "p1");
+    insertTask(db, "t1", "p1");
+    expect(() => insertEdge(db, "ghost", "t1")).toThrow();
+    expect(() => insertEdge(db, "t1", "ghost")).toThrow();
+    db.close();
+  });
+
+  it("cascades edges when the owning profile is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade-profile.db") });
+    insertProfile(db, "p1");
+    insertTask(db, "t1", "p1");
+    insertTask(db, "t2", "p1");
+    insertEdge(db, "t1", "t2");
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    expect(countOf(db, "task_dependencies")).toBe(0);
+    db.close();
+  });
+
+  it("cascades edges from either end when a task is hard-deleted", () => {
+    const db = openDatabase({ path: join(dir, "cascade-task.db") });
+    insertProfile(db, "p1");
+    insertTask(db, "t1", "p1");
+    insertTask(db, "t2", "p1");
+    insertTask(db, "t3", "p1");
+    insertEdge(db, "t1", "t2");
+    insertEdge(db, "t2", "t3");
+
+    // Deleting the middle task takes both the edge it blocks and the edge it is
+    // blocked by; the outer two tasks stay.
+    db.raw.prepare("DELETE FROM tasks WHERE id = ?").run("t2");
+    expect(countOf(db, "task_dependencies")).toBe(0);
+    expect(countOf(db, "tasks")).toBe(2);
+    db.close();
+  });
+
+  it("leaves a soft-deleted task's edges standing — only a HARD delete prunes them", () => {
+    const db = openDatabase({ path: join(dir, "soft-delete-edges.db") });
+    insertProfile(db, "p1");
+    insertTask(db, "t1", "p1");
+    insertTask(db, "t2", "p1");
+    insertEdge(db, "t1", "t2");
+
+    db.raw.prepare("UPDATE tasks SET deleted_at = ? WHERE id = ?").run(now(), "t1");
+    expect(countOf(db, "task_dependencies")).toBe(1);
+    db.close();
+  });
+
+  it("adds no column to tasks — being blocked is derived, never stored", () => {
+    const db = openDatabase({ path: join(dir, "tasks-untouched-deps.db") });
+    const columns = (
+      db.raw.prepare("PRAGMA table_info(tasks)").all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(columns).not.toContain("blocked");
+    expect(columns).not.toContain("blocked_by");
+    db.close();
+  });
+
+  it("carries no profile column — scoping rides the tasks, as task_tag_links does", () => {
+    const db = openDatabase({ path: join(dir, "no-profile-column.db") });
+    const columns = (
+      db.raw.prepare("PRAGMA table_info(task_dependencies)").all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(columns).toEqual(["blocker_id", "blocked_id"]);
     db.close();
   });
 });

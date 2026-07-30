@@ -76,6 +76,7 @@ import {
   SubjectStore,
   TaskAttachmentNotFoundError,
   TaskAttachmentStore,
+  TaskDependencyStore,
   TaskListStore,
   TaskNotFoundError,
   TaskStore,
@@ -132,6 +133,7 @@ import {
   type TaskPriority,
   type TaskSection,
   type TaskStatus,
+  type TaskDependencyLink,
   type TaskTag,
   type TaskTagLink,
   type TaskTemplate,
@@ -1620,6 +1622,10 @@ function applyTaskTemplate(
   })();
 }
 
+function taskDependencyStore(profileId: string): TaskDependencyStore {
+  return new TaskDependencyStore(requireDb().raw, profileId);
+}
+
 function eventStore(profileId: string): EventStore {
   return new EventStore(requireDb().raw, profileId);
 }
@@ -2144,6 +2150,7 @@ function restoreDeps(): RestoreDeps {
     taskTagStore,
     taskAttachmentStore,
     taskTemplateStore,
+    taskDependencyStore,
     eventStore,
     peopleStore,
     documentStore,
@@ -2685,6 +2692,37 @@ function registerIpc(): void {
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const id = asNonEmptyString(body.id, "id");
     taskTemplateStore(profileId).delete(id);
+  });
+
+  // --- Task dependencies (migration 029 / ADR-037) ------------------------
+  //
+  // The task-tag surface one concept over: one list read and two pair writes,
+  // no per-edge row to name. SEC-EL-02 as everywhere: sender checked first,
+  // every field through an `as*` validator. No clock is stamped here because an
+  // edge has no timestamp — it is either there or it is not.
+
+  ipcMain.handle(IpcChannel.taskDependenciesList, (event, payload): TaskDependencyLink[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return taskDependencyStore(profileId).listLinks();
+  });
+
+  ipcMain.handle(IpcChannel.taskDependenciesAdd, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const blockerId = asNonEmptyString(body.blockerId, "blockerId");
+    const blockedId = asNonEmptyString(body.blockedId, "blockedId");
+    taskDependencyStore(profileId).addDependency(blockerId, blockedId);
+  });
+
+  ipcMain.handle(IpcChannel.taskDependenciesRemove, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const blockerId = asNonEmptyString(body.blockerId, "blockerId");
+    const blockedId = asNonEmptyString(body.blockedId, "blockedId");
+    taskDependencyStore(profileId).removeDependency(blockerId, blockedId);
   });
 
   ipcMain.handle(IpcChannel.eventsList, (event, payload): Event[] => {
@@ -3748,6 +3786,7 @@ function registerIpc(): void {
         taskTagStore,
         taskAttachmentStore,
         taskTemplateStore,
+        taskDependencyStore,
         eventStore,
         peopleStore,
         documentStore,

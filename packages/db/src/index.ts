@@ -46,6 +46,7 @@ export {
   SubjectValidationError,
   TaskAttachmentNotFoundError,
   TaskAttachmentValidationError,
+  TaskDependencyValidationError,
   TaskListNotFoundError,
   TaskListValidationError,
   TaskNotFoundError,
@@ -111,6 +112,8 @@ export {
   MAX_TASK_TEMPLATE_TAGS,
 } from "./tasks/taskTemplateStore.js";
 export type { TaskTemplate, TaskTemplatePayload } from "./tasks/taskTemplateStore.js";
+export { TaskDependencyStore } from "./tasks/taskDependencyStore.js";
+export type { TaskDependencyLink } from "./tasks/taskDependencyStore.js";
 
 export {
   EventStore,

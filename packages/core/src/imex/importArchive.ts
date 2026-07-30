@@ -27,6 +27,7 @@ import type {
   ExportSubject,
   ExportTask,
   ExportTaskAttachment,
+  ExportTaskDependency,
   ExportTaskList,
   ExportTaskSection,
   ExportTaskTag,
@@ -116,29 +117,28 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.7.0` added a note
- * folder's `defaultTemplateId`/`isCaptureDefault` (NOTE prefs / ADR-036), after
- * `1.6.0` added the `task-template` record type (ADR-035), `1.5.0` the
- * `task-attachment` type (ADR-031), `1.4.0` added the `task-tag`/`task-tag-link` record types (migration 023),
- * `1.3.0` the `task-list`/`task-section` types and a task's placement into them
- * (TASK-004 / ADR-029), `1.2.0` a task's `reminderOffsets` (ADR-028) and `1.1.0`
- * the `person` record type (CAL-007 / ADR-026): additive changes, hence MINOR
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.8.0` added the
+ * `task-dependency` record type (migration 029 / ADR-037), after `1.5.0`-`1.7.0`
+ * (task attachments, task templates and the NOTE folder preferences), `1.4.0`
+ * the `task-tag`/`task-tag-link` types (migration 023), `1.3.0` the
+ * `task-list`/`task-section` types and a task's placement into them (TASK-004 /
+ * ADR-029), `1.2.0` a task's `reminderOffsets` (ADR-028) and `1.1.0` the
+ * `person` record type (CAL-007 / ADR-026): additive changes, hence MINOR
  * bumps, which is exactly the compatibility mechanism
  * `isSupportedSchemaVersion` implements — an older minor within major 1 still
  * passes the gate here, while an older build refuses a newer archive rather
  * than silently dropping what it cannot see (every person, every task's ladder,
  * every list the user filed their work into, every label they sorted it by, or
- * every file they hung off a task, every template they built, or every folder
- * preference they set). That, in turn, is why an unrecognised
- * record type below is an ERROR: the version gate makes "ignore what you do not
- * know" unreachable.
+ * every "do this first" they set). That, in turn, is why an unrecognised record
+ * type below is an ERROR: the version gate makes "ignore what you do not know"
+ * unreachable.
  *
  * A new RECORD TYPE needs no `ArchiveEra` flag, unlike a new field on an
  * existing type: an older archive simply carries none of it, which is
- * indistinguishable from a profile that had no tags — while a NEWER archive
- * never reaches a parser at all, because the gate above refuses it. Era flags
- * exist only for the "this row is missing a field it now must have" question,
- * which a whole absent type never asks.
+ * indistinguishable from a profile that had no dependencies — while a NEWER
+ * archive never reaches a parser at all, because the gate above refuses it. Era
+ * flags exist only for the "this row is missing a field it now must have"
+ * question, which a whole absent type never asks.
  *
  * Major is still 1 throughout, so there is nothing yet to migrate an older
  * major forward from — a migration framework for a major that has never
@@ -151,7 +151,7 @@ export interface ImportArchiveResult {
  * is accepted by minor comparison and simply carries a type this tree does not
  * know, which is exactly the situation the merge resolves.
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.7.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.8.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -584,6 +584,7 @@ type RecordType =
   | "task-tag-link"
   | "task-attachment"
   | "task-template"
+  | "task-dependency"
   | "event"
   | "document"
   | "renewal"
@@ -613,6 +614,7 @@ const ALL_RECORD_TYPES: readonly RecordType[] = [
   "task-tag-link",
   "task-attachment",
   "task-template",
+  "task-dependency",
   "event",
   "document",
   "renewal",
@@ -647,6 +649,7 @@ const FILE_RECORD_TYPES: Record<DataFilePath, readonly RecordType[]> = {
     "task-tag-link",
     "task-attachment",
     "task-template",
+    "task-dependency",
   ],
   "data/calendar.ndjson": ["event", "document", "renewal", "person"],
   "data/study.ndjson": ["subject", "exam", "deck", "card", "review", "plan", "block", "focus-session"],
@@ -870,6 +873,19 @@ function parseTaskTemplate(raw: Record<string, unknown>): ExportTaskTemplate {
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
   return { id, profileId, name, payload, createdAt, updatedAt };
+}
+
+/**
+ * One dependency edge (migration 029 / ADR-037). The self-edge is refused right
+ * here rather than in the cycle pass below, because it needs no graph to see and
+ * `invalid-record` names the field a person can go fix; a longer loop, which
+ * only the whole file can reveal, is `reference-cycle` further down.
+ */
+function parseTaskDependency(raw: Record<string, unknown>): ExportTaskDependency {
+  const blockerId = nonEmptyStr(raw.blockerId, "blockerId");
+  const blockedId = nonEmptyStr(raw.blockedId, "blockedId");
+  if (blockerId === blockedId) throw new InvalidFieldError("blockedId");
+  return { blockerId, blockedId };
 }
 
 function parseEvent(raw: Record<string, unknown>, era: ArchiveEra): ExportEvent {
@@ -1277,6 +1293,7 @@ interface Collections {
   taskTagLinks: Bucket<ExportTaskTagLink>;
   taskAttachments: Bucket<ExportTaskAttachment>;
   taskTemplates: Bucket<ExportTaskTemplate>;
+  taskDependencies: Bucket<ExportTaskDependency>;
   events: Bucket<ExportEvent>;
   documents: Bucket<ExportDocument>;
   renewals: Bucket<ExportRenewal>;
@@ -1302,7 +1319,8 @@ interface Collections {
 function newCollections(): Collections {
   return {
     tasks: newBucket(), taskLists: newBucket(), taskSections: newBucket(),
-    taskTags: newBucket(), taskTagLinks: newBucket(), taskAttachments: newBucket(), taskTemplates: newBucket(),
+    taskTags: newBucket(), taskTagLinks: newBucket(), taskAttachments: newBucket(),
+    taskTemplates: newBucket(), taskDependencies: newBucket(),
     events: newBucket(), documents: newBucket(), renewals: newBucket(),
     people: newBucket(), subjects: newBucket(), exams: newBucket(), decks: newBucket(), cards: newBucket(),
     reviewLog: newBucket(), plans: newBucket(), blocks: newBucket(), focusSessions: newBucket(),
@@ -1358,6 +1376,21 @@ function dispatchRecord(
     case "task-template": {
       const row = parseTaskTemplate(raw);
       pushRow(collections.taskTemplates, row.id, row, path, line, problems);
+      return;
+    }
+    // Migration 029's PRIMARY KEY is the pair too, so the same rule applies —
+    // and the ORDER of that pair is the record, which is why the key spells both
+    // roles out rather than sorting the two ids into a set.
+    case "task-dependency": {
+      const row = parseTaskDependency(raw);
+      pushRow(
+        collections.taskDependencies,
+        `blockerId=${row.blockerId},blockedId=${row.blockedId}`,
+        row,
+        path,
+        line,
+        problems,
+      );
       return;
     }
     case "event": {
@@ -1705,6 +1738,71 @@ function checkParentCycle<T>(
   }
 }
 
+/**
+ * Detects a cycle among the archive's task dependencies (ADR-037) — the store's
+ * own acyclicity invariant, restated over parsed rows because an archive is the
+ * one way an edge can reach `task_dependencies` without passing through
+ * `TaskDependencyStore.addDependency`, and no SQL `CHECK` can walk a graph.
+ *
+ * A three-colour DFS over the directed blocker → blocked graph, like
+ * `checkParentCycle` above, with one difference the shape forces: a task may
+ * block many tasks, so the walk branches, and the thing worth naming is the EDGE
+ * that closed the loop rather than the node it landed on — a node sits on the
+ * cycle by accident of traversal order, while the edge is a line in a file the
+ * user can go and delete. Reported once, not once per edge on the loop; an id on
+ * either end that no task carries is `unknown-reference`'s business and is left
+ * in the graph here (an absent task simply has no outgoing edges).
+ */
+function checkDependencyCycle(
+  bucket: Bucket<ExportTaskDependency>,
+  problems: ImportProblem[],
+): void {
+  if (bucket.entries.length === 0) return;
+
+  const outgoing = new Map<string, Located<ExportTaskDependency>[]>();
+  for (const entry of bucket.entries) {
+    const edges = outgoing.get(entry.row.blockerId);
+    if (edges) edges.push(entry);
+    else outgoing.set(entry.row.blockerId, [entry]);
+  }
+
+  const state = new Map<string, "visiting" | "done">();
+
+  /** The edge that closed a loop below `nodeId`, or null. Returned rather than stashed in an outer `let`, so the caller's narrowing is plain. */
+  const visit = (nodeId: string): Located<ExportTaskDependency> | null => {
+    if (state.get(nodeId) === "done") return null;
+    state.set(nodeId, "visiting");
+    for (const edge of outgoing.get(nodeId) ?? []) {
+      const next = edge.row.blockedId;
+      if (state.get(next) === "visiting") {
+        state.set(nodeId, "done");
+        return edge;
+      }
+      if (state.get(next) === "done") continue;
+      const found = visit(next);
+      if (found !== null) {
+        state.set(nodeId, "done");
+        return found;
+      }
+    }
+    state.set(nodeId, "done");
+    return null;
+  };
+
+  for (const blockerId of outgoing.keys()) {
+    const found = visit(blockerId);
+    if (found === null) continue;
+    problems.push(
+      problem("error", "reference-cycle", {
+        path: found.path,
+        line: found.line,
+        detail: `blockerId=${found.row.blockerId},blockedId=${found.row.blockedId}`,
+      }),
+    );
+    return;
+  }
+}
+
 // --- Main entry point ---------------------------------------------------------
 
 export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResult {
@@ -1896,6 +1994,12 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
   checkReference(collections.taskTagLinks, (row) => row.taskId, "taskId", taskIds, problems);
   checkReference(collections.taskTagLinks, (row) => row.tagId, "tagId", taskTagIds, problems);
   checkReference(collections.taskAttachments, (row) => row.taskId, "taskId", taskIds, problems);
+  // Both ends of a dependency are tasks of this archive (migration 029's two
+  // foreign keys), so both are checked — an edge pointing at a task the archive
+  // does not carry would fail the restore's own INSERT, deep inside its
+  // transaction, rather than here where it can be named.
+  checkReference(collections.taskDependencies, (row) => row.blockerId, "blockerId", taskIds, problems);
+  checkReference(collections.taskDependencies, (row) => row.blockedId, "blockedId", taskIds, problems);
   // The one reference `checkReference` cannot express: the section must exist
   // AND belong to the task's own list. A section of some other list would pass
   // every foreign key the schema has and still put the task under a heading
@@ -1962,6 +2066,9 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
     "data/notes.ndjson",
     problems,
   );
+  // …and the one cycle that is not a parent chain at all: the dependency graph,
+  // whose store-side invariant has no SQL twin and therefore needs a parser one.
+  checkDependencyCycle(collections.taskDependencies, problems);
 
   const hasError = problems.some((p) => p.severity === "error");
   const data: ProfileData | null = hasError
@@ -1974,6 +2081,7 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         taskTagLinks: rowsOf(collections.taskTagLinks),
         taskAttachments: rowsOf(collections.taskAttachments),
         taskTemplates: rowsOf(collections.taskTemplates),
+        taskDependencies: rowsOf(collections.taskDependencies),
         events: rowsOf(collections.events),
         documents: rowsOf(collections.documents),
         renewals: rowsOf(collections.renewals),

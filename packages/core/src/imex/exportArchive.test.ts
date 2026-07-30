@@ -34,6 +34,7 @@ function emptyInput(): ExportArchiveInput {
       taskTagLinks: [],
       taskAttachments: [],
       taskTemplates: [],
+      taskDependencies: [],
       events: [],
       documents: [],
       renewals: [],
@@ -224,7 +225,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.7.0");
+      expect(manifest.schemaVersion).toBe("1.8.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       expect(manifest.profile).toEqual({ id: "profile1", name: "Luka" });
@@ -475,6 +476,30 @@ describe("buildExportArchive", () => {
       ]);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as { blobs: unknown };
       expect(manifest.blobs).toEqual([{ sha256: sha, sizeBytes: 10 }]);
+    });
+
+    it("writes dependency edges last of all and counts them into byModule.tasks (migration 029 / ADR-037)", () => {
+      const input = emptyInput();
+      input.data.taskLists = [taskListRow({ id: LIST_ID, name: "Inbox" })];
+      const base = {
+        profileId: "profile1", parentId: null, description: null, status: "todo" as const,
+        priority: "none" as const, done: false, dueDate: null, startDate: null,
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+        completedAt: null, recurrence: null, reminderOffsets: [], ...PLACED,
+      };
+      input.data.tasks = [
+        { ...base, id: "t1", title: "Prvo" },
+        { ...base, id: "t2", title: "Drugo" },
+      ];
+      input.data.taskDependencies = [{ blockerId: "t1", blockedId: "t2" }];
+
+      const archive = buildExportArchive(input);
+      const rows = parseNdjson(archive.files.get("data/tasks.ndjson") ?? "") as Array<{ type: string }>;
+      // Both joins need BOTH ends resolved, so both come after the tasks.
+      expect(rows.map((row) => row.type)).toEqual(["task-list", "task", "task", "task-dependency"]);
+      expect(rows[3]).toEqual({ type: "task-dependency", blockerId: "t1", blockedId: "t2" });
+      expect(archive.byModule.tasks).toBe(4);
+      expect(archive.totalRecords).toBe(4);
     });
 
     it("carries a recurring task's whole rule (ADR-024)", () => {
@@ -754,12 +779,18 @@ describe("buildExportArchive", () => {
   });
 
   describe("countProfileModules", () => {
-    /** One row in every one of `ProfileData`'s 25 arrays, so each of the five buckets sums more than one field. */
+    /**
+     * One row in every one of `ProfileData`'s 25 arrays, so each of the five
+     * buckets sums more than one field. Two TASKS rather than one, because a
+     * dependency needs both of its ends to be real rows — a fixture whose edge
+     * dangled would be counting something the exporter could never write.
+     */
     function populatedData(): ProfileData {
       const t = "2026-01-01T00:00:00.000Z";
       return {
         tasks: [
           { id: "t1", profileId: "p1", parentId: null, title: "T", description: null, status: "todo", priority: "none", done: false, dueDate: null, startDate: null, createdAt: t, updatedAt: t, completedAt: null, recurrence: null, reminderOffsets: [], listId: "tl1", sectionId: "ts1", position: 1024 },
+          { id: "t2", profileId: "p1", parentId: null, title: "T2", description: null, status: "todo", priority: "none", done: false, dueDate: null, startDate: null, createdAt: t, updatedAt: t, completedAt: null, recurrence: null, reminderOffsets: [], listId: "tl1", sectionId: "ts1", position: 2048 },
         ],
         taskLists: [
           { id: "tl1", profileId: "p1", parentId: null, name: "Inbox", isInbox: true, defaultView: "list", position: 1024, createdAt: t, updatedAt: t },
@@ -779,6 +810,7 @@ describe("buildExportArchive", () => {
             },
           },
         ],
+        taskDependencies: [{ blockerId: "t1", blockedId: "t2" }],
         events: [
           { id: "e1", profileId: "p1", title: "E", description: null, startAt: t, endAt: null, allDay: false, location: null, category: null, createdAt: t, updatedAt: t, recurrence: null, recurrenceExdates: [], reminderOffsets: [] },
         ],
@@ -841,7 +873,7 @@ describe("buildExportArchive", () => {
     it("groups exactly as the manifest does, field by field", () => {
       const data = populatedData();
       expect(countProfileModules(data)).toEqual({
-        tasks: 7, // 1 task + 1 list + 1 section + 1 tag + 1 tag link + 1 attachment + 1 template
+        tasks: 9, // 2 tasks + 1 list + 1 section + 1 tag + 1 tag link + 1 attachment + 1 template + 1 dependency
         calendar: 4, // 1 event + 1 document + 1 renewal + 1 person
         study: 8, // 1 each of subject/exam/deck/card/review/plan/block/focus-session
         notifications: 1,

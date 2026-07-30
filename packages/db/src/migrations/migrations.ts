@@ -28,6 +28,7 @@ import { migration025 } from "./025-task-attachment-search.js";
 import { migration026 } from "./026-notification-appetite.js";
 import { migration027 } from "./027-task-templates.js";
 import { migration028 } from "./028-note-folder-prefs.js";
+import { migration029 } from "./029-task-dependencies.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -67,6 +68,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration026,
   migration027,
   migration028,
+  migration029,
 ];
 
 /**

@@ -37,6 +37,7 @@ import {
   SqliteFlagStore,
   SubjectStore,
   TaskAttachmentStore,
+  TaskDependencyStore,
   TaskListStore,
   TaskStore,
   TaskTagStore,
@@ -138,6 +139,7 @@ function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
     taskTagStore: (profileId) => new TaskTagStore(handle.raw, profileId),
     taskAttachmentStore: (profileId) => new TaskAttachmentStore(handle.raw, profileId),
     taskTemplateStore: (profileId) => new TaskTemplateStore(handle.raw, profileId),
+    taskDependencyStore: (profileId) => new TaskDependencyStore(handle.raw, profileId),
     eventStore: (profileId) => new EventStore(handle.raw, profileId),
     peopleStore: (profileId) => new PeopleStore(handle.raw, profileId),
     documentStore: (profileId) => new DocumentStore(handle.raw, profileId),
@@ -292,6 +294,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   const taskListStore = new TaskListStore(handle.raw, profileId);
   const taskTagStore = new TaskTagStore(handle.raw, profileId);
   const taskAttachmentStore = new TaskAttachmentStore(handle.raw, profileId);
+  const taskDependencyStore = new TaskDependencyStore(handle.raw, profileId);
   const eventStore = new EventStore(handle.raw, profileId);
   const peopleStore = new PeopleStore(handle.raw, profileId);
   const subjectStore = new SubjectStore(handle.raw, profileId);
@@ -323,6 +326,11 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   // task-tag row AND the join that needs both of its ends.
   const taskTag = taskTagStore.createTag(`${label} task tag`, t0);
   taskTagStore.attachTag(task.id, taskTag.id);
+  // A second task purely so there is a real dependency edge to push through the
+  // zip round trip (migration 029 / ADR-037) — an edge needs two live ends, and
+  // its DIRECTION is the whole record.
+  const blockerTask = taskStore.create({ title: `${label} blocker`, listId: list.id });
+  taskDependencyStore.addDependency(blockerTask.id, task.id);
 
   // A real file on that task (migration 024), with bytes of its own so the zip
   // round trip carries a blob NO note attachment references.
@@ -411,6 +419,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     taskTagLinks: taskTagStore.listTagLinks(),
     taskAttachments: taskAttachmentStore.list(task.id),
     taskTemplates: taskTemplateStore.list(),
+    taskDependencies: taskDependencyStore.listLinks(),
     events: eventStore.listActive(),
     documents: [],
     renewals: [],

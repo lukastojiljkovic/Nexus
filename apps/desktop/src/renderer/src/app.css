@@ -803,8 +803,13 @@ body {
    is not a state, and the note list's own tag chip (.note__item-tag) reads the
    same way — quiet metadata, never a selection affordance. The border takes the
    pixel the padding gives up on each side, so an outlined chip is exactly as tall
-   and as wide as a filled one beside it. */
-.tasks__tag-chip.nx-chip {
+   and as wide as a filled one beside it.
+
+   The „Blokiran“ mark (ADR-037) shares that recipe outright and adds only muted
+   text: waiting on something is a fact about the task, not a warning about it —
+   nothing is refused, and a chip that shouted would say otherwise. */
+.tasks__tag-chip.nx-chip,
+.tasks__blocked-chip.nx-chip {
   background: transparent;
   border: 1px solid var(--nx-border);
   padding: 1px 8px;
@@ -813,6 +818,13 @@ body {
    cluster, so it takes that cluster's hover treatment rather than the popover
    trigger's bare colour change, and stays visible like the + ✎ × beside it. */
 .tasks__row-menu:hover {
+.tasks__blocked-chip.nx-chip {
+  color: var(--nx-text-muted);
+}
+/* The per-task tag menu sits in the row's action cluster, so it takes that
+   cluster's hover treatment rather than the popover trigger's bare colour
+   change, and stays visible like the + ✎ × beside it. */
+.tasks__row-tags:hover {
   background: var(--nx-surface-alt);
 }
 .tasks__add-subtask.nx-button,
@@ -971,8 +983,11 @@ body {
   font-weight: var(--nx-font-weight-semibold);
 }
 /* Stands in for the chips while the form has no rok to count back from — the
-   same muted "why this field is off" line as .recur__caption right beside it. */
-.tasks__reminders-caption {
+   same muted "why this field is off" line as .recur__caption right beside it.
+   .tasks__deps-caption is the same line one field down: "waits on nothing", or
+   the dependency block's own failure notice. */
+.tasks__reminders-caption,
+.tasks__deps-caption {
   margin: 0;
   font-size: var(--nx-font-size-body-sm);
   color: var(--nx-text-muted);
@@ -997,6 +1012,19 @@ body {
 }
 /* Matched to .tasks__reminders-label, the field label right above it. */
 .tasks__attachments-label {
+/* Zavisnosti (migration 029 / ADR-037) — the edit form's "this one first" block.
+   Takes a full row of the wrapping form exactly as .tasks__reminders above does,
+   so a long list of blockers wraps under itself instead of pushing the submit
+   button around; the label is that block's label, restated here rather than
+   sharing the selector because the two fields are not the same field. */
+.tasks__deps {
+  flex-basis: 100%;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+.tasks__deps-label {
   flex: none;
   font-size: var(--nx-font-size-label);
   letter-spacing: var(--nx-font-tracking-label);
@@ -1070,6 +1098,71 @@ body {
   background: transparent;
   border: 1px solid var(--nx-border);
   padding: 1px 8px;
+.tasks__dep-list {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+/* One blocker: its title, an optional „završeno“ note, and the × that unmakes
+   the edge. Outlined like the tag chip family, since it is the same weight of
+   thing — a quiet statement about the task, not a control that changes it. */
+.tasks__dep-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  padding: 1px 4px 1px 8px;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  font-size: var(--nx-font-size-body-sm);
+}
+.tasks__dep-title {
+  color: var(--nx-text);
+}
+/* A finished blocker stays listed — the edge is still real — but says so and
+   stops competing for attention with the ones that still hold this task up. */
+.tasks__dep-title--done {
+  color: var(--nx-text-muted);
+  text-decoration: line-through;
+}
+.tasks__dep-done {
+  font-size: var(--nx-font-size-label);
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+}
+.tasks__dep-remove.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 0 4px;
+}
+.tasks__dep-remove.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+/* The picker's trigger is a NAMED action, not a row's „⋯“ overflow, so it takes
+   the quiet text-button treatment the other in-form buttons have rather than the
+   popover trigger's default glyph sizing. */
+.tasks__dep-add.note__menu-trigger {
+  width: auto;
+  padding: 2px 8px;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+.tasks__dep-add.note__menu-trigger:hover {
+  color: var(--nx-text);
+}
+/* The filter line at the top of the picker panel. The panel supplies its own
+   padding (.note__menu-panel), so this adds only the gap that separates the
+   field from the options under it and lets the input fill the panel's width. */
+.tasks__dep-search.nx-textfield {
+  margin-bottom: var(--nx-space-1);
+}
+.tasks__dep-search .nx-textfield__input {
+  width: 100%;
+}
+.tasks__deps-error {
+  flex-basis: 100%;
 }
 
 /* Edit-mode cancel: a quiet ghost beside the primary submit (text feel). */

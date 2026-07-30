@@ -34,6 +34,7 @@ import {
   SubjectStore,
   TASK_ORDER_GAP,
   TaskAttachmentStore,
+  TaskDependencyStore,
   TaskListStore,
   TaskStore,
   TaskTagStore,
@@ -119,6 +120,7 @@ function emptyProfileData(): ProfileData {
     taskTags: [],
     taskTagLinks: [],
     taskAttachments: [],
+    taskDependencies: [],
     events: [],
     documents: [],
     renewals: [],
@@ -212,6 +214,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   const taskListStore = new TaskListStore(handle.raw, profileId);
   const taskTagStore = new TaskTagStore(handle.raw, profileId);
   const taskAttachmentStore = new TaskAttachmentStore(handle.raw, profileId);
+  const taskDependencyStore = new TaskDependencyStore(handle.raw, profileId);
   const eventStore = new EventStore(handle.raw, profileId);
   const peopleStore = new PeopleStore(handle.raw, profileId);
   const documentStore = new DocumentStore(handle.raw, profileId);
@@ -282,6 +285,10 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     },
     t0,
   );
+  // A real dependency between the two tasks (migration 029 / ADR-037): the
+  // DIRECTION is the whole record, so a restore that reversed it would be as
+  // wrong as one that dropped it — and only a seeded edge can catch either.
+  taskDependencyStore.addDependency(childTask.id, parentTask.id);
 
   const event = eventStore.create({
     title: `${name} event`,
@@ -369,6 +376,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     taskTagLinks: taskTagStore.listTagLinks(),
     taskAttachments: taskAttachmentStore.list(parentTask.id),
     taskTemplates: taskTemplateStore.list(),
+    taskDependencies: taskDependencyStore.listLinks(),
     events: eventStore.listActive(),
     documents: documentStore.listActive(),
     renewals: documentStore.listRenewals(document.id),
@@ -527,6 +535,11 @@ function assertModulesMatch(
   // become a template the user never saved.
   expect(new TaskTemplateStore(handle.raw, readProfileId).list()).toEqual(
     remap(fixture.data.taskTemplates),
+  );
+  // No `remap`: an edge is a pair of TASK ids, and task ids are preserved
+  // verbatim by a restore — only `profileId` fields are retargeted.
+  expect(new TaskDependencyStore(handle.raw, readProfileId).listLinks()).toEqual(
+    fixture.data.taskDependencies,
   );
   expect(new EventStore(handle.raw, readProfileId).listActive()).toEqual(remap(fixture.data.events));
   expect(new PeopleStore(handle.raw, readProfileId).listActive()).toEqual(remap(fixture.data.people));
@@ -690,6 +703,7 @@ describe("RestoreStore", () => {
       "task_sections",
       "task_tag_links",
       "task_attachments",
+      "task_dependencies",
       "note_versions",
       "note_attachments",
       "note_tag_links",
@@ -1194,6 +1208,73 @@ describe("RestoreStore", () => {
     // would have left it behind, since the wipe deletes tasks by profile too.
     expect(
       (db.raw.prepare("SELECT count(*) AS n FROM task_tag_links").get() as { n: number }).n,
+    ).toBe(0);
+  });
+
+  it("restores dependency edges verbatim, direction and all (migration 029 / ADR-037)", () => {
+    const profileB = createProfile(db, "deps");
+    const timestamps = { createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" };
+    const listId = uuidv7();
+    const taskLists: TaskList[] = [
+      {
+        id: listId, profileId: "ignored", parentId: null, name: "Inbox", isInbox: true,
+        defaultView: "list", position: 1024, ...timestamps,
+      },
+    ];
+    const task = (title: string): ExportTask => ({
+      id: uuidv7(), profileId: "ignored", parentId: null, title, description: null,
+      status: "todo", priority: "none", done: false, dueDate: null, startDate: null,
+      completedAt: null, recurrence: null, reminderOffsets: [],
+      listId, sectionId: null, position: 1024, ...timestamps,
+    });
+    const first = task("Prvi");
+    const second = task("Drugi");
+    const third = task("Treći");
+    // A fan-out and a chain in one graph: the two shapes a dependency set has to
+    // survive, and enough of a graph that a restore reversing an edge would show.
+    const taskDependencies = [
+      { blockerId: first.id, blockedId: second.id },
+      { blockerId: first.id, blockedId: third.id },
+      { blockerId: second.id, blockedId: third.id },
+    ];
+
+    new RestoreStore(db.raw, profileB).replaceProfileData(
+      {
+        profileName: "Deps",
+        settings: emptySettings(),
+        data: { ...emptyProfileData(), taskLists, tasks: [first, second, third], taskDependencies },
+        derived: new Map(),
+      },
+      NOW,
+    );
+
+    expect(new TaskDependencyStore(db.raw, profileB).listLinks()).toEqual(
+      [...taskDependencies].sort((a, b) =>
+        a.blockerId === b.blockerId
+          ? a.blockedId.localeCompare(b.blockedId)
+          : a.blockerId.localeCompare(b.blockerId),
+      ),
+    );
+  });
+
+  it("wipes the target profile's own dependency edges before writing the archive's", () => {
+    const profileB = createProfile(db, "dep-wipe");
+    const tasks = new TaskStore(db.raw, profileB);
+    const oldBlocker = tasks.create({ title: "Stari blokator" });
+    const oldBlocked = tasks.create({ title: "Stari blokiran" });
+    new TaskDependencyStore(db.raw, profileB).addDependency(oldBlocker.id, oldBlocked.id);
+
+    new RestoreStore(db.raw, profileB).replaceProfileData(
+      { profileName: "Wiped", settings: emptySettings(), data: freshArchiveData(), derived: new Map() },
+      NOW,
+    );
+
+    expect(new TaskDependencyStore(db.raw, profileB).listLinks()).toEqual([]);
+    // Explicitly, not through the tasks' CASCADE: the wipe deletes edges by
+    // their own statement first, which is what a future table added without one
+    // would fail to do.
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM task_dependencies").get() as { n: number }).n,
     ).toBe(0);
   });
 

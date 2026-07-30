@@ -95,6 +95,12 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.taskTemplatesApply, { profileId, templateId, listId, sectionId }),
   deleteTaskTemplate: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.taskTemplatesDelete, { profileId, id }),
+  listTaskDependencies: (profileId) =>
+    ipcRenderer.invoke(IpcChannel.taskDependenciesList, { profileId }),
+  addTaskDependency: (profileId, blockerId, blockedId) =>
+    ipcRenderer.invoke(IpcChannel.taskDependenciesAdd, { profileId, blockerId, blockedId }),
+  removeTaskDependency: (profileId, blockerId, blockedId) =>
+    ipcRenderer.invoke(IpcChannel.taskDependenciesRemove, { profileId, blockerId, blockedId }),
   listEvents: (profileId) => ipcRenderer.invoke(IpcChannel.eventsList, { profileId }),
   createEvent: (profileId, event) =>
     ipcRenderer.invoke(IpcChannel.eventsCreate, { profileId, event }),

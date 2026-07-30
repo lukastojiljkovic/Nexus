@@ -58,6 +58,7 @@ function emptyExportInput(): ExportArchiveInput {
       taskTagLinks: [],
       taskAttachments: [],
       taskTemplates: [],
+      taskDependencies: [],
       events: [],
       documents: [],
       renewals: [],
@@ -177,6 +178,10 @@ function richProfileData(): ProfileData {
         },
       },
     ],
+    // A real edge between the two tasks (ADR-037): the DIRECTION is the record,
+    // so a round trip that lost it would restore a plan with its order reversed
+    // and nothing on screen to say so.
+    taskDependencies: [{ blockerId: "task-child", blockedId: "task-parent" }],
     events: [
       {
         id: "event-1", profileId: "profile1", title: "Sastanak", description: null,
@@ -514,10 +519,10 @@ describe("parseImportArchive — one test per problem code", () => {
   });
 
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.8.0" });
+    const files = baseFiles({ schemaVersion: "1.9.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.8.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.9.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -1640,8 +1645,8 @@ describe("parseImportArchive — note folder preferences (the 1.7.0 era gate)", 
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.7.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.7.0");
+  it("is 1.8.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.8.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -1653,7 +1658,7 @@ describe("parseImportArchive — schema version", () => {
   });
 
   it("accepts the exact current version", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.7.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.8.0" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
@@ -1681,9 +1686,9 @@ describe("parseImportArchive — schema version", () => {
     expect(result.data).not.toBeNull();
   });
 
-  // And for the one migration 023's tags have just superseded: a 1.3 archive
-  // carries no `task-tag` row at all, which is exactly what an untagged profile
-  // looks like — hence no era flag for a whole absent record type.
+  // And for the one migration 023's tags superseded: a 1.3 archive carries no
+  // `task-tag` row at all, which is exactly what an untagged profile looks like
+  // — hence no era flag for a whole absent record type.
   it("accepts an older minor — a 1.3 archive still parses here", () => {
     const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.3.0" })));
     expect(result.problems).toEqual([]);
@@ -1700,6 +1705,16 @@ describe("parseImportArchive — schema version", () => {
     expect(result.data).toMatchObject({ taskAttachments: [] });
   });
 
+  // And for the one ADR-037's dependencies have just superseded: a 1.7 archive
+  // carries no `task-dependency` row, which is exactly what a profile whose
+  // tasks nobody ordered looks like — the same "absent type needs no era flag"
+  // reading as the tags above.
+  it("accepts an older minor — a 1.7 archive still parses here", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.7.0" })));
+    expect(result.problems).toEqual([]);
+    expect(result.data).toMatchObject({ taskDependencies: [] });
+  });
+
   it("accepts an older patch", () => {
     const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.0.7" })));
     expect(result.problems).toEqual([]);
@@ -1707,15 +1722,15 @@ describe("parseImportArchive — schema version", () => {
   });
 
   it("accepts a newer patch", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.4.7" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.8.7" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
 
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.8.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.9.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.8.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.9.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -1979,6 +1994,151 @@ describe("parseImportArchive — task templates (migration 027 / ADR-035)", () =
   it("refuses a task-template record filed in the notes file", () => {
     const result = parseImportArchive(
       emptyInputWith(baseFiles({ fileContents: { "data/notes.ndjson": ndjson([VALID_TEMPLATE]) } })),
+    );
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "invalid-record", path: "data/notes.ndjson", line: 1, detail: "type",
+    });
+    expect(result.data).toBeNull();
+  });
+});
+
+describe("parseImportArchive — task dependencies (migration 029 / ADR-037)", () => {
+  const TASK_A = { ...VALID_TASK, id: "ta" };
+  const TASK_B = { ...VALID_TASK, id: "tb" };
+  const TASK_C = { ...VALID_TASK, id: "tc" };
+  const EDGE_AB = { type: "task-dependency", blockerId: "ta", blockedId: "tb" };
+
+  /** Parses a `data/tasks.ndjson` built from `rows` verbatim (the task-tag suite's own helper). */
+  function parseTasksFile(rows: readonly Record<string, unknown>[]) {
+    return parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/tasks.ndjson": ndjson(rows) } })),
+    );
+  }
+
+  it("round-trips one edge between two tasks", () => {
+    const result = parseTasksFile([VALID_TASK_LIST, TASK_A, TASK_B, EDGE_AB]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.taskDependencies).toEqual([{ blockerId: "ta", blockedId: "tb" }]);
+  });
+
+  const BAD_EDGES: { name: string; row: Record<string, unknown>; detail: string }[] = [
+    { name: "no blocker", row: { blockerId: undefined }, detail: "blockerId" },
+    { name: "an empty blocker", row: { blockerId: "" }, detail: "blockerId" },
+    { name: "no blocked task", row: { blockedId: undefined }, detail: "blockedId" },
+    { name: "an empty blocked id", row: { blockedId: "" }, detail: "blockedId" },
+    { name: "a non-string end", row: { blockerId: 7 }, detail: "blockerId" },
+  ];
+
+  for (const { name, row, detail } of BAD_EDGES) {
+    it(`refuses a dependency with ${name}`, () => {
+      const result = parseTasksFile([VALID_TASK_LIST, TASK_A, TASK_B, { ...EDGE_AB, ...row }]);
+      expect(result.problems).toContainEqual({
+        severity: "error", code: "invalid-record", path: "data/tasks.ndjson", line: 4, detail,
+      });
+      expect(result.data).toBeNull();
+    });
+  }
+
+  // A self-edge needs no graph to see, so it is `invalid-record` naming a field
+  // rather than the whole-file `reference-cycle` below.
+  it("refuses a task that blocks itself, as invalid-record", () => {
+    const result = parseTasksFile([
+      VALID_TASK_LIST, TASK_A, { ...EDGE_AB, blockerId: "ta", blockedId: "ta" },
+    ]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "invalid-record", path: "data/tasks.ndjson", line: 3, detail: "blockedId",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  it("refuses the same ordered pair twice, keyed by the pair", () => {
+    const result = parseTasksFile([VALID_TASK_LIST, TASK_A, TASK_B, EDGE_AB, EDGE_AB]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "duplicate-id", path: "data/tasks.ndjson", line: 5,
+      detail: "blockerId=ta,blockedId=tb",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  it("refuses an edge naming a task the archive does not carry, on either end", () => {
+    const missingBlocker = parseTasksFile([
+      VALID_TASK_LIST, TASK_B, { ...EDGE_AB, blockerId: "ghost" },
+    ]);
+    expect(missingBlocker.problems).toContainEqual({
+      severity: "error", code: "unknown-reference", path: "data/tasks.ndjson", line: 3,
+      detail: "blockerId=ghost",
+    });
+
+    const missingBlocked = parseTasksFile([
+      VALID_TASK_LIST, TASK_A, { ...EDGE_AB, blockedId: "ghost" },
+    ]);
+    expect(missingBlocked.problems).toContainEqual({
+      severity: "error", code: "unknown-reference", path: "data/tasks.ndjson", line: 3,
+      detail: "blockedId=ghost",
+    });
+  });
+
+  // The store's acyclicity invariant, restated: an archive is the one way an
+  // edge reaches the table without passing through `addDependency`.
+  it("refuses a two-edge loop, naming the record that closes it", () => {
+    const result = parseTasksFile([
+      VALID_TASK_LIST, TASK_A, TASK_B, EDGE_AB, { ...EDGE_AB, blockerId: "tb", blockedId: "ta" },
+    ]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "reference-cycle", path: "data/tasks.ndjson", line: 5,
+      detail: "blockerId=tb,blockedId=ta",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  it("refuses a three-edge loop", () => {
+    const result = parseTasksFile([
+      VALID_TASK_LIST, TASK_A, TASK_B, TASK_C,
+      EDGE_AB,
+      { ...EDGE_AB, blockerId: "tb", blockedId: "tc" },
+      { ...EDGE_AB, blockerId: "tc", blockedId: "ta" },
+    ]);
+    const cycle = result.problems.find((problem) => problem.code === "reference-cycle");
+    expect(cycle).toMatchObject({ severity: "error", path: "data/tasks.ndjson" });
+    expect(result.data).toBeNull();
+  });
+
+  it("reports a loop exactly once, not once per edge on it", () => {
+    const result = parseTasksFile([
+      VALID_TASK_LIST, TASK_A, TASK_B, TASK_C,
+      EDGE_AB,
+      { ...EDGE_AB, blockerId: "tb", blockedId: "tc" },
+      { ...EDGE_AB, blockerId: "tc", blockedId: "ta" },
+    ]);
+    expect(result.problems.filter((problem) => problem.code === "reference-cycle")).toHaveLength(1);
+  });
+
+  // A diamond is two paths to one task, not a loop — refusing it would forbid
+  // the ordinary "these two both have to finish first" shape.
+  it("accepts a diamond, and a task blocking several at once", () => {
+    const taskD = { ...VALID_TASK, id: "td" };
+    const result = parseTasksFile([
+      VALID_TASK_LIST, TASK_A, TASK_B, TASK_C, taskD,
+      EDGE_AB,
+      { ...EDGE_AB, blockerId: "ta", blockedId: "tc" },
+      { ...EDGE_AB, blockerId: "tb", blockedId: "td" },
+      { ...EDGE_AB, blockerId: "tc", blockedId: "td" },
+    ]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.taskDependencies).toHaveLength(4);
+  });
+
+  it("keeps the direction: the reverse pair alone is a different, valid edge", () => {
+    const result = parseTasksFile([
+      VALID_TASK_LIST, TASK_A, TASK_B, { ...EDGE_AB, blockerId: "tb", blockedId: "ta" },
+    ]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.taskDependencies).toEqual([{ blockerId: "tb", blockedId: "ta" }]);
+  });
+
+  it("refuses a task-dependency record filed in the notes file", () => {
+    const result = parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/notes.ndjson": ndjson([EDGE_AB]) } })),
     );
     expect(result.problems).toContainEqual({
       severity: "error", code: "invalid-record", path: "data/notes.ndjson", line: 1, detail: "type",

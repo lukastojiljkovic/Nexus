@@ -35,6 +35,8 @@ export interface RestoreProfileInput {
  * (`document_renewals` through `tracked_documents`; `task_sections` through
  * `task_lists`; `task_tag_links` and `task_attachments` through `tasks`; the six
  * `note_*` child tables through `notes`) — see `wipeSqlFor` below.
+ * `task_lists`; `task_tag_links` and `task_dependencies` through `tasks`; the
+ * six `note_*` child tables through `notes`) — see `wipeSqlFor` below.
  */
 export const RESTORE_WIPE_TABLES = [
   "document_renewals",
@@ -55,6 +57,11 @@ export const RESTORE_WIPE_TABLES = [
   // way down.
   "task_tag_links",
   "task_attachments",
+  // The tag links and dependency edges first, then the tasks they hang off, then
+  // the sections, lists and tags those point at — children before parents, all
+  // the way down.
+  "task_tag_links",
+  "task_dependencies",
   "tasks",
   "task_sections",
   "task_lists",
@@ -87,6 +94,11 @@ const SCOPED_THROUGH_PARENT: Partial<Record<WipeTable, string>> = {
   task_sections: `DELETE FROM task_sections WHERE list_id IN (SELECT id FROM task_lists WHERE profile_id = ?)`,
   task_tag_links: `DELETE FROM task_tag_links WHERE task_id IN (SELECT id FROM tasks WHERE profile_id = ?)`,
   task_attachments: `DELETE FROM task_attachments WHERE task_id IN (SELECT id FROM tasks WHERE profile_id = ?)`,
+  // Scoped through ONE end, exactly as `note_links` below is: both ends of an
+  // edge are always tasks of the same profile — `TaskDependencyStore` refuses
+  // any other pair, and the archive parser reference-checks both ends against
+  // the archive's own tasks — so naming the blocker names the whole edge.
+  task_dependencies: `DELETE FROM task_dependencies WHERE blocker_id IN (SELECT id FROM tasks WHERE profile_id = ?)`,
   note_tag_links: `DELETE FROM note_tag_links WHERE note_id IN (SELECT id FROM notes WHERE profile_id = ?)`,
   note_links: `DELETE FROM note_links WHERE source_note_id IN (SELECT id FROM notes WHERE profile_id = ?)`,
   note_attachments: `DELETE FROM note_attachments WHERE note_id IN (SELECT id FROM notes WHERE profile_id = ?)`,
@@ -172,6 +184,7 @@ export class RestoreStore {
   private readonly insertTaskTagLink: Database.Statement;
   private readonly insertTaskAttachment: Database.Statement;
   private readonly insertTaskTemplate: Database.Statement;
+  private readonly insertTaskDependency: Database.Statement;
   private readonly insertNoteFolder: Database.Statement;
   private readonly insertNoteTag: Database.Statement;
   private readonly insertSubject: Database.Statement;
@@ -226,6 +239,9 @@ export class RestoreStore {
     this.insertTaskAttachment = db.prepare(
       `INSERT INTO task_attachments (id, task_id, file_name, mime, size_bytes, sha256, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    );
+    this.insertTaskDependency = db.prepare(
+      `INSERT INTO task_dependencies (blocker_id, blocked_id) VALUES (?, ?)`,
     );
     this.insertTaskTemplate = db.prepare(
       `INSERT INTO task_templates (id, profile_id, name, payload, created_at, updated_at)
@@ -563,6 +579,16 @@ export class RestoreStore {
           template.id, this.profileId, template.name, JSON.stringify(template.payload),
           template.createdAt, template.updatedAt,
         );
+        written += 1;
+      }
+
+      // Beside the tag links, for the same reason and on the same terms: an edge
+      // is nothing but the ordered pair at its ends, both of which were
+      // preserved. The acyclicity the store guards on the live path was already
+      // proved by `parseImportArchive` for this whole graph, so there is nothing
+      // left to re-check here (R-parse-is-the-boundary).
+      for (const edge of input.data.taskDependencies) {
+        this.insertTaskDependency.run(edge.blockerId, edge.blockedId);
         written += 1;
       }
 

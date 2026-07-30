@@ -44,6 +44,7 @@ import type {
   SqliteFlagStore,
   SubjectStore,
   TaskAttachmentStore,
+  TaskDependencyStore,
   TaskListStore,
   TaskStore,
   TaskTagStore,
@@ -62,6 +63,7 @@ export interface ProfileDataDeps {
   taskTagStore(profileId: string): TaskTagStore;
   taskAttachmentStore(profileId: string): TaskAttachmentStore;
   taskTemplateStore(profileId: string): TaskTemplateStore;
+  taskDependencyStore(profileId: string): TaskDependencyStore;
   eventStore(profileId: string): EventStore;
   peopleStore(profileId: string): PeopleStore;
   documentStore(profileId: string): DocumentStore;
@@ -191,6 +193,10 @@ export function gatherProfileData(deps: ProfileDataDeps, profileId: string): Pro
     // Templates are a plain profile-wide read (migration 027): a template hangs
     // off no task and points at no list, so there is nothing to fan out over.
     taskTemplates: deps.taskTemplateStore(profileId).list(),
+    // Also a profile-wide read (migration 029), and also filtered to live tasks
+    // by the store itself — an edge hanging off a soft-deleted task is not part
+    // of what the profile currently IS, which is what an export carries.
+    taskDependencies: deps.taskDependencyStore(profileId).listLinks(),
     events: deps.eventStore(profileId).listActive(),
     documents,
     renewals: documents.flatMap((document) => documentsStore.listRenewals(document.id)),

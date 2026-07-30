@@ -59,6 +59,9 @@ export const IpcChannel = {
   taskTemplatesSaveFromTask: "task-templates:save-from-task",
   taskTemplatesApply: "task-templates:apply",
   taskTemplatesDelete: "task-templates:delete",
+  taskDependenciesList: "task-dependencies:list",
+  taskDependenciesAdd: "task-dependencies:add",
+  taskDependenciesRemove: "task-dependencies:remove",
   eventsList: "events:list",
   eventsCreate: "events:create",
   eventsUpdate: "events:update",
@@ -834,6 +837,40 @@ export interface TaskTemplatesApplyRequest {
 export interface TaskTemplatesDeleteRequest {
   profileId: string;
   id: string;
+}
+
+/**
+ * One dependency edge as seen by the renderer (mirrors the `task_dependencies`
+ * join table via `TaskDependencyStore`'s mapping, migration 029 / ADR-037):
+ * `blockedId` waits on `blockerId`. Redeclared here so the renderer never
+ * imports DB code, exactly as `TaskTagLink` above is.
+ *
+ * There is no "blocked" flag anywhere on the wire, deliberately: a task is
+ * blocked while any of its blockers is live and not done, and the page already
+ * holds both the tasks and these pairs — a second, stored answer could only
+ * drift from the first.
+ */
+export interface TaskDependencyLink {
+  blockerId: string;
+  blockedId: string;
+}
+
+export interface TaskDependenciesListRequest {
+  profileId: string;
+}
+
+/** Adding an edge that already exists is a no-op; a self-edge or one that would close a cycle is refused by the store. */
+export interface TaskDependenciesAddRequest {
+  profileId: string;
+  blockerId: string;
+  blockedId: string;
+}
+
+/** Removing an edge that is not there is a silent no-op — `detachTaskTag`'s rule. */
+export interface TaskDependenciesRemoveRequest {
+  profileId: string;
+  blockerId: string;
+  blockedId: string;
 }
 
 /**
@@ -2542,6 +2579,11 @@ export interface NexusApi {
   ): Promise<Task>;
   /** Deletes a template; no task created from it is touched. */
   deleteTaskTemplate(profileId: string, id: string): Promise<void>;
+  /** Every dependency of the profile whose both ends are live tasks, in one fetch — the page derives "blocked" from these plus the tasks it already has. */
+  listTaskDependencies(profileId: string): Promise<TaskDependencyLink[]>;
+  /** Records "`blockedId` waits on `blockerId`". Idempotent; rejects a self-edge and any edge that would close a cycle. */
+  addTaskDependency(profileId: string, blockerId: string, blockedId: string): Promise<void>;
+  removeTaskDependency(profileId: string, blockerId: string, blockedId: string): Promise<void>;
   listEvents(profileId: string): Promise<Event[]>;
   createEvent(profileId: string, event: NewEventFields): Promise<Event>;
   updateEvent(profileId: string, id: string, changes: EventFieldChanges): Promise<Event>;

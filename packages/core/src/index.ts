@@ -118,6 +118,7 @@ export type {
   ExportSubject,
   ExportTask,
   ExportTaskAttachment,
+  ExportTaskDependency,
   ExportTaskList,
   ExportTaskSection,
   ExportTaskTag,

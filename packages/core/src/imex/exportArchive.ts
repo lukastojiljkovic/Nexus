@@ -27,22 +27,22 @@ import { renderNoteMarkdown } from "./noteMarkdown.js";
 import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown.js";
 
 /**
- * IMEX-004: the archive's own semver. `1.7.0` adds a note folder's
- * `defaultTemplateId`/`isCaptureDefault` (NOTE prefs / ADR-036, migration 028),
- * after `1.6.0` added the `task-template` record type (ADR-035), `1.5.0` the
- * `task-attachment` type (ADR-031), `1.4.0` added the `task-tag` and `task-tag-link` record types
- * (migration 023), `1.3.0` the `task-list`/`task-section` types and the
- * `listId`/`sectionId`/`position` a task carries into them (TASK-004 /
- * ADR-029), `1.2.0` a task's `reminderOffsets` (ADR-028) and `1.1.0` the
- * `person` record type (CAL-007 / ADR-026). Additive, so a MINOR bump by the
- * same honesty each of those made one: an archive this build writes is refused
- * by a 1.6 reader, which would otherwise parse every folder and silently drop
- * the template the user set it to open notes with. Kept in step with
- * `INTERCHANGE_SCHEMA_VERSION` (`importArchive.ts`) — two constants rather than
- * one import, since the reader already imports from this module and the cycle
- * would be worse than the duplication; `importArchive.test.ts` pins them equal.
+ * IMEX-004: the archive's own semver. `1.8.0` adds the `task-dependency` record
+ * type (migration 029 / ADR-037), after `1.5.0`-`1.7.0` (task attachments, task
+ * templates and the NOTE folder preferences, each landing on its own lane),
+ * `1.4.0` the `task-tag`/`task-tag-link` types (migration 023), `1.3.0` the
+ * `task-list`/`task-section` types and the `listId`/`sectionId`/`position` a
+ * task carries into them (TASK-004 / ADR-029), `1.2.0` a task's
+ * `reminderOffsets` (ADR-028) and `1.1.0` the `person` record type (CAL-007 /
+ * ADR-026). Additive, so a MINOR bump by the same honesty each of those made
+ * one: an archive this build writes is refused by a 1.7 reader, which would
+ * otherwise parse every task and silently drop the order the user put them in.
+ * Kept in step with `INTERCHANGE_SCHEMA_VERSION` (`importArchive.ts`) — two
+ * constants rather than one import, since the reader already imports from this
+ * module and the cycle would be worse than the duplication;
+ * `importArchive.test.ts` pins them equal.
  */
-const SCHEMA_VERSION = "1.7.0";
+const SCHEMA_VERSION = "1.8.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -163,6 +163,22 @@ export interface ExportTaskTemplate {
   payload: ExportTaskTemplatePayload;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * One dependency edge (migration 029 / ADR-037): `blockerId` must finish before
+ * `blockedId` can be worked on. Two ids and nothing else, like the tag link
+ * above — an edge has no identity of its own to name and no moment to
+ * time-stamp; it is either there or it is not.
+ *
+ * DIRECTED, and that direction is the whole record: the reverse pair is a
+ * different edge, and an archive carrying both is a cycle, which the reader
+ * refuses outright (`importArchive.ts`). Rides in `data/tasks.ndjson` after the
+ * tasks, since it needs BOTH ends resolved.
+ */
+export interface ExportTaskDependency {
+  blockerId: string;
+  blockedId: string;
 }
 
 export interface ExportTask {
@@ -526,6 +542,10 @@ export interface ProfileData {
   // to reconstruct it — an export that quietly omitted them would restore a
   // profile whose templates are simply gone.
   taskTemplates: readonly ExportTaskTemplate[];
+  // Required, like every field around it: a dependency is the ORDER the user put
+  // their work in, and an archive that dropped it would restore a plan whose
+  // "do this first" is gone with nothing on screen to say so.
+  taskDependencies: readonly ExportTaskDependency[];
   events: readonly ExportEvent[];
   documents: readonly ExportDocument[];
   renewals: readonly ExportRenewal[];
@@ -607,10 +627,10 @@ export type ArchiveModuleId = (typeof ARCHIVE_MODULE_IDS)[number];
  */
 export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, number> {
   return {
-    // Lists, sections, tags, tag links, attachments and templates are all TASK
-    // module rows, so they count into the tasks bucket beside the tasks
-    // themselves — the same way a folder, a tag, a tag link, an attachment and
-    // a note template count into notes.
+    // Lists, sections, tags, tag links, attachments, templates and
+    // dependencies are all TASK module rows, so they count into the tasks
+    // bucket beside the tasks themselves — the same way a folder, a tag, a tag
+    // link, an attachment and a note template count into notes.
     tasks:
       data.tasks.length +
       data.taskLists.length +
@@ -618,7 +638,8 @@ export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, 
       data.taskTags.length +
       data.taskTagLinks.length +
       data.taskAttachments.length +
-      data.taskTemplates.length,
+      data.taskTemplates.length +
+      data.taskDependencies.length,
     calendar:
       data.events.length + data.documents.length + data.renewals.length + data.people.length,
     study:
@@ -652,7 +673,7 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     input.data;
 
   // Dependency order, as in `data/notes.ndjson`: the containers and labels a
-  // task points at come first and the join that needs BOTH ends comes last, so
+  // task points at come first and the joins that need BOTH ends come last, so
   // a reader that streamed the file could resolve every reference as it went.
   const tasksNdjson = toNdjson([
     ...input.data.taskLists.map((row) => ({ type: "task-list", ...row })),
@@ -664,6 +685,7 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     // Last: a template points at no row in this file (its tags are NAMES), so it
     // constrains nothing and sits after the join that needed both its ends.
     ...input.data.taskTemplates.map((row) => ({ type: "task-template", ...row })),
+    ...input.data.taskDependencies.map((row) => ({ type: "task-dependency", ...row })),
   ]);
   const calendarNdjson = toNdjson([
     ...input.data.events.map((row) => ({ type: "event", ...row })),

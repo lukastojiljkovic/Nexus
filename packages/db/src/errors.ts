@@ -140,6 +140,22 @@ export class TaskTemplateValidationError extends DatabaseError {}
 export class TaskTemplateNotFoundError extends DatabaseError {}
 
 /**
+ * Thrown when a task-dependency write is rejected at the store boundary because
+ * it would break the one rule the schema cannot state (ADR-037): a task blocking
+ * itself, or an edge that would close a loop in the blocker graph. No `CHECK`
+ * can walk a graph, so this guard — a recursive CTE over the blocker chain — is
+ * the whole of it on the live path, with `importArchive.ts`'s parser twin
+ * covering the one path that bypasses the store entirely.
+ *
+ * There is deliberately no `TaskDependencyNotFoundError` beside it, unlike the
+ * task-tag pair above: both ends of an edge are TASKS, so an id that does not
+ * resolve in this profile is already `TaskNotFoundError`, and removing an edge
+ * that is not there is a silent no-op (`detachTag`'s rule) rather than an error
+ * needing a name.
+ */
+export class TaskDependencyValidationError extends DatabaseError {}
+
+/**
  * Thrown when a calendar write is rejected at the store boundary because its
  * input breaks a domain rule the UI is expected to have caught already — an
  * empty event title, a malformed timestamp, or an end that precedes its start

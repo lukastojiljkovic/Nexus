@@ -12,7 +12,7 @@ import {
   ListView,
   TextField,
 } from "@nexus/ui";
-import { isInlineImageMime, isValidDayKey, parseQuickAddDate } from "@nexus/core";
+import { foldSearchText, isInlineImageMime, isValidDayKey, parseQuickAddDate } from "@nexus/core";
 import type { CollectionSchema, KanbanViewConfig, ListViewConfig } from "@nexus/core";
 import {
   MAX_TASK_LIST_NAME_LENGTH,
@@ -25,6 +25,7 @@ import type {
   RecurrenceRule,
   Task,
   TaskAttachment,
+  TaskDependencyLink,
   TaskFieldChanges,
   TaskList,
   TaskListView,
@@ -188,6 +189,15 @@ const NO_CHILDREN: readonly TaskFields[] = [];
 
 /** The same for an untagged task — the common case, and the one worth not allocating for. */
 const NO_TAGS: readonly TaskTag[] = [];
+
+// --- Dependencies (ADR-037) -------------------------------------------------
+
+/**
+ * How many candidates the "Dodaj zavisnost" picker offers at once. A cap rather
+ * than a scroll: the field beside it is how a longer list is narrowed, and a
+ * popover that grows past the window is worse than one that asks for a word.
+ */
+const MAX_DEPENDENCY_OPTIONS = 8;
 
 /**
  * How many steps a subtask is allowed to move right. Deeper nesting still
@@ -362,19 +372,20 @@ function attachmentChip(count: number): ReactNode {
 
 /**
  * The series marker (when the task repeats), subtask roll-up (when it has
- * children), tag labels (when any are attached), attachment count (when it
- * carries files), priority (when not 'none') and due-date (when set) chips;
- * null when none apply.
+ * children), the „Blokiran“ mark (when something it waits on is still open), tag
+ * labels (when any are attached), priority (when not 'none') and due-date (when
+ * set) chips; null when none apply.
  *
  * One cluster for both renderings, so a list row and a kanban card say the same
- * things about a task — which is why the tags and the attachment count travel
- * here rather than being spliced into the list row alone.
+ * things about a task — which is why the tags and the blocked mark travel here
+ * rather than being spliced into the list row alone.
  */
 function taskChips(
   task: TaskFields,
   children: readonly TaskFields[],
   tags: readonly TaskTag[],
   attachmentCount: number,
+  blocked: boolean,
 ): ReactNode {
   const chips: ReactNode[] = [];
   if (task.recurrence !== null) chips.push(<RecurrenceMark key="recurrence" />);
@@ -382,6 +393,21 @@ function taskChips(
   if (rollUp !== null) chips.push(rollUp);
   const attachments = attachmentChip(attachmentCount);
   if (attachments !== null) chips.push(attachments);
+  // Outlined and muted, on the tag chip's recipe (see .tasks__blocked-chip):
+  // waiting on something is a fact about the task, not a warning about it —
+  // completing a blocked task is never refused (ADR-037) — so it must not read
+  // as an alarm beside prioritet/rok.
+  if (blocked) {
+    chips.push(
+      <Chip
+        key="blocked"
+        className="tasks__blocked-chip"
+        title={strings.tasks.dependencies.blockedChipTitle}
+      >
+        {strings.tasks.dependencies.blockedChip}
+      </Chip>,
+    );
+  }
   // Outlined rather than filled (see .tasks__tag-chip): a label is not a state,
   // and next to prioritet/rok it must not read as one.
   for (const tag of tags) {
@@ -690,6 +716,10 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const [templateDraft, setTemplateDraft] = useState("");
   /** One flag across save/apply/delete, the `tagFailed` arrangement: the message is generic, and every template action clears it before trying again. */
   const [templateFailed, setTemplateFailed] = useState(false);
+  /** Zavisnosti (migration 029 / ADR-037): every edge of the profile whose both ends are live, plus the picker's own filter text and error line. */
+  const [dependencies, setDependencies] = useState<TaskDependencyLink[]>([]);
+  const [depDraft, setDepDraft] = useState("");
+  const [depFailed, setDepFailed] = useState(false);
   /** The list whose delete is waiting on the "what about its tasks" question, or null. */
   const [deletePrompt, setDeletePrompt] = useState<TaskList | null>(null);
   /** The list a delete just removed, offered back — the list counterpart of `pendingUndoId`. */
@@ -778,6 +808,45 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     return ids === undefined ? NO_TAGS : sortedTags.filter((tag) => ids.has(tag.id));
   };
 
+  // --- Zavisnosti (ADR-037), derived on every render ------------------------
+  //
+  // Two indexes over the flat edge list, plus a lookup over the PROFILE's tasks
+  // rather than the selected list's: a dependency crosses lists freely, so a
+  // blocker sitting in another list must still block, and must still be
+  // nameable in the picker.
+  const tasksById = new Map((tasks ?? []).map((task) => [task.id, task]));
+  const blockersByTask = new Map<string, string[]>();
+  const blockedByBlocker = new Map<string, string[]>();
+  for (const edge of dependencies) {
+    const blockers = blockersByTask.get(edge.blockedId);
+    if (blockers) blockers.push(edge.blockerId);
+    else blockersByTask.set(edge.blockedId, [edge.blockerId]);
+    const blocked = blockedByBlocker.get(edge.blockerId);
+    if (blocked) blocked.push(edge.blockedId);
+    else blockedByBlocker.set(edge.blockerId, [edge.blockedId]);
+  }
+
+  /** The live blockers of one task, in the store's own order. */
+  const blockersOf = (taskId: string): TaskFields[] => {
+    const ids = blockersByTask.get(taskId);
+    if (ids === undefined) return [];
+    const rows: TaskFields[] = [];
+    for (const id of ids) {
+      const row = tasksById.get(id);
+      if (row !== undefined) rows.push(row);
+    }
+    return rows;
+  };
+
+  /**
+   * Whether a task is BLOCKED: any live blocker of it is still not done
+   * (ADR-037 section 3). Derived, never stored and never enforced — completing a
+   * blocked task simply works, and this only says the order the user set is not
+   * finished yet.
+   */
+  const isBlocked = (taskId: string): boolean =>
+    blockersOf(taskId).some((blocker) => !blocker.done);
+
   /**
    * The rows the page actually draws: the selected list first (that is what
    * selecting in the rail means), then narrowed by the tag filter with AND
@@ -835,16 +904,19 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
       try {
         // One round trip each, in parallel: the rail and the rows are one screen,
         // so a render that has tasks but no lists (or no tags for the chips it
-        // draws, or the reverse) is never shown. All six are reads of the same
-        // local database, so any one of them failing is the page's one load error.
-        const [snapshot, list, tagList, linkList, counts, templateList] = await Promise.all([
-          window.nexus.listTaskLists(profileId),
-          window.nexus.listTasks(profileId),
-          window.nexus.listTaskTags(profileId),
-          window.nexus.listTaskTagLinks(profileId),
-          window.nexus.taskAttachmentCounts(profileId),
-          window.nexus.listTaskTemplates(profileId),
-        ]);
+        // draws, or no dependencies for the „Blokiran“ marks, or the reverse) is
+        // never shown. All seven are reads of the same local database, so any one
+        // of them failing is the page's one load error.
+        const [snapshot, list, tagList, linkList, counts, templateList, edgeList] =
+          await Promise.all([
+            window.nexus.listTaskLists(profileId),
+            window.nexus.listTasks(profileId),
+            window.nexus.listTaskTags(profileId),
+            window.nexus.listTaskTagLinks(profileId),
+            window.nexus.taskAttachmentCounts(profileId),
+            window.nexus.listTaskTemplates(profileId),
+            window.nexus.listTaskDependencies(profileId),
+          ]);
         if (!active) return;
         setLists(snapshot.lists);
         setSections(snapshot.sections);
@@ -853,6 +925,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         setTagLinks(linkList);
         setAttachmentCounts(new Map(counts.map((row) => [row.taskId, row.count])));
         setTemplates(templateList);
+        setDependencies(edgeList);
         // The active filter names tags of the profile it was set in, so a
         // profile switch drops it rather than filtering by ids that are gone.
         setTagFilter([]);
@@ -956,19 +1029,22 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   }
 
   /**
-   * Re-reads the rows AND the per-task attachment counts. The counts ride along
-   * rather than being fetched only after an attachment write, because a delete
-   * or an undo changes which tasks the store counts at all — a chip left over
-   * from a refetch that ignored them would be a number about a row that is no
-   * longer the row it describes.
+   * Re-reads the rows AND everything derived per-task from them: the
+   * attachment counts and the dependency edges. Both ride along rather than
+   * being fetched only after their own writes, because a delete or an undo
+   * changes which tasks the store counts (and which edges it shows) at all —
+   * a chip left over from a refetch that ignored them would describe a row
+   * that is no longer the row on screen.
    */
   async function reload(): Promise<void> {
-    const [list, counts] = await Promise.all([
+    const [list, counts, edgeList] = await Promise.all([
       window.nexus.listTasks(profileId),
       window.nexus.taskAttachmentCounts(profileId),
+      window.nexus.listTaskDependencies(profileId),
     ]);
     setTasks(list);
     setAttachmentCounts(new Map(counts.map((row) => [row.taskId, row.count])));
+    setDependencies(edgeList);
   }
 
   /** How many files a task carries, for its row/card chip; absent means none (`countsByTask` reports only tasks that have any). */
@@ -981,13 +1057,19 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
    * local SQLite reads, so there is nothing to save by fetching one half.
    */
   async function reloadAll(): Promise<void> {
-    const [snapshot, list] = await Promise.all([
+    const [snapshot, list, counts, edgeList] = await Promise.all([
       window.nexus.listTaskLists(profileId),
       window.nexus.listTasks(profileId),
+      window.nexus.taskAttachmentCounts(profileId),
+      // Deleting a list can delete its tasks, and an edge whose end is gone is
+      // gone with it — see `reload`.
+      window.nexus.listTaskDependencies(profileId),
     ]);
     setLists(snapshot.lists);
     setSections(snapshot.sections);
     setTasks(list);
+    setAttachmentCounts(new Map(counts.map((row) => [row.taskId, row.count])));
+    setDependencies(edgeList);
   }
 
   /**
@@ -1199,6 +1281,77 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     } catch (error) {
       console.error("Nexus: failed to toggle task tag:", error);
     }
+  }
+
+  // --- Zavisnosti (migration 029 / ADR-037) ---------------------------------
+  //
+  // Await-then-refetch like every other write on this page: the edges decide
+  // which rows wear a „Blokiran“ chip, and an optimistic patch could show one on
+  // a task the store refused to block.
+
+  /**
+   * Runs one dependency mutation and re-reads the edges. `depFailed` is its own
+   * line rather than the rail's: the block lives in the form, and the store can
+   * still refuse an edge the picker offered (a cycle closed on another device,
+   * a task completed between the fetch and the click).
+   */
+  async function runDependencyAction(action: () => Promise<void>): Promise<void> {
+    try {
+      setDepFailed(false);
+      await action();
+      setDependencies(await window.nexus.listTaskDependencies(profileId));
+    } catch (error) {
+      setDepFailed(true);
+      console.error("Nexus: dependency action failed:", error);
+    }
+  }
+
+  function addDependency(blockerId: string, blockedId: string): void {
+    void runDependencyAction(() => window.nexus.addTaskDependency(profileId, blockerId, blockedId));
+  }
+
+  function removeDependency(blockerId: string, blockedId: string): void {
+    void runDependencyAction(() =>
+      window.nexus.removeTaskDependency(profileId, blockerId, blockedId),
+    );
+  }
+
+  /**
+   * What the picker may offer as a blocker of `taskId`, narrowed by `depDraft`.
+   *
+   * Three exclusions, each of them something the store would refuse or ignore,
+   * so the picker never offers an affordance that can do nothing: the task
+   * itself and everything DOWNSTREAM of it (adding one of those closes a cycle),
+   * the blockers it already has (a no-op), and every finished task (a done
+   * blocker holds nothing up, so proposing one would be proposing a chip that
+   * never appears).
+   *
+   * Matching is folded on BOTH sides, the SRCH rule: „Đorđe“, „djordje“ and
+   * „Ђорђе“ meet at the same key, so a filter typed without diacritics still
+   * finds the task that has them.
+   */
+  function dependencyCandidates(taskId: string): TaskFields[] {
+    const downstream = new Set<string>([taskId]);
+    const queue: string[] = [taskId];
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (current === undefined) continue;
+      for (const next of blockedByBlocker.get(current) ?? []) {
+        if (downstream.has(next)) continue;
+        downstream.add(next);
+        queue.push(next);
+      }
+    }
+    const attached = new Set(blockersByTask.get(taskId) ?? []);
+    const term = foldSearchText(depDraft.trim());
+    const matches: TaskFields[] = [];
+    for (const task of tasks ?? []) {
+      if (task.done || downstream.has(task.id) || attached.has(task.id)) continue;
+      if (term.length > 0 && !foldSearchText(task.title).includes(term)) continue;
+      matches.push(task);
+      if (matches.length === MAX_DEPENDENCY_OPTIONS) break;
+    }
+    return matches;
   }
 
   /** Adds or removes one tag id from the filter; the narrowing itself is AND (see `visibleTasks`). */
@@ -1441,6 +1594,10 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     // The rows themselves are cleared by the effect that watches `editingId`;
     // only the transient error is this function's to drop.
     setAttachmentError(null);
+    // The picker's filter was typed against ONE task's candidates; carrying it
+    // into the next edit would silently narrow a different list.
+    setDepDraft("");
+    setDepFailed(false);
     if (!keepSection) setFormSectionId(null);
   }
 
@@ -1457,6 +1614,8 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     setDraft(task.title);
     setDismissedPhrase(null);
     setAttachmentError(null);
+    setDepDraft("");
+    setDepFailed(false);
     // The store accepts a date-time due date too, but this form only speaks in
     // whole days, so it shows (and on save keeps) the day part.
     setDueDate(task.dueDate === null ? "" : task.dueDate.slice(0, 10));
@@ -1757,7 +1916,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         leading={renderRowLead(task, depth)}
         trailing={
           <span className="tasks__row-meta">
-            {taskChips(task, children, tagsOf(task.id), attachmentCountOf(task.id))}
+            {taskChips(task, children, tagsOf(task.id), attachmentCountOf(task.id), isBlocked(task.id))}
             {/* The row's own "⋯" menu, exactly as on a note row. Attaching and
                 detaching tags lives here, and only where the profile HAS a tag
                 to attach — an affordance that can do nothing is one this page
@@ -1875,6 +2034,105 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
           </span>
         </Checkbox>
       </ListRow>
+    );
+  }
+
+  /**
+   * The edit form's "Zavisnosti" block (ADR-037): what `taskId` waits on, and
+   * the picker that adds one more.
+   *
+   * A blocker that is already DONE stays listed, muted and marked „završeno“:
+   * the edge is still real (finishing it is what unblocked this task, and
+   * re-opening the blocker blocks it again), so hiding it would make the
+   * relation the user set look like it had been deleted.
+   */
+  function renderDependencies(taskId: string): ReactNode {
+    const s = strings.tasks.dependencies;
+    const blockers = blockersOf(taskId);
+    const candidates = dependencyCandidates(taskId);
+    const searching = depDraft.trim().length > 0;
+
+    return (
+      <div className="tasks__deps">
+        <span className="tasks__deps-label">{s.label}</span>
+        <div className="tasks__dep-list">
+          {blockers.length === 0 ? (
+            <p className="tasks__deps-caption">{s.none}</p>
+          ) : (
+            blockers.map((blocker) => (
+              <span key={blocker.id} className="tasks__dep-row">
+                <span
+                  className={
+                    blocker.done ? "tasks__dep-title tasks__dep-title--done" : "tasks__dep-title"
+                  }
+                >
+                  {blocker.title}
+                </span>
+                {blocker.done && <span className="tasks__dep-done">{s.doneHint}</span>}
+                <Button
+                  size="sm"
+                  className="tasks__dep-remove"
+                  aria-label={s.removeLabel}
+                  onClick={() => removeDependency(blocker.id, taskId)}
+                >
+                  ×
+                </Button>
+              </span>
+            ))
+          )}
+          <NotePopover
+            label={s.add}
+            triggerContent={s.add}
+            triggerClassName="tasks__dep-add"
+          >
+            {(close) => (
+              <>
+                <TextField
+                  className="tasks__dep-search"
+                  value={depDraft}
+                  placeholder={s.searchPlaceholder}
+                  aria-label={s.searchPlaceholder}
+                  autoFocus
+                  onChange={(event: ChangeEvent<HTMLInputElement>) => setDepDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    // A swallowed Enter: this field sits INSIDE the add/edit
+                    // <form>, so an un-prevented Enter would save the task rather
+                    // than do nothing. Escape is left to `NotePopover`, which
+                    // closes the panel.
+                    if (event.key === "Enter") event.preventDefault();
+                  }}
+                />
+                {candidates.length === 0 ? (
+                  <span className="note__menu-label">
+                    {searching ? s.pickerNoMatches : s.pickerEmpty}
+                  </span>
+                ) : (
+                  candidates.map((candidate) => (
+                    <button
+                      key={candidate.id}
+                      className="note__menu-item"
+                      role="menuitem"
+                      type="button"
+                      onClick={() => {
+                        addDependency(candidate.id, taskId);
+                        setDepDraft("");
+                        close();
+                      }}
+                    >
+                      {candidate.title}
+                    </button>
+                  ))
+                )}
+              </>
+            )}
+          </NotePopover>
+        </div>
+        {depFailed && (
+          <p className="tasks__deps-caption tasks__deps-error" role="status">
+            {s.actionError}
+          </p>
+        )}
+      </div>
     );
   }
 
@@ -2545,6 +2803,12 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                   already exists). The picker itself is native and lives in main,
                   so there is no drop zone and no file input here. */}
               {editingId !== null && renderAttachments(editingId)}
+              {/* Zavisnosti (ADR-037) — EDIT ONLY, and not because it would be
+                  cluttered otherwise: an edge names two task ids, and a task
+                  being created has none yet. The picker offers only what the
+                  store would accept (see `dependencyCandidates`), so the error
+                  line below reports a race, never an ordinary refusal. */}
+              {editingId !== null && renderDependencies(editingId)}
             </div>
           </form>
 
@@ -2737,6 +3001,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                   childrenOf(task.id),
                   tagsOf(task.id),
                   attachmentCountOf(task.id),
+                  isBlocked(task.id),
                 )}
               >
                 <span

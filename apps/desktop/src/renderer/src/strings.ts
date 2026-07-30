@@ -351,6 +351,35 @@ export const strings = {
       delete: "Obriši šablon",
       actionError: "Radnja nad šablonom nije uspela. Pokušaj ponovo.",
     },
+    /**
+     * Zavisnosti (migration 029 / ADR-037) — "this one first". The block lives
+     * in the EDIT form only: a task that does not exist yet has no id for the
+     * other end of an edge to name.
+     *
+     * „Blokiran“ is a statement about the task, not an instruction: completing a
+     * blocked task is never refused, the chip only says the order it was put in
+     * is not finished yet — which is why its tooltip explains rather than warns.
+     */
+    dependencies: {
+      label: "Zavisnosti",
+      /** The picker's trigger, and its accessible name — a named action, not a row's „⋯“ overflow. */
+      add: "Dodaj zavisnost",
+      /** Placeholder and accessible name of the picker's filter field. */
+      searchPlaceholder: "Pretraži zadatke",
+      /** Shown in the picker when the profile has no task that could be a condition (all done, or all downstream of this one). */
+      pickerEmpty: "Nema zadatka koji može biti uslov.",
+      /** Shown in the picker when what was typed matches nothing among the candidates. */
+      pickerNoMatches: "Nema rezultata.",
+      /** Stands in for the list while the edited task waits on nothing. */
+      none: "Ovaj zadatak ne čeka ni na jedan drugi.",
+      removeLabel: "Ukloni zavisnost",
+      /** Beside a blocker that is already finished — the edge is real, it just no longer holds anything up. */
+      doneHint: "završeno",
+      /** The row/card chip on a task at least one of whose blockers is still open. */
+      blockedChip: "Blokiran",
+      blockedChipTitle: "Čeka zadatak koji još nije završen",
+      actionError: "Radnja nad zavisnošću nije uspela. Pokušaj ponovo.",
+    },
     /** Kanban column titles, keyed by task status value (labels are presentation). */
     status: {
       todo: "Za rad",
