@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Button, Card, Checkbox, Chip, TextField } from "@nexus/ui";
 import { validateArchivePassphrase, type ModuleRegistry } from "@nexus/core";
@@ -17,6 +17,13 @@ import { NotificationSettingsControls } from "./NotificationSettingsControls.js"
 import type { ThemePreference } from "./theme.js";
 import { AUTO_LOCK_MINUTES, type AutoLockMinutes } from "./autoLock.js";
 import { persistAccent, readStoredAccent } from "./accent.js";
+import { persistWeekStart, readStoredWeekStart, type WeekStartPreference } from "./weekStart.js";
+import {
+  buildSettingsSearchEntries,
+  foldSettingsQuery,
+  matchSettings,
+  moduleEntryId,
+} from "./settingsSearch.js";
 import { dayUnit, strings } from "./strings.js";
 
 /** Sidebar/page display name for a module id; mirrors App.tsx's private helper (kept local — App renders this page, so importing it back would be circular). */
@@ -29,6 +36,27 @@ const THEME_OPTIONS: ThemePreference[] = ["system", "dan", "noc"];
 function themeOptionLabel(option: ThemePreference): string {
   if (option === "system") return strings.settings.appearance.system;
   return option === "dan" ? strings.app.themeDan : strings.app.themeNoc;
+}
+
+/** PRD 04 §5, Ponedeljak first — the default, and the order a Serbian week is read in. */
+const WEEK_START_OPTIONS: WeekStartPreference[] = ["monday", "sunday"];
+
+/**
+ * SET-014 hit styling: a matched control label goes gold + semibold, exactly
+ * like every other active state in the app. Never a background wash or a glow.
+ */
+function labelClass(base: string, hit: boolean): string {
+  return hit ? `${base} set__hit` : base;
+}
+
+/**
+ * SET-014 section visibility: a filtered-out card hides with CSS instead of
+ * unmounting, so in-progress state — a restore preview holding its archive
+ * open, a half-typed passcode, unsaved quiet-hours edits — survives a
+ * keystroke in the filter box.
+ */
+function sectionClass(visible: boolean): string {
+  return visible ? "set__section" : "set__section set__section--hidden";
 }
 
 /** The home surface and this page itself can never be disabled — someone has to render the toggles. */
@@ -62,10 +90,12 @@ interface ProfileSectionProps {
   profileId: string;
   initialName: string;
   onProfileRenamed: (name: string) => void;
+  /** SET-014 search hits; the section reads only its own entry ids out of it. */
+  hits: ReadonlySet<string>;
 }
 
 /** Profil section: renames the active profile (same 1–80-char rule as Onboarding). */
-function ProfileSection({ profileId, initialName, onProfileRenamed }: ProfileSectionProps) {
+function ProfileSection({ profileId, initialName, onProfileRenamed, hits }: ProfileSectionProps) {
   const [name, setName] = useState(initialName);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,6 +123,10 @@ function ProfileSection({ profileId, initialName, onProfileRenamed }: ProfileSec
     <>
       <div className="set__row">
         <TextField
+          // The hit class lands on the field WRAPPER (that is where TextField
+          // puts className), so the stylesheet reaches the label through it —
+          // colouring the wrapper itself would bleed into the input's own text.
+          className={hits.has("profile-name") ? "set__hit-field" : ""}
           label={strings.settings.profile.nameLabel}
           value={name}
           maxLength={NAME_MAX}
@@ -337,6 +371,8 @@ function RestoreProblemRow({ problem, tone }: { problem: RestoreProblem; tone: "
 
 interface RestoreSectionProps {
   profileId: string;
+  /** SET-014 search hits; the section reads only its own entry ids out of it. */
+  hits: ReadonlySet<string>;
 }
 
 /**
@@ -354,7 +390,7 @@ interface RestoreSectionProps {
  * surviving. The undo banner the reloaded app shows is driven by
  * `restoreStatus` in App.tsx, never by this component.
  */
-function RestoreSection({ profileId }: RestoreSectionProps) {
+function RestoreSection({ profileId, hits }: RestoreSectionProps) {
   const s = strings.settings.restore;
 
   const [state, setState] = useState<RestoreState>({ phase: "idle", error: null });
@@ -474,7 +510,7 @@ function RestoreSection({ profileId }: RestoreSectionProps) {
 
   return (
     <div className="set__restore-block">
-      <h3 className="set__module-group-title">{s.title}</h3>
+      <h3 className={labelClass("set__module-group-title", hits.has("backup-restore"))}>{s.title}</h3>
       <p className="app__muted">{s.description}</p>
 
       {!previewing && state.phase !== "applied" && (
@@ -626,6 +662,8 @@ interface SecurityMessage {
 interface SecuritySectionProps {
   autoLockMinutes: AutoLockMinutes;
   onAutoLockChange: (value: AutoLockMinutes) => void;
+  /** SET-014 search hits; the section reads only its own entry ids out of it. */
+  hits: ReadonlySet<string>;
 }
 
 /**
@@ -634,7 +672,7 @@ interface SecuritySectionProps {
  * idle auto-lock preference. Auth is whole-account, not per-profile, so unlike
  * every other section here this one takes no `profileId`.
  */
-function SecuritySection({ autoLockMinutes, onAutoLockChange }: SecuritySectionProps) {
+function SecuritySection({ autoLockMinutes, onAutoLockChange, hits }: SecuritySectionProps) {
   const [currentPasscode, setCurrentPasscode] = useState("");
   const [nextPasscode, setNextPasscode] = useState("");
   const [confirmPasscode, setConfirmPasscode] = useState("");
@@ -700,7 +738,9 @@ function SecuritySection({ autoLockMinutes, onAutoLockChange }: SecuritySectionP
   return (
     <>
       <div className="set__security-block">
-        <h3 className="set__module-group-title">{s.changeTitle}</h3>
+        <h3 className={labelClass("set__module-group-title", hits.has("security-passcode"))}>
+          {s.changeTitle}
+        </h3>
         <form className="set__security-form" onSubmit={(event) => void submitChange(event)}>
           <TextField
             type="password"
@@ -735,7 +775,9 @@ function SecuritySection({ autoLockMinutes, onAutoLockChange }: SecuritySectionP
       </div>
 
       <div className="set__security-block">
-        <h3 className="set__module-group-title">{s.recoveryTitle}</h3>
+        <h3 className={labelClass("set__module-group-title", hits.has("security-recovery"))}>
+          {s.recoveryTitle}
+        </h3>
         {newRecoveryCode != null ? (
           <RecoveryKitPanel code={newRecoveryCode} onContinue={() => setNewRecoveryCode(null)} />
         ) : (
@@ -750,7 +792,9 @@ function SecuritySection({ autoLockMinutes, onAutoLockChange }: SecuritySectionP
       </div>
 
       <div className="set__security-block">
-        <h3 className="set__module-group-title">{s.autoLockTitle}</h3>
+        <h3 className={labelClass("set__module-group-title", hits.has("security-auto-lock"))}>
+          {s.autoLockTitle}
+        </h3>
         <p className="set__section-caption">{s.autoLockHint}</p>
         <select
           className="set__select"
@@ -784,12 +828,19 @@ export interface SettingsPageProps {
 }
 
 /**
- * SET (lite): profile rename, theme preference (Sistemski/Dan/Noć), the
- * module gallery (per-category enable/disable, SET-007), NTF-008's appetite
- * presets over the shared quiet-hours/source controls, and a read-only
- * "O aplikaciji" info panel. Every write goes through IPC methods that
- * already exist (`renameProfile`, `setFlag`, `setNotificationSourceEnabled`,
- * …) — this slice is renderer-only wiring, no DB/IPC/main changes.
+ * SET (lite): profile rename, theme preference (Sistemski/Dan/Noć), the accent
+ * palette, the first day of the week (PRD 04 §5), the module gallery
+ * (per-category enable/disable, SET-007), NTF-008's appetite presets over the
+ * shared quiet-hours/source controls, and a read-only "O aplikaciji" info
+ * panel. Every write goes through IPC methods that already exist
+ * (`renameProfile`, `setFlag`, `setNotificationSourceEnabled`, …) or through
+ * the localStorage helpers the shell already uses for the theme and accent —
+ * this page is renderer-only wiring, no DB/IPC/main changes.
+ *
+ * SET-014 layers a filter on top: the field below the title narrows the page to
+ * the sections that answer the query (`settingsSearch.ts` owns what is
+ * searchable) and marks the matched labels typographically. An empty query is
+ * the page exactly as it was before the filter existed.
  */
 export function SettingsPage({
   profileId,
@@ -805,6 +856,10 @@ export function SettingsPage({
   onAutoLockChange,
 }: SettingsPageProps) {
   const [accent, setAccent] = useState<AccentId>(() => readStoredAccent());
+  const [weekStart, setWeekStart] = useState<WeekStartPreference>(() => readStoredWeekStart());
+  // SET-014: the raw query. Empty means "render everything exactly as before" —
+  // the filter is additive, it never becomes the page's normal state.
+  const [query, setQuery] = useState("");
   const [modulesError, setModulesError] = useState<string | null>(null);
   const [notificationSources, setNotificationSources] = useState<NotificationSource[] | null>(null);
   const [presetError, setPresetError] = useState<string | null>(null);
@@ -859,24 +914,48 @@ export function SettingsPage({
       ? NOTIFICATION_PRESETS.find((preset) => sameSourceSet(preset.sources, notificationSources))
       : undefined;
 
+  // SET-014: the searchable index is a function of the registry alone, so it is
+  // built once per registry rather than on every keystroke; the match itself is
+  // a dozen string comparisons and needs no memo of its own.
+  const searchEntries = useMemo(() => buildSettingsSearchEntries(registry), [registry]);
+  const { sections, hits } = matchSettings(searchEntries, foldSettingsQuery(query));
+  const a = strings.settings.appearance;
+
   return (
     <div className="set">
       <h1 className="set__title">{moduleName("settings")}</h1>
 
-      <Card title={strings.settings.sectionTitle.profile} className="set__section">
+      <TextField
+        className="set__search"
+        value={query}
+        aria-label={strings.settings.searchPlaceholder}
+        placeholder={strings.settings.searchPlaceholder}
+        onChange={(event) => setQuery(event.target.value)}
+      />
+      {sections.size === 0 && <p className="set__section-caption">{strings.search.emptyResults}</p>}
+
+      <Card title={strings.settings.sectionTitle.profile} className={sectionClass(sections.has("profile"))}>
         <ProfileSection
           profileId={profileId}
           initialName={profileName}
           onProfileRenamed={onProfileRenamed}
+          hits={hits}
         />
       </Card>
 
-      <Card title={strings.settings.sectionTitle.security} className="set__section">
-        <SecuritySection autoLockMinutes={autoLockMinutes} onAutoLockChange={onAutoLockChange} />
+      <Card title={strings.settings.sectionTitle.security} className={sectionClass(sections.has("security"))}>
+        <SecuritySection
+          autoLockMinutes={autoLockMinutes}
+          onAutoLockChange={onAutoLockChange}
+          hits={hits}
+        />
       </Card>
 
-      <Card title={strings.settings.sectionTitle.appearance} className="set__section">
-        <div className="set__segmented" role="group" aria-label={strings.settings.sectionTitle.appearance}>
+      <Card title={strings.settings.sectionTitle.appearance} className={sectionClass(sections.has("appearance"))}>
+        <p className={labelClass("set__section-caption", hits.has("appearance-theme"))}>
+          {a.themeLabel}
+        </p>
+        <div className="set__segmented" role="group" aria-label={a.themeLabel}>
           {THEME_OPTIONS.map((option) => (
             <Button
               key={option}
@@ -889,12 +968,12 @@ export function SettingsPage({
             </Button>
           ))}
         </div>
-        <p className="set__section-caption">
-          {strings.settings.appearance.accentLabel} — {strings.settings.appearance.accentNames[accent] ?? accent}
+        <p className={labelClass("set__section-caption", hits.has("appearance-accent"))}>
+          {a.accentLabel} — {a.accentNames[accent] ?? accent}
         </p>
-        <div className="set__accent-row" role="group" aria-label={strings.settings.appearance.accentLabel}>
+        <div className="set__accent-row" role="group" aria-label={a.accentLabel}>
           {ACCENT_IDS.map((id) => {
-            const name = strings.settings.appearance.accentNames[id] ?? id;
+            const name = a.accentNames[id] ?? id;
             const selected = accent === id;
             return (
               <button
@@ -913,9 +992,30 @@ export function SettingsPage({
             );
           })}
         </div>
+        {/* PRD 04 §5. The calendar reads this on mount, so a change here shows
+            the next time that page is opened — page switching remounts it. */}
+        <p className={labelClass("set__section-caption", hits.has("appearance-week-start"))}>
+          {a.weekStartLabel}
+        </p>
+        <div className="set__segmented" role="group" aria-label={a.weekStartLabel}>
+          {WEEK_START_OPTIONS.map((option) => (
+            <Button
+              key={option}
+              size="sm"
+              variant={weekStart === option ? "primary" : "ghost"}
+              aria-pressed={weekStart === option}
+              onClick={() => {
+                persistWeekStart(option);
+                setWeekStart(option);
+              }}
+            >
+              {a.weekStartOptions[option]}
+            </Button>
+          ))}
+        </div>
       </Card>
 
-      <Card title={strings.settings.sectionTitle.modules} className="set__section">
+      <Card title={strings.settings.sectionTitle.modules} className={sectionClass(sections.has("modules"))}>
         {[...registry.byCategory()].map(([category, members]) => (
           <div key={category} className="set__module-group">
             <h3 className="set__module-group-title">
@@ -928,7 +1028,14 @@ export function SettingsPage({
                 return (
                   <div className="set__module-row" key={manifest.id}>
                     <div className="set__module-info">
-                      <span className="set__module-name">{moduleName(manifest.id)}</span>
+                      <span
+                        className={labelClass(
+                          "set__module-name",
+                          hits.has(moduleEntryId(manifest.id)),
+                        )}
+                      >
+                        {moduleName(manifest.id)}
+                      </span>
                       <span className="set__module-desc">
                         {strings.settings.moduleDescriptions[manifest.id] ?? ""}
                       </span>
@@ -951,7 +1058,7 @@ export function SettingsPage({
         {modulesError != null && <p className="set__error">{modulesError}</p>}
       </Card>
 
-      <Card title={strings.settings.sectionTitle.notifications} className="set__section">
+      <Card title={strings.settings.sectionTitle.notifications} className={sectionClass(sections.has("notifications"))}>
         <div className="set__preset-row">
           {NOTIFICATION_PRESETS.map((preset) => (
             <Button
@@ -969,12 +1076,12 @@ export function SettingsPage({
         <NotificationSettingsControls profileId={profileId} refreshToken={refreshToken} />
       </Card>
 
-      <Card title={strings.settings.sectionTitle.backup} className="set__section">
+      <Card title={strings.settings.sectionTitle.backup} className={sectionClass(sections.has("backup"))}>
         <BackupSection profileId={profileId} />
-        <RestoreSection profileId={profileId} />
+        <RestoreSection profileId={profileId} hits={hits} />
       </Card>
 
-      <Card title={strings.settings.sectionTitle.about} className="set__section">
+      <Card title={strings.settings.sectionTitle.about} className={sectionClass(sections.has("about"))}>
         {info ? (
           <dl className="app__facts">
             <div>

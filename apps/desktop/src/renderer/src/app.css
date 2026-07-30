@@ -3182,6 +3182,27 @@ button.cal__grid-event {
 .set__section .nx-card__title {
   margin-bottom: 0;
 }
+/* SET-014: the page filter, sitting alone under the title. Sized like the
+   Profil name field so the page keeps one measure down its left edge. */
+.set__search {
+  max-width: 320px;
+}
+/* A filtered-out section hides but stays MOUNTED — unmounting would discard
+   in-progress state (a restore preview holding its archive open, a half-typed
+   passcode, unsaved quiet-hours edits) on a keystroke in the filter box. */
+.set__section--hidden {
+  display: none;
+}
+/* A live search hit is typographic — accent text plus weight, exactly like
+   .tasks__view--active and .cal__reminder--active. Never a background wash or
+   a glow. The second selector reaches the label INSIDE a TextField, whose
+   className lands on the wrapper: colouring the wrapper itself would drag the
+   input's own text along with it. */
+.set__hit,
+.set__hit-field .nx-textfield__label {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
 /* Profil: name field + save side by side (study__subject-form idiom). */
 .set__row {
   display: flex;
@@ -3194,7 +3215,8 @@ button.cal__grid-event {
   min-width: 200px;
   max-width: 320px;
 }
-/* Izgled: the three-way theme preference as a compact segmented row. */
+/* Izgled: the three-way theme preference and the two-way first-day-of-week
+   (PRD 04 §5) as compact segmented rows, each under its own caption label. */
 .set__segmented {
   display: inline-flex;
   gap: var(--nx-space-1);

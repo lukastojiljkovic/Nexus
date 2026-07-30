@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent, KeyboardEvent } from "react";
 import { Button, Checkbox, Chip, EmptyState, ListRow, TextField } from "@nexus/ui";
 import { isValidDayKey, monthKeyOf, shiftDayKey, shiftMonthKey, weekDayKeys } from "@nexus/core";
+import type { WeekStart } from "@nexus/core";
 import type {
   Event,
   EventFieldChanges,
@@ -35,6 +36,7 @@ import type { RecurrenceScope } from "./RecurrenceScopeDialog.js";
 import { DocumentsPanel } from "./DocumentsPanel.js";
 import { PeoplePanel } from "./PeoplePanel.js";
 import { daysUntilExam, examCountdownLabel, examCountdownVariant, localTodayKey } from "./examDates.js";
+import { readStoredWeekStart, toWeekStart } from "./weekStart.js";
 import { dayUnit, strings } from "./strings.js";
 
 // --- Per-profile view memory (interim, mirrors TasksPage) -------------------
@@ -44,8 +46,6 @@ import { dayUnit, strings } from "./strings.js";
 // list/kanban toggle.
 type CalendarView = "mesec" | "nedelja" | "dan" | "agenda" | "dokumenta" | "ljudi";
 const VIEW_KEY_PREFIX = "nexus.calendar.view.";
-/** Monday-first, the Serbian default (mirrors CalendarMonth's own WEEK_START). */
-const WEEK_START = 1;
 
 /** The two views that replace the whole event surface with a panel of their own. */
 function isPanelView(view: CalendarView): boolean {
@@ -388,10 +388,15 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
   const [sources, setSources] = useState<ReadonlySet<CalendarSource>>(() =>
     readStoredSources(profileId),
   );
+  // PRD 04 §5, read once on mount: the shell renders exactly one module page at
+  // a time, so leaving Podešavanja and coming back here remounts this component
+  // and picks up a changed setting. Nothing needs to watch localStorage.
+  const [weekStart] = useState<WeekStart>(() => toWeekStart(readStoredWeekStart()));
   // The single anchor day every grid view derives from: the month view takes
-  // its month, the week view its Monday-first week, the day view the key
-  // itself — so "Danas" and the keyboard shortcuts have exactly one thing to
-  // reset regardless of which of the three is showing.
+  // its month, the week view the week around it (starting on whichever weekday
+  // `weekStart` says), the day view the key itself — so "Danas" and the
+  // keyboard shortcuts have exactly one thing to reset regardless of which of
+  // the three is showing.
   const [anchorKey, setAnchorKey] = useState<string>(() => localTodayKey());
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
 
@@ -896,7 +901,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
   // Every grid view derives from the one anchor day; cheap to compute both
   // unconditionally rather than branch on `view` twice below.
   const monthKey = monthKeyOf(anchorKey);
-  const weekKeys = weekDayKeys(anchorKey, WEEK_START);
+  const weekKeys = weekDayKeys(anchorKey, weekStart);
   const isGridView = view === "mesec" || view === "nedelja" || view === "dan";
 
   // How far a recurring master is expanded (ADR-024): exactly what this view can
@@ -1139,6 +1144,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
                 <CalendarMonth
                   monthKey={monthKey}
                   todayKey={todayKey}
+                  weekStart={weekStart}
                   items={calendarItems}
                   onSelectDay={selectDay}
                   onOpenDay={openDay}

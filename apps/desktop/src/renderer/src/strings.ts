@@ -8,6 +8,7 @@ import type {
   RestoreModuleCounts,
   RestoreProblemCode,
 } from "../../shared/ipc.js";
+import type { WeekStartPreference } from "./weekStart.js";
 
 export const strings = {
   app: {
@@ -918,6 +919,12 @@ export const strings = {
 
   settings: {
     // The page title reuses `strings.modules.settings` — no duplicate copy.
+    /**
+     * SET-014: the filter above the section cards. The "nothing matched" line
+     * is deliberately NOT repeated here — it reuses the search palette's own
+     * `strings.search.emptyResults`, which says exactly this and nothing else.
+     */
+    searchPlaceholder: "Pretraži podešavanja…",
     /** Section-card titles, in the order they appear on the page. */
     sectionTitle: {
       profile: "Profil",
@@ -959,6 +966,8 @@ export const strings = {
     /** Theme-preference option labels; Dan/Noć reuse `strings.app.themeDan/themeNoc`. */
     appearance: {
       system: "Sistemski",
+      /** Names the theme segmented row now that a second one (the week start) stands beside it. */
+      themeLabel: "Tema",
       accentLabel: "Boja akcenta",
       /** Accent swatch names, keyed by AccentId (SET's 8-accent palette). */
       accentNames: {
@@ -971,6 +980,12 @@ export const strings = {
         bordo: "Bordo",
         grafit: "Grafit",
       } as Record<string, string>,
+      /** PRD 04 §5: the weekday the calendar's month grid and week view open on. */
+      weekStartLabel: "Prvi dan nedelje",
+      weekStartOptions: {
+        monday: "Ponedeljak",
+        sunday: "Nedelja",
+      } satisfies Record<WeekStartPreference, string>,
     },
     /** One-line module descriptions for the gallery, keyed by module id. */
     moduleDescriptions: {

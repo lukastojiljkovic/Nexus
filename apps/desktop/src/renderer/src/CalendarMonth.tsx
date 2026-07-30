@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { DragEvent, MouseEvent, ReactNode } from "react";
 import { layoutMonthBars, monthGridDays } from "@nexus/core";
-import type { MonthGridDay, SpanItem } from "@nexus/core";
+import type { MonthGridDay, SpanItem, WeekStart } from "@nexus/core";
 import type { Event } from "../../shared/ipc.js";
 import { formatClock, isMutedItem, isSpanItem, isTimedEventItem } from "./calendarItems.js";
 import type { CalendarItem, EventOccurrence } from "./calendarItems.js";
@@ -12,12 +12,16 @@ import { strings } from "./strings.js";
 const VISIBLE_LANES = 3;
 /** Total stacked rows (bar lanes + timed chips) a cell budgets for before collapsing. */
 const TOTAL_ROWS = 4;
-/** Monday-first, the Serbian default. */
-const WEEK_START = 1;
 
 export interface CalendarMonthProps {
   monthKey: string;
   todayKey: string;
+  /**
+   * Which weekday the grid rows open on (PRD 04 §5). Comes from the page, not
+   * from a constant here: the weekday header row is read off the first week the
+   * layout engine returns, so the header and the rows can never disagree.
+   */
+  weekStart: WeekStart;
   items: readonly CalendarItem[];
   /** Click on a day cell's empty area — the page prefills the form's date. */
   onSelectDay: (dayKey: string) => void;
@@ -110,6 +114,7 @@ export function renderBarContent(item: CalendarItem): ReactNode {
 export function CalendarMonth({
   monthKey,
   todayKey,
+  weekStart,
   items,
   onSelectDay,
   onOpenDay,
@@ -130,7 +135,7 @@ export function CalendarMonth({
   // navigation would point at an unrelated week.
   useEffect(() => setExpandedWeeks(new Set()), [monthKey]);
 
-  const weeks = chunkWeeks(monthGridDays(monthKey, WEEK_START));
+  const weeks = chunkWeeks(monthGridDays(monthKey, weekStart));
   const itemById = new Map(items.map((item) => [item.id, item] as const));
   const barItems: SpanItem[] = items
     .filter(isSpanItem)
