@@ -803,6 +803,7 @@ export function App() {
             <DashboardPage
               profileId={activeProfile.id}
               profileName={activeProfile.name}
+              registry={registry}
               enabledModules={enabledIds}
               onOpenModule={setActiveId}
             />

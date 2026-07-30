@@ -1,47 +1,18 @@
-import { useEffect, useState } from "react";
-import type { ReactNode } from "react";
-import { computeStreak } from "@nexus/core";
-import { Card, Chip, EmptyState, ListRow } from "@nexus/ui";
+import { useEffect, useId, useRef, useState } from "react";
+import type { ComponentType, CSSProperties, DragEvent, ReactNode } from "react";
+import { createPortal } from "react-dom";
+import type { ModuleRegistry, WidgetContract } from "@nexus/core";
+import { Button, Card } from "@nexus/ui";
+import { DASHBOARD_WIDGET_SPANS } from "../../shared/ipc.js";
 import type {
   DashboardSettings,
-  DocumentStatus,
-  Event,
-  Exam,
-  FocusSession,
-  Person,
-  StudyStats,
-  Subject,
-  Task,
-  TrackedDocument,
+  DashboardWidgetInstance,
+  DashboardWidgetSize,
 } from "../../shared/ipc.js";
-import { buildCalendarItems } from "./calendarItems.js";
-import type { CalendarItem, CalendarSource } from "./calendarItems.js";
-import {
-  daysUntilExam,
-  examCountdownLabel,
-  examCountdownVariant,
-  formatExamDate,
-  localTodayKey,
-  shiftDayKey,
-} from "./examDates.js";
-import { focusSessionMinutes, formatDurationMinutes } from "./focusFormat.js";
-import { dayUnit, strings } from "./strings.js";
-
-// --- Formatting helpers (renderer-local, mirror the module pages) -----------
-//
-// DASH is a pure aggregation surface: it reads the same tasks/events/documents
-// the modules own and reformats them into "šta mi je danas bitno?" cards. The
-// date rules match the pages exactly — wall-clock ("today") is local, while a
-// bare calendar date (a due date, an all-day start) is treated as UTC so it does
-// not shift a day back when formatted in a negative-offset timezone.
-
-/** Local wall-clock day key "YYYY-MM-DD" — matches how the pages read "today". */
-function localDayKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
+import { lookupString, moveNeighbours, type LayoutNeighbours } from "./dashboardLayout.js";
+import { DASHBOARD_WIDGETS, type DashboardWidgetBodyProps } from "./dashboardWidgets.js";
+import { NotePopover } from "./notePopover.js";
+import { strings } from "./strings.js";
 
 /** Time-of-day salutation, personalized with the profile name when present. */
 function greeting(name: string, hour: number): string {
@@ -51,133 +22,288 @@ function greeting(name: string, hour: number): string {
   return trimmed.length > 0 ? `${salutation}, ${trimmed}` : salutation;
 }
 
-/** Row time label — "Ceo dan" for all-day, else HH:MM (mirrors CalendarPage). */
-function formatEventTime(event: Event): string {
-  if (event.allDay) return strings.calendar.allDay;
-  const date = new Date(event.startAt);
-  return Number.isNaN(date.getTime())
-    ? event.startAt
-    : new Intl.DateTimeFormat("sr-Latn", { hour: "2-digit", minute: "2-digit" }).format(date);
+/** The Serbian name of a widget, from the strings KEY its contract publishes. */
+function widgetTitle(contract: WidgetContract): string {
+  return lookupString(strings, contract.title) ?? contract.title;
 }
 
-/** Compact due-date chip label — "15. jul"; UTC-parsed for the bare calendar date. */
-function formatDueDate(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime())
-    ? iso
-    : new Intl.DateTimeFormat("sr-Latn", { day: "2-digit", month: "short", timeZone: "UTC" }).format(
-        date,
-      );
+/** The preset a newly placed widget takes: the medium one when it accepts it, the first it does otherwise. */
+function defaultSize(contract: WidgetContract): DashboardWidgetSize {
+  return contract.sizes.includes("M") ? "M" : (contract.sizes[0] ?? "M");
 }
 
-// Status → Chip variant, reusing DocumentsPanel's mapping: on time reads as data,
-// the reminder window as accent, an expired document as danger.
-const STATUS_VARIANT: Record<DocumentStatus, "data" | "accent" | "danger"> = {
-  ok: "data",
-  uskoro: "accent",
-  istekao: "danger",
-};
+/** One placement resolved into everything needed to draw it — the page skips whatever does not resolve. */
+interface PlacedWidget {
+  entry: DashboardWidgetInstance;
+  contract: WidgetContract;
+  Body: ComponentType<DashboardWidgetBodyProps>;
+}
+
+interface WidgetMenuProps {
+  /** The card this menu belongs to, so its "⋯" has a name of its own among five. */
+  title: string;
+  contract: WidgetContract;
+  size: DashboardWidgetSize;
+  /** Where a step up / down would land the card, or null at that end of the layout. */
+  up: LayoutNeighbours | null;
+  down: LayoutNeighbours | null;
+  onMove: (step: LayoutNeighbours) => void;
+  onResize: (size: DashboardWidgetSize) => void;
+  onRemove: () => void;
+}
 
 /**
- * "Time to expiry" hint from the store's derived daysUntilExpiry, reusing the
- * strings.documents.days phrasing so DASH and CAL never drift. The dan/dana
- * agreement comes from `dayUnit` (21 → "dan", 22 → "dana").
+ * The edit-mode "⋯" on one card: move it, resize it, take it off (ADR-045
+ * section 5). A menu of plain focusable buttons, the `MoveMenu` shape TASK-004
+ * established — which is what gives the whole edit mode keyboard parity with the
+ * drag by construction, rather than as a second implementation.
+ *
+ * An item at an end of the layout is DISABLED, never dropped: a menu whose items
+ * come and go is one the user has to re-read on every open.
  */
-function daysUntilLabel(days: number): string {
-  const d = strings.documents.days;
-  if (days > 1) return `${d.future} ${days} ${dayUnit(days, d.unitOne, d.unitMany)}`;
-  if (days === 1) return d.tomorrow;
-  if (days === 0) return d.today;
-  const ago = Math.abs(days);
-  return `${d.pastPrefix} ${ago} ${dayUnit(ago, d.unitOne, d.unitMany)}`;
-}
-
-/** A read-only widget row that deep-links into its module on click/Enter. */
-function DashRow({
-  onClick,
-  leading,
-  trailing,
-  children,
-}: {
-  onClick: () => void;
-  leading?: ReactNode;
-  trailing?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <button type="button" className="dash__row" onClick={onClick}>
-      <ListRow leading={leading} trailing={trailing}>
-        {children}
-      </ListRow>
+function WidgetMenu({
+  title,
+  contract,
+  size,
+  up,
+  down,
+  onMove,
+  onResize,
+  onRemove,
+}: WidgetMenuProps) {
+  const s = strings.dashboard.edit;
+  const step = (text: string, target: LayoutNeighbours | null, close: () => void): ReactNode => (
+    <button
+      className="note__menu-item"
+      role="menuitem"
+      type="button"
+      disabled={target === null}
+      onClick={() => {
+        if (target !== null) onMove(target);
+        close();
+      }}
+    >
+      {text}
     </button>
+  );
+
+  return (
+    <NotePopover label={`${s.menuLabel}: ${title}`} triggerClassName="dash__widget-menu">
+      {(close) => (
+        <>
+          {step(s.moveUp, up, close)}
+          {step(s.moveDown, down, close)}
+          <div className="note__menu-sep" role="separator" />
+          <span className="note__menu-label">{s.sizeLabel}</span>
+          {/* Only the presets this widget publishes: a size it cannot honour is
+              precisely what `WidgetContract.sizes` exists to withhold. */}
+          {contract.sizes.map((preset) => (
+            <button
+              key={preset}
+              className="note__menu-item note__menu-item--check"
+              role="menuitemradio"
+              type="button"
+              aria-checked={preset === size}
+              onClick={() => {
+                if (preset !== size) onResize(preset);
+                close();
+              }}
+            >
+              <span
+                className={`note__menu-check${preset === size ? "" : " note__menu-check--hidden"}`}
+                aria-hidden="true"
+              >
+                ✓
+              </span>
+              {s.size[preset]}
+            </button>
+          ))}
+          <div className="note__menu-sep" role="separator" />
+          <button
+            className="note__menu-item note__menu-item--danger"
+            role="menuitem"
+            type="button"
+            onClick={() => {
+              onRemove();
+              close();
+            }}
+          >
+            {s.remove}
+          </button>
+        </>
+      )}
+    </NotePopover>
   );
 }
 
-/**
- * "Danas" reads events and birthdays through the calendar's own merge, for one
- * reason: both are stored as a single row that only the merge knows how to
- * expand into the occurrence falling today — a recurring event from its rule
- * (ADR-024), a person from their yearless (month, day) (ADR-026). Those two are
- * the only sources asked for; tasks, exams and blocks reach this page by their
- * own routes above.
- */
-const TODAY_SOURCES: ReadonlySet<CalendarSource> = new Set<CalendarSource>([
-  "events",
-  "birthdays",
-]);
+interface WidgetGalleryProps {
+  registry: ModuleRegistry;
+  enabledModules: ReadonlySet<string>;
+  /** Qualified ids already on the layout — v1 places a widget once (ADR-045 section 5). */
+  placed: ReadonlySet<string>;
+  onAdd: (widgetId: string, size: DashboardWidgetSize) => void;
+  onClose: () => void;
+}
 
-/** Empty stats used in place of a fetch when the study module is disabled. */
-const EMPTY_STUDY_STATS: StudyStats = {
-  subjectMinutes: [],
-  activityDays: [],
-  reviews: { total: 0, perDay: [] },
-  blocks: { done: 0, missed: 0 },
-};
+/**
+ * „Dodaj vidžet" — every widget the ENABLED modules publish, grouped by the
+ * module that owns it (`ModuleRegistry.widgetsOf`). One already on the layout is
+ * shown DISABLED and marked „već dodat" rather than hidden, so the gallery reads
+ * as a catalogue of what exists and not as a list that quietly shrinks.
+ *
+ * The house dialog recipe, shared outright with the recurrence-scope question
+ * and the shortcuts reference: backdrop and panel as siblings, Escape and the
+ * backdrop close, focus lands inside and returns where it came from, no glow.
+ * It stays open after an add, because adding two widgets is one errand.
+ */
+function WidgetGallery({
+  registry,
+  enabledModules,
+  placed,
+  onAdd,
+  onClose,
+}: WidgetGalleryProps) {
+  const s = strings.dashboard.gallery;
+  const actionsRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const titleId = useId();
+
+  useEffect(() => {
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    actionsRef.current?.querySelector("button")?.focus();
+    return () => {
+      previousFocusRef.current?.focus();
+      previousFocusRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  // A registered widget this build cannot draw is left out: offering it would
+  // add a placement that renders nothing (ADR-045 section 3).
+  const groups = registry
+    .all()
+    .filter((manifest) => enabledModules.has(manifest.id))
+    .map((manifest) => ({
+      manifest,
+      widgets: registry
+        .widgetsOf(manifest.id)
+        .filter((widget) => `${manifest.id}:${widget.id}` in DASHBOARD_WIDGETS),
+    }))
+    .filter((group) => group.widgets.length > 0);
+
+  return createPortal(
+    <div className="recur-dialog__overlay">
+      <div className="recur-dialog__backdrop" onClick={onClose} />
+      <div
+        className="recur-dialog__panel dash-gallery__panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
+        <h2 id={titleId} className="recur-dialog__title">
+          {s.title}
+        </h2>
+
+        {groups.length === 0 ? (
+          <p className="recur-dialog__question">{s.empty}</p>
+        ) : (
+          <div className="dash-gallery__body">
+            {groups.map(({ manifest, widgets }) => (
+              <section key={manifest.id} className="dash-gallery__group">
+                <h3 className="set__module-group-title">
+                  {strings.modules[manifest.id] ?? manifest.id}
+                </h3>
+                {widgets.map((widget) => {
+                  const qualified = `${manifest.id}:${widget.id}`;
+                  const already = placed.has(qualified);
+                  return (
+                    <div key={qualified} className="dash-gallery__row">
+                      <span className="dash-gallery__name">{widgetTitle(widget)}</span>
+                      {already && <span className="dash-gallery__added">{s.added}</span>}
+                      <Button
+                        size="sm"
+                        disabled={already}
+                        onClick={() => onAdd(qualified, defaultSize(widget))}
+                      >
+                        {s.add}
+                      </Button>
+                    </div>
+                  );
+                })}
+              </section>
+            ))}
+          </div>
+        )}
+
+        <div className="recur-dialog__actions" ref={actionsRef}>
+          <Button className="recur-dialog__cancel" onClick={onClose}>
+            {s.close}
+          </Button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
 
 export interface DashboardPageProps {
   profileId: string;
   profileName: string;
-  /** Modules enabled by SET-007 flags; a disabled module's widgets are hidden and never fetched. */
+  /** The module catalogue (ADR-008) — what a placement's `moduleId:widgetId` resolves against. */
+  registry: ModuleRegistry;
+  /** Modules enabled by SET-007 flags; a disabled module's widgets draw nothing and fetch nothing. */
   enabledModules: ReadonlySet<string>;
   onOpenModule: (id: string) => void;
 }
 
 /**
- * The DASH home surface (DASH v0): a personalized greeting over read-only
- * widget cards that aggregate the data the modules already own — today's
- * agenda, the next tasks, documents nearing expiry, upcoming exams, and the
- * study streak — each row deep-linking into its module. Nothing here writes;
- * it composes over the existing `window.nexus` reads. A widget whose owning
- * module is disabled (SET-007) is hidden and its data is never fetched — a
- * disabled fetch resolves to an empty value instead, so the shared loading
- * gate still settles. (The old diagnostics card moved to Settings's
- * "O aplikaciji" section.)
+ * The DASH home surface: a personalized greeting over the profile's own widget
+ * layout (DASH-002 / ADR-045). The page holds the LAYOUT and nothing else — the
+ * five cards are components that own their reads (`dashboardWidgets.tsx`), so a
+ * failing card fails alone and there is no page-wide loading gate left to hold
+ * anything up.
+ *
+ * Edit mode is the second half: „Uredi" grows a strip on every card with a "⋯"
+ * menu (move / resize / remove) and a drag grip, and „Dodaj vidžet" opens the
+ * gallery. Every mutation answers with the WHOLE resulting layout, which is what
+ * gets stored in state — the renderer never patches an entry locally, because a
+ * move can re-space its neighbours.
  */
 export function DashboardPage({
   profileId,
   profileName,
+  registry,
   enabledModules,
   onOpenModule,
 }: DashboardPageProps) {
-  const tasksEnabled = enabledModules.has("tasks");
-  const calendarEnabled = enabledModules.has("calendar");
-  const studyEnabled = enabledModules.has("study");
-  const [tasks, setTasks] = useState<Task[] | null>(null);
-  const [events, setEvents] = useState<Event[] | null>(null);
-  const [documents, setDocuments] = useState<TrackedDocument[] | null>(null);
-  const [people, setPeople] = useState<Person[] | null>(null);
-  const [subjects, setSubjects] = useState<Subject[] | null>(null);
-  const [exams, setExams] = useState<Exam[] | null>(null);
-  // Učenje widget: a 365-day stats window backs the streak (mirrors StudyPage's
-  // `statsYear`), and today's completed focus sessions back the focus minutes
-  // (a running timer deliberately doesn't count — only `listFocusRange`'s
-  // persisted, completed sessions).
-  const [studyStats, setStudyStats] = useState<StudyStats | null>(null);
-  const [todayFocusSessions, setTodayFocusSessions] = useState<FocusSession[] | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [layout, setLayout] = useState<DashboardWidgetInstance[] | null>(null);
+  const [layoutFailed, setLayoutFailed] = useState(false);
+  const [layoutAttempt, setLayoutAttempt] = useState(0);
+  const [editing, setEditing] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  // A write that did not land, and the one thing the store does that the user
+  // could not have predicted: removing the last widget brings the default back.
+  const [actionFailed, setActionFailed] = useState(false);
+  const [defaultRestored, setDefaultRestored] = useState(false);
+  // The momentary "just landed" mark. Carries a sequence number so moving the
+  // same card twice re-runs the animation instead of leaving a finished one on.
+  const [landed, setLanded] = useState<{ instanceId: string; seq: number } | null>(null);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dropId, setDropId] = useState<string | null>(null);
   // The custom background (SET-006 / ADR-041). Loaded on its own, NOT joined to
-  // the widget fetch below: it is decoration, and decoration must never be able
-  // to hold up — or fail — the data the page exists to show.
+  // the layout below: it is decoration, and decoration must never be able to
+  // hold up — or fail — the data the page exists to show.
   const [dashboardSettings, setDashboardSettings] = useState<DashboardSettings | null>(null);
 
   useEffect(() => {
@@ -199,134 +325,139 @@ export function DashboardPage({
     let active = true;
     void (async () => {
       try {
-        const today = localTodayKey();
-        const [
-          nextTasks,
-          nextEvents,
-          nextDocuments,
-          nextPeople,
-          nextSubjects,
-          nextExams,
-          nextStudyStats,
-          nextTodayFocusSessions,
-        ] = await Promise.all([
-          tasksEnabled ? window.nexus.listTasks(profileId) : [],
-          calendarEnabled ? window.nexus.listEvents(profileId) : [],
-          calendarEnabled ? window.nexus.listDocuments(profileId) : [],
-          calendarEnabled ? window.nexus.listPeople(profileId) : [],
-          studyEnabled ? window.nexus.listSubjects(profileId) : [],
-          studyEnabled ? window.nexus.listExams(profileId) : [],
-          studyEnabled
-            ? window.nexus.studyStats(profileId, shiftDayKey(today, -365), today)
-            : EMPTY_STUDY_STATS,
-          studyEnabled ? window.nexus.listFocusRange(profileId, today, today) : [],
-        ]);
+        const next = await window.nexus.dashboardWidgets(profileId);
         if (!active) return;
-        setTasks(nextTasks);
-        setEvents(nextEvents);
-        setDocuments(nextDocuments);
-        setPeople(nextPeople);
-        setSubjects(nextSubjects);
-        setExams(nextExams);
-        setStudyStats(nextStudyStats);
-        setTodayFocusSessions(nextTodayFocusSessions);
+        setLayout(next);
+        setLayoutFailed(false);
       } catch (error) {
-        if (active) setFailed(true);
-        console.error("Nexus: failed to load dashboard:", error);
+        if (active) setLayoutFailed(true);
+        console.error("Nexus: failed to load the dashboard layout:", error);
       }
     })();
     return () => {
       active = false;
     };
-  }, [profileId, tasksEnabled, calendarEnabled, studyEnabled]);
+  }, [profileId, layoutAttempt]);
+
+  /**
+   * Runs one layout write and stores the layout it answers with. Every channel
+   * answers with the whole arrangement (ADR-045 section 1), so this is also the
+   * only place the layout is ever set from a mutation.
+   */
+  async function runLayout(
+    write: () => Promise<DashboardWidgetInstance[]>,
+  ): Promise<DashboardWidgetInstance[] | null> {
+    setActionFailed(false);
+    setDefaultRestored(false);
+    try {
+      const next = await write();
+      setLayout(next);
+      return next;
+    } catch (error) {
+      setActionFailed(true);
+      console.error("Nexus: failed to change the dashboard layout:", error);
+      return null;
+    }
+  }
+
+  function mark(instanceId: string): void {
+    setLanded((previous) => ({ instanceId, seq: (previous?.seq ?? 0) + 1 }));
+  }
+
+  async function moveWidget(instanceId: string, step: LayoutNeighbours): Promise<void> {
+    const next = await runLayout(() =>
+      window.nexus.moveDashboardWidget(profileId, instanceId, step.beforeId, step.afterId),
+    );
+    if (next !== null) mark(instanceId);
+  }
+
+  async function resizeWidget(instanceId: string, size: DashboardWidgetSize): Promise<void> {
+    await runLayout(() => window.nexus.setDashboardWidgetSize(profileId, instanceId, size));
+  }
+
+  async function removeWidget(instanceId: string): Promise<void> {
+    // Said out loud the moment it happens: no rows IS the default arrangement,
+    // so taking the last card off is also how a user resets (the store's
+    // documented semantics) — and nothing else on screen would explain the five
+    // cards that just came back.
+    const wasLast = layout !== null && layout.length === 1;
+    const next = await runLayout(() => window.nexus.removeDashboardWidget(profileId, instanceId));
+    if (next !== null && wasLast && next.length > 0) setDefaultRestored(true);
+  }
+
+  async function addWidget(widgetId: string, size: DashboardWidgetSize): Promise<void> {
+    const next = await runLayout(() => window.nexus.addDashboardWidget(profileId, widgetId, size));
+    const added = next?.at(-1);
+    if (added !== undefined) mark(added.instanceId);
+  }
+
+  // --- Drag & drop (edit mode) ----------------------------------------------
+  //
+  // Native HTML5 drag, the idiom the task list and the month grid already use:
+  // the dragged card travels as renderer state (the dataTransfer payload exists
+  // only because Firefox refuses to start a drag without one), and a drop target
+  // signals with an accent border and a soft background — never a glow. The grip
+  // is the card's title strip, so the drag image is set to the whole card:
+  // dragging a title around would say nothing about what is being moved.
+
+  function startDrag(event: DragEvent<HTMLElement>, instanceId: string): void {
+    setDraggedId(instanceId);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", instanceId);
+    const card = event.currentTarget.closest(".dash__widget");
+    if (card instanceof HTMLElement) {
+      const rect = card.getBoundingClientRect();
+      event.dataTransfer.setDragImage(card, event.clientX - rect.left, event.clientY - rect.top);
+    }
+  }
+
+  function endDrag(): void {
+    setDraggedId(null);
+    setDropId(null);
+  }
+
+  function dragOverCard(event: DragEvent<HTMLElement>, instanceId: string): void {
+    if (draggedId === null || draggedId === instanceId) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    if (dropId !== instanceId) setDropId(instanceId);
+  }
+
+  function dragLeaveCard(event: DragEvent<HTMLElement>, instanceId: string): void {
+    // Only when the pointer really left this card — a `dragleave` fired by
+    // moving onto a child would otherwise drop the highlight mid-hover.
+    if (dropId === instanceId && !event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setDropId(null);
+    }
+  }
+
+  function dropOnCard(
+    event: DragEvent<HTMLElement>,
+    order: readonly string[],
+    instanceId: string,
+  ): void {
+    event.preventDefault();
+    const dragged = draggedId;
+    endDrag();
+    if (dragged === null) return;
+    const step = moveNeighbours(order, order.indexOf(dragged), order.indexOf(instanceId));
+    if (step !== null) void moveWidget(dragged, step);
+  }
+
+  function leaveEdit(): void {
+    setEditing(false);
+    setGalleryOpen(false);
+    setActionFailed(false);
+    setDefaultRestored(false);
+    endDrag();
+  }
 
   const now = new Date();
-  const todayKey = localDayKey(now);
   const dateLine = new Intl.DateTimeFormat("sr-Latn", {
     weekday: "long",
     day: "numeric",
     month: "long",
   }).format(now);
-
-  // All eight resolve together, so a single null is enough to mean "loading".
-  const loading =
-    tasks === null ||
-    events === null ||
-    documents === null ||
-    people === null ||
-    subjects === null ||
-    exams === null ||
-    studyStats === null ||
-    todayFocusSessions === null;
-
-  // Danas — today's events (chronological), then whose birthday it is, then
-  // tasks due today. An all-day event's bare "YYYY-MM-DD" sorts before any
-  // timed start, matching the store. Recurring masters are expanded over today
-  // alone, and each item's `event` is that occurrence's own copy, so the time
-  // shown is the time it happens at.
-  const todayItems = buildCalendarItems(
-    { events: events ?? [], tasks: [], exams: [], blocks: [], subjects: [], people: people ?? [] },
-    TODAY_SOURCES,
-    { from: todayKey, to: todayKey },
-  )
-    .filter((item) => item.startKey === todayKey)
-    .sort((a, b) => a.sortKey.localeCompare(b.sortKey) || a.id.localeCompare(b.id));
-  // Only events and birthdays were asked for; the narrowings are what say so in the types.
-  const todayEvents = todayItems.filter(
-    (item): item is CalendarItem & { kind: "event" } => item.kind === "event",
-  );
-  const todayBirthdays = todayItems.filter(
-    (item): item is CalendarItem & { kind: "birthday" } => item.kind === "birthday",
-  );
-  const todayTasks = (tasks ?? []).filter(
-    (task) => !task.done && task.dueDate != null && task.dueDate.slice(0, 10) === todayKey,
-  );
-  const hasToday =
-    todayEvents.length > 0 || todayBirthdays.length > 0 || todayTasks.length > 0;
-
-  // Predstojeći zadaci — next 5 active tasks by due date (nulls last), then age.
-  const upcomingTasks = (tasks ?? [])
-    .filter((task) => !task.done)
-    .sort((a, b) => {
-      if (a.dueDate == null && b.dueDate == null) return a.createdAt.localeCompare(b.createdAt);
-      if (a.dueDate == null) return 1;
-      if (b.dueDate == null) return -1;
-      return a.dueDate.localeCompare(b.dueDate) || a.createdAt.localeCompare(b.createdAt);
-    })
-    .slice(0, 5);
-
-  // Dokumenta koja ističu — anything past the reminder threshold, soonest first.
-  const expiringDocuments = (documents ?? [])
-    .filter((doc) => doc.status !== "ok")
-    .sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry || a.id.localeCompare(b.id));
-
-  // Ispiti — the next upcoming exams (today or later), soonest first, capped at
-  // 5. An orphaned exam (its subject was soft-deleted) is skipped rather than
-  // shown without a name.
-  const subjectsById = new Map((subjects ?? []).map((subject) => [subject.id, subject] as const));
-  const upcomingExams = (exams ?? [])
-    .map((exam) => ({
-      exam,
-      subject: subjectsById.get(exam.subjectId),
-      days: daysUntilExam(exam.examDate),
-    }))
-    .filter(
-      (entry): entry is { exam: Exam; subject: Subject; days: number } =>
-        entry.subject != null && entry.days >= 0,
-    )
-    .sort((a, b) => a.days - b.days || a.exam.id.localeCompare(b.exam.id))
-    .slice(0, 5);
-
-  // Učenje — the study streak (same 365-day-window rule as StudyPage) and
-  // today's completed focus minutes; either can be zero independently, and
-  // the widget shows the gentle zero copy only when both are.
-  const streak = studyStats ? computeStreak(studyStats.activityDays, todayKey) : null;
-  const focusMinutesToday = (todayFocusSessions ?? []).reduce(
-    (total, session) => total + focusSessionMinutes(session),
-    0,
-  );
-  const hasStreak = streak != null && streak.current > 0;
-  const hasFocusToday = focusMinutesToday > 0;
 
   // Two layers behind the content when a background is set (ADR-041 section 5):
   // the image itself, cover/centered, and a scrim whose fill IS the theme's own
@@ -337,6 +468,20 @@ export function DashboardPage({
     dashboardSettings !== null && dashboardSettings.backgroundHash !== null
       ? { hash: dashboardSettings.backgroundHash, dim: dashboardSettings.backgroundDim }
       : null;
+
+  // What actually draws, in layout order. A placement whose widget this build
+  // does not publish, or whose module is switched off, resolves to nothing and
+  // is silently skipped — it stays in storage and comes back with its module.
+  const placed: PlacedWidget[] = (layout ?? []).flatMap((entry) => {
+    const contract = registry.findWidget(entry.widgetId);
+    const renderer = DASHBOARD_WIDGETS[entry.widgetId];
+    return contract !== undefined && renderer !== undefined && renderer.visible(enabledModules)
+      ? [{ entry, contract, Body: renderer.Body }]
+      : [];
+  });
+  const order = placed.map((item) => item.entry.instanceId);
+  const placedWidgetIds = new Set((layout ?? []).map((entry) => entry.widgetId));
+  const s = strings.dashboard;
 
   return (
     <div className={`dash${background !== null ? " dash--framed" : ""}`}>
@@ -350,181 +495,121 @@ export function DashboardPage({
           <div className="dash__scrim" style={{ opacity: background.dim / 100 }} aria-hidden="true" />
         </>
       )}
-      <header className="dash__greeting">
-        <h1 className="dash__hello">{greeting(profileName, now.getHours())}</h1>
-        <p className="dash__date">{dateLine}</p>
-      </header>
-
-      {failed ? (
-        <EmptyState
-          title={strings.dashboard.errorTitle}
-          description={strings.dashboard.errorDescription}
-        />
-      ) : loading ? (
-        <p className="app__muted">{strings.app.loading}</p>
-      ) : (
-        <div className="dash__grid">
-          {(tasksEnabled || calendarEnabled) && (
-            <Card title={strings.dashboard.today.title}>
-              {hasToday ? (
-                <div className="dash__list">
-                  {todayEvents.map((item) => (
-                    <DashRow
-                      key={item.id}
-                      onClick={() => onOpenModule("calendar")}
-                      leading={<span className="dash__time">{formatEventTime(item.event)}</span>}
-                    >
-                      <span className="dash__row-title">{item.event.title}</span>
-                    </DashRow>
-                  ))}
-                  {todayBirthdays.map((item) => (
-                    <DashRow
-                      key={item.id}
-                      onClick={() => onOpenModule("calendar")}
-                      leading={
-                        <span className="dash__time dash__time--tag">
-                          {strings.dashboard.today.personTag[item.person.kind]}
-                        </span>
-                      }
-                      trailing={
-                        item.age !== null ? (
-                          <Chip variant="data">
-                            {item.age} {strings.calendar.people.yearsUnit}
-                          </Chip>
-                        ) : undefined
-                      }
-                    >
-                      <span className="dash__row-title">{item.person.name}</span>
-                    </DashRow>
-                  ))}
-                  {todayTasks.map((task) => (
-                    <DashRow
-                      key={`task-${task.id}`}
-                      onClick={() => onOpenModule("tasks")}
-                      leading={
-                        <span className="dash__time dash__time--tag">
-                          {strings.dashboard.today.taskTag}
-                        </span>
-                      }
-                    >
-                      <span className="dash__row-title">{task.title}</span>
-                    </DashRow>
-                  ))}
-                </div>
-              ) : (
-                <p className="dash__empty">{strings.dashboard.today.empty}</p>
-              )}
-            </Card>
-          )}
-
-          {tasksEnabled && (
-            <Card title={strings.dashboard.upcoming.title}>
-              {upcomingTasks.length > 0 ? (
-                <div className="dash__list">
-                  {upcomingTasks.map((task) => (
-                    <DashRow
-                      key={task.id}
-                      onClick={() => onOpenModule("tasks")}
-                      trailing={
-                        task.dueDate ? (
-                          <Chip variant="data">{formatDueDate(task.dueDate)}</Chip>
-                        ) : undefined
-                      }
-                    >
-                      <span className="dash__row-title">{task.title}</span>
-                    </DashRow>
-                  ))}
-                </div>
-              ) : (
-                <p className="dash__empty">{strings.dashboard.upcoming.empty}</p>
-              )}
-            </Card>
-          )}
-
-          {calendarEnabled && (
-            <Card title={strings.dashboard.expiring.title}>
-              {expiringDocuments.length > 0 ? (
-                <div className="dash__list">
-                  {expiringDocuments.map((doc) => (
-                    <DashRow
-                      key={doc.id}
-                      onClick={() => onOpenModule("calendar")}
-                      leading={
-                        <Chip variant={STATUS_VARIANT[doc.status]}>
-                          {strings.documents.status[doc.status]}
-                        </Chip>
-                      }
-                      trailing={
-                        <span className="dash__days">{daysUntilLabel(doc.daysUntilExpiry)}</span>
-                      }
-                    >
-                      <span className="dash__doc">
-                        <span className="dash__doc-type">{strings.documents.type[doc.docType]}</span>
-                        <span className="dash__doc-label">{doc.label}</span>
-                      </span>
-                    </DashRow>
-                  ))}
-                </div>
-              ) : (
-                <p className="dash__empty">{strings.dashboard.expiring.empty}</p>
-              )}
-            </Card>
-          )}
-
-          {studyEnabled && (
-            <Card title={strings.study.dashboardTitle}>
-              {upcomingExams.length > 0 ? (
-                <div className="dash__list">
-                  {upcomingExams.map(({ exam, subject, days }) => (
-                    <DashRow
-                      key={exam.id}
-                      onClick={() => onOpenModule("study")}
-                      trailing={
-                        <Chip variant={examCountdownVariant(days)}>{examCountdownLabel(days)}</Chip>
-                      }
-                    >
-                      <span className="dash__exam">
-                        <span className="dash__exam-subject">{subject.name}</span>
-                        <span className="dash__exam-meta">
-                          <span>{strings.study.examType[exam.examType]}</span>
-                          <span>{formatExamDate(exam.examDate)}</span>
-                        </span>
-                      </span>
-                    </DashRow>
-                  ))}
-                </div>
-              ) : (
-                <p className="dash__empty">{strings.study.dashboardEmpty}</p>
-              )}
-            </Card>
-          )}
-
-          {studyEnabled && (
-            <Card title={strings.study.dashboardStudyTitle}>
-              {hasStreak || hasFocusToday ? (
-                <div className="dash__list">
-                  <DashRow onClick={() => onOpenModule("study")}>
-                    <span className="dash__study">
-                      {hasStreak && streak && (
-                        <span className="dash__study-line">
-                          {strings.study.streakLabel}: {streak.current}{" "}
-                          {dayUnit(streak.current, strings.study.streakUnitOne, strings.study.streakUnitMany)}
-                        </span>
-                      )}
-                      {hasFocusToday && (
-                        <span className="dash__study-line">
-                          {strings.study.dashboardFocusTodayLabel}: {formatDurationMinutes(focusMinutesToday)}
-                        </span>
-                      )}
-                    </span>
-                  </DashRow>
-                </div>
-              ) : (
-                <p className="dash__empty">{strings.study.streakZero}</p>
-              )}
-            </Card>
+      <div className="dash__topbar">
+        <header className="dash__greeting">
+          <h1 className="dash__hello">{greeting(profileName, now.getHours())}</h1>
+          <p className="dash__date">{dateLine}</p>
+        </header>
+        <div className="dash__tools">
+          {editing ? (
+            <>
+              <Button size="sm" onClick={() => setGalleryOpen(true)}>
+                {s.edit.add}
+              </Button>
+              <Button size="sm" onClick={leaveEdit}>
+                {s.edit.done}
+              </Button>
+            </>
+          ) : (
+            <Button size="sm" onClick={() => setEditing(true)}>
+              {s.edit.enter}
+            </Button>
           )}
         </div>
+      </div>
+
+      {(layoutFailed || actionFailed || defaultRestored) && (
+        <div className="dash__notices">
+          {layoutFailed && (
+            <p className="dash__status" role="alert">
+              {s.layoutError}
+              <Button size="sm" onClick={() => setLayoutAttempt((value) => value + 1)}>
+                {s.widget.retry}
+              </Button>
+            </p>
+          )}
+          {actionFailed && (
+            <p className="dash__status" role="alert">
+              {s.edit.failed}
+            </p>
+          )}
+          {defaultRestored && (
+            <p className="dash__status" role="status">
+              {s.edit.defaultRestored}
+            </p>
+          )}
+        </div>
+      )}
+
+      {layout !== null && (
+        <div className="dash__grid">
+          {placed.map(({ entry, contract, Body }, index) => {
+            const title = widgetTitle(contract);
+            const classes = ["dash__widget"];
+            if (draggedId === entry.instanceId) classes.push("dash__widget--dragging");
+            if (dropId === entry.instanceId) classes.push("dash__widget--drop");
+            // In edit mode the title moves into the strip below, beside the "⋯",
+            // so the card's own caption is withheld rather than drawn twice.
+            return (
+              <Card
+                key={entry.instanceId}
+                className={classes.join(" ")}
+                style={{ "--dash-span": DASHBOARD_WIDGET_SPANS[entry.size] } as CSSProperties}
+                {...(editing ? {} : { title })}
+                onDragOver={editing ? (event) => dragOverCard(event, entry.instanceId) : undefined}
+                onDragLeave={editing ? (event) => dragLeaveCard(event, entry.instanceId) : undefined}
+                onDrop={editing ? (event) => dropOnCard(event, order, entry.instanceId) : undefined}
+              >
+                {editing && (
+                  <div className="dash__widget-strip">
+                    <span
+                      className="nx-card__title dash__widget-grip"
+                      draggable
+                      title={s.edit.dragHint}
+                      onDragStart={(event) => startDrag(event, entry.instanceId)}
+                      onDragEnd={endDrag}
+                    >
+                      {title}
+                    </span>
+                    <WidgetMenu
+                      title={title}
+                      contract={contract}
+                      size={entry.size}
+                      up={moveNeighbours(order, index, index - 1)}
+                      down={moveNeighbours(order, index, index + 1)}
+                      onMove={(step) => void moveWidget(entry.instanceId, step)}
+                      onResize={(size) => void resizeWidget(entry.instanceId, size)}
+                      onRemove={() => void removeWidget(entry.instanceId)}
+                    />
+                  </div>
+                )}
+                <Body
+                  profileId={profileId}
+                  enabledModules={enabledModules}
+                  onOpenModule={onOpenModule}
+                />
+                {landed?.instanceId === entry.instanceId && (
+                  <span
+                    key={landed.seq}
+                    className="dash__widget-mark"
+                    aria-hidden="true"
+                    onAnimationEnd={() => setLanded(null)}
+                  />
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {galleryOpen && (
+        <WidgetGallery
+          registry={registry}
+          enabledModules={enabledModules}
+          placed={placedWidgetIds}
+          onAdd={(widgetId, size) => void addWidget(widgetId, size)}
+          onClose={() => setGalleryOpen(false)}
+        />
       )}
     </div>
   );

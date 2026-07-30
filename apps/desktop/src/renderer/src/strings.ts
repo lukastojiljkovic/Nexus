@@ -174,8 +174,53 @@ export const strings = {
       title: "Dokumenta koja ističu",
       empty: "Sva dokumenta su u redu ✅",
     },
-    errorTitle: "Kontrolna tabla nije dostupna",
-    errorDescription: "Podaci se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
+    /**
+     * A single widget's own boundary (ADR-045 section 4): each card loads and
+     * fails alone, so this copy is per-card and deliberately says nothing about
+     * the page — the four cards beside it are fine.
+     */
+    widget: {
+      error: "Podaci se ne mogu učitati.",
+      retry: "Pokušaj ponovo",
+    },
+    /** The layout itself could not be read — the one failure that is the page's own. */
+    layoutError: "Raspored kartica se ne može učitati.",
+    /** Edit mode (ADR-045 section 5) — the header actions and each card's „⋯“ menu. */
+    edit: {
+      enter: "Uredi",
+      done: "Gotovo",
+      add: "Dodaj vidžet",
+      /** Names one card's „⋯“; the widget's own title is appended, since five of them share the page. */
+      menuLabel: "Radnje nad karticom",
+      moveUp: "Pomeri gore",
+      moveDown: "Pomeri dole",
+      sizeLabel: "Veličina",
+      /** The three presets, named for how wide they draw — never by their stored letter. */
+      size: {
+        S: "Mala",
+        M: "Srednja",
+        L: "Velika",
+      },
+      remove: "Ukloni",
+      /** Tooltip on the title strip, which is also the drag grip. */
+      dragHint: "Prevuci da promeniš redosled",
+      failed: "Promena rasporeda nije uspela. Pokušaj ponovo.",
+      /**
+       * Removing the last card leaves no rows, and no rows IS the default
+       * arrangement — so the five come back. Said the moment it happens,
+       * because nothing else on screen would explain them.
+       */
+      defaultRestored: "Uklonjena je poslednja kartica — vraćen je podrazumevani raspored.",
+    },
+    /** „Dodaj vidžet“ — the catalogue of what the enabled modules publish. */
+    gallery: {
+      title: "Dodaj vidžet",
+      empty: "Nijedan uključen modul nema kartice.",
+      add: "Dodaj",
+      /** Beside a widget already on the layout; v1 places each of them once. */
+      added: "već dodat",
+      close: "Zatvori",
+    },
   },
 
   modulePlaceholder: {

@@ -2301,6 +2301,23 @@ button.cal__grid-event--dragging {
   background: var(--nx-bg);
 }
 
+/* Header row: the greeting on the left, the edit affordances on the right
+   (ADR-045 section 5). A wrapper rather than a change to .dash__greeting, so
+   the background layers keep the DOM-order stacking they were built on — the
+   two layers still come first and every content child still paints above. */
+.dash__topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nx-space-4);
+  flex-wrap: wrap;
+}
+.dash__tools {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+
 /* Greeting header — the personalized "šta mi je danas bitno?" line. */
 .dash__greeting {
   display: flex;
@@ -2322,12 +2339,150 @@ button.cal__grid-event--dragging {
   text-transform: uppercase;
 }
 
-/* Widget grid — auto-fitting cards that reflow to one column when narrow. */
+/* Quiet page-level lines: a layout read that failed (with its retry), a write
+   that did not land, and the one thing the store does that a user could not
+   predict — the default arrangement coming back. Never a dialog. */
+.dash__notices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.dash__status {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+/* Widget grid — an AUTHORED 6-column grid (ADR-045 section 1), replacing the
+   old auto-fit: a size preset is a whole number of columns (S=2 / M=3 / L=6),
+   which only means something against a fixed column count. The span rides in
+   as `--dash-span` because it is layout data the user stored, not a design
+   value — the same idiom as the task rail's `--task-depth`. */
 .dash__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: var(--nx-space-4);
   align-items: start;
+}
+.dash__widget {
+  grid-column: span var(--dash-span, 3);
+  /* Contains the momentary "just landed" mark, and lets a dragged card lift
+     above its neighbours. */
+  position: relative;
+  min-width: 0;
+}
+
+/* The single narrow-window collapse, and this codebase's FIRST media query.
+   There are no breakpoint tokens — none of the other pages needed one, because
+   none of them lets the user choose a width. This one does: below roughly this
+   width the main column (window − 220px rail − 48px padding) leaves a two-column
+   "Mala" card under ~190px, which is narrower than a Danas row's time gutter
+   plus a title. Order is kept: the grid draws in list order, so one column is
+   the same list. */
+@media (max-width: 900px) {
+  .dash__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dash__widget {
+    grid-column: auto;
+  }
+}
+
+/* Edit mode (ADR-045 section 5): the card's caption becomes a strip — the same
+   .nx-card__title type, now beside the "⋯" menu and doubling as the drag grip.
+   The strip carries the caption's bottom margin so the body sits where it did. */
+.dash__widget-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  margin-bottom: var(--nx-space-3);
+}
+.dash__widget-strip .nx-card__title {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash__widget-grip {
+  cursor: grab;
+}
+.dash__widget-menu {
+  flex: none;
+}
+
+/* Drop target = accent border + soft background, the house recipe — never a
+   glow. The card already has a 1px border, so recolouring it shifts nothing. */
+.dash__widget--drop {
+  border-color: var(--nx-accent);
+  background: var(--nx-accent-soft);
+}
+/* The card being dragged, on the .cal__grid-event--dragging precedent: the same
+   accent border, enough transparency to read what it is passing over, and a
+   stacking order that keeps the ghost above the cards it crosses. */
+.dash__widget--dragging {
+  z-index: 2;
+  opacity: 0.9;
+  border-color: var(--nx-accent);
+  cursor: grabbing;
+}
+
+/* The momentary "just landed" mark — an accent ring over the card that moved,
+   fading out by itself. An animation and not a transition for .nx-revealed's
+   reason: a class that is added and then removed can only transition IN. Its
+   own element, keyed by the move, so moving the same card twice re-runs it.
+   `inset: -1px` lays the ring exactly over the card's own border rather than
+   inside it, so nothing appears to grow. */
+.dash__widget-mark {
+  position: absolute;
+  inset: -1px;
+  border: 1px solid var(--nx-accent);
+  border-radius: inherit;
+  pointer-events: none;
+  animation: dash-landed 900ms var(--nx-motion-ease) forwards;
+}
+@keyframes dash-landed {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* One widget's own loading placeholder (ADR-045 section 4) — three bars on the
+   surface-alt fill. Deliberately still: a shimmer would be the loudest thing on
+   a page whose whole point is calm. */
+.dash__skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-1) 0;
+}
+.dash__skeleton-line {
+  height: 10px;
+  border-radius: var(--nx-radius-xs);
+  background: var(--nx-surface-alt);
+}
+.dash__skeleton-line:nth-child(2) {
+  width: 82%;
+}
+.dash__skeleton-line:nth-child(3) {
+  width: 64%;
+}
+
+/* One widget's isolated failure: this card could not read, and the way to ask
+   again. No EmptyState — that block would say the page is empty, and it isn't. */
+.dash__failure {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nx-space-2);
 }
 
 /* Widget rows are read-only deep-links: a reset button wrapping a ListRow, so
@@ -5949,6 +6104,45 @@ button.cal__grid-event--dragging {
 }
 .shortcuts-dialog__row-label {
   min-width: 0;
+}
+
+/* „Dodaj vidžet" (ADR-045 section 5) — the same house dialog recipe again, and
+   the same treatment the shortcuts reference gets: the recur-dialog classes
+   outright, with only a width and a scrolling body of its own. */
+.dash-gallery__panel.recur-dialog__panel {
+  width: min(460px, 92vw);
+  max-height: min(600px, 84vh);
+}
+.dash-gallery__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+  overflow-y: auto;
+}
+.dash-gallery__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.dash-gallery__row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-1) 0;
+}
+.dash-gallery__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body);
+}
+/* Why the button beside it is disabled — stated, not left to be inferred. */
+.dash-gallery__added {
+  flex: none;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
 }
 
 /* The app's single <kbd> recipe, shared by the reference and the Settings card:
