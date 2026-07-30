@@ -1,14 +1,24 @@
 import { defineConfig } from "vitest/config";
 
 /**
- * Vitest for the Electron MAIN process only. `apps/desktop` had no test
- * harness before this; `src/main` modules that import `electron` still cannot
- * be tested here (there is no Electron runtime under Vitest), so the rule this
- * config encodes is: a main-process module worth testing is one written
- * electron-free, and `include` deliberately reaches no further than
- * `src/main`, since the renderer would need a DOM environment and its own
- * setup.
+ * Vitest for `apps/desktop`, NODE environment only — there is no DOM library
+ * in this repo and none is being added, so what runs here is exactly what can
+ * run without one. Two roots are included, on the same rule:
+ *
+ * - `src/main` — the Electron main process. A main-process module worth
+ *   testing is one written electron-free; a module that imports `electron`
+ *   still cannot be tested here (there is no Electron runtime under Vitest).
+ * - `src/renderer/src` — the renderer's PURE and storage-backed logic: the
+ *   date/duration formatters, the calendar source merge, the search-command
+ *   registry, the module registry, the template merge, and the
+ *   `localStorage`-backed preference modules. The browser globals those
+ *   modules touch (`localStorage`, `document.documentElement`,
+ *   `window.matchMedia`, `window.nexus`) are stubbed per test file with
+ *   `vi.stubGlobal`, which is what makes a DOM environment unnecessary.
+ *   React components, the TipTap/ProseMirror extensions and the `reveal.ts`
+ *   hook are deliberately NOT covered here: they need a real document and a
+ *   React renderer, and a DOM library would be the only way to provide one.
  */
 export default defineConfig({
-  test: { include: ["src/main/**/*.test.ts"] },
+  test: { include: ["src/main/**/*.test.ts", "src/renderer/src/**/*.test.ts"] },
 });
