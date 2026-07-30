@@ -113,10 +113,8 @@ export function MathText({ text, className }: MathTextProps) {
         }
         const html = renderMath(segment.value, segment.kind === "display");
         return segment.kind === "display" ? (
-          // eslint-disable-next-line react/no-danger
           <div key={index} className="study__katex" dangerouslySetInnerHTML={{ __html: html }} />
         ) : (
-          // eslint-disable-next-line react/no-danger
           <span key={index} className="study__katex" dangerouslySetInnerHTML={{ __html: html }} />
         );
       }),

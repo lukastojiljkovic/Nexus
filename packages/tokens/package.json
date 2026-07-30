@@ -16,7 +16,8 @@
   ],
   "scripts": {
     "build": "node build.mjs && tsc -p tsconfig.json",
-    "typecheck": "node build.mjs && tsc -p tsconfig.json --noEmit"
+    "typecheck": "node build.mjs && tsc -p tsconfig.json --noEmit",
+    "lint": "eslint ."
   },
   "devDependencies": {
     "typescript": "^5.8.0"

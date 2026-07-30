@@ -1,5 +1,9 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
+  // The one shared ESLint flat config lives at the repo root, outside every
+  // package, so no package's own inputs can hash it. Naming it here is what
+  // makes a rule change invalidate the lint cache instead of replaying it.
+  "globalDependencies": ["eslint.config.mjs"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -8,7 +12,9 @@
     "typecheck": {
       "dependsOn": ["^build"]
     },
-    "lint": {},
+    "lint": {
+      "dependsOn": ["^build"]
+    },
     "test": {
       "dependsOn": ["^build"]
     }

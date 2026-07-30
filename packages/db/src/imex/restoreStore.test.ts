@@ -55,7 +55,6 @@ import type {
   NotificationRecord,
   Person,
   RestoredNoteDerived,
-  RestoreProfileInput,
   StudyPlan,
   Subject,
   Task,

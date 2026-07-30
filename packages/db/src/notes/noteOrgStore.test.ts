@@ -58,7 +58,6 @@ function fixture(): Fixture {
 const T0 = "2026-07-13T10:00:00.000Z";
 const T1 = "2026-07-13T10:01:00.000Z";
 const T2 = "2026-07-13T10:02:00.000Z";
-const T3 = "2026-07-13T10:03:00.000Z";
 
 describe("NoteOrgStore — folders", () => {
   it("creates a folder with a validated name and colour", () => {

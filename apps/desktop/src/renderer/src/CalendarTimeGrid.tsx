@@ -236,8 +236,8 @@ export function CalendarTimeGrid({
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-    // writeDrag is a stable closure over two refs and one setter.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // writeDrag is a stable closure over two refs and one setter, and the rule
+    // agrees — the dependency array is complete as written.
   }, [dragging]);
 
   /** True exactly once per drag: the click that a finished gesture still fires must do nothing. */

@@ -521,7 +521,6 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     reveal(deck.id);
     scrollRevealedIntoView(studyRowDomId(deck.id));
     onIntentHandled?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intent, subjects, exams, decks, cards, route, archivedOpen, reveal, onIntentHandled]);
 
   // Live elapsed readout for a running focus timer: ticks once a second from
