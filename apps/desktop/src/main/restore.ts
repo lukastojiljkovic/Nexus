@@ -406,8 +406,19 @@ export async function previewRestore(
     return { status: "invalid", problems: parsed.problems.map(toRestoreProblem) };
   }
 
-  const targetProfile = deps.getProfile(profileId);
-  const current = countProfileModules(gatherProfileData(deps, profileId));
+  let targetProfile: { name: string };
+  let current: ReturnType<typeof countProfileModules>;
+  try {
+    targetProfile = deps.getProfile(profileId);
+    current = countProfileModules(gatherProfileData(deps, profileId));
+  } catch (error) {
+    // `picked.ready` is still null, so nothing else holds a reference to this
+    // archive: letting the throw through unclosed would leak the handle and
+    // keep the user's file locked on Windows with no way left to release it —
+    // `previewImport`'s own guard, mirrored.
+    await archive.close().catch(() => {});
+    throw error;
+  }
   const incoming = countProfileModules(parsed.data);
   const warnings = parsed.problems.filter((problem) => problem.severity === "warning").map(toRestoreProblem);
   const token = randomBytes(16).toString("hex");

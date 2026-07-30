@@ -33,10 +33,9 @@ export interface RestoreProfileInput {
  * either added here or explicitly allow-listed as exempt). Ten tables carry no
  * `profile_id` of their own and are scoped through their parent instead
  * (`document_renewals` through `tracked_documents`; `task_sections` through
- * `task_lists`; `task_tag_links` and `task_attachments` through `tasks`; the six
- * `note_*` child tables through `notes`) — see `wipeSqlFor` below.
- * `task_lists`; `task_tag_links` and `task_dependencies` through `tasks`; the
- * six `note_*` child tables through `notes`) — see `wipeSqlFor` below.
+ * `task_lists`; `task_tag_links`, `task_attachments` and `task_dependencies`
+ * through `tasks`; the six `note_*` child tables through `notes`) — see
+ * `wipeSqlFor` below.
  */
 export const RESTORE_WIPE_TABLES = [
   "document_renewals",
@@ -52,15 +51,11 @@ export const RESTORE_WIPE_TABLES = [
   "events",
   "people",
   "notifications",
-  // The tag links and attachments first, then the tasks they hang off, then the
-  // sections, lists and tags those point at — children before parents, all the
-  // way down.
+  // The tag links, attachments and dependency edges first, then the tasks they
+  // hang off, then the sections, lists and tags those point at — children
+  // before parents, all the way down.
   "task_tag_links",
   "task_attachments",
-  // The tag links and dependency edges first, then the tasks they hang off, then
-  // the sections, lists and tags those point at — children before parents, all
-  // the way down.
-  "task_tag_links",
   "task_dependencies",
   "tasks",
   "task_sections",
