@@ -185,7 +185,7 @@ export type {
 export { DeckStore } from "./study/deckStore.js";
 export type { CreateDeckInput, Deck, UpdateDeckFields } from "./study/deckStore.js";
 
-export { CardStore, CARD_KINDS, CARD_RATINGS } from "./study/cardStore.js";
+export { CardStore, CARD_KINDS, CARD_RATINGS, MAX_QUEUE_DECK_IDS } from "./study/cardStore.js";
 export type {
   Card,
   CardKind,

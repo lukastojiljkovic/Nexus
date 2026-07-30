@@ -2878,6 +2878,13 @@ button.cal__grid-event--dragging {
   justify-content: space-between;
   gap: var(--nx-space-2);
 }
+/* „Vežbaj" beside „Uči sve": one group opposite the heading, so the header keeps
+   its two-part balance instead of spreading three items across the row. */
+.study__decks-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
 .study__decks-title {
   margin: 0;
   font-size: var(--nx-font-size-caption);
@@ -3472,6 +3479,12 @@ button.cal__grid-event--dragging {
   box-shadow: var(--nx-shadow);
   text-align: center;
   font-size: var(--nx-font-size-title);
+}
+/* Which špil the card in front of you belongs to (ADR-047), shown only when a
+   session actually spans more than one. Quiet and above the question — it is
+   context for the card, never part of it. */
+.review__deck {
+  align-self: center;
 }
 .review__divider {
   width: 100%;
@@ -6149,6 +6162,58 @@ button.cal__grid-event--dragging {
   flex: none;
   color: var(--nx-text-muted);
   font-size: var(--nx-font-size-body-sm);
+}
+
+/* „Vežbaj" — the interleaved-practice selection (ADR-047). The same treatment
+   the widget gallery gets: the recur-dialog classes outright, with only a width
+   and a scrolling špil list of its own. Two actions rather than one, hence the
+   only other override here. */
+.study-practice__panel.recur-dialog__panel {
+  width: min(460px, 92vw);
+  max-height: min(600px, 84vh);
+}
+.study-practice__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  overflow-y: auto;
+  /* Without this a flex item refuses to shrink below its content, and the panel
+     grows past its max-height instead of the list scrolling. */
+  min-height: 0;
+}
+.study-practice__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-1) 0;
+}
+/* The name takes the room; the two count chips never wrap away from it, and a
+   long špil name truncates instead of pushing them off the row. */
+.study-practice__deck.nx-checkbox {
+  flex: 1;
+  min-width: 0;
+}
+.study-practice__deck .nx-checkbox__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.study-practice__counts {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+/* The filter sits apart from the list it narrows: a hairline above it says it
+   is about the whole selection, not about the last špil in the list. */
+.study-practice__problems.nx-checkbox {
+  display: flex;
+  padding-top: var(--nx-space-3);
+  border-top: 1px solid var(--nx-border);
+}
+.study-practice__actions.recur-dialog__actions {
+  gap: var(--nx-space-2);
 }
 
 /* The app's single <kbd> recipe, shared by the reference and the Settings card:

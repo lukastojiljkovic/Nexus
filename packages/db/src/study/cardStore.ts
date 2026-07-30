@@ -131,10 +131,27 @@ export interface SyncFromNoteResult {
   removed: number;
 }
 
-/** Optional scope for `dueQueue`: at most one of `deckId`/`subjectId`, plus a cap on New cards. */
+/**
+ * Optional scope for `dueQueue`: at most one of `deckId`/`subjectId`/`deckIds`
+ * — supplying two is refused, not silently resolved in favour of one — plus the
+ * problems-only filter and a cap on New cards.
+ */
 export interface DueQueueOptions {
   deckId?: string;
   subjectId?: string;
+  /**
+   * A SET of decks to draw from (ADR-047, interleaved practice): the topic-shaped
+   * selection the practice dialog builds. Ids that name no live deck of this
+   * profile simply match nothing — a selection assembled in the renderer can go
+   * stale between opening the dialog and pressing „Počni".
+   */
+  deckIds?: readonly string[];
+  /**
+   * Keep only problem cards — rows with a worked solution (ADR-046). It cannot
+   * be expressed as a `kind` filter: a problem card's kind is `basic`, and the
+   * steps column is what makes it a problem.
+   */
+  problemsOnly?: boolean;
   newLimit?: number;
 }
 
@@ -227,10 +244,17 @@ interface SourceCardRow {
   source_block_key: string | null;
 }
 
-const CARD_COLUMNS =
-  `id, profile_id, deck_id, front, back, source_note_id, source_block_key, kind, cloze_text, ` +
-  `cloze_ordinal, problem_steps, due, stability, difficulty, elapsed_days, scheduled_days, ` +
-  `learning_steps, reps, lapses, state, last_review, created_at, updated_at`;
+const CARD_COLUMN_NAMES = [
+  "id", "profile_id", "deck_id", "front", "back", "source_note_id", "source_block_key",
+  "kind", "cloze_text", "cloze_ordinal", "problem_steps", "due", "stability", "difficulty",
+  "elapsed_days", "scheduled_days", "learning_steps", "reps", "lapses", "state",
+  "last_review", "created_at", "updated_at",
+] as const;
+
+const CARD_COLUMNS = CARD_COLUMN_NAMES.join(", ");
+
+/** The same list qualified for the queue's `cards c JOIN decks d` (see `queueSql`). */
+const QUEUE_CARD_COLUMNS = CARD_COLUMN_NAMES.map((name) => `c.${name}`).join(", ");
 
 const REVIEW_LOG_FULL_COLUMNS =
   "id, profile_id, card_id, rating, state, due, stability, difficulty, elapsed_days, " +
@@ -243,6 +267,41 @@ const REVIEW_LOG_COLUMNS =
 const MAX_TEXT_LENGTH = 10000;
 const DEFAULT_NEW_LIMIT = 20;
 const MAX_NEW_LIMIT = 100;
+
+/**
+ * The most decks one `deckIds` practice scope may name (ADR-047). The dialog
+ * offers a single subject's decks, so this is headroom rather than a limit
+ * anyone meets — it exists so an untrusted caller cannot ask for an unbounded
+ * `IN (…)` placeholder run.
+ */
+export const MAX_QUEUE_DECK_IDS = 100;
+
+/**
+ * Both queue sections read `cards` JOINED to `decks`, so a soft-deleted deck's
+ * cards can never reach a session — not even an UNSCOPED one, which used to
+ * skip the join entirely and surface them (the `statsStore` join idiom). An
+ * ARCHIVED subject is deliberately NOT filtered: archiving hides a subject from
+ * the hub, it does not retire what it taught.
+ */
+const QUEUE_FROM =
+  `FROM cards c
+     JOIN decks d ON d.id = c.deck_id AND d.profile_id = c.profile_id AND d.deleted_at IS NULL`;
+
+/** Due (non-New) cards at `now`, oldest due first: `(profileId, now, …scope)`. */
+const dueQueueSql = (scope: string): string =>
+  `SELECT ${QUEUE_CARD_COLUMNS} ${QUEUE_FROM}
+    WHERE c.profile_id = ? AND c.deleted_at IS NULL AND c.state != 0 AND c.due <= ? ${scope}
+    ORDER BY c.due, c.id`;
+
+/** New cards in creation order, capped: `(profileId, …scope, newLimit)`. */
+const newQueueSql = (scope: string): string =>
+  `SELECT ${QUEUE_CARD_COLUMNS} ${QUEUE_FROM}
+    WHERE c.profile_id = ? AND c.deleted_at IS NULL AND c.state = 0 ${scope}
+    ORDER BY c.created_at, c.id
+    LIMIT ?`;
+
+/** ADR-046: a problem card is a `basic` card that carries a worked solution, so this is the only predicate that can name one. */
+const PROBLEMS_ONLY_SCOPE = "AND c.problem_steps IS NOT NULL";
 
 /** The renderer batches generated-card specs below this in one `syncFromNote` call; re-checked here (SEC-EL-02). */
 const MAX_NOTE_CARD_SPECS = 500;
@@ -288,12 +347,16 @@ export class CardStore {
   private readonly selectAllReviewLog: Database.Statement;
   private readonly deleteReviewLog: Database.Statement;
   private readonly countsByDeckStatement: Database.Statement;
-  private readonly dueNoScope: Database.Statement;
-  private readonly dueByDeck: Database.Statement;
-  private readonly dueBySubject: Database.Statement;
-  private readonly newNoScope: Database.Statement;
-  private readonly newByDeck: Database.Statement;
-  private readonly newBySubject: Database.Statement;
+  /**
+   * The queue's statements, keyed by their own SQL. Unlike every statement
+   * above, `dueQueue`'s shape varies — with which scope it was asked for, with
+   * whether it is problems-only, and with HOW MANY decks a deck-set scope names
+   * (ADR-047) — so they cannot all be prepared up front. Each distinct shape is
+   * still prepared exactly once and reused for the life of the store, and every
+   * VALUE stays bound (SEC-API-03): the only thing built into the text is the
+   * `?` placeholder run.
+   */
+  private readonly queueStatements = new Map<string, Database.Statement>();
 
   constructor(
     private readonly db: DatabaseHandle,
@@ -402,26 +465,6 @@ export class CardStore {
         GROUP BY d.id
         ORDER BY d.name, d.id`,
     );
-
-    const dueBase = (scope: string) =>
-      `SELECT ${CARD_COLUMNS} FROM cards
-       WHERE profile_id = ? AND deleted_at IS NULL AND state != 0 AND due <= ? ${scope}
-       ORDER BY due, id`;
-    const newBase = (scope: string) =>
-      `SELECT ${CARD_COLUMNS} FROM cards
-       WHERE profile_id = ? AND deleted_at IS NULL AND state = 0 ${scope}
-       ORDER BY created_at, id
-       LIMIT ?`;
-    const deckScope = "AND deck_id = ?";
-    const subjectScope =
-      "AND deck_id IN (SELECT id FROM decks WHERE subject_id = ? AND profile_id = ? AND deleted_at IS NULL)";
-
-    this.dueNoScope = db.prepare(dueBase(""));
-    this.dueByDeck = db.prepare(dueBase(deckScope));
-    this.dueBySubject = db.prepare(dueBase(subjectScope));
-    this.newNoScope = db.prepare(newBase(""));
-    this.newByDeck = db.prepare(newBase(deckScope));
-    this.newBySubject = db.prepare(newBase(subjectScope));
   }
 
   /** Active cards of one active deck in this profile, ordered by creation (STUDY flashcards). */
@@ -1001,40 +1044,72 @@ export class CardStore {
 
   /**
    * The review queue at `now`: active due (non-New) cards first (by due, id),
-   * then up to `newLimit` New cards (by creation order). Optionally scoped to one
-   * deck or one subject (via its decks), both same-profile.
+   * then up to `newLimit` New cards (by creation order). Optionally scoped to
+   * one deck, one subject (via its decks) or a SET of decks (ADR-047) — at most
+   * one of the three — and optionally narrowed to problem cards alone. Both
+   * filters apply to both sections; ordering the two sections into one
+   * interleaved practice run is `@nexus/core`'s `interleavePractice`, not this
+   * store's: the queue answers what is studiable, never in what mood.
    */
   dueQueue(options: DueQueueOptions = {}, now: string): Card[] {
     const validNow = validateNow(now);
     const newLimit = validateNewLimit(options.newLimit);
+    const scope = this.resolveQueueScope(options);
+    const predicate =
+      options.problemsOnly === true ? `${scope.sql} ${PROBLEMS_ONLY_SCOPE}` : scope.sql;
+
+    const dueRows = this.queueStatement(dueQueueSql(predicate)).all(
+      this.profileId,
+      validNow,
+      ...scope.params,
+    ) as CardRow[];
+    const newRows = this.queueStatement(newQueueSql(predicate)).all(
+      this.profileId,
+      ...scope.params,
+      newLimit,
+    ) as CardRow[];
+    return [...dueRows.map(toCard), ...newRows.map(toCard)];
+  }
+
+  /** Prepares one queue shape, or returns the one already prepared for it. */
+  private queueStatement(sql: string): Database.Statement {
+    const existing = this.queueStatements.get(sql);
+    if (existing) return existing;
+    const statement = this.db.prepare(sql);
+    this.queueStatements.set(sql, statement);
+    return statement;
+  }
+
+  /**
+   * The SQL fragment and bound values of the ONE scope this queue was asked
+   * for. Two scopes at once is a refusal rather than a precedence rule: a
+   * caller that names both a deck and a subject does not know what it is asking
+   * for, and silently honouring one of them would study the wrong cards.
+   */
+  private resolveQueueScope(options: DueQueueOptions): { sql: string; params: string[] } {
+    const named = (["deckId", "subjectId", "deckIds"] as const).filter(
+      (key) => options[key] !== undefined,
+    );
+    if (named.length > 1) {
+      throw new CardValidationError(
+        `A review queue takes at most one scope, but ${named.join(" and ")} were given.`,
+      );
+    }
 
     if (options.deckId !== undefined) {
-      const deckId = this.resolveDeck(options.deckId);
-      const dueRows = this.dueByDeck.all(this.profileId, validNow, deckId) as CardRow[];
-      const newRows = this.newByDeck.all(this.profileId, deckId, newLimit) as CardRow[];
-      return [...dueRows.map(toCard), ...newRows.map(toCard)];
+      return { sql: "AND c.deck_id = ?", params: [this.resolveDeck(options.deckId)] };
     }
-
     if (options.subjectId !== undefined) {
-      const subjectId = this.resolveSubject(options.subjectId);
-      const dueRows = this.dueBySubject.all(
-        this.profileId,
-        validNow,
-        subjectId,
-        this.profileId,
-      ) as CardRow[];
-      const newRows = this.newBySubject.all(
-        this.profileId,
-        subjectId,
-        this.profileId,
-        newLimit,
-      ) as CardRow[];
-      return [...dueRows.map(toCard), ...newRows.map(toCard)];
+      // `d` is the joined `decks` row, so the subject filter needs no subquery
+      // and no second profile binding — the join already carries both.
+      return { sql: "AND d.subject_id = ?", params: [this.resolveSubject(options.subjectId)] };
     }
-
-    const dueRows = this.dueNoScope.all(this.profileId, validNow) as CardRow[];
-    const newRows = this.newNoScope.all(this.profileId, newLimit) as CardRow[];
-    return [...dueRows.map(toCard), ...newRows.map(toCard)];
+    if (options.deckIds !== undefined) {
+      const deckIds = validateDeckIds(options.deckIds);
+      const placeholders = deckIds.map(() => "?").join(", ");
+      return { sql: `AND c.deck_id IN (${placeholders})`, params: deckIds };
+    }
+    return { sql: "", params: [] };
   }
 
   /** Per active deck of this profile: New-state card count, and non-New cards due by `now`. */
@@ -1338,6 +1413,30 @@ function validateSpecKind(
     );
   }
   return { kind: "cloze", clozeText, clozeOrdinal: spec.clozeOrdinal };
+}
+
+/**
+ * A practice scope's deck SET (ADR-047), checked structurally only: a non-empty
+ * array of at most `MAX_QUEUE_DECK_IDS` non-empty strings. Whether an id names
+ * a live deck of this profile is NOT asked here — unlike single-deck scope,
+ * where naming a missing deck is a caller bug. A multi-deck selection is built
+ * in the renderer and can go stale, so the join and the `IN (…)` do the
+ * filtering and a stale entry contributes no cards instead of failing the whole
+ * session.
+ */
+function validateDeckIds(deckIds: readonly string[]): string[] {
+  if (!Array.isArray(deckIds) || deckIds.length === 0) {
+    throw new CardValidationError('"deckIds" must name at least one deck.');
+  }
+  if (deckIds.length > MAX_QUEUE_DECK_IDS) {
+    throw new CardValidationError(
+      `"deckIds" may name at most ${MAX_QUEUE_DECK_IDS} decks (got ${deckIds.length}).`,
+    );
+  }
+  if (!deckIds.every((deckId) => typeof deckId === "string" && deckId.length > 0)) {
+    throw new CardValidationError('"deckIds" must hold only non-empty deck ids.');
+  }
+  return [...deckIds];
 }
 
 function validateNewLimit(value: number | undefined): number {

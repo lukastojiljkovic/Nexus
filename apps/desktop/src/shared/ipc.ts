@@ -1619,14 +1619,28 @@ export interface DeckCounts {
 /** Closed FSRS review-rating domain (Again/Hard/Good/Easy). Manual (0) is never accepted. */
 export type CardRating = 1 | 2 | 3 | 4;
 
-/** Optional scope for the review queue: at most one of `deckId`/`subjectId`, plus a cap on New cards. */
+/**
+ * Optional scope for the review queue, hand-mirroring `DueQueueOptions` in
+ * `@nexus/db`: at most ONE of `deckId`/`subjectId`/`deckIds` — naming two is
+ * refused by the store, not silently resolved — plus the problems-only filter
+ * and a cap on New cards.
+ *
+ * This is the whole wire contract of a session's SELECTION. How a practice
+ * session then ORDERS what it gets back (the interleave seed, and that it is a
+ * practice session at all) is renderer-only state: the queue answers what is
+ * studiable, never in what order the reviewer asks it.
+ */
 export interface ReviewQueueScope {
   deckId?: string;
   subjectId?: string;
+  /** A SET of decks to draw from (ADR-047): the topic-shaped selection interleaved practice is built on. */
+  deckIds?: readonly string[];
+  /** Keep only problem cards — rows carrying a worked solution (ADR-046); a problem card's `kind` is `basic`, so no kind filter can say this. */
+  problemsOnly?: boolean;
   newLimit?: number;
 }
 
-/** The review queue: optionally scoped to one deck or one subject, plus a cap on New cards. `now` is stamped by main, never accepted from the renderer. */
+/** The review queue under one `ReviewQueueScope`. `now` is stamped by main, never accepted from the renderer. */
 export interface ReviewQueueRequest extends ReviewQueueScope {
   profileId: string;
 }

@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
+import { createPortal } from "react-dom";
 import {
   CLOZE_MASK,
   computeStreak,
   findClozeRuns,
+  interleavePractice,
   splitClozeSegments,
   splitProblemSteps,
 } from "@nexus/core";
@@ -124,6 +126,20 @@ function cardStateVariant(state: CardState): "neutral" | "data" | "accent" {
 /** Deck badge chip variant: quiet at zero, the given accent once there is actually something to act on. */
 function countVariant(count: number, whenPositive: "data" | "accent"): "neutral" | "data" | "accent" {
   return count > 0 ? whenPositive : "neutral";
+}
+
+/**
+ * A practice session's renderer-only configuration (STUDY-010 / ADR-047).
+ *
+ * It travels beside the `ReviewQueueScope`, never inside it: the IPC payload
+ * carries only what the QUEUE needs — which decks, problems only, how many New
+ * cards — while the seed and the fact that this is practice at all are about
+ * how the reviewer ORDERS and LABELS what came back. Neither belongs in main,
+ * and neither would survive being invented there.
+ */
+interface PracticeConfig {
+  /** Seeds `interleavePractice` once per session; re-rendering must never reshuffle a session in progress. */
+  seed: number;
 }
 
 /** Absolute next-due date+time for a non-New card, Serbian Latin; degrades to the raw string on bad input. */
@@ -463,11 +479,17 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   const [pendingUndoFocusId, setPendingUndoFocusId] = useState<string | null>(null);
 
   // Internal routing: the hub, a deck's card-management drill-in, or a review
-  // session. No router — a discriminated union kept in component state.
+  // session. No router — a discriminated union kept in component state. A
+  // review arm carries the wire scope AND, for a practice session, the
+  // renderer-only config the scope cannot express (ADR-047).
   const [route, setRoute] = useState<
-    { kind: "hub" } | { kind: "deck"; deckId: string } | { kind: "review"; scope: ReviewQueueScope }
+    | { kind: "hub" }
+    | { kind: "deck"; deckId: string }
+    | { kind: "review"; scope: ReviewQueueScope; practice: PracticeConfig | null }
   >({ kind: "hub" });
   const activeDeckId = route.kind === "deck" ? route.deckId : null;
+  /** Which subject's „Vežbaj" dialog is open, or null (ADR-047). */
+  const [practiceSubjectId, setPracticeSubjectId] = useState<string | null>(null);
 
   const [cards, setCards] = useState<Card[] | null>(null);
   const [cardsFailed, setCardsFailed] = useState(false);
@@ -1369,8 +1391,18 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     }
   }
 
-  function startReview(scope: ReviewQueueScope): void {
-    setRoute({ kind: "review", scope });
+  function startReview(scope: ReviewQueueScope, practice: PracticeConfig | null = null): void {
+    setRoute({ kind: "review", scope, practice });
+  }
+
+  /**
+   * Starts an interleaved practice session over the chosen špilovi (ADR-047).
+   * The seed is drawn HERE, once, as the session begins — not inside the
+   * reviewer, which re-renders on every reveal and every grade.
+   */
+  function startPractice(deckIds: readonly string[], problemsOnly: boolean): void {
+    setPracticeSubjectId(null);
+    startReview({ deckIds, problemsOnly }, { seed: Math.floor(Math.random() * 0x100000000) });
   }
 
   function exitReview(): void {
@@ -1494,7 +1526,15 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
 
   // --- Review session route --------------------------------------------------
   if (route.kind === "review") {
-    return <ReviewSession profileId={profileId} scope={route.scope} onExit={exitReview} />;
+    return (
+      <ReviewSession
+        profileId={profileId}
+        scope={route.scope}
+        practice={route.practice}
+        decks={decks ?? []}
+        onExit={exitReview}
+      />
+    );
   }
 
   // --- Deck drill-in route (card management) ---------------------------------
@@ -2123,13 +2163,18 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                     <div className="study__decks-header">
                       <h3 className="study__decks-title">{strings.study.decksTitle}</h3>
                       {subjectHasStudiable(subject.id) && (
-                        <Button
-                          size="sm"
-                          variant="primary"
-                          onClick={() => startReview({ subjectId: subject.id })}
-                        >
-                          {strings.study.studyAll}
-                        </Button>
+                        <span className="study__decks-actions">
+                          <Button size="sm" onClick={() => setPracticeSubjectId(subject.id)}>
+                            {strings.study.practice.open}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            onClick={() => startReview({ subjectId: subject.id })}
+                          >
+                            {strings.study.studyAll}
+                          </Button>
+                        </span>
                       )}
                     </div>
                     {subjectDecks.length === 0 ? (
@@ -2619,7 +2664,148 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
           </div>
         </>
       )}
+
+      {practiceSubjectId !== null && (
+        <PracticeDialog
+          decks={decksForSubject(practiceSubjectId)}
+          countsFor={countsFor}
+          onStart={startPractice}
+          onClose={() => setPracticeSubjectId(null)}
+        />
+      )}
     </div>
+  );
+}
+
+// --- Interleaved practice (STUDY-010 / ADR-047) -------------------------
+
+interface PracticeDialogProps {
+  /** The subject's špilovi, in the order the hub lists them. */
+  decks: readonly Deck[];
+  countsFor: (deckId: string) => DeckCounts;
+  onStart: (deckIds: readonly string[], problemsOnly: boolean) => void;
+  onClose: () => void;
+}
+
+/**
+ * „Vežbaj" — which špilovi one interleaved practice session draws from, and
+ * whether it asks only zadaci (ADR-047).
+ *
+ * Every deck starts CHECKED: the question the dialog asks is "anything you'd
+ * rather leave out?", not "what would you like to study?" — the subject header
+ * already answered the second one. „Samo zadaci" starts unchecked for the
+ * mirror-image reason: it removes cards, so it is the user's to ask for.
+ *
+ * The house dialog recipe, shared outright with the recurrence-scope question,
+ * the shortcuts reference and the widget gallery: backdrop and panel as
+ * siblings, Escape and the backdrop close, focus lands inside and returns where
+ * it came from, no glow.
+ */
+function PracticeDialog({ decks, countsFor, onStart, onClose }: PracticeDialogProps) {
+  const s = strings.study.practice;
+  const [selected, setSelected] = useState<ReadonlySet<string>>(
+    () => new Set(decks.map((deck) => deck.id)),
+  );
+  const [problemsOnly, setProblemsOnly] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const titleId = useId();
+
+  // Focus lands on the first špil, not on „Počni": the selection is what there
+  // is to answer here, and „Počni" is disabled the moment nothing is checked.
+  useEffect(() => {
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    bodyRef.current?.querySelector("input")?.focus();
+    return () => {
+      previousFocusRef.current?.focus();
+      previousFocusRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  function toggleDeck(deckId: string): void {
+    setSelected((previous) => {
+      const next = new Set(previous);
+      if (!next.delete(deckId)) next.add(deckId);
+      return next;
+    });
+  }
+
+  return createPortal(
+    <div className="recur-dialog__overlay">
+      <div className="recur-dialog__backdrop" onClick={onClose} />
+      <div
+        className="recur-dialog__panel study-practice__panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
+        <h2 id={titleId} className="recur-dialog__title">
+          {s.title}
+        </h2>
+        <p className="recur-dialog__question">{s.decksLabel}</p>
+
+        <div className="study-practice__body" ref={bodyRef}>
+          {decks.map((deck) => {
+            const counts = countsFor(deck.id);
+            return (
+              <div key={deck.id} className="study-practice__row">
+                <Checkbox
+                  className="study-practice__deck"
+                  checked={selected.has(deck.id)}
+                  onChange={() => toggleDeck(deck.id)}
+                >
+                  {deck.name}
+                </Checkbox>
+                <span className="study-practice__counts">
+                  <Chip variant={countVariant(counts.newCount, "data")}>
+                    {counts.newCount} {strings.study.newCount}
+                  </Chip>
+                  <Chip variant={countVariant(counts.dueCount, "accent")}>
+                    {counts.dueCount} {strings.study.dueCount}
+                  </Chip>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        <Checkbox
+          className="study-practice__problems"
+          checked={problemsOnly}
+          onChange={(event: ChangeEvent<HTMLInputElement>) =>
+            setProblemsOnly(event.target.checked)
+          }
+        >
+          {s.problemsOnly}
+        </Checkbox>
+
+        <div className="recur-dialog__actions study-practice__actions">
+          <Button className="recur-dialog__cancel" onClick={onClose}>
+            {s.close}
+          </Button>
+          <Button
+            variant="primary"
+            disabled={selected.size === 0}
+            onClick={() => onStart([...selected], problemsOnly)}
+          >
+            {s.start}
+          </Button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -2628,6 +2814,10 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
 interface ReviewSessionProps {
   profileId: string;
   scope: ReviewQueueScope;
+  /** Non-null for an interleaved practice session (ADR-047); null for the ordinary reviewer. */
+  practice: PracticeConfig | null;
+  /** The profile's špilovi, for the per-card deck chip's client-side join. The `Card` contract does not carry a deck name. */
+  decks: readonly Deck[];
   onExit: () => void;
 }
 
@@ -2644,10 +2834,20 @@ interface GradeHistoryEntry {
  * leaves permanently. A session-local stack of graded card ids backs
  * multi-level undo: it pops one grade at a time, rolling the DB back via
  * `undoReview` and dropping any requeued copy from the queue.
+ *
+ * Given a `practice` config it is the same reviewer with a different ORDER
+ * (ADR-047): the fetched queue goes through `interleavePractice` exactly once,
+ * right here, before it ever becomes `queue` — everything after that (requeue,
+ * undo's unshift) works the materialized array, so a session in progress is
+ * never reshuffled under the user.
  */
-function ReviewSession({ profileId, scope, onExit }: ReviewSessionProps) {
+function ReviewSession({ profileId, scope, practice, decks, onExit }: ReviewSessionProps) {
   const [queue, setQueue] = useState<Card[] | null>(null);
   const [total, setTotal] = useState(0);
+  // Whether the fetched session actually drew from more than one špil — the
+  // read that decides the per-card deck chip. Taken once, from the initial
+  // queue: derived from `queue` it would go false as the session emptied out.
+  const [spansDecks, setSpansDecks] = useState(false);
   const [completedCount, setCompletedCount] = useState(0);
   // How much of the current card is uncovered (ADR-046). A basic or cloze card
   // has exactly ONE step, so 0 and 1 are precisely the old hidden/revealed
@@ -2657,6 +2857,7 @@ function ReviewSession({ profileId, scope, onExit }: ReviewSessionProps) {
   const [preview, setPreview] = useState<PreviewIntervals | null>(null);
   const historyRef = useRef<GradeHistoryEntry[]>([]);
   const scopeRef = useRef(scope);
+  const practiceRef = useRef(practice);
   // Guards against a held-down grade key (auto-repeat) or a double-click firing
   // a second gradeReview for the same card before the first one lands — state
   // (`revealedSteps`) only changes after the await, so it can't serve as the guard.
@@ -2666,10 +2867,16 @@ function ReviewSession({ profileId, scope, onExit }: ReviewSessionProps) {
     let active = true;
     void (async () => {
       try {
-        const initial = await window.nexus.reviewQueue(profileId, scopeRef.current);
+        const fetched = await window.nexus.reviewQueue(profileId, scopeRef.current);
         if (!active) return;
+        const config = practiceRef.current;
+        // The single application of the interleave, before the queue exists.
+        const initial = config
+          ? interleavePractice(fetched, (card) => card.deckId, config.seed)
+          : fetched;
         setQueue(initial);
         setTotal(initial.length);
+        setSpansDecks(new Set(initial.map((card) => card.deckId)).size > 1);
       } catch (error) {
         console.error("Nexus: failed to load review queue:", error);
         if (active) {
@@ -2792,6 +2999,22 @@ function ReviewSession({ profileId, scope, onExit }: ReviewSessionProps) {
     );
   }
 
+  // A practice selection that yielded nothing is not an accomplishment: the
+  // user chose špilovi (and possibly „Samo zadaci") and there was nothing in
+  // them, which the celebratory „Sve obnovljeno za sada." would misreport.
+  if (practice !== null && total === 0) {
+    return (
+      <div className="review review--complete">
+        <p className="review__complete-title">{strings.study.practice.empty}</p>
+        <div className="review__complete-actions">
+          <Button variant="primary" onClick={onExit}>
+            {strings.study.reviewBack}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (current == null) {
     return (
       <div className="review review--complete">
@@ -2813,11 +3036,18 @@ function ReviewSession({ profileId, scope, onExit }: ReviewSessionProps) {
 
   const now = new Date().toISOString();
   const clozeSegments = clozeSegmentsOf(current);
+  // Which špil this card came from — a client-side join over the already-loaded
+  // deck list (the ExamsWidget idiom), shown only when the session actually
+  // spans more than one, where "which topic is this?" is a real question.
+  const deckNames = new Map(decks.map((deck) => [deck.id, deck.name] as const));
+  const deckName = spansDecks ? deckNames.get(current.deckId) : undefined;
 
   return (
     <div className="review">
       <div className="review__topbar">
-        <span className="review__title">{strings.study.reviewTitle}</span>
+        <span className="review__title">
+          {practice !== null ? strings.study.practice.title : strings.study.reviewTitle}
+        </span>
         <span className="review__progress">
           {Math.min(completedCount + 1, total)} / {total}
         </span>
@@ -2827,6 +3057,13 @@ function ReviewSession({ profileId, scope, onExit }: ReviewSessionProps) {
       </div>
 
       <div className="review__card">
+        {deckName !== undefined && (
+          // `title`, not `aria-label`: the accessible name must stay the špil's
+          // own name — the label only says what kind of thing that name is.
+          <Chip variant="data" className="review__deck" title={strings.study.practice.deckChipLabel}>
+            {deckName}
+          </Chip>
+        )}
         {clozeSegments !== null ? (
           // One line, two states: the blank fills in where it stood, and the
           // sentence around it never moves (ADR-042). No divider and no

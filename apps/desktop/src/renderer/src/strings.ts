@@ -1093,6 +1093,24 @@ export const strings = {
     reviewCompleteLabel: "Ocenjeno kartica",
     reviewBack: "Nazad",
 
+    /**
+     * Interleaved practice (STUDY-010 / ADR-047): pick špilovi, get one mixed
+     * session across them. „Vežbanje" against „Učenje" is the whole distinction
+     * on screen — the ordinary reviewer works through what is due, practice
+     * deliberately jumps between topics.
+     */
+    practice: {
+      open: "Vežbaj",
+      title: "Vežbanje",
+      decksLabel: "Špilovi",
+      problemsOnly: "Samo zadaci",
+      start: "Počni",
+      empty: "Nema kartica za vežbanje u ovom izboru.",
+      close: "Otkaži",
+      /** The chip naming a card's špil, shown only when a session spans more than one. */
+      deckChipLabel: "Špil",
+    },
+
     // --- Exam study plans (Planovi učenja, STUDY piece 3b) -------------------
     plansTitle: "Planovi učenja",
     todayTitle: "Danas za učenje",

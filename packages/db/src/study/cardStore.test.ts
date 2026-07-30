@@ -8,6 +8,7 @@ import {
   CardStore,
   CardValidationError,
   DeckStore,
+  MAX_QUEUE_DECK_IDS,
   NexusDatabase,
   openDatabase,
   SubjectStore,
@@ -443,6 +444,113 @@ describe("CardStore", () => {
       const { cards } = fixture();
       expect(() => cards.dueQueue({ deckId: "missing" }, T0)).toThrow(CardValidationError);
       expect(() => cards.dueQueue({ subjectId: "missing" }, T0)).toThrow(CardValidationError);
+    });
+
+    it("omits cards of a soft-deleted deck from an unscoped queue", () => {
+      // The unscoped queue never joined `decks`, so a deleted deck's cards kept
+      // surfacing in „Uči sve" and in every unscoped session (ADR-047).
+      const { cards, decks, subjectId, deckId } = fixture();
+      const goneDeckId = decks.create({ subjectId, name: "Obrisan" }).id;
+      const kept = cards.create({ deckId, front: "a", back: "a" }, T0);
+      const orphanNew = cards.create({ deckId: goneDeckId, front: "b", back: "b" }, T0);
+      const orphanDue = cards.create({ deckId: goneDeckId, front: "c", back: "c" }, T0);
+      cards.review(orphanDue.id, 3, T0); // leaves the New section, enters the due one
+      decks.softDelete(goneDeckId);
+
+      const queue = cards.dueQueue({ newLimit: 10 }, "2026-07-09T00:00:00.000Z");
+      const ids = queue.map((c) => c.id);
+      expect(ids).toContain(kept.id);
+      expect(ids).not.toContain(orphanNew.id);
+      expect(ids).not.toContain(orphanDue.id);
+    });
+
+    it("keeps cards of an ARCHIVED subject in an unscoped queue", () => {
+      // Archiving hides a subject from the hub's active list; it does not
+      // retire its cards, so the unscoped queue deliberately still holds them.
+      const { cards, subjects, subjectId, deckId } = fixture();
+      const card = cards.create({ deckId, front: "a", back: "a" }, T0);
+      subjects.update(subjectId, { archived: true });
+
+      expect(cards.dueQueue({ newLimit: 10 }, T0).map((c) => c.id)).toEqual([card.id]);
+    });
+
+    it("filters by a deck SET (interleaved practice, ADR-047)", () => {
+      const { cards, decks, subjectId, deckId } = fixture();
+      const secondDeckId = decks.create({ subjectId, name: "Glava 2" }).id;
+      const thirdDeckId = decks.create({ subjectId, name: "Glava 3" }).id;
+      const a = cards.create({ deckId, front: "a", back: "a" }, T0);
+      const b = cards.create({ deckId: secondDeckId, front: "b", back: "b" }, T0);
+      cards.create({ deckId: thirdDeckId, front: "c", back: "c" }, T0);
+
+      const queue = cards.dueQueue({ deckIds: [deckId, secondDeckId], newLimit: 10 }, T0);
+      expect(new Set(queue.map((c) => c.id))).toEqual(new Set([a.id, b.id]));
+    });
+
+    it("ignores a deckIds entry naming no live deck of this profile", () => {
+      // A selection built in the renderer can go stale (another window deletes
+      // a deck); the SQL restriction simply matches nothing for that id.
+      const { cards, decks, subjectId, deckId } = fixture();
+      const goneDeckId = decks.create({ subjectId, name: "Obrisan" }).id;
+      const kept = cards.create({ deckId, front: "a", back: "a" }, T0);
+      const orphan = cards.create({ deckId: goneDeckId, front: "b", back: "b" }, T0);
+      decks.softDelete(goneDeckId);
+
+      const queue = cards.dueQueue({ deckIds: [deckId, goneDeckId, "missing"], newLimit: 10 }, T0);
+      expect(queue.map((c) => c.id)).toEqual([kept.id]);
+      expect(queue.map((c) => c.id)).not.toContain(orphan.id);
+    });
+
+    it("rejects an empty, over-long or non-string deckIds", () => {
+      const { cards, deckId } = fixture();
+      expect(() => cards.dueQueue({ deckIds: [] }, T0)).toThrow(CardValidationError);
+      expect(() =>
+        cards.dueQueue({ deckIds: new Array<string>(MAX_QUEUE_DECK_IDS + 1).fill(deckId) }, T0),
+      ).toThrow(CardValidationError);
+      expect(() =>
+        cards.dueQueue({ deckIds: new Array<string>(MAX_QUEUE_DECK_IDS).fill(deckId) }, T0),
+      ).not.toThrow();
+      expect(() => cards.dueQueue({ deckIds: [""] }, T0)).toThrow(CardValidationError);
+      expect(() =>
+        cards.dueQueue({ deckIds: [7] as unknown as string[] }, T0),
+      ).toThrow(CardValidationError);
+    });
+
+    it("keeps only problem cards when problemsOnly is set, in BOTH sections", () => {
+      // A problem card's kind is `basic` (ADR-046), so "problems only" can only
+      // ever be expressed as "has worked steps".
+      const { cards, deckId } = fixture();
+      const problemNew = cards.createProblem(deckId, "Zadatak", "prvi\n--\ndrugi", T0);
+      const problemDue = cards.createProblem(deckId, "Drugi zadatak", "korak", T0);
+      cards.review(problemDue.id, 3, T0);
+      const plainNew = cards.create({ deckId, front: "a", back: "a" }, T0);
+      const plainDue = cards.create({ deckId, front: "b", back: "b" }, T0);
+      cards.review(plainDue.id, 3, T0);
+
+      const queue = cards.dueQueue({ problemsOnly: true, newLimit: 10 }, "2026-07-09T00:00:00.000Z");
+      const ids = queue.map((c) => c.id);
+      expect(new Set(ids)).toEqual(new Set([problemNew.id, problemDue.id]));
+      expect(ids).not.toContain(plainNew.id);
+      expect(ids).not.toContain(plainDue.id);
+    });
+
+    it("combines problemsOnly with a deck set", () => {
+      const { cards, decks, subjectId, deckId } = fixture();
+      const secondDeckId = decks.create({ subjectId, name: "Glava 2" }).id;
+      const wanted = cards.createProblem(deckId, "Zadatak", "korak", T0);
+      cards.create({ deckId, front: "a", back: "a" }, T0); // right deck, not a problem
+      cards.createProblem(secondDeckId, "Drugi", "korak", T0); // a problem, wrong deck
+
+      const queue = cards.dueQueue({ deckIds: [deckId], problemsOnly: true, newLimit: 10 }, T0);
+      expect(queue.map((c) => c.id)).toEqual([wanted.id]);
+    });
+
+    it("refuses more than one scope — deckId/subjectId/deckIds are mutually exclusive", () => {
+      const { cards, subjectId, deckId } = fixture();
+      expect(() => cards.dueQueue({ deckId, subjectId }, T0)).toThrow(CardValidationError);
+      expect(() => cards.dueQueue({ deckId, deckIds: [deckId] }, T0)).toThrow(CardValidationError);
+      expect(() => cards.dueQueue({ subjectId, deckIds: [deckId] }, T0)).toThrow(
+        CardValidationError,
+      );
     });
   });
 

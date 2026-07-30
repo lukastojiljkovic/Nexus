@@ -89,6 +89,8 @@ export {
   splitProblemSteps,
 } from "./study/problemSteps.js";
 
+export { interleavePractice } from "./study/interleave.js";
+
 export { replaceNoteContent } from "./notes/yjsRestore.js";
 
 export {

@@ -56,6 +56,7 @@ import {
   MAX_NOTE_LINKS,
   MAX_NOTE_TEMPLATE_BYTES,
   MAX_NOTE_UPDATE_BYTES,
+  MAX_QUEUE_DECK_IDS,
   MAX_SEARCH_BROWSE_LIMIT,
   MAX_SEARCH_LIMIT,
   MAX_TASK_ATTACHMENT_BYTES,
@@ -112,6 +113,7 @@ import {
   type DeleteListMode,
   type DocumentRenewal,
   type DocumentType,
+  type DueQueueOptions,
   type Event,
   type Exam,
   type ExamType,
@@ -3698,9 +3700,17 @@ function registerIpc(): void {
     assertTrustedSender(event);
     const body = asRecord(payload);
     const profileId = asNonEmptyString(body.profileId, "profileId");
-    const scope: { deckId?: string; subjectId?: string; newLimit?: number } = {};
+    // Field by field, only the keys that arrived — the store then judges the
+    // semantics (which scopes may co-exist, whether the ids resolve, ADR-047).
+    const scope: DueQueueOptions = {};
     if (body.deckId !== undefined) scope.deckId = asNonEmptyString(body.deckId, "deckId");
     if (body.subjectId !== undefined) scope.subjectId = asNonEmptyString(body.subjectId, "subjectId");
+    if (body.deckIds !== undefined) {
+      scope.deckIds = asStringArray(body.deckIds, "deckIds", MAX_QUEUE_DECK_IDS, 64);
+    }
+    if (body.problemsOnly !== undefined) {
+      scope.problemsOnly = asBoolean(body.problemsOnly, "problemsOnly");
+    }
     if (body.newLimit !== undefined) scope.newLimit = asInteger(body.newLimit, "newLimit");
     return cardStore(profileId).dueQueue(scope, new Date().toISOString());
   });
