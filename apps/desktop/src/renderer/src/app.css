@@ -1547,8 +1547,11 @@ button.cal__grid-header {
   background: var(--nx-surface-alt);
   color: var(--nx-text);
 }
-/* Today reads as typographic emphasis only — accent + weight, never a ring or glow. */
-.cal__grid-header--today {
+/* Today reads as typographic emphasis only — accent + weight, never a ring or
+   glow. Qualified with `button` so it outweighs `button.cal__grid-header`'s
+   muted colour above — a bare class loses that fight on specificity and today
+   rendered bold but muted. */
+button.cal__grid-header--today {
   color: var(--nx-accent-strong);
   font-weight: var(--nx-font-weight-semibold);
 }
