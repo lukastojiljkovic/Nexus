@@ -14,6 +14,9 @@ packages/tokens/gen/
 .env
 .env.*
 
+# Transient agent worktrees (parallel build lanes; never part of the repo)
+.claude/worktrees/
+
 # OS junk
 .DS_Store
 Thumbs.db
