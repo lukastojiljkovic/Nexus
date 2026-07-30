@@ -313,6 +313,14 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.noteAttachmentsOpen, { profileId, id: noteId, attachmentId }),
   saveNoteAttachmentAs: (profileId, noteId, attachmentId) =>
     ipcRenderer.invoke(IpcChannel.noteAttachmentsSaveAs, { profileId, id: noteId, attachmentId }),
+  dashboardSettings: (profileId) =>
+    ipcRenderer.invoke(IpcChannel.dashboardGetSettings, { profileId }),
+  pickDashboardBackground: (profileId) =>
+    ipcRenderer.invoke(IpcChannel.dashboardPickBackground, { profileId }),
+  clearDashboardBackground: (profileId) =>
+    ipcRenderer.invoke(IpcChannel.dashboardClearBackground, { profileId }),
+  setDashboardDim: (profileId, dim) =>
+    ipcRenderer.invoke(IpcChannel.dashboardSetDim, { profileId, dim }),
   searchQuery: (profileId, query, limit) =>
     ipcRenderer.invoke(IpcChannel.searchQuery, { profileId, query, limit }),
   searchRecent: (profileId, limit) =>

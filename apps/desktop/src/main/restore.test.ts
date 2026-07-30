@@ -20,6 +20,7 @@ import {
 import { deriveArchiveKey, generateSalt } from "@nexus/core/auth";
 import {
   CardStore,
+  DashboardSettingsStore,
   DeckStore,
   DocumentStore,
   EventStore,
@@ -155,6 +156,7 @@ function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
     noteTemplateStore: (profileId) => new NoteTemplateStore(handle.raw, profileId),
     noteAttachmentStore: (profileId) => new NoteAttachmentStore(handle.raw, profileId),
     flagStore: (profileId) => new SqliteFlagStore(handle.raw, profileId),
+    dashboardSettingsStore: (profileId) => new DashboardSettingsStore(handle.raw, profileId),
   };
 }
 
@@ -204,10 +206,13 @@ function makeTestDeps(handle: NexusDatabase, filePath: string | null): TestDepsH
     },
     // The REAL union `main/index.ts` computes, spelled the same way over the
     // same stores — a double that counted only notes would let the GC test
-    // below pass while the app still deleted a task's file.
+    // below pass while the app still deleted a task's file or the background
+    // the dashboard shows (ADR-041 section 3). Every member is
+    // profile-agnostic, so the id is never read.
     blobRefCount: (profileId, sha256) =>
       new NoteAttachmentStore(handle.raw, profileId).refCount(sha256) +
-      new TaskAttachmentStore(handle.raw, profileId).refCount(sha256),
+      new TaskAttachmentStore(handle.raw, profileId).refCount(sha256) +
+      new DashboardSettingsStore(handle.raw, profileId).refCount(sha256),
     deleteBlobIfOrphaned: async (sha256, refCount) => {
       if (refCount === 0) blobs.delete(sha256);
     },
@@ -275,6 +280,8 @@ interface SeededFixture {
     attachmentSha: string;
     /** The blob referenced ONLY by the task attachment — the one whose survival proves the GC union (migration 024). */
     taskAttachmentSha: string;
+    /** The dashboard background's own hash (ADR-041) — a SECOND, independent member of the archive's `blobs/` union. */
+    backgroundSha: string;
   };
 }
 
@@ -307,6 +314,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   const attachmentStore = new NoteAttachmentStore(handle.raw, profileId);
   const templateStore = new NoteTemplateStore(handle.raw, profileId);
   const taskTemplateStore = new TaskTemplateStore(handle.raw, profileId);
+  const dashboardStore = new DashboardSettingsStore(handle.raw, profileId);
 
   // A real list with a section, and the task filed inside it (TASK-004), so the
   // zip round trip carries a task's placement and not just the Inbox default.
@@ -410,6 +418,15 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
 
   const template = templateStore.save(`${label} template`, JSON.stringify({ type: "doc", content: [] }), t0);
 
+  // A dashboard background with its OWN blob (ADR-041): a second, independent
+  // entry in the archive's `blobs/` union, so the round trip proves the
+  // settings row and its bytes both travel — and that the union is a union.
+  const backgroundBytes = new TextEncoder().encode(`${label} background content`);
+  const backgroundSha = sha256OfBytes(backgroundBytes);
+  dashboardStore.setBackground("a".repeat(64), "image/png", 1, t0); // replaced below; proves a re-pick keeps the dim
+  dashboardStore.setDim(70, t0);
+  dashboardStore.setBackground(backgroundSha, "image/png", backgroundBytes.length, t0);
+
   const taskLists = taskListStore.listActive();
   const data: ProfileData = {
     tasks: taskStore.listActive(),
@@ -449,6 +466,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
       createdAt: version.createdAt,
       snapshot: noteStore.loadVersion(note.id, version.coveredSeq),
     })),
+    dashboardSettings: [{ profileId, ...dashboardStore.get() }],
   };
 
   const derived = deriveRestoredNotes(data.notes);
@@ -461,6 +479,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   const blobBytes = new Map<string, Uint8Array>([
     [attachmentSha, attachmentBytes],
     [taskAttachmentSha, taskAttachmentBytes],
+    [backgroundSha, backgroundBytes],
   ]);
 
   return {
@@ -468,7 +487,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     derived,
     settings,
     blobBytes,
-    ids: { task, list, section, taskTag, event, person, subject, exam, deck, card, notification, note, linkedNote, folder, tag, template, attachmentSha, taskAttachmentSha },
+    ids: { task, list, section, taskTag, event, person, subject, exam, deck, card, notification, note, linkedNote, folder, tag, template, attachmentSha, taskAttachmentSha, backgroundSha },
   };
 }
 
@@ -580,9 +599,12 @@ describe("restore", () => {
 
       const result = await applyRestore(deps, profileB, preview.preview.token);
       expect(result.rowsWritten).toBeGreaterThan(0);
-      // Two: the note's blob and the task's — both tables name the same
-      // `blobs/` namespace, so both had to be written before the transaction.
-      expect(result.blobsAdded).toBe(2);
+      // Three: the note attachment's blob, the task attachment's, and the
+      // dashboard background's (ADR-041) — every member of the one `blobs/`
+      // union had to be written before the transaction.
+      expect(result.blobsAdded).toBe(3);
+      expect(blobs.has(fixtureA.ids.taskAttachmentSha)).toBe(true);
+      expect(blobs.has(fixtureA.ids.backgroundSha)).toBe(true);
       expect(result.missingBlobs).toBe(0);
       expect(result.restored).toEqual(countProfileModules(fixtureA.data));
 
@@ -833,13 +855,15 @@ describe("restore", () => {
       const preview = await previewRestore(deps, profileTarget, null);
       if (preview.status !== "ready") unreachable();
 
+      // Four distinct blobs: the shared note one, the private note one, the
+      // task one (which no note attachment anywhere references), and the
+      // dashboard background (ADR-041) — one union, four distinct hashes.
       const applyResult = await applyRestore(deps, profileTarget, preview.preview.token);
-      // Three distinct blobs: the shared note one, the private note one, and the
-      // task one — the last of which no note attachment anywhere references.
-      expect(applyResult.blobsAdded).toBe(3);
+      expect(applyResult.blobsAdded).toBe(4);
       expect(blobs.has(fixtureSource.ids.attachmentSha)).toBe(true);
       expect(blobs.has(privateSha)).toBe(true);
       expect(blobs.has(fixtureSource.ids.taskAttachmentSha)).toBe(true);
+      expect(blobs.has(fixtureSource.ids.backgroundSha)).toBe(true);
 
       const afterApply = new TaskStore(dbB.raw, profileTarget).listActive();
       expect(afterApply.map((row) => row.id)).not.toContain(preexistingTask.id);
@@ -853,12 +877,17 @@ describe("restore", () => {
       expect(afterUndo.map((row) => row.id)).not.toContain(fixtureSource.ids.task.id);
 
       // The shared blob survives (the bystander profile still references it);
-      // the private one, referenced by nothing after undo, is gone.
+      // the private one, referenced by nothing after undo, is gone. So is the
+      // dashboard background — and THAT is the union doing its job (ADR-041
+      // section 3): its only referrer was a `dashboard_settings` row, which the
+      // undo replaced, and nothing but `blobRefCount`'s second member could
+      // have noticed that the last reference to those bytes had gone.
       expect(blobs.has(fixtureSource.ids.attachmentSha)).toBe(true);
       expect(blobs.has(privateSha)).toBe(false);
       // And the blob only a TASK attachment names survives too — the union.
       expect(blobs.has(fixtureSource.ids.taskAttachmentSha)).toBe(true);
-      expect(undoResult.blobsRemoved).toBe(1);
+      expect(blobs.has(fixtureSource.ids.backgroundSha)).toBe(false);
+      expect(undoResult.blobsRemoved).toBe(2);
     });
   });
 
@@ -867,7 +896,14 @@ describe("restore", () => {
       const profileA = createProfile(dbA, "A");
       const fixtureA = seedProfile(dbA, profileA, "A");
       const archive = buildArchiveFor(fixtureA, profileA, "A");
-      const zipBytes = await buildArchiveZip(archive, fixtureA.blobBytes, new Set([fixtureA.ids.attachmentSha]));
+      // BOTH members of the fixture's blob union are withheld — the attachment
+      // this case is about, and the dashboard background beside it — so
+      // "nothing was written" below stays the assertion it was written to be.
+      const zipBytes = await buildArchiveZip(
+        archive,
+        fixtureA.blobBytes,
+        new Set([fixtureA.ids.attachmentSha, fixtureA.ids.backgroundSha]),
+      );
       const filePath = fixturePath("missing-blob.nexus.zip");
       await writeFile(filePath, zipBytes);
 

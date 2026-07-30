@@ -16,8 +16,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 29 (task dependencies), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(29);
+  it("is at version 30 (dashboard settings), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(30);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -3059,6 +3059,117 @@ describe("migration 029 — task dependencies", () => {
       db.raw.prepare("PRAGMA table_info(task_dependencies)").all() as { name: string }[]
     ).map((row) => row.name);
     expect(columns).toEqual(["blocker_id", "blocked_id"]);
+    db.close();
+  });
+});
+
+describe("migration 030 — dashboard settings", () => {
+  const now = () => new Date().toISOString();
+
+  const insertSettings = (
+    db: NexusDatabase,
+    profileId: string,
+    hash: string | null,
+    mime: string | null,
+    sizeBytes: number | null,
+    dim: number,
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO dashboard_settings
+           (profile_id, background_hash, background_mime, background_size_bytes,
+            background_dim, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(profileId, hash, mime, sizeBytes, dim, now(), now());
+
+  const HASH = "a".repeat(64);
+
+  it("creates the dashboard_settings table and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    expect(tableNames(db)).toContain("dashboard_settings");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("creates the dashboard_settings_background index", () => {
+    const db = openDatabase({ path: join(dir, "index.db") });
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("dashboard_settings_background");
+    db.close();
+  });
+
+  it("allows at most one row per profile", () => {
+    const db = openDatabase({ path: join(dir, "one-row.db") });
+    insertProfile(db, "p1");
+    insertSettings(db, "p1", null, null, null, 40);
+    expect(() => insertSettings(db, "p1", null, null, null, 20)).toThrow();
+    db.close();
+  });
+
+  it("defaults background_dim to 40 when the column is omitted", () => {
+    const db = openDatabase({ path: join(dir, "default-dim.db") });
+    insertProfile(db, "p1");
+    db.raw
+      .prepare(
+        `INSERT INTO dashboard_settings (profile_id, created_at, updated_at) VALUES (?, ?, ?)`,
+      )
+      .run("p1", now(), now());
+    const row = db.raw
+      .prepare("SELECT background_dim FROM dashboard_settings WHERE profile_id = ?")
+      .get("p1") as { background_dim: number };
+    expect(row.background_dim).toBe(40);
+    db.close();
+  });
+
+  it("rejects a half-set background triple with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-pair.db") });
+    insertProfile(db, "p1");
+    // A hash with no mime — nothing could decide how to serve it.
+    expect(() => insertSettings(db, "p1", HASH, null, 10, 40)).toThrow();
+    // A mime with no hash — a decision about bytes that are not named.
+    expect(() => insertSettings(db, "p1", null, "image/png", null, 40)).toThrow();
+    // A hash and mime with no size — the archive's blob inventory needs both.
+    expect(() => insertSettings(db, "p1", HASH, "image/png", null, 40)).toThrow();
+    // All three set is accepted, and so is all three null.
+    expect(() => insertSettings(db, "p1", HASH, "image/png", 10, 40)).not.toThrow();
+    insertProfile(db, "p2");
+    expect(() => insertSettings(db, "p2", null, null, null, 40)).not.toThrow();
+    db.close();
+  });
+
+  it("rejects a non-positive background_size_bytes with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-size.db") });
+    insertProfile(db, "p1");
+    expect(() => insertSettings(db, "p1", HASH, "image/png", 0, 40)).toThrow();
+    expect(() => insertSettings(db, "p1", HASH, "image/png", 1, 40)).not.toThrow();
+    db.close();
+  });
+
+  it("rejects a background_dim outside 0..90 with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-dim.db") });
+    insertProfile(db, "p1");
+    expect(() => insertSettings(db, "p1", null, null, null, -1)).toThrow();
+    expect(() => insertSettings(db, "p1", null, null, null, 91)).toThrow();
+    expect(() => insertSettings(db, "p1", null, null, null, 0)).not.toThrow();
+    insertProfile(db, "p2");
+    expect(() => insertSettings(db, "p2", null, null, null, 90)).not.toThrow();
+    db.close();
+  });
+
+  it("cascades the settings row when the owning profile is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade-profile.db") });
+    insertProfile(db, "p1");
+    insertSettings(db, "p1", HASH, "image/png", 10, 40);
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM dashboard_settings").get() as { n: number }).n,
+    ).toBe(0);
     db.close();
   });
 });

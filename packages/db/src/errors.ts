@@ -469,3 +469,14 @@ export class SearchValidationError extends DatabaseError {}
  * persisting a snapshot with an empty, unsearchable plaintext body.
  */
 export class RestoreValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a dashboard-settings write breaks a rule migration 030's CHECKs
+ * cannot express on their own (SET-006 / ADR-041): a background hash that is
+ * not a 64-character lowercase sha256, a mime outside `isInlineImageMime`'s
+ * four raster formats, a non-positive size, or a dim that is not a whole
+ * number inside 0..`MAX_BACKGROUND_DIM`. The store revalidates because renderer
+ * input is untrusted (SEC-EL-02) — even though main sniffs the mime and caps
+ * the bytes itself, a store is never the place that assumes its caller did.
+ */
+export class DashboardSettingsValidationError extends DatabaseError {}

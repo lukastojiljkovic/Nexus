@@ -13,6 +13,8 @@ import type {
 } from "@nexus/core";
 import {
   CardStore,
+  DashboardSettingsStore,
+  DEFAULT_BACKGROUND_DIM,
   DeckStore,
   DocumentStore,
   EventStore,
@@ -141,6 +143,7 @@ function emptyProfileData(): ProfileData {
     noteAttachments: [],
     noteVersions: [],
     taskTemplates: [],
+    dashboardSettings: [],
   };
 }
 
@@ -229,6 +232,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   const attachmentStore = new NoteAttachmentStore(handle.raw, profileId);
   const templateStore = new NoteTemplateStore(handle.raw, profileId);
   const taskTemplateStore = new TaskTemplateStore(handle.raw, profileId);
+  const dashboardStore = new DashboardSettingsStore(handle.raw, profileId);
 
   // The merged Yjs state and derived body an export would carry for the edited
   // note — stand-ins for real Yjs bytes (see `bytes()`), but genuinely stored
@@ -365,6 +369,11 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   // rather than silently defaulting back on the way in.
   orgStore.setDefaultTemplate(folder.id, template.id, "2026-01-01T00:06:00.000Z");
   orgStore.setCaptureDefault(folder.id, "2026-01-01T00:06:00.000Z");
+  // A dashboard background sharing the attachment's hash on purpose (ADR-041):
+  // one blob, two rows naming it, so the restore round trip proves the settings
+  // row travels AND that the shared blob is not double-counted.
+  dashboardStore.setBackground("a".repeat(64), "image/png", 10, t2);
+  dashboardStore.setDim(65, t2);
 
   const taskLists = taskListStore.listActive();
   const data: ProfileData = {
@@ -405,6 +414,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
       createdAt: version.createdAt,
       snapshot: noteStore.loadVersion(editedNote.id, version.coveredSeq),
     })),
+    dashboardSettings: [{ profileId, ...dashboardStore.get() }],
   };
 
   const derived = new Map<string, RestoredNoteDerived>([
@@ -602,6 +612,12 @@ function assertModulesMatch(
   expect(notesRead.storedPlaintext(fixture.ids.editedNote.id)).toBe(
     fixture.derived.get(fixture.ids.editedNote.id)?.plaintext,
   );
+
+  // ADR-041: the dashboard's background and dim, remapped onto the reading
+  // profile exactly as every row above is.
+  expect(
+    [{ profileId: remapTo, ...new DashboardSettingsStore(handle.raw, readProfileId).get() }],
+  ).toEqual(remap(fixture.data.dashboardSettings));
 }
 
 describe("RestoreStore", () => {
@@ -694,6 +710,15 @@ describe("RestoreStore", () => {
     expect(new NoteOrgStore(db.raw, profileB).listFolders()).toEqual([]);
     expect(new NoteOrgStore(db.raw, profileB).listTags()).toEqual([]);
     expect(new TaskTagStore(db.raw, profileB).listTags()).toEqual([]);
+    // An archive carrying no dashboard row puts the profile back on the
+    // dashboard's own defaults (ADR-041) — the background B had is gone, not
+    // merely unreferenced.
+    expect(new DashboardSettingsStore(db.raw, profileB).get()).toEqual({
+      backgroundHash: null,
+      backgroundMime: null,
+      backgroundSizeBytes: null,
+      backgroundDim: DEFAULT_BACKGROUND_DIM,
+    });
 
     // Including the child tables no store lists on its own — the ones a wipe
     // that leaned on ON DELETE CASCADE would be most likely to miss.

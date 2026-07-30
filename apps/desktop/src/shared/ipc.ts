@@ -176,6 +176,10 @@ export const IpcChannel = {
   noteAttachmentsRemove: "note-attachments:remove",
   noteAttachmentsOpen: "note-attachments:open",
   noteAttachmentsSaveAs: "note-attachments:save-as",
+  dashboardGetSettings: "dashboard:get-settings",
+  dashboardPickBackground: "dashboard:pick-background",
+  dashboardClearBackground: "dashboard:clear-background",
+  dashboardSetDim: "dashboard:set-dim",
   searchQuery: "search:query",
   searchRecent: "search:recent",
   searchPage: "search:page",
@@ -2218,6 +2222,69 @@ export interface NoteAttachmentsSaveAsRequest {
 export type SaveAttachmentResult = { canceled: true } | { canceled: false; path: string };
 
 /**
+ * The dashboard's custom background and dim (SET-006 / ADR-041). Four channels,
+ * and deliberately none of them carries a path or a byte: main owns the native
+ * image picker, reads the file, sniffs its type and writes it into the
+ * encrypted blob store, exactly as the task-attachment picker does. The
+ * renderer only ever asks — "pick one", "drop it", "dim it this much" — and
+ * renders whatever comes back.
+ */
+
+/**
+ * Maximum size, in bytes, of an image `dashboard:pick-background` will accept.
+ * 20 MiB: a wallpaper-sized photograph with room to spare, and small enough
+ * that the file is read once into memory without thought. Stat'ed BEFORE the
+ * read, so an oversized file is refused without ever being loaded.
+ */
+export const MAX_BACKGROUND_BYTES = 20_971_520;
+
+/**
+ * Maximum dim the slider (and `dashboard:set-dim`) accept. MUST equal
+ * `MAX_BACKGROUND_DIM` in `@nexus/db` and migration 030's CHECK: the same
+ * bound, declared on both sides so neither imports the other.
+ */
+export const MAX_BACKGROUND_DIM = 90;
+
+/** The dim a profile that has never touched the slider gets. MUST equal `DEFAULT_BACKGROUND_DIM` in `@nexus/db` and migration 030's column default. */
+export const DEFAULT_BACKGROUND_DIM = 40;
+
+/**
+ * The dashboard's resolved settings for one profile (defaults already applied
+ * by the store). `backgroundHash` is what the renderer turns into an
+ * `nx-blob://<hash>` URL — the same read protocol inline note images use; the
+ * bytes themselves never cross IPC.
+ */
+export interface DashboardSettings {
+  backgroundHash: string | null;
+  backgroundMime: string | null;
+  backgroundSizeBytes: number | null;
+  backgroundDim: number;
+}
+
+/** Why an image the user picked was refused. `too-large` is over `MAX_BACKGROUND_BYTES`; `unsupported-format` is anything the main-process sniff did not recognise as one of the four inline raster formats; `unreadable` is a file that could not be stat'ed or read at all. */
+export type DashboardPickErrorCode = "too-large" | "unsupported-format" | "unreadable";
+
+/**
+ * The outcome of the native "pick a background" dialog: the user canceled, the
+ * file was refused for a NAMED reason (never silently re-encoded), or the
+ * settings row now points at it.
+ */
+export type DashboardPickResult =
+  | { status: "canceled" }
+  | { status: "rejected"; code: DashboardPickErrorCode }
+  | { status: "ok"; settings: DashboardSettings };
+
+export interface DashboardSettingsRequest {
+  profileId: string;
+}
+
+export interface DashboardSetDimRequest {
+  profileId: string;
+  /** A whole number, 0..`MAX_BACKGROUND_DIM`. Revalidated in main and again in the store. */
+  dim: number;
+}
+
+/**
  * Global search (ADR-021 / PRD 08 SRCH-001/002). The index itself (migration
  * 017) and its read-only store already exist; these three channels are the
  * palette's entire main-process surface: a typed query, the recency-ordered
@@ -2436,6 +2503,8 @@ export interface RestoreModuleCounts {
   study: number;
   notifications: number;
   notes: number;
+  /** Zero or one — the profile's dashboard background row (SET-006 / ADR-041). */
+  dashboard: number;
 }
 
 /** The outcome of the native "pick a restore archive" dialog (IMEX slice 3c). Mirrors `SaveAttachmentResult`'s shape, plus what a restore preview needs before it can even ask for a passphrase: the file's display name and whether it is an `NXA1` container. */
@@ -2488,7 +2557,14 @@ export interface RestoreApplyResult {
   rowsWritten: number;
   /** Attachment blobs whose bytes were new to the store. A blob already present is not counted, and is not undone. */
   blobsAdded: number;
-  /** Attachment rows restored whose blob the archive did not carry (or carried corrupt): the rows exist, the files do not. */
+  /**
+   * Attachment rows restored whose blob the archive did not carry (or carried
+   * corrupt): the rows exist, the files do not. Deliberately attachment-scoped
+   * — a dashboard background the archive lacked (ADR-041) is reported as a
+   * preview `missing-blob` warning, which is where the user actually decides
+   * whether to go ahead, and folding it in here would make this number mean two
+   * different things at once.
+   */
   missingBlobs: number;
 }
 
@@ -2888,6 +2964,19 @@ export interface NexusApi {
     noteId: string,
     attachmentId: string,
   ): Promise<SaveAttachmentResult>;
+  /** This profile's dashboard background and dim, defaults already applied (SET-006 / ADR-041). Never writes. */
+  dashboardSettings(profileId: string): Promise<DashboardSettings>;
+  /**
+   * Opens the native image picker in MAIN, which reads, sniffs and encrypts the
+   * chosen file into the blob store before the settings row is written — the
+   * renderer sends no path and no bytes. Resolves once the dialog is settled:
+   * canceled, refused with a named reason, or applied.
+   */
+  pickDashboardBackground(profileId: string): Promise<DashboardPickResult>;
+  /** Drops the background, keeping the dim; the blob is garbage-collected in main if nothing else references it. */
+  clearDashboardBackground(profileId: string): Promise<DashboardSettings>;
+  /** Sets how far the scrim dims the image, 0..`MAX_BACKGROUND_DIM`. */
+  setDashboardDim(profileId: string, dim: number): Promise<DashboardSettings>;
   /** Runs the query pipeline (parse -> FTS match -> bm25 candidates -> rank), falling back to `searchRecent`'s order when the query has no matchable terms (ADR-021). */
   searchQuery(profileId: string, query: string, limit: number): Promise<SearchResult[]>;
   /** The profile's most recently touched entries, already in their final order — no ranking pass, unlike `searchQuery`. */

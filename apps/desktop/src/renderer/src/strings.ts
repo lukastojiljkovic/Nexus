@@ -5,6 +5,7 @@
  */
 import type {
   ArchiveReadErrorCode,
+  DashboardPickErrorCode,
   RestoreModuleCounts,
   RestoreProblemCode,
 } from "../../shared/ipc.js";
@@ -1082,6 +1083,7 @@ export const strings = {
       appearance: "Izgled",
       notes: "Beleške",
       shortcuts: "Prečice",
+      dashboard: "Kontrolna tabla",
       modules: "Moduli",
       notifications: "Obaveštenja",
       backup: "Rezervna kopija",
@@ -1150,6 +1152,28 @@ export const strings = {
       markdownLabel: "Markdown prečice",
       markdownCaption:
         "Kucanje „# ”, „- ” ili „> ” odmah pretvara blok. „/” meni radi i kada je isključeno.",
+    },
+    /**
+     * Kontrolna tabla section (SET-006 / ADR-041): the dashboard's own
+     * background image and how far it is dimmed behind the widgets.
+     */
+    dashboard: {
+      caption: "Slika stoji iza kartica na kontrolnoj tabli.",
+      /** Alt text for the current-background thumbnail — the image is decoration, so it says what it is rather than describing it. */
+      thumbnailAlt: "Trenutna pozadina kontrolne table",
+      pick: "Izaberi sliku…",
+      clear: "Ukloni",
+      dimLabel: "Zatamnjenje",
+      /** Hidden while no background is set — a slider with nothing to dim is a control with no effect. */
+      dimHint: "Veće zatamnjenje znači mirniju pozadinu i čitljiviji tekst.",
+      /** One sentence per `DashboardPickErrorCode`: the file was refused, and why. Never a re-encode. */
+      rejected: {
+        "too-large": "Slika je prevelika — najviše 20 MB.",
+        "unsupported-format": "Ovaj format nije podržan. Koristi PNG, JPEG, GIF ili WebP.",
+        unreadable: "Fajl nije moguće pročitati.",
+      } satisfies Record<DashboardPickErrorCode, string>,
+      /** A rejected IPC call (not one of the named reasons above). */
+      error: "Promena pozadine nije uspela. Pokušaj ponovo.",
     },
     /** One-line module descriptions for the gallery, keyed by module id. */
     moduleDescriptions: {
@@ -1266,6 +1290,7 @@ export const strings = {
         study: "Učenje",
         notifications: "Obaveštenja",
         notes: "Beleške",
+        dashboard: "Kontrolna tabla",
       } satisfies Record<keyof RestoreModuleCounts, string>,
       columnCurrent: "Sada",
       columnIncoming: "Iz arhive",

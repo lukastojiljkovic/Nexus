@@ -27,22 +27,24 @@ import { renderNoteMarkdown } from "./noteMarkdown.js";
 import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown.js";
 
 /**
- * IMEX-004: the archive's own semver. `1.8.0` adds the `task-dependency` record
- * type (migration 029 / ADR-037), after `1.5.0`-`1.7.0` (task attachments, task
- * templates and the NOTE folder preferences, each landing on its own lane),
- * `1.4.0` the `task-tag`/`task-tag-link` types (migration 023), `1.3.0` the
+ * IMEX-004: the archive's own semver. `1.9.0` adds the `dashboard-settings`
+ * record type and the `data/dashboard.ndjson` file it rides in (SET-006 /
+ * ADR-041), after `1.8.0` added the `task-dependency` record type (migration
+ * 029 / ADR-037), `1.5.0`-`1.7.0` task attachments, task templates and the
+ * NOTE folder preferences (each landing on its own lane), `1.4.0` the
+ * `task-tag`/`task-tag-link` types (migration 023), `1.3.0` the
  * `task-list`/`task-section` types and the `listId`/`sectionId`/`position` a
  * task carries into them (TASK-004 / ADR-029), `1.2.0` a task's
  * `reminderOffsets` (ADR-028) and `1.1.0` the `person` record type (CAL-007 /
  * ADR-026). Additive, so a MINOR bump by the same honesty each of those made
- * one: an archive this build writes is refused by a 1.7 reader, which would
- * otherwise parse every task and silently drop the order the user put them in.
- * Kept in step with `INTERCHANGE_SCHEMA_VERSION` (`importArchive.ts`) — two
- * constants rather than one import, since the reader already imports from this
- * module and the cycle would be worse than the duplication;
+ * one: an archive this build writes is refused by an older reader, which would
+ * otherwise parse everything else and silently drop the background the user
+ * chose. Kept in step with `INTERCHANGE_SCHEMA_VERSION` (`importArchive.ts`) —
+ * two constants rather than one import, since the reader already imports from
+ * this module and the cycle would be worse than the duplication;
  * `importArchive.test.ts` pins them equal.
  */
-const SCHEMA_VERSION = "1.8.0";
+const SCHEMA_VERSION = "1.9.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -503,6 +505,29 @@ export interface ExportNoteVersion {
   snapshot: Uint8Array;
 }
 
+/**
+ * One profile's dashboard background choice and dim (SET-006 / ADR-041).
+ *
+ * A record rather than a manifest section, unlike the flags and notification
+ * preferences below, because it names a BLOB: the image travels in the
+ * archive's `blobs/` union exactly as a note attachment does, and a row that
+ * points at one belongs where the other blob-bearing rows are — in the NDJSON,
+ * checksummed, one line per profile.
+ *
+ * `backgroundHash`/`backgroundMime`/`backgroundSizeBytes` are all null or all
+ * set (migration 030's CHECK): a hash with no mime is a blob nothing can decide
+ * how to serve, and a hash with no size would make the manifest's blob
+ * inventory only partly true. The mime is whatever main sniffed from the file's
+ * own bytes at pick time (SEC-FILE-02), never a guess from its name.
+ */
+export interface ExportDashboardSettings {
+  profileId: string;
+  backgroundHash: string | null;
+  backgroundMime: string | null;
+  backgroundSizeBytes: number | null;
+  backgroundDim: number;
+}
+
 /** Everything the manifest's "settings" section carries (founder decision #11: flags + NTF settings ship with the export). */
 export interface ExportSettings {
   flags: Record<string, boolean>;
@@ -570,6 +595,15 @@ export interface ProfileData {
   noteTemplates: readonly ExportNoteTemplate[];
   noteAttachments: readonly ExportNoteAttachment[];
   noteVersions: readonly ExportNoteVersion[];
+  /**
+   * Zero or one row (SET-006 / ADR-041) — the profile's dashboard background
+   * and dim. Required, like every field above and for the same reason: a module
+   * the caller forgets must be a type error, not a quiet omission. An EMPTY
+   * array is the honest shape for "this archive carries no such row", which is
+   * exactly what every pre-`1.9.0` archive is, and what a restore then reads as
+   * "leave the profile on the store's own defaults".
+   */
+  dashboardSettings: readonly ExportDashboardSettings[];
 }
 
 export interface ExportArchiveInput {
@@ -603,17 +637,25 @@ export interface ExportArchive {
   binaries: ExportBinaryEntry[];
 }
 
-/** The five checksummed NDJSON files, in manifest order. Exported so `importArchive.ts` verifies checksums against exactly the list this module produces them from — never a second, hand-copied literal that could drift. */
+/** The checksummed NDJSON files, in manifest order. Exported so `importArchive.ts` verifies checksums against exactly the list this module produces them from — never a second, hand-copied literal that could drift. An older archive legitimately carries fewer of them; the reader's checksum walk iterates the UNION of this list and what the manifest declares, which is what makes appending one here backward-compatible. */
 export const DATA_FILES = [
   "data/tasks.ndjson",
   "data/calendar.ndjson",
   "data/study.ndjson",
   "data/notifications.ndjson",
   "data/notes.ndjson",
+  "data/dashboard.ndjson",
 ] as const;
 
-/** The manifest's five module ids, in manifest order — the grouping `countProfileModules` counts by and `buildExportArchive` builds `manifest.modules` from, so the two can never disagree. */
-export const ARCHIVE_MODULE_IDS = ["tasks", "calendar", "study", "notifications", "notes"] as const;
+/** The manifest's module ids, in manifest order — the grouping `countProfileModules` counts by and `buildExportArchive` builds `manifest.modules` from, so the two can never disagree. */
+export const ARCHIVE_MODULE_IDS = [
+  "tasks",
+  "calendar",
+  "study",
+  "notifications",
+  "notes",
+  "dashboard",
+] as const;
 export type ArchiveModuleId = (typeof ARCHIVE_MODULE_IDS)[number];
 
 /**
@@ -660,6 +702,11 @@ export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, 
       data.noteTemplates.length +
       data.noteAttachments.length +
       data.noteVersions.length,
+    // Zero or one, and counted like any other row rather than folded into a
+    // neighbouring module: a restore preview that showed "Kontrolna tabla: 1"
+    // against "0" is telling the user something true about what is about to
+    // change, which is the entire job of that table.
+    dashboard: data.dashboardSettings.length,
   };
 }
 
@@ -725,11 +772,16 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     ...noteTemplates.map((row) => ({ type: "note-template", ...row })),
   ]);
 
+  const dashboardNdjson = toNdjson(
+    input.data.dashboardSettings.map((row) => ({ type: "dashboard-settings", ...row })),
+  );
+
   files.set("data/tasks.ndjson", tasksNdjson);
   files.set("data/calendar.ndjson", calendarNdjson);
   files.set("data/study.ndjson", studyNdjson);
   files.set("data/notifications.ndjson", notificationsNdjson);
   files.set("data/notes.ndjson", notesNdjson);
+  files.set("data/dashboard.ndjson", dashboardNdjson);
 
   // --- Notes: Markdown mirror + binary entries (ADR-022 section 3) -------
   const binaries: ExportBinaryEntry[] = [];
@@ -758,18 +810,25 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   // Blobs are content-addressed and deduplicated: two attachment rows sharing
   // a hash declare ONE binary entry, not two — across notes, across tasks, and
   // across the two MODULES alike, because `blobs/` is one namespace over one
-  // on-disk store (migration 024). Notes lead only because they shipped first;
-  // the entry a hash lands under is identical either way.
+  // on-disk store (migration 024). A dashboard background (ADR-041) is a blob
+  // like any other and joins the SAME union — a background the user also
+  // attached to a note travels once, and either row alone is enough to carry
+  // it. Notes lead only because they shipped first; the entry a hash lands
+  // under is identical either way.
   const blobSizeBySha = new Map<string, number>();
+  const declareBlob = (sha256: string, sizeBytes: number): void => {
+    if (blobSizeBySha.has(sha256)) return;
+    blobSizeBySha.set(sha256, sizeBytes);
+    binaries.push({ kind: "attachment", path: `blobs/${sha256}`, sha256, sizeBytes });
+  };
   for (const attachment of [...noteAttachments, ...input.data.taskAttachments]) {
-    if (blobSizeBySha.has(attachment.sha256)) continue;
-    blobSizeBySha.set(attachment.sha256, attachment.sizeBytes);
-    binaries.push({
-      kind: "attachment",
-      path: `blobs/${attachment.sha256}`,
-      sha256: attachment.sha256,
-      sizeBytes: attachment.sizeBytes,
-    });
+    declareBlob(attachment.sha256, attachment.sizeBytes);
+  }
+  for (const dashboard of input.data.dashboardSettings) {
+    // Both non-null together (migration 030's CHECK, re-checked by the reader),
+    // so one guard covers the pair without the other needing a non-null claim.
+    if (dashboard.backgroundHash === null || dashboard.backgroundSizeBytes === null) continue;
+    declareBlob(dashboard.backgroundHash, dashboard.backgroundSizeBytes);
   }
 
   files.set("tables/tasks.csv", tasksCsv(input.data.tasks));

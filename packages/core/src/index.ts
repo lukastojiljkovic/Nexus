@@ -96,6 +96,7 @@ export type {
   ExportArchiveInput,
   ExportBinaryEntry,
   ExportCard,
+  ExportDashboardSettings,
   ExportDeck,
   ExportDocument,
   ExportEvent,

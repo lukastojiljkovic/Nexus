@@ -11,8 +11,10 @@ import {
   type ModuleRegistry,
 } from "@nexus/core";
 import { ACCENT_IDS, type AccentId } from "@nexus/tokens";
+import { MAX_BACKGROUND_DIM } from "../../shared/ipc.js";
 import type {
   AppInfo,
+  DashboardSettings,
   FlagState,
   NotificationSource,
   RestoreModuleCounts,
@@ -330,6 +332,7 @@ const RESTORE_MODULES: (keyof RestoreModuleCounts)[] = [
   "study",
   "notifications",
   "notes",
+  "dashboard",
 ];
 
 /**
@@ -657,6 +660,152 @@ function RestoreSection({ profileId, hits }: RestoreSectionProps) {
 
       {state.phase === "applied" && <p className="set__section-caption">{s.applied}</p>}
     </div>
+  );
+}
+
+interface DashboardSectionProps {
+  profileId: string;
+  /** SET-014 hit ids — the dim label highlights under `"dashboard-dim"`; the picker entries steer section visibility only. */
+  hits: ReadonlySet<string>;
+}
+
+/**
+ * Kontrolna tabla section (SET-006 / ADR-041): the dashboard's own background
+ * image and the dim that holds it behind the widgets.
+ *
+ * The renderer validates nothing about the file and never sees one — every
+ * button here is a request to main, which owns the picker, the size gate, the
+ * MIME sniff and the blob store (SEC-EL). A refused pick comes back as a NAMED
+ * reason and is shown as such; nothing is silently converted to fit.
+ *
+ * The slider is hidden while no background is set, because a dim with nothing
+ * to dim is a control that does nothing. It commits on every change rather than
+ * behind a save button: the value is one small integer, the effect is visual,
+ * and a "Sačuvaj" between the two would only put a step between the user and
+ * what they are looking at.
+ */
+function DashboardSection({ profileId, hits }: DashboardSectionProps) {
+  const s = strings.settings.dashboard;
+  const [settings, setSettings] = useState<DashboardSettings | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const next = await window.nexus.dashboardSettings(profileId);
+        if (active) setSettings(next);
+      } catch (loadError) {
+        if (active) setError(strings.settings.dashboard.error);
+        console.error("Nexus: failed to load dashboard settings:", loadError);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profileId]);
+
+  async function pick(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await window.nexus.pickDashboardBackground(profileId);
+      if (result.status === "ok") setSettings(result.settings);
+      else if (result.status === "rejected") setError(s.rejected[result.code]);
+    } catch (pickError) {
+      setError(s.error);
+      console.error("Nexus: failed to pick a dashboard background:", pickError);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function clear(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      setSettings(await window.nexus.clearDashboardBackground(profileId));
+    } catch (clearError) {
+      setError(s.error);
+      console.error("Nexus: failed to clear the dashboard background:", clearError);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Optimistic on purpose: the slider must track the pointer, so the local
+  // value moves first and main confirms after. A drag fires one write per step,
+  // and their replies can land out of order — `latestDim` is what stops a slow
+  // earlier reply from snapping the slider back over a newer position. Only the
+  // reply to the CURRENT value is ever adopted; the rest are dropped, which
+  // costs nothing since each carries the same row.
+  const latestDim = useRef<number | null>(null);
+
+  async function changeDim(dim: number): Promise<void> {
+    latestDim.current = dim;
+    setSettings((current) => (current === null ? current : { ...current, backgroundDim: dim }));
+    setError(null);
+    try {
+      const next = await window.nexus.setDashboardDim(profileId, dim);
+      if (latestDim.current === dim) setSettings(next);
+    } catch (dimError) {
+      setError(s.error);
+      console.error("Nexus: failed to set the dashboard dim:", dimError);
+    }
+  }
+
+  if (settings === null) {
+    return error != null ? <p className="set__error">{error}</p> : <p className="app__muted">{strings.app.loading}</p>;
+  }
+
+  const backgroundHash = settings.backgroundHash;
+
+  return (
+    <>
+      <p className="set__section-caption">{s.caption}</p>
+
+      <div className="set__dash-row">
+        {backgroundHash !== null && (
+          <img className="set__dash-thumb" src={`nx-blob://${backgroundHash}`} alt={s.thumbnailAlt} />
+        )}
+        <div className="set__dash-actions">
+          <Button size="sm" variant="primary" disabled={busy} onClick={() => void pick()}>
+            {s.pick}
+          </Button>
+          {backgroundHash !== null && (
+            <Button size="sm" variant="ghost" disabled={busy} onClick={() => void clear()}>
+              {s.clear}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {backgroundHash !== null && (
+        <div className="set__dash-dim">
+          <label
+            className={labelClass("set__dash-dim-label", hits.has("dashboard-dim"))}
+            htmlFor="set-dash-dim"
+          >
+            {s.dimLabel}
+            <span className="set__dash-dim-value">{settings.backgroundDim}%</span>
+          </label>
+          <input
+            id="set-dash-dim"
+            className="set__dash-slider"
+            type="range"
+            min={0}
+            max={MAX_BACKGROUND_DIM}
+            step={5}
+            value={settings.backgroundDim}
+            onChange={(event) => void changeDim(Number(event.target.value))}
+          />
+          <p className="set__section-caption">{s.dimHint}</p>
+        </div>
+      )}
+
+      {error != null && <p className="set__error">{error}</p>}
+    </>
   );
 }
 
@@ -1217,6 +1366,13 @@ export function SettingsPage({
           onShowAll={onShowShortcuts}
           hits={hits}
         />
+      </Card>
+
+      <Card
+        title={strings.settings.sectionTitle.dashboard}
+        className={sectionClass(sections.has("dashboard"))}
+      >
+        <DashboardSection profileId={profileId} hits={hits} />
       </Card>
 
       <Card title={strings.settings.sectionTitle.modules} className={sectionClass(sections.has("modules"))}>

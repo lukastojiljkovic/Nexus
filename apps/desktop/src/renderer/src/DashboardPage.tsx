@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { computeStreak } from "@nexus/core";
 import { Card, Chip, EmptyState, ListRow } from "@nexus/ui";
 import type {
+  DashboardSettings,
   DocumentStatus,
   Event,
   Exam,
@@ -174,6 +175,25 @@ export function DashboardPage({
   const [studyStats, setStudyStats] = useState<StudyStats | null>(null);
   const [todayFocusSessions, setTodayFocusSessions] = useState<FocusSession[] | null>(null);
   const [failed, setFailed] = useState(false);
+  // The custom background (SET-006 / ADR-041). Loaded on its own, NOT joined to
+  // the widget fetch below: it is decoration, and decoration must never be able
+  // to hold up — or fail — the data the page exists to show.
+  const [dashboardSettings, setDashboardSettings] = useState<DashboardSettings | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const next = await window.nexus.dashboardSettings(profileId);
+        if (active) setDashboardSettings(next);
+      } catch (error) {
+        console.error("Nexus: failed to load the dashboard background:", error);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profileId]);
 
   useEffect(() => {
     let active = true;
@@ -308,8 +328,28 @@ export function DashboardPage({
   const hasStreak = streak != null && streak.current > 0;
   const hasFocusToday = focusMinutesToday > 0;
 
+  // Two layers behind the content when a background is set (ADR-041 section 5):
+  // the image itself, cover/centered, and a scrim whose fill IS the theme's own
+  // page background — so Dan dims toward warm paper and Noć toward blue-black
+  // with no new colour value anywhere. No background set renders exactly
+  // today's dashboard: no layers, no frame, nothing.
+  const background =
+    dashboardSettings !== null && dashboardSettings.backgroundHash !== null
+      ? { hash: dashboardSettings.backgroundHash, dim: dashboardSettings.backgroundDim }
+      : null;
+
   return (
-    <div className="dash">
+    <div className={`dash${background !== null ? " dash--framed" : ""}`}>
+      {background !== null && (
+        <>
+          <div
+            className="dash__bg"
+            style={{ backgroundImage: `url("nx-blob://${background.hash}")` }}
+            aria-hidden="true"
+          />
+          <div className="dash__scrim" style={{ opacity: background.dim / 100 }} aria-hidden="true" />
+        </>
+      )}
       <header className="dash__greeting">
         <h1 className="dash__hello">{greeting(profileName, now.getHours())}</h1>
         <p className="dash__date">{dateLine}</p>

@@ -5,6 +5,7 @@ import type { RecurrenceRule } from "../recurrence/recurrence.js";
 import { DATA_FILES } from "./exportArchive.js";
 import type {
   ExportCard,
+  ExportDashboardSettings,
   ExportDeck,
   ExportDocument,
   ExportEvent,
@@ -117,13 +118,15 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.8.0` added the
- * `task-dependency` record type (migration 029 / ADR-037), after `1.5.0`-`1.7.0`
- * (task attachments, task templates and the NOTE folder preferences), `1.4.0`
- * the `task-tag`/`task-tag-link` types (migration 023), `1.3.0` the
- * `task-list`/`task-section` types and a task's placement into them (TASK-004 /
- * ADR-029), `1.2.0` a task's `reminderOffsets` (ADR-028) and `1.1.0` the
- * `person` record type (CAL-007 / ADR-026): additive changes, hence MINOR
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.9.0` added the
+ * `dashboard-settings` record type and its own data file (SET-006 / ADR-041),
+ * after `1.8.0` added the `task-dependency` record type (migration 029 /
+ * ADR-037), `1.5.0`-`1.7.0` task attachments, task templates and the NOTE
+ * folder preferences, `1.4.0` the `task-tag`/`task-tag-link` types (migration
+ * 023), `1.3.0` the `task-list`/`task-section` types and a task's placement
+ * into them (TASK-004 / ADR-029), `1.2.0` a task's `reminderOffsets` (ADR-028)
+ * and `1.1.0` the `person` record type (CAL-007 / ADR-026): additive changes,
+ * hence MINOR
  * bumps, which is exactly the compatibility mechanism
  * `isSupportedSchemaVersion` implements — an older minor within major 1 still
  * passes the gate here, while an older build refuses a newer archive rather
@@ -135,23 +138,18 @@ export interface ImportArchiveResult {
  *
  * A new RECORD TYPE needs no `ArchiveEra` flag, unlike a new field on an
  * existing type: an older archive simply carries none of it, which is
- * indistinguishable from a profile that had no dependencies — while a NEWER
- * archive never reaches a parser at all, because the gate above refuses it. Era
- * flags exist only for the "this row is missing a field it now must have"
- * question, which a whole absent type never asks.
+ * indistinguishable from a profile that had no dependencies — or, at `1.9.0`,
+ * from one that never chose a dashboard background — while a NEWER archive
+ * never reaches a parser at all, because the gate above refuses it. Era flags
+ * exist only for the "this row is missing a field it now must have" question,
+ * which a whole absent type never asks.
  *
  * Major is still 1 throughout, so there is nothing yet to migrate an older
  * major forward from — a migration framework for a major that has never
  * shipped would be speculative machinery with nothing to exercise it.
  *
- * SUPERVISOR NOTE (task-templates lane, ADR-035): this worktree branched before
- * the `1.5.0` (`task-attachment`) lane landed on main, so the `1.5.0` sentence
- * above describes a change this tree does not yet contain and the version jumps
- * `1.4.0` -> `1.6.0` here. The gate's behaviour is unaffected: a `1.5` archive
- * is accepted by minor comparison and simply carries a type this tree does not
- * know, which is exactly the situation the merge resolves.
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.8.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.9.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -482,6 +480,13 @@ function boundedNameArray(
   return names;
 }
 
+/** Exactly the 64 lowercase hex characters the blob store names a file by — and exactly what `blobs/<name>` must spell for the archive to be able to carry it. */
+function sha256Hex(value: unknown, field: string): string {
+  const s = nonEmptyStr(value, field);
+  if (!SHA256_PATTERN.test(s)) throw new InvalidFieldError(field);
+  return s;
+}
+
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 /** Exactly `HH:MM` on a 24-hour clock — the shape `NotificationStore`'s own `validateHHMM` enforces on every write. No SQL CHECK backs it, which is precisely why it has to be checked here: an archive is the one way a value can reach that table without passing through the store. */
@@ -534,6 +539,24 @@ const NOTIFICATION_STATUSES = ["delivered", "snoozed", "dismissed"] as const;
 const PERSON_KINDS = ["birthday", "anniversary"] as const;
 /** Mirrors `TASK_LIST_VIEWS` in `@nexus/db`'s `tasks/taskListStore.ts` and migration 022's CHECK (copied, not imported — the `NOTE_FOLDER_COLORS` arrangement). */
 const TASK_LIST_VIEWS = ["list", "kanban"] as const;
+
+/**
+ * Mirrors `MAX_BACKGROUND_DIM` in `@nexus/db`'s
+ * `dashboard/dashboardSettingsStore.ts` and migration 030's CHECK (copied, not
+ * imported — the `NOTE_FOLDER_COLORS` arrangement).
+ */
+const MAX_BACKGROUND_DIM = 90;
+
+/**
+ * The inline image formats a dashboard background may use — `isInlineImageMime`
+ * (`@nexus/core`'s own `files/sniff.ts`) spelled as a closed list so
+ * `enumStr` can name the offending field the way every other enum here does.
+ * The two are pinned equal by this module's own tests.
+ */
+const BACKGROUND_MIMES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
+
+/** A plaintext sha256 exactly as the blob store names one, and as `blobs/<name>` spells it in the archive. */
+const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 
 /**
  * A leap year, used only by `parsePerson` to ask whether a (month, day) pair
@@ -604,7 +627,8 @@ type RecordType =
   | "note-tag-link"
   | "note-attachment"
   | "note-version"
-  | "note-template";
+  | "note-template"
+  | "dashboard-settings";
 
 const ALL_RECORD_TYPES: readonly RecordType[] = [
   "task",
@@ -635,6 +659,7 @@ const ALL_RECORD_TYPES: readonly RecordType[] = [
   "note-attachment",
   "note-version",
   "note-template",
+  "dashboard-settings",
 ];
 
 type DataFilePath = (typeof DATA_FILES)[number];
@@ -663,6 +688,7 @@ const FILE_RECORD_TYPES: Record<DataFilePath, readonly RecordType[]> = {
     "note-version",
     "note-template",
   ],
+  "data/dashboard.ndjson": ["dashboard-settings"],
 };
 
 // --- Per-record parsers, one field validator call per interface field, in --
@@ -1230,6 +1256,44 @@ function parseNoteAttachment(raw: Record<string, unknown>): ExportNoteAttachment
   return { id, noteId, fileName, mime, sizeBytes, sha256, createdAt };
 }
 
+/**
+ * The dashboard's background choice and dim (SET-006 / ADR-041). Three rules no
+ * SQL CHECK on its own could have caught in an archive, and each of them is a
+ * rule `DashboardSettingsStore` enforces on every live write:
+ *
+ * - the hash is a real content-address (`blobs/<name>` is spelled exactly this
+ *   way, and a hash that is not would name a file the archive cannot hold);
+ * - the mime is one of the four inline image formats — the same closed set the
+ *   store refuses outside of, so a restored background is always something the
+ *   `nx-blob:` protocol can serve and Chromium can decode;
+ * - all three background fields are set together or not at all — migration
+ *   030's CHECK, restated here so a half-set triple is a named `invalid-record`
+ *   instead of a raw SQLite error inside the restore transaction.
+ *
+ * `backgroundDim` is bounded here rather than merely typed: 0..90 is the
+ * column's own CHECK, and an out-of-range value would otherwise abort a restore
+ * halfway through.
+ */
+function parseDashboardSettings(raw: Record<string, unknown>): ExportDashboardSettings {
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const backgroundHash =
+    raw.backgroundHash === null ? null : sha256Hex(raw.backgroundHash, "backgroundHash");
+  const backgroundMime =
+    raw.backgroundMime === null
+      ? null
+      : enumStr(raw.backgroundMime, "backgroundMime", BACKGROUND_MIMES);
+  const backgroundSizeBytes =
+    raw.backgroundSizeBytes === null ? null : positiveInt(raw.backgroundSizeBytes, "backgroundSizeBytes");
+  if ((backgroundHash === null) !== (backgroundMime === null)) {
+    throw new InvalidFieldError("backgroundMime");
+  }
+  if ((backgroundHash === null) !== (backgroundSizeBytes === null)) {
+    throw new InvalidFieldError("backgroundSizeBytes");
+  }
+  const backgroundDim = intInRange(raw.backgroundDim, "backgroundDim", 0, MAX_BACKGROUND_DIM);
+  return { profileId, backgroundHash, backgroundMime, backgroundSizeBytes, backgroundDim };
+}
+
 /** Metadata only — `snapshot` is attached afterward from `input.ydocs`, and is REQUIRED (rule 7), unlike a note's. */
 function parseNoteVersionMeta(raw: Record<string, unknown>): Omit<ExportNoteVersion, "snapshot"> {
   const noteId = nonEmptyStr(raw.noteId, "noteId");
@@ -1314,6 +1378,7 @@ interface Collections {
   noteAttachments: Bucket<ExportNoteAttachment>;
   noteVersions: Bucket<Omit<ExportNoteVersion, "snapshot">>;
   noteTemplates: Bucket<ExportNoteTemplate>;
+  dashboardSettings: Bucket<ExportDashboardSettings>;
 }
 
 function newCollections(): Collections {
@@ -1326,7 +1391,7 @@ function newCollections(): Collections {
     reviewLog: newBucket(), plans: newBucket(), blocks: newBucket(), focusSessions: newBucket(),
     notifications: newBucket(), noteFolders: newBucket(), noteTags: newBucket(), notes: newBucket(),
     noteTagLinks: newBucket(), noteAttachments: newBucket(), noteVersions: newBucket(),
-    noteTemplates: newBucket(),
+    noteTemplates: newBucket(), dashboardSettings: newBucket(),
   };
 }
 
@@ -1498,6 +1563,14 @@ function dispatchRecord(
     case "note-template": {
       const row = parseNoteTemplate(raw);
       pushRow(collections.noteTemplates, row.id, row, path, line, problems);
+      return;
+    }
+    // One row per profile (migration 030's PRIMARY KEY), so `profileId` IS the
+    // row's identity and a second one is a `duplicate-id` — the same reasoning
+    // that makes a join row's key its pair.
+    case "dashboard-settings": {
+      const row = parseDashboardSettings(raw);
+      pushRow(collections.dashboardSettings, row.profileId, row, path, line, problems);
       return;
     }
   }
@@ -1958,7 +2031,10 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
   // Both attachment tables are checked, because both name the same `blobs/`
   // namespace: a task's file is as lost as a note's when the archive omits it,
   // and a warning raised for only one of them would under-report the damage the
-  // restore preview shows the user.
+  // restore preview shows the user. A dashboard background is a blob on the
+  // same terms (ADR-041, checked just below): its row restores either way, and
+  // the dashboard simply comes back without a picture rather than the whole
+  // archive being refused over one lost image.
   for (const entry of [
     ...collections.noteAttachments.entries,
     ...collections.taskAttachments.entries,
@@ -1967,6 +2043,15 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
     if (!input.blobNames.has(attachment.sha256)) {
       problems.push(
         problem("warning", "missing-blob", { path: `blobs/${attachment.sha256}`, detail: attachment.id }),
+      );
+    }
+  }
+  for (const entry of collections.dashboardSettings.entries) {
+    const { backgroundHash, profileId } = entry.row;
+    if (backgroundHash === null) continue;
+    if (!input.blobNames.has(backgroundHash)) {
+      problems.push(
+        problem("warning", "missing-blob", { path: `blobs/${backgroundHash}`, detail: profileId }),
       );
     }
   }
@@ -2102,6 +2187,10 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         noteTemplates: rowsOf(collections.noteTemplates),
         noteAttachments: rowsOf(collections.noteAttachments),
         noteVersions,
+        // Empty for every pre-1.9.0 archive, which carries no such file at all —
+        // and a restore reads that emptiness as "leave the profile on the
+        // dashboard's own defaults", which is exactly where it was.
+        dashboardSettings: rowsOf(collections.dashboardSettings),
       };
 
   return { problems, manifest, data };

@@ -55,6 +55,7 @@ function emptyInput(): ExportArchiveInput {
       noteTemplates: [],
       noteAttachments: [],
       noteVersions: [],
+      dashboardSettings: [],
     },
     hash: sha256,
   };
@@ -189,6 +190,7 @@ describe("buildExportArchive", () => {
           "data/study.ndjson",
           "data/notifications.ndjson",
           "data/notes.ndjson",
+          "data/dashboard.ndjson",
           "tables/tasks.csv",
           "tables/events.csv",
           "tables/documents.csv",
@@ -206,6 +208,7 @@ describe("buildExportArchive", () => {
       expect(archive.files.get("data/study.ndjson")).toBe("");
       expect(archive.files.get("data/notifications.ndjson")).toBe("");
       expect(archive.files.get("data/notes.ndjson")).toBe("");
+      expect(archive.files.get("data/dashboard.ndjson")).toBe("");
 
       // CSV mirrors still carry their header row.
       expect(archive.files.get("tables/tasks.csv")).toMatch(/^id,/);
@@ -214,7 +217,9 @@ describe("buildExportArchive", () => {
       );
 
       expect(archive.totalRecords).toBe(0);
-      expect(archive.byModule).toEqual({ tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0 });
+      expect(archive.byModule).toEqual({
+        tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0, dashboard: 0,
+      });
       expect(archive.binaries).toEqual([]);
     });
   });
@@ -225,7 +230,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.8.0");
+      expect(manifest.schemaVersion).toBe("1.9.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       expect(manifest.profile).toEqual({ id: "profile1", name: "Luka" });
@@ -239,6 +244,7 @@ describe("buildExportArchive", () => {
         { id: "study", records: 0 },
         { id: "notifications", records: 0 },
         { id: "notes", records: 0 },
+        { id: "dashboard", records: 0 },
       ]);
       expect(manifest.checksums).toEqual({
         "data/tasks.ndjson": sha256(""),
@@ -246,6 +252,7 @@ describe("buildExportArchive", () => {
         "data/study.ndjson": sha256(""),
         "data/notifications.ndjson": sha256(""),
         "data/notes.ndjson": sha256(""),
+        "data/dashboard.ndjson": sha256(""),
       });
       expect(manifest.blobs).toEqual([]);
     });
@@ -773,7 +780,9 @@ describe("buildExportArchive", () => {
         },
       ];
       const archive = buildExportArchive(input);
-      expect(archive.byModule).toEqual({ tasks: 1, calendar: 0, study: 0, notifications: 1, notes: 0 });
+      expect(archive.byModule).toEqual({
+        tasks: 1, calendar: 0, study: 0, notifications: 1, notes: 0, dashboard: 0,
+      });
       expect(archive.totalRecords).toBe(2);
     });
   });
@@ -867,6 +876,12 @@ describe("buildExportArchive", () => {
         noteVersions: [
           { noteId: "note1", coveredSeq: 1, title: "N", createdAt: t, snapshot: new Uint8Array([1]) },
         ],
+        dashboardSettings: [
+          {
+            profileId: "p1", backgroundHash: "f".repeat(64), backgroundMime: "image/png",
+            backgroundSizeBytes: 32, backgroundDim: 40,
+          },
+        ],
       };
     }
 
@@ -878,6 +893,7 @@ describe("buildExportArchive", () => {
         study: 8, // 1 each of subject/exam/deck/card/review/plan/block/focus-session
         notifications: 1,
         notes: 7, // 1 each of note/folder/tag/tag-link/template/attachment/version
+        dashboard: 1, // the one settings row a profile can ever have
       });
     });
 
@@ -890,8 +906,81 @@ describe("buildExportArchive", () => {
 
     it("counts every bucket as zero for empty data", () => {
       expect(countProfileModules(emptyInput().data)).toEqual({
-        tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0,
+        tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0, dashboard: 0,
       });
+    });
+  });
+
+  describe("data/dashboard.ndjson (SET-006 / ADR-041)", () => {
+    const HASH = "d".repeat(64);
+
+    it("writes the settings row as one type-discriminated line and counts it into byModule.dashboard", () => {
+      const input = emptyInput();
+      input.data.dashboardSettings = [
+        {
+          profileId: "profile1", backgroundHash: HASH, backgroundMime: "image/jpeg",
+          backgroundSizeBytes: 4096, backgroundDim: 65,
+        },
+      ];
+      const archive = buildExportArchive(input);
+
+      expect(parseNdjson(archive.files.get("data/dashboard.ndjson") ?? "")).toEqual([
+        {
+          type: "dashboard-settings", profileId: "profile1", backgroundHash: HASH,
+          backgroundMime: "image/jpeg", backgroundSizeBytes: 4096, backgroundDim: 65,
+        },
+      ]);
+      expect(archive.byModule.dashboard).toBe(1);
+      expect(archive.totalRecords).toBe(1);
+    });
+
+    it("declares the background in the same blobs/ union an attachment uses", () => {
+      const input = emptyInput();
+      input.data.dashboardSettings = [
+        {
+          profileId: "profile1", backgroundHash: HASH, backgroundMime: "image/png",
+          backgroundSizeBytes: 4096, backgroundDim: 40,
+        },
+      ];
+      const archive = buildExportArchive(input);
+
+      expect(archive.binaries).toEqual([
+        { kind: "attachment", path: `blobs/${HASH}`, sha256: HASH, sizeBytes: 4096 },
+      ]);
+      const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as {
+        blobs: { sha256: string; sizeBytes: number }[];
+      };
+      expect(manifest.blobs).toEqual([{ sha256: HASH, sizeBytes: 4096 }]);
+    });
+
+    // Content-addressed means content-addressed: a background the user also
+    // attached to a note is ONE file in the archive, declared once.
+    it("declares a hash shared with an attachment exactly once", () => {
+      const input = emptyInput();
+      input.data.notes = [noteRow({ id: "note1", title: "N" })];
+      input.data.noteAttachments = [attachmentRow({ id: "att1", noteId: "note1", sha256: HASH })];
+      input.data.dashboardSettings = [
+        {
+          profileId: "profile1", backgroundHash: HASH, backgroundMime: "image/png",
+          backgroundSizeBytes: 10, backgroundDim: 40,
+        },
+      ];
+      const archive = buildExportArchive(input);
+
+      expect(archive.binaries.filter((entry) => entry.path === `blobs/${HASH}`)).toHaveLength(1);
+    });
+
+    it("declares no blob for a profile that chose no background", () => {
+      const input = emptyInput();
+      input.data.dashboardSettings = [
+        {
+          profileId: "profile1", backgroundHash: null, backgroundMime: null,
+          backgroundSizeBytes: null, backgroundDim: 20,
+        },
+      ];
+      const archive = buildExportArchive(input);
+      expect(archive.binaries).toEqual([]);
+      expect(archive.byModule.dashboard).toBe(1);
     });
   });
 

@@ -130,6 +130,20 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
     label: strings.shortcuts.showAll,
     keywords: ["precice", "tastatura", "spisak", "pomoc"],
   },
+  // SET-006 (ADR-041): the background picker steers the section; the dim
+  // label is a drawn control label, so it also earns the highlight.
+  {
+    id: "dashboard-background",
+    section: "dashboard",
+    label: strings.settings.dashboard.pick,
+    keywords: ["pozadina", "slika", "kontrolna", "tabla", "izgled"],
+  },
+  {
+    id: "dashboard-dim",
+    section: "dashboard",
+    label: strings.settings.dashboard.dimLabel,
+    keywords: ["zatamnjenje", "pozadina", "kontrolna", "tabla"],
+  },
   {
     id: "notifications-presets",
     section: "notifications",

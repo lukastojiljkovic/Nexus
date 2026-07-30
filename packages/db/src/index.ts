@@ -9,6 +9,7 @@ export type { OpenDatabaseOptions } from "./database.js";
 export {
   CardNotFoundError,
   CardValidationError,
+  DashboardSettingsValidationError,
   DatabaseError,
   DatabaseKeyError,
   DatabaseLockedError,
@@ -62,6 +63,13 @@ export { MIGRATIONS, runMigrations } from "./migrations/migrations.js";
 export type { Migration } from "./migrations/migrations.js";
 
 export { SqliteFlagStore } from "./flags/sqliteFlagStore.js";
+
+export {
+  DashboardSettingsStore,
+  DEFAULT_BACKGROUND_DIM,
+  MAX_BACKGROUND_DIM,
+} from "./dashboard/dashboardSettingsStore.js";
+export type { DashboardSettings } from "./dashboard/dashboardSettingsStore.js";
 
 export {
   TaskStore,

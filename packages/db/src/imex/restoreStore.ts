@@ -84,6 +84,10 @@ export const RESTORE_WIPE_TABLES = [
   "feature_flags",
   "ntf_settings",
   "ntf_source_settings",
+  // The dashboard's background choice (migration 030 / ADR-041): a per-profile
+  // settings row like the two above it, wiped and rewritten the same way. The
+  // blob it names is main's to garbage-collect afterward, never this store's.
+  "dashboard_settings",
 ] as const;
 
 type WipeTable = (typeof RESTORE_WIPE_TABLES)[number];
@@ -211,6 +215,7 @@ export class RestoreStore {
   private readonly insertFlag: Database.Statement;
   private readonly insertNtfSettings: Database.Statement;
   private readonly insertNtfSourceSetting: Database.Statement;
+  private readonly insertDashboardSettings: Database.Statement;
 
   constructor(
     private readonly db: DatabaseHandle,
@@ -371,6 +376,12 @@ export class RestoreStore {
     );
     this.insertNtfSourceSetting = db.prepare(
       `INSERT INTO ntf_source_settings (profile_id, source, enabled) VALUES (?, ?, 0)`,
+    );
+    this.insertDashboardSettings = db.prepare(
+      `INSERT INTO dashboard_settings
+         (profile_id, background_hash, background_mime, background_size_bytes,
+          background_dim, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     );
   }
 
@@ -716,6 +727,25 @@ export class RestoreStore {
       for (const source of NOTIFICATION_SOURCES) {
         if (enabledSources.has(source)) continue;
         this.insertNtfSourceSetting.run(this.profileId, source);
+        written += 1;
+      }
+
+      // ADR-041. Retargeted onto THIS profile, like every other row here: the
+      // archive's own `profileId` names the profile it was exported from, which
+      // is not necessarily the one being written. Zero rows is the shape every
+      // pre-1.9.0 archive has, and the absence of a row IS the default
+      // (`DashboardSettingsStore.get`) — so nothing is written to say "no
+      // background, dim 40", because that is what no row already means.
+      for (const dashboard of input.data.dashboardSettings) {
+        this.insertDashboardSettings.run(
+          this.profileId,
+          dashboard.backgroundHash,
+          dashboard.backgroundMime,
+          dashboard.backgroundSizeBytes,
+          dashboard.backgroundDim,
+          now,
+          now,
+        );
         written += 1;
       }
 

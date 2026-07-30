@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { readFile as readFileAsync, stat as statAsync } from "node:fs/promises";
 import { join } from "node:path";
 import { app, BrowserWindow, dialog, ipcMain, protocol } from "electron";
 import type { IpcMainInvokeEvent, OpenDialogOptions } from "electron";
@@ -13,6 +14,7 @@ import {
   dayKeyToUtcMs,
   isValidDayKey,
   MAX_ARCHIVE_PASSPHRASE_LENGTH,
+  isInlineImageMime,
   parseSearchQuery,
   rankSearchResults,
   resolveDueRange,
@@ -35,6 +37,7 @@ import { MAX_PASSCODE_LENGTH, blobStorageName, deriveBlobKeys, type BlobKeys } f
 import {
   CARD_RATINGS,
   CardStore,
+  DashboardSettingsStore,
   DatabaseLockedError,
   DeckStore,
   DOCUMENT_TYPES,
@@ -204,6 +207,8 @@ import {
 import {
   CARD_TEXT_MAX_LENGTH,
   IpcChannel,
+  MAX_BACKGROUND_BYTES,
+  MAX_BACKGROUND_DIM,
   MAX_TASK_TAG_NAME_LENGTH,
   MAX_TASK_TEMPLATE_NAME_LENGTH,
   NOTE_CARD_KEY_MAX_LENGTH,
@@ -214,6 +219,8 @@ import {
   type AppInfo,
   type AuthResult,
   type AuthStatus,
+  type DashboardPickResult,
+  type DashboardSettings,
   type ExportResult,
   type FlagState,
   type NoteCardSpec,
@@ -1736,37 +1743,45 @@ function requireTaskAttachment(profileId: string, taskId: string, attachmentId: 
   return found;
 }
 
-// --- Blob reference counting (ADR-014/ADR-019 + migration 024) --------------
+// --- Blob reference counting (ADR-014/ADR-019 + migrations 024/030) ---------
 //
 // THE place that enumerates every table naming a blob. One on-disk store is
-// shared by every module that lets a user attach a file, so a blob is orphaned
-// only when NO table names it anymore — a GC that consulted one table would
-// delete a file another still points at, and that is silent data loss. Both
-// helpers below are DELIBERATELY profile-agnostic (each store's own
+// shared by every module that lets a user hang bytes off a row, so a blob is
+// orphaned only when NO table names it anymore — a GC that consulted one table
+// would delete a file another still points at, and that is silent data loss.
+// That is also what makes a dashboard background shared byte-for-byte with an
+// attachment ONE file on disk that survives either row's deletion (ADR-041).
+// Both helpers below are DELIBERATELY profile-agnostic (each store's own
 // `refCount`/`mimeForHash` is, see their doc comments): the store is
 // content-addressed across the whole database, so a count that saw one
 // profile's rows would be the same bug one profile smaller.
 //
-// A module that gains attachments widens exactly these two functions.
+// A module that gains blobs widens exactly these two functions.
 
-/** How many attachment rows — across every attachment table and every profile — hold this hash. */
+/** How many rows — across every blob-naming table and every profile — hold this hash. */
 function blobRefCount(profileId: string, sha256: string): number {
   return (
     noteAttachmentStore(profileId).refCount(sha256) +
-    taskAttachmentStore(profileId).refCount(sha256)
+    taskAttachmentStore(profileId).refCount(sha256) +
+    dashboardSettingsStore(profileId).refCount(sha256)
   );
 }
 
-/** The main-sniffed mime registered for this hash by whichever table holds it, or null when no attachment row anywhere does. */
+/** The main-sniffed mime registered for this hash by whichever table holds it, or null when no row anywhere does. */
 function blobMimeForHash(profileId: string, sha256: string): string | null {
   return (
     noteAttachmentStore(profileId).mimeForHash(sha256) ??
-    taskAttachmentStore(profileId).mimeForHash(sha256)
+    taskAttachmentStore(profileId).mimeForHash(sha256) ??
+    dashboardSettingsStore(profileId).mimeForHash(sha256)
   );
 }
 
 function flagStore(profileId: string): SqliteFlagStore {
   return new SqliteFlagStore(requireDb().raw, profileId);
+}
+
+function dashboardSettingsStore(profileId: string): DashboardSettingsStore {
+  return new DashboardSettingsStore(requireDb().raw, profileId);
 }
 
 // --- Search (ADR-021): the query pipeline -----------------------------------
@@ -2321,6 +2336,7 @@ function restoreDeps(): RestoreDeps {
     cancelFocusSession: (profileId) => {
       runningFocusSessions.delete(profileId);
     },
+    dashboardSettingsStore,
     saveBlob: (bytes) => saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes),
     // Injected rather than reached for, so `restore.ts` never has to know WHICH
     // tables reference a blob — that union lives in exactly one place
@@ -2330,6 +2346,97 @@ function restoreDeps(): RestoreDeps {
     deleteBlobIfOrphaned: (sha256, refCount) =>
       deleteBlobIfOrphaned(blobStorePathsFor(), requireBlobKeys(), sha256, refCount),
   };
+}
+
+// --- Dashboard background (SET-006 / ADR-041) --------------------------------
+
+/**
+ * The whole pick flow, in main and nowhere else (SEC-EL): the native image
+ * dialog, the size gate, the read, the sniff, the encrypt-into-the-blob-store,
+ * and only then the settings row. The renderer sends no path and no bytes —
+ * exactly the note-attachment precedent, minus even the bytes, since here main
+ * opens the file itself.
+ *
+ * Order matters and is deliberate:
+ *
+ * 1. `stat` BEFORE the read, so a 4 GB file is refused without ever being
+ *    loaded — reading first and measuring after would make the cap decorative.
+ * 2. Sniff the bytes, never the extension (SEC-FILE-02). A `.png` whose content
+ *    is a PDF sniffs as a PDF and is refused by name; nothing is ever
+ *    re-encoded to make it fit, because silently converting a user's file is a
+ *    bigger surprise than declining it.
+ * 3. Write the blob, then the row. A blob with no row is collectable garbage
+ *    the next GC pass reclaims; a row with no blob is a dashboard pointing at
+ *    bytes that are not there.
+ * 4. GC the PREVIOUS hash afterwards, refcount-gated — replacing a background
+ *    is exactly as much a release of the old bytes as clearing one is.
+ */
+async function handleDashboardPick(profileId: string): Promise<DashboardPickResult> {
+  const options: OpenDialogOptions = {
+    properties: ["openFile"],
+    filters: [{ name: "Slika", extensions: ["png", "jpg", "jpeg", "gif", "webp"] }],
+  };
+  const { canceled, filePaths } = mainWindow
+    ? await dialog.showOpenDialog(mainWindow, options)
+    : await dialog.showOpenDialog(options);
+  const filePath = canceled ? null : (filePaths[0] ?? null);
+  if (filePath === null) return { status: "canceled" };
+
+  let bytes: Uint8Array;
+  try {
+    const stats = await statAsync(filePath);
+    if (stats.size > MAX_BACKGROUND_BYTES) return { status: "rejected", code: "too-large" };
+    bytes = await readFileAsync(filePath);
+  } catch {
+    return { status: "rejected", code: "unreadable" };
+  }
+
+  const mime = sniffMime(bytes);
+  if (!isInlineImageMime(mime)) return { status: "rejected", code: "unsupported-format" };
+
+  const store = dashboardSettingsStore(profileId);
+  const previousHash = store.get().backgroundHash;
+  const { sha256 } = await saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes);
+
+  let settings: DashboardSettings;
+  try {
+    settings = store.setBackground(sha256, mime, bytes.byteLength, new Date().toISOString());
+  } catch (error) {
+    // The blob was already written (write-if-absent); if the row failed, GC it
+    // so a failed pick never leaves an orphan file — but only if nothing else
+    // references it. The note-attachment add path's own arrangement.
+    await deleteBlobIfOrphaned(
+      blobStorePathsFor(),
+      requireBlobKeys(),
+      sha256,
+      blobRefCount(profileId, sha256),
+    );
+    throw error;
+  }
+
+  await releaseBackgroundBlob(profileId, previousHash, sha256);
+  return { status: "ok", settings };
+}
+
+/**
+ * Garbage-collects the background a profile just stopped using. `nextHash` is
+ * what replaced it (null when the background was simply cleared): re-picking
+ * the SAME image must not delete it, and the refcount would say so anyway —
+ * the explicit comparison just avoids the pointless round trip through the
+ * store and the filesystem.
+ */
+async function releaseBackgroundBlob(
+  profileId: string,
+  previousHash: string | null,
+  nextHash: string | null,
+): Promise<void> {
+  if (previousHash === null || previousHash === nextHash) return;
+  await deleteBlobIfOrphaned(
+    blobStorePathsFor(),
+    requireBlobKeys(),
+    previousHash,
+    blobRefCount(profileId, previousHash),
+  );
 }
 
 function registerIpc(): void {
@@ -3866,8 +3973,9 @@ function registerIpc(): void {
     } catch (error) {
       // The blob was already written (write-if-absent); if the row failed to
       // insert (e.g. an unknown/soft-deleted note), GC it so a failed add
-      // never leaves an orphan file — but only if NOTHING references it, in any
-      // attachment table (`blobRefCount`), since a task may hold the same file.
+      // never leaves an orphan file — but only if nothing else references it,
+      // counted across every table that names a hash (`blobRefCount`): an
+      // attachment on either module, or a dashboard background.
       await deleteBlobIfOrphaned(
         blobStorePathsFor(),
         requireBlobKeys(),
@@ -3918,6 +4026,41 @@ function registerIpc(): void {
       return saveAttachmentAs(mainWindow, blobStorePathsFor(), requireBlobKeys(), attachment);
     },
   );
+
+  // Dashboard background (SET-006 / ADR-041). The renderer never names a file
+  // and never sends bytes: `handleDashboardPick` owns the dialog, the size
+  // gate, the sniff and the blob write, and these four handlers validate only
+  // what actually crosses IPC — a profile id, and a dim.
+  ipcMain.handle(IpcChannel.dashboardGetSettings, (event, payload): DashboardSettings => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return dashboardSettingsStore(profileId).get();
+  });
+
+  ipcMain.handle(IpcChannel.dashboardPickBackground, (event, payload): Promise<DashboardPickResult> => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return handleDashboardPick(profileId);
+  });
+
+  ipcMain.handle(IpcChannel.dashboardClearBackground, async (event, payload): Promise<DashboardSettings> => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+
+    const store = dashboardSettingsStore(profileId);
+    const previousHash = store.get().backgroundHash;
+    const settings = store.clearBackground(new Date().toISOString());
+    await releaseBackgroundBlob(profileId, previousHash, null);
+    return settings;
+  });
+
+  ipcMain.handle(IpcChannel.dashboardSetDim, (event, payload): DashboardSettings => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const dim = asBoundedInteger(body.dim, "dim", 0, MAX_BACKGROUND_DIM);
+    return dashboardSettingsStore(profileId).setDim(dim, new Date().toISOString());
+  });
 
   // Global search (ADR-021 / PRD 08 SRCH-001/002): `runSearchQuery`/
   // `runRecentSearch` own the actual pipeline (see their doc comments) so the
@@ -4001,6 +4144,7 @@ function registerIpc(): void {
         noteOrgStore,
         noteTemplateStore,
         noteAttachmentStore,
+        dashboardSettingsStore,
         readBlob: (sha256) => readBlob(blobStorePathsFor(), requireBlobKeys(), sha256),
         flagStore,
         getMainWindow: () => mainWindow,
@@ -4471,15 +4615,14 @@ app.whenReady().then(async () => {
     // genuinely has nothing to hand back until the passcode is verified.
     registerIpc();
 
-    // ADR-014: the profileId argument is never read by `mimeForHash` — every
-    // attachment store's is deliberately profile-agnostic (see their doc
-    // comments), so any placeholder value is safe here. `blobMimeForHash` is
-    // what makes a task's thumbnail resolve as readily as a note's: one hash
-    // namespace, every table consulted. The lookup itself is wrapped: while
-    // locked, the stores throw through `requireDb()` — caught here and turned
-    // into a clean 404 (`registerBlobProtocol` already 404s on a null mime)
-    // rather than a generic network error surfacing in the renderer for every
-    // attachment image while locked.
+    // ADR-014 / ADR-041: `blobMimeForHash` is the union over every table that
+    // names a hash — an attachment row on either module, or a dashboard
+    // background — and every member of it is deliberately profile-agnostic, so
+    // the placeholder profile id is never read. The lookup itself is wrapped:
+    // while locked, the store getters throw through `requireDb()` — caught here
+    // and turned into a clean 404 (`registerBlobProtocol` already 404s on a
+    // null mime) rather than a generic network error surfacing in the renderer
+    // for every image on screen while locked.
     registerBlobProtocol(
       (sha256) => {
         try {

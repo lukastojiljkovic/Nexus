@@ -29,6 +29,7 @@ import type {
 import type { RestoredNoteDerived } from "@nexus/db";
 import type {
   CardStore,
+  DashboardSettingsStore,
   DeckStore,
   DocumentStore,
   EventStore,
@@ -79,6 +80,7 @@ export interface ProfileDataDeps {
   noteTemplateStore(profileId: string): NoteTemplateStore;
   noteAttachmentStore(profileId: string): NoteAttachmentStore;
   flagStore(profileId: string): SqliteFlagStore;
+  dashboardSettingsStore(profileId: string): DashboardSettingsStore;
 }
 
 /** Every NOTE-module row `ProfileData` requires (ADR-022 section 3) — `gatherNotes`'s return shape. */
@@ -211,6 +213,12 @@ export function gatherProfileData(deps: ProfileDataDeps, profileId: string): Pro
     focusSessions: deps.focusStore(profileId).listActive(),
     notifications: deps.notificationStore(profileId).listAll(),
     ...gatherNotes(deps, profileId),
+    // Always exactly one row (ADR-041), because `get` resolves the defaults a
+    // profile with no row still has: an archive that carried nothing here would
+    // restore as "no background, dim 40" anyway, so writing the resolved values
+    // says the same thing out loud — and makes the undo snapshot able to put
+    // back a dim the user had set, which an omission could not.
+    dashboardSettings: [{ profileId, ...deps.dashboardSettingsStore(profileId).get() }],
   };
 }
 

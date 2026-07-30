@@ -369,10 +369,16 @@ export async function applyRestore(
   // tables, since both name the same `blobs/` namespace — a task's file left
   // unwritten here would restore as a row pointing at nothing. One at a time —
   // never all resident together — mirroring `handleExport`'s own attachment loop.
+  // A dashboard background (ADR-041) is a referrer on the same terms as an
+  // attachment, so it joins the same set and a hash both name is written once.
   const restoredAttachments = [...ready.data.noteAttachments, ...ready.data.taskAttachments];
   const shasToWrite = new Set<string>();
   for (const attachment of restoredAttachments) {
     if (ready.archive.blobNames.has(attachment.sha256)) shasToWrite.add(attachment.sha256);
+  }
+  for (const dashboard of ready.data.dashboardSettings) {
+    const hash = dashboard.backgroundHash;
+    if (hash !== null && ready.archive.blobNames.has(hash)) shasToWrite.add(hash);
   }
   const addedBlobs: string[] = [];
   for (const sha256 of shasToWrite) {
@@ -429,11 +435,12 @@ export async function applyRestore(
  * (ADR-023 section 2), then — only AFTER that write, so the reference count
  * below is live rather than stale — removes exactly the blobs the restore
  * had added and that nothing references anymore. A blob's row-level reference
- * count across EVERY attachment table (`deps.blobRefCount`, deliberately
+ * count across EVERY table that names a hash (`deps.blobRefCount` —
+ * attachments on either module, dashboard backgrounds; deliberately
  * profile-agnostic) is what decides this, never simply "was it one of
  * `addedBlobs`": a blob the restore added that some OTHER profile's — or some
- * other MODULE's — attachment also happens to reference (content-addressed
- * blobs are shared) must survive regardless of who wrote it first.
+ * other MODULE's — row also happens to reference (content-addressed blobs are
+ * shared) must survive regardless of who wrote it first.
  *
  * Throws when there is nothing to undo for this profile. Discards the focus
  * timer and idle compactions exactly as `applyRestore` does, and reloads the

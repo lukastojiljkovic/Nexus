@@ -79,6 +79,7 @@ function emptyExportInput(): ExportArchiveInput {
       noteTemplates: [],
       noteAttachments: [],
       noteVersions: [],
+      dashboardSettings: [],
     },
     hash: sha256,
   };
@@ -345,6 +346,15 @@ function richProfileData(): ProfileData {
         snapshot: docSnapshot("Verzija 2"),
       },
     ],
+    // A background sharing the attachments' hash deliberately (ADR-041): the
+    // blob union has to declare it ONCE, and the round trip has to carry the
+    // settings row whole either way.
+    dashboardSettings: [
+      {
+        profileId: "profile1", backgroundHash: "a".repeat(64), backgroundMime: "image/jpeg",
+        backgroundSizeBytes: 10, backgroundDim: 65,
+      },
+    ],
   };
 }
 
@@ -384,6 +394,7 @@ const EMPTY_DATA_FILE_NAMES = [
   "data/study.ndjson",
   "data/notifications.ndjson",
   "data/notes.ndjson",
+  "data/dashboard.ndjson",
 ] as const;
 
 /** A minimal, fully valid manifest+data-files set (5 empty NDJSON files, checksums matching), so an individual test can override exactly one thing and stay isolated from every other rule. */
@@ -518,11 +529,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
+  // `1.10.0`: the nearest minor strictly ahead of this build's `1.9.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.9.0" });
+    const files = baseFiles({ schemaVersion: "1.10.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.9.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.10.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -1132,6 +1144,134 @@ describe("parseImportArchive — task attachments (migration 024)", () => {
   });
 });
 
+describe("parseImportArchive — dashboard settings (migration 030 / ADR-041)", () => {
+  const HASH = "a".repeat(64);
+
+  const VALID_DASHBOARD = {
+    type: "dashboard-settings", profileId: "profile1", backgroundHash: HASH,
+    backgroundMime: "image/png", backgroundSizeBytes: 4096, backgroundDim: 40,
+  };
+
+  /** Parses a `data/dashboard.ndjson` built from `rows`, with `blobNames` holding the background so the happy path carries no warning. */
+  function parseDashboardFile(
+    rows: readonly Record<string, unknown>[],
+    blobNames: ReadonlySet<string> = new Set([HASH]),
+  ) {
+    return parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/dashboard.ndjson": ndjson(rows) } }), {
+        blobNames,
+      }),
+    );
+  }
+
+  it("round-trips a background and its dim", () => {
+    const result = parseDashboardFile([VALID_DASHBOARD]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.dashboardSettings).toEqual([
+      {
+        profileId: "profile1", backgroundHash: HASH, backgroundMime: "image/png",
+        backgroundSizeBytes: 4096, backgroundDim: 40,
+      },
+    ]);
+  });
+
+  it("round-trips a dim with no background at all — the shape a profile that only moved the slider has", () => {
+    const result = parseDashboardFile([
+      {
+        type: "dashboard-settings", profileId: "profile1", backgroundHash: null,
+        backgroundMime: null, backgroundSizeBytes: null, backgroundDim: 0,
+      },
+    ]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.dashboardSettings).toEqual([
+      {
+        profileId: "profile1", backgroundHash: null, backgroundMime: null,
+        backgroundSizeBytes: null, backgroundDim: 0,
+      },
+    ]);
+  });
+
+  it("accepts both ends of the dim range and refuses either side of them", () => {
+    for (const backgroundDim of [0, 90]) {
+      expect(parseDashboardFile([{ ...VALID_DASHBOARD, backgroundDim }]).problems).toEqual([]);
+    }
+    for (const backgroundDim of [-1, 91, 12.5]) {
+      const result = parseDashboardFile([{ ...VALID_DASHBOARD, backgroundDim }]);
+      expect(result.problems).toContainEqual({
+        severity: "error", code: "invalid-record", path: "data/dashboard.ndjson", line: 1,
+        detail: "backgroundDim",
+      });
+      expect(result.data).toBeNull();
+    }
+  });
+
+  it("accepts every inline image format and refuses anything else", () => {
+    for (const backgroundMime of ["image/png", "image/jpeg", "image/gif", "image/webp"]) {
+      expect(parseDashboardFile([{ ...VALID_DASHBOARD, backgroundMime }]).problems).toEqual([]);
+    }
+    for (const backgroundMime of ["image/svg+xml", "application/pdf", "application/octet-stream"]) {
+      const result = parseDashboardFile([{ ...VALID_DASHBOARD, backgroundMime }]);
+      expect(result.problems).toContainEqual({
+        severity: "error", code: "invalid-record", path: "data/dashboard.ndjson", line: 1,
+        detail: "backgroundMime",
+      });
+      expect(result.data).toBeNull();
+    }
+  });
+
+  const BAD_ROWS: { name: string; row: Record<string, unknown>; detail: string }[] = [
+    { name: "no profile", row: { profileId: undefined }, detail: "profileId" },
+    { name: "a hash that is not a sha256", row: { backgroundHash: "nope" }, detail: "backgroundHash" },
+    { name: "an uppercase hash", row: { backgroundHash: "A".repeat(64) }, detail: "backgroundHash" },
+    { name: "a hash with no mime", row: { backgroundMime: null }, detail: "backgroundMime" },
+    { name: "a mime with no hash", row: { backgroundHash: null }, detail: "backgroundMime" },
+    { name: "a hash with no size", row: { backgroundSizeBytes: null }, detail: "backgroundSizeBytes" },
+    { name: "a zero size", row: { backgroundSizeBytes: 0 }, detail: "backgroundSizeBytes" },
+    { name: "no dim at all", row: { backgroundDim: undefined }, detail: "backgroundDim" },
+  ];
+
+  for (const { name, row, detail } of BAD_ROWS) {
+    it(`refuses a dashboard row with ${name}`, () => {
+      const result = parseDashboardFile([{ ...VALID_DASHBOARD, ...row }]);
+      expect(result.problems).toContainEqual({
+        severity: "error", code: "invalid-record", path: "data/dashboard.ndjson", line: 1, detail,
+      });
+      expect(result.data).toBeNull();
+    });
+  }
+
+  // One row per profile is migration 030's PRIMARY KEY, so the profile id IS
+  // the row's identity — two rows for one profile is a duplicate, not a merge.
+  it("refuses two rows for the same profile", () => {
+    const result = parseDashboardFile([VALID_DASHBOARD, { ...VALID_DASHBOARD, backgroundDim: 10 }]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "duplicate-id", path: "data/dashboard.ndjson", line: 2,
+      detail: "profile1",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  // A background is a blob on the same terms an attachment is: losing it costs
+  // the picture, never the whole archive.
+  it("warns, but still restores, when the archive lacks the background blob", () => {
+    const result = parseDashboardFile([VALID_DASHBOARD], new Set());
+    expect(result.problems).toEqual([
+      { severity: "warning", code: "missing-blob", path: `blobs/${HASH}`, detail: "profile1" },
+    ]);
+    expect(result.data?.dashboardSettings).toHaveLength(1);
+  });
+
+  it("refuses a dashboard record filed in another data file", () => {
+    const result = parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/notes.ndjson": ndjson([VALID_DASHBOARD]) } })),
+    );
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "invalid-record", path: "data/notes.ndjson", line: 1, detail: "type",
+    });
+    expect(result.data).toBeNull();
+  });
+});
+
 describe("parseImportArchive — recurrence (ADR-024)", () => {
   /** The `invalid-record` details a one-row file produced, in discovery order. */
   function detailsFor(path: string, row: Record<string, unknown>): (string | undefined)[] {
@@ -1645,8 +1785,8 @@ describe("parseImportArchive — note folder preferences (the 1.7.0 era gate)", 
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.8.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.8.0");
+  it("is 1.9.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.9.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -1658,7 +1798,7 @@ describe("parseImportArchive — schema version", () => {
   });
 
   it("accepts the exact current version", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.8.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.9.0" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
@@ -1715,6 +1855,16 @@ describe("parseImportArchive — schema version", () => {
     expect(result.data).toMatchObject({ taskDependencies: [] });
   });
 
+  // And for the one ADR-041's dashboard background has just superseded: a 1.8
+  // archive carries no `dashboard-settings` row at all, which is exactly what
+  // a profile that never chose a background looks like — hence, again, no era
+  // flag for a whole absent record type.
+  it("accepts an older minor — a 1.8 archive still parses here, dashboard settings empty", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.8.0" })));
+    expect(result.problems).toEqual([]);
+    expect(result.data).toMatchObject({ dashboardSettings: [] });
+  });
+
   it("accepts an older patch", () => {
     const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.0.7" })));
     expect(result.problems).toEqual([]);
@@ -1722,15 +1872,16 @@ describe("parseImportArchive — schema version", () => {
   });
 
   it("accepts a newer patch", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.8.7" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.9.7" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
 
+  // `1.10.0`: the nearest minor strictly ahead of this build's `1.9.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.9.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.10.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.9.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.10.0" },
     ]);
     expect(result.data).toBeNull();
   });
