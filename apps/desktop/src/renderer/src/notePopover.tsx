@@ -8,10 +8,17 @@ import {
 } from "react";
 
 export interface NotePopoverProps {
-  /** Accessible label for the "⋯" trigger button. */
+  /** Accessible label for the trigger button. */
   label: string;
   /** Extra class on the trigger, so callers can size/reveal it per context. */
   triggerClassName?: string;
+  /**
+   * What the trigger shows; defaults to the "⋯" every row-level menu uses. A
+   * toolbar-level menu (the TASK page's „Šabloni“) names itself instead, because
+   * a bare "⋯" beside the view toggle would say nothing about what it opens —
+   * the glyph reads as "more actions on THIS row" only when it sits on a row.
+   */
+  triggerContent?: ReactNode;
   /** Panel content; `close` dismisses the popover after an action is chosen. */
   children: (close: () => void) => ReactNode;
 }
@@ -25,7 +32,12 @@ export interface NotePopoverProps {
  * the renderer dependency-light; the panel is a real `role="menu"` region and
  * every item inside is a focusable `<button>`.
  */
-export function NotePopover({ label, triggerClassName, children }: NotePopoverProps) {
+export function NotePopover({
+  label,
+  triggerClassName,
+  triggerContent = "⋯",
+  children,
+}: NotePopoverProps) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -75,7 +87,7 @@ export function NotePopover({ label, triggerClassName, children }: NotePopoverPr
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        ⋯
+        {triggerContent}
       </button>
       {open && pos && (
         <div className="note__menu-panel" role="menu" style={panelStyle}>

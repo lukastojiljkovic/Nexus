@@ -166,6 +166,8 @@ export const strings = {
     loadError: "Zadaci se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
     editLabel: "Izmeni zadatak",
     deleteLabel: "Obriši zadatak",
+    /** The per-row „⋯“ menu: tags to attach plus „Sačuvaj kao šablon“, so its name is the row, not one of them. */
+    rowMenuLabel: "Radnje nad zadatkom",
     deletedNotice: "Zadatak obrisan",
     undo: "Vrati",
     dismiss: "Zatvori",
@@ -321,6 +323,33 @@ export const strings = {
       chipUnitMany: "priloga",
       /** Tooltip on that chip; the number alone cannot say what it counts. */
       chipTitle: "Priloženih datoteka",
+    },
+    /**
+     * Šabloni (ADR-035 / TASK-010) — a saved task shape, captured from a row's
+     * „⋯“ menu and applied from the toolbar. Worded like `notes.template*`
+     * where the sentence is the same, since it is the same idea one module
+     * over: `templateSaveAs` → `saveAs`, `templateNamePlaceholder` →
+     * `namePlaceholder`, `templateError` → `actionError`. The block already
+     * says „šablon“, so nothing inside it repeats the word.
+     */
+    templates: {
+      /** The toolbar button, and the heading inside both popovers. */
+      title: "Šabloni",
+      /** Accessible name of the toolbar button's menu. */
+      menuLabel: "Šabloni zadataka",
+      /** Shown in place of the list when the profile has no templates yet. */
+      empty: "Još nemaš šablone zadataka.",
+      /** The action in a task row's „⋯“ menu. */
+      saveAs: "Sačuvaj kao šablon",
+      namePlaceholder: "Naziv šablona",
+      /** Accessible name of the name field — the action in full, like `lists.renameSectionLabel`. */
+      nameLabel: "Sačuvaj zadatak kao šablon",
+      /** Said BEFORE the fact, not after: saving under an existing name is how a template is edited. */
+      overwriteNote: "Postojeći naziv se zamenjuje.",
+      /** Tooltip on a template's name in the list — the click applies it. */
+      applyTitle: "Napravi zadatak od ovog šablona",
+      delete: "Obriši šablon",
+      actionError: "Radnja nad šablonom nije uspela. Pokušaj ponovo.",
     },
     /** Kanban column titles, keyed by task status value (labels are presentation). */
     status: {

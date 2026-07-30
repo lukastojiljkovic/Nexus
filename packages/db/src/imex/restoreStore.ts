@@ -59,6 +59,11 @@ export const RESTORE_WIPE_TABLES = [
   "task_sections",
   "task_lists",
   "task_tags",
+  // Templates hang off nothing but `profiles` and nothing hangs off them
+  // (migration 027 — a template's tags are NAMES, not rows), so their position
+  // in this list is free; they sit at the end of the TASK group because that is
+  // where a reader looks for them, not because anything above them requires it.
+  "task_templates",
   "note_tag_links",
   "note_links",
   "note_attachments",
@@ -166,6 +171,7 @@ export class RestoreStore {
   private readonly insertTaskTag: Database.Statement;
   private readonly insertTaskTagLink: Database.Statement;
   private readonly insertTaskAttachment: Database.Statement;
+  private readonly insertTaskTemplate: Database.Statement;
   private readonly insertNoteFolder: Database.Statement;
   private readonly insertNoteTag: Database.Statement;
   private readonly insertSubject: Database.Statement;
@@ -220,6 +226,10 @@ export class RestoreStore {
     this.insertTaskAttachment = db.prepare(
       `INSERT INTO task_attachments (id, task_id, file_name, mime, size_bytes, sha256, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    );
+    this.insertTaskTemplate = db.prepare(
+      `INSERT INTO task_templates (id, profile_id, name, payload, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
     );
     this.insertNoteFolder = db.prepare(
       `INSERT INTO note_folders (id, profile_id, parent_id, name, color, created_at, updated_at)
@@ -528,6 +538,21 @@ export class RestoreStore {
         this.insertTaskAttachment.run(
           attachment.id, attachment.taskId, attachment.fileName, attachment.mime,
           attachment.sizeBytes, attachment.sha256, attachment.createdAt,
+        );
+        written += 1;
+      }
+
+      // The payload is re-serialized rather than carried as text, because the
+      // archive carries it as a nested JSON OBJECT (`ExportTaskTemplatePayload`)
+      // while the column holds JSON text. `parseImportArchive` already returned
+      // it in canonical form — the same field order and the same values
+      // `TaskTemplateStore` writes — so this produces exactly the text that
+      // store would have written, which is what lets it treat anything else it
+      // later reads as corruption.
+      for (const template of input.data.taskTemplates) {
+        this.insertTaskTemplate.run(
+          template.id, this.profileId, template.name, JSON.stringify(template.payload),
+          template.createdAt, template.updatedAt,
         );
         written += 1;
       }

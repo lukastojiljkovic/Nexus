@@ -87,6 +87,14 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.taskAttachmentsSaveAs, { profileId, id: taskId, attachmentId }),
   taskAttachmentCounts: (profileId) =>
     ipcRenderer.invoke(IpcChannel.taskAttachmentsCounts, { profileId }),
+  listTaskTemplates: (profileId) =>
+    ipcRenderer.invoke(IpcChannel.taskTemplatesList, { profileId }),
+  saveTaskTemplateFromTask: (profileId, taskId, name) =>
+    ipcRenderer.invoke(IpcChannel.taskTemplatesSaveFromTask, { profileId, taskId, name }),
+  applyTaskTemplate: (profileId, templateId, listId, sectionId) =>
+    ipcRenderer.invoke(IpcChannel.taskTemplatesApply, { profileId, templateId, listId, sectionId }),
+  deleteTaskTemplate: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.taskTemplatesDelete, { profileId, id }),
   listEvents: (profileId) => ipcRenderer.invoke(IpcChannel.eventsList, { profileId }),
   createEvent: (profileId, event) =>
     ipcRenderer.invoke(IpcChannel.eventsCreate, { profileId, event }),

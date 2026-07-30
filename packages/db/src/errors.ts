@@ -123,6 +123,23 @@ export class TaskAttachmentValidationError extends DatabaseError {}
 export class TaskAttachmentNotFoundError extends DatabaseError {}
 
 /**
+ * Thrown when a task template's name or payload breaks a rule the UI should
+ * have caught — an empty name, a payload field outside its domain, a reminder
+ * ladder or recurrence rule with no `dueOffsetDays` to anchor on. Raised on the
+ * way IN (an untrusted caller, SEC-EL-02) and equally on the way OUT, where it
+ * reports a stored row that no longer parses — corruption, never something to
+ * coerce, exactly as `TaskStore`'s own stored-column readers treat it.
+ */
+export class TaskTemplateValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a task-template operation targets an id that is not a template in
+ * the store's own profile — unknown or owned by another profile (the
+ * `NoteTemplateNotFoundError` arrangement).
+ */
+export class TaskTemplateNotFoundError extends DatabaseError {}
+
+/**
  * Thrown when a calendar write is rejected at the store boundary because its
  * input breaks a domain rule the UI is expected to have caught already — an
  * empty event title, a malformed timestamp, or an end that precedes its start

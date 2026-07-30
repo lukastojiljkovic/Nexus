@@ -57,6 +57,7 @@ function emptyExportInput(): ExportArchiveInput {
       taskTags: [],
       taskTagLinks: [],
       taskAttachments: [],
+      taskTemplates: [],
       events: [],
       documents: [],
       renewals: [],
@@ -147,6 +148,33 @@ function richProfileData(): ProfileData {
       {
         id: "tatt-2", taskId: "task-child", fileName: "slika.png", mime: "image/png",
         sizeBytes: 10, sha256: "a".repeat(64), createdAt: "2026-07-01T00:00:00.000Z",
+      },
+    ],
+    // Two templates, and the pair is the point: one carrying every field a
+    // payload has (relative due date, ladder, rule, tag names, subtasks) and one
+    // carrying only a title, which is the other legal extreme.
+    taskTemplates: [
+      {
+        id: "ttpl-review", profileId: "profile1", name: "Nedeljni pregled",
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-02T00:00:00.000Z",
+        payload: {
+          title: "Nedeljni pregled",
+          description: "Prođi kroz sve liste",
+          priority: "high",
+          dueOffsetDays: 7,
+          reminderOffsets: [0, 1],
+          recurrence: { freq: { kind: "weekly", interval: 1, days: [1] }, end: { kind: "never" } },
+          tagNames: ["posao", "kasnije"],
+          subtaskTitles: ["Inbox na nulu", "Pregledaj kalendar"],
+        },
+      },
+      {
+        id: "ttpl-bare", profileId: "profile1", name: "Brza beleška",
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+        payload: {
+          title: "Zapiši", description: null, priority: "none", dueOffsetDays: null,
+          reminderOffsets: [], recurrence: null, tagNames: [], subtaskTitles: [],
+        },
       },
     ],
     events: [
@@ -477,10 +505,10 @@ describe("parseImportArchive — one test per problem code", () => {
   });
 
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.6.0" });
+    const files = baseFiles({ schemaVersion: "1.7.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.6.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.7.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -1478,8 +1506,8 @@ describe("parseImportArchive — older eras (fields added after the first releas
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.5.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.5.0");
+  it("is 1.6.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.6.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -1491,7 +1519,7 @@ describe("parseImportArchive — schema version", () => {
   });
 
   it("accepts the exact current version", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.5.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.6.0" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
@@ -1551,9 +1579,9 @@ describe("parseImportArchive — schema version", () => {
   });
 
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.6.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.7.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.6.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.7.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -1675,5 +1703,152 @@ describe("parseImportArchive — settings", () => {
     );
     expect(result.problems).toEqual([]);
     expect(result.manifest?.settings.notifications.quietFrom).toBe("22:00");
+  });
+});
+
+describe("parseImportArchive — task templates (migration 027 / ADR-035)", () => {
+  const VALID_PAYLOAD = {
+    title: "Nedeljni pregled",
+    description: null,
+    priority: "high",
+    dueOffsetDays: 7,
+    reminderOffsets: [0, 1],
+    recurrence: { freq: { kind: "weekly", interval: 1, days: [1] }, end: { kind: "never" } },
+    tagNames: ["posao"],
+    subtaskTitles: ["Inbox na nulu"],
+  };
+
+  const VALID_TEMPLATE = {
+    type: "task-template", id: "ttpl1", profileId: "profile1", name: "Nedeljni pregled",
+    payload: VALID_PAYLOAD,
+    createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+  };
+
+  function parseTasksFile(rows: readonly Record<string, unknown>[]) {
+    return parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/tasks.ndjson": ndjson(rows) } })),
+    );
+  }
+
+  /** A template whose payload is `VALID_PAYLOAD` with `patch` applied — the one variable each payload case below turns. */
+  function withPayload(patch: Record<string, unknown>): Record<string, unknown> {
+    return { ...VALID_TEMPLATE, payload: { ...VALID_PAYLOAD, ...patch } };
+  }
+
+  it("round-trips a template with every payload field set", () => {
+    const result = parseTasksFile([VALID_TEMPLATE]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.taskTemplates).toEqual([
+      {
+        id: "ttpl1", profileId: "profile1", name: "Nedeljni pregled", payload: VALID_PAYLOAD,
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("keeps a template that references nothing else in the archive — it points at no row by design", () => {
+    const result = parseTasksFile([VALID_TEMPLATE]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.tasks).toEqual([]);
+    expect(result.data?.taskTags).toEqual([]);
+  });
+
+  const BAD_ROWS: { name: string; row: Record<string, unknown>; detail: string }[] = [
+    { name: "no id", row: { id: undefined }, detail: "id" },
+    { name: "no profile", row: { profileId: undefined }, detail: "profileId" },
+    { name: "an empty name", row: { name: "" }, detail: "name" },
+    { name: "an untrimmed name", row: { name: "  Pregled  " }, detail: "name" },
+    { name: "a name past the 80-character cap", row: { name: "x".repeat(81) }, detail: "name" },
+    { name: "no payload at all", row: { payload: undefined }, detail: "payload" },
+    { name: "a payload that is not an object", row: { payload: "{}" }, detail: "payload" },
+    { name: "a malformed updatedAt", row: { updatedAt: "juče" }, detail: "updatedAt" },
+  ];
+
+  for (const { name, row, detail } of BAD_ROWS) {
+    it(`refuses a task template with ${name}`, () => {
+      const result = parseTasksFile([{ ...VALID_TEMPLATE, ...row }]);
+      expect(result.problems).toContainEqual({
+        severity: "error", code: "invalid-record", path: "data/tasks.ndjson", line: 1, detail,
+      });
+      expect(result.data).toBeNull();
+    });
+  }
+
+  // Every payload field is revalidated here rather than trusted: it lives in a
+  // JSON column no CHECK can reach, so this parser and `TaskTemplateStore`'s own
+  // validator are the only two gates it ever passes.
+  const BAD_PAYLOADS: { name: string; patch: Record<string, unknown>; detail: string }[] = [
+    { name: "an empty title", patch: { title: "" }, detail: "payload.title" },
+    { name: "an untrimmed title", patch: { title: " x " }, detail: "payload.title" },
+    { name: "a priority outside the closed set", patch: { priority: "urgent" }, detail: "payload.priority" },
+    { name: "a negative dueOffsetDays", patch: { dueOffsetDays: -1 }, detail: "payload.dueOffsetDays" },
+    { name: "a dueOffsetDays past a year", patch: { dueOffsetDays: 366 }, detail: "payload.dueOffsetDays" },
+    { name: "a fractional dueOffsetDays", patch: { dueOffsetDays: 1.5 }, detail: "payload.dueOffsetDays" },
+    { name: "a repeated reminder lead time", patch: { reminderOffsets: [1, 1] }, detail: "payload.reminderOffsets" },
+    { name: "a reminder lead time past a year", patch: { reminderOffsets: [366] }, detail: "payload.reminderOffsets[0]" },
+    { name: "a recurrence rule the engine rejects", patch: { recurrence: { freq: { kind: "daily", interval: 0 }, end: { kind: "never" } } }, detail: "payload.recurrence" },
+    { name: "an empty tag name", patch: { tagNames: [""] }, detail: "payload.tagNames[0]" },
+    { name: "an over-long tag name", patch: { tagNames: ["x".repeat(51)] }, detail: "payload.tagNames[0]" },
+    { name: "a repeated tag name", patch: { tagNames: ["posao", "posao"] }, detail: "payload.tagNames" },
+    { name: "more than 20 tags", patch: { tagNames: Array.from({ length: 21 }, (_, i) => `t${i}`) }, detail: "payload.tagNames" },
+    { name: "an empty subtask title", patch: { subtaskTitles: [""] }, detail: "payload.subtaskTitles[0]" },
+    { name: "more than 30 subtasks", patch: { subtaskTitles: Array.from({ length: 31 }, (_, i) => `s${i}`) }, detail: "payload.subtaskTitles" },
+    { name: "reminders but no dueOffsetDays to count back from", patch: { dueOffsetDays: null, recurrence: null }, detail: "payload.dueOffsetDays" },
+    { name: "a rule but no dueOffsetDays to phase from", patch: { dueOffsetDays: null, reminderOffsets: [] }, detail: "payload.dueOffsetDays" },
+  ];
+
+  for (const { name, patch, detail } of BAD_PAYLOADS) {
+    it(`refuses a task template payload with ${name}`, () => {
+      const result = parseTasksFile([withPayload(patch)]);
+      expect(result.problems).toContainEqual({
+        severity: "error", code: "invalid-record", path: "data/tasks.ndjson", line: 1, detail,
+      });
+      expect(result.data).toBeNull();
+    });
+  }
+
+  // Two identical chores are two chores, unlike two identical labels — so the
+  // uniqueness rule applies to `tagNames` and deliberately not here.
+  it("accepts two subtasks sharing a title", () => {
+    const result = parseTasksFile([withPayload({ subtaskTitles: ["Pozovi", "Pozovi"] })]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.taskTemplates[0]?.payload.subtaskTitles).toEqual(["Pozovi", "Pozovi"]);
+  });
+
+  it("accepts a bare payload — a title and nothing else", () => {
+    const result = parseTasksFile([
+      withPayload({
+        description: null, priority: "none", dueOffsetDays: null, reminderOffsets: [],
+        recurrence: null, tagNames: [], subtaskTitles: [],
+      }),
+    ]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.taskTemplates[0]?.payload.dueOffsetDays).toBeNull();
+  });
+
+  // `0` is a real due date — "due the day it is applied" — which is exactly why
+  // capturing a past due date clamps to 0 rather than dropping it to null.
+  it("accepts a dueOffsetDays of 0 as the anchor a ladder and a rule need", () => {
+    const result = parseTasksFile([withPayload({ dueOffsetDays: 0 })]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.taskTemplates[0]?.payload.dueOffsetDays).toBe(0);
+  });
+
+  it("refuses two templates sharing an id", () => {
+    const result = parseTasksFile([VALID_TEMPLATE, { ...VALID_TEMPLATE, name: "Drugi" }]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "duplicate-id", path: "data/tasks.ndjson", line: 2, detail: "ttpl1",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  it("refuses a task-template record filed in the notes file", () => {
+    const result = parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/notes.ndjson": ndjson([VALID_TEMPLATE]) } })),
+    );
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "invalid-record", path: "data/notes.ndjson", line: 1, detail: "type",
+    });
+    expect(result.data).toBeNull();
   });
 });

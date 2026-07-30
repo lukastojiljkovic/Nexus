@@ -27,21 +27,28 @@ import { renderNoteMarkdown } from "./noteMarkdown.js";
 import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown.js";
 
 /**
- * IMEX-004: the archive's own semver. `1.5.0` adds the `task-attachment` record
- * type (migration 024), after `1.4.0` added `task-tag`/`task-tag-link`
- * (migration 023), `1.3.0` the `task-list`/`task-section` types and the
- * `listId`/`sectionId`/`position` a task carries into them (TASK-004 /
- * ADR-029), `1.2.0` a task's `reminderOffsets` (ADR-028) and `1.1.0` the
- * `person` record type (CAL-007 / ADR-026). Additive, so a MINOR bump by the
- * same honesty each of those made one: an archive this build writes is refused
- * by a 1.4 reader, which would otherwise parse every task and silently drop the
- * files the user hung off them — and, worse, drop the `blobs/` entries those
- * rows are the only reference to. Kept in step with
- * `INTERCHANGE_SCHEMA_VERSION` (`importArchive.ts`) — two constants rather than
- * one import, since the reader already imports from this module and the cycle
- * would be worse than the duplication; `importArchive.test.ts` pins them equal.
+ * IMEX-004: the archive's own semver. `1.6.0` adds the `task-template` record
+ * type (migration 027 / ADR-035), after `1.5.0` added `task-attachment`,
+ * `1.4.0` the `task-tag` and `task-tag-link` types (migration 023), `1.3.0` the
+ * `task-list`/`task-section` types and the `listId`/`sectionId`/`position` a
+ * task carries into them (TASK-004 / ADR-029), `1.2.0` a task's
+ * `reminderOffsets` (ADR-028) and `1.1.0` the `person` record type (CAL-007 /
+ * ADR-026). Additive, so a MINOR bump by the same honesty each of those made
+ * one: an archive this build writes is refused by a 1.5 reader, which would
+ * otherwise parse every task and silently drop every template the user built.
+ * Kept in step with `INTERCHANGE_SCHEMA_VERSION` (`importArchive.ts`) — two
+ * constants rather than one import, since the reader already imports from this
+ * module and the cycle would be worse than the duplication;
+ * `importArchive.test.ts` pins them equal.
+ *
+ * SUPERVISOR NOTE (task-templates lane, ADR-035): this worktree branched before
+ * the `1.5.0` (`task-attachment`) lane landed on main, so the `1.5.0` sentence
+ * above describes a change this tree does not yet contain and the version jumps
+ * `1.4.0` -> `1.6.0` here. `1.6.0` is the reserved number regardless; at merge
+ * the two lanes' record types simply coexist and nothing about this constant
+ * changes.
  */
-const SCHEMA_VERSION = "1.5.0";
+const SCHEMA_VERSION = "1.6.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -106,6 +113,62 @@ export interface ExportTaskAttachment {
   sizeBytes: number;
   sha256: string;
   createdAt: string;
+}
+
+/**
+ * The task-shaped body a template carries (ADR-035 / TASK-010) — the interchange
+ * twin of `@nexus/db`'s `TaskTemplatePayload`, declared structurally here for
+ * the reason every row shape in this file is (see the file header).
+ *
+ * A nested object rather than eight flattened `payload*` keys: the payload is
+ * one value in one column, it is validated as a unit on both sides, and
+ * flattening it would put eight task-ish field names at the top level of a row
+ * that is NOT a task — where the next reader would reasonably expect them to
+ * mean what they mean on a `task` row, which they do not (`dueOffsetDays` is
+ * relative, `tagNames` are names, `subtaskTitles` are not rows).
+ */
+export interface ExportTaskTemplatePayload {
+  title: string;
+  description: string | null;
+  priority: string;
+  /**
+   * Whole days from the day the template is APPLIED to the created task's due
+   * date, or null for no due date. Relative on purpose: an absolute date in a
+   * template rots the day after it is saved (ADR-035).
+   */
+  dueOffsetDays: number | null;
+  /** Whole days before the computed due date, ascending; empty unless `dueOffsetDays` is set. */
+  reminderOffsets: number[];
+  /** The rule the created task advances by, or null; non-null only with a `dueOffsetDays` to phase from. */
+  recurrence: RecurrenceRule | null;
+  /**
+   * Tag NAMES, never `task_tags` ids — which is what lets a template survive the
+   * deletion of a tag it was captured with, and restore into a profile whose tag
+   * ids are entirely different. Apply re-resolves each through get-or-create.
+   */
+  tagNames: string[];
+  /** Titles of the direct subtasks the template creates. Duplicates are legal — two identical chores are two chores. */
+  subtaskTitles: string[];
+}
+
+/**
+ * A task template (migration 027 / ADR-035). Rides in `data/tasks.ndjson`.
+ * Deliberately last among the TASK types there: it references nothing — not a
+ * list, not a section, not a tag ROW — so it constrains no ordering, and putting
+ * it after the join keeps the "everything a row points at came before it"
+ * reading of that file intact.
+ *
+ * No `tables/*.csv` mirror, for `ExportPerson`'s reason: those are a curated
+ * subset for a human with a spreadsheet, and a nested payload is precisely what
+ * a flat table cannot show. The NDJSON is the lossless layer (ADR-009).
+ */
+export interface ExportTaskTemplate {
+  id: string;
+  profileId: string;
+  name: string;
+  payload: ExportTaskTemplatePayload;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ExportTask {
@@ -454,6 +517,11 @@ export interface ProfileData {
   // merely lose the index — it would leave the user's files out of the zip
   // entirely, with nothing in the manifest to say they ever existed.
   taskAttachments: readonly ExportTaskAttachment[];
+  // Required like every field above (ADR-035): a template is the only record of
+  // a shape the user built by hand, and nothing else in the archive can be used
+  // to reconstruct it — an export that quietly omitted them would restore a
+  // profile whose templates are simply gone.
+  taskTemplates: readonly ExportTaskTemplate[];
   events: readonly ExportEvent[];
   documents: readonly ExportDocument[];
   renewals: readonly ExportRenewal[];
@@ -535,17 +603,18 @@ export type ArchiveModuleId = (typeof ARCHIVE_MODULE_IDS)[number];
  */
 export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, number> {
   return {
-    // Lists, sections, tags, tag links and attachments are all TASK module
-    // rows, so they count into the tasks bucket beside the tasks themselves —
-    // the same way a folder, a tag, a tag link and an attachment count into
-    // notes.
+    // Lists, sections, tags, tag links, attachments and templates are all TASK
+    // module rows, so they count into the tasks bucket beside the tasks
+    // themselves — the same way a folder, a tag, a tag link, an attachment and
+    // a note template count into notes.
     tasks:
       data.tasks.length +
       data.taskLists.length +
       data.taskSections.length +
       data.taskTags.length +
       data.taskTagLinks.length +
-      data.taskAttachments.length,
+      data.taskAttachments.length +
+      data.taskTemplates.length,
     calendar:
       data.events.length + data.documents.length + data.renewals.length + data.people.length,
     study:
@@ -588,6 +657,9 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     ...input.data.tasks.map((row) => ({ type: "task", ...row })),
     ...input.data.taskTagLinks.map((row) => ({ type: "task-tag-link", ...row })),
     ...input.data.taskAttachments.map((row) => ({ type: "task-attachment", ...row })),
+    // Last: a template points at no row in this file (its tags are NAMES), so it
+    // constrains nothing and sits after the join that needed both its ends.
+    ...input.data.taskTemplates.map((row) => ({ type: "task-template", ...row })),
   ]);
   const calendarNdjson = toNdjson([
     ...input.data.events.map((row) => ({ type: "event", ...row })),

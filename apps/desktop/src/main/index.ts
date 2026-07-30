@@ -8,11 +8,13 @@ import {
   applySearchOperators,
   buildSearchSnippet,
   foldSearchTag,
+  dayKeyToUtcMs,
   isValidDayKey,
   MAX_ARCHIVE_PASSPHRASE_LENGTH,
   parseSearchQuery,
   rankSearchResults,
   resolveDueRange,
+  shiftDayKey,
   sniffMime,
   toFtsMatchExpression,
   validateArchivePassphrase,
@@ -51,6 +53,7 @@ import {
   MAX_TASK_LIST_NAME_LENGTH,
   MAX_TASK_REMINDERS,
   MAX_TASK_REMINDER_DAYS,
+  MAX_TASK_TEMPLATE_DUE_OFFSET_DAYS,
   NOTE_FOLDER_COLORS,
   NOTIFICATION_SOURCES,
   NoteAttachmentNotFoundError,
@@ -74,8 +77,10 @@ import {
   TaskAttachmentNotFoundError,
   TaskAttachmentStore,
   TaskListStore,
+  TaskNotFoundError,
   TaskStore,
   TaskTagStore,
+  TaskTemplateStore,
   TASK_LIST_VIEWS,
   TASK_PRIORITIES,
   TASK_STATUSES,
@@ -129,6 +134,8 @@ import {
   type TaskStatus,
   type TaskTag,
   type TaskTagLink,
+  type TaskTemplate,
+  type TaskTemplatePayload,
   type TrackedDocument,
   type UpdateCardFields,
   type UpdateDeckFields,
@@ -191,6 +198,7 @@ import {
   CARD_TEXT_MAX_LENGTH,
   IpcChannel,
   MAX_TASK_TAG_NAME_LENGTH,
+  MAX_TASK_TEMPLATE_NAME_LENGTH,
   NOTE_CARD_KEY_MAX_LENGTH,
   NOTE_CARDS_MAX_COUNT,
   SEARCH_QUERY_MAX_BYTES,
@@ -842,10 +850,9 @@ function asTaskListName(value: unknown, field: string): string {
 /**
  * A task-tag name (migration 023): `asTaskListName`'s rule with the tag cap —
  * non-empty and within `MAX_TASK_TAG_NAME_LENGTH` after trimming, the TRIMMED
- * value travelling on. The cap comes from the wire contract rather than from
- * `@nexus/db` only because `taskTagStore.ts` keeps its own copy module-private
- * (as `noteOrgStore.ts` does); `TaskTagStore` trims and re-checks regardless,
- * and stays authoritative (SEC-EL-02).
+ * value travelling on. The cap comes from the wire contract (which mirrors
+ * `@nexus/db`'s constant of the same name); `TaskTagStore` trims and re-checks
+ * regardless, and stays authoritative (SEC-EL-02).
  */
 function asTaskTagName(value: unknown, field: string): string {
   if (typeof value !== "string") {
@@ -855,6 +862,29 @@ function asTaskTagName(value: unknown, field: string): string {
   if (trimmed.length === 0 || trimmed.length > MAX_TASK_TAG_NAME_LENGTH) {
     throw new Error(
       `Invalid IPC payload: "${field}" must be 1-${MAX_TASK_TAG_NAME_LENGTH} characters after trimming.`,
+    );
+  }
+  return trimmed;
+}
+
+/**
+ * A task-template name (ADR-035): `asTaskListName`'s rule with the template cap
+ * — non-empty and within `MAX_TASK_TEMPLATE_NAME_LENGTH` after trimming, the
+ * TRIMMED value travelling on. `TaskTemplateStore` trims and re-checks
+ * regardless, and stays authoritative (SEC-EL-02).
+ *
+ * This is the ONLY template field that ever crosses the wire: a template's
+ * payload is read out of the database by `captureTaskTemplatePayload` below, so
+ * there is no renderer-supplied task shape here to validate.
+ */
+function asTaskTemplateName(value: unknown, field: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`Invalid IPC payload: "${field}" must be a string.`);
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || trimmed.length > MAX_TASK_TEMPLATE_NAME_LENGTH) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be 1-${MAX_TASK_TEMPLATE_NAME_LENGTH} characters after trimming.`,
     );
   }
   return trimmed;
@@ -1470,6 +1500,120 @@ function taskAttachmentStore(profileId: string): TaskAttachmentStore {
   return new TaskAttachmentStore(requireDb().raw, profileId);
 }
 
+function taskTemplateStore(profileId: string): TaskTemplateStore {
+  return new TaskTemplateStore(requireDb().raw, profileId);
+}
+
+// --- Task templates (ADR-035): capture and apply -----------------------------
+//
+// Both directions live in main rather than in the renderer, and that is the
+// whole security shape of this feature: the renderer names a task or a template
+// and never sends a task-shaped payload, so there is nothing for it to forge.
+// Main reads the row it is told to capture out of the database it already owns,
+// and stamps every clock itself.
+
+/**
+ * A task's due date as a template's RELATIVE offset. Absent stays absent; a
+ * date already past clamps to 0 rather than going negative, because "overdue by
+ * three days" is not a shape worth reproducing — what the user is saving is the
+ * habit, and today is the earliest honest reading of it. The clamp can never
+ * strip an anchor: 0 is still a due date, so a captured rule or ladder keeps
+ * something to phase from (`TaskTemplateStore` would refuse it otherwise).
+ *
+ * A `dueDate` that is not a bare calendar day derives to null. `TaskStore`
+ * accepts a timestamped due date only on a task carrying neither a rule nor a
+ * ladder (`assertDueDateAnchors`), so this can never drop an anchor either.
+ * Beyond a year out, the offset saturates at the store's own cap — a template
+ * is a habit, and a habit does not start in 2029.
+ */
+function taskTemplateDueOffset(dueDate: string | null, today: string): number | null {
+  if (dueDate === null || !isValidDayKey(dueDate)) return null;
+  const days = Math.round((dayKeyToUtcMs(dueDate) - dayKeyToUtcMs(today)) / 86_400_000);
+  return Math.min(Math.max(days, 0), MAX_TASK_TEMPLATE_DUE_OFFSET_DAYS);
+}
+
+/**
+ * Reads one task of `profileId` and everything a template captures WITH it: its
+ * direct live subtasks, in the order the list draws them, and the names of the
+ * tags it carries. `listActive()` is already scoped, ordered
+ * (list/section/position) and free of soft-deleted rows, so the two derivations
+ * below need nothing beyond a filter — and a deleted subtask is left out for
+ * the same reason a recurring advance does not reopen one.
+ */
+function captureTaskTemplatePayload(profileId: string, taskId: string): TaskTemplatePayload {
+  const tasks = taskStore(profileId).listActive();
+  const task = tasks.find((row) => row.id === taskId);
+  if (!task) {
+    throw new TaskNotFoundError(`No active task "${taskId}" in this profile.`);
+  }
+
+  const tags = taskTagStore(profileId);
+  const tagIds = new Set(
+    tags.listTagLinks().filter((link) => link.taskId === taskId).map((link) => link.tagId),
+  );
+  const tagNames = tags.listTags().filter((tag) => tagIds.has(tag.id)).map((tag) => tag.name);
+
+  return {
+    title: task.title,
+    description: task.description,
+    priority: task.priority,
+    dueOffsetDays: taskTemplateDueOffset(task.dueDate, localToday()),
+    reminderOffsets: task.reminderOffsets,
+    recurrence: task.recurrence,
+    tagNames,
+    subtaskTitles: tasks.filter((row) => row.parentId === taskId).map((row) => row.title),
+  };
+}
+
+/**
+ * Creates a task from a template, in one transaction over the store calls: the
+ * parent, its tags (get-or-created by name — which is what makes a template
+ * outlive the tags it was captured with) and its subtasks are one act, and half
+ * of it is a task the user did not ask for. `TaskStore.create` owns the list /
+ * section / anchor rules, so this function validates none of them itself.
+ *
+ * The subtasks inherit their parent's placement, which `TaskStore.create`
+ * enforces on its own — the `listId`/`sectionId` are deliberately not repeated
+ * on them.
+ */
+function applyTaskTemplate(
+  profileId: string,
+  templateId: string,
+  listId: string,
+  sectionId: string | null,
+): Task {
+  const template = taskTemplateStore(profileId).get(templateId);
+  const { payload } = template;
+  const now = new Date().toISOString();
+  const dueDate =
+    payload.dueOffsetDays === null ? null : shiftDayKey(localToday(), payload.dueOffsetDays);
+  const tasks = taskStore(profileId);
+  const tags = taskTagStore(profileId);
+
+  return requireDb().raw.transaction((): Task => {
+    const parent = tasks.create({
+      title: payload.title,
+      description: payload.description,
+      priority: payload.priority,
+      dueDate,
+      recurrence: payload.recurrence,
+      reminderOffsets: payload.reminderOffsets,
+      listId,
+      sectionId,
+    });
+
+    for (const name of payload.tagNames) {
+      tags.attachTag(parent.id, tags.createTag(name, now).id);
+    }
+
+    for (const title of payload.subtaskTitles) {
+      tasks.create({ title, parentId: parent.id });
+    }
+
+    return parent;
+  })();
+}
+
 function eventStore(profileId: string): EventStore {
   return new EventStore(requireDb().raw, profileId);
 }
@@ -1993,6 +2137,7 @@ function restoreDeps(): RestoreDeps {
     taskListStore,
     taskTagStore,
     taskAttachmentStore,
+    taskTemplateStore,
     eventStore,
     peopleStore,
     documentStore,
@@ -2479,6 +2624,61 @@ function registerIpc(): void {
     assertTrustedSender(event);
     const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
     return taskAttachmentStore(profileId).countsByTask();
+  });
+
+  // --- Task templates (migration 027 / ADR-035) ---------------------------
+  //
+  // Four channels, and deliberately no "create a template from these fields"
+  // among them: a template is captured FROM a task and applied INTO a list, so
+  // the only things the renderer ever sends are ids and a name. That is what
+  // keeps the payload — the one value here a store cannot re-derive — out of an
+  // untrusted process entirely. SEC-EL-02 as everywhere: sender checked first,
+  // every field through an `as*` validator, and both clocks stamped by main.
+
+  ipcMain.handle(IpcChannel.taskTemplatesList, (event, payload): TaskTemplate[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return taskTemplateStore(profileId).list();
+  });
+
+  ipcMain.handle(IpcChannel.taskTemplatesSaveFromTask, (event, payload): TaskTemplate => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const taskId = asNonEmptyString(body.taskId, "taskId");
+    const name = asTaskTemplateName(body.name, "name");
+    // Read and write in one transaction: the payload describes the task as it
+    // stands, and a save that captured half of it (say, after another window
+    // deleted a subtask mid-read) would store a shape the user never had.
+    return requireDb().raw.transaction((): TaskTemplate => {
+      const captured = captureTaskTemplatePayload(profileId, taskId);
+      return taskTemplateStore(profileId).saveByName(
+        name,
+        captured,
+        new Date().toISOString(),
+      );
+    })();
+  });
+
+  ipcMain.handle(IpcChannel.taskTemplatesApply, (event, payload): Task => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const templateId = asNonEmptyString(body.templateId, "templateId");
+    // Structural checks only: that the list is this profile's and the section
+    // belongs to it are `TaskStore.create`'s rules, and re-spelling them here
+    // would be a second, drifting copy of them.
+    const listId = asNonEmptyString(body.listId, "listId");
+    const sectionId = asNullableString(body.sectionId, "sectionId");
+    return applyTaskTemplate(profileId, templateId, listId, sectionId);
+  });
+
+  ipcMain.handle(IpcChannel.taskTemplatesDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    taskTemplateStore(profileId).delete(id);
   });
 
   ipcMain.handle(IpcChannel.eventsList, (event, payload): Event[] => {
@@ -3519,6 +3719,7 @@ function registerIpc(): void {
         taskListStore,
         taskTagStore,
         taskAttachmentStore,
+        taskTemplateStore,
         eventStore,
         peopleStore,
         documentStore,

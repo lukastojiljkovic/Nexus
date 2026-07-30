@@ -677,6 +677,69 @@ body {
   color: var(--nx-text);
 }
 
+/* The toolbar's right-hand cluster: „Šabloni“ beside the view toggle. One row,
+   so the two read as the list's controls rather than as two unrelated corners. */
+.tasks__toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-3);
+  flex: none;
+}
+
+/* „Šabloni“ (ADR-035) borrows the popover trigger (.note__menu-trigger) but is
+   a NAMED button, not the row-level "⋯" glyph — so it takes the toggle's quiet
+   text feel and a width that fits a word instead of the 24px grid square. */
+.tasks__templates-trigger {
+  /* Only the WIDTH opens up: the trigger keeps its 24px height and its grid
+     centring, so the word sits on the same baseline as the toggle beside it. */
+  width: auto;
+  padding: 0 var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+}
+.tasks__templates-trigger[aria-expanded="true"] {
+  color: var(--nx-text);
+}
+/* One template in the popover list: its name applies it, the × removes it. */
+.tasks__template-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.tasks__template-apply {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tasks__template-delete {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  font: inherit;
+  line-height: 1;
+  color: var(--nx-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-sm);
+  cursor: pointer;
+}
+.tasks__template-delete:hover {
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+}
+/* The save-as-template prompt lives INSIDE the row menu, whose panel is far
+   narrower than the rail: the shared InlineNameForm's buttons would squeeze the
+   field to nothing there, so they wrap onto their own full-width row. */
+.tasks__template-form {
+  padding: var(--nx-space-1) var(--nx-space-2);
+}
+.tasks__template-form .nx-textfield {
+  flex-basis: 100%;
+}
+
 /* View toggle — active state is typographic (accent + weight), no glow or
    side-bar, per the direction brief; the ghost frame is dropped to a text feel. */
 .tasks__views {
@@ -746,10 +809,10 @@ body {
   border: 1px solid var(--nx-border);
   padding: 1px 8px;
 }
-/* The per-task tag menu sits in the row's action cluster, so it takes that
-   cluster's hover treatment rather than the popover trigger's bare colour
-   change, and stays visible like the + ✎ × beside it. */
-.tasks__row-tags:hover {
+/* The per-task "⋯" menu (tags + „Sačuvaj kao šablon“) sits in the row's action
+   cluster, so it takes that cluster's hover treatment rather than the popover
+   trigger's bare colour change, and stays visible like the + ✎ × beside it. */
+.tasks__row-menu:hover {
   background: var(--nx-surface-alt);
 }
 .tasks__add-subtask.nx-button,
@@ -4039,6 +4102,18 @@ button.cal__grid-event--dragging {
   height: 1px;
   margin: var(--nx-space-1) 0;
   background: var(--nx-border);
+}
+/* A quiet line inside a menu panel that is not an action: an empty state, a
+   note about what an action will do, or a failure. Same caption type as
+   .note__menu-label but sentence-shaped, so it wraps instead of clipping. */
+.note__menu-caption {
+  padding: 2px 10px 6px;
+  font-size: var(--nx-font-size-caption);
+  /* A literal, like every other line-height in this file: packages/tokens ships
+     no line-height scale, so an --nx-line-height token here would resolve to
+     nothing and silently inherit. */
+  line-height: 1.4;
+  color: var(--nx-text-muted);
 }
 
 /* Right pane: the editor, on a comfortable reading measure, centered. */

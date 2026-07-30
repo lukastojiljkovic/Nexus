@@ -33,6 +33,7 @@ function emptyInput(): ExportArchiveInput {
       taskTags: [],
       taskTagLinks: [],
       taskAttachments: [],
+      taskTemplates: [],
       events: [],
       documents: [],
       renewals: [],
@@ -221,7 +222,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.5.0");
+      expect(manifest.schemaVersion).toBe("1.6.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       expect(manifest.profile).toEqual({ id: "profile1", name: "Luka" });
@@ -767,6 +768,15 @@ describe("buildExportArchive", () => {
         taskAttachments: [
           { id: "tatt1", taskId: "t1", fileName: "ugovor.pdf", mime: "application/pdf", sizeBytes: 30, sha256: "f".repeat(64), createdAt: t },
         ],
+        taskTemplates: [
+          {
+            id: "ttpl1", profileId: "p1", name: "Šablon", createdAt: t, updatedAt: t,
+            payload: {
+              title: "T", description: null, priority: "none", dueOffsetDays: null,
+              reminderOffsets: [], recurrence: null, tagNames: [], subtaskTitles: [],
+            },
+          },
+        ],
         events: [
           { id: "e1", profileId: "p1", title: "E", description: null, startAt: t, endAt: null, allDay: false, location: null, category: null, createdAt: t, updatedAt: t, recurrence: null, recurrenceExdates: [], reminderOffsets: [] },
         ],
@@ -829,7 +839,7 @@ describe("buildExportArchive", () => {
     it("groups exactly as the manifest does, field by field", () => {
       const data = populatedData();
       expect(countProfileModules(data)).toEqual({
-        tasks: 6, // 1 task + 1 list + 1 section + 1 tag + 1 tag link + 1 attachment
+        tasks: 7, // 1 task + 1 list + 1 section + 1 tag + 1 tag link + 1 attachment + 1 template
         calendar: 4, // 1 event + 1 document + 1 renewal + 1 person
         study: 8, // 1 each of subject/exam/deck/card/review/plan/block/focus-session
         notifications: 1,

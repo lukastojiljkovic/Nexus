@@ -32,8 +32,13 @@ interface TaskTagLinkRow {
 
 const TAG_COLUMNS = "id, profile_id, name, created_at";
 
-/** The `note_tags` bound, copied rather than reinvented: a label is a label whichever entity carries it. */
-const MAX_TAG_NAME_LENGTH = 50;
+/**
+ * The `note_tags` bound, copied rather than reinvented: a label is a label
+ * whichever entity carries it. Exported (and re-exported from the package
+ * barrel) so `TaskTemplateStore` — whose payloads carry tag NAMES rather than
+ * ids — bounds them by this very number instead of a second copy of it.
+ */
+export const MAX_TASK_TAG_NAME_LENGTH = 50;
 
 /** Accepts a full ISO-8601 date-time (the `now` every mutating method takes) — mirrors noteOrgStore.ts. */
 const ISO_8601_DATETIME =
@@ -221,9 +226,9 @@ function validateTagName(value: string): string {
   if (trimmed.length === 0) {
     throw new TaskTagValidationError("A tag name must not be empty.");
   }
-  if (trimmed.length > MAX_TAG_NAME_LENGTH) {
+  if (trimmed.length > MAX_TASK_TAG_NAME_LENGTH) {
     throw new TaskTagValidationError(
-      `A tag name must not exceed ${MAX_TAG_NAME_LENGTH} characters after trimming.`,
+      `A tag name must not exceed ${MAX_TASK_TAG_NAME_LENGTH} characters after trimming.`,
     );
   }
   return trimmed;

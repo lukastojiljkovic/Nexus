@@ -55,6 +55,10 @@ export const IpcChannel = {
   taskAttachmentsOpen: "task-attachments:open",
   taskAttachmentsSaveAs: "task-attachments:save-as",
   taskAttachmentsCounts: "task-attachments:counts",
+  taskTemplatesList: "task-templates:list",
+  taskTemplatesSaveFromTask: "task-templates:save-from-task",
+  taskTemplatesApply: "task-templates:apply",
+  taskTemplatesDelete: "task-templates:delete",
   eventsList: "events:list",
   eventsCreate: "events:create",
   eventsUpdate: "events:update",
@@ -737,6 +741,55 @@ export interface TaskAttachmentsCountsRequest {
 }
 
 /**
+ * Longest task-template name after trimming. Mirrors
+ * `MAX_TASK_TEMPLATE_NAME_LENGTH` in `@nexus/db` — redeclared here, like
+ * `MAX_TASK_TAG_NAME_LENGTH` above, so the save prompt can bound what a user
+ * types without importing DB code, and so main can bound the wire without
+ * waiting for the store to refuse. The store stays authoritative.
+ */
+export const MAX_TASK_TEMPLATE_NAME_LENGTH = 80;
+
+/**
+ * The task-shaped body a template carries (ADR-035), as the renderer sees it —
+ * mirrors `@nexus/db`'s `TaskTemplatePayload` via the store's mapping.
+ * Redeclared here so the renderer never imports DB code.
+ *
+ * The renderer never CONSTRUCTS one of these: a template is captured from an
+ * existing task by main (`saveTaskTemplateFromTask`) and applied by main
+ * (`applyTaskTemplate`), so this type is read-only from the UI's side — which
+ * is why there is no "create a template by hand" channel and no validator for
+ * one. What the renderer sends is a name and an id, nothing more.
+ */
+export interface TaskTemplatePayload {
+  title: string;
+  description: string | null;
+  priority: TaskPriority;
+  /** Whole days from the day the template is APPLIED to the created task's due date, or null for none. */
+  dueOffsetDays: number | null;
+  /** Whole days before that computed due date, ascending. */
+  reminderOffsets: number[];
+  recurrence: RecurrenceRule | null;
+  /** Tag NAMES — get-or-created at apply time, so a template survives the deletion of the tag it was captured with. */
+  tagNames: string[];
+  /** Titles of the direct subtasks the template creates. */
+  subtaskTitles: string[];
+}
+
+/** A task template as seen by the renderer (mirrors the `task_templates` table, migration 027 / ADR-035). */
+export interface TaskTemplate {
+  id: string;
+  profileId: string;
+  name: string;
+  payload: TaskTemplatePayload;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TaskTemplatesListRequest {
+  profileId: string;
+}
+
+/**
  * How many attachments one live task carries — the per-row count chip's whole
  * payload, one entry per task that has any (a task with none is absent, not
  * reported as zero). Mirrors `DeckCounts`' flat-row shape rather than a map,
@@ -746,6 +799,39 @@ export interface TaskAttachmentsCountsRequest {
 export interface TaskAttachmentCount {
   taskId: string;
   count: number;
+}
+
+/**
+ * Captures an existing task as a template under `name` (ADR-035). Main reads the
+ * task, its direct live subtasks and its tag names itself — the renderer names
+ * only WHICH task and WHAT to call it, so there is no task-shaped payload on the
+ * wire to validate or to get wrong. Saving under a name that already exists
+ * REPLACES that template, which is the edit mechanism.
+ */
+export interface TaskTemplatesSaveFromTaskRequest {
+  profileId: string;
+  taskId: string;
+  name: string;
+}
+
+/**
+ * Creates a task from a template, in `listId` (and `sectionId`, or the list
+ * body). The destination is the caller's, never the template's: a template is
+ * applied where the user is standing, and one that carried a stored destination
+ * would file tasks into a list nobody is looking at. Returns the created PARENT
+ * task; its subtasks and tags come back with the page's next refetch.
+ */
+export interface TaskTemplatesApplyRequest {
+  profileId: string;
+  templateId: string;
+  listId: string;
+  sectionId: string | null;
+}
+
+/** Deleting a template is final — nothing references one (migration 027). */
+export interface TaskTemplatesDeleteRequest {
+  profileId: string;
+  id: string;
 }
 
 /**
@@ -2418,6 +2504,19 @@ export interface NexusApi {
   ): Promise<SaveAttachmentResult>;
   /** Every live task's attachment count in one fetch — the page indexes them by task rather than asking per row (the `cardCounts` idiom). */
   taskAttachmentCounts(profileId: string): Promise<TaskAttachmentCount[]>;
+  /** This profile's task templates, alphabetical by name (the popover re-sorts with `Intl.Collator(["sr-Latn","sr"])`). */
+  listTaskTemplates(profileId: string): Promise<TaskTemplate[]>;
+  /** Captures `taskId` — its own fields, its direct live subtasks and its tags — as a template called `name`. An existing name is REPLACED. */
+  saveTaskTemplateFromTask(profileId: string, taskId: string, name: string): Promise<TaskTemplate>;
+  /** Creates a task from a template in the given list/section, returning the created parent. */
+  applyTaskTemplate(
+    profileId: string,
+    templateId: string,
+    listId: string,
+    sectionId: string | null,
+  ): Promise<Task>;
+  /** Deletes a template; no task created from it is touched. */
+  deleteTaskTemplate(profileId: string, id: string): Promise<void>;
   listEvents(profileId: string): Promise<Event[]>;
   createEvent(profileId: string, event: NewEventFields): Promise<Event>;
   updateEvent(profileId: string, id: string, changes: EventFieldChanges): Promise<Event>;

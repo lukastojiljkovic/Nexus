@@ -116,6 +116,8 @@ export type {
   ExportTaskSection,
   ExportTaskTag,
   ExportTaskTagLink,
+  ExportTaskTemplate,
+  ExportTaskTemplatePayload,
   ProfileData,
 } from "./imex/exportArchive.js";
 
@@ -169,6 +171,7 @@ export {
   MAX_SPAN_DAYS,
   MIN_TIMED_MINUTES,
   MINUTES_PER_DAY,
+  dayKeyToUtcMs,
   daySpanKeys,
   isValidDayKey,
   layoutMonthBars,

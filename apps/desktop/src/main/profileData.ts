@@ -47,6 +47,7 @@ import type {
   TaskListStore,
   TaskStore,
   TaskTagStore,
+  TaskTemplateStore,
 } from "@nexus/db";
 
 /**
@@ -60,6 +61,7 @@ export interface ProfileDataDeps {
   taskListStore(profileId: string): TaskListStore;
   taskTagStore(profileId: string): TaskTagStore;
   taskAttachmentStore(profileId: string): TaskAttachmentStore;
+  taskTemplateStore(profileId: string): TaskTemplateStore;
   eventStore(profileId: string): EventStore;
   peopleStore(profileId: string): PeopleStore;
   documentStore(profileId: string): DocumentStore;
@@ -186,6 +188,9 @@ export function gatherProfileData(deps: ProfileDataDeps, profileId: string): Pro
     taskTags: tagsStore.listTags(),
     taskTagLinks: tagsStore.listTagLinks(),
     taskAttachments: tasks.flatMap((task) => taskAttachmentsStore.list(task.id)),
+    // Templates are a plain profile-wide read (migration 027): a template hangs
+    // off no task and points at no list, so there is nothing to fan out over.
+    taskTemplates: deps.taskTemplateStore(profileId).list(),
     events: deps.eventStore(profileId).listActive(),
     documents,
     renewals: documents.flatMap((document) => documentsStore.listRenewals(document.id)),

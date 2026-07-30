@@ -52,6 +52,8 @@ export {
   TaskSectionNotFoundError,
   TaskTagNotFoundError,
   TaskTagValidationError,
+  TaskTemplateNotFoundError,
+  TaskTemplateValidationError,
   TaskValidationError,
 } from "./errors.js";
 
@@ -91,7 +93,7 @@ export type {
   TaskSection,
 } from "./tasks/taskListStore.js";
 
-export { TaskTagStore } from "./tasks/taskTagStore.js";
+export { TaskTagStore, MAX_TASK_TAG_NAME_LENGTH } from "./tasks/taskTagStore.js";
 export type { TaskTag, TaskTagLink } from "./tasks/taskTagStore.js";
 
 export { TaskAttachmentStore, MAX_TASK_ATTACHMENT_BYTES } from "./tasks/taskAttachmentStore.js";
@@ -100,6 +102,15 @@ export type {
   TaskAttachment,
   TaskAttachmentCount,
 } from "./tasks/taskAttachmentStore.js";
+
+export {
+  TaskTemplateStore,
+  MAX_TASK_TEMPLATE_DUE_OFFSET_DAYS,
+  MAX_TASK_TEMPLATE_NAME_LENGTH,
+  MAX_TASK_TEMPLATE_SUBTASKS,
+  MAX_TASK_TEMPLATE_TAGS,
+} from "./tasks/taskTemplateStore.js";
+export type { TaskTemplate, TaskTemplatePayload } from "./tasks/taskTemplateStore.js";
 
 export {
   EventStore,

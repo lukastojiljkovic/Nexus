@@ -37,6 +37,7 @@ import {
   TaskListStore,
   TaskStore,
   TaskTagStore,
+  TaskTemplateStore,
   openDatabase,
   uuidv7,
 } from "../index.js";
@@ -60,6 +61,7 @@ import type {
   TaskList,
   TaskSection,
   TaskTag,
+  TaskTemplate,
   TrackedDocument,
 } from "../index.js";
 
@@ -137,6 +139,7 @@ function emptyProfileData(): ProfileData {
     noteTemplates: [],
     noteAttachments: [],
     noteVersions: [],
+    taskTemplates: [],
   };
 }
 
@@ -183,6 +186,7 @@ interface FixtureIds {
   editedNote: NoteMeta;
   neverEditedNote: NoteMeta;
   template: NoteTemplate;
+  taskTemplate: TaskTemplate;
 }
 
 interface Fixture {
@@ -222,6 +226,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   const orgStore = new NoteOrgStore(handle.raw, profileId);
   const attachmentStore = new NoteAttachmentStore(handle.raw, profileId);
   const templateStore = new NoteTemplateStore(handle.raw, profileId);
+  const taskTemplateStore = new TaskTemplateStore(handle.raw, profileId);
 
   // The merged Yjs state and derived body an export would carry for the edited
   // note — stand-ins for real Yjs bytes (see `bytes()`), but genuinely stored
@@ -258,6 +263,24 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     parentTask.id,
     { fileName: "ugovor.pdf", mime: "application/pdf", sizeBytes: 30, sha256: "c".repeat(64) },
     t2,
+  );
+
+  // A template with every payload field set (ADR-035): the nested payload is the
+  // one value in this fixture a restore has to re-serialize rather than copy, so
+  // an empty one would prove nothing about it.
+  const taskTemplate = taskTemplateStore.saveByName(
+    `${name} task template`,
+    {
+      title: `${name} from template`,
+      description: "Opis",
+      priority: "high",
+      dueOffsetDays: 7,
+      reminderOffsets: [0, 1],
+      recurrence: { freq: { kind: "weekly", interval: 1, days: [1] }, end: { kind: "never" } },
+      tagNames: [`${name} task tag`],
+      subtaskTitles: ["Prvi korak", "Drugi korak"],
+    },
+    t0,
   );
 
   const event = eventStore.create({
@@ -339,6 +362,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     taskTags: taskTagStore.listTags(),
     taskTagLinks: taskTagStore.listTagLinks(),
     taskAttachments: taskAttachmentStore.list(parentTask.id),
+    taskTemplates: taskTemplateStore.list(),
     events: eventStore.listActive(),
     documents: documentStore.listActive(),
     renewals: documentStore.listRenewals(document.id),
@@ -398,6 +422,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
       editedNote,
       neverEditedNote,
       template,
+      taskTemplate,
     },
   };
 }
@@ -446,6 +471,15 @@ function freshArchiveData(): ProfileData {
         content: JSON.stringify({ type: "doc", content: [] }), ...timestamps,
       },
     ],
+    taskTemplates: [
+      {
+        id: uuidv7(), profileId: "ignored", name: "Fresh task template", ...timestamps,
+        payload: {
+          title: "Fresh", description: null, priority: "none", dueOffsetDays: null,
+          reminderOffsets: [], recurrence: null, tagNames: [], subtaskTitles: [],
+        },
+      },
+    ],
   };
 }
 
@@ -482,6 +516,12 @@ function assertModulesMatch(
   expect(
     new TaskAttachmentStore(handle.raw, readProfileId).list(fixture.ids.parentTask.id),
   ).toEqual(fixture.data.taskAttachments);
+  // Read back through the store, which re-parses the JSON column: a payload the
+  // restore wrote in some other shape would fail here rather than silently
+  // become a template the user never saved.
+  expect(new TaskTemplateStore(handle.raw, readProfileId).list()).toEqual(
+    remap(fixture.data.taskTemplates),
+  );
   expect(new EventStore(handle.raw, readProfileId).listActive()).toEqual(remap(fixture.data.events));
   expect(new PeopleStore(handle.raw, readProfileId).listActive()).toEqual(remap(fixture.data.people));
   // Stripped on BOTH sides: `seedFixture` gathers documents through
@@ -617,6 +657,9 @@ describe("RestoreStore", () => {
     );
     expect(new NoteTemplateStore(db.raw, profileB).list()).toEqual(
       withProfile(fresh.noteTemplates, profileB),
+    );
+    expect(new TaskTemplateStore(db.raw, profileB).list()).toEqual(
+      withProfile(fresh.taskTemplates, profileB),
     );
 
     // Every module the archive carried zero rows for is empty, though B had one in each.

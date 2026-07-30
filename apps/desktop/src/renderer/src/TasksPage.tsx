@@ -14,7 +14,11 @@ import {
 } from "@nexus/ui";
 import { isInlineImageMime, isValidDayKey, parseQuickAddDate } from "@nexus/core";
 import type { CollectionSchema, KanbanViewConfig, ListViewConfig } from "@nexus/core";
-import { MAX_TASK_LIST_NAME_LENGTH, MAX_TASK_TAG_NAME_LENGTH } from "../../shared/ipc.js";
+import {
+  MAX_TASK_LIST_NAME_LENGTH,
+  MAX_TASK_TAG_NAME_LENGTH,
+  MAX_TASK_TEMPLATE_NAME_LENGTH,
+} from "../../shared/ipc.js";
 import type {
   DeleteListMode,
   NewTaskFields,
@@ -29,6 +33,7 @@ import type {
   TaskStatus,
   TaskTag,
   TaskTagLink,
+  TaskTemplate,
 } from "../../shared/ipc.js";
 import { localTodayKey } from "./examDates.js";
 import { NotePopover } from "./notePopover.js";
@@ -679,6 +684,12 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const [attachmentError, setAttachmentError] = useState<"generic" | "tooLarge" | null>(null);
   /** True while the native picker is open — the button is disabled so a second dialog cannot be asked for. */
   const [attaching, setAttaching] = useState(false);
+  /** Šabloni (ADR-035): the profile's saved task shapes, the row whose save prompt is open, and what has been typed into it. */
+  const [templates, setTemplates] = useState<TaskTemplate[]>([]);
+  const [templateFor, setTemplateFor] = useState<string | null>(null);
+  const [templateDraft, setTemplateDraft] = useState("");
+  /** One flag across save/apply/delete, the `tagFailed` arrangement: the message is generic, and every template action clears it before trying again. */
+  const [templateFailed, setTemplateFailed] = useState(false);
   /** The list whose delete is waiting on the "what about its tasks" question, or null. */
   const [deletePrompt, setDeletePrompt] = useState<TaskList | null>(null);
   /** The list a delete just removed, offered back — the list counterpart of `pendingUndoId`. */
@@ -760,6 +771,8 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     else tagIdsByTask.set(link.taskId, new Set([link.tagId]));
   }
   const sortedTags = tags.slice().sort((a, b) => collator.compare(a.name, b.name));
+  /** The store orders by SQLite's binary collation, which mis-tailors Serbian Latin — so the popover re-sorts, exactly as the tag chips do. */
+  const sortedTemplates = templates.slice().sort((a, b) => collator.compare(a.name, b.name));
   const tagsOf = (taskId: string): readonly TaskTag[] => {
     const ids = tagIdsByTask.get(taskId);
     return ids === undefined ? NO_TAGS : sortedTags.filter((tag) => ids.has(tag.id));
@@ -822,14 +835,15 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
       try {
         // One round trip each, in parallel: the rail and the rows are one screen,
         // so a render that has tasks but no lists (or no tags for the chips it
-        // draws, or the reverse) is never shown. All five are reads of the same
+        // draws, or the reverse) is never shown. All six are reads of the same
         // local database, so any one of them failing is the page's one load error.
-        const [snapshot, list, tagList, linkList, counts] = await Promise.all([
+        const [snapshot, list, tagList, linkList, counts, templateList] = await Promise.all([
           window.nexus.listTaskLists(profileId),
           window.nexus.listTasks(profileId),
           window.nexus.listTaskTags(profileId),
           window.nexus.listTaskTagLinks(profileId),
           window.nexus.taskAttachmentCounts(profileId),
+          window.nexus.listTaskTemplates(profileId),
         ]);
         if (!active) return;
         setLists(snapshot.lists);
@@ -838,9 +852,15 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         setTags(tagList);
         setTagLinks(linkList);
         setAttachmentCounts(new Map(counts.map((row) => [row.taskId, row.count])));
+        setTemplates(templateList);
         // The active filter names tags of the profile it was set in, so a
         // profile switch drops it rather than filtering by ids that are gone.
         setTagFilter([]);
+        // Same reasoning for the save-as-template prompt: it is bound to a task
+        // id of the profile being left, and a stale one would offer to capture a
+        // row this profile does not have.
+        closeTemplatePrompt();
+        setTemplateFailed(false);
       } catch (error) {
         if (active) setFailed(true);
         console.error("Nexus: failed to load tasks:", error);
@@ -1285,6 +1305,74 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     }
   }
 
+  // --- Šabloni (ADR-035) -----------------------------------------------------
+  //
+  // A template is captured FROM a row and applied INTO the selected list, and
+  // both halves are main's work: the renderer sends an id and a name and never a
+  // task shape. What is left here is the two popovers and their refetches.
+
+  function closeTemplatePrompt(): void {
+    setTemplateFor(null);
+    setTemplateDraft("");
+  }
+
+  function beginSaveTemplate(taskId: string, currentTitle: string): void {
+    setTemplateFailed(false);
+    // Pre-filled with the task's own title: the name a user wants is almost
+    // always that, and pre-filling makes the whole action one Enter — while
+    // still being a name they can replace before saving.
+    setTemplateDraft(currentTitle);
+    setTemplateFor(taskId);
+  }
+
+  /** Captures `taskId` under the typed name and closes the popover it was typed in. A failure leaves the prompt open with the text still in it. */
+  async function submitSaveTemplate(taskId: string, close: () => void): Promise<void> {
+    const name = templateDraft.trim();
+    if (name.length === 0) return;
+    try {
+      setTemplateFailed(false);
+      await window.nexus.saveTaskTemplateFromTask(profileId, taskId, name);
+      setTemplates(await window.nexus.listTaskTemplates(profileId));
+      closeTemplatePrompt();
+      close();
+    } catch (error) {
+      setTemplateFailed(true);
+      console.error("Nexus: failed to save a task template:", error);
+    }
+  }
+
+  /**
+   * Creates a task from `template` in the list the rail has selected, in its
+   * body. The whole page is re-read afterwards, not just the tasks: applying can
+   * create tags the profile did not have (they travel as NAMES), and the chips
+   * those tags draw come from `tags`/`tagLinks`.
+   */
+  async function applyTemplate(template: TaskTemplate, close: () => void): Promise<void> {
+    if (selectedId === null) return;
+    try {
+      setTemplateFailed(false);
+      await window.nexus.applyTaskTemplate(profileId, template.id, selectedId, null);
+      close();
+      await reloadAll();
+      await reloadTags();
+    } catch (error) {
+      setTemplateFailed(true);
+      console.error("Nexus: failed to apply a task template:", error);
+    }
+  }
+
+  /** Deletes a template. No task made from it is touched, so nothing but this popover needs re-reading. */
+  async function deleteTemplate(id: string): Promise<void> {
+    try {
+      setTemplateFailed(false);
+      await window.nexus.deleteTaskTemplate(profileId, id);
+      setTemplates(await window.nexus.listTaskTemplates(profileId));
+    } catch (error) {
+      setTemplateFailed(true);
+      console.error("Nexus: failed to delete a task template:", error);
+    }
+  }
+
   // --- Drag & drop (list view) ---------------------------------------------
   //
   // Native HTML5 drag, the same idiom as the kanban and the month grid: the
@@ -1670,44 +1758,78 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         trailing={
           <span className="tasks__row-meta">
             {taskChips(task, children, tagsOf(task.id), attachmentCountOf(task.id))}
-            {/* Attaching/detaching lives in a menu, exactly as it does on a note
-                row, and only where the profile has a tag to attach: an empty
-                menu is an affordance that can do nothing, which this page
-                already refuses to draw (see the Inbox's absent delete). Making
-                tags is the rail's job. */}
-            {sortedTags.length > 0 && (
-              <NotePopover
-                label={strings.tasks.tags.taskMenuLabel}
-                triggerClassName="tasks__row-tags"
-              >
-                {() => (
-                  <>
-                    <span className="note__menu-label">{strings.tasks.tags.label}</span>
-                    {sortedTags.map((tag) => {
-                      const attached = tagIdsByTask.get(task.id)?.has(tag.id) ?? false;
-                      return (
-                        <button
-                          key={tag.id}
-                          className="note__menu-item note__menu-item--check"
-                          role="menuitemcheckbox"
-                          type="button"
-                          aria-checked={attached}
-                          onClick={() => void toggleTaskTag(task, tag.id, attached)}
-                        >
-                          <span
-                            className={`note__menu-check${attached ? "" : " note__menu-check--hidden"}`}
-                            aria-hidden="true"
+            {/* The row's own "⋯" menu, exactly as on a note row. Attaching and
+                detaching tags lives here, and only where the profile HAS a tag
+                to attach — an affordance that can do nothing is one this page
+                refuses to draw (see the Inbox's absent delete); making tags is
+                the rail's job. „Sačuvaj kao šablon“ (ADR-035) is always there,
+                which is why the menu itself no longer waits for a tag to exist. */}
+            <NotePopover label={strings.tasks.rowMenuLabel} triggerClassName="tasks__row-menu">
+              {(close) => (
+                <>
+                  {sortedTags.length > 0 && (
+                    <>
+                      <span className="note__menu-label">{strings.tasks.tags.label}</span>
+                      {sortedTags.map((tag) => {
+                        const attached = tagIdsByTask.get(task.id)?.has(tag.id) ?? false;
+                        return (
+                          <button
+                            key={tag.id}
+                            className="note__menu-item note__menu-item--check"
+                            role="menuitemcheckbox"
+                            type="button"
+                            aria-checked={attached}
+                            onClick={() => void toggleTaskTag(task, tag.id, attached)}
                           >
-                            ✓
-                          </span>
-                          {tag.name}
-                        </button>
-                      );
-                    })}
-                  </>
-                )}
-              </NotePopover>
-            )}
+                            <span
+                              className={`note__menu-check${attached ? "" : " note__menu-check--hidden"}`}
+                              aria-hidden="true"
+                            >
+                              ✓
+                            </span>
+                            {tag.name}
+                          </button>
+                        );
+                      })}
+                      <div className="note__menu-sep" />
+                    </>
+                  )}
+                  <span className="note__menu-label">{strings.tasks.templates.title}</span>
+                  {templateFor === task.id ? (
+                    <>
+                      <InlineNameForm
+                        className="tasks__template-form"
+                        value={templateDraft}
+                        placeholder={strings.tasks.templates.namePlaceholder}
+                        label={strings.tasks.templates.nameLabel}
+                        maxLength={MAX_TASK_TEMPLATE_NAME_LENGTH}
+                        onChange={setTemplateDraft}
+                        onSubmit={() => void submitSaveTemplate(task.id, close)}
+                        onCancel={closeTemplatePrompt}
+                      />
+                      {/* Said before the fact: saving under a name that exists is
+                          how a template is EDITED, not an accident to warn about
+                          afterwards (the ADR-016 wording precedent). */}
+                      <p className="note__menu-caption">{strings.tasks.templates.overwriteNote}</p>
+                    </>
+                  ) : (
+                    <button
+                      className="note__menu-item"
+                      role="menuitem"
+                      type="button"
+                      onClick={() => beginSaveTemplate(task.id, task.title)}
+                    >
+                      {strings.tasks.templates.saveAs}
+                    </button>
+                  )}
+                  {templateFailed && (
+                    <p className="note__menu-caption" role="status">
+                      {strings.tasks.templates.actionError}
+                    </p>
+                  )}
+                </>
+              )}
+            </NotePopover>
             <Button
               size="sm"
               className="tasks__add-subtask"
@@ -2426,20 +2548,68 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
             </div>
           </form>
 
-          <div className="tasks__views" role="group" aria-label={strings.tasks.viewLabel}>
-            {(["list", "kanban"] as const).map((option) => (
-              <Button
-                key={option}
-                size="sm"
-                className={
-                  view === option ? "tasks__view tasks__view--active" : "tasks__view"
-                }
-                aria-pressed={view === option}
-                onClick={() => void selectView(option)}
-              >
-                {option === "list" ? strings.tasks.viewList : strings.tasks.viewKanban}
-              </Button>
-            ))}
+          <div className="tasks__toolbar-actions">
+            {/* Šabloni (ADR-035). Beside the view toggle rather than on a row,
+                because applying one is an action on the LIST the rail has
+                selected — and it behaves identically in the kanban view, which
+                shows that same list. */}
+            <NotePopover
+              label={strings.tasks.templates.menuLabel}
+              triggerClassName="tasks__templates-trigger"
+              triggerContent={strings.tasks.templates.title}
+            >
+              {(close) => (
+                <>
+                  <span className="note__menu-label">{strings.tasks.templates.title}</span>
+                  {sortedTemplates.length === 0 ? (
+                    <p className="note__menu-caption">{strings.tasks.templates.empty}</p>
+                  ) : (
+                    sortedTemplates.map((template) => (
+                      <div key={template.id} className="tasks__template-row">
+                        <button
+                          className="note__menu-item tasks__template-apply"
+                          role="menuitem"
+                          type="button"
+                          title={strings.tasks.templates.applyTitle}
+                          onClick={() => void applyTemplate(template, close)}
+                        >
+                          {template.name}
+                        </button>
+                        <button
+                          className="tasks__template-delete"
+                          type="button"
+                          aria-label={strings.tasks.templates.delete}
+                          onClick={() => void deleteTemplate(template.id)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))
+                  )}
+                  {templateFailed && (
+                    <p className="note__menu-caption" role="status">
+                      {strings.tasks.templates.actionError}
+                    </p>
+                  )}
+                </>
+              )}
+            </NotePopover>
+
+            <div className="tasks__views" role="group" aria-label={strings.tasks.viewLabel}>
+              {(["list", "kanban"] as const).map((option) => (
+                <Button
+                  key={option}
+                  size="sm"
+                  className={
+                    view === option ? "tasks__view tasks__view--active" : "tasks__view"
+                  }
+                  aria-pressed={view === option}
+                  onClick={() => void selectView(option)}
+                >
+                  {option === "list" ? strings.tasks.viewList : strings.tasks.viewKanban}
+                </Button>
+              ))}
+            </div>
           </div>
         </div>
 

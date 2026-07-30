@@ -16,8 +16,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 26 (notification appetite), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(26);
+  it("is at version 27 (task templates), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(27);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -2772,6 +2772,70 @@ describe("migration 026 — notification appetite", () => {
     insertProfile(db, "p1");
     expect(() => insertNtfSettings(db, "p1", 2)).toThrow();
     expect(() => insertNtfSettings(db, "p1", 1)).not.toThrow();
+    db.close();
+  });
+});
+
+describe("migration 027 — task templates", () => {
+  const now = () => new Date().toISOString();
+
+  const insertTemplate = (db: NexusDatabase, id: string, profileId: string, name: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO task_templates (id, profile_id, name, payload, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, profileId, name, '{"title":"x"}', now(), now());
+
+  it("creates the task_templates table and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    expect(tableNames(db)).toContain("task_templates");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("creates the task_templates_profile_name unique index", () => {
+    const db = openDatabase({ path: join(dir, "index.db") });
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("task_templates_profile_name");
+    db.close();
+  });
+
+  it("enforces UNIQUE(profile_id, name) — the name IS the template's identity", () => {
+    const db = openDatabase({ path: join(dir, "unique-name.db") });
+    insertProfile(db, "p1");
+    insertProfile(db, "p2");
+    insertTemplate(db, "tpl1", "p1", "Nedeljni pregled");
+    // the same name in the same profile collides — which is what makes
+    // `saveByName` an upsert rather than a second row.
+    expect(() => insertTemplate(db, "tpl2", "p1", "Nedeljni pregled")).toThrow();
+    // the same name in a different profile is fine.
+    expect(() => insertTemplate(db, "tpl3", "p2", "Nedeljni pregled")).not.toThrow();
+    db.close();
+  });
+
+  it("cascades templates when the owning profile is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade-profile.db") });
+    insertProfile(db, "p1");
+    insertTemplate(db, "tpl1", "p1", "Nedeljni pregled");
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM task_templates").get() as { n: number }).n,
+    ).toBe(0);
+    db.close();
+  });
+
+  it("has no deleted_at column — deleting a template is final, as for note_templates", () => {
+    const db = openDatabase({ path: join(dir, "no-soft-delete.db") });
+    const columns = (
+      db.raw.prepare("PRAGMA table_info(task_templates)").all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(columns).toEqual(["id", "profile_id", "name", "payload", "created_at", "updated_at"]);
     db.close();
   });
 });

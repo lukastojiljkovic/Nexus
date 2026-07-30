@@ -40,6 +40,7 @@ import {
   TaskListStore,
   TaskStore,
   TaskTagStore,
+  TaskTemplateStore,
   openDatabase,
   uuidv7,
 } from "@nexus/db";
@@ -136,6 +137,7 @@ function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
     taskListStore: (profileId) => new TaskListStore(handle.raw, profileId),
     taskTagStore: (profileId) => new TaskTagStore(handle.raw, profileId),
     taskAttachmentStore: (profileId) => new TaskAttachmentStore(handle.raw, profileId),
+    taskTemplateStore: (profileId) => new TaskTemplateStore(handle.raw, profileId),
     eventStore: (profileId) => new EventStore(handle.raw, profileId),
     peopleStore: (profileId) => new PeopleStore(handle.raw, profileId),
     documentStore: (profileId) => new DocumentStore(handle.raw, profileId),
@@ -301,6 +303,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   const orgStore = new NoteOrgStore(handle.raw, profileId);
   const attachmentStore = new NoteAttachmentStore(handle.raw, profileId);
   const templateStore = new NoteTemplateStore(handle.raw, profileId);
+  const taskTemplateStore = new TaskTemplateStore(handle.raw, profileId);
 
   // A real list with a section, and the task filed inside it (TASK-004), so the
   // zip round trip carries a task's placement and not just the Inbox default.
@@ -334,6 +337,24 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
       sha256: taskAttachmentSha,
     },
     "2026-01-01T00:02:00.000Z",
+  );
+
+  // A template with a fully-populated nested payload (ADR-035) — the one row in
+  // this fixture whose value is JSON inside JSON, so the zip round trip has to
+  // carry it through NDJSON and back without flattening or reordering it.
+  taskTemplateStore.saveByName(
+    `${label} task template`,
+    {
+      title: `${label} from template`,
+      description: "Opis",
+      priority: "high",
+      dueOffsetDays: 3,
+      reminderOffsets: [0, 1],
+      recurrence: { freq: { kind: "weekly", interval: 1, days: [1] }, end: { kind: "never" } },
+      tagNames: [`${label} task tag`],
+      subtaskTitles: ["Prvi korak"],
+    },
+    t0,
   );
 
   const event = eventStore.create({ title: `${label} event`, startAt: "2026-03-01T10:00:00.000Z" });
@@ -389,6 +410,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     taskTags: taskTagStore.listTags(),
     taskTagLinks: taskTagStore.listTagLinks(),
     taskAttachments: taskAttachmentStore.list(task.id),
+    taskTemplates: taskTemplateStore.list(),
     events: eventStore.listActive(),
     documents: [],
     renewals: [],

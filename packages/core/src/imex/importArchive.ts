@@ -31,6 +31,8 @@ import type {
   ExportTaskSection,
   ExportTaskTag,
   ExportTaskTagLink,
+  ExportTaskTemplate,
+  ExportTaskTemplatePayload,
   ProfileData,
 } from "./exportArchive.js";
 
@@ -114,20 +116,20 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.5.0` added the
- * `task-attachment` record type (migration 024), after `1.4.0` added
- * `task-tag`/`task-tag-link` (migration 023), `1.3.0` the
- * `task-list`/`task-section` types and a task's placement into them (TASK-004 /
- * ADR-029), `1.2.0` a task's `reminderOffsets` (ADR-028) and `1.1.0` the
- * `person` record type (CAL-007 / ADR-026): additive changes, hence MINOR
- * bumps, which is exactly the compatibility mechanism
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.6.0` added the
+ * `task-template` record type (migration 027 / ADR-035), after `1.5.0` added
+ * `task-attachment`, `1.4.0` the `task-tag`/`task-tag-link` types (migration
+ * 023), `1.3.0` the `task-list`/`task-section` types and a task's placement into
+ * them (TASK-004 / ADR-029), `1.2.0` a task's `reminderOffsets` (ADR-028) and
+ * `1.1.0` the `person` record type (CAL-007 / ADR-026): additive changes, hence
+ * MINOR bumps, which is exactly the compatibility mechanism
  * `isSupportedSchemaVersion` implements — an older minor within major 1 still
  * passes the gate here, while an older build refuses a newer archive rather
  * than silently dropping what it cannot see (every person, every task's ladder,
  * every list the user filed their work into, every label they sorted it by, or
- * every file they hung off a task). That, in turn, is why an unrecognised record
- * type below is an ERROR: the version gate makes "ignore what you do not know"
- * unreachable.
+ * every file they hung off a task, or every template they built).
+ * That, in turn, is why an unrecognised record type below is an ERROR: the
+ * version gate makes "ignore what you do not know" unreachable.
  *
  * A new RECORD TYPE needs no `ArchiveEra` flag, unlike a new field on an
  * existing type: an older archive simply carries none of it, which is
@@ -139,8 +141,15 @@ export interface ImportArchiveResult {
  * Major is still 1 throughout, so there is nothing yet to migrate an older
  * major forward from — a migration framework for a major that has never
  * shipped would be speculative machinery with nothing to exercise it.
+ *
+ * SUPERVISOR NOTE (task-templates lane, ADR-035): this worktree branched before
+ * the `1.5.0` (`task-attachment`) lane landed on main, so the `1.5.0` sentence
+ * above describes a change this tree does not yet contain and the version jumps
+ * `1.4.0` -> `1.6.0` here. The gate's behaviour is unaffected: a `1.5` archive
+ * is accepted by minor comparison and simply carries a type this tree does not
+ * know, which is exactly the situation the merge resolves.
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.5.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.6.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -278,6 +287,21 @@ function nonEmptyStr(value: unknown, field: string): string {
 
 function nullableStr(value: unknown, field: string): string | null {
   return value === null ? null : str(value, field);
+}
+
+/**
+ * A name/title the writing store keeps TRIMMED, checked against what that store
+ * would itself have written: whitespace-only is refused, and a value carrying
+ * outer whitespace is refused too rather than silently trimmed here — the
+ * writer emits the canonical form, so anything else is a row the store did not
+ * write. `maxLength` (after trimming, which is the same string) is optional
+ * because a task title has no cap at all (`TaskStore.validateTitle`).
+ */
+function trimmedNonEmptyStr(value: unknown, field: string, maxLength?: number): string {
+  const s = nonEmptyStr(value, field);
+  if (s !== s.trim()) throw new InvalidFieldError(field);
+  if (maxLength !== undefined && s.length > maxLength) throw new InvalidFieldError(field);
+  return s;
 }
 
 function nullableNonEmptyStr(value: unknown, field: string): string | null {
@@ -418,6 +442,32 @@ function boundedIntArray(value: unknown, field: string, max: number, maxLength: 
   return items;
 }
 
+/**
+ * An array of trimmed, non-empty names, the array capped at `maxItems` and each
+ * item at `maxItemLength` — the shape a task template's `tagNames` and
+ * `subtaskTitles` both take. `unique` is what tells them apart, and the
+ * difference is real: two identical tags are ONE label (migration 023's
+ * PRIMARY KEY says so, and `TaskTemplateStore` de-duplicates), while two
+ * identical subtask titles are two things to do. Repetition is therefore
+ * refused for the first and kept in order for the second.
+ */
+function boundedNameArray(
+  value: unknown,
+  field: string,
+  maxItems: number,
+  maxItemLength: number,
+  unique: boolean,
+): string[] {
+  if (!Array.isArray(value)) throw new InvalidFieldError(field);
+  const entries: readonly unknown[] = value;
+  if (entries.length > maxItems) throw new InvalidFieldError(field);
+  const names = entries.map((item, index) =>
+    trimmedNonEmptyStr(item, `${field}[${index}]`, maxItemLength),
+  );
+  if (unique && new Set(names).size !== names.length) throw new InvalidFieldError(field);
+  return names;
+}
+
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 /** Exactly `HH:MM` on a 24-hour clock — the shape `NotificationStore`'s own `validateHHMM` enforces on every write. No SQL CHECK backs it, which is precisely why it has to be checked here: an archive is the one way a value can reach that table without passing through the store. */
@@ -495,6 +545,21 @@ const MAX_EVENT_REMINDERS = 8;
 const MAX_TASK_REMINDER_DAYS = 365;
 const MAX_TASK_REMINDERS = 8;
 
+/**
+ * Mirrors `MAX_TASK_TEMPLATE_NAME_LENGTH` / `MAX_TASK_TEMPLATE_DUE_OFFSET_DAYS`
+ * / `MAX_TASK_TEMPLATE_TAGS` / `MAX_TASK_TEMPLATE_SUBTASKS` in `@nexus/db`'s
+ * `tasks/taskTemplateStore.ts`, plus `MAX_TASK_TAG_NAME_LENGTH` from
+ * `tasks/taskTagStore.ts` (copied, not imported — `@nexus/core` must not depend
+ * on `@nexus/db`), the same arrangement as the caps above. Nothing in migration
+ * 027 can CHECK a JSON column, so an archive is the one way a payload could
+ * reach that column having passed nobody's validator.
+ */
+const MAX_TASK_TEMPLATE_NAME_LENGTH = 80;
+const MAX_TASK_TEMPLATE_DUE_OFFSET_DAYS = 365;
+const MAX_TASK_TEMPLATE_TAGS = 20;
+const MAX_TASK_TEMPLATE_SUBTASKS = 30;
+const MAX_TASK_TAG_NAME_LENGTH = 50;
+
 // --- Record type discriminants ----------------------------------------------
 
 type RecordType =
@@ -504,6 +569,7 @@ type RecordType =
   | "task-tag"
   | "task-tag-link"
   | "task-attachment"
+  | "task-template"
   | "event"
   | "document"
   | "renewal"
@@ -532,6 +598,7 @@ const ALL_RECORD_TYPES: readonly RecordType[] = [
   "task-tag",
   "task-tag-link",
   "task-attachment",
+  "task-template",
   "event",
   "document",
   "renewal",
@@ -565,6 +632,7 @@ const FILE_RECORD_TYPES: Record<DataFilePath, readonly RecordType[]> = {
     "task",
     "task-tag-link",
     "task-attachment",
+    "task-template",
   ],
   "data/calendar.ndjson": ["event", "document", "renewal", "person"],
   "data/study.ndjson": ["subject", "exam", "deck", "card", "review", "plan", "block", "focus-session"],
@@ -710,6 +778,84 @@ function parseTaskAttachment(raw: Record<string, unknown>): ExportTaskAttachment
   const sha256 = nonEmptyStr(raw.sha256, "sha256");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   return { id, taskId, fileName, mime, sizeBytes, sha256, createdAt };
+}
+
+/**
+ * `TaskTemplateStore.validatePayload`'s twin (ADR-035). Every field is
+ * revalidated rather than passed through, because a payload lives in a JSON
+ * column no `CHECK` can reach: this parser and that store's own validator are
+ * between them the ONLY two gates the value ever passes, and they must agree.
+ *
+ * Nested, so the field paths a problem names read `payload.title`,
+ * `payload.tagNames[2]` — the row's own structure, which is what makes an
+ * `invalid-record` detail something a person can go and fix.
+ */
+function parseTaskTemplatePayload(value: unknown, field: string): ExportTaskTemplatePayload {
+  const raw = expectRecord(value, field);
+
+  const title = trimmedNonEmptyStr(raw.title, `${field}.title`);
+  const description = nullableStr(raw.description, `${field}.description`);
+  const priority = enumStr(raw.priority, `${field}.priority`, TASK_PRIORITIES);
+  const dueOffsetDays =
+    raw.dueOffsetDays === null
+      ? null
+      : intInRange(raw.dueOffsetDays, `${field}.dueOffsetDays`, 0, MAX_TASK_TEMPLATE_DUE_OFFSET_DAYS);
+  const reminderOffsets = boundedIntArray(
+    raw.reminderOffsets,
+    `${field}.reminderOffsets`,
+    MAX_TASK_REMINDER_DAYS,
+    MAX_TASK_REMINDERS,
+  );
+  const recurrence = nullableRecurrenceRule(raw.recurrence, `${field}.recurrence`);
+  const tagNames = boundedNameArray(
+    raw.tagNames,
+    `${field}.tagNames`,
+    MAX_TASK_TEMPLATE_TAGS,
+    MAX_TASK_TAG_NAME_LENGTH,
+    true,
+  );
+  const subtaskTitles = boundedNameArray(
+    raw.subtaskTitles,
+    `${field}.subtaskTitles`,
+    MAX_TASK_TEMPLATE_SUBTASKS,
+    // A subtask title is a TASK title, and `TaskStore` puts no length cap on
+    // one; the array cap alone bounds this field, so the per-item bound is the
+    // same "no cap" (`Infinity`) that store enforces.
+    Number.POSITIVE_INFINITY,
+    false,
+  );
+
+  // The anchor rule (ADR-024 / ADR-028) as the store states it against the
+  // RELATIVE offset: a ladder counts days back from the due date the apply
+  // computes, and a rule phases from it, so a template carrying either must
+  // describe one. `0` satisfies it — "due the day it is applied" is a date.
+  if (reminderOffsets.length > 0 && dueOffsetDays === null) {
+    throw new InvalidFieldError(`${field}.dueOffsetDays`);
+  }
+  if (recurrence !== null && dueOffsetDays === null) {
+    throw new InvalidFieldError(`${field}.dueOffsetDays`);
+  }
+
+  return {
+    title,
+    description,
+    priority,
+    dueOffsetDays,
+    reminderOffsets,
+    recurrence,
+    tagNames,
+    subtaskTitles,
+  };
+}
+
+function parseTaskTemplate(raw: Record<string, unknown>): ExportTaskTemplate {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const name = trimmedNonEmptyStr(raw.name, "name", MAX_TASK_TEMPLATE_NAME_LENGTH);
+  const payload = parseTaskTemplatePayload(raw.payload, "payload");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, profileId, name, payload, createdAt, updatedAt };
 }
 
 function parseEvent(raw: Record<string, unknown>, era: ArchiveEra): ExportEvent {
@@ -1095,6 +1241,7 @@ interface Collections {
   taskTags: Bucket<ExportTaskTag>;
   taskTagLinks: Bucket<ExportTaskTagLink>;
   taskAttachments: Bucket<ExportTaskAttachment>;
+  taskTemplates: Bucket<ExportTaskTemplate>;
   events: Bucket<ExportEvent>;
   documents: Bucket<ExportDocument>;
   renewals: Bucket<ExportRenewal>;
@@ -1120,7 +1267,7 @@ interface Collections {
 function newCollections(): Collections {
   return {
     tasks: newBucket(), taskLists: newBucket(), taskSections: newBucket(),
-    taskTags: newBucket(), taskTagLinks: newBucket(), taskAttachments: newBucket(),
+    taskTags: newBucket(), taskTagLinks: newBucket(), taskAttachments: newBucket(), taskTemplates: newBucket(),
     events: newBucket(), documents: newBucket(), renewals: newBucket(),
     people: newBucket(), subjects: newBucket(), exams: newBucket(), decks: newBucket(), cards: newBucket(),
     reviewLog: newBucket(), plans: newBucket(), blocks: newBucket(), focusSessions: newBucket(),
@@ -1171,6 +1318,11 @@ function dispatchRecord(
     case "task-attachment": {
       const row = parseTaskAttachment(raw);
       pushRow(collections.taskAttachments, row.id, row, path, line, problems);
+      return;
+    }
+    case "task-template": {
+      const row = parseTaskTemplate(raw);
+      pushRow(collections.taskTemplates, row.id, row, path, line, problems);
       return;
     }
     case "event": {
@@ -1769,6 +1921,7 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         taskTags: rowsOf(collections.taskTags),
         taskTagLinks: rowsOf(collections.taskTagLinks),
         taskAttachments: rowsOf(collections.taskAttachments),
+        taskTemplates: rowsOf(collections.taskTemplates),
         events: rowsOf(collections.events),
         documents: rowsOf(collections.documents),
         renewals: rowsOf(collections.renewals),
