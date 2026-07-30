@@ -27,24 +27,26 @@ import { renderNoteMarkdown } from "./noteMarkdown.js";
 import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown.js";
 
 /**
- * IMEX-004: the archive's own semver. `1.9.0` adds the `dashboard-settings`
- * record type and the `data/dashboard.ndjson` file it rides in (SET-006 /
- * ADR-041), after `1.8.0` added the `task-dependency` record type (migration
- * 029 / ADR-037), `1.5.0`-`1.7.0` task attachments, task templates and the
- * NOTE folder preferences (each landing on its own lane), `1.4.0` the
+ * IMEX-004: the archive's own semver. `1.10.0` adds a card's `kind` and, for a
+ * cloze card, the `clozeText`/`clozeOrdinal` it is derived from (STUDY-006 /
+ * ADR-042), after `1.9.0` added the `dashboard-settings` record type (SET-006
+ * / ADR-041), `1.8.0` the `task-dependency` record type (migration 029 /
+ * ADR-037), `1.5.0`-`1.7.0` task attachments, task templates and the NOTE
+ * folder preferences (each landing on its own lane), `1.4.0` the
  * `task-tag`/`task-tag-link` types (migration 023), `1.3.0` the
  * `task-list`/`task-section` types and the `listId`/`sectionId`/`position` a
  * task carries into them (TASK-004 / ADR-029), `1.2.0` a task's
  * `reminderOffsets` (ADR-028) and `1.1.0` the `person` record type (CAL-007 /
  * ADR-026). Additive, so a MINOR bump by the same honesty each of those made
  * one: an archive this build writes is refused by an older reader, which would
- * otherwise parse everything else and silently drop the background the user
- * chose. Kept in step with `INTERCHANGE_SCHEMA_VERSION` (`importArchive.ts`) —
- * two constants rather than one import, since the reader already imports from
- * this module and the cycle would be worse than the duplication;
- * `importArchive.test.ts` pins them equal.
+ * otherwise parse every cloze card and restore it as a plain front/back card
+ * whose template — the only text its owner can edit — is gone. Kept in step
+ * with `INTERCHANGE_SCHEMA_VERSION` (`importArchive.ts`) — two constants
+ * rather than one import, since the reader already imports from this module
+ * and the cycle would be worse than the duplication; `importArchive.test.ts`
+ * pins them equal.
  */
-const SCHEMA_VERSION = "1.9.0";
+const SCHEMA_VERSION = "1.10.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -350,6 +352,24 @@ export interface ExportCard {
    */
   sourceNoteId: string | null;
   sourceBlockKey: string | null;
+  /**
+   * What kind of card this is (STUDY-006 / ADR-042). OPTIONAL with a default:
+   * absent means `"basic"`, which is exactly what every archive written before
+   * this field existed contained, so it needs no `ArchiveEra` flag (the ADR-028
+   * rule — an era flag exists only for a field whose absence is ambiguous). A
+   * key that IS present is validated strictly, in every era.
+   */
+  kind?: string;
+  /**
+   * A cloze card's raw `{{…}}` template and the deletion this row asks.
+   * Required together exactly when `kind` is `"cloze"`, absent or null
+   * otherwise — the same pair rule the `cards` CHECK constraints enforce, and
+   * the reader additionally re-runs the `{{…}}` grammar to confirm the ordinal
+   * is actually IN the template. Without them a restored cloze card would keep
+   * its rendered sides but lose the only text its owner can edit.
+   */
+  clozeText?: string | null;
+  clozeOrdinal?: number | null;
   due: string;
   stability: number;
   difficulty: number;

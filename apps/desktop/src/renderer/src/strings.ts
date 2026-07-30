@@ -897,6 +897,39 @@ export const strings = {
     deckSelectLabel: "Špil",
     mathHint: "Koristi $…$ za matematičke izraze.",
     editCardLabel: "Izmeni karticu",
+
+    // --- Cloze cards (STUDY-006 / ADR-042) ----------------------------------
+    /** The Osnovna/Cloze segmented toggle above the card form. */
+    cardKindLabel: "Vrsta kartice",
+    cardKind: {
+      basic: "Osnovna",
+      cloze: "Cloze",
+    },
+    clozeLabel: "Tekst sa prazninama",
+    clozePlaceholder: "Glavni grad Srbije je {{Beograd}}.",
+    clozeHint: "Stavi {{…}} oko svakog dela koji treba da bude skriven.",
+    /**
+     * The live line under the cloze field: "3 praznine → 3 kartice". Both
+     * counted nouns take three Serbian forms (1 / 2–4 / 5+), so they go
+     * through `countUnit` rather than `dayUnit`.
+     */
+    clozeCount: {
+      arrow: "→",
+      blankOne: "praznina",
+      blankFew: "praznine",
+      blankMany: "praznina",
+      cardOne: "kartica",
+      cardFew: "kartice",
+      cardMany: "kartica",
+      /** Shown instead of the count line while the text has no deletion; creation stays disabled. */
+      none: "Nema praznina — dodaj {{…}} da bi nastala kartica.",
+    },
+    /** Inline refusal when an edit drops the very deletion this card asks about. */
+    clozeOrdinalMissing: "Ova kartica pita prazninu koju novi tekst više ne sadrži.",
+    /** Inline fallback when saving a card fails for any other reason. */
+    saveCardError: "Kartica nije sačuvana. Pokušaj ponovo.",
+    /** Screen-reader label for the masked blank in the review surface. */
+    clozeBlankLabel: "skriveni deo",
     deleteCardLabel: "Obriši karticu",
     deletedCardNotice: "Kartica obrisana",
     /** Card-state chip labels; Learning and Relearning share one label (both "in progress"). */
@@ -1535,4 +1568,25 @@ export const strings = {
  */
 export function dayUnit(count: number, one: string, many: string): string {
   return count % 10 === 1 && count % 100 !== 11 ? one : many;
+}
+
+/**
+ * Full Serbian numeral agreement — the three forms `dayUnit` deliberately does
+ * not model: 1 (and 21, 31, …) takes `one`, 2–4 (and 22–24, …) take `few`, and
+ * everything else takes `many`; the teens 11–14 are the exception that takes
+ * `many` at every one of them.
+ *
+ * `dayUnit` gets away with two forms because "dan"/"dana" happen to collapse
+ * there. A counted noun that does not collapse — "3 praznine" beside "5
+ * praznina" — needs this. Only ever applied to a count the app itself computed
+ * (see the `recurrence` note above on why a freely typed number keeps its
+ * labelled-field phrasing instead).
+ */
+export function countUnit(count: number, one: string, few: string, many: string): string {
+  const lastTwo = count % 100;
+  if (lastTwo >= 11 && lastTwo <= 14) return many;
+  const last = count % 10;
+  if (last === 1) return one;
+  if (last >= 2 && last <= 4) return few;
+  return many;
 }

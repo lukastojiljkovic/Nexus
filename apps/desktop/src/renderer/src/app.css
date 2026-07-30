@@ -3199,6 +3199,31 @@ button.cal__grid-event--dragging {
   align-items: center;
   gap: var(--nx-space-2);
 }
+/* Osnovna/Cloze kind toggle above the card form (ADR-042) — the house
+   segmented recipe, identical to Izgled's `.set__segmented`. */
+.study__segmented {
+  display: inline-flex;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
+}
+/* "3 praznine → 3 kartice", live under the cloze textarea. Quiet by default;
+   the zero-blank nudge is muted rather than alarming — nothing is wrong yet,
+   there is simply nothing to make a card from. */
+.study__cloze-count {
+  margin: 0;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text);
+  font-variant-numeric: tabular-nums;
+}
+.study__cloze-count--empty {
+  color: var(--nx-text-muted);
+}
+/* The store's refusal, surfaced in the form rather than the console. */
+.study__card-form-error {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-danger);
+}
 
 /* KaTeX host (MathText) — no colour of its own, so its output inherits
    currentColor and matches the surrounding themed text in both Dan and Noć. */
@@ -3266,6 +3291,30 @@ button.cal__grid-event--dragging {
 }
 .review__back {
   color: var(--nx-text-muted);
+}
+
+/* Cloze review surface (STUDY-006 / ADR-042): one line that keeps the sentence
+   in place while the blank becomes the answer. `inline` so the segments flow as
+   one paragraph and the line re-wraps around whatever length the answer has. */
+.review__cloze {
+  display: inline;
+}
+/* The masked deletion before reveal: a token-styled chip, not a glow. The
+   dashed border reads as "something belongs here" and the muted foreground
+   keeps the surrounding sentence the thing being read. */
+.review__cloze-blank {
+  display: inline-block;
+  padding: 0 var(--nx-space-2);
+  border: 1px dashed var(--nx-border);
+  border-radius: var(--nx-radius-sm);
+  background: var(--nx-surface-alt);
+  color: var(--nx-text-muted);
+}
+/* The answer after reveal, in the blank's own place: the house typographic
+   emphasis — accent colour plus weight, no glow, no background. */
+.review__cloze-answer {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
 }
 
 .review__reveal.nx-button {

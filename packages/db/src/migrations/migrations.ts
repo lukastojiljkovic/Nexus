@@ -30,6 +30,7 @@ import { migration027 } from "./027-task-templates.js";
 import { migration028 } from "./028-note-folder-prefs.js";
 import { migration029 } from "./029-task-dependencies.js";
 import { migration030 } from "./030-dashboard-settings.js";
+import { migration031 } from "./031-cloze-cards.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -39,16 +40,7 @@ export interface Migration {
   up(db: DatabaseHandle): void;
 }
 
-/**
- * All known migrations, ascending by version.
- *
- * SUPERVISOR NOTE: this lane's base tops out at migration 023, so 030
- * (ADR-041) lands here with 024..029 missing — those are the other in-flight
- * lanes' migrations, which this worktree cannot see. `runMigrations` only ever
- * compares against `user_version`, so a gap costs nothing at runtime; the
- * merged tree closes it. The gap-free assertion in `migrations.test.ts` is
- * loosened with the same note and must be restored at merge.
- */
+/** All known migrations, ascending by version. */
 export const MIGRATIONS: readonly Migration[] = [
   migration001,
   migration002,
@@ -80,6 +72,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration028,
   migration029,
   migration030,
+  migration031,
 ];
 
 /**

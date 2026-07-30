@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
-import { computeStreak } from "@nexus/core";
+import { CLOZE_MASK, computeStreak, findClozeRuns, splitClozeSegments } from "@nexus/core";
+import type { ClozeSegment } from "@nexus/core";
 import { Button, Checkbox, Chip, EmptyState, ListRow, TextField } from "@nexus/ui";
 import type {
   Card,
   CardFieldChanges,
+  CardKind,
   CardRating,
   CardState,
   Deck,
@@ -32,7 +34,7 @@ import type {
   SubjectColor,
   SubjectFieldChanges,
 } from "../../shared/ipc.js";
-import { CARD_TEXT_MAX_LENGTH } from "../../shared/ipc.js";
+import { CARD_KINDS, CARD_TEXT_MAX_LENGTH } from "../../shared/ipc.js";
 import {
   daysUntilExam,
   examCountdownLabel,
@@ -45,7 +47,7 @@ import { focusSessionMinutes, formatDurationMinutes, formatElapsed, formatFocusS
 import { MathText } from "./MathText.js";
 import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
 import { intervalLabel, isDueWithinSession } from "./reviewIntervals.js";
-import { dayUnit, strings } from "./strings.js";
+import { countUnit, dayUnit, strings } from "./strings.js";
 
 // --- Field orderings (renderer mirror of @nexus/db) -------------------------
 //
@@ -110,6 +112,70 @@ function formatCardDue(due: string): string {
         hour: "2-digit",
         minute: "2-digit",
       }).format(date);
+}
+
+/**
+ * The segments the review surface renders a cloze card from, or null when this
+ * row is not a usable cloze card — a basic card, or (defensively) a cloze row
+ * whose template no longer holds its own ordinal. The caller then falls back
+ * to the stored `front`/`back`, which are plain strings and always renderable.
+ */
+function clozeSegmentsOf(card: Card): ClozeSegment[] | null {
+  if (card.kind !== "cloze" || card.clozeText === null || card.clozeOrdinal === null) return null;
+  return splitClozeSegments(card.clozeText, card.clozeOrdinal);
+}
+
+/**
+ * The cloze review surface (STUDY-006 / ADR-042): the card's template with
+ * this row's deletion masked as a blank chip and every other run unwrapped —
+ * and, once revealed, the SAME line with the answer in the blank's place,
+ * emphasised typographically (accent + weight, never a glow). The context
+ * never leaves the screen, which is the whole point of a cloze card.
+ *
+ * The segments are plain strings, so each one goes through `MathText`
+ * afterwards — a `$…$` expression inside a cloze sentence renders exactly as
+ * it does on a basic card.
+ */
+function ClozeLine({
+  segments,
+  revealed,
+}: {
+  segments: readonly ClozeSegment[];
+  revealed: boolean;
+}) {
+  return (
+    <span className="review__cloze">
+      {segments.map((segment, index) => {
+        if (segment.kind === "text") {
+          return <MathText key={index} text={segment.value} />;
+        }
+        return revealed ? (
+          <MathText key={index} text={segment.value} className="review__cloze-answer" />
+        ) : (
+          <span
+            key={index}
+            className="review__cloze-blank"
+            aria-label={strings.study.clozeBlankLabel}
+          >
+            {CLOZE_MASK}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+/**
+ * The cloze form's live line: "3 praznine → 3 kartice", or the nudge that
+ * there is nothing to make a card from yet. Both nouns take the full
+ * three-form Serbian agreement, hence `countUnit` rather than `dayUnit`.
+ */
+function clozeCountLabel(blanks: number): string {
+  const copy = strings.study.clozeCount;
+  if (blanks === 0) return copy.none;
+  const blankWord = countUnit(blanks, copy.blankOne, copy.blankFew, copy.blankMany);
+  const cardWord = countUnit(blanks, copy.cardOne, copy.cardFew, copy.cardMany);
+  return `${blanks} ${blankWord} ${copy.arrow} ${blanks} ${cardWord}`;
 }
 
 /** Returns `list` with the first card matching `id` removed (used to drop a requeued copy on undo). */
@@ -362,7 +428,20 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   const [cardFront, setCardFront] = useState("");
   const [cardBack, setCardBack] = useState("");
   const [cardDeckId, setCardDeckId] = useState("");
+  // Which form the card editor is showing (ADR-042). Free to switch while
+  // adding; pinned to the row's own kind while editing, because a card cannot
+  // change kind — its FSRS history belongs to the question it has been asking.
+  const [cardKind, setCardKind] = useState<CardKind>("basic");
+  const [clozeText, setClozeText] = useState("");
+  // Inline, in-form failure text (the store's refusal to drop this card's own
+  // deletion, or any other save failure) — the study page has no toast slot
+  // for a form, and a silent console error would look like a dead button.
+  const [cardFormError, setCardFormError] = useState<string | null>(null);
   const [pendingUndoCardId, setPendingUndoCardId] = useState<string | null>(null);
+  // How many cards the cloze text currently makes — one per `{{…}}` deletion,
+  // read by the SAME grammar the store derives the rows with, so the live line
+  // can never promise a count the store would not produce.
+  const clozeBlankCount = findClozeRuns(clozeText.trim()).length;
   // Lazily loaded id -> title map backing the note-source link control
   // (ADR-017); stays empty, and unfetched, for a deck with no generated cards.
   const [noteTitles, setNoteTitles] = useState<Map<string, string>>(new Map());
@@ -1054,53 +1133,109 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     setCardFront("");
     setCardBack("");
     setCardDeckId("");
+    setCardKind("basic");
+    setClozeText("");
+    setCardFormError(null);
   }
 
   function startAddCard(deckId: string): void {
+    closeCardForm();
     setCardFormVisible(true);
-    setEditingCardId(null);
-    setCardFront("");
-    setCardBack("");
     setCardDeckId(deckId);
   }
 
   function startEditCard(card: Card): void {
+    closeCardForm();
     setCardFormVisible(true);
     setEditingCardId(card.id);
+    setCardDeckId(card.deckId);
+    // The row's kind decides the form, and stays fixed for the edit.
+    setCardKind(card.kind);
     setCardFront(card.front);
     setCardBack(card.back);
-    setCardDeckId(card.deckId);
+    setClozeText(card.clozeText ?? "");
   }
 
   async function submitCardForm(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    const trimmedFront = cardFront.trim();
-    const trimmedBack = cardBack.trim();
-    if (trimmedFront.length === 0 || trimmedBack.length === 0) return;
-    if (trimmedFront.length > CARD_TEXT_MAX_LENGTH || trimmedBack.length > CARD_TEXT_MAX_LENGTH) return;
-
+    setCardFormError(null);
     try {
-      if (editingCardId != null) {
-        const changes: CardFieldChanges = { deckId: cardDeckId, front: trimmedFront, back: trimmedBack };
-        const updated = await window.nexus.updateCard(profileId, editingCardId, changes);
-        setCards((prev) => {
-          if (!prev) return prev;
-          // Moved to a different deck: it leaves this drill-in's list.
-          if (activeDeckId != null && updated.deckId !== activeDeckId) {
-            return prev.filter((c) => c.id !== updated.id);
-          }
-          return prev.map((c) => (c.id === updated.id ? updated : c));
-        });
-      } else {
-        const fields: NewCardFields = { deckId: cardDeckId, front: trimmedFront, back: trimmedBack };
-        const created = await window.nexus.createCard(profileId, fields);
-        setCards((prev) => (prev ? [...prev, created] : [created]));
-      }
+      const saved = cardKind === "cloze" ? await submitClozeCard() : await submitBasicCard();
+      if (!saved) return;
       closeCardForm();
       await reloadDeckCounts();
     } catch (error) {
       console.error("Nexus: failed to save card:", error);
+      setCardFormError(
+        clozeOrdinalGone() ? strings.study.clozeOrdinalMissing : strings.study.saveCardError,
+      );
     }
+  }
+
+  /**
+   * Whether the save failed because the new template no longer contains the
+   * deletion this card asks about — the one refusal worth naming in the form
+   * (ADR-042). Read off the row's own ordinal rather than guessed from the
+   * blank count alone: a card asking deletion 2 dies under a two-blank text
+   * just as surely as under a zero-blank one.
+   */
+  function clozeOrdinalGone(): boolean {
+    if (cardKind !== "cloze" || editingCardId == null) return false;
+    const ordinal = cards?.find((card) => card.id === editingCardId)?.clozeOrdinal;
+    return ordinal != null && ordinal >= clozeBlankCount;
+  }
+
+  /** Creates or updates a plain front/back card. Returns false when the form is not yet submittable. */
+  async function submitBasicCard(): Promise<boolean> {
+    const trimmedFront = cardFront.trim();
+    const trimmedBack = cardBack.trim();
+    if (trimmedFront.length === 0 || trimmedBack.length === 0) return false;
+    if (trimmedFront.length > CARD_TEXT_MAX_LENGTH || trimmedBack.length > CARD_TEXT_MAX_LENGTH) {
+      return false;
+    }
+
+    if (editingCardId != null) {
+      const changes: CardFieldChanges = { deckId: cardDeckId, front: trimmedFront, back: trimmedBack };
+      applyUpdatedCard(await window.nexus.updateCard(profileId, editingCardId, changes));
+    } else {
+      const fields: NewCardFields = { deckId: cardDeckId, front: trimmedFront, back: trimmedBack };
+      const created = await window.nexus.createCard(profileId, fields);
+      setCards((prev) => (prev ? [...prev, created] : [created]));
+    }
+    return true;
+  }
+
+  /**
+   * Creates N sibling cards from one template, or edits an existing cloze
+   * card's template in place. Only the template goes over the wire — the store
+   * derives every side (ADR-042).
+   */
+  async function submitClozeCard(): Promise<boolean> {
+    const trimmed = clozeText.trim();
+    if (trimmed.length === 0 || trimmed.length > CARD_TEXT_MAX_LENGTH) return false;
+    // An edit may legitimately reach zero blanks — the store's refusal is the
+    // message the user needs, so it is submitted and reported, not blocked.
+    if (editingCardId == null && clozeBlankCount === 0) return false;
+
+    if (editingCardId != null) {
+      const changes: CardFieldChanges = { deckId: cardDeckId, clozeText: trimmed };
+      applyUpdatedCard(await window.nexus.updateCard(profileId, editingCardId, changes));
+    } else {
+      const created = await window.nexus.createClozeCards(profileId, cardDeckId, trimmed);
+      setCards((prev) => (prev ? [...prev, ...created] : created));
+    }
+    return true;
+  }
+
+  /** Replaces one card in the drill-in's list, or drops it when the edit moved it to another deck. */
+  function applyUpdatedCard(updated: Card): void {
+    setCards((prev) => {
+      if (!prev) return prev;
+      if (activeDeckId != null && updated.deckId !== activeDeckId) {
+        return prev.filter((c) => c.id !== updated.id);
+      }
+      return prev.map((c) => (c.id === updated.id ? updated : c));
+    });
   }
 
   async function removeCard(card: Card): Promise<void> {
@@ -1387,38 +1522,102 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
 
             {cardFormVisible ? (
               <form className="study__card-form" onSubmit={(e) => void submitCardForm(e)}>
-                <div className="study__card-field">
-                  <textarea
-                    className="nx-textfield__input study__textarea"
-                    value={cardFront}
-                    placeholder={strings.study.frontPlaceholder}
-                    aria-label={strings.study.frontLabel}
-                    maxLength={CARD_TEXT_MAX_LENGTH}
-                    autoFocus
-                    onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setCardFront(event.target.value)}
-                  />
-                  {cardFront.trim().length > 0 && (
-                    <div className="study__math-preview">
-                      <MathText text={cardFront} />
+                {/* Kind is chosen only when ADDING: an existing card keeps the
+                    question its FSRS history belongs to (ADR-042). */}
+                {editingCardId == null && (
+                  <div
+                    className="study__segmented"
+                    role="group"
+                    aria-label={strings.study.cardKindLabel}
+                  >
+                    {CARD_KINDS.map((kind) => (
+                      <Button
+                        key={kind}
+                        type="button"
+                        size="sm"
+                        variant={cardKind === kind ? "primary" : "ghost"}
+                        aria-pressed={cardKind === kind}
+                        onClick={() => {
+                          setCardKind(kind);
+                          setCardFormError(null);
+                        }}
+                      >
+                        {strings.study.cardKind[kind]}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+
+                {cardKind === "cloze" ? (
+                  <div className="study__card-field">
+                    <textarea
+                      className="nx-textfield__input study__textarea"
+                      value={clozeText}
+                      placeholder={strings.study.clozePlaceholder}
+                      aria-label={strings.study.clozeLabel}
+                      maxLength={CARD_TEXT_MAX_LENGTH}
+                      autoFocus
+                      onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
+                        setClozeText(event.target.value)
+                      }
+                    />
+                    <p
+                      className={
+                        clozeBlankCount === 0
+                          ? "study__cloze-count study__cloze-count--empty"
+                          : "study__cloze-count"
+                      }
+                      aria-live="polite"
+                    >
+                      {clozeCountLabel(clozeBlankCount)}
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="study__card-field">
+                      <textarea
+                        className="nx-textfield__input study__textarea"
+                        value={cardFront}
+                        placeholder={strings.study.frontPlaceholder}
+                        aria-label={strings.study.frontLabel}
+                        maxLength={CARD_TEXT_MAX_LENGTH}
+                        autoFocus
+                        onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setCardFront(event.target.value)}
+                      />
+                      {cardFront.trim().length > 0 && (
+                        <div className="study__math-preview">
+                          <MathText text={cardFront} />
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-                <div className="study__card-field">
-                  <textarea
-                    className="nx-textfield__input study__textarea"
-                    value={cardBack}
-                    placeholder={strings.study.backPlaceholder}
-                    aria-label={strings.study.backLabel}
-                    maxLength={CARD_TEXT_MAX_LENGTH}
-                    onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setCardBack(event.target.value)}
-                  />
-                  {cardBack.trim().length > 0 && (
-                    <div className="study__math-preview">
-                      <MathText text={cardBack} />
+                    <div className="study__card-field">
+                      <textarea
+                        className="nx-textfield__input study__textarea"
+                        value={cardBack}
+                        placeholder={strings.study.backPlaceholder}
+                        aria-label={strings.study.backLabel}
+                        maxLength={CARD_TEXT_MAX_LENGTH}
+                        onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setCardBack(event.target.value)}
+                      />
+                      {cardBack.trim().length > 0 && (
+                        <div className="study__math-preview">
+                          <MathText text={cardBack} />
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+                  </>
+                )}
+                {/* The math hint applies to a cloze template too — a `$…$`
+                    expression inside one renders exactly as on a basic card. */}
+                {cardKind === "cloze" && (
+                  <p className="study__math-hint">{strings.study.clozeHint}</p>
+                )}
                 <p className="study__math-hint">{strings.study.mathHint}</p>
+                {cardFormError !== null && (
+                  <p className="study__card-form-error" role="alert">
+                    {cardFormError}
+                  </p>
+                )}
                 {editingCardId != null && (
                   <select
                     className="study__select"
@@ -1434,7 +1633,14 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                   </select>
                 )}
                 <div className="study__card-form-actions">
-                  <Button type="submit" variant="primary" size="sm">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    // Creating at zero blanks would make zero cards, so the
+                    // button says so instead of failing after the click.
+                    disabled={cardKind === "cloze" && editingCardId == null && clozeBlankCount === 0}
+                  >
                     {editingCardId != null ? strings.study.saveCard : strings.study.addCard}
                   </Button>
                   <Button type="button" size="sm" className="study__cancel" onClick={closeCardForm}>
@@ -2417,6 +2623,7 @@ function ReviewSession({ profileId, scope, onExit }: ReviewSessionProps) {
   }
 
   const now = new Date().toISOString();
+  const clozeSegments = clozeSegmentsOf(current);
 
   return (
     <div className="review">
@@ -2431,15 +2638,26 @@ function ReviewSession({ profileId, scope, onExit }: ReviewSessionProps) {
       </div>
 
       <div className="review__card">
-        <div className="review__front">
-          <MathText text={current.front} />
-        </div>
-        {revealed && (
+        {clozeSegments !== null ? (
+          // One line, two states: the blank fills in where it stood, and the
+          // sentence around it never moves (ADR-042). No divider and no
+          // separate back — there is nothing to separate.
+          <div className="review__front">
+            <ClozeLine segments={clozeSegments} revealed={revealed} />
+          </div>
+        ) : (
           <>
-            <div className="review__divider" />
-            <div className="review__back">
-              <MathText text={current.back} />
+            <div className="review__front">
+              <MathText text={current.front} />
             </div>
+            {revealed && (
+              <>
+                <div className="review__divider" />
+                <div className="review__back">
+                  <MathText text={current.back} />
+                </div>
+              </>
+            )}
           </>
         )}
       </div>

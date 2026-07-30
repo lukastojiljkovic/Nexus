@@ -319,6 +319,10 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   const deck = deckStore.create({ subjectId: subject.id, name: `${name} deck` });
   const createdCard = cardStore.create({ deckId: deck.id, front: "Q", back: "A" }, t0);
   cardStore.review(createdCard.id, 3, "2026-01-02T00:00:00.000Z");
+  // A cloze card in the fixture (ADR-042), so `cards: cardStore.listByDeck(...)`
+  // below carries the kind columns and every "restores exactly what was
+  // gathered" assertion covers them.
+  cardStore.createCloze(deck.id, "Glavni grad je {{Beograd}}, a reka je {{Sava}}.", t0);
 
   const plan = planStore.createPlan(
     { examId: exam.id, dailyMinutes: 30, startDate: "2026-06-01", examWeekBoost: true },

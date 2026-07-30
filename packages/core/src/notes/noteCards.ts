@@ -1,5 +1,7 @@
 import * as Y from "yjs";
 
+import { findClozeRuns, renderClozeSide } from "../study/clozeText.js";
+import type { ClozeRun } from "../study/clozeText.js";
 import { xmlTextContent } from "./yjsText.js";
 
 /**
@@ -15,12 +17,25 @@ import { xmlTextContent } from "./yjsText.js";
 /** The maximum length of a generated card side — `CardStore`'s own cap, enforced here so an over-long block is visibly not a card. */
 export const NOTE_CARD_MAX_TEXT_LENGTH = 10_000;
 
+/**
+ * The kind a card row is, mirroring `cards.kind` (migration 031 / ADR-042).
+ * A `cloze` card keeps its rendered `front`/`back` like any other card AND the
+ * template it was rendered from, so the reviewer can show the blank in context.
+ */
+export type CardKind = "basic" | "cloze";
+
 /** One card a single block yields. `suffix` is appended to the block's key to form the card's reconcile key. */
 export interface ParsedCard {
   front: string;
   back: string;
   /** "" for a Q/A card, `#${ordinal}` for the ordinal-th cloze deletion of the block. */
   suffix: string;
+  /** `basic` for a Q/A card, `cloze` for one deletion of a cloze block (ADR-042). */
+  kind: CardKind;
+  /** The block's raw `{{…}}` template, or null for a Q/A card — both set exactly when `kind` is `cloze`. */
+  clozeText: string | null;
+  /** Which deletion of `clozeText` this card asks, or null for a Q/A card. */
+  clozeOrdinal: number | null;
 }
 
 /** A run of card syntax inside a block's text, as half-open offsets, for the editor's decorations. */
@@ -36,18 +51,18 @@ export interface ParsedBlock {
   spans: CardSyntaxSpan[];
 }
 
-/** One generated card as the sync sends it: the reconcile key plus the rendered sides. */
+/** One generated card as the sync sends it: the reconcile key plus the rendered sides and, for a cloze card, its template (ADR-042). */
 export interface NoteCardSpec {
   key: string;
   front: string;
   back: string;
+  kind: CardKind;
+  clozeText: string | null;
+  clozeOrdinal: number | null;
 }
 
 /** `::` with whitespace required on both sides — what keeps `std::vector`/`Foo::bar` from becoming cards. */
 const QNA_SEPARATOR = /(?<=\s)::(?=\s)/;
-
-/** A `{{…}}` run; `[^{}]*` both bans nesting and lets a run's own inner text decide if it is empty. */
-const CLOZE_RUN = /\{\{([^{}]*)\}\}/g;
 
 /**
  * The single source of truth for the inline-flashcard syntax. Returns
@@ -73,39 +88,23 @@ function parseQnA(text: string): ParsedBlock | null {
   if (front.length === 0 || back.length === 0) return null;
 
   return {
-    cards: [{ front, back, suffix: "" }],
+    cards: [{ front, back, suffix: "", kind: "basic", clozeText: null, clozeOrdinal: null }],
     spans: [{ start: match.index, end: match.index + 2, kind: "separator" }],
   };
 }
 
-/** One `{{…}}` run whose inner text is non-empty after trimming — a candidate cloze deletion. */
-interface ClozeRun {
-  start: number;
-  end: number;
-  inner: string;
-}
-
 /**
- * The cloze rule: every non-overlapping `{{…}}` run with non-empty (trimmed)
- * inner text is one deletion, in left-to-right order. A run whose inner text
- * is empty or whitespace-only (`{{}}`, `{{ }}`) is not a deletion — it is
- * ignored, exactly as if it were not there, rather than rendered as an empty
- * hidden slot.
+ * Applies only when the Q/A rule did not match. One card per deletion, all
+ * sharing one fully-unwrapped back — and all carrying the block's raw text as
+ * their template, so a note-derived cloze row is the same shape as a hand-made
+ * one (ADR-042) and the reviewer can put the blank back in its context.
+ *
+ * The grammar itself lives in `study/clozeText.ts`: the editor's decorations,
+ * the store's re-derivation and the reviewer all read it from there, and a
+ * second copy here could only ever drift.
  */
-function findClozeRuns(text: string): ClozeRun[] {
-  const runs: ClozeRun[] = [];
-  for (const match of text.matchAll(CLOZE_RUN)) {
-    if (match.index === undefined) continue; // matchAll always sets it; guard keeps strict mode happy
-    const inner = match[1] ?? "";
-    if (inner.trim().length === 0) continue;
-    runs.push({ start: match.index, end: match.index + match[0].length, inner });
-  }
-  return runs;
-}
-
-/** Applies only when the Q/A rule did not match. One card per deletion, all sharing one fully-unwrapped back. */
 function parseCloze(text: string): ParsedBlock {
-  const runs = findClozeRuns(text);
+  const runs: readonly ClozeRun[] = findClozeRuns(text);
   if (runs.length === 0) return { cards: [], spans: [] };
 
   const back = renderClozeSide(text, runs, null).trim();
@@ -113,6 +112,9 @@ function parseCloze(text: string): ParsedBlock {
     front: renderClozeSide(text, runs, ordinal).trim(),
     back,
     suffix: `#${ordinal}`,
+    kind: "cloze",
+    clozeText: text,
+    clozeOrdinal: ordinal,
   }));
   const spans: CardSyntaxSpan[] = runs.map((run) => ({
     start: run.start,
@@ -123,27 +125,18 @@ function parseCloze(text: string): ParsedBlock {
 }
 
 /**
- * Rebuilds one side of a cloze card: the `target`-th run (0-based) is
- * replaced by `[…]` (Anki's "hide only this one" behaviour), every other run
- * is unwrapped to its own inner text. `target: null` unwraps every run — the
- * one back all of a block's cloze cards share.
+ * A 10 000-character flashcard is not a flashcard: an over-long side drops the
+ * whole block, not just that card. A cloze card's TEMPLATE is measured too —
+ * it is persisted verbatim under the same column cap, and a block whose sides
+ * fit only because unwrapping shortened them would be rejected by the store
+ * rather than silently dropped here.
  */
-function renderClozeSide(text: string, runs: readonly ClozeRun[], target: number | null): string {
-  let result = "";
-  let cursor = 0;
-  runs.forEach((run, index) => {
-    result += text.slice(cursor, run.start);
-    result += index === target ? "[…]" : run.inner;
-    cursor = run.end;
-  });
-  return result + text.slice(cursor);
-}
-
-/** A 10 000-character flashcard is not a flashcard: an over-long side drops the whole block, not just that card. */
 function capLength(block: ParsedBlock): ParsedBlock {
   const overLong = block.cards.some(
     (card) =>
-      card.front.length > NOTE_CARD_MAX_TEXT_LENGTH || card.back.length > NOTE_CARD_MAX_TEXT_LENGTH,
+      card.front.length > NOTE_CARD_MAX_TEXT_LENGTH ||
+      card.back.length > NOTE_CARD_MAX_TEXT_LENGTH ||
+      (card.clozeText !== null && card.clozeText.length > NOTE_CARD_MAX_TEXT_LENGTH),
   );
   return overLong ? { cards: [], spans: [] } : block;
 }
@@ -177,7 +170,14 @@ export function collectNoteCards(doc: Y.Doc): NoteCardSpec[] {
         // and the database's UNIQUE index would reject the whole sync.
         if (seenKeys.has(key)) continue;
         seenKeys.add(key);
-        specs.push({ key, front: card.front, back: card.back });
+        specs.push({
+          key,
+          front: card.front,
+          back: card.back,
+          kind: card.kind,
+          clozeText: card.clozeText,
+          clozeOrdinal: card.clozeOrdinal,
+        });
       }
     }
 

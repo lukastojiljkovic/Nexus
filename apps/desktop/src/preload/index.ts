@@ -175,6 +175,8 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.cardsListByDeck, { profileId, deckId }),
   createCard: (profileId, card) =>
     ipcRenderer.invoke(IpcChannel.cardsCreate, { profileId, card }),
+  createClozeCards: (profileId, deckId, text) =>
+    ipcRenderer.invoke(IpcChannel.cardsCreateCloze, { profileId, deckId, text }),
   updateCard: (profileId, id, changes) =>
     ipcRenderer.invoke(IpcChannel.cardsUpdate, { profileId, id, changes }),
   deleteCard: (profileId, id) =>

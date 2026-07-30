@@ -241,6 +241,7 @@ function richProfileData(): ProfileData {
       {
         id: "card-1", profileId: "profile1", deckId: "deck-1", front: "Q1", back: "A1",
         sourceNoteId: null, sourceBlockKey: null,
+        kind: "basic", clozeText: null, clozeOrdinal: null,
         due: "2026-01-02T00:00:00.000Z", stability: 1, difficulty: 2, elapsedDays: 0,
         scheduledDays: 1, learningSteps: 0, reps: 0, lapses: 0, state: 0, lastReview: null,
         createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z",
@@ -251,10 +252,26 @@ function richProfileData(): ProfileData {
       {
         id: "card-2", profileId: "profile1", deckId: "deck-1", front: "Q2", back: "A2",
         sourceNoteId: "note-1", sourceBlockKey: "blok-1",
+        kind: "basic", clozeText: null, clozeOrdinal: null,
         due: "2026-01-05T00:00:00.000Z", stability: 4, difficulty: 6, elapsedDays: 2,
         scheduledDays: 3, learningSteps: 1, reps: 5, lapses: 1, state: 2,
         lastReview: "2026-01-02T00:00:00.000Z",
         createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-02T00:00:00.000Z",
+      },
+      // Cloze (STUDY-006 / ADR-042): the rendered sides AND the template they
+      // were derived from. A restore that dropped `clozeText` would leave a
+      // card whose owner can no longer edit anything about it.
+      {
+        id: "card-3", profileId: "profile1", deckId: "deck-1",
+        front: "Glavni grad je […], a reka je Sava.",
+        back: "Glavni grad je Beograd, a reka je Sava.",
+        sourceNoteId: null, sourceBlockKey: null,
+        kind: "cloze", clozeText: "Glavni grad je {{Beograd}}, a reka je {{Sava}}.",
+        clozeOrdinal: 0,
+        due: "2026-01-06T00:00:00.000Z", stability: 2, difficulty: 3, elapsedDays: 1,
+        scheduledDays: 2, learningSteps: 0, reps: 2, lapses: 0, state: 2,
+        lastReview: "2026-01-04T00:00:00.000Z",
+        createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-04T00:00:00.000Z",
       },
     ],
     reviewLog: [
@@ -529,12 +546,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.10.0`: the nearest minor strictly ahead of this build's `1.9.0`.
+  // `1.11.0`: the nearest minor strictly ahead of this build's `1.10.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.10.0" });
+    const files = baseFiles({ schemaVersion: "1.11.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.10.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.11.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -647,6 +664,24 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.problems).toContainEqual({
       severity: "error", code: "invalid-record", path: "data/study.ndjson", line: 3,
       detail: "sourceBlockKey",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  it("invalid-record: a cloze card whose ordinal its own template does not contain", () => {
+    // The one check no CHECK constraint can make: the archive says "this row
+    // asks deletion 3", the template holds one. Restoring it would land a card
+    // whose blank nothing can fill, so the grammar is re-run here.
+    const card = {
+      ...VALID_CARD, kind: "cloze", clozeText: "Glavni grad je {{Beograd}}.", clozeOrdinal: 3,
+    };
+    const files = baseFiles({
+      fileContents: { "data/study.ndjson": ndjson([VALID_SUBJECT, VALID_DECK, card]) },
+    });
+    const result = parseImportArchive(emptyInputWith(files));
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "invalid-record", path: "data/study.ndjson", line: 3,
+      detail: "clozeOrdinal",
     });
     expect(result.data).toBeNull();
   });
@@ -1043,6 +1078,88 @@ describe("parseImportArchive — task tags (migration 023)", () => {
       severity: "error", code: "invalid-record", path: "data/tasks.ndjson", line: 1, detail: "type",
     });
     expect(result.data).toBeNull();
+  });
+});
+
+describe("parseImportArchive — card kind (STUDY-006 / ADR-042)", () => {
+  /** Parses one card row alongside the subject and deck it needs; returns the parsed card and the problems. */
+  function parseCardRow(overrides: Record<string, unknown>) {
+    const files = baseFiles({
+      fileContents: {
+        "data/study.ndjson": ndjson([VALID_SUBJECT, VALID_DECK, { ...VALID_CARD, ...overrides }]),
+      },
+    });
+    return parseImportArchive(emptyInputWith(files));
+  }
+
+  const cardDetails = (result: ReturnType<typeof parseCardRow>): (string | undefined)[] =>
+    result.problems.filter((problem) => problem.code === "invalid-record").map((p) => p.detail);
+
+  it("defaults an absent kind to basic — no era flag needed for an optional-with-a-default", () => {
+    // `VALID_CARD` carries no `kind` at all: exactly a pre-ADR-042 archive's row.
+    const result = parseCardRow({});
+    expect(result.problems).toEqual([]);
+    expect(result.data?.cards[0]).toMatchObject({
+      kind: "basic",
+      clozeText: null,
+      clozeOrdinal: null,
+    });
+  });
+
+  it("accepts a fully-formed cloze card and keeps its template and ordinal", () => {
+    const result = parseCardRow({
+      kind: "cloze",
+      clozeText: "Glavni grad je {{Beograd}}.",
+      clozeOrdinal: 0,
+    });
+    expect(result.problems).toEqual([]);
+    expect(result.data?.cards[0]).toMatchObject({
+      kind: "cloze",
+      clozeText: "Glavni grad je {{Beograd}}.",
+      clozeOrdinal: 0,
+    });
+  });
+
+  it("accepts an explicitly-basic card that spells both cloze fields as null", () => {
+    const result = parseCardRow({ kind: "basic", clozeText: null, clozeOrdinal: null });
+    expect(result.problems).toEqual([]);
+    expect(result.data?.cards[0]).toMatchObject({ kind: "basic" });
+  });
+
+  it("refuses a kind outside the closed set — a present key is strict in every era", () => {
+    expect(cardDetails(parseCardRow({ kind: "bogus" }))).toEqual(["kind"]);
+    expect(cardDetails(parseCardRow({ kind: null }))).toEqual(["kind"]);
+    expect(cardDetails(parseCardRow({ kind: 7 }))).toEqual(["kind"]);
+  });
+
+  it("refuses a cloze card missing either half of the pair", () => {
+    expect(cardDetails(parseCardRow({ kind: "cloze", clozeOrdinal: 0 }))).toEqual(["clozeText"]);
+    expect(cardDetails(parseCardRow({ kind: "cloze", clozeText: "{{A}}" }))).toEqual([
+      "clozeOrdinal",
+    ]);
+  });
+
+  it("refuses a basic card carrying either half of the pair", () => {
+    expect(cardDetails(parseCardRow({ clozeText: "{{A}}" }))).toEqual(["clozeText"]);
+    expect(cardDetails(parseCardRow({ clozeOrdinal: 0 }))).toEqual(["clozeOrdinal"]);
+  });
+
+  it("refuses a malformed clozeText or clozeOrdinal", () => {
+    expect(cardDetails(parseCardRow({ kind: "cloze", clozeText: "", clozeOrdinal: 0 }))).toEqual([
+      "clozeText",
+    ]);
+    expect(
+      cardDetails(parseCardRow({ kind: "cloze", clozeText: "{{A}}", clozeOrdinal: -1 })),
+    ).toEqual(["clozeOrdinal"]);
+    expect(
+      cardDetails(parseCardRow({ kind: "cloze", clozeText: "{{A}}", clozeOrdinal: 0.5 })),
+    ).toEqual(["clozeOrdinal"]);
+  });
+
+  it("refuses a cloze template with no deletion at all — ordinal 0 names nothing in it", () => {
+    expect(
+      cardDetails(parseCardRow({ kind: "cloze", clozeText: "obična rečenica", clozeOrdinal: 0 })),
+    ).toEqual(["clozeOrdinal"]);
   });
 });
 
@@ -1785,8 +1902,8 @@ describe("parseImportArchive — note folder preferences (the 1.7.0 era gate)", 
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.9.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.9.0");
+  it("is 1.10.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.10.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -1798,7 +1915,7 @@ describe("parseImportArchive — schema version", () => {
   });
 
   it("accepts the exact current version", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.9.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.10.0" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
@@ -1871,17 +1988,26 @@ describe("parseImportArchive — schema version", () => {
     expect(result.data).not.toBeNull();
   });
 
-  it("accepts a newer patch", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.9.7" })));
+  // And for the one ADR-042's cloze fields have just superseded: a 1.9 archive
+  // carries no `kind` on any card, which is exactly what a profile of only
+  // basic cards looks like — an optional-with-a-default needs no era flag.
+  it("accepts an older minor — a 1.9 archive still parses here", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.9.0" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
 
-  // `1.10.0`: the nearest minor strictly ahead of this build's `1.9.0`.
+  it("accepts a newer patch", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.10.7" })));
+    expect(result.problems).toEqual([]);
+    expect(result.data).not.toBeNull();
+  });
+
+  // `1.11.0`: the nearest minor strictly ahead of this build's `1.10.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.10.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.11.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.10.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.11.0" },
     ]);
     expect(result.data).toBeNull();
   });

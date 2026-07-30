@@ -2,6 +2,7 @@ import * as Y from "yjs";
 
 import { validateRecurrenceRule } from "../recurrence/recurrence.js";
 import type { RecurrenceRule } from "../recurrence/recurrence.js";
+import { renderClozeCard } from "../study/clozeText.js";
 import { DATA_FILES } from "./exportArchive.js";
 import type {
   ExportCard,
@@ -118,21 +119,22 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.9.0` added the
- * `dashboard-settings` record type and its own data file (SET-006 / ADR-041),
- * after `1.8.0` added the `task-dependency` record type (migration 029 /
- * ADR-037), `1.5.0`-`1.7.0` task attachments, task templates and the NOTE
- * folder preferences, `1.4.0` the `task-tag`/`task-tag-link` types (migration
- * 023), `1.3.0` the `task-list`/`task-section` types and a task's placement
- * into them (TASK-004 / ADR-029), `1.2.0` a task's `reminderOffsets` (ADR-028)
- * and `1.1.0` the `person` record type (CAL-007 / ADR-026): additive changes,
- * hence MINOR
- * bumps, which is exactly the compatibility mechanism
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.10.0` added a
+ * card's `kind` and a cloze card's `clozeText`/`clozeOrdinal` (STUDY-006 /
+ * ADR-042), after `1.9.0` added the `dashboard-settings` record type and its
+ * own data file (SET-006 / ADR-041), `1.8.0` the `task-dependency` record type
+ * (migration 029 / ADR-037), `1.5.0`-`1.7.0` task attachments, task templates
+ * and the NOTE folder preferences, `1.4.0` the `task-tag`/`task-tag-link`
+ * types (migration 023), `1.3.0` the `task-list`/`task-section` types and a
+ * task's placement into them (TASK-004 / ADR-029), `1.2.0` a task's
+ * `reminderOffsets` (ADR-028) and `1.1.0` the `person` record type (CAL-007 /
+ * ADR-026): additive changes, hence MINOR bumps, which is exactly the
+ * compatibility mechanism
  * `isSupportedSchemaVersion` implements — an older minor within major 1 still
  * passes the gate here, while an older build refuses a newer archive rather
  * than silently dropping what it cannot see (every person, every task's ladder,
  * every list the user filed their work into, every label they sorted it by, or
- * every "do this first" they set). That, in turn, is why an unrecognised record
+ * every cloze card's template). That, in turn, is why an unrecognised record
  * type below is an ERROR: the version gate makes "ignore what you do not know"
  * unreachable.
  *
@@ -142,14 +144,16 @@ export interface ImportArchiveResult {
  * from one that never chose a dashboard background — while a NEWER archive
  * never reaches a parser at all, because the gate above refuses it. Era flags
  * exist only for the "this row is missing a field it now must have" question,
- * which a whole absent type never asks.
+ * which a whole absent type never asks — and which an OPTIONAL-with-a-default
+ * field never asks either: `kind`'s absence means `"basic"` in every era,
+ * because that is what every pre-ADR-042 archive's cards actually were.
  *
  * Major is still 1 throughout, so there is nothing yet to migrate an older
  * major forward from — a migration framework for a major that has never
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.9.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.10.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -532,6 +536,8 @@ const DOC_TYPES = ["licna_karta", "pasos", "vozacka", "registracija", "kartica",
 const SUBJECT_COLORS = ["jade", "gold", "bronze", "burgundy", "crimson", "graphite"] as const;
 const EXAM_TYPES = ["pismeni", "usmeni", "kolokvijum"] as const;
 const CARD_STATES = [0, 1, 2, 3] as const;
+/** Mirrors the `cards.kind` CHECK of migration 031 (ADR-042). */
+const CARD_KINDS = ["basic", "cloze"] as const;
 const REVIEW_RATINGS = [1, 2, 3, 4] as const;
 const STUDY_BLOCK_STATUSES = ["planned", "done", "missed"] as const;
 const NOTIFICATION_SOURCES = ["document", "exam", "study-day", "event", "task"] as const;
@@ -1070,6 +1076,7 @@ function parseCard(raw: Record<string, unknown>): ExportCard {
   if ((sourceNoteId === null) !== (sourceBlockKey === null)) {
     throw new InvalidFieldError("sourceBlockKey");
   }
+  const { kind, clozeText, clozeOrdinal } = parseCardKind(raw);
   const due = isoDateTime(raw.due, "due");
   const stability = finiteNumber(raw.stability, "stability");
   const difficulty = finiteNumber(raw.difficulty, "difficulty");
@@ -1083,10 +1090,50 @@ function parseCard(raw: Record<string, unknown>): ExportCard {
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
   return {
-    id, profileId, deckId, front, back, sourceNoteId, sourceBlockKey, due, stability,
+    id, profileId, deckId, front, back, sourceNoteId, sourceBlockKey,
+    kind, clozeText, clozeOrdinal, due, stability,
     difficulty, elapsedDays, scheduledDays, learningSteps, reps, lapses, state,
     lastReview, createdAt, updatedAt,
   };
+}
+
+/**
+ * The ADR-042 kind fields of one card row. `kind` is optional with a default
+ * (absent = `"basic"`), so no `ArchiveEra` flag is involved: an archive
+ * predating this field carried only basic cards, which is precisely what the
+ * default says. Present keys are strict in every era, as always.
+ *
+ * The pair rule mirrors the `cards` CHECK constraints of migration 031 — both
+ * set for a cloze card, neither for a basic one — and the ordinal is checked
+ * against the template by RE-RUNNING the `{{…}}` grammar rather than by
+ * re-describing it: an ordinal the template does not contain would restore a
+ * card whose blank nothing can fill, and `renderClozeCard` is the same reader
+ * `CardStore` derives that card's sides with.
+ */
+function parseCardKind(raw: Record<string, unknown>): {
+  kind: string;
+  clozeText: string | null;
+  clozeOrdinal: number | null;
+} {
+  const kind = raw.kind === undefined ? "basic" : enumStr(raw.kind, "kind", CARD_KINDS);
+  const clozeText =
+    raw.clozeText === undefined ? null : nullableNonEmptyStr(raw.clozeText, "clozeText");
+  const clozeOrdinal =
+    raw.clozeOrdinal === undefined || raw.clozeOrdinal === null
+      ? null
+      : nonNegativeInt(raw.clozeOrdinal, "clozeOrdinal");
+
+  if (kind !== "cloze") {
+    if (clozeText !== null) throw new InvalidFieldError("clozeText");
+    if (clozeOrdinal !== null) throw new InvalidFieldError("clozeOrdinal");
+    return { kind, clozeText: null, clozeOrdinal: null };
+  }
+  if (clozeText === null) throw new InvalidFieldError("clozeText");
+  if (clozeOrdinal === null) throw new InvalidFieldError("clozeOrdinal");
+  if (renderClozeCard(clozeText, clozeOrdinal) === null) {
+    throw new InvalidFieldError("clozeOrdinal");
+  }
+  return { kind, clozeText, clozeOrdinal };
 }
 
 function parseReview(raw: Record<string, unknown>): ExportReviewLogEntry {

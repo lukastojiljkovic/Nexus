@@ -425,7 +425,8 @@ describe("global search index (migration 017)", () => {
     // index" is what this file needs, and slicing the last entry off the list
     // only said that while 017 happened to be the newest migration — the day a
     // migration 018 landed, the "pre-migration-017" file silently became a
-    // post-017 one.
+    // post-017 one. Versions 1..16 are contiguous, so the stamped 16 below
+    // follows from the filter itself rather than from any list-wide property.
     const beforeSearchIndex = MIGRATIONS.filter((migration) => migration.version < 17);
     runMigrations(rawDb, beforeSearchIndex);
     expect(rawDb.pragma("user_version", { simple: true })).toBe(16);

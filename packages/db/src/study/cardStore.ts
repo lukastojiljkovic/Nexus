@@ -1,10 +1,22 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import type { Card as FsrsCard, CardInput, ReviewLogInput } from "ts-fsrs";
 import { createEmptyCard, fsrs, Rating } from "ts-fsrs";
+import { findClozeRuns, renderClozeCard } from "@nexus/core";
 import { CardNotFoundError, CardValidationError } from "../errors.js";
 import { uuidv7 } from "../ids.js";
 
 type DatabaseHandle = Database.Database;
+
+/**
+ * Closed card-kind domain, mirroring the `cards.kind` CHECK of migration 031
+ * (ADR-042). A `cloze` card keeps rendered `front`/`back` like any other card
+ * — that is what lets the search index, the palette, the deck list and every
+ * export keep reading cards without knowing this kind exists.
+ */
+export type CardKind = "basic" | "cloze";
+
+/** Card kinds in schema order. */
+export const CARD_KINDS: readonly CardKind[] = ["basic", "cloze"];
 
 /** Closed FSRS rating domain (ts-fsrs `Grade`): Again, Hard, Good, Easy. Manual (0) is never accepted. */
 export type CardRating = 1 | 2 | 3 | 4;
@@ -30,6 +42,16 @@ export interface Card {
   sourceNoteId: string | null;
   /** The source note's block key this card reconciles against, or null for a hand-made card (NOTE-006). */
   sourceBlockKey: string | null;
+  /** What kind of card this row is (ADR-042). `basic` for a plain front/back card. */
+  kind: CardKind;
+  /**
+   * For a `cloze` card: the raw `{{…}}` template `front`/`back` are DERIVED
+   * from, and the only text the user ever edits. Null for a `basic` card —
+   * both cloze fields are set exactly when `kind` is `cloze`.
+   */
+  clozeText: string | null;
+  /** For a `cloze` card: which deletion of `clozeText` this row asks (0-based). */
+  clozeOrdinal: number | null;
   due: string;
   stability: number;
   difficulty: number;
@@ -55,11 +77,18 @@ export interface CreateCardInput {
  * A partial patch of a card's own content/placement fields. An omitted key is
  * left untouched. This never touches FSRS scheduling state — only `review`,
  * `undoLastReview` do that. Soft delete/restore have their own methods.
+ *
+ * `front`/`back` and `clozeText` are mutually exclusive by KIND, not by call
+ * (ADR-042): a `basic` card takes the first pair and refuses the second, a
+ * `cloze` card takes only `clozeText` and re-derives its own sides from it.
+ * `deckId` applies to both.
  */
 export interface UpdateCardFields {
   deckId?: string;
   front?: string;
   back?: string;
+  /** A cloze card's new template. Its own ordinal must still exist in it, or the update is refused. */
+  clozeText?: string;
 }
 
 /** The four would-be next due dates for a card, one per rating, without persisting anything. */
@@ -75,6 +104,9 @@ export interface NoteCardSpecInput {
   key: string;
   front: string;
   back: string;
+  kind: CardKind;
+  clozeText: string | null;
+  clozeOrdinal: number | null;
 }
 
 /** What one reconcile changed. A restored-and-rewritten card counts as `updated`. */
@@ -128,6 +160,9 @@ interface CardRow {
   back: string;
   source_note_id: string | null;
   source_block_key: string | null;
+  kind: CardKind;
+  cloze_text: string | null;
+  cloze_ordinal: number | null;
   due: string;
   stability: number;
   difficulty: number;
@@ -168,14 +203,17 @@ interface SourceCardRow {
   deck_id: string;
   front: string;
   back: string;
+  kind: CardKind;
+  cloze_text: string | null;
+  cloze_ordinal: number | null;
   deleted_at: string | null;
   source_block_key: string | null;
 }
 
 const CARD_COLUMNS =
-  `id, profile_id, deck_id, front, back, source_note_id, source_block_key, due, stability, ` +
-  `difficulty, elapsed_days, scheduled_days, learning_steps, reps, lapses, state, last_review, ` +
-  `created_at, updated_at`;
+  `id, profile_id, deck_id, front, back, source_note_id, source_block_key, kind, cloze_text, ` +
+  `cloze_ordinal, due, stability, difficulty, elapsed_days, scheduled_days, learning_steps, ` +
+  `reps, lapses, state, last_review, created_at, updated_at`;
 
 const REVIEW_LOG_FULL_COLUMNS =
   "id, profile_id, card_id, rating, state, due, stability, difficulty, elapsed_days, " +
@@ -247,9 +285,10 @@ export class CardStore {
     this.insert = db.prepare(
       `INSERT INTO cards
          (id, profile_id, deck_id, front, back, source_note_id, source_block_key,
+          kind, cloze_text, cloze_ordinal,
           due, stability, difficulty, elapsed_days, scheduled_days, learning_steps,
           reps, lapses, state, last_review, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.selectActiveById = db.prepare(
       `SELECT ${CARD_COLUMNS} FROM cards
@@ -275,18 +314,28 @@ export class CardStore {
     // Every row this note has ever generated, active or soft-deleted — `syncFromNote`
     // needs both to tell "restore" apart from "create" and "no-op" apart from "update".
     this.selectCardsBySource = db.prepare(
-      `SELECT id, deck_id, front, back, deleted_at, source_block_key FROM cards
+      `SELECT id, deck_id, front, back, kind, cloze_text, cloze_ordinal, deleted_at, source_block_key
+       FROM cards
        WHERE profile_id = ? AND source_note_id = ?`,
     );
+    // Content and KIND move together: a note-derived cloze row upgrades in
+    // place on its note's next sync (ADR-042), and an edit to a hand-made
+    // cloze card rewrites the template plus the sides re-derived from it.
+    // Nothing writes one without the other, which is what keeps the CHECK
+    // constraints of migration 031 unreachable from here.
     this.updateContentFields = db.prepare(
-      `UPDATE cards SET deck_id = ?, front = ?, back = ?, updated_at = ?
+      `UPDATE cards
+         SET deck_id = ?, front = ?, back = ?, kind = ?, cloze_text = ?, cloze_ordinal = ?,
+             updated_at = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
     );
     // Restore + rewrite in one statement (rule 3 of `syncFromNote`'s reconcile):
     // undoing a deleted paragraph brings the same key back, and this is what
     // returns its FSRS state (untouched here) along with the row.
     this.restoreWithContent = db.prepare(
-      `UPDATE cards SET deck_id = ?, front = ?, back = ?, deleted_at = NULL, updated_at = ?
+      `UPDATE cards
+         SET deck_id = ?, front = ?, back = ?, kind = ?, cloze_text = ?, cloze_ordinal = ?,
+             deleted_at = NULL, updated_at = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NOT NULL`,
     );
     this.updateScheduling = db.prepare(
@@ -368,18 +417,192 @@ export class CardStore {
     const front = validateText(input.front, "front");
     const back = validateText(input.back, "back");
     const deckId = this.resolveDeck(input.deckId);
-    const empty = createEmptyCard(validNow);
     const bookkeepingNow = new Date().toISOString();
+
+    return this.insertNew(
+      { deckId, front, back, kind: "basic", clozeText: null, clozeOrdinal: null },
+      validNow,
+      bookkeepingNow,
+    );
+  }
+
+  /**
+   * Creates one card per `{{…}}` deletion of `text`, in ordinal order, inside
+   * ONE transaction (ADR-042): a template that yields three deletions lands
+   * three siblings or none at all — a partially-created cloze is a card set
+   * the user would have to notice was incomplete.
+   *
+   * The caller supplies only the template. Every row's `front`/`back` is
+   * DERIVED here, by the same `renderClozeCard` the note generator and the
+   * reviewer read, so the sides a cloze row stores can never disagree with its
+   * own template. Refuses a text with no deletion at all — that is not a cloze
+   * card, it is a sentence — and re-checks every derived side, plus the
+   * template itself, against the existing text cap.
+   *
+   * After creation the siblings are ordinary, independent rows: editing one
+   * edits one. That is a deliberate divergence from Anki's linked siblings —
+   * the card row is Nexus's unit of study, and a cross-row rewrite would mean
+   * one edit silently rescheduling cards the user was not looking at.
+   */
+  createCloze(deckId: string, text: string, now: string): Card[] {
+    const validNow = validateNow(now);
+    const template = validateClozeText(text);
+    const validDeckId = this.resolveDeck(deckId);
+    const ordinals = findClozeRuns(template).map((_, ordinal) => ordinal);
+    if (ordinals.length === 0) {
+      throw new CardValidationError("A cloze card needs at least one {{…}} deletion.");
+    }
+
+    // Rendered and length-checked BEFORE the transaction opens: an over-long
+    // side is a validation answer, not a rollback.
+    const sides = ordinals.map((ordinal) => {
+      const rendered = renderClozeCard(template, ordinal);
+      if (rendered === null) {
+        throw new CardValidationError(`Cloze deletion ${ordinal} is not present in this text.`);
+      }
+      return {
+        ordinal,
+        front: validateText(rendered.front, "front"),
+        back: validateText(rendered.back, "back"),
+      };
+    });
+
+    return this.db.transaction((): Card[] => {
+      // One millisecond apart, ascending by ordinal, rather than one shared
+      // stamp for the whole transaction. `listByDeck` orders by
+      // `(created_at, id)`, and `uuidv7`'s sub-millisecond bits are random —
+      // identical stamps would leave siblings in an ARBITRARY order in the
+      // deck list, which for a three-blank template is simply wrong on screen.
+      // Creation order is also the true answer here: ordinal 0 was authored
+      // first.
+      const base = Date.now();
+      return sides.map((side) =>
+        this.insertNew(
+          {
+            deckId: validDeckId,
+            front: side.front,
+            back: side.back,
+            kind: "cloze",
+            clozeText: template,
+            clozeOrdinal: side.ordinal,
+          },
+          validNow,
+          new Date(base + side.ordinal).toISOString(),
+        ),
+      );
+    })();
+  }
+
+  /**
+   * Applies a partial content/placement patch to an active card; never touches
+   * FSRS scheduling state.
+   *
+   * Which text fields are accepted is decided by the ROW's kind, not by the
+   * caller (ADR-042). A `cloze` card's sides are derived, so it refuses a
+   * direct `front`/`back` write and takes `clozeText` instead, re-deriving its
+   * own two sides from the new template — and refuses a template in which its
+   * own ordinal no longer exists, because a card must not silently die under
+   * an edit. A `basic` card is untouched by any of this and refuses
+   * `clozeText`.
+   */
+  update(id: string, fields: UpdateCardFields): Card {
+    const current = this.requireActive(id);
+    const deckId = fields.deckId !== undefined ? this.resolveDeck(fields.deckId) : current.deckId;
+    const content = this.resolveUpdatedContent(current, fields);
+    const now = new Date().toISOString();
+
+    this.updateContentFields.run(
+      deckId,
+      content.front,
+      content.back,
+      current.kind,
+      content.clozeText,
+      current.clozeOrdinal,
+      now,
+      current.id,
+      this.profileId,
+    );
+
+    return { ...current, deckId, ...content, updatedAt: now };
+  }
+
+  /** The `front`/`back`/`clozeText` an `update` lands, per the row's own kind. */
+  private resolveUpdatedContent(
+    current: Card,
+    fields: UpdateCardFields,
+  ): { front: string; back: string; clozeText: string | null } {
+    if (current.kind !== "cloze") {
+      if (fields.clozeText !== undefined) {
+        throw new CardValidationError('"clozeText" may only be set on a cloze card.');
+      }
+      return {
+        front: fields.front !== undefined ? validateText(fields.front, "front") : current.front,
+        back: fields.back !== undefined ? validateText(fields.back, "back") : current.back,
+        clozeText: null,
+      };
+    }
+
+    if (fields.front !== undefined || fields.back !== undefined) {
+      throw new CardValidationError(
+        'A cloze card\'s "front"/"back" are derived from its text and cannot be set directly.',
+      );
+    }
+    if (fields.clozeText === undefined) {
+      return { front: current.front, back: current.back, clozeText: current.clozeText };
+    }
+
+    const template = validateClozeText(fields.clozeText);
+    // `clozeOrdinal` is never null on a cloze row (migration 031's CHECK), but
+    // the type says it can be — `?? -1` names no run, so a corrupt row is
+    // refused rather than silently re-derived off ordinal 0.
+    const rendered = renderClozeCard(template, current.clozeOrdinal ?? -1);
+    if (rendered === null) {
+      throw new CardValidationError(
+        `This card asks cloze deletion ${current.clozeOrdinal}, which the new text does not contain.`,
+      );
+    }
+    return {
+      front: validateText(rendered.front, "front"),
+      back: validateText(rendered.back, "back"),
+      clozeText: template,
+    };
+  }
+
+  /**
+   * The one place a `cards` row is born: `create`, `createCloze` and
+   * `syncFromNote` all seed a fresh FSRS state at `now` and differ only in the
+   * six content columns above it.
+   */
+  private insertNew(
+    content: {
+      deckId: string;
+      front: string;
+      back: string;
+      kind: CardKind;
+      clozeText: string | null;
+      clozeOrdinal: number | null;
+      sourceNoteId?: string;
+      sourceBlockKey?: string;
+    },
+    now: string,
+    bookkeepingNow: string,
+  ): Card {
+    const empty = createEmptyCard(now);
     const id = uuidv7();
+    const sourceNoteId = content.sourceNoteId ?? null;
+    const sourceBlockKey = content.sourceBlockKey ?? null;
 
     this.insert.run(
       id,
       this.profileId,
-      deckId,
-      front,
-      back,
-      null,
-      null,
+      content.deckId,
+      content.front,
+      content.back,
+      sourceNoteId,
+      sourceBlockKey,
+      content.kind,
+      content.clozeText,
+      content.clozeOrdinal,
       empty.due.toISOString(),
       empty.stability,
       empty.difficulty,
@@ -397,11 +620,14 @@ export class CardStore {
     return {
       id,
       profileId: this.profileId,
-      deckId,
-      front,
-      back,
-      sourceNoteId: null,
-      sourceBlockKey: null,
+      deckId: content.deckId,
+      front: content.front,
+      back: content.back,
+      sourceNoteId,
+      sourceBlockKey,
+      kind: content.kind,
+      clozeText: content.clozeText,
+      clozeOrdinal: content.clozeOrdinal,
       due: empty.due.toISOString(),
       stability: empty.stability,
       difficulty: empty.difficulty,
@@ -415,19 +641,6 @@ export class CardStore {
       createdAt: bookkeepingNow,
       updatedAt: bookkeepingNow,
     };
-  }
-
-  /** Applies a partial content/placement patch to an active card; never touches FSRS scheduling state. */
-  update(id: string, fields: UpdateCardFields): Card {
-    const current = this.requireActive(id);
-    const deckId = fields.deckId !== undefined ? this.resolveDeck(fields.deckId) : current.deckId;
-    const front = fields.front !== undefined ? validateText(fields.front, "front") : current.front;
-    const back = fields.back !== undefined ? validateText(fields.back, "back") : current.back;
-    const now = new Date().toISOString();
-
-    this.updateContentFields.run(deckId, front, back, now, current.id, this.profileId);
-
-    return { ...current, deckId, front, back, updatedAt: now };
   }
 
   /**
@@ -473,7 +686,8 @@ export class CardStore {
       ) as SourceCardRow[];
       const byKey = new Map(existingRows.map((row) => [row.source_block_key, row]));
       const incomingKeys = new Set(validSpecs.map((spec) => spec.key));
-      const bookkeepingNow = new Date().toISOString();
+      const stampBase = Date.now();
+      const bookkeepingNow = new Date(stampBase).toISOString();
 
       let created = 0;
       let updated = 0;
@@ -482,27 +696,25 @@ export class CardStore {
       for (const spec of validSpecs) {
         const row = byKey.get(spec.key);
         if (!row) {
-          const empty = createEmptyCard(validNow);
-          this.insert.run(
-            uuidv7(),
-            this.profileId,
-            validDeckId,
-            spec.front,
-            spec.back,
-            validNoteId,
-            spec.key,
-            empty.due.toISOString(),
-            empty.stability,
-            empty.difficulty,
-            empty.elapsed_days,
-            empty.scheduled_days,
-            empty.learning_steps,
-            empty.reps,
-            empty.lapses,
-            empty.state,
-            empty.last_review ? empty.last_review.toISOString() : null,
-            bookkeepingNow,
-            bookkeepingNow,
+          this.insertNew(
+            {
+              deckId: validDeckId,
+              front: spec.front,
+              back: spec.back,
+              kind: spec.kind,
+              clozeText: spec.clozeText,
+              clozeOrdinal: spec.clozeOrdinal,
+              sourceNoteId: validNoteId,
+              sourceBlockKey: spec.key,
+            },
+            validNow,
+            // One millisecond apart, ascending, so `listByDeck`'s
+            // `(created_at, id)` order is the note's DOCUMENT order — `specs`
+            // arrives in it. A shared stamp would leave it to `uuidv7`, whose
+            // sub-millisecond bits are random, and a note's cards would land
+            // in the deck list shuffled. Only inserts are staggered; the
+            // update/restore/delete branches keep the transaction's own stamp.
+            new Date(stampBase + created).toISOString(),
           );
           created += 1;
         } else if (row.deleted_at !== null) {
@@ -510,16 +722,33 @@ export class CardStore {
             validDeckId,
             spec.front,
             spec.back,
+            spec.kind,
+            spec.clozeText,
+            spec.clozeOrdinal,
             bookkeepingNow,
             row.id,
             this.profileId,
           );
           updated += 1;
-        } else if (row.deck_id !== validDeckId || row.front !== spec.front || row.back !== spec.back) {
+        } else if (
+          row.deck_id !== validDeckId ||
+          row.front !== spec.front ||
+          row.back !== spec.back ||
+          // The kind fields join the comparison so an existing note-derived
+          // cloze row upgrades in place on the next sync of its note (ADR-042),
+          // FSRS history intact — and so a template edit whose rendered sides
+          // happen to be unchanged still lands.
+          row.kind !== spec.kind ||
+          row.cloze_text !== spec.clozeText ||
+          row.cloze_ordinal !== spec.clozeOrdinal
+        ) {
           this.updateContentFields.run(
             validDeckId,
             spec.front,
             spec.back,
+            spec.kind,
+            spec.clozeText,
+            spec.clozeOrdinal,
             bookkeepingNow,
             row.id,
             this.profileId,
@@ -779,6 +1008,9 @@ function toCard(row: CardRow): Card {
     back: row.back,
     sourceNoteId: row.source_note_id,
     sourceBlockKey: row.source_block_key,
+    kind: row.kind,
+    clozeText: row.cloze_text,
+    clozeOrdinal: row.cloze_ordinal,
     due: row.due,
     stability: row.stability,
     difficulty: row.difficulty,
@@ -874,6 +1106,25 @@ function validateText(value: string, field: "front" | "back"): string {
   return trimmed;
 }
 
+/**
+ * A cloze TEMPLATE: non-empty after trimming and under the same cap a rendered
+ * side lives under — it is stored in a column of the same table, and a
+ * template nobody can save is a card nobody can edit. Trimmed, so the stored
+ * text matches what `renderClozeCard` measured.
+ */
+function validateClozeText(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new CardValidationError('Card "clozeText" must not be empty.');
+  }
+  if (trimmed.length > MAX_TEXT_LENGTH) {
+    throw new CardValidationError(
+      `Card "clozeText" must be at most ${MAX_TEXT_LENGTH} characters.`,
+    );
+  }
+  return trimmed;
+}
+
 function validateNow(value: string): string {
   if (!ISO_8601_DATETIME.test(value)) {
     throw new CardValidationError('"now" must be an ISO-8601 date-time.');
@@ -895,6 +1146,12 @@ function validateRating(value: CardRating): CardRating {
  * bounded string, each side through the existing `validateText`, and no two
  * specs sharing a key — a duplicate would make the reconcile's per-key
  * dedupe silently drop one of the caller's edits.
+ *
+ * The ADR-042 kind fields get the same treatment: the pair rule migration 031
+ * puts in a CHECK is enforced here first, so a bad spec is a
+ * `CardValidationError` rather than a raw SQLite constraint error mid-reconcile,
+ * and a cloze spec's ordinal is re-checked against its own template by the
+ * same grammar that rendered it.
  */
 function validateNoteCardSpecs(specs: readonly NoteCardSpecInput[]): NoteCardSpecInput[] {
   if (specs.length > MAX_NOTE_CARD_SPECS) {
@@ -917,8 +1174,38 @@ function validateNoteCardSpecs(specs: readonly NoteCardSpecInput[]): NoteCardSpe
     }
     seenKeys.add(spec.key);
 
-    return { key: spec.key, front: validateText(spec.front, "front"), back: validateText(spec.back, "back") };
+    return {
+      key: spec.key,
+      front: validateText(spec.front, "front"),
+      back: validateText(spec.back, "back"),
+      ...validateSpecKind(spec),
+    };
   });
+}
+
+/** The kind half of one `syncFromNote` spec: the pair rule, plus "this ordinal exists in this template". */
+function validateSpecKind(
+  spec: NoteCardSpecInput,
+): Pick<NoteCardSpecInput, "kind" | "clozeText" | "clozeOrdinal"> {
+  if (!(CARD_KINDS as readonly string[]).includes(spec.kind)) {
+    throw new CardValidationError(`"${spec.kind}" is not a valid card kind.`);
+  }
+  if (spec.kind !== "cloze") {
+    if (spec.clozeText !== null || spec.clozeOrdinal !== null) {
+      throw new CardValidationError("A basic card must carry neither clozeText nor clozeOrdinal.");
+    }
+    return { kind: spec.kind, clozeText: null, clozeOrdinal: null };
+  }
+  if (spec.clozeText === null || spec.clozeOrdinal === null) {
+    throw new CardValidationError("A cloze card must carry both clozeText and clozeOrdinal.");
+  }
+  const clozeText = validateClozeText(spec.clozeText);
+  if (renderClozeCard(clozeText, spec.clozeOrdinal) === null) {
+    throw new CardValidationError(
+      `Cloze deletion ${spec.clozeOrdinal} is not present in this card's text.`,
+    );
+  }
+  return { kind: "cloze", clozeText, clozeOrdinal: spec.clozeOrdinal };
 }
 
 function validateNewLimit(value: number | undefined): number {

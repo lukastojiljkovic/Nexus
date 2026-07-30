@@ -205,6 +205,7 @@ import {
   type RestoreDeps,
 } from "./restore.js";
 import {
+  CARD_KINDS,
   CARD_TEXT_MAX_LENGTH,
   IpcChannel,
   MAX_BACKGROUND_BYTES,
@@ -217,6 +218,7 @@ import {
   SEARCH_QUERY_MAX_BYTES,
   SEARCH_RESULT_MAX_LIMIT,
   type AppInfo,
+  type CardKind,
   type AuthResult,
   type AuthStatus,
   type DashboardPickResult,
@@ -669,8 +671,27 @@ function asNoteCardSpecArray(value: unknown, field: string): NoteCardSpec[] {
       key,
       front: asCappedString(spec.front, `${field}[${index}].front`, CARD_TEXT_MAX_LENGTH),
       back: asCappedString(spec.back, `${field}[${index}].back`, CARD_TEXT_MAX_LENGTH),
+      // Structural again: the pair rule and "this ordinal is in this template"
+      // are `CardStore`'s to enforce, exactly as `key` uniqueness is.
+      kind: asCardKind(spec.kind, `${field}[${index}].kind`),
+      clozeText:
+        spec.clozeText === null
+          ? null
+          : asCappedString(spec.clozeText, `${field}[${index}].clozeText`, CARD_TEXT_MAX_LENGTH),
+      clozeOrdinal:
+        spec.clozeOrdinal === null
+          ? null
+          : asInteger(spec.clozeOrdinal, `${field}[${index}].clozeOrdinal`),
     };
   });
+}
+
+/** The closed card-kind domain (ADR-042); anything else is rejected before it reaches the store. */
+function asCardKind(value: unknown, field: string): CardKind {
+  if (typeof value === "string" && (CARD_KINDS as readonly string[]).includes(value)) {
+    return value as CardKind;
+  }
+  throw new Error(`Invalid IPC payload: "${field}" is not a valid card kind.`);
 }
 
 /** Profile display name: string, 1–80 chars after trimming; the trimmed value is stored. */
@@ -1340,13 +1361,22 @@ function asNewCardInput(value: unknown): CreateCardInput {
   };
 }
 
-/** Validates a `CardFieldChanges` payload into a store patch; an omitted key stays omitted. */
+/**
+ * Validates a `CardFieldChanges` payload into a store patch; an omitted key
+ * stays omitted. Structural checks only — which of `front`/`back` and
+ * `clozeText` a given card actually accepts is decided by the ROW's kind, and
+ * that is `CardStore.update`'s call, not a shape question this layer can
+ * answer (ADR-042).
+ */
 function asCardFieldChanges(value: unknown): UpdateCardFields {
   const changes = asRecord(value);
   const patch: UpdateCardFields = {};
   if (changes.deckId !== undefined) patch.deckId = asNonEmptyString(changes.deckId, "changes.deckId");
   if (changes.front !== undefined) patch.front = asNonEmptyString(changes.front, "changes.front");
   if (changes.back !== undefined) patch.back = asNonEmptyString(changes.back, "changes.back");
+  if (changes.clozeText !== undefined) {
+    patch.clozeText = asCappedString(changes.clozeText, "changes.clozeText", CARD_TEXT_MAX_LENGTH);
+  }
   return patch;
 }
 
@@ -3297,6 +3327,18 @@ function registerIpc(): void {
     const body = asRecord(payload);
     const profileId = asNonEmptyString(body.profileId, "profileId");
     return cardStore(profileId).create(asNewCardInput(body.card), new Date().toISOString());
+  });
+
+  // Only the TEMPLATE crosses the wire (ADR-042): `createCloze` finds the
+  // deletions and derives every sibling's sides itself, so the renderer cannot
+  // hand in sides that disagree with the text they claim to come from.
+  ipcMain.handle(IpcChannel.cardsCreateCloze, (event, payload): Card[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const deckId = asNonEmptyString(body.deckId, "deckId");
+    const text = asCappedString(body.text, "text", CARD_TEXT_MAX_LENGTH);
+    return cardStore(profileId).createCloze(deckId, text, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.cardsUpdate, (event, payload): Card => {

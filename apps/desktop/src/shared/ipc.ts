@@ -104,6 +104,7 @@ export const IpcChannel = {
   decksRestore: "decks:restore",
   cardsListByDeck: "cards:list-by-deck",
   cardsCreate: "cards:create",
+  cardsCreateCloze: "cards:create-cloze",
   cardsUpdate: "cards:update",
   cardsDelete: "cards:delete",
   cardsRestore: "cards:restore",
@@ -1360,8 +1361,18 @@ export interface DecksRestoreRequest {
  */
 export type CardState = 0 | 1 | 2 | 3;
 
-/** Maximum length of a card side — `CardStore`'s own cap, mirrored on the wire. */
+/** Maximum length of a card side — `CardStore`'s own cap, mirrored on the wire. A cloze template lives under the same cap. */
 export const CARD_TEXT_MAX_LENGTH = 10_000;
+
+/**
+ * Closed card-kind domain (mirrors `@nexus/db`'s `CardKind`, itself mirroring
+ * the `cards.kind` CHECK of migration 031). Redeclared here so the renderer
+ * never imports DB code.
+ */
+export type CardKind = "basic" | "cloze";
+
+/** Card kinds in schema order — the deck editor's Osnovna/Cloze toggle reads this. */
+export const CARD_KINDS: readonly CardKind[] = ["basic", "cloze"];
 
 /**
  * A flashcard as seen by the renderer (mirrors the `cards` table via the
@@ -1383,6 +1394,15 @@ export interface Card {
    */
   sourceNoteId: string | null;
   sourceBlockKey: string | null;
+  /**
+   * What kind of card this is (STUDY-006 / ADR-042). A `cloze` card's
+   * `front`/`back` are DERIVED by the store from `clozeText`/`clozeOrdinal`
+   * and are never written directly — the reviewer renders the template so the
+   * blank stays in its context, and the editor edits the template.
+   */
+  kind: CardKind;
+  clozeText: string | null;
+  clozeOrdinal: number | null;
   due: string;
   stability: number;
   difficulty: number;
@@ -1397,18 +1417,24 @@ export interface Card {
   updatedAt: string;
 }
 
-/** Fields for a new card; `deckId`, `front` and `back` are all required. The main process revalidates each. */
+/** Fields for a new BASIC card; `deckId`, `front` and `back` are all required. The main process revalidates each. */
 export interface NewCardFields {
   deckId: string;
   front: string;
   back: string;
 }
 
-/** A partial edit of a card's own content/placement fields; never touches FSRS scheduling state. */
+/**
+ * A partial edit of a card's own content/placement fields; never touches FSRS
+ * scheduling state. Which text field applies is decided by the card's KIND:
+ * `front`/`back` for a basic card, `clozeText` for a cloze one — the store
+ * refuses the wrong pairing rather than guessing (ADR-042).
+ */
 export interface CardFieldChanges {
   deckId?: string;
   front?: string;
   back?: string;
+  clozeText?: string;
 }
 
 export interface CardsListByDeckRequest {
@@ -1419,6 +1445,19 @@ export interface CardsListByDeckRequest {
 export interface CardsCreateRequest {
   profileId: string;
   card: NewCardFields;
+}
+
+/**
+ * Creates one cloze card per `{{…}}` deletion in `text` (STUDY-006 /
+ * ADR-042), atomically. Only the template crosses the wire: every row's
+ * `front`/`back` is derived in the main process by the same grammar the note
+ * generator and the reviewer read, so the renderer can never make a cloze
+ * card's stored sides disagree with its template.
+ */
+export interface CardsCreateClozeRequest {
+  profileId: string;
+  deckId: string;
+  text: string;
 }
 
 export interface CardsUpdateRequest {
@@ -2119,11 +2158,20 @@ export interface NotesTemplateDeleteRequest {
   id: string;
 }
 
-/** One generated flashcard as the editor reports it: the block's reconcile key plus the rendered sides. */
+/**
+ * One generated flashcard as the editor reports it: the block's reconcile key,
+ * the rendered sides, and — for a card the block's `{{…}}` syntax authored —
+ * the template and ordinal they were rendered from (ADR-042). Both cloze
+ * fields are set exactly when `kind` is `cloze`; main and `CardStore` both
+ * re-check that, and that the ordinal is really in the template.
+ */
 export interface NoteCardSpec {
   key: string;
   front: string;
   back: string;
+  kind: CardKind;
+  clozeText: string | null;
+  clozeOrdinal: number | null;
 }
 
 /**
@@ -2826,6 +2874,8 @@ export interface NexusApi {
   restoreDeck(profileId: string, id: string): Promise<void>;
   listCardsByDeck(profileId: string, deckId: string): Promise<Card[]>;
   createCard(profileId: string, card: NewCardFields): Promise<Card>;
+  /** Creates one cloze card per `{{…}}` deletion in `text`, atomically; returns the siblings in ordinal order (ADR-042). */
+  createClozeCards(profileId: string, deckId: string, text: string): Promise<Card[]>;
   updateCard(profileId: string, id: string, changes: CardFieldChanges): Promise<Card>;
   deleteCard(profileId: string, id: string): Promise<void>;
   restoreCard(profileId: string, id: string): Promise<void>;

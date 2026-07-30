@@ -72,7 +72,16 @@ export type { MergedNoteState } from "./notes/yjsMerge.js";
 export { extractNoteLinkTargets } from "./notes/noteLinks.js";
 
 export { collectNoteCards, NOTE_CARD_MAX_TEXT_LENGTH, parseCardBlock } from "./notes/noteCards.js";
-export type { CardSyntaxSpan, NoteCardSpec, ParsedBlock, ParsedCard } from "./notes/noteCards.js";
+export type { CardKind, CardSyntaxSpan, NoteCardSpec, ParsedBlock, ParsedCard } from "./notes/noteCards.js";
+
+export {
+  CLOZE_MASK,
+  findClozeRuns,
+  renderClozeCard,
+  renderClozeSide,
+  splitClozeSegments,
+} from "./study/clozeText.js";
+export type { ClozeRun, ClozeSegment } from "./study/clozeText.js";
 
 export { replaceNoteContent } from "./notes/yjsRestore.js";
 

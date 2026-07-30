@@ -16,8 +16,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 30 (dashboard settings), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(30);
+  it("is at version 31 (first-class cloze cards), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(31);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -3170,6 +3170,162 @@ describe("migration 030 — dashboard settings", () => {
     expect(
       (db.raw.prepare("SELECT count(*) AS n FROM dashboard_settings").get() as { n: number }).n,
     ).toBe(0);
+    db.close();
+  });
+});
+
+describe("migration 031 — first-class cloze cards", () => {
+  const now = () => new Date().toISOString();
+
+  const insertSubject = (db: NexusDatabase, id: string, profileId: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO subjects (id, profile_id, name, color, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, profileId, "x", "jade", now(), now());
+
+  const insertDeck = (db: NexusDatabase, id: string, profileId: string, subjectId: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO decks (id, profile_id, subject_id, name, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, profileId, subjectId, "x", now(), now());
+
+  /** A card with the three ADR-042 columns spelled out; the FSRS fields are constants here. */
+  const insertCard = (
+    db: NexusDatabase,
+    id: string,
+    profileId: string,
+    deckId: string,
+    kind: string,
+    clozeText: string | null,
+    clozeOrdinal: number | null,
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO cards
+           (id, profile_id, deck_id, front, back, kind, cloze_text, cloze_ordinal,
+            due, stability, difficulty, elapsed_days, scheduled_days, learning_steps,
+            reps, lapses, state, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id, profileId, deckId, "front", "back", kind, clozeText, clozeOrdinal,
+        now(), 0, 0, 0, 0, 0, 0, 0, 0, now(), now(),
+      );
+
+  /** A deck plus its profile and subject, ready for cards. */
+  const seedDeck = (db: NexusDatabase) => {
+    insertProfile(db, "p1");
+    insertSubject(db, "s1", "p1");
+    insertDeck(db, "d1", "p1", "s1");
+  };
+
+  it("adds the three cloze columns and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    const columns = (
+      db.raw.prepare("PRAGMA table_info(cards)").all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(columns).toContain("kind");
+    expect(columns).toContain("cloze_text");
+    expect(columns).toContain("cloze_ordinal");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("defaults kind to 'basic' with both cloze columns NULL — every pre-existing card, unchanged", () => {
+    const db = openDatabase({ path: join(dir, "default-kind.db") });
+    seedDeck(db);
+    // Deliberately omits all three columns, exactly as every write predating
+    // this migration did.
+    db.raw
+      .prepare(
+        `INSERT INTO cards
+           (id, profile_id, deck_id, front, back, due, stability, difficulty,
+            elapsed_days, scheduled_days, learning_steps, reps, lapses, state,
+            created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run("c1", "p1", "d1", "f", "b", now(), 0, 0, 0, 0, 0, 0, 0, 0, now(), now());
+
+    const row = db.raw
+      .prepare("SELECT kind, cloze_text, cloze_ordinal FROM cards WHERE id = ?")
+      .get("c1") as { kind: string; cloze_text: string | null; cloze_ordinal: number | null };
+    expect(row.kind).toBe("basic");
+    expect(row.cloze_text).toBeNull();
+    expect(row.cloze_ordinal).toBeNull();
+    db.close();
+  });
+
+  it("rejects a kind outside the closed set with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-kind.db") });
+    seedDeck(db);
+    expect(() => insertCard(db, "c1", "p1", "d1", "bogus", null, null)).toThrow();
+    expect(() => insertCard(db, "c2", "p1", "d1", "basic", null, null)).not.toThrow();
+    expect(() => insertCard(db, "c3", "p1", "d1", "cloze", "{{a}}", 0)).not.toThrow();
+    db.close();
+  });
+
+  it("rejects a basic card carrying either cloze column", () => {
+    const db = openDatabase({ path: join(dir, "check-basic-pair.db") });
+    seedDeck(db);
+    expect(() => insertCard(db, "c1", "p1", "d1", "basic", "{{a}}", null)).toThrow();
+    expect(() => insertCard(db, "c2", "p1", "d1", "basic", null, 0)).toThrow();
+    db.close();
+  });
+
+  it("rejects a cloze card missing either cloze column", () => {
+    const db = openDatabase({ path: join(dir, "check-cloze-pair.db") });
+    seedDeck(db);
+    expect(() => insertCard(db, "c1", "p1", "d1", "cloze", "{{a}}", null)).toThrow();
+    expect(() => insertCard(db, "c2", "p1", "d1", "cloze", null, 0)).toThrow();
+    expect(() => insertCard(db, "c3", "p1", "d1", "cloze", null, null)).toThrow();
+    db.close();
+  });
+
+  it("rejects a negative cloze_ordinal and accepts 0 (the first deletion)", () => {
+    const db = openDatabase({ path: join(dir, "check-ordinal.db") });
+    seedDeck(db);
+    expect(() => insertCard(db, "c1", "p1", "d1", "cloze", "{{a}}", -1)).toThrow();
+    expect(() => insertCard(db, "c2", "p1", "d1", "cloze", "{{a}}", 0)).not.toThrow();
+    db.close();
+  });
+
+  it("keeps every review_log row — this migration adds columns, it never rebuilds cards", () => {
+    // The reason the migration uses ALTER TABLE ADD COLUMN rather than the
+    // create/copy/drop/rename rebuild migration 021 used: DROP TABLE cards
+    // would cascade a user's whole FSRS history away.
+    const db = openDatabase({ path: join(dir, "review-log-survives.db") });
+    seedDeck(db);
+    insertCard(db, "c1", "p1", "d1", "basic", null, null);
+    db.raw
+      .prepare(
+        `INSERT INTO review_log
+           (id, profile_id, card_id, rating, state, due, stability, difficulty,
+            elapsed_days, last_elapsed_days, scheduled_days, learning_steps,
+            review, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run("l1", "p1", "c1", 3, 2, now(), 1, 1, 0, 0, 1, 0, now(), now());
+
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM review_log").get() as { n: number }).n,
+    ).toBe(1);
+    db.close();
+  });
+
+  it("keeps migration 017's card search triggers — a rebuild would have dropped them", () => {
+    const db = openDatabase({ path: join(dir, "triggers-survive.db") });
+    const triggers = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'trigger'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(triggers).toContain("cards_search_ai");
+    expect(triggers).toContain("cards_search_au");
+    expect(triggers).toContain("cards_search_ad");
     db.close();
   });
 });

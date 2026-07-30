@@ -1,13 +1,62 @@
 import { describe, expect, it } from "vitest";
 import * as Y from "yjs";
 import { collectNoteCards, NOTE_CARD_MAX_TEXT_LENGTH, parseCardBlock } from "./noteCards.js";
+import type { NoteCardSpec, ParsedCard } from "./noteCards.js";
+
+// The four builders below spell out the ADR-042 kind fields once instead of on
+// every expectation: they are constant for a Q/A card and mechanical for a
+// cloze one, and inlining them would bury what each test is actually about.
+
+/** A Q/A card's full `ParsedCard`. */
+const basic = (front: string, back: string, suffix = ""): ParsedCard => ({
+  front,
+  back,
+  suffix,
+  kind: "basic",
+  clozeText: null,
+  clozeOrdinal: null,
+});
+
+/** One deletion of `clozeText`, already rendered. */
+const cloze = (
+  front: string,
+  back: string,
+  clozeText: string,
+  clozeOrdinal: number,
+): ParsedCard => ({
+  front,
+  back,
+  suffix: `#${clozeOrdinal}`,
+  kind: "cloze",
+  clozeText,
+  clozeOrdinal,
+});
+
+/** A Q/A card as `collectNoteCards` sends it. */
+const basicSpec = (key: string, front: string, back: string): NoteCardSpec => ({
+  key,
+  front,
+  back,
+  kind: "basic",
+  clozeText: null,
+  clozeOrdinal: null,
+});
+
+/** One cloze deletion as `collectNoteCards` sends it. */
+const clozeSpec = (
+  key: string,
+  front: string,
+  back: string,
+  clozeText: string,
+  clozeOrdinal: number,
+): NoteCardSpec => ({ key, front, back, kind: "cloze", clozeText, clozeOrdinal });
 
 describe("parseCardBlock — Q/A rule", () => {
   it("splits a whitespace-bounded :: into a trimmed front/back, spanning only the colons", () => {
     const text = "Pitanje :: Odgovor";
     const sep = text.indexOf("::");
     expect(parseCardBlock(text)).toEqual({
-      cards: [{ front: "Pitanje", back: "Odgovor", suffix: "" }],
+      cards: [basic("Pitanje", "Odgovor")],
       spans: [{ start: sep, end: sep + 2, kind: "separator" }],
     });
   });
@@ -23,7 +72,7 @@ describe("parseCardBlock — Q/A rule", () => {
 
   it("splits at only the first qualifying separator; a later :: is just text", () => {
     const parsed = parseCardBlock("A :: B :: C");
-    expect(parsed.cards).toEqual([{ front: "A", back: "B :: C", suffix: "" }]);
+    expect(parsed.cards).toEqual([basic("A", "B :: C")]);
   });
 
   it("produces no card and no span when the front is empty after trimming", () => {
@@ -41,9 +90,7 @@ describe("parseCardBlock — cloze rule", () => {
     const start = text.indexOf("{{");
     const end = text.indexOf("}}") + 2;
     expect(parseCardBlock(text)).toEqual({
-      cards: [
-        { front: "Rečenica sa […] delom", back: "Rečenica sa skrivenim delom", suffix: "#0" },
-      ],
+      cards: [cloze("Rečenica sa […] delom", "Rečenica sa skrivenim delom", text, 0)],
       spans: [{ start, end, kind: "cloze" }],
     });
   });
@@ -52,8 +99,8 @@ describe("parseCardBlock — cloze rule", () => {
     const text = "{{A}} i {{B}}";
     const parsed = parseCardBlock(text);
     expect(parsed.cards).toEqual([
-      { front: "[…] i B", back: "A i B", suffix: "#0" },
-      { front: "A i […]", back: "A i B", suffix: "#1" },
+      cloze("[…] i B", "A i B", text, 0),
+      cloze("A i […]", "A i B", text, 1),
     ]);
     expect(parsed.spans).toHaveLength(2);
     expect(parsed.spans.every((span) => span.kind === "cloze")).toBe(true);
@@ -61,7 +108,7 @@ describe("parseCardBlock — cloze rule", () => {
 
   it("does not apply once the Q/A rule matched — the braces stay literal", () => {
     const parsed = parseCardBlock("Pitanje {{sa}} :: Odgovor");
-    expect(parsed.cards).toEqual([{ front: "Pitanje {{sa}}", back: "Odgovor", suffix: "" }]);
+    expect(parsed.cards).toEqual([basic("Pitanje {{sa}}", "Odgovor")]);
   });
 
   it("ignores a run whose inner text is empty or whitespace-only", () => {
@@ -140,7 +187,7 @@ describe("collectNoteCards", () => {
 
   it("collects a Q/A card from a keyed paragraph", () => {
     const doc = docWithBlocks(paragraph("Pitanje :: Odgovor", "key-1"));
-    expect(collectNoteCards(doc)).toEqual([{ key: "key-1", front: "Pitanje", back: "Odgovor" }]);
+    expect(collectNoteCards(doc)).toEqual([basicSpec("key-1", "Pitanje", "Odgovor")]);
   });
 
   it("collects a keyed paragraph nested inside a list item", () => {
@@ -149,7 +196,7 @@ describe("collectNoteCards", () => {
     item.insert(0, [paragraph("Q :: A", "key-nested")]);
     list.insert(0, [item]);
     const doc = docWithBlocks(list);
-    expect(collectNoteCards(doc)).toEqual([{ key: "key-nested", front: "Q", back: "A" }]);
+    expect(collectNoteCards(doc)).toEqual([basicSpec("key-nested", "Q", "A")]);
   });
 
   it("skips a codeBlock entirely, even one carrying a cardKey", () => {
@@ -162,7 +209,7 @@ describe("collectNoteCards", () => {
       paragraph("Prvo :: Pitanje", "dup"),
       paragraph("Drugo :: Pitanje", "dup"),
     );
-    expect(collectNoteCards(doc)).toEqual([{ key: "dup", front: "Prvo", back: "Pitanje" }]);
+    expect(collectNoteCards(doc)).toEqual([basicSpec("dup", "Prvo", "Pitanje")]);
   });
 
   it("preserves document order across multiple blocks", () => {
@@ -185,7 +232,7 @@ describe("collectNoteCards", () => {
       "key-bold",
     );
     expect(collectNoteCards(doc)).toEqual([
-      { key: "key-bold", front: "Glavni grad Francuske", back: "Pariz" },
+      basicSpec("key-bold", "Glavni grad Francuske", "Pariz"),
     ]);
   });
 
@@ -195,7 +242,7 @@ describe("collectNoteCards", () => {
       "key-code",
     );
     expect(collectNoteCards(doc)).toEqual([
-      { key: "key-code", front: "Prazan vektor", back: "std::vector<int> v;" },
+      basicSpec("key-code", "Prazan vektor", "std::vector<int> v;"),
     ]);
   });
 
@@ -225,8 +272,26 @@ describe("collectNoteCards", () => {
   it("expands cloze deletions into separate, ordinal-suffixed specs", () => {
     const doc = docWithBlocks(paragraph("{{A}} i {{B}}", "cloze-key"));
     expect(collectNoteCards(doc)).toEqual([
-      { key: "cloze-key#0", front: "[…] i B", back: "A i B" },
-      { key: "cloze-key#1", front: "A i […]", back: "A i B" },
+      clozeSpec("cloze-key#0", "[…] i B", "A i B", "{{A}} i {{B}}", 0),
+      clozeSpec("cloze-key#1", "A i […]", "A i B", "{{A}} i {{B}}", 1),
     ]);
+  });
+
+  it("carries the block's raw template on every cloze spec, so the row can re-derive itself (ADR-042)", () => {
+    const doc = docWithBlocks(paragraph("Glavni grad je {{Beograd}}.", "k"));
+    const specs = collectNoteCards(doc);
+    expect(specs).toHaveLength(1);
+    expect(specs[0]?.clozeText).toBe("Glavni grad je {{Beograd}}.");
+    expect(specs[0]?.clozeOrdinal).toBe(0);
+    expect(specs[0]?.kind).toBe("cloze");
+  });
+
+  it("drops a cloze block whose TEMPLATE exceeds the cap even though its sides fit", () => {
+    // Unwrapping strips 4 characters per run, so a template one over the cap
+    // renders to a back that is under it — the template is what gets stored.
+    const inner = "x".repeat(NOTE_CARD_MAX_TEXT_LENGTH - 3);
+    const text = `{{${inner}}}`;
+    expect(text.length).toBe(NOTE_CARD_MAX_TEXT_LENGTH + 1);
+    expect(parseCardBlock(text)).toEqual({ cards: [], spans: [] });
   });
 });
