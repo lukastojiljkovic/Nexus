@@ -27,9 +27,11 @@ import { renderNoteMarkdown } from "./noteMarkdown.js";
 import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown.js";
 
 /**
- * IMEX-004: the archive's own semver. `1.10.0` adds a card's `kind` and, for a
- * cloze card, the `clozeText`/`clozeOrdinal` it is derived from (STUDY-006 /
- * ADR-042), after `1.9.0` added the `dashboard-settings` record type (SET-006
+ * IMEX-004: the archive's own semver. `1.11.0` adds the `dashboard-widget`
+ * record type — the profile's dashboard layout (DASH-002 / ADR-045, migration
+ * 032) — after `1.10.0` added a card's `kind` and, for a cloze card, the
+ * `clozeText`/`clozeOrdinal` it is derived from (STUDY-006 /
+ * ADR-042), `1.9.0` the `dashboard-settings` record type (SET-006
  * / ADR-041), `1.8.0` the `task-dependency` record type (migration 029 /
  * ADR-037), `1.5.0`-`1.7.0` task attachments, task templates and the NOTE
  * folder preferences (each landing on its own lane), `1.4.0` the
@@ -39,14 +41,14 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * `reminderOffsets` (ADR-028) and `1.1.0` the `person` record type (CAL-007 /
  * ADR-026). Additive, so a MINOR bump by the same honesty each of those made
  * one: an archive this build writes is refused by an older reader, which would
- * otherwise parse every cloze card and restore it as a plain front/back card
- * whose template — the only text its owner can edit — is gone. Kept in step
+ * otherwise restore a profile whose dashboard is back to the stock five cards
+ * with no sign that the user had ever arranged it. Kept in step
  * with `INTERCHANGE_SCHEMA_VERSION` (`importArchive.ts`) — two constants
  * rather than one import, since the reader already imports from this module
  * and the cycle would be worse than the duplication; `importArchive.test.ts`
  * pins them equal.
  */
-const SCHEMA_VERSION = "1.10.0";
+const SCHEMA_VERSION = "1.11.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -548,6 +550,32 @@ export interface ExportDashboardSettings {
   backgroundDim: number;
 }
 
+/**
+ * One placed widget of a profile's dashboard layout (DASH-002 / ADR-045,
+ * migration 032). Rides in `data/dashboard.ndjson` beside `dashboard-settings`,
+ * after it — the two share a module and reference each other not at all.
+ *
+ * `widgetId` is a `moduleId:widgetId` slug a module's MANIFEST publishes: a code
+ * constant, in no table (migration 032 declares no foreign key for it, on
+ * migration 028's argument). It is carried across unchanged by every path here,
+ * including a foreign import, precisely because it does not name a row.
+ *
+ * `position` is the sparse sort key, not an index: it may be negative, it is
+ * never assumed contiguous, and the ORDER it expresses is the layout. `config`
+ * is per-widget JSON text, opaque — no widget publishes a config schema yet, so
+ * the reader checks only that a non-null value parses as JSON at all.
+ */
+export interface ExportDashboardWidget {
+  instanceId: string;
+  profileId: string;
+  widgetId: string;
+  size: string;
+  position: number;
+  config: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** Everything the manifest's "settings" section carries (founder decision #11: flags + NTF settings ship with the export). */
 export interface ExportSettings {
   flags: Record<string, boolean>;
@@ -624,6 +652,19 @@ export interface ProfileData {
    * "leave the profile on the store's own defaults".
    */
   dashboardSettings: readonly ExportDashboardSettings[];
+  /**
+   * The profile's dashboard layout (DASH-002 / ADR-045) — one row per placed
+   * widget, in position order. Required, like every field above and for the same
+   * reason: a module the caller forgets must be a type error, not a quiet
+   * omission.
+   *
+   * EMPTY is a meaningful value here, not merely the pre-`1.11.0` shape: a
+   * profile that has never rearranged its dashboard stores no rows at all
+   * (`DashboardWidgetStore` is get-or-default), so an empty array says "this
+   * profile is on the default arrangement" — which is exactly what a restore
+   * then leaves the target on.
+   */
+  dashboardWidgets: readonly ExportDashboardWidget[];
 }
 
 export interface ExportArchiveInput {
@@ -722,11 +763,12 @@ export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, 
       data.noteTemplates.length +
       data.noteAttachments.length +
       data.noteVersions.length,
-    // Zero or one, and counted like any other row rather than folded into a
-    // neighbouring module: a restore preview that showed "Kontrolna tabla: 1"
-    // against "0" is telling the user something true about what is about to
-    // change, which is the entire job of that table.
-    dashboard: data.dashboardSettings.length,
+    // The background row (zero or one) plus every placed widget, counted like
+    // any other rows rather than folded into a neighbouring module: a restore
+    // preview that showed "Kontrolna tabla: 6" against "0" is telling the user
+    // something true about what is about to change, which is the entire job of
+    // that table.
+    dashboard: data.dashboardSettings.length + data.dashboardWidgets.length,
   };
 }
 
@@ -792,9 +834,14 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     ...noteTemplates.map((row) => ({ type: "note-template", ...row })),
   ]);
 
-  const dashboardNdjson = toNdjson(
-    input.data.dashboardSettings.map((row) => ({ type: "dashboard-settings", ...row })),
-  );
+  // The background row first and the layout after it, in the order the two
+  // shipped. Neither references the other — a dashboard with no picture still
+  // has its widgets, and a widget names no settings row — so the order here is
+  // readability, not a dependency.
+  const dashboardNdjson = toNdjson([
+    ...input.data.dashboardSettings.map((row) => ({ type: "dashboard-settings", ...row })),
+    ...input.data.dashboardWidgets.map((row) => ({ type: "dashboard-widget", ...row })),
+  ]);
 
   files.set("data/tasks.ndjson", tasksNdjson);
   files.set("data/calendar.ndjson", calendarNdjson);

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { ModuleRegistry } from "./registry.js";
 import type { ModuleCategory, ModuleManifest } from "./manifest.js";
+import type { WidgetContract } from "../contracts/widgets.js";
 
 function mod(
   id: string,
@@ -8,6 +9,18 @@ function mod(
   category: ModuleCategory,
 ): ModuleManifest {
   return { id, prefix, category, defaultEnabled: true };
+}
+
+function widget(id: string, deepLink: string): WidgetContract {
+  return { id, title: `${deepLink}.${id}.title`, sizes: ["S", "M", "L"], deepLink };
+}
+
+function modWithWidgets(
+  id: string,
+  prefix: string,
+  widgets: WidgetContract[],
+): ModuleManifest {
+  return { ...mod(id, prefix, "Core experience"), widgets };
 }
 
 describe("ModuleRegistry", () => {
@@ -61,5 +74,50 @@ describe("ModuleRegistry", () => {
       "notes",
       "canvas",
     ]);
+  });
+});
+
+describe("ModuleRegistry widgets (ADR-045)", () => {
+  function registry(): ModuleRegistry {
+    const reg = new ModuleRegistry();
+    reg.register(
+      modWithWidgets("calendar", "CAL", [widget("danas", "calendar"), widget("isticanja", "calendar")]),
+    );
+    reg.register(modWithWidgets("study", "STUDY", [widget("ispiti", "study")]));
+    // A module that publishes none — the common case for now.
+    reg.register(mod("settings", "SET", "Core experience"));
+    return reg;
+  }
+
+  it("lists a module's widgets in manifest order", () => {
+    expect(registry().widgetsOf("calendar").map((w) => w.id)).toEqual(["danas", "isticanja"]);
+  });
+
+  it("answers with an empty list for a module that publishes none, and for one nobody registered", () => {
+    expect(registry().widgetsOf("settings")).toEqual([]);
+    expect(registry().widgetsOf("finance")).toEqual([]);
+  });
+
+  it("resolves a qualified `moduleId:widgetId`", () => {
+    const found = registry().findWidget("calendar:isticanja");
+    expect(found?.id).toBe("isticanja");
+    expect(found?.title).toBe("calendar.isticanja.title");
+  });
+
+  it("returns undefined for a widget this build does not publish — a layout keeps such rows", () => {
+    const reg = registry();
+    expect(reg.findWidget("calendar:nepostojeci")).toBeUndefined();
+    expect(reg.findWidget("finance:budzet")).toBeUndefined();
+  });
+
+  it("returns undefined for an id that is not qualified at all", () => {
+    const reg = registry();
+    expect(reg.findWidget("danas")).toBeUndefined();
+    expect(reg.findWidget("")).toBeUndefined();
+    expect(reg.findWidget(":danas")).toBeUndefined();
+  });
+
+  it("splits at the FIRST colon, so a trailing one cannot resolve to a real widget", () => {
+    expect(registry().findWidget("calendar:danas:extra")).toBeUndefined();
   });
 });

@@ -73,6 +73,7 @@ export class ForeignImportStore {
   private readonly insertNoteLink: Database.Statement;
   private readonly insertCard: Database.Statement;
   private readonly insertReviewLog: Database.Statement;
+  private readonly insertDashboardWidget: Database.Statement;
 
   constructor(
     private readonly db: DatabaseHandle,
@@ -221,6 +222,11 @@ export class ForeignImportStore {
           elapsed_days, last_elapsed_days, scheduled_days, learning_steps,
           review, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    this.insertDashboardWidget = db.prepare(
+      `INSERT INTO dashboard_widgets
+         (profile_id, instance_id, widget_id, size, position, config, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     );
   }
 
@@ -534,6 +540,20 @@ export class ForeignImportStore {
           log.id, this.profileId, log.cardId, log.rating, log.state, log.due,
           log.stability, log.difficulty, log.elapsedDays, log.lastElapsedDays,
           log.scheduledDays, log.learningSteps, log.review, log.createdAt,
+        );
+        written += 1;
+      }
+
+      // The dashboard LAYOUT (ADR-045), unlike the background the planner
+      // deliberately drops: a placement is content, and it arrives additively
+      // like everything else — new instance ids, the target's `profile_id`, and
+      // the source's own `position` kept so the imported run stays in its own
+      // order. `widget_id` is copied verbatim: it names a code constant, not a
+      // row, so there is nothing in it to remap (migration 032).
+      for (const widget of planned.dashboardWidgets) {
+        this.insertDashboardWidget.run(
+          this.profileId, widget.instanceId, widget.widgetId, widget.size,
+          widget.position, widget.config, widget.createdAt, widget.updatedAt,
         );
         written += 1;
       }

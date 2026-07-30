@@ -83,6 +83,12 @@ export const RESTORE_WIPE_TABLES = [
   // settings row like the two above it, wiped and rewritten the same way. The
   // blob it names is main's to garbage-collect afterward, never this store's.
   "dashboard_settings",
+  // The dashboard's layout (migration 032 / ADR-045). Wiped rather than merged,
+  // like everything here — and note that an archive carrying ZERO widget rows
+  // therefore leaves the profile with none, which is precisely what it should:
+  // no rows IS the default arrangement (`DashboardWidgetStore`), so a profile
+  // that never rearranged its dashboard restores to the same default it had.
+  "dashboard_widgets",
 ] as const;
 
 type WipeTable = (typeof RESTORE_WIPE_TABLES)[number];
@@ -176,6 +182,7 @@ export class RestoreStore {
   private readonly insertNtfSettings: Database.Statement;
   private readonly insertNtfSourceSetting: Database.Statement;
   private readonly insertDashboardSettings: Database.Statement;
+  private readonly insertDashboardWidget: Database.Statement;
 
   constructor(
     private readonly db: DatabaseHandle,
@@ -343,6 +350,11 @@ export class RestoreStore {
          (profile_id, background_hash, background_mime, background_size_bytes,
           background_dim, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    );
+    this.insertDashboardWidget = db.prepare(
+      `INSERT INTO dashboard_widgets
+         (profile_id, instance_id, widget_id, size, position, config, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     );
   }
 
@@ -712,6 +724,25 @@ export class RestoreStore {
           dashboard.backgroundDim,
           now,
           now,
+        );
+        written += 1;
+      }
+
+      // ADR-045, retargeted onto THIS profile exactly as the background above
+      // is. `createdAt`/`updatedAt` come from the ARCHIVE rather than from
+      // `now`, unlike the settings row: a placement is a row the user made at a
+      // moment, and a restore reproduces rows (R-reproduce-byte-for-byte), while
+      // the settings row is a resolved singleton with no history to preserve.
+      for (const widget of input.data.dashboardWidgets) {
+        this.insertDashboardWidget.run(
+          this.profileId,
+          widget.instanceId,
+          widget.widgetId,
+          widget.size,
+          widget.position,
+          widget.config,
+          widget.createdAt,
+          widget.updatedAt,
         );
         written += 1;
       }

@@ -56,6 +56,7 @@ function emptyInput(): ExportArchiveInput {
       noteAttachments: [],
       noteVersions: [],
       dashboardSettings: [],
+      dashboardWidgets: [],
     },
     hash: sha256,
   };
@@ -230,7 +231,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.10.0");
+      expect(manifest.schemaVersion).toBe("1.11.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       expect(manifest.profile).toEqual({ id: "profile1", name: "Luka" });
@@ -789,7 +790,7 @@ describe("buildExportArchive", () => {
 
   describe("countProfileModules", () => {
     /**
-     * One row in every one of `ProfileData`'s 25 arrays, so each of the five
+     * One row in every one of `ProfileData`'s arrays, so each of the six
      * buckets sums more than one field. Two TASKS rather than one, because a
      * dependency needs both of its ends to be real rows — a fixture whose edge
      * dangled would be counting something the exporter could never write.
@@ -882,6 +883,12 @@ describe("buildExportArchive", () => {
             backgroundSizeBytes: 32, backgroundDim: 40,
           },
         ],
+        dashboardWidgets: [
+          {
+            instanceId: "dw1", profileId: "p1", widgetId: "calendar:danas", size: "M",
+            position: 1024, config: null, createdAt: t, updatedAt: t,
+          },
+        ],
       };
     }
 
@@ -893,7 +900,7 @@ describe("buildExportArchive", () => {
         study: 8, // 1 each of subject/exam/deck/card/review/plan/block/focus-session
         notifications: 1,
         notes: 7, // 1 each of note/folder/tag/tag-link/template/attachment/version
-        dashboard: 1, // the one settings row a profile can ever have
+        dashboard: 2, // the one settings row a profile can ever have + 1 placed widget
       });
     });
 
@@ -981,6 +988,57 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       expect(archive.binaries).toEqual([]);
       expect(archive.byModule.dashboard).toBe(1);
+    });
+
+    // The layout (DASH-002 / ADR-045) rides the same file, after the settings
+    // row — the two share a module and reference each other not at all.
+    it("writes the layout after the settings row, one type-discriminated line each", () => {
+      const input = emptyInput();
+      const t = "2026-07-31T09:00:00.000Z";
+      input.data.dashboardSettings = [
+        {
+          profileId: "profile1", backgroundHash: null, backgroundMime: null,
+          backgroundSizeBytes: null, backgroundDim: 40,
+        },
+      ];
+      input.data.dashboardWidgets = [
+        {
+          instanceId: "dw1", profileId: "profile1", widgetId: "calendar:danas", size: "M",
+          position: 1024, config: null, createdAt: t, updatedAt: t,
+        },
+        {
+          instanceId: "dw2", profileId: "profile1", widgetId: "study:ispiti", size: "L",
+          position: 2048, config: '{"limit":3}', createdAt: t, updatedAt: t,
+        },
+      ];
+      const archive = buildExportArchive(input);
+
+      expect(parseNdjson(archive.files.get("data/dashboard.ndjson") ?? "")).toEqual([
+        {
+          type: "dashboard-settings", profileId: "profile1", backgroundHash: null,
+          backgroundMime: null, backgroundSizeBytes: null, backgroundDim: 40,
+        },
+        {
+          type: "dashboard-widget", instanceId: "dw1", profileId: "profile1",
+          widgetId: "calendar:danas", size: "M", position: 1024, config: null,
+          createdAt: t, updatedAt: t,
+        },
+        {
+          type: "dashboard-widget", instanceId: "dw2", profileId: "profile1",
+          widgetId: "study:ispiti", size: "L", position: 2048, config: '{"limit":3}',
+          createdAt: t, updatedAt: t,
+        },
+      ]);
+      expect(archive.byModule.dashboard).toBe(3);
+    });
+
+    // A profile on the default arrangement stores no rows at all, and the
+    // archive says so by carrying none — which a restore reads as "leave the
+    // target on the default", exactly where the source was.
+    it("writes nothing for a profile that has never rearranged its dashboard", () => {
+      const archive = buildExportArchive(emptyInput());
+      expect(archive.files.get("data/dashboard.ndjson")).toBe("");
+      expect(archive.byModule.dashboard).toBe(0);
     });
   });
 

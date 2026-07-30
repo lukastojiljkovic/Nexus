@@ -14,6 +14,8 @@ import type {
 import {
   CardStore,
   DashboardSettingsStore,
+  DashboardWidgetStore,
+  DEFAULT_DASHBOARD_LAYOUT,
   DEFAULT_BACKGROUND_DIM,
   DeckStore,
   DocumentStore,
@@ -144,6 +146,7 @@ function emptyProfileData(): ProfileData {
     noteVersions: [],
     taskTemplates: [],
     dashboardSettings: [],
+    dashboardWidgets: [],
   };
 }
 
@@ -233,6 +236,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   const templateStore = new NoteTemplateStore(handle.raw, profileId);
   const taskTemplateStore = new TaskTemplateStore(handle.raw, profileId);
   const dashboardStore = new DashboardSettingsStore(handle.raw, profileId);
+  const dashboardWidgetStore = new DashboardWidgetStore(handle.raw, profileId);
 
   // The merged Yjs state and derived body an export would carry for the edited
   // note — stand-ins for real Yjs bytes (see `bytes()`), but genuinely stored
@@ -378,6 +382,10 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   // row travels AND that the shared blob is not double-counted.
   dashboardStore.setBackground("a".repeat(64), "image/png", 10, t2);
   dashboardStore.setDim(65, t2);
+  // ADR-045: a REARRANGED dashboard, so the round trip carries real layout rows
+  // rather than the get-or-default emptiness a untouched profile would give.
+  // Adding one widget materializes the default five beside it.
+  dashboardWidgetStore.add("study:ispiti", "L", t2);
 
   const taskLists = taskListStore.listActive();
   const data: ProfileData = {
@@ -419,6 +427,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
       snapshot: noteStore.loadVersion(editedNote.id, version.coveredSeq),
     })),
     dashboardSettings: [{ profileId, ...dashboardStore.get() }],
+    dashboardWidgets: dashboardWidgetStore.listAll(),
   };
 
   const derived = new Map<string, RestoredNoteDerived>([
@@ -622,6 +631,12 @@ function assertModulesMatch(
   expect(
     [{ profileId: remapTo, ...new DashboardSettingsStore(handle.raw, readProfileId).get() }],
   ).toEqual(remap(fixture.data.dashboardSettings));
+
+  // ADR-045: the layout too — every placement reproduced under its own instance
+  // id, size, order and timestamps, retargeted onto the reading profile.
+  expect(new DashboardWidgetStore(handle.raw, readProfileId).listAll()).toEqual(
+    remap(fixture.data.dashboardWidgets),
+  );
 }
 
 describe("RestoreStore", () => {
@@ -723,6 +738,17 @@ describe("RestoreStore", () => {
       backgroundSizeBytes: null,
       backgroundDim: DEFAULT_BACKGROUND_DIM,
     });
+    // And the same for the layout (ADR-045): B's rearranged dashboard is wiped,
+    // which leaves no rows — and no rows IS the default arrangement, so B opens
+    // on exactly what the archive's own profile had.
+    expect(
+      (db.raw
+        .prepare("SELECT count(*) AS n FROM dashboard_widgets WHERE profile_id = ?")
+        .get(profileB) as { n: number }).n,
+    ).toBe(0);
+    expect(new DashboardWidgetStore(db.raw, profileB).listLayout().map((e) => e.widgetId)).toEqual(
+      DEFAULT_DASHBOARD_LAYOUT.map((e) => e.widgetId),
+    );
 
     // Including the child tables no store lists on its own — the ones a wipe
     // that leaned on ON DELETE CASCADE would be most likely to miss.

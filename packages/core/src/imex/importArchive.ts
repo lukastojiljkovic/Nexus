@@ -8,6 +8,7 @@ import type {
   ArchiveModuleId,
   ExportCard,
   ExportDashboardSettings,
+  ExportDashboardWidget,
   ExportDeck,
   ExportDocument,
   ExportEvent,
@@ -172,9 +173,12 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.10.0` added a
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.11.0` added the
+ * `dashboard-widget` record type — the profile's dashboard layout (DASH-002 /
+ * ADR-045, migration 032) — riding in the data file `1.9.0` already created,
+ * after `1.10.0` added a
  * card's `kind` and a cloze card's `clozeText`/`clozeOrdinal` (STUDY-006 /
- * ADR-042), after `1.9.0` added the `dashboard-settings` record type and its
+ * ADR-042), `1.9.0` the `dashboard-settings` record type and its
  * own data file (SET-006 / ADR-041), `1.8.0` the `task-dependency` record type
  * (migration 029 / ADR-037), `1.5.0`-`1.7.0` task attachments, task templates
  * and the NOTE folder preferences, `1.4.0` the `task-tag`/`task-tag-link`
@@ -194,7 +198,8 @@ export interface ImportArchiveResult {
  * A new RECORD TYPE needs no `ArchiveEra` flag, unlike a new field on an
  * existing type: an older archive simply carries none of it, which is
  * indistinguishable from a profile that had no dependencies — or, at `1.9.0`,
- * from one that never chose a dashboard background — while a NEWER archive
+ * from one that never chose a dashboard background, or, at `1.11.0`, from one
+ * that never rearranged its dashboard — while a NEWER archive
  * never reaches a parser at all, because the gate above refuses it. Era flags
  * exist only for the "this row is missing a field it now must have" question,
  * which a whole absent type never asks — and which an OPTIONAL-with-a-default
@@ -206,7 +211,7 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.10.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.11.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -375,6 +380,21 @@ function trimmedNonEmptyStr(value: unknown, field: string, maxLength?: number): 
 
 function nullableNonEmptyStr(value: unknown, field: string): string | null {
   return value === null ? null : nonEmptyStr(value, field);
+}
+
+/**
+ * A string whose CONTENT must itself be JSON — what a `TEXT` column documented
+ * as holding JSON actually holds. Parsed and thrown away: nothing here
+ * interprets the value (see `parseDashboardWidget`), the parse IS the check.
+ */
+function jsonText(value: unknown, field: string): string {
+  const s = nonEmptyStr(value, field);
+  try {
+    JSON.parse(s);
+  } catch {
+    throw new InvalidFieldError(field);
+  }
+  return s;
 }
 
 function bool(value: unknown, field: string): boolean {
@@ -607,6 +627,24 @@ const TASK_LIST_VIEWS = ["list", "kanban"] as const;
 const MAX_BACKGROUND_DIM = 90;
 
 /**
+ * Mirrors `DASHBOARD_WIDGET_SIZES` in `@nexus/db`'s
+ * `dashboard/dashboardWidgetStore.ts`, migration 032's `size` CHECK and
+ * `WidgetSize` in this package's own widget contract (copied here rather than
+ * imported from `@nexus/db` — the `NOTE_FOLDER_COLORS` arrangement).
+ */
+const DASHBOARD_WIDGET_SIZES = ["S", "M", "L"] as const;
+
+/**
+ * A widget id as a module's manifest publishes it: `moduleId:widgetId`, both
+ * ASCII kebab slugs. Mirrors `WIDGET_ID_PATTERN` in `@nexus/db`'s
+ * `dashboard/dashboardWidgetStore.ts`. The SHAPE is all either side checks —
+ * which widgets exist is the module registry's catalogue, and an archive
+ * naming one this build does not carry is a layout to keep, not a row to
+ * refuse (migration 032).
+ */
+const WIDGET_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*:[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/**
  * The inline image formats a dashboard background may use — `isInlineImageMime`
  * (`@nexus/core`'s own `files/sniff.ts`) spelled as a closed list so
  * `enumStr` can name the offending field the way every other enum here does.
@@ -688,7 +726,8 @@ export type ArchiveRecordType =
   | "note-attachment"
   | "note-version"
   | "note-template"
-  | "dashboard-settings";
+  | "dashboard-settings"
+  | "dashboard-widget";
 
 const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "task",
@@ -720,6 +759,7 @@ const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "note-version",
   "note-template",
   "dashboard-settings",
+  "dashboard-widget",
 ];
 
 type DataFilePath = (typeof DATA_FILES)[number];
@@ -748,7 +788,7 @@ const FILE_RECORD_TYPES: Record<DataFilePath, readonly ArchiveRecordType[]> = {
     "note-version",
     "note-template",
   ],
-  "data/dashboard.ndjson": ["dashboard-settings"],
+  "data/dashboard.ndjson": ["dashboard-settings", "dashboard-widget"],
 };
 
 /**
@@ -1411,6 +1451,40 @@ function parseDashboardSettings(raw: Record<string, unknown>): ExportDashboardSe
   return { profileId, backgroundHash, backgroundMime, backgroundSizeBytes, backgroundDim };
 }
 
+/**
+ * One placed widget of the dashboard layout (DASH-002 / ADR-045). Three rules
+ * beyond the field shapes, and none of them is something migration 032's own
+ * CHECK could have caught in an archive:
+ *
+ * - `widgetId` is a `moduleId:widgetId` slug. Only the SHAPE: which widgets
+ *   exist is the module registry's catalogue, and a row naming one this build
+ *   does not carry is deliberately KEPT — a layout survives a module being
+ *   switched off, and rendering is what filters, never storage. A value that
+ *   could not name a widget at ALL is another matter, and is refused here.
+ * - `size` is one of the three presets — the column's own CHECK, restated so an
+ *   out-of-domain value is a named `invalid-record` instead of a raw SQLite
+ *   error inside the restore transaction.
+ * - `config`, when non-null, must parse as JSON. Nothing interprets it (no
+ *   widget publishes a config schema yet), but an archive is the one way text
+ *   could reach that column having passed nobody's writer, and a column
+ *   documented as JSON must not start holding something else.
+ *
+ * `position` is an integer of any sign: a sparse sort key, never a count, and a
+ * prepend legitimately walks below zero.
+ */
+function parseDashboardWidget(raw: Record<string, unknown>): ExportDashboardWidget {
+  const instanceId = nonEmptyStr(raw.instanceId, "instanceId");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const widgetId = nonEmptyStr(raw.widgetId, "widgetId");
+  if (!WIDGET_ID_PATTERN.test(widgetId)) throw new InvalidFieldError("widgetId");
+  const size = enumStr(raw.size, "size", DASHBOARD_WIDGET_SIZES);
+  const position = int(raw.position, "position");
+  const config = raw.config === null ? null : jsonText(raw.config, "config");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { instanceId, profileId, widgetId, size, position, config, createdAt, updatedAt };
+}
+
 /** Metadata only — `snapshot` is attached afterward from `input.ydocs`, and is REQUIRED (rule 7), unlike a note's. */
 function parseNoteVersionMeta(raw: Record<string, unknown>): Omit<ExportNoteVersion, "snapshot"> {
   const noteId = nonEmptyStr(raw.noteId, "noteId");
@@ -1541,6 +1615,7 @@ interface Collections {
   noteVersions: Bucket<Omit<ExportNoteVersion, "snapshot">>;
   noteTemplates: Bucket<ExportNoteTemplate>;
   dashboardSettings: Bucket<ExportDashboardSettings>;
+  dashboardWidgets: Bucket<ExportDashboardWidget>;
 }
 
 function newCollections(): Collections {
@@ -1553,7 +1628,7 @@ function newCollections(): Collections {
     reviewLog: newBucket(), plans: newBucket(), blocks: newBucket(), focusSessions: newBucket(),
     notifications: newBucket(), noteFolders: newBucket(), noteTags: newBucket(), notes: newBucket(),
     noteTagLinks: newBucket(), noteAttachments: newBucket(), noteVersions: newBucket(),
-    noteTemplates: newBucket(), dashboardSettings: newBucket(),
+    noteTemplates: newBucket(), dashboardSettings: newBucket(), dashboardWidgets: newBucket(),
   };
 }
 
@@ -1735,6 +1810,14 @@ function dispatchRecord(
     case "dashboard-settings": {
       const row = parseDashboardSettings(raw);
       pushRow(collections.dashboardSettings, row.profileId, row, type, path, line, ctx);
+      return;
+    }
+    // A PLACEMENT's identity is its own `instanceId` (migration 032's PRIMARY
+    // KEY) — the same widget legitimately appears twice in one layout, so
+    // keying on `widgetId` would call a deliberate arrangement a duplicate.
+    case "dashboard-widget": {
+      const row = parseDashboardWidget(raw);
+      pushRow(collections.dashboardWidgets, row.instanceId, row, type, path, line, ctx);
       return;
     }
   }
@@ -2878,6 +2961,11 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         // and a restore reads that emptiness as "leave the profile on the
         // dashboard's own defaults", which is exactly where it was.
         dashboardSettings: rowsOf(collections.dashboardSettings),
+        // Empty both for a pre-1.11.0 archive and for a profile that never
+        // rearranged its dashboard — indistinguishable on purpose, because they
+        // mean the same thing: the default arrangement (`DashboardWidgetStore`
+        // is get-or-default, so "no rows" IS that arrangement).
+        dashboardWidgets: rowsOf(collections.dashboardWidgets),
       };
 
   return { problems, manifest, data, dropped: drops };

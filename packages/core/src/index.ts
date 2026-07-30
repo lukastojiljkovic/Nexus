@@ -106,6 +106,7 @@ export type {
   ExportBinaryEntry,
   ExportCard,
   ExportDashboardSettings,
+  ExportDashboardWidget,
   ExportDeck,
   ExportDocument,
   ExportEvent,

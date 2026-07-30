@@ -185,6 +185,15 @@ const ID_MINTERS: Record<keyof ProfileData, (data: ProfileData, ctx: PlanContext
   // Not imported (the remap literal plans an empty array): the dashboard
   // background and dim are the TARGET user's preferences, not the archive's.
   dashboardSettings: NO_IDS,
+  // The layout, unlike the background, IS content: a placement is a row among
+  // rows, so it imports on the same additive terms as everything else — a fresh
+  // instance id each, appended to whatever the target already had. Nothing
+  // INSIDE a placement is remapped: `widgetId` names a code constant published
+  // by a module manifest (migration 032 declares no foreign key for it), and
+  // `config` is opaque JSON no part of this build interprets.
+  dashboardWidgets: (data, ctx) => {
+    for (const widget of data.dashboardWidgets) mint(widget.instanceId, ctx);
+  },
   events: (data, ctx) => mintAll(data.events, ctx),
   documents: (data, ctx) => mintAll(data.documents, ctx),
   renewals: (data, ctx) => mintAll(data.renewals, ctx),
@@ -528,6 +537,16 @@ export function planForeignImport(
     // ADR-043: the dashboard background and dim are the TARGET user's own
     // preferences — an import must not redecorate their home.
     dashboardSettings: [],
+    // The layout imports, minted and re-stamped like every other row. Its
+    // `position` rides along unchanged: a position is a sort key relative to
+    // its own scope, and the target's existing placements keep theirs, so the
+    // two runs interleave by number rather than one landing on top of the
+    // other. `widgetId` and `config` are copied verbatim — see `ID_MINTERS`.
+    dashboardWidgets: source.dashboardWidgets.map((row) => ({
+      ...row,
+      instanceId: mapped(row.instanceId, ctx),
+      profileId: target.profileId,
+    })),
   };
 
   return {

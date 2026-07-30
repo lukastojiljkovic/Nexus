@@ -10,6 +10,8 @@ export {
   CardNotFoundError,
   CardValidationError,
   DashboardSettingsValidationError,
+  DashboardWidgetNotFoundError,
+  DashboardWidgetValidationError,
   DatabaseError,
   DatabaseKeyError,
   DatabaseLockedError,
@@ -70,6 +72,17 @@ export {
   MAX_BACKGROUND_DIM,
 } from "./dashboard/dashboardSettingsStore.js";
 export type { DashboardSettings } from "./dashboard/dashboardSettingsStore.js";
+
+export {
+  DashboardWidgetStore,
+  DASHBOARD_WIDGET_SIZES,
+  DEFAULT_DASHBOARD_LAYOUT,
+} from "./dashboard/dashboardWidgetStore.js";
+export type {
+  DashboardWidget,
+  DashboardWidgetInstance,
+  DashboardWidgetSize,
+} from "./dashboard/dashboardWidgetStore.js";
 
 export {
   TaskStore,

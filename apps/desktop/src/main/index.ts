@@ -38,6 +38,7 @@ import {
   CARD_RATINGS,
   CardStore,
   DashboardSettingsStore,
+  DashboardWidgetStore,
   DatabaseLockedError,
   DeckStore,
   DOCUMENT_TYPES,
@@ -242,6 +243,8 @@ import {
   type AuthStatus,
   type DashboardPickResult,
   type DashboardSettings,
+  type DashboardWidgetInstance,
+  type DashboardWidgetSize,
   type ExportResult,
   type FlagState,
   type ImportApplyResult,
@@ -1196,6 +1199,16 @@ function asPersonKind(value: unknown, field: string): PersonKind {
   throw new Error(`Invalid IPC payload: "${field}" is not a valid person kind.`);
 }
 
+/**
+ * A dashboard widget's size preset (ADR-045), checked against the closed domain
+ * migration 032's CHECK also holds. Required and explicit — there is no size
+ * this handler may pick on the user's behalf.
+ */
+function asDashboardWidgetSize(value: unknown, field: string): DashboardWidgetSize {
+  if (value === "S" || value === "M" || value === "L") return value;
+  throw new Error(`Invalid IPC payload: "${field}" must be "S", "M" or "L".`);
+}
+
 /** An integer field inside an inclusive structural range — the per-column halves of a person's yearless date. */
 function asBoundedInteger(value: unknown, field: string, min: number, max: number): number {
   const int = asInteger(value, field);
@@ -1915,6 +1928,10 @@ function dashboardSettingsStore(profileId: string): DashboardSettingsStore {
   return new DashboardSettingsStore(requireDb().raw, profileId);
 }
 
+function dashboardWidgetStore(profileId: string): DashboardWidgetStore {
+  return new DashboardWidgetStore(requireDb().raw, profileId);
+}
+
 // --- Search (ADR-021): the query pipeline -----------------------------------
 //
 // Extracted as named functions rather than closures inside `ipcMain.handle`,
@@ -2592,6 +2609,7 @@ function restoreDeps(): ImportDeps {
       runningFocusSessions.delete(profileId);
     },
     dashboardSettingsStore,
+    dashboardWidgetStore,
     saveBlob: (bytes) => saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes),
     // Injected rather than reached for, so `restore.ts` never has to know WHICH
     // tables reference a blob — that union lives in exactly one place
@@ -4353,6 +4371,82 @@ function registerIpc(): void {
     return dashboardSettingsStore(profileId).setDim(dim, new Date().toISOString());
   });
 
+  // Dashboard layout (DASH-002 / ADR-045). SEC-EL-02 as everywhere else:
+  // `assertTrustedSender` first, every field through an `as*` validator, and
+  // every `now` stamped from main's own clock. Each answers with the WHOLE
+  // resulting layout — a mutation can re-space its neighbours, so a reply naming
+  // only the touched row would leave the renderer holding a stale order.
+  ipcMain.handle(
+    IpcChannel.dashboardWidgetsList,
+    (event, payload): DashboardWidgetInstance[] => {
+      assertTrustedSender(event);
+      const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+      return dashboardWidgetStore(profileId).listLayout();
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannel.dashboardWidgetsAdd,
+    (event, payload): DashboardWidgetInstance[] => {
+      assertTrustedSender(event);
+      const body = asRecord(payload);
+      const profileId = asNonEmptyString(body.profileId, "profileId");
+      // Structural here, semantic in the store (SEC-EL-02's usual split): the
+      // `moduleId:widgetId` slug rule is `DashboardWidgetStore`'s, and which
+      // widgets actually EXIST is neither's — that catalogue lives in the module
+      // manifests, and a layout deliberately keeps placements this build cannot
+      // draw (migration 032).
+      const widgetId = asNonEmptyString(body.widgetId, "widgetId");
+      const size = asDashboardWidgetSize(body.size, "size");
+      return dashboardWidgetStore(profileId).add(widgetId, size, new Date().toISOString());
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannel.dashboardWidgetsRemove,
+    (event, payload): DashboardWidgetInstance[] => {
+      assertTrustedSender(event);
+      const body = asRecord(payload);
+      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const instanceId = asNonEmptyString(body.instanceId, "instanceId");
+      return dashboardWidgetStore(profileId).remove(instanceId, new Date().toISOString());
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannel.dashboardWidgetsSetSize,
+    (event, payload): DashboardWidgetInstance[] => {
+      assertTrustedSender(event);
+      const body = asRecord(payload);
+      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const instanceId = asNonEmptyString(body.instanceId, "instanceId");
+      const size = asDashboardWidgetSize(body.size, "size");
+      return dashboardWidgetStore(profileId).setSize(
+        instanceId,
+        size,
+        new Date().toISOString(),
+      );
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannel.dashboardWidgetsMove,
+    (event, payload): DashboardWidgetInstance[] => {
+      assertTrustedSender(event);
+      const body = asRecord(payload);
+      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const instanceId = asNonEmptyString(body.instanceId, "instanceId");
+      const beforeId = asNullableString(body.beforeId, "beforeId");
+      const afterId = asNullableString(body.afterId, "afterId");
+      return dashboardWidgetStore(profileId).move(
+        instanceId,
+        beforeId,
+        afterId,
+        new Date().toISOString(),
+      );
+    },
+  );
+
   // Global search (ADR-021 / PRD 08 SRCH-001/002): `runSearchQuery`/
   // `runRecentSearch` own the actual pipeline (see their doc comments) so the
   // smoke rehearsal can call the exact same code the renderer does.
@@ -4436,6 +4530,7 @@ function registerIpc(): void {
         noteTemplateStore,
         noteAttachmentStore,
         dashboardSettingsStore,
+        dashboardWidgetStore,
         readBlob: (sha256) => readBlob(blobStorePathsFor(), requireBlobKeys(), sha256),
         flagStore,
         getMainWindow: () => mainWindow,

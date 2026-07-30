@@ -14,6 +14,7 @@ import type {
 import {
   CardStore,
   DashboardSettingsStore,
+  DashboardWidgetStore,
   DeckStore,
   DocumentStore,
   EventStore,
@@ -113,6 +114,7 @@ function emptyProfileData(): ProfileData {
     noteAttachments: [],
     noteVersions: [],
     dashboardSettings: [],
+    dashboardWidgets: [],
   };
 }
 
@@ -651,6 +653,33 @@ describe("ForeignImportStore", () => {
       // The target's own dashboard row is what the app still reads: absent means
       // the defaults, which is exactly what it meant before the import.
       expect(new DashboardSettingsStore(db.raw, target).get().backgroundHash).toBeNull();
+    });
+
+    // The LAYOUT is the one dashboard thing that DOES import (ADR-045): a
+    // placement is content, so it arrives additively beside whatever the target
+    // already had, `widget_id` and `config` copied verbatim.
+    it("does write the dashboard layout, additively and under this profile", () => {
+      const target = createProfile("Odredište");
+      const t = "2026-01-01T00:00:00.000Z";
+      const planned: ProfileData = {
+        ...emptyProfileData(),
+        dashboardWidgets: [
+          {
+            instanceId: "dw-imported", profileId: "ignored", widgetId: "finance:budzet",
+            size: "S", position: 4096, config: '{"a":1}', createdAt: t, updatedAt: t,
+          },
+        ],
+      };
+
+      const written = new ForeignImportStore(db.raw, target).insertPlanned(planned, new Map(), NOW);
+
+      expect(written).toBe(1);
+      expect(new DashboardWidgetStore(db.raw, target).listAll()).toEqual([
+        {
+          instanceId: "dw-imported", profileId: target, widgetId: "finance:budzet",
+          size: "S", position: 4096, config: '{"a":1}', createdAt: t, updatedAt: t,
+        },
+      ]);
     });
 
     it("refuses a task that names no list", () => {

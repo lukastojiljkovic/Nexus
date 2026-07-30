@@ -30,6 +30,7 @@ import type { RestoredNoteDerived } from "@nexus/db";
 import type {
   CardStore,
   DashboardSettingsStore,
+  DashboardWidgetStore,
   DeckStore,
   DocumentStore,
   EventStore,
@@ -81,6 +82,7 @@ export interface ProfileDataDeps {
   noteAttachmentStore(profileId: string): NoteAttachmentStore;
   flagStore(profileId: string): SqliteFlagStore;
   dashboardSettingsStore(profileId: string): DashboardSettingsStore;
+  dashboardWidgetStore(profileId: string): DashboardWidgetStore;
 }
 
 /** Every NOTE-module row `ProfileData` requires (ADR-022 section 3) — `gatherNotes`'s return shape. */
@@ -219,6 +221,14 @@ export function gatherProfileData(deps: ProfileDataDeps, profileId: string): Pro
     // says the same thing out loud — and makes the undo snapshot able to put
     // back a dim the user had set, which an omission could not.
     dashboardSettings: [{ profileId, ...deps.dashboardSettingsStore(profileId).get() }],
+    // The STORED rows, not the resolved layout — the opposite choice from the
+    // settings row above, and for the opposite reason (ADR-045). A profile that
+    // never rearranged its dashboard has no rows, and that emptiness is itself
+    // the fact worth carrying: it says "on the default arrangement", so a
+    // restore leaves the target there and a later change to the default still
+    // reaches it. Writing out the resolved five instead would silently freeze
+    // every profile onto today's default the first time it was backed up.
+    dashboardWidgets: deps.dashboardWidgetStore(profileId).listAll(),
   };
 }
 

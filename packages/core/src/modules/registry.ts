@@ -1,8 +1,12 @@
+import type { WidgetContract } from "../contracts/widgets.js";
 import {
   MODULE_CATEGORIES,
   type ModuleCategory,
   type ModuleManifest,
 } from "./manifest.js";
+
+/** No widgets, shared rather than allocated per call — `widgetsOf` answers this for most modules. */
+const NO_WIDGETS: readonly WidgetContract[] = [];
 
 /**
  * Holds the compiled-in module manifests (ADR-008 static registry). Instances
@@ -34,6 +38,39 @@ export class ModuleRegistry {
   /** All registered manifests, in registration order. */
   all(): readonly ModuleManifest[] {
     return this.order;
+  }
+
+  /**
+   * The widgets one module publishes, in manifest order — empty for a module
+   * that publishes none, and for an id nobody registered. The two are one answer
+   * on purpose: "this module has no widgets" is what a caller building a gallery
+   * needs either way, and a missing module is `get`'s question, not this one.
+   */
+  widgetsOf(moduleId: string): readonly WidgetContract[] {
+    return this.byId.get(moduleId)?.widgets ?? NO_WIDGETS;
+  }
+
+  /**
+   * Resolves a QUALIFIED widget id — `moduleId:widgetId`, exactly as a stored
+   * layout row spells it (migration 032 / ADR-045) — or `undefined` when this
+   * build publishes no such widget.
+   *
+   * `undefined` is an ordinary answer here, not an error: a layout keeps rows
+   * for widgets whose module was dropped from the build or switched off, so the
+   * renderer asks this question about every stored placement and simply draws
+   * nothing for the ones it cannot resolve.
+   *
+   * Split at the FIRST colon, because a module id never contains one and a
+   * widget id is defined not to (`WidgetContract.id`) — so anything after a
+   * second colon could only be a malformed id, which resolves to nothing.
+   */
+  findWidget(qualifiedId: string): WidgetContract | undefined {
+    const separator = qualifiedId.indexOf(":");
+    if (separator <= 0) return undefined;
+    const widgetId = qualifiedId.slice(separator + 1);
+    return this.widgetsOf(qualifiedId.slice(0, separator)).find(
+      (widget) => widget.id === widgetId,
+    );
   }
 
   /**

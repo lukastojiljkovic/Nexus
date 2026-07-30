@@ -184,6 +184,11 @@ export const IpcChannel = {
   dashboardPickBackground: "dashboard:pick-background",
   dashboardClearBackground: "dashboard:clear-background",
   dashboardSetDim: "dashboard:set-dim",
+  dashboardWidgetsList: "dashboard:widgets-list",
+  dashboardWidgetsAdd: "dashboard:widgets-add",
+  dashboardWidgetsRemove: "dashboard:widgets-remove",
+  dashboardWidgetsSetSize: "dashboard:widgets-set-size",
+  dashboardWidgetsMove: "dashboard:widgets-move",
   searchQuery: "search:query",
   searchRecent: "search:recent",
   searchPage: "search:page",
@@ -2408,6 +2413,87 @@ export interface DashboardSetDimRequest {
 }
 
 /**
+ * The dashboard's widget layout (DASH-002 / ADR-045, migration 032). Five
+ * channels, all of them answering with the WHOLE resulting layout rather than
+ * with the row they touched: a layout is an ordered list, every mutation can
+ * re-space its neighbours, and a renderer that patched one entry locally would
+ * be one renumber away from disagreeing with what is stored.
+ */
+
+/** How many columns the layout grid has. A size preset spans a whole number of these — see `DASHBOARD_WIDGET_SPANS`. */
+export const DASHBOARD_GRID_COLUMNS = 6;
+
+/**
+ * The size presets a placed widget may take. MUST equal
+ * `DASHBOARD_WIDGET_SIZES` in `@nexus/db`, `WidgetSize` in `@nexus/core` and
+ * migration 032's CHECK: one domain, declared on each side so none imports
+ * another.
+ */
+export type DashboardWidgetSize = "S" | "M" | "L";
+
+/**
+ * How many of `DASHBOARD_GRID_COLUMNS` each preset spans: a third, a half, the
+ * full width. Presets rather than a free resize (PRD 02 DASH OQ#1) — three
+ * widths that always tile cleanly beat a drag handle that produces layouts
+ * nothing can lay out.
+ */
+export const DASHBOARD_WIDGET_SPANS: Record<DashboardWidgetSize, number> = {
+  S: 2,
+  M: 3,
+  L: 6,
+};
+
+/**
+ * One entry of the layout, in the order it is drawn — the array's own order IS
+ * the position, so no sort key crosses IPC.
+ *
+ * `widgetId` is a `moduleId:widgetId` id a module's manifest publishes
+ * (`ModuleRegistry.findWidget` resolves one). A layout deliberately KEEPS
+ * entries whose widget this build does not publish, or whose module is switched
+ * off — a placement must survive a flag being toggled and come back when it is
+ * toggled again — so the renderer is what filters, and an unresolvable entry
+ * simply draws nothing.
+ */
+export interface DashboardWidgetInstance {
+  /** This PLACEMENT's identity; the same widget may be placed more than once. */
+  instanceId: string;
+  widgetId: string;
+  size: DashboardWidgetSize;
+  /** Per-widget JSON text, or null. Opaque: no widget publishes a config schema yet. */
+  config: string | null;
+}
+
+export interface DashboardWidgetsListRequest {
+  profileId: string;
+}
+
+/** Places a widget at the end of the layout. No `config`: nothing configures a widget yet. */
+export interface DashboardWidgetsAddRequest {
+  profileId: string;
+  widgetId: string;
+  size: DashboardWidgetSize;
+}
+
+export interface DashboardWidgetsRemoveRequest {
+  profileId: string;
+  instanceId: string;
+}
+
+export interface DashboardWidgetsSetSizeRequest {
+  profileId: string;
+  instanceId: string;
+  size: DashboardWidgetSize;
+}
+
+/** Re-orders one placement: `beforeId`/`afterId` are the placements it lands between, either null at an end — the pair API `task-lists:move` established. */
+export interface DashboardWidgetsMoveRequest {
+  profileId: string;
+  instanceId: string;
+  beforeId: string | null;
+  afterId: string | null;
+}
+
+/**
  * Global search (ADR-021 / PRD 08 SRCH-001/002). The index itself (migration
  * 017) and its read-only store already exist; these three channels are the
  * palette's entire main-process surface: a typed query, the recency-ordered
@@ -2790,7 +2876,8 @@ export type ImportRecordType =
   | "note-attachment"
   | "note-version"
   | "note-template"
-  | "dashboard-settings";
+  | "dashboard-settings"
+  | "dashboard-widget";
 
 /**
  * Why rows the archive carried are not in the plan. Mirrors `@nexus/core`'s
@@ -3283,6 +3370,45 @@ export interface NexusApi {
   clearDashboardBackground(profileId: string): Promise<DashboardSettings>;
   /** Sets how far the scrim dims the image, 0..`MAX_BACKGROUND_DIM`. */
   setDashboardDim(profileId: string, dim: number): Promise<DashboardSettings>;
+  /**
+   * This profile's dashboard layout in draw order (DASH-002 / ADR-045) — the
+   * DEFAULT arrangement while the profile has never rearranged it, which is a
+   * resolved answer and not an empty one. Never writes.
+   */
+  dashboardWidgets(profileId: string): Promise<DashboardWidgetInstance[]>;
+  /**
+   * Places `widgetId` at the end of the layout and answers with the whole
+   * resulting layout. The first mutation of a profile still on the default
+   * writes that default out as real rows first, so adding a sixth widget never
+   * costs the five that were there.
+   */
+  addDashboardWidget(
+    profileId: string,
+    widgetId: string,
+    size: DashboardWidgetSize,
+  ): Promise<DashboardWidgetInstance[]>;
+  /**
+   * Removes one placement, answering with the resulting layout. Removing the
+   * LAST one puts the default arrangement back: no rows IS the default, so
+   * "remove everything" is also how a user resets.
+   */
+  removeDashboardWidget(
+    profileId: string,
+    instanceId: string,
+  ): Promise<DashboardWidgetInstance[]>;
+  /** Changes one placement's size preset, leaving its place in the order alone. */
+  setDashboardWidgetSize(
+    profileId: string,
+    instanceId: string,
+    size: DashboardWidgetSize,
+  ): Promise<DashboardWidgetInstance[]>;
+  /** Re-orders one placement between two others, either null at an end of the layout. */
+  moveDashboardWidget(
+    profileId: string,
+    instanceId: string,
+    beforeId: string | null,
+    afterId: string | null,
+  ): Promise<DashboardWidgetInstance[]>;
   /** Runs the query pipeline (parse -> FTS match -> bm25 candidates -> rank), falling back to `searchRecent`'s order when the query has no matchable terms (ADR-021). */
   searchQuery(profileId: string, query: string, limit: number): Promise<SearchResult[]>;
   /** The profile's most recently touched entries, already in their final order — no ranking pass, unlike `searchQuery`. */

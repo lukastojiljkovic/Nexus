@@ -1,7 +1,14 @@
 import { MODULE_CATEGORIES, resolveEnabled } from "@nexus/core";
+// The one place a renderer file names `@nexus/db`, and it is a TEST: the
+// default dashboard layout is a db constant (`DashboardWidgetStore`) whose
+// entries name widgets these manifests publish, and nothing else in the build
+// can see both halves of that pairing. The renderer's own code still reaches
+// the database only through main's IPC allowlist.
+import { DEFAULT_DASHBOARD_LAYOUT } from "@nexus/db";
 import { describe, expect, it } from "vitest";
 
 import { createModuleRegistry } from "./modules.js";
+import { strings } from "./strings.js";
 
 /**
  * `modules.ts` is the renderer's one declaration of which modules exist
@@ -76,5 +83,63 @@ describe("createModuleRegistry", () => {
       "study",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
+  });
+});
+
+describe("the widgets the v0 modules publish (ADR-045)", () => {
+  it("publishes today's five dashboard cards, each owned by the module it opens", () => {
+    const registry = createModuleRegistry();
+    expect(registry.widgetsOf("calendar").map((widget) => widget.id)).toEqual([
+      "danas",
+      "isticanja",
+    ]);
+    expect(registry.widgetsOf("tasks").map((widget) => widget.id)).toEqual(["predstojece"]);
+    expect(registry.widgetsOf("study").map((widget) => widget.id)).toEqual(["ispiti", "ucenje"]);
+  });
+
+  it("resolves every widget of the DEFAULT layout — a new profile must not open onto blanks", () => {
+    const registry = createModuleRegistry();
+    for (const entry of DEFAULT_DASHBOARD_LAYOUT) {
+      const widget = registry.findWidget(entry.widgetId);
+      expect(widget, entry.widgetId).toBeDefined();
+      // A default placement must also be a size its widget actually accepts.
+      expect(widget?.sizes, entry.widgetId).toContain(entry.size);
+    }
+  });
+
+  it("keeps every widget id an ASCII slug and every deep link a registered module", () => {
+    const registry = createModuleRegistry();
+    const moduleIds = new Set(registry.all().map((manifest) => manifest.id));
+    for (const manifest of registry.all()) {
+      for (const widget of registry.widgetsOf(manifest.id)) {
+        // An id ends up in `dashboard_widgets.widget_id` as `moduleId:widgetId`;
+        // it is a key, never a label, so no diacritics and no colon of its own.
+        expect(widget.id, widget.id).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+        expect(moduleIds, widget.id).toContain(widget.deepLink);
+        expect(widget.sizes.length, widget.id).toBeGreaterThan(0);
+        // `title` is a strings KEY path, not Serbian copy (WidgetContract).
+        expect(widget.title, widget.id).toMatch(/^[a-zA-Z]+(?:\.[a-zA-Z]+)+$/);
+      }
+    }
+  });
+
+  it("names a string that really exists for every widget title", () => {
+    // The convention is only worth anything if the key resolves: a title that
+    // named nothing would render as the raw path the day slice b draws it.
+    const registry = createModuleRegistry();
+    for (const manifest of registry.all()) {
+      for (const widget of registry.widgetsOf(manifest.id)) {
+        const resolved = widget.title
+          .split(".")
+          .reduce<unknown>(
+            (node, key) =>
+              typeof node === "object" && node !== null
+                ? (node as Record<string, unknown>)[key]
+                : undefined,
+            strings,
+          );
+        expect(typeof resolved, widget.title).toBe("string");
+      }
+    }
   });
 });

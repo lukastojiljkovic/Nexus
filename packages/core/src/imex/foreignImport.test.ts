@@ -56,7 +56,7 @@ function emptyProfileData(): ProfileData {
     focusSessions: [], notifications: [],
     notes: [], noteFolders: [], noteTags: [], noteTagLinks: [], noteTemplates: [],
     noteAttachments: [], noteVersions: [],
-    dashboardSettings: [],
+    dashboardSettings: [], dashboardWidgets: [],
   };
 }
 
@@ -695,6 +695,42 @@ describe("planForeignImport — task attachments, templates, dependencies, dashb
       code: "dashboard-settings-not-imported", module: "dashboard", type: "dashboard-settings", count: 1,
     });
     expect(result.report.modules.dashboard).toEqual({ parsed: 1, imported: 0, merged: 0, skipped: 1 });
+  });
+
+  // The LAYOUT is content, unlike the background above: a placement is a row
+  // among rows, so it imports additively with a fresh instance id (ADR-045).
+  it("imports the layout under minted instance ids, copying widget id and config verbatim", () => {
+    const t = "2026-07-01T00:00:00.000Z";
+    const data = {
+      ...withTaskExtras(),
+      dashboardWidgets: [
+        {
+          instanceId: "src-dw1", profileId: "src", widgetId: "calendar:danas", size: "L",
+          position: 1024, config: '{"limit":3}', createdAt: t, updatedAt: t,
+        },
+        {
+          instanceId: "src-dw2", profileId: "src", widgetId: "finance:budzet", size: "S",
+          position: 2048, config: null, createdAt: t, updatedAt: t,
+        },
+      ],
+    };
+    const result = plan(data);
+
+    expect(result.data.dashboardWidgets).toHaveLength(2);
+    for (const row of result.data.dashboardWidgets) {
+      expect(row.instanceId).not.toBe("src-dw1");
+      expect(row.instanceId).not.toBe("src-dw2");
+      expect(row.profileId).toBe("target-profile");
+    }
+    // Nothing INSIDE a placement is remapped: `widgetId` names a code constant
+    // and `config` is opaque, so both cross unchanged — as does `position`.
+    expect(result.data.dashboardWidgets.map((row) => [row.widgetId, row.size, row.position, row.config])).toEqual([
+      ["calendar:danas", "L", 1024, '{"limit":3}'],
+      ["finance:budzet", "S", 2048, null],
+    ]);
+    expect(result.report.modules.dashboard).toEqual({
+      parsed: 2, imported: 2, merged: 0, skipped: 0,
+    });
   });
 
   it("remaps a folder's default template and clears its capture claim exactly when the target already claims one", () => {

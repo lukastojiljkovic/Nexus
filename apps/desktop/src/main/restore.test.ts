@@ -21,6 +21,7 @@ import { deriveArchiveKey, generateSalt } from "@nexus/core/auth";
 import {
   CardStore,
   DashboardSettingsStore,
+  DashboardWidgetStore,
   DeckStore,
   DocumentStore,
   EventStore,
@@ -162,6 +163,7 @@ function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
     noteAttachmentStore: (profileId) => new NoteAttachmentStore(handle.raw, profileId),
     flagStore: (profileId) => new SqliteFlagStore(handle.raw, profileId),
     dashboardSettingsStore: (profileId) => new DashboardSettingsStore(handle.raw, profileId),
+    dashboardWidgetStore: (profileId) => new DashboardWidgetStore(handle.raw, profileId),
   };
 }
 
@@ -322,6 +324,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   const templateStore = new NoteTemplateStore(handle.raw, profileId);
   const taskTemplateStore = new TaskTemplateStore(handle.raw, profileId);
   const dashboardStore = new DashboardSettingsStore(handle.raw, profileId);
+  const dashboardWidgetStore = new DashboardWidgetStore(handle.raw, profileId);
 
   // A real list with a section, and the task filed inside it (TASK-004), so the
   // zip round trip carries a task's placement and not just the Inbox default.
@@ -433,6 +436,9 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   dashboardStore.setBackground("a".repeat(64), "image/png", 1, t0); // replaced below; proves a re-pick keeps the dim
   dashboardStore.setDim(70, t0);
   dashboardStore.setBackground(backgroundSha, "image/png", backgroundBytes.length, t0);
+  // ADR-045: a rearranged layout, so the fixture carries real widget rows —
+  // adding one materializes the default five beside it.
+  dashboardWidgetStore.add("study:ispiti", "L", t0);
 
   const taskLists = taskListStore.listActive();
   const data: ProfileData = {
@@ -474,6 +480,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
       snapshot: noteStore.loadVersion(note.id, version.coveredSeq),
     })),
     dashboardSettings: [{ profileId, ...dashboardStore.get() }],
+    dashboardWidgets: dashboardWidgetStore.listAll(),
   };
 
   const derived = deriveRestoredNotes(data.notes);

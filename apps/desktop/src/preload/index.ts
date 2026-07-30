@@ -328,6 +328,21 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.dashboardClearBackground, { profileId }),
   setDashboardDim: (profileId, dim) =>
     ipcRenderer.invoke(IpcChannel.dashboardSetDim, { profileId, dim }),
+  dashboardWidgets: (profileId) =>
+    ipcRenderer.invoke(IpcChannel.dashboardWidgetsList, { profileId }),
+  addDashboardWidget: (profileId, widgetId, size) =>
+    ipcRenderer.invoke(IpcChannel.dashboardWidgetsAdd, { profileId, widgetId, size }),
+  removeDashboardWidget: (profileId, instanceId) =>
+    ipcRenderer.invoke(IpcChannel.dashboardWidgetsRemove, { profileId, instanceId }),
+  setDashboardWidgetSize: (profileId, instanceId, size) =>
+    ipcRenderer.invoke(IpcChannel.dashboardWidgetsSetSize, { profileId, instanceId, size }),
+  moveDashboardWidget: (profileId, instanceId, beforeId, afterId) =>
+    ipcRenderer.invoke(IpcChannel.dashboardWidgetsMove, {
+      profileId,
+      instanceId,
+      beforeId,
+      afterId,
+    }),
   searchQuery: (profileId, query, limit) =>
     ipcRenderer.invoke(IpcChannel.searchQuery, { profileId, query, limit }),
   searchRecent: (profileId, limit) =>

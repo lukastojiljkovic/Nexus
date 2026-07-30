@@ -16,8 +16,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 31 (first-class cloze cards), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(31);
+  it("is at version 32 (dashboard widget layout), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(32);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -3326,6 +3326,97 @@ describe("migration 031 — first-class cloze cards", () => {
     expect(triggers).toContain("cards_search_ai");
     expect(triggers).toContain("cards_search_au");
     expect(triggers).toContain("cards_search_ad");
+    db.close();
+  });
+});
+
+describe("migration 032 — dashboard widgets", () => {
+  const now = () => new Date().toISOString();
+
+  const insertWidget = (
+    db: NexusDatabase,
+    instanceId: string,
+    profileId: string,
+    widgetId: string,
+    size: string,
+    position: number,
+    config: string | null = null,
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO dashboard_widgets
+           (profile_id, instance_id, widget_id, size, position, config, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(profileId, instanceId, widgetId, size, position, config, now(), now());
+
+  it("creates the dashboard_widgets table and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    expect(tableNames(db)).toContain("dashboard_widgets");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("creates the dashboard_widgets_profile_position index", () => {
+    const db = openDatabase({ path: join(dir, "index.db") });
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("dashboard_widgets_profile_position");
+    db.close();
+  });
+
+  it("rejects a size outside the closed set with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-size.db") });
+    insertProfile(db, "p1");
+    // an unlisted preset -> rejected by the CHECK.
+    expect(() => insertWidget(db, "w1", "p1", "calendar:danas", "XL", 1024)).toThrow();
+    // each enumerated preset is accepted.
+    expect(() => insertWidget(db, "w2", "p1", "calendar:danas", "S", 1024)).not.toThrow();
+    expect(() => insertWidget(db, "w3", "p1", "calendar:danas", "M", 2048)).not.toThrow();
+    expect(() => insertWidget(db, "w4", "p1", "calendar:danas", "L", 3072)).not.toThrow();
+    db.close();
+  });
+
+  it("enforces instance_id as the primary key while allowing the same widget twice", () => {
+    const db = openDatabase({ path: join(dir, "unique-instance.db") });
+    insertProfile(db, "p1");
+    insertWidget(db, "w1", "p1", "calendar:danas", "M", 1024);
+    // The same PLACEMENT id collides...
+    expect(() => insertWidget(db, "w1", "p1", "study:ispiti", "M", 2048)).toThrow();
+    // ...while the same widget placed a second time is a layout, not a mistake.
+    expect(() => insertWidget(db, "w2", "p1", "calendar:danas", "L", 2048)).not.toThrow();
+    db.close();
+  });
+
+  it("accepts a widget_id no module publishes — it is a code constant, not a foreign key", () => {
+    const db = openDatabase({ path: join(dir, "no-fk.db") });
+    insertProfile(db, "p1");
+    // A layout is the user's: a widget whose module this build does not carry
+    // keeps its row rather than vanishing from the table (migration 028's
+    // argument for `default_template_id`).
+    expect(() => insertWidget(db, "w1", "p1", "finance:budzet", "M", 1024)).not.toThrow();
+    db.close();
+  });
+
+  it("accepts a negative position — a sort key is relative, never a count", () => {
+    const db = openDatabase({ path: join(dir, "negative-position.db") });
+    insertProfile(db, "p1");
+    expect(() => insertWidget(db, "w1", "p1", "calendar:danas", "M", -1024)).not.toThrow();
+    db.close();
+  });
+
+  it("cascades widget deletion when the owning profile is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade-profile.db") });
+    insertProfile(db, "p1");
+    insertWidget(db, "w1", "p1", "calendar:danas", "M", 1024);
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM dashboard_widgets").get() as { n: number }).n,
+    ).toBe(0);
     db.close();
   });
 });

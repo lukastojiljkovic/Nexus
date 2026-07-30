@@ -80,6 +80,7 @@ function emptyExportInput(): ExportArchiveInput {
       noteAttachments: [],
       noteVersions: [],
       dashboardSettings: [],
+      dashboardWidgets: [],
     },
     hash: sha256,
   };
@@ -372,6 +373,26 @@ function richProfileData(): ProfileData {
         backgroundSizeBytes: 10, backgroundDim: 65,
       },
     ],
+    // A rearranged layout (ADR-045): the same widget placed twice at different
+    // sizes — a layout, not a mistake — plus one carrying config, so the round
+    // trip proves the opaque JSON survives verbatim.
+    dashboardWidgets: [
+      {
+        instanceId: "dw-1", profileId: "profile1", widgetId: "calendar:danas", size: "L",
+        position: 1024, config: null,
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-02T00:00:00.000Z",
+      },
+      {
+        instanceId: "dw-2", profileId: "profile1", widgetId: "study:ispiti", size: "S",
+        position: 2048, config: '{"limit":3}',
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+      {
+        instanceId: "dw-3", profileId: "profile1", widgetId: "calendar:danas", size: "S",
+        position: 3072, config: null,
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+    ],
   };
 }
 
@@ -546,12 +567,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.11.0`: the nearest minor strictly ahead of this build's `1.10.0`.
+  // `1.12.0`: the nearest minor strictly ahead of this build's `1.11.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.11.0" });
+    const files = baseFiles({ schemaVersion: "1.12.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.11.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.12.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -1389,6 +1410,135 @@ describe("parseImportArchive — dashboard settings (migration 030 / ADR-041)", 
   });
 });
 
+describe("parseImportArchive — dashboard widgets (migration 032 / ADR-045)", () => {
+  const T = "2026-07-31T09:00:00.000Z";
+
+  const VALID_WIDGET = {
+    type: "dashboard-widget", instanceId: "dw1", profileId: "profile1",
+    widgetId: "calendar:danas", size: "M", position: 1024, config: null,
+    createdAt: T, updatedAt: T,
+  };
+
+  function parseWidgetFile(rows: readonly Record<string, unknown>[]) {
+    return parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/dashboard.ndjson": ndjson(rows) } })),
+    );
+  }
+
+  it("round-trips a placement", () => {
+    const result = parseWidgetFile([VALID_WIDGET]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.dashboardWidgets).toEqual([
+      {
+        instanceId: "dw1", profileId: "profile1", widgetId: "calendar:danas", size: "M",
+        position: 1024, config: null, createdAt: T, updatedAt: T,
+      },
+    ]);
+  });
+
+  it("accepts every size preset and refuses anything else", () => {
+    for (const size of ["S", "M", "L"]) {
+      expect(parseWidgetFile([{ ...VALID_WIDGET, size }]).problems).toEqual([]);
+    }
+    for (const size of ["XL", "m", "", 3]) {
+      const result = parseWidgetFile([{ ...VALID_WIDGET, size }]);
+      expect(result.problems).toContainEqual({
+        severity: "error", code: "invalid-record", path: "data/dashboard.ndjson", line: 1,
+        detail: "size",
+      });
+      expect(result.data).toBeNull();
+    }
+  });
+
+  // A position is a sort key relative to its scope, never a count — a prepend
+  // legitimately walks below zero (`positionBetween`).
+  it("accepts a negative position and refuses a fractional one", () => {
+    expect(parseWidgetFile([{ ...VALID_WIDGET, position: -2048 }]).problems).toEqual([]);
+    const result = parseWidgetFile([{ ...VALID_WIDGET, position: 1024.5 }]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "invalid-record", path: "data/dashboard.ndjson", line: 1,
+      detail: "position",
+    });
+  });
+
+  // Nothing interprets a widget's config yet, but the column is documented as
+  // JSON and an archive is the one way text could reach it unvetted.
+  it("accepts config that parses as JSON and refuses text that does not", () => {
+    for (const config of ['{"limit":3}', "[]", "null", "42", '"tekst"']) {
+      expect(parseWidgetFile([{ ...VALID_WIDGET, config }]).problems).toEqual([]);
+    }
+    for (const config of ["{limit:3}", "", "  ", 7]) {
+      const result = parseWidgetFile([{ ...VALID_WIDGET, config }]);
+      expect(result.problems).toContainEqual({
+        severity: "error", code: "invalid-record", path: "data/dashboard.ndjson", line: 1,
+        detail: "config",
+      });
+      expect(result.data).toBeNull();
+    }
+  });
+
+  // Which widgets EXIST is the module registry's catalogue, not the parser's:
+  // a layout keeps a placement whose module this build does not carry, so a
+  // well-formed id nobody publishes must restore untouched.
+  it("accepts a well-formed widget id no module publishes, and refuses a malformed one", () => {
+    expect(parseWidgetFile([{ ...VALID_WIDGET, widgetId: "finance:budzet" }]).problems).toEqual([]);
+    for (const widgetId of ["danas", "calendar:danas:extra", "Calendar:Danas", "calendar: danas", ":danas"]) {
+      const result = parseWidgetFile([{ ...VALID_WIDGET, widgetId }]);
+      expect(result.problems).toContainEqual({
+        severity: "error", code: "invalid-record", path: "data/dashboard.ndjson", line: 1,
+        detail: "widgetId",
+      });
+      expect(result.data).toBeNull();
+    }
+  });
+
+  const BAD_WIDGET_ROWS: { name: string; row: Record<string, unknown>; detail: string }[] = [
+    { name: "no instance id", row: { instanceId: undefined }, detail: "instanceId" },
+    { name: "an empty instance id", row: { instanceId: "" }, detail: "instanceId" },
+    { name: "no profile", row: { profileId: undefined }, detail: "profileId" },
+    { name: "no widget id", row: { widgetId: undefined }, detail: "widgetId" },
+    { name: "no position", row: { position: undefined }, detail: "position" },
+    { name: "no created_at", row: { createdAt: undefined }, detail: "createdAt" },
+    { name: "a malformed updated_at", row: { updatedAt: "juče" }, detail: "updatedAt" },
+  ];
+
+  for (const { name, row, detail } of BAD_WIDGET_ROWS) {
+    it(`refuses a widget row with ${name}`, () => {
+      const result = parseWidgetFile([{ ...VALID_WIDGET, ...row }]);
+      expect(result.problems).toContainEqual({
+        severity: "error", code: "invalid-record", path: "data/dashboard.ndjson", line: 1, detail,
+      });
+      expect(result.data).toBeNull();
+    });
+  }
+
+  // A PLACEMENT's identity is its own instance id (migration 032's PRIMARY
+  // KEY) — the same widget twice is a layout, two rows sharing an id is not.
+  it("accepts the same widget placed twice and refuses two rows sharing an instance id", () => {
+    expect(
+      parseWidgetFile([VALID_WIDGET, { ...VALID_WIDGET, instanceId: "dw2", position: 2048 }])
+        .problems,
+    ).toEqual([]);
+
+    const result = parseWidgetFile([VALID_WIDGET, { ...VALID_WIDGET, size: "L" }]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "duplicate-id", path: "data/dashboard.ndjson", line: 2,
+      detail: "dw1",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  it("refuses a widget record filed in another data file", () => {
+    const result = parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/notes.ndjson": ndjson([VALID_WIDGET]) } })),
+    );
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "invalid-record", path: "data/notes.ndjson", line: 1, detail: "type",
+    });
+    expect(result.data).toBeNull();
+  });
+});
+
 describe("parseImportArchive — recurrence (ADR-024)", () => {
   /** The `invalid-record` details a one-row file produced, in discovery order. */
   function detailsFor(path: string, row: Record<string, unknown>): (string | undefined)[] {
@@ -1902,8 +2052,8 @@ describe("parseImportArchive — note folder preferences (the 1.7.0 era gate)", 
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.10.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.10.0");
+  it("is 1.11.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.11.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -1915,7 +2065,7 @@ describe("parseImportArchive — schema version", () => {
   });
 
   it("accepts the exact current version", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.10.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.11.0" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
@@ -1997,17 +2147,27 @@ describe("parseImportArchive — schema version", () => {
     expect(result.data).not.toBeNull();
   });
 
+  // And for the one ADR-045's dashboard layout has just superseded: a 1.10
+  // archive carries no `dashboard-widget` row at all, which is exactly what a
+  // profile that never rearranged its dashboard looks like — hence, again, no
+  // era flag for a whole absent record type.
+  it("accepts an older minor — a 1.10 archive still parses here, the layout empty", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.10.0" })));
+    expect(result.problems).toEqual([]);
+    expect(result.data).toMatchObject({ dashboardWidgets: [] });
+  });
+
   it("accepts a newer patch", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.10.7" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.11.7" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
 
-  // `1.11.0`: the nearest minor strictly ahead of this build's `1.10.0`.
+  // `1.12.0`: the nearest minor strictly ahead of this build's `1.11.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.11.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.12.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.11.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.12.0" },
     ]);
     expect(result.data).toBeNull();
   });

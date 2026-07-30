@@ -484,3 +484,18 @@ export class RestoreValidationError extends DatabaseError {}
  * the bytes itself, a store is never the place that assumes its caller did.
  */
 export class DashboardSettingsValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a dashboard-layout write breaks a rule migration 032's CHECK
+ * cannot express on its own (DASH-002 / ADR-045): a size outside `S`/`M`/`L`, a
+ * widget id that is not a `moduleId:widgetId` slug, a `now` that is not an
+ * ISO-8601 date-time, or a move whose `beforeId`/`afterId` describe no gap at
+ * all — the same two ids, or the two given the wrong way round. Which widgets
+ * EXIST is deliberately not among these: the catalogue lives in the module
+ * manifests, and a layout must be able to hold a placement this build cannot
+ * currently draw.
+ */
+export class DashboardWidgetValidationError extends DatabaseError {}
+
+/** Thrown when a dashboard-layout call names a placement this profile does not have — the moved widget itself, or a neighbour it was to be ordered against. */
+export class DashboardWidgetNotFoundError extends DatabaseError {}
