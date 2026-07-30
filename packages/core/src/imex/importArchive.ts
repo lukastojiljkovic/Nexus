@@ -5,6 +5,7 @@ import type { RecurrenceRule } from "../recurrence/recurrence.js";
 import { renderClozeCard } from "../study/clozeText.js";
 import { DATA_FILES } from "./exportArchive.js";
 import type {
+  ArchiveModuleId,
   ExportCard,
   ExportDashboardSettings,
   ExportDeck,
@@ -97,6 +98,54 @@ export interface ImportManifest {
   blobs: readonly { sha256: string; sizeBytes: number }[];
 }
 
+/**
+ * How strict the reader is about ONE bad row (ADR-043 section 1).
+ *
+ * `"restore"` — the default and the original contract: a restore REPLACES a
+ * profile, so a row it cannot read is data the user is about to lose, and the
+ * only honest answer is to refuse the whole archive and say why.
+ *
+ * `"import"` — a foreign import MERGES an archive into a profile that already
+ * has data, so refusing everything over one damaged row throws away the other
+ * nine thousand good ones. A per-row structural problem is demoted to a
+ * warning, the row is dropped, the drop cascades along references, and every
+ * drop is named in `problems` and counted in `dropped` — salvage, never
+ * silence.
+ *
+ * The GRAMMAR is identical in both: one parser, one set of rules, two
+ * strictness policies. Archive-level problems (bad manifest, bad checksums,
+ * unsupported version, a malformed NDJSON line) stay hard errors in both
+ * modes — a corrupt container is not something to guess at.
+ */
+export type ImportMode = "restore" | "import";
+
+/** The `ImportProblemCode`s that cost a row its place in import mode (see `ImportDrop`). */
+export type ImportDropReason =
+  | "unknown-record-type"
+  | "invalid-record"
+  | "duplicate-id"
+  | "unknown-reference"
+  | "reference-cycle"
+  | "missing-ydoc"
+  | "invalid-ydoc";
+
+/**
+ * One row import mode dropped, in structured form. `problems` already NAMES
+ * every drop (with its path and line) for a person reading a report; this is
+ * the same fact in a shape a planner can count by module without re-parsing
+ * prose — `planForeignImport` folds it straight into `ImportPlanReport`.
+ * Always empty in restore mode, which refuses rather than drops.
+ */
+export interface ImportDrop {
+  /** The manifest module the dropped row belonged to, from the data file it rode in. */
+  module: ArchiveModuleId;
+  /** The record type, or null when the row's own `type` was not one this build knows (the raw string is then in `detail`). */
+  type: ArchiveRecordType | null;
+  reason: ImportDropReason;
+  /** A short English machine-ish detail — the offending field, id or `field=id` reference. Never a sentence for a user. */
+  detail: string;
+}
+
 export interface ImportArchiveInput {
   /** Text entries by archive path (`manifest.json`, `data/*.ndjson`). Entries the archive lacks are simply absent. */
   files: ReadonlyMap<string, string>;
@@ -106,6 +155,8 @@ export interface ImportArchiveInput {
   blobNames: ReadonlySet<string>;
   /** sha256 hex over a UTF-8 string — injected exactly as `buildExportArchive` injects it, so this module imports no crypto. */
   hash: (content: string) => string;
+  /** Row-level strictness. Absent means `"restore"`, so every pre-ADR-043 caller keeps the contract it was written against. */
+  mode?: ImportMode;
 }
 
 export interface ImportArchiveResult {
@@ -115,6 +166,8 @@ export interface ImportArchiveResult {
   manifest: ImportManifest | null;
   /** Non-null only when NO problem has severity "error". Warnings do not withhold it. */
   data: ProfileData | null;
+  /** Every row import mode salvaged past, in discovery order. Always empty in restore mode. */
+  dropped: readonly ImportDrop[];
 }
 
 /**
@@ -605,7 +658,8 @@ const MAX_TASK_TAG_NAME_LENGTH = 50;
 
 // --- Record type discriminants ----------------------------------------------
 
-type RecordType =
+/** Every record type the interchange carries, spelled exactly as the `type` discriminant on an NDJSON row. Exported because `ImportDrop` names one. */
+export type ArchiveRecordType =
   | "task"
   | "task-list"
   | "task-section"
@@ -636,7 +690,7 @@ type RecordType =
   | "note-template"
   | "dashboard-settings";
 
-const ALL_RECORD_TYPES: readonly RecordType[] = [
+const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "task",
   "task-list",
   "task-section",
@@ -671,7 +725,7 @@ const ALL_RECORD_TYPES: readonly RecordType[] = [
 type DataFilePath = (typeof DATA_FILES)[number];
 
 /** Which record types the writer puts in each of the five NDJSON files — a type in any OTHER file is `invalid-record` (detail `"type"`), not silently accepted (ADR-022). */
-const FILE_RECORD_TYPES: Record<DataFilePath, readonly RecordType[]> = {
+const FILE_RECORD_TYPES: Record<DataFilePath, readonly ArchiveRecordType[]> = {
   "data/tasks.ndjson": [
     "task-list",
     "task-section",
@@ -695,6 +749,22 @@ const FILE_RECORD_TYPES: Record<DataFilePath, readonly RecordType[]> = {
     "note-template",
   ],
   "data/dashboard.ndjson": ["dashboard-settings"],
+};
+
+/**
+ * Which manifest module each data file's rows belong to — the same grouping
+ * `countProfileModules` counts by, spelled here as an explicit map rather than
+ * relying on `DATA_FILES` and `ARCHIVE_MODULE_IDS` happening to be in the same
+ * order. A dropped row is reported against its module (ADR-043), and a report
+ * that attributed drops to the wrong module would be worse than none.
+ */
+const MODULE_OF_DATA_FILE: Record<DataFilePath, ArchiveModuleId> = {
+  "data/tasks.ndjson": "tasks",
+  "data/calendar.ndjson": "calendar",
+  "data/study.ndjson": "study",
+  "data/notifications.ndjson": "notifications",
+  "data/notes.ndjson": "notes",
+  "data/dashboard.ndjson": "dashboard",
 };
 
 // --- Per-record parsers, one field validator call per interface field, in --
@@ -1354,18 +1424,18 @@ function parseNoteVersionMeta(raw: Record<string, unknown>): Omit<ExportNoteVers
 
 // --- Collecting parsed rows with their archive origin -----------------------
 
-/** One parsed row plus where it came from — needed after the fact, to attach `path`/`line` to a reference or cycle problem discovered only once every row is known. */
+/** One parsed row plus where it came from — needed after the fact, to attach `path`/`line` to a reference or cycle problem discovered only once every row is known, and to name the module a dropped row belonged to. */
 interface Located<T> {
   row: T;
-  path: string;
+  path: DataFilePath;
   line: number;
 }
 
-function locate<T>(row: T, path: string, line: number): Located<T> {
+function locate<T>(row: T, path: DataFilePath, line: number): Located<T> {
   return { row, path, line };
 }
 
-/** One bucket per collection: its rows (in file order) and the id-keys already seen, for `duplicate-id`. */
+/** One bucket per collection: its rows (in file order) and the id-keys already seen, for `duplicate-id`. `entries` is reassigned when import mode drops rows. */
 interface Bucket<T> {
   entries: Located<T>[];
   seenKeys: Set<string>;
@@ -1375,17 +1445,62 @@ function newBucket<T>(): Bucket<T> {
   return { entries: [], seenKeys: new Set() };
 }
 
-/** Records `row` into `bucket`, reporting `duplicate-id` (but still keeping the row) if `key` was already seen — a duplicate makes the whole import an error regardless, so keeping it does no harm and keeps this function simple. */
+/**
+ * Everything a per-row problem needs to know beyond the row itself: how strict
+ * to be, and where to record what strictness cost. One object rather than three
+ * parameters threaded through every parser, because every future row-level rule
+ * needs exactly these three.
+ */
+interface ParseContext {
+  mode: ImportMode;
+  problems: ImportProblem[];
+  drops: ImportDrop[];
+}
+
+/** The severity a PER-ROW problem carries: an error that refuses the archive in restore mode, a warning that drops one row in import mode (ADR-043). */
+function rowSeverity(ctx: ParseContext): ImportProblem["severity"] {
+  return ctx.mode === "import" ? "warning" : "error";
+}
+
+/**
+ * Records a PER-ROW problem at the mode's severity, plus — in import mode,
+ * where the severity is a warning precisely because the row is being dropped —
+ * the structured drop beside it. In restore mode nothing is dropped: the
+ * archive is refused as a whole, so `dropped` stays empty.
+ */
+function rowProblem(
+  ctx: ParseContext,
+  reason: ImportDropReason,
+  type: ArchiveRecordType | null,
+  path: DataFilePath,
+  line: number,
+  detail: string,
+): void {
+  ctx.problems.push(problem(rowSeverity(ctx), reason, { path, line, detail }));
+  if (ctx.mode === "import") {
+    ctx.drops.push({ module: MODULE_OF_DATA_FILE[path], type, reason, detail });
+  }
+}
+
+/**
+ * Records `row` into `bucket`. A `key` already seen is `duplicate-id`: in
+ * restore mode an error, and the row is still kept (a duplicate refuses the
+ * whole archive regardless, so keeping it does no harm); in import mode a
+ * warning, and the SECOND occurrence is the one that drops — the first is kept,
+ * because a file's own order is the only thing that can tell them apart.
+ */
 function pushRow<T>(
   bucket: Bucket<T>,
   key: string,
   row: T,
-  path: string,
+  type: ArchiveRecordType,
+  path: DataFilePath,
   line: number,
-  problems: ImportProblem[],
+  ctx: ParseContext,
 ): void {
   if (bucket.seenKeys.has(key)) {
-    problems.push(problem("error", "duplicate-id", { path, line, detail: key }));
+    rowProblem(ctx, "duplicate-id", type, path, line, key);
+    if (ctx.mode === "import") return;
   } else {
     bucket.seenKeys.add(key);
   }
@@ -1442,52 +1557,52 @@ function newCollections(): Collections {
   };
 }
 
-/** Parses `raw` per its `type` and files it into the matching bucket. Throws `InvalidFieldError` on a bad field — the line loop turns that into `invalid-record`. `era` reaches only the parsers whose rows gained fields after the first release (see `ArchiveEra`). */
+/** Parses `raw` per its `type` and files it into the matching bucket. Throws `InvalidFieldError` on a bad field — the line loop turns that into `invalid-record` at `ctx`'s severity. `era` reaches only the parsers whose rows gained fields after the first release (see `ArchiveEra`). */
 function dispatchRecord(
-  type: RecordType,
+  type: ArchiveRecordType,
   raw: Record<string, unknown>,
-  path: string,
+  path: DataFilePath,
   line: number,
   collections: Collections,
-  problems: ImportProblem[],
+  ctx: ParseContext,
   era: ArchiveEra,
 ): void {
   switch (type) {
     case "task": {
       const row = parseTask(raw, era);
-      pushRow(collections.tasks, row.id, row, path, line, problems);
+      pushRow(collections.tasks, row.id, row, type, path, line, ctx);
       return;
     }
     case "task-list": {
       const row = parseTaskList(raw);
-      pushRow(collections.taskLists, row.id, row, path, line, problems);
+      pushRow(collections.taskLists, row.id, row, type, path, line, ctx);
       return;
     }
     case "task-section": {
       const row = parseTaskSection(raw);
-      pushRow(collections.taskSections, row.id, row, path, line, problems);
+      pushRow(collections.taskSections, row.id, row, type, path, line, ctx);
       return;
     }
     case "task-tag": {
       const row = parseTaskTag(raw);
-      pushRow(collections.taskTags, row.id, row, path, line, problems);
+      pushRow(collections.taskTags, row.id, row, type, path, line, ctx);
       return;
     }
     // A join row's identity is the PAIR (migration 023's PRIMARY KEY), exactly
     // as `note-tag-link`'s is — so that composite is what `duplicate-id` keys on.
     case "task-tag-link": {
       const row = parseTaskTagLink(raw);
-      pushRow(collections.taskTagLinks, `taskId=${row.taskId},tagId=${row.tagId}`, row, path, line, problems);
+      pushRow(collections.taskTagLinks, `taskId=${row.taskId},tagId=${row.tagId}`, row, type, path, line, ctx);
       return;
     }
     case "task-attachment": {
       const row = parseTaskAttachment(raw);
-      pushRow(collections.taskAttachments, row.id, row, path, line, problems);
+      pushRow(collections.taskAttachments, row.id, row, type, path, line, ctx);
       return;
     }
     case "task-template": {
       const row = parseTaskTemplate(raw);
-      pushRow(collections.taskTemplates, row.id, row, path, line, problems);
+      pushRow(collections.taskTemplates, row.id, row, type, path, line, ctx);
       return;
     }
     // Migration 029's PRIMARY KEY is the pair too, so the same rule applies —
@@ -1499,100 +1614,101 @@ function dispatchRecord(
         collections.taskDependencies,
         `blockerId=${row.blockerId},blockedId=${row.blockedId}`,
         row,
+        type,
         path,
         line,
-        problems,
+        ctx,
       );
       return;
     }
     case "event": {
       const row = parseEvent(raw, era);
-      pushRow(collections.events, row.id, row, path, line, problems);
+      pushRow(collections.events, row.id, row, type, path, line, ctx);
       return;
     }
     case "document": {
       const row = parseDocument(raw);
-      pushRow(collections.documents, row.id, row, path, line, problems);
+      pushRow(collections.documents, row.id, row, type, path, line, ctx);
       return;
     }
     case "renewal": {
       const row = parseRenewal(raw);
-      pushRow(collections.renewals, row.id, row, path, line, problems);
+      pushRow(collections.renewals, row.id, row, type, path, line, ctx);
       return;
     }
     case "person": {
       const row = parsePerson(raw);
-      pushRow(collections.people, row.id, row, path, line, problems);
+      pushRow(collections.people, row.id, row, type, path, line, ctx);
       return;
     }
     case "subject": {
       const row = parseSubject(raw);
-      pushRow(collections.subjects, row.id, row, path, line, problems);
+      pushRow(collections.subjects, row.id, row, type, path, line, ctx);
       return;
     }
     case "exam": {
       const row = parseExam(raw);
-      pushRow(collections.exams, row.id, row, path, line, problems);
+      pushRow(collections.exams, row.id, row, type, path, line, ctx);
       return;
     }
     case "deck": {
       const row = parseDeck(raw);
-      pushRow(collections.decks, row.id, row, path, line, problems);
+      pushRow(collections.decks, row.id, row, type, path, line, ctx);
       return;
     }
     case "card": {
       const row = parseCard(raw);
-      pushRow(collections.cards, row.id, row, path, line, problems);
+      pushRow(collections.cards, row.id, row, type, path, line, ctx);
       return;
     }
     case "review": {
       const row = parseReview(raw);
-      pushRow(collections.reviewLog, row.id, row, path, line, problems);
+      pushRow(collections.reviewLog, row.id, row, type, path, line, ctx);
       return;
     }
     case "plan": {
       const row = parsePlan(raw);
-      pushRow(collections.plans, row.id, row, path, line, problems);
+      pushRow(collections.plans, row.id, row, type, path, line, ctx);
       return;
     }
     case "block": {
       const row = parseBlock(raw);
-      pushRow(collections.blocks, row.id, row, path, line, problems);
+      pushRow(collections.blocks, row.id, row, type, path, line, ctx);
       return;
     }
     case "focus-session": {
       const row = parseFocusSession(raw);
-      pushRow(collections.focusSessions, row.id, row, path, line, problems);
+      pushRow(collections.focusSessions, row.id, row, type, path, line, ctx);
       return;
     }
     case "notification": {
       const row = parseNotification(raw);
-      pushRow(collections.notifications, row.id, row, path, line, problems);
+      pushRow(collections.notifications, row.id, row, type, path, line, ctx);
       return;
     }
     case "note-folder": {
       const row = parseNoteFolder(raw, era);
-      pushRow(collections.noteFolders, row.id, row, path, line, problems);
+      pushRow(collections.noteFolders, row.id, row, type, path, line, ctx);
       return;
     }
     case "note-tag": {
       const row = parseNoteTag(raw);
-      pushRow(collections.noteTags, row.id, row, path, line, problems);
+      pushRow(collections.noteTags, row.id, row, type, path, line, ctx);
       return;
     }
     case "note": {
       const row = parseNoteMeta(raw);
-      pushRow(collections.notes, row.id, row, path, line, problems);
+      pushRow(collections.notes, row.id, row, type, path, line, ctx);
       return;
     }
     case "note-tag-link": {
       const row = parseNoteTagLink(raw);
-      pushRow(collections.noteTagLinks, `noteId=${row.noteId},tagId=${row.tagId}`, row, path, line, problems);
+      pushRow(collections.noteTagLinks, `noteId=${row.noteId},tagId=${row.tagId}`, row, type, path, line, ctx);
       return;
     }
     case "note-attachment": {
       const row = parseNoteAttachment(raw);
-      pushRow(collections.noteAttachments, row.id, row, path, line, problems);
+      pushRow(collections.noteAttachments, row.id, row, type, path, line, ctx);
       return;
     }
     case "note-version": {
@@ -1601,15 +1717,16 @@ function dispatchRecord(
         collections.noteVersions,
         `noteId=${row.noteId},coveredSeq=${row.coveredSeq}`,
         row,
+        type,
         path,
         line,
-        problems,
+        ctx,
       );
       return;
     }
     case "note-template": {
       const row = parseNoteTemplate(raw);
-      pushRow(collections.noteTemplates, row.id, row, path, line, problems);
+      pushRow(collections.noteTemplates, row.id, row, type, path, line, ctx);
       return;
     }
     // One row per profile (migration 030's PRIMARY KEY), so `profileId` IS the
@@ -1617,7 +1734,7 @@ function dispatchRecord(
     // that makes a join row's key its pair.
     case "dashboard-settings": {
       const row = parseDashboardSettings(raw);
-      pushRow(collections.dashboardSettings, row.profileId, row, path, line, problems);
+      pushRow(collections.dashboardSettings, row.profileId, row, type, path, line, ctx);
       return;
     }
   }
@@ -1784,6 +1901,11 @@ function problem(
   };
 }
 
+/** A note version's identity — the `(noteId, coveredSeq)` primary key, as one string, for keying its state by. */
+function versionKey(noteId: string, coveredSeq: number): string {
+  return `${noteId}#${coveredSeq}`;
+}
+
 // --- Yjs decode check ---------------------------------------------------------
 
 /** Whether `bytes` decode as a Yjs update at all — a throwaway `Y.Doc`, applied once and destroyed, exactly the `mergeNoteState`/`extractNoteLinkTargets` ceremony, just discarding the result instead of reading it. */
@@ -1800,43 +1922,118 @@ function isValidYUpdate(bytes: Uint8Array): boolean {
 }
 
 // --- Reference integrity & cycle detection -----------------------------------
+//
+// The archive's whole reference graph is declared ONCE, as the ordered table
+// `referenceRules` builds. Restore mode walks it a single time and reports each
+// dangling reference as an error; import mode walks it to a fixpoint, resolving
+// each dangling reference the way the table says (ADR-043 section 1) — two
+// strictness policies over one grammar, exactly as the row parsers are.
 
-/** Every row in `bucket` whose `getRef` result is non-null must resolve inside `targetIds`, else `unknown-reference` naming `field` and the dangling id. */
-function checkReference<T>(
-  bucket: Bucket<T>,
-  getRef: (row: T) => string | null,
-  field: string,
-  targetIds: ReadonlySet<string>,
-  problems: ImportProblem[],
-): void {
-  for (const entry of bucket.entries) {
-    const ref = getRef(entry.row);
-    if (ref === null) continue;
-    if (!targetIds.has(ref)) {
-      problems.push(
-        problem("error", "unknown-reference", { path: entry.path, line: entry.line, detail: `${field}=${ref}` }),
-      );
+/**
+ * What a dangling reference costs its row.
+ *
+ * `"drop"` — the row goes, and the drop cascades: whatever pointed at IT now
+ * dangles too. The ADR's default, and what every required reference must do
+ * (a card without its deck, a renewal without its document, a note version
+ * without its note are not rows anything could write).
+ *
+ * `detach` — the FIELD goes and the row survives, for the handful of
+ * references that are placement rather than substance: a task's list and
+ * section (ADR-043's "fall to the Inbox rule"), a note's folder and its card
+ * deck. Each is nullable in the interchange contract precisely because the row
+ * is complete without it, and losing a whole note because a folder row was
+ * damaged would be the opposite of salvage.
+ */
+type DanglingPolicy<T> = "drop" | { detach: (row: T) => T };
+
+/**
+ * One reference in the archive's graph, erased to a uniform closure so the
+ * ordered table can hold rules over rows of different types. Generics live
+ * inside `referenceRule`, never in the table.
+ */
+interface ReferenceRule {
+  /** Reports every dangling reference as an error, changing nothing (restore mode). */
+  report(problems: ImportProblem[]): void;
+  /** Drops or detaches every dangling reference, warning as it goes; returns true when it dropped at least one row (import mode). */
+  resolve(ctx: ParseContext): boolean;
+}
+
+function referenceRule<T>(spec: {
+  bucket: Bucket<T>;
+  type: ArchiveRecordType;
+  /** The field name the problem's `detail` names, as `field=id`. */
+  field: string;
+  /** The reference this row carries, or null when it carries none. */
+  ref: (row: T) => string | null;
+  /**
+   * Builds the "does this reference resolve?" test. Called ONCE per sweep, not
+   * once per row: the index it closes over is rebuilt on every sweep (import
+   * mode's drops shrink what is left to resolve against) but never inside the
+   * row loop, which would make each sweep quadratic.
+   */
+  resolver: () => (ref: string, row: T) => boolean;
+  onDangling: DanglingPolicy<T>;
+}): ReferenceRule {
+  /** Every entry whose reference is present but unresolvable, with the id at fault. */
+  function dangling(): { entry: Located<T>; ref: string }[] {
+    const resolves = spec.resolver();
+    const found: { entry: Located<T>; ref: string }[] = [];
+    for (const entry of spec.bucket.entries) {
+      const ref = spec.ref(entry.row);
+      if (ref === null || resolves(ref, entry.row)) continue;
+      found.push({ entry, ref });
     }
+    return found;
   }
+
+  return {
+    report(problems) {
+      for (const { entry, ref } of dangling()) {
+        problems.push(
+          problem("error", "unknown-reference", {
+            path: entry.path,
+            line: entry.line,
+            detail: `${spec.field}=${ref}`,
+          }),
+        );
+      }
+    },
+    resolve(ctx) {
+      const found = dangling();
+      if (found.length === 0) return false;
+      const policy = spec.onDangling;
+      const doomed = new Set<Located<T>>();
+      for (const { entry, ref } of found) {
+        rowProblem(ctx, "unknown-reference", spec.type, entry.path, entry.line, `${spec.field}=${ref}`);
+        if (policy === "drop") doomed.add(entry);
+        else entry.row = policy.detach(entry.row);
+      }
+      if (doomed.size === 0) return false;
+      spec.bucket.entries = spec.bucket.entries.filter((entry) => !doomed.has(entry));
+      return true;
+    },
+  };
 }
 
 /**
  * Detects a cycle in a self-referencing parent chain (`task.parentId`,
- * `note-folder.parentId`) via three-colour DFS: a back-edge to a node still
- * "visiting" is a cycle, reported once (not once per node on it); a dangling
- * reference (already reported by `checkReference`) just ends the walk, since
- * an absent id can never be part of a cycle.
+ * `task-list.parentId`, `note-folder.parentId`) via three-colour DFS: a
+ * back-edge to a node still "visiting" is a cycle, reported once (not once per
+ * node on it); a dangling reference (already reported by the reference rules)
+ * just ends the walk, since an absent id can never be part of a cycle.
+ * Returns the id each cycle was closed at — restore mode only reports them,
+ * import mode drops those rows, which is what breaks the cycle so the
+ * reference pass can cascade normally.
  */
-function checkParentCycle<T>(
+function findParentCycles<T>(
   bucket: Bucket<T>,
   getId: (row: T) => string,
   getParentId: (row: T) => string | null,
-  path: string,
-  problems: ImportProblem[],
-): void {
+): string[] {
   const parentOf = new Map<string, string | null>();
   for (const entry of bucket.entries) parentOf.set(getId(entry.row), getParentId(entry.row));
 
+  const closedAt: string[] = [];
   const state = new Map<string, "visiting" | "done">();
   for (const startId of parentOf.keys()) {
     if (state.get(startId) === "done") continue;
@@ -1846,7 +2043,7 @@ function checkParentCycle<T>(
     while (current !== null) {
       const currentState = state.get(current);
       if (currentState === "visiting") {
-        problems.push(problem("error", "reference-cycle", { path, detail: current }));
+        closedAt.push(current);
         break;
       }
       if (currentState === "done") break;
@@ -1855,6 +2052,488 @@ function checkParentCycle<T>(
       current = parentOf.get(current) ?? null;
     }
     for (const visited of visitedThisWalk) state.set(visited, "done");
+  }
+  return closedAt;
+}
+
+/** One self-referencing parent chain, erased the way `ReferenceRule` is, so the three chains read as one table. */
+interface CycleRule {
+  report(problems: ImportProblem[]): void;
+  resolve(ctx: ParseContext): boolean;
+}
+
+function cycleRule<T>(spec: {
+  bucket: Bucket<T>;
+  type: ArchiveRecordType;
+  path: DataFilePath;
+  id: (row: T) => string;
+  parentId: (row: T) => string | null;
+}): CycleRule {
+  return {
+    report(problems) {
+      for (const id of findParentCycles(spec.bucket, spec.id, spec.parentId)) {
+        problems.push(problem("error", "reference-cycle", { path: spec.path, detail: id }));
+      }
+    },
+    resolve(ctx) {
+      const closedAt = new Set(findParentCycles(spec.bucket, spec.id, spec.parentId));
+      if (closedAt.size === 0) return false;
+      // The row the back-edge closes on is the one that goes: removing it is
+      // the smallest cut that breaks the cycle, and its descendants then fall
+      // to this rule's own reference rule, cascading like any other drop.
+      const survivors: Located<T>[] = [];
+      for (const entry of spec.bucket.entries) {
+        const id = spec.id(entry.row);
+        if (!closedAt.has(id)) {
+          survivors.push(entry);
+          continue;
+        }
+        rowProblem(ctx, "reference-cycle", spec.type, entry.path, entry.line, id);
+      }
+      spec.bucket.entries = survivors;
+      return true;
+    },
+  };
+}
+
+/** The folders claiming the quick-capture mark, in file order — everything past the first is a double claim (ADR-036). */
+function captureClaimants(collections: Collections) {
+  return collections.noteFolders.entries.filter((entry) => entry.row.isCaptureDefault);
+}
+
+/**
+ * The archive's whole reference graph, in the order restore mode has always
+ * reported it. Each rule's target set is read through a closure rather than
+ * captured as a value, because import mode re-runs the table after every drop
+ * and a captured set would go stale the moment a row disappeared.
+ */
+function referenceRules(collections: Collections): ReferenceRule[] {
+  const idsOf = <T extends { id: string }>(bucket: Bucket<T>): ReadonlySet<string> =>
+    new Set(bucket.entries.map((entry) => entry.row.id));
+  const taskIds = () => idsOf(collections.tasks);
+  const taskListIds = () => idsOf(collections.taskLists);
+  const taskTagIds = () => idsOf(collections.taskTags);
+  const subjectIds = () => idsOf(collections.subjects);
+  const examIds = () => idsOf(collections.exams);
+  const deckIds = () => idsOf(collections.decks);
+  const cardIds = () => idsOf(collections.cards);
+  const planIds = () => idsOf(collections.plans);
+  const documentIds = () => idsOf(collections.documents);
+  const noteIds = () => idsOf(collections.notes);
+  const folderIds = () => idsOf(collections.noteFolders);
+  const noteTagIds = () => idsOf(collections.noteTags);
+  /** Which list each section belongs to — a task's `sectionId` must resolve to a section of the task's OWN list, which a plain id set cannot say. */
+  const listOfSection = () =>
+    new Map(collections.taskSections.entries.map((entry) => [entry.row.id, entry.row.listId]));
+
+  return [
+    referenceRule({
+      bucket: collections.tasks,
+      type: "task",
+      field: "parentId",
+      ref: (row) => row.parentId,
+      resolver: () => {
+        const ids = taskIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    referenceRule({
+      bucket: collections.tasks,
+      type: "task",
+      field: "listId",
+      ref: (row) => row.listId,
+      resolver: () => {
+        const ids = taskListIds();
+        return (ref) => ids.has(ref);
+      },
+      // ADR-043: a task whose list is gone falls to the Inbox rule — the same
+      // `null` an archive written before ADR-029 carries, which a restore and
+      // the foreign-import planner both read as "the target profile's Inbox".
+      // `sectionId` goes with it: the parser's own invariant forbids a section
+      // without a list, and a heading in a list the task no longer lives in
+      // would be a placement nothing renders.
+      onDangling: { detach: (row) => ({ ...row, listId: null, sectionId: null }) },
+    }),
+    referenceRule({
+      bucket: collections.taskLists,
+      type: "task-list",
+      field: "parentId",
+      ref: (row) => row.parentId,
+      resolver: () => {
+        const ids = taskListIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    referenceRule({
+      bucket: collections.taskSections,
+      type: "task-section",
+      field: "listId",
+      ref: (row) => row.listId,
+      resolver: () => {
+        const ids = taskListIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    referenceRule({
+      bucket: collections.taskTagLinks,
+      type: "task-tag-link",
+      field: "taskId",
+      ref: (row) => row.taskId,
+      resolver: () => {
+        const ids = taskIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    referenceRule({
+      bucket: collections.taskTagLinks,
+      type: "task-tag-link",
+      field: "tagId",
+      ref: (row) => row.tagId,
+      resolver: () => {
+        const ids = taskTagIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    referenceRule({
+      bucket: collections.taskAttachments,
+      type: "task-attachment",
+      field: "taskId",
+      ref: (row) => row.taskId,
+      resolver: () => {
+        const ids = taskIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    referenceRule({
+      bucket: collections.taskDependencies,
+      type: "task-dependency",
+      field: "blockerId",
+      ref: (row) => row.blockerId,
+      resolver: () => {
+        const ids = taskIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    referenceRule({
+      bucket: collections.taskDependencies,
+      type: "task-dependency",
+      field: "blockedId",
+      ref: (row) => row.blockedId,
+      resolver: () => {
+        const ids = taskIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    // The one reference a plain id set cannot express: the section must exist
+    // AND belong to the task's own list. A section of some other list would
+    // pass every foreign key the schema has and still put the task under a
+    // heading nothing renders.
+    referenceRule({
+      bucket: collections.tasks,
+      type: "task",
+      field: "sectionId",
+      ref: (row) => row.sectionId,
+      resolver: () => {
+        const listOf = listOfSection();
+        return (ref, row) => listOf.get(ref) === row.listId;
+      },
+      onDangling: { detach: (row) => ({ ...row, sectionId: null }) },
+    }),
+    referenceRule({
+      bucket: collections.exams,
+      type: "exam",
+      field: "subjectId",
+      ref: (row) => row.subjectId,
+      resolver: () => {
+        const ids = subjectIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    referenceRule({
+      bucket: collections.decks,
+      type: "deck",
+      field: "subjectId",
+      ref: (row) => row.subjectId,
+      resolver: () => {
+        const ids = subjectIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    referenceRule({
+      bucket: collections.cards,
+      type: "card",
+      field: "deckId",
+      ref: (row) => row.deckId,
+      resolver: () => {
+        const ids = deckIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    referenceRule({
+      bucket: collections.cards,
+      type: "card",
+      field: "sourceNoteId",
+      ref: (row) => row.sourceNoteId,
+      resolver: () => {
+        const ids = noteIds();
+        return (ref) => ids.has(ref);
+      },
+      // ADR-043 names this one a drop even though the column is nullable:
+      // clearing it would silently turn a note-derived card into a hand-made
+      // one, and `syncFromNote` would then generate a second card for the
+      // block the next time that note was opened.
+      onDangling: "drop",
+    }),
+    referenceRule({
+      bucket: collections.reviewLog,
+      type: "review",
+      field: "cardId",
+      ref: (row) => row.cardId,
+      resolver: () => {
+        const ids = cardIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    referenceRule({
+      bucket: collections.plans,
+      type: "plan",
+      field: "examId",
+      ref: (row) => row.examId,
+      resolver: () => {
+        const ids = examIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    referenceRule({
+      bucket: collections.blocks,
+      type: "block",
+      field: "planId",
+      ref: (row) => row.planId,
+      resolver: () => {
+        const ids = planIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    referenceRule({
+      bucket: collections.focusSessions,
+      type: "focus-session",
+      field: "subjectId",
+      ref: (row) => row.subjectId,
+      resolver: () => {
+        const ids = subjectIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    referenceRule({
+      bucket: collections.renewals,
+      type: "renewal",
+      field: "documentId",
+      ref: (row) => row.documentId,
+      resolver: () => {
+        const ids = documentIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    referenceRule({
+      bucket: collections.notes,
+      type: "note",
+      field: "folderId",
+      ref: (row) => row.folderId,
+      resolver: () => {
+        const ids = folderIds();
+        return (ref) => ids.has(ref);
+      },
+      // A folder is placement, like a list: the exporter already files a note
+      // whose folder is absent directly under `notes/` (`buildNotePaths`), so
+      // the archive format itself says a folderless note is a normal note.
+      onDangling: { detach: (row) => ({ ...row, folderId: null }) },
+    }),
+    referenceRule({
+      bucket: collections.notes,
+      type: "note",
+      field: "cardDeckId",
+      ref: (row) => row.cardDeckId,
+      resolver: () => {
+        const ids = deckIds();
+        return (ref) => ids.has(ref);
+      },
+      // The deck a note generates cards INTO — decoration on the note, and
+      // nullable for exactly that reason. Losing a note's whole body because
+      // its deck row was damaged is not salvage.
+      onDangling: { detach: (row) => ({ ...row, cardDeckId: null }) },
+    }),
+    referenceRule({
+      bucket: collections.noteFolders,
+      type: "note-folder",
+      field: "parentId",
+      ref: (row) => row.parentId,
+      resolver: () => {
+        const ids = folderIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    // ADR-036: the quick-capture folder is a per-profile SINGLETON, an
+    // invariant no single row can break and therefore no per-row parser can
+    // catch. Migration 028 backs it with a partial unique index, so a second
+    // claimant would abort the restore transaction with a raw SQLite error;
+    // catching it here instead names the offending row and line. Import mode
+    // CLEARS the later claims rather than dropping the folders — the claim is
+    // a flag, the folder is data, and losing a folder over a flag would be
+    // the opposite of salvage.
+    {
+      report(problems) {
+        for (const entry of captureClaimants(collections).slice(1)) {
+          problems.push(
+            problem("error", "invalid-record", {
+              path: entry.path,
+              line: entry.line,
+              detail: "isCaptureDefault",
+            }),
+          );
+        }
+      },
+      resolve(ctx) {
+        for (const entry of captureClaimants(collections).slice(1)) {
+          rowProblem(ctx, "invalid-record", "note-folder", entry.path, entry.line, "isCaptureDefault");
+          entry.row = { ...entry.row, isCaptureDefault: false };
+        }
+        // A cleared flag strands nothing, so there is never a re-sweep to ask for.
+        return false;
+      },
+    },
+    referenceRule({
+      bucket: collections.noteTagLinks,
+      type: "note-tag-link",
+      field: "noteId",
+      ref: (row) => row.noteId,
+      resolver: () => {
+        const ids = noteIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    referenceRule({
+      bucket: collections.noteTagLinks,
+      type: "note-tag-link",
+      field: "tagId",
+      ref: (row) => row.tagId,
+      resolver: () => {
+        const ids = noteTagIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    referenceRule({
+      bucket: collections.noteAttachments,
+      type: "note-attachment",
+      field: "noteId",
+      ref: (row) => row.noteId,
+      resolver: () => {
+        const ids = noteIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    referenceRule({
+      bucket: collections.noteVersions,
+      type: "note-version",
+      field: "noteId",
+      ref: (row) => row.noteId,
+      resolver: () => {
+        const ids = noteIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+  ];
+}
+
+/** The three self-referencing parent chains, in the order restore mode has always reported them. */
+function cycleRules(collections: Collections): CycleRule[] {
+  return [
+    cycleRule({
+      bucket: collections.tasks,
+      type: "task",
+      path: "data/tasks.ndjson",
+      id: (row) => row.id,
+      parentId: (row) => row.parentId,
+    }),
+    cycleRule({
+      bucket: collections.taskLists,
+      type: "task-list",
+      path: "data/tasks.ndjson",
+      id: (row) => row.id,
+      parentId: (row) => row.parentId,
+    }),
+    cycleRule({
+      bucket: collections.noteFolders,
+      type: "note-folder",
+      path: "data/notes.ndjson",
+      id: (row) => row.id,
+      parentId: (row) => row.parentId,
+    }),
+    // The fourth cycle is a graph, not a parent chain (ADR-037's dependency
+    // acyclicity), so it carries its own DFS instead of `cycleRule`'s walk. The
+    // smallest cut is the EDGE that closed the loop — dropping that one row
+    // breaks the cycle and the fixpoint re-runs until none remain.
+    {
+      report(problems) {
+        checkDependencyCycle(collections.taskDependencies, problems);
+      },
+      resolve(ctx) {
+        const edge = findDependencyCycleEdge(collections.taskDependencies);
+        if (edge === null) return false;
+        rowProblem(
+          ctx,
+          "reference-cycle",
+          "task-dependency",
+          edge.path,
+          edge.line,
+          `blockerId=${edge.row.blockerId},blockedId=${edge.row.blockedId}`,
+        );
+        collections.taskDependencies.entries = collections.taskDependencies.entries.filter(
+          (entry) => entry !== edge,
+        );
+        return true;
+      },
+    },
+  ];
+}
+
+/**
+ * Import mode's reference pass: drop, detach and break cycles until nothing
+ * changes. A fixpoint rather than a single sweep because every drop can strand
+ * a row that resolved a moment ago — a dropped subject takes its decks, which
+ * take their cards, which take their review log — and a cycle broken here can
+ * strand rows the reference rules must then see. Termination is structural:
+ * every iteration that returns true has removed at least one row from a finite
+ * set, and rows are never added.
+ */
+function resolveReferencesForImport(collections: Collections, ctx: ParseContext): void {
+  const references = referenceRules(collections);
+  const cycles = cycleRules(collections);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const rule of references) changed = rule.resolve(ctx) || changed;
+    for (const rule of cycles) changed = rule.resolve(ctx) || changed;
   }
 }
 
@@ -1877,7 +2556,22 @@ function checkDependencyCycle(
   bucket: Bucket<ExportTaskDependency>,
   problems: ImportProblem[],
 ): void {
-  if (bucket.entries.length === 0) return;
+  const found = findDependencyCycleEdge(bucket);
+  if (found === null) return;
+  problems.push(
+    problem("error", "reference-cycle", {
+      path: found.path,
+      line: found.line,
+      detail: `blockerId=${found.row.blockerId},blockedId=${found.row.blockedId}`,
+    }),
+  );
+}
+
+/** The edge that closes a dependency loop, or null — the DFS `checkDependencyCycle` reports through, shared with import mode's edge-dropping resolver. */
+function findDependencyCycleEdge(
+  bucket: Bucket<ExportTaskDependency>,
+): Located<ExportTaskDependency> | null {
+  if (bucket.entries.length === 0) return null;
 
   const outgoing = new Map<string, Located<ExportTaskDependency>[]>();
   for (const entry of bucket.entries) {
@@ -1911,27 +2605,24 @@ function checkDependencyCycle(
 
   for (const blockerId of outgoing.keys()) {
     const found = visit(blockerId);
-    if (found === null) continue;
-    problems.push(
-      problem("error", "reference-cycle", {
-        path: found.path,
-        line: found.line,
-        detail: `blockerId=${found.row.blockerId},blockedId=${found.row.blockedId}`,
-      }),
-    );
-    return;
+    if (found !== null) return found;
   }
+  return null;
 }
 
 // --- Main entry point ---------------------------------------------------------
 
 export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResult {
   const problems: ImportProblem[] = [];
+  const drops: ImportDrop[] = [];
+  // Absent means restore: the mode this reader was written against, and the one
+  // every pre-ADR-043 caller silently relies on.
+  const ctx: ParseContext = { mode: input.mode ?? "restore", problems, drops };
 
   const manifestText = input.files.get("manifest.json");
   if (manifestText === undefined) {
     problems.push(problem("error", "missing-manifest", { path: "manifest.json" }));
-    return { problems, manifest: null, data: null };
+    return { problems, manifest: null, data: null, dropped: drops };
   }
 
   const manifestOutcome = parseManifest(manifestText);
@@ -1945,7 +2636,7 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
           : { path: "manifest.json" },
       ),
     );
-    return { problems, manifest: null, data: null };
+    return { problems, manifest: null, data: null, dropped: drops };
   }
   const { manifest, checksums } = manifestOutcome;
 
@@ -1953,7 +2644,7 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
     problems.push(
       problem("error", "unsupported-schema-version", { path: "manifest.json", detail: manifest.schemaVersion }),
     );
-    return { problems, manifest, data: null };
+    return { problems, manifest, data: null, dropped: drops };
   }
 
   // --- Checksums (rule 4). Iterating the UNION of the files this build knows
@@ -2016,62 +2707,87 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
       }
       const type = root.type;
 
-      // An ERROR, not a tolerated warning. "Ignore what you do not recognise"
-      // is the right rule for additive schema evolution — but it is
-      // unreachable here, because the version gate above already refuses any
+      // In restore mode an ERROR, not a tolerated warning. "Ignore what you do
+      // not recognise" is the right rule for additive schema evolution — but it
+      // is unreachable here, because the version gate above already refuses any
       // archive newer than this build in major or minor, and an OLDER archive
       // can only ever carry FEWER types than this build knows. So a type we do
       // not recognise is never a newer Nexus; it is a damaged or hand-edited
       // file. Skipping the line would then quietly drop real rows from a
-      // backup, which is the exact failure this whole reader exists to refuse.
+      // backup, which is the exact failure this whole reader exists to refuse —
+      // in import mode, where the archive is somebody else's and the profile
+      // keeps everything it already has, the row is instead dropped and named.
       if (!isOneOf(type, ALL_RECORD_TYPES)) {
-        problems.push(problem("error", "unknown-record-type", { path, line: lineNumber, detail: type }));
+        rowProblem(ctx, "unknown-record-type", null, path, lineNumber, type);
         return;
       }
       if (!allowedTypes.includes(type)) {
-        problems.push(problem("error", "invalid-record", { path, line: lineNumber, detail: "type" }));
+        rowProblem(ctx, "invalid-record", type, path, lineNumber, "type");
         return;
       }
 
       const dispatchOutcome = tryParse(() =>
-        dispatchRecord(type, root, path, lineNumber, collections, problems, era),
+        dispatchRecord(type, root, path, lineNumber, collections, ctx, era),
       );
       if (!dispatchOutcome.ok) {
-        problems.push(
-          problem("error", "invalid-record", { path, line: lineNumber, detail: dispatchOutcome.detail }),
-        );
+        rowProblem(ctx, "invalid-record", type, path, lineNumber, dispatchOutcome.detail);
       }
     });
   }
 
-  // --- Yjs (rule 7): attach a note's snapshot when present; a note-version's
-  // snapshot is required.
-  const notes: ExportNote[] = collections.notes.entries.map((entry) => {
-    const meta = entry.row;
-    const ydocPath = `data/notes/${meta.id}.ydoc`;
+  // --- Yjs (rule 7): a note's snapshot is attached when present; a
+  // note-version's is required. Both are read into maps rather than straight
+  // into the result arrays, because import mode's reference pass below can
+  // still drop the row a snapshot belongs to — the final arrays are built from
+  // the surviving bucket entries, once, at the end.
+  const noteSnapshots = new Map<string, Uint8Array>();
+  for (const entry of collections.notes.entries) {
+    const ydocPath = `data/notes/${entry.row.id}.ydoc`;
     const bytes = input.ydocs.get(ydocPath);
-    if (bytes === undefined) return { ...meta, snapshot: null };
+    if (bytes === undefined) continue; // a never-edited note has no state, which is not a problem
+    // A note whose state will not decode keeps its row and loses its body: the
+    // title, folder, tags and links are all still real data. The problem names
+    // it in both modes — this is not a dropped ROW, so it is never a drop.
     if (!isValidYUpdate(bytes)) {
-      problems.push(problem("error", "invalid-ydoc", { path: ydocPath }));
-      return { ...meta, snapshot: null };
+      problems.push(problem(rowSeverity(ctx), "invalid-ydoc", { path: ydocPath }));
+      continue;
     }
-    return { ...meta, snapshot: bytes };
-  });
+    noteSnapshots.set(entry.row.id, bytes);
+  }
 
-  const noteVersions: ExportNoteVersion[] = [];
+  const versionSnapshots = new Map<string, Uint8Array>();
+  const versionsWithoutState = new Set<Located<Omit<ExportNoteVersion, "snapshot">>>();
   for (const entry of collections.noteVersions.entries) {
     const meta = entry.row;
     const ydocPath = `data/note-versions/${meta.noteId}/${meta.coveredSeq}.ydoc`;
     const bytes = input.ydocs.get(ydocPath);
-    if (bytes === undefined) {
-      problems.push(problem("error", "missing-ydoc", { path: ydocPath }));
+    if (bytes !== undefined && isValidYUpdate(bytes)) {
+      versionSnapshots.set(versionKey(meta.noteId, meta.coveredSeq), bytes);
       continue;
     }
-    if (!isValidYUpdate(bytes)) {
-      problems.push(problem("error", "invalid-ydoc", { path: ydocPath }));
-      continue;
+    // A version IS its state — a checkpoint with nothing to restore from is not
+    // a row at all, so it goes in both modes; only the severity differs, and
+    // only import mode counts it as a drop.
+    const reason: ImportDropReason = bytes === undefined ? "missing-ydoc" : "invalid-ydoc";
+    problems.push(problem(rowSeverity(ctx), reason, { path: ydocPath }));
+    versionsWithoutState.add(entry);
+    if (ctx.mode === "import") {
+      drops.push({
+        module: MODULE_OF_DATA_FILE[entry.path],
+        type: "note-version",
+        reason,
+        detail: ydocPath,
+      });
     }
-    noteVersions.push({ ...meta, snapshot: bytes });
+  }
+  // Restore mode leaves the stateless versions in the bucket: the archive is
+  // refused anyway, and removing them would change which reference problems it
+  // reports about them. Import mode takes them out, so nothing downstream has
+  // to remember they are hollow.
+  if (ctx.mode === "import" && versionsWithoutState.size > 0) {
+    collections.noteVersions.entries = collections.noteVersions.entries.filter(
+      (entry) => !versionsWithoutState.has(entry),
+    );
   }
 
   // --- Blobs (rule 8): a missing blob is a warning — the row still restores.
@@ -2103,104 +2819,28 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
     }
   }
 
-  // --- Reference integrity ----------------------------------------------------
-  const taskIds = new Set(rowsOf(collections.tasks).map((row) => row.id));
-  const taskListIds = new Set(rowsOf(collections.taskLists).map((row) => row.id));
-  const taskTagIds = new Set(rowsOf(collections.taskTags).map((row) => row.id));
-  /** Which list each section belongs to — a task's `sectionId` must resolve to a section of the task's OWN list, which a plain id set cannot say. */
-  const listOfSection = new Map(rowsOf(collections.taskSections).map((row) => [row.id, row.listId]));
-  const subjectIds = new Set(rowsOf(collections.subjects).map((row) => row.id));
-  const examIds = new Set(rowsOf(collections.exams).map((row) => row.id));
-  const deckIds = new Set(rowsOf(collections.decks).map((row) => row.id));
-  const cardIds = new Set(rowsOf(collections.cards).map((row) => row.id));
-  const planIds = new Set(rowsOf(collections.plans).map((row) => row.id));
-  const documentIds = new Set(rowsOf(collections.documents).map((row) => row.id));
-  const noteIds = new Set(rowsOf(collections.notes).map((row) => row.id));
-  const folderIds = new Set(rowsOf(collections.noteFolders).map((row) => row.id));
-  const tagIds = new Set(rowsOf(collections.noteTags).map((row) => row.id));
-
-  checkReference(collections.tasks, (row) => row.parentId, "parentId", taskIds, problems);
-  checkReference(collections.tasks, (row) => row.listId, "listId", taskListIds, problems);
-  checkReference(collections.taskLists, (row) => row.parentId, "parentId", taskListIds, problems);
-  checkReference(collections.taskSections, (row) => row.listId, "listId", taskListIds, problems);
-  checkReference(collections.taskTagLinks, (row) => row.taskId, "taskId", taskIds, problems);
-  checkReference(collections.taskTagLinks, (row) => row.tagId, "tagId", taskTagIds, problems);
-  checkReference(collections.taskAttachments, (row) => row.taskId, "taskId", taskIds, problems);
-  // Both ends of a dependency are tasks of this archive (migration 029's two
-  // foreign keys), so both are checked — an edge pointing at a task the archive
-  // does not carry would fail the restore's own INSERT, deep inside its
-  // transaction, rather than here where it can be named.
-  checkReference(collections.taskDependencies, (row) => row.blockerId, "blockerId", taskIds, problems);
-  checkReference(collections.taskDependencies, (row) => row.blockedId, "blockedId", taskIds, problems);
-  // The one reference `checkReference` cannot express: the section must exist
-  // AND belong to the task's own list. A section of some other list would pass
-  // every foreign key the schema has and still put the task under a heading
-  // nothing renders.
-  for (const entry of collections.tasks.entries) {
-    const { sectionId, listId } = entry.row;
-    if (sectionId === null) continue;
-    if (listOfSection.get(sectionId) === listId) continue;
-    problems.push(
-      problem("error", "unknown-reference", {
-        path: entry.path,
-        line: entry.line,
-        detail: `sectionId=${sectionId}`,
-      }),
-    );
+  // --- Reference integrity and cycles ------------------------------------------
+  // One table (`referenceRules` / `cycleRules`), two policies: restore reports
+  // and refuses, import resolves and salvages.
+  if (ctx.mode === "import") {
+    resolveReferencesForImport(collections, ctx);
+  } else {
+    for (const rule of referenceRules(collections)) rule.report(problems);
+    for (const rule of cycleRules(collections)) rule.report(problems);
   }
-  checkReference(collections.exams, (row) => row.subjectId, "subjectId", subjectIds, problems);
-  checkReference(collections.decks, (row) => row.subjectId, "subjectId", subjectIds, problems);
-  checkReference(collections.cards, (row) => row.deckId, "deckId", deckIds, problems);
-  checkReference(collections.cards, (row) => row.sourceNoteId, "sourceNoteId", noteIds, problems);
-  checkReference(collections.reviewLog, (row) => row.cardId, "cardId", cardIds, problems);
-  checkReference(collections.plans, (row) => row.examId, "examId", examIds, problems);
-  checkReference(collections.blocks, (row) => row.planId, "planId", planIds, problems);
-  checkReference(collections.focusSessions, (row) => row.subjectId, "subjectId", subjectIds, problems);
-  checkReference(collections.renewals, (row) => row.documentId, "documentId", documentIds, problems);
-  checkReference(collections.notes, (row) => row.folderId, "folderId", folderIds, problems);
-  checkReference(collections.notes, (row) => row.cardDeckId, "cardDeckId", deckIds, problems);
-  checkReference(collections.noteFolders, (row) => row.parentId, "parentId", folderIds, problems);
-  // ADR-036: the quick-capture folder is a per-profile SINGLETON, an invariant
-  // no single row can break and therefore no per-row parser can catch. Migration
-  // 028 backs it with a partial unique index, so a second claimant would abort
-  // the restore transaction with a raw SQLite error; catching it here instead
-  // names the offending row and line, which is the whole point of this pass.
-  const captureClaimants = collections.noteFolders.entries.filter(
-    (entry) => entry.row.isCaptureDefault,
-  );
-  for (const entry of captureClaimants.slice(1)) {
-    problems.push(
-      problem("error", "invalid-record", {
-        path: entry.path,
-        line: entry.line,
-        detail: "isCaptureDefault",
-      }),
-    );
-  }
-  checkReference(collections.noteTagLinks, (row) => row.noteId, "noteId", noteIds, problems);
-  checkReference(collections.noteTagLinks, (row) => row.tagId, "tagId", tagIds, problems);
-  checkReference(collections.noteAttachments, (row) => row.noteId, "noteId", noteIds, problems);
-  checkReference(collections.noteVersions, (row) => row.noteId, "noteId", noteIds, problems);
 
-  // --- Cycles: the three self-referencing parent chains.
-  checkParentCycle(collections.tasks, (row) => row.id, (row) => row.parentId, "data/tasks.ndjson", problems);
-  checkParentCycle(
-    collections.taskLists,
-    (row) => row.id,
-    (row) => row.parentId,
-    "data/tasks.ndjson",
-    problems,
-  );
-  checkParentCycle(
-    collections.noteFolders,
-    (row) => row.id,
-    (row) => row.parentId,
-    "data/notes.ndjson",
-    problems,
-  );
-  // …and the one cycle that is not a parent chain at all: the dependency graph,
-  // whose store-side invariant has no SQL twin and therefore needs a parser one.
-  checkDependencyCycle(collections.taskDependencies, problems);
+  // Built only now, from the rows that survived: import mode's reference pass
+  // can drop a note or a version after its state was read.
+  const notes: ExportNote[] = collections.notes.entries.map((entry) => ({
+    ...entry.row,
+    snapshot: noteSnapshots.get(entry.row.id) ?? null,
+  }));
+  const noteVersions: ExportNoteVersion[] = [];
+  for (const entry of collections.noteVersions.entries) {
+    const snapshot = versionSnapshots.get(versionKey(entry.row.noteId, entry.row.coveredSeq));
+    if (snapshot === undefined) continue; // already reported above (missing/invalid `.ydoc`)
+    noteVersions.push({ ...entry.row, snapshot });
+  }
 
   const hasError = problems.some((p) => p.severity === "error");
   const data: ProfileData | null = hasError
@@ -2240,5 +2880,5 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         dashboardSettings: rowsOf(collections.dashboardSettings),
       };
 
-  return { problems, manifest, data };
+  return { problems, manifest, data, dropped: drops };
 }

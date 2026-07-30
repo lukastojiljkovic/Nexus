@@ -2423,3 +2423,485 @@ describe("parseImportArchive — task dependencies (migration 029 / ADR-037)", (
     expect(result.data).toBeNull();
   });
 });
+
+// --- ADR-043 section 1: salvage is a parser MODE ----------------------------
+
+/** The salvage-mode twin of `emptyInputWith` — same fixtures, `mode: "import"`. */
+function importInputWith(files: Map<string, string>, extra: Partial<ImportArchiveInput> = {}): ImportArchiveInput {
+  return { files, ydocs: new Map(), blobNames: new Set(), hash: sha256, mode: "import", ...extra };
+}
+
+const SALVAGE_NOTE_FOLDER = {
+  type: "note-folder", id: "f1", profileId: "profile1", parentId: null, name: "Fakultet",
+  color: null, defaultTemplateId: null, isCaptureDefault: false,
+  createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+};
+
+const VALID_NOTE_TAG = {
+  type: "note-tag", id: "ntag1", profileId: "profile1", name: "ideja",
+  createdAt: "2026-07-01T00:00:00.000Z",
+};
+
+const VALID_NOTE_ATTACHMENT = {
+  type: "note-attachment", id: "att1", noteId: "n1", fileName: "slika.png", mime: "image/png",
+  sizeBytes: 10, sha256: "a".repeat(64), createdAt: "2026-07-01T00:00:00.000Z",
+};
+
+const VALID_NOTE_VERSION = {
+  type: "note-version", noteId: "n1", coveredSeq: 3, title: "Beleška",
+  createdAt: "2026-07-01T00:00:00.000Z",
+};
+
+const VALID_EXAM = {
+  type: "exam", id: "ex1", profileId: "profile1", subjectId: "s1", examType: "pismeni",
+  examDate: "2026-09-01", scope: null, createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+};
+
+const VALID_PLAN = {
+  type: "plan", id: "pl1", profileId: "profile1", examId: "ex1", dailyMinutes: 60,
+  startDate: "2026-08-01", examWeekBoost: false, createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+};
+
+const VALID_BLOCK = {
+  type: "block", id: "bl1", planId: "pl1", profileId: "profile1", blockDate: "2026-08-02",
+  minutes: 60, status: "planned", createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+};
+
+const VALID_REVIEW = {
+  type: "review", id: "rv1", profileId: "profile1", cardId: "c1", rating: 3, state: 1,
+  due: "2026-01-03T00:00:00.000Z", stability: 1, difficulty: 2, elapsedDays: 0,
+  lastElapsedDays: 0, scheduledDays: 1, learningSteps: 0, review: "2026-01-02T00:00:00.000Z",
+  createdAt: "2026-01-02T00:00:00.000Z",
+};
+
+const VALID_FOCUS_SESSION = {
+  type: "focus-session", id: "fs1", profileId: "profile1", subjectId: "s1",
+  startedAt: "2026-01-02T09:00:00.000Z", endedAt: "2026-01-02T10:00:00.000Z",
+  createdAt: "2026-01-02T10:00:00.000Z", updatedAt: "2026-01-02T10:00:00.000Z",
+};
+
+describe("parseImportArchive — import mode: archive-level problems stay hard errors", () => {
+  it("refuses a missing manifest exactly as restore does", () => {
+    const result = parseImportArchive(importInputWith(new Map()));
+    expect(result.problems).toEqual([{ severity: "error", code: "missing-manifest", path: "manifest.json" }]);
+    expect(result.data).toBeNull();
+    expect(result.dropped).toEqual([]);
+  });
+
+  it("refuses an unparseable manifest", () => {
+    const files = baseFiles();
+    files.set("manifest.json", "{ not json");
+    const result = parseImportArchive(importInputWith(files));
+    expect(result.problems).toEqual([{ severity: "error", code: "invalid-manifest", path: "manifest.json" }]);
+    expect(result.data).toBeNull();
+  });
+
+  it("refuses an unsupported schema version", () => {
+    const result = parseImportArchive(importInputWith(baseFiles({ schemaVersion: "2.0.0" })));
+    expect(result.problems).toEqual([
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "2.0.0" },
+    ]);
+    expect(result.data).toBeNull();
+  });
+
+  it("refuses a checksum mismatch", () => {
+    const files = baseFiles();
+    files.set("data/tasks.ndjson", ndjson([VALID_TASK_LIST]));
+    const result = parseImportArchive(importInputWith(files));
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "checksum-mismatch", path: "data/tasks.ndjson",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  it("refuses a missing data file", () => {
+    const files = baseFiles();
+    files.delete("data/study.ndjson");
+    const result = parseImportArchive(importInputWith(files));
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "missing-data-file", path: "data/study.ndjson",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  it("refuses a malformed NDJSON line — a corrupt container is not something to guess at", () => {
+    const content = `${JSON.stringify(VALID_TASK_LIST)}\n{ broken\n`;
+    const files = baseFiles({ fileContents: { "data/tasks.ndjson": content } });
+    const result = parseImportArchive(importInputWith(files));
+    expect(result.problems).toEqual([
+      { severity: "error", code: "invalid-json", path: "data/tasks.ndjson", line: 2 },
+    ]);
+    expect(result.data).toBeNull();
+    expect(result.dropped).toEqual([]);
+  });
+});
+
+describe("parseImportArchive — import mode: a bad row is dropped, not fatal", () => {
+  it("demotes invalid-record to a warning, drops the row, and keeps the good ones", () => {
+    const broken = { ...VALID_TASK, id: "t2", status: "nonsense" };
+    const files = baseFiles({ fileContents: { "data/tasks.ndjson": tasksFile([VALID_TASK, broken]) } });
+
+    const result = parseImportArchive(importInputWith(files));
+
+    expect(result.problems).toEqual([
+      { severity: "warning", code: "invalid-record", path: "data/tasks.ndjson", line: 3, detail: "status" },
+    ]);
+    expect(result.data?.tasks.map((row) => row.id)).toEqual(["t1"]);
+    expect(result.dropped).toEqual([
+      { module: "tasks", type: "task", reason: "invalid-record", detail: "status" },
+    ]);
+  });
+
+  it("demotes an unknown record type, naming the raw string and no known type", () => {
+    const files = baseFiles({
+      fileContents: { "data/tasks.ndjson": tasksFile([{ type: "gadget", id: "g1" }]) },
+    });
+
+    const result = parseImportArchive(importInputWith(files));
+
+    expect(result.problems).toEqual([
+      { severity: "warning", code: "unknown-record-type", path: "data/tasks.ndjson", line: 2, detail: "gadget" },
+    ]);
+    expect(result.dropped).toEqual([
+      { module: "tasks", type: null, reason: "unknown-record-type", detail: "gadget" },
+    ]);
+    expect(result.data).not.toBeNull();
+  });
+
+  it("demotes a known type sitting in the wrong data file", () => {
+    const files = baseFiles({ fileContents: { "data/calendar.ndjson": ndjson([VALID_SUBJECT]) } });
+
+    const result = parseImportArchive(importInputWith(files));
+
+    expect(result.problems).toEqual([
+      { severity: "warning", code: "invalid-record", path: "data/calendar.ndjson", line: 1, detail: "type" },
+    ]);
+    expect(result.dropped).toEqual([
+      { module: "calendar", type: "subject", reason: "invalid-record", detail: "type" },
+    ]);
+    expect(result.data?.subjects).toEqual([]);
+  });
+
+  it("drops the SECOND occurrence of a duplicate id and keeps the first", () => {
+    const first = { ...VALID_EVENT, title: "Prvi" };
+    const second = { ...VALID_EVENT, title: "Drugi" };
+    const files = baseFiles({ fileContents: { "data/calendar.ndjson": ndjson([first, second]) } });
+
+    const result = parseImportArchive(importInputWith(files));
+
+    expect(result.problems).toEqual([
+      { severity: "warning", code: "duplicate-id", path: "data/calendar.ndjson", line: 2, detail: "e1" },
+    ]);
+    expect(result.data?.events.map((row) => row.title)).toEqual(["Prvi"]);
+    expect(result.dropped).toEqual([
+      { module: "calendar", type: "event", reason: "duplicate-id", detail: "e1" },
+    ]);
+  });
+
+  it("drops the second occurrence of a duplicate JOIN row, keyed on its composite identity", () => {
+    const link = { type: "note-tag-link", noteId: "n1", tagId: "ntag1" };
+    const files = baseFiles({
+      fileContents: { "data/notes.ndjson": ndjson([VALID_NOTE_TAG, VALID_NOTE, link, link]) },
+    });
+
+    const result = parseImportArchive(importInputWith(files));
+
+    expect(result.dropped).toEqual([
+      { module: "notes", type: "note-tag-link", reason: "duplicate-id", detail: "noteId=n1,tagId=ntag1" },
+    ]);
+    expect(result.data?.noteTagLinks).toHaveLength(1);
+  });
+
+  it("names every drop in problems as well — salvage never becomes silence", () => {
+    const files = baseFiles({
+      fileContents: {
+        "data/tasks.ndjson": tasksFile([{ ...VALID_TASK, id: "t2", priority: "urgent" }]),
+        "data/calendar.ndjson": ndjson([{ ...VALID_PERSON, month: 13 }]),
+      },
+    });
+
+    const result = parseImportArchive(importInputWith(files));
+
+    expect(result.dropped).toHaveLength(2);
+    expect(result.problems).toHaveLength(2);
+    expect(result.problems.every((p) => p.severity === "warning")).toBe(true);
+    expect(result.data).not.toBeNull();
+  });
+});
+
+describe("parseImportArchive — import mode: drops cascade along references", () => {
+  it("a dropped list leaves its tasks in the Inbox rule's null placement", () => {
+    const list = { ...VALID_TASK_LIST, id: "tl-bad", isInbox: false, name: "Posao", defaultView: "gantt" };
+    const section = {
+      type: "task-section", id: "sec1", listId: "tl-bad", name: "U toku", position: 1024,
+      createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+    };
+    const task = { ...VALID_TASK, id: "t9", listId: "tl-bad", sectionId: "sec1" };
+    const files = baseFiles({ fileContents: { "data/tasks.ndjson": ndjson([list, section, task]) } });
+
+    const result = parseImportArchive(importInputWith(files));
+
+    // The list's `defaultView` is outside migration 022's CHECK, so the list
+    // itself drops; its section drops with it; the task survives, unplaced.
+    expect(result.data?.taskLists).toEqual([]);
+    expect(result.data?.taskSections).toEqual([]);
+    expect(result.data?.tasks).toHaveLength(1);
+    expect(result.data?.tasks[0]?.listId).toBeNull();
+    expect(result.data?.tasks[0]?.sectionId).toBeNull();
+    expect(result.dropped.map((drop) => `${drop.type ?? "?"}:${drop.reason}`)).toEqual([
+      "task-list:invalid-record",
+      "task:unknown-reference",
+      "task-section:unknown-reference",
+    ]);
+  });
+
+  it("a dropped deck takes its cards, and the cards take their review log", () => {
+    const deck = { ...VALID_DECK, name: "" };
+    const files = baseFiles({
+      fileContents: {
+        "data/study.ndjson": ndjson([VALID_SUBJECT, deck, VALID_CARD, VALID_REVIEW]),
+      },
+    });
+
+    const result = parseImportArchive(importInputWith(files));
+
+    expect(result.data?.subjects).toHaveLength(1);
+    expect(result.data?.decks).toEqual([]);
+    expect(result.data?.cards).toEqual([]);
+    expect(result.data?.reviewLog).toEqual([]);
+    expect(result.dropped.map((drop) => drop.type)).toEqual(["deck", "card", "review"]);
+  });
+
+  it("a dropped subject cascades all the way to a study block", () => {
+    const subject = { ...VALID_SUBJECT, color: "neon" };
+    const files = baseFiles({
+      fileContents: {
+        "data/study.ndjson": ndjson([subject, VALID_EXAM, VALID_PLAN, VALID_BLOCK, VALID_FOCUS_SESSION]),
+      },
+    });
+
+    const result = parseImportArchive(importInputWith(files));
+
+    expect(result.data?.subjects).toEqual([]);
+    expect(result.data?.exams).toEqual([]);
+    expect(result.data?.plans).toEqual([]);
+    expect(result.data?.blocks).toEqual([]);
+    expect(result.data?.focusSessions).toEqual([]);
+    expect(new Set(result.dropped.map((drop) => drop.type))).toEqual(
+      new Set(["subject", "exam", "plan", "block", "focus-session"]),
+    );
+  });
+
+  it("a dropped note takes its attachments, versions, tag links and derived cards", () => {
+    const note = { ...VALID_NOTE, pinned: "yes" };
+    const link = { type: "note-tag-link", noteId: "n1", tagId: "ntag1" };
+    const derived = { ...VALID_CARD, sourceNoteId: "n1", sourceBlockKey: "b1" };
+    const files = baseFiles({
+      fileContents: {
+        "data/notes.ndjson": ndjson([VALID_NOTE_TAG, note, link, VALID_NOTE_ATTACHMENT, VALID_NOTE_VERSION]),
+        "data/study.ndjson": ndjson([VALID_SUBJECT, VALID_DECK, derived]),
+      },
+    });
+
+    const result = parseImportArchive(
+      importInputWith(files, {
+        ydocs: new Map([["data/note-versions/n1/3.ydoc", docSnapshot("verzija")]]),
+        blobNames: new Set(["a".repeat(64)]),
+      }),
+    );
+
+    expect(result.data?.notes).toEqual([]);
+    expect(result.data?.noteAttachments).toEqual([]);
+    expect(result.data?.noteVersions).toEqual([]);
+    expect(result.data?.noteTagLinks).toEqual([]);
+    expect(result.data?.cards).toEqual([]);
+    // The tag itself is not a dependent of the note and stays.
+    expect(result.data?.noteTags).toHaveLength(1);
+  });
+
+  it("a dropped parent task takes its subtree", () => {
+    const parent = { ...VALID_TASK, id: "tp", title: "" };
+    const child = { ...VALID_TASK, id: "tc", parentId: "tp" };
+    const grandchild = { ...VALID_TASK, id: "tg", parentId: "tc" };
+    const files = baseFiles({
+      fileContents: { "data/tasks.ndjson": tasksFile([parent, child, grandchild]) },
+    });
+
+    const result = parseImportArchive(importInputWith(files));
+
+    expect(result.data?.tasks).toEqual([]);
+    expect(result.dropped.map((drop) => drop.detail)).toEqual(["title", "parentId=tp", "parentId=tc"]);
+  });
+
+  it("a note whose folder dropped keeps its body and lands at the root", () => {
+    const folder = { ...SALVAGE_NOTE_FOLDER, color: "neon" };
+    const note = { ...VALID_NOTE, folderId: "f1" };
+    const files = baseFiles({ fileContents: { "data/notes.ndjson": ndjson([folder, note]) } });
+
+    const result = parseImportArchive(importInputWith(files));
+
+    expect(result.data?.noteFolders).toEqual([]);
+    expect(result.data?.notes).toHaveLength(1);
+    expect(result.data?.notes[0]?.folderId).toBeNull();
+  });
+
+  it("a note whose card deck dropped keeps its body and stops generating cards", () => {
+    const deck = { ...VALID_DECK, name: "" };
+    const note = { ...VALID_NOTE, cardDeckId: "dk1" };
+    const files = baseFiles({
+      fileContents: {
+        "data/study.ndjson": ndjson([VALID_SUBJECT, deck]),
+        "data/notes.ndjson": ndjson([note]),
+      },
+    });
+
+    const result = parseImportArchive(importInputWith(files));
+
+    expect(result.data?.notes).toHaveLength(1);
+    expect(result.data?.notes[0]?.cardDeckId).toBeNull();
+  });
+
+  it("a task pointing at a section of some OTHER list falls to the list body", () => {
+    const other = { ...VALID_TASK_LIST, id: "tl2", isInbox: false, name: "Drugi" };
+    const section = {
+      type: "task-section", id: "sec1", listId: "tl2", name: "U toku", position: 1024,
+      createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+    };
+    const task = { ...VALID_TASK, listId: "tl1", sectionId: "sec1" };
+    const files = baseFiles({
+      fileContents: { "data/tasks.ndjson": ndjson([VALID_TASK_LIST, other, section, task]) },
+    });
+
+    const result = parseImportArchive(importInputWith(files));
+
+    expect(result.data?.tasks).toHaveLength(1);
+    expect(result.data?.tasks[0]?.listId).toBe("tl1");
+    expect(result.data?.tasks[0]?.sectionId).toBeNull();
+  });
+
+  it("breaks a parent cycle by dropping the row it closes on, then cascades", () => {
+    const a = { ...SALVAGE_NOTE_FOLDER, id: "fa", parentId: "fb" };
+    const b = { ...SALVAGE_NOTE_FOLDER, id: "fb", parentId: "fa" };
+    const files = baseFiles({ fileContents: { "data/notes.ndjson": ndjson([a, b]) } });
+
+    const result = parseImportArchive(importInputWith(files));
+
+    expect(result.data?.noteFolders).toEqual([]);
+    expect(result.dropped.map((drop) => drop.reason)).toEqual(["reference-cycle", "unknown-reference"]);
+    expect(result.problems.every((p) => p.severity === "warning")).toBe(true);
+  });
+
+  it("a dangling reference to a row that was never in the archive at all still drops the referrer", () => {
+    const files = baseFiles({
+      fileContents: { "data/study.ndjson": ndjson([VALID_SUBJECT, VALID_DECK, VALID_CARD, VALID_REVIEW]) },
+    });
+    // Same archive, minus the deck: the card and its review have nothing to hang off.
+    const withoutDeck = baseFiles({
+      fileContents: { "data/study.ndjson": ndjson([VALID_SUBJECT, VALID_CARD, VALID_REVIEW]) },
+    });
+
+    expect(parseImportArchive(importInputWith(files)).data?.cards).toHaveLength(1);
+    const result = parseImportArchive(importInputWith(withoutDeck));
+    expect(result.data?.cards).toEqual([]);
+    expect(result.data?.reviewLog).toEqual([]);
+  });
+});
+
+describe("parseImportArchive — import mode: Yjs state", () => {
+  it("keeps a note whose state will not decode, and says so", () => {
+    const files = baseFiles({ fileContents: { "data/notes.ndjson": ndjson([VALID_NOTE]) } });
+    const result = parseImportArchive(
+      importInputWith(files, { ydocs: new Map([["data/notes/n1.ydoc", new Uint8Array([9, 9, 9])]]) }),
+    );
+
+    expect(result.problems).toEqual([
+      { severity: "warning", code: "invalid-ydoc", path: "data/notes/n1.ydoc" },
+    ]);
+    expect(result.data?.notes).toHaveLength(1);
+    expect(result.data?.notes[0]?.snapshot).toBeNull();
+    // The ROW survived, so nothing was dropped.
+    expect(result.dropped).toEqual([]);
+  });
+
+  it("drops a note version whose state is missing, and keeps its note", () => {
+    const files = baseFiles({
+      fileContents: { "data/notes.ndjson": ndjson([VALID_NOTE, VALID_NOTE_VERSION]) },
+    });
+
+    const result = parseImportArchive(importInputWith(files));
+
+    expect(result.problems).toEqual([
+      { severity: "warning", code: "missing-ydoc", path: "data/note-versions/n1/3.ydoc" },
+    ]);
+    expect(result.data?.notes).toHaveLength(1);
+    expect(result.data?.noteVersions).toEqual([]);
+    expect(result.dropped).toEqual([
+      {
+        module: "notes", type: "note-version", reason: "missing-ydoc",
+        detail: "data/note-versions/n1/3.ydoc",
+      },
+    ]);
+  });
+
+  it("carries a surviving note's and version's state through untouched", () => {
+    const noteState = docSnapshot("telo");
+    const versionState = docSnapshot("verzija");
+    const files = baseFiles({
+      fileContents: { "data/notes.ndjson": ndjson([VALID_NOTE, VALID_NOTE_VERSION]) },
+    });
+
+    const result = parseImportArchive(
+      importInputWith(files, {
+        ydocs: new Map([
+          ["data/notes/n1.ydoc", noteState],
+          ["data/note-versions/n1/3.ydoc", versionState],
+        ]),
+      }),
+    );
+
+    expect(result.problems).toEqual([]);
+    expect(result.data?.notes[0]?.snapshot).toBe(noteState);
+    expect(result.data?.noteVersions[0]?.snapshot).toBe(versionState);
+  });
+});
+
+describe("parseImportArchive — mode is opt-in and restore is unchanged", () => {
+  it("defaults to restore when no mode is given", () => {
+    const files = baseFiles({
+      fileContents: { "data/tasks.ndjson": tasksFile([{ ...VALID_TASK, status: "nonsense" }]) },
+    });
+
+    const result = parseImportArchive(emptyInputWith(files));
+
+    expect(result.problems[0]?.severity).toBe("error");
+    expect(result.data).toBeNull();
+    expect(result.dropped).toEqual([]);
+  });
+
+  it("restore mode refuses what import mode salvages, from the very same archive", () => {
+    const files = baseFiles({
+      fileContents: { "data/tasks.ndjson": tasksFile([VALID_TASK, { ...VALID_TASK, id: "t2", done: true }]) },
+    });
+
+    const strict = parseImportArchive({ ...emptyInputWith(files), mode: "restore" });
+    const salvaged = parseImportArchive({ ...emptyInputWith(files), mode: "import" });
+
+    expect(strict.data).toBeNull();
+    expect(strict.dropped).toEqual([]);
+    expect(salvaged.data?.tasks.map((row) => row.id)).toEqual(["t1"]);
+  });
+
+  it("reads a flawless round trip identically in both modes", () => {
+    const archive = buildExportArchive({ ...emptyExportInput(), data: richProfileData() });
+    const strict = parseImportArchive(toImportInput(archive));
+    const salvaged = parseImportArchive({ ...toImportInput(archive), mode: "import" });
+
+    expect(strict.problems).toEqual([]);
+    expect(salvaged.problems).toEqual([]);
+    expect(salvaged.dropped).toEqual([]);
+    expect(salvaged.data).toEqual(strict.data);
+  });
+});
