@@ -1,16 +1,18 @@
 import { useEffect, useState } from "react";
 import type { Dispatch, FormEvent, SetStateAction } from "react";
-import { Button, Card, Checkbox, TextField } from "@nexus/ui";
-import { PASSCODE_MIN_LENGTH } from "../../shared/ipc.js";
-import type { AuthErrorReason, AuthStatus } from "../../shared/ipc.js";
+import { Button, Card, Checkbox, ListRow, TextField } from "@nexus/ui";
+import { MAX_ACCOUNT_LABEL_LENGTH, PASSCODE_MIN_LENGTH } from "../../shared/ipc.js";
+import type { AccountSummary, AuthErrorReason, AuthStatus } from "../../shared/ipc.js";
 import { strings } from "./strings.js";
 
 /**
- * The local-account lock screen (ADR-018). Four screens share one shell,
- * mirroring `Onboarding`'s `.onb`/`.onb__card` structure so the first thing a
- * user ever sees matches the second: (a) create the passcode, (b) the
- * one-time Recovery Kit, (c) unlock, (d) recovery. `App` renders this instead
- * of the app shell whenever `status.state !== "unlocked"`.
+ * The local-account lock screen (ADR-018, extended by ADR-044). Five screens
+ * share one shell, mirroring `Onboarding`'s `.onb`/`.onb__card` structure so
+ * the first thing a user ever sees matches the second: (a) create an account,
+ * (b) the one-time Recovery Kit, (c) unlock, (d) recovery, and (e) the account
+ * picker that comes ahead of (c) whenever this device holds more than one.
+ * `App` renders this instead of the app shell whenever
+ * `status.state !== "unlocked"`.
  */
 export interface AuthGateProps {
   status: AuthStatus;
@@ -18,12 +20,24 @@ export interface AuthGateProps {
   onUnlocked: () => void;
 }
 
-type Screen = "create" | "recoveryKit" | "unlock" | "recovery";
+type Screen = "picker" | "create" | "recoveryKit" | "unlock" | "recovery";
 
+/**
+ * No accounts at all is the only "create" case — everything else opens on the
+ * picker when there is a choice to make, and goes straight to the selected
+ * account's own form when there is not.
+ */
 function initialScreen(status: AuthStatus): Screen {
-  if (status.state === "uninitialized") return "create";
-  if (status.requiresRecovery) return "recovery";
-  return "unlock";
+  if (status.accounts.length === 0) return "create";
+  if (status.accounts.length > 1) return "picker";
+  return status.requiresRecovery ? "recovery" : "unlock";
+}
+
+/** The one line under an account's label in the picker: why it cannot simply be opened, in the order that decides what the user has to do about it. */
+function accountStateLine(account: AccountSummary, keystoreAvailable: boolean): string {
+  if (!keystoreAvailable) return strings.auth.picker.stateKeystoreUnavailable;
+  if (account.requiresRecovery) return strings.auth.picker.stateRecovery;
+  return strings.auth.picker.stateLocked;
 }
 
 // Mirrors @nexus/core/auth's own Unicode-aware check (HAS_LETTER/HAS_DIGIT) —
@@ -116,11 +130,24 @@ export function RecoveryKitPanel({ code, onContinue }: RecoveryKitPanelProps) {
 
 interface CreateFormProps {
   status: AuthStatus;
+  /** True when this device already holds accounts: the copy changes, a way back to the picker appears, and the call goes to `createAdditionalAccount` (which locks whatever is open first). */
+  additional: boolean;
+  onBack: () => void;
   onCreated: (recoveryCode: string) => void;
 }
 
-/** Screen (a): the passcode-creation form, or — when the OS keystore is unavailable — an explanation with no form at all (ADR-018: never a silent PIN-only downgrade). */
-function CreateForm({ status, onCreated }: CreateFormProps) {
+/**
+ * Screen (a): name the account, set its passcode — or, when the OS keystore is
+ * unavailable, an explanation with no form at all (ADR-018: never a silent
+ * PIN-only downgrade).
+ *
+ * One form serves the first account and every later one (ADR-044): the fields
+ * are identical, and only the copy, the way back and which channel it calls
+ * differ. The name comes FIRST because it is the thing the user is deciding —
+ * the passcode is how they protect the decision.
+ */
+function CreateForm({ status, additional, onBack, onCreated }: CreateFormProps) {
+  const [label, setLabel] = useState("");
   const [passcode, setPasscode] = useState("");
   const [confirm, setConfirm] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -131,6 +158,11 @@ function CreateForm({ status, onCreated }: CreateFormProps) {
       <>
         <h1 className="auth__title">{strings.auth.keystoreUnavailable.title}</h1>
         <p className="auth__note">{strings.auth.keystoreUnavailable.description}</p>
+        {additional && (
+          <Button variant="ghost" size="sm" type="button" onClick={onBack}>
+            {strings.auth.picker.back}
+          </Button>
+        )}
       </>
     );
   }
@@ -139,6 +171,10 @@ function CreateForm({ status, onCreated }: CreateFormProps) {
     event.preventDefault();
     if (submitting) return;
     setError(null);
+    if (label.trim().length === 0) {
+      setError(strings.auth.validation.labelRequired);
+      return;
+    }
     if (!passcodeMeetsPolicy(passcode)) {
       setError(strings.auth.validation.tooWeak);
       return;
@@ -149,7 +185,9 @@ function CreateForm({ status, onCreated }: CreateFormProps) {
     }
     setSubmitting(true);
     try {
-      const result = await window.nexus.createAccount(passcode);
+      const result = additional
+        ? await window.nexus.createAdditionalAccount(label, passcode)
+        : await window.nexus.createAccount(label, passcode);
       if (result.ok && result.recoveryCode) {
         onCreated(result.recoveryCode);
         return;
@@ -165,14 +203,27 @@ function CreateForm({ status, onCreated }: CreateFormProps) {
 
   return (
     <form className="auth__form" onSubmit={(event) => void submit(event)}>
-      <h1 className="auth__title">{strings.auth.create.title}</h1>
-      <p className="auth__note">{strings.auth.create.intro}</p>
+      <h1 className="auth__title">
+        {additional ? strings.auth.create.additionalTitle : strings.auth.create.title}
+      </h1>
+      <p className="auth__note">
+        {additional ? strings.auth.create.additionalIntro : strings.auth.create.intro}
+      </p>
+      <TextField
+        label={strings.auth.create.labelLabel}
+        placeholder={strings.auth.create.labelPlaceholder}
+        value={label}
+        maxLength={MAX_ACCOUNT_LABEL_LENGTH}
+        autoFocus
+        required
+        onChange={(event) => setLabel(event.target.value)}
+      />
+      <p className="auth__note">{strings.auth.create.labelNote}</p>
       <TextField
         type="password"
         label={strings.auth.create.passcodeLabel}
         placeholder={strings.auth.create.passcodePlaceholder}
         value={passcode}
-        autoFocus
         required
         onChange={(event) => setPasscode(event.target.value)}
       />
@@ -193,7 +244,149 @@ function CreateForm({ status, onCreated }: CreateFormProps) {
       <Button type="submit" variant="primary" disabled={submitting}>
         {strings.auth.create.submit}
       </Button>
+      {additional && (
+        <Button variant="ghost" size="sm" type="button" disabled={submitting} onClick={onBack}>
+          {strings.auth.picker.back}
+        </Button>
+      )}
     </form>
+  );
+}
+
+interface AccountPickerProps {
+  status: AuthStatus;
+  /** A rename answers with the whole status; the gate holds it so the list redraws without another round trip. */
+  onStatusChange: (next: AuthStatus) => void;
+  /** Main has switched: the gate decides whether that account wants the passcode form or the recovery one. */
+  onSelected: (next: AuthStatus) => void;
+  onAdd: () => void;
+}
+
+/**
+ * Screen (e): the account picker (ADR-044 section 5). Every account this device
+ * holds, each with the one line that says why it is not simply open, plus a
+ * rename — labels live in the plaintext registry, so renaming one needs no
+ * unlock at all, which is exactly what makes it possible from here.
+ *
+ * Built from the house list recipe (`ListRow`), with the account's own NAME as
+ * the button that opens it: the row's action and its identity are the same
+ * thing, so there is nothing to label „Otvori" separately, and the row needs no
+ * click handler competing with the „Preimenuj" beside it. Renaming takes over
+ * the whole card in the `.auth__form` shape every other screen here uses,
+ * rather than cramming a field and two buttons into one row.
+ */
+function AccountPicker({ status, onStatusChange, onSelected, onAdd }: AccountPickerProps) {
+  const [renaming, setRenaming] = useState<AccountSummary | null>(null);
+  const [draftLabel, setDraftLabel] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function select(accountId: string): Promise<void> {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      onSelected(await window.nexus.selectAccount(accountId));
+    } catch (selectError) {
+      setError(strings.auth.error.generic);
+      console.error("Nexus: failed to select an account:", selectError);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitRename(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (busy || renaming === null) return;
+    setError(null);
+    if (draftLabel.trim().length === 0) {
+      setError(strings.auth.validation.labelRequired);
+      return;
+    }
+    setBusy(true);
+    try {
+      onStatusChange(await window.nexus.renameAccount(renaming.id, draftLabel));
+      setRenaming(null);
+    } catch (renameError) {
+      setError(strings.auth.picker.renameError);
+      console.error("Nexus: failed to rename an account:", renameError);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (renaming !== null) {
+    return (
+      <form className="auth__form" onSubmit={(event) => void submitRename(event)}>
+        <h1 className="auth__title">{strings.auth.picker.rename}</h1>
+        <p className="auth__note">{strings.auth.create.labelNote}</p>
+        <TextField
+          label={strings.auth.picker.renameFieldLabel}
+          value={draftLabel}
+          maxLength={MAX_ACCOUNT_LABEL_LENGTH}
+          autoFocus
+          required
+          onChange={(event) => setDraftLabel(event.target.value)}
+        />
+        {error != null && (
+          <p className="auth__error" role="alert">
+            {error}
+          </p>
+        )}
+        <Button type="submit" variant="primary" disabled={busy}>
+          {strings.auth.picker.renameSave}
+        </Button>
+        <Button variant="ghost" size="sm" type="button" disabled={busy} onClick={() => setRenaming(null)}>
+          {strings.auth.picker.renameCancel}
+        </Button>
+      </form>
+    );
+  }
+
+  return (
+    <div className="auth__form">
+      <h1 className="auth__title">{strings.auth.picker.title}</h1>
+      <p className="auth__note">{strings.auth.picker.description}</p>
+      <div>
+        {status.accounts.map((account) => (
+          <ListRow
+            key={account.id}
+            trailing={
+              <Button
+                size="sm"
+                disabled={busy}
+                onClick={() => {
+                  setRenaming(account);
+                  setDraftLabel(account.label);
+                  setError(null);
+                }}
+              >
+                {strings.auth.picker.rename}
+              </Button>
+            }
+          >
+            {/* The name IS the button, with its state carried inside it: one
+                control per account, so the label and the line about it can
+                never drift apart on their own baselines. `.nx-button`'s own
+                gap does the spacing. */}
+            <Button disabled={busy} onClick={() => void select(account.id)}>
+              {account.label}
+              <span className="auth__note">
+                {accountStateLine(account, status.keystoreAvailable)}
+              </span>
+            </Button>
+          </ListRow>
+        ))}
+      </div>
+      {error != null && (
+        <p className="auth__error" role="alert">
+          {error}
+        </p>
+      )}
+      <Button type="button" disabled={busy} onClick={onAdd}>
+        {strings.auth.picker.add}
+      </Button>
+    </div>
   );
 }
 
@@ -201,12 +394,23 @@ interface UnlockFormProps {
   /** Lifted to `AuthGate` (not local state) so a detour through "Zaboravio sam kod" and back does not reset an in-progress throttle countdown to the gate's original mount-time value. */
   lockedForMs: number;
   onLockedForMsChange: Dispatch<SetStateAction<number>>;
+  /** The label of the account this form unlocks — shown only when there is more than one, where "which one is this" is a real question. */
+  accountLabel: string | null;
+  /** Back to the picker; null when this device holds a single account and there is nothing to choose between. */
+  onOtherAccount: (() => void) | null;
   onForgot: () => void;
   onUnlocked: () => void;
 }
 
 /** Screen (c): a single passcode field. Throttled attempts disable the form and count the wait down locally, re-enabling it without another round-trip once it reaches zero. */
-function UnlockForm({ lockedForMs, onLockedForMsChange, onForgot, onUnlocked }: UnlockFormProps) {
+function UnlockForm({
+  lockedForMs,
+  onLockedForMsChange,
+  accountLabel,
+  onOtherAccount,
+  onForgot,
+  onUnlocked,
+}: UnlockFormProps) {
   const [passcode, setPasscode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -251,7 +455,7 @@ function UnlockForm({ lockedForMs, onLockedForMsChange, onForgot, onUnlocked }: 
 
   return (
     <form className="auth__form" onSubmit={(event) => void submit(event)}>
-      <h1 className="auth__title">{strings.auth.unlock.title}</h1>
+      <h1 className="auth__title">{accountLabel ?? strings.auth.unlock.title}</h1>
       <p className="auth__note">{strings.auth.unlock.description}</p>
       <TextField
         type="password"
@@ -279,6 +483,11 @@ function UnlockForm({ lockedForMs, onLockedForMsChange, onForgot, onUnlocked }: 
       <Button variant="ghost" size="sm" type="button" onClick={onForgot}>
         {strings.auth.unlock.forgot}
       </Button>
+      {onOtherAccount != null && (
+        <Button variant="ghost" size="sm" type="button" onClick={onOtherAccount}>
+          {strings.auth.unlock.otherAccount}
+        </Button>
+      )}
     </form>
   );
 }
@@ -373,17 +582,34 @@ function RecoveryForm({ forced, onBack, onUnlocked }: RecoveryFormProps) {
   );
 }
 
-export function AuthGate({ status, onUnlocked }: AuthGateProps) {
-  const [screen, setScreen] = useState<Screen>(() => initialScreen(status));
-  // Fixed at mount: whether screen (d) was forced by `requiresRecovery` (no
-  // back link) or reached manually from (c) via "Zaboravio sam kod" (back
-  // link present). `status` itself never changes under a mounted AuthGate —
-  // App only re-renders it after a full unlock/lock cycle, which unmounts it.
-  const [recoveryForced] = useState(status.requiresRecovery);
+export function AuthGate({ status: initialStatus, onUnlocked }: AuthGateProps) {
+  // Owned here rather than read from the prop on every render (ADR-044):
+  // selecting an account and renaming one both answer with a whole fresh
+  // status, and the gate has to redraw from it without a lock/unlock cycle
+  // (the only thing that used to change `status` under a mounted gate).
+  const [status, setStatus] = useState(initialStatus);
+  const [screen, setScreen] = useState<Screen>(() => initialScreen(initialStatus));
+  // Whether screen (d) was forced by `requiresRecovery` (no back link) or
+  // reached manually from (c) via "Zaboravio sam kod" (back link present).
+  // Re-decided on every account switch, since it is a fact about the account
+  // now selected and not about this mount.
+  const [recoveryForced, setRecoveryForced] = useState(initialStatus.requiresRecovery);
   const [pendingRecoveryCode, setPendingRecoveryCode] = useState<string | null>(null);
   // See `UnlockFormProps.lockedForMs`'s doc comment for why this lives here
   // rather than inside `UnlockForm` itself.
-  const [lockedForMs, setLockedForMs] = useState(status.lockedForMs);
+  const [lockedForMs, setLockedForMs] = useState(initialStatus.lockedForMs);
+
+  const multipleAccounts = status.accounts.length > 1;
+  const selectedLabel =
+    status.accounts.find((account) => account.id === status.selectedAccountId)?.label ?? null;
+
+  /** Main has switched accounts: adopt its answer wholesale, including the throttle window and whether the passcode is usable on this device at all. */
+  function adoptSelection(next: AuthStatus): void {
+    setStatus(next);
+    setLockedForMs(next.lockedForMs);
+    setRecoveryForced(next.requiresRecovery);
+    setScreen(next.requiresRecovery ? "recovery" : "unlock");
+  }
 
   return (
     <div className="auth">
@@ -392,9 +618,19 @@ export function AuthGate({ status, onUnlocked }: AuthGateProps) {
           <span className="auth__brand" aria-hidden="true">
             ✦
           </span>
+          {screen === "picker" && (
+            <AccountPicker
+              status={status}
+              onStatusChange={setStatus}
+              onSelected={adoptSelection}
+              onAdd={() => setScreen("create")}
+            />
+          )}
           {screen === "create" && (
             <CreateForm
               status={status}
+              additional={status.accounts.length > 0}
+              onBack={() => setScreen("picker")}
               onCreated={(code) => {
                 setPendingRecoveryCode(code);
                 setScreen("recoveryKit");
@@ -408,6 +644,8 @@ export function AuthGate({ status, onUnlocked }: AuthGateProps) {
             <UnlockForm
               lockedForMs={lockedForMs}
               onLockedForMsChange={setLockedForMs}
+              accountLabel={multipleAccounts ? selectedLabel : null}
+              onOtherAccount={multipleAccounts ? () => setScreen("picker") : null}
               onForgot={() => setScreen("recovery")}
               onUnlocked={onUnlocked}
             />

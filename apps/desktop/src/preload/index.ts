@@ -9,7 +9,12 @@ import { IpcChannel, type NexusApi } from "../shared/ipc.js";
  */
 const api: NexusApi = {
   getAuthStatus: () => ipcRenderer.invoke(IpcChannel.authStatus),
-  createAccount: (passcode) => ipcRenderer.invoke(IpcChannel.authCreate, { passcode }),
+  createAccount: (label, passcode) => ipcRenderer.invoke(IpcChannel.authCreate, { label, passcode }),
+  createAdditionalAccount: (label, passcode) =>
+    ipcRenderer.invoke(IpcChannel.authCreateAdditional, { label, passcode }),
+  selectAccount: (accountId) => ipcRenderer.invoke(IpcChannel.authSelectAccount, { accountId }),
+  renameAccount: (accountId, label) =>
+    ipcRenderer.invoke(IpcChannel.authRenameAccount, { accountId, label }),
   unlockWithPasscode: (passcode) => ipcRenderer.invoke(IpcChannel.authUnlock, { passcode }),
   unlockWithRecovery: (recoveryCode, newPasscode) =>
     ipcRenderer.invoke(IpcChannel.authRecover, { recoveryCode, newPasscode }),

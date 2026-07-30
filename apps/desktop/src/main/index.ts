@@ -172,9 +172,22 @@ import {
   type BlobStorePaths,
 } from "./attachments.js";
 import {
+  MAX_ACCOUNT_LABEL_LENGTH,
+  absorbLegacyFlatData,
+  accountDir,
+  accountExists,
+  beginAccountDir,
+  readRegistry,
+  registerAccount,
+  renameAccount,
+  resumeAccountsMigration,
+  selectAccount,
+} from "./accounts.js";
+import {
   AuthError,
   changePasscode,
   createAccount,
+  isKeystoreAvailable,
   readStatus,
   regenerateRecoveryCode,
   unlockWithPasscode,
@@ -222,6 +235,7 @@ import {
   SEARCH_PAGE_MAX_RESULTS,
   SEARCH_QUERY_MAX_BYTES,
   SEARCH_RESULT_MAX_LIMIT,
+  type AccountSummary,
   type AppInfo,
   type CardKind,
   type AuthResult,
@@ -257,6 +271,13 @@ const isSmoke = process.argv.includes("--smoke");
 
 /** Fixed passcode the smoke run creates its own throwaway account with (ADR-018) — satisfies `validatePasscode` (8+ chars, letter and digit) and is never used for anything but the smoke harness's own disposable `userData/smoke` directory. */
 const SMOKE_PASSCODE = "smoke-passcode-1";
+
+/** The label the smoke run's throwaway account is created with (ADR-044) — proves the registry keeps what `auth:create` was handed. */
+const SMOKE_ACCOUNT_LABEL = "Smoke nalog";
+
+/** The second account the multi-account rehearsal adds, with a passcode of its own — two accounts must never share a key chain (ADR-044). */
+const SMOKE_SECOND_LABEL = "Drugi smoke nalog";
+const SMOKE_SECOND_PASSCODE = "second-passcode-2";
 
 // SEC-EL: registers the `nx-blob:` scheme as privileged (ADR-014) — MUST run
 // at module scope, before the app's "ready" event, or Electron ignores it.
@@ -315,20 +336,59 @@ let legacyMigrationTask: Promise<unknown> = Promise.resolve();
 // a `focus_sessions` row.
 const runningFocusSessions = new Map<string, RunningFocusSession>();
 
+// --- Accounts (ADR-044) -----------------------------------------------------
+
+/**
+ * Which local account every path below resolves against, and which one the
+ * seven original auth channels act on. Set once at startup (`lastActiveId`, or
+ * the sole account) and changed only by `auth:select-account` /
+ * `auth:create-additional` — both of which lock first, so there is never more
+ * than one unlocked account. Null only until the very first account exists.
+ */
+let activeAccountId: string | null = null;
+
+/** The `userData` directory itself — the registry's home, and the root every account directory hangs off. */
+function userDataDir(): string {
+  return app.getPath("userData");
+}
+
+/**
+ * `<userData>/accounts/<activeAccountId>` — what every `main/auth.ts` function
+ * takes as its first argument, and what every data path below is built from.
+ * Throws when no account is selected: every caller either runs after startup
+ * chose one or after a create made one, so a null here is an internal ordering
+ * mistake, not a state the user can reach.
+ */
+function activeAccountDir(): string {
+  if (activeAccountId === null) {
+    throw new Error("Internal error: no local account is selected.");
+  }
+  return accountDir(userDataDir(), activeAccountId);
+}
+
 // --- Database ---------------------------------------------------------------
 
 function databasePath(): string {
-  return join(app.getPath("userData"), "nexus.db");
+  return join(activeAccountDir(), "nexus.db");
 }
 
-/** `<userData>/blobs` (encrypted) + `<userData>/attachments` (legacy plaintext) — the NOTE attachment blob store's roots (ADR-014, encrypted at rest per ADR-019). */
+/** `<account>/blobs` (encrypted) + `<account>/attachments` (legacy plaintext) — the NOTE attachment blob store's roots (ADR-014, encrypted at rest per ADR-019). */
 function blobStorePathsFor(): BlobStorePaths {
-  return blobStorePaths(app.getPath("userData"));
+  return blobStorePaths(activeAccountDir());
 }
 
-/** `<userData>/tmp-open` — where `openExternally` copies a blob before handing it to the OS's default app. */
+/** `<account>/tmp-open` — where `openExternally` copies a blob before handing it to the OS's default app. */
 function tmpOpenDirPath(): string {
-  return join(app.getPath("userData"), "tmp-open");
+  return join(activeAccountDir(), "tmp-open");
+}
+
+/** Removes a directory and everything under it, forgiving the busy files Windows refuses to delete — see `wipeTmpOpenDir`. */
+function wipeDirBestEffort(path: string): void {
+  try {
+    rmSync(path, { recursive: true, force: true });
+  } catch {
+    // Busy files stay behind until a later attempt; nothing here is worth failing a lock over.
+  }
 }
 
 /**
@@ -339,16 +399,21 @@ function tmpOpenDirPath(): string {
  * still holding a temp copy — the next lock or launch clears it.
  */
 function wipeTmpOpenDir(): void {
-  try {
-    rmSync(tmpOpenDirPath(), { recursive: true, force: true });
-  } catch {
-    // Busy files stay behind until a later attempt; nothing here is worth failing a lock over.
-  }
+  if (activeAccountId === null) return;
+  wipeDirBestEffort(tmpOpenDirPath());
 }
 
-/** The `userData` directory itself — what every `main/auth.ts` function takes as its first argument (`keychain.json` lives directly inside it, beside `nexus.db`). */
-function userDataDir(): string {
-  return app.getPath("userData");
+/**
+ * Every account's `tmp-open`, for the startup sweep. A lock only ever wipes the
+ * account it locked, and a process that died never locked at all — so the one
+ * pass that has to be exhaustive is this one, which cannot know which account
+ * the previous run was on.
+ */
+function wipeAllTmpOpenDirs(): void {
+  const userData = userDataDir();
+  for (const account of readRegistry(userData).accounts) {
+    wipeDirBestEffort(join(accountDir(userData, account.id), "tmp-open"));
+  }
 }
 
 const SIDECAR_SUFFIXES = ["-wal", "-shm"] as const;
@@ -700,6 +765,34 @@ function asCardKind(value: unknown, field: string): CardKind {
     return value as CardKind;
   }
   throw new Error(`Invalid IPC payload: "${field}" is not a valid card kind.`);
+}
+
+/** Account label (ADR-044): the same shape rule as a profile name — string, 1–80 chars after trimming, trimmed value stored. `main/accounts.ts` re-checks it before it ever reaches the registry. */
+function asAccountLabel(value: unknown, field: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`Invalid IPC payload: "${field}" must be a string.`);
+  }
+  const trimmed = value.trim();
+  if (trimmed.length < 1 || trimmed.length > MAX_ACCOUNT_LABEL_LENGTH) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be 1-${MAX_ACCOUNT_LABEL_LENGTH} characters after trimming.`,
+    );
+  }
+  return trimmed;
+}
+
+/**
+ * An account id the registry actually knows. Membership is the check that
+ * matters, not the string's shape: this value becomes a directory name, and
+ * only ids the registry itself wrote are ever turned into one — a renderer can
+ * name no path main did not already create.
+ */
+function asAccountId(value: unknown, field: string): string {
+  const id = asNonEmptyString(value, field);
+  if (!accountExists(userDataDir(), id)) {
+    throw new Error(`Invalid IPC payload: "${field}" is not a known account id.`);
+  }
+  return id;
 }
 
 /** Profile display name: string, 1–80 chars after trimming; the trimmed value is stored. */
@@ -2127,13 +2220,66 @@ function runSearchPage(profileId: string, rawQuery: string): SearchPageResult {
 // exactly what tells the two apart.
 
 /**
+ * One account's on-disk status, with a damaged key chain reported as a plain
+ * locked account instead of a thrown error. `auth:status` answers for EVERY
+ * account at once (ADR-044), so one unparseable file must not be able to take
+ * the whole picker down and strand the healthy accounts beside it. Nothing is
+ * hidden by this: the moment that account is actually unlocked,
+ * `unlockWithPasscode` raises the same `corruptKeychain` and the lock screen
+ * says so in as many words — which is the screen where the user can do
+ * something about it, unlike the generic load-failure page a thrown status
+ * would have produced.
+ */
+function readAccountStatusSafely(dir: string): Omit<AuthStatus, "accounts" | "selectedAccountId"> {
+  try {
+    return readStatus(dir);
+  } catch {
+    return {
+      state: "locked",
+      lockedForMs: 0,
+      keystoreAvailable: isKeystoreAvailable(),
+      requiresRecovery: false,
+    };
+  }
+}
+
+/**
  * `auth.readStatus` can only ever report "uninitialized" or "locked" — it has
  * no way to know the database is open in this process. Only `db !== null`
  * means genuinely unlocked this session, so that is layered on top here.
+ *
+ * The per-account flags (`state`, `lockedForMs`, `requiresRecovery`) describe
+ * the SELECTED account (ADR-044); `accounts` carries every account's label plus
+ * the one live fact the picker draws a state line from. `requiresRecovery` is
+ * read per account rather than assumed device-wide precisely because each
+ * account's guard is bound to its own device secret — one carried in from
+ * another machine needs its Kit while its neighbours unlock normally.
  */
 function computeAuthStatus(): AuthStatus {
-  const fileStatus = readStatus(userDataDir());
-  return db !== null ? { ...fileStatus, state: "unlocked" } : fileStatus;
+  const userData = userDataDir();
+  const accounts: AccountSummary[] = readRegistry(userData).accounts.map((entry) => ({
+    ...entry,
+    requiresRecovery: readAccountStatusSafely(accountDir(userData, entry.id)).requiresRecovery,
+  }));
+
+  if (activeAccountId === null) {
+    return {
+      state: "uninitialized",
+      lockedForMs: 0,
+      keystoreAvailable: isKeystoreAvailable(),
+      requiresRecovery: false,
+      accounts,
+      selectedAccountId: null,
+    };
+  }
+
+  const fileStatus = readAccountStatusSafely(activeAccountDir());
+  return {
+    ...fileStatus,
+    ...(db !== null ? { state: "unlocked" as const } : {}),
+    accounts,
+    selectedAccountId: activeAccountId,
+  };
 }
 
 /** Starts everything that only makes sense once the database is open. Never during the smoke run — a scheduled check firing mid-smoke would make its deterministic exit flaky, the same reason `app.whenReady` used to skip it. */
@@ -2229,32 +2375,97 @@ async function adoptUnlockedKey(dataKeyHex: string): Promise<void> {
   );
 }
 
-/** Converts an `AuthError` into the `AuthResult` the renderer branches on; a `"throttled"` reason additionally carries a freshly computed `lockedForMs` (the guard file was left untouched by the throttle check that raised it, so re-reading it here is exact, not stale). Anything that is NOT an `AuthError` is rethrown — an unexpected failure, not an expected refusal. */
-function authResultFromError(error: unknown): AuthResult {
+/** Converts an `AuthError` into the `AuthResult` the renderer branches on; a `"throttled"` reason additionally carries a freshly computed `lockedForMs` (the guard file was left untouched by the throttle check that raised it, so re-reading it here is exact, not stale) read from `dir` — the account the refused call was about, which is not always the selected one. Anything that is NOT an `AuthError` is rethrown — an unexpected failure, not an expected refusal. */
+function authResultFromError(error: unknown, dir: string): AuthResult {
   if (error instanceof AuthError) {
     if (error.reason === "throttled") {
-      return { ok: false, reason: error.reason, lockedForMs: readStatus(userDataDir()).lockedForMs };
+      return { ok: false, reason: error.reason, lockedForMs: readStatus(dir).lockedForMs };
     }
     return { ok: false, reason: error.reason };
   }
   throw error;
 }
 
-async function handleAuthCreate(passcode: string): Promise<AuthResult> {
+/**
+ * Creates an account and opens it, in the one order that survives a failure at
+ * every step (ADR-044 section 4):
+ *
+ * 1. Claim a directory. `beginAccountDir` resumes into a keychain-less one, so
+ *    a create that died — or was refused for a weak passcode — leaves a
+ *    directory the NEXT attempt reuses rather than a fresh one beside it.
+ * 2. For the first account only, absorb a pre-ADR-044 flat install's data into
+ *    that directory. It has to happen before `openEncrypted` looks for the
+ *    database, or the encrypt-in-place ladder would create an empty one beside
+ *    the user's real file. An additional account never absorbs anything: by
+ *    then startup has already given any flat residue to `accounts[0]`.
+ * 3. Write the key chain. Only once that lands is there an account at all.
+ * 4. Write the registry entry — after the key chain, never before, so the list
+ *    can never advertise an account nothing is able to unlock.
+ * 5. Select and open. `activeAccountId` moves only after the key chain exists,
+ *    so a refused create can never leave the app pointing at a directory with
+ *    nothing in it.
+ */
+async function createLocalAccount(
+  label: string,
+  passcode: string,
+  absorbLegacy: boolean,
+): Promise<AuthResult> {
+  const userData = userDataDir();
+  const accountId = beginAccountDir(userData);
+  const dir = accountDir(userData, accountId);
   try {
-    const { dataKeyHex, recoveryCode } = await createAccount(userDataDir(), passcode);
+    if (absorbLegacy) absorbLegacyFlatData(userData, accountId);
+    const { dataKeyHex, recoveryCode } = await createAccount(dir, passcode);
+    registerAccount(userData, accountId, label, new Date().toISOString());
+    activeAccountId = accountId;
     openEncrypted(dataKeyHex);
     await adoptUnlockedKey(dataKeyHex);
     startUnlockedServices();
     return { ok: true, recoveryCode };
   } catch (error) {
-    return authResultFromError(error);
+    return authResultFromError(error, dir);
   }
+}
+
+/** First run: refused outright once any account exists, so it can never close a database somebody is using. `auth:create-additional` is the channel that may. */
+async function handleAuthCreate(label: string, passcode: string): Promise<AuthResult> {
+  if (readRegistry(userDataDir()).accounts.length > 0) {
+    return { ok: false, reason: "alreadyInitialized" };
+  }
+  return createLocalAccount(label, passcode, true);
+}
+
+/** Adds an account from the picker and switches to it. Locks first — exactly what switching does, and for the same reason: two unlocked accounts would mean two open databases and two sets of keys in memory. */
+async function handleAuthCreateAdditional(label: string, passcode: string): Promise<AuthResult> {
+  performLock();
+  return createLocalAccount(label, passcode, false);
+}
+
+/**
+ * Points every other auth channel at a different account. Switching away from
+ * an unlocked one is exactly `performLock()` first (ADR-044 section 5) — the
+ * whole session teardown, not a subset of it — so no reminder, undo slot, focus
+ * timer or blob key can survive into the account that follows. Re-selecting the
+ * account already active is a no-op rather than a needless lock.
+ */
+function handleAuthSelectAccount(accountId: string): AuthStatus {
+  if (accountId !== activeAccountId) {
+    performLock();
+    activeAccountId = accountId;
+    selectAccount(userDataDir(), accountId);
+  }
+  return computeAuthStatus();
+}
+
+/** Renames an account's label. Allowed while locked: the label lives in the plaintext registry, not behind the key chain. */
+function handleAuthRenameAccount(accountId: string, label: string): AuthStatus {
+  renameAccount(userDataDir(), accountId, label);
+  return computeAuthStatus();
 }
 
 async function handleAuthUnlock(passcode: string): Promise<AuthResult> {
   try {
-    const dataKeyHex = await unlockWithPasscode(userDataDir(), passcode);
+    const dataKeyHex = await unlockWithPasscode(activeAccountDir(), passcode);
     // The passcode is always fully verified above, regardless of session
     // state — only the database (re)open is idempotent: a redundant-but-
     // correct unlock while already unlocked must not call `openDatabase` a
@@ -2268,13 +2479,13 @@ async function handleAuthUnlock(passcode: string): Promise<AuthResult> {
     }
     return { ok: true };
   } catch (error) {
-    return authResultFromError(error);
+    return authResultFromError(error, activeAccountDir());
   }
 }
 
 async function handleAuthRecover(recoveryCode: string, newPasscode: string): Promise<AuthResult> {
   try {
-    const dataKeyHex = await unlockWithRecovery(userDataDir(), recoveryCode, newPasscode);
+    const dataKeyHex = await unlockWithRecovery(activeAccountDir(), recoveryCode, newPasscode);
     // Same idempotent-open discipline as `handleAuthUnlock` — the recovered
     // data key is unchanged from whatever is already open, so there is
     // nothing to reopen, but the recovery code and new passcode are always
@@ -2286,16 +2497,16 @@ async function handleAuthRecover(recoveryCode: string, newPasscode: string): Pro
     }
     return { ok: true };
   } catch (error) {
-    return authResultFromError(error);
+    return authResultFromError(error, activeAccountDir());
   }
 }
 
 async function handleAuthChangePasscode(currentPasscode: string, nextPasscode: string): Promise<AuthResult> {
   try {
-    await changePasscode(userDataDir(), currentPasscode, nextPasscode);
+    await changePasscode(activeAccountDir(), currentPasscode, nextPasscode);
     return { ok: true };
   } catch (error) {
-    return authResultFromError(error);
+    return authResultFromError(error, activeAccountDir());
   }
 }
 
@@ -2308,10 +2519,10 @@ async function handleAuthRegenerateRecovery(): Promise<AuthResult> {
     throw new Error("Cannot regenerate the recovery code while locked.");
   }
   try {
-    const recoveryCode = await regenerateRecoveryCode(userDataDir(), unlockedDataKeyHex);
+    const recoveryCode = await regenerateRecoveryCode(activeAccountDir(), unlockedDataKeyHex);
     return { ok: true, recoveryCode };
   } catch (error) {
-    return authResultFromError(error);
+    return authResultFromError(error, activeAccountDir());
   }
 }
 
@@ -2491,8 +2702,32 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.authCreate, (event, payload): Promise<AuthResult> => {
     assertTrustedSender(event);
-    const passcode = asPasscode(asRecord(payload).passcode, "passcode");
-    return handleAuthCreate(passcode);
+    const body = asRecord(payload);
+    const label = asAccountLabel(body.label, "label");
+    const passcode = asPasscode(body.passcode, "passcode");
+    return handleAuthCreate(label, passcode);
+  });
+
+  ipcMain.handle(IpcChannel.authCreateAdditional, (event, payload): Promise<AuthResult> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const label = asAccountLabel(body.label, "label");
+    const passcode = asPasscode(body.passcode, "passcode");
+    return handleAuthCreateAdditional(label, passcode);
+  });
+
+  ipcMain.handle(IpcChannel.authSelectAccount, (event, payload): AuthStatus => {
+    assertTrustedSender(event);
+    const accountId = asAccountId(asRecord(payload).accountId, "accountId");
+    return handleAuthSelectAccount(accountId);
+  });
+
+  ipcMain.handle(IpcChannel.authRenameAccount, (event, payload): AuthStatus => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const accountId = asAccountId(body.accountId, "accountId");
+    const label = asAccountLabel(body.label, "label");
+    return handleAuthRenameAccount(accountId, label);
   });
 
   ipcMain.handle(IpcChannel.authUnlock, (event, payload): Promise<AuthResult> => {
@@ -4345,13 +4580,23 @@ function createWindow(): BrowserWindow {
 
 /** Runs before the window exists: creates the smoke run's own account so the renderer's readiness round-trip (which calls a data channel) has something to succeed against. */
 async function runSmokeAuthSetup(): Promise<void> {
-  const before = readStatus(userDataDir());
+  const before = computeAuthStatus();
   if (before.state !== "uninitialized") {
     throw new Error(`expected an uninitialized account before smoke setup, got "${before.state}"`);
   }
-  const created = await handleAuthCreate(SMOKE_PASSCODE);
+  if (before.accounts.length !== 0 || before.selectedAccountId !== null) {
+    throw new Error(`expected no accounts before smoke setup, got ${JSON.stringify(before.accounts)}`);
+  }
+  const created = await handleAuthCreate(SMOKE_ACCOUNT_LABEL, SMOKE_PASSCODE);
   if (!created.ok) {
     throw new Error(`smoke account creation failed: ${created.reason}`);
+  }
+  const after = computeAuthStatus();
+  if (after.accounts.length !== 1 || after.selectedAccountId !== after.accounts[0]?.id) {
+    throw new Error(`expected exactly one selected account after setup, got ${JSON.stringify(after)}`);
+  }
+  if (after.accounts[0]?.label !== SMOKE_ACCOUNT_LABEL) {
+    throw new Error(`expected the created account to keep its label, got ${JSON.stringify(after.accounts)}`);
   }
   if (created.recoveryCode === undefined) {
     throw new Error("account creation returned no Recovery Kit code");
@@ -4386,7 +4631,7 @@ const SMOKE_MIGRATED_PASSCODE = "migrated-passcode-2";
 async function runSmokeMigrationRehearsal(): Promise<void> {
   performLock();
 
-  const keychainFile = join(userDataDir(), "keychain.json");
+  const keychainFile = join(activeAccountDir(), "keychain.json");
   const parsed: unknown = JSON.parse(readFileSync(keychainFile, "utf8"));
   const foreignGuard = { ...(parsed as Record<string, unknown>), guard: randomBytes(64).toString("base64") };
   writeFileSync(keychainFile, JSON.stringify(foreignGuard, null, 2));
@@ -4581,6 +4826,70 @@ function runSmokeSearchRehearsal(): void {
   }
 }
 
+/**
+ * Rehearses multiple local accounts end to end (ADR-044): add a second account,
+ * switch back to the first, rename the second. Runs LAST, so nothing before it
+ * has to care that the selected account moved, and it is the only place the
+ * per-account directory layout is proved against a real filesystem and a real
+ * OS keystore at once — a second account with its own key chain, its own
+ * database and its own device secret.
+ *
+ * By this point the first account's passcode is `SMOKE_MIGRATED_PASSCODE`: the
+ * migration rehearsal above recovered it and set that one.
+ */
+async function runSmokeMultiAccountRehearsal(): Promise<void> {
+  const firstId = computeAuthStatus().selectedAccountId;
+  if (firstId === null) throw new Error("expected an account to be selected before adding a second");
+
+  const created = await handleAuthCreateAdditional(SMOKE_SECOND_LABEL, SMOKE_SECOND_PASSCODE);
+  if (!created.ok) {
+    throw new Error(`expected a second account to be created, got reason "${created.reason}"`);
+  }
+
+  const added = computeAuthStatus();
+  if (added.accounts.length !== 2) {
+    throw new Error(`expected two accounts after adding one, got ${JSON.stringify(added.accounts)}`);
+  }
+  if (added.state !== "unlocked" || added.selectedAccountId === firstId) {
+    throw new Error(`expected the new account to be selected and open, got ${JSON.stringify(added)}`);
+  }
+  const secondId = added.selectedAccountId;
+  if (secondId === null) throw new Error("expected the new account to be selected");
+  // Its own database, seeded from scratch — never the first account's rows.
+  if (listProfiles(requireDb()).length !== 1) {
+    throw new Error("expected the second account to open a freshly seeded database of its own");
+  }
+
+  // Switching is a lock plus a select: the previous account's database must be
+  // closed, not merely unreferenced.
+  const switched = handleAuthSelectAccount(firstId);
+  if (switched.state !== "locked" || switched.selectedAccountId !== firstId) {
+    throw new Error(`expected switching back to leave the first account locked, got ${JSON.stringify(switched)}`);
+  }
+  if (db !== null) {
+    throw new Error("expected switching accounts to close the open database");
+  }
+
+  const reopened = await handleAuthUnlock(SMOKE_MIGRATED_PASSCODE);
+  if (!reopened.ok) {
+    throw new Error(`expected the first account to unlock after a switch, got reason "${reopened.reason}"`);
+  }
+  if (listProfiles(requireDb()).length < 1) {
+    throw new Error("expected the first account's own data to come back after the switch");
+  }
+
+  // A label is plaintext registry data, so renaming the account that is NOT
+  // open works without unlocking it.
+  const renamed = handleAuthRenameAccount(secondId, `${SMOKE_SECOND_LABEL} 2`);
+  const renamedEntry = renamed.accounts.find((account) => account.id === secondId);
+  if (renamedEntry?.label !== `${SMOKE_SECOND_LABEL} 2`) {
+    throw new Error(`expected the locked account to be renameable, got ${JSON.stringify(renamed.accounts)}`);
+  }
+  if (renamed.selectedAccountId !== firstId || renamed.state !== "unlocked") {
+    throw new Error(`expected a rename to leave the session alone, got ${JSON.stringify(renamed)}`);
+  }
+}
+
 async function runSmoke(win: BrowserWindow): Promise<void> {
   const profiles = listProfiles(requireDb());
   if (profiles.length < 1) {
@@ -4634,6 +4943,7 @@ async function runSmoke(win: BrowserWindow): Promise<void> {
   await runSmokeMigrationRehearsal();
   await runSmokeBlobMigrationRehearsal();
   runSmokeSearchRehearsal();
+  await runSmokeMultiAccountRehearsal();
 }
 
 // --- Auto-update (SEC-EL-07) -------------------------------------------------
@@ -4690,11 +5000,21 @@ app.whenReady().then(async () => {
   }
 
   try {
+    // ADR-044, and strictly before anything answers the renderer: bring the
+    // on-disk layout up to the per-account one (resuming an interrupted move),
+    // then choose which account this launch is about. `lastActiveId` is what
+    // the previous session left; a registry that has forgotten it (or never
+    // had one) falls back to the oldest account, which is the only account at
+    // all on every install that has just one.
+    const bootRegistry = resumeAccountsMigration(userDataDir());
+    activeAccountId = bootRegistry.lastActiveId ?? bootRegistry.accounts[0]?.id ?? null;
+
     // See `performLock`'s doc comment: `openExternally`'s temp copies are an
     // unavoidable plaintext residue outside both blob stores. Wiping them once
     // here catches whatever a previous run left behind if the process died
-    // before a lock ever ran (a graceful lock already wipes this directory).
-    wipeTmpOpenDir();
+    // before a lock ever ran (a graceful lock already wipes this directory) —
+    // across EVERY account, since nothing on disk records which one that was.
+    wipeAllTmpOpenDirs();
 
     // ADR-018: the main process starts LOCKED. No database is opened here —
     // `db` stays null until `auth:create`/`auth:unlock`/`auth:recover`
@@ -4718,7 +5038,11 @@ app.whenReady().then(async () => {
           return null;
         }
       },
-      blobStorePathsFor(),
+      // Lazy for the same reason the key getter is: the blob roots move with
+      // the selected account (ADR-044), and this registration outlives every
+      // switch. Read only after the key check below it, which is what
+      // guarantees an account is selected by the time it runs.
+      blobStorePathsFor,
       () => blobKeys,
     );
 

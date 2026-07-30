@@ -208,6 +208,11 @@ export function App() {
       lockedForMs: 0,
       keystoreAvailable: previous?.keystoreAvailable ?? true,
       requiresRecovery: false,
+      // Carried over rather than re-fetched: locking changes neither the
+      // account list nor which one is selected (ADR-044), and AuthGate needs
+      // both to decide whether to open on the picker or the passcode form.
+      accounts: previous?.accounts ?? [],
+      selectedAccountId: previous?.selectedAccountId ?? null,
     }));
   }
 
@@ -735,6 +740,20 @@ export function App() {
                 {strings.search.navLabel}
               </NavItem>
               <NotificationCenter profileId={activeProfile.id} onNavigate={setActiveId} />
+              {/* Only with somewhere to switch TO (ADR-044). Locking is the
+                  whole action: AuthGate opens on the picker by itself once
+                  this device holds more than one account. */}
+              {authStatus.accounts.length > 1 && (
+                <NavItem
+                  href="#"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void handleLock();
+                  }}
+                >
+                  {strings.auth.switchAction}
+                </NavItem>
+              )}
               <NavItem
                 href="#"
                 onClick={(event) => {

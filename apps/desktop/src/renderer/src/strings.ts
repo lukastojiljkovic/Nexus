@@ -36,15 +36,25 @@ export const strings = {
     saveError: "Čuvanje nije uspelo. Pokušaj ponovo.",
   },
 
-  /** Local account lock screen (ADR-018 / AUTH-002..005): create → Kit za oporavak → unlock → recovery, plus the shared error map and the sidebar lock action. */
+  /** Local account lock screen (ADR-018 / AUTH-002..005, extended by ADR-044 / AUTH-006): picker → create → Kit za oporavak → unlock → recovery, plus the shared error map and the sidebar lock/switch actions. */
   auth: {
     validation: {
       tooWeak: "Pristupni kod mora imati bar 8 karaktera, uz najmanje jedno slovo i jednu cifru.",
       mismatch: "Kodovi se ne poklapaju.",
+      labelRequired: "Upiši ime naloga.",
     },
     create: {
       title: "Zaštiti svoj Nexus",
       intro: "Postavi pristupni kod koji će štititi sve tvoje podatke na ovom računaru.",
+      additionalTitle: "Novi nalog",
+      additionalIntro:
+        "Novi nalog ima svoj pristupni kod i svoje podatke — ništa se ne deli sa nalozima koji već postoje.",
+      labelLabel: "Ime naloga",
+      labelPlaceholder: "npr. Lični",
+      // The registry that holds this name is plaintext by design (ADR-044): it
+      // is what the lock screen lists before anything is unlocked. Said plainly
+      // where the name is typed, never buried in a settings page.
+      labelNote: "Ovo ime je vidljivo na zaključanom ekranu.",
       passcodeLabel: "Pristupni kod",
       passcodePlaceholder: "Najmanje 8 karaktera, slovo i cifra",
       confirmLabel: "Potvrdi pristupni kod",
@@ -76,6 +86,22 @@ export const strings = {
       submit: "Otključaj",
       forgot: "Zaboravljen pristupni kod?",
       retryPrefix: "Previše pokušaja — probaj ponovo za",
+      otherAccount: "Drugi nalog",
+    },
+    /** The account picker (ADR-044 / AUTH-006) — shown ahead of the lock screen whenever this device holds more than one account. */
+    picker: {
+      title: "Izaberi nalog",
+      description: "Na ovom računaru postoji više naloga. Svaki ima svoj pristupni kod i svoje podatke.",
+      stateLocked: "Zaključan",
+      stateRecovery: "Traži Kit za oporavak",
+      stateKeystoreUnavailable: "Sistemski trezor nije dostupan",
+      rename: "Preimenuj",
+      renameFieldLabel: "Novo ime naloga",
+      renameSave: "Sačuvaj",
+      renameCancel: "Otkaži",
+      renameError: "Preimenovanje nije uspelo. Pokušaj ponovo.",
+      add: "Dodaj nalog",
+      back: "Nazad na izbor naloga",
     },
     recovery: {
       title: "Oporavak pristupa",
@@ -106,6 +132,8 @@ export const strings = {
       generic: "Radnja nije uspela. Pokušaj ponovo.",
     },
     lockAction: "Zaključaj",
+    /** Sidebar, only when this device holds more than one account: locks the open one, which brings the picker back (ADR-044). */
+    switchAction: "Promeni nalog",
   },
 
   /** Display names for registered modules, keyed by module id. */

@@ -464,6 +464,13 @@ const SHA256_HOST_PATTERN = /^[0-9a-f]{64}$/;
  * lets an inline image still resolve out of the legacy store during the
  * migration window.
  *
+ * `getPaths` is a getter for the same reason `getKeys` is: the protocol is
+ * registered once at startup, but the blob roots move with the SELECTED account
+ * (ADR-044), so a path captured at registration time would keep serving the
+ * account that happened to be active then. It is read only after the `getKeys`
+ * null-check, which is what guarantees an account is selected by the time it is
+ * called at all.
+ *
  * The response always carries the main-process-sniffed `Content-Type` (never
  * the renderer's claim, SEC-FILE-02) plus `X-Content-Type-Options: nosniff`.
  * `sniffMime` (`@nexus/core`) never returns `text/html` or any other markup
@@ -473,7 +480,7 @@ const SHA256_HOST_PATTERN = /^[0-9a-f]{64}$/;
  */
 export function registerBlobProtocol(
   lookupMime: (sha256: string) => string | null,
-  paths: BlobStorePaths,
+  getPaths: () => BlobStorePaths,
   getKeys: () => BlobKeys | null,
 ): void {
   protocol.handle("nx-blob", async (request) => {
@@ -492,7 +499,7 @@ export function registerBlobProtocol(
       return new Response(null, { status: 404 });
     }
 
-    const bytes = await readBlob(paths, keys, host);
+    const bytes = await readBlob(getPaths(), keys, host);
     if (bytes === null) {
       return new Response(null, { status: 404 });
     }

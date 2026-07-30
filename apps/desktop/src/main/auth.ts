@@ -269,6 +269,16 @@ function decryptGuard(guardBase64: string): GuardPayload | null {
   return parsed;
 }
 
+/**
+ * Whether the OS keystore can encrypt at all. Device-global — `safeStorage`
+ * knows nothing about accounts — so `main/index.ts` reads it directly when
+ * there is no account to run `readStatus` against yet (a first-ever launch,
+ * ADR-044), rather than pointing that function at a directory it invented.
+ */
+export function isKeystoreAvailable(): boolean {
+  return safeStorage.isEncryptionAvailable();
+}
+
 /** Refuses up front — no silent PIN-only downgrade (ADR-018) — for every call that needs the device-bound half of the key chain. */
 function assertKeystoreAvailable(): void {
   if (!safeStorage.isEncryptionAvailable()) {

@@ -18,6 +18,9 @@ export const IpcChannel = {
   authChangePasscode: "auth:change-passcode",
   authRegenerateRecovery: "auth:regenerate-recovery",
   authLock: "auth:lock",
+  authSelectAccount: "auth:select-account",
+  authCreateAdditional: "auth:create-additional",
+  authRenameAccount: "auth:rename-account",
   profilesList: "profiles:list",
   profilesRename: "profiles:rename",
   flagsGet: "flags:get",
@@ -244,12 +247,36 @@ export type AuthErrorReason =
  */
 export const PASSCODE_MIN_LENGTH = 8;
 
+/** Longest account label the create form and the picker's rename accept. Mirrors `main/accounts.ts`'s `MAX_ACCOUNT_LABEL_LENGTH`, redeclared here so the renderer can cap its own input; main stays authoritative. */
+export const MAX_ACCOUNT_LABEL_LENGTH = 80;
+
+/**
+ * One local account as the lock screen sees it (ADR-044). The registry's three
+ * plaintext fields plus the one live fact the picker needs to draw a state line
+ * for an account it has not selected.
+ *
+ * `label` is PLAINTEXT on disk by design: it is what the picker lists before
+ * anything is unlocked, so it cannot live inside an encrypted database. The
+ * create form says so where the field is typed.
+ */
+export interface AccountSummary {
+  id: string;
+  label: string;
+  createdAt: string;
+  /**
+   * Per-account, not per-device: each account's guard blob is bound to its own
+   * device secret, so one carried over from another machine needs its Recovery
+   * Kit while the others on this machine unlock normally.
+   */
+  requiresRecovery: boolean;
+}
+
 /** The local account's status (ADR-018) — the first thing the renderer asks about, before profiles or flags. */
 export interface AuthStatus {
   state: AuthState;
   /** Milliseconds still to wait before another attempt is accepted; 0 when none. */
   lockedForMs: number;
-  /** False when the OS keystore is unavailable — account creation is refused rather than silently downgraded. */
+  /** False when the OS keystore is unavailable — account creation is refused rather than silently downgraded. Device-global: `safeStorage` knows nothing about accounts. */
   keystoreAvailable: boolean;
   /**
    * True when this data was carried over from another machine or Windows
@@ -259,6 +286,17 @@ export interface AuthStatus {
    * the recovery form instead of the passcode form.
    */
   requiresRecovery: boolean;
+  /**
+   * Every local account on this device (ADR-044), oldest first. Empty on a
+   * first-ever launch, which is exactly when `state` is `"uninitialized"`.
+   */
+  accounts: AccountSummary[];
+  /**
+   * The account `state`, `lockedForMs` and `requiresRecovery` above describe,
+   * and the one every other auth channel acts on. Null only when there are no
+   * accounts yet.
+   */
+  selectedAccountId: string | null;
 }
 
 /**
@@ -274,8 +312,35 @@ export type AuthResult =
   | { ok: true; recoveryCode?: string }
   | { ok: false; reason: AuthErrorReason; lockedForMs?: number };
 
+/** `label` names the account on the lock screen and is stored in plaintext (see `AccountSummary`); creation is refused outright once any account exists. */
 export interface AuthCreateRequest {
+  label: string;
   passcode: string;
+}
+
+/**
+ * A second (third, …) account, created from the picker while others already
+ * exist (ADR-044 section 4). Payload-identical to `AuthCreateRequest`, and
+ * deliberately a channel of its own rather than a flag on it: this one LOCKS
+ * the current session before it creates anything (there is never more than one
+ * unlocked account), while `auth:create` can only ever run when nothing is
+ * unlocked at all. Collapsing the two would put "may close the open database"
+ * behind a boolean.
+ */
+export interface AuthCreateAdditionalRequest {
+  label: string;
+  passcode: string;
+}
+
+/** Switches which account every other auth channel acts on. Switching away from an unlocked one locks it first (ADR-044 section 5). */
+export interface AuthSelectAccountRequest {
+  accountId: string;
+}
+
+/** Renames an account's lock-screen label. Works while locked — the label is plaintext registry data, not something behind the key chain. */
+export interface AuthRenameAccountRequest {
+  accountId: string;
+  label: string;
 }
 
 export interface AuthUnlockRequest {
@@ -2870,7 +2935,13 @@ export interface NexusApi {
   /** ADR-018: the local account's status. The first thing the renderer asks about, before profiles or flags — there is no code path where a data channel is called before this. */
   getAuthStatus(): Promise<AuthStatus>;
   /** First run: creates the local account (encrypting an existing plaintext database in place if one predates this) and returns the one-time Recovery Kit code on success — the only time it is ever handed back. */
-  createAccount(passcode: string): Promise<AuthResult>;
+  createAccount(label: string, passcode: string): Promise<AuthResult>;
+  /** Adds another local account and switches to it, locking whatever was open first (ADR-044). Returns the new account's one-time Recovery Kit code, exactly as `createAccount` does. */
+  createAdditionalAccount(label: string, passcode: string): Promise<AuthResult>;
+  /** Points every other auth channel at a different account, locking the current one first when it was open. Answers with the freshly computed status so the picker never has to ask twice. */
+  selectAccount(accountId: string): Promise<AuthStatus>;
+  /** Renames an account's lock-screen label; allowed while locked. Answers with the freshly computed status. */
+  renameAccount(accountId: string, label: string): Promise<AuthStatus>;
   /** Opens the database with the passcode-derived key, or a throttled/wrong-passcode refusal. */
   unlockWithPasscode(passcode: string): Promise<AuthResult>;
   /** Recovers from a forgotten passcode: verifies the Recovery Kit code and sets a new passcode in the same call. */
