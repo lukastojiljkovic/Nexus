@@ -620,7 +620,11 @@ describe("task attachment names inside the task's search entry (migration 025)",
     const profileId = createProfile();
     const tasks = new TaskStore(db.raw, profileId);
     const task = tasks.create({ title: "Za kasnije" });
-    attach(task.id, "prilog.pdf");
+    // Explicit ids, exactly as the id-order test above: the projection orders
+    // by id, and a same-millisecond pair of GENERATED UUIDv7s orders randomly
+    // (the sibling-shuffle class) — which is a fact about the test's fixture,
+    // not about the entry, whose order is stable for any given file.
+    attach(task.id, "prilog.pdf", "a1");
 
     expect(entry("task", task.id)?.body).toBe("prilog.pdf");
 
@@ -632,7 +636,7 @@ describe("task attachment names inside the task's search entry (migration 025)",
     // A write to the child table while the parent is soft-deleted must not
     // resurrect the entry: the refresh reinserts from the view, whose own
     // liveness filter is what decides whether a row comes back at all.
-    attach(task.id, "dok.pdf");
+    attach(task.id, "dok.pdf", "a2");
     expect(entry("task", task.id)).toBeUndefined();
     expect(ftsCount()).toBe(entryCount());
 
