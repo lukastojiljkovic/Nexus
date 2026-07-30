@@ -233,21 +233,51 @@ describe("readStoredShortcutOverrides", () => {
     });
   });
 
-  // CURRENT BEHAVIOUR, pinned rather than endorsed: the conflict check passes an
-  // EMPTY bindings map, so it can only ever catch the reserved Ctrl+digit
-  // family. A hand-edited file that puts an action on another action's chord —
-  // or two actions on the same chord — is read back intact, and the global
-  // handler then fires whichever the shell checks first. Unreachable through
-  // the Settings capture surface (which refuses a taken chord), so it is pinned
-  // and reported, not fixed here.
-  it("does NOT drop a stored chord that collides with another action's binding", () => {
+  // A hand-edited file is the only way a taken chord reaches the reader — the
+  // Settings capture surface refuses one — and two actions on a single chord
+  // would leave the global handler firing whichever the shell checks first.
+  it("drops a stored chord that collides with another action's binding", () => {
     seedRaw(JSON.stringify({ palette: "Ctrl+L" }));
-    const resolved = resolveShortcuts(readStoredShortcutOverrides());
-    expect(formatChord(resolved.palette)).toBe("Ctrl+L");
-    expect(formatChord(resolved.lock)).toBe("Ctrl+L");
+    expect(readStoredShortcutOverrides()).toEqual({});
 
-    seedRaw(JSON.stringify({ palette: "Ctrl+J", lock: "Ctrl+J" }));
-    expect(Object.keys(readStoredShortcutOverrides()).sort()).toEqual(["lock", "palette"]);
+    const resolved = resolveShortcuts(readStoredShortcutOverrides());
+    expect(formatChord(resolved.palette)).toBe("Ctrl+K"); // back on its default
+    expect(formatChord(resolved.lock)).toBe("Ctrl+L"); // still the only Ctrl+L
+  });
+
+  it("keeps the FIRST of two overrides claiming one chord, in registry order", () => {
+    // `palette` is laid out before `lock`, so it wins — whichever order the
+    // file happens to list them in.
+    for (const raw of [
+      { palette: "Ctrl+J", lock: "Ctrl+J" },
+      { lock: "Ctrl+J", palette: "Ctrl+J" },
+    ]) {
+      seedRaw(JSON.stringify(raw));
+      const overrides = readStoredShortcutOverrides();
+      expect(Object.keys(overrides), JSON.stringify(raw)).toEqual(["palette"]);
+      expect(formatChord(resolveShortcuts(overrides).lock)).toBe("Ctrl+L");
+    }
+  });
+
+  it("accepts an override claiming a default the override before it just freed", () => {
+    // palette moves off Ctrl+K, so Ctrl+K is genuinely free by the time
+    // quickCreate asks for it — the effective map, not the raw defaults.
+    seedRaw(JSON.stringify({ palette: "Alt+P", quickCreate: "Ctrl+K" }));
+    expect(serialized(resolveShortcuts(readStoredShortcutOverrides()))).toEqual({
+      ...serialized(DEFAULTS),
+      palette: "Alt+P",
+      quickCreate: "Ctrl+K",
+    });
+  });
+
+  it("judges a candidate against the defaults of actions not yet reached", () => {
+    // quickCreate is still on Ctrl+N when palette asks for it, so palette is
+    // dropped even though quickCreate later vacates that chord. Conservative,
+    // but fixed by the registry order rather than by the file's key order.
+    seedRaw(JSON.stringify({ palette: "Ctrl+N", quickCreate: "Alt+Q" }));
+    expect(readStoredShortcutOverrides()).toEqual({
+      quickCreate: { ctrl: false, alt: true, shift: false, key: "q" },
+    });
   });
 });
 

@@ -68,17 +68,28 @@ export function shortcutActionLabel(actionId: string): string {
   return SHORTCUT_ACTIONS.find((action) => action.id === actionId)?.label ?? actionId;
 }
 
-function isShortcutActionId(value: string): value is ShortcutActionId {
-  return (SHORTCUT_ACTION_IDS as readonly string[]).includes(value);
-}
-
 /**
  * Reads the stored overrides. Anything that is not a known action id bound to
  * a chord this app would let the user record is dropped silently rather than
  * guessed at: an unknown id, unparsable text, a combination typing could
- * produce, or one inside the reserved Ctrl+digit family (which the capture
- * surface refuses, so it can only arrive by hand-editing — and would show a
- * chord in Settings that can never fire).
+ * produce, one inside the reserved Ctrl+digit family, or one another action
+ * already answers to. Every one of those is refused by the Settings capture
+ * surface, so it can only arrive by hand-editing — and each would leave a chord
+ * in Settings that either can never fire or fires two actions at once.
+ *
+ * Collisions are settled by walking `SHORTCUT_ACTION_IDS` in order and judging
+ * each candidate against the map as it would actually stand around it: every
+ * action's default, with the overrides accepted so far already laid over it.
+ * Two consequences worth naming, both covered by tests:
+ *
+ *  - An override that vacates its own default frees that chord for a later
+ *    action to claim — move `palette` off Ctrl+K and `quickCreate` may take it.
+ *  - An action not yet reached is still on its default, so a candidate is
+ *    refused against a chord that a later override would have vacated.
+ *
+ * Dropping one candidate can therefore decide the next, which is exactly why
+ * the walk follows the registry's fixed order — first laid out wins — rather
+ * than the file's key order: the same file must always read back the same way.
  */
 export function readStoredShortcutOverrides(): ShortcutOverrides {
   const stored = localStorage.getItem(STORAGE_KEY);
@@ -90,13 +101,19 @@ export function readStoredShortcutOverrides(): ShortcutOverrides {
     return {};
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
+  const raw = parsed as Record<string, unknown>;
   const overrides: Partial<Record<ShortcutActionId, Chord>> = {};
-  for (const [id, value] of Object.entries(parsed as Record<string, unknown>)) {
-    if (!isShortcutActionId(id) || typeof value !== "string") continue;
+  const effective: Record<ShortcutActionId, Chord> = { ...DEFAULT_CHORDS };
+  for (const id of SHORTCUT_ACTION_IDS) {
+    const value = raw[id];
+    if (typeof value !== "string") continue;
     const chord = parseChord(value);
     if (chord === null || !isBindableChord(chord)) continue;
-    if (findChordConflict(id, chord, {}) !== null) continue; // reserved Ctrl+digit
+    // `findChordConflict` skips `id` itself, so `effective` — which still holds
+    // this action's own default — reads as the bindings of every OTHER action.
+    if (findChordConflict(id, chord, effective) !== null) continue;
     overrides[id] = chord;
+    effective[id] = chord;
   }
   return overrides;
 }

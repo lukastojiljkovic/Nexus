@@ -347,7 +347,7 @@ export function planForeignImport(
       taskId: mapped(link.taskId, ctx),
       tagId: mapped(link.tagId, ctx),
     })),
-    (link) => `${link.taskId} ${link.tagId}`,
+    (link) => `${link.taskId}\0${link.tagId}`,
   );
   ctx.merged.tasks += taskTagLinks.collapsed;
 
@@ -356,7 +356,7 @@ export function planForeignImport(
       noteId: mapped(link.noteId, ctx),
       tagId: mapped(link.tagId, ctx),
     })),
-    (link) => `${link.noteId} ${link.tagId}`,
+    (link) => `${link.noteId}\0${link.tagId}`,
   );
   ctx.merged.notes += noteTagLinks.collapsed;
 
@@ -570,7 +570,7 @@ function buildReport(
   ): void {
     if (count <= 0) return;
     if (module !== null) skipped[module] += count;
-    const key = `${code} ${module ?? ""} ${type ?? ""}`;
+    const key = `${code}\0${module ?? ""}\0${type ?? ""}`;
     const existing = skipIndex.get(key);
     if (existing !== undefined) {
       existing.count += count;
