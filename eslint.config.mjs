@@ -38,6 +38,10 @@ export default tseslint.config(
       "**/release/**",
       "**/gen/**",
       "**/.turbo/**",
+      // Agent worktrees (gitignored working copies of older commits). Flat
+      // config reads no .gitignore, so a root-level `eslint .` would lint
+      // stale snapshots of the whole repo without this.
+      ".claude/**",
       "**/*.config.*",
     ],
   },
