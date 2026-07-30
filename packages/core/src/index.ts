@@ -297,3 +297,19 @@ export type { RankedSearchHit, SearchHit } from "./search/searchRanking.js";
 
 export { MAX_RELATIVE_DAYS, parseQuickAddDate } from "./tasks/quickAddDate.js";
 export type { QuickAddDateMatch } from "./tasks/quickAddDate.js";
+
+export {
+  chordFromEvent,
+  findChordConflict,
+  formatChord,
+  isBindableChord,
+  isModifierKey,
+  matchesChord,
+  MODULE_NAV_CONFLICT,
+  MODULE_NAV_MAX,
+  moduleNavChord,
+  moduleNavPosition,
+  normalizeChordKey,
+  parseChord,
+} from "./shortcuts/shortcuts.js";
+export type { Chord, ChordEvent } from "./shortcuts/shortcuts.js";

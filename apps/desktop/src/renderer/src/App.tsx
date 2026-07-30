@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { resolveEnabled } from "@nexus/core";
+import { formatChord, matchesChord, moduleNavPosition, resolveEnabled } from "@nexus/core";
 import { Button, EmptyState, NavItem } from "@nexus/ui";
 import type { ThemeName } from "@nexus/tokens";
 import type { AppInfo, AuthStatus, FlagState, Profile, SearchResult } from "../../shared/ipc.js";
@@ -15,9 +15,18 @@ import { NotificationCenter } from "./NotificationCenter.js";
 import { NotificationAppetiteDialog } from "./NotificationAppetiteDialog.js";
 import { SearchPalette } from "./SearchPalette.js";
 import { SearchPage } from "./SearchPage.js";
+import { ShortcutsDialog } from "./ShortcutsDialog.js";
 import { buildSearchCommands } from "./searchCommands.js";
 import { createModuleRegistry } from "./modules.js";
 import { persistAutoLock, readStoredAutoLock, type AutoLockMinutes } from "./autoLock.js";
+import {
+  readStoredShortcutOverrides,
+  resolveShortcuts,
+  SHORTCUT_ACTIONS,
+  writeStoredShortcutOverrides,
+  type ShortcutActionId,
+  type ShortcutOverrides,
+} from "./shortcuts.js";
 import {
   persistThemePreference,
   readStoredThemePreference,
@@ -84,6 +93,13 @@ export function App() {
   // first `getAuthStatus` round trip resolves.
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [autoLockMinutes, setAutoLockMinutes] = useState<AutoLockMinutes>(readStoredAutoLock);
+  // Remapped shortcuts (ADR-040). Read once at init and owned here — the
+  // `autoLockMinutes` precedent: a device-level UI preference, so it lives in
+  // `localStorage` and is handed to SettingsPage with an onChange rather than
+  // being re-read wherever it happens to be needed.
+  const [shortcutOverrides, setShortcutOverrides] =
+    useState<ShortcutOverrides>(readStoredShortcutOverrides);
+  const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false);
   // Global search palette (021-d). `searchStatus` is the rebuild command's
   // Serbian confirmation/error text — owned here since this is where the
   // command's `run` closure is built (see `buildSearchCommands` below).
@@ -233,6 +249,30 @@ export function App() {
     setAutoLockMinutes(value);
   }
 
+  // Stable across renders: SettingsPage's capture mode lists this in the
+  // dependency array of the effect that attaches its one-keystroke listener,
+  // and a fresh reference on every unrelated App re-render would tear that
+  // listener down and re-attach it mid-capture.
+  const changeShortcutOverrides = useCallback((next: ShortcutOverrides) => {
+    writeStoredShortcutOverrides(next);
+    setShortcutOverrides(next);
+  }, []);
+
+  const shortcuts = useMemo(() => resolveShortcuts(shortcutOverrides), [shortcutOverrides]);
+
+  /**
+   * The sidebar's own order — `registry.byCategory()` flattened, filtered by
+   * the enabled flags — which is what Ctrl+1…Ctrl+9 count along. Deliberately
+   * NOT `resolveEnabled`: that returns registration order, and the two are
+   * only accidentally equal for today's module set.
+   */
+  const visibleModuleIds = useMemo(() => {
+    const enabled = new Set(resolveEnabled(registry, flags));
+    return [...registry.byCategory()].flatMap(([, members]) =>
+      members.filter((manifest) => enabled.has(manifest.id)).map((manifest) => manifest.id),
+    );
+  }, [flags]);
+
   // v0 runs a single profile; this is the same one every page below is handed.
   const activeProfileId = profiles?.[0]?.id;
 
@@ -338,6 +378,26 @@ export function App() {
     dispatchIntent({ module: "notes", intent: { kind: "reveal", noteId } });
   }
 
+  /**
+   * Starts a fresh entity in a module through its own create intent (021-e).
+   * Shared by the palette's "Novi …" commands and ADR-040's quick-create
+   * chord, so both mean exactly the same thing; a module with no create intent
+   * falls through and does nothing, predictably.
+   */
+  function createInModule(moduleId: string): void {
+    switch (moduleId) {
+      case "tasks":
+        dispatchIntent({ module: "tasks", intent: { kind: "create" } });
+        return;
+      case "calendar":
+        dispatchIntent({ module: "calendar", intent: { kind: "create-event" } });
+        return;
+      case "notes":
+        dispatchIntent({ module: "notes", intent: { kind: "create" } });
+        return;
+    }
+  }
+
   // Stable across renders: `SearchPalette`'s own auto-close effect (the
   // rebuild command's confirmation timer) depends on this callback, and a
   // fresh reference on every unrelated App re-render would restart that
@@ -431,25 +491,86 @@ export function App() {
     }
   }
 
-  // Ctrl+K / Cmd+K opens the palette (only once truly unlocked and past
-  // onboarding — a shortcut firing over the lock screen or the name prompt
-  // would open a surface with nothing behind it to search). `preventDefault`
-  // stops Electron/Chromium's own default for the combo; a modifier-free "k"
-  // typed anywhere never matches, since ctrlKey/metaKey are false for that.
+  /**
+   * Runs one of the remappable core actions (ADR-040). Every action dismisses
+   * the overlays it is not itself opening: these actions navigate or put a new
+   * surface up, and landing underneath one that is still on screen is not what
+   * pressing the chord meant.
+   */
+  function runShortcutAction(actionId: ShortcutActionId): void {
+    if (actionId === "shortcutsHelp") {
+      closePalette();
+      setShortcutsHelpOpen(true);
+      return;
+    }
+    setShortcutsHelpOpen(false);
+    if (actionId === "palette") {
+      setPaletteOpen((open) => !open);
+      setSearchStatus(null);
+      return;
+    }
+    closePalette();
+    switch (actionId) {
+      case "quickCreate":
+        // The ACTIVE module's create intent — matching what `effectiveId`
+        // below actually renders, so the chord never creates in a module the
+        // user is not looking at.
+        createInModule(visibleModuleIds.includes(activeId) ? activeId : "dashboard");
+        return;
+      case "lock":
+        void handleLock();
+        return;
+      case "settings":
+        setActiveId("settings");
+        return;
+    }
+  }
+
+  /**
+   * The app's one global chord handler (ADR-040) — it replaced the inline
+   * Ctrl+K listener this shell used to carry. Armed only once truly unlocked
+   * and past onboarding: a shortcut firing over the lock screen or the name
+   * prompt would act on a shell that is not there yet.
+   *
+   * It needs no input-focus guard, and that is a property of the binding rule
+   * rather than an oversight: nothing that looks like typing can be bound (see
+   * `isBindableChord`), so no chord here can ever collide with a user writing
+   * into a field. Auto-repeat is skipped so holding a chord fires once, and
+   * `preventDefault` is called only when something actually matched — the
+   * reserved Ctrl+digit family included, since the app claims those keys even
+   * when there is no Nth module for them to reach.
+   */
   useEffect(() => {
     const firstProfile = profiles?.[0];
     const ready =
       authStatus?.state === "unlocked" && firstProfile !== undefined && firstProfile.name.trim() !== "";
     if (!ready) return;
     function handleGlobalKeydown(event: KeyboardEvent): void {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+      if (event.repeat) return;
+      const position = moduleNavPosition(event);
+      if (position !== null) {
         event.preventDefault();
-        setPaletteOpen(true);
+        const moduleId = visibleModuleIds[position - 1];
+        if (moduleId === undefined) return;
+        closePalette();
+        setShortcutsHelpOpen(false);
+        setActiveId(moduleId);
+        return;
+      }
+      for (const action of SHORTCUT_ACTIONS) {
+        if (!matchesChord(shortcuts[action.id], event)) continue;
+        event.preventDefault();
+        runShortcutAction(action.id);
+        return;
       }
     }
     window.addEventListener("keydown", handleGlobalKeydown);
     return () => window.removeEventListener("keydown", handleGlobalKeydown);
-  }, [authStatus?.state, profiles]);
+    // `runShortcutAction` and `createInModule` are re-created every render but
+    // close over nothing that changes except `activeId` and `visibleModuleIds`,
+    // both listed here — everything else they touch is a stable state setter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authStatus?.state, profiles, shortcuts, visibleModuleIds, activeId, closePalette]);
 
   // Rebuilt whenever the enabled-module set can change (flags), the active
   // profile changes, or `theme` changes — the last one matters because
@@ -468,21 +589,10 @@ export function App() {
         enabledModuleIds: resolveEnabled(registry, flags),
         moduleName,
         onNavigate: setActiveId,
-        onCreate: (moduleId) => {
-          switch (moduleId) {
-            case "tasks":
-              dispatchIntent({ module: "tasks", intent: { kind: "create" } });
-              return;
-            case "calendar":
-              dispatchIntent({ module: "calendar", intent: { kind: "create-event" } });
-              return;
-            case "notes":
-              dispatchIntent({ module: "notes", intent: { kind: "create" } });
-              return;
-          }
-        },
+        onCreate: createInModule,
         onToggleTheme: toggleTheme,
         onLock: () => void handleLock(),
+        onOpenShortcuts: () => setShortcutsHelpOpen(true),
         onRebuildComplete: setSearchStatus,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -606,7 +716,9 @@ export function App() {
               <NavItem
                 href="#"
                 active={effectiveId === SEARCH_PAGE_ID}
-                badge={strings.search.shortcutHint}
+                // The LIVE palette binding, never a printed "Ctrl+K": a remap
+                // has to be visible everywhere at once (ADR-040).
+                badge={formatChord(shortcuts.palette)}
                 onClick={(event) => {
                   event.preventDefault();
                   setActiveId(SEARCH_PAGE_ID);
@@ -694,6 +806,7 @@ export function App() {
               seed={searchSeed}
               onSeedConsumed={clearSearchSeed}
               onOpenResult={onSearchResult}
+              paletteChordLabel={formatChord(shortcuts.palette)}
             />
           ) : effectiveId === "settings" && activeProfile ? (
             <SettingsPage
@@ -708,6 +821,9 @@ export function App() {
               registry={registry}
               autoLockMinutes={autoLockMinutes}
               onAutoLockChange={changeAutoLock}
+              shortcutOverrides={shortcutOverrides}
+              onShortcutOverridesChange={changeShortcutOverrides}
+              onShowShortcuts={() => setShortcutsHelpOpen(true)}
             />
           ) : (
             <ModulePage id={effectiveId} />
@@ -729,6 +845,14 @@ export function App() {
 
       {appetiteAsk && activeProfile && (
         <NotificationAppetiteDialog profileId={activeProfile.id} onAnswered={closeAppetiteAsk} />
+      )}
+
+      {shortcutsHelpOpen && (
+        <ShortcutsDialog
+          bindings={shortcuts}
+          moduleIds={visibleModuleIds}
+          onClose={() => setShortcutsHelpOpen(false)}
+        />
       )}
     </div>
   );

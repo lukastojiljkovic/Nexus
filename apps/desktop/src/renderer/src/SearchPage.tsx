@@ -52,9 +52,17 @@ export interface SearchPageProps {
   onSeedConsumed: () => void;
   /** Activates a result — the shell's own reveal dispatcher, shared with the palette. */
   onOpenResult: (result: SearchResult) => void;
+  /** The palette's LIVE chord, formatted by the shell (ADR-040) — a remap must be visible here too. */
+  paletteChordLabel: string;
 }
 
-export function SearchPage({ profileId, seed, onSeedConsumed, onOpenResult }: SearchPageProps) {
+export function SearchPage({
+  profileId,
+  seed,
+  onSeedConsumed,
+  onOpenResult,
+  paletteChordLabel,
+}: SearchPageProps) {
   const [query, setQuery] = useState("");
   const [data, setData] = useState<SearchPageResult>(EMPTY_RESULT);
   const [visible, setVisible] = useState(RESULT_CHUNK);
@@ -154,7 +162,9 @@ export function SearchPage({ profileId, seed, onSeedConsumed, onOpenResult }: Se
       <header className="searchpage__header">
         <div className="searchpage__heading">
           <h1 className="searchpage__title">{strings.search.page.title}</h1>
-          <span className="searchpage__shortcut">{strings.search.page.shortcutHint}</span>
+          <span className="searchpage__shortcut">
+            {`${paletteChordLabel} ${strings.search.page.shortcutHint}`}
+          </span>
         </div>
         <input
           ref={inputRef}

@@ -3775,6 +3775,42 @@ button.cal__grid-event--dragging {
   outline: 2px solid var(--nx-accent);
   outline-offset: 2px;
 }
+/* Prečice (ADR-040): one row per remappable action — label, its current chord,
+   then the row's own buttons. Same hairline-separated row rhythm as the module
+   gallery above, so the two cards read as the same kind of list. */
+.set__shortcut-list {
+  display: flex;
+  flex-direction: column;
+}
+.set__shortcut-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  padding: var(--nx-space-2) 0;
+}
+.set__shortcut-item + .set__shortcut-item {
+  border-top: 1px solid var(--nx-border);
+}
+.set__shortcut-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-3);
+}
+.set__shortcut-label {
+  flex: 1;
+  min-width: 0;
+}
+/* Pushed to the end so every row's buttons line up regardless of label length. */
+.set__shortcut-actions {
+  display: flex;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
+}
+.set__shortcut-footer {
+  display: flex;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
 
 /* Notes (NOTE page, slice a2) ------------------------------------------ */
 /* Two panes fill the main column: a fixed note list on the left, the block
@@ -5639,4 +5675,60 @@ button.cal__grid-event--dragging {
 .ntf__appetite-keep.nx-button:hover {
   background: transparent;
   color: var(--nx-text);
+}
+
+/* Shortcuts reference (ADR-040) — the house dialog recipe above, widened for a
+   two-column list and scrolling in its body rather than growing past the
+   window. It reuses those classes outright and only overrides what a reference
+   needs; nothing about the overlay, backdrop or title differs. */
+.shortcuts-dialog__panel.recur-dialog__panel {
+  width: min(520px, 94vw);
+  max-height: min(680px, 86vh);
+}
+.shortcuts-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+  overflow-y: auto;
+  /* Without this a flex item refuses to shrink below its content, and the
+     panel grows past its max-height instead of the list scrolling. */
+  min-height: 0;
+  /* The scroll edge needs breathing room, or a clipped row reads as the end. */
+  padding-right: var(--nx-space-2);
+}
+.shortcuts-dialog__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.shortcuts-dialog__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nx-space-4);
+  font-size: var(--nx-font-size-body-sm);
+}
+.shortcuts-dialog__row-label {
+  min-width: 0;
+}
+
+/* The app's single <kbd> recipe, shared by the reference and the Settings card:
+   a quiet key cap on the alternate surface — a printed key, never a control. */
+.shortcut-kbd {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px var(--nx-space-2);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-sm);
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-caption);
+  white-space: nowrap;
+}
+.shortcut-kbd-row {
+  display: inline-flex;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }

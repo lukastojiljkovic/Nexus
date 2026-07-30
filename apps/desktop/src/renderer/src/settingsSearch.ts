@@ -107,6 +107,29 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
     label: s.notes.markdownLabel,
     keywords: ["beleske", "markdown", "precice", "formatiranje", "naslov", "lista", "slash"],
   },
+  // One entry per remappable action (ADR-040) — a user hunting for "novi
+  // unos" or "zakljucaj" should land on the exact row that rebinds it — plus
+  // one for the reference dialog itself.
+  ...(
+    [
+      ["palette", ["paleta", "pretraga", "ctrl", "k"]],
+      ["quickCreate", ["novi", "unos", "kreiranje", "ctrl", "n"]],
+      ["lock", ["zakljucaj", "zakljucavanje", "ctrl", "l"]],
+      ["settings", ["podesavanja", "ctrl"]],
+      ["shortcutsHelp", ["pomoc", "referenca", "f1"]],
+    ] as const
+  ).map(([actionId, keywords]) => ({
+    id: shortcutEntryId(actionId),
+    section: "shortcuts" as const,
+    label: strings.shortcuts.actions[actionId],
+    keywords: ["precice", "tastatura", ...keywords],
+  })),
+  {
+    id: "shortcuts-reference",
+    section: "shortcuts",
+    label: strings.shortcuts.showAll,
+    keywords: ["precice", "tastatura", "spisak", "pomoc"],
+  },
   {
     id: "notifications-presets",
     section: "notifications",
@@ -146,6 +169,11 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
 /** Entry id for a module row in the Moduli gallery — the page uses the same id to highlight the row's name. */
 export function moduleEntryId(moduleId: string): string {
   return `module-${moduleId}`;
+}
+
+/** Entry id for a remappable shortcut row (ADR-040) — `ShortcutsSection` highlights its label by the same id. */
+export function shortcutEntryId(actionId: string): string {
+  return `shortcut-${actionId}`;
 }
 
 /**

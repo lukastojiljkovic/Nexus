@@ -1081,6 +1081,7 @@ export const strings = {
       security: "Sigurnost",
       appearance: "Izgled",
       notes: "Beleške",
+      shortcuts: "Prečice",
       modules: "Moduli",
       notifications: "Obaveštenja",
       backup: "Rezervna kopija",
@@ -1336,14 +1337,16 @@ export const strings = {
     },
   },
 
-  /** Global search palette (021-d / ADR-021): nav label + shortcut hint, the
-   *  input placeholder, kind labels (singular for a result row's own kind
+  /** Global search palette (021-d / ADR-021): nav label, the input
+   *  placeholder, kind labels (singular for a result row's own kind
    *  tag; plural for both the filter chips and the per-kind group headings),
    *  the two non-kind group headings, the key-hint footer, the empty-result
-   *  line, and the local command labels `searchCommands.ts` matches against. */
+   *  line, and the local command labels `searchCommands.ts` matches against.
+   *  The sidebar's shortcut badge is deliberately NOT copy: it renders the
+   *  live palette binding through `formatChord` (ADR-040), so a remap is
+   *  reflected there instead of a printed "Ctrl+K" going quietly stale. */
   search: {
     navLabel: "Pretraga",
-    shortcutHint: "Ctrl+K",
     placeholder: "Pretraži zadatke, beleške, događaje…",
     kindFilterLabel: "Filter po vrsti",
     recentGroup: "Nedavno",
@@ -1404,8 +1407,8 @@ export const strings = {
      */
     page: {
       title: "Pretraga",
-      /** Restates the palette shortcut, as the sidebar badge does (ADR-039 §1). */
-      shortcutHint: "Ctrl+K otvara brzu pretragu",
+      /** Follows the LIVE palette chord the page renders before it (ADR-040) — never a printed "Ctrl+K". */
+      shortcutHint: "otvara brzu pretragu",
       /** Names the query grammar, the way the palette's footer does — including `rok:`, which the page inherits from ADR-030 unchanged. */
       grammarHint: "z: b: d: filtriraju po vrsti · #oznaka · rok:danas / sutra / nedelja / 2026-08-15",
       allKinds: "Sve",
@@ -1420,6 +1423,82 @@ export const strings = {
       showMore: "Prikaži još",
       emptyTitle: "Nema rezultata",
       emptyDescription: "Probajte drugu reč ili uklonite neki filter.",
+    },
+  },
+
+  /**
+   * Keyboard shortcuts (ADR-040 / SET-013): the Settings card that remaps the
+   * core set, and the reference overlay that documents every key in the app.
+   *
+   * `actions` names the five remappable actions. „Zaključaj aplikaciju"
+   * deliberately reads the same as the palette command above: they are the same
+   * action reached two ways, and one of them saying something else would be a
+   * lie about what the chord does.
+   *
+   * `reference` is documentation, so the rule is simple: a context that adds a
+   * key adds a row here, or the reference is wrong. Descriptions name what the
+   * key does, never where the key lives — the group heading already says that.
+   */
+  shortcuts: {
+    cardCaption:
+      "Prečice se pamte na ovom uređaju — ne putuju uz profil ni uz rezervnu kopiju.",
+    showAll: "Prikaži sve prečice",
+    change: "Promeni",
+    reset: "Vrati",
+    resetAll: "Vrati sve",
+    capturePrompt: "Pritisni novu kombinaciju…",
+    captureHint: "Esc otkazuje.",
+    /** Refusal shown when the captured combination is something typing could produce. */
+    refuseUnbindable: "Kombinacija mora da drži Ctrl ili Alt, ili da bude taster F1–F12.",
+    /** Prefixes the name of whatever already holds the captured combination. */
+    takenPrefix: "Zauzeto: ",
+    actions: {
+      palette: "Komandna paleta",
+      quickCreate: "Novi unos u aktivnom modulu",
+      lock: "Zaključaj aplikaciju",
+      settings: "Otvori Podešavanja",
+      shortcutsHelp: "Prikaži prečice",
+    },
+    dialogTitle: "Prečice na tastaturi",
+    dialogClose: "Zatvori",
+    groups: {
+      global: "Globalno",
+      modules: "Moduli",
+      palette: "Paleta",
+      tasks: "Zadaci",
+      calendar: "Kalendar",
+      study: "Učenje",
+      notes: "Beleške",
+    },
+    /** The reserved Ctrl+1…Ctrl+9 family: positional, so it is described rather than named. */
+    moduleNavLabel: "Prelazak na modul po redosledu",
+    moduleNavCaption: "Redosled je isti kao u bočnoj traci; važi za prvih devet modula.",
+    captions: {
+      calendar: "Dok je mreža kalendara u fokusu.",
+      study: "Tokom učenja kartica.",
+      notes: "Na početku reda u editoru beleški.",
+    },
+    reference: {
+      paletteMove: "Kretanje kroz rezultate",
+      paletteOpen: "Otvori rezultat ili pokreni komandu",
+      paletteClose: "Zatvori paletu",
+      tasksSubtask: "Dodaj podzadatak iz reda za unos",
+      tasksCancel: "Otkaži unos u redu ili zatvori pitanje",
+      tasksExitSelection: "Izađi iz režima Izbor",
+      calendarShift: "Prethodni ili sledeći period",
+      calendarToday: "Vrati se na danas",
+      studyReveal: "Prikaži odgovor",
+      studyGrade: "Oceni karticu — Ponovo, Teško, Dobro, Lako",
+      studyUndo: "Opozovi poslednju ocenu",
+      studyExit: "Izađi iz učenja",
+      notesHeading: "Naslov 1, 2 ili 3",
+      notesBulletList: "Lista",
+      notesOrderedList: "Numerisana lista",
+      notesBlockquote: "Citat",
+      notesCodeBlock: "Blok koda",
+      notesSlash: "Meni komandi za blokove",
+      notesLink: "Veza ka drugoj belešci",
+      notesHistory: "Opozovi i ponovi izmenu",
     },
   },
 } as const;

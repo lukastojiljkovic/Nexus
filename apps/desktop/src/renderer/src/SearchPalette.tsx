@@ -19,7 +19,8 @@ import { strings } from "./strings.js";
 /**
  * The ADR-021 global search palette (021-d): a Spotlight-style overlay,
  * portalled to `document.body`, opened via the sidebar's Pretraga item or
- * Ctrl/Cmd+K. The index/store/IPC pipeline already exists (021-a/b) — this
+ * the `palette` chord (Ctrl+K by default, remappable — ADR-040). The
+ * index/store/IPC pipeline already exists (021-a/b) — this
  * component is the surface a user actually touches: a typed query plus kind
  * chips against entity results, local command matching against the fixed
  * registry in `searchCommands.ts`, and one shared keyboard model across

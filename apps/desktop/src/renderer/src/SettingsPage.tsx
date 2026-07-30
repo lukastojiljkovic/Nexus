@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Button, Card, Checkbox, Chip, TextField } from "@nexus/ui";
-import { validateArchivePassphrase, type ModuleRegistry } from "@nexus/core";
+import {
+  chordFromEvent,
+  findChordConflict,
+  formatChord,
+  isModifierKey,
+  MODULE_NAV_CONFLICT,
+  validateArchivePassphrase,
+  type ModuleRegistry,
+} from "@nexus/core";
 import { ACCENT_IDS, type AccentId } from "@nexus/tokens";
 import type {
   AppInfo,
@@ -16,6 +24,14 @@ import { ALL_NOTIFICATION_SOURCES, NOTIFICATION_PRESETS } from "./notificationFo
 import { NotificationSettingsControls } from "./NotificationSettingsControls.js";
 import type { ThemePreference } from "./theme.js";
 import { AUTO_LOCK_MINUTES, type AutoLockMinutes } from "./autoLock.js";
+import {
+  resolveShortcuts,
+  shortcutActionLabel,
+  SHORTCUT_ACTIONS,
+  type ShortcutActionId,
+  type ShortcutOverrides,
+} from "./shortcuts.js";
+import { Kbd } from "./ShortcutsDialog.js";
 import { persistAccent, readStoredAccent } from "./accent.js";
 import { persistWeekStart, readStoredWeekStart, type WeekStartPreference } from "./weekStart.js";
 import {
@@ -23,6 +39,7 @@ import {
   foldSettingsQuery,
   matchSettings,
   moduleEntryId,
+  shortcutEntryId,
 } from "./settingsSearch.js";
 import {
   NOTE_WIDTHS,
@@ -803,6 +820,143 @@ function SecuritySection({ autoLockMinutes, onAutoLockChange, hits }: SecuritySe
   );
 }
 
+interface ShortcutsSectionProps {
+  overrides: ShortcutOverrides;
+  onChange: (overrides: ShortcutOverrides) => void;
+  /** Opens the reference overlay App owns — the same one F1 and the palette command open. */
+  onShowAll: () => void;
+  /** SET-014 hit ids — each action row highlights its label under `shortcutEntryId(action.id)`. */
+  hits: ReadonlySet<string>;
+}
+
+/**
+ * Prečice section (ADR-040 / SET-013): the remappable core set, each row
+ * showing what it is bound to right now.
+ *
+ * „Promeni" turns that row's own button into the capture surface — one
+ * control, so focus is already where the keystroke must be read and losing it
+ * cancels, with no second element to keep in sync. The listener itself sits on
+ * `window` in the CAPTURE phase, which is what lets a user record Ctrl+K
+ * without also opening the palette: it runs strictly before the app's own
+ * bubble-phase global handler and stops the event there.
+ *
+ * A combination that is not bindable, or that something else already holds, is
+ * refused with the reason named and capture stays open. Nothing is ever
+ * swapped out from under another action.
+ */
+function ShortcutsSection({ overrides, onChange, onShowAll, hits }: ShortcutsSectionProps) {
+  const s = strings.shortcuts;
+  const [capturing, setCapturing] = useState<ShortcutActionId | null>(null);
+  const [refusal, setRefusal] = useState<string | null>(null);
+
+  const bindings = resolveShortcuts(overrides);
+  const hasOverrides = SHORTCUT_ACTIONS.some((action) => overrides[action.id] !== undefined);
+
+  useEffect(() => {
+    const actionId = capturing;
+    if (actionId === null) return;
+    const onKeyDown = (event: KeyboardEvent): void => {
+      // A modifier on its own is the combination still being assembled.
+      if (isModifierKey(event.key)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === "Escape") {
+        setCapturing(null);
+        setRefusal(null);
+        return;
+      }
+      const chord = chordFromEvent(event);
+      if (chord === null) {
+        setRefusal(s.refuseUnbindable);
+        return;
+      }
+      // `bindings` is this render's, and `overrides` — what it is derived from
+      // — is in the dependency list below, so it is never a stale map.
+      const conflict = findChordConflict(actionId, chord, bindings);
+      if (conflict !== null) {
+        setRefusal(
+          s.takenPrefix +
+            (conflict === MODULE_NAV_CONFLICT ? s.moduleNavLabel : shortcutActionLabel(conflict)),
+        );
+        return;
+      }
+      onChange({ ...overrides, [actionId]: chord });
+      setCapturing(null);
+      setRefusal(null);
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+    // `bindings` is a pure derivation of `overrides` (already listed), and `s`
+    // is a frozen module constant — neither would ever change when the other
+    // dependencies did not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [capturing, overrides, onChange]);
+
+  function reset(actionId: ShortcutActionId): void {
+    const next = { ...overrides };
+    delete next[actionId];
+    onChange(next);
+  }
+
+  return (
+    <>
+      <div className="set__shortcut-list">
+        {SHORTCUT_ACTIONS.map((action) => {
+          const isCapturing = capturing === action.id;
+          return (
+            <div className="set__shortcut-item" key={action.id}>
+              <div className="set__shortcut-row">
+                <span className={labelClass("set__shortcut-label", hits.has(shortcutEntryId(action.id)))}>
+                  {action.label}
+                </span>
+                <Kbd>{formatChord(bindings[action.id])}</Kbd>
+                <div className="set__shortcut-actions">
+                  <Button
+                    size="sm"
+                    variant={isCapturing ? "primary" : "ghost"}
+                    aria-pressed={isCapturing}
+                    onClick={() => {
+                      setRefusal(null);
+                      setCapturing(isCapturing ? null : action.id);
+                    }}
+                    onBlur={() => {
+                      if (isCapturing) {
+                        setCapturing(null);
+                        setRefusal(null);
+                      }
+                    }}
+                  >
+                    {isCapturing ? s.capturePrompt : s.change}
+                  </Button>
+                  {overrides[action.id] !== undefined && (
+                    <Button size="sm" variant="ghost" onClick={() => reset(action.id)}>
+                      {s.reset}
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {isCapturing && (
+                <p className={refusal !== null ? "set__error" : "set__section-caption"} role="status">
+                  {refusal ?? s.captureHint}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <p className="set__section-caption">{s.cardCaption}</p>
+      <div className="set__shortcut-footer">
+        <Button size="sm" variant="primary" onClick={onShowAll}>
+          {s.showAll}
+        </Button>
+        <Button size="sm" variant="ghost" disabled={!hasOverrides} onClick={() => onChange({})}>
+          {s.resetAll}
+        </Button>
+      </div>
+    </>
+  );
+}
+
 export interface SettingsPageProps {
   profileId: string;
   profileName: string;
@@ -815,6 +969,10 @@ export interface SettingsPageProps {
   registry: ModuleRegistry;
   autoLockMinutes: AutoLockMinutes;
   onAutoLockChange: (value: AutoLockMinutes) => void;
+  /** Remapped shortcuts (ADR-040), owned by App the way `autoLockMinutes` is. */
+  shortcutOverrides: ShortcutOverrides;
+  onShortcutOverridesChange: (overrides: ShortcutOverrides) => void;
+  onShowShortcuts: () => void;
 }
 
 /**
@@ -844,6 +1002,9 @@ export function SettingsPage({
   registry,
   autoLockMinutes,
   onAutoLockChange,
+  shortcutOverrides,
+  onShortcutOverridesChange,
+  onShowShortcuts,
 }: SettingsPageProps) {
   const [accent, setAccent] = useState<AccentId>(() => readStoredAccent());
   const [weekStart, setWeekStart] = useState<WeekStartPreference>(() => readStoredWeekStart());
@@ -1047,6 +1208,15 @@ export function SettingsPage({
             }}
           />
         </div>
+      </Card>
+
+      <Card title={strings.settings.sectionTitle.shortcuts} className={sectionClass(sections.has("shortcuts"))}>
+        <ShortcutsSection
+          overrides={shortcutOverrides}
+          onChange={onShortcutOverridesChange}
+          onShowAll={onShowShortcuts}
+          hits={hits}
+        />
       </Card>
 
       <Card title={strings.settings.sectionTitle.modules} className={sectionClass(sections.has("modules"))}>

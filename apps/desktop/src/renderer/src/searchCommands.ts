@@ -42,6 +42,8 @@ export interface SearchCommandsContext {
   onCreate: (moduleId: CreatableModuleId) => void;
   onToggleTheme: () => void;
   onLock: () => void;
+  /** Opens the shortcuts reference (ADR-040) — the same overlay F1 opens. */
+  onOpenShortcuts: () => void;
   /** Reports the rebuild's outcome as an already-Serbian-formatted string, for the palette's footer (see that component for why it owns the delayed close). */
   onRebuildComplete: (message: string) => void;
 }
@@ -75,7 +77,7 @@ function formatRebuildDone(count: number): string {
 /**
  * Builds the fixed command list, in display order: one "Idi na: <modul>" per
  * enabled module, the quick-create commands (`CREATABLE` above), then theme
- * toggle, lock, and index rebuild. Every `run` is a plain callback into the
+ * toggle, lock, shortcuts and index rebuild. Every `run` is a plain callback into the
  * shell except the rebuild's, which is the one
  * command with no dedicated shell action to call — it talks to
  * `window.nexus.rebuildSearchIndex` directly.
@@ -112,6 +114,13 @@ export function buildSearchCommands(context: SearchCommandsContext): SearchComma
       label: c.lock,
       keywords: ["izlaz", "odjava"],
       run: () => context.onLock(),
+    },
+    {
+      id: "shortcuts",
+      // Reuses the Settings card's own section title — one spelling for one surface.
+      label: strings.settings.sectionTitle.shortcuts,
+      keywords: ["tastatura", "kombinacije", "precice"],
+      run: () => context.onOpenShortcuts(),
     },
     {
       id: REBUILD_COMMAND_ID,
