@@ -36,6 +36,7 @@ import {
   MAX_NOTE_LINKS,
   MAX_NOTE_TEMPLATE_BYTES,
   MAX_NOTE_UPDATE_BYTES,
+  MAX_TASK_LIST_NAME_LENGTH,
   MAX_TASK_REMINDERS,
   MAX_TASK_REMINDER_DAYS,
   NOTE_FOLDER_COLORS,
@@ -59,6 +60,7 @@ import {
   SubjectStore,
   TaskListStore,
   TaskStore,
+  TASK_LIST_VIEWS,
   TASK_PRIORITIES,
   TASK_STATUSES,
   uuidv7,
@@ -75,6 +77,7 @@ import {
   type CreateTaskInput,
   type Deck,
   type DeckCounts,
+  type DeleteListMode,
   type DocumentRenewal,
   type DocumentType,
   type Event,
@@ -101,7 +104,10 @@ import {
   type Subject,
   type SubjectColor,
   type Task,
+  type TaskList,
+  type TaskListView,
   type TaskPriority,
+  type TaskSection,
   type TaskStatus,
   type TrackedDocument,
   type UpdateCardFields,
@@ -183,6 +189,7 @@ import {
   type SearchResult,
   type SnoozePreset,
   type StudyStats,
+  type TaskListsSnapshot,
 } from "../shared/ipc.js";
 
 const isSmoke = process.argv.includes("--smoke");
@@ -775,7 +782,54 @@ function asNewTaskInput(value: unknown): CreateTaskInput {
   if (task.reminderOffsets !== undefined) {
     input.reminderOffsets = asTaskReminderOffsets(task.reminderOffsets, "task.reminderOffsets");
   }
+  // Placement (TASK-004): structural checks only — that the list is this
+  // profile's, that the section belongs to that list, and that a subtask
+  // inherits its parent's placement instead are all `TaskStore.create`'s rules.
+  if (task.listId !== undefined) input.listId = asNonEmptyString(task.listId, "task.listId");
+  if (task.sectionId !== undefined) {
+    input.sectionId = asNullableString(task.sectionId, "task.sectionId");
+  }
   return input;
+}
+
+/**
+ * A list or section name (ADR-029): a string that is non-empty and within
+ * `MAX_TASK_LIST_NAME_LENGTH` after trimming — the cap imported from the store
+ * rather than respelled here, so there is exactly one number to change. The
+ * TRIMMED value is what travels on, mirroring `asProfileName`; `TaskListStore`
+ * trims and re-checks it regardless (SEC-EL-02).
+ */
+function asTaskListName(value: unknown, field: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`Invalid IPC payload: "${field}" must be a string.`);
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || trimmed.length > MAX_TASK_LIST_NAME_LENGTH) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be 1-${MAX_TASK_LIST_NAME_LENGTH} characters after trimming.`,
+    );
+  }
+  return trimmed;
+}
+
+/** Which shape a list opens in (TASK-005), checked against the store's own closed domain. */
+function asTaskListView(value: unknown, field: string): TaskListView {
+  if (typeof value === "string" && (TASK_LIST_VIEWS as readonly string[]).includes(value)) {
+    return value as TaskListView;
+  }
+  throw new Error(`Invalid IPC payload: "${field}" is not a valid task list view.`);
+}
+
+/**
+ * What deleting a list does with its tasks. Required and explicit: the two
+ * modes lose different things, so an absent or unrecognized one is a rejection
+ * rather than a default — there is no answer this handler may pick for the user.
+ */
+function asDeleteListMode(value: unknown, field: string): DeleteListMode {
+  if (value === "move-to-inbox" || value === "delete-tasks") return value;
+  throw new Error(
+    `Invalid IPC payload: "${field}" must be "move-to-inbox" or "delete-tasks".`,
+  );
 }
 
 /** Validates a `TaskFieldChanges` payload into a store patch; an omitted key stays omitted. */
@@ -1903,6 +1957,141 @@ function registerIpc(): void {
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const id = asNonEmptyString(body.id, "id");
     return taskStore(profileId).completeOccurrence(id, new Date().toISOString());
+  });
+
+  // --- Task lists and sections (TASK-004 / ADR-029) ---------------------
+  //
+  // SEC-EL-02 as everywhere else: `assertTrustedSender` first, every field
+  // through an `as*` validator, and every `now` stamped from main's own clock —
+  // when a list was renamed or reordered is never the renderer's to say.
+
+  ipcMain.handle(IpcChannel.taskListsList, (event, payload): TaskListsSnapshot => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const lists = taskListStore(profileId);
+    const active = lists.listActive();
+    // One reply for the whole rail: the sections follow the same list order, so
+    // the renderer can never hold sections of a list this reply did not list.
+    return { lists: active, sections: active.flatMap((list) => lists.listSections(list.id)) };
+  });
+
+  ipcMain.handle(IpcChannel.taskListsCreate, (event, payload): TaskList => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const name = asTaskListName(body.name, "name");
+    const parentId = asNullableString(body.parentId, "parentId");
+    return taskListStore(profileId).createList({ name, parentId }, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.taskListsRename, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const name = asTaskListName(body.name, "name");
+    taskListStore(profileId).renameList(id, name, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.taskListsSetView, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const view = asTaskListView(body.view, "view");
+    taskListStore(profileId).setDefaultView(id, view, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.taskListsMove, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const parentId = asNullableString(body.parentId, "parentId");
+    const beforeId = asNullableString(body.beforeId, "beforeId");
+    const afterId = asNullableString(body.afterId, "afterId");
+    taskListStore(profileId).moveList(id, parentId, beforeId, afterId, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.taskListsDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const mode = asDeleteListMode(body.mode, "mode");
+    taskListStore(profileId).deleteList(id, mode, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.taskListsRestore, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    taskListStore(profileId).restoreList(id, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.taskSectionsCreate, (event, payload): TaskSection => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const listId = asNonEmptyString(body.listId, "listId");
+    const name = asTaskListName(body.name, "name");
+    return taskListStore(profileId).createSection(listId, name, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.taskSectionsRename, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const name = asTaskListName(body.name, "name");
+    taskListStore(profileId).renameSection(id, name, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.taskSectionsMove, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const beforeId = asNullableString(body.beforeId, "beforeId");
+    const afterId = asNullableString(body.afterId, "afterId");
+    taskListStore(profileId).moveSection(id, beforeId, afterId, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.taskSectionsDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    taskListStore(profileId).deleteSection(id, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.tasksMoveToList, (event, payload): Task => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const listId = asNonEmptyString(body.listId, "listId");
+    return taskStore(profileId).moveToList(id, listId, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.tasksMoveToSection, (event, payload): Task => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const sectionId = asNullableString(body.sectionId, "sectionId");
+    return taskStore(profileId).moveToSection(id, sectionId, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.tasksReorder, (event, payload): Task => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const beforeId = asNullableString(body.beforeId, "beforeId");
+    const afterId = asNullableString(body.afterId, "afterId");
+    return taskStore(profileId).reorder(id, beforeId, afterId, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.eventsList, (event, payload): Event[] => {

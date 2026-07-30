@@ -36,6 +36,33 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.tasksRestore, { profileId, id }),
   completeTaskOccurrence: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.tasksCompleteOccurrence, { profileId, id }),
+  listTaskLists: (profileId) => ipcRenderer.invoke(IpcChannel.taskListsList, { profileId }),
+  createTaskList: (profileId, name, parentId) =>
+    ipcRenderer.invoke(IpcChannel.taskListsCreate, { profileId, name, parentId }),
+  renameTaskList: (profileId, id, name) =>
+    ipcRenderer.invoke(IpcChannel.taskListsRename, { profileId, id, name }),
+  setTaskListView: (profileId, id, view) =>
+    ipcRenderer.invoke(IpcChannel.taskListsSetView, { profileId, id, view }),
+  moveTaskList: (profileId, id, parentId, beforeId, afterId) =>
+    ipcRenderer.invoke(IpcChannel.taskListsMove, { profileId, id, parentId, beforeId, afterId }),
+  deleteTaskList: (profileId, id, mode) =>
+    ipcRenderer.invoke(IpcChannel.taskListsDelete, { profileId, id, mode }),
+  restoreTaskList: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.taskListsRestore, { profileId, id }),
+  createTaskSection: (profileId, listId, name) =>
+    ipcRenderer.invoke(IpcChannel.taskSectionsCreate, { profileId, listId, name }),
+  renameTaskSection: (profileId, id, name) =>
+    ipcRenderer.invoke(IpcChannel.taskSectionsRename, { profileId, id, name }),
+  moveTaskSection: (profileId, id, beforeId, afterId) =>
+    ipcRenderer.invoke(IpcChannel.taskSectionsMove, { profileId, id, beforeId, afterId }),
+  deleteTaskSection: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.taskSectionsDelete, { profileId, id }),
+  moveTaskToList: (profileId, id, listId) =>
+    ipcRenderer.invoke(IpcChannel.tasksMoveToList, { profileId, id, listId }),
+  moveTaskToSection: (profileId, id, sectionId) =>
+    ipcRenderer.invoke(IpcChannel.tasksMoveToSection, { profileId, id, sectionId }),
+  reorderTask: (profileId, id, beforeId, afterId) =>
+    ipcRenderer.invoke(IpcChannel.tasksReorder, { profileId, id, beforeId, afterId }),
   listEvents: (profileId) => ipcRenderer.invoke(IpcChannel.eventsList, { profileId }),
   createEvent: (profileId, event) =>
     ipcRenderer.invoke(IpcChannel.eventsCreate, { profileId, event }),

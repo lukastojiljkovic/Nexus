@@ -853,6 +853,74 @@ describe("TaskStore — lists, sections and ordering (TASK-004 / ADR-029)", () =
     });
   });
 
+  describe("restore", () => {
+    it("puts a task whose list was deleted back into the Inbox body, subtree and all", () => {
+      const { tasks, lists, inboxId } = scope();
+      const work = lists.createList({ name: "Posao" }, NOW);
+      const section = lists.createSection(work.id, "U toku", NOW);
+      const parent = tasks.create({ title: "Roditelj", listId: work.id, sectionId: section.id });
+      const child = tasks.create({ title: "Dete", parentId: parent.id });
+      const anchor = tasks.create({ title: "U Inboxu" });
+
+      lists.deleteList(work.id, "delete-tasks", NOW);
+      expect(tasks.listActive().map((task) => task.id)).toEqual([anchor.id]);
+
+      // The child first: its list is gone, so it lands in the Inbox body even
+      // though the parent it belongs to is still deleted.
+      tasks.restore(child.id);
+      expect(tasks.listActive().find((task) => task.id === child.id)).toMatchObject({
+        listId: inboxId,
+        sectionId: null,
+        position: anchor.position + TASK_ORDER_GAP,
+      });
+
+      // Then the parent: its own list is gone too, and the live subtree (itself
+      // plus the child already restored above) travels with it in order.
+      tasks.restore(parent.id);
+      const byId = new Map(tasks.listActive().map((task) => [task.id, task]));
+      expect(byId.get(parent.id)).toMatchObject({ listId: inboxId, sectionId: null });
+      expect(byId.get(child.id)).toMatchObject({ listId: inboxId, sectionId: null });
+      expect(byId.get(child.id)?.position).toBeGreaterThan(byId.get(parent.id)?.position ?? 0);
+      expect(tasks.listActive().map((task) => task.id)).toEqual([
+        anchor.id,
+        parent.id,
+        child.id,
+      ]);
+    });
+
+    it("leaves a restored task exactly where it was when its list is still there", () => {
+      const { tasks, lists } = scope();
+      const work = lists.createList({ name: "Posao" }, NOW);
+      const section = lists.createSection(work.id, "U toku", NOW);
+      const created = tasks.create({ title: "x", listId: work.id, sectionId: section.id });
+      const placement = {
+        listId: created.listId,
+        sectionId: created.sectionId,
+        position: created.position,
+      };
+
+      tasks.softDelete(created.id);
+      tasks.restore(created.id);
+
+      expect(tasks.listActive().find((task) => task.id === created.id)).toMatchObject(placement);
+    });
+
+    it("refuses to restore at all when the fallback has no Inbox to fall back to", () => {
+      const { tasks, lists, profileId } = scope();
+      const work = lists.createList({ name: "Posao" }, NOW);
+      const created = tasks.create({ title: "x", listId: work.id });
+      lists.deleteList(work.id, "delete-tasks", NOW);
+      db.raw
+        .prepare("UPDATE task_lists SET deleted_at = ? WHERE profile_id = ? AND is_inbox = 1")
+        .run(NOW, profileId);
+
+      expect(() => tasks.restore(created.id)).toThrow(TaskValidationError);
+      // Atomic: the un-delete is rolled back with the fallback that failed, so
+      // the task is not left alive in a list nobody can see.
+      expect(tasks.listActive()).toHaveLength(0);
+    });
+  });
+
   it("carries the placement untouched through an edit, a completion and a recurring advance", () => {
     const { tasks, lists, inboxId } = scope();
     const section = lists.createSection(inboxId, "Danas", NOW);

@@ -316,11 +316,271 @@ body {
   user-select: all;
 }
 
-/* Tasks (TASK page) --------------------------------------------------- */
+/* Tasks (TASK page) ---------------------------------------------------
+   Two columns since TASK-004: the list rail, then everything that was the whole
+   page before it. `align-items: start` keeps the rail from stretching to the
+   rows' height, and minmax(0, 1fr) is what lets the kanban's own grid shrink
+   instead of pushing the rail off. */
 .tasks {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: var(--nx-space-5);
+  align-items: start;
+}
+.tasks__main {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-4);
+}
+
+/* The list rail (TASK-004 / ADR-029) — the NOTE organizer's feel one module
+   over: a hairline separator, rows that are buttons, and a selection that is
+   TYPOGRAPHIC (gold name + weight), never a highlight bar or a glow. */
+.tasks__rail {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-right: var(--nx-space-4);
+  border-right: 1px solid var(--nx-border);
+}
+.tasks__rail-heading {
+  margin: 0 0 var(--nx-space-1);
+  padding: 0 var(--nx-space-2);
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+/* The transparent border is reserved for the drop state, so lighting a row up
+   never shifts the rail's layout by a pixel. */
+.tasks__rail-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  padding-left: calc(var(--nx-space-3) * var(--task-depth, 0));
+  border: 1px solid transparent;
+  border-radius: var(--nx-radius-md);
+}
+/* Drop target = accent border + soft background, the same recipe as
+   .nx-kanban-view__col--drop and .cal__month-day--drop — never a glow. */
+.tasks__rail-row--drop {
+  border-color: var(--nx-accent);
+  background: var(--nx-accent-soft);
+}
+.tasks__rail-list {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: var(--nx-space-2);
+  font: inherit;
+  font-size: var(--nx-font-size-body);
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.tasks__rail-list:hover {
+  background: var(--nx-surface-alt);
+}
+.tasks__rail-list:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+.tasks__rail-list--active .tasks__rail-name {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.tasks__rail-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Row actions stay quiet until the row is hovered or one of them is focused —
+   mirrors .note__tag-menu, so the rail reads as names rather than as buttons. */
+.tasks__rail-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.tasks__rail-row:hover .tasks__rail-actions,
+.tasks__rail-actions:focus-within {
+  opacity: 1;
+}
+.tasks__rail-action.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 6px;
+}
+.tasks__rail-action.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.tasks__rail-delete.nx-button:hover {
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+}
+.tasks__new-list.nx-button,
+.tasks__new-section.nx-button {
+  margin-top: var(--nx-space-2);
+  align-self: flex-start;
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.tasks__new-list.nx-button:hover,
+.tasks__new-section.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.tasks__rail-error {
+  margin: var(--nx-space-2) 0 0;
+  padding: 0 var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-danger);
+}
+
+/* The one inline "type a name" line, shared by the rail's and the sections'
+   create/rename actions (InlineNameForm). It borrows the textfield rather than
+   inventing a second field, and wraps so the two buttons drop under a narrow
+   rail instead of squeezing the input to nothing. */
+.tasks__name-form {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-1) 0;
+  /* One of its two homes is a section HEADING, whose uppercase/tracked/caption
+     type would otherwise be inherited by the name being typed into it (the same
+     reset .note__tag-clear needs inside .note__org-heading). */
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-regular);
+  letter-spacing: var(--nx-font-tracking-normal);
+  text-transform: none;
+}
+.tasks__name-form .nx-textfield {
+  flex: 1;
+  min-width: 100px;
+}
+.tasks__name-cancel.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.tasks__name-cancel.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
+}
+
+/* Sections inside a list (list view only): a heading between the body rows and
+   the rows filed under it. Typographic like the rail heading, with the same
+   transparent-border-for-the-drop-state trick as .tasks__rail-row. */
+.tasks__group {
+  display: flex;
+  flex-direction: column;
+}
+/* The heading's own breathing room is small on purpose: each group is already a
+   flex item of .tasks__main with its gap, and the two together are the space
+   above a heading. */
+.tasks__section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
+  margin-top: var(--nx-space-2);
+  padding: var(--nx-space-1) var(--nx-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--nx-radius-md);
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+.tasks__section--drop {
+  border-color: var(--nx-accent);
+  background: var(--nx-accent-soft);
+}
+.tasks__section-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tasks__section-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.tasks__section:hover .tasks__section-actions,
+.tasks__section-actions:focus-within {
+  opacity: 1;
+}
+.tasks__section-action.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 6px;
+}
+.tasks__section-action.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.tasks__section-delete.nx-button:hover {
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+}
+
+/* Manual ordering (TASK-004): a grip on top-level rows, and the gaps a dragged
+   row can land in. The grip is quiet until its row is hovered — that is when a
+   drag starts — and keeps a fixed width so revealing it never moves the row.
+   The gaps exist only while a drag is in flight (see renderDropGap), so at rest
+   the list is exactly as dense as it was before.
+
+   The grip column is exactly one indent step wide, and every row that has no
+   grip (a subtask, the inline "new subtask" line) opens with a spacer of the
+   same width — otherwise the first indent step would land under the grip and a
+   subtask would sit level with its own parent. `.tasks__row-lead` holds the
+   spacer and the indent together as ONE flex item, so the flex gap around it
+   applies once. */
+.tasks .tasks__grip,
+.tasks__grip-spacer {
+  flex: none;
+  width: var(--nx-space-4);
+}
+.tasks__row-lead {
+  flex: none;
+  display: inline-flex;
+}
+.tasks .tasks__grip {
+  text-align: center;
+  color: var(--nx-text-muted);
+  cursor: grab;
+  opacity: 0;
+  transition: opacity var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.tasks .nx-list-row:hover .tasks__grip {
+  opacity: 1;
+}
+.tasks__drop-gap {
+  height: var(--nx-space-3);
+  border: 1px solid transparent;
+  border-radius: var(--nx-radius-sm);
+}
+.tasks__drop-gap--active {
+  border-color: var(--nx-accent);
+  background: var(--nx-accent-soft);
 }
 
 /* Add/edit form + view toggle share one row; the toggle stays right-aligned and
@@ -4604,6 +4864,15 @@ button.cal__grid-event {
   margin: 0;
   font-size: var(--nx-font-size-body-sm);
   color: var(--nx-text-muted);
+}
+/* Which record the question is about (the list being deleted) — full-strength
+   text between the title and the muted question, so the name is the one thing
+   read before the choices. */
+.tasks__dialog-name {
+  margin: 0;
+  font-size: var(--nx-font-size-body);
+  color: var(--nx-text);
+  overflow-wrap: anywhere;
 }
 /* Equal choices and no primary among them: the dialog exists so that nothing
    here is picked by accident. */

@@ -218,6 +218,50 @@ export const strings = {
       completeOne: "Završi samo zadatak",
       cancel: "Otkaži",
     },
+    /**
+     * The list rail and the sections inside a list (TASK-004 / ADR-029).
+     *
+     * The Inbox is deliberately NOT named here: it is a stored, renamable row
+     * like any other list, so the rail renders `list.name` and the delete
+     * dialog's "move them there" choice names it from the same row — a
+     * hard-coded „Inbox“ would go stale the moment the founder renames it to
+     * „Prijemno“.
+     */
+    lists: {
+      /** Heading above the rail; the rail's own accessible name is a touch longer, since „Liste“ alone says little out of context. */
+      title: "Liste",
+      railLabel: "Liste zadataka",
+      newList: "Nova lista",
+      newSubList: "Nova podlista",
+      listNamePlaceholder: "Ime liste",
+      renameListLabel: "Preimenuj listu",
+      deleteListLabel: "Obriši listu",
+      save: "Sačuvaj",
+      cancel: "Otkaži",
+      /** Shown under the rail when a list/section action failed — the inline editor stays open with what was typed still in it. */
+      actionError: "Radnja nije uspela. Pokušaj ponovo.",
+      deletedNotice: "Lista obrisana",
+      /**
+       * What to do with the tasks of a list being deleted. The two choices lose
+       * different things, so there is no default and no primary button; Otkaži
+       * is the way out that changes nothing.
+       */
+      dialog: {
+        title: "Brisanje liste",
+        question: "Šta sa zadacima iz ove liste?",
+        /** Followed by the Inbox's own stored name in quotes — see the block comment above. */
+        moveToInboxPrefix: "Premesti u",
+        deleteTasks: "Obriši i zadatke",
+        cancel: "Otkaži",
+      },
+      /** The add/edit form's heading select, shown only where the list has headings to pick. */
+      sectionLabel: "Sekcija",
+      noSection: "Bez sekcije",
+      newSection: "Nova sekcija",
+      sectionNamePlaceholder: "Ime sekcije",
+      renameSectionLabel: "Preimenuj sekciju",
+      deleteSectionLabel: "Obriši sekciju",
+    },
     /** Kanban column titles, keyed by task status value (labels are presentation). */
     status: {
       todo: "Za rad",

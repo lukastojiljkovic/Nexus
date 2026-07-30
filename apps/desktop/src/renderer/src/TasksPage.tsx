@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { ChangeEvent, FormEvent, ReactNode } from "react";
+import type { CSSProperties, ChangeEvent, DragEvent, FormEvent, ReactNode } from "react";
 import {
   Button,
   Checkbox,
@@ -14,12 +14,17 @@ import {
 } from "@nexus/ui";
 import { isValidDayKey, parseQuickAddDate } from "@nexus/core";
 import type { CollectionSchema, KanbanViewConfig, ListViewConfig } from "@nexus/core";
+import { MAX_TASK_LIST_NAME_LENGTH } from "../../shared/ipc.js";
 import type {
+  DeleteListMode,
   NewTaskFields,
   RecurrenceRule,
   Task,
   TaskFieldChanges,
+  TaskList,
+  TaskListView,
   TaskPriority,
+  TaskSection,
   TaskStatus,
 } from "../../shared/ipc.js";
 import { localTodayKey } from "./examDates.js";
@@ -55,24 +60,17 @@ const TASK_SCHEMA: CollectionSchema = {
   ],
 };
 
-// v0 shows tasks in the store's stable creation order — no filter/sort UI yet.
+/**
+ * The list view carries NO sort spec on purpose, and that absence is the
+ * ordering seam (TASK-004): `applySort` returns its input untouched without one,
+ * so the rows render in exactly the order `listTasks` handed over — which is the
+ * store's own total order (list, body before sections, then each scope by its
+ * sparse `position`). Manual order is therefore the display order, and a drag
+ * only has to write a new `position` for the list to redraw in it. Adding a sort
+ * here would silently make the drag a no-op on screen.
+ */
 const LIST_CONFIG: ListViewConfig = { type: "list" };
 const KANBAN_CONFIG: KanbanViewConfig = { type: "kanban", groupBy: "status" };
-
-// --- Per-profile view memory (interim, mirrors theme.ts) --------------------
-//
-// Which view (list/kanban) is a lightweight UI preference, persisted per profile
-// in localStorage exactly like the theme. Per-VIEW config persistence (per-list
-// view memory, filters/sort — TASK-004/005) is SET's job in a later slice.
-type TaskView = "list" | "kanban";
-const VIEW_KEY_PREFIX = "nexus.tasks.view.";
-
-function readStoredView(profileId: string): TaskView {
-  return localStorage.getItem(VIEW_KEY_PREFIX + profileId) === "kanban" ? "kanban" : "list";
-}
-function persistView(profileId: string, view: TaskView): void {
-  localStorage.setItem(VIEW_KEY_PREFIX + profileId, view);
-}
 
 const STATUS_TITLES: Record<TaskStatus, string> = strings.tasks.status;
 
@@ -170,6 +168,24 @@ function indentClass(depth: number): string {
 }
 
 /**
+ * The left spacer of anything that is NOT a top-level row: the width of the drag
+ * grip column (which only top-level rows fill, see `renderRowLead`) plus this
+ * row's own indent.
+ *
+ * One element rather than two siblings on purpose: both places it is used sit in
+ * a flex row with a gap, and two siblings would take that gap between them and
+ * push nested content one step further right than the row above it.
+ */
+function leadSpacer(depth: number): ReactNode {
+  return (
+    <span className="tasks__row-lead" aria-hidden="true">
+      <span className="tasks__grip-spacer" />
+      <span className={indentClass(depth)} />
+    </span>
+  );
+}
+
+/**
  * Splits the flat task list into the rows that render at top level and a
  * parent → direct-children index, both keeping the order `listTasks` returned.
  *
@@ -195,6 +211,77 @@ function buildTaskTree(tasks: readonly TaskFields[]): {
     else children.set(task.parentId, [task]);
   }
   return { roots, children };
+}
+
+// --- Lists and sections (TASK-004 / ADR-029) --------------------------------
+
+/** How many steps a nested list is allowed to move right in the rail — the `MAX_INDENT_DEPTH` rule, one pane over: deeper lists still render, they just stop indenting. */
+const MAX_RAIL_DEPTH = 3;
+
+/** One list with its child lists, in the order the store returned them (`position`, never a name sort — a list's order is something the user sets). */
+interface RailNode {
+  list: TaskList;
+  children: RailNode[];
+}
+
+/**
+ * The flat list array as a tree keyed by `parentId`, with the Inbox first among
+ * the roots — it is where a task lands when the user names none, so it leads.
+ *
+ * A list whose `parentId` names no fetched list would not be reachable here;
+ * that state does not exist, because deleting a list PROMOTES its children to
+ * the deleted list's own parent in the same transaction.
+ */
+function buildListTree(lists: readonly TaskList[]): RailNode[] {
+  const byParent = new Map<string | null, TaskList[]>();
+  for (const list of lists) {
+    const siblings = byParent.get(list.parentId);
+    if (siblings) siblings.push(list);
+    else byParent.set(list.parentId, [list]);
+  }
+  const build = (parentId: string | null): RailNode[] =>
+    (byParent.get(parentId) ?? []).map((list) => ({ list, children: build(list.id) }));
+  const roots = build(null);
+  return [...roots.filter((node) => node.list.isInbox), ...roots.filter((node) => !node.list.isInbox)];
+}
+
+/**
+ * One rendering group of the list view: the list BODY (`section` null) or one
+ * section, holding the top-level rows that belong to it. Sections come in their
+ * own `position` order, which a task row cannot see — `TASK_ORDER` sorts rows by
+ * `section_id`, i.e. by an opaque id — so the grouping is what puts the headings
+ * in the order the user arranged them.
+ */
+interface TaskGroup {
+  section: TaskSection | null;
+  roots: TaskFields[];
+}
+
+/** The rail's and the list view's inline name editors: one open at a time, either a new row under a parent or a rename of an existing one. */
+type RailEditing =
+  | null
+  | { mode: "new"; parentId: string | null }
+  | { mode: "rename"; id: string };
+
+type SectionEditing = null | { mode: "new" } | { mode: "rename"; id: string };
+
+/**
+ * What a task drag is currently over: a gap between two rows of one ordering
+ * scope, a section heading, or a list in the rail — one per write the drop
+ * performs (`reorderTask` / `moveTaskToSection` / `moveTaskToList`).
+ */
+type DropTarget =
+  | { kind: "gap"; beforeId: string | null; afterId: string | null }
+  | { kind: "section"; id: string }
+  | { kind: "list"; id: string };
+
+/** Identity of a drop target, so a `dragover` over the one already highlighted does not re-render. */
+function sameTarget(a: DropTarget | null, b: DropTarget): boolean {
+  if (a === null || a.kind !== b.kind) return false;
+  if (a.kind === "gap" && b.kind === "gap") {
+    return a.beforeId === b.beforeId && a.afterId === b.afterId;
+  }
+  return "id" in a && "id" in b && a.id === b.id;
 }
 
 /**
@@ -315,6 +402,136 @@ function SubtaskCompletionDialog({ onChoose, onCancel }: SubtaskCompletionDialog
   );
 }
 
+interface InlineNameFormProps {
+  value: string;
+  placeholder: string;
+  /** Accessible name of the field — the action being performed ("Nova lista", "Preimenuj sekciju"). */
+  label: string;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+  onCancel: () => void;
+}
+
+/**
+ * The one inline "type a name" line, shared by all four naming actions (new
+ * list, rename list, new section, rename section). They differ only in their
+ * wording and in what the submit calls, so they share this rather than four
+ * copies of the same form. Escape cancels — the line sits outside the page's
+ * add/edit form, so no key reaches that form from here — and the length cap is
+ * the wire contract's own, not a UI courtesy.
+ */
+function InlineNameForm({
+  value,
+  placeholder,
+  label,
+  onChange,
+  onSubmit,
+  onCancel,
+}: InlineNameFormProps) {
+  return (
+    <form
+      className="tasks__name-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit();
+      }}
+    >
+      <TextField
+        value={value}
+        placeholder={placeholder}
+        aria-label={label}
+        maxLength={MAX_TASK_LIST_NAME_LENGTH}
+        autoFocus
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            onCancel();
+          }
+        }}
+      />
+      <Button type="submit" size="sm" variant="primary">
+        {strings.tasks.lists.save}
+      </Button>
+      <Button type="button" size="sm" className="tasks__name-cancel" onClick={onCancel}>
+        {strings.tasks.lists.cancel}
+      </Button>
+    </form>
+  );
+}
+
+interface TaskListDeleteDialogProps {
+  list: TaskList;
+  /** The stored Inbox name, so the "move them there" choice says where — the Inbox is renamable. */
+  inboxName: string;
+  onChoose: (mode: DeleteListMode) => void;
+  onCancel: () => void;
+}
+
+/**
+ * "Šta sa zadacima iz ove liste?" — the two things deleting a list can mean
+ * (ADR-029), asked rather than assumed, because they lose different things: one
+ * keeps every task, the other takes them down with the list. The house dialog
+ * recipe, shared outright with `SubtaskCompletionDialog` and the recurrence
+ * scope question; only the wording differs.
+ *
+ * Deliberately without a default: no primary button, Enter picks nothing, and
+ * Escape, the backdrop and Otkaži all cancel and change nothing.
+ */
+function TaskListDeleteDialog({ list, inboxName, onChoose, onCancel }: TaskListDeleteDialogProps) {
+  const s = strings.tasks.lists.dialog;
+  const choicesRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const questionId = useId();
+
+  useEffect(() => {
+    choicesRef.current?.querySelector("button")?.focus();
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCancel();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onCancel]);
+
+  return createPortal(
+    <div className="tasks__dialog-overlay">
+      <div className="tasks__dialog-backdrop" onClick={onCancel} />
+      <div
+        className="tasks__dialog-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={questionId}
+      >
+        <h2 id={titleId} className="tasks__dialog-title">
+          {s.title}
+        </h2>
+        <p className="tasks__dialog-name">„{list.name}“</p>
+        <p id={questionId} className="tasks__dialog-question">
+          {s.question}
+        </p>
+        <div className="tasks__dialog-choices" ref={choicesRef}>
+          <Button className="tasks__dialog-choice" onClick={() => onChoose("move-to-inbox")}>
+            {s.moveToInboxPrefix} „{inboxName}“
+          </Button>
+          <Button className="tasks__dialog-choice" onClick={() => onChoose("delete-tasks")}>
+            {s.deleteTasks}
+          </Button>
+        </div>
+        <div className="tasks__dialog-actions">
+          <Button className="tasks__dialog-cancel" onClick={onCancel}>
+            {s.cancel}
+          </Button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 /** A pending deep-link target (021-e global search / palette commands): reveal one task, or focus the quick-add input for a fresh one. */
 export type TasksIntent = { kind: "reveal"; taskId: string } | { kind: "create" };
 
@@ -331,11 +548,13 @@ export interface TasksPageProps {
 }
 
 /**
- * The TASK module page (v0 basics): one form that both adds and edits (its
+ * The TASK module page: a list rail on the left (TASK-004 — the profile's Inbox
+ * and every list under it), and beside it one form that both adds and edits (its
  * title line alone is still the quick-add), a list and a kanban view over the
  * shared views engine, per-row done toggle and delete-with-undo. The engine owns
- * ordering/grouping; every write goes through the tasks:* IPC allowlist, so the
- * store stays the single source of truth (e.g. it derives completed_at).
+ * grouping; every write goes through the tasks / task-lists / task-sections IPC
+ * allowlist, so the store stays the single source of truth (e.g. it derives
+ * completed_at, and it owns every `position`).
  *
  * Ticking a task off always goes through `completeTaskOccurrence` (ADR-024) —
  * the checkbox and the kanban drop into "Završeno" alike. A one-off completes;
@@ -345,7 +564,31 @@ export interface TasksPageProps {
 export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps) {
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [failed, setFailed] = useState(false);
-  const [view, setView] = useState<TaskView>(() => readStoredView(profileId));
+  /** Every list of the profile and every section of those lists — one fetch, see `TaskListsSnapshot`. */
+  const [lists, setLists] = useState<TaskList[] | null>(null);
+  const [sections, setSections] = useState<TaskSection[]>([]);
+  /**
+   * Which list the rail has selected — a PREFERENCE, not the answer: what the
+   * page renders is derived below and falls back to the Inbox, so a selection
+   * left over from another profile, or naming a list that has since been
+   * deleted, resolves itself instead of blanking the page.
+   */
+  const [selectedListId, setSelectedListId] = useState<string | null>(null);
+  /** True when the last list/section action failed — the rail says so rather than failing silently. */
+  const [listFailed, setListFailed] = useState(false);
+  const [railEditing, setRailEditing] = useState<RailEditing>(null);
+  const [railDraft, setRailDraft] = useState("");
+  const [sectionEditing, setSectionEditing] = useState<SectionEditing>(null);
+  const [sectionDraft, setSectionDraft] = useState("");
+  /** The list whose delete is waiting on the "what about its tasks" question, or null. */
+  const [deletePrompt, setDeletePrompt] = useState<TaskList | null>(null);
+  /** The list a delete just removed, offered back — the list counterpart of `pendingUndoId`. */
+  const [pendingListUndoId, setPendingListUndoId] = useState<string | null>(null);
+  /** The section the add/edit form will file the task under; null is the list body. */
+  const [formSectionId, setFormSectionId] = useState<string | null>(null);
+  /** The task being dragged in the list view, and what the pointer is over. */
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   // One form serves both modes, as on Kalendar: a non-null editingId means
   // "editing that task", and the title line alone still works as the quick-add.
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -370,18 +613,82 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const subtaskInputRef = useRef<HTMLInputElement>(null);
   const { revealedId, reveal } = useRevealedRow();
 
+  /**
+   * The selected list, resolved rather than trusted: the stored preference if it
+   * still names a list of this profile, else the Inbox, else nothing (only while
+   * the first fetch is in flight — every profile has an Inbox).
+   */
+  const selectedList =
+    lists === null
+      ? null
+      : (lists.find((list) => list.id === selectedListId) ??
+        lists.find((list) => list.isInbox) ??
+        lists[0] ??
+        null);
+  const selectedId = selectedList?.id ?? null;
+  const inboxList = lists?.find((list) => list.isInbox) ?? null;
+
+  /**
+   * WHICH VIEW is now a per-list property (TASK-004/005): the toggle writes
+   * `setTaskListView` and the list itself remembers, so switching lists switches
+   * shape with them. This replaces the old per-profile localStorage memory
+   * outright — the `nexus.tasks.view.<profileId>` key is simply left where it is
+   * and never read again, which is the whole migration: the value it held was a
+   * UI preference, and the Inbox's own `defaultView` now stands in its place.
+   */
+  const view: TaskListView = selectedList?.defaultView ?? "list";
+
+  /**
+   * The page shows ONE list at a time — that is what selecting in the rail
+   * means. A task whose `listId` matches no fetched list would belong to a
+   * soft-deleted list and be unreachable here; nothing can produce one: deleting
+   * a list either moves its tasks to the Inbox or deletes them with it, and the
+   * per-task undo re-places a task whose list is gone into the Inbox
+   * (`TaskStore.restore`).
+   */
+  const listTasks =
+    selectedId === null ? [] : (tasks ?? []).filter((task) => task.listId === selectedId);
+  /** Already in `position` order: main returns sections grouped by list, each list's in its own order, so filtering preserves it. */
+  const listSections =
+    selectedId === null ? [] : sections.filter((section) => section.listId === selectedId);
+
   // Rebuilt from the flat list on every render: it is one pass over an array
   // the page already holds, so there is nothing worth memoising.
-  const { roots, children } = buildTaskTree(tasks ?? []);
+  const { roots, children } = buildTaskTree(listTasks);
   const childrenOf = (taskId: string): readonly TaskFields[] =>
     children.get(taskId) ?? NO_CHILDREN;
+
+  const knownSectionIds = new Set(listSections.map((section) => section.id));
+  /** The heading a row renders under: its own section, or the body for a section this fetch does not know (only reachable between a section delete and the refetch that follows it). */
+  const groupKeyOf = (task: TaskFields): string | null =>
+    task.sectionId !== null && knownSectionIds.has(task.sectionId) ? task.sectionId : null;
+  const groups: TaskGroup[] = [
+    { section: null, roots: roots.filter((task) => groupKeyOf(task) === null) },
+    ...listSections.map((section) => ({
+      section,
+      roots: roots.filter((task) => task.sectionId === section.id),
+    })),
+  ];
+
+  const draggedTask =
+    draggedTaskId === null
+      ? null
+      : (listTasks.find((task) => task.id === draggedTaskId) ?? null);
 
   useEffect(() => {
     let active = true;
     void (async () => {
       try {
-        const list = await window.nexus.listTasks(profileId);
-        if (active) setTasks(list);
+        // One round trip each, in parallel: the rail and the rows are one screen,
+        // so a render that has tasks but no lists (or the reverse) is never shown.
+        const [snapshot, list] = await Promise.all([
+          window.nexus.listTaskLists(profileId),
+          window.nexus.listTasks(profileId),
+        ]);
+        if (!active) return;
+        setLists(snapshot.lists);
+        setSections(snapshot.sections);
+        setTasks(list);
       } catch (error) {
         if (active) setFailed(true);
         console.error("Nexus: failed to load tasks:", error);
@@ -393,10 +700,11 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   }, [profileId]);
 
   // Consumes a pending deep-link (021-e): "create" focuses the quick-add
-  // input; "reveal" scrolls to and marks a task's row. Both the list and the
-  // kanban view always render every loaded task — v0 has no filter/sort UI
-  // yet (see the top-of-file comment) — so unlike CAL/STUDY there is no view
-  // or filter state to adjust here; the reveal has nothing to hide from.
+  // input; "reveal" scrolls to and marks a task's row. The rail filters the
+  // page to one list (TASK-004), so a reveal now has one thing to un-hide: the
+  // row's own list, selected first, with the intent deliberately left standing
+  // so this effect finishes the reveal on the next pass — by which time the row
+  // is actually in the DOM for `scrollRevealedIntoView` to find.
   // Keyed on `intent`/`tasks` rather than mount, so a search fired while
   // already on Zadaci retriggers this exactly like one that switches modules
   // here does, and so a load race (intent arrives before the list has
@@ -409,14 +717,21 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
       return;
     }
     if (tasks === null) return; // still loading — wait rather than deciding it's missing
-    if (!tasks.some((task) => task.id === intent.taskId)) {
+    const target = tasks.find((task) => task.id === intent.taskId);
+    if (!target) {
       onIntentHandled?.(); // deleted between indexing and clicking — do nothing else
+      return;
+    }
+    // The "is it a list we know" half matters: without it, a row pointing at a
+    // list this fetch does not have would defer forever and strand the intent.
+    if (target.listId !== selectedId && (lists?.some((list) => list.id === target.listId) ?? false)) {
+      selectList(target.listId);
       return;
     }
     reveal(intent.taskId);
     scrollRevealedIntoView(taskRowDomId(intent.taskId));
     onIntentHandled?.();
-  }, [intent, tasks, reveal, onIntentHandled]);
+  }, [intent, tasks, lists, selectedId, reveal, onIntentHandled]);
 
   // A due date read straight out of the title (TASK-007). Derived plainly on
   // every render — the scan is a handful of regexes over a title-length string,
@@ -430,9 +745,31 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const activeQuickDate =
     quickDate !== null && quickDate.phrase !== dismissedPhrase ? quickDate : null;
 
-  function selectView(next: TaskView): void {
-    setView(next);
-    persistView(profileId, next);
+  /** Remembers the shape this list opens in (TASK-005) — the store owns the memory, so it survives a restart and travels with the list. */
+  async function selectView(next: TaskListView): Promise<void> {
+    const list = selectedList;
+    if (list === null || list.defaultView === next) return;
+    try {
+      await window.nexus.setTaskListView(profileId, list.id, next);
+      setLists(
+        (prev) => prev && prev.map((row) => (row.id === list.id ? { ...row, defaultView: next } : row)),
+      );
+    } catch (error) {
+      console.error("Nexus: failed to remember the list view:", error);
+    }
+  }
+
+  /** Switches the page to another list, closing everything that was bound to the one being left. */
+  function selectList(id: string): void {
+    if (id === selectedId) return;
+    setSelectedListId(id);
+    // The form, the inline subtask line and the section editor were all bound to
+    // rows of the list being left — none of which this list shows.
+    resetForm();
+    closeSubtaskInput();
+    setSectionEditing(null);
+    setSectionDraft("");
+    setListFailed(false);
   }
 
   function replaceTask(updated: Task): void {
@@ -443,7 +780,196 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     setTasks(await window.nexus.listTasks(profileId));
   }
 
-  function resetForm(): void {
+  /**
+   * Re-fetches the rail AND the rows, which is what every list/section write
+   * needs: deleting a list moves or deletes its tasks, deleting a section
+   * promotes them, and both re-place rows the rail no longer describes. Two
+   * local SQLite reads, so there is nothing to save by fetching one half.
+   */
+  async function reloadAll(): Promise<void> {
+    const [snapshot, list] = await Promise.all([
+      window.nexus.listTaskLists(profileId),
+      window.nexus.listTasks(profileId),
+    ]);
+    setLists(snapshot.lists);
+    setSections(snapshot.sections);
+    setTasks(list);
+  }
+
+  /**
+   * Runs one list/section mutation: clears the previous failure, performs it,
+   * closes whichever inline editor was open, and re-reads everything. A failure
+   * leaves the editor open with what the user typed still in it — the rail's
+   * error line says the action did not take.
+   */
+  async function runListAction(action: () => Promise<void>): Promise<void> {
+    try {
+      setListFailed(false);
+      await action();
+      closeRailEditor();
+      closeSectionEditor();
+      await reloadAll();
+    } catch (error) {
+      setListFailed(true);
+      console.error("Nexus: list action failed:", error);
+    }
+  }
+
+  function closeRailEditor(): void {
+    setRailEditing(null);
+    setRailDraft("");
+  }
+
+  function beginNewList(parentId: string | null): void {
+    setListFailed(false);
+    setRailDraft("");
+    setRailEditing({ mode: "new", parentId });
+  }
+
+  function beginRenameList(list: TaskList): void {
+    setListFailed(false);
+    setRailDraft(list.name);
+    setRailEditing({ mode: "rename", id: list.id });
+  }
+
+  function submitNewList(parentId: string | null): void {
+    const name = railDraft.trim();
+    if (name.length === 0) return;
+    void runListAction(async () => {
+      const created = await window.nexus.createTaskList(profileId, name, parentId);
+      // A list is made to put things in, so the page follows the user there —
+      // through `selectList`, so everything bound to the list being left goes
+      // with it rather than lingering over rows this list does not show.
+      selectList(created.id);
+    });
+  }
+
+  function submitRenameList(id: string): void {
+    const name = railDraft.trim();
+    if (name.length === 0) return;
+    void runListAction(() => window.nexus.renameTaskList(profileId, id, name));
+  }
+
+  /** Applies the answer the delete dialog collected; the undo bar then offers the list back. */
+  function deleteList(list: TaskList, mode: DeleteListMode): void {
+    void runListAction(async () => {
+      await window.nexus.deleteTaskList(profileId, list.id, mode);
+      // The selection is derived, so a deleted list falls back to the Inbox on
+      // its own; what has to go is anything still bound to the list's rows.
+      resetForm();
+      closeSubtaskInput();
+      // One pending undo at a time — a fresh delete replaces the previous offer.
+      setPendingListUndoId(list.id);
+    });
+  }
+
+  function undoListDelete(): void {
+    const id = pendingListUndoId;
+    if (id === null) return;
+    void runListAction(async () => {
+      await window.nexus.restoreTaskList(profileId, id);
+      setPendingListUndoId(null);
+    });
+  }
+
+  function closeSectionEditor(): void {
+    setSectionEditing(null);
+    setSectionDraft("");
+  }
+
+  function beginNewSection(): void {
+    setListFailed(false);
+    setSectionDraft("");
+    setSectionEditing({ mode: "new" });
+  }
+
+  function beginRenameSection(section: TaskSection): void {
+    setListFailed(false);
+    setSectionDraft(section.name);
+    setSectionEditing({ mode: "rename", id: section.id });
+  }
+
+  function submitNewSection(listId: string): void {
+    const name = sectionDraft.trim();
+    if (name.length === 0) return;
+    void runListAction(() =>
+      window.nexus.createTaskSection(profileId, listId, name).then(() => undefined),
+    );
+  }
+
+  function submitRenameSection(id: string): void {
+    const name = sectionDraft.trim();
+    if (name.length === 0) return;
+    void runListAction(() => window.nexus.renameTaskSection(profileId, id, name));
+  }
+
+  function deleteSection(id: string): void {
+    void runListAction(async () => {
+      await window.nexus.deleteTaskSection(profileId, id);
+      // Its tasks moved to the list body in the same transaction, so a form
+      // still pointing at the deleted heading would file the next save nowhere.
+      if (formSectionId === id) setFormSectionId(null);
+    });
+  }
+
+  // --- Drag & drop (list view) ---------------------------------------------
+  //
+  // Native HTML5 drag, the same idiom as the kanban and the month grid: the
+  // dragged row travels as renderer state (the dataTransfer payload exists only
+  // because Firefox refuses to start a drag without one), and a drop target
+  // signals with an accent border and a soft background — never a glow.
+  //
+  // Only TOP-LEVEL rows are drag sources. A subtask lives where its parent
+  // lives, which every write path upholds; dragging one into another list would
+  // move a subtree out from under a parent left behind in this one.
+
+  function startTaskDrag(event: DragEvent, task: TaskFields): void {
+    setDraggedTaskId(task.id);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", task.id);
+  }
+
+  function endTaskDrag(): void {
+    setDraggedTaskId(null);
+    setDropTarget(null);
+  }
+
+  function dragOverTarget(event: DragEvent, target: DropTarget): void {
+    if (draggedTaskId === null) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    if (!sameTarget(dropTarget, target)) setDropTarget(target);
+  }
+
+  function dragLeaveTarget(event: DragEvent<HTMLElement>, target: DropTarget): void {
+    // Only when the pointer really left this element — a `dragleave` fired by
+    // moving onto a child would otherwise drop the highlight mid-hover.
+    if (sameTarget(dropTarget, target) && !event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setDropTarget(null);
+    }
+  }
+
+  /**
+   * Runs one placement write and re-reads the rows. The refetch is not optional:
+   * the display order IS the store's order (see `LIST_CONFIG`), and every one of
+   * these writes moves a row within it — patching the moved task in place would
+   * change its `position` while leaving it drawn where it was.
+   */
+  async function runPlacement(event: DragEvent, write: (id: string) => Promise<unknown>): Promise<void> {
+    const id = draggedTaskId;
+    if (id === null) return;
+    event.preventDefault();
+    endTaskDrag();
+    try {
+      await write(id);
+      await reload();
+    } catch (error) {
+      console.error("Nexus: failed to move task:", error);
+    }
+  }
+
+  /** Clears the add/edit form. `keepSection` leaves the heading the user is filing into standing — see the call in `submitForm`. */
+  function resetForm(keepSection = false): void {
     setEditingId(null);
     setDraft("");
     setDueDate("");
@@ -451,6 +977,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     setRecurrence(null);
     setReminderOffsets([]);
     setDismissedPhrase(null);
+    if (!keepSection) setFormSectionId(null);
   }
 
   /** Adds or removes one lead time; the store owns ordering, so the set is kept as picked. */
@@ -471,6 +998,10 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     setPriority(task.priority);
     setRecurrence(task.recurrence);
     setReminderOffsets([...task.reminderOffsets]);
+    // The heading the task currently sits under, so saving without touching the
+    // select leaves it exactly where it is (`groupKeyOf`, for the same reason
+    // the grouping uses it: a section this fetch does not know reads as the body).
+    setFormSectionId(groupKeyOf(task));
     inputRef.current?.focus();
   }
 
@@ -510,7 +1041,16 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
           // task carried.
           reminderOffsets: ladder,
         };
+        const edited = tasks?.find((task) => task.id === editingId) ?? null;
         replaceTask(await window.nexus.updateTask(profileId, editingId, changes));
+        // A heading is a PLACEMENT, not a field: the store deliberately keeps it
+        // out of the field patch, so a changed section is its own write — and it
+        // appends the task at the end of the heading it lands in, which is a new
+        // order, hence the refetch.
+        if (edited !== null && groupKeyOf(edited) !== formSectionId) {
+          await window.nexus.moveTaskToSection(profileId, editingId, formSectionId);
+          await reload();
+        }
       } else {
         const fields: NewTaskFields = { title };
         // Only send what is set (exactOptionalPropertyTypes).
@@ -518,10 +1058,17 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         if (priority !== "none") fields.priority = priority;
         if (rule !== null) fields.recurrence = rule;
         if (ladder.length > 0) fields.reminderOffsets = ladder;
+        // A new task lands in the list the rail has selected, under the heading
+        // the select names — the whole point of selecting one.
+        if (selectedId !== null) fields.listId = selectedId;
+        if (formSectionId !== null) fields.sectionId = formSectionId;
         const created = await window.nexus.createTask(profileId, fields);
         setTasks((prev) => (prev ? [...prev, created] : [created]));
       }
-      resetForm();
+      // A create keeps the heading it filed into: writing a section is a run of
+      // several tasks, and re-picking it after every Enter would be the form
+      // fighting the user. Finishing an EDIT clears it, like every other field.
+      resetForm(editingId == null);
       inputRef.current?.focus();
     } catch (error) {
       console.error("Nexus: failed to save task:", error);
@@ -711,12 +1258,38 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     }
   }
 
+  /**
+   * A row's leading slot: the drag grip on a top-level row (TASK-004), or
+   * `leadSpacer`'s grip-column-plus-indent on a nested one — which is what keeps
+   * indentation MEANING something, since the grip column is exactly one indent
+   * step wide and would otherwise cancel the first step out.
+   *
+   * The grip is deliberately `aria-hidden`: a drag is mouse-only here, as on the
+   * calendar, and a control a keyboard can focus but not operate is worse than
+   * none. Nothing depends on it — the section select moves a task between
+   * headings without it.
+   */
+  function renderRowLead(task: TaskFields, depth: number): ReactNode {
+    if (depth > 0) return leadSpacer(depth);
+    return (
+      <span
+        className="tasks__grip"
+        draggable
+        aria-hidden="true"
+        onDragStart={(event) => startTaskDrag(event, task)}
+        onDragEnd={endTaskDrag}
+      >
+        ⠿
+      </span>
+    );
+  }
+
   /** One task's row, indented by `depth`; `children` is its direct children, already looked up by the caller. */
   function renderRow(task: TaskFields, depth: number, children: readonly TaskFields[]): ReactNode {
     return (
       <ListRow
         key={task.id}
-        leading={depth > 0 ? <span className={indentClass(depth)} aria-hidden="true" /> : undefined}
+        leading={renderRowLead(task, depth)}
         trailing={
           <span className="tasks__row-meta">
             {taskChips(task, children)}
@@ -772,7 +1345,9 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   function renderSubtaskInput(parentId: string, depth: number): ReactNode {
     return (
       <div className="tasks__subtask-add" key={`add-${parentId}`}>
-        <span className={indentClass(depth)} aria-hidden="true" />
+        {/* The same lead as a nested row's, so the line starts exactly where the
+            new subtask's checkbox will. */}
+        {leadSpacer(depth)}
         <input
           ref={subtaskInputRef}
           className="nx-textfield__input tasks__subtask-input"
@@ -823,233 +1398,560 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     return nodes;
   }
 
-  return (
-    <div className="tasks">
-      <div className="tasks__toolbar">
-        <form className="tasks__form" onSubmit={submitForm}>
-          <div className="tasks__quick-add">
-            <input
-              ref={inputRef}
-              className="nx-textfield__input"
-              value={draft}
-              placeholder={strings.tasks.quickAddPlaceholder}
-              aria-label={strings.tasks.quickAddLabel}
-              autoFocus
-              onChange={(event: ChangeEvent<HTMLInputElement>) => setDraft(event.target.value)}
-            />
-            <Button type="submit" variant="primary">
-              {editingId != null ? strings.tasks.save : strings.tasks.quickAddSubmit}
-            </Button>
-            {editingId != null && (
-              <Button type="button" className="tasks__cancel" onClick={resetForm}>
-                {strings.tasks.cancel}
-              </Button>
-            )}
-          </div>
+  /**
+   * A place a dragged row can land, between the two rows it names. Rendered ONLY
+   * while a drag is in flight: at rest the list looks exactly as it did before
+   * this slice, and during a drag it opens up the gaps that mean something.
+   *
+   * The gaps next to the dragged row itself are skipped — that is where it
+   * already is, and the store refuses to order a task against itself.
+   */
+  function renderDropGap(beforeId: string | null, afterId: string | null): ReactNode {
+    if (draggedTaskId === null) return null;
+    if (beforeId === draggedTaskId || afterId === draggedTaskId) return null;
+    const target: DropTarget = { kind: "gap", beforeId, afterId };
+    const active = sameTarget(dropTarget, target);
+    return (
+      <div
+        key={`gap-${beforeId ?? "start"}-${afterId ?? "end"}`}
+        className={active ? "tasks__drop-gap tasks__drop-gap--active" : "tasks__drop-gap"}
+        onDragOver={(event) => dragOverTarget(event, target)}
+        onDragLeave={(event) => dragLeaveTarget(event, target)}
+        onDrop={(event) =>
+          void runPlacement(event, (id) => window.nexus.reorderTask(profileId, id, beforeId, afterId))
+        }
+      />
+    );
+  }
 
-          {activeQuickDate !== null && (
-            <div
-              className="tasks__quick-date"
-              role="status"
-              aria-label={strings.tasks.quickDate.regionLabel}
-            >
-              <span className="tasks__quick-date-mark" aria-hidden="true">
-                →
-              </span>
-              <Chip variant="data" title={strings.tasks.quickDate.chipTitle}>
-                {formatQuickDate(activeQuickDate.date)}
-              </Chip>
-              <Button
-                type="button"
-                size="sm"
-                className="tasks__quick-date-dismiss"
-                aria-label={strings.tasks.quickDate.dismissLabel}
-                onClick={() => {
-                  setDismissedPhrase(activeQuickDate.phrase);
-                  // The button it sits on is about to unmount, so focus has to
-                  // be handed somewhere deliberate — back to the line the user
-                  // was typing in.
-                  inputRef.current?.focus();
-                }}
-              >
-                ×
-              </Button>
-            </div>
-          )}
-
-          <div className="tasks__fields">
-            <TextField
-              type="date"
-              value={dueDate}
-              aria-label={strings.tasks.dueDateLabel}
-              onChange={(event) => {
-                const next = event.target.value;
-                setDueDate(next);
-                // A rule has to phase from a real day, and a reminder ladder has
-                // to count back from one, so clearing the due date clears both
-                // where the user can see it happen.
-                if (!isValidDayKey(next)) {
-                  setRecurrence(null);
-                  setReminderOffsets([]);
-                }
-              }}
-            />
-            <select
-              className="tasks__select"
-              value={priority}
-              aria-label={strings.tasks.priorityLabel}
-              onChange={(event) => setPriority(asPriority(event.target.value))}
-            >
-              {TASK_PRIORITIES.map((option) => (
-                <option key={option} value={option}>
-                  {strings.tasks.priority[option]}
-                </option>
-              ))}
-            </select>
-            {/* Keyed by the record being edited: switching tasks re-derives
-                whether the rule reads as a preset or as Prilagođeno. */}
-            <RecurrencePicker
-              key={editingId ?? "new"}
-              value={recurrence}
-              onChange={setRecurrence}
-              anchor={dueDate}
-            />
-            {/* Podsetnik (ADR-028) — bound to the rok FIELD, exactly like the
-                rule above: the ladder counts back from the date the form is
-                showing, and the store refuses one that has no date to count
-                back from, so the chips say why rather than letting the user hit
-                that error blind. A date read out of the quick-add line is not
-                that anchor yet; it becomes one once it lands in the field. */}
-            <div className="tasks__reminders">
-              <span className="tasks__reminders-label">{strings.tasks.reminders.label}</span>
-              {isValidDayKey(dueDate) ? (
-                <div
-                  className="tasks__reminder-chips"
-                  role="group"
-                  aria-label={strings.tasks.reminders.label}
-                >
-                  {reminderChoices(reminderOffsets).map((days) => {
-                    const selected = reminderOffsets.includes(days);
-                    return (
-                      <Button
-                        key={days}
-                        size="sm"
-                        className={
-                          selected ? "tasks__reminder tasks__reminder--active" : "tasks__reminder"
-                        }
-                        aria-pressed={selected}
-                        onClick={() => toggleReminder(days)}
-                      >
-                        {taskReminderLabel(days)}
-                      </Button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="tasks__reminders-caption">{strings.tasks.reminders.needsDate}</p>
-              )}
-            </div>
-          </div>
-        </form>
-
-        <div className="tasks__views" role="group" aria-label={strings.tasks.viewLabel}>
-          {(["list", "kanban"] as const).map((option) => (
-            <Button
-              key={option}
-              size="sm"
-              className={
-                view === option ? "tasks__view tasks__view--active" : "tasks__view"
-              }
-              aria-pressed={view === option}
-              onClick={() => selectView(option)}
-            >
-              {option === "list" ? strings.tasks.viewList : strings.tasks.viewKanban}
-            </Button>
-          ))}
+  /** One section's heading: its name, the inline ✎/× actions, and the drop target that files a dragged task under it. */
+  function renderSectionHead(section: TaskSection): ReactNode {
+    const s = strings.tasks.lists;
+    if (sectionEditing?.mode === "rename" && sectionEditing.id === section.id) {
+      return (
+        <div className="tasks__section" key={`head-${section.id}`}>
+          <InlineNameForm
+            value={sectionDraft}
+            placeholder={s.sectionNamePlaceholder}
+            label={s.renameSectionLabel}
+            onChange={setSectionDraft}
+            onSubmit={() => submitRenameSection(section.id)}
+            onCancel={closeSectionEditor}
+          />
         </div>
+      );
+    }
+    const target: DropTarget = { kind: "section", id: section.id };
+    // A task already under this heading has nowhere to go — the store would only
+    // re-append it — so its own heading never offers itself as a target.
+    const droppable = draggedTask !== null && draggedTask.sectionId !== section.id;
+    const active = droppable && sameTarget(dropTarget, target);
+    return (
+      <div
+        key={`head-${section.id}`}
+        className={active ? "tasks__section tasks__section--drop" : "tasks__section"}
+        onDragOver={droppable ? (event) => dragOverTarget(event, target) : undefined}
+        onDragLeave={droppable ? (event) => dragLeaveTarget(event, target) : undefined}
+        onDrop={
+          droppable
+            ? (event) =>
+                void runPlacement(event, (id) =>
+                  window.nexus.moveTaskToSection(profileId, id, section.id),
+                )
+            : undefined
+        }
+      >
+        <span className="tasks__section-name">{section.name}</span>
+        <span className="tasks__section-actions">
+          <Button
+            size="sm"
+            className="tasks__section-action"
+            aria-label={s.renameSectionLabel}
+            onClick={() => beginRenameSection(section)}
+          >
+            ✎
+          </Button>
+          <Button
+            size="sm"
+            className="tasks__section-action tasks__section-delete"
+            aria-label={s.deleteSectionLabel}
+            onClick={() => deleteSection(section.id)}
+          >
+            ×
+          </Button>
+        </span>
       </div>
+    );
+  }
 
-      {pendingUndoId != null && (
-        <div className="tasks__undo" role="status">
-          <span className="tasks__undo-text">{strings.tasks.deletedNotice}</span>
-          <Button size="sm" className="tasks__undo-action" onClick={() => void undo()}>
-            {strings.tasks.undo}
-          </Button>
-          <Button
-            size="sm"
-            className="tasks__undo-dismiss"
-            aria-label={strings.tasks.dismiss}
-            onClick={() => setPendingUndoId(null)}
-          >
-            ×
-          </Button>
-        </div>
-      )}
+  /**
+   * One group of the list view — the list body or one section — as its heading,
+   * its rows, and the drop gaps between them.
+   *
+   * The gaps only appear in the group the dragged row itself belongs to: a
+   * neighbour from another scope describes a section move, not a reorder, and
+   * those two are different writes (the heading above is the one that means the
+   * former).
+   */
+  function renderGroup(group: TaskGroup): ReactNode {
+    const dragInGroup =
+      draggedTask !== null && groupKeyOf(draggedTask) === (group.section?.id ?? null);
+    // Read once per group rather than an `indexOf` per row.
+    const previousOf = new Map<string, string | null>();
+    group.roots.forEach((task, index) => {
+      previousOf.set(task.id, group.roots[index - 1]?.id ?? null);
+    });
+    const last = group.roots[group.roots.length - 1] ?? null;
 
-      {advancedTo != null && (
-        <div className="tasks__undo" role="status">
-          <span className="tasks__undo-text">
-            {strings.recurrence.nextOccurrence} {formatDue(advancedTo)}
-          </span>
-          <Button
-            size="sm"
-            className="tasks__undo-dismiss"
-            aria-label={strings.tasks.dismiss}
-            onClick={() => setAdvancedTo(null)}
-          >
-            ×
-          </Button>
-        </div>
-      )}
-
-      {failed ? (
-        <EmptyState title={strings.tasks.emptyTitle} description={strings.tasks.loadError} />
-      ) : tasks === null ? (
-        <p className="app__muted">{strings.app.loading}</p>
-      ) : tasks.length === 0 ? (
-        <EmptyState
-          title={strings.tasks.emptyTitle}
-          description={strings.tasks.emptyDescription}
-        />
-      ) : view === "list" ? (
-        // Only the top-level rows are handed to the engine; each one renders
-        // its own subtree (see `renderBranch`).
+    return (
+      <div className="tasks__group" key={group.section?.id ?? "__body__"}>
+        {group.section !== null && renderSectionHead(group.section)}
+        {/* Only the top-level rows are handed to the engine; each one renders
+            its own subtree (see `renderBranch`). */}
         <ListView<TaskFields>
-          items={roots}
+          items={group.roots}
           schema={TASK_SCHEMA}
           config={LIST_CONFIG}
           itemKey={(task) => task.id}
-          renderItem={(task) => renderBranch(task, 0, new Set())}
+          renderItem={(task) => [
+            dragInGroup ? renderDropGap(previousOf.get(task.id) ?? null, task.id) : null,
+            ...renderBranch(task, 0, new Set()),
+          ]}
         />
-      ) : (
-        // The board stays flat: a subtask is a real task with a status of its
-        // own, and a card in Za rad whose parent sits in U toku belongs in Za
-        // rad. Only the roll-up chip travels here, so a parent card still says
-        // how much of it is actually finished.
-        <KanbanView<TaskFields>
-          items={tasks}
-          schema={TASK_SCHEMA}
-          config={KANBAN_CONFIG}
-          columnTitle={statusTitle}
-          itemKey={(task) => task.id}
-          renderCard={(task) => (
-            <KanbanCard tag={taskChips(task, childrenOf(task.id))}>
-              <span
-                id={taskRowDomId(task.id)}
-                className={revealedId === task.id ? "nx-revealed" : undefined}
+        {/* The end of the group: the one gap that cannot live inside a row. */}
+        {dragInGroup && last !== null && renderDropGap(last.id, null)}
+      </div>
+    );
+  }
+
+  /** One rail row: the list itself (a select button that is also a drop target), plus its hover actions and its children. */
+  function renderRailList(node: RailNode, depth: number): ReactNode {
+    const s = strings.tasks.lists;
+    const { list } = node;
+    const indent = { "--task-depth": Math.min(depth, MAX_RAIL_DEPTH) } as CSSProperties;
+    const renaming = railEditing?.mode === "rename" && railEditing.id === list.id;
+    const addingChild = railEditing?.mode === "new" && railEditing.parentId === list.id;
+    const target: DropTarget = { kind: "list", id: list.id };
+    // Dropping a task on the list it already lives in would only re-append it.
+    const droppable = draggedTask !== null && draggedTask.listId !== list.id;
+    const active = droppable && sameTarget(dropTarget, target);
+    const selected = list.id === selectedId;
+
+    return (
+      <Fragment key={list.id}>
+        <div
+          className={active ? "tasks__rail-row tasks__rail-row--drop" : "tasks__rail-row"}
+          style={indent}
+          onDragOver={droppable ? (event) => dragOverTarget(event, target) : undefined}
+          onDragLeave={droppable ? (event) => dragLeaveTarget(event, target) : undefined}
+          onDrop={
+            droppable
+              ? (event) =>
+                  void runPlacement(event, (id) =>
+                    window.nexus.moveTaskToList(profileId, id, list.id),
+                  )
+              : undefined
+          }
+        >
+          {renaming ? (
+            <InlineNameForm
+              value={railDraft}
+              placeholder={s.listNamePlaceholder}
+              label={s.renameListLabel}
+              onChange={setRailDraft}
+              onSubmit={() => submitRenameList(list.id)}
+              onCancel={closeRailEditor}
+            />
+          ) : (
+            <>
+              <button
+                type="button"
+                className={selected ? "tasks__rail-list tasks__rail-list--active" : "tasks__rail-list"}
+                aria-current={selected ? "true" : undefined}
+                onClick={() => selectList(list.id)}
               >
-                {task.title}
+                <span className="tasks__rail-name">{list.name}</span>
+              </button>
+              <span className="tasks__rail-actions">
+                <Button
+                  size="sm"
+                  className="tasks__rail-action"
+                  aria-label={s.renameListLabel}
+                  onClick={() => beginRenameList(list)}
+                >
+                  ✎
+                </Button>
+                <Button
+                  size="sm"
+                  className="tasks__rail-action"
+                  aria-label={s.newSubList}
+                  onClick={() => beginNewList(list.id)}
+                >
+                  +
+                </Button>
+                {/* The Inbox is where "premesti u Inbox" moves things and where a
+                    task lands when the user names no list, so it cannot be
+                    deleted — the store refuses, and the affordance is not shown
+                    at all rather than offered and then rejected. */}
+                {!list.isInbox && (
+                  <Button
+                    size="sm"
+                    className="tasks__rail-action tasks__rail-delete"
+                    aria-label={s.deleteListLabel}
+                    onClick={() => setDeletePrompt(list)}
+                  >
+                    ×
+                  </Button>
+                )}
               </span>
-            </KanbanCard>
+            </>
           )}
-          onMove={(task, patch) => {
-            const next = patch.status;
-            // Ungrouped drops never occur — every task has a valid status — so
-            // the patch is always a real status; main revalidates regardless.
-            if (next != null && isTaskStatus(next)) void moveToStatus(task, next);
-          }}
-        />
-      )}
+        </div>
+
+        {addingChild && (
+          <div
+            className="tasks__rail-row"
+            style={{ "--task-depth": Math.min(depth + 1, MAX_RAIL_DEPTH) } as CSSProperties}
+          >
+            <InlineNameForm
+              value={railDraft}
+              placeholder={s.listNamePlaceholder}
+              label={s.newSubList}
+              onChange={setRailDraft}
+              onSubmit={() => submitNewList(list.id)}
+              onCancel={closeRailEditor}
+            />
+          </div>
+        )}
+
+        {node.children.map((child) => renderRailList(child, depth + 1))}
+      </Fragment>
+    );
+  }
+
+  return (
+    <div className="tasks">
+      <aside className="tasks__rail" aria-label={strings.tasks.lists.railLabel}>
+        <div className="tasks__rail-heading">{strings.tasks.lists.title}</div>
+        {/* The Inbox's own name is rendered like every other list's: it is a
+            stored, renamable row, so a hard-coded label would go stale the
+            moment it is renamed. */}
+        {lists !== null && buildListTree(lists).map((node) => renderRailList(node, 0))}
+        {railEditing?.mode === "new" && railEditing.parentId === null ? (
+          <div className="tasks__rail-row">
+            <InlineNameForm
+              value={railDraft}
+              placeholder={strings.tasks.lists.listNamePlaceholder}
+              label={strings.tasks.lists.newList}
+              onChange={setRailDraft}
+              onSubmit={() => submitNewList(null)}
+              onCancel={closeRailEditor}
+            />
+          </div>
+        ) : (
+          <Button size="sm" className="tasks__new-list" onClick={() => beginNewList(null)}>
+            {strings.tasks.lists.newList}
+          </Button>
+        )}
+        {listFailed && (
+          <p className="tasks__rail-error" role="status">
+            {strings.tasks.lists.actionError}
+          </p>
+        )}
+      </aside>
+
+      <div className="tasks__main">
+        <div className="tasks__toolbar">
+          <form className="tasks__form" onSubmit={submitForm}>
+            <div className="tasks__quick-add">
+              <input
+                ref={inputRef}
+                className="nx-textfield__input"
+                value={draft}
+                placeholder={strings.tasks.quickAddPlaceholder}
+                aria-label={strings.tasks.quickAddLabel}
+                autoFocus
+                onChange={(event: ChangeEvent<HTMLInputElement>) => setDraft(event.target.value)}
+              />
+              <Button type="submit" variant="primary">
+                {editingId != null ? strings.tasks.save : strings.tasks.quickAddSubmit}
+              </Button>
+              {editingId != null && (
+                <Button type="button" className="tasks__cancel" onClick={() => resetForm()}>
+                  {strings.tasks.cancel}
+                </Button>
+              )}
+            </div>
+
+            {activeQuickDate !== null && (
+              <div
+                className="tasks__quick-date"
+                role="status"
+                aria-label={strings.tasks.quickDate.regionLabel}
+              >
+                <span className="tasks__quick-date-mark" aria-hidden="true">
+                  →
+                </span>
+                <Chip variant="data" title={strings.tasks.quickDate.chipTitle}>
+                  {formatQuickDate(activeQuickDate.date)}
+                </Chip>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="tasks__quick-date-dismiss"
+                  aria-label={strings.tasks.quickDate.dismissLabel}
+                  onClick={() => {
+                    setDismissedPhrase(activeQuickDate.phrase);
+                    // The button it sits on is about to unmount, so focus has to
+                    // be handed somewhere deliberate — back to the line the user
+                    // was typing in.
+                    inputRef.current?.focus();
+                  }}
+                >
+                  ×
+                </Button>
+              </div>
+            )}
+
+            <div className="tasks__fields">
+              <TextField
+                type="date"
+                value={dueDate}
+                aria-label={strings.tasks.dueDateLabel}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setDueDate(next);
+                  // A rule has to phase from a real day, and a reminder ladder has
+                  // to count back from one, so clearing the due date clears both
+                  // where the user can see it happen.
+                  if (!isValidDayKey(next)) {
+                    setRecurrence(null);
+                    setReminderOffsets([]);
+                  }
+                }}
+              />
+              <select
+                className="tasks__select"
+                value={priority}
+                aria-label={strings.tasks.priorityLabel}
+                onChange={(event) => setPriority(asPriority(event.target.value))}
+              >
+                {TASK_PRIORITIES.map((option) => (
+                  <option key={option} value={option}>
+                    {strings.tasks.priority[option]}
+                  </option>
+                ))}
+              </select>
+              {/* Sekcija (TASK-004) — only where there is a heading to pick: a
+                  select whose one option is "Bez sekcije" says nothing, and a
+                  task of the selected list can only carry a heading of that same
+                  list, so this row appearing at all means there is a real choice.
+                  It is also the way BACK to the list body, which the drag (whose
+                  targets are the headings) deliberately does not offer. */}
+              {listSections.length > 0 && (
+                <select
+                  className="tasks__select"
+                  value={formSectionId ?? ""}
+                  aria-label={strings.tasks.lists.sectionLabel}
+                  onChange={(event) =>
+                    setFormSectionId(event.target.value.length === 0 ? null : event.target.value)
+                  }
+                >
+                  <option value="">{strings.tasks.lists.noSection}</option>
+                  {listSections.map((section) => (
+                    <option key={section.id} value={section.id}>
+                      {section.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {/* Keyed by the record being edited: switching tasks re-derives
+                  whether the rule reads as a preset or as Prilagođeno. */}
+              <RecurrencePicker
+                key={editingId ?? "new"}
+                value={recurrence}
+                onChange={setRecurrence}
+                anchor={dueDate}
+              />
+              {/* Podsetnik (ADR-028) — bound to the rok FIELD, exactly like the
+                  rule above: the ladder counts back from the date the form is
+                  showing, and the store refuses one that has no date to count
+                  back from, so the chips say why rather than letting the user hit
+                  that error blind. A date read out of the quick-add line is not
+                  that anchor yet; it becomes one once it lands in the field. */}
+              <div className="tasks__reminders">
+                <span className="tasks__reminders-label">{strings.tasks.reminders.label}</span>
+                {isValidDayKey(dueDate) ? (
+                  <div
+                    className="tasks__reminder-chips"
+                    role="group"
+                    aria-label={strings.tasks.reminders.label}
+                  >
+                    {reminderChoices(reminderOffsets).map((days) => {
+                      const selected = reminderOffsets.includes(days);
+                      return (
+                        <Button
+                          key={days}
+                          size="sm"
+                          className={
+                            selected ? "tasks__reminder tasks__reminder--active" : "tasks__reminder"
+                          }
+                          aria-pressed={selected}
+                          onClick={() => toggleReminder(days)}
+                        >
+                          {taskReminderLabel(days)}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="tasks__reminders-caption">{strings.tasks.reminders.needsDate}</p>
+                )}
+              </div>
+            </div>
+          </form>
+
+          <div className="tasks__views" role="group" aria-label={strings.tasks.viewLabel}>
+            {(["list", "kanban"] as const).map((option) => (
+              <Button
+                key={option}
+                size="sm"
+                className={
+                  view === option ? "tasks__view tasks__view--active" : "tasks__view"
+                }
+                aria-pressed={view === option}
+                onClick={() => void selectView(option)}
+              >
+                {option === "list" ? strings.tasks.viewList : strings.tasks.viewKanban}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {pendingUndoId != null && (
+          <div className="tasks__undo" role="status">
+            <span className="tasks__undo-text">{strings.tasks.deletedNotice}</span>
+            <Button size="sm" className="tasks__undo-action" onClick={() => void undo()}>
+              {strings.tasks.undo}
+            </Button>
+            <Button
+              size="sm"
+              className="tasks__undo-dismiss"
+              aria-label={strings.tasks.dismiss}
+              onClick={() => setPendingUndoId(null)}
+            >
+              ×
+            </Button>
+          </div>
+        )}
+
+        {advancedTo != null && (
+          <div className="tasks__undo" role="status">
+            <span className="tasks__undo-text">
+              {strings.recurrence.nextOccurrence} {formatDue(advancedTo)}
+            </span>
+            <Button
+              size="sm"
+              className="tasks__undo-dismiss"
+              aria-label={strings.tasks.dismiss}
+              onClick={() => setAdvancedTo(null)}
+            >
+              ×
+            </Button>
+          </div>
+        )}
+
+        {pendingListUndoId != null && (
+          <div className="tasks__undo" role="status">
+            <span className="tasks__undo-text">{strings.tasks.lists.deletedNotice}</span>
+            <Button size="sm" className="tasks__undo-action" onClick={undoListDelete}>
+              {strings.tasks.undo}
+            </Button>
+            <Button
+              size="sm"
+              className="tasks__undo-dismiss"
+              aria-label={strings.tasks.dismiss}
+              onClick={() => setPendingListUndoId(null)}
+            >
+              ×
+            </Button>
+          </div>
+        )}
+
+        {failed ? (
+          <EmptyState title={strings.tasks.emptyTitle} description={strings.tasks.loadError} />
+        ) : tasks === null || lists === null ? (
+          <p className="app__muted">{strings.app.loading}</p>
+        ) : view === "list" ? (
+          // The body first, then each section by its own position — sections are
+          // what a task row cannot order itself by (see `TaskGroup`).
+          <>
+            {/* An empty list still shows whatever headings it has, and the way to
+                add one: the empty state stands in only when there is nothing at
+                all to draw. */}
+            {listTasks.length === 0 && listSections.length === 0 ? (
+              <EmptyState
+                title={strings.tasks.emptyTitle}
+                description={strings.tasks.emptyDescription}
+              />
+            ) : (
+              groups.map((group) => renderGroup(group))
+            )}
+            {selectedId !== null &&
+              (sectionEditing?.mode === "new" ? (
+                <InlineNameForm
+                  value={sectionDraft}
+                  placeholder={strings.tasks.lists.sectionNamePlaceholder}
+                  label={strings.tasks.lists.newSection}
+                  onChange={setSectionDraft}
+                  onSubmit={() => submitNewSection(selectedId)}
+                  onCancel={closeSectionEditor}
+                />
+              ) : (
+                <Button size="sm" className="tasks__new-section" onClick={beginNewSection}>
+                  {strings.tasks.lists.newSection}
+                </Button>
+              ))}
+          </>
+        ) : listTasks.length === 0 ? (
+          // The board has nothing to hold headings or an "add" affordance for, so
+          // an empty list is the empty state here, as it was before TASK-004.
+          <EmptyState
+            title={strings.tasks.emptyTitle}
+            description={strings.tasks.emptyDescription}
+          />
+        ) : (
+          // The board stays flat: a subtask is a real task with a status of its
+          // own, and a card in Za rad whose parent sits in U toku belongs in Za
+          // rad. Only the roll-up chip travels here, so a parent card still says
+          // how much of it is actually finished. Ordering stays the engine's:
+          // columns are the status field's options, and a card's place within one
+          // is not something the board lets the user set.
+          <KanbanView<TaskFields>
+            items={listTasks}
+            schema={TASK_SCHEMA}
+            config={KANBAN_CONFIG}
+            columnTitle={statusTitle}
+            itemKey={(task) => task.id}
+            renderCard={(task) => (
+              <KanbanCard tag={taskChips(task, childrenOf(task.id))}>
+                <span
+                  id={taskRowDomId(task.id)}
+                  className={revealedId === task.id ? "nx-revealed" : undefined}
+                >
+                  {task.title}
+                </span>
+              </KanbanCard>
+            )}
+            onMove={(task, patch) => {
+              const next = patch.status;
+              // Ungrouped drops never occur — every task has a valid status — so
+              // the patch is always a real status; main revalidates regardless.
+              if (next != null && isTaskStatus(next)) void moveToStatus(task, next);
+            }}
+          />
+        )}
+      </div>
 
       {completePrompt !== null && (
         <SubtaskCompletionDialog
@@ -1059,6 +1961,19 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
             void (choice === "all" ? completeWithSubtasks(task) : completeTask(task));
           }}
           onCancel={() => setCompletePrompt(null)}
+        />
+      )}
+
+      {deletePrompt !== null && inboxList !== null && (
+        <TaskListDeleteDialog
+          list={deletePrompt}
+          inboxName={inboxList.name}
+          onChoose={(mode) => {
+            const list = deletePrompt;
+            setDeletePrompt(null);
+            deleteList(list, mode);
+          }}
+          onCancel={() => setDeletePrompt(null)}
         />
       )}
     </div>

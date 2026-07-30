@@ -28,6 +28,20 @@ export const IpcChannel = {
   tasksSetDone: "tasks:set-done",
   tasksDelete: "tasks:delete",
   tasksRestore: "tasks:restore",
+  taskListsList: "task-lists:list",
+  taskListsCreate: "task-lists:create",
+  taskListsRename: "task-lists:rename",
+  taskListsSetView: "task-lists:set-view",
+  taskListsMove: "task-lists:move",
+  taskListsDelete: "task-lists:delete",
+  taskListsRestore: "task-lists:restore",
+  taskSectionsCreate: "task-sections:create",
+  taskSectionsRename: "task-sections:rename",
+  taskSectionsMove: "task-sections:move",
+  taskSectionsDelete: "task-sections:delete",
+  tasksMoveToList: "tasks:move-to-list",
+  tasksMoveToSection: "tasks:move-to-section",
+  tasksReorder: "tasks:reorder",
   eventsList: "events:list",
   eventsCreate: "events:create",
   eventsUpdate: "events:update",
@@ -339,6 +353,12 @@ export interface Task {
    * same anchor a recurrence rule phases from.
    */
   reminderOffsets: number[];
+  /** The list this task lives in (TASK-004 / ADR-029). Never null: every task has a list, the profile's Inbox by default. */
+  listId: string;
+  /** The section (a heading inside `listId`) this task sits under, or null for the list body. */
+  sectionId: string | null;
+  /** Sparse sort key within this task's (list, section) scope — the list view's display order. */
+  position: number;
 }
 
 /** Fields for a new task; only `title` is required (TASK-001). The main process revalidates each. */
@@ -353,6 +373,10 @@ export interface NewTaskFields {
   recurrence?: RecurrenceRule | null;
   /** Reminder lead times in whole DAYS before the due date (ADR-028); omitted means none. The store canonicalizes and caps them. */
   reminderOffsets?: number[];
+  /** Where the task lands (TASK-004); omitted means the profile's Inbox. Ignored when `parentId` is set — a subtask lives where its parent lives. */
+  listId?: string;
+  /** A section of `listId`; omitted or null puts the task in the list body. Ignored when `parentId` is set, for the same reason. */
+  sectionId?: string | null;
 }
 
 /** A partial edit of a task's own fields; an omitted key is untouched, `null` clears it. */
@@ -404,6 +428,154 @@ export interface TasksRestoreRequest {
 export interface TasksCompleteOccurrenceRequest {
   profileId: string;
   id: string;
+}
+
+/** Which shape a list opens in (TASK-004/005). Mirrors `@nexus/db`'s `TASK_LIST_VIEWS`; redeclared so the renderer never imports DB code. */
+export type TaskListView = "list" | "kanban";
+
+/**
+ * Longest list/section name after trimming. Mirrors `@nexus/db`'s
+ * `MAX_TASK_LIST_NAME_LENGTH` — redeclared here, like `PASSCODE_MIN_LENGTH`, so
+ * the rail's inputs can bound what a user types without importing DB code. The
+ * store and the main-process validator stay authoritative.
+ */
+export const MAX_TASK_LIST_NAME_LENGTH = 100;
+
+/**
+ * A task list as seen by the renderer (mirrors the `task_lists` table via the
+ * store's mapping, ADR-029). `parentId` is null at the root; the Inbox is the
+ * one list a task lands in when the user names none — renamable, but never
+ * deletable or movable, which the store refuses outright.
+ */
+export interface TaskList {
+  id: string;
+  profileId: string;
+  parentId: string | null;
+  name: string;
+  isInbox: boolean;
+  defaultView: TaskListView;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A heading inside one list (ADR-029). Scoped through its list, so it carries no `profileId` of its own. */
+export interface TaskSection {
+  id: string;
+  listId: string;
+  name: string;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** What deleting a list does with the tasks it holds — the two answers a user can give, and there is no third. */
+export type DeleteListMode = "move-to-inbox" | "delete-tasks";
+
+/**
+ * Everything the left rail draws, in one fetch: every active list of the
+ * profile plus every section of those lists. Two round trips would let the rail
+ * render sections for a list that the same render no longer shows.
+ */
+export interface TaskListsSnapshot {
+  /** Root lists first, then each parent's children, every scope in its own position order. */
+  lists: TaskList[];
+  /** Grouped by list in that same order, each list's sections in position order. */
+  sections: TaskSection[];
+}
+
+export interface TaskListsListRequest {
+  profileId: string;
+}
+
+/** `parentId` null makes it a root list. */
+export interface TaskListsCreateRequest {
+  profileId: string;
+  name: string;
+  parentId: string | null;
+}
+
+export interface TaskListsRenameRequest {
+  profileId: string;
+  id: string;
+  name: string;
+}
+
+/** The view this list opens in (TASK-005) — the per-list replacement for the old localStorage view memory. */
+export interface TaskListsSetViewRequest {
+  profileId: string;
+  id: string;
+  view: TaskListView;
+}
+
+/** Re-parents and re-orders in one call: `parentId` names the scope, `beforeId`/`afterId` the live siblings it lands between there (either null at an end). */
+export interface TaskListsMoveRequest {
+  profileId: string;
+  id: string;
+  parentId: string | null;
+  beforeId: string | null;
+  afterId: string | null;
+}
+
+/** `mode` is always explicit — what happens to the tasks is the user's answer, never a default. */
+export interface TaskListsDeleteRequest {
+  profileId: string;
+  id: string;
+  mode: DeleteListMode;
+}
+
+/** Undo of a list delete: brings back the list together with exactly the tasks that delete took down with it. */
+export interface TaskListsRestoreRequest {
+  profileId: string;
+  id: string;
+}
+
+export interface TaskSectionsCreateRequest {
+  profileId: string;
+  listId: string;
+  name: string;
+}
+
+export interface TaskSectionsRenameRequest {
+  profileId: string;
+  id: string;
+  name: string;
+}
+
+/** Re-orders a section within its own list; `beforeId`/`afterId` are its siblings there. */
+export interface TaskSectionsMoveRequest {
+  profileId: string;
+  id: string;
+  beforeId: string | null;
+  afterId: string | null;
+}
+
+/** Deleting a section promotes its tasks to the list body — a heading is not a container things are lost in. */
+export interface TaskSectionsDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
+/** Moves a task and its whole live subtree into another list, appended at that list's body end. */
+export interface TasksMoveToListRequest {
+  profileId: string;
+  id: string;
+  listId: string;
+}
+
+/** Moves one task between the sections of the list it is already in; `null` is the list body. */
+export interface TasksMoveToSectionRequest {
+  profileId: string;
+  id: string;
+  sectionId: string | null;
+}
+
+/** Re-orders a task between two live neighbours of its own (list, section) scope; either is null at an end of it. */
+export interface TasksReorderRequest {
+  profileId: string;
+  id: string;
+  beforeId: string | null;
+  afterId: string | null;
 }
 
 /**
@@ -1987,6 +2159,52 @@ export interface NexusApi {
    * recurring one precisely so the two paths cannot drift apart.
    */
   completeTaskOccurrence(profileId: string, id: string): Promise<Task>;
+  /** Everything the task rail draws — lists and their sections — in one fetch (ADR-029). */
+  listTaskLists(profileId: string): Promise<TaskListsSnapshot>;
+  /** Creates a list, appended at the end of its parent scope; `parentId` null makes it a root list. */
+  createTaskList(profileId: string, name: string, parentId: string | null): Promise<TaskList>;
+  /** Renames a list. The Inbox renames like any other — only its deletion and its placement are fixed. */
+  renameTaskList(profileId: string, id: string, name: string): Promise<void>;
+  /** Remembers which shape this list opens in (TASK-005): the per-list view memory the view toggle writes. */
+  setTaskListView(profileId: string, id: string, view: TaskListView): Promise<void>;
+  /** Re-parents and re-orders in one call; refuses a cycle, and refuses to move the Inbox at all. */
+  moveTaskList(
+    profileId: string,
+    id: string,
+    parentId: string | null,
+    beforeId: string | null,
+    afterId: string | null,
+  ): Promise<void>;
+  /**
+   * Deletes a list, taking its tasks one of the two ways the user can mean
+   * (`"move-to-inbox"` / `"delete-tasks"`); child lists always promote to the
+   * deleted list's own parent. Reversible through `restoreTaskList` — which
+   * brings back exactly the tasks THIS delete removed, so the undo of a
+   * "move-to-inbox" restores the list without dragging the moved tasks back.
+   */
+  deleteTaskList(profileId: string, id: string, mode: DeleteListMode): Promise<void>;
+  restoreTaskList(profileId: string, id: string): Promise<void>;
+  createTaskSection(profileId: string, listId: string, name: string): Promise<TaskSection>;
+  renameTaskSection(profileId: string, id: string, name: string): Promise<void>;
+  moveTaskSection(
+    profileId: string,
+    id: string,
+    beforeId: string | null,
+    afterId: string | null,
+  ): Promise<void>;
+  /** Deletes a section and promotes its tasks to the list body, appended at its end. */
+  deleteTaskSection(profileId: string, id: string): Promise<void>;
+  /** Moves a task (and its live subtree) into another list — the rail's drop target. */
+  moveTaskToList(profileId: string, id: string, listId: string): Promise<Task>;
+  /** Moves one task into a section of its own list, or back to the body with `null`. */
+  moveTaskToSection(profileId: string, id: string, sectionId: string | null): Promise<Task>;
+  /** Re-orders a task within its own scope — the list view's drag between two rows. */
+  reorderTask(
+    profileId: string,
+    id: string,
+    beforeId: string | null,
+    afterId: string | null,
+  ): Promise<Task>;
   listEvents(profileId: string): Promise<Event[]>;
   createEvent(profileId: string, event: NewEventFields): Promise<Event>;
   updateEvent(profileId: string, id: string, changes: EventFieldChanges): Promise<Event>;

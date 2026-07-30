@@ -584,13 +584,33 @@ export class TaskStore {
     }
   }
 
-  /** Restores a soft-deleted task (undo of a delete, TASK-011). */
+  /**
+   * Restores a soft-deleted task (undo of a delete, TASK-011).
+   *
+   * If the list the task points at has meanwhile been deleted — the per-task
+   * undo offered right after `deleteList(…, "delete-tasks")` is exactly that
+   * case — the row is re-placed into the profile's Inbox body through
+   * `moveToList`, so the whole live subtree travels and lands appended in
+   * order. Without it the undo would "work" while putting the task in a list no
+   * view can reach, which is indistinguishable from the delete not being undone
+   * at all.
+   *
+   * One transaction: a fallback that cannot run (a profile with no Inbox is
+   * corruption, `requireInbox`) takes the un-delete down with it rather than
+   * leaving the task alive somewhere invisible.
+   */
   restore(id: string): void {
     const now = new Date().toISOString();
-    const { changes } = this.markRestored.run(now, id, this.profileId);
-    if (changes === 0) {
-      throw new TaskNotFoundError(`No deleted task "${id}" to restore in this profile.`);
-    }
+    this.db.transaction((): void => {
+      const { changes } = this.markRestored.run(now, id, this.profileId);
+      if (changes === 0) {
+        throw new TaskNotFoundError(`No deleted task "${id}" to restore in this profile.`);
+      }
+      const restored = this.requireActive(id);
+      if (!this.selectActiveList.get(restored.listId, this.profileId)) {
+        this.moveToList(id, this.requireInbox(), now);
+      }
+    })();
   }
 
   /** Reads an active task in this profile or throws — enforces scope + existence. */
