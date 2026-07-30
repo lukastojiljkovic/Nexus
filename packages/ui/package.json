@@ -13,7 +13,7 @@
     "lint": "eslint ."
   },
   "peerDependencies": {
-    "react": "^19.0.0"
+    "react": "^19.2.8"
   },
   "dependencies": {
     "@nexus/core": "workspace:*",
@@ -21,7 +21,7 @@
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
-    "react": "^19.0.0",
+    "react": "^19.2.8",
     "typescript": "^5.8.0"
   }
 }
