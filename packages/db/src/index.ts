@@ -65,6 +65,7 @@ export { SqliteFlagStore } from "./flags/sqliteFlagStore.js";
 
 export {
   TaskStore,
+  MAX_TASK_BULK_IDS,
   MAX_TASK_REMINDERS,
   MAX_TASK_REMINDER_DAYS,
   TASK_PRIORITIES,

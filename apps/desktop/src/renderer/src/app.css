@@ -568,13 +568,15 @@ body {
    spacer and the indent together as ONE flex item, so the flex gap around it
    applies once. */
 .tasks .tasks__grip,
-.tasks__grip-spacer {
+.tasks__grip-spacer,
+.tasks__pick {
   flex: none;
   width: var(--nx-space-4);
 }
 .tasks__row-lead {
   flex: none;
   display: inline-flex;
+  align-items: center;
 }
 .tasks .tasks__grip {
   text-align: center;
@@ -594,6 +596,55 @@ body {
 .tasks__drop-gap--active {
   border-color: var(--nx-accent);
   background: var(--nx-accent-soft);
+}
+
+/* Izbor — batch selection over the list view (ADR-038). The pick control takes
+   the grip's column, so entering the mode shifts nothing: same width, same
+   quiet-until-hovered reveal as the grip it stands in for. */
+.tasks__pick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font: inherit;
+  line-height: 1;
+  color: var(--nx-accent-strong);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.tasks__pick:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+  border-radius: var(--nx-radius-sm);
+}
+/* Hidden rather than absent, so every row's title starts at the same x whether
+   it is picked or not (.note__menu-check's reserved column, one page over). */
+.tasks__pick-mark--off {
+  visibility: hidden;
+  color: var(--nx-text-muted);
+}
+.tasks .nx-list-row:hover .tasks__pick-mark--off,
+.tasks__pick:focus-visible .tasks__pick-mark--off {
+  visibility: visible;
+}
+/* The whole row is the toggle while the mode is on. The done checkbox stays
+   drawn but disabled, and lets clicks through, so the box is not a dead spot in
+   the middle of that target. */
+.tasks__row--picking {
+  cursor: pointer;
+}
+.tasks__row--picking .nx-checkbox input {
+  pointer-events: none;
+}
+/* Picked = the house drop-target recipe (accent border + soft background), as
+   an outline so a row lighting up never moves the rows under it. Never a glow,
+   and never a side bar. */
+.tasks__row--picked {
+  background: var(--nx-accent-soft);
+  outline: 1px solid var(--nx-accent);
+  outline-offset: -1px;
+  border-radius: var(--nx-radius-sm);
 }
 
 /* Add/edit form + view toggle share one row; the toggle stays right-aligned and
@@ -786,6 +837,38 @@ body {
 .tasks__undo-dismiss.nx-button:hover {
   background: var(--nx-surface);
   color: var(--nx-text);
+}
+
+/* The batch action bar (ADR-038) is the undo bar's recipe with a wrap: it holds
+   three menu triggers and a delete rather than one action, and must not squeeze
+   the count out of view on a narrow window. */
+.tasks__bulk {
+  flex-wrap: wrap;
+}
+/* The row menus' trigger is a 24px glyph box; a NAMED trigger has to size to its
+   words instead, and reads as text rather than as an icon. */
+.tasks__bulk-trigger.note__menu-trigger {
+  width: auto;
+  height: auto;
+  padding: 4px 8px;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+/* Sub-lists indent under their parent exactly as the rail draws them, so the
+   menu reads as the same tree rather than as a flat list of names. */
+.tasks__bulk-list {
+  padding-left: calc(10px + var(--nx-space-3) * var(--task-depth, 0));
+}
+.tasks__bulk-due {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-1);
+}
+.tasks__bulk-error {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-danger);
 }
 
 /* Row trailing: priority/due chips next to a quiet per-row delete affordance. */

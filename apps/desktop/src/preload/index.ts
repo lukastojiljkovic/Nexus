@@ -63,6 +63,16 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.tasksMoveToSection, { profileId, id, sectionId }),
   reorderTask: (profileId, id, beforeId, afterId) =>
     ipcRenderer.invoke(IpcChannel.tasksReorder, { profileId, id, beforeId, afterId }),
+  bulkMoveTasksToList: (profileId, ids, listId, sectionId) =>
+    ipcRenderer.invoke(IpcChannel.tasksBulkMove, { profileId, ids, listId, sectionId }),
+  bulkSetTaskPriority: (profileId, ids, priority) =>
+    ipcRenderer.invoke(IpcChannel.tasksBulkPriority, { profileId, ids, priority }),
+  bulkSetTaskDueDate: (profileId, ids, dueDate) =>
+    ipcRenderer.invoke(IpcChannel.tasksBulkDue, { profileId, ids, dueDate }),
+  bulkDeleteTasks: (profileId, ids) =>
+    ipcRenderer.invoke(IpcChannel.tasksBulkDelete, { profileId, ids }),
+  bulkRestoreTasks: (profileId, ids) =>
+    ipcRenderer.invoke(IpcChannel.tasksBulkRestore, { profileId, ids }),
   listTaskTags: (profileId) => ipcRenderer.invoke(IpcChannel.taskTagsList, { profileId }),
   createTaskTag: (profileId, name) =>
     ipcRenderer.invoke(IpcChannel.taskTagsCreate, { profileId, name }),

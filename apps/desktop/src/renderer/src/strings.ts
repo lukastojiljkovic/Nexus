@@ -380,6 +380,45 @@ export const strings = {
       blockedChipTitle: "Čeka zadatak koji još nije završen",
       actionError: "Radnja nad zavisnošću nije uspela. Pokušaj ponovo.",
     },
+    /**
+     * Izbor (ADR-038) — the batch mode over the list view: pick rows, then move,
+     * re-prioritise, re-date or delete them in one go.
+     *
+     * „Izabrano: 5“ rather than a counted noun on purpose: Serbian numerals take
+     * three forms (1 / 2–4 / 5+) while `dayUnit` knows two, and a picked-task
+     * count is freely variable — so the number is stated after a colon, where no
+     * agreement is owed. „Obrisano zadataka: 5“ works the same way: the genitive
+     * plural is the invariant form after a stated count.
+     */
+    bulk: {
+      /** The toolbar toggle that enters and leaves the mode; active state is typographic, like the view toggle beside it. */
+      mode: "Izbor",
+      /** Names the action bar that appears once at least one row is picked. */
+      regionLabel: "Radnje nad izabranim zadacima",
+      /** The per-row pick control that replaces the drag grip while the mode is on. */
+      pickLabel: "Izaberi zadatak",
+      /** Followed by the number of rows picked. */
+      selected: "Izabrano:",
+      move: "Premesti…",
+      /** Header inside the move menu — it lists the rail's lists, indented as the rail draws them. */
+      moveLabel: "Premesti u listu",
+      priority: "Prioritet…",
+      priorityLabel: "Postavi prioritet",
+      due: "Rok…",
+      dueLabel: "Postavi rok",
+      clearDue: "Ukloni rok",
+      delete: "Obriši",
+      /**
+       * Shown in the action bar when the store refused the batch. It names the
+       * one refusal a user can actually run into — clearing a rok that a
+       * repetition or a reminder counts from — because nothing was changed and
+       * the way out is to adjust the selection.
+       */
+      actionError:
+        "Radnja nije uspela — ništa nije promenjeno. Rok se ne može ukloniti zadatku koji se ponavlja ili ima podsetnik.",
+      /** Followed by the number of tasks the batch delete removed; the offer itself is the same one-slot undo a single delete uses. */
+      deletedNotice: "Obrisano zadataka:",
+    },
     /** Kanban column titles, keyed by task status value (labels are presentation). */
     status: {
       todo: "Za rad",

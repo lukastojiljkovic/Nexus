@@ -40,6 +40,15 @@ export const MAX_TASK_REMINDER_DAYS = 365;
 export const MAX_TASK_REMINDERS = 8;
 
 /**
+ * ADR-038: how many tasks one batch action may name. A batch is a single
+ * transaction over rows the user picked by hand, so the bound is not about
+ * memory but about what an untrusted caller may ask the database to rewrite
+ * atomically. Exported (and re-exported from the package barrel) so the IPC
+ * validator guarding this store checks the very same number.
+ */
+export const MAX_TASK_BULK_IDS = 500;
+
+/**
  * A task as the store returns it: camelCase keys that map straight onto a views
  * engine `CollectionSchema` (status/priority → select, dueDate → date, title →
  * text, done → boolean) with no adapter. `done` is derived from `status`.
@@ -575,9 +584,15 @@ export class TaskStore {
     })();
   }
 
-  /** Soft-deletes an active task (PRD delete semantics; reversible via `restore`). */
-  softDelete(id: string): void {
-    const now = new Date().toISOString();
+  /**
+   * Soft-deletes an active task (PRD delete semantics; reversible via
+   * `restore`). `at` defaults to the wall clock; `bulkSoftDelete` passes one
+   * stamp for a whole batch — the `writeFields` idiom, and the same equality
+   * `TaskListStore.deleteList`/`restoreList` rely on: rows removed together
+   * carry the same `deleted_at`.
+   */
+  softDelete(id: string, at: string = new Date().toISOString()): void {
+    const now = validateDateTime(at);
     const { changes } = this.markDeleted.run(now, now, id, this.profileId);
     if (changes === 0) {
       throw new TaskNotFoundError(`No active task "${id}" to delete in this profile.`);
@@ -598,9 +613,12 @@ export class TaskStore {
    * One transaction: a fallback that cannot run (a profile with no Inbox is
    * corruption, `requireInbox`) takes the un-delete down with it rather than
    * leaving the task alive somewhere invisible.
+   *
+   * `at` defaults to the wall clock, like `softDelete`'s, so `bulkRestore` can
+   * stamp one moment across a whole undo.
    */
-  restore(id: string): void {
-    const now = new Date().toISOString();
+  restore(id: string, at: string = new Date().toISOString()): void {
+    const now = validateDateTime(at);
     this.db.transaction((): void => {
       const { changes } = this.markRestored.run(now, id, this.profileId);
       if (changes === 0) {
@@ -611,6 +629,95 @@ export class TaskStore {
         this.moveToList(id, this.requireInbox(), now);
       }
     })();
+  }
+
+  // --- Batch operations (ADR-038) -----------------------------------------
+  //
+  // Five actions over a hand-picked set of tasks. Each is ONE transaction that
+  // calls this store's own single-row methods per id, so not one invariant is
+  // re-spelled here: a batch move is a run of `moveToList`s, a batch edit a run
+  // of `update`s, and whatever those refuse, a batch refuses too.
+  //
+  // Refuse-on-any-error, atomically: a batch that half-applied would leave the
+  // user with no way to say which half, so the first failing id takes the whole
+  // run down with it (better-sqlite3 rolls a transaction back on a throw) and
+  // the error names that id.
+
+  /**
+   * Moves every named task into `listId` (subtrees and all, `moveToList`), then
+   * — when `sectionId` is given — files each named task under that heading.
+   *
+   * The two steps are in that order because a section belongs to a list: the
+   * heading can only be accepted once the row is actually in the list that owns
+   * it, which is the same check `moveToSection` makes for a single task. Only
+   * the NAMED tasks take the heading; a subtask that travelled with its parent
+   * stays in the list body, exactly as a single `moveToSection` leaves it.
+   */
+  bulkMoveToList(
+    ids: readonly string[],
+    listId: string,
+    sectionId: string | null,
+    now: string,
+  ): Task[] {
+    return this.batch(ids, (id) => {
+      const moved = this.moveToList(id, listId, now);
+      return sectionId === null ? moved : this.moveToSection(id, sectionId, now);
+    });
+  }
+
+  /** Sets one priority across the batch. */
+  bulkSetPriority(ids: readonly string[], priority: TaskPriority): Task[] {
+    const valid = validatePriority(priority);
+    return this.batch(ids, (id) => this.update(id, { priority: valid }));
+  }
+
+  /**
+   * Sets (or, with `null`, clears) one due date across the batch. Clearing is
+   * refused for a task whose recurrence rule or reminder ladder anchors on that
+   * date — `update`'s own rule — and that refusal takes the whole batch with it.
+   */
+  bulkSetDueDate(ids: readonly string[], dueDate: string | null): Task[] {
+    const valid = validateDate(dueDate, "dueDate");
+    return this.batch(ids, (id) => this.update(id, { dueDate: valid }));
+  }
+
+  /**
+   * Soft-deletes the batch under ONE shared `deleted_at`, which is returned:
+   * rows removed by one action carry one stamp, the property
+   * `TaskListStore.restoreList` already reads a list's own deletion by.
+   */
+  bulkSoftDelete(ids: readonly string[]): string {
+    const at = new Date().toISOString();
+    this.batch(ids, (id) => this.softDelete(id, at));
+    return at;
+  }
+
+  /** Restores the batch, each row by `restore`'s own semantics — Inbox fallback included. */
+  bulkRestore(ids: readonly string[]): void {
+    const at = new Date().toISOString();
+    this.batch(ids, (id) => this.restore(id, at));
+  }
+
+  /**
+   * The one batch runner: validates the id list, then applies `run` to each
+   * distinct id inside a single transaction, naming the id a failure stopped at.
+   *
+   * Duplicates are collapsed rather than refused — naming a task twice is what
+   * a selection can honestly produce, and the second pass over the same row
+   * would otherwise fail as "already deleted" and abort a batch that asked for
+   * nothing impossible.
+   */
+  private batch<T>(ids: readonly string[], run: (id: string) => T): T[] {
+    const unique = validateBulkIds(ids);
+    return this.db.transaction((): T[] =>
+      unique.map((id) => {
+        try {
+          return run(id);
+        } catch (error) {
+          throw namingTask(error, id);
+        }
+      }),
+    )();
   }
 
   /** Reads an active task in this profile or throws — enforces scope + existence. */
@@ -774,6 +881,37 @@ function ownFields(task: Task): Required<UpdateTaskFields> {
     recurrence: task.recurrence,
     reminderOffsets: task.reminderOffsets,
   };
+}
+
+/**
+ * A batch's id list (ADR-038): non-empty, within `MAX_TASK_BULK_IDS`, returned
+ * distinct. The cap is checked against what the caller actually sent, before
+ * the dedupe — a payload naming ten thousand ids is refused rather than quietly
+ * shrunk into an acceptable one.
+ */
+function validateBulkIds(ids: readonly string[]): string[] {
+  if (ids.length === 0) {
+    throw new TaskValidationError("A batch action must name at least one task.");
+  }
+  if (ids.length > MAX_TASK_BULK_IDS) {
+    throw new TaskValidationError(
+      `A batch action may name at most ${MAX_TASK_BULK_IDS} tasks (got ${ids.length}).`,
+    );
+  }
+  return [...new Set(ids)];
+}
+
+/**
+ * The same failure, said again with the task the batch stopped at named. The
+ * class is preserved — a caller telling "no such task" from "that edit is not
+ * allowed" must go on being able to — and anything this store does not own
+ * (a SQLite error, say) travels untouched.
+ */
+function namingTask(error: unknown, id: string): unknown {
+  const prefix = `Batch action stopped at task "${id}": `;
+  if (error instanceof TaskNotFoundError) return new TaskNotFoundError(prefix + error.message);
+  if (error instanceof TaskValidationError) return new TaskValidationError(prefix + error.message);
+  return error;
 }
 
 function validateTitle(value: string): string {

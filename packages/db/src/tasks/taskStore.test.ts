@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { RecurrenceRule } from "@nexus/core";
 import {
+  MAX_TASK_BULK_IDS,
   MAX_TASK_REMINDERS,
   MAX_TASK_REMINDER_DAYS,
   NexusDatabase,
@@ -940,5 +941,211 @@ describe("TaskStore — lists, sections and ordering (TASK-004 / ADR-029)", () =
     expect(tasks.completeOccurrence(created.id, NOW)).toMatchObject(placement);
     expect(tasks.setDone(created.id, false)).toMatchObject(placement);
     expect(tasks.listActive()[0]).toMatchObject(placement);
+  });
+});
+
+describe("TaskStore — batch operations (ADR-038)", () => {
+  const NOW = "2026-07-10T12:00:00.000Z";
+
+  /** The same fixture the placement suite opens with: a profile, its two stores and its Inbox. */
+  function scope(): {
+    profileId: string;
+    tasks: TaskStore;
+    lists: TaskListStore;
+    inboxId: string;
+  } {
+    const profileId = createProfile();
+    return {
+      profileId,
+      tasks: new TaskStore(db.raw, profileId),
+      lists: new TaskListStore(db.raw, profileId),
+      inboxId: inboxOf(profileId),
+    };
+  }
+
+  describe("input rules", () => {
+    it("refuses an empty batch and one over the cap", () => {
+      const { tasks } = scope();
+      const created = tasks.create({ title: "x" });
+
+      expect(() => tasks.bulkSetPriority([], "high")).toThrow(TaskValidationError);
+      expect(() =>
+        tasks.bulkSetPriority(new Array<string>(MAX_TASK_BULK_IDS + 1).fill(created.id), "high"),
+      ).toThrow(TaskValidationError);
+      // Neither refusal touched the row.
+      expect(tasks.listActive()[0]?.priority).toBe("none");
+    });
+
+    it("dedupes ids, so naming the same task twice is one edit rather than a failure", () => {
+      const { tasks } = scope();
+      const created = tasks.create({ title: "x" });
+
+      // Without the dedupe the second pass would soft-delete an already
+      // soft-deleted row and take the whole batch down with it.
+      tasks.bulkSoftDelete([created.id, created.id]);
+      expect(tasks.listActive()).toHaveLength(0);
+    });
+  });
+
+  describe("bulkMoveToList", () => {
+    it("moves every named task — subtrees and all — into the target list's body", () => {
+      const { tasks, lists, inboxId } = scope();
+      const work = lists.createList({ name: "Posao" }, NOW);
+      const section = lists.createSection(inboxId, "Danas", NOW);
+      const first = tasks.create({ title: "Prvi", sectionId: section.id });
+      const child = tasks.create({ title: "Dete", parentId: first.id });
+      const second = tasks.create({ title: "Drugi" });
+      const bystander = tasks.create({ title: "Neko drugi" });
+
+      const moved = tasks.bulkMoveToList([first.id, second.id], work.id, null, NOW);
+      expect(moved.map((task) => task.id)).toEqual([first.id, second.id]);
+
+      const byId = new Map(tasks.listActive().map((task) => [task.id, task]));
+      for (const id of [first.id, child.id, second.id]) {
+        expect(byId.get(id)).toMatchObject({ listId: work.id, sectionId: null });
+      }
+      expect(byId.get(bystander.id)?.listId).toBe(inboxId);
+    });
+
+    it("files the batch under a heading of the target list, and refuses one of another list", () => {
+      const { tasks, lists, inboxId } = scope();
+      const work = lists.createList({ name: "Posao" }, NOW);
+      const heading = lists.createSection(work.id, "U toku", NOW);
+      const foreign = lists.createSection(inboxId, "Danas", NOW);
+      const a = tasks.create({ title: "A" });
+      const b = tasks.create({ title: "B" });
+
+      tasks.bulkMoveToList([a.id, b.id], work.id, heading.id, NOW);
+      for (const task of tasks.listActive()) {
+        expect(task).toMatchObject({ listId: work.id, sectionId: heading.id });
+      }
+
+      expect(() => tasks.bulkMoveToList([a.id, b.id], work.id, foreign.id, NOW)).toThrow(
+        TaskValidationError,
+      );
+      // The refusal rolled the whole batch back — including the list move that
+      // the failing section change came after.
+      for (const task of tasks.listActive()) {
+        expect(task).toMatchObject({ listId: work.id, sectionId: heading.id });
+      }
+    });
+  });
+
+  describe("bulkSetPriority / bulkSetDueDate", () => {
+    it("applies one priority to the whole batch and leaves the rest alone", () => {
+      const { tasks } = scope();
+      const a = tasks.create({ title: "A" });
+      const b = tasks.create({ title: "B" });
+      const untouched = tasks.create({ title: "C", priority: "low" });
+
+      const changed = tasks.bulkSetPriority([a.id, b.id], "high");
+      expect(changed.map((task) => task.priority)).toEqual(["high", "high"]);
+
+      const byId = new Map(tasks.listActive().map((task) => [task.id, task.priority]));
+      expect(byId.get(untouched.id)).toBe("low");
+    });
+
+    it("sets and clears a due date across the batch", () => {
+      const { tasks } = scope();
+      const a = tasks.create({ title: "A", dueDate: "2026-08-01" });
+      const b = tasks.create({ title: "B" });
+
+      tasks.bulkSetDueDate([a.id, b.id], "2026-09-15");
+      expect(tasks.listActive().map((task) => task.dueDate)).toEqual(["2026-09-15", "2026-09-15"]);
+
+      tasks.bulkSetDueDate([a.id, b.id], null);
+      expect(tasks.listActive().map((task) => task.dueDate)).toEqual([null, null]);
+    });
+
+    it("refuses to clear the rok a recurrence rule or a reminder ladder anchors on, naming the task", () => {
+      const { tasks } = scope();
+      const plain = tasks.create({ title: "Obicni", dueDate: "2026-08-01" });
+      const recurring = tasks.create({
+        title: "Ponavlja se",
+        dueDate: "2026-08-02",
+        recurrence: { freq: { kind: "daily", interval: 1 }, end: { kind: "never" } },
+      });
+      const reminded = tasks.create({
+        title: "Podseca",
+        dueDate: "2026-08-03",
+        reminderOffsets: [1],
+      });
+
+      // The offender is the LAST id in the batch, so the rows before it were
+      // already written when it threw — and must be back as they were.
+      expect(() => tasks.bulkSetDueDate([plain.id, recurring.id], null)).toThrow(
+        new RegExp(recurring.id),
+      );
+      expect(() => tasks.bulkSetDueDate([plain.id, reminded.id], null)).toThrow(
+        TaskValidationError,
+      );
+      expect(tasks.listActive().map((task) => task.dueDate)).toEqual([
+        "2026-08-01",
+        "2026-08-02",
+        "2026-08-03",
+      ]);
+    });
+
+    it("aborts the whole batch on an unknown, deleted or foreign id", () => {
+      const { tasks } = scope();
+      const a = tasks.create({ title: "A" });
+      const b = tasks.create({ title: "B" });
+      const deleted = tasks.create({ title: "Obrisan" });
+      tasks.softDelete(deleted.id);
+      const foreign = new TaskStore(db.raw, createProfile()).create({ title: "Tudji" });
+
+      expect(() => tasks.bulkSetPriority([a.id, b.id, "missing"], "high")).toThrow(
+        TaskNotFoundError,
+      );
+      expect(() => tasks.bulkSetPriority([a.id, deleted.id], "high")).toThrow(TaskNotFoundError);
+      expect(() => tasks.bulkSetPriority([a.id, foreign.id], "high")).toThrow(TaskNotFoundError);
+
+      for (const task of tasks.listActive()) expect(task.priority).toBe("none");
+    });
+  });
+
+  describe("bulkSoftDelete / bulkRestore", () => {
+    it("stamps one deleted_at across the batch and gives it back", () => {
+      const { tasks, profileId } = scope();
+      const a = tasks.create({ title: "A" });
+      const b = tasks.create({ title: "B" });
+      const survivor = tasks.create({ title: "C" });
+
+      const deletedAt = tasks.bulkSoftDelete([a.id, b.id]);
+      expect(tasks.listActive().map((task) => task.id)).toEqual([survivor.id]);
+
+      const stamps = db.raw
+        .prepare("SELECT deleted_at AS deletedAt FROM tasks WHERE profile_id = ? AND deleted_at IS NOT NULL")
+        .all(profileId) as { deletedAt: string }[];
+      expect(stamps.map((row) => row.deletedAt)).toEqual([deletedAt, deletedAt]);
+    });
+
+    it("restores the exact id set, falling back to the Inbox for a list that is gone", () => {
+      const { tasks, lists, inboxId } = scope();
+      const work = lists.createList({ name: "Posao" }, NOW);
+      const a = tasks.create({ title: "A", listId: work.id });
+      const b = tasks.create({ title: "B" });
+
+      tasks.bulkSoftDelete([a.id, b.id]);
+      lists.deleteList(work.id, "delete-tasks", NOW);
+
+      tasks.bulkRestore([a.id, b.id]);
+      const byId = new Map(tasks.listActive().map((task) => [task.id, task]));
+      expect(byId.get(a.id)).toMatchObject({ listId: inboxId, sectionId: null });
+      expect(byId.get(b.id)?.listId).toBe(inboxId);
+    });
+
+    it("leaves every row alone when the batch fails on its last id", () => {
+      const { tasks } = scope();
+      const a = tasks.create({ title: "A" });
+      const b = tasks.create({ title: "B" });
+
+      expect(() => tasks.bulkSoftDelete([a.id, b.id, "missing"])).toThrow(TaskNotFoundError);
+      expect(tasks.listActive().map((task) => task.id)).toEqual([a.id, b.id]);
+
+      tasks.bulkSoftDelete([a.id, b.id]);
+      expect(() => tasks.bulkRestore([a.id, b.id, "missing"])).toThrow(TaskNotFoundError);
+      expect(tasks.listActive()).toHaveLength(0);
+    });
   });
 });

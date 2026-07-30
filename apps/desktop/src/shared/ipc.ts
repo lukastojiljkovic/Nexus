@@ -42,6 +42,11 @@ export const IpcChannel = {
   tasksMoveToList: "tasks:move-to-list",
   tasksMoveToSection: "tasks:move-to-section",
   tasksReorder: "tasks:reorder",
+  tasksBulkMove: "tasks:bulk-move",
+  tasksBulkPriority: "tasks:bulk-priority",
+  tasksBulkDue: "tasks:bulk-due",
+  tasksBulkDelete: "tasks:bulk-delete",
+  tasksBulkRestore: "tasks:bulk-restore",
   taskTagsList: "task-tags:list",
   taskTagsCreate: "task-tags:create",
   taskTagsRename: "task-tags:rename",
@@ -600,6 +605,46 @@ export interface TasksReorderRequest {
   id: string;
   beforeId: string | null;
   afterId: string | null;
+}
+
+/**
+ * Moves a whole selection into `listId`, under `sectionId` (null = the list
+ * body). One transaction in the store: if any id is refused, nothing moves.
+ *
+ * `ids` is validated element-wise in main and bounded there by `@nexus/db`'s
+ * own `MAX_TASK_BULK_IDS` — unlike the name caps above, the renderer never
+ * needs the number, so it is not restated here. The same holds for the four
+ * batch requests below.
+ */
+export interface TasksBulkMoveRequest {
+  profileId: string;
+  ids: string[];
+  listId: string;
+  sectionId: string | null;
+}
+
+export interface TasksBulkPriorityRequest {
+  profileId: string;
+  ids: string[];
+  priority: TaskPriority;
+}
+
+/** `null` clears the rok — refused, for the whole batch, where a recurrence rule or a reminder ladder anchors on it. */
+export interface TasksBulkDueRequest {
+  profileId: string;
+  ids: string[];
+  dueDate: string | null;
+}
+
+export interface TasksBulkDeleteRequest {
+  profileId: string;
+  ids: string[];
+}
+
+/** Undo of a batch delete: the exact id set the delete removed. */
+export interface TasksBulkRestoreRequest {
+  profileId: string;
+  ids: string[];
 }
 
 /**
@@ -2540,6 +2585,27 @@ export interface NexusApi {
     beforeId: string | null,
     afterId: string | null,
   ): Promise<Task>;
+  /**
+   * The five batch actions over a hand-picked selection (ADR-038). Each is one
+   * store transaction and refuses the WHOLE batch on any per-row failure, so a
+   * rejected promise means nothing changed.
+   *
+   * All five reply with nothing on purpose: a batch moves and re-positions rows
+   * it was never asked about (a move re-appends a subtree; a delete renumbers
+   * nothing but hides children), so the page re-reads rather than patching what
+   * a reply could only partly describe.
+   */
+  bulkMoveTasksToList(
+    profileId: string,
+    ids: string[],
+    listId: string,
+    sectionId: string | null,
+  ): Promise<void>;
+  bulkSetTaskPriority(profileId: string, ids: string[], priority: TaskPriority): Promise<void>;
+  /** `null` clears the rok; the batch is refused where a rule or a reminder ladder anchors on it. */
+  bulkSetTaskDueDate(profileId: string, ids: string[], dueDate: string | null): Promise<void>;
+  bulkDeleteTasks(profileId: string, ids: string[]): Promise<void>;
+  bulkRestoreTasks(profileId: string, ids: string[]): Promise<void>;
   /** This profile's task tags, alphabetical by name (the rail re-sorts with `Intl.Collator(["sr-Latn","sr"])`). */
   listTaskTags(profileId: string): Promise<TaskTag[]>;
   /** Get-or-create by trimmed name: tagging with a name the profile already has returns that tag rather than a second one. */

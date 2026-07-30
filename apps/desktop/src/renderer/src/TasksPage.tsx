@@ -290,6 +290,27 @@ function buildListTree(lists: readonly TaskList[]): RailNode[] {
 }
 
 /**
+ * The same tree flattened back out, each list carrying the depth it renders at
+ * — what a MENU needs (a flat run of items) while still reading like the rail
+ * (children indented under their parent). The rail itself keeps the tree,
+ * because it nests real DOM.
+ */
+function flattenRail(nodes: readonly RailNode[], depth = 0): { list: TaskList; depth: number }[] {
+  return nodes.flatMap((node) => [
+    { list: node.list, depth },
+    ...flattenRail(node.children, depth + 1),
+  ]);
+}
+
+/**
+ * The page's single pending delete offer: one task (the row ×) or a whole batch
+ * (ADR-038's Obriši). ONE slot, not two bars — a fresh delete of either kind
+ * replaces the previous offer, which is what "undo" can honestly mean when only
+ * the last delete is remembered.
+ */
+type PendingUndo = null | { kind: "single"; id: string } | { kind: "bulk"; ids: string[] };
+
+/**
  * One rendering group of the list view: the list BODY (`section` null) or one
  * section, holding the top-level rows that belong to it. Sections come in their
  * own `position` order, which a task row cannot see — `TASK_ORDER` sorts rows by
@@ -722,7 +743,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const [depFailed, setDepFailed] = useState(false);
   /** The list whose delete is waiting on the "what about its tasks" question, or null. */
   const [deletePrompt, setDeletePrompt] = useState<TaskList | null>(null);
-  /** The list a delete just removed, offered back — the list counterpart of `pendingUndoId`. */
+  /** The list a delete just removed, offered back — the list counterpart of `pendingUndo`. */
   const [pendingListUndoId, setPendingListUndoId] = useState<string | null>(null);
   /** The section the add/edit form will file the task under; null is the list body. */
   const [formSectionId, setFormSectionId] = useState<string | null>(null);
@@ -739,7 +760,20 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const [reminderOffsets, setReminderOffsets] = useState<number[]>([]);
   /** The quick-add phrase the user waved away, or null — see `activeQuickDate`. */
   const [dismissedPhrase, setDismissedPhrase] = useState<string | null>(null);
-  const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
+  const [pendingUndo, setPendingUndo] = useState<PendingUndo>(null);
+  /**
+   * Izbor (ADR-038): whether the list view is in batch-selection mode, and which
+   * rows are picked in it. The ids are a PREFERENCE, like `selectedListId` — the
+   * rows actually acted on are derived below from what this render draws, so a
+   * pick that the tag filter, a list switch or a refetch has taken off screen
+   * never travels into a write.
+   */
+  const [selecting, setSelecting] = useState(false);
+  const [pickedIds, setPickedIds] = useState<string[]>([]);
+  /** True when the last batch action was refused — the action bar says so, and the selection stays for the user to adjust. */
+  const [bulkFailed, setBulkFailed] = useState(false);
+  /** The date typed into the batch „Rok…“ popover. */
+  const [bulkDue, setBulkDue] = useState("");
   /** Next due date of a recurring task that just advanced, or null — the row moved, so the page says where to. */
   const [advancedTo, setAdvancedTo] = useState<string | null>(null);
   // The inline "new subtask" line (TASK-008): which row it hangs under, and
@@ -898,6 +932,43 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
       ? null
       : (listTasks.find((task) => task.id === draggedTaskId) ?? null);
 
+  /**
+   * The picked rows, derived rather than trusted (ADR-038): the intersection of
+   * what the user ticked with what this render actually draws. That is what
+   * makes every way of losing a row — narrowing the tag filter, switching list,
+   * a refetch after someone else's delete — self-correcting, and it is what the
+   * count in the action bar must say, since acting on rows the user cannot see
+   * is exactly what a batch must not do.
+   */
+  const pickedIdSet = new Set(pickedIds);
+  const pickedTasks = selecting ? visibleTasks.filter((task) => pickedIdSet.has(task.id)) : [];
+  /**
+   * Where a batch move can go: every list except the one already on screen —
+   * the rail's own drop target leaves itself out for the same reason. A profile
+   * whose only list is the one being shown therefore has NO targets, and the
+   * „Premesti…“ trigger is not drawn at all rather than opening onto nothing.
+   */
+  const moveTargets = selecting
+    ? flattenRail(buildListTree(lists ?? [])).filter(({ list }) => list.id !== selectedId)
+    : [];
+  /**
+   * Whether a move would carry every picked row honestly. A subtask lives where
+   * its parent lives — the invariant that makes only TOP-LEVEL rows drag sources
+   * — so a picked subtask may travel only when its parent travels with it, or
+   * when it has no parent on this screen to be torn away from (the orphan rule
+   * `buildTaskTree` already renders it by). Otherwise „Premesti…“ is not drawn:
+   * the same refusal the rail makes by not offering the Inbox a delete, rather
+   * than an action that quietly moves some of the selection.
+   */
+  const pickedTaskIds = new Set(pickedTasks.map((task) => task.id));
+  const listTaskIds = selecting ? new Set(listTasks.map((task) => task.id)) : new Set<string>();
+  const pickedMovable = pickedTasks.every(
+    (task) =>
+      task.parentId === null ||
+      pickedTaskIds.has(task.parentId) ||
+      !listTaskIds.has(task.parentId),
+  );
+
   useEffect(() => {
     let active = true;
     void (async () => {
@@ -985,6 +1056,19 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     onIntentHandled?.();
   }, [intent, tasks, lists, selectedId, tagFilter, reveal, onIntentHandled]);
 
+  // Escape leaves Izbor (ADR-038) — the way out of every other mode on this
+  // page. `defaultPrevented` is what keeps it from firing behind an inline name
+  // form or the subtask line: those handle Escape themselves and prevent it,
+  // and React's handlers run at the root, below this document listener.
+  useEffect(() => {
+    if (!selecting) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented) exitSelection();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [selecting]);
+
   // A due date read straight out of the title (TASK-007). Derived plainly on
   // every render — the scan is a handful of regexes over a title-length string,
   // so there is nothing worth memoising or debouncing — and ONLY while
@@ -1001,6 +1085,9 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   async function selectView(next: TaskListView): Promise<void> {
     const list = selectedList;
     if (list === null || list.defaultView === next) return;
+    // Izbor is a LIST-view mode (ADR-038): the board has no rows to pick, so
+    // leaving the list view leaves the mode with it.
+    if (next !== "list") exitSelection();
     try {
       await window.nexus.setTaskListView(profileId, list.id, next);
       setLists(
@@ -1015,10 +1102,12 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   function selectList(id: string): void {
     if (id === selectedId) return;
     setSelectedListId(id);
-    // The form, the inline subtask line and the section editor were all bound to
-    // rows of the list being left — none of which this list shows.
+    // The form, the inline subtask line, the section editor and any batch
+    // selection were all bound to rows of the list being left — none of which
+    // this list shows.
     resetForm();
     closeSubtaskInput();
+    exitSelection();
     setSectionEditing(null);
     setSectionDraft("");
     setListFailed(false);
@@ -1864,22 +1953,125 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
       if (editingId === task.id) resetForm();
       if (subtaskParentId === task.id) closeSubtaskInput();
       // One pending undo at a time — a fresh delete replaces the previous offer.
-      setPendingUndoId(task.id);
+      setPendingUndo({ kind: "single", id: task.id });
     } catch (error) {
       console.error("Nexus: failed to delete task:", error);
     }
   }
 
   async function undo(): Promise<void> {
-    if (!pendingUndoId) return;
+    const pending = pendingUndo;
+    if (pending === null) return;
     try {
-      await window.nexus.restoreTask(profileId, pendingUndoId);
-      setPendingUndoId(null);
-      // Re-fetch so the restored task lands back in stable creation order.
+      if (pending.kind === "single") {
+        await window.nexus.restoreTask(profileId, pending.id);
+      } else {
+        // The exact id set the batch removed — not "whatever is deleted now",
+        // which would sweep in rows this offer never took away.
+        await window.nexus.bulkRestoreTasks(profileId, pending.ids);
+      }
+      setPendingUndo(null);
+      // Re-fetch so the restored tasks land back in stable placement order.
       await reload();
     } catch (error) {
       console.error("Nexus: failed to restore task:", error);
     }
+  }
+
+  // --- Izbor: batch actions (ADR-038) ---------------------------------------
+  //
+  // A mode does one thing: while it is on, a row is a thing to PICK, so its
+  // click-to-edit, its drag and its done checkbox are all suspended and the row
+  // actions are not drawn at all. Every action is await-then-refetch, and the
+  // selection survives a move/priority/rok so several can be chained; only a
+  // delete clears it, because there is nothing left to act on.
+
+  function exitSelection(): void {
+    setSelecting(false);
+    setPickedIds([]);
+    setBulkFailed(false);
+    setBulkDue("");
+  }
+
+  function toggleSelectionMode(): void {
+    if (selecting) {
+      exitSelection();
+      return;
+    }
+    // Entering starts empty: a selection left over from the last time the mode
+    // was on would be acted upon by a bar the user has not looked at yet. The
+    // inline subtask line goes with it — it hangs off a row, and rows are about
+    // to mean something else.
+    setPickedIds([]);
+    setBulkFailed(false);
+    closeSubtaskInput();
+    setSelecting(true);
+  }
+
+  function togglePicked(id: string): void {
+    setBulkFailed(false);
+    setPickedIds((current) =>
+      current.includes(id) ? current.filter((picked) => picked !== id) : [...current, id],
+    );
+  }
+
+  /**
+   * Runs one batch action over the picked rows and re-reads. The refetch is not
+   * optional: a batch moves and re-positions rows it was never asked about (a
+   * move carries whole subtrees, a delete hides children), which is also why
+   * none of these channels replies with the tasks it wrote.
+   *
+   * A refusal is atomic in the store, so the page says so and changes nothing —
+   * the selection stays exactly as it was for the user to adjust.
+   */
+  async function runBulk(action: (ids: string[]) => Promise<void>): Promise<boolean> {
+    const ids = pickedTasks.map((task) => task.id);
+    if (ids.length === 0) return false;
+    try {
+      setBulkFailed(false);
+      await action(ids);
+    } catch (error) {
+      setBulkFailed(true);
+      console.error("Nexus: batch action failed:", error);
+      return false;
+    }
+    // The refetch is deliberately outside that catch: the error line above says
+    // nothing was changed, which is only true of a refused WRITE. A read that
+    // fails afterwards leaves a stale screen, not an untouched database, and
+    // must not be reported as the batch having been refused.
+    try {
+      await reload();
+    } catch (error) {
+      console.error("Nexus: failed to reload tasks:", error);
+    }
+    return true;
+  }
+
+  /** Moves the selection into another list's BODY; the rows leave this list, so the selection empties itself on the refetch. */
+  function movePicked(listId: string): void {
+    void runBulk((ids) => window.nexus.bulkMoveTasksToList(profileId, ids, listId, null));
+  }
+
+  function setPickedPriority(priority: TaskPriority): void {
+    void runBulk((ids) => window.nexus.bulkSetTaskPriority(profileId, ids, priority));
+  }
+
+  function setPickedDue(dueDate: string | null): void {
+    void runBulk((ids) => window.nexus.bulkSetTaskDueDate(profileId, ids, dueDate));
+  }
+
+  /** Deletes the selection and hands the exact id set to the page's one undo slot. */
+  async function removePicked(): Promise<void> {
+    const ids = pickedTasks.map((task) => task.id);
+    if (ids.length === 0) return;
+    const applied = await runBulk((batch) => window.nexus.bulkDeleteTasks(profileId, batch));
+    if (!applied) return;
+    // Nothing may stay bound to a row that is gone — the same care `remove`
+    // takes, over a set rather than one id.
+    if (editingId !== null && ids.includes(editingId)) resetForm();
+    if (subtaskParentId !== null && ids.includes(subtaskParentId)) closeSubtaskInput();
+    setPendingUndo({ kind: "bulk", ids });
+    exitSelection();
   }
 
   /**
@@ -1894,6 +2086,34 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
    * headings without it.
    */
   function renderRowLead(task: TaskFields, depth: number): ReactNode {
+    // In Izbor the grip column becomes the pick column — the same width, so
+    // entering the mode moves nothing on screen, and no drag can start.
+    //
+    // The button carries no handler of its own: the row is the toggle, and a
+    // keyboard activation here dispatches a click that bubbles to it. That is
+    // what makes the mode reachable without a mouse, since a row is not a
+    // control and must not pretend to be one.
+    if (selecting) {
+      const picked = pickedIdSet.has(task.id);
+      return (
+        <span className="tasks__row-lead">
+          <button
+            type="button"
+            className="tasks__pick"
+            aria-pressed={picked}
+            aria-label={strings.tasks.bulk.pickLabel}
+          >
+            <span
+              className={picked ? "tasks__pick-mark" : "tasks__pick-mark tasks__pick-mark--off"}
+              aria-hidden="true"
+            >
+              ✓
+            </span>
+          </button>
+          {depth > 0 && <span className={indentClass(depth)} />}
+        </span>
+      );
+    }
     if (depth > 0) return leadSpacer(depth);
     return (
       <span
@@ -1910,122 +2130,143 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
 
   /** One task's row, indented by `depth`; `children` is its direct children, already looked up by the caller. */
   function renderRow(task: TaskFields, depth: number, children: readonly TaskFields[]): ReactNode {
+    const picked = selecting && pickedIdSet.has(task.id);
     return (
       <ListRow
         key={task.id}
+        className={
+          selecting
+            ? picked
+              ? "tasks__row--picking tasks__row--picked"
+              : "tasks__row--picking"
+            : undefined
+        }
+        onClick={selecting ? () => togglePicked(task.id) : undefined}
         leading={renderRowLead(task, depth)}
         trailing={
           <span className="tasks__row-meta">
             {taskChips(task, children, tagsOf(task.id), attachmentCountOf(task.id), isBlocked(task.id))}
-            {/* The row's own "⋯" menu, exactly as on a note row. Attaching and
-                detaching tags lives here, and only where the profile HAS a tag
-                to attach — an affordance that can do nothing is one this page
-                refuses to draw (see the Inbox's absent delete); making tags is
-                the rail's job. „Sačuvaj kao šablon“ (ADR-035) is always there,
-                which is why the menu itself no longer waits for a tag to exist. */}
-            <NotePopover label={strings.tasks.rowMenuLabel} triggerClassName="tasks__row-menu">
-              {(close) => (
-                <>
-                  {sortedTags.length > 0 && (
+            {/* Izbor (ADR-038) draws chips only: the row actions below would
+                each be a second meaning for a click in a mode that has exactly
+                one. */}
+            {!selecting && (
+              <>
+                {/* The row's own "⋯" menu, exactly as on a note row. Attaching and
+                    detaching tags lives here, and only where the profile HAS a tag
+                    to attach — an affordance that can do nothing is one this page
+                    refuses to draw (see the Inbox's absent delete); making tags is
+                    the rail's job. „Sačuvaj kao šablon“ (ADR-035) is always there,
+                    which is why the menu itself no longer waits for a tag to exist. */}
+                <NotePopover label={strings.tasks.rowMenuLabel} triggerClassName="tasks__row-menu">
+                  {(close) => (
                     <>
-                      <span className="note__menu-label">{strings.tasks.tags.label}</span>
-                      {sortedTags.map((tag) => {
-                        const attached = tagIdsByTask.get(task.id)?.has(tag.id) ?? false;
-                        return (
-                          <button
-                            key={tag.id}
-                            className="note__menu-item note__menu-item--check"
-                            role="menuitemcheckbox"
-                            type="button"
-                            aria-checked={attached}
-                            onClick={() => void toggleTaskTag(task, tag.id, attached)}
-                          >
-                            <span
-                              className={`note__menu-check${attached ? "" : " note__menu-check--hidden"}`}
-                              aria-hidden="true"
-                            >
-                              ✓
-                            </span>
-                            {tag.name}
-                          </button>
-                        );
-                      })}
-                      <div className="note__menu-sep" />
+                      {sortedTags.length > 0 && (
+                        <>
+                          <span className="note__menu-label">{strings.tasks.tags.label}</span>
+                          {sortedTags.map((tag) => {
+                            const attached = tagIdsByTask.get(task.id)?.has(tag.id) ?? false;
+                            return (
+                              <button
+                                key={tag.id}
+                                className="note__menu-item note__menu-item--check"
+                                role="menuitemcheckbox"
+                                type="button"
+                                aria-checked={attached}
+                                onClick={() => void toggleTaskTag(task, tag.id, attached)}
+                              >
+                                <span
+                                  className={`note__menu-check${attached ? "" : " note__menu-check--hidden"}`}
+                                  aria-hidden="true"
+                                >
+                                  ✓
+                                </span>
+                                {tag.name}
+                              </button>
+                            );
+                          })}
+                          <div className="note__menu-sep" />
+                        </>
+                      )}
+                      <span className="note__menu-label">{strings.tasks.templates.title}</span>
+                      {templateFor === task.id ? (
+                        <>
+                          <InlineNameForm
+                            className="tasks__template-form"
+                            value={templateDraft}
+                            placeholder={strings.tasks.templates.namePlaceholder}
+                            label={strings.tasks.templates.nameLabel}
+                            maxLength={MAX_TASK_TEMPLATE_NAME_LENGTH}
+                            onChange={setTemplateDraft}
+                            onSubmit={() => void submitSaveTemplate(task.id, close)}
+                            onCancel={closeTemplatePrompt}
+                          />
+                          {/* Said before the fact: saving under a name that exists is
+                              how a template is EDITED, not an accident to warn about
+                              afterwards (the ADR-016 wording precedent). */}
+                          <p className="note__menu-caption">{strings.tasks.templates.overwriteNote}</p>
+                        </>
+                      ) : (
+                        <button
+                          className="note__menu-item"
+                          role="menuitem"
+                          type="button"
+                          onClick={() => beginSaveTemplate(task.id, task.title)}
+                        >
+                          {strings.tasks.templates.saveAs}
+                        </button>
+                      )}
+                      {templateFailed && (
+                        <p className="note__menu-caption" role="status">
+                          {strings.tasks.templates.actionError}
+                        </p>
+                      )}
                     </>
                   )}
-                  <span className="note__menu-label">{strings.tasks.templates.title}</span>
-                  {templateFor === task.id ? (
-                    <>
-                      <InlineNameForm
-                        className="tasks__template-form"
-                        value={templateDraft}
-                        placeholder={strings.tasks.templates.namePlaceholder}
-                        label={strings.tasks.templates.nameLabel}
-                        maxLength={MAX_TASK_TEMPLATE_NAME_LENGTH}
-                        onChange={setTemplateDraft}
-                        onSubmit={() => void submitSaveTemplate(task.id, close)}
-                        onCancel={closeTemplatePrompt}
-                      />
-                      {/* Said before the fact: saving under a name that exists is
-                          how a template is EDITED, not an accident to warn about
-                          afterwards (the ADR-016 wording precedent). */}
-                      <p className="note__menu-caption">{strings.tasks.templates.overwriteNote}</p>
-                    </>
-                  ) : (
-                    <button
-                      className="note__menu-item"
-                      role="menuitem"
-                      type="button"
-                      onClick={() => beginSaveTemplate(task.id, task.title)}
-                    >
-                      {strings.tasks.templates.saveAs}
-                    </button>
-                  )}
-                  {templateFailed && (
-                    <p className="note__menu-caption" role="status">
-                      {strings.tasks.templates.actionError}
-                    </p>
-                  )}
-                </>
-              )}
-            </NotePopover>
-            <Button
-              size="sm"
-              className="tasks__add-subtask"
-              aria-label={strings.tasks.addSubtaskLabel}
-              onClick={() => openSubtaskInput(task.id)}
-            >
-              +
-            </Button>
-            <Button
-              size="sm"
-              className="tasks__edit"
-              aria-label={strings.tasks.editLabel}
-              onClick={() => startEdit(task)}
-            >
-              ✎
-            </Button>
-            <Button
-              size="sm"
-              className="tasks__delete"
-              aria-label={strings.tasks.deleteLabel}
-              onClick={() => void remove(task)}
-            >
-              ×
-            </Button>
+                </NotePopover>
+                <Button
+                  size="sm"
+                  className="tasks__add-subtask"
+                  aria-label={strings.tasks.addSubtaskLabel}
+                  onClick={() => openSubtaskInput(task.id)}
+                >
+                  +
+                </Button>
+                <Button
+                  size="sm"
+                  className="tasks__edit"
+                  aria-label={strings.tasks.editLabel}
+                  onClick={() => startEdit(task)}
+                >
+                  ✎
+                </Button>
+                <Button
+                  size="sm"
+                  className="tasks__delete"
+                  aria-label={strings.tasks.deleteLabel}
+                  onClick={() => void remove(task)}
+                >
+                  ×
+                </Button>
+              </>
+            )}
           </span>
         }
       >
+        {/* Disabled rather than hidden in Izbor: the box is where the row says
+            whether it is done, and a row that loses it mid-mode would read as a
+            different kind of row. Its clicks pass through to the row (see
+            .tasks__row--picking), so the box is not a dead spot in the toggle. */}
         <Checkbox
           checked={task.done}
           done={task.done}
+          disabled={selecting}
           onChange={(event) => void toggleDone(task, event.target.checked)}
         >
           {/* The id/reveal mark sits on this inner span rather than on
-              `ListRow` itself: `ListRow`/`ListView` cannot take extra
-              props, and wrapping `ListRow` in an owned div would break
-              its `:last-child` border-bottom CSS (packages/ui/src/
-              styles.css — out of scope for this slice). */}
+              `ListRow` itself: `ListRow` takes a row-wide class (see the
+              picked state above) but not an id, and wrapping `ListRow` in an
+              owned div would break its `:last-child` border-bottom CSS
+              (packages/ui/src/styles.css). */}
           <span
             id={taskRowDomId(task.id)}
             className={revealedId === task.id ? "nx-revealed" : undefined}
@@ -2875,11 +3116,150 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
               ))}
             </div>
           </div>
+
+          {/* Izbor sits beside the view toggle and borrows its typographic
+              active state, but stays OUT of that group: it is not a third view,
+              and the board has no rows to pick. */}
+          {view === "list" && (
+            <Button
+              size="sm"
+              className={selecting ? "tasks__view tasks__view--active" : "tasks__view"}
+              aria-pressed={selecting}
+              onClick={toggleSelectionMode}
+            >
+              {strings.tasks.bulk.mode}
+            </Button>
+          )}
         </div>
 
-        {pendingUndoId != null && (
+        {selecting && pickedTasks.length > 0 && (
+          <div
+            className="tasks__undo tasks__bulk"
+            role="group"
+            aria-label={strings.tasks.bulk.regionLabel}
+          >
+            <span className="tasks__undo-text">
+              {strings.tasks.bulk.selected} {pickedTasks.length}
+            </span>
+
+            {/* The rail's lists, indented as the rail draws them (see
+                `moveTargets` and `pickedMovable` for when this is offered). */}
+            {moveTargets.length > 0 && pickedMovable && (
+              <NotePopover
+                label={strings.tasks.bulk.moveLabel}
+                triggerContent={strings.tasks.bulk.move}
+                triggerClassName="tasks__bulk-trigger"
+              >
+                {(close) => (
+                  <>
+                    <span className="note__menu-label">{strings.tasks.bulk.moveLabel}</span>
+                    {moveTargets.map(({ list, depth }) => (
+                      <button
+                        key={list.id}
+                        className="note__menu-item tasks__bulk-list"
+                        role="menuitem"
+                        type="button"
+                        style={{ "--task-depth": Math.min(depth, MAX_RAIL_DEPTH) } as CSSProperties}
+                        onClick={() => {
+                          close();
+                          movePicked(list.id);
+                        }}
+                      >
+                        {list.name}
+                      </button>
+                    ))}
+                  </>
+                )}
+              </NotePopover>
+            )}
+
+            <NotePopover
+              label={strings.tasks.bulk.priorityLabel}
+              triggerContent={strings.tasks.bulk.priority}
+              triggerClassName="tasks__bulk-trigger"
+            >
+              {(close) => (
+                <>
+                  <span className="note__menu-label">{strings.tasks.bulk.priorityLabel}</span>
+                  {TASK_PRIORITIES.map((option) => (
+                    <button
+                      key={option}
+                      className="note__menu-item"
+                      role="menuitem"
+                      type="button"
+                      onClick={() => {
+                        close();
+                        setPickedPriority(option);
+                      }}
+                    >
+                      {strings.tasks.priority[option]}
+                    </button>
+                  ))}
+                </>
+              )}
+            </NotePopover>
+
+            <NotePopover
+              label={strings.tasks.bulk.dueLabel}
+              triggerContent={strings.tasks.bulk.due}
+              triggerClassName="tasks__bulk-trigger"
+            >
+              {(close) => (
+                <div className="tasks__bulk-due">
+                  <span className="note__menu-label">{strings.tasks.bulk.dueLabel}</span>
+                  <TextField
+                    type="date"
+                    value={bulkDue}
+                    aria-label={strings.tasks.dueDateLabel}
+                    onChange={(event) => setBulkDue(event.target.value)}
+                  />
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    disabled={!isValidDayKey(bulkDue)}
+                    onClick={() => {
+                      close();
+                      setPickedDue(bulkDue);
+                    }}
+                  >
+                    {strings.tasks.save}
+                  </Button>
+                  {/* Clearing is its own button rather than "save an empty
+                      field": it is the half of this action the store can refuse
+                      (a rok a repetition or a reminder counts from), so it must
+                      be asked for deliberately. */}
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      close();
+                      setPickedDue(null);
+                    }}
+                  >
+                    {strings.tasks.bulk.clearDue}
+                  </Button>
+                </div>
+              )}
+            </NotePopover>
+
+            <Button size="sm" className="tasks__delete" onClick={() => void removePicked()}>
+              {strings.tasks.bulk.delete}
+            </Button>
+          </div>
+        )}
+
+        {bulkFailed && selecting && (
+          <p className="tasks__bulk-error" role="status">
+            {strings.tasks.bulk.actionError}
+          </p>
+        )}
+
+        {pendingUndo !== null && (
           <div className="tasks__undo" role="status">
-            <span className="tasks__undo-text">{strings.tasks.deletedNotice}</span>
+            <span className="tasks__undo-text">
+              {pendingUndo.kind === "single"
+                ? strings.tasks.deletedNotice
+                : `${strings.tasks.bulk.deletedNotice} ${pendingUndo.ids.length}`}
+            </span>
             <Button size="sm" className="tasks__undo-action" onClick={() => void undo()}>
               {strings.tasks.undo}
             </Button>
@@ -2887,7 +3267,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
               size="sm"
               className="tasks__undo-dismiss"
               aria-label={strings.tasks.dismiss}
-              onClick={() => setPendingUndoId(null)}
+              onClick={() => setPendingUndo(null)}
             >
               ×
             </Button>

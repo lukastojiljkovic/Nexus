@@ -50,6 +50,7 @@ import {
   MAX_NOTE_UPDATE_BYTES,
   MAX_SEARCH_LIMIT,
   MAX_TASK_ATTACHMENT_BYTES,
+  MAX_TASK_BULK_IDS,
   MAX_TASK_LIST_NAME_LENGTH,
   MAX_TASK_REMINDERS,
   MAX_TASK_REMINDER_DAYS,
@@ -803,6 +804,18 @@ function asTaskReminderOffsets(value: unknown, field: string): number[] {
     );
   }
   return value as number[];
+}
+
+/**
+ * A batch action's id list (ADR-038): an array of non-empty id-shaped strings,
+ * capped at the store's own `MAX_TASK_BULK_IDS` — imported, never respelled, so
+ * there is exactly one number to change. Emptiness, duplicates and whether the
+ * ids name anything are `TaskStore`'s to judge; this is the structural half.
+ * The 64-character per-id bound is `notesLinksSet`'s, for the same reason: an
+ * id is a uuidv7, and nothing longer needs to reach a prepared statement.
+ */
+function asTaskIdArray(value: unknown, field: string): string[] {
+  return asStringArray(value, field, MAX_TASK_BULK_IDS, 64);
 }
 
 /** Validates a `NewTaskFields` payload into a store input; only present keys are carried. */
@@ -2466,6 +2479,62 @@ function registerIpc(): void {
     const beforeId = asNullableString(body.beforeId, "beforeId");
     const afterId = asNullableString(body.afterId, "afterId");
     return taskStore(profileId).reorder(id, beforeId, afterId, new Date().toISOString());
+  });
+
+  // --- Task batch actions (ADR-038) --------------------------------------
+  //
+  // Five channels over a hand-picked selection. SEC-EL-02 as everywhere: sender
+  // checked first, every field through an `as*` validator (the id array
+  // element-wise, under the store's own cap), and the placement `now` stamped
+  // from main's clock. Each store method is one transaction that refuses the
+  // whole batch on any per-row failure, so a rejected promise here means the
+  // database is exactly as the renderer last read it.
+
+  ipcMain.handle(IpcChannel.tasksBulkMove, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const ids = asTaskIdArray(body.ids, "ids");
+    const listId = asNonEmptyString(body.listId, "listId");
+    const sectionId = asNullableString(body.sectionId, "sectionId");
+    taskStore(profileId).bulkMoveToList(ids, listId, sectionId, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.tasksBulkPriority, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const ids = asTaskIdArray(body.ids, "ids");
+    const priority = asTaskPriority(body.priority, "priority");
+    taskStore(profileId).bulkSetPriority(ids, priority);
+  });
+
+  ipcMain.handle(IpcChannel.tasksBulkDue, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const ids = asTaskIdArray(body.ids, "ids");
+    const dueDate = asNullableString(body.dueDate, "dueDate");
+    taskStore(profileId).bulkSetDueDate(ids, dueDate);
+  });
+
+  ipcMain.handle(IpcChannel.tasksBulkDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const ids = asTaskIdArray(body.ids, "ids");
+    // The shared `deleted_at` the store returns stays in main: the undo offer
+    // is keyed by the very id set the renderer just sent, so handing the stamp
+    // over would only be a second name for something it already holds.
+    taskStore(profileId).bulkSoftDelete(ids);
+  });
+
+  ipcMain.handle(IpcChannel.tasksBulkRestore, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const ids = asTaskIdArray(body.ids, "ids");
+    taskStore(profileId).bulkRestore(ids);
   });
 
   // --- Task tags (migration 023) -----------------------------------------
