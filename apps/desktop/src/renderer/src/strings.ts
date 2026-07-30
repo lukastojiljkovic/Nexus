@@ -240,6 +240,18 @@ export const strings = {
       listNamePlaceholder: "Ime liste",
       renameListLabel: "Preimenuj listu",
       deleteListLabel: "Obriši listu",
+      /** The rail row's own „⋯“ menu, which holds the two ordering actions below. */
+      listMenuLabel: "Radnje nad listom",
+      /** The section heading's „⋯“ menu — the same two actions, one scope in. */
+      sectionMenuLabel: "Radnje nad sekcijom",
+      /**
+       * Shared by both menus, because it is one gesture in two scopes: a list
+       * steps among its siblings, a section within its list. Always both, the
+       * one at the end of its scope simply disabled — a menu whose items come
+       * and go is one the user has to re-read every time.
+       */
+      moveUp: "Pomeri gore",
+      moveDown: "Pomeri dole",
       save: "Sačuvaj",
       cancel: "Otkaži",
       /** Shown under the rail when a list/section action failed — the inline editor stays open with what was typed still in it. */

@@ -439,6 +439,112 @@ describe("TaskListStore — deleteList", () => {
     expect(restored).not.toContain(deletedEarlier.id);
   });
 
+  it("move-to-inbox: restoreList brings exactly the moved tasks back, appended to the list body", () => {
+    const { profileId, lists, inboxId } = scope();
+    const tasks = new TaskStore(db.raw, profileId);
+    const alreadyHome = tasks.create({ title: "Već u Inboxu" });
+
+    const work = lists.createList({ name: "Posao" }, NOW);
+    const section = lists.createSection(work.id, "U toku", NOW);
+    const inBody = tasks.create({ title: "Telo", listId: work.id });
+    const inSection = tasks.create({ title: "Sekcija", listId: work.id, sectionId: section.id });
+
+    lists.deleteList(work.id, "move-to-inbox", LATER);
+    lists.restoreList(work.id, "2026-07-12T00:00:00.000Z");
+
+    const byId = new Map(tasks.listActive().map((task) => [task.id, task]));
+    // Both come home, in the order they were moved out in, and neither carries a
+    // heading: the move cleared `section_id`, so the sections it left standing
+    // are empty ones the user re-files into.
+    expect(byId.get(inBody.id)).toMatchObject({ listId: work.id, sectionId: null });
+    expect(byId.get(inSection.id)).toMatchObject({ listId: work.id, sectionId: null });
+    expect(
+      (byId.get(inBody.id)?.position ?? 0) < (byId.get(inSection.id)?.position ?? 0),
+    ).toBe(true);
+    // A task that was in the Inbox all along is not one of the list's, whatever
+    // the rest of the Inbox now holds.
+    expect(byId.get(alreadyHome.id)).toMatchObject({ listId: inboxId });
+    expect(lists.listSections(work.id).map((row) => row.id)).toEqual([section.id]);
+  });
+
+  it("move-to-inbox: a task the user moved again after the delete stays where they put it", () => {
+    const { profileId, lists, inboxId } = scope();
+    const tasks = new TaskStore(db.raw, profileId);
+    const work = lists.createList({ name: "Posao" }, NOW);
+    const other = lists.createList({ name: "Drugo" }, NOW);
+    const stays = tasks.create({ title: "Ostaje", listId: work.id });
+    const comesBack = tasks.create({ title: "Vraća se", listId: work.id });
+
+    lists.deleteList(work.id, "move-to-inbox", LATER);
+    // An explicit later action on one of them: its stamp is no longer the
+    // delete's, so the undo must not fight it.
+    tasks.moveToList(stays.id, other.id, "2026-07-11T18:00:00.000Z");
+
+    lists.restoreList(work.id, "2026-07-12T00:00:00.000Z");
+
+    const byId = new Map(tasks.listActive().map((task) => [task.id, task]));
+    expect(byId.get(stays.id)?.listId).toBe(other.id);
+    expect(byId.get(comesBack.id)?.listId).toBe(work.id);
+    expect(byId.get(comesBack.id)?.listId).not.toBe(inboxId);
+  });
+
+  it("move-to-inbox: a restore that fails part-way through changes nothing", () => {
+    const { profileId, lists, inboxId } = scope();
+    const tasks = new TaskStore(db.raw, profileId);
+    const work = lists.createList({ name: "Posao" }, NOW);
+    const first = tasks.create({ title: "Prvi", listId: work.id });
+    const second = tasks.create({ title: "Drugi", listId: work.id });
+
+    lists.deleteList(work.id, "move-to-inbox", LATER);
+
+    // Refuses the SECOND row of the batch, so the restore is interrupted after
+    // the list itself and the first task have already been written. A trigger
+    // body takes no parameters, hence the interpolated ids — the store's own
+    // "always bind" rule is untouched, these are generated uuids in a test.
+    db.raw.exec(
+      `CREATE TRIGGER refuse_second BEFORE UPDATE ON tasks
+       WHEN NEW.id = '${second.id}' AND NEW.list_id = '${work.id}'
+       BEGIN SELECT RAISE(ABORT, 'refused'); END`,
+    );
+    try {
+      expect(() => lists.restoreList(work.id, "2026-07-12T00:00:00.000Z")).toThrow();
+    } finally {
+      db.raw.exec("DROP TRIGGER refuse_second");
+    }
+
+    // One transaction: the list is still deleted and BOTH tasks are still in the
+    // Inbox — a half-applied undo would be the worst of the two states.
+    expect(names(lists)).toEqual(["Inbox"]);
+    const byId = new Map(tasks.listActive().map((task) => [task.id, task]));
+    expect(byId.get(first.id)?.listId).toBe(inboxId);
+    expect(byId.get(second.id)?.listId).toBe(inboxId);
+
+    // ...and with the refusal gone the same undo goes through in full.
+    lists.restoreList(work.id, "2026-07-12T00:00:00.000Z");
+    const after = new Map(tasks.listActive().map((task) => [task.id, task]));
+    expect(after.get(first.id)?.listId).toBe(work.id);
+    expect(after.get(second.id)?.listId).toBe(work.id);
+  });
+
+  it("delete-tasks: the undo restores its own tasks and never claims one from the Inbox", () => {
+    const { profileId, lists, inboxId } = scope();
+    const tasks = new TaskStore(db.raw, profileId);
+    const work = lists.createList({ name: "Posao" }, NOW);
+    const inInbox = tasks.create({ title: "U Inboxu" });
+    const inList = tasks.create({ title: "S listom", listId: work.id });
+    // Touched at the very instant the delete below stamps: the two halves of the
+    // undo are mutually exclusive, so a delete that took its tasks DOWN must not
+    // also go looking for tasks in the Inbox.
+    db.raw.prepare("UPDATE tasks SET updated_at = ? WHERE id = ?").run(LATER, inInbox.id);
+
+    lists.deleteList(work.id, "delete-tasks", LATER);
+    lists.restoreList(work.id, "2026-07-12T00:00:00.000Z");
+
+    const byId = new Map(tasks.listActive().map((task) => [task.id, task]));
+    expect(byId.get(inInbox.id)?.listId).toBe(inboxId);
+    expect(byId.get(inList.id)?.listId).toBe(work.id);
+  });
+
   it("promotes child lists to the deleted list's own parent, appended in order, in both modes", () => {
     for (const mode of ["move-to-inbox", "delete-tasks"] as const) {
       const { lists } = scope();

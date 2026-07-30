@@ -289,6 +289,35 @@ function buildListTree(lists: readonly TaskList[]): RailNode[] {
   return [...roots.filter((node) => node.list.isInbox), ...roots.filter((node) => !node.list.isInbox)];
 }
 
+/** The two live siblings a moved row lands between — the shape both `moveList` and `moveSection` take, either end null. */
+type StepTarget = { beforeId: string | null; afterId: string | null };
+
+/**
+ * The neighbours a row lands BETWEEN when it steps one place up (`-1`) or down
+ * (`+1`) inside `order`, or null when it is already at that end of its scope.
+ *
+ * A pair rather than an index because that is the only shape the store's
+ * placement takes — positions are sparse sort keys, so "one place up" is not
+ * arithmetic on an index but a statement about which two rows the moved one now
+ * sits between.
+ *
+ * `order` is the order the RAIL DRAWS, which for root lists is the Inbox pinned
+ * first and every other list after it (`buildListTree`). The Inbox is left out
+ * of it entirely: the store refuses to move it, and a step "above" a row that is
+ * pinned to the top would be a write with nothing to show for it.
+ */
+function stepNeighbours(
+  order: readonly string[],
+  index: number,
+  direction: -1 | 1,
+): StepTarget | null {
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= order.length) return null;
+  return direction === -1
+    ? { beforeId: order[target - 1] ?? null, afterId: order[target] ?? null }
+    : { beforeId: order[target] ?? null, afterId: order[target + 1] ?? null };
+}
+
 /**
  * The same tree flattened back out, each list carrying the depth it renders at
  * — what a MENU needs (a flat run of items) while still reading like the rail
@@ -592,6 +621,57 @@ function InlineNameForm({
   );
 }
 
+interface MoveMenuProps {
+  /** Accessible name of the "⋯" trigger — whose row this menu belongs to. */
+  label: string;
+  triggerClassName: string;
+  /** Where a step up / down would land the row, or null at that end of its scope. */
+  up: StepTarget | null;
+  down: StepTarget | null;
+  onMove: (step: StepTarget) => void;
+}
+
+/**
+ * The "⋯" menu that steps one row of an ordered scope up or down (TASK-004) —
+ * the rail's lists and a list's section headings alike, since it is the same
+ * gesture over the same sparse `position`.
+ *
+ * Deliberately a MENU rather than a second pair of inline arrows: the row's
+ * quiet ✎/+/× cluster is already as wide as a rail row can carry, and a menu
+ * item is a plain focusable button, so this reaches the keyboard by
+ * construction — which the existing mouse drag never did and still does not.
+ * An item at the end of its scope is DISABLED, never dropped: a menu whose
+ * items come and go is one the user has to re-read on every open.
+ */
+function MoveMenu({ label, triggerClassName, up, down, onMove }: MoveMenuProps) {
+  const s = strings.tasks.lists;
+  const item = (text: string, step: StepTarget | null, close: () => void): ReactNode => (
+    <button
+      className="note__menu-item"
+      role="menuitem"
+      type="button"
+      disabled={step === null}
+      onClick={() => {
+        if (step !== null) onMove(step);
+        close();
+      }}
+    >
+      {text}
+    </button>
+  );
+
+  return (
+    <NotePopover label={label} triggerClassName={triggerClassName}>
+      {(close) => (
+        <>
+          {item(s.moveUp, up, close)}
+          {item(s.moveDown, down, close)}
+        </>
+      )}
+    </NotePopover>
+  );
+}
+
 interface TaskListDeleteDialogProps {
   list: TaskList;
   /** The stored Inbox name, so the "move them there" choice says where — the Inbox is renamable. */
@@ -825,6 +905,8 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   /** Already in `position` order: main returns sections grouped by list, each list's in its own order, so filtering preserves it. */
   const listSections =
     selectedId === null ? [] : sections.filter((section) => section.listId === selectedId);
+  /** That order as bare ids — the scope „Pomeri gore/dole“ steps a heading through (`stepNeighbours`). */
+  const sectionOrder = listSections.map((section) => section.id);
 
   // The tag ids each task carries, from the flat link list — one pass over an
   // array the page already holds, like the tree below.
@@ -1213,6 +1295,24 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     const name = railDraft.trim();
     if (name.length === 0) return;
     void runListAction(() => window.nexus.renameTaskList(profileId, id, name));
+  }
+
+  /**
+   * Steps a list one place within its own parent scope. The scope is never
+   * changed here — re-parenting stays the drag's job — so `parentId` is handed
+   * back exactly as the list carries it.
+   */
+  function moveListStep(list: TaskList, step: StepTarget): void {
+    void runListAction(() =>
+      window.nexus.moveTaskList(profileId, list.id, list.parentId, step.beforeId, step.afterId),
+    );
+  }
+
+  /** The same, one scope in: a section steps within the list it heads. */
+  function moveSectionStep(section: TaskSection, step: StepTarget): void {
+    void runListAction(() =>
+      window.nexus.moveTaskSection(profileId, section.id, step.beforeId, step.afterId),
+    );
   }
 
   /** Applies the answer the delete dialog collected; the undo bar then offers the list back. */
@@ -2463,8 +2563,8 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     );
   }
 
-  /** One section's heading: its name, the inline ✎/× actions, and the drop target that files a dragged task under it. */
-  function renderSectionHead(section: TaskSection): ReactNode {
+  /** One section's heading: its name, the inline ✎/⋯/× actions, and the drop target that files a dragged task under it. */
+  function renderSectionHead(section: TaskSection, order: readonly string[]): ReactNode {
     const s = strings.tasks.lists;
     if (sectionEditing?.mode === "rename" && sectionEditing.id === section.id) {
       return (
@@ -2485,6 +2585,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     // re-append it — so its own heading never offers itself as a target.
     const droppable = draggedTask !== null && draggedTask.sectionId !== section.id;
     const active = droppable && sameTarget(dropTarget, target);
+    const index = order.indexOf(section.id);
     return (
       <div
         key={`head-${section.id}`}
@@ -2510,6 +2611,16 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
           >
             ✎
           </Button>
+          {/* A lone heading has nothing to step past — see the rail row. */}
+          {order.length > 1 && (
+            <MoveMenu
+              label={s.sectionMenuLabel}
+              triggerClassName="tasks__section-menu"
+              up={stepNeighbours(order, index, -1)}
+              down={stepNeighbours(order, index, 1)}
+              onMove={(step) => moveSectionStep(section, step)}
+            />
+          )}
           <Button
             size="sm"
             className="tasks__section-action tasks__section-delete"
@@ -2544,7 +2655,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
 
     return (
       <div className="tasks__group" key={group.section?.id ?? "__body__"}>
-        {group.section !== null && renderSectionHead(group.section)}
+        {group.section !== null && renderSectionHead(group.section, sectionOrder)}
         {/* Only the top-level rows are handed to the engine; each one renders
             its own subtree (see `renderBranch`). */}
         <ListView<TaskFields>
@@ -2653,10 +2764,21 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     );
   }
 
+  /**
+   * One scope of the rail, in the order it draws — the roots, or one list's
+   * children. The movable order is computed once per scope here rather than per
+   * row, and it is what „Pomeri gore/dole“ steps through (see `stepNeighbours`).
+   */
+  function renderRailScope(nodes: readonly RailNode[], depth: number): ReactNode {
+    const order = nodes.filter((node) => !node.list.isInbox).map((node) => node.list.id);
+    return nodes.map((node) => renderRailList(node, depth, order));
+  }
+
   /** One rail row: the list itself (a select button that is also a drop target), plus its hover actions and its children. */
-  function renderRailList(node: RailNode, depth: number): ReactNode {
+  function renderRailList(node: RailNode, depth: number, order: readonly string[]): ReactNode {
     const s = strings.tasks.lists;
     const { list } = node;
+    const index = order.indexOf(list.id);
     const indent = { "--task-depth": Math.min(depth, MAX_RAIL_DEPTH) } as CSSProperties;
     const renaming = railEditing?.mode === "rename" && railEditing.id === list.id;
     const addingChild = railEditing?.mode === "new" && railEditing.parentId === list.id;
@@ -2719,18 +2841,35 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                   +
                 </Button>
                 {/* The Inbox is where "premesti u Inbox" moves things and where a
-                    task lands when the user names no list, so it cannot be
-                    deleted — the store refuses, and the affordance is not shown
-                    at all rather than offered and then rejected. */}
+                    task lands when the user names no list, so it can neither be
+                    deleted nor moved — the store refuses both, and neither
+                    affordance is shown at all rather than offered and then
+                    rejected. */}
                 {!list.isInbox && (
-                  <Button
-                    size="sm"
-                    className="tasks__rail-action tasks__rail-delete"
-                    aria-label={s.deleteListLabel}
-                    onClick={() => setDeletePrompt(list)}
-                  >
-                    ×
-                  </Button>
+                  <>
+                    {/* An only child has no siblings to step past, and a menu
+                        that can do nothing is an affordance this page does not
+                        draw (see the row's tag menu). Within a scope that HAS
+                        somewhere to go, the two items always both appear — the
+                        one at the end merely disabled. */}
+                    {order.length > 1 && (
+                      <MoveMenu
+                        label={s.listMenuLabel}
+                        triggerClassName="tasks__rail-menu"
+                        up={stepNeighbours(order, index, -1)}
+                        down={stepNeighbours(order, index, 1)}
+                        onMove={(step) => moveListStep(list, step)}
+                      />
+                    )}
+                    <Button
+                      size="sm"
+                      className="tasks__rail-action tasks__rail-delete"
+                      aria-label={s.deleteListLabel}
+                      onClick={() => setDeletePrompt(list)}
+                    >
+                      ×
+                    </Button>
+                  </>
                 )}
               </span>
             </>
@@ -2753,7 +2892,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
           </div>
         )}
 
-        {node.children.map((child) => renderRailList(child, depth + 1))}
+        {renderRailScope(node.children, depth + 1)}
       </Fragment>
     );
   }
@@ -2765,7 +2904,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         {/* The Inbox's own name is rendered like every other list's: it is a
             stored, renamable row, so a hard-coded label would go stale the
             moment it is renamed. */}
-        {lists !== null && buildListTree(lists).map((node) => renderRailList(node, 0))}
+        {lists !== null && renderRailScope(buildListTree(lists), 0)}
         {railEditing?.mode === "new" && railEditing.parentId === null ? (
           <div className="tasks__rail-row">
             <InlineNameForm

@@ -200,6 +200,7 @@ export class TaskListStore {
 
   private readonly selectListTaskIds: Database.Statement;
   private readonly selectSectionTaskIds: Database.Statement;
+  private readonly selectMovedTaskIds: Database.Statement;
   private readonly selectMaxTaskPosition: Database.Statement;
   private readonly placeTask: Database.Statement;
   private readonly markListTasksDeleted: Database.Statement;
@@ -340,6 +341,18 @@ export class TaskListStore {
        WHERE section_id = ? AND profile_id = ?
        ORDER BY position, created_at, id`,
     );
+    // The move-to-inbox counterpart of `markListTasksRestored`: the tasks a
+    // delete SENT to the Inbox rather than took down, identified by the same
+    // equality one column over — their `updated_at` is the move's stamp, which
+    // is the list's own `deleted_at` (see `deleteList`). `list_id`/`section_id`
+    // pin them to where the move left them, so a task since moved on is missed
+    // by both halves of the test rather than one.
+    this.selectMovedTaskIds = db.prepare(
+      `SELECT id FROM tasks
+       WHERE profile_id = ? AND list_id = ? AND section_id IS NULL
+         AND deleted_at IS NULL AND updated_at = ?
+       ORDER BY position, created_at, id`,
+    );
     this.selectMaxTaskPosition = db.prepare(
       `SELECT max(position) AS maxPosition FROM tasks
        WHERE profile_id = ? AND list_id = ? AND section_id IS ?`,
@@ -454,10 +467,15 @@ export class TaskListStore {
    *
    *  - `"move-to-inbox"` — every live task of the list, in any section, moves to
    *    the Inbox body (`section_id` cleared) appended at its end in their
-   *    current order. The list itself keeps its now-empty sections, so restoring
-   *    it brings the structure back even though the tasks have moved on.
+   *    current order, each stamped with the list's own `deleted_at`. The list
+   *    keeps its now-empty sections, so restoring it brings the structure back;
+   *    `restoreList` walks the moved tasks home by that stamp.
    *  - `"delete-tasks"` — the list and its live tasks are soft-deleted with the
    *    SAME `deleted_at` stamp, which is exactly what `restoreList` undoes.
+   *
+   * The two are mutually exclusive by construction — a delete either sends its
+   * tasks to the Inbox or takes them down, never both — which is what lets
+   * `restoreList` tell one undo from the other without a stored mode.
    *
    * Either way its child lists PROMOTE to the deleted list's own parent
    * (`NoteOrgStore.deleteFolder`'s rule), appended at the end of that scope in
@@ -510,13 +528,25 @@ export class TaskListStore {
 
   /**
    * Restores a soft-deleted list together with exactly the tasks that delete
-   * took down with it — the ones whose `deleted_at` EQUALS the list's own.
+   * took away from it — whichever of the two things it did with them, in one
+   * transaction, so a half-applied undo is not a state anybody can observe.
+   *
+   *  - after `"delete-tasks"`, the tasks whose `deleted_at` EQUALS the list's own
+   *    come back with it;
+   *  - after `"move-to-inbox"`, the tasks now sitting in the Inbox whose
+   *    `updated_at` EQUALS the list's `deleted_at` are moved back to it.
    *
    * That equality is the whole mechanism, and it is why `deleteList` stamps one
-   * `now` across every row it touches: a task the user had deleted by hand
-   * before (or after) carries a different instant, so it stays deleted, while
-   * everything the list took carries this one and comes back. No extra column,
-   * no "deleted by list" flag, and nothing to keep in step.
+   * `now` across every row it touches: a task the user has deleted, moved or
+   * edited since carries a different instant, so it stays exactly where they put
+   * it — an undo must never fight a later explicit action. No extra column, no
+   * "removed by list" flag, and nothing to keep in step.
+   *
+   * The two halves are exclusive: a restore that genuinely brought tasks back
+   * from the dead was undoing a `"delete-tasks"`, which sent nothing to the
+   * Inbox, so it does not go looking there. What remains is a task that was in
+   * the Inbox all along and happens to carry the identical millisecond — the
+   * same residue the `deleted_at` equality has always had, one column over.
    */
   restoreList(id: string, now: string): void {
     const validNow = validateDateTime(now);
@@ -527,10 +557,33 @@ export class TaskListStore {
 
     this.db.transaction(() => {
       this.markListRestored.run(validNow, id, this.profileId);
-      if (row.deleted_at !== null) {
-        this.markListTasksRestored.run(validNow, id, this.profileId, row.deleted_at);
-      }
+      if (row.deleted_at === null) return;
+      const revived = this.markListTasksRestored.run(validNow, id, this.profileId, row.deleted_at);
+      if (revived.changes === 0) this.reclaimMovedTasks(id, row.deleted_at, validNow);
     })();
+  }
+
+  /**
+   * The `"move-to-inbox"` half of `restoreList`: the tasks that delete parked in
+   * the Inbox, appended back at the end of the restored list's BODY in the order
+   * they left in.
+   *
+   * The body rather than their old sections, because the move cleared
+   * `section_id` outright — that identity is not recorded anywhere, so restoring
+   * it would mean inventing it. The list's sections themselves survived the
+   * delete, empty, and the user re-files into them.
+   */
+  private reclaimMovedTasks(listId: string, stamp: string, now: string): void {
+    const inbox = this.selectInbox.get(this.profileId) as TaskListRow | undefined;
+    if (!inbox) return;
+    const taskIds = (
+      this.selectMovedTaskIds.all(this.profileId, inbox.id, stamp) as { id: string }[]
+    ).map((row) => row.id);
+    let position = this.maxTaskPosition(listId, null);
+    for (const taskId of taskIds) {
+      position = nextPosition(position);
+      this.placeTask.run(listId, null, position, now, taskId, this.profileId);
+    }
   }
 
   // ---------------------------------------------------------------------

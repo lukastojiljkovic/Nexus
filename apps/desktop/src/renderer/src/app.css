@@ -428,6 +428,22 @@ body {
   background: var(--nx-danger-soft);
   color: var(--nx-danger);
 }
+/* The „⋯“ reorder menu (TASK-004) stands in the same quiet cluster as ✎/+/× on a
+   rail row and as ✎/× on a section heading, so its trigger takes THEIR box
+   rather than the note row's square one — otherwise it would set the row's
+   height and the cluster would step out of line. Colour and hover colour come
+   from .note__menu-trigger, which already matches. */
+.tasks__rail-menu,
+.tasks__section-menu {
+  width: auto;
+  height: auto;
+  padding: 2px 6px;
+  border-radius: var(--nx-radius-md);
+}
+.tasks__rail-menu:hover,
+.tasks__section-menu:hover {
+  background: var(--nx-surface-alt);
+}
 .tasks__new-list.nx-button,
 .tasks__new-section.nx-button,
 .tasks__new-tag.nx-button {
@@ -4464,6 +4480,11 @@ button.cal__grid-event--dragging {
   /* position: fixed + coordinates are set inline from the trigger's rect, so the
      panel escapes the surrounding overflow:auto list/tree instead of being clipped. */
   z-index: 40;
+  /* One of its homes is a section HEADING, whose uppercase/tracked caption type
+     `font: inherit` on the items does NOT reset (the same reason
+     .tasks__name-form spells it out). A menu is prose, not a heading. */
+  text-transform: none;
+  letter-spacing: var(--nx-font-tracking-normal);
   min-width: 180px;
   max-height: 320px;
   overflow-y: auto;
@@ -4496,6 +4517,17 @@ button.cal__grid-event--dragging {
 }
 .note__menu-item:hover {
   background: var(--nx-surface-alt);
+}
+/* An action that is unavailable HERE is dimmed rather than dropped (the row at
+   the end of its ordering scope, see MoveMenu), on the same recipe as
+   .nx-button:disabled — a menu whose items come and go has to be re-read on
+   every open. */
+.note__menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.note__menu-item:disabled:hover {
+  background: transparent;
 }
 .note__menu-item--danger:hover {
   background: var(--nx-danger-soft);
