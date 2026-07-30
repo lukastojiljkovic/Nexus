@@ -254,10 +254,10 @@ export class RestoreStore {
     this.insertCard = db.prepare(
       `INSERT INTO cards
          (id, profile_id, deck_id, front, back, source_note_id, source_block_key,
-          kind, cloze_text, cloze_ordinal,
+          kind, cloze_text, cloze_ordinal, problem_steps,
           due, stability, difficulty, elapsed_days, scheduled_days, learning_steps,
           reps, lapses, state, last_review, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertDocument = db.prepare(
       `INSERT INTO tracked_documents
@@ -482,6 +482,7 @@ export class RestoreStore {
           card.id, this.profileId, card.deckId, card.front, card.back,
           card.sourceNoteId, card.sourceBlockKey,
           card.kind ?? "basic", card.clozeText ?? null, card.clozeOrdinal ?? null,
+          card.problemSteps ?? null,
           card.due, card.stability, card.difficulty,
           card.elapsedDays, card.scheduledDays, card.learningSteps, card.reps, card.lapses,
           card.state, card.lastReview, card.createdAt, card.updatedAt,

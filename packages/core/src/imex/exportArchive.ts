@@ -27,11 +27,12 @@ import { renderNoteMarkdown } from "./noteMarkdown.js";
 import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown.js";
 
 /**
- * IMEX-004: the archive's own semver. `1.11.0` adds the `dashboard-widget`
- * record type — the profile's dashboard layout (DASH-002 / ADR-045, migration
- * 032) — after `1.10.0` added a card's `kind` and, for a cloze card, the
- * `clozeText`/`clozeOrdinal` it is derived from (STUDY-006 /
- * ADR-042), `1.9.0` the `dashboard-settings` record type (SET-006
+ * IMEX-004: the archive's own semver. `1.12.0` adds a card's `problemSteps` —
+ * the worked solution a problem card's `back` is derived from (ADR-046) —
+ * after `1.11.0` added the `dashboard-widget` record type — the profile's
+ * dashboard layout (DASH-002 / ADR-045, migration 032) — `1.10.0` a card's
+ * `kind` and, for a cloze card, the `clozeText`/`clozeOrdinal` it is derived
+ * from (STUDY-006 / ADR-042), `1.9.0` the `dashboard-settings` record type (SET-006
  * / ADR-041), `1.8.0` the `task-dependency` record type (migration 029 /
  * ADR-037), `1.5.0`-`1.7.0` task attachments, task templates and the NOTE
  * folder preferences (each landing on its own lane), `1.4.0` the
@@ -41,14 +42,20 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * `reminderOffsets` (ADR-028) and `1.1.0` the `person` record type (CAL-007 /
  * ADR-026). Additive, so a MINOR bump by the same honesty each of those made
  * one: an archive this build writes is refused by an older reader, which would
- * otherwise restore a profile whose dashboard is back to the stock five cards
- * with no sign that the user had ever arranged it. Kept in step
+ * otherwise parse every problem card and restore it as a plain front/back card
+ * whose steps — the only text its owner can edit, and the thing the reviewer
+ * reveals one at a time — are gone; the same honesty `1.11.0` owed the
+ * arranged dashboard and `1.10.0` owed every cloze template. Kept in step
  * with `INTERCHANGE_SCHEMA_VERSION` (`importArchive.ts`) — two constants
  * rather than one import, since the reader already imports from this module
  * and the cycle would be worse than the duplication; `importArchive.test.ts`
  * pins them equal.
+ *
+ * SUPERVISOR NOTE: `1.11.0` belongs to the sibling lane (dashboard layout) and
+ * is not in this worktree; this lane writes `1.12.0` directly, leaving the gap
+ * for the supervisor to reconcile at merge.
  */
-const SCHEMA_VERSION = "1.11.0";
+const SCHEMA_VERSION = "1.12.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -372,6 +379,16 @@ export interface ExportCard {
    */
   clozeText?: string | null;
   clozeOrdinal?: number | null;
+  /**
+   * A problem card's worked solution in the `--` grammar of `problemSteps.ts`,
+   * the SOURCE its `back` is derived from (ADR-046). OPTIONAL with a default,
+   * like `kind`: absent or null means "no worked solution", which is what every
+   * card in every archive written before this field contained, so no
+   * `ArchiveEra` flag is involved. Only a `"basic"` card may carry it — a
+   * problem card is a basic card with steps, not a third kind — and the reader
+   * refuses it on a cloze card, whose `back` already has a source.
+   */
+  problemSteps?: string | null;
   due: string;
   stability: number;
   difficulty: number;

@@ -201,20 +201,22 @@ export class ForeignImportStore {
     this.insertNoteLink = db.prepare(
       `INSERT INTO note_links (source_note_id, target_note_id) VALUES (?, ?)`,
     );
-    // The cloze columns (ADR-042 / migration 031) ride the existing insert, and
-    // the three `cards` CHECKs — `kind IN ('basic','cloze')`, and the pair rule
-    // tying `cloze_text`/`cloze_ordinal` to it — are satisfied by the plan's own
-    // rows: the parser enforced exactly that pair rule before the planner ran,
-    // and the planner copies the three fields through untouched. They are spelled
-    // out here anyway, because an INSERT that named no columns would silently
-    // depend on the table's physical column order.
+    // The cloze columns (ADR-042 / migration 031) and `problem_steps` (ADR-046
+    // / migration 033) ride the existing insert, and the four `cards` CHECKs —
+    // `kind IN ('basic','cloze')`, the pair rule tying
+    // `cloze_text`/`cloze_ordinal` to it, and "steps only on a non-empty basic
+    // card" — are satisfied by the plan's own rows: the parser enforced exactly
+    // those rules before the planner ran, and the planner copies the four fields
+    // through untouched. They are spelled out here anyway, because an INSERT
+    // that named no columns would silently depend on the table's physical
+    // column order.
     this.insertCard = db.prepare(
       `INSERT INTO cards
          (id, profile_id, deck_id, front, back, source_note_id, source_block_key,
-          kind, cloze_text, cloze_ordinal,
+          kind, cloze_text, cloze_ordinal, problem_steps,
           due, stability, difficulty, elapsed_days, scheduled_days, learning_steps,
           reps, lapses, state, last_review, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertReviewLog = db.prepare(
       `INSERT INTO review_log
@@ -528,6 +530,7 @@ export class ForeignImportStore {
           card.id, this.profileId, card.deckId, card.front, card.back,
           card.sourceNoteId, card.sourceBlockKey,
           card.kind ?? "basic", card.clozeText ?? null, card.clozeOrdinal ?? null,
+          card.problemSteps ?? null,
           card.due, card.stability, card.difficulty,
           card.elapsedDays, card.scheduledDays, card.learningSteps, card.reps, card.lapses,
           card.state, card.lastReview, card.createdAt, card.updatedAt,

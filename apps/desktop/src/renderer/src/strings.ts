@@ -940,11 +940,16 @@ export const strings = {
     editCardLabel: "Izmeni karticu",
 
     // --- Cloze cards (STUDY-006 / ADR-042) ----------------------------------
-    /** The Osnovna/Cloze segmented toggle above the card form. */
+    /**
+     * The Osnovna/Cloze/Zadatak segmented toggle above the card form. Indexed
+     * by the renderer's `CardForm`, NOT by `CardKind`: „Zadatak" is a third
+     * FORM of a `basic` card, not a third kind (ADR-046).
+     */
     cardKindLabel: "Vrsta kartice",
-    cardKind: {
+    cardForm: {
       basic: "Osnovna",
       cloze: "Cloze",
+      problem: "Zadatak",
     },
     clozeLabel: "Tekst sa prazninama",
     clozePlaceholder: "Glavni grad Srbije je {{Beograd}}.",
@@ -967,6 +972,28 @@ export const strings = {
     },
     /** Inline refusal when an edit drops the very deletion this card asks about. */
     clozeOrdinalMissing: "Ova kartica pita prazninu koju novi tekst više ne sadrži.",
+
+    // --- Problem cards (ADR-046) --------------------------------------------
+    /** The statement — the same field a basic card calls its front, named for what it is here. */
+    problemStatementLabel: "Tekst zadatka",
+    problemStatementPlaceholder: "Nađi izvod funkcije $f(x)=x^2$ u tački $x=1$.",
+    problemStepsLabel: "Rešenje po koracima",
+    problemStepsPlaceholder: "Izvod je $2x$.\n--\nU tački $x=1$ to je $2$.",
+    problemStepsHint: "Odvoji korake redom koji sadrži samo --",
+    /**
+     * The live line under the solution field: "3 koraka". The counted noun
+     * takes all three Serbian forms (1 / 2–4 / 5+), so it goes through
+     * `countUnit`, exactly like the cloze count above it.
+     */
+    problemStepCount: {
+      stepOne: "korak",
+      stepFew: "koraka",
+      stepMany: "koraka",
+      /** Shown instead of the count while the solution has no step; creation stays disabled. */
+      none: "Nema koraka — upiši rešenje da bi nastala kartica.",
+    },
+    /** Reveal button on a problem card: each press uncovers the next step. */
+    revealNextStep: "Sledeći korak",
     /** Inline fallback when saving a card fails for any other reason. */
     saveCardError: "Kartica nije sačuvana. Pokušaj ponovo.",
     /** Screen-reader label for the masked blank in the review surface. */

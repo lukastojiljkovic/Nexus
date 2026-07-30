@@ -1477,10 +1477,15 @@ function asNewCardInput(value: unknown): CreateCardInput {
 
 /**
  * Validates a `CardFieldChanges` payload into a store patch; an omitted key
- * stays omitted. Structural checks only — which of `front`/`back` and
- * `clozeText` a given card actually accepts is decided by the ROW's kind, and
- * that is `CardStore.update`'s call, not a shape question this layer can
- * answer (ADR-042).
+ * stays omitted. Structural checks only — which of `front`/`back`,
+ * `clozeText` and `problemSteps` a given card actually accepts is decided by
+ * the ROW's kind, and that is `CardStore.update`'s call, not a shape question
+ * this layer can answer (ADR-042 / ADR-046).
+ *
+ * `problemSteps` is the one field whose `null` is MEANINGFUL rather than
+ * absent: it is how the renderer says "this card no longer has a worked
+ * solution", so null passes straight through instead of being refused as a
+ * non-string.
  */
 function asCardFieldChanges(value: unknown): UpdateCardFields {
   const changes = asRecord(value);
@@ -1490,6 +1495,12 @@ function asCardFieldChanges(value: unknown): UpdateCardFields {
   if (changes.back !== undefined) patch.back = asNonEmptyString(changes.back, "changes.back");
   if (changes.clozeText !== undefined) {
     patch.clozeText = asCappedString(changes.clozeText, "changes.clozeText", CARD_TEXT_MAX_LENGTH);
+  }
+  if (changes.problemSteps !== undefined) {
+    patch.problemSteps =
+      changes.problemSteps === null
+        ? null
+        : asCappedString(changes.problemSteps, "changes.problemSteps", CARD_TEXT_MAX_LENGTH);
   }
   return patch;
 }
@@ -3606,6 +3617,19 @@ function registerIpc(): void {
     const deckId = asNonEmptyString(body.deckId, "deckId");
     const text = asCappedString(body.text, "text", CARD_TEXT_MAX_LENGTH);
     return cardStore(profileId).createCloze(deckId, text, new Date().toISOString());
+  });
+
+  // Same discipline for a problem card (ADR-046): the statement and the STEPS
+  // cross the wire, never the `back` — `createProblem` derives it from the
+  // steps by the one grammar every reader shares.
+  ipcMain.handle(IpcChannel.cardsCreateProblem, (event, payload): Card => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const deckId = asNonEmptyString(body.deckId, "deckId");
+    const front = asCappedString(body.front, "front", CARD_TEXT_MAX_LENGTH);
+    const stepsText = asCappedString(body.stepsText, "stepsText", CARD_TEXT_MAX_LENGTH);
+    return cardStore(profileId).createProblem(deckId, front, stepsText, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.cardsUpdate, (event, payload): Card => {

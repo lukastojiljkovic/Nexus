@@ -108,6 +108,7 @@ export const IpcChannel = {
   cardsListByDeck: "cards:list-by-deck",
   cardsCreate: "cards:create",
   cardsCreateCloze: "cards:create-cloze",
+  cardsCreateProblem: "cards:create-problem",
   cardsUpdate: "cards:update",
   cardsDelete: "cards:delete",
   cardsRestore: "cards:restore",
@@ -1451,7 +1452,12 @@ export const CARD_TEXT_MAX_LENGTH = 10_000;
  */
 export type CardKind = "basic" | "cloze";
 
-/** Card kinds in schema order — the deck editor's Osnovna/Cloze toggle reads this. */
+/**
+ * Card kinds in schema order — the closed wire domain a `NoteCardSpec`'s
+ * `kind` is validated against. The card editor's form toggle does NOT read
+ * this: „Zadatak" is a third FORM, not a third kind (ADR-046), so that toggle
+ * has its own three-value union in the renderer.
+ */
 export const CARD_KINDS: readonly CardKind[] = ["basic", "cloze"];
 
 /**
@@ -1483,6 +1489,14 @@ export interface Card {
   kind: CardKind;
   clozeText: string | null;
   clozeOrdinal: number | null;
+  /**
+   * A problem card's worked solution (ADR-046): the steps its `back` is
+   * DERIVED from, separated by a line that is nothing but `--`. Null for a card
+   * with no worked solution. A problem card is a `basic` card with this field
+   * set — NOT a third kind — so the reviewer reveals its steps one at a time
+   * while the editor edits the steps, never the back.
+   */
+  problemSteps: string | null;
   due: string;
   stability: number;
   difficulty: number;
@@ -1515,6 +1529,12 @@ export interface CardFieldChanges {
   front?: string;
   back?: string;
   clozeText?: string;
+  /**
+   * A basic card's worked solution (ADR-046). A string sets the steps and has
+   * the store re-derive `back` from them — so `back` is never sent alongside;
+   * `null` clears them, leaving a plain basic card. Refused on a cloze card.
+   */
+  problemSteps?: string | null;
 }
 
 export interface CardsListByDeckRequest {
@@ -1538,6 +1558,20 @@ export interface CardsCreateClozeRequest {
   profileId: string;
   deckId: string;
   text: string;
+}
+
+/**
+ * Creates one problem card (ADR-046): a BASIC card carrying the worked
+ * solution its `back` is derived from. Only the statement and the steps cross
+ * the wire — `back` is derived in the main process by the same grammar the
+ * editor counts steps with and the reviewer reveals them by, so the renderer
+ * can never make a problem card's stored answer disagree with its steps.
+ */
+export interface CardsCreateProblemRequest {
+  profileId: string;
+  deckId: string;
+  front: string;
+  stepsText: string;
 }
 
 export interface CardsUpdateRequest {
@@ -3219,6 +3253,13 @@ export interface NexusApi {
   createCard(profileId: string, card: NewCardFields): Promise<Card>;
   /** Creates one cloze card per `{{…}}` deletion in `text`, atomically; returns the siblings in ordinal order (ADR-042). */
   createClozeCards(profileId: string, deckId: string, text: string): Promise<Card[]>;
+  /** Creates one problem card — a basic card whose `back` the main process derives from `stepsText` (ADR-046). */
+  createProblemCard(
+    profileId: string,
+    deckId: string,
+    front: string,
+    stepsText: string,
+  ): Promise<Card>;
   updateCard(profileId: string, id: string, changes: CardFieldChanges): Promise<Card>;
   deleteCard(profileId: string, id: string): Promise<void>;
   restoreCard(profileId: string, id: string): Promise<void>;

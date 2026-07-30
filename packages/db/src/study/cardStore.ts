@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import type { Card as FsrsCard, CardInput, ReviewLogInput } from "ts-fsrs";
 import { createEmptyCard, fsrs, Rating } from "ts-fsrs";
-import { findClozeRuns, renderClozeCard } from "@nexus/core";
+import { findClozeRuns, renderClozeCard, renderProblemBack, splitProblemSteps } from "@nexus/core";
 import { CardNotFoundError, CardValidationError } from "../errors.js";
 import { uuidv7 } from "../ids.js";
 
@@ -52,6 +52,14 @@ export interface Card {
   clozeText: string | null;
   /** For a `cloze` card: which deletion of `clozeText` this row asks (0-based). */
   clozeOrdinal: number | null;
+  /**
+   * A problem card's worked solution in the `--` grammar of `@nexus/core`'s
+   * `problemSteps.ts` — the SOURCE `back` is derived from (ADR-046). Null for
+   * a card with no worked solution; never set on a `cloze` card, whose back
+   * already has a source. A problem card is a `basic` card with this column
+   * set, not a third kind.
+   */
+  problemSteps: string | null;
   due: string;
   stability: number;
   difficulty: number;
@@ -89,6 +97,13 @@ export interface UpdateCardFields {
   back?: string;
   /** A cloze card's new template. Its own ordinal must still exist in it, or the update is refused. */
   clozeText?: string;
+  /**
+   * A basic card's worked solution (ADR-046). A string SETS the steps and
+   * re-derives `back` from them; `null` CLEARS them, leaving a plain basic
+   * card — no kind changes either way, because a problem card minus its steps
+   * is a basic card. Refused on a `cloze` card.
+   */
+  problemSteps?: string | null;
 }
 
 /** The four would-be next due dates for a card, one per rating, without persisting anything. */
@@ -163,6 +178,7 @@ interface CardRow {
   kind: CardKind;
   cloze_text: string | null;
   cloze_ordinal: number | null;
+  problem_steps: string | null;
   due: string;
   stability: number;
   difficulty: number;
@@ -206,14 +222,15 @@ interface SourceCardRow {
   kind: CardKind;
   cloze_text: string | null;
   cloze_ordinal: number | null;
+  problem_steps: string | null;
   deleted_at: string | null;
   source_block_key: string | null;
 }
 
 const CARD_COLUMNS =
   `id, profile_id, deck_id, front, back, source_note_id, source_block_key, kind, cloze_text, ` +
-  `cloze_ordinal, due, stability, difficulty, elapsed_days, scheduled_days, learning_steps, ` +
-  `reps, lapses, state, last_review, created_at, updated_at`;
+  `cloze_ordinal, problem_steps, due, stability, difficulty, elapsed_days, scheduled_days, ` +
+  `learning_steps, reps, lapses, state, last_review, created_at, updated_at`;
 
 const REVIEW_LOG_FULL_COLUMNS =
   "id, profile_id, card_id, rating, state, due, stability, difficulty, elapsed_days, " +
@@ -285,10 +302,10 @@ export class CardStore {
     this.insert = db.prepare(
       `INSERT INTO cards
          (id, profile_id, deck_id, front, back, source_note_id, source_block_key,
-          kind, cloze_text, cloze_ordinal,
+          kind, cloze_text, cloze_ordinal, problem_steps,
           due, stability, difficulty, elapsed_days, scheduled_days, learning_steps,
           reps, lapses, state, last_review, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.selectActiveById = db.prepare(
       `SELECT ${CARD_COLUMNS} FROM cards
@@ -314,7 +331,8 @@ export class CardStore {
     // Every row this note has ever generated, active or soft-deleted — `syncFromNote`
     // needs both to tell "restore" apart from "create" and "no-op" apart from "update".
     this.selectCardsBySource = db.prepare(
-      `SELECT id, deck_id, front, back, kind, cloze_text, cloze_ordinal, deleted_at, source_block_key
+      `SELECT id, deck_id, front, back, kind, cloze_text, cloze_ordinal, problem_steps,
+              deleted_at, source_block_key
        FROM cards
        WHERE profile_id = ? AND source_note_id = ?`,
     );
@@ -322,11 +340,13 @@ export class CardStore {
     // place on its note's next sync (ADR-042), and an edit to a hand-made
     // cloze card rewrites the template plus the sides re-derived from it.
     // Nothing writes one without the other, which is what keeps the CHECK
-    // constraints of migration 031 unreachable from here.
+    // constraints of migration 031 unreachable from here. `problem_steps`
+    // (ADR-046) rides along for the same reason: it is the other source `back`
+    // can be derived from, so it must never be left over from a previous one.
     this.updateContentFields = db.prepare(
       `UPDATE cards
          SET deck_id = ?, front = ?, back = ?, kind = ?, cloze_text = ?, cloze_ordinal = ?,
-             updated_at = ?
+             problem_steps = ?, updated_at = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
     );
     // Restore + rewrite in one statement (rule 3 of `syncFromNote`'s reconcile):
@@ -335,7 +355,7 @@ export class CardStore {
     this.restoreWithContent = db.prepare(
       `UPDATE cards
          SET deck_id = ?, front = ?, back = ?, kind = ?, cloze_text = ?, cloze_ordinal = ?,
-             deleted_at = NULL, updated_at = ?
+             problem_steps = ?, deleted_at = NULL, updated_at = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NOT NULL`,
     );
     this.updateScheduling = db.prepare(
@@ -494,6 +514,40 @@ export class CardStore {
   }
 
   /**
+   * Creates a problem card (ADR-046): a `basic` card whose worked solution is
+   * kept in `problem_steps`, with `back` DERIVED from it here by the same
+   * `renderProblemBack` the editor counts steps with and the reviewer reveals
+   * them by. The caller sends the statement and the solution; it never sends a
+   * `back`, exactly as `createCloze`'s caller never sends the sides.
+   *
+   * There is no third kind and no atomicity problem to solve: one call makes
+   * one row. What it does refuse is a solution holding no step at all — a
+   * text of nothing but separators renders an empty `back`, which is not a
+   * card — and anything past the existing per-column text cap.
+   */
+  createProblem(deckId: string, front: string, stepsText: string, now: string): Card {
+    const validNow = validateNow(now);
+    const validFront = validateText(front, "front");
+    const steps = validateProblemSteps(stepsText);
+    const validDeckId = this.resolveDeck(deckId);
+    const back = validateText(renderProblemBack(steps), "back");
+
+    return this.insertNew(
+      {
+        deckId: validDeckId,
+        front: validFront,
+        back,
+        kind: "basic",
+        clozeText: null,
+        clozeOrdinal: null,
+        problemSteps: steps,
+      },
+      validNow,
+      new Date().toISOString(),
+    );
+  }
+
+  /**
    * Applies a partial content/placement patch to an active card; never touches
    * FSRS scheduling state.
    *
@@ -504,6 +558,12 @@ export class CardStore {
    * own ordinal no longer exists, because a card must not silently die under
    * an edit. A `basic` card is untouched by any of this and refuses
    * `clozeText`.
+   *
+   * A `basic` card additionally takes `problemSteps` (ADR-046), which sets or
+   * clears its worked solution and re-derives `back` when it sets one. Both
+   * directions are ordinary edits of one row, not identity changes: a problem
+   * card minus its steps IS a basic card, so nothing about the question this
+   * row's FSRS history belongs to has moved.
    */
   update(id: string, fields: UpdateCardFields): Card {
     const current = this.requireActive(id);
@@ -518,6 +578,7 @@ export class CardStore {
       current.kind,
       content.clozeText,
       current.clozeOrdinal,
+      content.problemSteps,
       now,
       current.id,
       this.profileId,
@@ -526,19 +587,43 @@ export class CardStore {
     return { ...current, deckId, ...content, updatedAt: now };
   }
 
-  /** The `front`/`back`/`clozeText` an `update` lands, per the row's own kind. */
+  /** The `front`/`back`/`clozeText`/`problemSteps` an `update` lands, per the row's own kind. */
   private resolveUpdatedContent(
     current: Card,
     fields: UpdateCardFields,
-  ): { front: string; back: string; clozeText: string | null } {
+  ): { front: string; back: string; clozeText: string | null; problemSteps: string | null } {
     if (current.kind !== "cloze") {
       if (fields.clozeText !== undefined) {
         throw new CardValidationError('"clozeText" may only be set on a cloze card.');
       }
+      const front =
+        fields.front !== undefined ? validateText(fields.front, "front") : current.front;
+
+      // Steps GIVEN: they own the back, so an explicit `back` in the same call
+      // would be a second, contradicting answer for one card.
+      if (typeof fields.problemSteps === "string") {
+        if (fields.back !== undefined) {
+          throw new CardValidationError(
+            'A problem card\'s "back" is derived from its steps and cannot be set in the same update.',
+          );
+        }
+        const steps = validateProblemSteps(fields.problemSteps);
+        return {
+          front,
+          back: validateText(renderProblemBack(steps), "back"),
+          clozeText: null,
+          problemSteps: steps,
+        };
+      }
+
+      // Steps CLEARED (null) or untouched (omitted). Clearing keeps the answer
+      // the user could already see: the derived solution simply becomes an
+      // ordinary hand-editable `back`.
       return {
-        front: fields.front !== undefined ? validateText(fields.front, "front") : current.front,
+        front,
         back: fields.back !== undefined ? validateText(fields.back, "back") : current.back,
         clozeText: null,
+        problemSteps: fields.problemSteps === undefined ? current.problemSteps : null,
       };
     }
 
@@ -547,8 +632,16 @@ export class CardStore {
         'A cloze card\'s "front"/"back" are derived from its text and cannot be set directly.',
       );
     }
+    if (fields.problemSteps !== undefined) {
+      throw new CardValidationError('"problemSteps" may only be set on a basic card.');
+    }
     if (fields.clozeText === undefined) {
-      return { front: current.front, back: current.back, clozeText: current.clozeText };
+      return {
+        front: current.front,
+        back: current.back,
+        clozeText: current.clozeText,
+        problemSteps: null,
+      };
     }
 
     const template = validateClozeText(fields.clozeText);
@@ -565,13 +658,15 @@ export class CardStore {
       front: validateText(rendered.front, "front"),
       back: validateText(rendered.back, "back"),
       clozeText: template,
+      problemSteps: null,
     };
   }
 
   /**
-   * The one place a `cards` row is born: `create`, `createCloze` and
-   * `syncFromNote` all seed a fresh FSRS state at `now` and differ only in the
-   * six content columns above it.
+   * The one place a `cards` row is born: `create`, `createCloze`,
+   * `createProblem` and `syncFromNote` all seed a fresh FSRS state at `now`
+   * and differ only in the content columns above it. `problemSteps` is
+   * optional here because exactly one of those four sets it.
    */
   private insertNew(
     content: {
@@ -581,6 +676,7 @@ export class CardStore {
       kind: CardKind;
       clozeText: string | null;
       clozeOrdinal: number | null;
+      problemSteps?: string | null;
       sourceNoteId?: string;
       sourceBlockKey?: string;
     },
@@ -591,6 +687,7 @@ export class CardStore {
     const id = uuidv7();
     const sourceNoteId = content.sourceNoteId ?? null;
     const sourceBlockKey = content.sourceBlockKey ?? null;
+    const problemSteps = content.problemSteps ?? null;
 
     this.insert.run(
       id,
@@ -603,6 +700,7 @@ export class CardStore {
       content.kind,
       content.clozeText,
       content.clozeOrdinal,
+      problemSteps,
       empty.due.toISOString(),
       empty.stability,
       empty.difficulty,
@@ -628,6 +726,7 @@ export class CardStore {
       kind: content.kind,
       clozeText: content.clozeText,
       clozeOrdinal: content.clozeOrdinal,
+      problemSteps,
       due: empty.due.toISOString(),
       stability: empty.stability,
       difficulty: empty.difficulty,
@@ -725,6 +824,7 @@ export class CardStore {
             spec.kind,
             spec.clozeText,
             spec.clozeOrdinal,
+            null,
             bookkeepingNow,
             row.id,
             this.profileId,
@@ -740,7 +840,13 @@ export class CardStore {
           // happen to be unchanged still lands.
           row.kind !== spec.kind ||
           row.cloze_text !== spec.clozeText ||
-          row.cloze_ordinal !== spec.clozeOrdinal
+          row.cloze_ordinal !== spec.clozeOrdinal ||
+          // A note has no syntax for problem steps (ADR-046 section 6), so a
+          // generated row's steps are always NULL. Comparing anyway is what
+          // clears a stale solution a direct edit left behind: the note owns
+          // this row's content, and a second source for its `back` would
+          // otherwise survive every future sync.
+          row.problem_steps !== null
         ) {
           this.updateContentFields.run(
             validDeckId,
@@ -749,6 +855,7 @@ export class CardStore {
             spec.kind,
             spec.clozeText,
             spec.clozeOrdinal,
+            null,
             bookkeepingNow,
             row.id,
             this.profileId,
@@ -1011,6 +1118,7 @@ function toCard(row: CardRow): Card {
     kind: row.kind,
     clozeText: row.cloze_text,
     clozeOrdinal: row.cloze_ordinal,
+    problemSteps: row.problem_steps,
     due: row.due,
     stability: row.stability,
     difficulty: row.difficulty,
@@ -1121,6 +1229,30 @@ function validateClozeText(value: string): string {
     throw new CardValidationError(
       `Card "clozeText" must be at most ${MAX_TEXT_LENGTH} characters.`,
     );
+  }
+  return trimmed;
+}
+
+/**
+ * A problem card's SOLUTION text (ADR-046): non-empty after trimming, under
+ * the same per-column cap every card text lives under, and holding at least
+ * one actual step — a text of nothing but `--` separators renders an empty
+ * `back`, which is not a card. Trimmed, so what is stored is what
+ * `renderProblemBack` measured, and so migration 033's `length(…) > 0` CHECK
+ * can never be reached from here.
+ */
+function validateProblemSteps(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new CardValidationError('Card "problemSteps" must not be empty.');
+  }
+  if (trimmed.length > MAX_TEXT_LENGTH) {
+    throw new CardValidationError(
+      `Card "problemSteps" must be at most ${MAX_TEXT_LENGTH} characters.`,
+    );
+  }
+  if (splitProblemSteps(trimmed).length === 0) {
+    throw new CardValidationError("A problem card needs at least one step.");
   }
   return trimmed;
 }

@@ -32,6 +32,7 @@ import { migration029 } from "./029-task-dependencies.js";
 import { migration030 } from "./030-dashboard-settings.js";
 import { migration031 } from "./031-cloze-cards.js";
 import { migration032 } from "./032-dashboard-widgets.js";
+import { migration033 } from "./033-problem-cards.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -75,6 +76,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration030,
   migration031,
   migration032,
+  migration033,
 ];
 
 /**

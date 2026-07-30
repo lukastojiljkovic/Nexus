@@ -242,7 +242,7 @@ function richProfileData(): ProfileData {
       {
         id: "card-1", profileId: "profile1", deckId: "deck-1", front: "Q1", back: "A1",
         sourceNoteId: null, sourceBlockKey: null,
-        kind: "basic", clozeText: null, clozeOrdinal: null,
+        kind: "basic", clozeText: null, clozeOrdinal: null, problemSteps: null,
         due: "2026-01-02T00:00:00.000Z", stability: 1, difficulty: 2, elapsedDays: 0,
         scheduledDays: 1, learningSteps: 0, reps: 0, lapses: 0, state: 0, lastReview: null,
         createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z",
@@ -253,7 +253,7 @@ function richProfileData(): ProfileData {
       {
         id: "card-2", profileId: "profile1", deckId: "deck-1", front: "Q2", back: "A2",
         sourceNoteId: "note-1", sourceBlockKey: "blok-1",
-        kind: "basic", clozeText: null, clozeOrdinal: null,
+        kind: "basic", clozeText: null, clozeOrdinal: null, problemSteps: null,
         due: "2026-01-05T00:00:00.000Z", stability: 4, difficulty: 6, elapsedDays: 2,
         scheduledDays: 3, learningSteps: 1, reps: 5, lapses: 1, state: 2,
         lastReview: "2026-01-02T00:00:00.000Z",
@@ -268,11 +268,27 @@ function richProfileData(): ProfileData {
         back: "Glavni grad je Beograd, a reka je Sava.",
         sourceNoteId: null, sourceBlockKey: null,
         kind: "cloze", clozeText: "Glavni grad je {{Beograd}}, a reka je {{Sava}}.",
-        clozeOrdinal: 0,
+        clozeOrdinal: 0, problemSteps: null,
         due: "2026-01-06T00:00:00.000Z", stability: 2, difficulty: 3, elapsedDays: 1,
         scheduledDays: 2, learningSteps: 0, reps: 2, lapses: 0, state: 2,
         lastReview: "2026-01-04T00:00:00.000Z",
         createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-04T00:00:00.000Z",
+      },
+      // Problem (ADR-046): a BASIC card that also carries the worked solution
+      // its `back` was derived from. A restore that dropped `problemSteps`
+      // would keep the answer but lose the steps the reviewer reveals one at a
+      // time — and the only text its owner can edit.
+      {
+        id: "card-4", profileId: "profile1", deckId: "deck-1",
+        front: "Nađi izvod od $x^2$ u tački $x=1$.",
+        back: "Izvod je $2x$.\n\nU tački $x=1$ to je $2$.",
+        sourceNoteId: null, sourceBlockKey: null,
+        kind: "basic", clozeText: null, clozeOrdinal: null,
+        problemSteps: "Izvod je $2x$.\n--\nU tački $x=1$ to je $2$.",
+        due: "2026-01-07T00:00:00.000Z", stability: 3, difficulty: 4, elapsedDays: 0,
+        scheduledDays: 1, learningSteps: 0, reps: 1, lapses: 0, state: 2,
+        lastReview: "2026-01-05T00:00:00.000Z",
+        createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-05T00:00:00.000Z",
       },
     ],
     reviewLog: [
@@ -567,12 +583,13 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.12.0`: the nearest minor strictly ahead of this build's `1.11.0`.
+  // `1.13.0`: the nearest minor strictly ahead of this build's `1.12.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.12.0" });
+    const files = baseFiles({ schemaVersion: "1.13.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.12.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.13.0" },
+
     ]);
     expect(result.data).toBeNull();
   });
@@ -1181,6 +1198,48 @@ describe("parseImportArchive — card kind (STUDY-006 / ADR-042)", () => {
     expect(
       cardDetails(parseCardRow({ kind: "cloze", clozeText: "obična rečenica", clozeOrdinal: 0 })),
     ).toEqual(["clozeOrdinal"]);
+  });
+
+  // --- Problem steps (ADR-046) ---------------------------------------------
+
+  it("defaults an absent problemSteps to null — no era flag, exactly like kind", () => {
+    // `VALID_CARD` carries no `problemSteps` at all: exactly a pre-ADR-046 row.
+    const result = parseCardRow({});
+    expect(result.problems).toEqual([]);
+    expect(result.data?.cards[0]).toMatchObject({ problemSteps: null });
+  });
+
+  it("accepts a problem card: a BASIC card that also carries its worked solution", () => {
+    const result = parseCardRow({ kind: "basic", problemSteps: "prvi\n--\ndrugi" });
+    expect(result.problems).toEqual([]);
+    expect(result.data?.cards[0]).toMatchObject({
+      kind: "basic",
+      problemSteps: "prvi\n--\ndrugi",
+      clozeText: null,
+    });
+  });
+
+  it("treats an explicit null as no worked solution", () => {
+    const result = parseCardRow({ problemSteps: null });
+    expect(result.problems).toEqual([]);
+    expect(result.data?.cards[0]).toMatchObject({ problemSteps: null });
+  });
+
+  it("refuses steps on a cloze card — its back already has a source", () => {
+    expect(
+      cardDetails(
+        parseCardRow({ kind: "cloze", clozeText: "{{A}}", clozeOrdinal: 0, problemSteps: "korak" }),
+      ),
+    ).toEqual(["problemSteps"]);
+  });
+
+  it("refuses empty, untrimmed, over-cap and non-string steps", () => {
+    expect(cardDetails(parseCardRow({ problemSteps: "" }))).toEqual(["problemSteps"]);
+    expect(cardDetails(parseCardRow({ problemSteps: " korak " }))).toEqual(["problemSteps"]);
+    expect(cardDetails(parseCardRow({ problemSteps: "x".repeat(10_001) }))).toEqual([
+      "problemSteps",
+    ]);
+    expect(cardDetails(parseCardRow({ problemSteps: 7 }))).toEqual(["problemSteps"]);
   });
 });
 
@@ -2052,8 +2111,9 @@ describe("parseImportArchive — note folder preferences (the 1.7.0 era gate)", 
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.11.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.11.0");
+  it("is 1.12.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.12.0");
+
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -2065,7 +2125,7 @@ describe("parseImportArchive — schema version", () => {
   });
 
   it("accepts the exact current version", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.11.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.12.0" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
@@ -2147,27 +2207,36 @@ describe("parseImportArchive — schema version", () => {
     expect(result.data).not.toBeNull();
   });
 
-  // And for the one ADR-045's dashboard layout has just superseded: a 1.10
-  // archive carries no `dashboard-widget` row at all, which is exactly what a
-  // profile that never rearranged its dashboard looks like — hence, again, no
-  // era flag for a whole absent record type.
+  // And for the one ADR-045's dashboard layout superseded: a 1.10 archive
+  // carries no `dashboard-widget` row at all, which is exactly what a profile
+  // that never rearranged its dashboard looks like — hence, again, no era flag
+  // for a whole absent record type.
   it("accepts an older minor — a 1.10 archive still parses here, the layout empty", () => {
     const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.10.0" })));
     expect(result.problems).toEqual([]);
     expect(result.data).toMatchObject({ dashboardWidgets: [] });
   });
 
-  it("accepts a newer patch", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.11.7" })));
+  // And for the one ADR-046's steps superseded: a 1.11 archive carries no
+  // `problemSteps` on any card, which is exactly what a profile of cards with
+  // no worked solution looks like.
+  it("accepts an older minor — a 1.11 archive still parses here", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.11.0" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
 
-  // `1.12.0`: the nearest minor strictly ahead of this build's `1.11.0`.
+  it("accepts a newer patch", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.12.7" })));
+    expect(result.problems).toEqual([]);
+    expect(result.data).not.toBeNull();
+  });
+
+  // `1.13.0`: the nearest minor strictly ahead of this build's `1.12.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.12.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.13.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.12.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.13.0" },
     ]);
     expect(result.data).toBeNull();
   });

@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
-import { CLOZE_MASK, computeStreak, findClozeRuns, splitClozeSegments } from "@nexus/core";
+import {
+  CLOZE_MASK,
+  computeStreak,
+  findClozeRuns,
+  splitClozeSegments,
+  splitProblemSteps,
+} from "@nexus/core";
 import type { ClozeSegment } from "@nexus/core";
 import { Button, Checkbox, Chip, EmptyState, ListRow, TextField } from "@nexus/ui";
 import type {
   Card,
   CardFieldChanges,
-  CardKind,
   CardRating,
   CardState,
   Deck,
@@ -34,7 +39,7 @@ import type {
   SubjectColor,
   SubjectFieldChanges,
 } from "../../shared/ipc.js";
-import { CARD_KINDS, CARD_TEXT_MAX_LENGTH } from "../../shared/ipc.js";
+import { CARD_TEXT_MAX_LENGTH } from "../../shared/ipc.js";
 import {
   daysUntilExam,
   examCountdownLabel,
@@ -64,6 +69,26 @@ const SUBJECT_COLORS: readonly SubjectColor[] = [
   "graphite",
 ];
 const EXAM_TYPES: readonly ExamType[] = ["pismeni", "usmeni", "kolokvijum"];
+
+/**
+ * Which FORM the card editor is showing — deliberately NOT `CardKind` (ADR-046).
+ * There are two kinds on the wire and in the schema, `basic` and `cloze`; there
+ * are three forms here, because a problem card IS a basic card that also
+ * carries a worked solution. Modelling the toggle as a kind would have needed a
+ * third kind the ADR refuses, so the choice lives only in the renderer, where
+ * it belongs: it is a question about which fields to show, not about what a row
+ * is. `strings.study.cardForm` is indexed by this union, not by `CardKind`.
+ */
+type CardForm = "basic" | "cloze" | "problem";
+
+/** The forms in toggle order: the two plain ones, then the one that adds steps to the first. */
+const CARD_FORMS: readonly CardForm[] = ["basic", "cloze", "problem"];
+
+/** The form an existing row edits in: its kind decides, and for a basic row its steps do (ADR-046). */
+function formOfCard(card: Card): CardForm {
+  if (card.kind === "cloze") return "cloze";
+  return card.problemSteps === null ? "basic" : "problem";
+}
 const CARD_RATINGS: readonly CardRating[] = [1, 2, 3, 4];
 const RATING_KEYS: Record<CardRating, keyof typeof strings.study.rating> = {
   1: "again",
@@ -176,6 +201,29 @@ function clozeCountLabel(blanks: number): string {
   const blankWord = countUnit(blanks, copy.blankOne, copy.blankFew, copy.blankMany);
   const cardWord = countUnit(blanks, copy.cardOne, copy.cardFew, copy.cardMany);
   return `${blanks} ${blankWord} ${copy.arrow} ${blanks} ${cardWord}`;
+}
+
+/**
+ * The steps the review surface reveals one at a time, or null when this row is
+ * not a problem card — including (defensively) one whose stored steps parse to
+ * nothing. The caller then falls back to the stored `front`/`back`, which are
+ * plain strings and always renderable.
+ */
+function problemStepsOf(card: Card): string[] | null {
+  if (card.problemSteps === null) return null;
+  const steps = splitProblemSteps(card.problemSteps);
+  return steps.length > 0 ? steps : null;
+}
+
+/**
+ * The problem form's live line: "3 koraka", or the nudge that there is nothing
+ * to make a card from yet. Same recipe as `clozeCountLabel` — the counted noun
+ * takes the full three-form Serbian agreement, hence `countUnit`.
+ */
+function problemStepCountLabel(steps: number): string {
+  const copy = strings.study.problemStepCount;
+  if (steps === 0) return copy.none;
+  return `${steps} ${countUnit(steps, copy.stepOne, copy.stepFew, copy.stepMany)}`;
 }
 
 /** Returns `list` with the first card matching `id` removed (used to drop a requeued copy on undo). */
@@ -428,11 +476,15 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   const [cardFront, setCardFront] = useState("");
   const [cardBack, setCardBack] = useState("");
   const [cardDeckId, setCardDeckId] = useState("");
-  // Which form the card editor is showing (ADR-042). Free to switch while
-  // adding; pinned to the row's own kind while editing, because a card cannot
-  // change kind — its FSRS history belongs to the question it has been asking.
-  const [cardKind, setCardKind] = useState<CardKind>("basic");
+  // Which form the card editor is showing (ADR-042 / ADR-046). Free to switch
+  // while adding. While EDITING, a cloze card's form is pinned — a card cannot
+  // change kind, because its FSRS history belongs to the question it has been
+  // asking — but Osnovna and Zadatak may be switched between freely: both are
+  // kind `basic`, so adding or dropping a worked solution changes what the row
+  // shows, never what it is.
+  const [cardForm, setCardForm] = useState<CardForm>("basic");
   const [clozeText, setClozeText] = useState("");
+  const [problemSteps, setProblemSteps] = useState("");
   // Inline, in-form failure text (the store's refusal to drop this card's own
   // deletion, or any other save failure) — the study page has no toast slot
   // for a form, and a silent console error would look like a dead button.
@@ -442,6 +494,11 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   // read by the SAME grammar the store derives the rows with, so the live line
   // can never promise a count the store would not produce.
   const clozeBlankCount = findClozeRuns(clozeText.trim()).length;
+  // Likewise for the problem form: the SAME grammar the store derives `back`
+  // with, so the live count and preview can never promise a card the store
+  // would refuse.
+  const problemStepList = splitProblemSteps(problemSteps);
+  const problemStepCount = problemStepList.length;
   // Lazily loaded id -> title map backing the note-source link control
   // (ADR-017); stays empty, and unfetched, for a deck with no generated cards.
   const [noteTitles, setNoteTitles] = useState<Map<string, string>>(new Map());
@@ -1133,8 +1190,9 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     setCardFront("");
     setCardBack("");
     setCardDeckId("");
-    setCardKind("basic");
+    setCardForm("basic");
     setClozeText("");
+    setProblemSteps("");
     setCardFormError(null);
   }
 
@@ -1149,18 +1207,25 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     setCardFormVisible(true);
     setEditingCardId(card.id);
     setCardDeckId(card.deckId);
-    // The row's kind decides the form, and stays fixed for the edit.
-    setCardKind(card.kind);
+    // The row decides which form opens; a cloze row then stays in it, while a
+    // basic row may be switched between Osnovna and Zadatak (ADR-046).
+    setCardForm(formOfCard(card));
     setCardFront(card.front);
     setCardBack(card.back);
     setClozeText(card.clozeText ?? "");
+    setProblemSteps(card.problemSteps ?? "");
   }
 
   async function submitCardForm(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     setCardFormError(null);
     try {
-      const saved = cardKind === "cloze" ? await submitClozeCard() : await submitBasicCard();
+      const saved =
+        cardForm === "cloze"
+          ? await submitClozeCard()
+          : cardForm === "problem"
+            ? await submitProblemCard()
+            : await submitBasicCard();
       if (!saved) return;
       closeCardForm();
       await reloadDeckCounts();
@@ -1180,7 +1245,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
    * just as surely as under a zero-blank one.
    */
   function clozeOrdinalGone(): boolean {
-    if (cardKind !== "cloze" || editingCardId == null) return false;
+    if (cardForm !== "cloze" || editingCardId == null) return false;
     const ordinal = cards?.find((card) => card.id === editingCardId)?.clozeOrdinal;
     return ordinal != null && ordinal >= clozeBlankCount;
   }
@@ -1195,11 +1260,53 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     }
 
     if (editingCardId != null) {
-      const changes: CardFieldChanges = { deckId: cardDeckId, front: trimmedFront, back: trimmedBack };
+      // `problemSteps: null` is what makes Zadatak → Osnovna a real switch: it
+      // clears the worked solution, leaving the derived answer as an ordinary
+      // hand-edited back. Harmless on a card that never had one.
+      const changes: CardFieldChanges = {
+        deckId: cardDeckId,
+        front: trimmedFront,
+        back: trimmedBack,
+        problemSteps: null,
+      };
       applyUpdatedCard(await window.nexus.updateCard(profileId, editingCardId, changes));
     } else {
       const fields: NewCardFields = { deckId: cardDeckId, front: trimmedFront, back: trimmedBack };
       const created = await window.nexus.createCard(profileId, fields);
+      setCards((prev) => (prev ? [...prev, created] : [created]));
+    }
+    return true;
+  }
+
+  /**
+   * Creates or updates a problem card: a BASIC card carrying the worked
+   * solution its back is derived from (ADR-046). Only the statement and the
+   * steps go over the wire — the store derives the back, so `back` is never
+   * sent alongside them.
+   */
+  async function submitProblemCard(): Promise<boolean> {
+    const trimmedFront = cardFront.trim();
+    const trimmedSteps = problemSteps.trim();
+    if (trimmedFront.length === 0 || trimmedSteps.length === 0) return false;
+    if (trimmedFront.length > CARD_TEXT_MAX_LENGTH || trimmedSteps.length > CARD_TEXT_MAX_LENGTH) {
+      return false;
+    }
+    if (problemStepCount === 0) return false;
+
+    if (editingCardId != null) {
+      const changes: CardFieldChanges = {
+        deckId: cardDeckId,
+        front: trimmedFront,
+        problemSteps: trimmedSteps,
+      };
+      applyUpdatedCard(await window.nexus.updateCard(profileId, editingCardId, changes));
+    } else {
+      const created = await window.nexus.createProblemCard(
+        profileId,
+        cardDeckId,
+        trimmedFront,
+        trimmedSteps,
+      );
       setCards((prev) => (prev ? [...prev, created] : [created]));
     }
     return true;
@@ -1395,6 +1502,11 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     const deck = decks?.find((d) => d.id === route.deckId);
     const deckSubject = deck ? subjects?.find((s) => s.id === deck.subjectId) : undefined;
     const deckOptions = deck ? decksForSubject(deck.subjectId) : [];
+    // Which forms the toggle offers: all three when adding; none for a cloze
+    // card being edited (it cannot change kind); Osnovna and Zadatak for a
+    // basic one, which are two forms of the same kind (ADR-046).
+    const formOptions: readonly CardForm[] =
+      editingCardId == null ? CARD_FORMS : cardForm === "cloze" ? [] : ["basic", "problem"];
 
     /**
      * The trailing control for a note-sourced card (ADR-017 "STUDY: one
@@ -1522,33 +1634,35 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
 
             {cardFormVisible ? (
               <form className="study__card-form" onSubmit={(e) => void submitCardForm(e)}>
-                {/* Kind is chosen only when ADDING: an existing card keeps the
-                    question its FSRS history belongs to (ADR-042). */}
-                {editingCardId == null && (
+                {/* All three forms are offered when ADDING. While editing, a
+                    cloze card has no toggle at all — it cannot change kind
+                    (ADR-042) — but a basic card offers Osnovna and Zadatak,
+                    which are two forms of the same kind (ADR-046). */}
+                {formOptions.length > 0 && (
                   <div
                     className="study__segmented"
                     role="group"
                     aria-label={strings.study.cardKindLabel}
                   >
-                    {CARD_KINDS.map((kind) => (
+                    {formOptions.map((form) => (
                       <Button
-                        key={kind}
+                        key={form}
                         type="button"
                         size="sm"
-                        variant={cardKind === kind ? "primary" : "ghost"}
-                        aria-pressed={cardKind === kind}
+                        variant={cardForm === form ? "primary" : "ghost"}
+                        aria-pressed={cardForm === form}
                         onClick={() => {
-                          setCardKind(kind);
+                          setCardForm(form);
                           setCardFormError(null);
                         }}
                       >
-                        {strings.study.cardKind[kind]}
+                        {strings.study.cardForm[form]}
                       </Button>
                     ))}
                   </div>
                 )}
 
-                {cardKind === "cloze" ? (
+                {cardForm === "cloze" ? (
                   <div className="study__card-field">
                     <textarea
                       className="nx-textfield__input study__textarea"
@@ -1574,12 +1688,22 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                   </div>
                 ) : (
                   <>
+                    {/* The statement: the same `front` a basic card has, named
+                        for what it is in a problem card. */}
                     <div className="study__card-field">
                       <textarea
                         className="nx-textfield__input study__textarea"
                         value={cardFront}
-                        placeholder={strings.study.frontPlaceholder}
-                        aria-label={strings.study.frontLabel}
+                        placeholder={
+                          cardForm === "problem"
+                            ? strings.study.problemStatementPlaceholder
+                            : strings.study.frontPlaceholder
+                        }
+                        aria-label={
+                          cardForm === "problem"
+                            ? strings.study.problemStatementLabel
+                            : strings.study.frontLabel
+                        }
                         maxLength={CARD_TEXT_MAX_LENGTH}
                         autoFocus
                         onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setCardFront(event.target.value)}
@@ -1590,27 +1714,65 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                         </div>
                       )}
                     </div>
-                    <div className="study__card-field">
-                      <textarea
-                        className="nx-textfield__input study__textarea"
-                        value={cardBack}
-                        placeholder={strings.study.backPlaceholder}
-                        aria-label={strings.study.backLabel}
-                        maxLength={CARD_TEXT_MAX_LENGTH}
-                        onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setCardBack(event.target.value)}
-                      />
-                      {cardBack.trim().length > 0 && (
-                        <div className="study__math-preview">
-                          <MathText text={cardBack} />
-                        </div>
-                      )}
-                    </div>
+                    {cardForm === "problem" ? (
+                      <div className="study__card-field">
+                        <textarea
+                          className="nx-textfield__input study__textarea"
+                          value={problemSteps}
+                          placeholder={strings.study.problemStepsPlaceholder}
+                          aria-label={strings.study.problemStepsLabel}
+                          maxLength={CARD_TEXT_MAX_LENGTH}
+                          onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
+                            setProblemSteps(event.target.value)
+                          }
+                        />
+                        {/* The preview reads the steps through the SAME grammar
+                            the store does, so it shows them as the reviewer
+                            will: one per line, markers gone. */}
+                        {problemStepCount > 0 && (
+                          <div className="study__math-preview study__step-preview">
+                            {problemStepList.map((step, index) => (
+                              <MathText key={index} text={step} />
+                            ))}
+                          </div>
+                        )}
+                        <p
+                          className={
+                            problemStepCount === 0
+                              ? "study__step-count study__step-count--empty"
+                              : "study__step-count"
+                          }
+                          aria-live="polite"
+                        >
+                          {problemStepCountLabel(problemStepCount)}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="study__card-field">
+                        <textarea
+                          className="nx-textfield__input study__textarea"
+                          value={cardBack}
+                          placeholder={strings.study.backPlaceholder}
+                          aria-label={strings.study.backLabel}
+                          maxLength={CARD_TEXT_MAX_LENGTH}
+                          onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setCardBack(event.target.value)}
+                        />
+                        {cardBack.trim().length > 0 && (
+                          <div className="study__math-preview">
+                            <MathText text={cardBack} />
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </>
                 )}
                 {/* The math hint applies to a cloze template too — a `$…$`
                     expression inside one renders exactly as on a basic card. */}
-                {cardKind === "cloze" && (
+                {cardForm === "cloze" && (
                   <p className="study__math-hint">{strings.study.clozeHint}</p>
+                )}
+                {cardForm === "problem" && (
+                  <p className="study__math-hint">{strings.study.problemStepsHint}</p>
                 )}
                 <p className="study__math-hint">{strings.study.mathHint}</p>
                 {cardFormError !== null && (
@@ -1637,9 +1799,15 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                     type="submit"
                     variant="primary"
                     size="sm"
-                    // Creating at zero blanks would make zero cards, so the
-                    // button says so instead of failing after the click.
-                    disabled={cardKind === "cloze" && editingCardId == null && clozeBlankCount === 0}
+                    // Creating at zero blanks would make zero cards, and a
+                    // problem card with no step has nothing to reveal, so the
+                    // button says so instead of failing after the click. A
+                    // stepless solution is not a dead end while editing: the
+                    // Osnovna toggle beside it drops the steps entirely.
+                    disabled={
+                      (cardForm === "cloze" && editingCardId == null && clozeBlankCount === 0) ||
+                      (cardForm === "problem" && problemStepCount === 0)
+                    }
                   >
                     {editingCardId != null ? strings.study.saveCard : strings.study.addCard}
                   </Button>
@@ -2481,13 +2649,17 @@ function ReviewSession({ profileId, scope, onExit }: ReviewSessionProps) {
   const [queue, setQueue] = useState<Card[] | null>(null);
   const [total, setTotal] = useState(0);
   const [completedCount, setCompletedCount] = useState(0);
-  const [revealed, setRevealed] = useState(false);
+  // How much of the current card is uncovered (ADR-046). A basic or cloze card
+  // has exactly ONE step, so 0 and 1 are precisely the old hidden/revealed
+  // booleans and their behaviour is bit-identical; a problem card simply has
+  // more of them, revealed one press at a time.
+  const [revealedSteps, setRevealedSteps] = useState(0);
   const [preview, setPreview] = useState<PreviewIntervals | null>(null);
   const historyRef = useRef<GradeHistoryEntry[]>([]);
   const scopeRef = useRef(scope);
   // Guards against a held-down grade key (auto-repeat) or a double-click firing
   // a second gradeReview for the same card before the first one lands — state
-  // (`revealed`) only flips after the await, so it can't serve as the guard.
+  // (`revealedSteps`) only changes after the await, so it can't serve as the guard.
   const gradingRef = useRef(false);
 
   useEffect(() => {
@@ -2512,10 +2684,20 @@ function ReviewSession({ profileId, scope, onExit }: ReviewSessionProps) {
   }, [profileId]);
 
   const current = queue && queue.length > 0 ? queue[0] : null;
+  // A problem card's steps, or null for every other card — which then has the
+  // single step every card has always had.
+  const currentSteps = current ? problemStepsOf(current) : null;
+  const totalSteps = currentSteps?.length ?? 1;
+  const fullyRevealed = revealedSteps >= totalSteps;
 
   async function reveal(): Promise<void> {
-    if (!current || revealed) return;
-    setRevealed(true);
+    if (!current || fullyRevealed) return;
+    const next = revealedSteps + 1;
+    setRevealedSteps(next);
+    // The intervals belong to grading, and grading only opens once the LAST
+    // step is on screen — so the preview is fetched exactly then, on a problem
+    // card as on any other.
+    if (next < totalSteps) return;
     try {
       setPreview(await window.nexus.previewReview(profileId, current.id));
     } catch (error) {
@@ -2525,7 +2707,7 @@ function ReviewSession({ profileId, scope, onExit }: ReviewSessionProps) {
   }
 
   async function grade(rating: CardRating): Promise<void> {
-    if (!current || !revealed || !queue || gradingRef.current) return;
+    if (!current || !fullyRevealed || !queue || gradingRef.current) return;
     gradingRef.current = true;
     try {
       const now = new Date().toISOString();
@@ -2536,7 +2718,7 @@ function ReviewSession({ profileId, scope, onExit }: ReviewSessionProps) {
       const rest = queue.slice(1);
       setQueue(requeue ? [...rest, graded] : rest);
       if (!requeue) setCompletedCount((n) => n + 1);
-      setRevealed(false);
+      setRevealedSteps(0);
       setPreview(null);
     } catch (error) {
       console.error("Nexus: failed to grade review:", error);
@@ -2556,7 +2738,9 @@ function ReviewSession({ profileId, scope, onExit }: ReviewSessionProps) {
         return [restored, ...withoutRequeuedCopy];
       });
       if (!entry.requeued) setCompletedCount((n) => Math.max(0, n - 1));
-      setRevealed(false);
+      // Back to nothing uncovered — the restored card is asked again from its
+      // statement, however many steps it has.
+      setRevealedSteps(0);
       setPreview(null);
     } catch (error) {
       console.error("Nexus: failed to undo review:", error);
@@ -2567,7 +2751,7 @@ function ReviewSession({ profileId, scope, onExit }: ReviewSessionProps) {
 
   // Keyboard is the primary interface here — no inputs exist in this view, so
   // no target-type filtering is needed. Re-subscribing every render keeps the
-  // closures (queue/revealed/current) fresh without threading everything
+  // closures (queue/revealedSteps/current) fresh without threading everything
   // through refs.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
@@ -2581,12 +2765,17 @@ function ReviewSession({ profileId, scope, onExit }: ReviewSessionProps) {
         void undoLast();
         return;
       }
-      if ((event.key === " " || event.key === "Enter") && !revealed) {
+      // Space/Enter uncovers the next step; on a one-step card that is the
+      // whole answer, exactly as before.
+      if ((event.key === " " || event.key === "Enter") && !fullyRevealed) {
         event.preventDefault();
         void reveal();
         return;
       }
-      if (revealed && (event.key === "1" || event.key === "2" || event.key === "3" || event.key === "4")) {
+      // The grade keys stay inert until the LAST step is on screen — grading a
+      // problem card halfway through its solution would be grading a question
+      // the user has not finished being asked.
+      if (fullyRevealed && (event.key === "1" || event.key === "2" || event.key === "3" || event.key === "4")) {
         event.preventDefault();
         void grade(Number(event.key) as CardRating);
       }
@@ -2643,14 +2832,35 @@ function ReviewSession({ profileId, scope, onExit }: ReviewSessionProps) {
           // sentence around it never moves (ADR-042). No divider and no
           // separate back — there is nothing to separate.
           <div className="review__front">
-            <ClozeLine segments={clozeSegments} revealed={revealed} />
+            <ClozeLine segments={clozeSegments} revealed={fullyRevealed} />
           </div>
+        ) : currentSteps !== null ? (
+          // A problem card: the STATEMENT never leaves the screen, and the
+          // solution grows under it one step per press (ADR-046). No separate
+          // back — the steps are the back.
+          <>
+            <div className="review__front">
+              <MathText text={current.front} />
+            </div>
+            {revealedSteps > 0 && (
+              <>
+                <div className="review__divider" />
+                <ol className="review__steps">
+                  {currentSteps.slice(0, revealedSteps).map((step, index) => (
+                    <li key={index} className="review__step">
+                      <MathText text={step} />
+                    </li>
+                  ))}
+                </ol>
+              </>
+            )}
+          </>
         ) : (
           <>
             <div className="review__front">
               <MathText text={current.front} />
             </div>
-            {revealed && (
+            {fullyRevealed && (
               <>
                 <div className="review__divider" />
                 <div className="review__back">
@@ -2662,9 +2872,9 @@ function ReviewSession({ profileId, scope, onExit }: ReviewSessionProps) {
         )}
       </div>
 
-      {!revealed ? (
+      {!fullyRevealed ? (
         <Button variant="primary" className="review__reveal" onClick={() => void reveal()}>
-          {strings.study.revealAnswer}
+          {currentSteps === null ? strings.study.revealAnswer : strings.study.revealNextStep}
         </Button>
       ) : (
         <div className="review__grades">

@@ -83,6 +83,12 @@ export {
 } from "./study/clozeText.js";
 export type { ClozeRun, ClozeSegment } from "./study/clozeText.js";
 
+export {
+  PROBLEM_STEP_SEPARATOR,
+  renderProblemBack,
+  splitProblemSteps,
+} from "./study/problemSteps.js";
+
 export { replaceNoteContent } from "./notes/yjsRestore.js";
 
 export {

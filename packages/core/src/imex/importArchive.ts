@@ -173,10 +173,11 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.11.0` added the
- * `dashboard-widget` record type — the profile's dashboard layout (DASH-002 /
- * ADR-045, migration 032) — riding in the data file `1.9.0` already created,
- * after `1.10.0` added a
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.12.0` added a
+ * card's `problemSteps` — the worked solution its `back` is derived from
+ * (ADR-046) — after `1.11.0` added the `dashboard-widget` record type — the
+ * profile's dashboard layout (DASH-002 / ADR-045, migration 032) — riding in
+ * the data file `1.9.0` already created, and `1.10.0` added a
  * card's `kind` and a cloze card's `clozeText`/`clozeOrdinal` (STUDY-006 /
  * ADR-042), `1.9.0` the `dashboard-settings` record type and its
  * own data file (SET-006 / ADR-041), `1.8.0` the `task-dependency` record type
@@ -204,14 +205,21 @@ export interface ImportArchiveResult {
  * exist only for the "this row is missing a field it now must have" question,
  * which a whole absent type never asks — and which an OPTIONAL-with-a-default
  * field never asks either: `kind`'s absence means `"basic"` in every era,
- * because that is what every pre-ADR-042 archive's cards actually were.
+ * because that is what every pre-ADR-042 archive's cards actually were, and
+ * `problemSteps`'s absence means "no worked solution", because that is what
+ * every pre-ADR-046 archive's cards actually had.
  *
  * Major is still 1 throughout, so there is nothing yet to migrate an older
  * major forward from — a migration framework for a major that has never
  * shipped would be speculative machinery with nothing to exercise it.
  *
+ * SUPERVISOR NOTE: `1.11.0` belongs to the sibling lane (dashboard layout) and
+ * is not in this worktree; this lane writes `1.12.0` directly, leaving the gap
+ * for the supervisor to reconcile at merge. The too-new refusal fixtures in
+ * `importArchive.test.ts` moved to `1.13.0` for the same reason — `1.11.0` is
+ * no longer "strictly ahead of this build".
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.11.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.12.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -611,6 +619,8 @@ const EXAM_TYPES = ["pismeni", "usmeni", "kolokvijum"] as const;
 const CARD_STATES = [0, 1, 2, 3] as const;
 /** Mirrors the `cards.kind` CHECK of migration 031 (ADR-042). */
 const CARD_KINDS = ["basic", "cloze"] as const;
+/** Mirrors `MAX_TEXT_LENGTH` in `@nexus/db`'s `study/cardStore.ts` — the cap every card text column lives under. */
+const MAX_CARD_TEXT_LENGTH = 10_000;
 const REVIEW_RATINGS = [1, 2, 3, 4] as const;
 const STUDY_BLOCK_STATUSES = ["planned", "done", "missed"] as const;
 const NOTIFICATION_SOURCES = ["document", "exam", "study-day", "event", "task"] as const;
@@ -1186,7 +1196,7 @@ function parseCard(raw: Record<string, unknown>): ExportCard {
   if ((sourceNoteId === null) !== (sourceBlockKey === null)) {
     throw new InvalidFieldError("sourceBlockKey");
   }
-  const { kind, clozeText, clozeOrdinal } = parseCardKind(raw);
+  const { kind, clozeText, clozeOrdinal, problemSteps } = parseCardKind(raw);
   const due = isoDateTime(raw.due, "due");
   const stability = finiteNumber(raw.stability, "stability");
   const difficulty = finiteNumber(raw.difficulty, "difficulty");
@@ -1201,17 +1211,19 @@ function parseCard(raw: Record<string, unknown>): ExportCard {
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
   return {
     id, profileId, deckId, front, back, sourceNoteId, sourceBlockKey,
-    kind, clozeText, clozeOrdinal, due, stability,
+    kind, clozeText, clozeOrdinal, problemSteps, due, stability,
     difficulty, elapsedDays, scheduledDays, learningSteps, reps, lapses, state,
     lastReview, createdAt, updatedAt,
   };
 }
 
 /**
- * The ADR-042 kind fields of one card row. `kind` is optional with a default
- * (absent = `"basic"`), so no `ArchiveEra` flag is involved: an archive
- * predating this field carried only basic cards, which is precisely what the
- * default says. Present keys are strict in every era, as always.
+ * The KIND-CONDITIONED fields of one card row: the ADR-042 cloze pair and the
+ * ADR-046 problem steps, both of which only some kinds may carry. `kind` is
+ * optional with a default (absent = `"basic"`), so no `ArchiveEra` flag is
+ * involved: an archive predating this field carried only basic cards, which is
+ * precisely what the default says. Present keys are strict in every era, as
+ * always.
  *
  * The pair rule mirrors the `cards` CHECK constraints of migration 031 — both
  * set for a cloze card, neither for a basic one — and the ordinal is checked
@@ -1219,11 +1231,18 @@ function parseCard(raw: Record<string, unknown>): ExportCard {
  * re-describing it: an ordinal the template does not contain would restore a
  * card whose blank nothing can fill, and `renderClozeCard` is the same reader
  * `CardStore` derives that card's sides with.
+ *
+ * `problemSteps` is optional-with-a-default in the same way (absent or null =
+ * no worked solution) and mirrors migration 033's CHECK: only a basic card may
+ * carry it, and never as an empty string. The cap is the writing store's own,
+ * and the value is required TRIMMED — `CardStore` trims before writing, so
+ * anything else is a row it did not write.
  */
 function parseCardKind(raw: Record<string, unknown>): {
   kind: string;
   clozeText: string | null;
   clozeOrdinal: number | null;
+  problemSteps: string | null;
 } {
   const kind = raw.kind === undefined ? "basic" : enumStr(raw.kind, "kind", CARD_KINDS);
   const clozeText =
@@ -1232,18 +1251,25 @@ function parseCardKind(raw: Record<string, unknown>): {
     raw.clozeOrdinal === undefined || raw.clozeOrdinal === null
       ? null
       : nonNegativeInt(raw.clozeOrdinal, "clozeOrdinal");
+  const problemSteps =
+    raw.problemSteps === undefined || raw.problemSteps === null
+      ? null
+      : trimmedNonEmptyStr(raw.problemSteps, "problemSteps", MAX_CARD_TEXT_LENGTH);
 
   if (kind !== "cloze") {
     if (clozeText !== null) throw new InvalidFieldError("clozeText");
     if (clozeOrdinal !== null) throw new InvalidFieldError("clozeOrdinal");
-    return { kind, clozeText: null, clozeOrdinal: null };
+    return { kind, clozeText: null, clozeOrdinal: null, problemSteps };
   }
   if (clozeText === null) throw new InvalidFieldError("clozeText");
   if (clozeOrdinal === null) throw new InvalidFieldError("clozeOrdinal");
   if (renderClozeCard(clozeText, clozeOrdinal) === null) {
     throw new InvalidFieldError("clozeOrdinal");
   }
-  return { kind, clozeText, clozeOrdinal };
+  // A cloze card's back is already derived from its template; a second source
+  // for the same side is a row migration 033's CHECK would refuse outright.
+  if (problemSteps !== null) throw new InvalidFieldError("problemSteps");
+  return { kind, clozeText, clozeOrdinal, problemSteps: null };
 }
 
 function parseReview(raw: Record<string, unknown>): ExportReviewLogEntry {

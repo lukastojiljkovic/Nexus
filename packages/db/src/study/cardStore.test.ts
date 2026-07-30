@@ -1064,5 +1064,199 @@ describe("CardStore", () => {
       expect(updated.clozeOrdinal).toBeNull();
     });
   });
+
+  describe("createProblem", () => {
+    const STEPS = "Izvod je $2x$.\n--\nU tački $x=1$ to je $2$.";
+
+    it("is a BASIC card that carries steps — there is no third kind", () => {
+      const { cards, deckId } = fixture();
+      const created = cards.createProblem(deckId, "Nađi izvod od $x^2$ u $x=1$.", STEPS, T0);
+
+      expect(created.kind).toBe("basic");
+      expect(created.clozeText).toBeNull();
+      expect(created.clozeOrdinal).toBeNull();
+      expect(created.problemSteps).toBe(STEPS);
+      expect(created.front).toBe("Nađi izvod od $x^2$ u $x=1$.");
+    });
+
+    it("derives `back` from the steps — the caller never sends one", () => {
+      const { cards, deckId } = fixture();
+      const created = cards.createProblem(deckId, "Q", STEPS, T0);
+      expect(created.back).toBe("Izvod je $2x$.\n\nU tački $x=1$ to je $2$.");
+      expect(created.back).not.toContain("--");
+    });
+
+    it("accepts a single step and stores it as its own back", () => {
+      const { cards, deckId } = fixture();
+      const created = cards.createProblem(deckId, "Q", "  Jedan potez.  ", T0);
+      expect(created.problemSteps).toBe("Jedan potez.");
+      expect(created.back).toBe("Jedan potez.");
+    });
+
+    it("seeds a fresh FSRS state and no note origin, and lists back like any card", () => {
+      const { cards, deckId } = fixture();
+      const created = cards.createProblem(deckId, "Q", STEPS, T0);
+
+      expect(created.state).toBe(0);
+      expect(created.due).toBe(T0);
+      expect(created.reps).toBe(0);
+      expect(created.sourceNoteId).toBeNull();
+      expect(cards.listByDeck(deckId).map((c) => c.id)).toEqual([created.id]);
+      expect(cards.listByDeck(deckId)[0]?.problemSteps).toBe(STEPS);
+    });
+
+    it("refuses steps that hold no step at all, and an empty statement", () => {
+      const { cards, deckId } = fixture();
+      expect(() => cards.createProblem(deckId, "Q", "   ", T0)).toThrow(CardValidationError);
+      expect(() => cards.createProblem(deckId, "Q", "--\n--", T0)).toThrow(CardValidationError);
+      expect(() => cards.createProblem(deckId, "  ", STEPS, T0)).toThrow(CardValidationError);
+      expect(cards.listByDeck(deckId)).toHaveLength(0);
+    });
+
+    it("refuses an over-cap statement and over-cap steps", () => {
+      const { cards, deckId } = fixture();
+      const long = "x".repeat(10001);
+      expect(() => cards.createProblem(deckId, long, STEPS, T0)).toThrow(CardValidationError);
+      expect(() => cards.createProblem(deckId, "Q", long, T0)).toThrow(CardValidationError);
+    });
+
+    it("rejects a deck from another profile and a malformed now", () => {
+      const { cards, deckId } = fixture();
+      const foreignProfile = createProfile();
+      const foreignSubjects = new SubjectStore(db.raw, foreignProfile);
+      const foreignSubjectId = foreignSubjects.create({ name: "Elsewhere" }).id;
+      const foreignDecks = new DeckStore(db.raw, foreignProfile);
+      const foreignDeckId = foreignDecks.create({ subjectId: foreignSubjectId, name: "x" }).id;
+
+      expect(() => cards.createProblem(foreignDeckId, "Q", STEPS, T0)).toThrow(CardValidationError);
+      expect(() => cards.createProblem(deckId, "Q", STEPS, "not-a-date")).toThrow(
+        CardValidationError,
+      );
+    });
+  });
+
+  describe("update — problem cards", () => {
+    const STEPS = "prvi\n--\ndrugi";
+
+    it("re-derives `back` from new steps on every write", () => {
+      const { cards, deckId } = fixture();
+      const created = cards.createProblem(deckId, "Q", STEPS, T0);
+
+      const updated = cards.update(created.id, { problemSteps: "a\n--\nb\n--\nc" });
+
+      expect(updated.problemSteps).toBe("a\n--\nb\n--\nc");
+      expect(updated.back).toBe("a\n\nb\n\nc");
+      expect(updated.kind).toBe("basic");
+    });
+
+    it("turns a plain basic card into a problem card — same row, same identity", () => {
+      const { cards, deckId } = fixture();
+      const basic = cards.create({ deckId, front: "Q", back: "A" }, T0);
+
+      const updated = cards.update(basic.id, { problemSteps: STEPS });
+
+      expect(updated.id).toBe(basic.id);
+      expect(updated.kind).toBe("basic");
+      expect(updated.problemSteps).toBe(STEPS);
+      expect(updated.back).toBe("prvi\n\ndrugi");
+    });
+
+    it("clears the steps on null — the card becomes a plain basic card, keeping its back", () => {
+      const { cards, deckId } = fixture();
+      const created = cards.createProblem(deckId, "Q", STEPS, T0);
+
+      const updated = cards.update(created.id, { problemSteps: null });
+
+      expect(updated.problemSteps).toBeNull();
+      expect(updated.kind).toBe("basic");
+      // The derived solution stays as the plain back — clearing the source does
+      // not throw away the answer the user could already see.
+      expect(updated.back).toBe("prvi\n\ndrugi");
+      expect(cards.listByDeck(deckId)[0]?.problemSteps).toBeNull();
+    });
+
+    it("leaves the steps untouched when the patch does not mention them", () => {
+      const { cards, deckId } = fixture();
+      const created = cards.createProblem(deckId, "Q", STEPS, T0);
+      const updated = cards.update(created.id, { front: "Q2" });
+      expect(updated.front).toBe("Q2");
+      expect(updated.problemSteps).toBe(STEPS);
+      expect(updated.back).toBe("prvi\n\ndrugi");
+    });
+
+    it("leaves FSRS scheduling state untouched", () => {
+      const { cards, deckId } = fixture();
+      const created = cards.createProblem(deckId, "Q", STEPS, T0);
+      const reviewed = cards.review(created.id, 3, T0);
+
+      const updated = cards.update(created.id, { problemSteps: "jedan korak" });
+
+      expect(updated.due).toBe(reviewed.due);
+      expect(updated.stability).toBe(reviewed.stability);
+      expect(updated.reps).toBe(reviewed.reps);
+      expect(updated.state).toBe(reviewed.state);
+    });
+
+    it("refuses a direct `back` write alongside steps — the steps own the back", () => {
+      const { cards, deckId } = fixture();
+      const created = cards.createProblem(deckId, "Q", STEPS, T0);
+      expect(() => cards.update(created.id, { problemSteps: "a", back: "ručno" })).toThrow(
+        CardValidationError,
+      );
+    });
+
+    it("refuses steps that hold no step at all, and over-cap steps", () => {
+      const { cards, deckId } = fixture();
+      const created = cards.createProblem(deckId, "Q", STEPS, T0);
+      expect(() => cards.update(created.id, { problemSteps: "--\n--" })).toThrow(
+        CardValidationError,
+      );
+      expect(() => cards.update(created.id, { problemSteps: "x".repeat(10001) })).toThrow(
+        CardValidationError,
+      );
+      expect(cards.listByDeck(deckId)[0]?.problemSteps).toBe(STEPS);
+    });
+
+    it("refuses problemSteps on a CLOZE card, by name", () => {
+      const { cards, deckId } = fixture();
+      const cloze = cards.createCloze(deckId, "{{A}} i B", T0)[0]!;
+      expect(() => cards.update(cloze.id, { problemSteps: STEPS })).toThrow(CardValidationError);
+      expect(() => cards.update(cloze.id, { problemSteps: null })).toThrow(CardValidationError);
+    });
+
+    it("still moves a problem card between decks", () => {
+      const { cards, decks, subjectId, deckId } = fixture();
+      const otherDeckId = decks.create({ subjectId, name: "Glava 2" }).id;
+      const created = cards.createProblem(deckId, "Q", STEPS, T0);
+
+      const moved = cards.update(created.id, { deckId: otherDeckId });
+      expect(moved.deckId).toBe(otherDeckId);
+      expect(moved.problemSteps).toBe(STEPS);
+    });
+  });
+
+  describe("syncFromNote — problem steps", () => {
+    it("writes no steps: there is no note syntax for them (ADR-046 section 6)", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+      cards.syncFromNote(noteId, deckId, [spec("b1", "Q", "A")], T0);
+      expect(cards.listByDeck(deckId)[0]?.problemSteps).toBeNull();
+    });
+
+    it("clears steps a hand edit left on a note-sourced row, on the next sync", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+      cards.syncFromNote(noteId, deckId, [spec("b1", "Q", "A")], T0);
+      const generated = cards.listByDeck(deckId)[0]!;
+      cards.update(generated.id, { problemSteps: "korak" });
+
+      const result = cards.syncFromNote(noteId, deckId, [spec("b1", "Q", "A")], T0);
+
+      // The note owns this row's content: a stale source for its back would
+      // survive every future sync unless the reconcile notices it.
+      expect(result.updated).toBe(1);
+      expect(cards.listByDeck(deckId)[0]?.problemSteps).toBeNull();
+    });
+  });
 });
 

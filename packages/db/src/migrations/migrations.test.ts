@@ -16,8 +16,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 32 (dashboard widget layout), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(32);
+  it("is at version 33 (problem cards), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(33);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -3417,6 +3417,139 @@ describe("migration 032 — dashboard widgets", () => {
     expect(
       (db.raw.prepare("SELECT count(*) AS n FROM dashboard_widgets").get() as { n: number }).n,
     ).toBe(0);
+    db.close();
+  });
+});
+
+describe("migration 033 — problem cards", () => {
+  const now = () => new Date().toISOString();
+
+  const insertSubject = (db: NexusDatabase, id: string, profileId: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO subjects (id, profile_id, name, color, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, profileId, "x", "jade", now(), now());
+
+  const insertDeck = (db: NexusDatabase, id: string, profileId: string, subjectId: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO decks (id, profile_id, subject_id, name, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, profileId, subjectId, "x", now(), now());
+
+  /** A card with `kind` and the ADR-046 column spelled out; the FSRS fields are constants here. */
+  const insertCard = (
+    db: NexusDatabase,
+    id: string,
+    kind: string,
+    clozeText: string | null,
+    clozeOrdinal: number | null,
+    problemSteps: string | null,
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO cards
+           (id, profile_id, deck_id, front, back, kind, cloze_text, cloze_ordinal, problem_steps,
+            due, stability, difficulty, elapsed_days, scheduled_days, learning_steps,
+            reps, lapses, state, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id, "p1", "d1", "front", "back", kind, clozeText, clozeOrdinal, problemSteps,
+        now(), 0, 0, 0, 0, 0, 0, 0, 0, now(), now(),
+      );
+
+  /** A deck plus its profile and subject, ready for cards. */
+  const seedDeck = (db: NexusDatabase) => {
+    insertProfile(db, "p1");
+    insertSubject(db, "s1", "p1");
+    insertDeck(db, "d1", "p1", "s1");
+  };
+
+  it("adds problem_steps and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh-033.db") });
+    const columns = (
+      db.raw.prepare("PRAGMA table_info(cards)").all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(columns).toContain("problem_steps");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("leaves problem_steps NULL for a card written without it — no default, no backfill", () => {
+    const db = openDatabase({ path: join(dir, "default-steps.db") });
+    seedDeck(db);
+    // Deliberately omits the column, exactly as every write predating this
+    // migration did: NULL already means "no worked solution".
+    db.raw
+      .prepare(
+        `INSERT INTO cards
+           (id, profile_id, deck_id, front, back, due, stability, difficulty,
+            elapsed_days, scheduled_days, learning_steps, reps, lapses, state,
+            created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run("c1", "p1", "d1", "f", "b", now(), 0, 0, 0, 0, 0, 0, 0, 0, now(), now());
+
+    const row = db.raw
+      .prepare("SELECT kind, problem_steps FROM cards WHERE id = ?")
+      .get("c1") as { kind: string; problem_steps: string | null };
+    expect(row.kind).toBe("basic");
+    expect(row.problem_steps).toBeNull();
+    db.close();
+  });
+
+  it("accepts steps on a basic card — the only kind that may carry them", () => {
+    const db = openDatabase({ path: join(dir, "check-basic-steps.db") });
+    seedDeck(db);
+    expect(() => insertCard(db, "c1", "basic", null, null, "prvi\n--\ndrugi")).not.toThrow();
+    expect(() => insertCard(db, "c2", "basic", null, null, null)).not.toThrow();
+    db.close();
+  });
+
+  it("rejects steps on a cloze card — its back already has a source, and one is all it may have", () => {
+    const db = openDatabase({ path: join(dir, "check-cloze-steps.db") });
+    seedDeck(db);
+    expect(() => insertCard(db, "c1", "cloze", "{{a}}", 0, "korak")).toThrow();
+    expect(() => insertCard(db, "c2", "cloze", "{{a}}", 0, null)).not.toThrow();
+    db.close();
+  });
+
+  it("rejects the empty string — NULL is the one way to say 'no worked solution'", () => {
+    const db = openDatabase({ path: join(dir, "check-empty-steps.db") });
+    seedDeck(db);
+    expect(() => insertCard(db, "c1", "basic", null, null, "")).toThrow();
+    db.close();
+  });
+
+  it("keeps every review_log row and migration 017's card triggers — cards is never rebuilt", () => {
+    const db = openDatabase({ path: join(dir, "cards-intact-033.db") });
+    seedDeck(db);
+    insertCard(db, "c1", "basic", null, null, "korak");
+    db.raw
+      .prepare(
+        `INSERT INTO review_log
+           (id, profile_id, card_id, rating, state, due, stability, difficulty,
+            elapsed_days, last_elapsed_days, scheduled_days, learning_steps,
+            review, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run("l1", "p1", "c1", 3, 2, now(), 1, 1, 0, 0, 1, 0, now(), now());
+
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM review_log").get() as { n: number }).n,
+    ).toBe(1);
+    const triggers = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'trigger'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(triggers).toContain("cards_search_ai");
+    expect(triggers).toContain("cards_search_au");
+    expect(triggers).toContain("cards_search_ad");
     db.close();
   });
 });
