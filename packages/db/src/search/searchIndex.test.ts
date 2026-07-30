@@ -473,3 +473,264 @@ describe("global search index (migration 017)", () => {
     rawDb.close();
   });
 });
+
+/**
+ * Migration 025 (ADR-032). A task's attachment filenames are indexed INSIDE the
+ * task's own entry rather than as rows of a tenth kind: a note attachment has a
+ * destination of its own (its note's Prilozi panel, which search can reveal),
+ * while a task's files live only inside the task edit form — so the task IS the
+ * destination, and searching a filename must surface the task carrying it.
+ *
+ * Rows go into `task_attachments` by raw SQL rather than through
+ * `TaskAttachmentStore`: what is under test is a trigger on that table, which
+ * fires for whoever writes it, and the store's `add`/`remove` are exactly the
+ * INSERT/DELETE below with validation in front.
+ */
+describe("task attachment names inside the task's search entry (migration 025)", () => {
+  function attach(taskId: string, fileName: string, id = uuidv7()): string {
+    db.raw
+      .prepare(
+        `INSERT INTO task_attachments (id, task_id, file_name, mime, size_bytes, sha256, created_at)
+         VALUES (?, ?, ?, 'application/pdf', 1024, ?, ?)`,
+      )
+      .run(id, taskId, fileName, "a".repeat(64), NOW);
+    return id;
+  }
+
+  it("appends an attached file's name to its task's body and makes the task match it — including the folded name — without creating an entry of its own", () => {
+    const profileId = createProfile();
+    const task = new TaskStore(db.raw, profileId).create({
+      title: "Prijava na konkurs",
+      description: "Opis zadatka",
+    });
+
+    attach(task.id, "Ugovor-Đorđe.pdf");
+
+    const row = entry("task", task.id);
+    expect(row?.body).toBe("Opis zadatka Ugovor-Đorđe.pdf");
+    expect(row?.body_folded).toBe(foldSearchText("Opis zadatka Ugovor-Đorđe.pdf"));
+    // The filename is findable both as typed and through the Serbian fold
+    // (đ -> dj), which is the whole point of indexing it folded.
+    expect(ftsMatchEntities('"ugovor"*')).toEqual([{ kind: "task", entity_id: task.id }]);
+    expect(ftsMatchEntities('"djordje"*')).toEqual([{ kind: "task", entity_id: task.id }]);
+    // The task's own description still matches: the widening lost nothing.
+    expect(ftsMatchEntities('"zadatka"*')).toEqual([{ kind: "task", entity_id: task.id }]);
+    // Exactly one entry in the whole index — the task's. A task attachment is
+    // deliberately NOT a search kind of its own.
+    expect(entryCount()).toBe(1);
+    expect(ftsCount()).toBe(1);
+  });
+
+  it("stops matching a filename once the attachment row is gone, leaving the task findable by its own title", () => {
+    const profileId = createProfile();
+    const task = new TaskStore(db.raw, profileId).create({ title: "Pasoš" });
+    const attachmentId = attach(task.id, "skenirano.png");
+
+    expect(ftsMatchCount('"skenirano"*')).toBe(1);
+
+    db.raw.prepare("DELETE FROM task_attachments WHERE id = ?").run(attachmentId);
+
+    expect(ftsMatchCount('"skenirano"*')).toBe(0);
+    expect(ftsMatchEntities('"pasos"*')).toEqual([{ kind: "task", entity_id: task.id }]);
+    expect(entry("task", task.id)?.body).toBe("");
+    expect(ftsCount()).toBe(entryCount());
+  });
+
+  it("leaves a task with no attachments indexed byte-for-byte as migration 017 indexed it, separator junk included", () => {
+    // `TaskStore` stores a description verbatim (only all-whitespace collapses
+    // to NULL), so surrounding spaces are a real stored state — and the widened
+    // projection must not quietly trim them, or every attachment-less task's
+    // body would change the day this migration landed.
+    const profileId = createProfile();
+    const tasks = new TaskStore(db.raw, profileId);
+    const padded = tasks.create({ title: "Sa razmacima", description: "  Opis sa razmacima  " });
+    const bare = tasks.create({ title: "Bez opisa" });
+
+    expect(entry("task", padded.id)?.body).toBe("  Opis sa razmacima  ");
+    expect(entry("task", padded.id)?.body_folded).toBe(foldSearchText("  Opis sa razmacima  "));
+    expect(entry("task", bare.id)?.body).toBe("");
+    expect(entry("task", bare.id)?.body_folded).toBe("");
+  });
+
+  it("stands the filenames alone when the task has no description, with no leading separator", () => {
+    const profileId = createProfile();
+    const task = new TaskStore(db.raw, profileId).create({ title: "Bez opisa" });
+
+    attach(task.id, "racun.pdf");
+
+    expect(entry("task", task.id)?.body).toBe("racun.pdf");
+  });
+
+  it("concatenates several filenames in id order, space-separated, whatever order they were written in", () => {
+    const profileId = createProfile();
+    const task = new TaskStore(db.raw, profileId).create({ title: "Tri priloga" });
+
+    // Written youngest-id first on purpose: the projection orders by id, not by
+    // insertion — a bare `group_concat` would be free to hand back either.
+    attach(task.id, "treci.pdf", "a3");
+    attach(task.id, "prvi.pdf", "a1");
+    attach(task.id, "drugi.pdf", "a2");
+
+    expect(entry("task", task.id)?.body).toBe("prvi.pdf drugi.pdf treci.pdf");
+  });
+
+  it("caps description and filenames together at 8000 characters, exactly as every other kind's body is capped", () => {
+    // The honest consequence of one cap over the whole body: a description long
+    // enough to fill it crowds the filenames out, the way an event's long
+    // description already crowds out its location. Pinned so nobody "fixes" it
+    // by capping the halves separately, which would let one task store twice
+    // the indexed text any other kind can.
+    const profileId = createProfile();
+    const longText = "lorem ipsum ".repeat(700); // 8400 ASCII characters
+    const task = new TaskStore(db.raw, profileId).create({
+      title: "Dugačak opis",
+      description: longText,
+    });
+
+    attach(task.id, "kraj.pdf");
+
+    const row = entry("task", task.id);
+    expect(row?.body.length).toBe(8000);
+    expect(row?.body).toBe(longText.slice(0, 8000));
+    expect(ftsMatchCount('"kraj"*')).toBe(0);
+  });
+
+  it("refreshes the task's entry when an attachment is renamed", () => {
+    const profileId = createProfile();
+    const task = new TaskStore(db.raw, profileId).create({ title: "Preimenovanje" });
+    const attachmentId = attach(task.id, "staro-ime.pdf");
+
+    expect(ftsMatchCount('"staro"*')).toBe(1);
+
+    db.raw
+      .prepare("UPDATE task_attachments SET file_name = ? WHERE id = ?")
+      .run("novo-ime.pdf", attachmentId);
+
+    expect(ftsMatchCount('"staro"*')).toBe(0);
+    expect(ftsMatchCount('"novo"*')).toBe(1);
+    expect(entry("task", task.id)?.body).toBe("novo-ime.pdf");
+    expect(ftsCount()).toBe(entryCount());
+  });
+
+  it("takes a soft-deleted task's entry out of the index and brings it back — filenames included — on restore", () => {
+    const profileId = createProfile();
+    const tasks = new TaskStore(db.raw, profileId);
+    const task = tasks.create({ title: "Za kasnije" });
+    attach(task.id, "prilog.pdf");
+
+    expect(entry("task", task.id)?.body).toBe("prilog.pdf");
+
+    tasks.softDelete(task.id);
+    expect(entry("task", task.id)).toBeUndefined();
+    expect(ftsMatchCount('"prilog"*')).toBe(0);
+    expect(ftsCount()).toBe(entryCount());
+
+    // A write to the child table while the parent is soft-deleted must not
+    // resurrect the entry: the refresh reinserts from the view, whose own
+    // liveness filter is what decides whether a row comes back at all.
+    attach(task.id, "dok.pdf");
+    expect(entry("task", task.id)).toBeUndefined();
+    expect(ftsCount()).toBe(entryCount());
+
+    tasks.restore(task.id);
+    expect(entry("task", task.id)?.body).toBe("prilog.pdf dok.pdf");
+    expect(ftsMatchCount('"prilog"*')).toBe(1);
+    expect(ftsCount()).toBe(entryCount());
+  });
+
+  it("hard-deleting a task with attachments leaves no entry behind — the FK cascade's own AD trigger cannot resurrect one", () => {
+    // The cascade fires `task_attachments`' AD trigger, which refreshes the
+    // PARENT task's entry: if SQLite ran that child trigger while the task row
+    // still existed, the refresh would reinsert an entry that nothing would
+    // ever remove again. Pinned as a test rather than reasoned about in a
+    // comment.
+    const profileId = createProfile();
+    const task = new TaskStore(db.raw, profileId).create({ title: "Za brisanje" });
+    attach(task.id, "nestaje.pdf");
+
+    expect(entryCount()).toBe(1);
+
+    db.raw.prepare("DELETE FROM tasks WHERE id = ?").run(task.id);
+
+    expect(entryCount()).toBe(0);
+    expect(ftsCount()).toBe(0);
+  });
+
+  it("hard-deleting a profile carrying tasks with attachments empties the index without a foreign-key failure", () => {
+    // Same cascade, one level higher: a resurrected entry here would point at a
+    // profiles row that is already gone, which `search_entries`' own FK would
+    // reject — turning "delete this profile" into an error.
+    const profileId = createProfile();
+    const task = new TaskStore(db.raw, profileId).create({ title: "Profilni zadatak" });
+    attach(task.id, "prilog.pdf");
+
+    expect(() => db.raw.prepare("DELETE FROM profiles WHERE id = ?").run(profileId)).not.toThrow();
+
+    expect(entryCount()).toBe(0);
+    expect(ftsCount()).toBe(0);
+  });
+
+  it("reindexes tasks that already carried attachments when migration 025 is applied to a pre-existing database", () => {
+    // The same construction the migration-017 backfill test above uses: a file
+    // stopped one migration short, with data already in it, then brought up to
+    // the latest schema — the state of any install that ran a build carrying
+    // migration 024 but not 025. Its task entries were projected by the OLD
+    // view, so the migration has to re-project them or the filenames stay
+    // invisible until each task happens to be edited.
+    const upgradePath = join(dir, "upgrade-025.db");
+    const rawDb = new Database(upgradePath);
+    rawDb.pragma("journal_mode = WAL");
+    rawDb.pragma("foreign_keys = ON");
+    rawDb.function("nx_fold", { deterministic: true }, (value: unknown) =>
+      typeof value === "string" ? foldSearchText(value) : null,
+    );
+
+    const beforeThisMigration = MIGRATIONS.filter((migration) => migration.version < 25);
+    runMigrations(rawDb, beforeThisMigration);
+    expect(rawDb.pragma("user_version", { simple: true })).toBe(24);
+
+    const profileId = uuidv7();
+    rawDb
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run(profileId, "personal", "P", NOW);
+    const taskId = uuidv7();
+    rawDb
+      .prepare(
+        `INSERT INTO tasks (id, profile_id, title, status, created_at, updated_at, completed_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(taskId, profileId, "Zadatak sa prilogom", "todo", NOW, NOW, null);
+    rawDb
+      .prepare(
+        `INSERT INTO task_attachments (id, task_id, file_name, mime, size_bytes, sha256, created_at)
+         VALUES (?, ?, ?, 'application/pdf', 2048, ?, ?)`,
+      )
+      .run(uuidv7(), taskId, "ranije-zakačen.pdf", "b".repeat(64), NOW);
+
+    // Under the pre-025 projection the filename is nowhere in the index.
+    const staleBody = rawDb
+      .prepare("SELECT body FROM search_entries WHERE kind = 'task' AND entity_id = ?")
+      .get(taskId) as { body: string } | undefined;
+    expect(staleBody?.body).toBe("");
+
+    runMigrations(rawDb, MIGRATIONS);
+    expect(rawDb.pragma("user_version", { simple: true })).toBe(MIGRATIONS.length);
+
+    const row = rawDb
+      .prepare("SELECT body, body_folded FROM search_entries WHERE kind = 'task' AND entity_id = ?")
+      .get(taskId) as { body: string; body_folded: string } | undefined;
+    expect(row?.body).toBe("ranije-zakačen.pdf");
+    expect(row?.body_folded).toBe(foldSearchText("ranije-zakačen.pdf"));
+
+    const ftsRow = rawDb
+      .prepare(
+        `SELECT count(*) AS n FROM search_fts f
+         JOIN search_entries e ON e.id = f.rowid
+         WHERE e.entity_id = ? AND search_fts MATCH ?`,
+      )
+      .get(taskId, '"zakacen"*') as { n: number };
+    expect(ftsRow.n).toBe(1);
+
+    rawDb.close();
+  });
+});

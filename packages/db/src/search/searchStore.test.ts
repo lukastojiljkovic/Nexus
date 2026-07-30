@@ -322,6 +322,32 @@ describe("rebuildSearchIndex", () => {
     expect(allEntries()).toEqual(before);
   });
 
+  it("reproduces a task entry carrying its attachment filenames, exactly as the triggers wrote it (migration 025)", () => {
+    // A rebuild reads `search_source_task` by name, so the widened projection
+    // comes along for free — but "for free" is precisely the kind of claim that
+    // rots silently, and a rebuild that dropped the filenames would leave the
+    // repair tool producing a WEAKER index than the one it replaced.
+    const profileId = createProfile();
+    const task = new TaskStore(db.raw, profileId).create({
+      title: "Prijava",
+      description: "Opis",
+    });
+    db.raw
+      .prepare(
+        `INSERT INTO task_attachments (id, task_id, file_name, mime, size_bytes, sha256, created_at)
+         VALUES (?, ?, ?, 'application/pdf', 1024, ?, ?)`,
+      )
+      .run(uuidv7(), task.id, "ugovor.pdf", "a".repeat(64), "2026-07-26T10:00:00.000Z");
+
+    const before = allEntries();
+    expect(before).toHaveLength(1);
+    expect(before[0]!.body).toBe("Opis ugovor.pdf");
+
+    rebuildSearchIndex(db.raw);
+
+    expect(allEntries()).toEqual(before);
+  });
+
   it("clears a stale search_fts row whose search_entries parent is already gone (orphan repair)", () => {
     // A hand-inserted orphan bypasses every AFTER DELETE trigger (there is no
     // search_entries row to delete, so no trigger ever fires) — the one

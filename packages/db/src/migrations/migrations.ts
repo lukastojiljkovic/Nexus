@@ -24,6 +24,7 @@ import { migration021 } from "./021-task-reminders.js";
 import { migration022 } from "./022-task-lists.js";
 import { migration023 } from "./023-task-tags.js";
 import { migration024 } from "./024-task-attachments.js";
+import { migration025 } from "./025-task-attachment-search.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -59,6 +60,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration022,
   migration023,
   migration024,
+  migration025,
 ];
 
 /**

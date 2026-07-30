@@ -16,8 +16,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 24 (task attachments), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(24);
+  it("is at version 25 (task attachments in task search), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(25);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -2627,6 +2627,97 @@ describe("migration 024 — task attachments", () => {
 
     db.raw.prepare("UPDATE tasks SET deleted_at = ? WHERE id = ?").run(now(), "t1");
     expect(countOf(db, "task_attachments")).toBe(1);
+    db.close();
+  });
+});
+
+describe("migration 025 — task attachment names inside the task's search entry", () => {
+  /** Every view/trigger migration 017 defined, by name — what "leaves every OTHER view and trigger untouched" is measured against. */
+  const SEARCH_VIEWS = [
+    "search_source_task",
+    "search_source_event",
+    "search_source_note",
+    "search_source_document",
+    "search_source_subject",
+    "search_source_exam",
+    "search_source_deck",
+    "search_source_card",
+    "search_source_attachment",
+  ];
+
+  const objectSql = (db: NexusDatabase, type: string, name: string): string | undefined =>
+    (
+      db.raw
+        .prepare("SELECT sql FROM sqlite_master WHERE type = ? AND name = ?")
+        .get(type, name) as { sql: string } | undefined
+    )?.sql;
+
+  const namesOfType = (db: NexusDatabase, type: string): string[] =>
+    (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = ? ORDER BY name").all(type) as {
+        name: string;
+      }[]
+    ).map((row) => row.name);
+
+  it("swaps search_source_task for one that reads task_attachments, leaving exactly one view of that name", () => {
+    const db = openDatabase({ path: join(dir, "view-swap.db") });
+    const views = namesOfType(db, "view");
+    expect(views.filter((name) => name === "search_source_task")).toHaveLength(1);
+
+    const sql = objectSql(db, "view", "search_source_task");
+    expect(sql).toContain("task_attachments");
+    expect(sql).toContain("group_concat");
+    // The rest of the projection is untouched: still the task's own columns,
+    // still capped, still folded.
+    expect(sql).toContain("nx_fold");
+    expect(sql).toContain("8000");
+    expect(sql).toContain("due_date");
+    db.close();
+  });
+
+  it("creates the three task_attachments search triggers, the update one scoped to file_name", () => {
+    const db = openDatabase({ path: join(dir, "triggers.db") });
+    const triggers = namesOfType(db, "trigger");
+    expect(triggers).toContain("task_attachments_search_ai");
+    expect(triggers).toContain("task_attachments_search_au");
+    expect(triggers).toContain("task_attachments_search_ad");
+
+    // The AI/AU refresh keys off new.task_id, the AD off old.task_id — reading
+    // `new` in an AFTER DELETE trigger is not an error SQLite reports, it is a
+    // trigger that silently refreshes nothing.
+    expect(objectSql(db, "trigger", "task_attachments_search_au")).toContain(
+      "UPDATE OF file_name",
+    );
+    expect(objectSql(db, "trigger", "task_attachments_search_ad")).toContain("old.task_id");
+    expect(objectSql(db, "trigger", "task_attachments_search_ai")).toContain("new.task_id");
+    db.close();
+  });
+
+  it("leaves every other search view and trigger of migration 017 exactly as it was", () => {
+    const db = openDatabase({ path: join(dir, "untouched.db") });
+    const views = namesOfType(db, "view");
+    for (const name of SEARCH_VIEWS) expect(views).toContain(name);
+    // Only search_source_task learned about task attachments.
+    for (const name of SEARCH_VIEWS.filter((view) => view !== "search_source_task")) {
+      expect(objectSql(db, "view", name)).not.toContain("task_attachments");
+    }
+
+    const triggers = namesOfType(db, "trigger");
+    for (const name of [
+      "tasks_search_ai",
+      "tasks_search_au",
+      "tasks_search_ad",
+      "note_attachments_search_ai",
+      "note_attachments_search_au",
+      "note_attachments_search_ad",
+      "notes_search_au",
+      "search_entries_ai",
+      "search_entries_au",
+      "search_entries_ad",
+    ]) {
+      expect(triggers).toContain(name);
+    }
     db.close();
   });
 });
