@@ -47,6 +47,7 @@ import {
   EXAM_TYPES,
   ExamStore,
   FocusStore,
+  ForeignImportStore,
   isPlaintextDatabase,
   MAX_EVENT_REMINDERS,
   MAX_EVENT_REMINDER_MINUTES,
@@ -195,14 +196,18 @@ import {
   stopNotificationScheduler,
 } from "./notifications.js";
 import {
+  applyImport,
   applyRestore,
+  cancelImport,
   cancelRestore,
   clearRestoreState,
+  pickImportFile,
   pickRestoreFile,
+  previewImport,
   previewRestore,
   restoreStatus,
   undoRestore,
-  type RestoreDeps,
+  type ImportDeps,
 } from "./restore.js";
 import {
   CARD_KINDS,
@@ -225,6 +230,9 @@ import {
   type DashboardSettings,
   type ExportResult,
   type FlagState,
+  type ImportApplyResult,
+  type ImportPickResult,
+  type ImportPreviewResult,
   type NoteCardSpec,
   type NoteDocPayload,
   type NoteVersionMeta,
@@ -2308,15 +2316,17 @@ async function handleAuthRegenerateRecovery(): Promise<AuthResult> {
 }
 
 /**
- * Everything `main/restore.ts` runs on (ADR-023 slice 3c): the same store
- * getters the `imex:export` handler hands `handleExport` — that shared shape is
- * exactly why undo's snapshot and an ordinary export are provably identical
- * (`profileData.ts`) — plus the pieces only a restore needs. Built fresh per
- * call, like the export handler's own deps literal: every getter resolves
- * `requireDb()`/`requireBlobKeys()` at use time, so a deps object can never
- * outlive the session that made it.
+ * Everything `main/restore.ts` runs on (ADR-023 slice 3c, extended by ADR-043):
+ * the same store getters the `imex:export` handler hands `handleExport` — that
+ * shared shape is exactly why undo's snapshot and an ordinary export are
+ * provably identical (`profileData.ts`) — plus the pieces only a restore needs
+ * and the one only a foreign import does. ONE literal for both flows, since a
+ * superset satisfies either: the module holds their state apart, not their
+ * dependencies. Built fresh per call, like the export handler's own deps
+ * literal: every getter resolves `requireDb()`/`requireBlobKeys()` at use time,
+ * so a deps object can never outlive the session that made it.
  */
-function restoreDeps(): RestoreDeps {
+function restoreDeps(): ImportDeps {
   return {
     taskStore,
     taskListStore,
@@ -2340,6 +2350,10 @@ function restoreDeps(): RestoreDeps {
     noteAttachmentStore,
     flagStore,
     restoreStore: (profileId) => new RestoreStore(requireDb().raw, profileId),
+    // The additive counterpart (ADR-043): the ONLY thing an import needs that a
+    // restore does not — every fact it reads about the target profile comes
+    // through the same store getters above.
+    foreignImportStore: (profileId) => new ForeignImportStore(requireDb().raw, profileId),
     getProfile: (profileId) => requireProfile(requireDb(), profileId),
     pickArchiveFile: async () => {
       // One filter for both archive kinds: an encrypted export is `.nexus` and
@@ -4237,6 +4251,37 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.imexRestoreCancel, (event): Promise<void> => {
     assertTrustedSender(event);
     return cancelRestore();
+  });
+
+  // Foreign import (ADR-043): the additive counterpart of the four handlers
+  // above, on its OWN channels and its own pick — a preview taken here can only
+  // be applied here, and nothing on either surface reaches the other's archive.
+  // There is no import-specific undo or status: both operations share one undo
+  // slot and one banner, which `imex:restore-undo`/`imex:restore-status` serve.
+  ipcMain.handle(IpcChannel.imexImportPick, (event): Promise<ImportPickResult> => {
+    assertTrustedSender(event);
+    return pickImportFile(restoreDeps());
+  });
+
+  ipcMain.handle(IpcChannel.imexImportPreview, (event, payload): Promise<ImportPreviewResult> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const passphrase = asRestorePassphrase(body.passphrase, "passphrase");
+    return previewImport(restoreDeps(), profileId, passphrase);
+  });
+
+  ipcMain.handle(IpcChannel.imexImportApply, (event, payload): Promise<ImportApplyResult> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const token = asRestoreToken(body.token, "token");
+    return applyImport(restoreDeps(), profileId, token);
+  });
+
+  ipcMain.handle(IpcChannel.imexImportCancel, (event): Promise<void> => {
+    assertTrustedSender(event);
+    return cancelImport();
   });
 
   ipcMain.handle(IpcChannel.appInfo, (event): AppInfo => {

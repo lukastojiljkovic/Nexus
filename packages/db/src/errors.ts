@@ -459,14 +459,18 @@ export class NoteTemplateNotFoundError extends DatabaseError {}
 export class SearchValidationError extends DatabaseError {}
 
 /**
- * Thrown when a `RestoreStore.replaceProfileData` call is given a `ProfileData`
- * that is internally inconsistent in a way `@nexus/core`'s `parseImportArchive`
- * cannot check on its own — currently: a note whose `snapshot` is non-null with
- * no matching entry in the caller-supplied `derived` map (IMEX / ADR-023). The
- * parser validates one archive file at a time and has no way to demand a
- * companion map of derived values from the caller; the restore boundary is what
- * enforces that pairing before anything is written, rather than silently
- * persisting a snapshot with an empty, unsearchable plaintext body.
+ * Thrown when an archive-apply store — `RestoreStore.replaceProfileData`
+ * (ADR-023) or `ForeignImportStore.insertPlanned` (ADR-043) — is given a
+ * `ProfileData` that is internally inconsistent in a way `@nexus/core`'s
+ * `parseImportArchive` cannot check on its own: a note whose `snapshot` is
+ * non-null with no matching entry in the caller-supplied `derived` map (both
+ * stores), or a task naming no list in an import plan, which the planner
+ * resolves onto the target's Inbox and so can only mean the planner was
+ * bypassed. The parser validates one archive file at a time and has no way to
+ * demand a companion map of derived values — or a target profile — from the
+ * caller; the apply boundary is what enforces those pairings before anything is
+ * written, rather than silently persisting a snapshot with an empty,
+ * unsearchable plaintext body or a task no list can show.
  */
 export class RestoreValidationError extends DatabaseError {}
 

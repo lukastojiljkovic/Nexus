@@ -1,9 +1,9 @@
 import type Database from "better-sqlite3-multiple-ciphers";
-import { serializeRecurrenceRule } from "@nexus/core";
-import type { ExportSettings, ProfileData, RecurrenceRule } from "@nexus/core";
+import type { ExportSettings, ProfileData } from "@nexus/core";
 import { RestoreValidationError } from "../errors.js";
 import { NOTIFICATION_SOURCES } from "../notify/notificationStore.js";
 import { TASK_ORDER_GAP, TaskListStore } from "../tasks/taskListStore.js";
+import { exdatesText, offsetsText, recurrenceText } from "./columnText.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -114,41 +114,6 @@ const SCOPED_THROUGH_PARENT: Partial<Record<WipeTable, string>> = {
 /** Every wipe statement takes exactly one bound parameter: this store's own `profileId` (R4) — never the archive's. */
 function wipeSqlFor(table: WipeTable): string {
   return SCOPED_THROUGH_PARENT[table] ?? `DELETE FROM ${table} WHERE profile_id = ?`;
-}
-
-/**
- * A parsed rule as the column stores it. `parseImportArchive` already returned
- * the rule in canonical form, so this re-serialization is the same text the
- * store itself would have written — which is what lets `TaskStore`/`EventStore`
- * treat any non-canonical value they later read as corruption.
- */
-function recurrenceText(rule: RecurrenceRule | null): string | null {
-  return rule === null ? null : serializeRecurrenceRule(rule);
-}
-
-/**
- * An event's recurrence exceptions as the column stores them: ascending, which
- * `EventStore` documents as the column's canonical form and its own writes
- * always produce. The parser accepts an archive that lists them in any order
- * (order carries no meaning), so sorting here is what keeps a restored master
- * indistinguishable from one the store wrote itself. Day keys are fixed-width,
- * so a plain lexicographic sort IS chronological.
- */
-function exdatesText(exdates: readonly string[]): string {
-  return JSON.stringify([...exdates].sort());
-}
-
-/**
- * A reminder ladder as its column stores it — an event's whole minutes
- * (CAL-006) or a task's whole days (ADR-028), one function because the shape is
- * the same: ascending, for exactly the reason `exdatesText` sorts — the parser
- * accepts any order (order carries no meaning in an archive), and
- * `EventStore`/`TaskStore` read back only what they would have written
- * themselves. Lead times are numbers, so this needs a numeric comparator where
- * day keys got the default lexicographic one.
- */
-function offsetsText(offsets: readonly number[]): string {
-  return JSON.stringify([...offsets].sort((a, b) => a - b));
 }
 
 /**

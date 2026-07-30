@@ -192,6 +192,16 @@ export const IpcChannel = {
   imexRestoreUndo: "imex:restore-undo",
   imexRestoreStatus: "imex:restore-status",
   imexRestoreCancel: "imex:restore-cancel",
+  // A foreign import (ADR-043) gets its OWN channels rather than a mode flag on
+  // the restore ones. The two surfaces do opposite things — one REPLACES a
+  // profile preserving ids, one MERGES into it minting new ones — and a shared
+  // channel would be one validated field away from letting a renderer that
+  // asked for a merge trigger a replace. Undo and status are deliberately NOT
+  // duplicated: both operations share ONE undo slot and ONE banner.
+  imexImportPick: "imex:import-pick",
+  imexImportPreview: "imex:import-preview",
+  imexImportApply: "imex:import-apply",
+  imexImportCancel: "imex:import-cancel",
   appInfo: "app:info",
 } as const;
 
@@ -2623,9 +2633,15 @@ export interface RestoreUndoResult {
   blobsRemoved: number;
 }
 
-/** What a freshly reloaded renderer asks for, since the reload replaced the screen that would have shown the undo banner (IMEX-006). */
+/**
+ * What a freshly reloaded renderer asks for, since the reload replaced the
+ * screen that would have shown the undo banner (IMEX-006). ONE slot covers
+ * whichever archive operation ran last (ADR-043 section 4) — `kind` is what the
+ * banner names, since "poništi vraćanje" and "poništi uvoz" undo very different
+ * things even though the mechanism putting them back is identical.
+ */
 export interface RestoreStatus {
-  undo: { appliedAt: string; summary: RestoreApplyResult } | null;
+  undo: { kind: "restore" | "import"; appliedAt: string; summary: RestoreApplyResult } | null;
 }
 
 /**
@@ -2661,6 +2677,175 @@ export interface ImexRestoreUndoRequest {
 
 export interface ImexRestoreStatusRequest {
   profileId: string;
+}
+
+// --- Foreign import (ADR-043) -----------------------------------------------
+
+/**
+ * The archive modules an import's arithmetic is grouped by — `RestoreModuleCounts`'
+ * own keys, so the set is declared exactly once in this file. `main` assigns
+ * `@nexus/core`'s `Record<ArchiveModuleId, …>` to the report below, which makes
+ * a module added in core and forgotten here a compile error.
+ */
+export type ArchiveModuleName = keyof RestoreModuleCounts;
+
+/**
+ * Mirrors `@nexus/core`'s `ArchiveRecordType` exactly — the `type` discriminant
+ * an interchange row carries. Redeclared rather than imported, the same pattern
+ * `RestoreProblemCode` follows and for the same reason: this file deliberately
+ * imports nothing, and `main`'s assignment of a core value to this type is what
+ * turns a record type added in core into a compile error here.
+ */
+export type ImportRecordType =
+  | "task"
+  | "task-list"
+  | "task-section"
+  | "task-tag"
+  | "task-tag-link"
+  | "task-attachment"
+  | "task-template"
+  | "task-dependency"
+  | "event"
+  | "document"
+  | "renewal"
+  | "person"
+  | "subject"
+  | "exam"
+  | "deck"
+  | "card"
+  | "review"
+  | "plan"
+  | "block"
+  | "focus-session"
+  | "notification"
+  | "note-folder"
+  | "note-tag"
+  | "note"
+  | "note-tag-link"
+  | "note-attachment"
+  | "note-version"
+  | "note-template"
+  | "dashboard-settings";
+
+/**
+ * Why rows the archive carried are not in the plan. Mirrors `@nexus/core`'s
+ * `ImportSkipCode`: either salvage mode could not read them (the first seven,
+ * which are `RestoreProblemCode`s) or the planner skips them BY DESIGN. The
+ * renderer maps each to Serbian copy; nothing here is user-facing prose.
+ */
+export type ImportSkipCode =
+  | "unknown-record-type"
+  | "invalid-record"
+  | "duplicate-id"
+  | "unknown-reference"
+  | "reference-cycle"
+  | "missing-ydoc"
+  | "invalid-ydoc"
+  | "settings-not-imported"
+  | "notifications-not-imported"
+  | "dashboard-settings-not-imported"
+  | "template-name-taken"
+  | "source-inbox-collapsed";
+
+/** One named, counted group of skipped rows, grouped by `(code, module, type)` in first-seen order. `module`/`type` are null for a skip that belongs to neither (the manifest's settings). */
+export interface ImportSkipReason {
+  code: ImportSkipCode;
+  module: ArchiveModuleName | null;
+  type: ImportRecordType | null;
+  count: number;
+}
+
+/** One module's arithmetic. `parsed` always equals `imported + merged + skipped` — a report that did not balance would be worse than no report at all. */
+export interface ImportModuleCounts {
+  /** Everything the archive carried for this module, including the rows salvage mode dropped. */
+  parsed: number;
+  /** Rows the import will insert as new rows. */
+  imported: number;
+  /** Rows that resolved onto something the target already has (a tag matched by name, a link that collapsed onto an existing pair). */
+  merged: number;
+  /** Rows that will not be inserted at all — every one of them named in `skips`. */
+  skipped: number;
+}
+
+/** The whole honest account of what an import would do, straight off `planForeignImport`'s own report. */
+export interface ImportPlanReport {
+  modules: Record<ArchiveModuleName, ImportModuleCounts>;
+  skips: ImportSkipReason[];
+}
+
+/**
+ * The outcome of the native "pick an archive to import" dialog. Structurally a
+ * `RestorePickResult` and deliberately declared as one: the two flows pick the
+ * same kind of file through the same dialog, and only what happens NEXT differs.
+ */
+export type ImportPickResult = RestorePickResult;
+
+/**
+ * A dry run of a real import (ADR-043 section 3), computed by actually parsing
+ * the picked archive in `"import"` mode and really planning it against this
+ * profile — never an estimate. Unlike a restore's preview it does not compare
+ * "current" with "incoming": nothing is being replaced, so the only honest
+ * numbers are what would be ADDED, and what would not.
+ */
+export interface ImportPreview {
+  /** Identifies this exact parse-and-plan. `applyImport` refuses any other value, so a stale screen can never apply a plan the user did not see. */
+  token: string;
+  fileName: string;
+  encrypted: boolean;
+  /** From the archive's manifest. */
+  createdAt: string;
+  appVersion: string;
+  /** The profile the archive was exported FROM — somebody else's, or the user's own other account. */
+  sourceProfileName: string;
+  /** The profile the rows would be merged INTO, as it is right now. */
+  targetProfileName: string;
+  report: ImportPlanReport;
+  /** Warning-severity problems only. In import mode this is where every salvaged row is named, one warning each; errors refuse the archive outright. */
+  warnings: RestoreProblem[];
+  /** Blobs present in the archive whose bytes did not hash to their own name: their attachment rows import, their files do not. */
+  corruptBlobs: number;
+}
+
+/**
+ * `"no-file"` when nothing has been picked yet; `"unreadable"` when the archive
+ * could not be opened (wrong/missing passphrase, damage, limits); `"invalid"`
+ * when it opened but failed validation at the ARCHIVE level — a bad manifest, a
+ * checksum mismatch, an unsupported version — which import mode refuses exactly
+ * as a restore does, since a corrupt container is not something to guess at.
+ * `"ready"` is the only state `applyImport` accepts.
+ */
+export type ImportPreviewResult =
+  | { status: "no-file" }
+  | { status: "unreadable"; code: ArchiveReadErrorCode }
+  | { status: "invalid"; problems: RestoreProblem[] }
+  | { status: "ready"; preview: ImportPreview };
+
+/**
+ * What a completed import actually wrote. Deliberately the SAME shape a restore
+ * reports, because the two are undone through one slot and shown through one
+ * banner (ADR-043 section 4): `restored` counts the rows this operation put into
+ * the profile, which is what both operations mean by it. The plan's own
+ * arithmetic — parsed/imported/merged/skipped per module — belongs to the
+ * PREVIEW, where the user decides, not to the receipt.
+ */
+export type ImportApplyResult = RestoreApplyResult;
+
+/**
+ * Picking an archive (`imex:import-pick`) and dropping the picked one
+ * (`imex:import-cancel`) carry no payload — main holds the pick — and so declare
+ * no request shape. Undo and status have no import-specific request either: one
+ * slot, one banner, `imex:restore-undo`/`imex:restore-status` for both.
+ */
+export interface ImexImportPreviewRequest {
+  profileId: string;
+  /** `null` for a plain `.nexus.zip`. Bounded but never policy-checked, for exactly the reason `ImexRestorePreviewRequest`'s is not: the file on disk is the authority on what opens it. */
+  passphrase: string | null;
+}
+
+/** `token` names the exact plan being confirmed — main refuses any other value, so a stale screen can never apply a plan the user did not see. */
+export interface ImexImportApplyRequest {
+  profileId: string;
+  token: string;
 }
 
 /** Runtime and environment facts, proving the main-process path end to end. */
@@ -3051,9 +3236,32 @@ export interface NexusApi {
   applyRestore(profileId: string, token: string): Promise<RestoreApplyResult>;
   /** Puts the profile back exactly as it was before the last applied restore (ADR-023 section 3). Rejects when there is nothing to undo. */
   undoRestore(profileId: string): Promise<RestoreUndoResult>;
-  /** Whether a restore is still undoable — the first thing a reloaded renderer asks, since the reload replaced the screen that would have shown the banner. */
+  /** Whether a restore OR an import is still undoable — the first thing a reloaded renderer asks, since the reload replaced the screen that would have shown the banner. One slot: `kind` says which operation it is offering to undo. */
   restoreStatus(profileId: string): Promise<RestoreStatus>;
   /** Drops the picked archive without applying it, releasing the OS file lock an opened one holds. */
   cancelRestore(): Promise<void>;
+  /**
+   * Opens the native "pick an archive to import" dialog (ADR-043). A separate
+   * channel from `pickRestoreArchive` on purpose: main holds the two picks
+   * apart, so a preview of one can never be applied as the other.
+   */
+  pickImportArchive(): Promise<ImportPickResult>;
+  /**
+   * Dry-runs the import by really parsing the picked archive in salvage mode and
+   * really planning it against this profile — never an estimate. `passphrase` is
+   * `null` for a plain `.nexus.zip`; a wrong one comes back as
+   * `{ status: "unreadable", code: "passphrase-wrong" }` rather than as a rejection.
+   */
+  previewImport(profileId: string, passphrase: string | null): Promise<ImportPreviewResult>;
+  /**
+   * Confirms the plan `token` names, MERGING it into this profile: every row is
+   * added under a new id and nothing already there is touched. Undoable through
+   * `undoRestore`, which the two operations share. The renderer is reloaded
+   * shortly AFTER this resolves, so nothing may depend on the reload having
+   * already happened.
+   */
+  applyImport(profileId: string, token: string): Promise<ImportApplyResult>;
+  /** Drops the picked import archive without applying it, releasing the OS file lock an opened one holds. */
+  cancelImport(): Promise<void>;
   appInfo(): Promise<AppInfo>;
 }

@@ -341,6 +341,12 @@ const api: NexusApi = {
   undoRestore: (profileId) => ipcRenderer.invoke(IpcChannel.imexRestoreUndo, { profileId }),
   restoreStatus: (profileId) => ipcRenderer.invoke(IpcChannel.imexRestoreStatus, { profileId }),
   cancelRestore: () => ipcRenderer.invoke(IpcChannel.imexRestoreCancel),
+  pickImportArchive: () => ipcRenderer.invoke(IpcChannel.imexImportPick),
+  previewImport: (profileId, passphrase) =>
+    ipcRenderer.invoke(IpcChannel.imexImportPreview, { profileId, passphrase }),
+  applyImport: (profileId, token) =>
+    ipcRenderer.invoke(IpcChannel.imexImportApply, { profileId, token }),
+  cancelImport: () => ipcRenderer.invoke(IpcChannel.imexImportCancel),
   appInfo: () => ipcRenderer.invoke(IpcChannel.appInfo),
 };
 

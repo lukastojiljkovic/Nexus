@@ -26,6 +26,7 @@ import {
   EventStore,
   ExamStore,
   FocusStore,
+  ForeignImportStore,
   NexusDatabase,
   NoteAttachmentStore,
   NoteOrgStore,
@@ -66,17 +67,21 @@ import type {
 } from "@nexus/db";
 
 import * as archiveReaderModule from "./archiveReader.js";
-import { deriveRestoredNotes } from "./profileData.js";
+import { deriveRestoredNotes, gatherProfileData } from "./profileData.js";
 import type { ProfileDataDeps } from "./profileData.js";
 import {
+  applyImport,
   applyRestore,
+  cancelImport,
   cancelRestore,
   clearRestoreState,
+  pickImportFile,
   pickRestoreFile,
+  previewImport,
   previewRestore,
   restoreStatus,
   undoRestore,
-  type RestoreDeps,
+  type ImportDeps,
 } from "./restore.js";
 
 /**
@@ -161,7 +166,8 @@ function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
 }
 
 interface TestDepsHandle {
-  deps: RestoreDeps;
+  /** The superset both flows run on: a restore reads only `RestoreDeps` from it, an import also the additive store (ADR-043). */
+  deps: ImportDeps;
   /** Stands in for the on-disk encrypted blob store: `sha256 -> bytes`, exactly what `created`/deletion observability needs. */
   blobs: Map<string, Uint8Array>;
   cancelFocusCalls: string[];
@@ -181,9 +187,10 @@ function makeTestDeps(handle: NexusDatabase, filePath: string | null): TestDepsH
   const cancelFocusCalls: string[] = [];
   let reloadCount = 0;
 
-  const deps: RestoreDeps = {
+  const deps: ImportDeps = {
     ...profileDataDeps(handle),
     restoreStore: (profileId) => new RestoreStore(handle.raw, profileId),
+    foreignImportStore: (profileId) => new ForeignImportStore(handle.raw, profileId),
     getProfile: (profileId) => {
       const row = handle.raw.prepare("SELECT id, name FROM profiles WHERE id = ?").get(profileId) as
         | { id: string; name: string }
@@ -1095,6 +1102,299 @@ describe("restore", () => {
       expect(rightAgain.status).toBe("ready");
 
       await expect(secondArchive.readBlob(fixtureA.ids.attachmentSha)).rejects.toThrow();
+    });
+  });
+});
+
+// --- Foreign import (ADR-043) ------------------------------------------------
+
+/**
+ * Rewrites one NDJSON line of an already-built archive and repairs the
+ * manifest's checksum for that file, so what reaches the parser is an archive
+ * with ONE structurally bad ROW rather than a corrupt container. The
+ * distinction is the whole point: a container problem is a hard error in both
+ * modes, while a bad row is what import mode salvages past and restore mode
+ * refuses.
+ */
+function withDamagedRecord(
+  files: ReadonlyMap<string, string>,
+  path: string,
+  damage: (line: string) => string,
+): Map<string, string> {
+  const original = files.get(path);
+  if (original === undefined) throw new Error(`Test setup: the archive has no "${path}".`);
+  const lines = original.split("\n");
+  const index = lines.findIndex((line) => line.trim().length > 0);
+  if (index < 0) throw new Error(`Test setup: "${path}" carries no records to damage.`);
+  lines[index] = damage(lines[index] ?? "");
+
+  const next = new Map(files);
+  next.set(path, lines.join("\n"));
+
+  const manifest = JSON.parse(files.get("manifest.json") ?? "{}") as {
+    checksums: Record<string, string>;
+  };
+  manifest.checksums[path] = hashUtf8(next.get(path) ?? "");
+  next.set("manifest.json", JSON.stringify(manifest, null, 2));
+  return next;
+}
+
+/** Every note-link edge in one database, as plain id pairs. */
+function noteLinks(handle: NexusDatabase): { source: string; target: string }[] {
+  return handle.raw
+    .prepare("SELECT source_note_id AS source, target_note_id AS target FROM note_links")
+    .all() as { source: string; target: string }[];
+}
+
+describe("foreign import", () => {
+  /**
+   * Profile A's archive on disk, profile B seeded with data of its own in a
+   * SEPARATE database — the shape a foreign import actually has, and the only
+   * one where "nothing already there is touched" means anything.
+   */
+  async function twoProfiles(
+    fileName: string,
+    damage?: (files: ReadonlyMap<string, string>) => Map<string, string>,
+  ): Promise<{
+    profileB: string;
+    fixtureA: SeededFixture;
+    handle: TestDepsHandle;
+  }> {
+    const profileA = createProfile(dbA, "A");
+    const fixtureA = seedProfile(dbA, profileA, "A");
+    const archive = buildArchiveFor(fixtureA, profileA, "A");
+    const files = damage ? damage(archive.files) : archive.files;
+    const zipBytes = await buildArchiveZip({ files, binaries: archive.binaries }, fixtureA.blobBytes);
+    const filePath = fixturePath(fileName);
+    await writeFile(filePath, zipBytes);
+
+    const profileB = createProfile(dbB, "B-target");
+    seedProfile(dbB, profileB, "B");
+    return { profileB, fixtureA, handle: makeTestDeps(dbB, filePath) };
+  }
+
+  describe("preview", () => {
+    it("plans a real merge whose arithmetic balances, without writing anything", async () => {
+      const { profileB, handle } = await twoProfiles("import.nexus.zip");
+      const { deps } = handle;
+
+      const before = gatherProfileData(deps, profileB);
+
+      const pick = await pickImportFile(deps);
+      expect(pick).toEqual({
+        canceled: false,
+        path: fixturePath("import.nexus.zip"),
+        fileName: "import.nexus.zip",
+        encrypted: false,
+      });
+
+      const preview = await previewImport(deps, profileB, null);
+      if (preview.status !== "ready") unreachable();
+      expect(preview.preview.sourceProfileName).toBe("A");
+      expect(preview.preview.targetProfileName).toBe("B-target");
+
+      // `parsed` = `imported + merged + skipped`, per module. A report that did
+      // not balance would be worse than no report at all.
+      for (const counts of Object.values(preview.preview.report.modules)) {
+        expect(counts.parsed).toBe(counts.imported + counts.merged + counts.skipped);
+      }
+      // The two the planner never imports are named rather than silently absent.
+      const codes = preview.preview.report.skips.map((skip) => skip.code);
+      expect(codes).toContain("notifications-not-imported");
+      expect(codes).toContain("settings-not-imported");
+      expect(codes).toContain("source-inbox-collapsed");
+
+      // A dry run: the profile is byte for byte what it was.
+      expect(gatherProfileData(deps, profileB)).toEqual(before);
+    });
+
+    it("salvages one bad row instead of refusing the archive, and names it in the report", async () => {
+      // Restore mode would call this `invalid-record` at ERROR severity and
+      // refuse the whole file; import mode drops the row and carries on. That
+      // difference IS `mode: "import"` being wired through — nothing else in
+      // this file can tell the two apart.
+      const { profileB, handle } = await twoProfiles("salvage.nexus.zip", (files) =>
+        withDamagedRecord(files, "data/calendar.ndjson", (line) =>
+          JSON.stringify({ ...(JSON.parse(line) as Record<string, unknown>), startAt: "ne-datum" }),
+        ),
+      );
+      const { deps } = handle;
+
+      await pickImportFile(deps);
+      const preview = await previewImport(deps, profileB, null);
+      if (preview.status !== "ready") unreachable();
+
+      expect(preview.preview.report.skips).toContainEqual(
+        expect.objectContaining({ code: "invalid-record", module: "calendar" }),
+      );
+      expect(preview.preview.warnings.some((problem) => problem.code === "invalid-record")).toBe(true);
+      expect(preview.preview.report.modules.calendar.skipped).toBeGreaterThan(0);
+    });
+
+    it("reports a wrong passphrase rather than rejecting", async () => {
+      const profileA = createProfile(dbA, "A");
+      const fixtureA = seedProfile(dbA, profileA, "A");
+      const archive = buildArchiveFor(fixtureA, profileA, "A");
+      const zipBytes = await buildArchiveZip(archive, fixtureA.blobBytes);
+      const filePath = fixturePath("sealed-import.nexus");
+      await writeFile(filePath, await sealAsNxa1(zipBytes, "correct horse battery staple"));
+
+      const profileB = createProfile(dbB, "B-target");
+      const { deps } = makeTestDeps(dbB, filePath);
+
+      const pick = await pickImportFile(deps);
+      expect(pick).toEqual({
+        canceled: false,
+        path: filePath,
+        fileName: "sealed-import.nexus",
+        encrypted: true,
+      });
+      await expect(previewImport(deps, profileB, "wrong passphrase")).resolves.toEqual({
+        status: "unreadable",
+        code: "passphrase-wrong",
+      });
+      const ready = await previewImport(deps, profileB, "correct horse battery staple");
+      expect(ready.status).toBe("ready");
+    });
+  });
+
+  describe("apply and undo", () => {
+    it("merges the archive in additively, then undoes it away completely", async () => {
+      const { profileB, fixtureA, handle } = await twoProfiles("apply.nexus.zip");
+      const { deps, blobs, cancelFocusCalls, getReloadCount } = handle;
+
+      const before = gatherProfileData(deps, profileB);
+      const beforeLinks = noteLinks(dbB);
+
+      await pickImportFile(deps);
+      const preview = await previewImport(deps, profileB, null);
+      if (preview.status !== "ready") unreachable();
+
+      const result = await applyImport(deps, profileB, preview.preview.token);
+      expect(result.rowsWritten).toBeGreaterThan(0);
+      // The note attachment's blob and the task attachment's. NOT the dashboard
+      // background: an import never carries the archive's decoration.
+      expect(result.blobsAdded).toBe(2);
+      expect(blobs.has(fixtureA.ids.attachmentSha)).toBe(true);
+      expect(blobs.has(fixtureA.ids.taskAttachmentSha)).toBe(true);
+      expect(blobs.has(fixtureA.ids.backgroundSha)).toBe(false);
+      expect(result.missingBlobs).toBe(0);
+
+      const after = gatherProfileData(deps, profileB);
+
+      // Every row profile B already had is exactly where it was.
+      for (const row of before.tasks) {
+        expect(after.tasks.find((candidate) => candidate.id === row.id)).toEqual(row);
+      }
+      for (const row of before.notes) {
+        expect(after.notes.find((candidate) => candidate.id === row.id)).toEqual(row);
+      }
+      expect(after.tasks.length).toBeGreaterThan(before.tasks.length);
+      expect(after.notes.length).toBeGreaterThan(before.notes.length);
+
+      // And not one imported id collides with an id B already had — the whole
+      // point of minting rather than preserving.
+      const beforeTaskIds = new Set(before.tasks.map((row) => row.id));
+      expect(after.tasks.filter((row) => beforeTaskIds.has(row.id))).toHaveLength(before.tasks.length);
+
+      // The archive's wiki-link travelled: a SECOND edge now exists, and both of
+      // its ends are imported notes, never B's own.
+      const afterLinks = noteLinks(dbB);
+      expect(afterLinks).toHaveLength(beforeLinks.length + 1);
+      const beforeNoteIds = new Set(before.notes.map((row) => row.id));
+      const importedLink = afterLinks.find(
+        (link) => !beforeLinks.some((existing) => existing.source === link.source),
+      );
+      expect(importedLink).toBeDefined();
+      expect(beforeNoteIds.has(importedLink?.source ?? "")).toBe(false);
+      expect(beforeNoteIds.has(importedLink?.target ?? "")).toBe(false);
+
+      // The undo banner is the shared one, and it says which operation it means.
+      expect(restoreStatus(profileB)).toEqual({
+        undo: { kind: "import", appliedAt: expect.any(String), summary: result },
+      });
+
+      // An import destroys nothing, so it discards nothing: the running focus
+      // timer survives it. (The undo below genuinely does wipe, and cancels.)
+      expect(cancelFocusCalls).toEqual([]);
+      await flushSetTimeout();
+      expect(getReloadCount()).toBe(1);
+
+      const undoResult = await undoRestore(deps, profileB);
+      expect(undoResult.blobsRemoved).toBe(2);
+      expect(blobs.size).toBe(0);
+      expect(gatherProfileData(deps, profileB)).toEqual(before);
+      // Every imported note is gone, so no edge can name one anymore. Asserted
+      // as "no imported end survives" rather than as `toEqual(beforeLinks)`:
+      // undo replays through the same `replaceProfileData` a restore does, which
+      // REBUILDS `note_links` from each note's own Yjs state — so B's own
+      // wiki-links come back as index rows whether or not they were there
+      // before, which is the mechanism working, not the import leaking.
+      for (const link of noteLinks(dbB)) {
+        expect(beforeNoteIds.has(link.source)).toBe(true);
+        expect(beforeNoteIds.has(link.target)).toBe(true);
+      }
+      expect(restoreStatus(profileB).undo).toBeNull();
+      expect(cancelFocusCalls).toEqual([profileB]);
+    });
+
+    it("refuses a stale token, a foreign profile, and a second apply of the same plan", async () => {
+      const { profileB, handle } = await twoProfiles("token.nexus.zip");
+      const { deps } = handle;
+      const otherProfile = createProfile(dbB, "B-other");
+
+      await pickImportFile(deps);
+      const preview = await previewImport(deps, profileB, null);
+      if (preview.status !== "ready") unreachable();
+
+      await expect(applyImport(deps, profileB, "not-the-real-token")).rejects.toThrow();
+      await expect(applyImport(deps, otherProfile, preview.preview.token)).rejects.toThrow();
+
+      await applyImport(deps, profileB, preview.preview.token);
+      await expect(applyImport(deps, profileB, preview.preview.token)).rejects.toThrow();
+    });
+  });
+
+  describe("the two surfaces never reach each other", () => {
+    it("keeps the picks apart and refuses a token across them", async () => {
+      const { profileB, handle } = await twoProfiles("apart.nexus.zip");
+      const { deps } = handle;
+
+      // A pick made for an import is invisible to the restore flow: the
+      // destructive surface has nothing to preview until it picks for itself.
+      await pickImportFile(deps);
+      await expect(previewRestore(deps, profileB, null)).resolves.toEqual({ status: "no-file" });
+
+      const preview = await previewImport(deps, profileB, null);
+      if (preview.status !== "ready") unreachable();
+      // An import's token is not a restore's: confirming it on the destructive
+      // surface must fail rather than replace the profile.
+      await expect(applyRestore(deps, profileB, preview.preview.token)).rejects.toThrow();
+
+      // And the two picks COEXIST rather than clobbering each other — a user who
+      // opens the restore screen has not silently thrown away the import they
+      // were half-way through, and neither pick can be applied by the other.
+      await pickRestoreFile(deps);
+      const restorePreview = await previewRestore(deps, profileB, null);
+      if (restorePreview.status !== "ready") unreachable();
+      const stillReady = await previewImport(deps, profileB, null);
+      if (stillReady.status !== "ready") unreachable();
+      await expect(applyImport(deps, profileB, restorePreview.preview.token)).rejects.toThrow();
+    });
+
+    it("drops the import pick on cancel and on lock", async () => {
+      const { profileB, handle } = await twoProfiles("drop.nexus.zip");
+      const { deps } = handle;
+
+      await pickImportFile(deps);
+      expect((await previewImport(deps, profileB, null)).status).toBe("ready");
+      await cancelImport();
+      await expect(previewImport(deps, profileB, null)).resolves.toEqual({ status: "no-file" });
+
+      await pickImportFile(deps);
+      expect((await previewImport(deps, profileB, null)).status).toBe("ready");
+      clearRestoreState();
+      await expect(previewImport(deps, profileB, null)).resolves.toEqual({ status: "no-file" });
     });
   });
 });
