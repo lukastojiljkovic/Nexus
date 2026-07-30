@@ -14,7 +14,7 @@ import {
 } from "@nexus/ui";
 import { isValidDayKey, parseQuickAddDate } from "@nexus/core";
 import type { CollectionSchema, KanbanViewConfig, ListViewConfig } from "@nexus/core";
-import { MAX_TASK_LIST_NAME_LENGTH } from "../../shared/ipc.js";
+import { MAX_TASK_LIST_NAME_LENGTH, MAX_TASK_TAG_NAME_LENGTH } from "../../shared/ipc.js";
 import type {
   DeleteListMode,
   NewTaskFields,
@@ -26,8 +26,11 @@ import type {
   TaskPriority,
   TaskSection,
   TaskStatus,
+  TaskTag,
+  TaskTagLink,
 } from "../../shared/ipc.js";
 import { localTodayKey } from "./examDates.js";
+import { NotePopover } from "./notePopover.js";
 import { RecurrenceMark, RecurrencePicker } from "./RecurrencePicker.js";
 import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
 import { dayUnit, strings } from "./strings.js";
@@ -73,6 +76,9 @@ const LIST_CONFIG: ListViewConfig = { type: "list" };
 const KANBAN_CONFIG: KanbanViewConfig = { type: "kanban", groupBy: "status" };
 
 const STATUS_TITLES: Record<TaskStatus, string> = strings.tasks.status;
+
+/** sr-Latn collation for the tag chips — plain "sr" mis-tailors Latin š/č/ć, and the store orders by SQLite's binary collation. */
+const collator = new Intl.Collator(["sr-Latn", "sr"]);
 
 function isTaskStatus(value: string): value is TaskStatus {
   return (TASK_STATUSES as readonly string[]).includes(value);
@@ -154,6 +160,9 @@ function reminderChoices(selected: readonly number[]): number[] {
 
 /** Shared empty result for a childless task, so a render never allocates one. */
 const NO_CHILDREN: readonly TaskFields[] = [];
+
+/** The same for an untagged task — the common case, and the one worth not allocating for. */
+const NO_TAGS: readonly TaskTag[] = [];
 
 /**
  * How many steps a subtask is allowed to move right. Deeper nesting still
@@ -265,6 +274,9 @@ type RailEditing =
 
 type SectionEditing = null | { mode: "new" } | { mode: "rename"; id: string };
 
+/** The Oznake section's own editor state, parallel to `SectionEditing` above (migration 023). */
+type TagEditing = null | { mode: "new" } | { mode: "rename"; id: string };
+
 /**
  * What a task drag is currently over: a gap between two rows of one ordering
  * scope, a section heading, or a list in the rail — one per write the drop
@@ -306,12 +318,33 @@ function progressChip(children: readonly TaskFields[]): ReactNode {
   );
 }
 
-/** The series marker (when the task repeats), subtask roll-up (when it has children), priority (when not 'none') and due-date (when set) chips; null when none apply. */
-function taskChips(task: TaskFields, children: readonly TaskFields[]): ReactNode {
+/**
+ * The series marker (when the task repeats), subtask roll-up (when it has
+ * children), tag labels (when any are attached), priority (when not 'none') and
+ * due-date (when set) chips; null when none apply.
+ *
+ * One cluster for both renderings, so a list row and a kanban card say the same
+ * things about a task — which is why the tags travel here rather than being
+ * spliced into the list row alone.
+ */
+function taskChips(
+  task: TaskFields,
+  children: readonly TaskFields[],
+  tags: readonly TaskTag[],
+): ReactNode {
   const chips: ReactNode[] = [];
   if (task.recurrence !== null) chips.push(<RecurrenceMark key="recurrence" />);
   const rollUp = progressChip(children);
   if (rollUp !== null) chips.push(rollUp);
+  // Outlined rather than filled (see .tasks__tag-chip): a label is not a state,
+  // and next to prioritet/rok it must not read as one.
+  for (const tag of tags) {
+    chips.push(
+      <Chip key={`tag-${tag.id}`} className="tasks__tag-chip">
+        {tag.name}
+      </Chip>,
+    );
+  }
   if (task.priority !== "none") {
     chips.push(
       <Chip key="priority" variant={task.priority === "high" ? "accent" : "neutral"}>
@@ -410,15 +443,19 @@ interface InlineNameFormProps {
   onChange: (value: string) => void;
   onSubmit: () => void;
   onCancel: () => void;
+  /** The wire cap for what is being named; defaults to the list/section one, which four of its six homes want. */
+  maxLength?: number;
+  /** Extra class on the form, so a caller can size it for its own row (see the tag row's `tasks__tag-form`). */
+  className?: string;
 }
 
 /**
- * The one inline "type a name" line, shared by all four naming actions (new
- * list, rename list, new section, rename section). They differ only in their
- * wording and in what the submit calls, so they share this rather than four
- * copies of the same form. Escape cancels — the line sits outside the page's
- * add/edit form, so no key reaches that form from here — and the length cap is
- * the wire contract's own, not a UI courtesy.
+ * The one inline "type a name" line, shared by all six naming actions (new
+ * list, rename list, new section, rename section, new tag, rename tag). They
+ * differ only in their wording, their cap and in what the submit calls, so they
+ * share this rather than six copies of the same form. Escape cancels — the line
+ * sits outside the page's add/edit form, so no key reaches that form from here —
+ * and the length cap is the wire contract's own, not a UI courtesy.
  */
 function InlineNameForm({
   value,
@@ -427,10 +464,12 @@ function InlineNameForm({
   onChange,
   onSubmit,
   onCancel,
+  maxLength = MAX_TASK_LIST_NAME_LENGTH,
+  className,
 }: InlineNameFormProps) {
   return (
     <form
-      className="tasks__name-form"
+      className={className ? `tasks__name-form ${className}` : "tasks__name-form"}
       onSubmit={(event) => {
         event.preventDefault();
         onSubmit();
@@ -440,7 +479,7 @@ function InlineNameForm({
         value={value}
         placeholder={placeholder}
         aria-label={label}
-        maxLength={MAX_TASK_LIST_NAME_LENGTH}
+        maxLength={maxLength}
         autoFocus
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
@@ -580,6 +619,14 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const [railDraft, setRailDraft] = useState("");
   const [sectionEditing, setSectionEditing] = useState<SectionEditing>(null);
   const [sectionDraft, setSectionDraft] = useState("");
+  /** Oznake (migration 023): the profile's tags, every attachment of its live tasks, and the ids the filter has selected. */
+  const [tags, setTags] = useState<TaskTag[]>([]);
+  const [tagLinks, setTagLinks] = useState<TaskTagLink[]>([]);
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
+  const [tagEditing, setTagEditing] = useState<TagEditing>(null);
+  const [tagDraft, setTagDraft] = useState("");
+  /** True when the last tag action failed — kept apart from `listFailed` so the two sections of the rail report their own. */
+  const [tagFailed, setTagFailed] = useState(false);
   /** The list whose delete is waiting on the "what about its tasks" question, or null. */
   const [deletePrompt, setDeletePrompt] = useState<TaskList | null>(null);
   /** The list a delete just removed, offered back — the list counterpart of `pendingUndoId`. */
@@ -652,11 +699,53 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const listSections =
     selectedId === null ? [] : sections.filter((section) => section.listId === selectedId);
 
+  // The tag ids each task carries, from the flat link list — one pass over an
+  // array the page already holds, like the tree below.
+  const tagIdsByTask = new Map<string, Set<string>>();
+  for (const link of tagLinks) {
+    const ids = tagIdsByTask.get(link.taskId);
+    if (ids) ids.add(link.tagId);
+    else tagIdsByTask.set(link.taskId, new Set([link.tagId]));
+  }
+  const sortedTags = tags.slice().sort((a, b) => collator.compare(a.name, b.name));
+  const tagsOf = (taskId: string): readonly TaskTag[] => {
+    const ids = tagIdsByTask.get(taskId);
+    return ids === undefined ? NO_TAGS : sortedTags.filter((tag) => ids.has(tag.id));
+  };
+
+  /**
+   * The rows the page actually draws: the selected list first (that is what
+   * selecting in the rail means), then narrowed by the tag filter with AND
+   * semantics — a task must carry EVERY selected tag, the same rule NotesPage's
+   * filter applies to notes.
+   *
+   * A matching SUBTASK whose parent does not match renders at top level, by the
+   * orphan rule `buildTaskTree` already has. That is the honest reading of a
+   * filter — the rows on screen are exactly the tasks carrying the tags — and it
+   * is why the filter never touches what a task's subtasks ARE (see below).
+   */
+  const visibleTasks =
+    tagFilter.length === 0
+      ? listTasks
+      : listTasks.filter((task) => tagFilter.every((id) => tagIdsByTask.get(task.id)?.has(id)));
+  /** True when the list holds rows but the filter shows none of them — its own empty state, not "the list is empty". */
+  const filterHidesEverything = tagFilter.length > 0 && visibleTasks.length === 0;
+
   // Rebuilt from the flat list on every render: it is one pass over an array
   // the page already holds, so there is nothing worth memoising.
-  const { roots, children } = buildTaskTree(listTasks);
+  //
+  // TWO trees, and the split is load-bearing: `children` answers what a task's
+  // subtasks ARE (over the WHOLE list), while `visibleChildren` answers which of
+  // them this render draws. Deriving the first from the filtered rows would make
+  // a roll-up count only what is on screen ("1/1" on a task with five open
+  // subtasks) and would let completing a parent quietly skip the subtasks the
+  // filter hides — the very reach PRD 03 §4 makes this page ask about.
+  const { children } = buildTaskTree(listTasks);
+  const { roots, children: visibleChildren } = buildTaskTree(visibleTasks);
   const childrenOf = (taskId: string): readonly TaskFields[] =>
     children.get(taskId) ?? NO_CHILDREN;
+  const visibleChildrenOf = (taskId: string): readonly TaskFields[] =>
+    visibleChildren.get(taskId) ?? NO_CHILDREN;
 
   const knownSectionIds = new Set(listSections.map((section) => section.id));
   /** The heading a row renders under: its own section, or the body for a section this fetch does not know (only reachable between a section delete and the refetch that follows it). */
@@ -680,15 +769,24 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     void (async () => {
       try {
         // One round trip each, in parallel: the rail and the rows are one screen,
-        // so a render that has tasks but no lists (or the reverse) is never shown.
-        const [snapshot, list] = await Promise.all([
+        // so a render that has tasks but no lists (or no tags for the chips it
+        // draws, or the reverse) is never shown. All four are reads of the same
+        // local database, so any one of them failing is the page's one load error.
+        const [snapshot, list, tagList, linkList] = await Promise.all([
           window.nexus.listTaskLists(profileId),
           window.nexus.listTasks(profileId),
+          window.nexus.listTaskTags(profileId),
+          window.nexus.listTaskTagLinks(profileId),
         ]);
         if (!active) return;
         setLists(snapshot.lists);
         setSections(snapshot.sections);
         setTasks(list);
+        setTags(tagList);
+        setTagLinks(linkList);
+        // The active filter names tags of the profile it was set in, so a
+        // profile switch drops it rather than filtering by ids that are gone.
+        setTagFilter([]);
       } catch (error) {
         if (active) setFailed(true);
         console.error("Nexus: failed to load tasks:", error);
@@ -722,6 +820,13 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
       onIntentHandled?.(); // deleted between indexing and clicking — do nothing else
       return;
     }
+    // A tag filter can hide the very row being revealed (NotesPage resets its
+    // filters on a reveal for exactly this reason), so it is cleared first and
+    // the intent left standing — same deferral as the list switch below.
+    if (tagFilter.length > 0) {
+      setTagFilter([]);
+      return;
+    }
     // The "is it a list we know" half matters: without it, a row pointing at a
     // list this fetch does not have would defer forever and strand the intent.
     if (target.listId !== selectedId && (lists?.some((list) => list.id === target.listId) ?? false)) {
@@ -731,7 +836,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     reveal(intent.taskId);
     scrollRevealedIntoView(taskRowDomId(intent.taskId));
     onIntentHandled?.();
-  }, [intent, tasks, lists, selectedId, reveal, onIntentHandled]);
+  }, [intent, tasks, lists, selectedId, tagFilter, reveal, onIntentHandled]);
 
   // A due date read straight out of the title (TASK-007). Derived plainly on
   // every render — the scan is a handful of regexes over a title-length string,
@@ -910,6 +1015,108 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
       // still pointing at the deleted heading would file the next save nowhere.
       if (formSectionId === id) setFormSectionId(null);
     });
+  }
+
+  // --- Oznake (migration 023) ----------------------------------------------
+  //
+  // The NOTE organizer's tag section one module over: tag CRUD and the filter
+  // chips in the rail, the per-task attachment in the row's own "⋯" menu. Every
+  // write is await-then-refetch, never optimistic — the house style, and the
+  // only way a CASCADE (deleting a tag) can be reflected at all.
+
+  /**
+   * Re-reads the tags AND the links together, then prunes the active filter of
+   * ids the profile no longer has: deleting a tag can never leave a ghost filter
+   * that hides every row while naming nothing.
+   */
+  async function reloadTags(): Promise<void> {
+    const [tagList, linkList] = await Promise.all([
+      window.nexus.listTaskTags(profileId),
+      window.nexus.listTaskTagLinks(profileId),
+    ]);
+    setTags(tagList);
+    setTagLinks(linkList);
+    const validIds = new Set(tagList.map((tag) => tag.id));
+    setTagFilter((current) => current.filter((id) => validIds.has(id)));
+  }
+
+  /**
+   * Runs one tag mutation: clears the previous failure, performs it, closes the
+   * inline editor and re-reads. A failure leaves the editor open with what the
+   * user typed still in it — the rail's tag error line says it did not take.
+   */
+  async function runTagAction(action: () => Promise<void>): Promise<void> {
+    try {
+      setTagFailed(false);
+      await action();
+      closeTagEditor();
+      await reloadTags();
+    } catch (error) {
+      setTagFailed(true);
+      console.error("Nexus: tag action failed:", error);
+    }
+  }
+
+  function closeTagEditor(): void {
+    setTagEditing(null);
+    setTagDraft("");
+  }
+
+  function beginNewTag(): void {
+    setTagFailed(false);
+    setTagDraft("");
+    setTagEditing({ mode: "new" });
+  }
+
+  function beginRenameTag(tag: TaskTag): void {
+    setTagFailed(false);
+    setTagDraft(tag.name);
+    setTagEditing({ mode: "rename", id: tag.id });
+  }
+
+  function submitNewTag(): void {
+    const name = tagDraft.trim();
+    if (name.length === 0) return;
+    // Get-or-create in the store: naming a tag the profile already has selects
+    // it rather than failing, so there is nothing here to report as a conflict.
+    void runTagAction(() => window.nexus.createTaskTag(profileId, name).then(() => undefined));
+  }
+
+  function submitRenameTag(id: string): void {
+    const name = tagDraft.trim();
+    if (name.length === 0) return;
+    void runTagAction(() => window.nexus.renameTaskTag(profileId, id, name));
+  }
+
+  function deleteTag(id: string): void {
+    // Its attachments go with it through the schema's CASCADE, so the refetch is
+    // what takes the tag's chips off every row that carried it.
+    void runTagAction(() => window.nexus.deleteTaskTag(profileId, id));
+  }
+
+  /**
+   * Attaches or detaches one tag on one task, then re-reads the links. Kept out
+   * of `runTagAction` on purpose: a row toggle must not close a rename the user
+   * has open in the rail, and it has no inline editor of its own to close.
+   */
+  async function toggleTaskTag(task: TaskFields, tagId: string, attached: boolean): Promise<void> {
+    try {
+      if (attached) {
+        await window.nexus.detachTaskTag(profileId, task.id, tagId);
+      } else {
+        await window.nexus.attachTaskTag(profileId, task.id, tagId);
+      }
+      await reloadTags();
+    } catch (error) {
+      console.error("Nexus: failed to toggle task tag:", error);
+    }
+  }
+
+  /** Adds or removes one tag id from the filter; the narrowing itself is AND (see `visibleTasks`). */
+  function toggleTagFilter(id: string): void {
+    setTagFilter((current) =>
+      current.includes(id) ? current.filter((tagId) => tagId !== id) : [...current, id],
+    );
   }
 
   // --- Drag & drop (list view) ---------------------------------------------
@@ -1292,7 +1499,45 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         leading={renderRowLead(task, depth)}
         trailing={
           <span className="tasks__row-meta">
-            {taskChips(task, children)}
+            {taskChips(task, children, tagsOf(task.id))}
+            {/* Attaching/detaching lives in a menu, exactly as it does on a note
+                row, and only where the profile has a tag to attach: an empty
+                menu is an affordance that can do nothing, which this page
+                already refuses to draw (see the Inbox's absent delete). Making
+                tags is the rail's job. */}
+            {sortedTags.length > 0 && (
+              <NotePopover
+                label={strings.tasks.tags.taskMenuLabel}
+                triggerClassName="tasks__row-tags"
+              >
+                {() => (
+                  <>
+                    <span className="note__menu-label">{strings.tasks.tags.label}</span>
+                    {sortedTags.map((tag) => {
+                      const attached = tagIdsByTask.get(task.id)?.has(tag.id) ?? false;
+                      return (
+                        <button
+                          key={tag.id}
+                          className="note__menu-item note__menu-item--check"
+                          role="menuitemcheckbox"
+                          type="button"
+                          aria-checked={attached}
+                          onClick={() => void toggleTaskTag(task, tag.id, attached)}
+                        >
+                          <span
+                            className={`note__menu-check${attached ? "" : " note__menu-check--hidden"}`}
+                            aria-hidden="true"
+                          >
+                            ✓
+                          </span>
+                          {tag.name}
+                        </button>
+                      );
+                    })}
+                  </>
+                )}
+              </NotePopover>
+            )}
             <Button
               size="sm"
               className="tasks__add-subtask"
@@ -1391,10 +1636,13 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     // guard is what keeps a malformed row from becoming an infinite render.
     if (seen.has(task.id)) return [];
     seen.add(task.id);
-    const children = childrenOf(task.id);
-    const nodes: ReactNode[] = [renderRow(task, depth, children)];
+    // The row is told about ALL its subtasks (its roll-up counts them), while the
+    // recursion follows only the ones this render draws — see the two trees above.
+    const nodes: ReactNode[] = [renderRow(task, depth, childrenOf(task.id))];
     if (subtaskParentId === task.id) nodes.push(renderSubtaskInput(task.id, depth + 1));
-    for (const child of children) nodes.push(...renderBranch(child, depth + 1, seen));
+    for (const child of visibleChildrenOf(task.id)) {
+      nodes.push(...renderBranch(child, depth + 1, seen));
+    }
     return nodes;
   }
 
@@ -1658,6 +1906,106 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
             {strings.tasks.lists.actionError}
           </p>
         )}
+
+        {/* Oznake, below the lists (migration 023): every tag is a filter chip
+            that narrows the selected list further, and carries its own rename/
+            delete menu — the NOTE organizer's tag section, chip for chip.
+            Selecting one is typographic (gold text + weight), never a fill. */}
+        <div className="tasks__rail-heading tasks__tag-heading">
+          <span>{strings.tasks.tags.label}</span>
+          {tagFilter.length > 0 && (
+            <button type="button" className="tasks__tag-clear" onClick={() => setTagFilter([])}>
+              {strings.tasks.tags.clearFilter}
+            </button>
+          )}
+        </div>
+        <div className="tasks__tag-row" role="group" aria-label={strings.tasks.tags.filterLabel}>
+          {sortedTags.map((tag) => {
+            if (tagEditing?.mode === "rename" && tagEditing.id === tag.id) {
+              return (
+                <InlineNameForm
+                  key={tag.id}
+                  className="tasks__tag-form"
+                  value={tagDraft}
+                  placeholder={strings.tasks.tags.namePlaceholder}
+                  label={strings.tasks.tags.renameLabel}
+                  maxLength={MAX_TASK_TAG_NAME_LENGTH}
+                  onChange={setTagDraft}
+                  onSubmit={() => submitRenameTag(tag.id)}
+                  onCancel={closeTagEditor}
+                />
+              );
+            }
+            const active = tagFilter.includes(tag.id);
+            return (
+              <div key={tag.id} className="tasks__tag-item">
+                <button
+                  type="button"
+                  className={active ? "tasks__tag tasks__tag--active" : "tasks__tag"}
+                  aria-pressed={active}
+                  onClick={() => toggleTagFilter(tag.id)}
+                >
+                  {tag.name}
+                </button>
+                <NotePopover
+                  label={strings.tasks.tags.menuLabel}
+                  triggerClassName="tasks__tag-menu"
+                >
+                  {(close) => (
+                    <>
+                      <button
+                        className="note__menu-item"
+                        role="menuitem"
+                        type="button"
+                        onClick={() => {
+                          beginRenameTag(tag);
+                          close();
+                        }}
+                      >
+                        {strings.tasks.tags.rename}
+                      </button>
+                      <button
+                        className="note__menu-item note__menu-item--danger"
+                        role="menuitem"
+                        type="button"
+                        onClick={() => {
+                          deleteTag(tag.id);
+                          close();
+                        }}
+                      >
+                        {strings.tasks.tags.delete}
+                      </button>
+                    </>
+                  )}
+                </NotePopover>
+              </div>
+            );
+          })}
+          {/* Inside the chip row, so the form takes a whole wrap line of it
+              rather than being stretched by the rail's column axis. */}
+          {tagEditing?.mode === "new" && (
+            <InlineNameForm
+              className="tasks__tag-form"
+              value={tagDraft}
+              placeholder={strings.tasks.tags.namePlaceholder}
+              label={strings.tasks.tags.newTag}
+              maxLength={MAX_TASK_TAG_NAME_LENGTH}
+              onChange={setTagDraft}
+              onSubmit={submitNewTag}
+              onCancel={closeTagEditor}
+            />
+          )}
+        </div>
+        {tagEditing?.mode !== "new" && (
+          <Button size="sm" className="tasks__new-tag" onClick={beginNewTag}>
+            {strings.tasks.tags.newTag}
+          </Button>
+        )}
+        {tagFailed && (
+          <p className="tasks__rail-error" role="status">
+            {strings.tasks.tags.actionError}
+          </p>
+        )}
       </aside>
 
       <div className="tasks__main">
@@ -1888,8 +2236,15 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
           <>
             {/* An empty list still shows whatever headings it has, and the way to
                 add one: the empty state stands in only when there is nothing at
-                all to draw. */}
-            {listTasks.length === 0 && listSections.length === 0 ? (
+                all to draw. A filter that matches nothing says so instead —
+                including where the list does have headings, since empty ones
+                would only be noise under an answer of "no rows". */}
+            {filterHidesEverything ? (
+              <EmptyState
+                title={strings.tasks.emptyTitle}
+                description={strings.tasks.tags.filterEmptyDescription}
+              />
+            ) : listTasks.length === 0 && listSections.length === 0 ? (
               <EmptyState
                 title={strings.tasks.emptyTitle}
                 description={strings.tasks.emptyDescription}
@@ -1913,12 +2268,17 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                 </Button>
               ))}
           </>
-        ) : listTasks.length === 0 ? (
+        ) : visibleTasks.length === 0 ? (
           // The board has nothing to hold headings or an "add" affordance for, so
-          // an empty list is the empty state here, as it was before TASK-004.
+          // an empty list is the empty state here, as it was before TASK-004 —
+          // and a filter that hides every card says which of the two it is.
           <EmptyState
             title={strings.tasks.emptyTitle}
-            description={strings.tasks.emptyDescription}
+            description={
+              filterHidesEverything
+                ? strings.tasks.tags.filterEmptyDescription
+                : strings.tasks.emptyDescription
+            }
           />
         ) : (
           // The board stays flat: a subtask is a real task with a status of its
@@ -1928,13 +2288,13 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
           // columns are the status field's options, and a card's place within one
           // is not something the board lets the user set.
           <KanbanView<TaskFields>
-            items={listTasks}
+            items={visibleTasks}
             schema={TASK_SCHEMA}
             config={KANBAN_CONFIG}
             columnTitle={statusTitle}
             itemKey={(task) => task.id}
             renderCard={(task) => (
-              <KanbanCard tag={taskChips(task, childrenOf(task.id))}>
+              <KanbanCard tag={taskChips(task, childrenOf(task.id), tagsOf(task.id))}>
                 <span
                   id={taskRowDomId(task.id)}
                   className={revealedId === task.id ? "nx-revealed" : undefined}

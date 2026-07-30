@@ -42,6 +42,13 @@ export const IpcChannel = {
   tasksMoveToList: "tasks:move-to-list",
   tasksMoveToSection: "tasks:move-to-section",
   tasksReorder: "tasks:reorder",
+  taskTagsList: "task-tags:list",
+  taskTagsCreate: "task-tags:create",
+  taskTagsRename: "task-tags:rename",
+  taskTagsDelete: "task-tags:delete",
+  taskTagsAttach: "task-tags:attach",
+  taskTagsDetach: "task-tags:detach",
+  taskTagLinksList: "task-tag-links:list",
   eventsList: "events:list",
   eventsCreate: "events:create",
   eventsUpdate: "events:update",
@@ -576,6 +583,73 @@ export interface TasksReorderRequest {
   id: string;
   beforeId: string | null;
   afterId: string | null;
+}
+
+/**
+ * Longest task-tag name after trimming. Mirrors the cap `TaskTagStore` enforces
+ * (itself copied from `note_tags` — a label is a label whichever entity carries
+ * it), redeclared here like `MAX_TASK_LIST_NAME_LENGTH` so the rail's tag input
+ * can bound what a user types without importing DB code, and so main can bound
+ * the wire without waiting for the store to refuse. The store stays
+ * authoritative: it trims and re-checks whatever it is handed.
+ */
+export const MAX_TASK_TAG_NAME_LENGTH = 50;
+
+/**
+ * A task tag as seen by the renderer (mirrors the `task_tags` table via
+ * `TaskTagStore`'s mapping, migration 023) — a per-profile label, unique by
+ * name. Redeclared here so the renderer never imports DB code; `NoteTag` above
+ * is the same shape on a different entity, deliberately.
+ */
+export interface TaskTag {
+  id: string;
+  profileId: string;
+  name: string;
+  createdAt: string;
+}
+
+/** One task-tag attachment (mirrors the `task_tag_links` join table, migration 023). */
+export interface TaskTagLink {
+  taskId: string;
+  tagId: string;
+}
+
+export interface TaskTagsListRequest {
+  profileId: string;
+}
+
+/** Get-or-create by trimmed name: an existing tag of this profile comes back rather than being duplicated. */
+export interface TaskTagsCreateRequest {
+  profileId: string;
+  name: string;
+}
+
+export interface TaskTagsRenameRequest {
+  profileId: string;
+  id: string;
+  name: string;
+}
+
+/** Deleting a tag prunes its attachments through the schema's CASCADE — no task is touched. */
+export interface TaskTagsDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
+export interface TaskTagLinksListRequest {
+  profileId: string;
+}
+
+export interface TaskTagsAttachRequest {
+  profileId: string;
+  taskId: string;
+  tagId: string;
+}
+
+export interface TaskTagsDetachRequest {
+  profileId: string;
+  taskId: string;
+  tagId: string;
 }
 
 /**
@@ -2205,6 +2279,17 @@ export interface NexusApi {
     beforeId: string | null,
     afterId: string | null,
   ): Promise<Task>;
+  /** This profile's task tags, alphabetical by name (the rail re-sorts with `Intl.Collator(["sr-Latn","sr"])`). */
+  listTaskTags(profileId: string): Promise<TaskTag[]>;
+  /** Get-or-create by trimmed name: tagging with a name the profile already has returns that tag rather than a second one. */
+  createTaskTag(profileId: string, name: string): Promise<TaskTag>;
+  renameTaskTag(profileId: string, id: string, name: string): Promise<void>;
+  /** Deletes a tag; the schema's CASCADE takes its attachments with it, so the tag disappears from every task at once. */
+  deleteTaskTag(profileId: string, id: string): Promise<void>;
+  /** Every task-tag attachment of the profile in one fetch — the page indexes them by task rather than asking per row. Attachments of soft-deleted tasks are hidden, not dropped. */
+  listTaskTagLinks(profileId: string): Promise<TaskTagLink[]>;
+  attachTaskTag(profileId: string, taskId: string, tagId: string): Promise<void>;
+  detachTaskTag(profileId: string, taskId: string, tagId: string): Promise<void>;
   listEvents(profileId: string): Promise<Event[]>;
   createEvent(profileId: string, event: NewEventFields): Promise<Event>;
   updateEvent(profileId: string, id: string, changes: EventFieldChanges): Promise<Event>;

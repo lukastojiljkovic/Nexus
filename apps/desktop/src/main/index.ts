@@ -110,6 +110,8 @@ import {
   type TaskPriority,
   type TaskSection,
   type TaskStatus,
+  type TaskTag,
+  type TaskTagLink,
   type TrackedDocument,
   type UpdateCardFields,
   type UpdateDeckFields,
@@ -166,6 +168,7 @@ import {
 import {
   CARD_TEXT_MAX_LENGTH,
   IpcChannel,
+  MAX_TASK_TAG_NAME_LENGTH,
   NOTE_CARD_KEY_MAX_LENGTH,
   NOTE_CARDS_MAX_COUNT,
   SEARCH_QUERY_MAX_BYTES,
@@ -808,6 +811,27 @@ function asTaskListName(value: unknown, field: string): string {
   if (trimmed.length === 0 || trimmed.length > MAX_TASK_LIST_NAME_LENGTH) {
     throw new Error(
       `Invalid IPC payload: "${field}" must be 1-${MAX_TASK_LIST_NAME_LENGTH} characters after trimming.`,
+    );
+  }
+  return trimmed;
+}
+
+/**
+ * A task-tag name (migration 023): `asTaskListName`'s rule with the tag cap —
+ * non-empty and within `MAX_TASK_TAG_NAME_LENGTH` after trimming, the TRIMMED
+ * value travelling on. The cap comes from the wire contract rather than from
+ * `@nexus/db` only because `taskTagStore.ts` keeps its own copy module-private
+ * (as `noteOrgStore.ts` does); `TaskTagStore` trims and re-checks regardless,
+ * and stays authoritative (SEC-EL-02).
+ */
+function asTaskTagName(value: unknown, field: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`Invalid IPC payload: "${field}" must be a string.`);
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || trimmed.length > MAX_TASK_TAG_NAME_LENGTH) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be 1-${MAX_TASK_TAG_NAME_LENGTH} characters after trimming.`,
     );
   }
   return trimmed;
@@ -2098,6 +2122,69 @@ function registerIpc(): void {
     const beforeId = asNullableString(body.beforeId, "beforeId");
     const afterId = asNullableString(body.afterId, "afterId");
     return taskStore(profileId).reorder(id, beforeId, afterId, new Date().toISOString());
+  });
+
+  // --- Task tags (migration 023) -----------------------------------------
+  //
+  // The `note-tags:*` surface one module over, channel for channel: the same
+  // feature on a different entity, so a second set of semantics would only mean
+  // two things for the UI to explain. SEC-EL-02 as everywhere: sender checked
+  // first, every field through an `as*` validator, and `createTag`'s `now`
+  // stamped from main's own clock.
+
+  ipcMain.handle(IpcChannel.taskTagsList, (event, payload): TaskTag[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return taskTagStore(profileId).listTags();
+  });
+
+  ipcMain.handle(IpcChannel.taskTagsCreate, (event, payload): TaskTag => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const name = asTaskTagName(body.name, "name");
+    return taskTagStore(profileId).createTag(name, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.taskTagsRename, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const name = asTaskTagName(body.name, "name");
+    taskTagStore(profileId).renameTag(id, name);
+  });
+
+  ipcMain.handle(IpcChannel.taskTagsDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    taskTagStore(profileId).deleteTag(id);
+  });
+
+  ipcMain.handle(IpcChannel.taskTagLinksList, (event, payload): TaskTagLink[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return taskTagStore(profileId).listTagLinks();
+  });
+
+  ipcMain.handle(IpcChannel.taskTagsAttach, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const taskId = asNonEmptyString(body.taskId, "taskId");
+    const tagId = asNonEmptyString(body.tagId, "tagId");
+    taskTagStore(profileId).attachTag(taskId, tagId);
+  });
+
+  ipcMain.handle(IpcChannel.taskTagsDetach, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const taskId = asNonEmptyString(body.taskId, "taskId");
+    const tagId = asNonEmptyString(body.tagId, "tagId");
+    taskTagStore(profileId).detachTag(taskId, tagId);
   });
 
   ipcMain.handle(IpcChannel.eventsList, (event, payload): Event[] => {

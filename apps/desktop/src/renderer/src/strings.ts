@@ -262,6 +262,32 @@ export const strings = {
       renameSectionLabel: "Preimenuj sekciju",
       deleteSectionLabel: "Obriši sekciju",
     },
+    /**
+     * Oznake (migration 023) — the NOTE module's tag wording one module over,
+     * key for key with `strings.notes`' tag block (`tagsLabel` → `label`,
+     * `tagNamePlaceholder` → `namePlaceholder`, `tagError` → `actionError`, …),
+     * unprefixed because the block itself already says „tag“. Identical Serbian
+     * where the sentence is identical: a label is a label whichever entity
+     * carries it, so the two modules must not word it two ways.
+     */
+    tags: {
+      label: "Oznake",
+      newTag: "Nova oznaka",
+      namePlaceholder: "Naziv oznake",
+      rename: "Preimenuj",
+      /** Accessible name of the rename field — the action in full, like `lists.renameSectionLabel`; the menu item itself stays the short „Preimenuj“. */
+      renameLabel: "Preimenuj oznaku",
+      delete: "Obriši oznaku",
+      /** The rail chip's own „⋯“ menu (rename/delete one tag). */
+      menuLabel: "Radnje nad oznakom",
+      /** The per-task „⋯“ menu that attaches/detaches this task's tags. */
+      taskMenuLabel: "Oznake zadatka",
+      filterLabel: "Filter po oznakama",
+      clearFilter: "Poništi",
+      actionError: "Radnja nad oznakom nije uspela. Pokušaj ponovo.",
+      /** Shown in place of the rows when the tag filter matches nothing in the selected list. */
+      filterEmptyDescription: "Nijedan zadatak ne odgovara izabranim oznakama.",
+    },
     /** Kanban column titles, keyed by task status value (labels are presentation). */
     status: {
       todo: "Za rad",

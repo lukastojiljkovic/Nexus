@@ -63,6 +63,18 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.tasksMoveToSection, { profileId, id, sectionId }),
   reorderTask: (profileId, id, beforeId, afterId) =>
     ipcRenderer.invoke(IpcChannel.tasksReorder, { profileId, id, beforeId, afterId }),
+  listTaskTags: (profileId) => ipcRenderer.invoke(IpcChannel.taskTagsList, { profileId }),
+  createTaskTag: (profileId, name) =>
+    ipcRenderer.invoke(IpcChannel.taskTagsCreate, { profileId, name }),
+  renameTaskTag: (profileId, id, name) =>
+    ipcRenderer.invoke(IpcChannel.taskTagsRename, { profileId, id, name }),
+  deleteTaskTag: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.taskTagsDelete, { profileId, id }),
+  listTaskTagLinks: (profileId) => ipcRenderer.invoke(IpcChannel.taskTagLinksList, { profileId }),
+  attachTaskTag: (profileId, taskId, tagId) =>
+    ipcRenderer.invoke(IpcChannel.taskTagsAttach, { profileId, taskId, tagId }),
+  detachTaskTag: (profileId, taskId, tagId) =>
+    ipcRenderer.invoke(IpcChannel.taskTagsDetach, { profileId, taskId, tagId }),
   listEvents: (profileId) => ipcRenderer.invoke(IpcChannel.eventsList, { profileId }),
   createEvent: (profileId, event) =>
     ipcRenderer.invoke(IpcChannel.eventsCreate, { profileId, event }),

@@ -429,7 +429,8 @@ body {
   color: var(--nx-danger);
 }
 .tasks__new-list.nx-button,
-.tasks__new-section.nx-button {
+.tasks__new-section.nx-button,
+.tasks__new-tag.nx-button {
   margin-top: var(--nx-space-2);
   align-self: flex-start;
   background: transparent;
@@ -437,7 +438,8 @@ body {
   color: var(--nx-text-muted);
 }
 .tasks__new-list.nx-button:hover,
-.tasks__new-section.nx-button:hover {
+.tasks__new-section.nx-button:hover,
+.tasks__new-tag.nx-button:hover {
   background: var(--nx-surface-alt);
   color: var(--nx-text);
 }
@@ -446,6 +448,17 @@ body {
   padding: 0 var(--nx-space-2);
   font-size: var(--nx-font-size-body-sm);
   color: var(--nx-danger);
+}
+/* Oznake, the rail's second section (migration 023): the same caption heading as
+   „Liste“, plus the room a second section needs above it and the „Poništi“ the
+   NOTE organizer puts on the same line. The chips themselves share the NOTE tag
+   recipe outright — see .note__tag / .tasks__tag further down. */
+.tasks__tag-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
+  margin-top: var(--nx-space-4);
 }
 
 /* The one inline "type a name" line, shared by the rail's and the sections'
@@ -722,6 +735,22 @@ body {
   display: inline-flex;
   align-items: center;
   gap: var(--nx-space-1);
+}
+/* A tag chip in that cluster is OUTLINED where prioritet/rok are filled: a label
+   is not a state, and the note list's own tag chip (.note__item-tag) reads the
+   same way — quiet metadata, never a selection affordance. The border takes the
+   pixel the padding gives up on each side, so an outlined chip is exactly as tall
+   and as wide as a filled one beside it. */
+.tasks__tag-chip.nx-chip {
+  background: transparent;
+  border: 1px solid var(--nx-border);
+  padding: 1px 8px;
+}
+/* The per-task tag menu sits in the row's action cluster, so it takes that
+   cluster's hover treatment rather than the popover trigger's bare colour
+   change, and stays visible like the + ✎ × beside it. */
+.tasks__row-tags:hover {
+  background: var(--nx-surface-alt);
 }
 .tasks__add-subtask.nx-button,
 .tasks__edit.nx-button,
@@ -3516,8 +3545,12 @@ button.cal__grid-event {
 /* Oznake (tags) section, below the folder tree (slice a3b-2): filter chips
    with inline create/rename/delete, mirroring the folder actions above.
    Selecting a tag for the filter is typographic (gold text + weight), never a
-   fill or glow — the house rule applied to chips instead of a nav row. */
-.note__tag-clear {
+   fill or glow — the house rule applied to chips instead of a nav row.
+   Shared outright with the TASK rail's own Oznake section (.tasks__tag*,
+   migration 023) the way the dialog and reminder recipes are: it is the same
+   feature on a different entity, so one look for it is the point. */
+.note__tag-clear,
+.tasks__tag-clear {
   padding: 0;
   background: transparent;
   border: none;
@@ -3530,22 +3563,26 @@ button.cal__grid-event {
   cursor: pointer;
   transition: color var(--nx-motion-fast) var(--nx-motion-ease);
 }
-.note__tag-clear:hover {
+.note__tag-clear:hover,
+.tasks__tag-clear:hover {
   color: var(--nx-text);
 }
-.note__tag-row {
+.note__tag-row,
+.tasks__tag-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--nx-space-2);
   padding: var(--nx-space-1) var(--nx-space-2);
 }
-.note__tag-item {
+.note__tag-item,
+.tasks__tag-item {
   display: inline-flex;
   align-items: center;
   gap: 2px;
 }
-.note__tag {
+.note__tag,
+.tasks__tag {
   display: inline-flex;
   align-items: center;
   padding: 2px 10px;
@@ -3560,26 +3597,33 @@ button.cal__grid-event {
     border-color var(--nx-motion-fast) var(--nx-motion-ease),
     color var(--nx-motion-fast) var(--nx-motion-ease);
 }
-.note__tag:hover {
+.note__tag:hover,
+.tasks__tag:hover {
   background: var(--nx-surface-alt);
 }
-.note__tag:focus-visible {
+.note__tag:focus-visible,
+.tasks__tag:focus-visible {
   outline: 2px solid var(--nx-accent);
   outline-offset: 2px;
 }
-.note__tag--active {
+.note__tag--active,
+.tasks__tag--active {
   color: var(--nx-accent-strong);
   font-weight: var(--nx-font-weight-semibold);
   border-color: var(--nx-accent);
 }
 /* The tag chip's "⋯" menu trigger stays quiet until the chip is hovered, the
    trigger is focused, or its menu is open — mirrors .note__row-menu. */
-.note__tag-menu {
+.note__tag-menu,
+.tasks__tag-menu {
   opacity: 0;
 }
 .note__tag-item:hover .note__tag-menu,
 .note__tag-menu[aria-expanded="true"],
-.note__tag-menu:focus-visible {
+.note__tag-menu:focus-visible,
+.tasks__tag-item:hover .tasks__tag-menu,
+.tasks__tag-menu[aria-expanded="true"],
+.tasks__tag-menu:focus-visible {
   opacity: 1;
 }
 .note__new-tag.nx-button {
@@ -3593,9 +3637,11 @@ button.cal__grid-event {
   background: var(--nx-surface-alt);
   color: var(--nx-text);
 }
-/* Rename/new tag form: reuses .note__folder-form, but flex-basis: 100% makes
-   it take the whole wrap row instead of sitting beside the other chips. */
-.note__tag-form {
+/* Rename/new tag form: reuses .note__folder-form (.tasks__name-form in the TASK
+   rail), but flex-basis: 100% makes it take the whole wrap row instead of
+   sitting beside the other chips. */
+.note__tag-form,
+.tasks__tag-form {
   flex-basis: 100%;
 }
 
@@ -3750,7 +3796,11 @@ button.cal__grid-event {
   color: var(--nx-accent-strong);
 }
 
-/* The "⋯" actions popover, shared by folder rows and note rows. */
+/* The "⋯" actions popover (notePopover.tsx). The class family belongs to that
+   component rather than to the NOTE module: folder rows, note rows, and the TASK
+   rail's tag chips and task rows all mount it, and the panel's own classes come
+   from the component, so its menu items keep this family wherever they are
+   written. */
 .note__menu {
   position: relative;
   flex: none;
