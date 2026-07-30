@@ -22,6 +22,7 @@ import {
   NoteAttachmentStore,
   NoteOrgStore,
   NoteStore,
+  NOTIFICATION_SOURCES,
   NoteTemplateStore,
   NotificationStore,
   PeopleStore,
@@ -31,6 +32,8 @@ import {
   RESTORE_WIPE_TABLES,
   SqliteFlagStore,
   SubjectStore,
+  TASK_ORDER_GAP,
+  TaskListStore,
   TaskStore,
   openDatabase,
   uuidv7,
@@ -52,6 +55,8 @@ import type {
   StudyPlan,
   Subject,
   Task,
+  TaskList,
+  TaskSection,
   TrackedDocument,
 } from "../index.js";
 
@@ -83,9 +88,14 @@ const NOW = "2026-02-01T00:00:00.000Z";
 
 function createProfile(handle: NexusDatabase, name: string): string {
   const id = uuidv7();
+  const created = new Date().toISOString();
   handle.raw
     .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
-    .run(id, "personal", name, new Date().toISOString());
+    .run(id, "personal", name, created);
+  // Every profile has an Inbox (TASK-004): migration 022 backfills the ones
+  // that predate ADR-029 and `main` seeds it for the ones it creates, so a
+  // fixture without one would be a database state the app cannot reach.
+  new TaskListStore(handle.raw, id).ensureInbox(created);
   return id;
 }
 
@@ -99,6 +109,8 @@ function bytes(length: number, offset = 0): Uint8Array {
 function emptyProfileData(): ProfileData {
   return {
     tasks: [],
+    taskLists: [],
+    taskSections: [],
     events: [],
     documents: [],
     renewals: [],
@@ -147,6 +159,8 @@ function makeNote(overrides: Partial<ExportNote> & { id: string }): ExportNote {
 interface FixtureIds {
   parentTask: Task;
   childTask: Task;
+  list: TaskList;
+  section: TaskSection;
   event: Event;
   person: Person;
   document: TrackedDocument;
@@ -184,6 +198,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   const t3 = "2026-01-01T00:03:00.000Z";
 
   const taskStore = new TaskStore(handle.raw, profileId);
+  const taskListStore = new TaskListStore(handle.raw, profileId);
   const eventStore = new EventStore(handle.raw, profileId);
   const peopleStore = new PeopleStore(handle.raw, profileId);
   const documentStore = new DocumentStore(handle.raw, profileId);
@@ -205,12 +220,20 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   const editedSnapshot = bytes(8, 99);
   const editedPlaintext = `${name} note plaintext`;
 
+  // A real list with a real section, and the task filed INSIDE it (TASK-004):
+  // the placement is what a restore has to reproduce, and the Inbox-only shape
+  // would prove nothing about it.
+  const list = taskListStore.createList({ name: `${name} list` }, t0);
+  const section = taskListStore.createSection(list.id, `${name} section`, t0);
+
   // Dated and laddered (ADR-028), so the full round trip below carries a task
   // whose reminders have somewhere to count back from.
   const parentTask = taskStore.create({
     title: `${name} parent task`,
     dueDate: "2026-09-01",
     reminderOffsets: [1, 0],
+    listId: list.id,
+    sectionId: section.id,
   });
   const childTask = taskStore.create({ title: `${name} child task`, parentId: parentTask.id });
 
@@ -285,8 +308,11 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     "2026-01-01T00:05:00.000Z",
   );
 
+  const taskLists = taskListStore.listActive();
   const data: ProfileData = {
     tasks: taskStore.listActive(),
+    taskLists,
+    taskSections: taskLists.flatMap((row) => taskListStore.listSections(row.id)),
     events: eventStore.listActive(),
     documents: documentStore.listActive(),
     renewals: documentStore.listRenewals(document.id),
@@ -328,6 +354,8 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     ids: {
       parentTask,
       childTask,
+      list,
+      section,
       event,
       person,
       document,
@@ -362,13 +390,21 @@ function stripDocumentDerived(
  */
 function freshArchiveData(): ProfileData {
   const timestamps = { createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" };
+  const listId = uuidv7();
   return {
     ...emptyProfileData(),
+    taskLists: [
+      {
+        id: listId, profileId: "ignored", parentId: null, name: "Inbox", isInbox: true,
+        defaultView: "list", position: 1024, ...timestamps,
+      },
+    ],
     tasks: [
       {
         id: uuidv7(), profileId: "ignored", parentId: null, title: "Fresh task", description: null,
         status: "todo", priority: "none", done: false, dueDate: null, startDate: null,
-        completedAt: null, recurrence: null, reminderOffsets: [], ...timestamps,
+        completedAt: null, recurrence: null, reminderOffsets: [],
+        listId, sectionId: null, position: 1024, ...timestamps,
       },
     ],
     subjects: [
@@ -408,6 +444,11 @@ function assertModulesMatch(
     rows.map((row) => ({ ...row, profileId: remapTo }));
 
   expect(new TaskStore(handle.raw, readProfileId).listActive()).toEqual(remap(fixture.data.tasks));
+  const listsRead = new TaskListStore(handle.raw, readProfileId);
+  expect(listsRead.listActive()).toEqual(remap(fixture.data.taskLists));
+  expect(listsRead.listActive().flatMap((row) => listsRead.listSections(row.id))).toEqual(
+    fixture.data.taskSections,
+  );
   expect(new EventStore(handle.raw, readProfileId).listActive()).toEqual(remap(fixture.data.events));
   expect(new PeopleStore(handle.raw, readProfileId).listActive()).toEqual(remap(fixture.data.people));
   // Stripped on BOTH sides: `seedFixture` gathers documents through
@@ -561,7 +602,13 @@ describe("RestoreStore", () => {
 
     // Including the child tables no store lists on its own — the ones a wipe
     // that leaned on ON DELETE CASCADE would be most likely to miss.
-    for (const table of ["document_renewals", "note_versions", "note_attachments", "note_tag_links"]) {
+    for (const table of [
+      "document_renewals",
+      "task_sections",
+      "note_versions",
+      "note_attachments",
+      "note_tag_links",
+    ]) {
       const { n } = db.raw.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number };
       expect({ table, n }).toEqual({ table, n: 0 });
     }
@@ -614,6 +661,11 @@ describe("RestoreStore", () => {
       completedAt: null,
       recurrence: null,
       reminderOffsets: [],
+      // No list: this archive is an OLDER one, and the fallback Inbox is what
+      // catches it (see the era-default test at the bottom of this file).
+      listId: null,
+      sectionId: null,
+      position: 0,
     };
     const child: ExportTask = { id: childId, profileId: "ignored", parentId, title: "Child", ...base };
     const parent: ExportTask = { id: parentId, profileId: "ignored", parentId: null, title: "Parent", ...base };
@@ -717,6 +769,9 @@ describe("RestoreStore", () => {
       completedAt: null,
       recurrence: null,
       reminderOffsets: [],
+      listId: null,
+      sectionId: null,
+      position: 0,
     };
 
     const data: ProfileData = { ...emptyProfileData(), notes: [note], tasks: [task] };
@@ -890,12 +945,18 @@ describe("RestoreStore", () => {
   it("restores a recurring task's rule and ladder, and a series master's rule, exceptions and ladder verbatim (ADR-024/CAL-006/ADR-028)", () => {
     const profileB = createProfile(db, "recurrence");
     const timestamps = { createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" };
+    const listId = uuidv7();
+    const list: TaskList = {
+      id: listId, profileId: "ignored", parentId: null, name: "Inbox", isInbox: true,
+      defaultView: "list", position: 1024, ...timestamps,
+    };
     const task: ExportTask = {
       id: uuidv7(), profileId: "ignored", parentId: null, title: "Prvog u mesecu", description: null,
       status: "todo", priority: "none", done: false, dueDate: "2026-08-01", startDate: null,
       completedAt: null,
       recurrence: { freq: { kind: "monthly-date", interval: 1, day: 1 }, end: { kind: "count", total: 12 } },
       reminderOffsets: [7, 0], // deliberately unsorted, like the event's below
+      listId, sectionId: null, position: 1024,
       ...timestamps,
     };
     const event: ExportEvent = {
@@ -906,7 +967,9 @@ describe("RestoreStore", () => {
       reminderOffsets: [1440, 15], // likewise unsorted — and 1440 > 15 proves the sort is numeric, not lexical
       ...timestamps,
     };
-    const data: ProfileData = { ...emptyProfileData(), tasks: [task], events: [event] };
+    const data: ProfileData = {
+      ...emptyProfileData(), taskLists: [list], tasks: [task], events: [event],
+    };
 
     new RestoreStore(db.raw, profileB).replaceProfileData(
       { profileName: "Recurrence", settings: emptySettings(), data, derived: new Map() },
@@ -929,6 +992,113 @@ describe("RestoreStore", () => {
         reminderOffsets: [15, 1440],
       },
     ]);
+  });
+
+  it("restores a task's list, section and position verbatim (TASK-004 / ADR-029)", () => {
+    const profileB = createProfile(db, "placement");
+    const timestamps = { createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" };
+    const inboxId = uuidv7();
+    const workId = uuidv7();
+    const sectionId = uuidv7();
+    const taskLists: TaskList[] = [
+      {
+        id: inboxId, profileId: "ignored", parentId: null, name: "Inbox", isInbox: true,
+        defaultView: "list", position: 1024, ...timestamps,
+      },
+      {
+        id: workId, profileId: "ignored", parentId: inboxId, name: "Posao", isInbox: false,
+        defaultView: "kanban", position: 2048, ...timestamps,
+      },
+    ];
+    const taskSections: TaskSection[] = [
+      { id: sectionId, listId: workId, name: "U toku", position: 1024, ...timestamps },
+    ];
+    const task: ExportTask = {
+      id: uuidv7(), profileId: "ignored", parentId: null, title: "U sekciji", description: null,
+      status: "todo", priority: "none", done: false, dueDate: null, startDate: null,
+      completedAt: null, recurrence: null, reminderOffsets: [],
+      // Negative on purpose: prepending walks below zero, and a restore that
+      // normalized it would silently re-order the user's list.
+      listId: workId, sectionId, position: -1024, ...timestamps,
+    };
+
+    new RestoreStore(db.raw, profileB).replaceProfileData(
+      { profileName: "Placement", settings: emptySettings(), data: { ...emptyProfileData(), taskLists, tasks: [task], taskSections }, derived: new Map() },
+      NOW,
+    );
+
+    const lists = new TaskListStore(db.raw, profileB);
+    expect(lists.listActive()).toEqual(withProfile(taskLists, profileB));
+    expect(lists.listSections(workId)).toEqual(taskSections);
+    expect(new TaskStore(db.raw, profileB).listActive()).toEqual([{ ...task, profileId: profileB }]);
+  });
+
+  it("maps an older archive's list-less tasks into a freshly minted Inbox, gap-spaced in the archive's own order", () => {
+    const profileB = createProfile(db, "era-default");
+    const timestamps = { createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" };
+    // What `parseImportArchive` hands back for a pre-1.3.0 archive: no lists at
+    // all, and every task defaulted to null/null/0 (`ArchiveEra`).
+    const legacyTask = (title: string): ExportTask => ({
+      id: uuidv7(), profileId: "ignored", parentId: null, title, description: null,
+      status: "todo", priority: "none", done: false, dueDate: null, startDate: null,
+      completedAt: null, recurrence: null, reminderOffsets: [],
+      listId: null, sectionId: null, position: 0, ...timestamps,
+    });
+    const tasks = [legacyTask("Prvi"), legacyTask("Drugi"), legacyTask("Treći")];
+
+    const written = new RestoreStore(db.raw, profileB).replaceProfileData(
+      { profileName: "Era", settings: emptySettings(), data: { ...emptyProfileData(), tasks }, derived: new Map() },
+      NOW,
+    );
+
+    const lists = new TaskListStore(db.raw, profileB).listActive();
+    expect(lists).toHaveLength(1);
+    expect(lists[0]).toMatchObject({ name: "Inbox", isInbox: true, createdAt: NOW, updatedAt: NOW });
+
+    const restored = new TaskStore(db.raw, profileB).listActive();
+    expect(restored.map((row) => row.title)).toEqual(["Prvi", "Drugi", "Treći"]);
+    expect(restored.map((row) => row.listId)).toEqual([lists[0]?.id, lists[0]?.id, lists[0]?.id]);
+    expect(restored.map((row) => row.position)).toEqual([
+      TASK_ORDER_GAP,
+      2 * TASK_ORDER_GAP,
+      3 * TASK_ORDER_GAP,
+    ]);
+    // The minted Inbox is a row this restore wrote, so it is counted as one:
+    // three tasks + that Inbox + the settings rows every restore writes (the
+    // `ntf_settings` row, plus one disabled row per source `emptySettings`
+    // leaves out).
+    expect(written).toBe(3 + 1 + 1 + NOTIFICATION_SOURCES.length);
+  });
+
+  it("reuses the archive's OWN Inbox for list-less tasks rather than minting a second one", () => {
+    const profileB = createProfile(db, "era-default-with-inbox");
+    const timestamps = { createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" };
+    const inboxId = uuidv7();
+    const taskLists: TaskList[] = [
+      {
+        id: inboxId, profileId: "ignored", parentId: null, name: "Prijemno", isInbox: true,
+        defaultView: "list", position: 1024, ...timestamps,
+      },
+    ];
+    const task: ExportTask = {
+      id: uuidv7(), profileId: "ignored", parentId: null, title: "Bez liste", description: null,
+      status: "todo", priority: "none", done: false, dueDate: null, startDate: null,
+      completedAt: null, recurrence: null, reminderOffsets: [],
+      listId: null, sectionId: null, position: 0, ...timestamps,
+    };
+
+    new RestoreStore(db.raw, profileB).replaceProfileData(
+      { profileName: "Era2", settings: emptySettings(), data: { ...emptyProfileData(), taskLists, tasks: [task] }, derived: new Map() },
+      NOW,
+    );
+
+    const lists = new TaskListStore(db.raw, profileB).listActive();
+    expect(lists.map((row) => row.id)).toEqual([inboxId]);
+    expect(lists[0]?.name).toBe("Prijemno"); // the archive's row, not a fresh one
+    expect(new TaskStore(db.raw, profileB).listActive()[0]).toMatchObject({
+      listId: inboxId,
+      position: TASK_ORDER_GAP,
+    });
   });
 
   it("throws RestoreValidationError when a note has a non-null snapshot but no matching entry in derived (R9)", () => {

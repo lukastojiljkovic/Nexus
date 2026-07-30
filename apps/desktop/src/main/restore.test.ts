@@ -36,6 +36,7 @@ import {
   RestoreStore,
   SqliteFlagStore,
   SubjectStore,
+  TaskListStore,
   TaskStore,
   openDatabase,
   uuidv7,
@@ -54,6 +55,8 @@ import type {
   RestoredNoteDerived,
   Subject,
   Task,
+  TaskList,
+  TaskSection,
 } from "@nexus/db";
 
 import * as archiveReaderModule from "./archiveReader.js";
@@ -113,9 +116,13 @@ function sha256OfBytes(bytes: Uint8Array): string {
 
 function createProfile(handle: NexusDatabase, name: string): string {
   const id = uuidv7();
+  const created = new Date().toISOString();
   handle.raw
     .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
-    .run(id, "personal", name, new Date().toISOString());
+    .run(id, "personal", name, created);
+  // The Inbox `main`'s own `seedFirstRunProfile` gives every profile it
+  // creates (TASK-004): `TaskStore` refuses to place a task without one.
+  new TaskListStore(handle.raw, id).ensureInbox(created);
   return id;
 }
 
@@ -123,6 +130,7 @@ function createProfile(handle: NexusDatabase, name: string): string {
 function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
   return {
     taskStore: (profileId) => new TaskStore(handle.raw, profileId),
+    taskListStore: (profileId) => new TaskListStore(handle.raw, profileId),
     eventStore: (profileId) => new EventStore(handle.raw, profileId),
     peopleStore: (profileId) => new PeopleStore(handle.raw, profileId),
     documentStore: (profileId) => new DocumentStore(handle.raw, profileId),
@@ -234,6 +242,8 @@ interface SeededFixture {
   blobBytes: Map<string, Uint8Array>;
   ids: {
     task: Task;
+    list: TaskList;
+    section: TaskSection;
     event: Event;
     person: Person;
     subject: Subject;
@@ -263,6 +273,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   const t0 = "2026-01-01T00:00:00.000Z";
 
   const taskStore = new TaskStore(handle.raw, profileId);
+  const taskListStore = new TaskListStore(handle.raw, profileId);
   const eventStore = new EventStore(handle.raw, profileId);
   const peopleStore = new PeopleStore(handle.raw, profileId);
   const subjectStore = new SubjectStore(handle.raw, profileId);
@@ -275,12 +286,19 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   const attachmentStore = new NoteAttachmentStore(handle.raw, profileId);
   const templateStore = new NoteTemplateStore(handle.raw, profileId);
 
+  // A real list with a section, and the task filed inside it (TASK-004), so the
+  // zip round trip carries a task's placement and not just the Inbox default.
+  const list = taskListStore.createList({ name: `${label} list` }, t0);
+  const section = taskListStore.createSection(list.id, `${label} section`, t0);
+
   // Dated and laddered (ADR-028), so the whole zip round trip below carries a
   // task's reminder ladder as well as its plain fields.
   const task = taskStore.create({
     title: `${label} task`,
     dueDate: "2026-03-05",
     reminderOffsets: [0, 3],
+    listId: list.id,
+    sectionId: section.id,
   });
   const event = eventStore.create({ title: `${label} event`, startAt: "2026-03-01T10:00:00.000Z" });
   // A leap-day birthday (CAL-007): the pair migration 020's CHECKs cannot vet,
@@ -327,8 +345,11 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
 
   const template = templateStore.save(`${label} template`, JSON.stringify({ type: "doc", content: [] }), t0);
 
+  const taskLists = taskListStore.listActive();
   const data: ProfileData = {
     tasks: taskStore.listActive(),
+    taskLists,
+    taskSections: taskLists.flatMap((row) => taskListStore.listSections(row.id)),
     events: eventStore.listActive(),
     documents: [],
     renewals: [],
@@ -374,7 +395,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     derived,
     settings,
     blobBytes,
-    ids: { task, event, person, subject, exam, deck, card, notification, note, linkedNote, folder, tag, template, attachmentSha },
+    ids: { task, list, section, event, person, subject, exam, deck, card, notification, note, linkedNote, folder, tag, template, attachmentSha },
   };
 }
 
@@ -508,6 +529,14 @@ describe("restore", () => {
       );
       expect(new NoteOrgStore(dbB.raw, profileB).listFolders()).toEqual(
         fixtureA.data.noteFolders.map((row) => ({ ...row, profileId: profileB })),
+      );
+      // The lists and the section a task was filed in travelled with it.
+      const listsB = new TaskListStore(dbB.raw, profileB);
+      expect(listsB.listActive()).toEqual(
+        fixtureA.data.taskLists.map((row) => ({ ...row, profileId: profileB })),
+      );
+      expect(listsB.listSections(fixtureA.ids.list.id)).toEqual(
+        fixtureA.data.taskSections.filter((row) => row.listId === fixtureA.ids.list.id),
       );
 
       // The note's real Yjs state and its search-visible plaintext came out right.

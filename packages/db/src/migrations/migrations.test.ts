@@ -16,8 +16,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 21 (task reminders), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(21);
+  it("is at version 22 (task lists), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(22);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -2169,6 +2169,226 @@ describe("migration 021 — task reminders", () => {
     expect(
       (db.raw.prepare("SELECT count(*) AS n FROM ntf_source_settings").get() as { n: number }).n,
     ).toBe(0);
+    db.close();
+  });
+});
+
+describe("migration 022 — task lists", () => {
+  type Handle = Database.Database;
+
+  const now = () => new Date().toISOString();
+
+  const columnNames = (raw: Handle, table: string): string[] =>
+    (raw.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((row) => row.name);
+
+  const seedProfile = (raw: Handle, id: string) =>
+    raw
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run(id, "personal", "P", now());
+
+  /** A task seeded straight into the table, `created_at` supplied so the backfill's ordering is observable. */
+  const seedTask = (raw: Handle, id: string, profileId: string, createdAt: string) =>
+    raw
+      .prepare(
+        `INSERT INTO tasks (id, profile_id, title, status, created_at, updated_at)
+         VALUES (?, ?, ?, 'todo', ?, ?)`,
+      )
+      .run(id, profileId, `Zadatak ${id}`, createdAt, createdAt);
+
+  const insertList = (
+    db: NexusDatabase,
+    overrides: Partial<{
+      id: string;
+      parentId: string | null;
+      name: string;
+      isInbox: number;
+      defaultView: string;
+      position: number;
+    }> = {},
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO task_lists
+           (id, profile_id, parent_id, name, is_inbox, default_view, position, created_at, updated_at)
+         VALUES (?, 'p1', ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        overrides.id ?? "tl1",
+        overrides.parentId === undefined ? null : overrides.parentId,
+        overrides.name ?? "Lista",
+        overrides.isInbox ?? 0,
+        overrides.defaultView ?? "list",
+        overrides.position ?? 1024,
+        now(),
+        now(),
+      );
+
+  /** As migration 021's own helper: a connection held at exactly `version`, set up the way `openDatabase` sets one up. */
+  function openAtVersion(path: string, version: number): Handle {
+    const raw = new Database(path);
+    raw.pragma("journal_mode = WAL");
+    raw.pragma("foreign_keys = ON");
+    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
+      typeof value === "string" ? foldSearchText(value) : null,
+    );
+    runMigrations(
+      raw,
+      MIGRATIONS.filter((migration) => migration.version <= version),
+    );
+    return raw;
+  }
+
+  it("creates both tables, adds the three task columns, and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    expect(tableNames(db)).toContain("task_lists");
+    expect(tableNames(db)).toContain("task_sections");
+    expect(columnNames(db.raw, "tasks")).toEqual(
+      expect.arrayContaining(["list_id", "section_id", "position"]),
+    );
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("defaults position to 0 and leaves list_id/section_id null for a raw insert — TaskStore is the gate", () => {
+    const db = openDatabase({ path: join(dir, "task-defaults.db") });
+    insertProfile(db, "p1");
+    seedTask(db.raw, "t1", "p1", now());
+    expect(
+      db.raw.prepare("SELECT list_id, section_id, position FROM tasks WHERE id = ?").get("t1"),
+    ).toEqual({ list_id: null, section_id: null, position: 0 });
+    db.close();
+  });
+
+  it("bounds is_inbox to 0/1 and default_view to the closed list/kanban set with CHECKs", () => {
+    const db = openDatabase({ path: join(dir, "check-list.db") });
+    insertProfile(db, "p1");
+    expect(() => insertList(db, { id: "tl1", isInbox: 1, defaultView: "kanban" })).not.toThrow();
+    expect(() => insertList(db, { id: "tl2", isInbox: 0, defaultView: "list" })).not.toThrow();
+    expect(() => insertList(db, { id: "tl3", isInbox: 2 })).toThrow();
+    expect(() => insertList(db, { id: "tl4", defaultView: "gantt" })).toThrow();
+    db.close();
+  });
+
+  it("accepts a negative position — a sort key is not a count, and prepending walks below zero", () => {
+    const db = openDatabase({ path: join(dir, "negative-position.db") });
+    insertProfile(db, "p1");
+    expect(() => insertList(db, { id: "tl1", position: -2048 })).not.toThrow();
+    db.close();
+  });
+
+  it("refuses a parent_id, list_id or section_id that references nothing", () => {
+    const db = openDatabase({ path: join(dir, "fk-list.db") });
+    insertProfile(db, "p1");
+    expect(() => insertList(db, { id: "tlx", parentId: "ghost" })).toThrow();
+
+    insertList(db, { id: "tl1" });
+    seedTask(db.raw, "t1", "p1", now());
+    expect(() =>
+      db.raw.prepare("UPDATE tasks SET list_id = ? WHERE id = ?").run("ghost", "t1"),
+    ).toThrow();
+    expect(() =>
+      db.raw.prepare("UPDATE tasks SET section_id = ? WHERE id = ?").run("ghost", "t1"),
+    ).toThrow();
+    db.close();
+  });
+
+  it("cascades lists (and, through them, sections) when the owning profile is removed, task and all", () => {
+    const db = openDatabase({ path: join(dir, "cascade-lists.db") });
+    insertProfile(db, "p1");
+    insertList(db, { id: "tl1" });
+    db.raw
+      .prepare(
+        `INSERT INTO task_sections (id, list_id, name, position, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run("ts1", "tl1", "Danas", 1024, now(), now());
+    // A task placed INSIDE that section: the profile's delete reaches `tasks`
+    // and `task_lists` directly and `task_sections` only through the latter, so
+    // this is the shape that would trip on the order the cascades run in.
+    seedTask(db.raw, "t1", "p1", now());
+    db.raw
+      .prepare("UPDATE tasks SET list_id = 'tl1', section_id = 'ts1' WHERE id = ?")
+      .run("t1");
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    for (const table of ["tasks", "task_lists", "task_sections"]) {
+      const { n } = db.raw.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number };
+      expect({ table, n }).toEqual({ table, n: 0 });
+    }
+    db.close();
+  });
+
+  it("backfills one Inbox per existing profile and files every task into it, gap-spaced in created_at order", () => {
+    const path = join(dir, "upgrade-022.db");
+    const before = openAtVersion(path, 21);
+    seedProfile(before, "p1");
+    seedProfile(before, "p2");
+    // Deliberately inserted out of order, so the backfill's `created_at, id`
+    // sort is what the positions below prove — not the insertion order.
+    seedTask(before, "t2", "p1", "2026-01-02T00:00:00.000Z");
+    seedTask(before, "t1", "p1", "2026-01-01T00:00:00.000Z");
+    seedTask(before, "t3", "p1", "2026-01-03T00:00:00.000Z");
+    seedTask(before, "t4", "p2", "2026-01-01T00:00:00.000Z");
+    // A soft-deleted task is backfilled too: restoring it later must not
+    // resurrect a row with no list to sit in.
+    seedTask(before, "t5", "p1", "2026-01-04T00:00:00.000Z");
+    before.prepare("UPDATE tasks SET deleted_at = ? WHERE id = ?").run(now(), "t5");
+    expect(before.pragma("user_version", { simple: true })).toBe(21);
+    before.close();
+
+    const db = openDatabase({ path });
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+
+    const inboxes = db.raw
+      .prepare(
+        `SELECT id, profile_id, name, is_inbox, default_view, position, created_at, updated_at, deleted_at
+         FROM task_lists ORDER BY profile_id`,
+      )
+      .all() as {
+      id: string;
+      profile_id: string;
+      name: string;
+      is_inbox: number;
+      default_view: string;
+      position: number;
+      created_at: string;
+      updated_at: string;
+      deleted_at: string | null;
+    }[];
+    expect(inboxes.map((row) => row.profile_id)).toEqual(["p1", "p2"]);
+    for (const inbox of inboxes) {
+      expect({
+        name: inbox.name,
+        is_inbox: inbox.is_inbox,
+        default_view: inbox.default_view,
+        position: inbox.position,
+        deleted_at: inbox.deleted_at,
+      }).toEqual({ name: "Inbox", is_inbox: 1, default_view: "list", position: 0, deleted_at: null });
+    }
+    // One JS clock read for the whole migration.
+    expect(new Set(inboxes.map((row) => `${row.created_at}|${row.updated_at}`)).size).toBe(1);
+
+    const p1Inbox = inboxes[0]?.id ?? "";
+    const p2Inbox = inboxes[1]?.id ?? "";
+    expect(p1Inbox).not.toBe(p2Inbox);
+
+    expect(
+      db.raw
+        .prepare("SELECT id, list_id, section_id, position FROM tasks ORDER BY profile_id, position")
+        .all(),
+    ).toEqual([
+      { id: "t1", list_id: p1Inbox, section_id: null, position: 1024 },
+      { id: "t2", list_id: p1Inbox, section_id: null, position: 2048 },
+      { id: "t3", list_id: p1Inbox, section_id: null, position: 3072 },
+      { id: "t5", list_id: p1Inbox, section_id: null, position: 4096 },
+      { id: "t4", list_id: p2Inbox, section_id: null, position: 1024 },
+    ]);
+    db.close();
+  });
+
+  it("creates no Inbox at all for a database with no profiles yet", () => {
+    const db = openDatabase({ path: join(dir, "no-profiles.db") });
+    expect((db.raw.prepare("SELECT count(*) AS n FROM task_lists").get() as { n: number }).n).toBe(0);
     db.close();
   });
 });

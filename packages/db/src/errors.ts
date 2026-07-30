@@ -46,6 +46,40 @@ export class TaskValidationError extends DatabaseError {}
 export class TaskNotFoundError extends DatabaseError {}
 
 /**
+ * Thrown when a task-list or task-section write is rejected at the store
+ * boundary because its input breaks a domain rule the caller is expected to
+ * have caught already — an empty or over-long name after trimming, a view
+ * outside the closed `list`/`kanban` set, a malformed `now`, a move that would
+ * make a list its own ancestor (a cycle), a delete or a move aimed at the
+ * profile's Inbox (which is neither), or a `beforeId`/`afterId` pair that
+ * describes no gap in the target scope (TASK-004 / ADR-029). One class covers
+ * both row kinds because one store owns both: a section is a heading inside a
+ * list, sharing its ordering helper and every list-scoped invariant, so
+ * splitting the validation error would only ask callers to catch two names for
+ * one boundary. The store revalidates because renderer input is untrusted
+ * (SEC-EL-02).
+ */
+export class TaskListValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a task-list operation targets an id that is not an active row in
+ * the store's own profile — unknown, soft-deleted (for a mutation), or owned by
+ * another profile — including a `parentId`/`listId` reference that does not
+ * resolve there. Surfacing this uniformly keeps one profile's lists invisible to
+ * a store scoped to another.
+ */
+export class TaskListNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a task-section operation targets an id that is not a section of a
+ * list in the store's own profile — unknown, belonging to another list, or
+ * reached through a list this profile does not own. Sections carry no
+ * `profile_id` of their own, so this gate (always a join through `task_lists`)
+ * is the whole of their profile scoping.
+ */
+export class TaskSectionNotFoundError extends DatabaseError {}
+
+/**
  * Thrown when a calendar write is rejected at the store boundary because its
  * input breaks a domain rule the UI is expected to have caught already — an
  * empty event title, a malformed timestamp, or an end that precedes its start

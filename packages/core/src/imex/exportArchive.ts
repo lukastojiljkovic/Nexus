@@ -27,19 +27,48 @@ import { renderNoteMarkdown } from "./noteMarkdown.js";
 import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown.js";
 
 /**
- * IMEX-004: the archive's own semver. `1.2.0` adds `reminderOffsets` to the
- * `task` record (ADR-028) — a new field, so a MINOR bump by the same honesty
- * that made `1.1.0` (the `person` record type, CAL-007 / ADR-026) one: an
- * archive this build writes is refused by a 1.1 reader, which would otherwise
- * parse every task and silently drop the reminder ladder the user set. Kept in
- * step with
- * `INTERCHANGE_SCHEMA_VERSION` (`importArchive.ts`) — two constants rather than
- * one import, since the reader already imports from this module and the cycle
- * would be worse than the duplication; `importArchive.test.ts` pins them equal.
+ * IMEX-004: the archive's own semver. `1.3.0` adds the `task-list` and
+ * `task-section` record types and the `listId`/`sectionId`/`position` a task
+ * carries into them (TASK-004 / ADR-029), after `1.2.0` added a task's
+ * `reminderOffsets` (ADR-028) and `1.1.0` the `person` record type (CAL-007 /
+ * ADR-026). Additive, so a MINOR bump by the same honesty each of those made
+ * one: an archive this build writes is refused by a 1.2 reader, which would
+ * otherwise parse every task and silently drop the lists the user organized
+ * them into. Kept in step with `INTERCHANGE_SCHEMA_VERSION`
+ * (`importArchive.ts`) — two constants rather than one import, since the reader
+ * already imports from this module and the cycle would be worse than the
+ * duplication; `importArchive.test.ts` pins them equal.
  */
-const SCHEMA_VERSION = "1.2.0";
+const SCHEMA_VERSION = "1.3.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
+
+/**
+ * A task list (TASK-004 / ADR-029): the nestable container tasks live in, with
+ * `isInbox` marking the one every profile always has. Rides in
+ * `data/tasks.ndjson` ahead of the tasks that reference it.
+ */
+export interface ExportTaskList {
+  id: string;
+  profileId: string;
+  parentId: string | null;
+  name: string;
+  isInbox: boolean;
+  defaultView: string;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A heading inside one list. No `profileId`: a section is scoped through its list, exactly as a renewal is through its document. */
+export interface ExportTaskSection {
+  id: string;
+  listId: string;
+  name: string;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface ExportTask {
   id: string;
@@ -71,6 +100,19 @@ export interface ExportTask {
    * goes quiet, and quiet is the one failure a reminder feature cannot report.
    */
   reminderOffsets: number[];
+  /**
+   * The list this task lives in (TASK-004 / ADR-029). `null` ONLY when the
+   * archive predates `1.3.0` and the reader defaulted it (see `ArchiveEra`) — a
+   * writer at `1.3.0` or later always names a list, and a `1.3` archive that
+   * carries `null` here is refused rather than quietly re-filed. A restore maps
+   * an era-defaulted `null` onto the target profile's Inbox, which is where
+   * those tasks were before lists existed.
+   */
+  listId: string | null;
+  /** The section of `listId` this task sits under, or null for the list body. Era-defaults to null. */
+  sectionId: string | null;
+  /** Sparse sort key within the task's (list, section) scope; may be negative. Era-defaults to 0, which a restore then re-spaces. */
+  position: number;
 }
 
 export interface ExportEvent {
@@ -359,6 +401,11 @@ export interface ExportSettings {
  */
 export interface ProfileData {
   tasks: readonly ExportTask[];
+  // Required, like `tasks` itself: a task names the list it lives in, so an
+  // archive that carried the tasks but not the lists would restore a profile
+  // whose every task points at a container that is not there.
+  taskLists: readonly ExportTaskList[];
+  taskSections: readonly ExportTaskSection[];
   events: readonly ExportEvent[];
   documents: readonly ExportDocument[];
   renewals: readonly ExportRenewal[];
@@ -440,7 +487,10 @@ export type ArchiveModuleId = (typeof ARCHIVE_MODULE_IDS)[number];
  */
 export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, number> {
   return {
-    tasks: data.tasks.length,
+    // Lists and sections are TASK module rows, so they count into the tasks
+    // bucket beside the tasks themselves — the same way a folder counts into
+    // notes.
+    tasks: data.tasks.length + data.taskLists.length + data.taskSections.length,
     calendar:
       data.events.length + data.documents.length + data.renewals.length + data.people.length,
     study:
@@ -473,7 +523,14 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   const { notes, noteFolders, noteTags, noteTagLinks, noteTemplates, noteAttachments, noteVersions } =
     input.data;
 
-  const tasksNdjson = toNdjson(input.data.tasks.map((row) => ({ type: "task", ...row })));
+  // Dependency order, as in `data/notes.ndjson`: the containers a task points
+  // at come first, so a reader that streamed the file could resolve every
+  // reference as it went.
+  const tasksNdjson = toNdjson([
+    ...input.data.taskLists.map((row) => ({ type: "task-list", ...row })),
+    ...input.data.taskSections.map((row) => ({ type: "task-section", ...row })),
+    ...input.data.tasks.map((row) => ({ type: "task", ...row })),
+  ]);
   const calendarNdjson = toNdjson([
     ...input.data.events.map((row) => ({ type: "event", ...row })),
     ...input.data.documents.map((row) => ({ type: "document", ...row })),

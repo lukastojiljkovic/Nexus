@@ -52,6 +52,8 @@ function emptyExportInput(): ExportArchiveInput {
     },
     data: {
       tasks: [],
+      taskLists: [],
+      taskSections: [],
       events: [],
       documents: [],
       renewals: [],
@@ -82,7 +84,9 @@ function richProfileData(): ProfileData {
   return {
     tasks: [
       // Recurring (ADR-024), and reminded (ADR-028): the rule, the ladder and
-      // the due date both of them anchor on travel together.
+      // the due date both of them anchor on travel together. Filed in a
+      // SECTION of a non-Inbox list (TASK-004), so the round trip carries the
+      // full placement rather than the default one.
       {
         id: "task-parent", profileId: "profile1", parentId: null, title: "Roditeljski zadatak",
         description: null, status: "todo", priority: "none", done: false, dueDate: "2026-08-01",
@@ -90,12 +94,35 @@ function richProfileData(): ProfileData {
         completedAt: null,
         recurrence: { freq: { kind: "monthly-date", interval: 1, day: 1 }, end: { kind: "count", total: 12 } },
         reminderOffsets: [0, 3],
+        listId: "list-work", sectionId: "section-doing", position: 1024,
       },
       {
         id: "task-child", profileId: "profile1", parentId: "task-parent", title: "Podzadatak",
         description: "Opis", status: "done", priority: "high", done: true, dueDate: null,
         startDate: "2026-07-05", createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-02T00:00:00.000Z",
         completedAt: "2026-07-02T00:00:00.000Z", recurrence: null, reminderOffsets: [],
+        // A negative position: prepending walks below zero, so the round trip
+        // has to carry one verbatim.
+        listId: "list-inbox", sectionId: null, position: -1024,
+      },
+    ],
+    // A nested list under the Inbox, so the parent chain travels too.
+    taskLists: [
+      {
+        id: "list-inbox", profileId: "profile1", parentId: null, name: "Inbox", isInbox: true,
+        defaultView: "list", position: 1024, createdAt: "2026-07-01T00:00:00.000Z",
+        updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+      {
+        id: "list-work", profileId: "profile1", parentId: "list-inbox", name: "Posao", isInbox: false,
+        defaultView: "kanban", position: 2048, createdAt: "2026-07-01T00:00:00.000Z",
+        updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+    ],
+    taskSections: [
+      {
+        id: "section-doing", listId: "list-work", name: "U toku", position: 1024,
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
       },
     ],
     events: [
@@ -334,12 +361,28 @@ function emptyInputWith(files: Map<string, string>, extra: Partial<ImportArchive
   return { files, ydocs: new Map(), blobNames: new Set(), hash: sha256, ...extra };
 }
 
+/** The list `VALID_TASK` lives in — a task at this build's era must always name one, so the two travel together (see `tasksFile`). */
+const VALID_TASK_LIST = {
+  type: "task-list", id: "tl1", profileId: "profile1", parentId: null, name: "Inbox",
+  isInbox: true, defaultView: "list", position: 1024,
+  createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+};
+
 const VALID_TASK = {
   type: "task", id: "t1", profileId: "profile1", parentId: null, title: "A", description: null,
   status: "todo", priority: "none", done: false, dueDate: null, startDate: null,
   createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z", completedAt: null,
-  recurrence: null, reminderOffsets: [],
+  recurrence: null, reminderOffsets: [], listId: "tl1", sectionId: null, position: 1024,
 };
+
+/**
+ * `data/tasks.ndjson` holding `rows` behind the list they reference, so a test
+ * that cares about a TASK does not have to restate its container. Line numbers
+ * therefore start at 2 for the first task — the tests that assert one say so.
+ */
+function tasksFile(rows: readonly Record<string, unknown>[]): string {
+  return ndjson([VALID_TASK_LIST, ...rows]);
+}
 
 const VALID_EVENT = {
   type: "event", id: "e1", profileId: "profile1", title: "Sastanak", description: null,
@@ -410,10 +453,10 @@ describe("parseImportArchive — one test per problem code", () => {
   });
 
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.3.0" });
+    const files = baseFiles({ schemaVersion: "1.4.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.3.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.4.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -428,7 +471,7 @@ describe("parseImportArchive — one test per problem code", () => {
 
   it("checksum-mismatch: a data file's content does not hash to the manifest's recorded checksum", () => {
     const files = baseFiles();
-    files.set("data/tasks.ndjson", ndjson([VALID_TASK]));
+    files.set("data/tasks.ndjson", tasksFile([VALID_TASK]));
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toContainEqual({ severity: "error", code: "checksum-mismatch", path: "data/tasks.ndjson" });
     expect(result.data).toBeNull();
@@ -569,6 +612,214 @@ describe("parseImportArchive — one test per problem code", () => {
   });
 });
 
+describe("parseImportArchive — task lists and sections (TASK-004 / ADR-029)", () => {
+  const VALID_SECTION = {
+    type: "task-section", id: "ts1", listId: "tl1", name: "U toku", position: 1024,
+    createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+  };
+
+  /** Parses a `data/tasks.ndjson` built from `rows` verbatim — no list prepended, so a test can state exactly what its archive holds. */
+  function parseTasksFile(rows: readonly Record<string, unknown>[]) {
+    return parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/tasks.ndjson": ndjson(rows) } })),
+    );
+  }
+
+  it("round-trips a nested list, a section and a task placed in it", () => {
+    const child = {
+      ...VALID_TASK_LIST, id: "tl2", parentId: "tl1", name: "Posao", isInbox: false,
+      defaultView: "kanban", position: 2048,
+    };
+    const section = { ...VALID_SECTION, listId: "tl2" };
+    const task = { ...VALID_TASK, listId: "tl2", sectionId: "ts1", position: -1024 };
+
+    const result = parseTasksFile([VALID_TASK_LIST, child, section, task]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.taskLists).toEqual([
+      {
+        id: "tl1", profileId: "profile1", parentId: null, name: "Inbox", isInbox: true,
+        defaultView: "list", position: 1024, createdAt: "2026-07-01T00:00:00.000Z",
+        updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+      {
+        id: "tl2", profileId: "profile1", parentId: "tl1", name: "Posao", isInbox: false,
+        defaultView: "kanban", position: 2048, createdAt: "2026-07-01T00:00:00.000Z",
+        updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+    ]);
+    expect(result.data?.taskSections).toEqual([
+      {
+        id: "ts1", listId: "tl2", name: "U toku", position: 1024,
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+    ]);
+    // A negative position is a legitimate sort key (prepending walks below
+    // zero), so it survives verbatim rather than being clamped.
+    expect(result.data?.tasks[0]).toMatchObject({ listId: "tl2", sectionId: "ts1", position: -1024 });
+  });
+
+  const BAD_LISTS: { name: string; row: Record<string, unknown>; detail: string }[] = [
+    { name: "an empty name", row: { name: "" }, detail: "name" },
+    { name: "a view outside migration 022's CHECK", row: { defaultView: "gantt" }, detail: "defaultView" },
+    { name: "a non-boolean isInbox", row: { isInbox: 1 }, detail: "isInbox" },
+    { name: "a fractional position", row: { position: 1.5 }, detail: "position" },
+    { name: "no position at all", row: { position: undefined }, detail: "position" },
+    { name: "a missing timestamp", row: { updatedAt: undefined }, detail: "updatedAt" },
+  ];
+
+  for (const { name, row, detail } of BAD_LISTS) {
+    it(`refuses a task list with ${name}`, () => {
+      const result = parseTasksFile([{ ...VALID_TASK_LIST, ...row }]);
+      expect(result.problems).toContainEqual({
+        severity: "error", code: "invalid-record", path: "data/tasks.ndjson", line: 1, detail,
+      });
+      expect(result.data).toBeNull();
+    });
+  }
+
+  const BAD_SECTIONS: { name: string; row: Record<string, unknown>; detail: string }[] = [
+    { name: "an empty name", row: { name: "" }, detail: "name" },
+    { name: "no list to belong to", row: { listId: undefined }, detail: "listId" },
+    { name: "a fractional position", row: { position: 0.5 }, detail: "position" },
+  ];
+
+  for (const { name, row, detail } of BAD_SECTIONS) {
+    it(`refuses a task section with ${name}`, () => {
+      const result = parseTasksFile([VALID_TASK_LIST, { ...VALID_SECTION, ...row }]);
+      expect(result.problems).toContainEqual({
+        severity: "error", code: "invalid-record", path: "data/tasks.ndjson", line: 2, detail,
+      });
+      expect(result.data).toBeNull();
+    });
+  }
+
+  it("refuses a task naming a list the archive does not carry", () => {
+    const result = parseTasksFile([{ ...VALID_TASK, listId: "ghost" }]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "unknown-reference", path: "data/tasks.ndjson", line: 1,
+      detail: "listId=ghost",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  it("refuses a section naming a list the archive does not carry", () => {
+    const result = parseTasksFile([{ ...VALID_SECTION, listId: "ghost" }]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "unknown-reference", path: "data/tasks.ndjson", line: 1,
+      detail: "listId=ghost",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  it("refuses a list whose parent chain loops", () => {
+    const a = { ...VALID_TASK_LIST, id: "a", parentId: "b", isInbox: false };
+    const b = { ...VALID_TASK_LIST, id: "b", parentId: "a", isInbox: false };
+    const result = parseTasksFile([a, b]);
+    const cycle = result.problems.find((problem) => problem.code === "reference-cycle");
+    expect(cycle).toMatchObject({ severity: "error", path: "data/tasks.ndjson" });
+    expect(["a", "b"]).toContain(cycle?.detail);
+    expect(result.data).toBeNull();
+  });
+
+  // The reference no foreign key can express: the section exists, but under a
+  // different list, so the task would land under a heading nothing renders.
+  it("refuses a task whose section belongs to another list", () => {
+    const otherList = { ...VALID_TASK_LIST, id: "tl2", isInbox: false, position: 2048 };
+    const section = { ...VALID_SECTION, listId: "tl2" };
+    const task = { ...VALID_TASK, listId: "tl1", sectionId: "ts1" };
+
+    const result = parseTasksFile([VALID_TASK_LIST, otherList, section, task]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "unknown-reference", path: "data/tasks.ndjson", line: 4,
+      detail: "sectionId=ts1",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  it("accepts that very same task once its section is a section of ITS list", () => {
+    const result = parseTasksFile([
+      VALID_TASK_LIST,
+      VALID_SECTION,
+      { ...VALID_TASK, listId: "tl1", sectionId: "ts1" },
+    ]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.tasks[0]?.sectionId).toBe("ts1");
+  });
+
+  it("refuses a task-list record filed in the wrong data file", () => {
+    const result = parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/notes.ndjson": ndjson([VALID_TASK_LIST]) } })),
+    );
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "invalid-record", path: "data/notes.ndjson", line: 1, detail: "type",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  // --- The 1.3.0 era gate ------------------------------------------------
+
+  /** Parses `rows` under a manifest declaring `schemaVersion` — the one variable each era case below turns. */
+  function parseAtVersion(schemaVersion: string, rows: readonly Record<string, unknown>[]) {
+    return parseImportArchive(
+      emptyInputWith(
+        baseFiles({ schemaVersion, fileContents: { "data/tasks.ndjson": ndjson(rows) } }),
+      ),
+    );
+  }
+
+  const {
+    listId: _listId,
+    sectionId: _sectionId,
+    position: _position,
+    ...TASK_WITHOUT_PLACEMENT
+  } = VALID_TASK;
+
+  it("defaults a 1.2.0 archive's task placement, so it restores into the Inbox", () => {
+    const result = parseAtVersion("1.2.0", [TASK_WITHOUT_PLACEMENT]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.tasks[0]).toMatchObject({ listId: null, sectionId: null, position: 0 });
+  });
+
+  it("refuses that same row at 1.3.0, naming the field the bump made required", () => {
+    const result = parseAtVersion("1.3.0", [TASK_WITHOUT_PLACEMENT]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "invalid-record", path: "data/tasks.ndjson", line: 1, detail: "listId",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  // An explicit `null` is PRESENT, not absent: a 1.3 writer that emitted the key
+  // meant it, and "no list" is not a state a task can be in.
+  it("refuses an explicit null listId at 1.3.0", () => {
+    const result = parseAtVersion("1.3.0", [{ ...VALID_TASK, listId: null }]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "invalid-record", path: "data/tasks.ndjson", line: 1, detail: "listId",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  // And leniency never weakens a value that IS present, in any era.
+  it("validates a present placement strictly at 1.2.0 too", () => {
+    const malformed = parseAtVersion("1.2.0", [{ ...TASK_WITHOUT_PLACEMENT, position: "first" }]);
+    expect(malformed.problems).toContainEqual({
+      severity: "error", code: "invalid-record", path: "data/tasks.ndjson", line: 1, detail: "position",
+    });
+  });
+
+  // A section without a list is a heading with nothing to head — and at an
+  // older era, where `listId` legitimately defaults to null, this is the only
+  // check that can catch it.
+  it("refuses a 1.2.0 task carrying a sectionId but no listId", () => {
+    const result = parseAtVersion("1.2.0", [
+      { ...TASK_WITHOUT_PLACEMENT, sectionId: "ts1" },
+    ]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "invalid-record", path: "data/tasks.ndjson", line: 1, detail: "sectionId",
+    });
+    expect(result.data).toBeNull();
+  });
+});
+
 describe("parseImportArchive — recurrence (ADR-024)", () => {
   /** The `invalid-record` details a one-row file produced, in discovery order. */
   function detailsFor(path: string, row: Record<string, unknown>): (string | undefined)[] {
@@ -585,7 +836,7 @@ describe("parseImportArchive — recurrence (ADR-024)", () => {
       recurrence: { freq: { kind: "weekly", interval: 2, days: [4, 1] }, end: { kind: "never" } },
     };
     const result = parseImportArchive(
-      emptyInputWith(baseFiles({ fileContents: { "data/tasks.ndjson": ndjson([task]) } })),
+      emptyInputWith(baseFiles({ fileContents: { "data/tasks.ndjson": tasksFile([task]) } })),
     );
     expect(result.problems).toEqual([]);
     expect(result.data?.tasks[0]?.recurrence).toEqual({
@@ -650,7 +901,7 @@ describe("parseImportArchive — recurrence (ADR-024)", () => {
   it("accepts a task whose reminder ladder sits beside the due date it counts back from, in any order", () => {
     const task = { ...VALID_TASK, dueDate: "2026-08-10", reminderOffsets: [7, 0] };
     const result = parseImportArchive(
-      emptyInputWith(baseFiles({ fileContents: { "data/tasks.ndjson": ndjson([task]) } })),
+      emptyInputWith(baseFiles({ fileContents: { "data/tasks.ndjson": tasksFile([task]) } })),
     );
     expect(result.problems).toEqual([]);
     // Order carries no meaning on the way in — `RestoreStore` writes it sorted.
@@ -790,17 +1041,25 @@ describe("parseImportArchive — recurrence (ADR-024)", () => {
 });
 
 /**
- * A backup's whole point is that it restores. Four REQUIRED fields have been
+ * A backup's whole point is that it restores. Seven REQUIRED fields have been
  * added to existing record types since the first release — task/event
  * `recurrence`, event `recurrenceExdates`, event `reminderOffsets` (all three
- * inside `1.0.x`, with no bump) and task `reminderOffsets` (at the `1.2.0`
- * bump) — and without the era gate every archive written before each of them
- * would be refused outright for a field that did not exist yet.
+ * inside `1.0.x`, with no bump), task `reminderOffsets` (at the `1.2.0` bump)
+ * and a task's `listId`/`sectionId`/`position` (at the `1.3.0` one) — and
+ * without the era gate every archive written before each of them would be
+ * refused outright for a field that did not exist yet.
  */
 describe("parseImportArchive — older eras (fields added after the first release)", () => {
   /** `VALID_TASK` as a 1.0.0 writer emitted it: derived by REMOVING the fields added since, so this fixture cannot drift from the current row shape. */
   function eraTask(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-    const { recurrence: _recurrence, reminderOffsets: _reminderOffsets, ...rest } = VALID_TASK;
+    const {
+      recurrence: _recurrence,
+      reminderOffsets: _reminderOffsets,
+      listId: _listId,
+      sectionId: _sectionId,
+      position: _position,
+      ...rest
+    } = VALID_TASK;
     return { ...rest, ...overrides };
   }
 
@@ -837,11 +1096,19 @@ describe("parseImportArchive — older eras (fields added after the first releas
   const invalidDetails = (result: ReturnType<typeof parseAt>): (string | undefined)[] =>
     result.problems.filter((problem) => problem.code === "invalid-record").map((p) => p.detail);
 
-  it("parses a 1.0.0 archive whose rows predate all four fields, defaulting each", () => {
+  it("parses a 1.0.0 archive whose rows predate all seven fields, defaulting each", () => {
     const result = parseAt("1.0.0", [eraTask()], [eraEvent()]);
 
     expect(result.problems).toEqual([]);
-    expect(result.data?.tasks[0]).toMatchObject({ recurrence: null, reminderOffsets: [] });
+    expect(result.data?.tasks[0]).toMatchObject({
+      recurrence: null,
+      reminderOffsets: [],
+      // TASK-004: no list to point at, which is exactly what `RestoreStore`
+      // reads as "put this task in the target profile's Inbox".
+      listId: null,
+      sectionId: null,
+      position: 0,
+    });
     expect(result.data?.events[0]).toMatchObject({
       recurrence: null,
       recurrenceExdates: [],
@@ -869,7 +1136,9 @@ describe("parseImportArchive — older eras (fields added after the first releas
 
   it("lets a 1.1.0 archive omit only what the 1.2.0 bump added", () => {
     const { reminderOffsets: _ladder, ...taskWithoutLadder } = VALID_TASK;
-    const accepted = parseAt("1.1.0", [taskWithoutLadder]);
+    // The list travels with it: `listId` is PRESENT on this row, and leniency
+    // never weakens a present value — its reference check included.
+    const accepted = parseAt("1.1.0", [VALID_TASK_LIST, taskWithoutLadder]);
     expect(accepted.problems).toEqual([]);
     expect(accepted.data?.tasks[0]?.reminderOffsets).toEqual([]);
 
@@ -939,8 +1208,8 @@ describe("parseImportArchive — older eras (fields added after the first releas
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.2.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.2.0");
+  it("is 1.3.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.3.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -952,7 +1221,7 @@ describe("parseImportArchive — schema version", () => {
   });
 
   it("accepts the exact current version", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.2.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.3.0" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
@@ -966,9 +1235,16 @@ describe("parseImportArchive — schema version", () => {
     expect(result.data).not.toBeNull();
   });
 
-  // And the same for the minor ADR-028 has just superseded.
+  // And the same for the minor ADR-028 superseded.
   it("accepts an older minor — a 1.1 archive still parses here", () => {
     const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.1.0" })));
+    expect(result.problems).toEqual([]);
+    expect(result.data).not.toBeNull();
+  });
+
+  // And for the one ADR-029 has just superseded.
+  it("accepts an older minor — a 1.2 archive still parses here", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.2.0" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
@@ -980,15 +1256,15 @@ describe("parseImportArchive — schema version", () => {
   });
 
   it("accepts a newer patch", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.2.7" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.3.7" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
 
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.3.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.4.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.3.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.4.0" },
     ]);
     expect(result.data).toBeNull();
   });

@@ -3,6 +3,7 @@ import { serializeRecurrenceRule } from "@nexus/core";
 import type { ExportSettings, ProfileData, RecurrenceRule } from "@nexus/core";
 import { RestoreValidationError } from "../errors.js";
 import { NOTIFICATION_SOURCES } from "../notify/notificationStore.js";
+import { TASK_ORDER_GAP, TaskListStore } from "../tasks/taskListStore.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -29,10 +30,11 @@ export interface RestoreProfileInput {
  * CASCADE` to reach a row (a future migration's table would silently survive
  * a restore if it relied on cascade alone — see `restoreStore.test.ts`'s
  * guard test, which reads `sqlite_master` and fails until a new table is
- * either added here or explicitly allow-listed as exempt). Six tables carry no
+ * either added here or explicitly allow-listed as exempt). Seven tables carry no
  * `profile_id` of their own and are scoped through their parent instead
- * (`document_renewals` through `tracked_documents`; the five `note_*` child
- * tables through `notes`) — see `wipeSqlFor` below.
+ * (`document_renewals` through `tracked_documents`; `task_sections` through
+ * `task_lists`; the five `note_*` child tables through `notes`) — see
+ * `wipeSqlFor` below.
  */
 export const RESTORE_WIPE_TABLES = [
   "document_renewals",
@@ -48,7 +50,11 @@ export const RESTORE_WIPE_TABLES = [
   "events",
   "people",
   "notifications",
+  // Tasks first, then the sections and lists they point at — children before
+  // parents, all the way down.
   "tasks",
+  "task_sections",
+  "task_lists",
   "note_tag_links",
   "note_links",
   "note_attachments",
@@ -69,6 +75,7 @@ type WipeTable = (typeof RESTORE_WIPE_TABLES)[number];
 /** The tables above that carry no `profile_id` column and must be scoped through their parent instead of a direct `WHERE profile_id = ?`. */
 const SCOPED_THROUGH_PARENT: Partial<Record<WipeTable, string>> = {
   document_renewals: `DELETE FROM document_renewals WHERE document_id IN (SELECT id FROM tracked_documents WHERE profile_id = ?)`,
+  task_sections: `DELETE FROM task_sections WHERE list_id IN (SELECT id FROM task_lists WHERE profile_id = ?)`,
   note_tag_links: `DELETE FROM note_tag_links WHERE note_id IN (SELECT id FROM notes WHERE profile_id = ?)`,
   note_links: `DELETE FROM note_links WHERE source_note_id IN (SELECT id FROM notes WHERE profile_id = ?)`,
   note_attachments: `DELETE FROM note_attachments WHERE note_id IN (SELECT id FROM notes WHERE profile_id = ?)`,
@@ -139,7 +146,17 @@ function offsetsText(offsets: readonly number[]): string {
 export class RestoreStore {
   private readonly wipeStatements: readonly Database.Statement[];
   private readonly updateProfileName: Database.Statement;
+  /**
+   * The ONE store class this restore leans on, and deliberately so: an archive
+   * written before ADR-029 names no list at all, and the Inbox its tasks then
+   * land in has no archive row to reproduce — it is a fresh row, minted now,
+   * which is exactly what `ensureInbox` makes. Reproducing that literal here
+   * would be a second definition of "what a profile's Inbox looks like".
+   */
+  private readonly taskLists: TaskListStore;
 
+  private readonly insertTaskList: Database.Statement;
+  private readonly insertTaskSection: Database.Statement;
   private readonly insertNoteFolder: Database.Statement;
   private readonly insertNoteTag: Database.Statement;
   private readonly insertSubject: Database.Statement;
@@ -173,7 +190,18 @@ export class RestoreStore {
   ) {
     this.wipeStatements = RESTORE_WIPE_TABLES.map((table) => db.prepare(wipeSqlFor(table)));
     this.updateProfileName = db.prepare(`UPDATE profiles SET name = ? WHERE id = ?`);
+    this.taskLists = new TaskListStore(db, profileId);
 
+    this.insertTaskList = db.prepare(
+      `INSERT INTO task_lists
+         (id, profile_id, parent_id, name, is_inbox, default_view, position,
+          created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    this.insertTaskSection = db.prepare(
+      `INSERT INTO task_sections (id, list_id, name, position, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    );
     this.insertNoteFolder = db.prepare(
       `INSERT INTO note_folders (id, profile_id, parent_id, name, color, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -225,8 +253,8 @@ export class RestoreStore {
       `INSERT INTO tasks
          (id, profile_id, parent_id, title, description, status, priority,
           due_date, start_date, created_at, updated_at, completed_at, recurrence,
-          reminder_offsets, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+          reminder_offsets, list_id, section_id, position, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertEvent = db.prepare(
       `INSERT INTO events
@@ -320,6 +348,22 @@ export class RestoreStore {
 
       let written = 0;
 
+      for (const list of input.data.taskLists) {
+        this.insertTaskList.run(
+          list.id, this.profileId, list.parentId, list.name, list.isInbox ? 1 : 0,
+          list.defaultView, list.position, list.createdAt, list.updatedAt,
+        );
+        written += 1;
+      }
+
+      for (const section of input.data.taskSections) {
+        this.insertTaskSection.run(
+          section.id, section.listId, section.name, section.position,
+          section.createdAt, section.updatedAt,
+        );
+        written += 1;
+      }
+
       for (const folder of input.data.noteFolders) {
         this.insertNoteFolder.run(
           folder.id, this.profileId, folder.parentId, folder.name, folder.color,
@@ -409,12 +453,37 @@ export class RestoreStore {
         written += 1;
       }
 
+      // A task whose `listId` is null came from an archive written before
+      // ADR-029 (`ArchiveEra.writesTaskLists`), so there is no list to
+      // reproduce: it goes to the target profile's Inbox — created here if the
+      // archive carried no lists at all, which is precisely the case an
+      // era-defaulted archive always is — and gets a gap-spaced position in the
+      // archive's own row order, so the list reads as it did before lists
+      // existed. Resolved once, lazily, so an archive that names its lists never
+      // mints an Inbox it does not need.
+      let fallbackListId: string | null = null;
+      let fallbackPosition = 0;
       for (const task of input.data.tasks) {
+        let listId = task.listId;
+        let position = task.position;
+        if (listId === null) {
+          if (fallbackListId === null) {
+            const inbox = this.taskLists.ensureInbox(now);
+            fallbackListId = inbox.id;
+            // `written` counts the rows this restore wrote: an Inbox
+            // `ensureInbox` had to mint is one of them, while one it found among
+            // the archive's own lists was already counted above.
+            if (!input.data.taskLists.some((list) => list.id === inbox.id)) written += 1;
+          }
+          listId = fallbackListId;
+          fallbackPosition += TASK_ORDER_GAP;
+          position = fallbackPosition;
+        }
         this.insertTask.run(
           task.id, this.profileId, task.parentId, task.title, task.description,
           task.status, task.priority, task.dueDate, task.startDate,
           task.createdAt, task.updatedAt, task.completedAt, recurrenceText(task.recurrence),
-          offsetsText(task.reminderOffsets),
+          offsetsText(task.reminderOffsets), listId, task.sectionId, position,
         );
         written += 1;
       }

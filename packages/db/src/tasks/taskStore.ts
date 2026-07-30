@@ -8,6 +8,7 @@ import {
 import type { RecurrenceRule } from "@nexus/core";
 import { TaskNotFoundError, TaskValidationError } from "../errors.js";
 import { uuidv7 } from "../ids.js";
+import { TASK_ORDER_GAP, placeBetween } from "./taskListStore.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -72,6 +73,16 @@ export interface Task {
    * instant: this is the document-expiry model, not the event one.
    */
   reminderOffsets: number[];
+  /**
+   * The list this task lives in (TASK-004 / ADR-029). Never null: migration 022
+   * gave every task the profile's Inbox and every write path since sets one, so
+   * a NULL column here is corruption rather than "no list", and is read as such.
+   */
+  listId: string;
+  /** The section (a heading inside `listId`) this task sits under, or null for the list body. */
+  sectionId: string | null;
+  /** Sparse sort key within this task's (list, section) scope — see `TaskListStore.positionBetween`. */
+  position: number;
 }
 
 /** Fields accepted when creating a task; only `title` is required (TASK-001). */
@@ -85,6 +96,10 @@ export interface CreateTaskInput {
   parentId?: string | null;
   recurrence?: RecurrenceRule | null;
   reminderOffsets?: number[];
+  /** Where the task lands (TASK-004); absent means the profile's Inbox. Ignored when `parentId` is set — a subtask follows its parent. */
+  listId?: string;
+  /** A section of `listId`; absent or null puts the task in the list body. Ignored when `parentId` is set, for the same reason. */
+  sectionId?: string | null;
 }
 
 /**
@@ -118,15 +133,40 @@ interface TaskRow {
   completed_at: string | null;
   recurrence: string | null;
   reminder_offsets: string;
+  list_id: string | null;
+  section_id: string | null;
+  position: number;
 }
 
 const COLUMNS =
   "id, profile_id, parent_id, title, description, status, priority, " +
-  "due_date, start_date, created_at, updated_at, completed_at, recurrence, reminder_offsets";
+  "due_date, start_date, created_at, updated_at, completed_at, recurrence, reminder_offsets, " +
+  "list_id, section_id, position";
+
+/**
+ * The one total order every task read uses (TASK-004): list, then the list BODY
+ * before its sections (`section_id IS NOT NULL` is 0 for the body), then each
+ * scope by its own sparse `position`. `created_at, id` break the remaining ties,
+ * because equal positions inside one scope are legal — a promoted subtree keeps
+ * its relative order rather than forcing a table-wide reshuffle. Sections
+ * themselves are ordered by `task_sections.position`, which a task row cannot
+ * see; the UI reads that order from `TaskListStore.listSections` and groups
+ * these rows under it.
+ */
+const TASK_ORDER = "list_id, section_id IS NOT NULL, section_id, position, created_at, id";
 
 /** Accepts ISO-8601 date ('2026-07-08') or date-time, optionally zoned (PRD §7). */
 const ISO_8601 =
   /^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2})?(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})?)?$/;
+
+/**
+ * A full ISO-8601 date-time — the `now` the TASK-004 placement mutators take
+ * (the `NoteStore`/`TaskListStore` idiom, so one structural edit stamps one
+ * moment across every row it touches). The older methods above predate that
+ * idiom and read the wall clock themselves.
+ */
+const ISO_8601_DATETIME =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})?$/;
 
 /**
  * Task persistence for a single profile, over prepared, parameterized statements
@@ -143,6 +183,15 @@ export class TaskStore {
   private readonly markDeleted: Database.Statement;
   private readonly markRestored: Database.Statement;
   private readonly reopenSubtasks: Database.Statement;
+  private readonly selectInbox: Database.Statement;
+  private readonly selectActiveList: Database.Statement;
+  private readonly selectSectionOfList: Database.Statement;
+  private readonly selectSiblingPosition: Database.Statement;
+  private readonly selectMaxPosition: Database.Statement;
+  private readonly selectScopeIds: Database.Statement;
+  private readonly selectLiveSubtreeIds: Database.Statement;
+  private readonly updatePlacement: Database.Statement;
+  private readonly updatePosition: Database.Statement;
 
   constructor(
     private readonly db: DatabaseHandle,
@@ -152,13 +201,13 @@ export class TaskStore {
       `INSERT INTO tasks
          (id, profile_id, parent_id, title, description, status, priority,
           due_date, start_date, created_at, updated_at, completed_at, recurrence,
-          reminder_offsets, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+          reminder_offsets, list_id, section_id, position, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.selectActive = db.prepare(
       `SELECT ${COLUMNS} FROM tasks
        WHERE profile_id = ? AND deleted_at IS NULL
-       ORDER BY created_at, id`,
+       ORDER BY ${TASK_ORDER}`,
     );
     this.selectActiveById = db.prepare(
       `SELECT ${COLUMNS} FROM tasks
@@ -186,15 +235,81 @@ export class TaskStore {
       `UPDATE tasks SET status = 'todo', completed_at = NULL, updated_at = ?
        WHERE parent_id = ? AND profile_id = ? AND deleted_at IS NULL`,
     );
+
+    // --- Placement (TASK-004 / ADR-029) ---------------------------------
+    // Lists and sections belong to `TaskListStore`; a task only ever READS
+    // them, through these four scoping statements, so this store never has to
+    // duplicate that store's rules — only respect them.
+    this.selectInbox = db.prepare(
+      `SELECT id FROM task_lists
+       WHERE profile_id = ? AND is_inbox = 1 AND deleted_at IS NULL
+       ORDER BY position, id LIMIT 1`,
+    );
+    this.selectActiveList = db.prepare(
+      `SELECT id FROM task_lists WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
+    );
+    this.selectSectionOfList = db.prepare(
+      `SELECT s.id FROM task_sections s JOIN task_lists l ON l.id = s.list_id
+       WHERE s.id = ? AND s.list_id = ? AND l.profile_id = ?`,
+    );
+    this.selectSiblingPosition = db.prepare(
+      `SELECT position FROM tasks
+       WHERE id = ? AND profile_id = ? AND deleted_at IS NULL
+         AND list_id = ? AND section_id IS ?`,
+    );
+    // Position bookkeeping (the scope maximum, a renumber) deliberately spans
+    // soft-deleted rows too, so restoring a task puts it back where it was
+    // rather than on top of a live one.
+    this.selectMaxPosition = db.prepare(
+      `SELECT max(position) AS maxPosition FROM tasks
+       WHERE profile_id = ? AND list_id = ? AND section_id IS ?`,
+    );
+    this.selectScopeIds = db.prepare(
+      `SELECT id FROM tasks
+       WHERE profile_id = ? AND list_id = ? AND section_id IS ?
+       ORDER BY position, created_at, id`,
+    );
+    // `UNION` (never `UNION ALL`) so a hand-corrupted parent chain ends the
+    // walk instead of running forever.
+    this.selectLiveSubtreeIds = db.prepare(
+      `WITH RECURSIVE subtree(tid) AS (
+         SELECT ?
+         UNION
+         SELECT t.id FROM tasks t JOIN subtree ON t.parent_id = subtree.tid
+         WHERE t.deleted_at IS NULL
+       )
+       SELECT t.id FROM tasks t
+       WHERE t.id IN (SELECT tid FROM subtree) AND t.profile_id = ? AND t.deleted_at IS NULL
+       ORDER BY t.position, t.created_at, t.id`,
+    );
+    this.updatePlacement = db.prepare(
+      `UPDATE tasks SET list_id = ?, section_id = ?, position = ?, updated_at = ?
+       WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
+    );
+    // A renumber re-spaces rows the user did not touch, so it leaves their
+    // `updated_at` alone (`NoteOrgStore`'s promoted-notes reasoning).
+    this.updatePosition = db.prepare(
+      `UPDATE tasks SET position = ? WHERE id = ? AND profile_id = ?`,
+    );
   }
 
-  /** Active tasks for this profile in stable creation order (soft-deleted excluded). */
+  /** Active tasks for this profile in the placement order `TASK_ORDER` defines (soft-deleted excluded). */
   listActive(): Task[] {
     const rows = this.selectActive.all(this.profileId) as TaskRow[];
     return rows.map(toTask);
   }
 
-  /** Inserts a task, applying defaults, and returns the stored row (TASK-001). */
+  /**
+   * Inserts a task, applying defaults, and returns the stored row (TASK-001).
+   *
+   * Placement (TASK-004): a task with a `parentId` INHERITS its parent's list
+   * and section, and any `listId`/`sectionId` given alongside is ignored — a
+   * subtask lives where its parent lives, and the alternative (a subtask filed
+   * in a different list from the parent it is rendered under) is not a state the
+   * UI could ever show honestly. Otherwise `listId` decides, defaulting to the
+   * profile's Inbox. The row is appended at the end of whichever scope it lands
+   * in.
+   */
   create(input: CreateTaskInput): Task {
     const title = validateTitle(input.title);
     const status = validateStatus(input.status ?? "todo");
@@ -205,22 +320,129 @@ export class TaskStore {
     const recurrence = validateRecurrence(input.recurrence);
     const reminderOffsets = validateReminderOffsets(input.reminderOffsets);
     assertDueDateAnchors(recurrence, reminderOffsets, dueDate);
-    const parentId = this.resolveParent(input.parentId);
+    const parent = this.resolveParent(input.parentId);
+    const { listId, sectionId } =
+      parent !== null
+        ? { listId: parent.listId, sectionId: parent.sectionId }
+        : this.resolveScope(input.listId, input.sectionId);
+    const position = this.appendPosition(listId, sectionId);
     const now = new Date().toISOString();
     const completedAt = status === "done" ? now : null;
     const id = uuidv7();
 
     this.insert.run(
-      id, this.profileId, parentId, title, description, status, priority,
+      id, this.profileId, parent?.id ?? null, title, description, status, priority,
       dueDate, startDate, now, now, completedAt, serializeRecurrence(recurrence),
-      JSON.stringify(reminderOffsets),
+      JSON.stringify(reminderOffsets), listId, sectionId, position,
     );
 
     return {
-      id, profileId: this.profileId, parentId, title, description, status,
+      id, profileId: this.profileId, parentId: parent?.id ?? null, title, description, status,
       priority, done: status === "done", dueDate, startDate,
       createdAt: now, updatedAt: now, completedAt, recurrence, reminderOffsets,
+      listId, sectionId, position,
     };
+  }
+
+  /**
+   * Moves a task — and its whole LIVE subtree — into another list, clearing
+   * every section along the way and appending each row at the end of the target
+   * list's body, in their current order. One transaction.
+   *
+   * The subtree travels because "a subtask lives where its parent lives" is the
+   * invariant `create` establishes, and a move is the only other thing that
+   * could break it. Sections are not part of that invariant — they are headings
+   * WITHIN one list, and the UI renders a subtask under its parent whichever
+   * heading it carries — which is why `moveToSection` moves the one task only.
+   */
+  moveToList(id: string, listId: string, now: string): Task {
+    const current = this.requireActive(id);
+    const validNow = validateDateTime(now);
+    this.requireList(listId);
+
+    return this.db.transaction((): Task => {
+      const ids = (this.selectLiveSubtreeIds.all(id, this.profileId) as { id: string }[]).map(
+        (row) => row.id,
+      );
+      let position = this.appendPosition(listId, null);
+      let movedPosition = position;
+      for (const taskId of ids) {
+        this.updatePlacement.run(listId, null, position, validNow, taskId, this.profileId);
+        if (taskId === id) movedPosition = position;
+        position += TASK_ORDER_GAP;
+      }
+      return { ...current, listId, sectionId: null, position: movedPosition, updatedAt: validNow };
+    })();
+  }
+
+  /**
+   * Moves a task between the sections of the list it is already in (`null` = the
+   * list body), appended at the end of the target scope. Refuses a section
+   * belonging to any other list: changing list is `moveToList`'s job, and doing
+   * both at once would silently skip the subtree rule that move upholds.
+   */
+  moveToSection(id: string, sectionId: string | null, now: string): Task {
+    const current = this.requireActive(id);
+    const validNow = validateDateTime(now);
+    if (sectionId !== null) this.requireSectionOfList(sectionId, current.listId);
+
+    const position = this.appendPosition(current.listId, sectionId);
+    this.updatePlacement.run(
+      current.listId, sectionId, position, validNow, id, this.profileId,
+    );
+    return { ...current, sectionId, position, updatedAt: validNow };
+  }
+
+  /**
+   * Re-orders a task within its own (list, section) scope, between two live
+   * neighbours there — either null at an end of the scope. Both must share the
+   * task's exact scope: a neighbour from another list or another section
+   * describes a move, not a reorder, and the two have different rules.
+   */
+  reorder(id: string, beforeId: string | null, afterId: string | null, now: string): Task {
+    const current = this.requireActive(id);
+    const validNow = validateDateTime(now);
+    if (beforeId === id || afterId === id) {
+      throw new TaskValidationError("A task cannot be ordered against itself.");
+    }
+
+    // One transaction, because a renumber and the move it made room for are one
+    // edit: half of them is a scope re-spaced for a row that never arrived.
+    return this.db.transaction((): Task => {
+      const position = placeBetween(
+        (siblingId) => {
+          const row = this.selectSiblingPosition.get(
+            siblingId, this.profileId, current.listId, current.sectionId,
+          ) as { position: number } | undefined;
+          if (!row) {
+            throw new TaskValidationError(
+              `No active task "${siblingId}" to order against in this scope.`,
+            );
+          }
+          return row.position;
+        },
+        () => {
+          const ids = this.selectScopeIds.all(
+            this.profileId, current.listId, current.sectionId,
+          ) as { id: string }[];
+          ids.forEach((row, index) => {
+            this.updatePosition.run((index + 1) * TASK_ORDER_GAP, row.id, this.profileId);
+          });
+        },
+        beforeId,
+        afterId,
+      );
+      if (position === null) {
+        throw new TaskValidationError(
+          '"beforeId" and "afterId" do not describe a gap in this scope.',
+        );
+      }
+
+      this.updatePlacement.run(
+        current.listId, current.sectionId, position, validNow, id, this.profileId,
+      );
+      return { ...current, position, updatedAt: validNow };
+    })();
   }
 
   /** Applies a partial field patch to an active task (TASK-001 editing). */
@@ -416,16 +638,68 @@ export class TaskStore {
     };
   }
 
-  /** Validates an optional parent id belongs to an active task in this profile. */
-  private resolveParent(parentId: string | null | undefined): string | null {
+  /** Validates an optional parent id belongs to an active task in this profile, returning that parent (a subtask inherits its placement). */
+  private resolveParent(parentId: string | null | undefined): Task | null {
     if (parentId === undefined || parentId === null) return null;
-    const parent = this.selectActiveById.get(parentId, this.profileId);
+    const parent = this.selectActiveById.get(parentId, this.profileId) as TaskRow | undefined;
     if (!parent) {
       throw new TaskValidationError(
         `parentId "${parentId}" does not reference a task in this profile.`,
       );
     }
-    return parentId;
+    return toTask(parent);
+  }
+
+  /**
+   * Where a top-level task lands: the given list or the profile's Inbox, plus a
+   * section that must belong to it. A profile with no Inbox is refused rather
+   * than papered over — migration 022 and `TaskListStore.ensureInbox` between
+   * them guarantee one, so its absence means a database nobody should be
+   * writing tasks into.
+   */
+  private resolveScope(
+    listId: string | undefined,
+    sectionId: string | null | undefined,
+  ): { listId: string; sectionId: string | null } {
+    const resolvedList = listId === undefined ? this.requireInbox() : this.requireList(listId);
+    const resolvedSection = sectionId ?? null;
+    if (resolvedSection !== null) this.requireSectionOfList(resolvedSection, resolvedList);
+    return { listId: resolvedList, sectionId: resolvedSection };
+  }
+
+  private requireInbox(): string {
+    const row = this.selectInbox.get(this.profileId) as { id: string } | undefined;
+    if (!row) {
+      throw new TaskValidationError("This profile has no Inbox list to place a task in.");
+    }
+    return row.id;
+  }
+
+  private requireList(listId: string): string {
+    const row = this.selectActiveList.get(listId, this.profileId) as { id: string } | undefined;
+    if (!row) {
+      throw new TaskValidationError(
+        `listId "${listId}" does not reference an active list in this profile.`,
+      );
+    }
+    return row.id;
+  }
+
+  private requireSectionOfList(sectionId: string, listId: string): void {
+    const row = this.selectSectionOfList.get(sectionId, listId, this.profileId);
+    if (!row) {
+      throw new TaskValidationError(
+        `sectionId "${sectionId}" does not reference a section of list "${listId}".`,
+      );
+    }
+  }
+
+  /** The end of one (list, section) scope — every insert and every move appends there. */
+  private appendPosition(listId: string, sectionId: string | null): number {
+    const row = this.selectMaxPosition.get(this.profileId, listId, sectionId) as {
+      maxPosition: number | null;
+    };
+    return row.maxPosition === null ? TASK_ORDER_GAP : row.maxPosition + TASK_ORDER_GAP;
   }
 }
 
@@ -446,7 +720,26 @@ function toTask(row: TaskRow): Task {
     completedAt: row.completed_at,
     recurrence: parseStoredRecurrence(row.recurrence, row.id),
     reminderOffsets: parseStoredOffsets(row.reminder_offsets, row.id),
+    listId: requireStoredListId(row.list_id, row.id),
+    sectionId: row.section_id,
+    position: row.position,
   };
+}
+
+/**
+ * Reads `tasks.list_id` back. The column is NULLable only because SQLite cannot
+ * add a NOT NULL column with a `REFERENCES` clause to a populated table
+ * (migration 022); migration 022's own backfill and every write path since fill
+ * it, so a NULL here is a hand-edited or half-restored row rather than a task
+ * without a list. Reading it as "unfiled" would quietly hide the task from every
+ * list the UI draws, so it throws naming the row — the same reasoning
+ * `parseStoredRecurrence` gives for its own column.
+ */
+function requireStoredListId(listId: string | null, id: string): string {
+  if (listId === null) {
+    throw new TaskValidationError(`Task "${id}" carries no list; its row is corrupt.`);
+  }
+  return listId;
 }
 
 /** A task's own patchable fields as they currently stand — the base every full-row write starts from. */
@@ -481,6 +774,13 @@ function validateStatus(value: TaskStatus): TaskStatus {
 function validatePriority(value: TaskPriority): TaskPriority {
   if (!TASK_PRIORITIES.includes(value)) {
     throw new TaskValidationError(`Unknown task priority "${value}".`);
+  }
+  return value;
+}
+
+function validateDateTime(value: string): string {
+  if (!ISO_8601_DATETIME.test(value)) {
+    throw new TaskValidationError('"now" must be an ISO-8601 date-time.');
   }
   return value;
 }

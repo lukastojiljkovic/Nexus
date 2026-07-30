@@ -43,6 +43,7 @@ import type {
   PlanStore,
   SqliteFlagStore,
   SubjectStore,
+  TaskListStore,
   TaskStore,
 } from "@nexus/db";
 
@@ -54,6 +55,7 @@ import type {
  */
 export interface ProfileDataDeps {
   taskStore(profileId: string): TaskStore;
+  taskListStore(profileId: string): TaskListStore;
   eventStore(profileId: string): EventStore;
   peopleStore(profileId: string): PeopleStore;
   documentStore(profileId: string): DocumentStore;
@@ -157,8 +159,15 @@ export function gatherProfileData(deps: ProfileDataDeps, profileId: string): Pro
   const plansStore = deps.planStore(profileId);
   const plans = plansStore.listActive();
 
+  // Sections carry no profile scope of their own — they are read one list at a
+  // time, through the already-scoped lists (TASK-004 / ADR-029).
+  const listsStore = deps.taskListStore(profileId);
+  const taskLists = listsStore.listActive();
+
   return {
     tasks: deps.taskStore(profileId).listActive(),
+    taskLists,
+    taskSections: taskLists.flatMap((list) => listsStore.listSections(list.id)),
     events: deps.eventStore(profileId).listActive(),
     documents,
     renewals: documents.flatMap((document) => documentsStore.listRenewals(document.id)),

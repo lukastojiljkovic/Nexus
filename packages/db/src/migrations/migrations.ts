@@ -21,6 +21,7 @@ import { migration018 } from "./018-recurrence.js";
 import { migration019 } from "./019-event-reminders.js";
 import { migration020 } from "./020-people.js";
 import { migration021 } from "./021-task-reminders.js";
+import { migration022 } from "./022-task-lists.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -53,6 +54,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration019,
   migration020,
   migration021,
+  migration022,
 ];
 
 /**

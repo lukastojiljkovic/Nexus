@@ -16,6 +16,7 @@ import {
   SearchStore,
   SearchValidationError,
   SubjectStore,
+  TaskListStore,
   TaskStore,
   openDatabase,
   rebuildSearchIndex,
@@ -44,9 +45,14 @@ afterEach(() => {
 
 function createProfile(name = "P"): string {
   const id = uuidv7();
+  const now = new Date().toISOString();
   db.raw
     .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
-    .run(id, "personal", name, new Date().toISOString());
+    .run(id, "personal", name, now);
+  // Every profile has an Inbox (TASK-004): migration 022 backfills the ones
+  // that predate it, `main` seeds it for the ones it creates, and `TaskStore`
+  // refuses to place a task in a profile without one.
+  new TaskListStore(db.raw, id).ensureInbox(now);
   return id;
 }
 

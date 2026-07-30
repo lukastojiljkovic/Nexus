@@ -44,7 +44,10 @@ export {
   SearchValidationError,
   SubjectNotFoundError,
   SubjectValidationError,
+  TaskListNotFoundError,
+  TaskListValidationError,
   TaskNotFoundError,
+  TaskSectionNotFoundError,
   TaskValidationError,
 } from "./errors.js";
 
@@ -67,6 +70,22 @@ export type {
   TaskStatus,
   UpdateTaskFields,
 } from "./tasks/taskStore.js";
+
+export {
+  TaskListStore,
+  MAX_TASK_LIST_NAME_LENGTH,
+  TASK_LIST_VIEWS,
+  TASK_ORDER_GAP,
+  placeBetween,
+  positionBetween,
+} from "./tasks/taskListStore.js";
+export type {
+  CreateTaskListInput,
+  DeleteListMode,
+  TaskList,
+  TaskListView,
+  TaskSection,
+} from "./tasks/taskListStore.js";
 
 export {
   EventStore,

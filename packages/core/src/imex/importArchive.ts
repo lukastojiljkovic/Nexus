@@ -26,6 +26,8 @@ import type {
   ExportStudyPlan,
   ExportSubject,
   ExportTask,
+  ExportTaskList,
+  ExportTaskSection,
   ProfileData,
 } from "./exportArchive.js";
 
@@ -109,21 +111,23 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.2.0` added a task's
- * `reminderOffsets` (ADR-028) after `1.1.0` added the `person` record type
- * (CAL-007 / ADR-026): additive changes, hence MINOR bumps, which is exactly
- * the compatibility mechanism `isSupportedSchemaVersion` implements — an older
- * minor within major 1 still passes the gate here, while an older build refuses
- * a newer archive rather than silently dropping what it cannot see (every
- * person, or every task's ladder). That, in turn, is why an unrecognised record
- * type below is an ERROR: the version gate makes "ignore what you do not know"
- * unreachable.
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.3.0` added the
+ * `task-list`/`task-section` record types and a task's placement into them
+ * (TASK-004 / ADR-029), after `1.2.0` added a task's `reminderOffsets`
+ * (ADR-028) and `1.1.0` the `person` record type (CAL-007 / ADR-026): additive
+ * changes, hence MINOR bumps, which is exactly the compatibility mechanism
+ * `isSupportedSchemaVersion` implements — an older minor within major 1 still
+ * passes the gate here, while an older build refuses a newer archive rather
+ * than silently dropping what it cannot see (every person, every task's ladder,
+ * or every list the user filed their work into). That, in turn, is why an
+ * unrecognised record type below is an ERROR: the version gate makes "ignore
+ * what you do not know" unreachable.
  *
  * Major is still 1 throughout, so there is nothing yet to migrate an older
  * major forward from — a migration framework for a major that has never
  * shipped would be speculative machinery with nothing to exercise it.
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.2.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.3.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -162,6 +166,15 @@ interface ArchiveEra {
    * `[]`, at `1.2.0` and above it is required.
    */
   writesTaskReminders: boolean;
+  /**
+   * Task `listId`/`sectionId`/`position` (TASK-004 / ADR-029) — added AT the
+   * `1.3.0` bump, the same honest arrangement `writesTaskReminders` records for
+   * `1.2.0`: below `1.3.0` their absence is expected and defaults to
+   * `null`/`null`/`0`, at `1.3.0` and above a task must name the list it lives
+   * in. This is the first field addition shipped under that rule from the
+   * start — its own flag AND its own bump, together, rather than either alone.
+   */
+  writesTaskLists: boolean;
 }
 
 /**
@@ -173,11 +186,16 @@ interface ArchiveEra {
 function eraOf(schemaVersion: string): ArchiveEra {
   const version = parseSemver(schemaVersion);
   if (version === null) {
-    return { writesRecurrenceAndEventReminders: true, writesTaskReminders: true };
+    return {
+      writesRecurrenceAndEventReminders: true,
+      writesTaskReminders: true,
+      writesTaskLists: true,
+    };
   }
   return {
     writesRecurrenceAndEventReminders: version.minor >= 1,
     writesTaskReminders: version.minor >= 2,
+    writesTaskLists: version.minor >= 3,
   };
 }
 
@@ -437,6 +455,8 @@ const STUDY_BLOCK_STATUSES = ["planned", "done", "missed"] as const;
 const NOTIFICATION_SOURCES = ["document", "exam", "study-day", "event", "task"] as const;
 const NOTIFICATION_STATUSES = ["delivered", "snoozed", "dismissed"] as const;
 const PERSON_KINDS = ["birthday", "anniversary"] as const;
+/** Mirrors `TASK_LIST_VIEWS` in `@nexus/db`'s `tasks/taskListStore.ts` and migration 022's CHECK (copied, not imported — the `NOTE_FOLDER_COLORS` arrangement). */
+const TASK_LIST_VIEWS = ["list", "kanban"] as const;
 
 /**
  * A leap year, used only by `parsePerson` to ask whether a (month, day) pair
@@ -466,6 +486,8 @@ const MAX_TASK_REMINDERS = 8;
 
 type RecordType =
   | "task"
+  | "task-list"
+  | "task-section"
   | "event"
   | "document"
   | "renewal"
@@ -489,6 +511,8 @@ type RecordType =
 
 const ALL_RECORD_TYPES: readonly RecordType[] = [
   "task",
+  "task-list",
+  "task-section",
   "event",
   "document",
   "renewal",
@@ -515,7 +539,7 @@ type DataFilePath = (typeof DATA_FILES)[number];
 
 /** Which record types the writer puts in each of the five NDJSON files — a type in any OTHER file is `invalid-record` (detail `"type"`), not silently accepted (ADR-022). */
 const FILE_RECORD_TYPES: Record<DataFilePath, readonly RecordType[]> = {
-  "data/tasks.ndjson": ["task"],
+  "data/tasks.ndjson": ["task-list", "task-section", "task"],
   "data/calendar.ndjson": ["event", "document", "renewal", "person"],
   "data/study.ndjson": ["subject", "exam", "deck", "card", "review", "plan", "block", "focus-session"],
   "data/notifications.ndjson": ["notification"],
@@ -578,10 +602,61 @@ function parseTask(raw: Record<string, unknown>, era: ArchiveEra): ExportTask {
   // `nullableBareDate`, so the only case still left to refuse is `null`, and
   // refusing it through the same helper keeps the rule one statement, not two.
   if (reminderOffsets.length > 0) bareDate(dueDate, "dueDate");
+  // TASK-004: a 1.3 writer always names the list a task lives in, so `null` is
+  // refused there — it is only ever what an OLDER archive's absent key defaults
+  // to, and `RestoreStore` reads that null as "the target profile's Inbox".
+  const listId = eraDefault<string | null>(
+    raw.listId,
+    era.writesTaskLists,
+    (value) => nonEmptyStr(value, "listId"),
+    null,
+  );
+  const sectionId = eraDefault<string | null>(
+    raw.sectionId,
+    era.writesTaskLists,
+    (value) => nullableNonEmptyStr(value, "sectionId"),
+    null,
+  );
+  // `int`, not `nonNegativeInt`: a position is a relative sort key, and
+  // prepending walks it below zero (`TaskListStore.positionBetween`).
+  const position = eraDefault(
+    raw.position,
+    era.writesTaskLists,
+    (value) => int(value, "position"),
+    0,
+  );
+  // A section is a heading INSIDE a list, so one without the other is a row the
+  // store could not have written. Which list it belongs to is checked in the
+  // reference pass, where the sections are known.
+  if (sectionId !== null && listId === null) throw new InvalidFieldError("sectionId");
   return {
     id, profileId, parentId, title, description, status, priority, done,
     dueDate, startDate, createdAt, updatedAt, completedAt, recurrence, reminderOffsets,
+    listId, sectionId, position,
   };
+}
+
+function parseTaskList(raw: Record<string, unknown>): ExportTaskList {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const parentId = nullableNonEmptyStr(raw.parentId, "parentId");
+  const name = nonEmptyStr(raw.name, "name");
+  const isInbox = bool(raw.isInbox, "isInbox");
+  const defaultView = enumStr(raw.defaultView, "defaultView", TASK_LIST_VIEWS);
+  const position = int(raw.position, "position");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, profileId, parentId, name, isInbox, defaultView, position, createdAt, updatedAt };
+}
+
+function parseTaskSection(raw: Record<string, unknown>): ExportTaskSection {
+  const id = nonEmptyStr(raw.id, "id");
+  const listId = nonEmptyStr(raw.listId, "listId");
+  const name = nonEmptyStr(raw.name, "name");
+  const position = int(raw.position, "position");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, listId, name, position, createdAt, updatedAt };
 }
 
 function parseEvent(raw: Record<string, unknown>, era: ArchiveEra): ExportEvent {
@@ -962,6 +1037,8 @@ function rowsOf<T>(bucket: Bucket<T>): T[] {
 
 interface Collections {
   tasks: Bucket<ExportTask>;
+  taskLists: Bucket<ExportTaskList>;
+  taskSections: Bucket<ExportTaskSection>;
   events: Bucket<ExportEvent>;
   documents: Bucket<ExportDocument>;
   renewals: Bucket<ExportRenewal>;
@@ -986,7 +1063,8 @@ interface Collections {
 
 function newCollections(): Collections {
   return {
-    tasks: newBucket(), events: newBucket(), documents: newBucket(), renewals: newBucket(),
+    tasks: newBucket(), taskLists: newBucket(), taskSections: newBucket(),
+    events: newBucket(), documents: newBucket(), renewals: newBucket(),
     people: newBucket(), subjects: newBucket(), exams: newBucket(), decks: newBucket(), cards: newBucket(),
     reviewLog: newBucket(), plans: newBucket(), blocks: newBucket(), focusSessions: newBucket(),
     notifications: newBucket(), noteFolders: newBucket(), noteTags: newBucket(), notes: newBucket(),
@@ -1009,6 +1087,16 @@ function dispatchRecord(
     case "task": {
       const row = parseTask(raw, era);
       pushRow(collections.tasks, row.id, row, path, line, problems);
+      return;
+    }
+    case "task-list": {
+      const row = parseTaskList(raw);
+      pushRow(collections.taskLists, row.id, row, path, line, problems);
+      return;
+    }
+    case "task-section": {
+      const row = parseTaskSection(raw);
+      pushRow(collections.taskSections, row.id, row, path, line, problems);
       return;
     }
     case "event": {
@@ -1519,6 +1607,9 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
 
   // --- Reference integrity ----------------------------------------------------
   const taskIds = new Set(rowsOf(collections.tasks).map((row) => row.id));
+  const taskListIds = new Set(rowsOf(collections.taskLists).map((row) => row.id));
+  /** Which list each section belongs to — a task's `sectionId` must resolve to a section of the task's OWN list, which a plain id set cannot say. */
+  const listOfSection = new Map(rowsOf(collections.taskSections).map((row) => [row.id, row.listId]));
   const subjectIds = new Set(rowsOf(collections.subjects).map((row) => row.id));
   const examIds = new Set(rowsOf(collections.exams).map((row) => row.id));
   const deckIds = new Set(rowsOf(collections.decks).map((row) => row.id));
@@ -1530,6 +1621,25 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
   const tagIds = new Set(rowsOf(collections.noteTags).map((row) => row.id));
 
   checkReference(collections.tasks, (row) => row.parentId, "parentId", taskIds, problems);
+  checkReference(collections.tasks, (row) => row.listId, "listId", taskListIds, problems);
+  checkReference(collections.taskLists, (row) => row.parentId, "parentId", taskListIds, problems);
+  checkReference(collections.taskSections, (row) => row.listId, "listId", taskListIds, problems);
+  // The one reference `checkReference` cannot express: the section must exist
+  // AND belong to the task's own list. A section of some other list would pass
+  // every foreign key the schema has and still put the task under a heading
+  // nothing renders.
+  for (const entry of collections.tasks.entries) {
+    const { sectionId, listId } = entry.row;
+    if (sectionId === null) continue;
+    if (listOfSection.get(sectionId) === listId) continue;
+    problems.push(
+      problem("error", "unknown-reference", {
+        path: entry.path,
+        line: entry.line,
+        detail: `sectionId=${sectionId}`,
+      }),
+    );
+  }
   checkReference(collections.exams, (row) => row.subjectId, "subjectId", subjectIds, problems);
   checkReference(collections.decks, (row) => row.subjectId, "subjectId", subjectIds, problems);
   checkReference(collections.cards, (row) => row.deckId, "deckId", deckIds, problems);
@@ -1547,8 +1657,15 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
   checkReference(collections.noteAttachments, (row) => row.noteId, "noteId", noteIds, problems);
   checkReference(collections.noteVersions, (row) => row.noteId, "noteId", noteIds, problems);
 
-  // --- Cycles: the two self-referencing parent chains.
+  // --- Cycles: the three self-referencing parent chains.
   checkParentCycle(collections.tasks, (row) => row.id, (row) => row.parentId, "data/tasks.ndjson", problems);
+  checkParentCycle(
+    collections.taskLists,
+    (row) => row.id,
+    (row) => row.parentId,
+    "data/tasks.ndjson",
+    problems,
+  );
   checkParentCycle(
     collections.noteFolders,
     (row) => row.id,
@@ -1562,6 +1679,8 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
     ? null
     : {
         tasks: rowsOf(collections.tasks),
+        taskLists: rowsOf(collections.taskLists),
+        taskSections: rowsOf(collections.taskSections),
         events: rowsOf(collections.events),
         documents: rowsOf(collections.documents),
         renewals: rowsOf(collections.renewals),

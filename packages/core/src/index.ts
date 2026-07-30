@@ -111,6 +111,8 @@ export type {
   ExportStudyPlan,
   ExportSubject,
   ExportTask,
+  ExportTaskList,
+  ExportTaskSection,
   ProfileData,
 } from "./imex/exportArchive.js";
 

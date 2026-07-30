@@ -7,6 +7,8 @@ import {
   MAX_TASK_REMINDERS,
   MAX_TASK_REMINDER_DAYS,
   NexusDatabase,
+  TASK_ORDER_GAP,
+  TaskListStore,
   TaskNotFoundError,
   TaskStore,
   TaskValidationError,
@@ -28,16 +30,31 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
+const NOW_ISO = "2026-01-01T00:00:00.000Z";
+
+/**
+ * A profile with the Inbox every profile has (TASK-004): migration 022
+ * backfills the ones that predate ADR-029, `main` seeds it for the ones it
+ * creates, and `TaskStore.create` refuses a profile without one — so a fixture
+ * that skipped it would be testing a database state the app cannot reach.
+ */
 function createProfile(): string {
   const id = uuidv7();
   db.raw
     .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
     .run(id, "personal", "P", new Date().toISOString());
+  new TaskListStore(db.raw, id).ensureInbox(NOW_ISO);
   return id;
 }
 
 function store(): TaskStore {
   return new TaskStore(db.raw, createProfile());
+}
+
+function inboxOf(profileId: string): string {
+  const inbox = new TaskListStore(db.raw, profileId).listActive().find((list) => list.isInbox);
+  if (!inbox) throw new Error("Test setup: profile has no Inbox.");
+  return inbox.id;
 }
 
 describe("TaskStore", () => {
@@ -580,5 +597,280 @@ describe("TaskStore — reminder offsets (ADR-028)", () => {
     expect(tasks.setDone(created.id, true).reminderOffsets).toEqual([1]);
     expect(tasks.setDone(created.id, false).reminderOffsets).toEqual([1]);
     expect(tasks.completeOccurrence(created.id, NOW).reminderOffsets).toEqual([1]);
+  });
+});
+
+describe("TaskStore — lists, sections and ordering (TASK-004 / ADR-029)", () => {
+  const NOW = "2026-07-10T12:00:00.000Z";
+
+  /** A profile, its `TaskStore`, its `TaskListStore` and its Inbox — what nearly every case below opens with. */
+  function scope(): {
+    profileId: string;
+    tasks: TaskStore;
+    lists: TaskListStore;
+    inboxId: string;
+  } {
+    const profileId = createProfile();
+    return {
+      profileId,
+      tasks: new TaskStore(db.raw, profileId),
+      lists: new TaskListStore(db.raw, profileId),
+      inboxId: inboxOf(profileId),
+    };
+  }
+
+  it("defaults a new task into the profile's Inbox, appended at the body end", () => {
+    const { tasks, inboxId } = scope();
+
+    const first = tasks.create({ title: "Prvi" });
+    const second = tasks.create({ title: "Drugi" });
+
+    expect(first.listId).toBe(inboxId);
+    expect(first.sectionId).toBeNull();
+    expect(first.position).toBe(TASK_ORDER_GAP);
+    expect(second.position).toBe(2 * TASK_ORDER_GAP);
+    expect(tasks.listActive().map((task) => task.id)).toEqual([first.id, second.id]);
+  });
+
+  it("places a task in a named list and section, and refuses a section of another list", () => {
+    const { tasks, lists, inboxId } = scope();
+    const work = lists.createList({ name: "Posao" }, NOW);
+    const doing = lists.createSection(work.id, "U toku", NOW);
+    const inboxSection = lists.createSection(inboxId, "Danas", NOW);
+
+    const placed = tasks.create({ title: "U sekciji", listId: work.id, sectionId: doing.id });
+    expect(placed).toMatchObject({ listId: work.id, sectionId: doing.id, position: TASK_ORDER_GAP });
+
+    expect(() =>
+      tasks.create({ title: "Pogrešna sekcija", listId: work.id, sectionId: inboxSection.id }),
+    ).toThrow(TaskValidationError);
+    expect(() => tasks.create({ title: "Nepoznata lista", listId: uuidv7() })).toThrow(
+      TaskValidationError,
+    );
+  });
+
+  it("refuses a list belonging to another profile, and one that is soft-deleted", () => {
+    const mine = scope();
+    const theirs = scope();
+    const foreign = theirs.lists.createList({ name: "Njihova" }, NOW);
+    const deleted = mine.lists.createList({ name: "Obrisana" }, NOW);
+    mine.lists.deleteList(deleted.id, "delete-tasks", NOW);
+
+    expect(() => mine.tasks.create({ title: "x", listId: foreign.id })).toThrow(TaskValidationError);
+    expect(() => mine.tasks.create({ title: "x", listId: deleted.id })).toThrow(TaskValidationError);
+  });
+
+  it("gives a subtask its parent's placement, ignoring any listId the caller passes", () => {
+    const { tasks, lists } = scope();
+    const work = lists.createList({ name: "Posao" }, NOW);
+    const doing = lists.createSection(work.id, "U toku", NOW);
+    const parent = tasks.create({ title: "Roditelj", listId: work.id, sectionId: doing.id });
+
+    const child = tasks.create({ title: "Dete", parentId: parent.id, listId: uuidv7() });
+    expect(child).toMatchObject({ listId: work.id, sectionId: doing.id });
+    expect(child.position).toBe(parent.position + TASK_ORDER_GAP);
+  });
+
+  it("throws when the profile has no Inbox at all — seeding and migration 022 both guarantee one", () => {
+    const profileId = createProfile();
+    const tasks = new TaskStore(db.raw, profileId);
+    db.raw.prepare("DELETE FROM task_lists WHERE profile_id = ?").run(profileId);
+
+    expect(() => tasks.create({ title: "Nema gde" })).toThrow(TaskValidationError);
+  });
+
+  it("throws when a stored row carries no list — after migration 022 that is corruption, not 'unfiled'", () => {
+    const { tasks } = scope();
+    const created = tasks.create({ title: "x" });
+
+    db.raw.prepare("UPDATE tasks SET list_id = NULL WHERE id = ?").run(created.id);
+    expect(() => tasks.listActive()).toThrow(TaskValidationError);
+  });
+
+  it("orders the body before the sections, and each scope by position", () => {
+    const { tasks, lists, inboxId } = scope();
+    const section = lists.createSection(inboxId, "Danas", NOW);
+
+    const inSection = tasks.create({ title: "U sekciji", sectionId: section.id });
+    const body = tasks.create({ title: "U telu" });
+
+    // Created section-first, listed body-first: the order is the scope's, never
+    // the insertion's.
+    expect(tasks.listActive().map((task) => task.id)).toEqual([body.id, inSection.id]);
+  });
+
+  describe("moveToList", () => {
+    it("moves the whole live subtree, clearing sections and appending in order", () => {
+      const { tasks, lists, inboxId } = scope();
+      const work = lists.createList({ name: "Posao" }, NOW);
+      const section = lists.createSection(inboxId, "Danas", NOW);
+      const parent = tasks.create({ title: "Roditelj", sectionId: section.id });
+      const child = tasks.create({ title: "Dete", parentId: parent.id });
+      const grandchild = tasks.create({ title: "Unuk", parentId: child.id });
+      const bystander = tasks.create({ title: "Neko drugi" });
+
+      const moved = tasks.moveToList(parent.id, work.id, NOW);
+      expect(moved).toMatchObject({ listId: work.id, sectionId: null, updatedAt: NOW });
+
+      const byId = new Map(tasks.listActive().map((task) => [task.id, task]));
+      for (const id of [parent.id, child.id, grandchild.id]) {
+        expect({ id, listId: byId.get(id)?.listId, sectionId: byId.get(id)?.sectionId }).toEqual({
+          id,
+          listId: work.id,
+          sectionId: null,
+        });
+      }
+      // The bystander stayed exactly where it was.
+      expect(byId.get(bystander.id)?.listId).toBe(inboxId);
+      // And the subtree is spaced apart in the target list, parent first.
+      const positions = [parent.id, child.id, grandchild.id].map((id) => byId.get(id)?.position ?? 0);
+      expect(positions).toEqual([TASK_ORDER_GAP, 2 * TASK_ORDER_GAP, 3 * TASK_ORDER_GAP]);
+    });
+
+    it("leaves a soft-deleted subtask behind rather than resurrecting it into the new list", () => {
+      const { tasks, lists, inboxId } = scope();
+      const work = lists.createList({ name: "Posao" }, NOW);
+      const parent = tasks.create({ title: "Roditelj" });
+      const deletedChild = tasks.create({ title: "Obrisano dete", parentId: parent.id });
+      tasks.softDelete(deletedChild.id);
+
+      tasks.moveToList(parent.id, work.id, NOW);
+
+      const row = db.raw
+        .prepare("SELECT list_id AS listId, deleted_at AS deletedAt FROM tasks WHERE id = ?")
+        .get(deletedChild.id) as { listId: string; deletedAt: string | null };
+      expect(row.listId).toBe(inboxId);
+      expect(row.deletedAt).not.toBeNull();
+    });
+
+    it("refuses an unknown list and a malformed now", () => {
+      const { tasks } = scope();
+      const created = tasks.create({ title: "x" });
+
+      expect(() => tasks.moveToList(created.id, uuidv7(), NOW)).toThrow(TaskValidationError);
+      expect(() => tasks.moveToList(created.id, inboxOf(createProfile()), NOW)).toThrow(
+        TaskValidationError,
+      );
+      expect(() => tasks.moveToList("missing", inboxOf(createProfile()), NOW)).toThrow(
+        TaskNotFoundError,
+      );
+      expect(() => tasks.moveToList(created.id, created.listId, "danas")).toThrow(
+        TaskValidationError,
+      );
+    });
+  });
+
+  describe("moveToSection", () => {
+    it("moves one task between its list's sections and back to the body", () => {
+      const { tasks, lists, inboxId } = scope();
+      const section = lists.createSection(inboxId, "Danas", NOW);
+      const created = tasks.create({ title: "x" });
+      const child = tasks.create({ title: "dete", parentId: created.id });
+
+      const moved = tasks.moveToSection(created.id, section.id, NOW);
+      expect(moved).toMatchObject({ listId: inboxId, sectionId: section.id, position: TASK_ORDER_GAP });
+      // Only the task itself: sections are a within-list grouping, and the UI
+      // renders a subtask under its parent whichever heading it carries.
+      expect(tasks.listActive().find((task) => task.id === child.id)?.sectionId).toBeNull();
+
+      expect(tasks.moveToSection(created.id, null, NOW).sectionId).toBeNull();
+    });
+
+    it("refuses a section of another list — changing list is moveToList's job", () => {
+      const { tasks, lists } = scope();
+      const work = lists.createList({ name: "Posao" }, NOW);
+      const foreign = lists.createSection(work.id, "U toku", NOW);
+      const created = tasks.create({ title: "x" });
+
+      expect(() => tasks.moveToSection(created.id, foreign.id, NOW)).toThrow(TaskValidationError);
+      expect(tasks.listActive()[0]?.sectionId).toBeNull();
+    });
+  });
+
+  describe("reorder", () => {
+    it("places a task between two neighbours, at either end, and refuses a foreign one", () => {
+      const { tasks, lists } = scope();
+      const a = tasks.create({ title: "A" });
+      const b = tasks.create({ title: "B" });
+      const c = tasks.create({ title: "C" });
+
+      // C between A and B.
+      tasks.reorder(c.id, a.id, b.id, NOW);
+      expect(tasks.listActive().map((task) => task.title)).toEqual(["A", "C", "B"]);
+
+      // C to the head, then to the tail.
+      tasks.reorder(c.id, null, a.id, NOW);
+      expect(tasks.listActive().map((task) => task.title)).toEqual(["C", "A", "B"]);
+      tasks.reorder(c.id, b.id, null, NOW);
+      expect(tasks.listActive().map((task) => task.title)).toEqual(["A", "B", "C"]);
+
+      // A neighbour outside the task's own (list, section) scope describes a
+      // move, not a reorder.
+      const work = lists.createList({ name: "Posao" }, NOW);
+      const elsewhere = tasks.create({ title: "Drugde", listId: work.id });
+      expect(() => tasks.reorder(a.id, elsewhere.id, null, NOW)).toThrow(TaskValidationError);
+      expect(() => tasks.reorder(a.id, a.id, null, NOW)).toThrow(TaskValidationError);
+      expect(() => tasks.reorder(a.id, b.id, b.id, NOW)).toThrow(TaskValidationError);
+    });
+
+    it("renumbers the scope once and retries when the gap between two neighbours runs out", () => {
+      const { tasks, profileId } = scope();
+      const a = tasks.create({ title: "A" });
+      const b = tasks.create({ title: "B" });
+      const filler = tasks.create({ title: "Filler" });
+
+      // Wedge A and B one apart by hand — exactly the state repeated inserts at
+      // the same spot converge on, reached here in one step.
+      db.raw.prepare("UPDATE tasks SET position = ? WHERE id = ?").run(100, a.id);
+      db.raw.prepare("UPDATE tasks SET position = ? WHERE id = ?").run(101, b.id);
+      db.raw.prepare("UPDATE tasks SET position = ? WHERE id = ?").run(102, filler.id);
+
+      const moved = tasks.reorder(filler.id, a.id, b.id, NOW);
+
+      // The whole scope was re-spaced at gap steps, and the moved row landed in
+      // the middle of the room that made.
+      const positions = new Map(tasks.listActive().map((task) => [task.title, task.position]));
+      expect(positions.get("A")).toBe(TASK_ORDER_GAP);
+      expect(positions.get("B")).toBe(2 * TASK_ORDER_GAP);
+      expect(moved.position).toBe(TASK_ORDER_GAP + TASK_ORDER_GAP / 2);
+      expect(tasks.listActive().map((task) => task.title)).toEqual(["A", "Filler", "B"]);
+
+      // The renumber left every other scope alone.
+      const inboxCount = db.raw
+        .prepare("SELECT count(*) AS n FROM tasks WHERE profile_id = ?")
+        .get(profileId) as { n: number };
+      expect(inboxCount.n).toBe(3);
+    });
+
+    it("refuses neighbours given the wrong way round, even after a renumber", () => {
+      const { tasks } = scope();
+      const a = tasks.create({ title: "A" });
+      const b = tasks.create({ title: "B" });
+      const c = tasks.create({ title: "C" });
+
+      // "after A" and "before B" describe no gap when B precedes A.
+      expect(() => tasks.reorder(c.id, b.id, a.id, NOW)).toThrow(TaskValidationError);
+    });
+  });
+
+  it("carries the placement untouched through an edit, a completion and a recurring advance", () => {
+    const { tasks, lists, inboxId } = scope();
+    const section = lists.createSection(inboxId, "Danas", NOW);
+    const created = tasks.create({
+      title: "Svakog dana",
+      dueDate: "2026-07-10",
+      sectionId: section.id,
+      recurrence: { freq: { kind: "daily", interval: 1 }, end: { kind: "never" } },
+    });
+    const placement = {
+      listId: created.listId,
+      sectionId: created.sectionId,
+      position: created.position,
+    };
+
+    expect(tasks.update(created.id, { title: "Preimenovano" })).toMatchObject(placement);
+    expect(tasks.completeOccurrence(created.id, NOW)).toMatchObject(placement);
+    expect(tasks.setDone(created.id, false)).toMatchObject(placement);
+    expect(tasks.listActive()[0]).toMatchObject(placement);
   });
 });

@@ -57,6 +57,7 @@ import {
   STUDY_BLOCK_STATUSES,
   SUBJECT_COLORS,
   SubjectStore,
+  TaskListStore,
   TaskStore,
   TASK_PRIORITIES,
   TASK_STATUSES,
@@ -422,15 +423,23 @@ function renameProfile(database: NexusDatabase, id: string, name: string): void 
  * First-run seeding: create exactly one personal profile if the table is empty.
  * The name is intentionally blank — profile naming belongs to onboarding (ONB)
  * later, so we do not invent a personal name here.
+ *
+ * The Inbox comes with it (TASK-004 / ADR-029): it is the list `TaskStore.create`
+ * defaults to, so a profile without one is a profile no task can be added to.
+ * Migration 022 backfills every profile that predates this slice; this is the
+ * same row for every profile created after it.
  */
 function seedFirstRunProfile(database: NexusDatabase): void {
   const { count } = database.raw
     .prepare("SELECT count(*) AS count FROM profiles")
     .get() as { count: number };
   if (count > 0) return;
+  const id = uuidv7();
+  const now = new Date().toISOString();
   database.raw
     .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
-    .run(uuidv7(), "personal", "", new Date().toISOString());
+    .run(id, "personal", "", now);
+  new TaskListStore(database.raw, id).ensureInbox(now);
 }
 
 function appInfo(): AppInfo {
@@ -1334,6 +1343,10 @@ function taskStore(profileId: string): TaskStore {
   return new TaskStore(requireDb().raw, profileId);
 }
 
+function taskListStore(profileId: string): TaskListStore {
+  return new TaskListStore(requireDb().raw, profileId);
+}
+
 function eventStore(profileId: string): EventStore {
   return new EventStore(requireDb().raw, profileId);
 }
@@ -1714,6 +1727,7 @@ async function handleAuthRegenerateRecovery(): Promise<AuthResult> {
 function restoreDeps(): RestoreDeps {
   return {
     taskStore,
+    taskListStore,
     eventStore,
     peopleStore,
     documentStore,
@@ -2896,6 +2910,7 @@ function registerIpc(): void {
     return handleExport(
       {
         taskStore,
+        taskListStore,
         eventStore,
         peopleStore,
         documentStore,
