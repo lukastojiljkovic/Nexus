@@ -1187,6 +1187,13 @@ export const strings = {
     commandsGroup: "Komande",
     emptyResults: "Nema rezultata.",
     hint: "↑↓ kretanje · Enter otvori · Esc zatvori",
+    /**
+     * The operator grammar, named quietly in the footer beside the key hints —
+     * `#oznaka` filters by tag (zadaci i beleške), `rok:`/`due:` by date. The
+     * values are the closed set `parseSearchQuery` accepts, written out rather
+     * than abbreviated so the line teaches the whole grammar at a glance.
+     */
+    operatorHint: "#oznaka · rok:danas / sutra / nedelja / 2026-08-15",
     kindSingular: {
       task: "Zadatak",
       event: "Događaj",

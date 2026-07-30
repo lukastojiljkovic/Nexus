@@ -4763,10 +4763,22 @@ button.cal__grid-event {
   font-size: var(--nx-font-size-body-sm);
 }
 .search__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nx-space-1) var(--nx-space-3);
   padding: var(--nx-space-2) var(--nx-space-4);
   border-top: 1px solid var(--nx-border);
   font-size: var(--nx-font-size-label);
   color: var(--nx-text-muted);
+}
+/* The operator grammar sits opposite the key hints, in the footer's own muted
+   register — a reference the eye returns to, never something competing with
+   the results above it. Tabular figures keep its example date from jittering
+   against the key hints on the other side. */
+.search__footer-operators {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Recurrence field + scope dialog (ADR-024) ---------------------------- */

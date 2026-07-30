@@ -108,6 +108,118 @@ describe("parseSearchQuery — tokenizing", () => {
   });
 });
 
+describe("parseSearchQuery — tag tokens", () => {
+  it("reads a '#' token as a tag filter, folded, and keeps it out of the terms", () => {
+    const parsed = parseSearchQuery("#posao hitno");
+    expect(parsed.tags).toEqual(["posao"]);
+    expect(parsed.terms).toEqual(["hitno"]);
+  });
+
+  it("folds a tag the same way it folds text (case, diacritics, Cyrillic)", () => {
+    expect(parseSearchQuery("#Đorđe").tags).toEqual(["djordje"]);
+    expect(parseSearchQuery("#Ђорђе").tags).toEqual(["djordje"]);
+  });
+
+  it("ANDs several '#' tokens, deduped, in the order typed", () => {
+    const parsed = parseSearchQuery("#posao #kuca #posao");
+    expect(parsed.tags).toEqual(["posao", "kuca"]);
+  });
+
+  it("drops a bare '#'", () => {
+    const parsed = parseSearchQuery("#");
+    expect(parsed.tags).toEqual([]);
+    expect(parsed.terms).toEqual([]);
+  });
+
+  it("does not count tag tokens toward MAX_SEARCH_TERMS", () => {
+    const words = ["a", "b", "c", "d", "e", "f", "g", "h"];
+    const parsed = parseSearchQuery(`#oznaka ${words.join(" ")}`);
+    expect(parsed.tags).toEqual(["oznaka"]);
+    expect(parsed.terms).toEqual(words);
+    expect(parsed.terms).toHaveLength(MAX_SEARCH_TERMS);
+  });
+
+  it("is empty for a query with no '#' token", () => {
+    expect(parseSearchQuery("obican upit").tags).toEqual([]);
+  });
+
+  it("parses uniformly in command mode (commands simply ignore the field)", () => {
+    const parsed = parseSearchQuery(">#posao");
+    expect(parsed.commandsOnly).toBe(true);
+    expect(parsed.tags).toEqual(["posao"]);
+  });
+});
+
+describe("parseSearchQuery — due filters", () => {
+  it("reads the Serbian presets", () => {
+    expect(parseSearchQuery("rok:danas").due).toEqual({ kind: "preset", preset: "today" });
+    expect(parseSearchQuery("rok:sutra").due).toEqual({ kind: "preset", preset: "tomorrow" });
+    expect(parseSearchQuery("rok:nedelja").due).toEqual({ kind: "preset", preset: "week" });
+  });
+
+  it("reads the English presets, under either prefix", () => {
+    expect(parseSearchQuery("due:today").due).toEqual({ kind: "preset", preset: "today" });
+    expect(parseSearchQuery("rok:tomorrow").due).toEqual({ kind: "preset", preset: "tomorrow" });
+    expect(parseSearchQuery("due:week").due).toEqual({ kind: "preset", preset: "week" });
+  });
+
+  it("keeps the token out of the terms when it resolves", () => {
+    const parsed = parseSearchQuery("rok:danas kupovina");
+    expect(parsed.terms).toEqual(["kupovina"]);
+  });
+
+  it("reads a bare real date", () => {
+    expect(parseSearchQuery("due:2026-08-15").due).toEqual({ kind: "date", date: "2026-08-15" });
+    expect(parseSearchQuery("rok:2024-02-29").due).toEqual({ kind: "date", date: "2024-02-29" });
+  });
+
+  it("leaves an UNREAL date as plain search text rather than guessing", () => {
+    const parsed = parseSearchQuery("rok:2026-02-30");
+    expect(parsed.due).toBeNull();
+    expect(parsed.terms).toEqual(["rok", "2026", "02", "30"]);
+  });
+
+  it("leaves an impossible month as plain search text", () => {
+    expect(parseSearchQuery("rok:2026-13-01").due).toBeNull();
+    expect(parseSearchQuery("rok:2026-02-29").due).toBeNull();
+  });
+
+  it("leaves an unknown value as plain search text", () => {
+    const parsed = parseSearchQuery("rok:mesec");
+    expect(parsed.due).toBeNull();
+    expect(parsed.terms).toEqual(["rok", "mesec"]);
+  });
+
+  it("leaves an empty value as plain search text", () => {
+    const parsed = parseSearchQuery("rok:");
+    expect(parsed.due).toBeNull();
+    expect(parsed.terms).toEqual(["rok"]);
+  });
+
+  it("lets the LAST date filter win", () => {
+    expect(parseSearchQuery("rok:danas rok:sutra").due).toEqual({
+      kind: "preset",
+      preset: "tomorrow",
+    });
+    expect(parseSearchQuery("rok:sutra due:2026-08-15").due).toEqual({
+      kind: "date",
+      date: "2026-08-15",
+    });
+  });
+
+  it("is null without a date filter", () => {
+    expect(parseSearchQuery("obican upit").due).toBeNull();
+  });
+
+  it("combines with a kind prefix and ordinary terms", () => {
+    const parsed = parseSearchQuery("z: rok:sutra #posao kupovina");
+    expect(parsed.kinds).toEqual(["task"]);
+    expect(parsed.due).toEqual({ kind: "preset", preset: "tomorrow" });
+    expect(parsed.tags).toEqual(["posao"]);
+    expect(parsed.terms).toEqual(["kupovina"]);
+  });
+});
+
 describe("toFtsMatchExpression", () => {
   it("quotes every term and prefix-stars only the last one by default", () => {
     expect(toFtsMatchExpression(["res", "zad"])).toBe('"res" "zad"*');

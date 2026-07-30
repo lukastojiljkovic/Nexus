@@ -17,6 +17,8 @@ const NOW = "2026-07-26T00:00:00.000Z";
 const emptyQuery: ParsedSearchQuery = {
   kinds: [],
   terms: [],
+  tags: [],
+  due: null,
   commandsOnly: false,
   text: "",
   prefixLast: true,

@@ -225,7 +225,25 @@ export {
   SEARCH_KIND_PREFIXES,
   toFtsMatchExpression,
 } from "./search/searchQuery.js";
-export type { ParsedSearchQuery, SearchKind } from "./search/searchQuery.js";
+export type {
+  ParsedSearchQuery,
+  SearchDueFilter,
+  SearchDuePreset,
+  SearchKind,
+} from "./search/searchQuery.js";
+
+export {
+  applySearchOperators,
+  foldSearchTag,
+  resolveDueRange,
+  SEARCH_DUE_WEEK_DAYS,
+  searchContextDay,
+} from "./search/searchOperators.js";
+export type {
+  SearchDayRange,
+  SearchOperatorFilters,
+  SearchTagMatch,
+} from "./search/searchOperators.js";
 
 export {
   KIND_PRIOR,

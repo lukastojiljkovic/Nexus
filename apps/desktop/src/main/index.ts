@@ -5,17 +5,27 @@ import { app, BrowserWindow, dialog, ipcMain, protocol } from "electron";
 import type { IpcMainInvokeEvent, OpenDialogOptions } from "electron";
 import { autoUpdater } from "electron-updater";
 import {
+  applySearchOperators,
   buildSearchSnippet,
+  foldSearchTag,
   isValidDayKey,
   MAX_ARCHIVE_PASSPHRASE_LENGTH,
   parseSearchQuery,
   rankSearchResults,
+  resolveDueRange,
   sniffMime,
   toFtsMatchExpression,
   validateArchivePassphrase,
   validateRecurrenceRule,
 } from "@nexus/core";
-import type { NotificationSource, SearchHit, SearchKind } from "@nexus/core";
+import type {
+  NotificationSource,
+  ParsedSearchQuery,
+  SearchHit,
+  SearchKind,
+  SearchOperatorFilters,
+  SearchTagMatch,
+} from "@nexus/core";
 import { MAX_PASSCODE_LENGTH, blobStorageName, deriveBlobKeys, type BlobKeys } from "@nexus/core/auth";
 import {
   CARD_RATINGS,
@@ -36,6 +46,7 @@ import {
   MAX_NOTE_LINKS,
   MAX_NOTE_TEMPLATE_BYTES,
   MAX_NOTE_UPDATE_BYTES,
+  MAX_SEARCH_LIMIT,
   MAX_TASK_LIST_NAME_LENGTH,
   MAX_TASK_REMINDERS,
   MAX_TASK_REMINDER_DAYS,
@@ -1551,6 +1562,16 @@ function toSearchResult(hit: SearchHit, terms: readonly string[]): SearchResult 
   };
 }
 
+/** `SearchStore.recent`'s hits, kind-filtered when asked — the raw rows behind `runRecentSearch` and the operator-only query path below. */
+function recentHits(
+  profileId: string,
+  limit: number,
+  kinds: readonly SearchKind[],
+): SearchHit[] {
+  const store = searchStore(profileId);
+  return kinds.length > 0 ? store.recent({ limit, kinds }) : store.recent({ limit });
+}
+
 /**
  * The profile's most recently touched entries, already in their FINAL order
  * (`SearchStore.recent`) — deliberately NOT passed through
@@ -1568,9 +1589,80 @@ function runRecentSearch(
   limit: number,
   kinds: readonly SearchKind[] = [],
 ): SearchResult[] {
-  const store = searchStore(profileId);
-  const hits = kinds.length > 0 ? store.recent({ limit, kinds }) : store.recent({ limit });
-  return hits.map((hit) => toSearchResult(hit, []));
+  return recentHits(profileId, limit, kinds).map((hit) => toSearchResult(hit, []));
+}
+
+/** Every entity id carrying a tag whose `foldSearchTag` form starts with `token`, for one `#` token and one module. */
+function tagFilterIds(
+  tags: ReadonlyArray<{ readonly id: string; readonly folded: string }>,
+  linksByTagId: ReadonlyMap<string, readonly string[]>,
+  token: string,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const tag of tags) {
+    if (!tag.folded.startsWith(token)) continue;
+    for (const entityId of linksByTagId.get(tag.id) ?? []) ids.add(entityId);
+  }
+  return ids;
+}
+
+/** Groups tag links by their tag id, so each `#` token walks the tags once instead of the whole link table. */
+function groupLinksByTagId(
+  links: ReadonlyArray<{ readonly entityId: string; readonly tagId: string }>,
+): Map<string, string[]> {
+  const byTag = new Map<string, string[]>();
+  for (const link of links) {
+    const bucket = byTag.get(link.tagId);
+    if (bucket) bucket.push(link.entityId);
+    else byTag.set(link.tagId, [link.entityId]);
+  }
+  return byTag;
+}
+
+/**
+ * One `{ taskIds, noteIds }` set per `#` token. Both modules' tags and links
+ * are read (and each name folded) exactly ONCE here, however many tokens were
+ * typed — the per-token work is then a prefix scan over an already-folded list.
+ */
+function buildTagMatches(profileId: string, tokens: readonly string[]): SearchTagMatch[] {
+  const noteTags = noteOrgStore(profileId);
+  const taskTags = taskTagStore(profileId);
+  const foldedNoteTags = noteTags
+    .listTags()
+    .map((tag) => ({ id: tag.id, folded: foldSearchTag(tag.name) }));
+  const foldedTaskTags = taskTags
+    .listTags()
+    .map((tag) => ({ id: tag.id, folded: foldSearchTag(tag.name) }));
+  const noteLinks = groupLinksByTagId(
+    noteTags.listTagLinks().map((link) => ({ entityId: link.noteId, tagId: link.tagId })),
+  );
+  const taskLinks = groupLinksByTagId(
+    taskTags.listTagLinks().map((link) => ({ entityId: link.taskId, tagId: link.tagId })),
+  );
+
+  return tokens.map((token) => ({
+    taskIds: tagFilterIds(foldedTaskTags, taskLinks, token),
+    noteIds: tagFilterIds(foldedNoteTags, noteLinks, token),
+  }));
+}
+
+/**
+ * Resolves the parsed operators against this profile's data: each `#` token
+ * into the ids it matches, and a `rok:` filter into real day bounds using
+ * MAIN's local today — the renderer never gets to say what day it is (SEC-EL).
+ * Returns null when the query carries no operators at all, which is also what
+ * tells the caller to keep the untouched pipeline (and what keeps an ordinary
+ * query from touching the tag tables at all).
+ */
+function searchOperatorFilters(
+  profileId: string,
+  parsed: ParsedSearchQuery,
+): SearchOperatorFilters | null {
+  if (parsed.tags.length === 0 && parsed.due === null) return null;
+  return {
+    tagMatches: parsed.tags.length > 0 ? buildTagMatches(profileId, parsed.tags) : [],
+    dueRange: parsed.due === null ? null : resolveDueRange(parsed.due, localToday()),
+  };
 }
 
 /**
@@ -1582,20 +1674,39 @@ function runRecentSearch(
  * `toFtsMatchExpression` returns null for exactly that case, precisely so an
  * empty or punctuation-only query never reaches the store as a malformed FTS
  * expression.
+ *
+ * The `#oznaka` / `rok:` operators are POST-filters (see `searchOperators.ts`
+ * on why they cannot be SQL), which changes candidate sourcing in two places:
+ * with an operator active the store is asked for `MAX_SEARCH_LIMIT` candidates
+ * rather than a small multiple of `limit`, since an unknown share of them is
+ * about to be filtered away; and an operator with NO text terms — a perfectly
+ * ordinary "#posao" — takes the `recent` path instead of falling through to an
+ * unfiltered recent list, keeping that method's own recency order (it must
+ * never be re-ranked, per its contract) rather than pretending to a relevance
+ * it has no query to measure.
  */
 function runSearchQuery(profileId: string, rawQuery: string, limit: number): SearchResult[] {
   const parsed = parseSearchQuery(rawQuery);
+  const filters = searchOperatorFilters(profileId, parsed);
   const match = toFtsMatchExpression(parsed.terms, { prefixLast: parsed.prefixLast });
-  if (match === null) return runRecentSearch(profileId, limit, parsed.kinds);
+
+  if (match === null) {
+    if (filters === null) return runRecentSearch(profileId, limit, parsed.kinds);
+    const hits = recentHits(profileId, MAX_SEARCH_LIMIT, parsed.kinds);
+    return applySearchOperators(hits, filters)
+      .slice(0, limit)
+      .map((hit) => toSearchResult(hit, []));
+  }
 
   const store = searchStore(profileId);
-  const candidateLimit = limit * SEARCH_CANDIDATE_FACTOR;
+  const candidateLimit = filters === null ? limit * SEARCH_CANDIDATE_FACTOR : MAX_SEARCH_LIMIT;
   const candidates =
     parsed.kinds.length > 0
       ? store.search({ match, limit: candidateLimit, kinds: parsed.kinds })
       : store.search({ match, limit: candidateLimit });
+  const filtered = filters === null ? candidates : applySearchOperators(candidates, filters);
 
-  const ranked = rankSearchResults(candidates, { now: new Date().toISOString(), query: parsed });
+  const ranked = rankSearchResults(filtered, { now: new Date().toISOString(), query: parsed });
   return ranked.slice(0, limit).map((hit) => toSearchResult(hit, parsed.terms));
 }
 
