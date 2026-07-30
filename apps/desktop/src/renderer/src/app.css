@@ -1640,6 +1640,33 @@ button.cal__grid-event {
   outline: 2px solid var(--nx-accent);
   outline-offset: 1px;
 }
+/* Being dragged (ADR-034): the same accent border + soft background every drop
+   affordance in the app uses — never a glow — plus enough transparency to read
+   the hour lines it is passing over, and a stacking order that keeps the ghost
+   above the blocks of whichever column it is crossing into. Qualified with
+   `button` to match the specificity of `button.cal__grid-event` above, whose
+   `border: none` and `cursor: pointer` a bare class would lose to. */
+button.cal__grid-event--dragging {
+  z-index: 2;
+  opacity: 0.9;
+  border: 1px solid var(--nx-accent);
+  cursor: grabbing;
+}
+.cal__grid-event--dragging:hover {
+  text-decoration: none;
+}
+/* The bottom grab strip: a cursor and nothing else. The mode is decided from
+   the pointer's distance to the block's bottom edge (CalendarTimeGrid), so this
+   span only has to be hit-testable — visible chrome on a 30-minute block would
+   cost more than it explains. */
+.cal__grid-event-handle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 6px;
+  cursor: ns-resize;
+}
 .cal__grid-event-time {
   font-variant-numeric: tabular-nums;
   font-weight: var(--nx-font-weight-semibold);

@@ -367,10 +367,15 @@ export function isSpanItem(item: CalendarItem): boolean {
   return item.startMinutes === null || item.endKey !== item.startKey;
 }
 
+/**
+ * A single-day timed event — the only kind of item that lands *in* the hour
+ * grid rather than in its all-day band, and so the only kind the week/day grid
+ * lets the pointer move and resize (ADR-034).
+ */
+export type TimedEventItem = CalendarItem & { kind: "event"; startMinutes: number };
+
 /** The exact complement of `isSpanItem`: a single-day timed event, the only kind that lands in the hour grid. */
-export function isTimedEventItem(
-  item: CalendarItem,
-): item is CalendarItem & { kind: "event"; startMinutes: number } {
+export function isTimedEventItem(item: CalendarItem): item is TimedEventItem {
   return item.kind === "event" && item.startMinutes !== null && item.endKey === item.startKey;
 }
 

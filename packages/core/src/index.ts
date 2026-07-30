@@ -190,6 +190,20 @@ export type {
   WeekStart,
 } from "./calendar/calendarGrid.js";
 
+export {
+  TIME_GRID_DRAG_THRESHOLD_PX,
+  TIME_GRID_MAX_END_MINUTES,
+  TIME_GRID_MIN_EVENT_MINUTES,
+  TIME_GRID_SNAP_MINUTES,
+  exceedsTimeGridDragThreshold,
+  resolveTimeGridColumn,
+  resolveTimeGridMove,
+  resolveTimeGridResize,
+  snapTimeGridMinutes,
+  timeGridPixelsToMinutes,
+} from "./calendar/timeGridDrag.js";
+export type { TimeGridSpan } from "./calendar/timeGridDrag.js";
+
 export { ageAtOccurrence, birthdayOccurrencesInRange } from "./calendar/birthdays.js";
 export type { BirthdayPerson } from "./calendar/birthdays.js";
 

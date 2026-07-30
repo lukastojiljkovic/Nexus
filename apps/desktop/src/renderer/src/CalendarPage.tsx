@@ -16,6 +16,7 @@ import type {
 } from "../../shared/ipc.js";
 import { CalendarMonth } from "./CalendarMonth.js";
 import { CalendarTimeGrid } from "./CalendarTimeGrid.js";
+import type { TimedEventDragTarget } from "./CalendarTimeGrid.js";
 import {
   buildCalendarItems,
   CALENDAR_SOURCES,
@@ -29,6 +30,7 @@ import type {
   CalendarRange,
   CalendarSource,
   EventOccurrence,
+  TimedEventItem,
 } from "./calendarItems.js";
 import { RecurrenceMark, RecurrencePicker } from "./RecurrencePicker.js";
 import { RecurrenceScopeDialog } from "./RecurrenceScopeDialog.js";
@@ -265,6 +267,16 @@ interface EditedEventFields {
 }
 
 /**
+ * The minutes a week/day-grid drag landed on (ADR-034). A month-grid drag says
+ * nothing about the time of day, so it carries null here and the moved event
+ * keeps whatever time it had.
+ */
+interface TimedDragMinutes {
+  readonly startMinutes: number;
+  readonly endMinutes: number | null;
+}
+
+/**
  * A series operation waiting on the "Samo ovaj / Ovaj i budući / Svi" answer.
  * Each variant carries everything its own branch needs, so the dialog's answer
  * is all that is still missing when it arrives.
@@ -272,7 +284,15 @@ interface EditedEventFields {
 type PendingSeries =
   | { kind: "edit"; occurrence: EventOccurrence; fields: EditedEventFields }
   | { kind: "delete"; occurrence: EventOccurrence }
-  | { kind: "move"; occurrence: EventOccurrence; event: Event; fromKey: string; toKey: string };
+  | {
+      kind: "move";
+      occurrence: EventOccurrence;
+      event: Event;
+      fromKey: string;
+      toKey: string;
+      /** Non-null when the drag came from the hour grid: the same move, said to the minute. */
+      minutes: TimedDragMinutes | null;
+    };
 
 /**
  * The form's collected fields as a create payload; only present values are sent
@@ -326,11 +346,17 @@ function shiftEventChanges(event: Event, delta: number): EventFieldChanges {
   return changes;
 }
 
-/** A full copy of an event moved `delta` whole days — what a detached occurrence or a new series master is created from. */
+/**
+ * A full copy of an event moved `delta` whole days — what a detached occurrence
+ * or a new series master is created from. `minutes` retimes that copy onto the
+ * exact span a week/day-grid drag landed on (ADR-034); a month-grid drag passes
+ * null and the copy keeps the time of day it always had.
+ */
 function copyEventFields(
   event: Event,
   delta: number,
   rule: RecurrenceRule | null,
+  minutes: TimedDragMinutes | null,
 ): NewEventFields {
   const moved = shiftEventChanges(event, delta);
   const payload: NewEventFields = {
@@ -345,7 +371,29 @@ function copyEventFields(
   if (event.description !== null) payload.description = event.description;
   if (event.category !== null) payload.category = event.category;
   if (rule !== null) payload.recurrence = rule;
+  if (minutes !== null) {
+    // The day is already right (shiftEventChanges moved it); only the clock
+    // parts are replaced, and an event dragged as a point stays a point.
+    const dayKey = payload.startAt.slice(0, 10);
+    payload.startAt = `${dayKey}T${formatClock(minutes.startMinutes)}`;
+    payload.endAt =
+      minutes.endMinutes === null ? null : `${dayKey}T${formatClock(minutes.endMinutes)}`;
+  }
   return payload;
+}
+
+/**
+ * What a week/day-grid drag amounts to as an edit of the row it dropped
+ * (ADR-034), or null when it landed exactly where it was picked up. A move
+ * states both endpoints at once, so the store validates the pair rather than an
+ * end that momentarily precedes its new start.
+ */
+function timedDragChanges(event: Event, target: TimedEventDragTarget): EventFieldChanges | null {
+  const startAt = `${target.dayKey}T${formatClock(target.startMinutes)}`;
+  const endAt =
+    target.endMinutes === null ? null : `${target.dayKey}T${formatClock(target.endMinutes)}`;
+  if (startAt === event.startAt && endAt === event.endAt) return null;
+  return { startAt, endAt };
 }
 
 /**
@@ -796,7 +844,19 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
     const master = pending.occurrence.master;
     const delta = daysBetweenKeys(pending.fromKey, pending.toKey);
     if (scope === "all") {
-      await window.nexus.updateEvent(profileId, master.id, shiftEventChanges(master, delta));
+      // "Svi" moves the series by the same whole-day delta; a drag inside the
+      // hour grid also gives it the new time of day and duration, exactly as
+      // `applyEditScope`'s own "all" branch takes those from the form.
+      const changes = shiftEventChanges(master, delta);
+      if (pending.minutes !== null) {
+        const masterDay = (changes.startAt ?? master.startAt).slice(0, 10);
+        changes.startAt = `${masterDay}T${formatClock(pending.minutes.startMinutes)}`;
+        changes.endAt =
+          pending.minutes.endMinutes === null
+            ? null
+            : `${masterDay}T${formatClock(pending.minutes.endMinutes)}`;
+      }
+      await window.nexus.updateEvent(profileId, master.id, changes);
     } else {
       // Copied from the OCCURRENCE, not the master, so the new row keeps this
       // occurrence's own duration and time of day rather than the series'.
@@ -804,7 +864,12 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
       // interruption between the pair then duplicates rather than vanishes.
       await window.nexus.createEvent(
         profileId,
-        copyEventFields(pending.event, delta, scope === "this" ? null : master.recurrence),
+        copyEventFields(
+          pending.event,
+          delta,
+          scope === "this" ? null : master.recurrence,
+          pending.minutes,
+        ),
       );
       if (scope === "this") {
         await window.nexus.addEventRecurrenceExdate(
@@ -862,6 +927,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
           event: item.event,
           fromKey: item.startKey,
           toKey: dayKey,
+          minutes: null,
         });
         return;
       }
@@ -885,6 +951,37 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
       } catch (error) {
         console.error("Nexus: failed to move task:", error);
       }
+    }
+  }
+
+  /**
+   * A pointer drag inside the week/day hour grid finished (ADR-034): the event
+   * now occupies exactly `target`. The same three-way question a day-drag asks
+   * of an occurrence is asked here too — the only difference is that the answer
+   * carries minutes as well as a day.
+   *
+   * A one-off writes straight through and then re-reads, never optimistically:
+   * the block stays where it was until the store says otherwise.
+   */
+  async function moveTimedEvent(item: TimedEventItem, target: TimedEventDragTarget): Promise<void> {
+    const changes = timedDragChanges(item.event, target);
+    if (changes === null) return;
+    if (item.occurrence !== null) {
+      setPendingSeries({
+        kind: "move",
+        occurrence: item.occurrence,
+        event: item.event,
+        fromKey: item.startKey,
+        toKey: target.dayKey,
+        minutes: { startMinutes: target.startMinutes, endMinutes: target.endMinutes },
+      });
+      return;
+    }
+    try {
+      await window.nexus.updateEvent(profileId, item.event.id, changes);
+      await reload();
+    } catch (error) {
+      console.error("Nexus: failed to move event:", error);
     }
   }
 
@@ -1161,6 +1258,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
                   onOpenDay={openDay}
                   onEditEvent={startEdit}
                   onOpenPeople={() => selectView("ljudi")}
+                  onMoveTimedEvent={(item, target) => void moveTimedEvent(item, target)}
                 />
               )}
             </div>
