@@ -156,11 +156,23 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
     label: s.backup.exportButton,
     keywords: ["izvoz", "arhiva", "kopija"],
   },
+  // The "Rezervna kopija" card holds three blocks — export, restore, import —
+  // so each gets its own entry inside that one section rather than a section of
+  // its own: they are one subject, and splitting the card would hide the
+  // contrast the two archive flows are meant to be read against. „uvoz“ now
+  // belongs to the import block alone; the restore entry answers to the words
+  // that describe what IT does.
   {
     id: "backup-restore",
     section: "backup",
     label: s.restore.title,
-    keywords: ["vracanje", "uvoz", "arhiva"],
+    keywords: ["vracanje", "vrati", "zameni", "arhiva"],
+  },
+  {
+    id: "backup-import",
+    section: "backup",
+    label: s.import.title,
+    keywords: ["uvoz", "uvezi", "spajanje", "dodaj", "arhiva"],
   },
   {
     // The panel is one read-only block of facts, so it is one entry: splitting

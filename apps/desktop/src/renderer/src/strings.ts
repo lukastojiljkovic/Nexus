@@ -6,6 +6,7 @@
 import type {
   ArchiveReadErrorCode,
   DashboardPickErrorCode,
+  ImportSkipCode,
   RestoreModuleCounts,
   RestoreProblemCode,
 } from "../../shared/ipc.js";
@@ -1397,6 +1398,97 @@ export const strings = {
         "missing-ydoc": "Belešci u arhivi nedostaje sadržaj.",
         "missing-blob": "Prilogu nedostaje datoteka u arhivi — zapis se vraća bez nje.",
       } satisfies Record<RestoreProblemCode, string>,
+    },
+    /**
+     * Uvoz iz arhive (ADR-043 §5) — the ADDITIVE sibling of the restore block
+     * above, in the same "Rezervna kopija" card and through the same
+     * pick → passphrase → preview → confirm flow.
+     *
+     * Only what actually differs is spelled here. Everything the two flows
+     * share — the passphrase field, the preview/running lines, the picked-file
+     * prefix, the manifest labels, the `unreadable`/`problems` sentences, the
+     * corrupt-blob line, the module row labels, „Otkaži“ — is read straight off
+     * `strings.settings.restore` by the component, because the flows are
+     * identical there by design and a second spelling would drift.
+     *
+     * `description` states the contract the whole card turns on and that the
+     * restore description states in reverse: an import ADDS, a restore
+     * REPLACES.
+     *
+     * `skips` is typed against the wire's own closed `ImportSkipCode` domain,
+     * so a code added in `shared/ipc.ts` is a compile error here rather than a
+     * silently missing sentence in the one screen that has to be honest about
+     * what will not arrive.
+     */
+    import: {
+      title: "Uvoz iz arhive",
+      description:
+        "Dodaj sadržaj tuđe arhive — ili svog drugog profila — u ovaj profil. Uvoz ništa ne briše: sve što već imaš ostaje na svom mestu, a sadržaj arhive dolazi pored toga, kao novi zapisi. Uvoz možeš opozvati jednim klikom, ali samo dok ne zaključaš ili ne zatvoriš aplikaciju.",
+      /** Preview header, beside the archive's own manifest facts (which reuse restore's labels). */
+      targetLabel: "Uvozi se u",
+      encryptedBadge: "Šifrovana arhiva",
+      /**
+       * The per-module table's four columns — `ImportModuleCounts`' own
+       * arithmetic, in its own order: `parsed = imported + merged + skipped`.
+       */
+      columnParsed: "U arhivi",
+      columnImported: "Uvozi se",
+      columnMerged: "Spojeno",
+      columnSkipped: "Preskočeno",
+      /** Says what the two middle columns mean before the user has to guess — merging is the part nobody expects. */
+      tableCaption:
+        "„Spojeno“ su zapisi koji su se poklopili sa nečim što već imaš — oznaka istog imena, veza koja već postoji. Sve „preskočeno“ je, razlog po razlog, izlistano ispod.",
+      /** Heading above the skip list; rendered only when the plan actually skips something. */
+      skipsTitle: "Šta se ne uvozi",
+      /**
+       * Heading above the parse warnings. A restore's preview needs none — it
+       * shows one list — while an import shows the grouped skip report AND the
+       * row-by-row detail behind it, and two unlabeled lists in a row would
+       * read as one.
+       */
+      warningsTitle: "Upozorenja pri čitanju arhive",
+      /**
+       * One sentence per `ImportSkipCode`. The first seven are rows salvage
+       * mode could not read — the „oštećen red“ family, worded so it is clear
+       * the ARCHIVE is at fault and the rest of it still arrives. The last five
+       * are skipped BY DESIGN, and each says whose choice wins and why.
+       *
+       * The default task list is deliberately never named („Inbox“): it is a
+       * stored, renamable row, exactly as `strings.tasks.lists` explains.
+       */
+      skips: {
+        "unknown-record-type":
+          "Oštećen red — vrsta zapisa koju ova verzija Nexusa ne poznaje; ostatak arhive se uvozi normalno.",
+        "invalid-record": "Oštećen red — zapis nije ispravan i zato se preskače.",
+        "duplicate-id": "Oštećen red — isti zapis se u arhivi pojavljuje više puta; uzima se prvi.",
+        "unknown-reference": "Oštećen red — zapis upućuje na nešto čega u arhivi nema.",
+        "reference-cycle": "Oštećen red — zapisi u arhivi upućuju jedni na druge u krug.",
+        "missing-ydoc": "Oštećen red — belešci u arhivi nedostaje sadržaj.",
+        "invalid-ydoc": "Oštećen red — sadržaj beleške u arhivi nije ispravan.",
+        "settings-not-imported":
+          "Podešavanja iz arhive se ne uvoze — moduli i obaveštenja ostaju onako kako si ih ti podesio.",
+        "notifications-not-imported":
+          "Zabeležena obaveštenja se ne uvoze — taj spisak pripada profilu u kom je nastao.",
+        "dashboard-settings-not-imported":
+          "Pozadina kontrolne table se ne uvozi — izgled tvoje table ostaje tvoj.",
+        "template-name-taken": "Šablon istog imena već postoji kod tebe — tvoj se zadržava.",
+        "source-inbox-collapsed":
+          "Podrazumevana lista iz arhive se ne pravi ponovo — njeni zadaci ulaze u tvoju podrazumevanu listu.",
+      } satisfies Record<ImportSkipCode, string>,
+      /**
+       * The corrupt-blob line's closing clause only: the count, its numeral
+       * agreement and the „Arhiva sadrži“ opening are the restore's, and only
+       * the verb differs — those files are not RETURNED here, they are not
+       * imported.
+       */
+      corruptBlobsSuffix: "sa oštećenim sadržajem — te datoteke neće biti uvezene.",
+      applyButton: "Uvezi",
+      applying: "Uvoz u toku…",
+      applied: "Podaci su uvezeni. Aplikacija se osvežava…",
+      /** A rejected apply call; the preview itself stays valid, so this invites a retry. */
+      error: "Uvoz nije uspeo. Pokušaj ponovo.",
+      /** The post-reload banner (App.tsx) when the undo slot holds an IMPORT — the button, the dismiss label and the error line are the restore's, since undoing is one mechanism. */
+      undoBanner: "Podaci su uvezeni iz arhive.",
     },
     about: {
       version: "Verzija",

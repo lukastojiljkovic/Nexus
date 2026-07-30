@@ -3847,16 +3847,19 @@ button.cal__grid-event--dragging {
 .set__security-form .nx-button {
   align-self: flex-start;
 }
-/* Rezervna kopija → Vraćanje iz arhive (IMEX slice 3d): its own block below the
-   export, separated by the same hairline the sidebar uses between nav groups. */
-.set__restore-block {
+/* Rezervna kopija → Vraćanje iz arhive (IMEX slice 3d) and Uvoz iz arhive
+   (ADR-043): sibling blocks below the export, each separated from what is above
+   it by the same hairline the sidebar uses between nav groups. */
+.set__restore-block,
+.set__import-block {
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-2);
   padding-top: var(--nx-space-3);
   border-top: 1px solid var(--nx-border);
 }
-.set__restore-block .nx-button {
+.set__restore-block .nx-button,
+.set__import-block .nx-button {
   align-self: flex-start;
 }
 /* Preview header: the archive's file name and its manifest facts, wrapping
@@ -3926,6 +3929,26 @@ button.cal__grid-event--dragging {
   display: flex;
   gap: var(--nx-space-2);
   flex-wrap: wrap;
+}
+/* Uvoz iz arhive: the same table recipe with four numeric columns instead of
+   two — it needs more room overall and less of it per column. Must follow
+   `.set__restore-table`, which it shares specificity with. */
+.set__import-table {
+  max-width: 460px;
+}
+.set__import-table tbody td {
+  width: 76px;
+}
+/* The skip report: the reason reads as prose, the module and count trail it
+   muted, so a long list scans by sentence rather than by number. */
+.set__import-skip {
+  font-size: var(--nx-font-size-body-sm);
+}
+.set__import-skip-meta {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 /* Native select matched to the textfield input (tokens only, no custom arrow; mirrors .study__select). */
 .set__select {

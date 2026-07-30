@@ -16,6 +16,8 @@ import type {
   AppInfo,
   DashboardSettings,
   FlagState,
+  ImportPreview,
+  ImportSkipReason,
   NotificationSource,
   RestoreModuleCounts,
   RestorePreview,
@@ -325,8 +327,8 @@ type RestoreState =
   | { phase: "applying"; pick: PickedArchive; preview: RestorePreview }
   | { phase: "applied" };
 
-/** The counts table's five rows, in the order they are shown. */
-const RESTORE_MODULES: (keyof RestoreModuleCounts)[] = [
+/** The archive modules, in the order both the restore table and the import report show them. */
+const ARCHIVE_MODULES: (keyof RestoreModuleCounts)[] = [
   "tasks",
   "calendar",
   "study",
@@ -609,7 +611,7 @@ function RestoreSection({ profileId, hits }: RestoreSectionProps) {
               </tr>
             </thead>
             <tbody>
-              {RESTORE_MODULES.map((key) => (
+              {ARCHIVE_MODULES.map((key) => (
                 <tr key={key}>
                   <th scope="row">{s.modules[key]}</th>
                   <td>{state.preview.current[key]}</td>
@@ -650,6 +652,355 @@ function RestoreSection({ profileId, hits }: RestoreSectionProps) {
               onClick={() => void cancel()}
             >
               {s.cancelButton}
+            </Button>
+          </div>
+
+          {state.phase === "applying" && <p className="app__muted">{s.applying}</p>}
+          {state.phase === "ready" && state.error != null && <p className="set__error">{state.error}</p>}
+        </>
+      )}
+
+      {state.phase === "applied" && <p className="set__section-caption">{s.applied}</p>}
+    </div>
+  );
+}
+
+/**
+ * The import flow's state, phase for phase the same machine `RestoreState` is:
+ * the two flows differ in what they DO, never in how they are driven, and one
+ * shape means one set of buttons-per-phase to reason about. Only the preview
+ * type differs, because only the preview says anything different.
+ */
+type ImportState =
+  | { phase: "idle"; error: string | null }
+  | {
+      phase: "picked";
+      pick: PickedArchive;
+      needsPassphrase: boolean;
+      busy: boolean;
+      error: string | null;
+    }
+  | { phase: "invalid"; pick: PickedArchive; problems: RestoreProblem[] }
+  | { phase: "ready"; pick: PickedArchive; preview: ImportPreview; error: string | null }
+  | { phase: "applying"; pick: PickedArchive; preview: ImportPreview }
+  | { phase: "applied" };
+
+/** One named group of rows the import will not write: its Serbian reason, then the module it belonged to and how many rows it covers. */
+function ImportSkipRow({ reason }: { reason: ImportSkipReason }) {
+  const s = strings.settings.import;
+  const moduleLabel = reason.module === null ? null : strings.settings.restore.modules[reason.module];
+  return (
+    <li className="set__import-skip">
+      {s.skips[reason.code]}{" "}
+      <span className="set__import-skip-meta">
+        {moduleLabel !== null && <>{moduleLabel} · </>}
+        {reason.count}
+      </span>
+    </li>
+  );
+}
+
+interface ImportSectionProps {
+  profileId: string;
+  /** SET-014 search hits; the section reads only its own entry ids out of it. */
+  hits: ReadonlySet<string>;
+}
+
+/**
+ * Uvoz iz arhive (ADR-043 §5): pick somebody else's archive — or your own other
+ * profile's — dry-run it against THIS profile, and merge it in.
+ *
+ * Deliberately the restore section's twin: the same pick → passphrase →
+ * preview → confirm machine, the same busy and error states, the same `set__`
+ * recipes, so the two cards read as siblings and the user learns one flow. What
+ * differs is the contract and therefore the preview. A restore REPLACES, so its
+ * preview compares current with incoming; an import ADDS, so nothing is being
+ * replaced and the only honest numbers are per-module arithmetic — what the
+ * archive carried, what will be inserted, what merged onto something already
+ * here, and what will not arrive at all, every last one of those NAMED before
+ * anything is written.
+ *
+ * As with a restore, main reloads this renderer after a successful apply, so
+ * nothing here depends on its own state surviving; the undo banner the reloaded
+ * app shows is driven by `restoreStatus` in App.tsx, which serves both
+ * operations from one slot.
+ */
+function ImportSection({ profileId, hits }: ImportSectionProps) {
+  const s = strings.settings.import;
+  // The half of the flow that is identical to a restore's, read from where it
+  // is already spelled rather than spelled a second time.
+  const shared = strings.settings.restore;
+
+  const [state, setState] = useState<ImportState>({ phase: "idle", error: null });
+  // Outside the state machine for the reason `RestoreSection`'s is: a wrong
+  // passphrase comes back as a status, not a rejection, and the user corrects
+  // the value already typed rather than retyping it.
+  const [passphrase, setPassphrase] = useState("");
+  // Read by the unmount cleanup only. An apply in flight must never be
+  // cancelled from here: main is copying blobs out of the very archive
+  // `cancelImport` would close under it.
+  const applying = useRef(false);
+
+  // Leaving the page while an archive is picked still has to release it — an
+  // opened archive keeps the user's file locked on Windows. After an apply main
+  // has already dropped the pick, so this is a no-op.
+  useEffect(() => {
+    return () => {
+      if (applying.current) return;
+      void window.nexus.cancelImport().catch((error: unknown) => {
+        console.error("Nexus: failed to release the picked import archive:", error);
+      });
+    };
+  }, []);
+
+  async function runPreview(pick: PickedArchive, phrase: string | null): Promise<void> {
+    setState({ phase: "picked", pick, needsPassphrase: phrase !== null, busy: true, error: null });
+    try {
+      const result = await window.nexus.previewImport(profileId, phrase);
+      switch (result.status) {
+        case "ready":
+          // Main holds the opened archive now; nothing after this point ever
+          // needs the passphrase again (`BackupSection`'s own hygiene rule).
+          setPassphrase("");
+          setState({ phase: "ready", pick, preview: result.preview, error: null });
+          return;
+        case "invalid":
+          setState({ phase: "invalid", pick, problems: result.problems });
+          return;
+        case "unreadable":
+          setState({
+            phase: "picked",
+            pick,
+            // An archive that turns out to want a passphrase gets the field even
+            // if the pick did not say so — otherwise the message asks for
+            // something this screen offers no way to give.
+            needsPassphrase: pick.encrypted || result.code === "passphrase-required",
+            busy: false,
+            error: shared.unreadable[result.code],
+          });
+          return;
+        case "no-file":
+          setState({ phase: "idle", error: shared.noFileError });
+          return;
+      }
+    } catch (previewError) {
+      setState({
+        phase: "picked",
+        pick,
+        needsPassphrase: pick.encrypted,
+        busy: false,
+        error: shared.readError,
+      });
+      console.error("Nexus: failed to preview an import archive:", previewError);
+    }
+  }
+
+  /** Picking from any phase starts over — main closes the superseded pick itself. */
+  async function choose(): Promise<void> {
+    setState({ phase: "idle", error: null });
+    setPassphrase("");
+    try {
+      const picked = await window.nexus.pickImportArchive();
+      if (picked.canceled) return;
+      const pick: PickedArchive = { fileName: picked.fileName, encrypted: picked.encrypted };
+      if (pick.encrypted) {
+        setState({ phase: "picked", pick, needsPassphrase: true, busy: false, error: null });
+        return;
+      }
+      // Nothing left to ask for: a plain archive previews itself on the spot.
+      await runPreview(pick, null);
+    } catch (pickError) {
+      setState({ phase: "idle", error: shared.readError });
+      console.error("Nexus: failed to pick an import archive:", pickError);
+    }
+  }
+
+  async function apply(pick: PickedArchive, preview: ImportPreview): Promise<void> {
+    applying.current = true;
+    setState({ phase: "applying", pick, preview });
+    try {
+      await window.nexus.applyImport(profileId, preview.token);
+      // Main reloads this renderer moments after the reply lands, so the
+      // success line simply stands until the whole screen is replaced.
+      setState({ phase: "applied" });
+    } catch (applyError) {
+      // A failed apply leaves the plan — and the token main accepts —
+      // untouched, so the screen goes back to it rather than to idle.
+      setState({ phase: "ready", pick, preview, error: s.error });
+      console.error("Nexus: failed to apply an import:", applyError);
+    } finally {
+      applying.current = false;
+    }
+  }
+
+  async function cancel(): Promise<void> {
+    setState({ phase: "idle", error: null });
+    setPassphrase("");
+    try {
+      await window.nexus.cancelImport();
+    } catch (cancelError) {
+      console.error("Nexus: failed to release the picked import archive:", cancelError);
+    }
+  }
+
+  const previewing = state.phase === "ready" || state.phase === "applying";
+
+  return (
+    <div className="set__import-block">
+      <h3 className={labelClass("set__module-group-title", hits.has("backup-import"))}>{s.title}</h3>
+      <p className="app__muted">{s.description}</p>
+
+      {!previewing && state.phase !== "applied" && (
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={state.phase === "picked" && state.busy}
+          onClick={() => void choose()}
+        >
+          {shared.pickButton}
+        </Button>
+      )}
+
+      {state.phase === "idle" && state.error != null && <p className="set__error">{state.error}</p>}
+
+      {state.phase === "picked" && (
+        <>
+          <p className="set__section-caption">
+            {shared.pickedPrefix} <span className="app__path">{state.pick.fileName}</span>
+          </p>
+          {state.needsPassphrase && (
+            <form
+              className="set__security-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void runPreview(state.pick, passphrase);
+              }}
+            >
+              <TextField
+                type="password"
+                label={shared.passphraseLabel}
+                value={passphrase}
+                disabled={state.busy}
+                onChange={(event) => setPassphrase(event.target.value)}
+              />
+              <Button type="submit" size="sm" variant="primary" disabled={state.busy || passphrase === ""}>
+                {shared.previewButton}
+              </Button>
+            </form>
+          )}
+          {state.busy && <p className="app__muted">{shared.previewRunning}</p>}
+          {state.error != null && <p className="set__error">{state.error}</p>}
+        </>
+      )}
+
+      {state.phase === "invalid" && (
+        <>
+          <p className="set__section-caption">
+            {shared.pickedPrefix} <span className="app__path">{state.pick.fileName}</span>
+          </p>
+          <ul className="set__restore-problems">
+            {state.problems.map((problem, index) => (
+              <RestoreProblemRow key={`${problem.code}-${index}`} problem={problem} tone="error" />
+            ))}
+          </ul>
+        </>
+      )}
+
+      {previewing && (
+        <>
+          <div className="set__restore-head">
+            <span className="app__path">{state.preview.fileName}</span>
+            {state.preview.encrypted && <Chip>{s.encryptedBadge}</Chip>}
+            <span className="set__restore-meta">
+              {shared.createdLabel}: {formatArchiveInstant(state.preview.createdAt)}
+            </span>
+            <span className="set__restore-meta">
+              {shared.versionLabel}: {state.preview.appVersion}
+            </span>
+            <span className="set__restore-meta">
+              {shared.sourceLabel}: {state.preview.sourceProfileName}
+            </span>
+            <span className="set__restore-meta">
+              {s.targetLabel}: {state.preview.targetProfileName}
+            </span>
+          </div>
+
+          <table className="set__restore-table set__import-table">
+            <thead>
+              <tr>
+                {/* The row-header column's own corner cell: a module name needs no heading. */}
+                <td />
+                <th scope="col">{s.columnParsed}</th>
+                <th scope="col">{s.columnImported}</th>
+                <th scope="col">{s.columnMerged}</th>
+                <th scope="col">{s.columnSkipped}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ARCHIVE_MODULES.map((key) => {
+                const counts = state.preview.report.modules[key];
+                return (
+                  <tr key={key}>
+                    <th scope="row">{shared.modules[key]}</th>
+                    <td>{counts.parsed}</td>
+                    <td>{counts.imported}</td>
+                    <td>{counts.merged}</td>
+                    <td>{counts.skipped}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="set__section-caption">{s.tableCaption}</p>
+
+          {state.preview.report.skips.length > 0 && (
+            <>
+              <h4 className="set__module-group-title">{s.skipsTitle}</h4>
+              <ul className="set__restore-problems">
+                {state.preview.report.skips.map((reason) => (
+                  <ImportSkipRow
+                    key={`${reason.code}-${reason.module ?? ""}-${reason.type ?? ""}`}
+                    reason={reason}
+                  />
+                ))}
+              </ul>
+            </>
+          )}
+
+          {state.preview.warnings.length > 0 && (
+            <>
+              <h4 className="set__module-group-title">{s.warningsTitle}</h4>
+              <ul className="set__restore-problems">
+                {state.preview.warnings.map((warning, index) => (
+                  <RestoreProblemRow key={`${warning.code}-${index}`} problem={warning} tone="muted" />
+                ))}
+              </ul>
+            </>
+          )}
+          {state.preview.corruptBlobs > 0 && (
+            <p className="set__section-caption">
+              {shared.corruptBlobsPrefix} {state.preview.corruptBlobs}{" "}
+              {dayUnit(state.preview.corruptBlobs, shared.corruptBlobsUnitOne, shared.corruptBlobsUnitMany)}{" "}
+              {s.corruptBlobsSuffix}
+            </p>
+          )}
+
+          <div className="set__restore-actions">
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={state.phase === "applying"}
+              onClick={() => void apply(state.pick, state.preview)}
+            >
+              {s.applyButton}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={state.phase === "applying"}
+              onClick={() => void cancel()}
+            >
+              {shared.cancelButton}
             </Button>
           </div>
 
@@ -1439,6 +1790,7 @@ export function SettingsPage({
       <Card title={strings.settings.sectionTitle.backup} className={sectionClass(sections.has("backup"))}>
         <BackupSection profileId={profileId} />
         <RestoreSection profileId={profileId} hits={hits} />
+        <ImportSection profileId={profileId} hits={hits} />
       </Card>
 
       <Card title={strings.settings.sectionTitle.about} className={sectionClass(sections.has("about"))}>

@@ -110,11 +110,16 @@ export function App() {
   // mounted at the moment the palette closes; the page consumes it on mount
   // and clears it through `onSeedConsumed`.
   const [searchSeed, setSearchSeed] = useState<string | null>(null);
-  // The post-reload restore banner (IMEX slice 3d, ADR-023). Applying a
-  // restore reloads this renderer, so the screen that ran it is gone by the
-  // time there is anything to say — `restoreStatus` below is how the fresh
-  // renderer learns an undo is still available.
-  const [restoreUndoAt, setRestoreUndoAt] = useState<string | null>(null);
+  // The post-reload archive banner (IMEX slice 3d, ADR-023; ADR-043 §4).
+  // Applying a restore OR an import reloads this renderer, so the screen that
+  // ran it is gone by the time there is anything to say — `restoreStatus` below
+  // is how the fresh renderer learns an undo is still available. One slot, one
+  // banner: `kind` is what the offer is worded from, since "vraćanje" and
+  // "uvoz" undo very different things through the same mechanism.
+  const [restoreUndo, setRestoreUndo] = useState<{
+    kind: "restore" | "import";
+    appliedAt: string;
+  } | null>(null);
   // Dismissal is presentational and session-only: it hides the banner, it does
   // NOT cancel the undo — main keeps that until the app is locked or closed,
   // and a locked session drops it anyway. Deliberately not persisted: the next
@@ -285,7 +290,10 @@ export function App() {
     void (async () => {
       try {
         const status = await window.nexus.restoreStatus(activeProfileId);
-        if (active) setRestoreUndoAt(status.undo?.appliedAt ?? null);
+        if (active) {
+          const undo = status.undo;
+          setRestoreUndo(undo === null ? null : { kind: undo.kind, appliedAt: undo.appliedAt });
+        }
       } catch (error) {
         console.error("Nexus: failed to read the restore status:", error);
       }
@@ -295,7 +303,7 @@ export function App() {
     };
   }, [authStatus?.state, activeProfileId]);
 
-  /** The banner's "Opozovi": puts the profile back exactly as it was before the restore. */
+  /** The banner's "Opozovi": puts the profile back exactly as it was before the restore — or before the import, which undoes through the same slot. */
   async function undoRestore(): Promise<void> {
     if (activeProfileId === undefined || undoingRestore) return;
     setUndoingRestore(true);
@@ -741,11 +749,15 @@ export function App() {
         </nav>
 
         <main className="app__main">
-          {restoreUndoAt != null && !restoreBannerHidden && (
+          {restoreUndo != null && !restoreBannerHidden && (
             <div className="app__restore-banner" role="status">
               <span className="app__restore-banner-text">
-                {strings.settings.restore.undoBanner}{" "}
-                <span className="app__restore-banner-when">{formatArchiveInstant(restoreUndoAt)}</span>
+                {restoreUndo.kind === "import"
+                  ? strings.settings.import.undoBanner
+                  : strings.settings.restore.undoBanner}{" "}
+                <span className="app__restore-banner-when">
+                  {formatArchiveInstant(restoreUndo.appliedAt)}
+                </span>
               </span>
               {restoreUndoError != null && (
                 <span className="app__restore-banner-error">{restoreUndoError}</span>
