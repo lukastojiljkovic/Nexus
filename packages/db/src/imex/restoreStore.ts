@@ -232,8 +232,10 @@ export class RestoreStore {
        VALUES (?, ?, ?, ?, ?, ?)`,
     );
     this.insertNoteFolder = db.prepare(
-      `INSERT INTO note_folders (id, profile_id, parent_id, name, color, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO note_folders
+         (id, profile_id, parent_id, name, color, default_template_id, is_capture_default,
+          created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     this.insertNoteTag = db.prepare(
       `INSERT INTO note_tags (id, profile_id, name, created_at) VALUES (?, ?, ?, ?)`,
@@ -398,9 +400,16 @@ export class RestoreStore {
         written += 1;
       }
 
+      // ADR-036: `defaultTemplateId` is written exactly as the archive states
+      // it, with NO check that the named template came along. It may name a
+      // built-in (a code constant, in no table at all), and even for a stored
+      // row the dangling-id rule already covers the miss — the apply path reads
+      // an unresolvable default as "no template". Validating it here could only
+      // turn a harmless blank note into a refused restore.
       for (const folder of input.data.noteFolders) {
         this.insertNoteFolder.run(
           folder.id, this.profileId, folder.parentId, folder.name, folder.color,
+          folder.defaultTemplateId, folder.isCaptureDefault ? 1 : 0,
           folder.createdAt, folder.updatedAt,
         );
         written += 1;

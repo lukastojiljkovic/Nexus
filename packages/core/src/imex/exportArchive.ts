@@ -27,28 +27,22 @@ import { renderNoteMarkdown } from "./noteMarkdown.js";
 import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown.js";
 
 /**
- * IMEX-004: the archive's own semver. `1.6.0` adds the `task-template` record
- * type (migration 027 / ADR-035), after `1.5.0` added `task-attachment`,
- * `1.4.0` the `task-tag` and `task-tag-link` types (migration 023), `1.3.0` the
- * `task-list`/`task-section` types and the `listId`/`sectionId`/`position` a
- * task carries into them (TASK-004 / ADR-029), `1.2.0` a task's
- * `reminderOffsets` (ADR-028) and `1.1.0` the `person` record type (CAL-007 /
- * ADR-026). Additive, so a MINOR bump by the same honesty each of those made
- * one: an archive this build writes is refused by a 1.5 reader, which would
- * otherwise parse every task and silently drop every template the user built.
- * Kept in step with `INTERCHANGE_SCHEMA_VERSION` (`importArchive.ts`) — two
- * constants rather than one import, since the reader already imports from this
- * module and the cycle would be worse than the duplication;
- * `importArchive.test.ts` pins them equal.
- *
- * SUPERVISOR NOTE (task-templates lane, ADR-035): this worktree branched before
- * the `1.5.0` (`task-attachment`) lane landed on main, so the `1.5.0` sentence
- * above describes a change this tree does not yet contain and the version jumps
- * `1.4.0` -> `1.6.0` here. `1.6.0` is the reserved number regardless; at merge
- * the two lanes' record types simply coexist and nothing about this constant
- * changes.
+ * IMEX-004: the archive's own semver. `1.7.0` adds a note folder's
+ * `defaultTemplateId`/`isCaptureDefault` (NOTE prefs / ADR-036, migration 028),
+ * after `1.6.0` added the `task-template` record type (ADR-035), `1.5.0` the
+ * `task-attachment` type (ADR-031), `1.4.0` added the `task-tag` and `task-tag-link` record types
+ * (migration 023), `1.3.0` the `task-list`/`task-section` types and the
+ * `listId`/`sectionId`/`position` a task carries into them (TASK-004 /
+ * ADR-029), `1.2.0` a task's `reminderOffsets` (ADR-028) and `1.1.0` the
+ * `person` record type (CAL-007 / ADR-026). Additive, so a MINOR bump by the
+ * same honesty each of those made one: an archive this build writes is refused
+ * by a 1.6 reader, which would otherwise parse every folder and silently drop
+ * the template the user set it to open notes with. Kept in step with
+ * `INTERCHANGE_SCHEMA_VERSION` (`importArchive.ts`) — two constants rather than
+ * one import, since the reader already imports from this module and the cycle
+ * would be worse than the duplication; `importArchive.test.ts` pins them equal.
  */
-const SCHEMA_VERSION = "1.6.0";
+const SCHEMA_VERSION = "1.7.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -436,6 +430,16 @@ export interface ExportNoteFolder {
   parentId: string | null;
   name: string;
   color: string | null;
+  /**
+   * The template a note created in this folder opens with (ADR-036). A
+   * built-in template's constant id or a `note_templates` row's id — the two
+   * are indistinguishable here on purpose, exactly as in the column (migration
+   * 028 deliberately declares no foreign key), and a dangling id quietly means
+   * "no template" rather than refusing to create the note.
+   */
+  defaultTemplateId: string | null;
+  /** Whether a context-free "Nova beleška" (the palette's) files into this folder. At most one folder per profile carries it. */
+  isCaptureDefault: boolean;
   createdAt: string;
   updatedAt: string;
 }

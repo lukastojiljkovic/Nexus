@@ -291,10 +291,12 @@ function richProfileData(): ProfileData {
     noteFolders: [
       {
         id: "folder-root", profileId: "profile1", parentId: null, name: "Posao", color: "zlato",
+        defaultTemplateId: "builtin:sastanak", isCaptureDefault: true,
         createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
       },
       {
         id: "folder-child", profileId: "profile1", parentId: "folder-root", name: "Projekti", color: null,
+        defaultTemplateId: null, isCaptureDefault: false,
         createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
       },
     ],
@@ -456,6 +458,13 @@ const VALID_NOTE = {
   cardDeckId: null, createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
 };
 
+/** A `note-folder` row as THIS build writes it (ADR-036 added the last two fields at the 1.7.0 bump). */
+const VALID_NOTE_FOLDER = {
+  type: "note-folder", id: "nf1", profileId: "profile1", parentId: null, name: "Posao",
+  color: "zlato", defaultTemplateId: null, isCaptureDefault: false,
+  createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+};
+
 const VALID_SUBJECT = {
   type: "subject", id: "s1", profileId: "profile1", name: "Analiza", color: "jade", semester: null,
   archived: false, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z",
@@ -505,10 +514,10 @@ describe("parseImportArchive — one test per problem code", () => {
   });
 
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.7.0" });
+    const files = baseFiles({ schemaVersion: "1.8.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.7.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.8.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -1339,13 +1348,14 @@ describe("parseImportArchive — recurrence (ADR-024)", () => {
 });
 
 /**
- * A backup's whole point is that it restores. Seven REQUIRED fields have been
+ * A backup's whole point is that it restores. Nine REQUIRED fields have been
  * added to existing record types since the first release — task/event
  * `recurrence`, event `recurrenceExdates`, event `reminderOffsets` (all three
- * inside `1.0.x`, with no bump), task `reminderOffsets` (at the `1.2.0` bump)
- * and a task's `listId`/`sectionId`/`position` (at the `1.3.0` one) — and
- * without the era gate every archive written before each of them would be
- * refused outright for a field that did not exist yet.
+ * inside `1.0.x`, with no bump), task `reminderOffsets` (at the `1.2.0` bump),
+ * a task's `listId`/`sectionId`/`position` (at the `1.3.0` one) and a note
+ * folder's `defaultTemplateId`/`isCaptureDefault` (at `1.7.0`, covered in its
+ * own suite below) — and without the era gate every archive written before each
+ * of them would be refused outright for a field that did not exist yet.
  */
 describe("parseImportArchive — older eras (fields added after the first release)", () => {
   /** `VALID_TASK` as a 1.0.0 writer emitted it: derived by REMOVING the fields added since, so this fixture cannot drift from the current row shape. */
@@ -1505,9 +1515,133 @@ describe("parseImportArchive — older eras (fields added after the first releas
   });
 });
 
+/**
+ * ADR-036's own era gate: a note folder's `defaultTemplateId` and
+ * `isCaptureDefault` were added AT the `1.7.0` bump, so every archive written
+ * before it carries neither — and a backup that cannot be restored is not a
+ * backup. Structured exactly like the task/event suite above, because it is the
+ * same rule: absence is defaulted below the bump, required at and above it, and
+ * a PRESENT value is strict in every era.
+ */
+describe("parseImportArchive — note folder preferences (the 1.7.0 era gate)", () => {
+  /** `VALID_NOTE_FOLDER` as a pre-1.7 writer emitted it: derived by REMOVING the two fields, so the fixture cannot drift from the current row shape. */
+  function eraFolder(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    const {
+      defaultTemplateId: _defaultTemplateId,
+      isCaptureDefault: _isCaptureDefault,
+      ...rest
+    } = VALID_NOTE_FOLDER;
+    return { ...rest, ...overrides };
+  }
+
+  function parseFolders(schemaVersion: string, folders: readonly Record<string, unknown>[]) {
+    return parseImportArchive(
+      emptyInputWith(
+        baseFiles({
+          schemaVersion,
+          fileContents: { "data/notes.ndjson": ndjson(folders) },
+        }),
+      ),
+    );
+  }
+
+  const invalidDetails = (result: ReturnType<typeof parseFolders>): (string | undefined)[] =>
+    result.problems.filter((problem) => problem.code === "invalid-record").map((p) => p.detail);
+
+  it("defaults both preferences on a 1.6.0 archive that predates them", () => {
+    const result = parseFolders("1.6.0", [eraFolder()]);
+
+    expect(result.problems).toEqual([]);
+    expect(result.data?.noteFolders[0]).toMatchObject({
+      defaultTemplateId: null,
+      isCaptureDefault: false,
+    });
+  });
+
+  it("refuses that same row at 1.7.0, naming the field the bump made required", () => {
+    const result = parseFolders("1.7.0", [eraFolder()]);
+
+    expect(invalidDetails(result)).toEqual(["defaultTemplateId"]);
+    expect(result.data).toBeNull();
+  });
+
+  it("refuses a row missing only the capture flag at 1.7.0", () => {
+    const { isCaptureDefault: _flag, ...withoutFlag } = VALID_NOTE_FOLDER;
+    expect(invalidDetails(parseFolders("1.7.0", [withoutFlag]))).toEqual(["isCaptureDefault"]);
+  });
+
+  it("validates a PRESENT value strictly in every era — leniency covers absence only", () => {
+    for (const schemaVersion of ["1.0.0", "1.6.0", "1.7.0"]) {
+      const folder = (overrides: Record<string, unknown>) => ({ ...VALID_NOTE_FOLDER, ...overrides });
+
+      expect(invalidDetails(parseFolders(schemaVersion, [folder({ isCaptureDefault: 1 })]))).toEqual([
+        "isCaptureDefault",
+      ]);
+      expect(
+        invalidDetails(parseFolders(schemaVersion, [folder({ defaultTemplateId: "" })])),
+      ).toEqual(["defaultTemplateId"]);
+      // An explicit `null` capture flag is PRESENT, not absent: a writer that
+      // emitted the key meant it, and `null` is not a boolean.
+      expect(
+        invalidDetails(parseFolders(schemaVersion, [folder({ isCaptureDefault: null })])),
+      ).toEqual(["isCaptureDefault"]);
+    }
+  });
+
+  // ADR-036's dangling-id rule, stated as a test: the archive names a template
+  // it does not carry, and that is FINE — the id may be a built-in constant
+  // that lives in no table at all, and even a missing stored row only ever
+  // means "this folder creates a blank note".
+  it("accepts a defaultTemplateId the archive carries no template for", () => {
+    const result = parseFolders("1.7.0", [
+      { ...VALID_NOTE_FOLDER, defaultTemplateId: "builtin:sastanak" },
+      { ...VALID_NOTE_FOLDER, id: "nf2", defaultTemplateId: "no-such-template-row" },
+    ]);
+
+    expect(result.problems).toEqual([]);
+    expect(result.data?.noteFolders.map((folder) => folder.defaultTemplateId)).toEqual([
+      "builtin:sastanak",
+      "no-such-template-row",
+    ]);
+  });
+
+  // The capture mark is a per-profile SINGLETON — an invariant no single row can
+  // break, so no per-row parser can catch it. Migration 028's partial unique
+  // index would abort the restore transaction; catching it here names the row.
+  it("refuses a second folder claiming the capture mark, naming only the later one", () => {
+    const result = parseFolders("1.7.0", [
+      { ...VALID_NOTE_FOLDER, id: "nf1", isCaptureDefault: true },
+      { ...VALID_NOTE_FOLDER, id: "nf2", isCaptureDefault: true },
+      { ...VALID_NOTE_FOLDER, id: "nf3", isCaptureDefault: false },
+    ]);
+
+    expect(result.problems).toEqual([
+      {
+        severity: "error",
+        code: "invalid-record",
+        path: "data/notes.ndjson",
+        line: 2,
+        detail: "isCaptureDefault",
+      },
+    ]);
+    expect(result.data).toBeNull();
+  });
+
+  it("accepts exactly one claimant beside any number of unmarked folders", () => {
+    const result = parseFolders("1.7.0", [
+      { ...VALID_NOTE_FOLDER, id: "nf1", isCaptureDefault: false },
+      { ...VALID_NOTE_FOLDER, id: "nf2", isCaptureDefault: true },
+      { ...VALID_NOTE_FOLDER, id: "nf3", isCaptureDefault: false },
+    ]);
+
+    expect(result.problems).toEqual([]);
+    expect(result.data?.noteFolders.filter((folder) => folder.isCaptureDefault)).toHaveLength(1);
+  });
+});
+
 describe("parseImportArchive — schema version", () => {
-  it("is 1.6.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.6.0");
+  it("is 1.7.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.7.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -1519,7 +1653,7 @@ describe("parseImportArchive — schema version", () => {
   });
 
   it("accepts the exact current version", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.6.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.7.0" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
@@ -1579,9 +1713,9 @@ describe("parseImportArchive — schema version", () => {
   });
 
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.7.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.8.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.7.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.8.0" },
     ]);
     expect(result.data).toBeNull();
   });

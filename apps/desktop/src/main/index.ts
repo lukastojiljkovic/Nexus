@@ -677,6 +677,12 @@ function asNullableString(value: unknown, field: string): string | null {
   throw new Error(`Invalid IPC payload: "${field}" must be a string or null.`);
 }
 
+/** An optional id: `null`, or a non-empty string. An empty string is a bug on the wire, never "no id" — that is what `null` says. */
+function asNullableId(value: unknown, field: string): string | null {
+  if (value === null) return null;
+  return asNonEmptyString(value, field);
+}
+
 /**
  * `imex:export`'s passphrase field (ADR-022): `null` for the explicitly-
  * confirmed plaintext export, otherwise a string that must itself pass
@@ -3392,6 +3398,28 @@ function registerIpc(): void {
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const id = asNonEmptyString(body.id, "id");
     noteOrgStore(profileId).deleteFolder(id, new Date().toISOString());
+  });
+
+  // ADR-036 (folder preferences). The template id is checked for SHAPE only
+  // here; whether it names a real template is `NoteOrgStore`'s call, since only
+  // the store can see both halves of the union (the built-in constants and this
+  // profile's rows).
+  ipcMain.handle(IpcChannel.noteFoldersSetTemplate, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const templateId = asNullableId(body.templateId, "templateId");
+    noteOrgStore(profileId).setDefaultTemplate(id, templateId, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.noteFoldersSetCapture, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    // `null` is a real, meaningful value here — it clears the profile's mark.
+    const id = asNullableId(body.id, "id");
+    noteOrgStore(profileId).setCaptureDefault(id, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.noteTagsList, (event, payload): NoteTag[] => {

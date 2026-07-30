@@ -76,6 +76,12 @@ export type { CardSyntaxSpan, NoteCardSpec, ParsedBlock, ParsedCard } from "./no
 
 export { replaceNoteContent } from "./notes/yjsRestore.js";
 
+export {
+  BUILTIN_NOTE_TEMPLATE_IDS,
+  isBuiltinNoteTemplateId,
+} from "./notes/noteTemplateIds.js";
+export type { BuiltinNoteTemplateId } from "./notes/noteTemplateIds.js";
+
 export { claimUniqueName, sanitizePathSegment, UNTITLED_NOTE_NAME } from "./imex/archivePaths.js";
 
 export { toCsv } from "./imex/csv.js";

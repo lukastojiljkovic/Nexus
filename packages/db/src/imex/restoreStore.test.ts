@@ -354,6 +354,12 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     "2026-01-01T00:05:00.000Z",
   );
 
+  // ADR-036: the folder carries BOTH preferences, so the round trip below
+  // proves migration 028's two columns survive a full export/restore cycle
+  // rather than silently defaulting back on the way in.
+  orgStore.setDefaultTemplate(folder.id, template.id, "2026-01-01T00:06:00.000Z");
+  orgStore.setCaptureDefault(folder.id, "2026-01-01T00:06:00.000Z");
+
   const taskLists = taskListStore.listActive();
   const data: ProfileData = {
     tasks: taskStore.listActive(),
@@ -772,6 +778,8 @@ describe("RestoreStore", () => {
       parentId,
       name: "Child",
       color: null,
+      defaultTemplateId: null,
+      isCaptureDefault: false,
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
     };
@@ -781,6 +789,8 @@ describe("RestoreStore", () => {
       parentId: null,
       name: "Parent",
       color: null,
+      defaultTemplateId: null,
+      isCaptureDefault: false,
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
     };

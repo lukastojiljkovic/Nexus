@@ -96,6 +96,18 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
     ],
   },
   {
+    id: "note-width",
+    section: "notes",
+    label: s.notes.widthLabel,
+    keywords: ["beleske", "editor", "sirina", "mera", "uska", "normalna", "siroka", "kolona"],
+  },
+  {
+    id: "note-markdown-shortcuts",
+    section: "notes",
+    label: s.notes.markdownLabel,
+    keywords: ["beleske", "markdown", "precice", "formatiranje", "naslov", "lista", "slash"],
+  },
+  {
     id: "notifications-presets",
     section: "notifications",
     label: s.sectionTitle.notifications,

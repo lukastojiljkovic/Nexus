@@ -1,8 +1,9 @@
-import { Fragment, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { ACCENT_IDS } from "@nexus/tokens";
 import { Button, TextField } from "@nexus/ui";
 import type { NoteFolder, NoteFolderColor, NoteTag } from "../../shared/ipc.js";
 import { NotePopover } from "./notePopover.js";
+import { mergeTemplateEntries, type TemplateEntry } from "./noteTemplates.js";
 import { strings } from "./strings.js";
 
 /** Which slice of notes the middle list shows: everything, only unfiled, or one folder. */
@@ -15,6 +16,10 @@ type Editing =
   | null
   | { mode: "rename"; id: string }
   | { mode: "recolor"; id: string }
+  // ADR-036: the default-template picker opens as a second-level row under the
+  // folder, exactly like the colour swatches — the popover would otherwise have
+  // to host a nested menu whose length grows with the profile's own templates.
+  | { mode: "template"; id: string }
   | { mode: "new"; parentId: string | null };
 
 /** The tag section's own state machine, parallel to the folder one above. */
@@ -91,6 +96,29 @@ export function NoteOrganizer({
   const [tagEditing, setTagEditing] = useState<TagEditing>(null);
   const [tagDraftName, setTagDraftName] = useState("");
   const [tagFailed, setTagFailed] = useState(false);
+  // The template picker's own list (ADR-036), through the same
+  // `mergeTemplateEntries` the Šabloni pane and the slash menu read — built-ins
+  // first, then this profile's rows sr-Latn sorted — so a folder's default is
+  // named here exactly as it is named everywhere else.
+  const [templates, setTemplates] = useState<TemplateEntry[]>([]);
+
+  const loadTemplates = useCallback(async () => {
+    try {
+      setTemplates(mergeTemplateEntries(await window.nexus.listNoteTemplates(profileId)));
+    } catch (error) {
+      console.error("Nexus: failed to load note templates:", error);
+    }
+  }, [profileId]);
+
+  // Fetched whenever a picker OPENS rather than once on mount — the same
+  // refresh-on-entry policy `NoteEditor` uses for the slash menu's list. The
+  // Šabloni pane lives in the editor pane, so this component never unmounts
+  // while a template is saved, renamed or deleted; without the refetch its list
+  // would drift out of step with the profile's real templates.
+  useEffect(() => {
+    if (editing === null || editing.mode !== "template") return;
+    void loadTemplates();
+  }, [editing, loadTemplates]);
 
   const tree = buildTree(folders);
   const sortedTags = tags.slice().sort((a, b) => collator.compare(a.name, b.name));
@@ -138,6 +166,20 @@ export function NoteOrganizer({
 
   function recolor(id: string, color: NoteFolderColor | null): void {
     void run(() => window.nexus.updateNoteFolder(profileId, id, { color }));
+  }
+
+  function chooseTemplate(id: string, templateId: string | null): void {
+    void run(() => window.nexus.setNoteFolderTemplate(profileId, id, templateId));
+  }
+
+  /**
+   * Toggles the profile's quick-capture mark (ADR-036). Passing `null` clears
+   * it, so re-pressing the marked folder turns the feature off rather than
+   * leaving the user with no way to unset it — the mark is a singleton, and
+   * "move it elsewhere" cannot express "nowhere".
+   */
+  function toggleCapture(id: string, isCurrent: boolean): void {
+    void run(() => window.nexus.setNoteFolderCaptureDefault(profileId, isCurrent ? null : id));
   }
 
   function remove(id: string): void {
@@ -248,6 +290,8 @@ export function NoteOrganizer({
     const isSelected = selection.kind === "folder" && selection.id === node.id;
     const isRenaming = editing !== null && editing.mode === "rename" && editing.id === node.id;
     const isRecoloring = editing !== null && editing.mode === "recolor" && editing.id === node.id;
+    const isPickingTemplate =
+      editing !== null && editing.mode === "template" && editing.id === node.id;
     const isAddingChild = editing !== null && editing.mode === "new" && editing.parentId === node.id;
     const indent = { "--note-depth": depth } as CSSProperties;
 
@@ -271,6 +315,19 @@ export function NoteOrganizer({
                   aria-hidden="true"
                 />
                 <span className="note__folder-name">{node.name}</span>
+                {node.isCaptureDefault && (
+                  <span
+                    className="note__folder-capture"
+                    // `role="img"` so the glyph is announced by its label
+                    // rather than read out as a character — a bare aria-label
+                    // on a roleless span is not reliably exposed.
+                    role="img"
+                    title={strings.notes.folderCaptureDefaultOn}
+                    aria-label={strings.notes.folderCaptureDefaultOn}
+                  >
+                    •
+                  </span>
+                )}
               </button>
               <NotePopover label={strings.notes.folderMenuLabel}>
                 {(close) => (
@@ -309,6 +366,38 @@ export function NoteOrganizer({
                     >
                       {strings.notes.newSubfolder}
                     </button>
+                    <div className="note__menu-sep" role="separator" />
+                    <button
+                      className="note__menu-item"
+                      role="menuitem"
+                      type="button"
+                      onClick={() => {
+                        setFailed(false);
+                        setEditing({ mode: "template", id: node.id });
+                        close();
+                      }}
+                    >
+                      {strings.notes.folderTemplate}
+                    </button>
+                    <button
+                      className="note__menu-item note__menu-item--check"
+                      role="menuitemcheckbox"
+                      type="button"
+                      aria-checked={node.isCaptureDefault}
+                      onClick={() => {
+                        toggleCapture(node.id, node.isCaptureDefault);
+                        close();
+                      }}
+                    >
+                      <span
+                        className={`note__menu-check${node.isCaptureDefault ? "" : " note__menu-check--hidden"}`}
+                        aria-hidden="true"
+                      >
+                        ✓
+                      </span>
+                      {strings.notes.folderCaptureDefault}
+                    </button>
+                    <div className="note__menu-sep" role="separator" />
                     <button
                       className="note__menu-item note__menu-item--danger"
                       role="menuitem"
@@ -349,6 +438,40 @@ export function NoteOrganizer({
             >
               ×
             </button>
+          </div>
+        )}
+
+        {isPickingTemplate && (
+          <div
+            className="note__template-row"
+            style={indent}
+            role="group"
+            aria-label={strings.notes.folderTemplate}
+          >
+            <button
+              type="button"
+              className={`note__template-option${
+                node.defaultTemplateId === null ? " note__template-option--selected" : ""
+              }`}
+              aria-pressed={node.defaultTemplateId === null}
+              onClick={() => chooseTemplate(node.id, null)}
+            >
+              {strings.notes.folderTemplateNone}
+            </button>
+            {templates.map((entry) => {
+              const selected = node.defaultTemplateId === entry.id;
+              return (
+                <button
+                  key={entry.id}
+                  type="button"
+                  className={`note__template-option${selected ? " note__template-option--selected" : ""}`}
+                  aria-pressed={selected}
+                  onClick={() => chooseTemplate(node.id, entry.id)}
+                >
+                  {entry.name}
+                </button>
+              );
+            })}
           </div>
         )}
 

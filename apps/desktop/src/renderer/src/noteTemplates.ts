@@ -1,4 +1,5 @@
 import type { JSONContent } from "@tiptap/core";
+import type { BuiltinNoteTemplateId } from "@nexus/core";
 import type { NoteTemplate } from "../../shared/ipc.js";
 import { strings } from "./strings.js";
 
@@ -23,8 +24,14 @@ import { strings } from "./strings.js";
  */
 
 export interface BuiltinTemplate {
-  /** `builtin:`-prefixed — the prefix is what makes these non-renameable and non-deletable. */
-  id: string;
+  /**
+   * `builtin:`-prefixed — the prefix is what makes these non-renameable and
+   * non-deletable. Typed as `BuiltinNoteTemplateId` (`@nexus/core`) rather than
+   * a bare string since ADR-036: `NoteOrgStore` validates a folder's default
+   * template against that same constant list, so a respelled id here would be a
+   * compile error instead of a folder whose template silently never applies.
+   */
+  id: BuiltinNoteTemplateId;
   name: string;
   /** Always a full `{ type: "doc", content: [...] }` node. */
   content: JSONContent;

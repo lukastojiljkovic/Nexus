@@ -141,6 +141,8 @@ export const IpcChannel = {
   noteFoldersUpdate: "note-folders:update",
   noteFoldersMove: "note-folders:move",
   noteFoldersDelete: "note-folders:delete",
+  noteFoldersSetTemplate: "note-folders:set-template",
+  noteFoldersSetCapture: "note-folders:set-capture",
   noteTagsList: "note-tags:list",
   noteTagsCreate: "note-tags:create",
   noteTagsRename: "note-tags:rename",
@@ -1840,6 +1842,15 @@ export interface NoteFolder {
   parentId: string | null;
   name: string;
   color: NoteFolderColor | null;
+  /**
+   * The template a note created in this folder opens with (ADR-036), or null.
+   * A built-in template's constant id (`BUILTIN_NOTE_TEMPLATE_IDS`,
+   * `@nexus/core`) or a `NoteTemplate` row's id. An id the profile can no
+   * longer resolve means "no template" — never an error.
+   */
+  defaultTemplateId: string | null;
+  /** Whether a context-free "Nova beleška" (the palette's) files into this folder. At most one folder per profile. */
+  isCaptureDefault: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -1892,6 +1903,20 @@ export interface NoteFoldersMoveRequest {
 export interface NoteFoldersDeleteRequest {
   profileId: string;
   id: string;
+}
+
+/** ADR-036: points a folder at a default template, or clears it with `null`. The store validates the id against built-ins + this profile's templates. */
+export interface NoteFoldersSetTemplateRequest {
+  profileId: string;
+  id: string;
+  templateId: string | null;
+}
+
+/** ADR-036: moves this profile's quick-capture mark onto one folder, or clears it entirely with `null`. */
+export interface NoteFoldersSetCaptureRequest {
+  profileId: string;
+  /** `null` clears the mark; the store keeps at most one marked folder per profile. */
+  id: string | null;
 }
 
 export interface NoteTagsListRequest {
@@ -2655,6 +2680,10 @@ export interface NexusApi {
   ): Promise<void>;
   moveNoteFolder(profileId: string, id: string, newParentId: string | null): Promise<void>;
   deleteNoteFolder(profileId: string, id: string): Promise<void>;
+  /** ADR-036: the template new notes in this folder open with; `null` clears it. Rejects an id that is neither a built-in nor one of this profile's templates. */
+  setNoteFolderTemplate(profileId: string, id: string, templateId: string | null): Promise<void>;
+  /** ADR-036: moves this profile's quick-capture mark onto `id`, or clears it with `null`. */
+  setNoteFolderCaptureDefault(profileId: string, id: string | null): Promise<void>;
   listNoteTags(profileId: string): Promise<NoteTag[]>;
   createNoteTag(profileId: string, name: string): Promise<NoteTag>;
   renameNoteTag(profileId: string, id: string, name: string): Promise<void>;

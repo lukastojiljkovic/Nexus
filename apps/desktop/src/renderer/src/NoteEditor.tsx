@@ -31,6 +31,7 @@ import { countEditorCards, NoteFlashcard } from "./noteFlashcard.js";
 import { NoteLink, NoteLinkProvider } from "./noteLink.js";
 import { createNoteLinkExtension, NoteLinkMenu, type NoteLinkRenderState } from "./noteLinkMenu.js";
 import { NotePopover } from "./notePopover.js";
+import { readStoredNoteMarkdownShortcuts } from "./notePrefs.js";
 import { createSlashExtension, SlashMenu, type SlashRenderState } from "./noteSlashMenu.js";
 import { NoteTemplatePane } from "./noteTemplatePane.js";
 import { mergeTemplateEntries, stripAttachmentNodes, type TemplateEntry } from "./noteTemplates.js";
@@ -163,9 +164,24 @@ export interface NoteEditorProps {
   onSaved: () => void;
   /** Navigates to another note — wired from wiki-links and the backlinks panel. */
   onOpenNote: (id: string) => void;
+  /**
+   * Blocks from the folder's default template, for a note that was just created
+   * in it (ADR-036). Read ONCE, at mount — see the state below. `null` for
+   * every other mount, which is all of them but the one.
+   */
+  initialTemplate?: JSONContent[] | null;
+  /** Reports that `initialTemplate` has been applied, so the page can drop its copy. */
+  onInitialTemplateApplied?: () => void;
 }
 
-export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEditorProps) {
+export function NoteEditor({
+  profileId,
+  noteId,
+  onSaved,
+  onOpenNote,
+  initialTemplate,
+  onInitialTemplateApplied,
+}: NoteEditorProps) {
   const [doc, setDoc] = useState<Y.Doc | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [saveError, setSaveError] = useState<"generic" | "tooLarge" | null>(null);
@@ -192,7 +208,19 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
   // array, applied by `EditorCanvas` once it remounts in edit mode, and the
   // open note's content as of the moment the pane was opened (the pane itself
   // has no live editor to read from).
-  const [pendingTemplate, setPendingTemplate] = useState<JSONContent[] | null>(null);
+  //
+  // Seeded from `initialTemplate` (ADR-036) so a note created in a folder with
+  // a default template opens through the very same hand-off the Šabloni pane
+  // uses — one insert path, one set of edge cases. Reading it at mount is
+  // enough because `NotesPage` keys this component by note id: a newly created
+  // note is always a fresh mount, so the initializer runs exactly once for it.
+  const [pendingTemplate, setPendingTemplate] = useState<JSONContent[] | null>(
+    initialTemplate ?? null,
+  );
+  // Whether the pending blocks above came from that hand-off, so the applied
+  // callback reports only the one the page is waiting on — a later insert from
+  // the Šabloni pane is the pane's business, not the page's.
+  const initialTemplatePendingRef = useRef(initialTemplate != null);
   const [templateSource, setTemplateSource] = useState<JSONContent | null>(null);
   // Feeds the slash menu's live template list (NOTE-009c) — see `loadTemplates`
   // below for the refresh-on-edit-entry policy.
@@ -456,7 +484,13 @@ export function NoteEditor({ profileId, noteId, onSaved, onOpenNote }: NoteEdito
 
   // Stable identity so `EditorCanvas`'s apply-effect (below) doesn't re-fire
   // on every render — it clears the hand-off once the insert is applied.
-  const onTemplateApplied = useCallback(() => setPendingTemplate(null), []);
+  const onTemplateApplied = useCallback(() => {
+    setPendingTemplate(null);
+    if (initialTemplatePendingRef.current) {
+      initialTemplatePendingRef.current = false;
+      onInitialTemplateApplied?.();
+    }
+  }, [onInitialTemplateApplied]);
 
   const scheduleFlush = useCallback(() => {
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
@@ -1038,6 +1072,17 @@ function EditorCanvas({
   const editor = useEditor(
     {
       extensions,
+      // ADR-036: the markdown-shortcut preference, read from localStorage at
+      // editor-construction time. A mount read is enough — `useEditor` keys off
+      // `[doc]`, and the doc changes whenever another note (or another page) is
+      // opened, so the editor is rebuilt on the very next note the user opens
+      // after flipping the switch. Nothing stale can be typed into: the setting
+      // lives on the Settings page, which is not the note editor.
+      //
+      // TipTap's own flag, rather than disabling extensions: the slash menu and
+      // the `[[` link menu are Suggestion plugins, not input rules, so they go
+      // on working with this off — which is exactly the promised behaviour.
+      enableInputRules: readStoredNoteMarkdownShortcuts(),
       // Avoids a first-render/StrictMode mismatch with the collaborative doc.
       immediatelyRender: false,
       editorProps: { attributes: { class: "note__prosemirror" } },

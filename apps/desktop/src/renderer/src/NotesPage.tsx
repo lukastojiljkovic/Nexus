@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { JSONContent } from "@tiptap/core";
 import { Button, EmptyState } from "@nexus/ui";
 import type { NoteFolder, NoteMeta, NoteTag, NoteTagLink } from "../../shared/ipc.js";
 import { NoteEditor } from "./NoteEditor.js";
 import { NoteOrganizer, type FolderSelection } from "./NoteOrganizer.js";
 import { NotePopover } from "./notePopover.js";
+import { mergeTemplateEntries } from "./noteTemplates.js";
 import { strings } from "./strings.js";
 
 /** sr-Latn collation for the move-to-folder menu — plain "sr" mis-tailors š/č/ć. */
@@ -58,6 +60,12 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
   const [tags, setTags] = useState<NoteTag[]>([]);
   const [links, setLinks] = useState<NoteTagLink[]>([]);
   const [tagFilter, setTagFilter] = useState<string[]>([]);
+  // ADR-036's create-then-apply hand-off: the blocks a freshly created note
+  // should open with, tagged with the note they belong to so a slow round trip
+  // can never drop them into whichever note happens to be selected by then.
+  const [pendingTemplate, setPendingTemplate] = useState<
+    { noteId: string; blocks: JSONContent[] } | null
+  >(null);
 
   const loadFolders = useCallback(async () => {
     try {
@@ -122,7 +130,9 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
       // `create()` is async (it awaits the IPC round trip and refetches), but
       // the intent is reported handled right away — the caller only needs to
       // know it was consumed, not that the note has finished being created.
-      void create();
+      // `withoutContext`: this create came from the palette (021-e), so the
+      // quick-capture folder, not the organizer's selection, is its home.
+      void create({ withoutContext: true });
       onIntentHandled?.();
       return;
     }
@@ -132,6 +142,12 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
     onIntentHandled?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intent, onIntentHandled]);
+
+  // Stable identity on purpose: it ends up in the dep array of the canvas's
+  // apply-effect, which inserts blocks. A callback that changed identity on
+  // every render would put a re-fire of that effect one stray re-render away
+  // from appending the same template twice.
+  const clearPendingTemplate = useCallback(() => setPendingTemplate(null), []);
 
   // A folder mutation may have promoted children/notes — refetch both panes.
   const onFoldersChanged = useCallback(async () => {
@@ -180,13 +196,71 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
     }
   }
 
-  async function create(): Promise<void> {
+  /**
+   * Resolves a folder's default template to the blocks to append (ADR-036), or
+   * null when there is nothing to apply.
+   *
+   * The template list is fetched here, at create time, rather than held in
+   * state: one more round trip on a path that already makes several, and always
+   * current — which is also what implements ADR-036's dangling-id rule for
+   * free. An id whose template has since been deleted simply matches no entry,
+   * and the note is created blank instead of the folder refusing to create it.
+   */
+  async function templateBlocksFor(folder: NoteFolder | undefined): Promise<JSONContent[] | null> {
+    if (folder?.defaultTemplateId == null) return null;
     try {
+      const entries = mergeTemplateEntries(await window.nexus.listNoteTemplates(profileId));
+      const entry = entries.find((candidate) => candidate.id === folder.defaultTemplateId);
+      const blocks = entry?.content?.content ?? null;
+      return blocks !== null && blocks.length > 0 ? blocks : null;
+    } catch (error) {
+      // A template that cannot be read must never cost the user their note.
+      console.error("Nexus: failed to resolve a folder's default template:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Creates a note and files it, then hands its folder's default template to
+   * the editor (ADR-036 — the two features compose: the capture folder's
+   * template applies just as any other folder's does).
+   *
+   * `withoutContext` is what the palette's "Nova beleška" passes: that command
+   * is issued from the palette, not from the organizer, so it has no selected
+   * folder to mean anything — which is exactly the case the quick-capture mark
+   * exists for. The in-page button never passes it, so creating under "Sve
+   * beleške" or "Bez fascikle" stays blank and unfiled, as before.
+   */
+  async function create(options: { withoutContext?: boolean } = {}): Promise<void> {
+    try {
+      // Read fresh rather than from `folders` state: a palette create (021-e)
+      // can land on a NotesPage that is still mounting, whose folder state is
+      // therefore an empty array — and silently ignoring the quick-capture
+      // folder because a fetch had not returned yet is exactly the kind of
+      // "works except when it matters" this feature cannot afford.
+      const current = await window.nexus.listNoteFolders(profileId);
+      const captureFolder = options.withoutContext
+        ? current.find((folder) => folder.isCaptureDefault)
+        : undefined;
+      const targetId = captureFolder?.id ?? (selection.kind === "folder" ? selection.id : null);
+
       const created = await window.nexus.createNote(profileId);
-      // A note created while a folder is selected belongs to that folder.
-      if (selection.kind === "folder") {
-        await window.nexus.setNoteFolder(profileId, created.id, selection.id);
+      if (targetId !== null) {
+        await window.nexus.setNoteFolder(profileId, created.id, targetId);
       }
+      // The capture folder is not necessarily the one on screen, and a note the
+      // middle list filters away reads as a create that did nothing — so the
+      // pane follows the note, the same reasoning the "reveal" intent uses when
+      // it resets both filters.
+      if (captureFolder !== undefined) {
+        setSelection({ kind: "folder", id: captureFolder.id });
+        setTagFilter([]);
+      }
+
+      const blocks = await templateBlocksFor(
+        current.find((folder) => folder.id === targetId),
+      );
+      setPendingTemplate(blocks === null ? null : { noteId: created.id, blocks });
       setSelectedId(created.id);
       await loadNotes();
     } catch (error) {
@@ -414,6 +488,13 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
             noteId={selectedId}
             onSaved={() => void loadNotes()}
             onOpenNote={setSelectedId}
+            // Handed over only to the note it was resolved for, and dropped the
+            // moment the editor reports it applied — otherwise navigating away
+            // and back to that note would append the template a second time.
+            initialTemplate={
+              pendingTemplate?.noteId === selectedId ? pendingTemplate.blocks : null
+            }
+            onInitialTemplateApplied={clearPendingTemplate}
           />
         ) : (
           <div className="note__editor-empty">

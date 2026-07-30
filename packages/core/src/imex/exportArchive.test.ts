@@ -117,6 +117,8 @@ function folderRow(overrides: {
     parentId: overrides.parentId ?? null,
     name: overrides.name,
     color: null,
+    defaultTemplateId: null,
+    isCaptureDefault: false,
     createdAt: "2026-07-01T00:00:00.000Z",
     updatedAt: "2026-07-01T00:00:00.000Z",
   };
@@ -222,7 +224,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.6.0");
+      expect(manifest.schemaVersion).toBe("1.7.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       expect(manifest.profile).toEqual({ id: "profile1", name: "Luka" });

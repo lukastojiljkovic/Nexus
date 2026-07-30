@@ -116,20 +116,22 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.6.0` added the
- * `task-template` record type (migration 027 / ADR-035), after `1.5.0` added
- * `task-attachment`, `1.4.0` the `task-tag`/`task-tag-link` types (migration
- * 023), `1.3.0` the `task-list`/`task-section` types and a task's placement into
- * them (TASK-004 / ADR-029), `1.2.0` a task's `reminderOffsets` (ADR-028) and
- * `1.1.0` the `person` record type (CAL-007 / ADR-026): additive changes, hence
- * MINOR bumps, which is exactly the compatibility mechanism
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.7.0` added a note
+ * folder's `defaultTemplateId`/`isCaptureDefault` (NOTE prefs / ADR-036), after
+ * `1.6.0` added the `task-template` record type (ADR-035), `1.5.0` the
+ * `task-attachment` type (ADR-031), `1.4.0` added the `task-tag`/`task-tag-link` record types (migration 023),
+ * `1.3.0` the `task-list`/`task-section` types and a task's placement into them
+ * (TASK-004 / ADR-029), `1.2.0` a task's `reminderOffsets` (ADR-028) and `1.1.0`
+ * the `person` record type (CAL-007 / ADR-026): additive changes, hence MINOR
+ * bumps, which is exactly the compatibility mechanism
  * `isSupportedSchemaVersion` implements — an older minor within major 1 still
  * passes the gate here, while an older build refuses a newer archive rather
  * than silently dropping what it cannot see (every person, every task's ladder,
  * every list the user filed their work into, every label they sorted it by, or
- * every file they hung off a task, or every template they built).
- * That, in turn, is why an unrecognised record type below is an ERROR: the
- * version gate makes "ignore what you do not know" unreachable.
+ * every file they hung off a task, every template they built, or every folder
+ * preference they set). That, in turn, is why an unrecognised
+ * record type below is an ERROR: the version gate makes "ignore what you do not
+ * know" unreachable.
  *
  * A new RECORD TYPE needs no `ArchiveEra` flag, unlike a new field on an
  * existing type: an older archive simply carries none of it, which is
@@ -149,7 +151,7 @@ export interface ImportArchiveResult {
  * is accepted by minor comparison and simply carries a type this tree does not
  * know, which is exactly the situation the merge resolves.
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.6.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.7.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -197,6 +199,16 @@ interface ArchiveEra {
    * start — its own flag AND its own bump, together, rather than either alone.
    */
   writesTaskLists: boolean;
+  /**
+   * A note folder's `defaultTemplateId`/`isCaptureDefault` (NOTE prefs /
+   * ADR-036) — added AT the `1.7.0` bump, the arrangement `writesTaskLists`
+   * established: below `1.7.0` their absence is expected and defaults to
+   * `null`/`false`, at `1.7.0` and above a folder must state both. `false` is
+   * the honest default for the capture flag specifically because it is a
+   * per-profile SINGLETON: defaulting it to `true` on an era that never wrote
+   * it would let an old archive claim the mark for every folder at once.
+   */
+  writesNoteFolderPrefs: boolean;
 }
 
 /**
@@ -212,12 +224,14 @@ function eraOf(schemaVersion: string): ArchiveEra {
       writesRecurrenceAndEventReminders: true,
       writesTaskReminders: true,
       writesTaskLists: true,
+      writesNoteFolderPrefs: true,
     };
   }
   return {
     writesRecurrenceAndEventReminders: version.minor >= 1,
     writesTaskReminders: version.minor >= 2,
     writesTaskLists: version.minor >= 3,
+    writesNoteFolderPrefs: version.minor >= 7,
   };
 }
 
@@ -1116,15 +1130,36 @@ function parseNotification(raw: Record<string, unknown>): ExportNotification {
   };
 }
 
-function parseNoteFolder(raw: Record<string, unknown>): ExportNoteFolder {
+function parseNoteFolder(raw: Record<string, unknown>, era: ArchiveEra): ExportNoteFolder {
   const id = nonEmptyStr(raw.id, "id");
   const profileId = nonEmptyStr(raw.profileId, "profileId");
   const parentId = nullableNonEmptyStr(raw.parentId, "parentId");
   const name = nonEmptyStr(raw.name, "name");
   const color = nullableFolderColor(raw.color, "color");
+  // ADR-036: the id is checked for SHAPE only, never for existence. It may name
+  // a built-in template (a code constant, in no table at all) or a
+  // `note_templates` row, and migration 028 declares no foreign key for exactly
+  // that reason. An id naming a template this archive did not carry is
+  // therefore NOT a restore-time error: the apply path treats a dangling
+  // default as "no template", so a folder can never refuse to create a note.
+  const defaultTemplateId = eraDefault<string | null>(
+    raw.defaultTemplateId,
+    era.writesNoteFolderPrefs,
+    (value) => nullableNonEmptyStr(value, "defaultTemplateId"),
+    null,
+  );
+  const isCaptureDefault = eraDefault(
+    raw.isCaptureDefault,
+    era.writesNoteFolderPrefs,
+    (value) => bool(value, "isCaptureDefault"),
+    false,
+  );
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
-  return { id, profileId, parentId, name, color, createdAt, updatedAt };
+  return {
+    id, profileId, parentId, name, color, defaultTemplateId, isCaptureDefault,
+    createdAt, updatedAt,
+  };
 }
 
 function parseNoteTag(raw: Record<string, unknown>): ExportNoteTag {
@@ -1277,7 +1312,7 @@ function newCollections(): Collections {
   };
 }
 
-/** Parses `raw` per its `type` and files it into the matching bucket. Throws `InvalidFieldError` on a bad field — the line loop turns that into `invalid-record`. `era` reaches only the two parsers whose rows gained fields after the first release (see `ArchiveEra`). */
+/** Parses `raw` per its `type` and files it into the matching bucket. Throws `InvalidFieldError` on a bad field — the line loop turns that into `invalid-record`. `era` reaches only the parsers whose rows gained fields after the first release (see `ArchiveEra`). */
 function dispatchRecord(
   type: RecordType,
   raw: Record<string, unknown>,
@@ -1391,7 +1426,7 @@ function dispatchRecord(
       return;
     }
     case "note-folder": {
-      const row = parseNoteFolder(raw);
+      const row = parseNoteFolder(raw, era);
       pushRow(collections.noteFolders, row.id, row, path, line, problems);
       return;
     }
@@ -1889,6 +1924,23 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
   checkReference(collections.notes, (row) => row.folderId, "folderId", folderIds, problems);
   checkReference(collections.notes, (row) => row.cardDeckId, "cardDeckId", deckIds, problems);
   checkReference(collections.noteFolders, (row) => row.parentId, "parentId", folderIds, problems);
+  // ADR-036: the quick-capture folder is a per-profile SINGLETON, an invariant
+  // no single row can break and therefore no per-row parser can catch. Migration
+  // 028 backs it with a partial unique index, so a second claimant would abort
+  // the restore transaction with a raw SQLite error; catching it here instead
+  // names the offending row and line, which is the whole point of this pass.
+  const captureClaimants = collections.noteFolders.entries.filter(
+    (entry) => entry.row.isCaptureDefault,
+  );
+  for (const entry of captureClaimants.slice(1)) {
+    problems.push(
+      problem("error", "invalid-record", {
+        path: entry.path,
+        line: entry.line,
+        detail: "isCaptureDefault",
+      }),
+    );
+  }
   checkReference(collections.noteTagLinks, (row) => row.noteId, "noteId", noteIds, problems);
   checkReference(collections.noteTagLinks, (row) => row.tagId, "tagId", tagIds, problems);
   checkReference(collections.noteAttachments, (row) => row.noteId, "noteId", noteIds, problems);

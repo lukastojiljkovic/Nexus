@@ -16,8 +16,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 27 (task templates), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(27);
+  it("is at version 28 (note folder preferences), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(28);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -2836,6 +2836,107 @@ describe("migration 027 — task templates", () => {
       db.raw.prepare("PRAGMA table_info(task_templates)").all() as { name: string }[]
     ).map((row) => row.name);
     expect(columns).toEqual(["id", "profile_id", "name", "payload", "created_at", "updated_at"]);
+    db.close();
+  });
+});
+
+describe("migration 028 — note folder preferences", () => {
+  const now = () => new Date().toISOString();
+
+  const insertFolder = (
+    db: NexusDatabase,
+    id: string,
+    profileId: string,
+    fields: { defaultTemplateId?: string | null; isCaptureDefault?: number } = {},
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO note_folders
+           (id, profile_id, parent_id, name, color, default_template_id, is_capture_default,
+            created_at, updated_at)
+         VALUES (?, ?, NULL, ?, NULL, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        profileId,
+        `F${id}`,
+        fields.defaultTemplateId ?? null,
+        fields.isCaptureDefault ?? 0,
+        now(),
+        now(),
+      );
+
+  it("adds both columns to note_folders, defaulting to NULL and 0", () => {
+    const db = openDatabase({ path: join(dir, "prefs-columns.db") });
+    const columns = (
+      db.raw.prepare("PRAGMA table_info(note_folders)").all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(columns).toContain("default_template_id");
+    expect(columns).toContain("is_capture_default");
+
+    insertProfile(db, "p1");
+    // Written through the PRE-028 column list, exactly as an older row was —
+    // the values read back are what a migrated database gives such a row.
+    db.raw
+      .prepare(
+        `INSERT INTO note_folders (id, profile_id, parent_id, name, color, created_at, updated_at)
+         VALUES (?, ?, NULL, 'F', NULL, ?, ?)`,
+      )
+      .run("f1", "p1", now(), now());
+    const row = db.raw
+      .prepare("SELECT default_template_id, is_capture_default FROM note_folders WHERE id = ?")
+      .get("f1") as { default_template_id: string | null; is_capture_default: number };
+    expect(row.default_template_id).toBeNull();
+    expect(row.is_capture_default).toBe(0);
+    db.close();
+  });
+
+  it("rejects an is_capture_default outside {0, 1} with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-capture.db") });
+    insertProfile(db, "p1");
+    expect(() => insertFolder(db, "f1", "p1", { isCaptureDefault: 2 })).toThrow();
+    expect(() => insertFolder(db, "f2", "p1", { isCaptureDefault: 1 })).not.toThrow();
+    db.close();
+  });
+
+  it("accepts a default_template_id naming no row at all — deliberately not a foreign key", () => {
+    const db = openDatabase({ path: join(dir, "no-fk.db") });
+    insertProfile(db, "p1");
+    // A built-in template id is a code constant with no `note_templates` row to
+    // reference — a foreign key here would make exactly this case unstorable.
+    expect(() =>
+      insertFolder(db, "f1", "p1", { defaultTemplateId: "builtin:sastanak" }),
+    ).not.toThrow();
+    expect(() =>
+      insertFolder(db, "f2", "p1", { defaultTemplateId: "no-such-template" }),
+    ).not.toThrow();
+    db.close();
+  });
+
+  it("allows at most one capture-default folder per profile, and any number of unmarked ones", () => {
+    const db = openDatabase({ path: join(dir, "capture-unique.db") });
+    insertProfile(db, "p1");
+    insertProfile(db, "p2");
+    insertFolder(db, "f1", "p1", { isCaptureDefault: 1 });
+    // a second claimant in the SAME profile violates the partial unique index.
+    expect(() => insertFolder(db, "f2", "p1", { isCaptureDefault: 1 })).toThrow();
+    // unmarked folders are unconstrained — the index is partial, not a plain
+    // UNIQUE(profile_id), which would allow one folder per profile full stop.
+    expect(() => insertFolder(db, "f3", "p1")).not.toThrow();
+    expect(() => insertFolder(db, "f4", "p1")).not.toThrow();
+    // another profile's mark is its own.
+    expect(() => insertFolder(db, "f5", "p2", { isCaptureDefault: 1 })).not.toThrow();
+    db.close();
+  });
+
+  it("creates the note_folders_capture_default partial index", () => {
+    const db = openDatabase({ path: join(dir, "capture-index.db") });
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("note_folders_capture_default");
     db.close();
   });
 });

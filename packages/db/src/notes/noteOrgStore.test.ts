@@ -11,6 +11,7 @@ import {
   NoteStore,
   NoteTagNotFoundError,
   NoteTagValidationError,
+  NoteTemplateStore,
   openDatabase,
   uuidv7,
 } from "../index.js";
@@ -39,12 +40,19 @@ function createProfile(): string {
 interface Fixture {
   org: NoteOrgStore;
   notes: NoteStore;
+  /** Only the folder-preference suites need it (ADR-036): a folder's default template may name a stored row. */
+  templates: NoteTemplateStore;
   profileId: string;
 }
 
 function fixture(): Fixture {
   const profileId = createProfile();
-  return { org: new NoteOrgStore(db.raw, profileId), notes: new NoteStore(db.raw, profileId), profileId };
+  return {
+    org: new NoteOrgStore(db.raw, profileId),
+    notes: new NoteStore(db.raw, profileId),
+    templates: new NoteTemplateStore(db.raw, profileId),
+    profileId,
+  };
 }
 
 const T0 = "2026-07-13T10:00:00.000Z";
@@ -374,5 +382,181 @@ describe("NoteOrgStore — tag links", () => {
     expect(() => b.org.renameTag(tagA.id, "x")).toThrow(NoteTagNotFoundError);
     expect(a.org.listFolders()).toHaveLength(1);
     expect(a.org.listTagLinks()).toHaveLength(1);
+  });
+});
+
+// --- Folder preferences (ADR-036 / migration 028) ---------------------------
+
+describe("NoteOrgStore — default template", () => {
+  it("defaults a new folder to no template and no capture mark", () => {
+    const { org } = fixture();
+    const folder = org.createFolder({ parentId: null, name: "Posao", color: null }, T0);
+    expect(folder.defaultTemplateId).toBeNull();
+    expect(folder.isCaptureDefault).toBe(false);
+  });
+
+  it("accepts a BUILT-IN template id, read back off the list", () => {
+    const { org } = fixture();
+    const folder = org.createFolder({ parentId: null, name: "Sastanci", color: null }, T0);
+
+    org.setDefaultTemplate(folder.id, "builtin:sastanak", T1);
+    const stored = org.listFolders()[0];
+    expect(stored?.defaultTemplateId).toBe("builtin:sastanak");
+    expect(stored?.updatedAt).toBe(T1);
+  });
+
+  it("accepts a stored template's id", () => {
+    const { org, templates } = fixture();
+    const template = templates.save("Moj šablon", '{"type":"doc","content":[]}', T0);
+    const folder = org.createFolder({ parentId: null, name: "Moje", color: null }, T0);
+
+    org.setDefaultTemplate(folder.id, template.id, T1);
+    expect(org.listFolders()[0]?.defaultTemplateId).toBe(template.id);
+  });
+
+  it("rejects an id that is neither a built-in nor one of this profile's templates", () => {
+    const { org } = fixture();
+    const folder = org.createFolder({ parentId: null, name: "X", color: null }, T0);
+
+    expect(() => org.setDefaultTemplate(folder.id, "builtin:izmisljeni", T1)).toThrow(
+      NoteFolderValidationError,
+    );
+    expect(() => org.setDefaultTemplate(folder.id, "no-such-template", T1)).toThrow(
+      NoteFolderValidationError,
+    );
+  });
+
+  it("rejects ANOTHER profile's template id", () => {
+    const a = fixture();
+    const b = fixture();
+    const foreign = a.templates.save("A-šablon", '{"type":"doc","content":[]}', T0);
+    const folder = b.org.createFolder({ parentId: null, name: "B", color: null }, T0);
+
+    expect(() => b.org.setDefaultTemplate(folder.id, foreign.id, T1)).toThrow(
+      NoteFolderValidationError,
+    );
+  });
+
+  it("clears the template with null, and leaves a DANGLING id standing once its template is deleted", () => {
+    const { org, templates } = fixture();
+    const template = templates.save("Privremeni", '{"type":"doc","content":[]}', T0);
+    const folder = org.createFolder({ parentId: null, name: "F", color: null }, T0);
+    org.setDefaultTemplate(folder.id, template.id, T1);
+
+    // Deleting the template does NOT reach into the folder: the column is
+    // deliberately not a foreign key, and the apply path reads a dangling id as
+    // "no template" rather than refusing to create a note (ADR-036).
+    templates.remove(template.id);
+    expect(org.listFolders()[0]?.defaultTemplateId).toBe(template.id);
+
+    org.setDefaultTemplate(folder.id, null, T2);
+    expect(org.listFolders()[0]?.defaultTemplateId).toBeNull();
+  });
+
+  it("rejects an unknown folder, another profile's folder, and a malformed now", () => {
+    const a = fixture();
+    const b = fixture();
+    const folderA = a.org.createFolder({ parentId: null, name: "A", color: null }, T0);
+
+    expect(() => a.org.setDefaultTemplate("no-such", "builtin:dnevnik", T1)).toThrow(
+      NoteFolderNotFoundError,
+    );
+    expect(() => b.org.setDefaultTemplate(folderA.id, "builtin:dnevnik", T1)).toThrow(
+      NoteFolderNotFoundError,
+    );
+    expect(() => a.org.setDefaultTemplate(folderA.id, "builtin:dnevnik", "nope")).toThrow(
+      NoteFolderValidationError,
+    );
+  });
+
+  it("leaves the name, colour and parent untouched", () => {
+    const { org } = fixture();
+    const parent = org.createFolder({ parentId: null, name: "Root", color: null }, T0);
+    const child = org.createFolder({ parentId: parent.id, name: "Ime", color: "zlato" }, T0);
+
+    org.setDefaultTemplate(child.id, "builtin:recept", T1);
+    const stored = org.listFolders().find((folder) => folder.id === child.id);
+    expect(stored?.name).toBe("Ime");
+    expect(stored?.color).toBe("zlato");
+    expect(stored?.parentId).toBe(parent.id);
+  });
+});
+
+describe("NoteOrgStore — capture default", () => {
+  it("marks one folder", () => {
+    const { org } = fixture();
+    const folder = org.createFolder({ parentId: null, name: "Brzi unos", color: null }, T0);
+
+    org.setCaptureDefault(folder.id, T1);
+    const stored = org.listFolders()[0];
+    expect(stored?.isCaptureDefault).toBe(true);
+    expect(stored?.updatedAt).toBe(T1);
+  });
+
+  it("moves the mark: setting a second folder clears the first, in one transaction", () => {
+    const { org } = fixture();
+    const first = org.createFolder({ parentId: null, name: "Prva", color: null }, T0);
+    const second = org.createFolder({ parentId: null, name: "Druga", color: null }, T0);
+
+    org.setCaptureDefault(first.id, T1);
+    org.setCaptureDefault(second.id, T2);
+
+    const marked = org.listFolders().filter((folder) => folder.isCaptureDefault);
+    expect(marked.map((folder) => folder.id)).toEqual([second.id]);
+  });
+
+  it("clears every mark with null", () => {
+    const { org } = fixture();
+    const folder = org.createFolder({ parentId: null, name: "F", color: null }, T0);
+    org.setCaptureDefault(folder.id, T1);
+
+    org.setCaptureDefault(null, T2);
+    expect(org.listFolders().some((f) => f.isCaptureDefault)).toBe(false);
+  });
+
+  it("is idempotent — re-marking the folder that already holds it keeps exactly one mark", () => {
+    const { org } = fixture();
+    const folder = org.createFolder({ parentId: null, name: "F", color: null }, T0);
+
+    org.setCaptureDefault(folder.id, T1);
+    org.setCaptureDefault(folder.id, T2);
+    expect(org.listFolders().filter((f) => f.isCaptureDefault)).toHaveLength(1);
+  });
+
+  it("is per-profile: one profile's mark never disturbs another's", () => {
+    const a = fixture();
+    const b = fixture();
+    const folderA = a.org.createFolder({ parentId: null, name: "A", color: null }, T0);
+    const folderB = b.org.createFolder({ parentId: null, name: "B", color: null }, T0);
+
+    a.org.setCaptureDefault(folderA.id, T1);
+    b.org.setCaptureDefault(folderB.id, T1);
+
+    expect(a.org.listFolders()[0]?.isCaptureDefault).toBe(true);
+    expect(b.org.listFolders()[0]?.isCaptureDefault).toBe(true);
+    // and clearing one leaves the other standing.
+    a.org.setCaptureDefault(null, T2);
+    expect(a.org.listFolders()[0]?.isCaptureDefault).toBe(false);
+    expect(b.org.listFolders()[0]?.isCaptureDefault).toBe(true);
+  });
+
+  it("rejects an unknown folder, another profile's folder, and a malformed now", () => {
+    const a = fixture();
+    const b = fixture();
+    const folderA = a.org.createFolder({ parentId: null, name: "A", color: null }, T0);
+
+    expect(() => a.org.setCaptureDefault("no-such", T1)).toThrow(NoteFolderNotFoundError);
+    expect(() => b.org.setCaptureDefault(folderA.id, T1)).toThrow(NoteFolderNotFoundError);
+    expect(() => a.org.setCaptureDefault(folderA.id, "nope")).toThrow(NoteFolderValidationError);
+    expect(() => a.org.setCaptureDefault(null, "nope")).toThrow(NoteFolderValidationError);
+  });
+
+  it("loses the mark with the folder — deleting it leaves the profile with none", () => {
+    const { org } = fixture();
+    const folder = org.createFolder({ parentId: null, name: "F", color: null }, T0);
+    org.setCaptureDefault(folder.id, T1);
+
+    org.deleteFolder(folder.id, T2);
+    expect(org.listFolders()).toHaveLength(0);
   });
 });

@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3-multiple-ciphers";
+import { isBuiltinNoteTemplateId } from "@nexus/core";
 import {
   NoteFolderNotFoundError,
   NoteFolderValidationError,
@@ -40,6 +41,16 @@ export interface NoteFolder {
   parentId: string | null;
   name: string;
   color: NoteFolderColor | null;
+  /**
+   * The template a note created in this folder opens with (ADR-036), or null.
+   * A built-in template's constant id or a `note_templates` row's id —
+   * validated against the union of the two at SET time, never re-checked on
+   * read, so a template deleted since leaves a DANGLING id here on purpose (see
+   * `setDefaultTemplate`).
+   */
+  defaultTemplateId: string | null;
+  /** Whether a context-free "Nova beleška" files into this folder. At most one folder per profile carries it. */
+  isCaptureDefault: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -64,6 +75,8 @@ interface NoteFolderRow {
   parent_id: string | null;
   name: string;
   color: string | null;
+  default_template_id: string | null;
+  is_capture_default: number;
   created_at: string;
   updated_at: string;
 }
@@ -80,7 +93,8 @@ interface NoteTagLinkRow {
   tag_id: string;
 }
 
-const FOLDER_COLUMNS = "id, profile_id, parent_id, name, color, created_at, updated_at";
+const FOLDER_COLUMNS =
+  "id, profile_id, parent_id, name, color, default_template_id, is_capture_default, created_at, updated_at";
 const TAG_COLUMNS = "id, profile_id, name, created_at";
 
 const MAX_FOLDER_NAME_LENGTH = 100;
@@ -107,6 +121,13 @@ const ISO_8601_DATETIME =
  * never silently orphan a subtree the user can still see. `createTag` is
  * get-or-create: tag names are unique per profile, and re-tagging with an
  * existing name is a normal, non-erroring path for the UI's tag input.
+ *
+ * A folder also carries two preferences (ADR-036, migration 028), each with its
+ * own setter because each has its own invariant: `setDefaultTemplate` validates
+ * an id against a union no foreign key could express, and `setCaptureDefault`
+ * maintains a per-profile singleton. Neither belongs in `updateFolder`'s
+ * partial-patch shape, which exists for the two fields a rename/recolour form
+ * edits together.
  */
 export class NoteOrgStore {
   private readonly insertFolder: Database.Statement;
@@ -114,6 +135,10 @@ export class NoteOrgStore {
   private readonly selectFolderById: Database.Statement;
   private readonly updateFolderFields: Database.Statement;
   private readonly updateFolderParent: Database.Statement;
+  private readonly updateFolderTemplate: Database.Statement;
+  private readonly selectTemplateById: Database.Statement;
+  private readonly clearCaptureDefault: Database.Statement;
+  private readonly setCaptureDefaultRow: Database.Statement;
   private readonly selectFolderAncestor: Database.Statement;
   private readonly promoteChildFolders: Database.Statement;
   private readonly promoteNotes: Database.Statement;
@@ -164,6 +189,22 @@ export class NoteOrgStore {
          WHERE f.parent_id IS NOT NULL
        )
        SELECT 1 FROM anc WHERE fid = ?`,
+    );
+    this.updateFolderTemplate = db.prepare(
+      `UPDATE note_folders SET default_template_id = ?, updated_at = ?
+       WHERE id = ? AND profile_id = ?`,
+    );
+    this.selectTemplateById = db.prepare(
+      `SELECT id FROM note_templates WHERE id = ? AND profile_id = ?`,
+    );
+    // Scoped by profile, so clearing one profile's mark never touches another's.
+    this.clearCaptureDefault = db.prepare(
+      `UPDATE note_folders SET is_capture_default = 0, updated_at = ?
+       WHERE profile_id = ? AND is_capture_default = 1`,
+    );
+    this.setCaptureDefaultRow = db.prepare(
+      `UPDATE note_folders SET is_capture_default = 1, updated_at = ?
+       WHERE id = ? AND profile_id = ?`,
     );
     this.promoteChildFolders = db.prepare(
       `UPDATE note_folders SET parent_id = ?, updated_at = ?
@@ -247,6 +288,12 @@ export class NoteOrgStore {
       parentId: input.parentId,
       name,
       color,
+      // Both preferences (ADR-036) are set afterwards, never at create time: a
+      // folder is named before it is configured, and the capture mark in
+      // particular is a per-profile singleton that a create must not silently
+      // take from another folder.
+      defaultTemplateId: null,
+      isCaptureDefault: false,
       createdAt: validNow,
       updatedAt: validNow,
     };
@@ -291,6 +338,61 @@ export class NoteOrgStore {
     }
 
     this.updateFolderParent.run(newParentId, validNow, id, this.profileId);
+  }
+
+  /**
+   * Points a folder at the template its new notes open with, or clears it with
+   * `null` (ADR-036).
+   *
+   * The candidate is validated against the UNION of the two things a template
+   * can be: a built-in (a code constant with no row anywhere —
+   * `isBuiltinNoteTemplateId`, imported rather than respelled, so the two lists
+   * cannot drift) and one of THIS profile's `note_templates` rows. That union is
+   * why migration 028 declares no foreign key; the check has to live here
+   * instead, and it happens exactly once, at SET time.
+   *
+   * Nothing re-validates the id on the way out, and nothing prunes it when a
+   * template is deleted. A dangling id is therefore normal and deliberate: the
+   * apply path reads it as "no template", because a folder that refused to
+   * create a note — over a preference — would be a far worse failure than one
+   * that quietly creates a blank one.
+   */
+  setDefaultTemplate(folderId: string, templateId: string | null, now: string): void {
+    const validNow = validateDateTime(now, "now", NoteFolderValidationError);
+    this.requireFolder(folderId);
+
+    if (templateId !== null) {
+      const known =
+        isBuiltinNoteTemplateId(templateId) ||
+        this.selectTemplateById.get(templateId, this.profileId) !== undefined;
+      if (!known) {
+        throw new NoteFolderValidationError(
+          `"${templateId}" is neither a built-in template nor a template in this profile.`,
+        );
+      }
+    }
+
+    this.updateFolderTemplate.run(templateId, validNow, folderId, this.profileId);
+  }
+
+  /**
+   * Moves this profile's quick-capture mark onto one folder, or clears it
+   * entirely with `null` (ADR-036).
+   *
+   * The mark is a per-profile singleton, so the clear and the set are one
+   * transaction — and in that order, because migration 028's partial unique
+   * index would reject a second claimant if the set ran first. Re-marking the
+   * folder that already holds it is therefore idempotent rather than a
+   * constraint violation: its own row is cleared and set again.
+   */
+  setCaptureDefault(folderId: string | null, now: string): void {
+    const validNow = validateDateTime(now, "now", NoteFolderValidationError);
+    if (folderId !== null) this.requireFolder(folderId);
+
+    this.db.transaction(() => {
+      this.clearCaptureDefault.run(validNow, this.profileId);
+      if (folderId !== null) this.setCaptureDefaultRow.run(validNow, folderId, this.profileId);
+    })();
   }
 
   /**
@@ -415,6 +517,8 @@ function toNoteFolder(row: NoteFolderRow): NoteFolder {
     parentId: row.parent_id,
     name: row.name,
     color: row.color as NoteFolderColor | null,
+    defaultTemplateId: row.default_template_id,
+    isCaptureDefault: row.is_capture_default === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

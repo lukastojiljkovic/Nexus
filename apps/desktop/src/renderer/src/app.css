@@ -3751,6 +3751,60 @@ button.cal__grid-event--dragging {
   line-height: 1;
 }
 
+/* Default-template picker (ADR-036): the second-level row the folder menu's
+   "Podrazumevani šablon" opens, indented under its folder exactly like
+   .note__swatch-row above. The options are chips on the .note__tag recipe —
+   the same "one of these is chosen" affordance the tag filter already uses —
+   so the selected one is typographic (gold text + weight + accent border),
+   never a fill or a glow. */
+.note__template-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) 0 var(--nx-space-2) calc(var(--nx-space-3) * var(--note-depth, 0));
+}
+.note__template-option {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+  background: transparent;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+  transition:
+    background var(--nx-motion-fast) var(--nx-motion-ease),
+    border-color var(--nx-motion-fast) var(--nx-motion-ease),
+    color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__template-option:hover {
+  background: var(--nx-surface-alt);
+}
+.note__template-option:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.note__template-option--selected {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+  border-color: var(--nx-accent);
+}
+
+/* The quick-capture mark (ADR-036) — a quiet muted dot at the row's right
+   edge, with the tooltip carrying the meaning. Deliberately NOT the ✦ brand
+   glyph: ✦ is the design language's mark for the ACTIVE nav row, and a gold ✦
+   in the same right-edge position on a non-selected folder would read as a
+   second selection. */
+.note__folder-capture {
+  flex: none;
+  margin-left: auto;
+  padding-left: var(--nx-space-2);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+  line-height: 1;
+}
+
 /* Oznake (tags) section, below the folder tree (slice a3b-2): filter chips
    with inline create/rename/delete, mirroring the folder actions above.
    Selecting a tag for the filter is typographic (gold text + weight), never a
@@ -4116,7 +4170,28 @@ button.cal__grid-event--dragging {
   color: var(--nx-text-muted);
 }
 
-/* Right pane: the editor, on a comfortable reading measure, centered. */
+/* Right pane: the editor, on a comfortable reading measure, centered.
+
+   That measure is ONE declaration (ADR-036): every element in the pane —
+   canvas, toolbar, deck bar, Prilozi, backlinks, the Istorija/Šabloni panes
+   and each channel's error row — reads `--note-measure`, so the Settings
+   control below can retune the whole column without any of them drifting out
+   of alignment with the rest. The default IS the historical 70ch, so a profile
+   that never touches the setting is pixel-identical to before.
+
+   Set on :root rather than the pane, because `data-note-width` lives on the
+   document element (the theme/accent idiom) and the panes are nested well
+   below it. */
+:root {
+  --note-measure: 70ch;
+}
+:root[data-note-width="uska"] {
+  --note-measure: 55ch;
+}
+:root[data-note-width="siroka"] {
+  --note-measure: 90ch;
+}
+
 .note__editor-pane {
   min-height: 0;
   overflow-y: auto;
@@ -4127,7 +4202,7 @@ button.cal__grid-event--dragging {
   place-items: center;
 }
 .note__save-error {
-  max-width: 70ch;
+  max-width: var(--note-measure);
   margin: 0 auto var(--nx-space-3);
   padding: var(--nx-space-2) var(--nx-space-3);
   background: var(--nx-danger-soft);
@@ -4136,7 +4211,7 @@ button.cal__grid-event--dragging {
   font-size: var(--nx-font-size-body-sm);
 }
 .note__editor {
-  max-width: 70ch;
+  max-width: var(--note-measure);
   margin: 0 auto;
   padding: var(--nx-space-4) var(--nx-space-2) var(--nx-space-8);
 }
@@ -4162,7 +4237,7 @@ button.cal__grid-event--dragging {
    pane toggles, right-aligned above the canvas. Same reading measure as
    everything below it. */
 .note__editor-tools {
-  max-width: 70ch;
+  max-width: var(--note-measure);
   margin: 0 auto;
   padding: var(--nx-space-2) var(--nx-space-2) 0;
   display: flex;
@@ -4174,7 +4249,7 @@ button.cal__grid-event--dragging {
    editor on the same reading measure. Quiet rows — navigation, never a
    selection affordance. */
 .note__backlinks {
-  max-width: 70ch;
+  max-width: var(--note-measure);
   margin: 0 auto;
   padding: var(--nx-space-4) var(--nx-space-2) var(--nx-space-8);
   border-top: 1px solid var(--nx-border);
@@ -4212,7 +4287,7 @@ button.cal__grid-event--dragging {
 /* Prilozi panel (NOTE-003b): attachment rows. Always rendered (unlike
    backlinks), same reading measure and border-top recipe. */
 .note__attachments {
-  max-width: 70ch;
+  max-width: var(--note-measure);
   margin: 0 auto;
   padding: var(--nx-space-4) var(--nx-space-2) var(--nx-space-8);
   border-top: 1px solid var(--nx-border);
@@ -4297,7 +4372,7 @@ button.cal__grid-event--dragging {
    the .note__folder--active / .nx-nav-item--active recipe — never a fill,
    border or glow. */
 .note__history {
-  max-width: 70ch;
+  max-width: var(--note-measure);
   margin: 0 auto;
   padding: var(--nx-space-4) var(--nx-space-2) var(--nx-space-8);
   display: grid;
@@ -4376,7 +4451,7 @@ button.cal__grid-event--dragging {
 }
 /* Same recipe as .note__save-error, scoped to the version-history channel. */
 .note__history-error {
-  max-width: 70ch;
+  max-width: var(--note-measure);
   margin: 0 auto var(--nx-space-3);
   padding: var(--nx-space-2) var(--nx-space-3);
   background: var(--nx-danger-soft);
@@ -4385,7 +4460,7 @@ button.cal__grid-event--dragging {
   font-size: var(--nx-font-size-body-sm);
 }
 .note__history-empty {
-  max-width: 70ch;
+  max-width: var(--note-measure);
   margin: 0 auto;
   padding: var(--nx-space-4) var(--nx-space-2);
   color: var(--nx-text-muted);
@@ -4397,7 +4472,7 @@ button.cal__grid-event--dragging {
    shape as .note__history* (fixed-width list column, fluid preview column).
    Selecting a row is typographic only, same recipe as .note__history-item. */
 .note__templates {
-  max-width: 70ch;
+  max-width: var(--note-measure);
   margin: 0 auto;
   padding: var(--nx-space-4) var(--nx-space-2) var(--nx-space-8);
   display: grid;
@@ -4504,7 +4579,7 @@ button.cal__grid-event--dragging {
 }
 /* Same recipe as .note__save-error, scoped to the templates channel. */
 .note__templates-error {
-  max-width: 70ch;
+  max-width: var(--note-measure);
   margin: 0 auto;
   padding: var(--nx-space-2) var(--nx-space-3);
   background: var(--nx-danger-soft);
@@ -4672,7 +4747,7 @@ button.cal__grid-event--dragging {
    .note__editor-tools, same reading measure — its own centering, since it
    sits in .note__editor-body rather than an already-centered container. */
 .note__cards-bar {
-  max-width: 70ch;
+  max-width: var(--note-measure);
   margin: 0 auto;
   padding: var(--nx-space-2);
   display: flex;
@@ -4684,7 +4759,7 @@ button.cal__grid-event--dragging {
 /* Same recipe as .note__save-error, scoped to the cards channel — its own
    centering too, exactly like .note__history-error above. */
 .note__cards-error {
-  max-width: 70ch;
+  max-width: var(--note-measure);
   margin: 0 auto var(--nx-space-3);
   padding: var(--nx-space-2) var(--nx-space-3);
   background: var(--nx-danger-soft);

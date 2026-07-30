@@ -24,6 +24,14 @@ import {
   matchSettings,
   moduleEntryId,
 } from "./settingsSearch.js";
+import {
+  NOTE_WIDTHS,
+  persistNoteMarkdownShortcuts,
+  persistNoteWidth,
+  readStoredNoteMarkdownShortcuts,
+  readStoredNoteWidth,
+  type NoteWidth,
+} from "./notePrefs.js";
 import { dayUnit, strings } from "./strings.js";
 
 /** Sidebar/page display name for a module id; mirrors App.tsx's private helper (kept local — App renders this page, so importing it back would be circular). */
@@ -842,6 +850,12 @@ export function SettingsPage({
   // SET-014: the raw query. Empty means "render everything exactly as before" —
   // the filter is additive, it never becomes the page's normal state.
   const [query, setQuery] = useState("");
+  // ADR-036. Both are device preferences read straight out of localStorage,
+  // exactly like `accent` above — no IPC, no profile row, no loading state.
+  const [noteWidth, setNoteWidth] = useState<NoteWidth>(() => readStoredNoteWidth());
+  const [markdownShortcuts, setMarkdownShortcuts] = useState(() =>
+    readStoredNoteMarkdownShortcuts(),
+  );
   const [modulesError, setModulesError] = useState<string | null>(null);
   const [notificationSources, setNotificationSources] = useState<NotificationSource[] | null>(null);
   const [presetError, setPresetError] = useState<string | null>(null);
@@ -994,6 +1008,44 @@ export function SettingsPage({
               {a.weekStartOptions[option]}
             </Button>
           ))}
+        </div>
+      </Card>
+
+      <Card title={strings.settings.sectionTitle.notes} className={sectionClass(sections.has("notes"))}>
+        <p className={labelClass("set__section-caption", hits.has("note-width"))}>
+          {strings.settings.notes.widthLabel}
+        </p>
+        <div className="set__segmented" role="group" aria-label={strings.settings.notes.widthLabel}>
+          {NOTE_WIDTHS.map((width) => (
+            <Button
+              key={width}
+              size="sm"
+              variant={noteWidth === width ? "primary" : "ghost"}
+              aria-pressed={noteWidth === width}
+              onClick={() => {
+                persistNoteWidth(width);
+                setNoteWidth(width);
+              }}
+            >
+              {strings.settings.notes.widthNames[width] ?? width}
+            </Button>
+          ))}
+        </div>
+        <div className="set__module-row">
+          <div className="set__module-info">
+            <span className={labelClass("set__module-name", hits.has("note-markdown-shortcuts"))}>
+              {strings.settings.notes.markdownLabel}
+            </span>
+            <span className="set__module-desc">{strings.settings.notes.markdownCaption}</span>
+          </div>
+          <Checkbox
+            checked={markdownShortcuts}
+            aria-label={strings.settings.notes.markdownLabel}
+            onChange={(event) => {
+              persistNoteMarkdownShortcuts(event.target.checked);
+              setMarkdownShortcuts(event.target.checked);
+            }}
+          />
         </div>
       </Card>
 

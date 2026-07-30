@@ -480,6 +480,11 @@ export const strings = {
     noColor: "Bez boje",
     folderNamePlaceholder: "Naziv fascikle",
     folderMenuLabel: "Radnje nad fasciklom",
+    /** Folder preferences (ADR-036): the default template submenu + the quick-capture toggle. */
+    folderTemplate: "Podrazumevani šablon",
+    folderTemplateNone: "Bez šablona",
+    folderCaptureDefault: "Fascikla za brzi unos",
+    folderCaptureDefaultOn: "Nova beleška bez konteksta ide ovde.",
     moveToFolder: "Premesti u fasciklu",
     noteMenuLabel: "Više opcija",
     pin: "Zakači",
@@ -1007,6 +1012,7 @@ export const strings = {
       profile: "Profil",
       security: "Sigurnost",
       appearance: "Izgled",
+      notes: "Beleške",
       modules: "Moduli",
       notifications: "Obaveštenja",
       backup: "Rezervna kopija",
@@ -1063,6 +1069,18 @@ export const strings = {
         monday: "Ponedeljak",
         sunday: "Nedelja",
       } satisfies Record<WeekStartPreference, string>,
+    },
+    /** Beleške section (ADR-036): the note editor's reading measure and its markdown shortcuts. */
+    notes: {
+      widthLabel: "Širina editora",
+      widthNames: {
+        uska: "Uska",
+        normalna: "Normalna",
+        siroka: "Široka",
+      } as Record<string, string>,
+      markdownLabel: "Markdown prečice",
+      markdownCaption:
+        "Kucanje „# ”, „- ” ili „> ” odmah pretvara blok. „/” meni radi i kada je isključeno.",
     },
     /** One-line module descriptions for the gallery, keyed by module id. */
     moduleDescriptions: {
