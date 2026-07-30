@@ -32,6 +32,7 @@ function emptyInput(): ExportArchiveInput {
       taskSections: [],
       taskTags: [],
       taskTagLinks: [],
+      taskAttachments: [],
       events: [],
       documents: [],
       renewals: [],
@@ -220,7 +221,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.4.0");
+      expect(manifest.schemaVersion).toBe("1.5.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       expect(manifest.profile).toEqual({ id: "profile1", name: "Luka" });
@@ -400,6 +401,77 @@ describe("buildExportArchive", () => {
       expect(rows[3]).toEqual({ type: "task-tag-link", taskId: "t1", tagId: "ttag1" });
       expect(archive.byModule.tasks).toBe(4);
       expect(archive.totalRecords).toBe(4);
+    });
+
+    it("writes task attachments behind their tasks, declares one blob entry each, and counts them into byModule.tasks (migration 024)", () => {
+      const input = emptyInput();
+      const sha = "f".repeat(64);
+      input.data.taskLists = [taskListRow({ id: LIST_ID, name: "Inbox" })];
+      input.data.tasks = [
+        {
+          id: "t1", profileId: "profile1", parentId: null, title: "Sa prilogom", description: null,
+          status: "todo", priority: "none", done: false, dueDate: null, startDate: null,
+          createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+          completedAt: null, recurrence: null, reminderOffsets: [], ...PLACED,
+        },
+      ];
+      input.data.taskAttachments = [
+        {
+          id: "tatt1", taskId: "t1", fileName: "ugovor.pdf", mime: "application/pdf",
+          sizeBytes: 30, sha256: sha, createdAt: "2026-07-01T00:00:00.000Z",
+        },
+      ];
+
+      const archive = buildExportArchive(input);
+      const rows = parseNdjson(archive.files.get("data/tasks.ndjson") ?? "") as Array<{ type: string }>;
+      expect(rows.map((row) => row.type)).toEqual(["task-list", "task", "task-attachment"]);
+      expect(rows[2]).toEqual({
+        type: "task-attachment",
+        id: "tatt1",
+        taskId: "t1",
+        fileName: "ugovor.pdf",
+        mime: "application/pdf",
+        sizeBytes: 30,
+        sha256: sha,
+        createdAt: "2026-07-01T00:00:00.000Z",
+      });
+      expect(archive.binaries).toEqual([
+        { kind: "attachment", path: `blobs/${sha}`, sha256: sha, sizeBytes: 30 },
+      ]);
+      expect(archive.byModule.tasks).toBe(3);
+      expect(archive.totalRecords).toBe(3);
+    });
+
+    // One `blobs/` namespace over one on-disk store: a file attached to both a
+    // note and a task must travel exactly once, or the zip would carry the same
+    // bytes twice under the same path.
+    it("declares ONE blob entry for a hash a note attachment and a task attachment share", () => {
+      const input = emptyInput();
+      const sha = "e".repeat(64);
+      input.data.notes = [noteRow({ id: "n1", title: "Beleška" })];
+      input.data.noteAttachments = [attachmentRow({ id: "natt1", noteId: "n1", sha256: sha, sizeBytes: 10 })];
+      input.data.taskLists = [taskListRow({ id: LIST_ID, name: "Inbox" })];
+      input.data.tasks = [
+        {
+          id: "t1", profileId: "profile1", parentId: null, title: "Isti fajl", description: null,
+          status: "todo", priority: "none", done: false, dueDate: null, startDate: null,
+          createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+          completedAt: null, recurrence: null, reminderOffsets: [], ...PLACED,
+        },
+      ];
+      input.data.taskAttachments = [
+        {
+          id: "tatt1", taskId: "t1", fileName: "slika.png", mime: "image/png",
+          sizeBytes: 10, sha256: sha, createdAt: "2026-07-01T00:00:00.000Z",
+        },
+      ];
+
+      const archive = buildExportArchive(input);
+      expect(archive.binaries.filter((entry) => entry.kind === "attachment")).toEqual([
+        { kind: "attachment", path: `blobs/${sha}`, sha256: sha, sizeBytes: 10 },
+      ]);
+      const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as { blobs: unknown };
+      expect(manifest.blobs).toEqual([{ sha256: sha, sizeBytes: 10 }]);
     });
 
     it("carries a recurring task's whole rule (ADR-024)", () => {
@@ -679,7 +751,7 @@ describe("buildExportArchive", () => {
   });
 
   describe("countProfileModules", () => {
-    /** One row in every one of `ProfileData`'s 24 arrays, so each of the five buckets sums more than one field. */
+    /** One row in every one of `ProfileData`'s 25 arrays, so each of the five buckets sums more than one field. */
     function populatedData(): ProfileData {
       const t = "2026-01-01T00:00:00.000Z";
       return {
@@ -692,6 +764,9 @@ describe("buildExportArchive", () => {
         taskSections: [{ id: "ts1", listId: "tl1", name: "Danas", position: 1024, createdAt: t, updatedAt: t }],
         taskTags: [{ id: "ttag1", profileId: "p1", name: "posao", createdAt: t }],
         taskTagLinks: [{ taskId: "t1", tagId: "ttag1" }],
+        taskAttachments: [
+          { id: "tatt1", taskId: "t1", fileName: "ugovor.pdf", mime: "application/pdf", sizeBytes: 30, sha256: "f".repeat(64), createdAt: t },
+        ],
         events: [
           { id: "e1", profileId: "p1", title: "E", description: null, startAt: t, endAt: null, allDay: false, location: null, category: null, createdAt: t, updatedAt: t, recurrence: null, recurrenceExdates: [], reminderOffsets: [] },
         ],
@@ -754,7 +829,7 @@ describe("buildExportArchive", () => {
     it("groups exactly as the manifest does, field by field", () => {
       const data = populatedData();
       expect(countProfileModules(data)).toEqual({
-        tasks: 5, // 1 task + 1 list + 1 section + 1 tag + 1 tag link
+        tasks: 6, // 1 task + 1 list + 1 section + 1 tag + 1 tag link + 1 attachment
         calendar: 4, // 1 event + 1 document + 1 renewal + 1 person
         study: 8, // 1 each of subject/exam/deck/card/review/plan/block/focus-session
         notifications: 1,

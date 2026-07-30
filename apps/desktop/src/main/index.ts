@@ -47,6 +47,7 @@ import {
   MAX_NOTE_TEMPLATE_BYTES,
   MAX_NOTE_UPDATE_BYTES,
   MAX_SEARCH_LIMIT,
+  MAX_TASK_ATTACHMENT_BYTES,
   MAX_TASK_LIST_NAME_LENGTH,
   MAX_TASK_REMINDERS,
   MAX_TASK_REMINDER_DAYS,
@@ -69,6 +70,8 @@ import {
   STUDY_BLOCK_STATUSES,
   SUBJECT_COLORS,
   SubjectStore,
+  TaskAttachmentNotFoundError,
+  TaskAttachmentStore,
   TaskListStore,
   TaskStore,
   TaskTagStore,
@@ -116,6 +119,8 @@ import {
   type Subject,
   type SubjectColor,
   type Task,
+  type TaskAttachment,
+  type TaskAttachmentCount,
   type TaskList,
   type TaskListView,
   type TaskPriority,
@@ -140,6 +145,7 @@ import {
   deleteBlobIfOrphaned,
   migrateLegacyBlobs,
   openExternally,
+  pickAttachmentFiles,
   readBlob,
   registerBlobProtocol,
   saveAttachmentAs,
@@ -204,6 +210,7 @@ import {
   type SearchResult,
   type SnoozePreset,
   type StudyStats,
+  type TaskAttachmentsAddResult,
   type TaskListsSnapshot,
 } from "../shared/ipc.js";
 
@@ -1441,6 +1448,10 @@ function taskTagStore(profileId: string): TaskTagStore {
   return new TaskTagStore(requireDb().raw, profileId);
 }
 
+function taskAttachmentStore(profileId: string): TaskAttachmentStore {
+  return new TaskAttachmentStore(requireDb().raw, profileId);
+}
+
 function eventStore(profileId: string): EventStore {
   return new EventStore(requireDb().raw, profileId);
 }
@@ -1519,6 +1530,46 @@ function requireNoteAttachment(profileId: string, noteId: string, attachmentId: 
     throw new NoteAttachmentNotFoundError(`No attachment "${attachmentId}" on note "${noteId}".`);
   }
   return found;
+}
+
+/** `requireNoteAttachment`'s twin for tasks, and for the same reason: `TaskAttachmentStore.list` is already scoped to an active task of this profile, so resolving through it keeps that gate intact. */
+function requireTaskAttachment(profileId: string, taskId: string, attachmentId: string): TaskAttachment {
+  const found = taskAttachmentStore(profileId)
+    .list(taskId)
+    .find((attachment) => attachment.id === attachmentId);
+  if (!found) {
+    throw new TaskAttachmentNotFoundError(`No attachment "${attachmentId}" on task "${taskId}".`);
+  }
+  return found;
+}
+
+// --- Blob reference counting (ADR-014/ADR-019 + migration 024) --------------
+//
+// THE place that enumerates every table naming a blob. One on-disk store is
+// shared by every module that lets a user attach a file, so a blob is orphaned
+// only when NO table names it anymore — a GC that consulted one table would
+// delete a file another still points at, and that is silent data loss. Both
+// helpers below are DELIBERATELY profile-agnostic (each store's own
+// `refCount`/`mimeForHash` is, see their doc comments): the store is
+// content-addressed across the whole database, so a count that saw one
+// profile's rows would be the same bug one profile smaller.
+//
+// A module that gains attachments widens exactly these two functions.
+
+/** How many attachment rows — across every attachment table and every profile — hold this hash. */
+function blobRefCount(profileId: string, sha256: string): number {
+  return (
+    noteAttachmentStore(profileId).refCount(sha256) +
+    taskAttachmentStore(profileId).refCount(sha256)
+  );
+}
+
+/** The main-sniffed mime registered for this hash by whichever table holds it, or null when no attachment row anywhere does. */
+function blobMimeForHash(profileId: string, sha256: string): string | null {
+  return (
+    noteAttachmentStore(profileId).mimeForHash(sha256) ??
+    taskAttachmentStore(profileId).mimeForHash(sha256)
+  );
 }
 
 function flagStore(profileId: string): SqliteFlagStore {
@@ -1923,6 +1974,7 @@ function restoreDeps(): RestoreDeps {
     taskStore,
     taskListStore,
     taskTagStore,
+    taskAttachmentStore,
     eventStore,
     peopleStore,
     documentStore,
@@ -1966,6 +2018,11 @@ function restoreDeps(): RestoreDeps {
       runningFocusSessions.delete(profileId);
     },
     saveBlob: (bytes) => saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes),
+    // Injected rather than reached for, so `restore.ts` never has to know WHICH
+    // tables reference a blob — that union lives in exactly one place
+    // (`blobRefCount`), which is what keeps an undo from deleting a file some
+    // other module still names.
+    blobRefCount,
     deleteBlobIfOrphaned: (sha256, refCount) =>
       deleteBlobIfOrphaned(blobStorePathsFor(), requireBlobKeys(), sha256, refCount),
   };
@@ -2296,6 +2353,114 @@ function registerIpc(): void {
     const taskId = asNonEmptyString(body.taskId, "taskId");
     const tagId = asNonEmptyString(body.tagId, "tagId");
     taskTagStore(profileId).detachTag(taskId, tagId);
+  });
+
+  // --- Task attachments (migration 024) ------------------------------------
+  //
+  // The `note-attachments:*` surface one module over, with one deliberate
+  // difference: `add` takes no bytes and no path. Main opens the native picker,
+  // reads the chosen files itself, sniffs each one's real mime from its bytes
+  // (SEC-FILE-02) and stamps `now` from its own clock — so a task's files never
+  // cross the bridge in either direction, and the size cap is the store's own
+  // (`MAX_TASK_ATTACHMENT_BYTES`, imported, never respelled here).
+
+  ipcMain.handle(IpcChannel.taskAttachmentsList, (event, payload): TaskAttachment[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return taskAttachmentStore(profileId).list(id);
+  });
+
+  /**
+   * Attaches every file the native picker returns, one at a time. A per-file
+   * failure after the blob is written GCs that blob (only when nothing else
+   * references it, `blobRefCount`) and then propagates: a row that would not
+   * insert means the task itself is gone or not this profile's, which is not
+   * something the next file in the pick would survive either.
+   */
+  ipcMain.handle(
+    IpcChannel.taskAttachmentsAdd,
+    async (event, payload): Promise<TaskAttachmentsAddResult> => {
+      assertTrustedSender(event);
+      const body = asRecord(payload);
+      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const id = asNonEmptyString(body.id, "id");
+
+      const picked = await pickAttachmentFiles(mainWindow, MAX_TASK_ATTACHMENT_BYTES);
+      if (picked.canceled) return { canceled: true };
+
+      const store = taskAttachmentStore(profileId);
+      let added = 0;
+      for (const file of picked.files) {
+        const mime = sniffMime(file.bytes);
+        const { sha256 } = await saveBlob(blobStorePathsFor(), requireBlobKeys(), file.bytes);
+        try {
+          store.add(
+            id,
+            { fileName: file.fileName, mime, sizeBytes: file.bytes.byteLength, sha256 },
+            new Date().toISOString(),
+          );
+          added += 1;
+        } catch (error) {
+          await deleteBlobIfOrphaned(
+            blobStorePathsFor(),
+            requireBlobKeys(),
+            sha256,
+            blobRefCount(profileId, sha256),
+          );
+          throw error;
+        }
+      }
+      return { canceled: false, added, skippedTooLarge: picked.skippedTooLarge };
+    },
+  );
+
+  ipcMain.handle(IpcChannel.taskAttachmentsRemove, async (event, payload): Promise<void> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
+
+    const removed = taskAttachmentStore(profileId).remove(id, attachmentId);
+    await deleteBlobIfOrphaned(
+      blobStorePathsFor(),
+      requireBlobKeys(),
+      removed.sha256,
+      blobRefCount(profileId, removed.sha256),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.taskAttachmentsOpen, async (event, payload): Promise<void> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
+
+    const attachment = requireTaskAttachment(profileId, id, attachmentId);
+    await openExternally(blobStorePathsFor(), requireBlobKeys(), tmpOpenDirPath(), attachment);
+  });
+
+  ipcMain.handle(
+    IpcChannel.taskAttachmentsSaveAs,
+    (event, payload): Promise<SaveAttachmentResult> => {
+      assertTrustedSender(event);
+      const body = asRecord(payload);
+      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const id = asNonEmptyString(body.id, "id");
+      const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
+
+      const attachment = requireTaskAttachment(profileId, id, attachmentId);
+      return saveAttachmentAs(mainWindow, blobStorePathsFor(), requireBlobKeys(), attachment);
+    },
+  );
+
+  ipcMain.handle(IpcChannel.taskAttachmentsCounts, (event, payload): TaskAttachmentCount[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return taskAttachmentStore(profileId).countsByTask();
   });
 
   ipcMain.handle(IpcChannel.eventsList, (event, payload): Event[] => {
@@ -3203,12 +3368,13 @@ function registerIpc(): void {
     } catch (error) {
       // The blob was already written (write-if-absent); if the row failed to
       // insert (e.g. an unknown/soft-deleted note), GC it so a failed add
-      // never leaves an orphan file — but only if nothing else references it.
+      // never leaves an orphan file — but only if NOTHING references it, in any
+      // attachment table (`blobRefCount`), since a task may hold the same file.
       await deleteBlobIfOrphaned(
         blobStorePathsFor(),
         requireBlobKeys(),
         sha256,
-        store.refCount(sha256),
+        blobRefCount(profileId, sha256),
       );
       throw error;
     }
@@ -3221,13 +3387,12 @@ function registerIpc(): void {
     const id = asNonEmptyString(body.id, "id");
     const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
 
-    const store = noteAttachmentStore(profileId);
-    const removed = store.remove(id, attachmentId);
+    const removed = noteAttachmentStore(profileId).remove(id, attachmentId);
     await deleteBlobIfOrphaned(
       blobStorePathsFor(),
       requireBlobKeys(),
       removed.sha256,
-      store.refCount(removed.sha256),
+      blobRefCount(profileId, removed.sha256),
     );
   });
 
@@ -3305,6 +3470,7 @@ function registerIpc(): void {
         taskStore,
         taskListStore,
         taskTagStore,
+        taskAttachmentStore,
         eventStore,
         peopleStore,
         documentStore,
@@ -3789,17 +3955,19 @@ app.whenReady().then(async () => {
     // genuinely has nothing to hand back until the passcode is verified.
     registerIpc();
 
-    // ADR-014: the profileId argument is never read by `mimeForHash` — it is
-    // deliberately profile-agnostic (see `NoteAttachmentStore`'s doc comment),
-    // so any placeholder value is safe here. The lookup itself is wrapped: while
-    // locked, `noteAttachmentStore("")` throws through `requireDb()` — caught
-    // here and turned into a clean 404 (`registerBlobProtocol` already 404s on
-    // a null mime) rather than a generic network error surfacing in the
-    // renderer for every attachment image while locked.
+    // ADR-014: the profileId argument is never read by `mimeForHash` — every
+    // attachment store's is deliberately profile-agnostic (see their doc
+    // comments), so any placeholder value is safe here. `blobMimeForHash` is
+    // what makes a task's thumbnail resolve as readily as a note's: one hash
+    // namespace, every table consulted. The lookup itself is wrapped: while
+    // locked, the stores throw through `requireDb()` — caught here and turned
+    // into a clean 404 (`registerBlobProtocol` already 404s on a null mime)
+    // rather than a generic network error surfacing in the renderer for every
+    // attachment image while locked.
     registerBlobProtocol(
       (sha256) => {
         try {
-          return noteAttachmentStore("").mimeForHash(sha256);
+          return blobMimeForHash("", sha256);
         } catch {
           return null;
         }

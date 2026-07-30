@@ -915,6 +915,100 @@ body {
   color: var(--nx-text-muted);
 }
 
+/* Prilozi on the task form (migration 024) — the NOTE panel's rows
+   (.note__attachment*) in the form's own context: a full row of the wrapping
+   field row, like .tasks__reminders above, so a long file name wraps under
+   itself instead of pushing the submit button around. Shown only while editing
+   an existing task (TasksPage), which is why it has no empty state: the block
+   IS the affordance, and one button is not a page. */
+.tasks__attachments {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.tasks__attachments-head {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+/* Matched to .tasks__reminders-label, the field label right above it. */
+.tasks__attachments-label {
+  flex: none;
+  font-size: var(--nx-font-size-label);
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+}
+/* Quiet text button, the .tasks__reminder recipe rather than a second one. */
+.tasks__attach.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.tasks__attach.nx-button:hover:not(:disabled) {
+  background: transparent;
+  color: var(--nx-text);
+}
+/* Same recipe as .note__attachment-error, scoped to this form's channel. */
+.tasks__attachment-error {
+  margin: 0;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+  border-radius: var(--nx-radius-md);
+  font-size: var(--nx-font-size-body-sm);
+}
+.tasks__attachment {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-1) var(--nx-space-2);
+  border-radius: var(--nx-radius-md);
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.tasks__attachment:hover {
+  background: var(--nx-surface-alt);
+}
+.tasks__attachment-thumb {
+  flex-shrink: 0;
+  max-width: 96px;
+  max-height: 40px;
+  object-fit: cover;
+  border-radius: var(--nx-radius-sm);
+}
+.tasks__attachment-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body-sm);
+}
+.tasks__attachment-size {
+  flex-shrink: 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+/* The "⋯" stays quiet until its row is hovered or the menu is open — the
+   .note__row-menu treatment, on a form row. */
+.tasks__attachment-menu {
+  opacity: 0;
+}
+.tasks__attachment:hover .tasks__attachment-menu,
+.tasks__attachment-menu[aria-expanded="true"],
+.tasks__attachment-menu:focus-visible {
+  opacity: 1;
+}
+/* The row/card count chip is OUTLINED like .tasks__tag-chip beside it, and for
+   the same reason: how many files a task carries is metadata about the row, not
+   a state of it. */
+.tasks__attachment-chip.nx-chip {
+  background: transparent;
+  border: 1px solid var(--nx-border);
+  padding: 1px 8px;
+}
+
 /* Edit-mode cancel: a quiet ghost beside the primary submit (text feel). */
 .cal__cancel.nx-button {
   background: transparent;

@@ -111,6 +111,7 @@ export type {
   ExportStudyPlan,
   ExportSubject,
   ExportTask,
+  ExportTaskAttachment,
   ExportTaskList,
   ExportTaskSection,
   ExportTaskTag,

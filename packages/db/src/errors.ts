@@ -100,6 +100,29 @@ export class TaskTagValidationError extends DatabaseError {}
 export class TaskTagNotFoundError extends DatabaseError {}
 
 /**
+ * Thrown when a task-attachment write is rejected at the store boundary
+ * because its input breaks a domain rule the caller is expected to have caught
+ * already — an empty, over-255-character, or path-separator-carrying
+ * `fileName`, a malformed or over-100-character `mime`, a `sizeBytes` that is
+ * not a positive integer within `MAX_TASK_ATTACHMENT_BYTES`, a malformed
+ * `sha256`, or a malformed `now` (migration 024). The rules are
+ * `NoteAttachmentValidationError`'s verbatim, because a task attachment is the
+ * NOTE-003 feature applied to tasks. The store revalidates because renderer
+ * input is untrusted (SEC-EL-02).
+ */
+export class TaskAttachmentValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a task-attachment operation targets a task that is not active in
+ * the store's own profile (unknown, soft-deleted, or owned by another profile —
+ * surfaced as `TaskNotFoundError`, the same gate `TaskTagStore.attachTag`
+ * uses), or when `remove` targets an attachment id that is not a row of that
+ * task (unknown, or belonging to a different task). The
+ * `NoteAttachmentNotFoundError` arrangement, one module over.
+ */
+export class TaskAttachmentNotFoundError extends DatabaseError {}
+
+/**
  * Thrown when a calendar write is rejected at the store boundary because its
  * input breaks a domain rule the UI is expected to have caught already — an
  * empty event title, a malformed timestamp, or an end that precedes its start

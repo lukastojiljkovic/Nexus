@@ -44,6 +44,8 @@ export {
   SearchValidationError,
   SubjectNotFoundError,
   SubjectValidationError,
+  TaskAttachmentNotFoundError,
+  TaskAttachmentValidationError,
   TaskListNotFoundError,
   TaskListValidationError,
   TaskNotFoundError,
@@ -91,6 +93,13 @@ export type {
 
 export { TaskTagStore } from "./tasks/taskTagStore.js";
 export type { TaskTag, TaskTagLink } from "./tasks/taskTagStore.js";
+
+export { TaskAttachmentStore, MAX_TASK_ATTACHMENT_BYTES } from "./tasks/taskAttachmentStore.js";
+export type {
+  AddTaskAttachmentInput,
+  TaskAttachment,
+  TaskAttachmentCount,
+} from "./tasks/taskAttachmentStore.js";
 
 export {
   EventStore,

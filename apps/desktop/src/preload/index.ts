@@ -75,6 +75,18 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.taskTagsAttach, { profileId, taskId, tagId }),
   detachTaskTag: (profileId, taskId, tagId) =>
     ipcRenderer.invoke(IpcChannel.taskTagsDetach, { profileId, taskId, tagId }),
+  listTaskAttachments: (profileId, taskId) =>
+    ipcRenderer.invoke(IpcChannel.taskAttachmentsList, { profileId, id: taskId }),
+  attachTaskFiles: (profileId, taskId) =>
+    ipcRenderer.invoke(IpcChannel.taskAttachmentsAdd, { profileId, id: taskId }),
+  removeTaskAttachment: (profileId, taskId, attachmentId) =>
+    ipcRenderer.invoke(IpcChannel.taskAttachmentsRemove, { profileId, id: taskId, attachmentId }),
+  openTaskAttachment: (profileId, taskId, attachmentId) =>
+    ipcRenderer.invoke(IpcChannel.taskAttachmentsOpen, { profileId, id: taskId, attachmentId }),
+  saveTaskAttachmentAs: (profileId, taskId, attachmentId) =>
+    ipcRenderer.invoke(IpcChannel.taskAttachmentsSaveAs, { profileId, id: taskId, attachmentId }),
+  taskAttachmentCounts: (profileId) =>
+    ipcRenderer.invoke(IpcChannel.taskAttachmentsCounts, { profileId }),
   listEvents: (profileId) => ipcRenderer.invoke(IpcChannel.eventsList, { profileId }),
   createEvent: (profileId, event) =>
     ipcRenderer.invoke(IpcChannel.eventsCreate, { profileId, event }),

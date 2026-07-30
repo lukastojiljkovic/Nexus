@@ -43,6 +43,7 @@ import type {
   PlanStore,
   SqliteFlagStore,
   SubjectStore,
+  TaskAttachmentStore,
   TaskListStore,
   TaskStore,
   TaskTagStore,
@@ -58,6 +59,7 @@ export interface ProfileDataDeps {
   taskStore(profileId: string): TaskStore;
   taskListStore(profileId: string): TaskListStore;
   taskTagStore(profileId: string): TaskTagStore;
+  taskAttachmentStore(profileId: string): TaskAttachmentStore;
   eventStore(profileId: string): EventStore;
   peopleStore(profileId: string): PeopleStore;
   documentStore(profileId: string): DocumentStore;
@@ -171,12 +173,19 @@ export function gatherProfileData(deps: ProfileDataDeps, profileId: string): Pro
   // per-task fan-out here.
   const tagsStore = deps.taskTagStore(profileId);
 
+  // Attachments, unlike tags, ARE read one task at a time (migration 024's
+  // store is scoped through its task, exactly as the note one is through its
+  // note), so the live task list is read once and reused for both.
+  const tasks = deps.taskStore(profileId).listActive();
+  const taskAttachmentsStore = deps.taskAttachmentStore(profileId);
+
   return {
-    tasks: deps.taskStore(profileId).listActive(),
+    tasks,
     taskLists,
     taskSections: taskLists.flatMap((list) => listsStore.listSections(list.id)),
     taskTags: tagsStore.listTags(),
     taskTagLinks: tagsStore.listTagLinks(),
+    taskAttachments: tasks.flatMap((task) => taskAttachmentsStore.list(task.id)),
     events: deps.eventStore(profileId).listActive(),
     documents,
     renewals: documents.flatMap((document) => documentsStore.listRenewals(document.id)),

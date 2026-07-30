@@ -49,6 +49,12 @@ export const IpcChannel = {
   taskTagsAttach: "task-tags:attach",
   taskTagsDetach: "task-tags:detach",
   taskTagLinksList: "task-tag-links:list",
+  taskAttachmentsList: "task-attachments:list",
+  taskAttachmentsAdd: "task-attachments:add",
+  taskAttachmentsRemove: "task-attachments:remove",
+  taskAttachmentsOpen: "task-attachments:open",
+  taskAttachmentsSaveAs: "task-attachments:save-as",
+  taskAttachmentsCounts: "task-attachments:counts",
   eventsList: "events:list",
   eventsCreate: "events:create",
   eventsUpdate: "events:update",
@@ -650,6 +656,94 @@ export interface TaskTagsDetachRequest {
   profileId: string;
   taskId: string;
   tagId: string;
+}
+
+/**
+ * A task attachment's index row as seen by the renderer (mirrors the
+ * `task_attachments` table via `TaskAttachmentStore`'s mapping, migration 024).
+ * `NoteAttachment` below is the same shape on a different entity, deliberately.
+ * The attachment's BYTES never cross this boundary at all — unlike a note's,
+ * which the renderer hands over once at attach time: a task's files are picked
+ * through a native dialog and read by main itself (see
+ * `TaskAttachmentsAddRequest`), so every reference here is by `sha256` alone
+ * (e.g. an `nx-blob://<sha256>` URL for a thumbnail). Redeclared here so the
+ * renderer never imports DB code.
+ */
+export interface TaskAttachment {
+  id: string;
+  taskId: string;
+  fileName: string;
+  mime: string;
+  sizeBytes: number;
+  sha256: string;
+  createdAt: string;
+}
+
+export interface TaskAttachmentsListRequest {
+  profileId: string;
+  id: string;
+}
+
+/**
+ * Attaches one or more files to a task. The payload carries NO file data and no
+ * path: main opens the native "pick files" dialog itself, reads what the user
+ * chose, sniffs each file's real MIME type from its bytes (SEC-FILE-02) and
+ * stamps `createdAt` from its own clock.
+ *
+ * Deliberately different from `note-attachments:add`, which takes the
+ * renderer's `bytes` (the note editor also accepts a drag-drop, which has no
+ * dialog to open). A form has no such source, so nothing here needs to hand
+ * 50 MB across the bridge — and a flow where main owns both the dialog and the
+ * read is strictly the smaller attack surface (SEC-EL: the renderer never names
+ * a filesystem path).
+ */
+export interface TaskAttachmentsAddRequest {
+  profileId: string;
+  id: string;
+}
+
+/**
+ * The outcome of that dialog: either the user canceled, or `added` files were
+ * attached. `skippedTooLarge` counts files main refused for exceeding the store's
+ * own byte cap — reported rather than thrown, because refusing one oversize file
+ * must not lose the others the same pick succeeded with.
+ */
+export type TaskAttachmentsAddResult =
+  | { canceled: true }
+  | { canceled: false; added: number; skippedTooLarge: number };
+
+export interface TaskAttachmentsRemoveRequest {
+  profileId: string;
+  id: string;
+  attachmentId: string;
+}
+
+export interface TaskAttachmentsOpenRequest {
+  profileId: string;
+  id: string;
+  attachmentId: string;
+}
+
+export interface TaskAttachmentsSaveAsRequest {
+  profileId: string;
+  id: string;
+  attachmentId: string;
+}
+
+export interface TaskAttachmentsCountsRequest {
+  profileId: string;
+}
+
+/**
+ * How many attachments one live task carries — the per-row count chip's whole
+ * payload, one entry per task that has any (a task with none is absent, not
+ * reported as zero). Mirrors `DeckCounts`' flat-row shape rather than a map,
+ * for the same reason: a plain array survives structured clone without a
+ * thought.
+ */
+export interface TaskAttachmentCount {
+  taskId: string;
+  count: number;
 }
 
 /**
@@ -2290,6 +2384,21 @@ export interface NexusApi {
   listTaskTagLinks(profileId: string): Promise<TaskTagLink[]>;
   attachTaskTag(profileId: string, taskId: string, tagId: string): Promise<void>;
   detachTaskTag(profileId: string, taskId: string, tagId: string): Promise<void>;
+  /** One task's attachments, oldest first. Only an ACTIVE task of this profile has any to list. */
+  listTaskAttachments(profileId: string, taskId: string): Promise<TaskAttachment[]>;
+  /** Opens the native file picker and attaches whatever the user chooses — main reads the files, the renderer never touches a path or a byte. Resolves once the dialog is settled and every chosen file has been handled. */
+  attachTaskFiles(profileId: string, taskId: string): Promise<TaskAttachmentsAddResult>;
+  removeTaskAttachment(profileId: string, taskId: string, attachmentId: string): Promise<void>;
+  /** Copies the attachment's blob to a main-owned temp file and opens it with the OS default handler. */
+  openTaskAttachment(profileId: string, taskId: string, attachmentId: string): Promise<void>;
+  /** Copies the attachment's blob to a path chosen via a native save dialog. Resolves after the dialog is settled — canceled or written. */
+  saveTaskAttachmentAs(
+    profileId: string,
+    taskId: string,
+    attachmentId: string,
+  ): Promise<SaveAttachmentResult>;
+  /** Every live task's attachment count in one fetch — the page indexes them by task rather than asking per row (the `cardCounts` idiom). */
+  taskAttachmentCounts(profileId: string): Promise<TaskAttachmentCount[]>;
   listEvents(profileId: string): Promise<Event[]>;
   createEvent(profileId: string, event: NewEventFields): Promise<Event>;
   updateEvent(profileId: string, id: string, changes: EventFieldChanges): Promise<Event>;

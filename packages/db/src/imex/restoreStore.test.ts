@@ -33,6 +33,7 @@ import {
   SqliteFlagStore,
   SubjectStore,
   TASK_ORDER_GAP,
+  TaskAttachmentStore,
   TaskListStore,
   TaskStore,
   TaskTagStore,
@@ -115,6 +116,7 @@ function emptyProfileData(): ProfileData {
     taskSections: [],
     taskTags: [],
     taskTagLinks: [],
+    taskAttachments: [],
     events: [],
     documents: [],
     renewals: [],
@@ -205,6 +207,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   const taskStore = new TaskStore(handle.raw, profileId);
   const taskListStore = new TaskListStore(handle.raw, profileId);
   const taskTagStore = new TaskTagStore(handle.raw, profileId);
+  const taskAttachmentStore = new TaskAttachmentStore(handle.raw, profileId);
   const eventStore = new EventStore(handle.raw, profileId);
   const peopleStore = new PeopleStore(handle.raw, profileId);
   const documentStore = new DocumentStore(handle.raw, profileId);
@@ -247,6 +250,15 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   // reproduce, and a bare tag with nothing attached would prove only half of it.
   const taskTag = taskTagStore.createTag(`${name} task tag`, t0);
   taskTagStore.attachTag(parentTask.id, taskTag.id);
+
+  // A real file on a real task (migration 024), sharing its hash with NOTHING —
+  // the note attachment below uses "a"×64, so the two tables' blobs stay
+  // distinguishable in every assertion.
+  taskAttachmentStore.add(
+    parentTask.id,
+    { fileName: "ugovor.pdf", mime: "application/pdf", sizeBytes: 30, sha256: "c".repeat(64) },
+    t2,
+  );
 
   const event = eventStore.create({
     title: `${name} event`,
@@ -326,6 +338,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     taskSections: taskLists.flatMap((row) => taskListStore.listSections(row.id)),
     taskTags: taskTagStore.listTags(),
     taskTagLinks: taskTagStore.listTagLinks(),
+    taskAttachments: taskAttachmentStore.list(parentTask.id),
     events: eventStore.listActive(),
     documents: documentStore.listActive(),
     renewals: documentStore.listRenewals(document.id),
@@ -466,6 +479,9 @@ function assertModulesMatch(
   const tagsRead = new TaskTagStore(handle.raw, readProfileId);
   expect(tagsRead.listTags()).toEqual(remap(fixture.data.taskTags));
   expect(tagsRead.listTagLinks()).toEqual(fixture.data.taskTagLinks);
+  expect(
+    new TaskAttachmentStore(handle.raw, readProfileId).list(fixture.ids.parentTask.id),
+  ).toEqual(fixture.data.taskAttachments);
   expect(new EventStore(handle.raw, readProfileId).listActive()).toEqual(remap(fixture.data.events));
   expect(new PeopleStore(handle.raw, readProfileId).listActive()).toEqual(remap(fixture.data.people));
   // Stripped on BOTH sides: `seedFixture` gathers documents through
@@ -624,6 +640,7 @@ describe("RestoreStore", () => {
       "document_renewals",
       "task_sections",
       "task_tag_links",
+      "task_attachments",
       "note_versions",
       "note_attachments",
       "note_tag_links",

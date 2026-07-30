@@ -27,20 +27,21 @@ import { renderNoteMarkdown } from "./noteMarkdown.js";
 import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown.js";
 
 /**
- * IMEX-004: the archive's own semver. `1.4.0` adds the `task-tag` and
- * `task-tag-link` record types (migration 023), after `1.3.0` added the
- * `task-list`/`task-section` types and the `listId`/`sectionId`/`position` a
- * task carries into them (TASK-004 / ADR-029), `1.2.0` a task's
- * `reminderOffsets` (ADR-028) and `1.1.0` the `person` record type (CAL-007 /
- * ADR-026). Additive, so a MINOR bump by the same honesty each of those made
- * one: an archive this build writes is refused by a 1.3 reader, which would
- * otherwise parse every task and silently drop the labels the user filed them
- * under. Kept in step with `INTERCHANGE_SCHEMA_VERSION`
- * (`importArchive.ts`) — two constants rather than one import, since the reader
- * already imports from this module and the cycle would be worse than the
- * duplication; `importArchive.test.ts` pins them equal.
+ * IMEX-004: the archive's own semver. `1.5.0` adds the `task-attachment` record
+ * type (migration 024), after `1.4.0` added `task-tag`/`task-tag-link`
+ * (migration 023), `1.3.0` the `task-list`/`task-section` types and the
+ * `listId`/`sectionId`/`position` a task carries into them (TASK-004 /
+ * ADR-029), `1.2.0` a task's `reminderOffsets` (ADR-028) and `1.1.0` the
+ * `person` record type (CAL-007 / ADR-026). Additive, so a MINOR bump by the
+ * same honesty each of those made one: an archive this build writes is refused
+ * by a 1.4 reader, which would otherwise parse every task and silently drop the
+ * files the user hung off them — and, worse, drop the `blobs/` entries those
+ * rows are the only reference to. Kept in step with
+ * `INTERCHANGE_SCHEMA_VERSION` (`importArchive.ts`) — two constants rather than
+ * one import, since the reader already imports from this module and the cycle
+ * would be worse than the duplication; `importArchive.test.ts` pins them equal.
  */
-const SCHEMA_VERSION = "1.4.0";
+const SCHEMA_VERSION = "1.5.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -88,6 +89,23 @@ export interface ExportTaskTag {
 export interface ExportTaskTagLink {
   taskId: string;
   tagId: string;
+}
+
+/**
+ * A file hanging off a task (migration 024): the index row only, exactly as
+ * `ExportNoteAttachment` is, with the bytes declared as a binary entry and
+ * content-addressed by `sha256`. The two tables share ONE `blobs/<sha256>`
+ * namespace in the archive, because they share one blob store on disk — a file
+ * attached to both a task and a note travels once.
+ */
+export interface ExportTaskAttachment {
+  id: string;
+  taskId: string;
+  fileName: string;
+  mime: string;
+  sizeBytes: number;
+  sha256: string;
+  createdAt: string;
 }
 
 export interface ExportTask {
@@ -431,6 +449,11 @@ export interface ProfileData {
   // whose every label points at a row that is not there.
   taskTags: readonly ExportTaskTag[];
   taskTagLinks: readonly ExportTaskTagLink[];
+  // Required, and for the sharpest reason of the three: an attachment row is
+  // the ONLY thing that names a blob, so an archive that forgot them would not
+  // merely lose the index — it would leave the user's files out of the zip
+  // entirely, with nothing in the manifest to say they ever existed.
+  taskAttachments: readonly ExportTaskAttachment[];
   events: readonly ExportEvent[];
   documents: readonly ExportDocument[];
   renewals: readonly ExportRenewal[];
@@ -512,15 +535,17 @@ export type ArchiveModuleId = (typeof ARCHIVE_MODULE_IDS)[number];
  */
 export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, number> {
   return {
-    // Lists, sections, tags and tag links are all TASK module rows, so they
-    // count into the tasks bucket beside the tasks themselves — the same way a
-    // folder, a tag and a tag link count into notes.
+    // Lists, sections, tags, tag links and attachments are all TASK module
+    // rows, so they count into the tasks bucket beside the tasks themselves —
+    // the same way a folder, a tag, a tag link and an attachment count into
+    // notes.
     tasks:
       data.tasks.length +
       data.taskLists.length +
       data.taskSections.length +
       data.taskTags.length +
-      data.taskTagLinks.length,
+      data.taskTagLinks.length +
+      data.taskAttachments.length,
     calendar:
       data.events.length + data.documents.length + data.renewals.length + data.people.length,
     study:
@@ -562,6 +587,7 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     ...input.data.taskTags.map((row) => ({ type: "task-tag", ...row })),
     ...input.data.tasks.map((row) => ({ type: "task", ...row })),
     ...input.data.taskTagLinks.map((row) => ({ type: "task-tag-link", ...row })),
+    ...input.data.taskAttachments.map((row) => ({ type: "task-attachment", ...row })),
   ]);
   const calendarNdjson = toNdjson([
     ...input.data.events.map((row) => ({ type: "event", ...row })),
@@ -631,10 +657,13 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
       bytes: version.snapshot,
     });
   }
-  // Blobs are content-addressed and deduplicated: two attachment rows
-  // sharing a hash (even across notes) declare ONE binary entry, not two.
+  // Blobs are content-addressed and deduplicated: two attachment rows sharing
+  // a hash declare ONE binary entry, not two — across notes, across tasks, and
+  // across the two MODULES alike, because `blobs/` is one namespace over one
+  // on-disk store (migration 024). Notes lead only because they shipped first;
+  // the entry a hash lands under is identical either way.
   const blobSizeBySha = new Map<string, number>();
-  for (const attachment of noteAttachments) {
+  for (const attachment of [...noteAttachments, ...input.data.taskAttachments]) {
     if (blobSizeBySha.has(attachment.sha256)) continue;
     blobSizeBySha.set(attachment.sha256, attachment.sizeBytes);
     binaries.push({

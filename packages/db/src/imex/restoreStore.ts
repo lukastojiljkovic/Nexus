@@ -30,11 +30,11 @@ export interface RestoreProfileInput {
  * CASCADE` to reach a row (a future migration's table would silently survive
  * a restore if it relied on cascade alone — see `restoreStore.test.ts`'s
  * guard test, which reads `sqlite_master` and fails until a new table is
- * either added here or explicitly allow-listed as exempt). Nine tables carry no
+ * either added here or explicitly allow-listed as exempt). Ten tables carry no
  * `profile_id` of their own and are scoped through their parent instead
  * (`document_renewals` through `tracked_documents`; `task_sections` through
- * `task_lists`; `task_tag_links` through `tasks`; the six `note_*` child tables
- * through `notes`) — see `wipeSqlFor` below.
+ * `task_lists`; `task_tag_links` and `task_attachments` through `tasks`; the six
+ * `note_*` child tables through `notes`) — see `wipeSqlFor` below.
  */
 export const RESTORE_WIPE_TABLES = [
   "document_renewals",
@@ -50,9 +50,11 @@ export const RESTORE_WIPE_TABLES = [
   "events",
   "people",
   "notifications",
-  // The tag links first, then the tasks they hang off, then the sections, lists
-  // and tags those point at — children before parents, all the way down.
+  // The tag links and attachments first, then the tasks they hang off, then the
+  // sections, lists and tags those point at — children before parents, all the
+  // way down.
   "task_tag_links",
+  "task_attachments",
   "tasks",
   "task_sections",
   "task_lists",
@@ -79,6 +81,7 @@ const SCOPED_THROUGH_PARENT: Partial<Record<WipeTable, string>> = {
   document_renewals: `DELETE FROM document_renewals WHERE document_id IN (SELECT id FROM tracked_documents WHERE profile_id = ?)`,
   task_sections: `DELETE FROM task_sections WHERE list_id IN (SELECT id FROM task_lists WHERE profile_id = ?)`,
   task_tag_links: `DELETE FROM task_tag_links WHERE task_id IN (SELECT id FROM tasks WHERE profile_id = ?)`,
+  task_attachments: `DELETE FROM task_attachments WHERE task_id IN (SELECT id FROM tasks WHERE profile_id = ?)`,
   note_tag_links: `DELETE FROM note_tag_links WHERE note_id IN (SELECT id FROM notes WHERE profile_id = ?)`,
   note_links: `DELETE FROM note_links WHERE source_note_id IN (SELECT id FROM notes WHERE profile_id = ?)`,
   note_attachments: `DELETE FROM note_attachments WHERE note_id IN (SELECT id FROM notes WHERE profile_id = ?)`,
@@ -162,6 +165,7 @@ export class RestoreStore {
   private readonly insertTaskSection: Database.Statement;
   private readonly insertTaskTag: Database.Statement;
   private readonly insertTaskTagLink: Database.Statement;
+  private readonly insertTaskAttachment: Database.Statement;
   private readonly insertNoteFolder: Database.Statement;
   private readonly insertNoteTag: Database.Statement;
   private readonly insertSubject: Database.Statement;
@@ -212,6 +216,10 @@ export class RestoreStore {
     );
     this.insertTaskTagLink = db.prepare(
       `INSERT INTO task_tag_links (task_id, tag_id) VALUES (?, ?)`,
+    );
+    this.insertTaskAttachment = db.prepare(
+      `INSERT INTO task_attachments (id, task_id, file_name, mime, size_bytes, sha256, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     );
     this.insertNoteFolder = db.prepare(
       `INSERT INTO note_folders (id, profile_id, parent_id, name, color, created_at, updated_at)
@@ -508,6 +516,19 @@ export class RestoreStore {
       // link is nothing but the pair of ids at its ends, and both were preserved.
       for (const link of input.data.taskTagLinks) {
         this.insertTaskTagLink.run(link.taskId, link.tagId);
+        written += 1;
+      }
+
+      // Likewise the index rows for the files hanging off those tasks. Only the
+      // rows: the BYTES are written to the blob store before this transaction
+      // ever opens (`main/restore.ts`), for the reason that order exists — a
+      // failure here leaves unreferenced blob files, while the reverse would
+      // leave rows pointing at files that were never written.
+      for (const attachment of input.data.taskAttachments) {
+        this.insertTaskAttachment.run(
+          attachment.id, attachment.taskId, attachment.fileName, attachment.mime,
+          attachment.sizeBytes, attachment.sha256, attachment.createdAt,
+        );
         written += 1;
       }
 

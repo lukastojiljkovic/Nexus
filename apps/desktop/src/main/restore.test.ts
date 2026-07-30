@@ -36,6 +36,7 @@ import {
   RestoreStore,
   SqliteFlagStore,
   SubjectStore,
+  TaskAttachmentStore,
   TaskListStore,
   TaskStore,
   TaskTagStore,
@@ -134,6 +135,7 @@ function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
     taskStore: (profileId) => new TaskStore(handle.raw, profileId),
     taskListStore: (profileId) => new TaskListStore(handle.raw, profileId),
     taskTagStore: (profileId) => new TaskTagStore(handle.raw, profileId),
+    taskAttachmentStore: (profileId) => new TaskAttachmentStore(handle.raw, profileId),
     eventStore: (profileId) => new EventStore(handle.raw, profileId),
     peopleStore: (profileId) => new PeopleStore(handle.raw, profileId),
     documentStore: (profileId) => new DocumentStore(handle.raw, profileId),
@@ -196,6 +198,12 @@ function makeTestDeps(handle: NexusDatabase, filePath: string | null): TestDepsH
       if (created) blobs.set(sha256, bytes);
       return { sha256, created };
     },
+    // The REAL union `main/index.ts` computes, spelled the same way over the
+    // same stores — a double that counted only notes would let the GC test
+    // below pass while the app still deleted a task's file.
+    blobRefCount: (profileId, sha256) =>
+      new NoteAttachmentStore(handle.raw, profileId).refCount(sha256) +
+      new TaskAttachmentStore(handle.raw, profileId).refCount(sha256),
     deleteBlobIfOrphaned: async (sha256, refCount) => {
       if (refCount === 0) blobs.delete(sha256);
     },
@@ -261,6 +269,8 @@ interface SeededFixture {
     tag: NoteTag;
     template: NoteTemplate;
     attachmentSha: string;
+    /** The blob referenced ONLY by the task attachment — the one whose survival proves the GC union (migration 024). */
+    taskAttachmentSha: string;
   };
 }
 
@@ -279,6 +289,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   const taskStore = new TaskStore(handle.raw, profileId);
   const taskListStore = new TaskListStore(handle.raw, profileId);
   const taskTagStore = new TaskTagStore(handle.raw, profileId);
+  const taskAttachmentStore = new TaskAttachmentStore(handle.raw, profileId);
   const eventStore = new EventStore(handle.raw, profileId);
   const peopleStore = new PeopleStore(handle.raw, profileId);
   const subjectStore = new SubjectStore(handle.raw, profileId);
@@ -309,6 +320,21 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   // task-tag row AND the join that needs both of its ends.
   const taskTag = taskTagStore.createTag(`${label} task tag`, t0);
   taskTagStore.attachTag(task.id, taskTag.id);
+
+  // A real file on that task (migration 024), with bytes of its own so the zip
+  // round trip carries a blob NO note attachment references.
+  const taskAttachmentBytes = new TextEncoder().encode(`${label} task attachment content`);
+  const taskAttachmentSha = sha256OfBytes(taskAttachmentBytes);
+  taskAttachmentStore.add(
+    task.id,
+    {
+      fileName: "ugovor.pdf",
+      mime: "application/pdf",
+      sizeBytes: taskAttachmentBytes.length,
+      sha256: taskAttachmentSha,
+    },
+    "2026-01-01T00:02:00.000Z",
+  );
 
   const event = eventStore.create({ title: `${label} event`, startAt: "2026-03-01T10:00:00.000Z" });
   // A leap-day birthday (CAL-007): the pair migration 020's CHECKs cannot vet,
@@ -362,6 +388,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     taskSections: taskLists.flatMap((row) => taskListStore.listSections(row.id)),
     taskTags: taskTagStore.listTags(),
     taskTagLinks: taskTagStore.listTagLinks(),
+    taskAttachments: taskAttachmentStore.list(task.id),
     events: eventStore.listActive(),
     documents: [],
     renewals: [],
@@ -400,14 +427,17 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     notifications: { quietFrom: null, quietTo: null, morningHour: "08:00", enabledSources: ["exam"] },
   };
 
-  const blobBytes = new Map<string, Uint8Array>([[attachmentSha, attachmentBytes]]);
+  const blobBytes = new Map<string, Uint8Array>([
+    [attachmentSha, attachmentBytes],
+    [taskAttachmentSha, taskAttachmentBytes],
+  ]);
 
   return {
     data,
     derived,
     settings,
     blobBytes,
-    ids: { task, list, section, taskTag, event, person, subject, exam, deck, card, notification, note, linkedNote, folder, tag, template, attachmentSha },
+    ids: { task, list, section, taskTag, event, person, subject, exam, deck, card, notification, note, linkedNote, folder, tag, template, attachmentSha, taskAttachmentSha },
   };
 }
 
@@ -519,7 +549,9 @@ describe("restore", () => {
 
       const result = await applyRestore(deps, profileB, preview.preview.token);
       expect(result.rowsWritten).toBeGreaterThan(0);
-      expect(result.blobsAdded).toBe(1);
+      // Two: the note's blob and the task's — both tables name the same
+      // `blobs/` namespace, so both had to be written before the transaction.
+      expect(result.blobsAdded).toBe(2);
       expect(result.missingBlobs).toBe(0);
       expect(result.restored).toEqual(countProfileModules(fixtureA.data));
 
@@ -559,6 +591,11 @@ describe("restore", () => {
       expect(tagsB.listTagLinks()).toEqual([
         { taskId: fixtureA.ids.task.id, tagId: fixtureA.ids.taskTag.id },
       ]);
+      // The file hanging off that task travelled too — row AND blob.
+      expect(new TaskAttachmentStore(dbB.raw, profileB).list(fixtureA.ids.task.id)).toEqual(
+        fixtureA.data.taskAttachments,
+      );
+      expect(blobs.has(fixtureA.ids.taskAttachmentSha)).toBe(true);
 
       // The note's real Yjs state and its search-visible plaintext came out right.
       const notesB = new NoteStore(dbB.raw, profileB);
@@ -739,6 +776,22 @@ describe("restore", () => {
         },
         "2026-01-01T00:05:00.000Z",
       );
+      // And a bystander TASK whose attachment is the ONLY thing left naming the
+      // archive's task blob once the undo has run. Nothing in `note_attachments`
+      // references it at any point, so a reference count that consulted only
+      // that table would read 0 and delete a file the user still has attached —
+      // which is precisely what the union in `blobRefCount` exists to prevent.
+      const bystanderTask = new TaskStore(dbB.raw, profileBystander).create({ title: "Bystander task" });
+      new TaskAttachmentStore(dbB.raw, profileBystander).add(
+        bystanderTask.id,
+        {
+          fileName: "shared.pdf",
+          mime: "application/pdf",
+          sizeBytes: fixtureSource.blobBytes.get(fixtureSource.ids.taskAttachmentSha)?.length ?? 0,
+          sha256: fixtureSource.ids.taskAttachmentSha,
+        },
+        "2026-01-01T00:05:00.000Z",
+      );
 
       // The restore target: one pre-existing row the restore will wipe.
       const profileTarget = createProfile(dbB, "Target");
@@ -750,9 +803,12 @@ describe("restore", () => {
       if (preview.status !== "ready") unreachable();
 
       const applyResult = await applyRestore(deps, profileTarget, preview.preview.token);
-      expect(applyResult.blobsAdded).toBe(2);
+      // Three distinct blobs: the shared note one, the private note one, and the
+      // task one — the last of which no note attachment anywhere references.
+      expect(applyResult.blobsAdded).toBe(3);
       expect(blobs.has(fixtureSource.ids.attachmentSha)).toBe(true);
       expect(blobs.has(privateSha)).toBe(true);
+      expect(blobs.has(fixtureSource.ids.taskAttachmentSha)).toBe(true);
 
       const afterApply = new TaskStore(dbB.raw, profileTarget).listActive();
       expect(afterApply.map((row) => row.id)).not.toContain(preexistingTask.id);
@@ -769,6 +825,8 @@ describe("restore", () => {
       // the private one, referenced by nothing after undo, is gone.
       expect(blobs.has(fixtureSource.ids.attachmentSha)).toBe(true);
       expect(blobs.has(privateSha)).toBe(false);
+      // And the blob only a TASK attachment names survives too — the union.
+      expect(blobs.has(fixtureSource.ids.taskAttachmentSha)).toBe(true);
       expect(undoResult.blobsRemoved).toBe(1);
     });
   });
@@ -792,9 +850,12 @@ describe("restore", () => {
       );
 
       const result = await applyRestore(deps, profileB, preview.preview.token);
+      // Exactly the one blob the zip lacks is reported; the task's own file was
+      // present and restored, so a lost file costs that file and nothing else.
       expect(result.missingBlobs).toBe(1);
-      expect(result.blobsAdded).toBe(0);
-      expect(blobs.size).toBe(0);
+      expect(result.blobsAdded).toBe(1);
+      expect(blobs.has(fixtureA.ids.attachmentSha)).toBe(false);
+      expect(blobs.has(fixtureA.ids.taskAttachmentSha)).toBe(true);
 
       expect(
         new NoteAttachmentStore(dbB.raw, profileB).list(fixtureA.ids.note.id).map((row) => row.sha256),

@@ -1,18 +1,25 @@
 import { createHash, randomBytes } from "node:crypto";
 import { mkdir, readdir, readFile, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
-import { dirname, extname, join } from "node:path";
-import type { BrowserWindow } from "electron";
+import { basename, dirname, extname, join } from "node:path";
+import type { BrowserWindow, OpenDialogOptions } from "electron";
 import { dialog, protocol, shell } from "electron";
 import { blobStorageName, decryptBlob, encryptBlob, type BlobKeys } from "@nexus/core/auth";
 import type { SaveAttachmentResult } from "../shared/ipc.js";
 
 /**
- * The NOTE module's content-addressed attachment blob store and its
- * `nx-blob:` read protocol (ADR-014 / NOTE-003, slice 003-a; encrypted at
- * rest per ADR-019, slice 019-b). Mirrors `main/imex.ts`'s
- * deps-injection style: every function takes the directories, keys, and
- * window it needs as explicit parameters — nothing here reads `app` itself —
- * so `index.ts` is the only place that resolves real paths
+ * The content-addressed attachment blob store and its `nx-blob:` read protocol
+ * (ADR-014 / NOTE-003, slice 003-a; encrypted at rest per ADR-019, slice
+ * 019-b). ONE store, shared by every module that lets a user hang a file off a
+ * record — notes (`note_attachments`) and tasks (`task_attachments`, migration
+ * 024) alike — because a blob is nothing but its bytes: two records holding
+ * byte-identical files are one file on disk whichever tables name them. Nothing
+ * in this module knows which table a hash came from, which is exactly why
+ * `index.ts` must SUM every such table's reference count before handing one to
+ * `deleteBlobIfOrphaned`.
+ *
+ * Mirrors `main/imex.ts`'s deps-injection style: every function takes the
+ * directories, keys, and window it needs as explicit parameters — nothing here
+ * reads `app` itself — so `index.ts` is the only place that resolves real paths
  * (`app.getPath("userData")`) and derives `BlobKeys` from the unlocked data
  * key.
  *
@@ -24,9 +31,9 @@ import type { SaveAttachmentResult } from "../shared/ipc.js";
  * `<userData>/attachments` is the legacy plaintext store, read-only from
  * here on and drained in the background by `migrateLegacyBlobs`. The two are
  * told apart by directory, never by sniffing a file's bytes — a foreign
- * magic byte is corruption, not a signal. `NoteAttachmentStore` owns the
- * index rows and always speaks plaintext SHA-256; this module owns only the
- * bytes and never touches SQL.
+ * magic byte is corruption, not a signal. `NoteAttachmentStore` and
+ * `TaskAttachmentStore` own the index rows and always speak plaintext SHA-256;
+ * this module owns only the bytes and never touches SQL.
  */
 
 /** The two roots the store spans while a legacy install is still being migrated. */
@@ -234,6 +241,76 @@ export async function openExternally(
   }
 }
 
+/** One file the user picked, as main read it: the display name derived from the path here (never a name the renderer supplied) plus the bytes themselves. */
+export interface PickedAttachmentFile {
+  readonly fileName: string;
+  readonly bytes: Uint8Array;
+}
+
+/** The outcome of `pickAttachmentFiles`: a canceled dialog, or the files that were read plus a count of the ones refused for size. */
+export interface PickedAttachments {
+  readonly canceled: boolean;
+  readonly files: PickedAttachmentFile[];
+  readonly skippedTooLarge: number;
+}
+
+/**
+ * Opens the native "attach a file" dialog and reads whatever the user chose
+ * (TASK attachments, migration 024). The dialog is the ONLY source of a path —
+ * the renderer neither supplies one nor ever sees one (SEC-EL) — and the
+ * display name is `basename`'d off that path here rather than accepted from
+ * anywhere, so a name the store later validates is one main derived itself.
+ *
+ * The size gate is a `stat` BEFORE the read, deliberately: `maxBytes` is 50 MB
+ * and a user can multi-select, so reading first and checking afterwards would
+ * pull a file into memory precisely in the case where it must not be. It is
+ * re-checked on the bytes actually read, because a file can grow between the
+ * two — the store would refuse that row anyway, and this turns a thrown error
+ * into the same "too large" the user was already going to be told.
+ *
+ * A file that fails its stat/read for any other reason, and an EMPTY one (which
+ * migration 024's `size_bytes > 0` CHECK forbids, and which has no content to
+ * attach), are skipped without a count: one unreadable file must not lose the
+ * pick's other, perfectly good ones, and "too large" is the one skip reason the
+ * UI has something meaningful to say about.
+ *
+ * Multi-select is on: attaching three files is one dialog, not three.
+ */
+export async function pickAttachmentFiles(
+  win: BrowserWindow | null,
+  maxBytes: number,
+): Promise<PickedAttachments> {
+  const options: OpenDialogOptions = { properties: ["openFile", "multiSelections"] };
+  const { canceled, filePaths } = win
+    ? await dialog.showOpenDialog(win, options)
+    : await dialog.showOpenDialog(options);
+  if (canceled) return { canceled: true, files: [], skippedTooLarge: 0 };
+
+  const files: PickedAttachmentFile[] = [];
+  let skippedTooLarge = 0;
+  for (const path of filePaths) {
+    try {
+      const info = await stat(path);
+      if (!info.isFile() || info.size === 0) continue;
+      if (info.size > maxBytes) {
+        skippedTooLarge += 1;
+        continue;
+      }
+      const bytes = await readFile(path);
+      if (bytes.byteLength === 0) continue;
+      if (bytes.byteLength > maxBytes) {
+        skippedTooLarge += 1;
+        continue;
+      }
+      files.push({ fileName: basename(path), bytes });
+    } catch {
+      // Unreadable (permissions, a file that vanished between the dialog and
+      // here): skipped, never fatal — the rest of the pick still lands.
+    }
+  }
+  return { canceled: false, files, skippedTooLarge };
+}
+
 /**
  * Decrypts an attachment's blob to a path the user picks via the native save
  * dialog — the only source of the destination path (SEC-EL: the renderer
@@ -376,10 +453,12 @@ const SHA256_HOST_PATTERN = /^[0-9a-f]{64}$/;
  * app-ready, so a request's hash arrives lowercased as the URL's host, e.g.
  * `nx-blob://<sha256>` — always the plaintext SHA-256, exactly what the
  * renderer and the database both know; the encrypted store's HMAC storage
- * names never cross this boundary. `lookupMime` is the caller's
- * `NoteAttachmentStore.mimeForHash` — a hash that resolves to no registered
- * attachment row (never attached, or already GC'd) 404s before the filesystem
- * is even touched, and a malformed host never reaches `lookupMime` at all.
+ * names never cross this boundary. `lookupMime` is the caller's mime resolver
+ * across EVERY attachment table (`NoteAttachmentStore.mimeForHash` or
+ * `TaskAttachmentStore`'s, whichever registered the hash) — a hash that
+ * resolves to no attachment row anywhere (never attached, or already GC'd) 404s
+ * before the filesystem is even touched, and a malformed host never reaches
+ * `lookupMime` at all.
  * `getKeys` returning `null` (locked) also 404s, as does `readBlob` returning
  * `null` (nothing in either store) — decrypting through `readBlob` is what
  * lets an inline image still resolve out of the legacy store during the

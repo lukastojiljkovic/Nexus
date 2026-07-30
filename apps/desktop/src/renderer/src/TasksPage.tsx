@@ -12,7 +12,7 @@ import {
   ListView,
   TextField,
 } from "@nexus/ui";
-import { isValidDayKey, parseQuickAddDate } from "@nexus/core";
+import { isInlineImageMime, isValidDayKey, parseQuickAddDate } from "@nexus/core";
 import type { CollectionSchema, KanbanViewConfig, ListViewConfig } from "@nexus/core";
 import { MAX_TASK_LIST_NAME_LENGTH, MAX_TASK_TAG_NAME_LENGTH } from "../../shared/ipc.js";
 import type {
@@ -20,6 +20,7 @@ import type {
   NewTaskFields,
   RecurrenceRule,
   Task,
+  TaskAttachment,
   TaskFieldChanges,
   TaskList,
   TaskListView,
@@ -154,6 +155,25 @@ function taskReminderLabel(days: number): string {
 function reminderChoices(selected: readonly number[]): number[] {
   const extra = selected.filter((days) => !REMINDER_LADDER.includes(days));
   return [...new Set([...REMINDER_LADDER, ...extra])].sort((a, b) => a - b);
+}
+
+// --- Prilozi (migration 024) ------------------------------------------------
+
+/** Locale-aware one-decimal formatter for the KB/MB branches of `formatBytes` — the NOTE panel's own (`NoteEditor.tsx`). */
+const BYTES_FORMATTER = new Intl.NumberFormat("sr-Latn", { maximumFractionDigits: 1 });
+
+/**
+ * Human-readable file size for the Prilozi rows: whole bytes under 1 KB,
+ * otherwise KB/MB with at most one decimal — no fabricated precision beyond
+ * what `Intl.NumberFormat` already rounds to. Copied from `NoteEditor.tsx`
+ * rather than imported: the two panels are in different pages with no shared
+ * module between them, and a formatting helper is not worth a third one.
+ */
+function formatBytes(sizeBytes: number): string {
+  if (sizeBytes < 1024) return `${sizeBytes} B`;
+  const kb = sizeBytes / 1024;
+  if (kb < 1024) return `${BYTES_FORMATTER.format(kb)} KB`;
+  return `${BYTES_FORMATTER.format(kb / 1024)} MB`;
 }
 
 // --- Subtask tree (TASK-008) ------------------------------------------------
@@ -319,23 +339,44 @@ function progressChip(children: readonly TaskFields[]): ReactNode {
 }
 
 /**
+ * The muted „N prilog/priloga“ chip on a task that carries files (migration
+ * 024); null when it carries none — a zero chip would be noise on most rows.
+ *
+ * Outlined like the tag chip beside it and for the same reason: a file count is
+ * metadata about the row, not a state of it.
+ */
+function attachmentChip(count: number): ReactNode {
+  if (count === 0) return null;
+  const s = strings.tasks.attachments;
+  return (
+    <Chip key="attachments" className="tasks__attachment-chip" title={s.chipTitle}>
+      {count} {dayUnit(count, s.chipUnitOne, s.chipUnitMany)}
+    </Chip>
+  );
+}
+
+/**
  * The series marker (when the task repeats), subtask roll-up (when it has
- * children), tag labels (when any are attached), priority (when not 'none') and
- * due-date (when set) chips; null when none apply.
+ * children), tag labels (when any are attached), attachment count (when it
+ * carries files), priority (when not 'none') and due-date (when set) chips;
+ * null when none apply.
  *
  * One cluster for both renderings, so a list row and a kanban card say the same
- * things about a task — which is why the tags travel here rather than being
- * spliced into the list row alone.
+ * things about a task — which is why the tags and the attachment count travel
+ * here rather than being spliced into the list row alone.
  */
 function taskChips(
   task: TaskFields,
   children: readonly TaskFields[],
   tags: readonly TaskTag[],
+  attachmentCount: number,
 ): ReactNode {
   const chips: ReactNode[] = [];
   if (task.recurrence !== null) chips.push(<RecurrenceMark key="recurrence" />);
   const rollUp = progressChip(children);
   if (rollUp !== null) chips.push(rollUp);
+  const attachments = attachmentChip(attachmentCount);
+  if (attachments !== null) chips.push(attachments);
   // Outlined rather than filled (see .tasks__tag-chip): a label is not a state,
   // and next to prioritet/rok it must not read as one.
   for (const tag of tags) {
@@ -627,6 +668,17 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const [tagDraft, setTagDraft] = useState("");
   /** True when the last tag action failed — kept apart from `listFailed` so the two sections of the rail report their own. */
   const [tagFailed, setTagFailed] = useState(false);
+  /**
+   * Prilozi (migration 024): how many files each live task carries (the row/card
+   * chip), the edited task's own rows (the form's panel), and that panel's own
+   * transient error channel — separate from `listFailed`/`tagFailed`, since an
+   * attachment failure belongs to the form, not to the rail.
+   */
+  const [attachmentCounts, setAttachmentCounts] = useState<Map<string, number>>(new Map());
+  const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
+  const [attachmentError, setAttachmentError] = useState<"generic" | "tooLarge" | null>(null);
+  /** True while the native picker is open — the button is disabled so a second dialog cannot be asked for. */
+  const [attaching, setAttaching] = useState(false);
   /** The list whose delete is waiting on the "what about its tasks" question, or null. */
   const [deletePrompt, setDeletePrompt] = useState<TaskList | null>(null);
   /** The list a delete just removed, offered back — the list counterpart of `pendingUndoId`. */
@@ -770,13 +822,14 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
       try {
         // One round trip each, in parallel: the rail and the rows are one screen,
         // so a render that has tasks but no lists (or no tags for the chips it
-        // draws, or the reverse) is never shown. All four are reads of the same
+        // draws, or the reverse) is never shown. All five are reads of the same
         // local database, so any one of them failing is the page's one load error.
-        const [snapshot, list, tagList, linkList] = await Promise.all([
+        const [snapshot, list, tagList, linkList, counts] = await Promise.all([
           window.nexus.listTaskLists(profileId),
           window.nexus.listTasks(profileId),
           window.nexus.listTaskTags(profileId),
           window.nexus.listTaskTagLinks(profileId),
+          window.nexus.taskAttachmentCounts(profileId),
         ]);
         if (!active) return;
         setLists(snapshot.lists);
@@ -784,6 +837,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         setTasks(list);
         setTags(tagList);
         setTagLinks(linkList);
+        setAttachmentCounts(new Map(counts.map((row) => [row.taskId, row.count])));
         // The active filter names tags of the profile it was set in, so a
         // profile switch drops it rather than filtering by ids that are gone.
         setTagFilter([]);
@@ -881,9 +935,24 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     setTasks((prev) => prev && prev.map((task) => (task.id === updated.id ? updated : task)));
   }
 
+  /**
+   * Re-reads the rows AND the per-task attachment counts. The counts ride along
+   * rather than being fetched only after an attachment write, because a delete
+   * or an undo changes which tasks the store counts at all — a chip left over
+   * from a refetch that ignored them would be a number about a row that is no
+   * longer the row it describes.
+   */
   async function reload(): Promise<void> {
-    setTasks(await window.nexus.listTasks(profileId));
+    const [list, counts] = await Promise.all([
+      window.nexus.listTasks(profileId),
+      window.nexus.taskAttachmentCounts(profileId),
+    ]);
+    setTasks(list);
+    setAttachmentCounts(new Map(counts.map((row) => [row.taskId, row.count])));
   }
+
+  /** How many files a task carries, for its row/card chip; absent means none (`countsByTask` reports only tasks that have any). */
+  const attachmentCountOf = (taskId: string): number => attachmentCounts.get(taskId) ?? 0;
 
   /**
    * Re-fetches the rail AND the rows, which is what every list/section write
@@ -1119,6 +1188,103 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     );
   }
 
+  // --- Prilozi (migration 024) ---------------------------------------------
+  //
+  // The NOTE editor's Prilozi panel, on the task form — with one difference the
+  // form imposes: it exists only while EDITING an existing task. A task being
+  // created has no id yet, and there is nothing to hang a file off; the note
+  // editor never faces that question because it only ever opens on a note that
+  // already exists.
+  //
+  // Every write is await-then-refetch, the house style, and main owns the file
+  // dialog: the renderer never sees a path or a byte.
+
+  // Loads the edited task's attachments; clears them the moment the form leaves
+  // edit mode, so a stale list can never be shown against another task. Keyed
+  // on the id, so switching straight from one task's ✎ to another's refetches.
+  useEffect(() => {
+    if (editingId === null) {
+      setAttachments([]);
+      return;
+    }
+    let active = true;
+    void (async () => {
+      try {
+        const rows = await window.nexus.listTaskAttachments(profileId, editingId);
+        if (active) setAttachments(rows);
+      } catch (error) {
+        if (active) {
+          setAttachments([]);
+          setAttachmentError("generic");
+        }
+        console.error("Nexus: failed to load task attachments:", error);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profileId, editingId]);
+
+  /** Re-reads the edited task's rows and every task's count — what each of the two writes below ends with. */
+  async function reloadAttachments(taskId: string): Promise<void> {
+    const [rows, counts] = await Promise.all([
+      window.nexus.listTaskAttachments(profileId, taskId),
+      window.nexus.taskAttachmentCounts(profileId),
+    ]);
+    setAttachments(rows);
+    setAttachmentCounts(new Map(counts.map((row) => [row.taskId, row.count])));
+  }
+
+  /**
+   * Opens the native picker and attaches whatever comes back. A canceled dialog
+   * changes nothing and says nothing; files refused for size are reported, since
+   * a picker that silently dropped one would look like a bug.
+   */
+  async function attachFiles(taskId: string): Promise<void> {
+    if (attaching) return;
+    setAttaching(true);
+    setAttachmentError(null);
+    try {
+      const result = await window.nexus.attachTaskFiles(profileId, taskId);
+      if (result.canceled) return;
+      if (result.skippedTooLarge > 0) setAttachmentError("tooLarge");
+      await reloadAttachments(taskId);
+    } catch (error) {
+      setAttachmentError("generic");
+      console.error("Nexus: failed to attach files:", error);
+    } finally {
+      setAttaching(false);
+    }
+  }
+
+  async function openAttachment(taskId: string, attachmentId: string): Promise<void> {
+    try {
+      await window.nexus.openTaskAttachment(profileId, taskId, attachmentId);
+    } catch (error) {
+      setAttachmentError("generic");
+      console.error("Nexus: failed to open task attachment:", error);
+    }
+  }
+
+  async function saveAttachmentAs(taskId: string, attachmentId: string): Promise<void> {
+    try {
+      await window.nexus.saveTaskAttachmentAs(profileId, taskId, attachmentId);
+    } catch (error) {
+      setAttachmentError("generic");
+      console.error("Nexus: failed to save task attachment:", error);
+    }
+  }
+
+  async function removeAttachment(taskId: string, attachmentId: string): Promise<void> {
+    try {
+      await window.nexus.removeTaskAttachment(profileId, taskId, attachmentId);
+      await reloadAttachments(taskId);
+    } catch (error) {
+      setAttachmentError("generic");
+      console.error("Nexus: failed to remove task attachment:", error);
+    }
+  }
+
   // --- Drag & drop (list view) ---------------------------------------------
   //
   // Native HTML5 drag, the same idiom as the kanban and the month grid: the
@@ -1184,6 +1350,9 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     setRecurrence(null);
     setReminderOffsets([]);
     setDismissedPhrase(null);
+    // The rows themselves are cleared by the effect that watches `editingId`;
+    // only the transient error is this function's to drop.
+    setAttachmentError(null);
     if (!keepSection) setFormSectionId(null);
   }
 
@@ -1199,6 +1368,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     setEditingId(task.id);
     setDraft(task.title);
     setDismissedPhrase(null);
+    setAttachmentError(null);
     // The store accepts a date-time due date too, but this form only speaks in
     // whole days, so it shows (and on save keeps) the day part.
     setDueDate(task.dueDate === null ? "" : task.dueDate.slice(0, 10));
@@ -1499,7 +1669,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         leading={renderRowLead(task, depth)}
         trailing={
           <span className="tasks__row-meta">
-            {taskChips(task, children, tagsOf(task.id))}
+            {taskChips(task, children, tagsOf(task.id), attachmentCountOf(task.id))}
             {/* Attaching/detaching lives in a menu, exactly as it does on a note
                 row, and only where the profile has a tag to attach: an empty
                 menu is an affordance that can do nothing, which this page
@@ -1768,6 +1938,96 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         />
         {/* The end of the group: the one gap that cannot live inside a row. */}
         {dragInGroup && last !== null && renderDropGap(last.id, null)}
+      </div>
+    );
+  }
+
+  /**
+   * The Prilozi block of the edit form: the "Priloži datoteku" button, then one
+   * row per file — an image thumbnail served by the `nx-blob:` protocol, the
+   * name, a human-readable size, and the open/save-as/remove menu.
+   *
+   * The NOTE panel's recipe, adapted to a form: it takes a whole row of the
+   * wrapping field row (like Podsetnik above it) rather than sitting in a
+   * scrolling pane of its own, and it is rendered only for an existing task —
+   * see the call site.
+   */
+  function renderAttachments(taskId: string): ReactNode {
+    const s = strings.tasks.attachments;
+    return (
+      <div className="tasks__attachments">
+        <div className="tasks__attachments-head">
+          <span className="tasks__attachments-label">
+            {s.title}
+            {attachments.length > 0 ? ` (${attachments.length})` : ""}
+          </span>
+          <Button
+            size="sm"
+            className="tasks__attach"
+            disabled={attaching}
+            onClick={() => void attachFiles(taskId)}
+          >
+            {s.attach}
+          </Button>
+        </div>
+        {attachmentError !== null && (
+          <p className="tasks__attachment-error" role="status">
+            {attachmentError === "tooLarge" ? s.tooLarge : s.actionError}
+          </p>
+        )}
+        {attachments.map((attachment) => (
+          <div key={attachment.id} className="tasks__attachment">
+            {isInlineImageMime(attachment.mime) && (
+              <img
+                className="tasks__attachment-thumb"
+                src={`nx-blob://${attachment.sha256}`}
+                alt={attachment.fileName}
+              />
+            )}
+            <span className="tasks__attachment-name">{attachment.fileName}</span>
+            <span className="tasks__attachment-size">{formatBytes(attachment.sizeBytes)}</span>
+            <NotePopover label={s.menuLabel} triggerClassName="tasks__attachment-menu">
+              {(close) => (
+                <>
+                  <button
+                    type="button"
+                    className="note__menu-item"
+                    role="menuitem"
+                    onClick={() => {
+                      void openAttachment(taskId, attachment.id);
+                      close();
+                    }}
+                  >
+                    {s.open}
+                  </button>
+                  <button
+                    type="button"
+                    className="note__menu-item"
+                    role="menuitem"
+                    onClick={() => {
+                      void saveAttachmentAs(taskId, attachment.id);
+                      close();
+                    }}
+                  >
+                    {s.saveAs}
+                  </button>
+                  <div className="note__menu-sep" role="separator" />
+                  <button
+                    type="button"
+                    className="note__menu-item note__menu-item--danger"
+                    role="menuitem"
+                    onClick={() => {
+                      void removeAttachment(taskId, attachment.id);
+                      close();
+                    }}
+                  >
+                    {s.remove}
+                  </button>
+                </>
+              )}
+            </NotePopover>
+          </div>
+        ))}
       </div>
     );
   }
@@ -2156,6 +2416,13 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                   <p className="tasks__reminders-caption">{strings.tasks.reminders.needsDate}</p>
                 )}
               </div>
+
+              {/* Prilozi (migration 024) — only while EDITING: an uncreated task
+                  has no id to hang a file off, which is the same constraint the
+                  note editor lives under (it only ever opens on a note that
+                  already exists). The picker itself is native and lives in main,
+                  so there is no drop zone and no file input here. */}
+              {editingId !== null && renderAttachments(editingId)}
             </div>
           </form>
 
@@ -2294,7 +2561,14 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
             columnTitle={statusTitle}
             itemKey={(task) => task.id}
             renderCard={(task) => (
-              <KanbanCard tag={taskChips(task, childrenOf(task.id), tagsOf(task.id))}>
+              <KanbanCard
+                tag={taskChips(
+                  task,
+                  childrenOf(task.id),
+                  tagsOf(task.id),
+                  attachmentCountOf(task.id),
+                )}
+              >
                 <span
                   id={taskRowDomId(task.id)}
                   className={revealedId === task.id ? "nx-revealed" : undefined}

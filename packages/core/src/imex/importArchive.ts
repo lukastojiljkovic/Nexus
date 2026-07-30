@@ -26,6 +26,7 @@ import type {
   ExportStudyPlan,
   ExportSubject,
   ExportTask,
+  ExportTaskAttachment,
   ExportTaskList,
   ExportTaskSection,
   ExportTaskTag,
@@ -113,18 +114,20 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.4.0` added the
- * `task-tag`/`task-tag-link` record types (migration 023), after `1.3.0` added
- * the `task-list`/`task-section` types and a task's placement into them
- * (TASK-004 / ADR-029), `1.2.0` a task's `reminderOffsets` (ADR-028) and `1.1.0`
- * the `person` record type (CAL-007 / ADR-026): additive changes, hence MINOR
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.5.0` added the
+ * `task-attachment` record type (migration 024), after `1.4.0` added
+ * `task-tag`/`task-tag-link` (migration 023), `1.3.0` the
+ * `task-list`/`task-section` types and a task's placement into them (TASK-004 /
+ * ADR-029), `1.2.0` a task's `reminderOffsets` (ADR-028) and `1.1.0` the
+ * `person` record type (CAL-007 / ADR-026): additive changes, hence MINOR
  * bumps, which is exactly the compatibility mechanism
  * `isSupportedSchemaVersion` implements — an older minor within major 1 still
  * passes the gate here, while an older build refuses a newer archive rather
  * than silently dropping what it cannot see (every person, every task's ladder,
- * every list the user filed their work into, or every label they sorted it by).
- * That, in turn, is why an unrecognised record type below is an ERROR: the
- * version gate makes "ignore what you do not know" unreachable.
+ * every list the user filed their work into, every label they sorted it by, or
+ * every file they hung off a task). That, in turn, is why an unrecognised record
+ * type below is an ERROR: the version gate makes "ignore what you do not know"
+ * unreachable.
  *
  * A new RECORD TYPE needs no `ArchiveEra` flag, unlike a new field on an
  * existing type: an older archive simply carries none of it, which is
@@ -137,7 +140,7 @@ export interface ImportArchiveResult {
  * major forward from — a migration framework for a major that has never
  * shipped would be speculative machinery with nothing to exercise it.
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.4.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.5.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -500,6 +503,7 @@ type RecordType =
   | "task-section"
   | "task-tag"
   | "task-tag-link"
+  | "task-attachment"
   | "event"
   | "document"
   | "renewal"
@@ -527,6 +531,7 @@ const ALL_RECORD_TYPES: readonly RecordType[] = [
   "task-section",
   "task-tag",
   "task-tag-link",
+  "task-attachment",
   "event",
   "document",
   "renewal",
@@ -553,7 +558,14 @@ type DataFilePath = (typeof DATA_FILES)[number];
 
 /** Which record types the writer puts in each of the five NDJSON files — a type in any OTHER file is `invalid-record` (detail `"type"`), not silently accepted (ADR-022). */
 const FILE_RECORD_TYPES: Record<DataFilePath, readonly RecordType[]> = {
-  "data/tasks.ndjson": ["task-list", "task-section", "task-tag", "task", "task-tag-link"],
+  "data/tasks.ndjson": [
+    "task-list",
+    "task-section",
+    "task-tag",
+    "task",
+    "task-tag-link",
+    "task-attachment",
+  ],
   "data/calendar.ndjson": ["event", "document", "renewal", "person"],
   "data/study.ndjson": ["subject", "exam", "deck", "card", "review", "plan", "block", "focus-session"],
   "data/notifications.ndjson": ["notification"],
@@ -686,6 +698,18 @@ function parseTaskTagLink(raw: Record<string, unknown>): ExportTaskTagLink {
   const taskId = nonEmptyStr(raw.taskId, "taskId");
   const tagId = nonEmptyStr(raw.tagId, "tagId");
   return { taskId, tagId };
+}
+
+/** `parseNoteAttachment`'s twin, and deliberately identical: migration 024's `task_attachments` is migration 013's `note_attachments` with a task on the other end. `sizeBytes` is `positiveInt` because both tables CHECK it. */
+function parseTaskAttachment(raw: Record<string, unknown>): ExportTaskAttachment {
+  const id = nonEmptyStr(raw.id, "id");
+  const taskId = nonEmptyStr(raw.taskId, "taskId");
+  const fileName = nonEmptyStr(raw.fileName, "fileName");
+  const mime = nonEmptyStr(raw.mime, "mime");
+  const sizeBytes = positiveInt(raw.sizeBytes, "sizeBytes");
+  const sha256 = nonEmptyStr(raw.sha256, "sha256");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  return { id, taskId, fileName, mime, sizeBytes, sha256, createdAt };
 }
 
 function parseEvent(raw: Record<string, unknown>, era: ArchiveEra): ExportEvent {
@@ -1070,6 +1094,7 @@ interface Collections {
   taskSections: Bucket<ExportTaskSection>;
   taskTags: Bucket<ExportTaskTag>;
   taskTagLinks: Bucket<ExportTaskTagLink>;
+  taskAttachments: Bucket<ExportTaskAttachment>;
   events: Bucket<ExportEvent>;
   documents: Bucket<ExportDocument>;
   renewals: Bucket<ExportRenewal>;
@@ -1095,7 +1120,7 @@ interface Collections {
 function newCollections(): Collections {
   return {
     tasks: newBucket(), taskLists: newBucket(), taskSections: newBucket(),
-    taskTags: newBucket(), taskTagLinks: newBucket(),
+    taskTags: newBucket(), taskTagLinks: newBucket(), taskAttachments: newBucket(),
     events: newBucket(), documents: newBucket(), renewals: newBucket(),
     people: newBucket(), subjects: newBucket(), exams: newBucket(), decks: newBucket(), cards: newBucket(),
     reviewLog: newBucket(), plans: newBucket(), blocks: newBucket(), focusSessions: newBucket(),
@@ -1141,6 +1166,11 @@ function dispatchRecord(
     case "task-tag-link": {
       const row = parseTaskTagLink(raw);
       pushRow(collections.taskTagLinks, `taskId=${row.taskId},tagId=${row.tagId}`, row, path, line, problems);
+      return;
+    }
+    case "task-attachment": {
+      const row = parseTaskAttachment(raw);
+      pushRow(collections.taskAttachments, row.id, row, path, line, problems);
       return;
     }
     case "event": {
@@ -1640,7 +1670,14 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
   }
 
   // --- Blobs (rule 8): a missing blob is a warning — the row still restores.
-  for (const entry of collections.noteAttachments.entries) {
+  // Both attachment tables are checked, because both name the same `blobs/`
+  // namespace: a task's file is as lost as a note's when the archive omits it,
+  // and a warning raised for only one of them would under-report the damage the
+  // restore preview shows the user.
+  for (const entry of [
+    ...collections.noteAttachments.entries,
+    ...collections.taskAttachments.entries,
+  ]) {
     const attachment = entry.row;
     if (!input.blobNames.has(attachment.sha256)) {
       problems.push(
@@ -1671,6 +1708,7 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
   checkReference(collections.taskSections, (row) => row.listId, "listId", taskListIds, problems);
   checkReference(collections.taskTagLinks, (row) => row.taskId, "taskId", taskIds, problems);
   checkReference(collections.taskTagLinks, (row) => row.tagId, "tagId", taskTagIds, problems);
+  checkReference(collections.taskAttachments, (row) => row.taskId, "taskId", taskIds, problems);
   // The one reference `checkReference` cannot express: the section must exist
   // AND belong to the task's own list. A section of some other list would pass
   // every foreign key the schema has and still put the task under a heading
@@ -1730,6 +1768,7 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         taskSections: rowsOf(collections.taskSections),
         taskTags: rowsOf(collections.taskTags),
         taskTagLinks: rowsOf(collections.taskTagLinks),
+        taskAttachments: rowsOf(collections.taskAttachments),
         events: rowsOf(collections.events),
         documents: rowsOf(collections.documents),
         renewals: rowsOf(collections.renewals),

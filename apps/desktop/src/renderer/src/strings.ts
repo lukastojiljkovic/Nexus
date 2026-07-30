@@ -289,6 +289,39 @@ export const strings = {
       /** Shown in place of the rows when the tag filter matches nothing in the selected list. */
       filterEmptyDescription: "Nijedan zadatak ne odgovara izabranim oznakama.",
     },
+    /**
+     * Prilozi (migration 024) — files hung off a task. The NOTE panel's wording
+     * one module over, and deliberately the SAME Serbian wherever the sentence
+     * is the same: „Prilozi“, „Priloži datoteku“, „Otvori“, „Sačuvaj kao…“ mean
+     * exactly what they mean on a note, and two phrasings for one action would
+     * only be two things to learn.
+     *
+     * Only the strings a task genuinely words differently live here: the
+     * section is visible only while EDITING (a task that has not been created
+     * has no id to hang a file off), the file picker is a native dialog rather
+     * than a drop zone, and the per-row chip counts.
+     */
+    attachments: {
+      title: "Prilozi",
+      attach: "Priloži datoteku",
+      open: "Otvori",
+      saveAs: "Sačuvaj kao…",
+      remove: "Ukloni prilog",
+      /** The per-attachment „⋯“ menu, mirroring `tags.menuLabel`'s shape. */
+      menuLabel: "Radnje nad prilogom",
+      /** Shown when the picker refused one or more files for size. The 50 MB bound is the store's own (`MAX_TASK_ATTACHMENT_BYTES`), stated here as a plain fact rather than counted files — the count varies, the limit does not. */
+      tooLarge: "Datoteke veće od 50 MB se ne mogu priložiti.",
+      actionError: "Radnja nad prilogom nije uspela. Pokušaj ponovo.",
+      /**
+       * The muted row/card chip: „1 prilog“ / „3 priloga“ — Serbian numeral
+       * agreement via `dayUnit`, the same two-form rule every other counted
+       * noun in this file uses.
+       */
+      chipUnitOne: "prilog",
+      chipUnitMany: "priloga",
+      /** Tooltip on that chip; the number alone cannot say what it counts. */
+      chipTitle: "Priloženih datoteka",
+    },
     /** Kanban column titles, keyed by task status value (labels are presentation). */
     status: {
       todo: "Za rad",

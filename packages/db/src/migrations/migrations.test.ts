@@ -16,8 +16,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 23 (task tags), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(23);
+  it("is at version 24 (task attachments), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(24);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -2529,6 +2529,104 @@ describe("migration 023 — task tags", () => {
       db.raw.prepare("PRAGMA table_info(tasks)").all() as { name: string }[]
     ).map((row) => row.name);
     expect(columns).not.toContain("tag_id");
+    db.close();
+  });
+});
+
+describe("migration 024 — task attachments", () => {
+  const now = () => new Date().toISOString();
+
+  /** A task seeded straight into the table — this migration adds nothing to `tasks`, so the Inbox `TaskStore` needs is beside the point here (migration 023's own suite makes the same call). */
+  const insertTask = (db: NexusDatabase, id: string, profileId: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO tasks (id, profile_id, title, status, created_at, updated_at)
+         VALUES (?, ?, ?, 'todo', ?, ?)`,
+      )
+      .run(id, profileId, `Zadatak ${id}`, now(), now());
+
+  const insertAttachment = (
+    db: NexusDatabase,
+    id: string,
+    taskId: string,
+    sizeBytes = 100,
+    sha256 = "a".repeat(64),
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO task_attachments (id, task_id, file_name, mime, size_bytes, sha256, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, taskId, "file.png", "image/png", sizeBytes, sha256, now());
+
+  const countOf = (db: NexusDatabase, table: string): number =>
+    (db.raw.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n;
+
+  it("creates the task_attachments table and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    expect(tableNames(db)).toContain("task_attachments");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("creates the task_attachments_task and task_attachments_sha indexes", () => {
+    const db = openDatabase({ path: join(dir, "index.db") });
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("task_attachments_task");
+    expect(indexes).toContain("task_attachments_sha");
+    db.close();
+  });
+
+  it("rejects a size_bytes of 0 with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-size.db") });
+    insertProfile(db, "p1");
+    insertTask(db, "t1", "p1");
+    expect(() => insertAttachment(db, "a1", "t1", 0)).toThrow();
+    expect(() => insertAttachment(db, "a2", "t1", 1)).not.toThrow();
+    db.close();
+  });
+
+  it("refuses an attachment pointing at no task", () => {
+    const db = openDatabase({ path: join(dir, "fk-task.db") });
+    insertProfile(db, "p1");
+    expect(() => insertAttachment(db, "a1", "ghost")).toThrow();
+    db.close();
+  });
+
+  it("cascades attachment deletion when the owning task is hard-deleted", () => {
+    const db = openDatabase({ path: join(dir, "cascade-task.db") });
+    insertProfile(db, "p1");
+    insertTask(db, "t1", "p1");
+    insertAttachment(db, "a1", "t1");
+
+    db.raw.prepare("DELETE FROM tasks WHERE id = ?").run("t1");
+    expect(countOf(db, "task_attachments")).toBe(0);
+    db.close();
+  });
+
+  it("cascades attachment deletion when the owning profile is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade-profile.db") });
+    insertProfile(db, "p1");
+    insertTask(db, "t1", "p1");
+    insertAttachment(db, "a1", "t1");
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    expect(countOf(db, "task_attachments")).toBe(0);
+    db.close();
+  });
+
+  it("leaves a soft-deleted task's attachments standing — only a HARD delete prunes them", () => {
+    const db = openDatabase({ path: join(dir, "soft-delete.db") });
+    insertProfile(db, "p1");
+    insertTask(db, "t1", "p1");
+    insertAttachment(db, "a1", "t1");
+
+    db.raw.prepare("UPDATE tasks SET deleted_at = ? WHERE id = ?").run(now(), "t1");
+    expect(countOf(db, "task_attachments")).toBe(1);
     db.close();
   });
 });

@@ -56,6 +56,7 @@ function emptyExportInput(): ExportArchiveInput {
       taskSections: [],
       taskTags: [],
       taskTagLinks: [],
+      taskAttachments: [],
       events: [],
       documents: [],
       renewals: [],
@@ -134,6 +135,20 @@ function richProfileData(): ProfileData {
       { id: "ttag-idle", profileId: "profile1", name: "kasnije", createdAt: "2026-07-01T00:00:00.000Z" },
     ],
     taskTagLinks: [{ taskId: "task-parent", tagId: "ttag-work" }],
+    // Two attachments on two different tasks, the second one sharing its hash
+    // with a NOTE attachment below: `blobs/` is one namespace over one on-disk
+    // store, so the round trip has to carry a cross-module dedup as well as a
+    // plain row.
+    taskAttachments: [
+      {
+        id: "tatt-1", taskId: "task-parent", fileName: "ugovor.pdf", mime: "application/pdf",
+        sizeBytes: 30, sha256: "c".repeat(64), createdAt: "2026-07-01T00:00:00.000Z",
+      },
+      {
+        id: "tatt-2", taskId: "task-child", fileName: "slika.png", mime: "image/png",
+        sizeBytes: 10, sha256: "a".repeat(64), createdAt: "2026-07-01T00:00:00.000Z",
+      },
+    ],
     events: [
       {
         id: "event-1", profileId: "profile1", title: "Sastanak", description: null,
@@ -462,10 +477,10 @@ describe("parseImportArchive — one test per problem code", () => {
   });
 
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.5.0" });
+    const files = baseFiles({ schemaVersion: "1.6.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.5.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.6.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -977,6 +992,104 @@ describe("parseImportArchive — task tags (migration 023)", () => {
   });
 });
 
+describe("parseImportArchive — task attachments (migration 024)", () => {
+  const SHA = "f".repeat(64);
+
+  const VALID_TASK_ATTACHMENT = {
+    type: "task-attachment", id: "tatt1", taskId: "t1", fileName: "ugovor.pdf",
+    mime: "application/pdf", sizeBytes: 2048, sha256: SHA,
+    createdAt: "2026-07-01T00:00:00.000Z",
+  };
+
+  /** Parses a `data/tasks.ndjson` built from `rows` verbatim, with `blobNames` standing in for what the zip actually carries. */
+  function parseTasksFile(
+    rows: readonly Record<string, unknown>[],
+    blobNames: ReadonlySet<string> = new Set([SHA]),
+  ) {
+    return parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/tasks.ndjson": ndjson(rows) } }), {
+        blobNames,
+      }),
+    );
+  }
+
+  it("round-trips an attachment on the task it hangs off", () => {
+    const result = parseTasksFile([VALID_TASK_LIST, VALID_TASK, VALID_TASK_ATTACHMENT]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.taskAttachments).toEqual([
+      {
+        id: "tatt1", taskId: "t1", fileName: "ugovor.pdf", mime: "application/pdf",
+        sizeBytes: 2048, sha256: SHA, createdAt: "2026-07-01T00:00:00.000Z",
+      },
+    ]);
+  });
+
+  const BAD_ROWS: { name: string; row: Record<string, unknown>; detail: string }[] = [
+    { name: "no id", row: { id: undefined }, detail: "id" },
+    { name: "no task", row: { taskId: undefined }, detail: "taskId" },
+    { name: "an empty file name", row: { fileName: "" }, detail: "fileName" },
+    { name: "no mime", row: { mime: undefined }, detail: "mime" },
+    // Migration 024's own CHECK, mirrored here: a zero-byte "attachment" is not a file.
+    { name: "a sizeBytes of zero", row: { sizeBytes: 0 }, detail: "sizeBytes" },
+    { name: "a fractional sizeBytes", row: { sizeBytes: 1.5 }, detail: "sizeBytes" },
+    { name: "an empty sha256", row: { sha256: "" }, detail: "sha256" },
+    { name: "a malformed createdAt", row: { createdAt: "juče" }, detail: "createdAt" },
+  ];
+
+  for (const { name, row, detail } of BAD_ROWS) {
+    it(`refuses a task attachment with ${name}`, () => {
+      const result = parseTasksFile([
+        VALID_TASK_LIST, VALID_TASK, { ...VALID_TASK_ATTACHMENT, ...row },
+      ]);
+      expect(result.problems).toContainEqual({
+        severity: "error", code: "invalid-record", path: "data/tasks.ndjson", line: 3, detail,
+      });
+      expect(result.data).toBeNull();
+    });
+  }
+
+  it("refuses two attachments sharing an id", () => {
+    const result = parseTasksFile([
+      VALID_TASK_LIST, VALID_TASK, VALID_TASK_ATTACHMENT, VALID_TASK_ATTACHMENT,
+    ]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "duplicate-id", path: "data/tasks.ndjson", line: 4, detail: "tatt1",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  it("refuses an attachment naming a task the archive does not carry", () => {
+    const result = parseTasksFile([{ ...VALID_TASK_ATTACHMENT, taskId: "ghost" }]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "unknown-reference", path: "data/tasks.ndjson", line: 1,
+      detail: "taskId=ghost",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  // Rule 8: a lost file is a warning, never a refusal — the row still restores,
+  // and the restore preview is what tells the user how many files did not.
+  it("warns (but still parses) when the archive carries no blob for the row", () => {
+    const result = parseTasksFile([VALID_TASK_LIST, VALID_TASK, VALID_TASK_ATTACHMENT], new Set());
+    expect(result.problems).toEqual([
+      { severity: "warning", code: "missing-blob", path: `blobs/${SHA}`, detail: "tatt1" },
+    ]);
+    expect(result.data?.taskAttachments).toHaveLength(1);
+  });
+
+  it("refuses a task-attachment record filed in the notes file", () => {
+    const result = parseImportArchive(
+      emptyInputWith(
+        baseFiles({ fileContents: { "data/notes.ndjson": ndjson([VALID_TASK_ATTACHMENT]) } }),
+      ),
+    );
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "invalid-record", path: "data/notes.ndjson", line: 1, detail: "type",
+    });
+    expect(result.data).toBeNull();
+  });
+});
+
 describe("parseImportArchive — recurrence (ADR-024)", () => {
   /** The `invalid-record` details a one-row file produced, in discovery order. */
   function detailsFor(path: string, row: Record<string, unknown>): (string | undefined)[] {
@@ -1365,8 +1478,8 @@ describe("parseImportArchive — older eras (fields added after the first releas
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.4.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.4.0");
+  it("is 1.5.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.5.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -1378,7 +1491,7 @@ describe("parseImportArchive — schema version", () => {
   });
 
   it("accepts the exact current version", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.4.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.5.0" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
@@ -1415,6 +1528,16 @@ describe("parseImportArchive — schema version", () => {
     expect(result.data).toMatchObject({ taskTags: [], taskTagLinks: [] });
   });
 
+  // And for the one migration 024's attachments have just superseded: a 1.4
+  // archive carries no `task-attachment` row at all, which is exactly what a
+  // profile with no files hung off its tasks looks like — the same reason a
+  // whole absent record type needs no era flag.
+  it("accepts an older minor — a 1.4 archive still parses here", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.4.0" })));
+    expect(result.problems).toEqual([]);
+    expect(result.data).toMatchObject({ taskAttachments: [] });
+  });
+
   it("accepts an older patch", () => {
     const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.0.7" })));
     expect(result.problems).toEqual([]);
@@ -1428,9 +1551,9 @@ describe("parseImportArchive — schema version", () => {
   });
 
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.5.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.6.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.5.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.6.0" },
     ]);
     expect(result.data).toBeNull();
   });

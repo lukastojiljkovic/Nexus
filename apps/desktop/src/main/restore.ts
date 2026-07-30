@@ -129,6 +129,14 @@ export interface RestoreDeps extends ProfileDataDeps {
   /** Discards this profile's in-memory focus timer. */
   cancelFocusSession(profileId: string): void;
   saveBlob(bytes: Uint8Array): Promise<{ sha256: string; created: boolean }>;
+  /**
+   * How many attachment rows — across EVERY table that names a blob, and every
+   * profile — still hold this hash. Injected rather than read off one store,
+   * because "which tables reference a blob" is one fact that must live in one
+   * place (`main/index.ts`'s `blobRefCount`): an undo that counted only the
+   * note table would delete a file a restored TASK attachment still points at.
+   */
+  blobRefCount(profileId: string, sha256: string): number;
   deleteBlobIfOrphaned(sha256: string, refCount: number): Promise<void>;
 }
 
@@ -357,10 +365,13 @@ export async function applyRestore(
   const undoDerived = deriveRestoredNotes(undoData.notes);
 
   // Every distinct blob the restored rows reference AND the archive actually
-  // carries (a missing one is counted below, never fetched). One at a time —
+  // carries (a missing one is counted below, never fetched). BOTH attachment
+  // tables, since both name the same `blobs/` namespace — a task's file left
+  // unwritten here would restore as a row pointing at nothing. One at a time —
   // never all resident together — mirroring `handleExport`'s own attachment loop.
+  const restoredAttachments = [...ready.data.noteAttachments, ...ready.data.taskAttachments];
   const shasToWrite = new Set<string>();
-  for (const attachment of ready.data.noteAttachments) {
+  for (const attachment of restoredAttachments) {
     if (ready.archive.blobNames.has(attachment.sha256)) shasToWrite.add(attachment.sha256);
   }
   const addedBlobs: string[] = [];
@@ -377,7 +388,7 @@ export async function applyRestore(
     now,
   );
 
-  const missingBlobs = ready.data.noteAttachments.filter(
+  const missingBlobs = restoredAttachments.filter(
     (attachment) => !ready.archive.blobNames.has(attachment.sha256),
   ).length;
 
@@ -418,11 +429,11 @@ export async function applyRestore(
  * (ADR-023 section 2), then — only AFTER that write, so the reference count
  * below is live rather than stale — removes exactly the blobs the restore
  * had added and that nothing references anymore. A blob's row-level reference
- * count (`NoteAttachmentStore.refCount`, deliberately profile-agnostic) is
- * what decides this, never simply "was it one of `addedBlobs`": a blob the
- * restore added that some OTHER profile's attachment also happens to
- * reference (content-addressed blobs are shared) must survive regardless of
- * who wrote it first.
+ * count across EVERY attachment table (`deps.blobRefCount`, deliberately
+ * profile-agnostic) is what decides this, never simply "was it one of
+ * `addedBlobs`": a blob the restore added that some OTHER profile's — or some
+ * other MODULE's — attachment also happens to reference (content-addressed
+ * blobs are shared) must survive regardless of who wrote it first.
  *
  * Throws when there is nothing to undo for this profile. Discards the focus
  * timer and idle compactions exactly as `applyRestore` does, and reloads the
@@ -451,7 +462,7 @@ export async function undoRestore(deps: RestoreDeps, profileId: string): Promise
 
   let blobsRemoved = 0;
   for (const sha256 of toUndo.addedBlobs) {
-    const refCount = deps.noteAttachmentStore(profileId).refCount(sha256);
+    const refCount = deps.blobRefCount(profileId, sha256);
     if (refCount === 0) blobsRemoved += 1;
     await deps.deleteBlobIfOrphaned(sha256, refCount);
   }

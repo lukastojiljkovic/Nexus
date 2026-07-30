@@ -26,15 +26,18 @@ export interface ImexExportDeps extends ProfileDataDeps {
 
 /**
  * Full-export handler (IMEX slice a1, PRD 14 IMEX-001 / ADR-009, extended to
- * NOTE by ADR-022): gathers one profile's tasks, calendar, study, notification
- * and NOTE data (notes, folders, tags, templates, attachments, version
- * history) through the stores main already owns, hands the plain arrays to
- * the pure `buildExportArchive` (`@nexus/core`), and streams the result at a
- * path the user picks via a native save dialog — either a plain `.nexus.zip`
- * or, when `passphrase` is given, an `.nexus` `NXA1` container sealed around
- * that same zip byte stream (see `writeZip`/`ArchiveFramer`). Every note ships
- * twice over — a lossless `.ydoc` snapshot and a readable Markdown mirror —
- * and every attachment blob is decrypted back to its original bytes.
+ * NOTE by ADR-022): gathers one profile's TASK data (tasks, lists, sections,
+ * tags, attachments), calendar, study, notification and NOTE data (notes,
+ * folders, tags, templates, attachments, version history) through the stores
+ * main already owns, hands the plain arrays to the pure `buildExportArchive`
+ * (`@nexus/core`), and streams the result at a path the user picks via a native
+ * save dialog — either a plain `.nexus.zip` or, when `passphrase` is given, an
+ * `.nexus` `NXA1` container sealed around that same zip byte stream (see
+ * `writeZip`/`ArchiveFramer`). Every note ships twice over — a lossless `.ydoc`
+ * snapshot and a readable Markdown mirror — and every attachment blob, note's
+ * and task's alike, is decrypted back to its original bytes exactly once: the
+ * `blobs/` entries `buildExportArchive` declares are the UNION of both tables,
+ * deduplicated by hash, so a file attached in two places travels in one.
  *
  * SEC-EL: the renderer never supplies a filesystem path — the dialog is the
  * only source of `filePath`, owned entirely by this main-process function.
