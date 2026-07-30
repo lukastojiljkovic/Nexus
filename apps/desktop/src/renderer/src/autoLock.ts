@@ -20,8 +20,12 @@ function isAutoLockMinutes(value: number): value is AutoLockMinutes {
 
 /** Reads the stored auto-lock preference, falling back to 15 minutes for anything unrecognized. */
 export function readStoredAutoLock(): AutoLockMinutes {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored === null) return DEFAULT_MINUTES;
+  // Blank text is not a value: `Number("")` and `Number("  ")` are 0, itself an
+  // allowed member meaning "never lock", so a corrupted or tampered key would
+  // switch a security control OFF instead of falling back. Only trimmed,
+  // non-empty text is parsed; an explicit "0" the user chose still reads as never.
+  const stored = localStorage.getItem(STORAGE_KEY)?.trim();
+  if (stored === undefined || stored === "") return DEFAULT_MINUTES;
   const parsed = Number(stored);
   return isAutoLockMinutes(parsed) ? parsed : DEFAULT_MINUTES;
 }

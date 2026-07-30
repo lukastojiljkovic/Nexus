@@ -40,10 +40,16 @@ export function formatDurationMinutes(totalMinutes: number): string {
   return `${hours} h ${rest} min`;
 }
 
-/** Whole-minute duration of a completed focus session (`endedAt` − `startedAt`), rounded. */
+/**
+ * Whole-minute duration of a completed focus session (`endedAt` − `startedAt`),
+ * rounded, with an unparseable endpoint reading as 0 like every other unusable
+ * input.
+ */
 export function focusSessionMinutes(session: { startedAt: string; endedAt: string }): number {
   const ms = new Date(session.endedAt).getTime() - new Date(session.startedAt).getTime();
-  return Math.max(0, Math.round(ms / MINUTE_MS));
+  // An unparseable endpoint makes the difference NaN, and NaN escapes the clamp
+  // (`Math.max(0, NaN)` is NaN), so finiteness is decided before it.
+  return Number.isFinite(ms) ? Math.max(0, Math.round(ms / MINUTE_MS)) : 0;
 }
 
 /**

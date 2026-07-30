@@ -7,7 +7,10 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", "out/**"]
+      // `gen/**` is `packages/tokens`'s generated TS source: its `dist/ts` build
+      // carries sourcemaps that point back at `gen/index.ts`, so leaving it out
+      // makes every cache hit restore maps whose sources are missing.
+      "outputs": ["dist/**", "out/**", "gen/**"]
     },
     "typecheck": {
       "dependsOn": ["^build"]

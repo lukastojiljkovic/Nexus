@@ -239,18 +239,22 @@ describe("readStoredAutoLock", () => {
     }
   });
 
-  // CURRENT BEHAVIOUR, pinned rather than endorsed: the value goes through
-  // `Number(stored)`, and `Number("")` / `Number(" ")` are 0 — which IS an
-  // allowed value, meaning "never lock". A blank stored entry therefore
-  // disables auto-lock instead of falling back to 15 minutes, unlike every
-  // other unusable value above. Unreachable through `persistAutoLock` (it only
-  // ever writes a member of the closed set), so this is pinned and reported,
-  // not fixed here.
-  it("reads a blank stored value as 0 — never lock — not as the default", () => {
+  // Blank text is the one unusable value that could disable a security control
+  // rather than fall back: `Number("")` / `Number("  ")` are 0, an allowed
+  // member meaning "never lock". A corrupted or tampered key must not be able
+  // to switch auto-lock off, so it falls back like everything else above.
+  it("falls back to 15 for a blank stored value instead of reading it as never", () => {
     stubStorage({ "nexus.autoLock": "" });
-    expect(readStoredAutoLock()).toBe(0);
+    expect(readStoredAutoLock()).toBe(15);
 
     stubStorage({ "nexus.autoLock": "  " });
+    expect(readStoredAutoLock()).toBe(15);
+  });
+
+  // The other side of that rule: "never" is a choice the user can persist, and
+  // an explicitly stored "0" must survive the blank-text guard untouched.
+  it("keeps an explicitly stored 0 as never", () => {
+    stubStorage({ "nexus.autoLock": "0" });
     expect(readStoredAutoLock()).toBe(0);
   });
 

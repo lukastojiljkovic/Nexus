@@ -100,15 +100,13 @@ describe("focusSessionMinutes", () => {
     expect(offset).toBe(utc);
   });
 
-  // CURRENT BEHAVIOUR, pinned rather than endorsed: `Math.max(0, NaN)` is NaN,
-  // so an unparseable endpoint yields NaN instead of the 0 every other bad
-  // input collapses to. Nothing upstream can produce one today (both fields
-  // come from the store as real ISO instants), which is why it is pinned here
-  // and reported rather than fixed inside a test-only lane.
-  it("returns NaN — not 0 — when an endpoint is unparseable", () => {
-    expect(
-      focusSessionMinutes({ startedAt: "not-a-date", endedAt: "2026-07-30T10:00:00.000Z" }),
-    ).toBeNaN();
+  // NaN escapes the clamp — `Math.max(0, NaN)` is NaN — so an unparseable
+  // endpoint has to be caught before it, or it would leak a NaN into a minute
+  // total instead of collapsing to the 0 every other bad input yields.
+  it("clamps an unparseable endpoint to 0 rather than yielding NaN", () => {
+    expect(focusSessionMinutes({ startedAt: "not-a-date", endedAt: "2026-07-30T10:00:00.000Z" })).toBe(0);
+    expect(focusSessionMinutes({ startedAt: "2026-07-30T10:00:00.000Z", endedAt: "not-a-date" })).toBe(0);
+    expect(focusSessionMinutes({ startedAt: "", endedAt: "" })).toBe(0);
   });
 });
 
