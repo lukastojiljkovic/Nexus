@@ -35,6 +35,7 @@ import {
   TASK_ORDER_GAP,
   TaskListStore,
   TaskStore,
+  TaskTagStore,
   openDatabase,
   uuidv7,
 } from "../index.js";
@@ -57,6 +58,7 @@ import type {
   Task,
   TaskList,
   TaskSection,
+  TaskTag,
   TrackedDocument,
 } from "../index.js";
 
@@ -111,6 +113,8 @@ function emptyProfileData(): ProfileData {
     tasks: [],
     taskLists: [],
     taskSections: [],
+    taskTags: [],
+    taskTagLinks: [],
     events: [],
     documents: [],
     renewals: [],
@@ -161,6 +165,7 @@ interface FixtureIds {
   childTask: Task;
   list: TaskList;
   section: TaskSection;
+  taskTag: TaskTag;
   event: Event;
   person: Person;
   document: TrackedDocument;
@@ -199,6 +204,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
 
   const taskStore = new TaskStore(handle.raw, profileId);
   const taskListStore = new TaskListStore(handle.raw, profileId);
+  const taskTagStore = new TaskTagStore(handle.raw, profileId);
   const eventStore = new EventStore(handle.raw, profileId);
   const peopleStore = new PeopleStore(handle.raw, profileId);
   const documentStore = new DocumentStore(handle.raw, profileId);
@@ -236,6 +242,11 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     sectionId: section.id,
   });
   const childTask = taskStore.create({ title: `${name} child task`, parentId: parentTask.id });
+
+  // A real tag on a real task (migration 023): the link is what a restore has to
+  // reproduce, and a bare tag with nothing attached would prove only half of it.
+  const taskTag = taskTagStore.createTag(`${name} task tag`, t0);
+  taskTagStore.attachTag(parentTask.id, taskTag.id);
 
   const event = eventStore.create({
     title: `${name} event`,
@@ -313,6 +324,8 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     tasks: taskStore.listActive(),
     taskLists,
     taskSections: taskLists.flatMap((row) => taskListStore.listSections(row.id)),
+    taskTags: taskTagStore.listTags(),
+    taskTagLinks: taskTagStore.listTagLinks(),
     events: eventStore.listActive(),
     documents: documentStore.listActive(),
     renewals: documentStore.listRenewals(document.id),
@@ -356,6 +369,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
       childTask,
       list,
       section,
+      taskTag,
       event,
       person,
       document,
@@ -449,6 +463,9 @@ function assertModulesMatch(
   expect(listsRead.listActive().flatMap((row) => listsRead.listSections(row.id))).toEqual(
     fixture.data.taskSections,
   );
+  const tagsRead = new TaskTagStore(handle.raw, readProfileId);
+  expect(tagsRead.listTags()).toEqual(remap(fixture.data.taskTags));
+  expect(tagsRead.listTagLinks()).toEqual(fixture.data.taskTagLinks);
   expect(new EventStore(handle.raw, readProfileId).listActive()).toEqual(remap(fixture.data.events));
   expect(new PeopleStore(handle.raw, readProfileId).listActive()).toEqual(remap(fixture.data.people));
   // Stripped on BOTH sides: `seedFixture` gathers documents through
@@ -599,12 +616,14 @@ describe("RestoreStore", () => {
     expect(new NoteStore(db.raw, profileB).list()).toEqual([]);
     expect(new NoteOrgStore(db.raw, profileB).listFolders()).toEqual([]);
     expect(new NoteOrgStore(db.raw, profileB).listTags()).toEqual([]);
+    expect(new TaskTagStore(db.raw, profileB).listTags()).toEqual([]);
 
     // Including the child tables no store lists on its own — the ones a wipe
     // that leaned on ON DELETE CASCADE would be most likely to miss.
     for (const table of [
       "document_renewals",
       "task_sections",
+      "task_tag_links",
       "note_versions",
       "note_attachments",
       "note_tag_links",
@@ -1031,6 +1050,77 @@ describe("RestoreStore", () => {
     expect(lists.listActive()).toEqual(withProfile(taskLists, profileB));
     expect(lists.listSections(workId)).toEqual(taskSections);
     expect(new TaskStore(db.raw, profileB).listActive()).toEqual([{ ...task, profileId: profileB }]);
+  });
+
+  it("restores a task's tags and their links verbatim, ids and all (migration 023)", () => {
+    const profileB = createProfile(db, "tags");
+    const timestamps = { createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" };
+    const listId = uuidv7();
+    const taskLists: TaskList[] = [
+      {
+        id: listId, profileId: "ignored", parentId: null, name: "Inbox", isInbox: true,
+        defaultView: "list", position: 1024, ...timestamps,
+      },
+    ];
+    const taskTags: TaskTag[] = [
+      { id: uuidv7(), profileId: "ignored", name: "posao", createdAt: timestamps.createdAt },
+      { id: uuidv7(), profileId: "ignored", name: "kasnije", createdAt: timestamps.createdAt },
+    ];
+    const task = (title: string): ExportTask => ({
+      id: uuidv7(), profileId: "ignored", parentId: null, title, description: null,
+      status: "todo", priority: "none", done: false, dueDate: null, startDate: null,
+      completedAt: null, recurrence: null, reminderOffsets: [],
+      listId, sectionId: null, position: 1024, ...timestamps,
+    });
+    const first = task("Prvi");
+    const second = task("Drugi");
+    // One task under two tags and one tag over two tasks — the two shapes a
+    // many-to-many has to survive, plus a tag attached to nothing at all.
+    const taskTagLinks = [
+      { taskId: first.id, tagId: taskTags[0]?.id ?? "" },
+      { taskId: first.id, tagId: taskTags[1]?.id ?? "" },
+      { taskId: second.id, tagId: taskTags[0]?.id ?? "" },
+    ];
+
+    new RestoreStore(db.raw, profileB).replaceProfileData(
+      {
+        profileName: "Tags",
+        settings: emptySettings(),
+        data: { ...emptyProfileData(), taskLists, tasks: [first, second], taskTags, taskTagLinks },
+        derived: new Map(),
+      },
+      NOW,
+    );
+
+    const tags = new TaskTagStore(db.raw, profileB);
+    expect(tags.listTags()).toEqual(
+      withProfile(taskTags, profileB).sort((a, b) => a.name.localeCompare(b.name)),
+    );
+    expect(tags.listTagLinks()).toEqual(
+      [...taskTagLinks].sort((a, b) =>
+        a.taskId === b.taskId ? a.tagId.localeCompare(b.tagId) : a.taskId.localeCompare(b.taskId),
+      ),
+    );
+  });
+
+  it("wipes the target profile's own tags and links before writing the archive's", () => {
+    const profileB = createProfile(db, "tag-wipe");
+    const oldTag = new TaskTagStore(db.raw, profileB).createTag("staro", NOW);
+    const oldTask = new TaskStore(db.raw, profileB).create({ title: "Stari zadatak" });
+    new TaskTagStore(db.raw, profileB).attachTag(oldTask.id, oldTag.id);
+
+    new RestoreStore(db.raw, profileB).replaceProfileData(
+      { profileName: "Wiped", settings: emptySettings(), data: freshArchiveData(), derived: new Map() },
+      NOW,
+    );
+
+    const tags = new TaskTagStore(db.raw, profileB);
+    expect(tags.listTags()).toEqual([]);
+    // The link went with it — a wipe that leaned on the task's CASCADE alone
+    // would have left it behind, since the wipe deletes tasks by profile too.
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM task_tag_links").get() as { n: number }).n,
+    ).toBe(0);
   });
 
   it("maps an older archive's list-less tasks into a freshly minted Inbox, gap-spaced in the archive's own order", () => {

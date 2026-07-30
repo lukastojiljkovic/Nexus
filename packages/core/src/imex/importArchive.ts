@@ -28,6 +28,8 @@ import type {
   ExportTask,
   ExportTaskList,
   ExportTaskSection,
+  ExportTaskTag,
+  ExportTaskTagLink,
   ProfileData,
 } from "./exportArchive.js";
 
@@ -111,23 +113,31 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.3.0` added the
- * `task-list`/`task-section` record types and a task's placement into them
- * (TASK-004 / ADR-029), after `1.2.0` added a task's `reminderOffsets`
- * (ADR-028) and `1.1.0` the `person` record type (CAL-007 / ADR-026): additive
- * changes, hence MINOR bumps, which is exactly the compatibility mechanism
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.4.0` added the
+ * `task-tag`/`task-tag-link` record types (migration 023), after `1.3.0` added
+ * the `task-list`/`task-section` types and a task's placement into them
+ * (TASK-004 / ADR-029), `1.2.0` a task's `reminderOffsets` (ADR-028) and `1.1.0`
+ * the `person` record type (CAL-007 / ADR-026): additive changes, hence MINOR
+ * bumps, which is exactly the compatibility mechanism
  * `isSupportedSchemaVersion` implements — an older minor within major 1 still
  * passes the gate here, while an older build refuses a newer archive rather
  * than silently dropping what it cannot see (every person, every task's ladder,
- * or every list the user filed their work into). That, in turn, is why an
- * unrecognised record type below is an ERROR: the version gate makes "ignore
- * what you do not know" unreachable.
+ * every list the user filed their work into, or every label they sorted it by).
+ * That, in turn, is why an unrecognised record type below is an ERROR: the
+ * version gate makes "ignore what you do not know" unreachable.
+ *
+ * A new RECORD TYPE needs no `ArchiveEra` flag, unlike a new field on an
+ * existing type: an older archive simply carries none of it, which is
+ * indistinguishable from a profile that had no tags — while a NEWER archive
+ * never reaches a parser at all, because the gate above refuses it. Era flags
+ * exist only for the "this row is missing a field it now must have" question,
+ * which a whole absent type never asks.
  *
  * Major is still 1 throughout, so there is nothing yet to migrate an older
  * major forward from — a migration framework for a major that has never
  * shipped would be speculative machinery with nothing to exercise it.
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.3.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.4.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -488,6 +498,8 @@ type RecordType =
   | "task"
   | "task-list"
   | "task-section"
+  | "task-tag"
+  | "task-tag-link"
   | "event"
   | "document"
   | "renewal"
@@ -513,6 +525,8 @@ const ALL_RECORD_TYPES: readonly RecordType[] = [
   "task",
   "task-list",
   "task-section",
+  "task-tag",
+  "task-tag-link",
   "event",
   "document",
   "renewal",
@@ -539,7 +553,7 @@ type DataFilePath = (typeof DATA_FILES)[number];
 
 /** Which record types the writer puts in each of the five NDJSON files — a type in any OTHER file is `invalid-record` (detail `"type"`), not silently accepted (ADR-022). */
 const FILE_RECORD_TYPES: Record<DataFilePath, readonly RecordType[]> = {
-  "data/tasks.ndjson": ["task-list", "task-section", "task"],
+  "data/tasks.ndjson": ["task-list", "task-section", "task-tag", "task", "task-tag-link"],
   "data/calendar.ndjson": ["event", "document", "renewal", "person"],
   "data/study.ndjson": ["subject", "exam", "deck", "card", "review", "plan", "block", "focus-session"],
   "data/notifications.ndjson": ["notification"],
@@ -657,6 +671,21 @@ function parseTaskSection(raw: Record<string, unknown>): ExportTaskSection {
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
   return { id, listId, name, position, createdAt, updatedAt };
+}
+
+/** `parseNoteTag`'s twin, and deliberately identical: migration 023's `task_tags` is migration 011's `note_tags` with tasks on the other end of the join. */
+function parseTaskTag(raw: Record<string, unknown>): ExportTaskTag {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const name = nonEmptyStr(raw.name, "name");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  return { id, profileId, name, createdAt };
+}
+
+function parseTaskTagLink(raw: Record<string, unknown>): ExportTaskTagLink {
+  const taskId = nonEmptyStr(raw.taskId, "taskId");
+  const tagId = nonEmptyStr(raw.tagId, "tagId");
+  return { taskId, tagId };
 }
 
 function parseEvent(raw: Record<string, unknown>, era: ArchiveEra): ExportEvent {
@@ -1039,6 +1068,8 @@ interface Collections {
   tasks: Bucket<ExportTask>;
   taskLists: Bucket<ExportTaskList>;
   taskSections: Bucket<ExportTaskSection>;
+  taskTags: Bucket<ExportTaskTag>;
+  taskTagLinks: Bucket<ExportTaskTagLink>;
   events: Bucket<ExportEvent>;
   documents: Bucket<ExportDocument>;
   renewals: Bucket<ExportRenewal>;
@@ -1064,6 +1095,7 @@ interface Collections {
 function newCollections(): Collections {
   return {
     tasks: newBucket(), taskLists: newBucket(), taskSections: newBucket(),
+    taskTags: newBucket(), taskTagLinks: newBucket(),
     events: newBucket(), documents: newBucket(), renewals: newBucket(),
     people: newBucket(), subjects: newBucket(), exams: newBucket(), decks: newBucket(), cards: newBucket(),
     reviewLog: newBucket(), plans: newBucket(), blocks: newBucket(), focusSessions: newBucket(),
@@ -1097,6 +1129,18 @@ function dispatchRecord(
     case "task-section": {
       const row = parseTaskSection(raw);
       pushRow(collections.taskSections, row.id, row, path, line, problems);
+      return;
+    }
+    case "task-tag": {
+      const row = parseTaskTag(raw);
+      pushRow(collections.taskTags, row.id, row, path, line, problems);
+      return;
+    }
+    // A join row's identity is the PAIR (migration 023's PRIMARY KEY), exactly
+    // as `note-tag-link`'s is — so that composite is what `duplicate-id` keys on.
+    case "task-tag-link": {
+      const row = parseTaskTagLink(raw);
+      pushRow(collections.taskTagLinks, `taskId=${row.taskId},tagId=${row.tagId}`, row, path, line, problems);
       return;
     }
     case "event": {
@@ -1608,6 +1652,7 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
   // --- Reference integrity ----------------------------------------------------
   const taskIds = new Set(rowsOf(collections.tasks).map((row) => row.id));
   const taskListIds = new Set(rowsOf(collections.taskLists).map((row) => row.id));
+  const taskTagIds = new Set(rowsOf(collections.taskTags).map((row) => row.id));
   /** Which list each section belongs to — a task's `sectionId` must resolve to a section of the task's OWN list, which a plain id set cannot say. */
   const listOfSection = new Map(rowsOf(collections.taskSections).map((row) => [row.id, row.listId]));
   const subjectIds = new Set(rowsOf(collections.subjects).map((row) => row.id));
@@ -1624,6 +1669,8 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
   checkReference(collections.tasks, (row) => row.listId, "listId", taskListIds, problems);
   checkReference(collections.taskLists, (row) => row.parentId, "parentId", taskListIds, problems);
   checkReference(collections.taskSections, (row) => row.listId, "listId", taskListIds, problems);
+  checkReference(collections.taskTagLinks, (row) => row.taskId, "taskId", taskIds, problems);
+  checkReference(collections.taskTagLinks, (row) => row.tagId, "tagId", taskTagIds, problems);
   // The one reference `checkReference` cannot express: the section must exist
   // AND belong to the task's own list. A section of some other list would pass
   // every foreign key the schema has and still put the task under a heading
@@ -1681,6 +1728,8 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         tasks: rowsOf(collections.tasks),
         taskLists: rowsOf(collections.taskLists),
         taskSections: rowsOf(collections.taskSections),
+        taskTags: rowsOf(collections.taskTags),
+        taskTagLinks: rowsOf(collections.taskTagLinks),
         events: rowsOf(collections.events),
         documents: rowsOf(collections.documents),
         renewals: rowsOf(collections.renewals),

@@ -38,6 +38,7 @@ import {
   SubjectStore,
   TaskListStore,
   TaskStore,
+  TaskTagStore,
   openDatabase,
   uuidv7,
 } from "@nexus/db";
@@ -57,6 +58,7 @@ import type {
   Task,
   TaskList,
   TaskSection,
+  TaskTag,
 } from "@nexus/db";
 
 import * as archiveReaderModule from "./archiveReader.js";
@@ -131,6 +133,7 @@ function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
   return {
     taskStore: (profileId) => new TaskStore(handle.raw, profileId),
     taskListStore: (profileId) => new TaskListStore(handle.raw, profileId),
+    taskTagStore: (profileId) => new TaskTagStore(handle.raw, profileId),
     eventStore: (profileId) => new EventStore(handle.raw, profileId),
     peopleStore: (profileId) => new PeopleStore(handle.raw, profileId),
     documentStore: (profileId) => new DocumentStore(handle.raw, profileId),
@@ -244,6 +247,7 @@ interface SeededFixture {
     task: Task;
     list: TaskList;
     section: TaskSection;
+    taskTag: TaskTag;
     event: Event;
     person: Person;
     subject: Subject;
@@ -274,6 +278,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
 
   const taskStore = new TaskStore(handle.raw, profileId);
   const taskListStore = new TaskListStore(handle.raw, profileId);
+  const taskTagStore = new TaskTagStore(handle.raw, profileId);
   const eventStore = new EventStore(handle.raw, profileId);
   const peopleStore = new PeopleStore(handle.raw, profileId);
   const subjectStore = new SubjectStore(handle.raw, profileId);
@@ -300,6 +305,11 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     listId: list.id,
     sectionId: section.id,
   });
+  // A real tag on that task (migration 023), so the zip round trip carries a
+  // task-tag row AND the join that needs both of its ends.
+  const taskTag = taskTagStore.createTag(`${label} task tag`, t0);
+  taskTagStore.attachTag(task.id, taskTag.id);
+
   const event = eventStore.create({ title: `${label} event`, startAt: "2026-03-01T10:00:00.000Z" });
   // A leap-day birthday (CAL-007): the pair migration 020's CHECKs cannot vet,
   // so it is the person shape worth pushing through a whole zip round trip.
@@ -350,6 +360,8 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     tasks: taskStore.listActive(),
     taskLists,
     taskSections: taskLists.flatMap((row) => taskListStore.listSections(row.id)),
+    taskTags: taskTagStore.listTags(),
+    taskTagLinks: taskTagStore.listTagLinks(),
     events: eventStore.listActive(),
     documents: [],
     renewals: [],
@@ -395,7 +407,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     derived,
     settings,
     blobBytes,
-    ids: { task, list, section, event, person, subject, exam, deck, card, notification, note, linkedNote, folder, tag, template, attachmentSha },
+    ids: { task, list, section, taskTag, event, person, subject, exam, deck, card, notification, note, linkedNote, folder, tag, template, attachmentSha },
   };
 }
 
@@ -538,6 +550,15 @@ describe("restore", () => {
       expect(listsB.listSections(fixtureA.ids.list.id)).toEqual(
         fixtureA.data.taskSections.filter((row) => row.listId === fixtureA.ids.list.id),
       );
+      // The tag and the link that joins it to that task travelled too — the one
+      // module whose rows are worthless without their counterpart.
+      const tagsB = new TaskTagStore(dbB.raw, profileB);
+      expect(tagsB.listTags()).toEqual(
+        fixtureA.data.taskTags.map((row) => ({ ...row, profileId: profileB })),
+      );
+      expect(tagsB.listTagLinks()).toEqual([
+        { taskId: fixtureA.ids.task.id, tagId: fixtureA.ids.taskTag.id },
+      ]);
 
       // The note's real Yjs state and its search-visible plaintext came out right.
       const notesB = new NoteStore(dbB.raw, profileB);

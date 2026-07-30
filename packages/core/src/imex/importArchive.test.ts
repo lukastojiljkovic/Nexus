@@ -54,6 +54,8 @@ function emptyExportInput(): ExportArchiveInput {
       tasks: [],
       taskLists: [],
       taskSections: [],
+      taskTags: [],
+      taskTagLinks: [],
       events: [],
       documents: [],
       renewals: [],
@@ -125,6 +127,13 @@ function richProfileData(): ProfileData {
         createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
       },
     ],
+    // Two tags, one of them attached: an unattached tag is as real a row as an
+    // attached one, and the round trip has to carry both.
+    taskTags: [
+      { id: "ttag-work", profileId: "profile1", name: "posao", createdAt: "2026-07-01T00:00:00.000Z" },
+      { id: "ttag-idle", profileId: "profile1", name: "kasnije", createdAt: "2026-07-01T00:00:00.000Z" },
+    ],
+    taskTagLinks: [{ taskId: "task-parent", tagId: "ttag-work" }],
     events: [
       {
         id: "event-1", profileId: "profile1", title: "Sastanak", description: null,
@@ -453,10 +462,10 @@ describe("parseImportArchive — one test per problem code", () => {
   });
 
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.4.0" });
+    const files = baseFiles({ schemaVersion: "1.5.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.4.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.5.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -815,6 +824,154 @@ describe("parseImportArchive — task lists and sections (TASK-004 / ADR-029)", 
     ]);
     expect(result.problems).toContainEqual({
       severity: "error", code: "invalid-record", path: "data/tasks.ndjson", line: 1, detail: "sectionId",
+    });
+    expect(result.data).toBeNull();
+  });
+});
+
+describe("parseImportArchive — task tags (migration 023)", () => {
+  const VALID_TASK_TAG = {
+    type: "task-tag", id: "ttag1", profileId: "profile1", name: "posao",
+    createdAt: "2026-07-01T00:00:00.000Z",
+  };
+
+  const VALID_TASK_TAG_LINK = { type: "task-tag-link", taskId: "t1", tagId: "ttag1" };
+
+  /** Parses a `data/tasks.ndjson` built from `rows` verbatim — the `task-tag` rows here supply their own containers. */
+  function parseTasksFile(rows: readonly Record<string, unknown>[]) {
+    return parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/tasks.ndjson": ndjson(rows) } })),
+    );
+  }
+
+  it("round-trips a tag and the task it is attached to", () => {
+    const result = parseTasksFile([VALID_TASK_LIST, VALID_TASK_TAG, VALID_TASK, VALID_TASK_TAG_LINK]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.taskTags).toEqual([
+      { id: "ttag1", profileId: "profile1", name: "posao", createdAt: "2026-07-01T00:00:00.000Z" },
+    ]);
+    expect(result.data?.taskTagLinks).toEqual([{ taskId: "t1", tagId: "ttag1" }]);
+  });
+
+  it("keeps a tag nothing is attached to — an unused label is data, not a dangling row", () => {
+    const result = parseTasksFile([VALID_TASK_TAG]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.taskTags).toHaveLength(1);
+    expect(result.data?.taskTagLinks).toEqual([]);
+  });
+
+  const BAD_TAGS: { name: string; row: Record<string, unknown>; detail: string }[] = [
+    { name: "an empty name", row: { name: "" }, detail: "name" },
+    { name: "no name at all", row: { name: undefined }, detail: "name" },
+    { name: "no profile", row: { profileId: undefined }, detail: "profileId" },
+    { name: "a malformed createdAt", row: { createdAt: "juče" }, detail: "createdAt" },
+  ];
+
+  for (const { name, row, detail } of BAD_TAGS) {
+    it(`refuses a task tag with ${name}`, () => {
+      const result = parseTasksFile([{ ...VALID_TASK_TAG, ...row }]);
+      expect(result.problems).toContainEqual({
+        severity: "error", code: "invalid-record", path: "data/tasks.ndjson", line: 1, detail,
+      });
+      expect(result.data).toBeNull();
+    });
+  }
+
+  const BAD_LINKS: { name: string; row: Record<string, unknown>; detail: string }[] = [
+    { name: "no task", row: { taskId: undefined }, detail: "taskId" },
+    { name: "an empty tag id", row: { tagId: "" }, detail: "tagId" },
+  ];
+
+  for (const { name, row, detail } of BAD_LINKS) {
+    it(`refuses a task tag link with ${name}`, () => {
+      const result = parseTasksFile([
+        VALID_TASK_LIST, VALID_TASK_TAG, VALID_TASK, { ...VALID_TASK_TAG_LINK, ...row },
+      ]);
+      expect(result.problems).toContainEqual({
+        severity: "error", code: "invalid-record", path: "data/tasks.ndjson", line: 4, detail,
+      });
+      expect(result.data).toBeNull();
+    });
+  }
+
+  it("refuses two tags sharing an id", () => {
+    const result = parseTasksFile([VALID_TASK_TAG, { ...VALID_TASK_TAG, name: "drugo" }]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "duplicate-id", path: "data/tasks.ndjson", line: 2, detail: "ttag1",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  // A link's identity is its PAIR (migration 023's PRIMARY KEY), so that is
+  // what the duplicate rule keys on — the `note-tag-link` arrangement.
+  it("refuses the same (task, tag) pair twice, keyed by the pair", () => {
+    const result = parseTasksFile([
+      VALID_TASK_LIST, VALID_TASK_TAG, VALID_TASK, VALID_TASK_TAG_LINK, VALID_TASK_TAG_LINK,
+    ]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "duplicate-id", path: "data/tasks.ndjson", line: 5,
+      detail: "taskId=t1,tagId=ttag1",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  it("accepts one task under two tags and one tag over two tasks", () => {
+    const secondTag = { ...VALID_TASK_TAG, id: "ttag2", name: "kasnije" };
+    const secondTask = { ...VALID_TASK, id: "t2" };
+    const result = parseTasksFile([
+      VALID_TASK_LIST, VALID_TASK_TAG, secondTag, VALID_TASK, secondTask,
+      VALID_TASK_TAG_LINK,
+      { ...VALID_TASK_TAG_LINK, tagId: "ttag2" },
+      { ...VALID_TASK_TAG_LINK, taskId: "t2" },
+    ]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.taskTagLinks).toEqual([
+      { taskId: "t1", tagId: "ttag1" },
+      { taskId: "t1", tagId: "ttag2" },
+      { taskId: "t2", tagId: "ttag1" },
+    ]);
+  });
+
+  it("refuses a link naming a task the archive does not carry", () => {
+    const result = parseTasksFile([VALID_TASK_TAG, { ...VALID_TASK_TAG_LINK, taskId: "ghost" }]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "unknown-reference", path: "data/tasks.ndjson", line: 2,
+      detail: "taskId=ghost",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  it("refuses a link naming a tag the archive does not carry", () => {
+    const result = parseTasksFile([
+      VALID_TASK_LIST, VALID_TASK, { ...VALID_TASK_TAG_LINK, tagId: "ghost" },
+    ]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "unknown-reference", path: "data/tasks.ndjson", line: 3,
+      detail: "tagId=ghost",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  // A task tag is not a note tag: the two live in different files, and a row in
+  // the wrong one is a damaged archive rather than something to accept quietly.
+  it("refuses a task-tag record filed in the notes file", () => {
+    const result = parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/notes.ndjson": ndjson([VALID_TASK_TAG]) } })),
+    );
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "invalid-record", path: "data/notes.ndjson", line: 1, detail: "type",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  it("refuses a note-tag record filed in the tasks file", () => {
+    const noteTag = {
+      type: "note-tag", id: "ntag1", profileId: "profile1", name: "posao",
+      createdAt: "2026-07-01T00:00:00.000Z",
+    };
+    const result = parseTasksFile([noteTag]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "invalid-record", path: "data/tasks.ndjson", line: 1, detail: "type",
     });
     expect(result.data).toBeNull();
   });
@@ -1208,8 +1365,8 @@ describe("parseImportArchive — older eras (fields added after the first releas
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.3.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.3.0");
+  it("is 1.4.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.4.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -1221,7 +1378,7 @@ describe("parseImportArchive — schema version", () => {
   });
 
   it("accepts the exact current version", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.3.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.4.0" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
@@ -1242,11 +1399,20 @@ describe("parseImportArchive — schema version", () => {
     expect(result.data).not.toBeNull();
   });
 
-  // And for the one ADR-029 has just superseded.
+  // And for the one ADR-029 superseded.
   it("accepts an older minor — a 1.2 archive still parses here", () => {
     const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.2.0" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
+  });
+
+  // And for the one migration 023's tags have just superseded: a 1.3 archive
+  // carries no `task-tag` row at all, which is exactly what an untagged profile
+  // looks like — hence no era flag for a whole absent record type.
+  it("accepts an older minor — a 1.3 archive still parses here", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.3.0" })));
+    expect(result.problems).toEqual([]);
+    expect(result.data).toMatchObject({ taskTags: [], taskTagLinks: [] });
   });
 
   it("accepts an older patch", () => {
@@ -1256,15 +1422,15 @@ describe("parseImportArchive — schema version", () => {
   });
 
   it("accepts a newer patch", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.3.7" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.4.7" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
 
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.4.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.5.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.4.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.5.0" },
     ]);
     expect(result.data).toBeNull();
   });

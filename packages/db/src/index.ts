@@ -48,6 +48,8 @@ export {
   TaskListValidationError,
   TaskNotFoundError,
   TaskSectionNotFoundError,
+  TaskTagNotFoundError,
+  TaskTagValidationError,
   TaskValidationError,
 } from "./errors.js";
 
@@ -86,6 +88,9 @@ export type {
   TaskListView,
   TaskSection,
 } from "./tasks/taskListStore.js";
+
+export { TaskTagStore } from "./tasks/taskTagStore.js";
+export type { TaskTag, TaskTagLink } from "./tasks/taskTagStore.js";
 
 export {
   EventStore,

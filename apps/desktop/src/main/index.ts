@@ -60,6 +60,7 @@ import {
   SubjectStore,
   TaskListStore,
   TaskStore,
+  TaskTagStore,
   TASK_LIST_VIEWS,
   TASK_PRIORITIES,
   TASK_STATUSES,
@@ -1401,6 +1402,10 @@ function taskListStore(profileId: string): TaskListStore {
   return new TaskListStore(requireDb().raw, profileId);
 }
 
+function taskTagStore(profileId: string): TaskTagStore {
+  return new TaskTagStore(requireDb().raw, profileId);
+}
+
 function eventStore(profileId: string): EventStore {
   return new EventStore(requireDb().raw, profileId);
 }
@@ -1782,6 +1787,7 @@ function restoreDeps(): RestoreDeps {
   return {
     taskStore,
     taskListStore,
+    taskTagStore,
     eventStore,
     peopleStore,
     documentStore,
@@ -3100,6 +3106,7 @@ function registerIpc(): void {
       {
         taskStore,
         taskListStore,
+        taskTagStore,
         eventStore,
         peopleStore,
         documentStore,

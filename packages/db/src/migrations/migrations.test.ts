@@ -16,8 +16,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 22 (task lists), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(22);
+  it("is at version 23 (task tags), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(23);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -2389,6 +2389,146 @@ describe("migration 022 — task lists", () => {
   it("creates no Inbox at all for a database with no profiles yet", () => {
     const db = openDatabase({ path: join(dir, "no-profiles.db") });
     expect((db.raw.prepare("SELECT count(*) AS n FROM task_lists").get() as { n: number }).n).toBe(0);
+    db.close();
+  });
+});
+
+describe("migration 023 — task tags", () => {
+  const now = () => new Date().toISOString();
+
+  /** A task seeded straight into the table — this migration adds nothing to `tasks`, so the Inbox `TaskStore` needs is beside the point here. */
+  const insertTask = (db: NexusDatabase, id: string, profileId: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO tasks (id, profile_id, title, status, created_at, updated_at)
+         VALUES (?, ?, ?, 'todo', ?, ?)`,
+      )
+      .run(id, profileId, `Zadatak ${id}`, now(), now());
+
+  const insertTag = (db: NexusDatabase, id: string, profileId: string, name: string) =>
+    db.raw
+      .prepare(`INSERT INTO task_tags (id, profile_id, name, created_at) VALUES (?, ?, ?, ?)`)
+      .run(id, profileId, name, now());
+
+  const insertLink = (db: NexusDatabase, taskId: string, tagId: string) =>
+    db.raw
+      .prepare(`INSERT INTO task_tag_links (task_id, tag_id) VALUES (?, ?)`)
+      .run(taskId, tagId);
+
+  const countOf = (db: NexusDatabase, table: string): number =>
+    (db.raw.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n;
+
+  it("creates both tag tables and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    const names = tableNames(db);
+    expect(names).toContain("task_tags");
+    expect(names).toContain("task_tag_links");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("creates the task tag indexes", () => {
+    const db = openDatabase({ path: join(dir, "index.db") });
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("task_tags_profile_name");
+    expect(indexes).toContain("task_tag_links_tag");
+    db.close();
+  });
+
+  it("enforces UNIQUE(profile_id, name) on task_tags — migration 011's choice for note_tags", () => {
+    const db = openDatabase({ path: join(dir, "unique-tag.db") });
+    insertProfile(db, "p1");
+    insertProfile(db, "p2");
+    insertTag(db, "tt1", "p1", "važno");
+    // the same name in the same profile collides.
+    expect(() => insertTag(db, "tt2", "p1", "važno")).toThrow();
+    // the same name in a different profile is fine.
+    expect(() => insertTag(db, "tt3", "p2", "važno")).not.toThrow();
+    db.close();
+  });
+
+  it("enforces PRIMARY KEY (task_id, tag_id) on task_tag_links", () => {
+    const db = openDatabase({ path: join(dir, "unique-link.db") });
+    insertProfile(db, "p1");
+    insertTask(db, "t1", "p1");
+    insertTag(db, "tt1", "p1", "a");
+    insertLink(db, "t1", "tt1");
+    // the same (task, tag) pair collides.
+    expect(() => insertLink(db, "t1", "tt1")).toThrow();
+    db.close();
+  });
+
+  it("refuses a link pointing at no task or no tag", () => {
+    const db = openDatabase({ path: join(dir, "fk-link.db") });
+    insertProfile(db, "p1");
+    insertTask(db, "t1", "p1");
+    insertTag(db, "tt1", "p1", "a");
+    expect(() => insertLink(db, "ghost", "tt1")).toThrow();
+    expect(() => insertLink(db, "t1", "ghost")).toThrow();
+    db.close();
+  });
+
+  it("cascades tags and links when the owning profile is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade-profile.db") });
+    insertProfile(db, "p1");
+    insertTask(db, "t1", "p1");
+    insertTag(db, "tt1", "p1", "a");
+    insertLink(db, "t1", "tt1");
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    expect(countOf(db, "task_tags")).toBe(0);
+    expect(countOf(db, "task_tag_links")).toBe(0);
+    db.close();
+  });
+
+  it("cascades tag links when the owning task is removed, leaving the tag itself", () => {
+    const db = openDatabase({ path: join(dir, "cascade-task-links.db") });
+    insertProfile(db, "p1");
+    insertTask(db, "t1", "p1");
+    insertTag(db, "tt1", "p1", "a");
+    insertLink(db, "t1", "tt1");
+
+    db.raw.prepare("DELETE FROM tasks WHERE id = ?").run("t1");
+    expect(countOf(db, "task_tag_links")).toBe(0);
+    // the tag itself survives — only the link is pruned.
+    expect(countOf(db, "task_tags")).toBe(1);
+    db.close();
+  });
+
+  it("cascades tag links when the owning tag is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade-tag-links.db") });
+    insertProfile(db, "p1");
+    insertTask(db, "t1", "p1");
+    insertTag(db, "tt1", "p1", "a");
+    insertLink(db, "t1", "tt1");
+
+    db.raw.prepare("DELETE FROM task_tags WHERE id = ?").run("tt1");
+    expect(countOf(db, "task_tag_links")).toBe(0);
+    db.close();
+  });
+
+  it("leaves a soft-deleted task's links standing — only a HARD delete prunes them", () => {
+    const db = openDatabase({ path: join(dir, "soft-delete-links.db") });
+    insertProfile(db, "p1");
+    insertTask(db, "t1", "p1");
+    insertTag(db, "tt1", "p1", "a");
+    insertLink(db, "t1", "tt1");
+
+    db.raw.prepare("UPDATE tasks SET deleted_at = ? WHERE id = ?").run(now(), "t1");
+    expect(countOf(db, "task_tag_links")).toBe(1);
+    db.close();
+  });
+
+  it("adds no column to tasks — tagging is entirely the join's business", () => {
+    const db = openDatabase({ path: join(dir, "tasks-untouched.db") });
+    const columns = (
+      db.raw.prepare("PRAGMA table_info(tasks)").all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(columns).not.toContain("tag_id");
     db.close();
   });
 });

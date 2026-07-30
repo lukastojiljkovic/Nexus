@@ -30,11 +30,11 @@ export interface RestoreProfileInput {
  * CASCADE` to reach a row (a future migration's table would silently survive
  * a restore if it relied on cascade alone — see `restoreStore.test.ts`'s
  * guard test, which reads `sqlite_master` and fails until a new table is
- * either added here or explicitly allow-listed as exempt). Seven tables carry no
+ * either added here or explicitly allow-listed as exempt). Nine tables carry no
  * `profile_id` of their own and are scoped through their parent instead
  * (`document_renewals` through `tracked_documents`; `task_sections` through
- * `task_lists`; the five `note_*` child tables through `notes`) — see
- * `wipeSqlFor` below.
+ * `task_lists`; `task_tag_links` through `tasks`; the six `note_*` child tables
+ * through `notes`) — see `wipeSqlFor` below.
  */
 export const RESTORE_WIPE_TABLES = [
   "document_renewals",
@@ -50,11 +50,13 @@ export const RESTORE_WIPE_TABLES = [
   "events",
   "people",
   "notifications",
-  // Tasks first, then the sections and lists they point at — children before
-  // parents, all the way down.
+  // The tag links first, then the tasks they hang off, then the sections, lists
+  // and tags those point at — children before parents, all the way down.
+  "task_tag_links",
   "tasks",
   "task_sections",
   "task_lists",
+  "task_tags",
   "note_tag_links",
   "note_links",
   "note_attachments",
@@ -76,6 +78,7 @@ type WipeTable = (typeof RESTORE_WIPE_TABLES)[number];
 const SCOPED_THROUGH_PARENT: Partial<Record<WipeTable, string>> = {
   document_renewals: `DELETE FROM document_renewals WHERE document_id IN (SELECT id FROM tracked_documents WHERE profile_id = ?)`,
   task_sections: `DELETE FROM task_sections WHERE list_id IN (SELECT id FROM task_lists WHERE profile_id = ?)`,
+  task_tag_links: `DELETE FROM task_tag_links WHERE task_id IN (SELECT id FROM tasks WHERE profile_id = ?)`,
   note_tag_links: `DELETE FROM note_tag_links WHERE note_id IN (SELECT id FROM notes WHERE profile_id = ?)`,
   note_links: `DELETE FROM note_links WHERE source_note_id IN (SELECT id FROM notes WHERE profile_id = ?)`,
   note_attachments: `DELETE FROM note_attachments WHERE note_id IN (SELECT id FROM notes WHERE profile_id = ?)`,
@@ -157,6 +160,8 @@ export class RestoreStore {
 
   private readonly insertTaskList: Database.Statement;
   private readonly insertTaskSection: Database.Statement;
+  private readonly insertTaskTag: Database.Statement;
+  private readonly insertTaskTagLink: Database.Statement;
   private readonly insertNoteFolder: Database.Statement;
   private readonly insertNoteTag: Database.Statement;
   private readonly insertSubject: Database.Statement;
@@ -201,6 +206,12 @@ export class RestoreStore {
     this.insertTaskSection = db.prepare(
       `INSERT INTO task_sections (id, list_id, name, position, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    this.insertTaskTag = db.prepare(
+      `INSERT INTO task_tags (id, profile_id, name, created_at) VALUES (?, ?, ?, ?)`,
+    );
+    this.insertTaskTagLink = db.prepare(
+      `INSERT INTO task_tag_links (task_id, tag_id) VALUES (?, ?)`,
     );
     this.insertNoteFolder = db.prepare(
       `INSERT INTO note_folders (id, profile_id, parent_id, name, color, created_at, updated_at)
@@ -364,6 +375,11 @@ export class RestoreStore {
         written += 1;
       }
 
+      for (const tag of input.data.taskTags) {
+        this.insertTaskTag.run(tag.id, this.profileId, tag.name, tag.createdAt);
+        written += 1;
+      }
+
       for (const folder of input.data.noteFolders) {
         this.insertNoteFolder.run(
           folder.id, this.profileId, folder.parentId, folder.name, folder.color,
@@ -485,6 +501,13 @@ export class RestoreStore {
           task.createdAt, task.updatedAt, task.completedAt, recurrenceText(task.recurrence),
           offsetsText(task.reminderOffsets), listId, task.sectionId, position,
         );
+        written += 1;
+      }
+
+      // Written straight after the tasks they hang off, and never re-keyed: a
+      // link is nothing but the pair of ids at its ends, and both were preserved.
+      for (const link of input.data.taskTagLinks) {
+        this.insertTaskTagLink.run(link.taskId, link.tagId);
         written += 1;
       }
 

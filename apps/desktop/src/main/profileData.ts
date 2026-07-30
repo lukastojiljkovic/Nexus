@@ -45,6 +45,7 @@ import type {
   SubjectStore,
   TaskListStore,
   TaskStore,
+  TaskTagStore,
 } from "@nexus/db";
 
 /**
@@ -56,6 +57,7 @@ import type {
 export interface ProfileDataDeps {
   taskStore(profileId: string): TaskStore;
   taskListStore(profileId: string): TaskListStore;
+  taskTagStore(profileId: string): TaskTagStore;
   eventStore(profileId: string): EventStore;
   peopleStore(profileId: string): PeopleStore;
   documentStore(profileId: string): DocumentStore;
@@ -164,10 +166,17 @@ export function gatherProfileData(deps: ProfileDataDeps, profileId: string): Pro
   const listsStore = deps.taskListStore(profileId);
   const taskLists = listsStore.listActive();
 
+  // Tags and their links are both profile-wide reads (migration 023) — the
+  // links reach their tasks through the store's own scoping, so there is no
+  // per-task fan-out here.
+  const tagsStore = deps.taskTagStore(profileId);
+
   return {
     tasks: deps.taskStore(profileId).listActive(),
     taskLists,
     taskSections: taskLists.flatMap((list) => listsStore.listSections(list.id)),
+    taskTags: tagsStore.listTags(),
+    taskTagLinks: tagsStore.listTagLinks(),
     events: deps.eventStore(profileId).listActive(),
     documents,
     renewals: documents.flatMap((document) => documentsStore.listRenewals(document.id)),

@@ -113,6 +113,8 @@ export type {
   ExportTask,
   ExportTaskList,
   ExportTaskSection,
+  ExportTaskTag,
+  ExportTaskTagLink,
   ProfileData,
 } from "./imex/exportArchive.js";
 

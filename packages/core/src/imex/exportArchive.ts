@@ -27,19 +27,20 @@ import { renderNoteMarkdown } from "./noteMarkdown.js";
 import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown.js";
 
 /**
- * IMEX-004: the archive's own semver. `1.3.0` adds the `task-list` and
- * `task-section` record types and the `listId`/`sectionId`/`position` a task
- * carries into them (TASK-004 / ADR-029), after `1.2.0` added a task's
+ * IMEX-004: the archive's own semver. `1.4.0` adds the `task-tag` and
+ * `task-tag-link` record types (migration 023), after `1.3.0` added the
+ * `task-list`/`task-section` types and the `listId`/`sectionId`/`position` a
+ * task carries into them (TASK-004 / ADR-029), `1.2.0` a task's
  * `reminderOffsets` (ADR-028) and `1.1.0` the `person` record type (CAL-007 /
  * ADR-026). Additive, so a MINOR bump by the same honesty each of those made
- * one: an archive this build writes is refused by a 1.2 reader, which would
- * otherwise parse every task and silently drop the lists the user organized
- * them into. Kept in step with `INTERCHANGE_SCHEMA_VERSION`
+ * one: an archive this build writes is refused by a 1.3 reader, which would
+ * otherwise parse every task and silently drop the labels the user filed them
+ * under. Kept in step with `INTERCHANGE_SCHEMA_VERSION`
  * (`importArchive.ts`) — two constants rather than one import, since the reader
  * already imports from this module and the cycle would be worse than the
  * duplication; `importArchive.test.ts` pins them equal.
  */
-const SCHEMA_VERSION = "1.3.0";
+const SCHEMA_VERSION = "1.4.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -68,6 +69,25 @@ export interface ExportTaskSection {
   position: number;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * A task tag (migration 023): a per-profile label, unique by (profile, name).
+ * Field for field `ExportNoteTag` — task tags are that feature applied to
+ * tasks, so the interchange row is the same row with a different owner. Rides in
+ * `data/tasks.ndjson` ahead of the tasks that carry it.
+ */
+export interface ExportTaskTag {
+  id: string;
+  profileId: string;
+  name: string;
+  createdAt: string;
+}
+
+/** One task-tag attachment — `ExportNoteTagLink` with a task on the other end. */
+export interface ExportTaskTagLink {
+  taskId: string;
+  tagId: string;
 }
 
 export interface ExportTask {
@@ -406,6 +426,11 @@ export interface ProfileData {
   // whose every task points at a container that is not there.
   taskLists: readonly ExportTaskList[];
   taskSections: readonly ExportTaskSection[];
+  // Required for the same reason, one step further along: a link names a tag,
+  // so an archive carrying the links but not the tags would restore a profile
+  // whose every label points at a row that is not there.
+  taskTags: readonly ExportTaskTag[];
+  taskTagLinks: readonly ExportTaskTagLink[];
   events: readonly ExportEvent[];
   documents: readonly ExportDocument[];
   renewals: readonly ExportRenewal[];
@@ -487,10 +512,15 @@ export type ArchiveModuleId = (typeof ARCHIVE_MODULE_IDS)[number];
  */
 export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, number> {
   return {
-    // Lists and sections are TASK module rows, so they count into the tasks
-    // bucket beside the tasks themselves — the same way a folder counts into
-    // notes.
-    tasks: data.tasks.length + data.taskLists.length + data.taskSections.length,
+    // Lists, sections, tags and tag links are all TASK module rows, so they
+    // count into the tasks bucket beside the tasks themselves — the same way a
+    // folder, a tag and a tag link count into notes.
+    tasks:
+      data.tasks.length +
+      data.taskLists.length +
+      data.taskSections.length +
+      data.taskTags.length +
+      data.taskTagLinks.length,
     calendar:
       data.events.length + data.documents.length + data.renewals.length + data.people.length,
     study:
@@ -523,13 +553,15 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   const { notes, noteFolders, noteTags, noteTagLinks, noteTemplates, noteAttachments, noteVersions } =
     input.data;
 
-  // Dependency order, as in `data/notes.ndjson`: the containers a task points
-  // at come first, so a reader that streamed the file could resolve every
-  // reference as it went.
+  // Dependency order, as in `data/notes.ndjson`: the containers and labels a
+  // task points at come first and the join that needs BOTH ends comes last, so
+  // a reader that streamed the file could resolve every reference as it went.
   const tasksNdjson = toNdjson([
     ...input.data.taskLists.map((row) => ({ type: "task-list", ...row })),
     ...input.data.taskSections.map((row) => ({ type: "task-section", ...row })),
+    ...input.data.taskTags.map((row) => ({ type: "task-tag", ...row })),
     ...input.data.tasks.map((row) => ({ type: "task", ...row })),
+    ...input.data.taskTagLinks.map((row) => ({ type: "task-tag-link", ...row })),
   ]);
   const calendarNdjson = toNdjson([
     ...input.data.events.map((row) => ({ type: "event", ...row })),

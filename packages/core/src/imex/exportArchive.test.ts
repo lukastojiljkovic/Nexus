@@ -30,6 +30,8 @@ function emptyInput(): ExportArchiveInput {
       tasks: [],
       taskLists: [],
       taskSections: [],
+      taskTags: [],
+      taskTagLinks: [],
       events: [],
       documents: [],
       renewals: [],
@@ -218,7 +220,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.3.0");
+      expect(manifest.schemaVersion).toBe("1.4.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       expect(manifest.profile).toEqual({ id: "profile1", name: "Luka" });
@@ -364,6 +366,38 @@ describe("buildExportArchive", () => {
       // A negative position is legitimate — prepending walks below zero — so it
       // travels verbatim rather than being normalized on the way out.
       expect(rows[3]).toMatchObject({ listId: "tl2", sectionId: "ts1", position: -1024 });
+      expect(archive.byModule.tasks).toBe(4);
+      expect(archive.totalRecords).toBe(4);
+    });
+
+    it("writes tags ahead of the tasks that carry them and links behind both, counting all of them into byModule.tasks (migration 023)", () => {
+      const input = emptyInput();
+      input.data.taskLists = [taskListRow({ id: LIST_ID, name: "Inbox" })];
+      input.data.taskTags = [
+        { id: "ttag1", profileId: "profile1", name: "posao", createdAt: "2026-07-01T00:00:00.000Z" },
+      ];
+      input.data.tasks = [
+        {
+          id: "t1", profileId: "profile1", parentId: null, title: "Označen", description: null,
+          status: "todo", priority: "none", done: false, dueDate: null, startDate: null,
+          createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+          completedAt: null, recurrence: null, reminderOffsets: [], ...PLACED,
+        },
+      ];
+      input.data.taskTagLinks = [{ taskId: "t1", tagId: "ttag1" }];
+
+      const archive = buildExportArchive(input);
+      const rows = parseNdjson(archive.files.get("data/tasks.ndjson") ?? "") as Array<{ type: string }>;
+      // The join comes last: it is the one row that needs BOTH of the others.
+      expect(rows.map((row) => row.type)).toEqual(["task-list", "task-tag", "task", "task-tag-link"]);
+      expect(rows[1]).toEqual({
+        type: "task-tag",
+        id: "ttag1",
+        profileId: "profile1",
+        name: "posao",
+        createdAt: "2026-07-01T00:00:00.000Z",
+      });
+      expect(rows[3]).toEqual({ type: "task-tag-link", taskId: "t1", tagId: "ttag1" });
       expect(archive.byModule.tasks).toBe(4);
       expect(archive.totalRecords).toBe(4);
     });
@@ -645,7 +679,7 @@ describe("buildExportArchive", () => {
   });
 
   describe("countProfileModules", () => {
-    /** One row in every one of `ProfileData`'s 22 arrays, so each of the five buckets sums more than one field. */
+    /** One row in every one of `ProfileData`'s 24 arrays, so each of the five buckets sums more than one field. */
     function populatedData(): ProfileData {
       const t = "2026-01-01T00:00:00.000Z";
       return {
@@ -656,6 +690,8 @@ describe("buildExportArchive", () => {
           { id: "tl1", profileId: "p1", parentId: null, name: "Inbox", isInbox: true, defaultView: "list", position: 1024, createdAt: t, updatedAt: t },
         ],
         taskSections: [{ id: "ts1", listId: "tl1", name: "Danas", position: 1024, createdAt: t, updatedAt: t }],
+        taskTags: [{ id: "ttag1", profileId: "p1", name: "posao", createdAt: t }],
+        taskTagLinks: [{ taskId: "t1", tagId: "ttag1" }],
         events: [
           { id: "e1", profileId: "p1", title: "E", description: null, startAt: t, endAt: null, allDay: false, location: null, category: null, createdAt: t, updatedAt: t, recurrence: null, recurrenceExdates: [], reminderOffsets: [] },
         ],
@@ -718,7 +754,7 @@ describe("buildExportArchive", () => {
     it("groups exactly as the manifest does, field by field", () => {
       const data = populatedData();
       expect(countProfileModules(data)).toEqual({
-        tasks: 3, // 1 task + 1 list + 1 section
+        tasks: 5, // 1 task + 1 list + 1 section + 1 tag + 1 tag link
         calendar: 4, // 1 event + 1 document + 1 renewal + 1 person
         study: 8, // 1 each of subject/exam/deck/card/review/plan/block/focus-session
         notifications: 1,

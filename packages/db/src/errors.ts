@@ -80,6 +80,26 @@ export class TaskListNotFoundError extends DatabaseError {}
 export class TaskSectionNotFoundError extends DatabaseError {}
 
 /**
+ * Thrown when a task-tag write is rejected at the store boundary because its
+ * input breaks a domain rule the caller is expected to have caught already — an
+ * empty or over-50-character name, a malformed `now`, or a rename that would
+ * collide with another tag's name in this profile (the UNIQUE(profile_id, name)
+ * index, surfaced as a domain error rather than a raw driver error). The rules
+ * are `NoteTagValidationError`'s verbatim, because task tags are the `note_tags`
+ * feature applied to tasks (migration 023). The store revalidates because
+ * renderer input is untrusted (SEC-EL-02).
+ */
+export class TaskTagValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a task-tag operation targets an id that is not a tag in the
+ * store's own profile — unknown or owned by another profile. Surfacing this
+ * uniformly keeps one profile's tags invisible to a store scoped to another
+ * (the `NoteTagNotFoundError` arrangement).
+ */
+export class TaskTagNotFoundError extends DatabaseError {}
+
+/**
  * Thrown when a calendar write is rejected at the store boundary because its
  * input breaks a domain rule the UI is expected to have caught already — an
  * empty event title, a malformed timestamp, or an end that precedes its start
