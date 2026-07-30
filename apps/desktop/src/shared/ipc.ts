@@ -178,6 +178,7 @@ export const IpcChannel = {
   noteAttachmentsSaveAs: "note-attachments:save-as",
   searchQuery: "search:query",
   searchRecent: "search:recent",
+  searchPage: "search:page",
   searchRebuild: "search:rebuild",
   imexExport: "imex:export",
   imexRestorePick: "imex:restore-pick",
@@ -2292,6 +2293,56 @@ export interface SearchRebuildRequest {
 }
 
 /**
+ * The ADR-039 search page's single channel. Unlike `searchQuery`, this one
+ * carries no `limit`: the page is the browse surface, so its size is a
+ * property of the surface (`SEARCH_PAGE_MAX_RESULTS`) rather than something
+ * the renderer negotiates. The renderer pages through what comes back in
+ * chunks of its own choosing.
+ */
+export interface SearchPageRequest {
+  profileId: string;
+  query: string;
+}
+
+/** One kind's share of the pre-narrowing hit set (ADR-039 §3). */
+export interface SearchKindCount {
+  kind: SearchKind;
+  count: number;
+}
+
+/** One tag chip: the original spelling to show, the `#token` to splice, and how many results it would keep. */
+export interface SearchTagFacet {
+  name: string;
+  token: string;
+  count: number;
+}
+
+/**
+ * Hard cap on how many results one search-page response may carry. Equal to
+ * `MAX_SEARCH_BROWSE_LIMIT` in `@nexus/db` by intent but declared
+ * independently here, the same rule `SEARCH_QUERY_MAX_BYTES` follows — the
+ * shared IPC contract imports nothing from the database package.
+ */
+export const SEARCH_PAGE_MAX_RESULTS = 500;
+
+/**
+ * The search page's whole payload (ADR-039 §3). `kindCounts` and `tagFacets`
+ * are computed over the set BEFORE `kinds` narrowing, so a chip answers
+ * "what would this narrowing give you" rather than "what does the narrowing
+ * you already applied contain".
+ */
+export interface SearchPageResult {
+  /** Ranked and capped at `SEARCH_PAGE_MAX_RESULTS`. */
+  hits: SearchResult[];
+  /** How many hits matched before the response cap — may exceed `hits.length`. */
+  total: number;
+  /** Candidate sourcing hit its bound, so `total` is a floor, not an exact count. */
+  truncated: boolean;
+  kindCounts: SearchKindCount[];
+  tagFacets: SearchTagFacet[];
+}
+
+/**
  * `passphrase` is renderer-declared like every other explicit user choice on
  * this wire (SEC-EL-02: untrusted input, re-validated in main) — `null` is
  * the explicitly-confirmed plaintext export, a non-null string is re-checked
@@ -2841,6 +2892,8 @@ export interface NexusApi {
   searchQuery(profileId: string, query: string, limit: number): Promise<SearchResult[]>;
   /** The profile's most recently touched entries, already in their final order — no ranking pass, unlike `searchQuery`. */
   searchRecent(profileId: string, limit: number): Promise<SearchResult[]>;
+  /** The ADR-039 search page: the same pipeline over a wider candidate bound, plus the kind/tag facet counts the page's chip rows draw. An empty query is browse mode, not an error. */
+  searchPage(profileId: string, query: string): Promise<SearchPageResult>;
   /** Rebuilds the ENTIRE file's search index from scratch (corruption recovery, not a per-profile operation); returns the resulting row count. */
   rebuildSearchIndex(profileId: string): Promise<number>;
   /**

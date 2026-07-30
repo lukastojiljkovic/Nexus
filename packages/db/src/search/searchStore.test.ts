@@ -9,6 +9,7 @@ import {
   DocumentStore,
   EventStore,
   ExamStore,
+  MAX_SEARCH_BROWSE_LIMIT,
   MAX_SEARCH_LIMIT,
   NexusDatabase,
   NoteAttachmentStore,
@@ -165,16 +166,36 @@ describe("SearchStore.search", () => {
     expect(hits).toHaveLength(2);
   });
 
-  it("clamps a limit above MAX_SEARCH_LIMIT instead of rejecting it", () => {
+  it("clamps a limit above MAX_SEARCH_BROWSE_LIMIT instead of rejecting it", () => {
     const profileId = createProfile();
     const tasks = new TaskStore(db.raw, profileId);
-    for (let i = 0; i < MAX_SEARCH_LIMIT + 5; i++) {
+    for (let i = 0; i < MAX_SEARCH_BROWSE_LIMIT + 5; i++) {
       tasks.create({ title: `Mnogo alfa zadataka ${i}` });
     }
 
     const store = new SearchStore(db.raw, profileId);
     const hits = store.search({ match: '"alfa"*', limit: 1_000_000 });
-    expect(hits).toHaveLength(MAX_SEARCH_LIMIT);
+    expect(hits).toHaveLength(MAX_SEARCH_BROWSE_LIMIT);
+  });
+
+  /**
+   * The ceiling moved from `MAX_SEARCH_LIMIT` to `MAX_SEARCH_BROWSE_LIMIT`
+   * for the ADR-039 search page, so a limit BETWEEN the two must now pass
+   * through untouched rather than being clamped down to 200 the way it was
+   * before. `MAX_SEARCH_LIMIT` stays exported and stays the palette's own
+   * candidate bound — it is simply no longer this store's clamp.
+   */
+  it("honours a limit between MAX_SEARCH_LIMIT and MAX_SEARCH_BROWSE_LIMIT", () => {
+    const profileId = createProfile();
+    const tasks = new TaskStore(db.raw, profileId);
+    const wanted = MAX_SEARCH_LIMIT + 20;
+    for (let i = 0; i < wanted + 5; i++) {
+      tasks.create({ title: `Mnogo beta zadataka ${i}` });
+    }
+
+    const store = new SearchStore(db.raw, profileId);
+    expect(store.search({ match: '"beta"*', limit: wanted })).toHaveLength(wanted);
+    expect(store.recent({ limit: wanted })).toHaveLength(wanted);
   });
 
   it("throws SearchValidationError for an empty match", () => {

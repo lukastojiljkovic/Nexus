@@ -7,6 +7,8 @@ import { autoUpdater } from "electron-updater";
 import {
   applySearchOperators,
   buildSearchSnippet,
+  buildSearchTagFacets,
+  countSearchKinds,
   foldSearchTag,
   dayKeyToUtcMs,
   isValidDayKey,
@@ -27,6 +29,7 @@ import type {
   SearchKind,
   SearchOperatorFilters,
   SearchTagMatch,
+  TagFacetSource,
 } from "@nexus/core";
 import { MAX_PASSCODE_LENGTH, blobStorageName, deriveBlobKeys, type BlobKeys } from "@nexus/core/auth";
 import {
@@ -48,6 +51,7 @@ import {
   MAX_NOTE_LINKS,
   MAX_NOTE_TEMPLATE_BYTES,
   MAX_NOTE_UPDATE_BYTES,
+  MAX_SEARCH_BROWSE_LIMIT,
   MAX_SEARCH_LIMIT,
   MAX_TASK_ATTACHMENT_BYTES,
   MAX_TASK_BULK_IDS,
@@ -204,6 +208,7 @@ import {
   MAX_TASK_TEMPLATE_NAME_LENGTH,
   NOTE_CARD_KEY_MAX_LENGTH,
   NOTE_CARDS_MAX_COUNT,
+  SEARCH_PAGE_MAX_RESULTS,
   SEARCH_QUERY_MAX_BYTES,
   SEARCH_RESULT_MAX_LIMIT,
   type AppInfo,
@@ -223,6 +228,7 @@ import {
   type RestoreUndoResult,
   type RunningFocusSession,
   type SaveAttachmentResult,
+  type SearchPageResult,
   type SearchResult,
   type SnoozePreset,
   type StudyStats,
@@ -1858,25 +1864,24 @@ function groupLinksByTagId(
 }
 
 /**
- * One `{ taskIds, noteIds }` set per `#` token. Both modules' tags and links
- * are read (and each name folded) exactly ONCE here, however many tokens were
- * typed — the per-token work is then a prefix scan over an already-folded list.
+ * One `{ taskIds, noteIds }` set per `#` token, computed from an already-read
+ * `tagFacetSources` snapshot (each name folded exactly ONCE however many
+ * tokens were typed — the per-token work is a prefix scan over an
+ * already-folded list). Taking the sources rather than a profileId is what
+ * lets `runSearchPage` share ONE read between this filter and its facet rows.
  */
-function buildTagMatches(profileId: string, tokens: readonly string[]): SearchTagMatch[] {
-  const noteTags = noteOrgStore(profileId);
-  const taskTags = taskTagStore(profileId);
-  const foldedNoteTags = noteTags
-    .listTags()
-    .map((tag) => ({ id: tag.id, folded: foldSearchTag(tag.name) }));
-  const foldedTaskTags = taskTags
-    .listTags()
-    .map((tag) => ({ id: tag.id, folded: foldSearchTag(tag.name) }));
-  const noteLinks = groupLinksByTagId(
-    noteTags.listTagLinks().map((link) => ({ entityId: link.noteId, tagId: link.tagId })),
-  );
-  const taskLinks = groupLinksByTagId(
-    taskTags.listTagLinks().map((link) => ({ entityId: link.taskId, tagId: link.tagId })),
-  );
+function buildTagMatches(
+  sources: readonly TagFacetSource[],
+  tokens: readonly string[],
+): SearchTagMatch[] {
+  const note = sources.find((source) => source.kind === "note");
+  const task = sources.find((source) => source.kind === "task");
+  const foldTags = (source: TagFacetSource | undefined) =>
+    (source?.tags ?? []).map((tag) => ({ id: tag.id, folded: foldSearchTag(tag.name) }));
+  const foldedNoteTags = foldTags(note);
+  const foldedTaskTags = foldTags(task);
+  const noteLinks = groupLinksByTagId(note?.links ?? []);
+  const taskLinks = groupLinksByTagId(task?.links ?? []);
 
   return tokens.map((token) => ({
     taskIds: tagFilterIds(foldedTaskTags, taskLinks, token),
@@ -1898,7 +1903,7 @@ function searchOperatorFilters(
 ): SearchOperatorFilters | null {
   if (parsed.tags.length === 0 && parsed.due === null) return null;
   return {
-    tagMatches: parsed.tags.length > 0 ? buildTagMatches(profileId, parsed.tags) : [],
+    tagMatches: parsed.tags.length > 0 ? buildTagMatches(tagFacetSources(profileId), parsed.tags) : [],
     dueRange: parsed.due === null ? null : resolveDueRange(parsed.due, localToday()),
   };
 }
@@ -1937,7 +1942,16 @@ function runSearchQuery(profileId: string, rawQuery: string, limit: number): Sea
   }
 
   const store = searchStore(profileId);
-  const candidateLimit = filters === null ? limit * SEARCH_CANDIDATE_FACTOR : MAX_SEARCH_LIMIT;
+  // Clamped to `MAX_SEARCH_LIMIT` HERE rather than left to the store: the
+  // store's own ceiling rose to `MAX_SEARCH_BROWSE_LIMIT` for the ADR-039
+  // page, and without this the palette would silently start pulling 300
+  // candidates where it used to be cut off at 200. 200 is still the palette's
+  // bound (ADR-030 §3 / ADR-039 §4) — an overlay showing a couple of screens
+  // of results has no use for more.
+  const candidateLimit =
+    filters === null
+      ? Math.min(limit * SEARCH_CANDIDATE_FACTOR, MAX_SEARCH_LIMIT)
+      : MAX_SEARCH_LIMIT;
   const candidates =
     parsed.kinds.length > 0
       ? store.search({ match, limit: candidateLimit, kinds: parsed.kinds })
@@ -1946,6 +1960,107 @@ function runSearchQuery(profileId: string, rawQuery: string, limit: number): Sea
 
   const ranked = rankSearchResults(filtered, { now: new Date().toISOString(), query: parsed });
   return ranked.slice(0, limit).map((hit) => toSearchResult(hit, parsed.terms));
+}
+
+/**
+ * The tag data facet counting is computed from, read the same way for both
+ * modules that carry tags. Extracted so the search page and any future tag
+ * reader cannot drift on which rows count as "this profile's tags": both
+ * stores already scope every statement by `profile_id`, and both list the
+ * ACTIVE (non-soft-deleted) links only, so no filtering is layered on here.
+ *
+ * `entityId` is the one normalization: the stores spell the owning id
+ * `noteId`/`taskId`, while core's facet helper is deliberately kind-agnostic.
+ */
+function tagFacetSources(profileId: string): TagFacetSource[] {
+  const notes = noteOrgStore(profileId);
+  const tasks = taskTagStore(profileId);
+  return [
+    {
+      kind: "note",
+      tags: notes.listTags(),
+      links: notes.listTagLinks().map((link) => ({ entityId: link.noteId, tagId: link.tagId })),
+    },
+    {
+      kind: "task",
+      tags: tasks.listTags(),
+      links: tasks.listTagLinks().map((link) => ({ entityId: link.taskId, tagId: link.tagId })),
+    },
+  ];
+}
+
+/**
+ * The ADR-039 search page pipeline. Same parse/rank pieces as
+ * `runSearchQuery`, differing in three ways that are the whole point of the
+ * page:
+ *
+ *  1. Candidates are sourced over **every** kind at `MAX_SEARCH_BROWSE_LIMIT`,
+ *     never narrowed in SQL, because the facet counts have to be computed
+ *     over the un-narrowed set — a chip that reads "Zadaci 12" is answering
+ *     "what would this narrowing give you", which it cannot do if the
+ *     narrowing already happened upstream of the count.
+ *  2. Kind narrowing therefore happens here, in memory, AFTER counting.
+ *  3. `truncated` is reported honestly: when the candidate array came back
+ *     exactly at the bound, the store had no way to tell us whether more
+ *     existed, so `total` is a floor and the page must say so rather than
+ *     print a number it never measured.
+ *
+ * The termless path keeps `SearchStore.recent`'s recency order and is NOT
+ * re-ranked — that method's documented contract, the same rule
+ * `runRecentSearch` follows.
+ *
+ * Operators (`#oznaka`, `rok:`) are resolved exactly as in `runSearchQuery` —
+ * `parseSearchQuery` keeps the tokens out of the FTS text itself and
+ * `applySearchOperators` post-filters (ADR-030, inherited unchanged per
+ * ADR-039's consequence note) — with one difference: the tag tables are read
+ * ONCE per request (`tagFacetSources`) and shared between the operator filter
+ * and the facet rows, where the palette path reads them only when a `#` token
+ * is present.
+ */
+function runSearchPage(profileId: string, rawQuery: string): SearchPageResult {
+  const parsed = parseSearchQuery(rawQuery);
+  const match = toFtsMatchExpression(parsed.terms, { prefixLast: parsed.prefixLast });
+  const store = searchStore(profileId);
+
+  const candidates: SearchHit[] =
+    match === null
+      ? store.recent({ limit: MAX_SEARCH_BROWSE_LIMIT })
+      : store.search({ match, limit: MAX_SEARCH_BROWSE_LIMIT });
+  const truncated = candidates.length >= MAX_SEARCH_BROWSE_LIMIT;
+
+  const sources = tagFacetSources(profileId);
+  const filters: SearchOperatorFilters | null =
+    parsed.tags.length === 0 && parsed.due === null
+      ? null
+      : {
+          tagMatches: parsed.tags.length > 0 ? buildTagMatches(sources, parsed.tags) : [],
+          dueRange: parsed.due === null ? null : resolveDueRange(parsed.due, localToday()),
+        };
+  // Operators are applied BEFORE the facets are counted (ADR-039 §3 step 3),
+  // so a facet row reports what it would leave you with rather than what you
+  // already asked for.
+  const operated = filters === null ? candidates : applySearchOperators(candidates, filters);
+
+  // Counted over the pre-kind set (ADR-039 §3 step 3).
+  const kindCounts = countSearchKinds(operated);
+  const tagFacets = buildSearchTagFacets(operated, sources);
+
+  const kinds = new Set(parsed.kinds);
+  const narrowed = kinds.size > 0 ? operated.filter((hit) => kinds.has(hit.kind)) : operated;
+  const ordered =
+    match === null
+      ? narrowed
+      : rankSearchResults(narrowed, { now: new Date().toISOString(), query: parsed });
+
+  return {
+    hits: ordered
+      .slice(0, SEARCH_PAGE_MAX_RESULTS)
+      .map((hit) => toSearchResult(hit, parsed.terms)),
+    total: ordered.length,
+    truncated,
+    kindCounts: kindCounts.map(({ kind, count }) => ({ kind, count })),
+    tagFacets: tagFacets.map(({ name, token, count }) => ({ name, token, count })),
+  };
 }
 
 // --- Auth (ADR-018): the local account gate ---------------------------------
@@ -3822,6 +3937,22 @@ function registerIpc(): void {
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const limit = Math.min(asPositiveInteger(body.limit, "limit"), SEARCH_RESULT_MAX_LIMIT);
     return runRecentSearch(profileId, limit);
+  });
+
+  /**
+   * The ADR-039 search page. No `limit` on the wire: the page's size is a
+   * property of the surface (`SEARCH_PAGE_MAX_RESULTS`, applied inside
+   * `runSearchPage`), not something the renderer negotiates — so there is one
+   * fewer number to validate and no way for a caller to ask for more than the
+   * page was designed to carry. An empty query is browse mode, which is why
+   * `query` is capped but not required to be non-empty.
+   */
+  ipcMain.handle(IpcChannel.searchPage, (event, payload): SearchPageResult => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const query = asCappedString(body.query, "query", SEARCH_QUERY_MAX_BYTES);
+    return runSearchPage(profileId, query);
   });
 
   /**

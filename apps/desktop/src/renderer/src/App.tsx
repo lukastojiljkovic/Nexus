@@ -14,6 +14,7 @@ import { SettingsPage, formatArchiveInstant } from "./SettingsPage.js";
 import { NotificationCenter } from "./NotificationCenter.js";
 import { NotificationAppetiteDialog } from "./NotificationAppetiteDialog.js";
 import { SearchPalette } from "./SearchPalette.js";
+import { SearchPage } from "./SearchPage.js";
 import { buildSearchCommands } from "./searchCommands.js";
 import { createModuleRegistry } from "./modules.js";
 import { persistAutoLock, readStoredAutoLock, type AutoLockMinutes } from "./autoLock.js";
@@ -38,6 +39,15 @@ type PendingIntent =
   | { module: "calendar"; intent: CalendarIntent }
   | { module: "notes"; intent: NotesIntent }
   | { module: "study"; intent: StudyIntent };
+
+/**
+ * The full search page's `activeId` (ADR-039 §1). Deliberately NOT a registry
+ * id: search is a system surface like the palette, so it must never show up in
+ * the Settings module gallery or grow an enable flag, and the registry's rule
+ * stays "hub pages only". Every place that treats `activeId` as a module id
+ * therefore has to exempt this one — `effectiveId` and the route guard below.
+ */
+const SEARCH_PAGE_ID = "search";
 
 /** Idle events that count as activity for the auto-lock timer (AUTH-005). */
 const IDLE_ACTIVITY_EVENTS = ["mousemove", "keydown", "mousedown", "wheel"] as const;
@@ -79,6 +89,11 @@ export function App() {
   // command's `run` closure is built (see `buildSearchCommands` below).
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [searchStatus, setSearchStatus] = useState<string | null>(null);
+  // A query handed from the palette to the full page (ADR-039 §5). Held here
+  // rather than pushed as a prop-with-a-reset because the page may not be
+  // mounted at the moment the palette closes; the page consumes it on mount
+  // and clears it through `onSeedConsumed`.
+  const [searchSeed, setSearchSeed] = useState<string | null>(null);
   // The post-reload restore banner (IMEX slice 3d, ADR-023). Applying a
   // restore reloads this renderer, so the screen that ran it is gone by the
   // time there is anything to say — `restoreStatus` below is how the fresh
@@ -270,7 +285,10 @@ export function App() {
   // Route guard companion: when the active module gets disabled (or a deep
   // link targets a disabled one), reset the state so the nav highlight is
   // honest — `effectiveId` below already renders the dashboard either way.
+  // `SEARCH_PAGE_ID` is exempt: it is a shell surface, not a registry module,
+  // so it is never in the enabled set and must not be guarded out of.
   useEffect(() => {
+    if (activeId === SEARCH_PAGE_ID) return;
     if (!new Set(resolveEnabled(registry, flags)).has(activeId)) {
       setActiveId("dashboard");
       // A pending intent aimed at a now-disabled module has no page left to
@@ -351,6 +369,16 @@ export function App() {
       setAppetiteAsk(true);
     });
   }, [authStatus?.state, closePalette]);
+
+  // Stable across renders for the same reason `clearIntent` is: `SearchPage`
+  // lists it in a mount effect's dependency array.
+  const clearSearchSeed = useCallback(() => setSearchSeed(null), []);
+
+  /** The palette's "Prikaži sve rezultate" row: carry the query to the page and go there. */
+  const openSearchPage = useCallback((query: string) => {
+    setSearchSeed(query);
+    setActiveId(SEARCH_PAGE_ID);
+  }, []);
 
   /**
    * Activates a global-search result (021-d/021-e): dispatches the intent
@@ -462,7 +490,12 @@ export function App() {
   );
 
   const enabledIds = new Set(resolveEnabled(registry, flags));
-  const effectiveId = enabledIds.has(activeId) ? activeId : "dashboard";
+  // `SEARCH_PAGE_ID` is a valid destination without being an enabled module:
+  // the search page is a system surface like the palette (ADR-039 §1), so it
+  // is deliberately NOT a `ModuleManifest` and never appears in the Settings
+  // module gallery.
+  const effectiveId =
+    enabledIds.has(activeId) || activeId === SEARCH_PAGE_ID ? activeId : "dashboard";
 
   if (failed) {
     return (
@@ -568,12 +601,15 @@ export function App() {
           })}
           {activeProfile && (
             <>
+              {/* Navigates to the full page (ADR-039 §1); the badge stays as
+                  the hint for Ctrl+K, which still opens the palette. */}
               <NavItem
                 href="#"
+                active={effectiveId === SEARCH_PAGE_ID}
                 badge={strings.search.shortcutHint}
                 onClick={(event) => {
                   event.preventDefault();
-                  setPaletteOpen(true);
+                  setActiveId(SEARCH_PAGE_ID);
                 }}
               >
                 {strings.search.navLabel}
@@ -652,6 +688,13 @@ export function App() {
               intent={pending?.module === "study" ? pending.intent : null}
               onIntentHandled={clearIntent}
             />
+          ) : effectiveId === SEARCH_PAGE_ID && activeProfile ? (
+            <SearchPage
+              profileId={activeProfile.id}
+              seed={searchSeed}
+              onSeedConsumed={clearSearchSeed}
+              onOpenResult={onSearchResult}
+            />
           ) : effectiveId === "settings" && activeProfile ? (
             <SettingsPage
               profileId={activeProfile.id}
@@ -679,6 +722,7 @@ export function App() {
           onClose={closePalette}
           commands={searchCommands}
           onOpenResult={onSearchResult}
+          onOpenPage={openSearchPage}
           statusMessage={searchStatus}
         />
       )}

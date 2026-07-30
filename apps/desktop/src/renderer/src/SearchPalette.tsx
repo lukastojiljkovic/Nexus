@@ -1,14 +1,19 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { foldSearchTag, parseSearchQuery, SEARCH_KIND_PREFIXES, SEARCH_KINDS } from "@nexus/core";
+import { foldSearchTag, parseSearchQuery, SEARCH_KINDS } from "@nexus/core";
 import type { SearchKind } from "@nexus/core";
 import { Button, Chip } from "@nexus/ui";
-import type { NoteTag, SearchHighlight, SearchResult, TaskTag } from "../../shared/ipc.js";
+import type { NoteTag, SearchResult, TaskTag } from "../../shared/ipc.js";
 import { REBUILD_COMMAND_ID, matchCommands } from "./searchCommands.js";
 import type { SearchCommand } from "./searchCommands.js";
-import { formatExamDate } from "./examDates.js";
-import { formatNotificationWhen } from "./notificationFormat.js";
+import {
+  SEARCH_DEBOUNCE_MS,
+  buildEffectiveQuery,
+  formatContextDate,
+  groupByKind,
+  renderHighlighted,
+} from "./searchShared.js";
 import { strings } from "./strings.js";
 
 /**
@@ -24,7 +29,6 @@ import { strings } from "./strings.js";
  */
 
 const SEARCH_PAGE_SIZE = 30;
-const SEARCH_DEBOUNCE_MS = 120;
 /** How long the rebuild command's confirmation stays on screen before the palette auto-closes (spec: "reports its count first ... then close"). */
 const STATUS_MESSAGE_DISPLAY_MS = 1400;
 /** Tag suggestions offered while a `#` token is being typed — a short list to pick from, not a tag browser. */
@@ -60,25 +64,8 @@ function mergeTagOptions(noteTags: readonly NoteTag[], taskTags: readonly TaskTa
   return [...byKey.values()].sort((a, b) => collator.compare(a.name, b.name));
 }
 
-/**
- * For each kind, the shortest alias in `SEARCH_KIND_PREFIXES` — computed
- * once so a chip click can splice a real prefix token ("z:") into the query
- * text without hand-duplicating core's own alias table (and risking it
- * drifting from this one).
- */
-const KIND_QUERY_PREFIX: Record<SearchKind, string> = (() => {
-  const shortest: Partial<Record<SearchKind, string>> = {};
-  for (const [alias, kind] of Object.entries(SEARCH_KIND_PREFIXES)) {
-    const current = shortest[kind];
-    if (current === undefined || alias.length < current.length) {
-      shortest[kind] = alias;
-    }
-  }
-  // Every kind has at least one alias in SEARCH_KIND_PREFIXES (core's own
-  // invariant), so the loop above has populated every key by now — the cast
-  // just states what it already guarantees.
-  return shortest as Record<SearchKind, string>;
-})();
+/** The "Prikaži sve rezultate" row's id — a fixed string, since there is exactly one and it carries no entity. */
+const SHOW_ALL_ROW_ID = "search-row-show-all";
 
 export interface SearchPaletteProps {
   profileId: string;
@@ -87,6 +74,12 @@ export interface SearchPaletteProps {
   commands: readonly SearchCommand[];
   /** Activates a result — the shell decides where that lands. */
   onOpenResult: (result: SearchResult) => void;
+  /**
+   * Hands the current query to the full search page (ADR-039 §5) and closes
+   * the palette. The shell owns the seed and the navigation; the palette only
+   * says which query the user was looking at.
+   */
+  onOpenPage: (query: string) => void;
   /**
    * The rebuild command's Serbian confirmation (or error) text. Owned by the
    * shell (`App.tsx`), since that is where `buildSearchCommands` is called
@@ -100,7 +93,8 @@ export interface SearchPaletteProps {
 type PaletteRow =
   | { readonly id: string; readonly kind: "tag"; readonly tag: TagOption }
   | { readonly id: string; readonly kind: "result"; readonly result: SearchResult }
-  | { readonly id: string; readonly kind: "command"; readonly command: SearchCommand };
+  | { readonly id: string; readonly kind: "command"; readonly command: SearchCommand }
+  | { readonly id: string; readonly kind: "show-all" };
 
 function resultRowId(result: SearchResult): string {
   return `search-row-result-${result.kind}-${result.entityId}`;
@@ -112,87 +106,13 @@ function tagRowId(tag: TagOption): string {
   return `search-row-tag-${tag.key}`;
 }
 
-/** Groups results by kind, in `SEARCH_KINDS` order, dropping empty groups. */
-function groupByKind(results: readonly SearchResult[]): Array<[SearchKind, SearchResult[]]> {
-  const byKind = new Map<SearchKind, SearchResult[]>();
-  for (const result of results) {
-    const list = byKind.get(result.kind);
-    if (list) list.push(result);
-    else byKind.set(result.kind, [result]);
-  }
-  return SEARCH_KINDS.filter((kind) => byKind.has(kind)).map(
-    (kind) => [kind, byKind.get(kind) ?? []] as [SearchKind, SearchResult[]],
-  );
-}
-
-/**
- * `contextDate` is either a bare "YYYY-MM-DD" (task/document/exam) or a full
- * ISO instant (event/card) — the two shapes it ever carries, per kind, in
- * the search index (migration 017). No single existing formatter handles
- * both, so this picks the right one of the two that already exist rather
- * than adding a third: `formatExamDate` (bare dates, day+month+year) or
- * `formatNotificationWhen` (instants, "HH:MM today, else day + HH:MM").
- */
-function formatContextDate(value: string): string {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? formatExamDate(value) : formatNotificationWhen(value);
-}
-
-/**
- * Renders `text` with `ranges` wrapped in `<mark>`. Ranges are half-open,
- * sorted and non-overlapping BY CONTRACT (`SearchHighlight`'s doc comment) —
- * but this is the last line of defense before they hit the DOM, so each one
- * is clamped to `text`'s bounds and any range that would move the cursor
- * backward (out-of-order or overlapping, however that happened) is skipped
- * rather than trusted.
- */
-function renderHighlighted(text: string, ranges: readonly SearchHighlight[]): ReactNode {
-  if (ranges.length === 0) return text;
-  const pieces: ReactNode[] = [];
-  let cursor = 0;
-  for (const [rawStart, rawEnd] of ranges) {
-    const start = Math.max(0, Math.min(rawStart, text.length));
-    const end = Math.max(start, Math.min(rawEnd, text.length));
-    if (start < cursor) continue; // would re-render already-consumed text — untrusted shape, skip it
-    if (start > cursor) pieces.push(text.slice(cursor, start));
-    if (end > start) {
-      pieces.push(
-        <mark key={`${start}-${end}`} className="search__mark">
-          {text.slice(start, end)}
-        </mark>,
-      );
-    }
-    cursor = end;
-  }
-  if (cursor < text.length) pieces.push(text.slice(cursor));
-  return pieces;
-}
-
-/**
- * Splices chip-only kind filters into the query text as real prefix tokens
- * (e.g. "z:") before it goes over IPC, so a chip click has the same effect
- * on the result as typing the prefix would — a kind already typed is left
- * alone rather than duplicated. This is the palette's chosen design for
- * keeping typed prefixes and chips in agreement (see the component doc
- * below for the other half: chip *display*).
- */
-function buildEffectiveQuery(
-  rawQuery: string,
-  chipKinds: ReadonlySet<SearchKind>,
-  typedKinds: readonly SearchKind[],
-): string {
-  const typed = new Set(typedKinds);
-  const extra = [...chipKinds]
-    .filter((kind) => !typed.has(kind))
-    .map((kind) => `${KIND_QUERY_PREFIX[kind]}:`);
-  return extra.length > 0 ? `${extra.join(" ")} ${rawQuery}` : rawQuery;
-}
-
 export function SearchPalette({
   profileId,
   open,
   onClose,
   commands,
   onOpenResult,
+  onOpenPage,
   statusMessage,
 }: SearchPaletteProps) {
   const [query, setQuery] = useState("");
@@ -347,6 +267,12 @@ export function SearchPalette({
     return () => window.clearTimeout(timer);
   }, [open, statusMessage, onClose]);
 
+  // The full-page escape hatch (ADR-039 §5) is offered only where it means
+  // something: command mode is palette-only, and with no text AND no chips
+  // there is nothing to carry over — browse mode is what the sidebar's
+  // Pretraga item already opens.
+  const showAllRow = !parsed.commandsOnly && (query.trim().length > 0 || chipKinds.size > 0);
+
   // Tag suggestions come first: while a `#` token is being typed, completing
   // it is the likelier intent than opening whatever the half-typed token
   // currently matches.
@@ -358,6 +284,10 @@ export function SearchPalette({
       kind: "command" as const,
       command,
     })),
+    // Pinned last so ArrowDown reaches it after everything it is an
+    // alternative to, and Enter on it is never what a fast typist gets by
+    // accident.
+    ...(showAllRow ? [{ id: SHOW_ALL_ROW_ID, kind: "show-all" as const }] : []),
   ];
   const rowIndexById = new Map(rows.map((row, index) => [row.id, index] as const));
 
@@ -446,11 +376,17 @@ export function SearchPalette({
     inputRef.current?.focus();
   }
 
+  /** The page must mean exactly what the palette currently shows, so chip filters ride along as their typed tokens rather than being dropped. */
+  function activateShowAll(): void {
+    leaveFor(() => onOpenPage(buildEffectiveQuery(query, chipKinds, parsed.kinds)));
+  }
+
   function activateRow(row: PaletteRow | undefined): void {
     if (!row) return;
     if (row.kind === "tag") completeTag(row.tag);
     else if (row.kind === "result") activateResult(row.result);
-    else activateCommand(row.command);
+    else if (row.kind === "command") activateCommand(row.command);
+    else activateShowAll();
   }
 
   function handleInputKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
@@ -667,6 +603,29 @@ export function SearchPalette({
           )}
 
           {showEmptyState && <p className="search__empty">{strings.search.emptyResults}</p>}
+
+          {showAllRow && (
+            <div
+              id={SHOW_ALL_ROW_ID}
+              role="option"
+              aria-selected={rowIndexById.get(SHOW_ALL_ROW_ID) === activeIndex}
+              className={
+                rowIndexById.get(SHOW_ALL_ROW_ID) === activeIndex
+                  ? "search__row search__row--all search__row--active"
+                  : "search__row search__row--all"
+              }
+              onMouseEnter={() => {
+                const index = rowIndexById.get(SHOW_ALL_ROW_ID);
+                if (index !== undefined) setActiveIndex(index);
+              }}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                activateShowAll();
+              }}
+            >
+              <span className="search__row-title">{strings.search.showAllResults}</span>
+            </div>
+          )}
         </div>
 
         {/* A command's confirmation replaces the whole footer rather than

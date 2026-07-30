@@ -18,8 +18,23 @@ export const BODY_BM25_WEIGHT = 1.0;
 
 /** `search`/`recent` candidate count when the caller does not ask for a specific `limit`. */
 export const DEFAULT_SEARCH_LIMIT = 60;
-/** Hard ceiling on `limit`: a caller may ask for fewer, never more — see `validateLimit`. */
+/**
+ * The **palette's** candidate bound (ADR-021), not this store's clamp: an
+ * overlay that shows a couple of screens of results has no use for more
+ * candidates than this, and main keeps passing it for the palette pipeline.
+ * Kept exported and unchanged; `validateLimit` clamps to
+ * `MAX_SEARCH_BROWSE_LIMIT` instead — see below.
+ */
 export const MAX_SEARCH_LIMIT = 200;
+/**
+ * Hard ceiling on `limit`: a caller may ask for fewer, never more — see
+ * `validateLimit`. Raised from `MAX_SEARCH_LIMIT` to 500 for the ADR-039
+ * search page, whose facet counts are computed over the whole candidate set
+ * and are therefore only as honest as that set is large. 500 is where the
+ * page stops and says so out loud ("truncated") rather than quietly implying
+ * a count it never actually measured.
+ */
+export const MAX_SEARCH_BROWSE_LIMIT = 500;
 
 interface SearchHitRow {
   kind: SearchKind;
@@ -41,7 +56,7 @@ export interface SearchOptions {
   readonly match: string;
   /** Restricts to these kinds; omit for every kind. Must be non-empty when given. */
   readonly kinds?: readonly SearchKind[];
-  /** Candidate cap; defaults to `DEFAULT_SEARCH_LIMIT`, clamped to `MAX_SEARCH_LIMIT`. */
+  /** Candidate cap; defaults to `DEFAULT_SEARCH_LIMIT`, clamped to `MAX_SEARCH_BROWSE_LIMIT`. */
   readonly limit?: number;
 }
 
@@ -253,7 +268,7 @@ function validateLimit(limit: number | undefined): number {
   if (!Number.isInteger(value) || value <= 0) {
     throw new SearchValidationError(`limit must be a positive integer, got ${value}.`);
   }
-  return Math.min(value, MAX_SEARCH_LIMIT);
+  return Math.min(value, MAX_SEARCH_BROWSE_LIMIT);
 }
 
 /** The nine kind-projection views migration 017 defines, read verbatim — never re-spelled — by both `rebuildSearchIndex` below and the migration's own backfill. */

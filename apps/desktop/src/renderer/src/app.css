@@ -5231,6 +5231,194 @@ button.cal__grid-event--dragging {
   font-variant-numeric: tabular-nums;
 }
 
+/* Full search page (ADR-039) ------------------------------------------- */
+/* Its own `searchpage__` family rather than more `search__` rules: the two
+   surfaces share meaning, not measurements — the palette is a 640px overlay
+   with a scrolling list, this is a full page column. The one class they do
+   share is `.search__mark`, since a highlight is a highlight. Chips reuse the
+   same typographic toggle as `.search__chip` (accent text + weight, no glow,
+   no inset bar); rows are real <button>s here, unlike the palette's listbox
+   options, because there is no combobox owning focus on this page. */
+.searchpage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+.searchpage__header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+.searchpage__heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-3);
+  flex-wrap: wrap;
+}
+.searchpage__title {
+  margin: 0;
+  font-size: var(--nx-font-size-title);
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-text);
+}
+.searchpage__shortcut {
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+}
+.searchpage__input.nx-textfield__input {
+  width: 100%;
+  font-size: var(--nx-font-size-body);
+}
+.searchpage__facets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.searchpage__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.searchpage__chip.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  gap: var(--nx-space-1);
+}
+.searchpage__chip.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
+}
+.searchpage__chip--active.nx-button {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.searchpage__chip-count {
+  margin-left: var(--nx-space-1);
+  font-size: var(--nx-font-size-label);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+.searchpage__meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+  flex-wrap: wrap;
+  padding-bottom: var(--nx-space-2);
+  border-bottom: 1px solid var(--nx-border);
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+}
+.searchpage__count {
+  font-variant-numeric: tabular-nums;
+}
+.searchpage__truncated {
+  margin: 0;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+}
+.searchpage__results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+.searchpage__group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.searchpage__group-heading {
+  margin: 0 var(--nx-space-2) var(--nx-space-1);
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.searchpage__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+  width: 100%;
+  padding: var(--nx-space-2);
+  border: none;
+  border-radius: var(--nx-radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.searchpage__row:hover {
+  background: var(--nx-surface-alt);
+}
+.searchpage__row:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+.searchpage__row:hover .searchpage__row-title {
+  color: var(--nx-accent-strong);
+}
+.searchpage__row-main {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+.searchpage__row-kind {
+  flex: none;
+}
+.searchpage__row-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.searchpage__row-title {
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.searchpage__row-snippet {
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.searchpage__row-date {
+  flex: none;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.searchpage__more.nx-button {
+  align-self: flex-start;
+}
+
+/* The palette's own full-page escape hatch, styled as a quiet footer row
+   rather than another result: it is an action, not something to open. */
+.search__row--all {
+  justify-content: center;
+  border-top: 1px solid var(--nx-border);
+  border-radius: 0;
+  margin-top: var(--nx-space-1);
+  padding-top: var(--nx-space-3);
+}
+.search__row--all .search__row-title {
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+}
+.search__row--all.search__row--active .search__row-title {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+
 /* Recurrence field + scope dialog (ADR-024) ---------------------------- */
 /* Shared by the task form and the event form, so this family is its own
    (`recur__`) rather than living under either page. Every control reuses the

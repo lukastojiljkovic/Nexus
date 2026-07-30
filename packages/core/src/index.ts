@@ -271,6 +271,20 @@ export type {
 } from "./search/searchOperators.js";
 
 export {
+  buildSearchTagFacets,
+  countSearchKinds,
+  MAX_TAG_FACETS,
+} from "./search/searchFacets.js";
+export type {
+  FacetTag,
+  FacetTagLink,
+  SearchFacetHit,
+  SearchKindCount,
+  SearchTagFacet,
+  TagFacetSource,
+} from "./search/searchFacets.js";
+
+export {
   KIND_PRIOR,
   rankSearchResults,
   RECENCY_DECAY_DAYS,

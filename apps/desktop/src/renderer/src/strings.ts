@@ -1357,6 +1357,8 @@ export const strings = {
      * than abbreviated so the line teaches the whole grammar at a glance.
      */
     operatorHint: "#oznaka · rok:danas / sutra / nedelja / 2026-08-15",
+    /** The palette's bottom row, which hands the current query to the full page (ADR-039 §5). */
+    showAllResults: "Prikaži sve rezultate",
     kindSingular: {
       task: "Zadatak",
       event: "Događaj",
@@ -1393,6 +1395,31 @@ export const strings = {
       rebuildRecordsUnitOne: "zapis",
       rebuildRecordsUnitMany: "zapisa",
       rebuildError: "Ponovno izgrađivanje indeksa nije uspelo.",
+    },
+    /**
+     * The full search page (ADR-039): its header and the two facet rows. The
+     * page reuses the palette's `placeholder`, `kindSingular`/`kindPlural`
+     * and `emptyResults` above rather than restating them — the two surfaces
+     * mean the same things and must read the same way.
+     */
+    page: {
+      title: "Pretraga",
+      /** Restates the palette shortcut, as the sidebar badge does (ADR-039 §1). */
+      shortcutHint: "Ctrl+K otvara brzu pretragu",
+      /** Names the query grammar, the way the palette's footer does — including `rok:`, which the page inherits from ADR-030 unchanged. */
+      grammarHint: "z: b: d: filtriraju po vrsti · #oznaka · rok:danas / sutra / nedelja / 2026-08-15",
+      allKinds: "Sve",
+      tagFilterLabel: "Filter po oznaci",
+      browseHeading: "Nedavno",
+      /** Tooltip on the date column when it falls back to the entry's last edit. */
+      updatedLabel: "Poslednja izmena",
+      resultsUnitOne: "rezultat",
+      resultsUnitMany: "rezultata",
+      /** Shown instead of an exact count once candidate sourcing hit its bound. */
+      truncatedNote: "Prikazano je prvih 500 rezultata — suzite pretragu za precizniji spisak.",
+      showMore: "Prikaži još",
+      emptyTitle: "Nema rezultata",
+      emptyDescription: "Probajte drugu reč ili uklonite neki filter.",
     },
   },
 } as const;
