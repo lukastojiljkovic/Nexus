@@ -14,8 +14,8 @@
     "@nexus/core": "workspace:*",
     "@nexus/tokens": "workspace:*",
     "@nexus/ui": "workspace:*",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
