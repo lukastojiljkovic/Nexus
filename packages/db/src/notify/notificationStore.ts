@@ -66,6 +66,14 @@ export interface NotificationSettings {
   quietTo: string | null;
   morningHour: string;
   enabledSources: NotificationSource[];
+  /**
+   * Whether the one-time "how much should Nexus remind you" question has been
+   * PUT to this profile (NTF-008 / ADR-033) — not what was answered, since
+   * keeping the defaults closes it just as finally as picking a preset. False
+   * whenever the settings row is absent, which is exactly the profile the ask
+   * exists for. Set only by `markAppetiteAsked`.
+   */
+  appetiteAsked: boolean;
 }
 
 /** A partial patch of the profile's settings; an omitted key is left untouched. */
@@ -94,6 +102,7 @@ interface SettingsRow {
   quiet_from: string | null;
   quiet_to: string | null;
   morning_hour: string;
+  appetite_asked: number;
 }
 
 interface SourceSettingRow {
@@ -140,6 +149,7 @@ export class NotificationStore {
   private readonly updateDismissedStatement: Database.Statement;
   private readonly selectSettings: Database.Statement;
   private readonly upsertSettings: Database.Statement;
+  private readonly markAppetiteAskedStatement: Database.Statement;
   private readonly selectSourceSettings: Database.Statement;
   private readonly upsertSourceSetting: Database.Statement;
 
@@ -191,8 +201,13 @@ export class NotificationStore {
        WHERE id = ? AND profile_id = ?`,
     );
     this.selectSettings = db.prepare(
-      `SELECT quiet_from, quiet_to, morning_hour FROM ntf_settings WHERE profile_id = ?`,
+      `SELECT quiet_from, quiet_to, morning_hour, appetite_asked
+       FROM ntf_settings WHERE profile_id = ?`,
     );
+    // `appetite_asked` is deliberately absent from both halves: the INSERT
+    // branch lets the column's own DEFAULT 0 stand (a first settings edit is
+    // not an answer to the NTF-008 question), and the UPDATE branch leaves an
+    // already-set flag alone — nothing but `markAppetiteAsked` ever moves it.
     this.upsertSettings = db.prepare(
       `INSERT INTO ntf_settings (profile_id, quiet_from, quiet_to, morning_hour, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)
@@ -200,6 +215,18 @@ export class NotificationStore {
          quiet_from = excluded.quiet_from,
          quiet_to = excluded.quiet_to,
          morning_hour = excluded.morning_hour,
+         updated_at = excluded.updated_at`,
+    );
+    // The mirror image: the INSERT branch writes the very defaults `getSettings`
+    // would have reported for the absent row it replaces, so marking the flag
+    // can never be mistaken for the user having chosen quiet hours; the UPDATE
+    // branch touches nothing but the flag and the timestamp.
+    this.markAppetiteAskedStatement = db.prepare(
+      `INSERT INTO ntf_settings
+         (profile_id, quiet_from, quiet_to, morning_hour, appetite_asked, created_at, updated_at)
+       VALUES (?, NULL, NULL, ?, 1, ?, ?)
+       ON CONFLICT (profile_id) DO UPDATE SET
+         appetite_asked = 1,
          updated_at = excluded.updated_at`,
     );
     this.selectSourceSettings = db.prepare(
@@ -214,7 +241,8 @@ export class NotificationStore {
 
   /**
    * This profile's resolved NTF preferences: no quiet hours, morning hour
-   * 08:00, and every source enabled when their rows are absent. Never writes.
+   * 08:00, every source enabled, and the NTF-008 appetite question unasked when
+   * their rows are absent. Never writes.
    */
   getSettings(): NotificationSettings {
     const settingsRow = this.selectSettings.get(this.profileId) as SettingsRow | undefined;
@@ -227,7 +255,26 @@ export class NotificationStore {
       quietTo: settingsRow?.quiet_to ?? null,
       morningHour: settingsRow?.morning_hour ?? DEFAULT_MORNING_HOUR,
       enabledSources,
+      appetiteAsked: settingsRow?.appetite_asked === 1,
     };
+  }
+
+  /**
+   * Records that this profile has been asked the one-time NTF-008 appetite
+   * question (ADR-033) — whatever the answer was, including "keep the
+   * defaults" and a dismissal, because the question is asked once, ever.
+   * Idempotent, and never touches quiet hours, the morning hour or any source
+   * toggle: writing the answer is the caller's separate business
+   * (`setSourceEnabled`), and this only closes the question.
+   */
+  markAppetiteAsked(now: string): void {
+    const validNow = validateDateTime(now, "now");
+    this.markAppetiteAskedStatement.run(
+      this.profileId,
+      DEFAULT_MORNING_HOUR,
+      validNow,
+      validNow,
+    );
   }
 
   /**
@@ -265,7 +312,15 @@ export class NotificationStore {
 
     this.upsertSettings.run(this.profileId, quietFrom, quietTo, morningHour, validNow, validNow);
 
-    return { quietFrom, quietTo, morningHour, enabledSources: current.enabledSources };
+    return {
+      quietFrom,
+      quietTo,
+      morningHour,
+      enabledSources: current.enabledSources,
+      // Untouched by this upsert (see `upsertSettings`) — editing a setting is
+      // not an answer to, nor an escape from, the one-time appetite question.
+      appetiteAsked: current.appetiteAsked,
+    };
   }
 
   /** Enables or disables one source for this profile (upserted; validated against the closed set). */

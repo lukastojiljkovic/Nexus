@@ -948,6 +948,21 @@ export const strings = {
       },
       saveError: "Čuvanje podešavanja nije uspelo. Pokušaj ponovo.",
     },
+    /**
+     * The one-time appetite question (NTF-008 / ADR-033), put at the first
+     * moment Nexus is actually about to remind. Asked once, ever — so the copy
+     * never promises a second chance, and the quiet "Zadrži podrazumevano" is a
+     * real answer, not an escape. The three choices reuse
+     * `settings.notificationPresets` labels: the same word must mean the same
+     * set here and on the Settings page.
+     */
+    appetite: {
+      title: "Koliko da te Nexus podseća?",
+      question:
+        "Prvi podsetnik je spreman. Izaberi koliko obaveštenja želiš — kasnije sve možeš promeniti u Podešavanjima.",
+      keepDefault: "Zadrži podrazumevano",
+      saveError: "Čuvanje izbora nije uspelo. Pokušaj ponovo.",
+    },
   },
 
   settings: {

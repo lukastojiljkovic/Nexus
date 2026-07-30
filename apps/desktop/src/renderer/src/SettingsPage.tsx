@@ -12,7 +12,7 @@ import type {
   RestoreProblem,
 } from "../../shared/ipc.js";
 import { authErrorMessage, passcodeMeetsPolicy, RecoveryKitPanel } from "./AuthGate.js";
-import { ALL_NOTIFICATION_SOURCES } from "./notificationFormat.js";
+import { ALL_NOTIFICATION_SOURCES, NOTIFICATION_PRESETS } from "./notificationFormat.js";
 import { NotificationSettingsControls } from "./NotificationSettingsControls.js";
 import type { ThemePreference } from "./theme.js";
 import { AUTO_LOCK_MINUTES, type AutoLockMinutes } from "./autoLock.js";
@@ -61,24 +61,6 @@ function sectionClass(visible: boolean): string {
 
 /** The home surface and this page itself can never be disabled — someone has to render the toggles. */
 const LOCKED_MODULES = new Set(["dashboard", "settings"]);
-
-interface NotificationPreset {
-  key: "minimal" | "normal" | "all";
-  sources: NotificationSource[];
-}
-
-/**
- * NTF-008: minimalno/normalno/sve map onto growing subsets of the five sources.
- * An event reminder is in every preset, minimalno included — it is the least
- * noisy kind there is, since the user attached it to that one event by hand. A
- * task reminder (ADR-028) joins every tier for exactly the same reason: it
- * exists only because the user set a ladder on that one task by hand.
- */
-const NOTIFICATION_PRESETS: NotificationPreset[] = [
-  { key: "minimal", sources: ["document", "event", "task"] },
-  { key: "normal", sources: ["document", "exam", "event", "task"] },
-  { key: "all", sources: ["document", "exam", "study-day", "event", "task"] },
-];
 
 function sameSourceSet(a: readonly NotificationSource[], b: readonly NotificationSource[]): boolean {
   return a.length === b.length && a.every((source) => b.includes(source));

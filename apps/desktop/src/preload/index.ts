@@ -207,6 +207,13 @@ const api: NexusApi = {
     ipcRenderer.on(IpcChannel.notificationsChanged, handler);
     return () => ipcRenderer.removeListener(IpcChannel.notificationsChanged, handler);
   },
+  onNotificationAppetiteAsk: (listener) => {
+    const handler = (): void => listener();
+    ipcRenderer.on(IpcChannel.notificationsAppetiteAsk, handler);
+    return () => ipcRenderer.removeListener(IpcChannel.notificationsAppetiteAsk, handler);
+  },
+  answerNotificationAppetite: (profileId, sources) =>
+    ipcRenderer.invoke(IpcChannel.notificationsAppetiteAnswer, { profileId, sources }),
   listNotes: (profileId, filter) =>
     ipcRenderer.invoke(
       IpcChannel.notesList,

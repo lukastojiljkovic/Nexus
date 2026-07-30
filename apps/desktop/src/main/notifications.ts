@@ -68,6 +68,14 @@ const GROUP_THRESHOLD = 3;
 
 let intervalHandle: ReturnType<typeof setInterval> | null = null;
 let resumeListener: (() => void) | null = null;
+/**
+ * The deps of the currently RUNNING scheduler, so a check can be triggered from
+ * outside without every caller rebuilding the whole store bundle (NTF-008: the
+ * appetite answer runs one immediately, so the reminders it held back fire
+ * under the chosen appetite rather than waiting out the next tick). Null
+ * whenever no scheduler is running — a locked session has no stores to read.
+ */
+let activeDeps: NotificationSchedulerDeps | null = null;
 
 /**
  * Starts the periodic reminder check (NTF piece a2): runs one check
@@ -80,6 +88,7 @@ let resumeListener: (() => void) | null = null;
  */
 export function startNotificationScheduler(deps: NotificationSchedulerDeps): void {
   stopNotificationScheduler();
+  activeDeps = deps;
   runNotificationCheck(deps);
   intervalHandle = setInterval(() => runNotificationCheck(deps), CHECK_INTERVAL_MS);
   resumeListener = () => runNotificationCheck(deps);
@@ -96,6 +105,20 @@ export function stopNotificationScheduler(): void {
     powerMonitor.removeListener("resume", resumeListener);
     resumeListener = null;
   }
+  activeDeps = null;
+}
+
+/**
+ * Runs one check right now against the running scheduler's own deps — the seam
+ * the NTF-008 appetite answer uses so the reminders that were held for the ask
+ * fire immediately under the appetite just chosen. A no-op when no scheduler is
+ * running (a locked session, or the smoke run, which never starts one), which
+ * is also why it takes no deps: there is nothing sensible to check against
+ * without the session the scheduler was started for.
+ */
+export function runCheckNow(): void {
+  if (activeDeps === null) return;
+  runNotificationCheck(activeDeps);
 }
 
 /**
@@ -239,7 +262,13 @@ function taskReminderInputs(tasks: readonly Task[]): TaskReminderInput[] {
   return rows;
 }
 
-/** One profile's worth of the check: sync plans, derive candidates, fire/record survivors, re-fire or dismiss snoozed rows. */
+/**
+ * One profile's worth of the check: sync plans, derive candidates, fire/record
+ * survivors, re-fire or dismiss snoozed rows — unless this is the profile's
+ * first visible reminder moment and the NTF-008 appetite question is still
+ * unanswered, in which case the whole cycle is held and the question is pushed
+ * instead (see the block below).
+ */
 function checkProfile(
   deps: NotificationSchedulerDeps,
   profileId: string,
@@ -291,6 +320,45 @@ function checkProfile(
 
   const ledgerKeys = new Set(ntf.listLedgerKeys().map(occurrenceKey));
   const withinQuiet = isWithinQuietHours(nowTime, settings.quietFrom, settings.quietTo);
+  const currentKeys = new Set(candidates.map(occurrenceKey));
+
+  // Everything this cycle would actually put in front of the user, decided
+  // before anything is written: fresh candidates that clear both the ledger and
+  // the quiet-hours gate, plus snoozed rows whose time is up and whose source
+  // entity is still due. Splitting the decision from the delivery is what lets
+  // the NTF-008 ask below hold a cycle without having recorded half of it.
+  const fresh = candidates.filter(
+    (candidate) =>
+      !ledgerKeys.has(occurrenceKey(candidate)) &&
+      // held; re-derives once quiet hours end
+      (candidate.priority === "max" || !withinQuiet),
+  );
+  const dueSnoozed = ntf.dueSnoozed(nowIso);
+  const refiring = dueSnoozed.filter((row) => currentKeys.has(occurrenceKey(row)));
+
+  // NTF-008 (ADR-033): the one-time "how much should Nexus remind you" ask, put
+  // at the first moment it is actually about to remind — the only moment where
+  // the question means anything — and ONLY when there is a window to see it in.
+  // Holding is free for exactly the reason quiet hours are free: nothing is
+  // materialized, so a held cycle simply re-derives on the next one. When the
+  // window is hidden or minimized the reminder wins instead and the flag stays
+  // unset, so the ask waits for the next VISIBLE delivery moment: a reminder is
+  // never held hostage by a dialog nobody can see.
+  //
+  // The push is payload-free, so the renderer answers for the profile it is
+  // showing. That is exact while there is one profile (see the loop comment in
+  // `runNotificationCheck`), and it is the SAME assumption the surrounding loop
+  // already makes — but it fails harder: an ask raised for a non-active profile
+  // would be answered for the active one, leaving the first still unasked and
+  // its cycle held on every future check. Whoever lands profile switching must
+  // scope this ask along with the rest of the loop.
+  if (!settings.appetiteAsked && (fresh.length > 0 || refiring.length > 0)) {
+    const visibleWindow = visibleMainWindow(deps);
+    if (visibleWindow) {
+      visibleWindow.webContents.send(IpcChannel.notificationsAppetiteAsk);
+      return; // nothing recorded, nothing fired — the whole cycle re-derives
+    }
+  }
 
   const documentsById = new Map(documents.map((doc) => [doc.id, doc]));
   const eventsById = new Map(events.map((event) => [event.id, event]));
@@ -302,10 +370,7 @@ function checkProfile(
   const toShow: Array<{ source: NotificationSource; copy: NotificationCopy }> = [];
   let ledgerChanged = false;
 
-  for (const candidate of candidates) {
-    if (ledgerKeys.has(occurrenceKey(candidate))) continue; // already recorded, in any status
-    if (candidate.priority !== "max" && withinQuiet) continue; // held; re-derives once quiet hours end
-
+  for (const candidate of fresh) {
     const copy = composeCopy(candidate, {
       documentsById,
       eventsById,
@@ -331,8 +396,7 @@ function checkProfile(
     ledgerChanged = true;
   }
 
-  const currentKeys = new Set(candidates.map(occurrenceKey));
-  for (const row of ntf.dueSnoozed(nowIso)) {
+  for (const row of dueSnoozed) {
     if (currentKeys.has(occurrenceKey(row))) {
       const refired = ntf.markRefired(row.id, nowIso);
       toShow.push({ source: row.source, copy: { title: refired.title, body: refired.body } });
@@ -347,6 +411,19 @@ function checkProfile(
   if (ledgerChanged) {
     deps.getMainWindow()?.webContents.send(IpcChannel.notificationsChanged);
   }
+}
+
+/**
+ * The main window when it is genuinely on screen — shown, not minimized, not
+ * torn down. This is the whole gate on the NTF-008 ask: a modal question pushed
+ * to a hidden or minimized window would be answered by nobody while the
+ * reminder it is holding sits undelivered, so "can this be seen right now" is
+ * the condition, not "does a window object exist".
+ */
+function visibleMainWindow(deps: NotificationSchedulerDeps): BrowserWindow | null {
+  const win = deps.getMainWindow();
+  if (!win || win.isDestroyed()) return null;
+  return win.isVisible() && !win.isMinimized() ? win : null;
 }
 
 /** The (source, entityId, occurrenceKey) identity shared by candidates, ledger keys, and ledger rows. */

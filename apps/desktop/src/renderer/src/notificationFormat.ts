@@ -15,6 +15,32 @@ export const ALL_NOTIFICATION_SOURCES: NotificationSource[] = [
   "task",
 ];
 
+/** Which appetite tier a preset is — the key both its Serbian label and its button identity are read from. */
+export type NotificationPresetKey = "minimal" | "normal" | "all";
+
+export interface NotificationPreset {
+  key: NotificationPresetKey;
+  sources: NotificationSource[];
+}
+
+/**
+ * NTF-008: minimalno/normalno/sve map onto growing subsets of the five sources.
+ * An event reminder is in every preset, minimalno included — it is the least
+ * noisy kind there is, since the user attached it to that one event by hand. A
+ * task reminder (ADR-028) joins every tier for exactly the same reason: it
+ * exists only because the user set a ladder on that one task by hand.
+ *
+ * Lives here, beside `ALL_NOTIFICATION_SOURCES`, because two surfaces now write
+ * these exact sets: the Settings page's preset row and the one-time appetite
+ * dialog (ADR-033). Picking "Normalno" must mean the identical thing in both,
+ * and a second copy is precisely how it would stop doing so.
+ */
+export const NOTIFICATION_PRESETS: NotificationPreset[] = [
+  { key: "minimal", sources: ["document", "event", "task"] },
+  { key: "normal", sources: ["document", "exam", "event", "task"] },
+  { key: "all", sources: ["document", "exam", "study-day", "event", "task"] },
+];
+
 function isSameLocalDay(a: Date, b: Date): boolean {
   return (
     a.getFullYear() === b.getFullYear() &&

@@ -931,6 +931,10 @@ describe("RestoreStore", () => {
       quietTo: "06:30",
       morningHour: "07:45",
       enabledSources: ["document", "exam"],
+      // NTF-008 (ADR-033): the appetite flag deliberately does not travel in an
+      // archive, so a restored profile comes back UNASKED and is asked again at
+      // its next visible reminder — the harmless direction.
+      appetiteAsked: false,
     });
 
     const profileRow = db.raw.prepare("SELECT name FROM profiles WHERE id = ?").get(profileB) as {

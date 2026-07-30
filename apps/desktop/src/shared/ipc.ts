@@ -124,6 +124,8 @@ export const IpcChannel = {
   notificationsSettingsUpdate: "notifications:settings-update",
   notificationsSourceToggle: "notifications:source-toggle",
   notificationsChanged: "notifications:changed",
+  notificationsAppetiteAsk: "notifications:appetite-ask",
+  notificationsAppetiteAnswer: "notifications:appetite-answer",
   notesList: "notes:list",
   notesCreate: "notes:create",
   notesLoad: "notes:load",
@@ -1532,6 +1534,8 @@ export interface NotificationSettings {
   quietTo: string | null;
   morningHour: string;
   enabledSources: NotificationSource[];
+  /** Whether the one-time "how much should Nexus remind you" question has already been put to this profile (NTF-008 / ADR-033). */
+  appetiteAsked: boolean;
 }
 
 /** A partial patch of NTF settings; an omitted key is left untouched, `null` clears a quiet-hours bound. */
@@ -1570,6 +1574,21 @@ export interface NotificationsSourceToggleRequest {
   profileId: string;
   source: NotificationSource;
   enabled: boolean;
+}
+
+/**
+ * The user's answer to the one-time NTF-008 appetite question (ADR-033).
+ * `sources` is the exact set to enable — one of the Settings presets — or
+ * `null` for "keep whatever is configured", which is what both "Zadrži
+ * podrazumevano" and a dismissal send. Either way the question is marked as
+ * asked: it is asked once, ever, and an answer of "don't change anything" is
+ * still an answer. Main stamps the clock and then runs one immediate scheduler
+ * check, so the reminders held back for the ask fire under the chosen appetite
+ * instead of waiting out the next 60-second tick.
+ */
+export interface NotificationsAppetiteAnswerRequest {
+  profileId: string;
+  sources: NotificationSource[] | null;
 }
 
 /**
@@ -2501,6 +2520,19 @@ export interface NexusApi {
    * one fixed channel, never a generic `on(channel, ...)` passthrough.
    */
   onNotificationsChanged(listener: () => void): () => void;
+  /**
+   * Subscribes to the single `notifications:appetite-ask` push event (NTF-008 /
+   * ADR-033) — payload-free, exactly like `onNotificationsChanged`, since the
+   * only thing it carries is "now is the moment to ask". Main may push it again
+   * on a later check while the question is still unanswered, so the listener
+   * guards against opening the dialog twice. Returns an unsubscribe function.
+   */
+  onNotificationAppetiteAsk(listener: () => void): () => void;
+  /** Answers the one-time appetite question; `sources` null keeps the current settings. Marks the question asked either way. */
+  answerNotificationAppetite(
+    profileId: string,
+    sources: NotificationSource[] | null,
+  ): Promise<void>;
   listNotes(profileId: string, filter?: { folderId?: string | null }): Promise<NoteMeta[]>;
   createNote(profileId: string): Promise<NoteMeta>;
   loadNote(profileId: string, noteId: string): Promise<NoteDocPayload>;

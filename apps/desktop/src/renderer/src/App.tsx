@@ -12,6 +12,7 @@ import { NotesPage, type NotesIntent } from "./NotesPage.js";
 import { StudyPage, type StudyIntent } from "./StudyPage.js";
 import { SettingsPage, formatArchiveInstant } from "./SettingsPage.js";
 import { NotificationCenter } from "./NotificationCenter.js";
+import { NotificationAppetiteDialog } from "./NotificationAppetiteDialog.js";
 import { SearchPalette } from "./SearchPalette.js";
 import { buildSearchCommands } from "./searchCommands.js";
 import { createModuleRegistry } from "./modules.js";
@@ -91,6 +92,13 @@ export function App() {
   const [restoreBannerHidden, setRestoreBannerHidden] = useState(false);
   const [undoingRestore, setUndoingRestore] = useState(false);
   const [restoreUndoError, setRestoreUndoError] = useState<string | null>(null);
+  // The one-time notification-appetite question (NTF-008 / ADR-033). Main
+  // decides WHEN to ask — at the first reminder moment it can actually be seen —
+  // and pushes a payload-free event; this flag is only "is it on screen". Main
+  // may push again on a later check while the question is still unanswered
+  // (its own held-cycle mechanism), so setting a boolean already true is the
+  // guard against opening twice.
+  const [appetiteAsk, setAppetiteAsk] = useState(false);
 
   /** Loads everything that requires an open database. Only ever called once `auth:status` (or an unlock/create/recover result) has confirmed `state === "unlocked"`. */
   async function loadUnlockedData(): Promise<void> {
@@ -284,6 +292,12 @@ export function App() {
     changePreference(theme === "noc" ? "dan" : "noc");
   }
 
+  // Stable across renders: the appetite dialog's Escape listener depends on the
+  // callback that answers, which depends on this — a fresh reference on every
+  // unrelated App re-render would tear the listener down and re-register it for
+  // nothing.
+  const closeAppetiteAsk = useCallback(() => setAppetiteAsk(false), []);
+
   // Stable across renders: every page lists `onIntentHandled` (this) in its
   // own intent-effect's dependency array, and a fresh reference on every
   // unrelated App re-render would retrigger that effect for nothing.
@@ -315,6 +329,28 @@ export function App() {
     setPaletteOpen(false);
     setSearchStatus(null);
   }, []);
+
+  // The appetite ask (NTF-008): subscribed only while genuinely unlocked, since
+  // main never runs a check against a locked session and a dialog over the lock
+  // screen would have no profile to answer for. Torn down on lock with the
+  // subscription, and the flag is cleared with it so a later unlock starts from
+  // "not on screen" rather than resurrecting a dialog nobody is answering.
+  //
+  // The search palette is closed as the question opens. Both listen for Escape
+  // on the document, so leaving the palette up would let one keypress close it
+  // AND answer a one-time question the user never got to read — and this
+  // question is asked once, ever. It is also simply modal: nothing else should
+  // share the screen with it.
+  useEffect(() => {
+    if (authStatus?.state !== "unlocked") {
+      setAppetiteAsk(false);
+      return;
+    }
+    return window.nexus.onNotificationAppetiteAsk(() => {
+      closePalette();
+      setAppetiteAsk(true);
+    });
+  }, [authStatus?.state, closePalette]);
 
   /**
    * Activates a global-search result (021-d/021-e): dispatches the intent
@@ -645,6 +681,10 @@ export function App() {
           onOpenResult={onSearchResult}
           statusMessage={searchStatus}
         />
+      )}
+
+      {appetiteAsk && activeProfile && (
+        <NotificationAppetiteDialog profileId={activeProfile.id} onAnswered={closeAppetiteAsk} />
       )}
     </div>
   );

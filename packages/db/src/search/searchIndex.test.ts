@@ -425,8 +425,7 @@ describe("global search index (migration 017)", () => {
     // index" is what this file needs, and slicing the last entry off the list
     // only said that while 017 happened to be the newest migration — the day a
     // migration 018 landed, the "pre-migration-017" file silently became a
-    // post-017 one. `migrations.test.ts` pins that versions run 1..N gap-free,
-    // so the count below and the stamped version agree by construction.
+    // post-017 one.
     const beforeSearchIndex = MIGRATIONS.filter((migration) => migration.version < 17);
     runMigrations(rawDb, beforeSearchIndex);
     expect(rawDb.pragma("user_version", { simple: true })).toBe(16);
@@ -452,7 +451,11 @@ describe("global search index (migration 017)", () => {
     expect(tablesBefore).not.toContain("search_entries");
 
     runMigrations(rawDb, MIGRATIONS);
-    expect(rawDb.pragma("user_version", { simple: true })).toBe(MIGRATIONS.length);
+    // The stamp is the HIGHEST migration version — which equals
+    // `MIGRATIONS.length` only while the list is contiguous. Reading the
+    // maximum says what is actually meant and holds either way.
+    const latestVersion = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
+    expect(rawDb.pragma("user_version", { simple: true })).toBe(latestVersion);
 
     const row = rawDb
       .prepare("SELECT title, title_folded, profile_id FROM search_entries WHERE kind = 'task' AND entity_id = ?")

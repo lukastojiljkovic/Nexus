@@ -5024,14 +5024,17 @@ button.cal__grid-event--dragging {
   margin-right: 3px;
 }
 
-/* House dialog recipe — the recurrence scope question (.recur-dialog__*) and
-   the open-subtasks question (.tasks__dialog-*, TASK-008) share it outright:
-   both ask "this reaches records you did not pick", and one look for that
-   question is the point. The same overlay as the search palette (backdrop and
-   panel as siblings, a solid wash of the app background rather than a raw
-   scrim), centred because it is a question, not a search surface. */
+/* House dialog recipe — the recurrence scope question (.recur-dialog__*), the
+   open-subtasks question (.tasks__dialog-*, TASK-008) and the one-time
+   notification-appetite question (.ntf__appetite-*, NTF-008) share it outright:
+   each asks something the app must not answer on the user's behalf, and one
+   look for that kind of question is the point. The same overlay as the search
+   palette (backdrop and panel as siblings, a solid wash of the app background
+   rather than a raw scrim), centred because it is a question, not a search
+   surface. */
 .recur-dialog__overlay,
-.tasks__dialog-overlay {
+.tasks__dialog-overlay,
+.ntf__appetite-overlay {
   position: fixed;
   inset: 0;
   z-index: 60;
@@ -5041,14 +5044,16 @@ button.cal__grid-event--dragging {
   padding: var(--nx-space-6);
 }
 .recur-dialog__backdrop,
-.tasks__dialog-backdrop {
+.tasks__dialog-backdrop,
+.ntf__appetite-backdrop {
   position: absolute;
   inset: 0;
   background: var(--nx-bg);
   opacity: 0.75;
 }
 .recur-dialog__panel,
-.tasks__dialog-panel {
+.tasks__dialog-panel,
+.ntf__appetite-panel {
   position: relative;
   width: min(420px, 92vw);
   display: flex;
@@ -5061,14 +5066,16 @@ button.cal__grid-event--dragging {
   box-shadow: var(--nx-shadow);
 }
 .recur-dialog__title,
-.tasks__dialog-title {
+.tasks__dialog-title,
+.ntf__appetite-title {
   margin: 0;
   font-size: var(--nx-font-size-title);
   font-weight: var(--nx-font-weight-semibold);
   color: var(--nx-text);
 }
 .recur-dialog__question,
-.tasks__dialog-question {
+.tasks__dialog-question,
+.ntf__appetite-question {
   margin: 0;
   font-size: var(--nx-font-size-body-sm);
   color: var(--nx-text-muted);
@@ -5085,29 +5092,37 @@ button.cal__grid-event--dragging {
 /* Equal choices and no primary among them: the dialog exists so that nothing
    here is picked by accident. */
 .recur-dialog__choices,
-.tasks__dialog-choices {
+.tasks__dialog-choices,
+.ntf__appetite-choices {
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-2);
 }
 .recur-dialog__choice.nx-button,
-.tasks__dialog-choice.nx-button {
+.tasks__dialog-choice.nx-button,
+.ntf__appetite-choice.nx-button {
   justify-content: flex-start;
   text-align: left;
 }
 .recur-dialog__actions,
-.tasks__dialog-actions {
+.tasks__dialog-actions,
+.ntf__appetite-actions {
   display: flex;
   justify-content: flex-end;
 }
+/* The quiet way out of a question that must still be answered: "Zadrži
+   podrazumevano" carries the same recessive treatment as Otkaži, because it is
+   the answer that changes nothing — not because it is a cancel. */
 .recur-dialog__cancel.nx-button,
-.tasks__dialog-cancel.nx-button {
+.tasks__dialog-cancel.nx-button,
+.ntf__appetite-keep.nx-button {
   background: transparent;
   border-color: transparent;
   color: var(--nx-text-muted);
 }
 .recur-dialog__cancel.nx-button:hover,
-.tasks__dialog-cancel.nx-button:hover {
+.tasks__dialog-cancel.nx-button:hover,
+.ntf__appetite-keep.nx-button:hover {
   background: transparent;
   color: var(--nx-text);
 }

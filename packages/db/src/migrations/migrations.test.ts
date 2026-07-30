@@ -16,8 +16,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 25 (task attachments in task search), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(25);
+  it("is at version 26 (notification appetite), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(26);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -2718,6 +2718,60 @@ describe("migration 025 — task attachment names inside the task's search entry
     ]) {
       expect(triggers).toContain(name);
     }
+    db.close();
+  });
+});
+
+describe("migration 026 — notification appetite", () => {
+  const now = () => new Date().toISOString();
+
+  const insertNtfSettings = (
+    db: NexusDatabase,
+    profileId: string,
+    appetiteAsked: number | null = null,
+  ) =>
+    appetiteAsked === null
+      ? db.raw
+          .prepare(
+            `INSERT INTO ntf_settings
+               (profile_id, quiet_from, quiet_to, morning_hour, created_at, updated_at)
+             VALUES (?, NULL, NULL, '08:00', ?, ?)`,
+          )
+          .run(profileId, now(), now())
+      : db.raw
+          .prepare(
+            `INSERT INTO ntf_settings
+               (profile_id, quiet_from, quiet_to, morning_hour, appetite_asked, created_at, updated_at)
+             VALUES (?, NULL, NULL, '08:00', ?, ?, ?)`,
+          )
+          .run(profileId, appetiteAsked, now(), now());
+
+  it("adds appetite_asked to ntf_settings and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    const columns = (
+      db.raw.prepare("PRAGMA table_info(ntf_settings)").all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(columns).toContain("appetite_asked");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("defaults to 0 — a row written without it means the question was never put", () => {
+    const db = openDatabase({ path: join(dir, "default.db") });
+    insertProfile(db, "p1");
+    insertNtfSettings(db, "p1");
+    const row = db.raw
+      .prepare("SELECT appetite_asked FROM ntf_settings WHERE profile_id = ?")
+      .get("p1") as { appetite_asked: number };
+    expect(row.appetite_asked).toBe(0);
+    db.close();
+  });
+
+  it("rejects an appetite_asked value outside {0, 1} with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-appetite.db") });
+    insertProfile(db, "p1");
+    expect(() => insertNtfSettings(db, "p1", 2)).toThrow();
+    expect(() => insertNtfSettings(db, "p1", 1)).not.toThrow();
     db.close();
   });
 });

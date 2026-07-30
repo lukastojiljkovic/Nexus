@@ -52,6 +52,7 @@ import {
   MAX_TASK_REMINDERS,
   MAX_TASK_REMINDER_DAYS,
   NOTE_FOLDER_COLORS,
+  NOTIFICATION_SOURCES,
   NoteAttachmentNotFoundError,
   NoteAttachmentStore,
   NotificationStore,
@@ -171,7 +172,11 @@ import {
   healNotes,
   scheduleIdleCompaction,
 } from "./notes.js";
-import { startNotificationScheduler, stopNotificationScheduler } from "./notifications.js";
+import {
+  runCheckNow,
+  startNotificationScheduler,
+  stopNotificationScheduler,
+} from "./notifications.js";
 import {
   applyRestore,
   cancelRestore,
@@ -1347,28 +1352,41 @@ function asBlockStatus(value: unknown, field: string): StudyBlockStatus {
   throw new Error(`Invalid IPC payload: "${field}" is not a valid block status.`);
 }
 
-/**
- * The five NTF/CAL-006/ADR-028 source kinds (mirrors `@nexus/core`'s
- * `NotificationSource`). Not re-exported from `@nexus/db`, so the closed set is
- * declared here, the same division of labour as every other closed-enum
- * validator in this file.
- */
-const NOTIFICATION_SOURCES: readonly NotificationSource[] = [
-  "document",
-  "exam",
-  "study-day",
-  "event",
-  "task",
-];
-
 /** The four snooze presets `notifications:snooze` accepts; main resolves each to an absolute `until` from its own clock. */
 const SNOOZE_PRESETS: readonly SnoozePreset[] = ["10m", "1h", "tonight", "tomorrow-morning"];
 
+/**
+ * The five NTF/CAL-006/ADR-028 source kinds, checked against `@nexus/db`'s
+ * exported `NOTIFICATION_SOURCES` — the very list `NotificationStore` validates
+ * against and `RestoreStore` writes from — rather than another hand-typed copy
+ * of the migration's CHECK. A source added by a future migration widens this
+ * validator for free instead of being silently refused on the wire.
+ */
 function asNotificationSource(value: unknown, field: string): NotificationSource {
   if (typeof value === "string" && (NOTIFICATION_SOURCES as readonly string[]).includes(value)) {
     return value as NotificationSource;
   }
   throw new Error(`Invalid IPC payload: "${field}" is not a valid notification source.`);
+}
+
+/**
+ * The NTF-008 appetite answer's `sources` (ADR-033): either an array of known
+ * sources — bounded by the closed set's own size, since a longer one could only
+ * be repeats — or `null` for "keep the current settings", which is what both
+ * "keep the defaults" and a dismissal send. Each entry is checked against the
+ * imported closed set, never a respelling of it.
+ */
+function asNotificationSourceListOrNull(
+  value: unknown,
+  field: string,
+): NotificationSource[] | null {
+  if (value === null) return null;
+  if (!Array.isArray(value) || value.length > NOTIFICATION_SOURCES.length) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be null or an array of at most ${NOTIFICATION_SOURCES.length} notification sources.`,
+    );
+  }
+  return value.map((entry, index) => asNotificationSource(entry, `${field}[${index}]`));
 }
 
 function asSnoozePreset(value: unknown, field: string): SnoozePreset {
@@ -3033,6 +3051,36 @@ function registerIpc(): void {
     const source = asNotificationSource(body.source, "source");
     const enabled = asBoolean(body.enabled, "enabled");
     notificationStore(profileId).setSourceEnabled(source, enabled, new Date().toISOString());
+  });
+
+  /**
+   * The one-time NTF-008 appetite answer (ADR-033). `sources` non-null writes
+   * the whole set at once — every known source is set explicitly, so a preset
+   * means exactly the same thing here as it does on the Settings page rather
+   * than "enable these and leave the rest as they were". `null` writes nothing
+   * and only closes the question, which is what "keep the defaults" and a
+   * dismissal both mean.
+   *
+   * Marking always happens, whatever the answer: the question is asked once,
+   * ever. The immediate check afterwards is the point of the whole exchange —
+   * the scheduler held this cycle back to put the question, so the reminders
+   * behind it fire now, under the appetite just chosen, instead of after
+   * another minute of silence.
+   */
+  ipcMain.handle(IpcChannel.notificationsAppetiteAnswer, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const sources = asNotificationSourceListOrNull(body.sources, "sources");
+    const now = new Date().toISOString();
+    const store = notificationStore(profileId);
+    if (sources !== null) {
+      for (const source of NOTIFICATION_SOURCES) {
+        store.setSourceEnabled(source, sources.includes(source), now);
+      }
+    }
+    store.markAppetiteAsked(now);
+    runCheckNow();
   });
 
   // NOTE slice a1 (ADR-012): binary Yjs updates cross this boundary as

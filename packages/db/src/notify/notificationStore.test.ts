@@ -58,13 +58,14 @@ function deliver(
 
 describe("NotificationStore", () => {
   describe("getSettings", () => {
-    it("returns defaults when no settings rows exist: no quiet hours, 08:00 morning hour, all sources enabled", () => {
+    it("returns defaults when no settings rows exist: no quiet hours, 08:00 morning hour, all sources enabled, appetite unasked", () => {
       const { notify } = fixture();
       expect(notify.getSettings()).toEqual({
         quietFrom: null,
         quietTo: null,
         morningHour: "08:00",
         enabledSources: ["document", "exam", "study-day", "event", "task"],
+        appetiteAsked: false,
       });
     });
 
@@ -87,6 +88,7 @@ describe("NotificationStore", () => {
         quietTo: "07:00",
         morningHour: "09:00",
         enabledSources: ["document", "exam", "study-day", "event", "task"],
+        appetiteAsked: false,
       });
       expect(notify.getSettings().quietFrom).toBe("22:00");
     });
@@ -138,7 +140,82 @@ describe("NotificationStore", () => {
         quietTo: "07:00",
         morningHour: "09:00",
         enabledSources: ["document", "exam", "study-day", "event", "task"],
+        appetiteAsked: false,
       });
+    });
+  });
+
+  /**
+   * NTF-008 (ADR-033): the one-time "how much should Nexus remind you" ask.
+   * The flag records that the question was PUT, not what was answered — so
+   * "keep the defaults" and a chosen preset both close it forever.
+   */
+  describe("markAppetiteAsked", () => {
+    it("flips the flag and persists it, from no settings row at all", () => {
+      const { notify } = fixture();
+      expect(notify.getSettings().appetiteAsked).toBe(false);
+      notify.markAppetiteAsked(NOW);
+      expect(notify.getSettings().appetiteAsked).toBe(true);
+    });
+
+    it("leaves the rest of the settings at their defaults when it writes the first row", () => {
+      const { notify } = fixture();
+      notify.markAppetiteAsked(NOW);
+      expect(notify.getSettings()).toEqual({
+        quietFrom: null,
+        quietTo: null,
+        morningHour: "08:00",
+        enabledSources: ["document", "exam", "study-day", "event", "task"],
+        appetiteAsked: true,
+      });
+    });
+
+    it("preserves quiet hours and the morning hour when a settings row already exists", () => {
+      const { notify } = fixture();
+      notify.updateSettings({ quietFrom: "22:00", quietTo: "07:00", morningHour: "09:00" }, NOW);
+      notify.markAppetiteAsked(NOW);
+      expect(notify.getSettings()).toEqual({
+        quietFrom: "22:00",
+        quietTo: "07:00",
+        morningHour: "09:00",
+        enabledSources: ["document", "exam", "study-day", "event", "task"],
+        appetiteAsked: true,
+      });
+    });
+
+    it("is idempotent and upserts rather than duplicating the row", () => {
+      const { notify, profileId } = fixture();
+      notify.markAppetiteAsked(NOW);
+      notify.markAppetiteAsked("2026-07-11T08:00:00.000Z");
+      expect(notify.getSettings().appetiteAsked).toBe(true);
+      expect(
+        (
+          db.raw
+            .prepare("SELECT count(*) AS n FROM ntf_settings WHERE profile_id = ?")
+            .get(profileId) as { n: number }
+        ).n,
+      ).toBe(1);
+    });
+
+    it("survives a later settings edit — the question is asked once, ever", () => {
+      const { notify } = fixture();
+      notify.markAppetiteAsked(NOW);
+      notify.updateSettings({ morningHour: "10:00" }, NOW);
+      expect(notify.getSettings().appetiteAsked).toBe(true);
+      expect(notify.updateSettings({ morningHour: "11:00" }, NOW).appetiteAsked).toBe(true);
+    });
+
+    it("is scoped to its own profile", () => {
+      const first = fixture();
+      const second = fixture();
+      first.notify.markAppetiteAsked(NOW);
+      expect(first.notify.getSettings().appetiteAsked).toBe(true);
+      expect(second.notify.getSettings().appetiteAsked).toBe(false);
+    });
+
+    it("rejects a malformed now", () => {
+      const { notify } = fixture();
+      expect(() => notify.markAppetiteAsked("2026-07-10")).toThrow(NotificationValidationError);
     });
   });
 
