@@ -12,6 +12,7 @@ import type {
   NotificationCandidate,
   NotificationSource,
   StudyDayReminderInput,
+  TaskReminderInput,
 } from "@nexus/core";
 import type {
   DocumentStore,
@@ -22,6 +23,8 @@ import type {
   NotificationStore,
   PlanStore,
   SubjectStore,
+  Task,
+  TaskStore,
   TrackedDocument,
 } from "@nexus/db";
 import { localToday, localTime } from "./clock.js";
@@ -32,6 +35,7 @@ import {
   examNotificationCopy,
   groupedDigestCopy,
   studyDayNotificationCopy,
+  taskNotificationCopy,
   type NotificationCopy,
 } from "./notificationStrings.js";
 import { IpcChannel } from "../shared/ipc.js";
@@ -49,6 +53,7 @@ export interface NotificationSchedulerDeps {
   examStore(profileId: string): ExamStore;
   subjectStore(profileId: string): SubjectStore;
   planStore(profileId: string): PlanStore;
+  taskStore(profileId: string): TaskStore;
   notificationStore(profileId: string): NotificationStore;
   getMainWindow(): BrowserWindow | null;
 }
@@ -202,6 +207,38 @@ function eventReminderInputs(events: readonly Event[], today: string): EventRemi
   return rows;
 }
 
+/**
+ * The tasks of one profile in the engine's reminder shape (ADR-028). Only rows
+ * that can actually produce an occurrence travel: a task that is already done
+ * has nothing left to remind about, and one with an empty ladder was never set
+ * to remind. (Soft-deleted rows never appear at all — `listActive` excludes
+ * them.)
+ *
+ * The due-date check is the same defensive skip `eventReminderInputs` makes of
+ * a malformed start: a days-before ladder has nothing to count back from unless
+ * the due date is a bare day, and while `TaskStore` refuses to WRITE that pair,
+ * a row can reach the table by another route (a restored archive). One such row
+ * costs a skipped reminder rather than the whole check.
+ *
+ * Unlike events there is no expansion and no forward window, because the row's
+ * CURRENT due date is the only occurrence that can ever be due: a recurring
+ * task's series lives in its own advance (ADR-024) — completing an occurrence
+ * moves this very row to the next date, which re-keys its reminders for free.
+ */
+function taskReminderInputs(tasks: readonly Task[]): TaskReminderInput[] {
+  const rows: TaskReminderInput[] = [];
+  for (const task of tasks) {
+    if (task.done || task.reminderOffsets.length === 0) continue;
+    if (task.dueDate === null || !isValidDayKey(task.dueDate)) continue;
+    rows.push({
+      id: task.id,
+      dueDate: task.dueDate,
+      reminderOffsets: task.reminderOffsets,
+    });
+  }
+  return rows;
+}
+
 /** One profile's worth of the check: sync plans, derive candidates, fire/record survivors, re-fire or dismiss snoozed rows. */
 function checkProfile(
   deps: NotificationSchedulerDeps,
@@ -220,6 +257,7 @@ function checkProfile(
   const events = deps.eventStore(profileId).listActive();
   const exams = deps.examStore(profileId).listActive();
   const subjects = deps.subjectStore(profileId).listActive();
+  const tasks = deps.taskStore(profileId).listActive();
   const todaysBlocks = plans
     .listBlocksInRange(today, today)
     .filter((block) => block.status === "planned");
@@ -244,10 +282,7 @@ function checkProfile(
     exams: exams.map((exam) => ({ id: exam.id, examDate: exam.examDate })),
     events: eventReminderInputs(events, today),
     studyDays,
-    // ADR-028 landed the engine's task source and the store column behind it;
-    // the next slice gathers them (undone tasks with a bare-date due date and a
-    // non-empty ladder) and gives them their Serbian copy.
-    tasks: [],
+    tasks: taskReminderInputs(tasks),
     enabledSources: settings.enabledSources,
     today,
     nowLocalTime: nowTime,
@@ -260,6 +295,7 @@ function checkProfile(
   const documentsById = new Map(documents.map((doc) => [doc.id, doc]));
   const eventsById = new Map(events.map((event) => [event.id, event]));
   const examsById = new Map(exams.map((exam) => [exam.id, exam]));
+  const tasksById = new Map(tasks.map((task) => [task.id, task]));
   const subjectNameById = new Map(subjects.map((subject) => [subject.id, subject.name]));
   const studyDaysByDate = new Map(studyDays.map((day) => [day.date, day]));
 
@@ -274,6 +310,7 @@ function checkProfile(
       documentsById,
       eventsById,
       examsById,
+      tasksById,
       subjectNameById,
       studyDaysByDate,
       today,
@@ -321,6 +358,7 @@ interface CopyContext {
   documentsById: Map<string, TrackedDocument>;
   eventsById: Map<string, Event>;
   examsById: Map<string, Exam>;
+  tasksById: Map<string, Task>;
   subjectNameById: Map<string, string>;
   studyDaysByDate: Map<string, StudyDayReminderInput>;
   today: string;
@@ -356,10 +394,17 @@ function composeCopy(candidate: NotificationCandidate, ctx: CopyContext): Notifi
     );
   }
   if (candidate.source === "task") {
-    // ADR-028 landed the engine's task source and the store column behind it;
-    // the next slice gathers them and gives them their Serbian copy. Until it
-    // does, `tasks: []` above means no task candidate can reach here at all.
-    return null;
+    const task = ctx.tasksById.get(candidate.entityId);
+    if (!task) return null;
+    // The engine's own documented occurrence key: "<dueDate> <offset>". Both
+    // halves are read back out of the key, exactly as the event branch does:
+    // the offset is nowhere else, and the due date is the one this occurrence
+    // was derived for — which matters because a recurring task advances IN
+    // PLACE (ADR-024), so the row's own `dueDate` is a moving target while the
+    // key is the fixed identity the ledger already recorded under.
+    const [dueDate, offsetDays] = candidate.occurrenceKey.split(" ");
+    if (dueDate === undefined || offsetDays === undefined) return null;
+    return taskNotificationCopy(task.title, dueDate, ctx.today, Number(offsetDays));
   }
   const day = ctx.studyDaysByDate.get(candidate.entityId);
   if (!day) return null;

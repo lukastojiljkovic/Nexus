@@ -5,12 +5,13 @@ import { bellCountLabel, formatNotificationWhen } from "./notificationFormat.js"
 import { NotificationSettingsControls } from "./NotificationSettingsControls.js";
 import { strings } from "./strings.js";
 
-/** Deep-link target module per source (NTF a3: exam/study-day → study, document/event → calendar). */
+/** Deep-link target module per source (NTF a3: exam/study-day → study, document/event → calendar, task → tasks). */
 const SOURCE_MODULE: Record<NotificationSource, string> = {
   document: "calendar",
   exam: "study",
   "study-day": "study",
   event: "calendar",
+  task: "tasks",
 };
 
 const SNOOZE_PRESETS: SnoozePreset[] = ["10m", "1h", "tonight", "tomorrow-morning"];

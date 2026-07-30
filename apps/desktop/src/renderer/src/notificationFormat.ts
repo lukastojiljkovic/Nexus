@@ -6,12 +6,13 @@
  */
 import type { NotificationSource } from "../../shared/ipc.js";
 
-/** The four NTF sources, in the fixed order every source list/loop uses. */
+/** The five NTF sources, in the fixed order every source list/loop uses. */
 export const ALL_NOTIFICATION_SOURCES: NotificationSource[] = [
   "document",
   "exam",
   "study-day",
   "event",
+  "task",
 ];
 
 function isSameLocalDay(a: Date, b: Date): boolean {

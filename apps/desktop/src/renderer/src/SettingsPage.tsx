@@ -40,14 +40,16 @@ interface NotificationPreset {
 }
 
 /**
- * NTF-008: minimalno/normalno/sve map onto growing subsets of the four sources.
+ * NTF-008: minimalno/normalno/sve map onto growing subsets of the five sources.
  * An event reminder is in every preset, minimalno included — it is the least
- * noisy kind there is, since the user attached it to that one event by hand.
+ * noisy kind there is, since the user attached it to that one event by hand. A
+ * task reminder (ADR-028) joins every tier for exactly the same reason: it
+ * exists only because the user set a ladder on that one task by hand.
  */
 const NOTIFICATION_PRESETS: NotificationPreset[] = [
-  { key: "minimal", sources: ["document", "event"] },
-  { key: "normal", sources: ["document", "exam", "event"] },
-  { key: "all", sources: ["document", "exam", "study-day", "event"] },
+  { key: "minimal", sources: ["document", "event", "task"] },
+  { key: "normal", sources: ["document", "exam", "event", "task"] },
+  { key: "all", sources: ["document", "exam", "study-day", "event", "task"] },
 ];
 
 function sameSourceSet(a: readonly NotificationSource[], b: readonly NotificationSource[]): boolean {

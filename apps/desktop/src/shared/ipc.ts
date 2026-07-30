@@ -331,6 +331,14 @@ export interface Task {
   completedAt: string | null;
   /** The rule this task advances by when an occurrence is completed (ADR-024), or null for a one-off. Never non-null without a bare-date `dueDate` — the date the rule phases from. */
   recurrence: RecurrenceRule | null;
+  /**
+   * Whole DAYS before `dueDate` at which to remind (ADR-028), ascending and
+   * duplicate-free; empty for a task with no reminders. Days, not minutes like
+   * an event's ladder: a task's deadline is a day, so this is the
+   * document-expiry model. Never non-empty without a bare-date `dueDate` — the
+   * same anchor a recurrence rule phases from.
+   */
+  reminderOffsets: number[];
 }
 
 /** Fields for a new task; only `title` is required (TASK-001). The main process revalidates each. */
@@ -343,6 +351,8 @@ export interface NewTaskFields {
   startDate?: string | null;
   parentId?: string | null;
   recurrence?: RecurrenceRule | null;
+  /** Reminder lead times in whole DAYS before the due date (ADR-028); omitted means none. The store canonicalizes and caps them. */
+  reminderOffsets?: number[];
 }
 
 /** A partial edit of a task's own fields; an omitted key is untouched, `null` clears it. */
@@ -354,6 +364,8 @@ export interface TaskFieldChanges {
   dueDate?: string | null;
   startDate?: string | null;
   recurrence?: RecurrenceRule | null;
+  /** Reminder lead times in whole DAYS before the due date (ADR-028); an empty array clears every reminder. */
+  reminderOffsets?: number[];
 }
 
 export interface TasksListRequest {
@@ -1145,8 +1157,8 @@ export interface StatsStudyRequest {
   toDate: string;
 }
 
-/** The four NTF-001..003/CAL-006 source kinds (mirrors `@nexus/core`'s `NotificationSource`; redeclared here so the renderer never imports core/DB code). */
-export type NotificationSource = "document" | "exam" | "study-day" | "event";
+/** The five NTF-001..003/CAL-006/ADR-028 source kinds (mirrors `@nexus/core`'s `NotificationSource`; redeclared here so the renderer never imports core/DB code). */
+export type NotificationSource = "document" | "exam" | "study-day" | "event" | "task";
 
 /** Closed ledger-status domain (mirrors `@nexus/db`'s `NotificationStatus`). Dismissal is terminal. */
 export type NotificationStatus = "delivered" | "snoozed" | "dismissed";

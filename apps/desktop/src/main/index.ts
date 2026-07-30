@@ -36,6 +36,8 @@ import {
   MAX_NOTE_LINKS,
   MAX_NOTE_TEMPLATE_BYTES,
   MAX_NOTE_UPDATE_BYTES,
+  MAX_TASK_REMINDERS,
+  MAX_TASK_REMINDER_DAYS,
   NOTE_FOLDER_COLORS,
   NoteAttachmentNotFoundError,
   NoteAttachmentStore,
@@ -718,6 +720,32 @@ function asTaskPriority(value: unknown, field: string): TaskPriority {
   throw new Error(`Invalid IPC payload: "${field}" is not a valid task priority.`);
 }
 
+/**
+ * A task's reminder ladder (ADR-028): whole DAYS of lead time, unique, within
+ * the store's own caps — which are imported from it rather than respelled here,
+ * so there is exactly one number to change. Days, not the minutes
+ * `asEventReminderOffsets` below speaks: a task's deadline is a day, so its
+ * ladder is the DOCUMENT model. Structural checks only; `TaskStore`
+ * re-canonicalizes (sorts, revalidates, refuses a ladder with no bare-date due
+ * date to count back from) whatever it is handed.
+ */
+function asTaskReminderOffsets(value: unknown, field: string): number[] {
+  if (
+    !Array.isArray(value) ||
+    value.length > MAX_TASK_REMINDERS ||
+    !value.every(
+      (n) =>
+        typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= MAX_TASK_REMINDER_DAYS,
+    ) ||
+    new Set(value).size !== value.length
+  ) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must hold at most ${MAX_TASK_REMINDERS} distinct whole days between 0 and ${MAX_TASK_REMINDER_DAYS}.`,
+    );
+  }
+  return value as number[];
+}
+
 /** Validates a `NewTaskFields` payload into a store input; only present keys are carried. */
 function asNewTaskInput(value: unknown): CreateTaskInput {
   const task = asRecord(value);
@@ -734,6 +762,9 @@ function asNewTaskInput(value: unknown): CreateTaskInput {
   if (task.parentId !== undefined) input.parentId = asNullableString(task.parentId, "task.parentId");
   if (task.recurrence !== undefined) {
     input.recurrence = asRecurrenceRule(task.recurrence, "task.recurrence");
+  }
+  if (task.reminderOffsets !== undefined) {
+    input.reminderOffsets = asTaskReminderOffsets(task.reminderOffsets, "task.reminderOffsets");
   }
   return input;
 }
@@ -758,6 +789,12 @@ function asTaskFieldChanges(value: unknown): UpdateTaskFields {
   }
   if (changes.recurrence !== undefined) {
     patch.recurrence = asRecurrenceRule(changes.recurrence, "changes.recurrence");
+  }
+  if (changes.reminderOffsets !== undefined) {
+    patch.reminderOffsets = asTaskReminderOffsets(
+      changes.reminderOffsets,
+      "changes.reminderOffsets",
+    );
   }
   return patch;
 }
@@ -1205,7 +1242,7 @@ function asBlockStatus(value: unknown, field: string): StudyBlockStatus {
 }
 
 /**
- * The four NTF/CAL-006 source kinds (mirrors `@nexus/core`'s
+ * The five NTF/CAL-006/ADR-028 source kinds (mirrors `@nexus/core`'s
  * `NotificationSource`). Not re-exported from `@nexus/db`, so the closed set is
  * declared here, the same division of labour as every other closed-enum
  * validator in this file.
@@ -1215,6 +1252,7 @@ const NOTIFICATION_SOURCES: readonly NotificationSource[] = [
   "exam",
   "study-day",
   "event",
+  "task",
 ];
 
 /** The four snooze presets `notifications:snooze` accepts; main resolves each to an absolute `until` from its own clock. */
@@ -1495,6 +1533,7 @@ function startUnlockedServices(): void {
     examStore,
     subjectStore,
     planStore,
+    taskStore,
     notificationStore,
     getMainWindow: () => mainWindow,
   });

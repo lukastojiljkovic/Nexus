@@ -571,42 +571,59 @@ body {
   flex: 1;
   min-width: 240px;
 }
-/* Podsetnici chip row (CAL-006) — the same typographic toggle as .cal__source
-   and .recur__day: accent text + weight when on, never a glow. Takes a full row
-   of the wrapping form, like .recur does, so a long ladder wraps under itself
-   instead of pushing the submit button around. */
-.cal__reminders {
+/* Reminder chip row — the event form's "Podsetnici" (CAL-006) and the task
+   form's "Podsetnik" (ADR-028) share this recipe outright, the way the house
+   dialog is shared further down: one ladder of lead times, one look, only the
+   unit differs (an event counts minutes, a task counts days). The same
+   typographic toggle as .cal__source and .recur__day: accent text + weight when
+   on, never a glow. Takes a full row of the wrapping form, like .recur does, so
+   a long ladder wraps under itself instead of pushing the submit button
+   around. */
+.cal__reminders,
+.tasks__reminders {
   flex-basis: 100%;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: var(--nx-space-2);
 }
-.cal__reminders-label {
+.cal__reminders-label,
+.tasks__reminders-label {
   flex: none;
   font-size: var(--nx-font-size-label);
   letter-spacing: var(--nx-font-tracking-label);
   color: var(--nx-text-muted);
 }
-.cal__reminder-chips {
+.cal__reminder-chips,
+.tasks__reminder-chips {
   display: inline-flex;
   align-items: center;
   gap: var(--nx-space-1);
   flex-wrap: wrap;
 }
-.cal__reminder.nx-button {
+.cal__reminder.nx-button,
+.tasks__reminder.nx-button {
   background: transparent;
   border-color: transparent;
   color: var(--nx-text-muted);
   padding: 2px 8px;
 }
-.cal__reminder.nx-button:hover {
+.cal__reminder.nx-button:hover,
+.tasks__reminder.nx-button:hover {
   background: transparent;
   color: var(--nx-text);
 }
-.cal__reminder--active.nx-button {
+.cal__reminder--active.nx-button,
+.tasks__reminder--active.nx-button {
   color: var(--nx-accent-strong);
   font-weight: var(--nx-font-weight-semibold);
+}
+/* Stands in for the chips while the form has no rok to count back from — the
+   same muted "why this field is off" line as .recur__caption right beside it. */
+.tasks__reminders-caption {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
 }
 
 /* Edit-mode cancel: a quiet ghost beside the primary submit (text feel). */

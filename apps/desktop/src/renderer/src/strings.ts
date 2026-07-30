@@ -185,6 +185,22 @@ export const strings = {
     priorityLabel: "Prioritet",
     save: "Sačuvaj",
     cancel: "Otkaži",
+    /**
+     * The "Podsetnik" chip row on the task form (ADR-028) — the same shape as
+     * `calendar.reminders`, counted in DAYS rather than minutes, because a
+     * task's deadline is a day. Every chip's label is built from these by one
+     * formatter, so the fixed ladder and an offset loaded from a stored task
+     * read the same way: "Na dan roka", "1 dan ranije", "3 dana ranije".
+     */
+    reminders: {
+      label: "Podsetnik",
+      /** Shown in place of the chips while the form has no (valid) rok to count back from — the store refuses that combination. */
+      needsDate: "Postavi rok da bi podsetnik bio moguć.",
+      /** The zero-day chip: the reminder fires on the due day itself, at the morning hour. */
+      atDue: "Na dan roka",
+      /** Trailing word of every non-zero lead time; the counted day noun takes `dayUnit`. */
+      before: "ranije",
+    },
     /** Per-row „+” and the inline line it opens (TASK-008). A subtask starts as a bare name; rok/prioritet/ponavljanje are set afterwards through the ✎ form, like on any task. */
     addSubtaskLabel: "Dodaj podzadatak",
     subtaskPlaceholder: "Novi podzadatak — upiši i pritisni Enter",
@@ -799,6 +815,7 @@ export const strings = {
       exam: "Ispit",
       "study-day": "Učenje",
       event: "Događaj",
+      task: "Zadatak",
     },
     /** Snooze preset button labels, keyed by SnoozePreset value. */
     snoozePreset: {
@@ -823,6 +840,7 @@ export const strings = {
         exam: "Ispiti",
         "study-day": "Učenje",
         event: "Događaji",
+        task: "Zadaci",
       },
       saveError: "Čuvanje podešavanja nije uspelo. Pokušaj ponovo.",
     },

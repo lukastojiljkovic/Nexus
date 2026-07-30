@@ -25,7 +25,7 @@ import type {
 import { localTodayKey } from "./examDates.js";
 import { RecurrenceMark, RecurrencePicker } from "./RecurrencePicker.js";
 import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
-import { strings } from "./strings.js";
+import { dayUnit, strings } from "./strings.js";
 
 // --- Field orderings (renderer mirror of @nexus/db) -------------------------
 //
@@ -122,6 +122,34 @@ function formatQuickDate(dayKey: string): string {
         month: "short",
         timeZone: "UTC",
       }).format(date);
+}
+
+// --- Reminders (ADR-028) ----------------------------------------------------
+
+/** The offered lead times, in whole DAYS before the rok. Anything else a task already carries gets a chip of its own beside these. */
+const REMINDER_LADDER: readonly number[] = [0, 1, 3, 7];
+
+/**
+ * A lead time as its chip label: "Na dan roka", "1 dan ranije", "3 dana
+ * ranije". Zero is its own wording — there is nothing "ranije" about the due
+ * day itself — and every other count takes `dayUnit`, so the ladder and any
+ * offset outside it (a restored archive, a longer lead set on another device)
+ * are worded by the one rule rather than two.
+ */
+function taskReminderLabel(days: number): string {
+  const s = strings.tasks.reminders;
+  if (days === 0) return s.atDue;
+  return `${days} ${dayUnit(days, "dan", "dana")} ${s.before}`;
+}
+
+/**
+ * The chips to draw: the fixed ladder plus every offset the edited task carries
+ * that the ladder cannot say, in ascending order. Without that union an edit
+ * would silently drop a lead time merely because no chip could express it.
+ */
+function reminderChoices(selected: readonly number[]): number[] {
+  const extra = selected.filter((days) => !REMINDER_LADDER.includes(days));
+  return [...new Set([...REMINDER_LADDER, ...extra])].sort((a, b) => a - b);
 }
 
 // --- Subtask tree (TASK-008) ------------------------------------------------
@@ -325,6 +353,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const [dueDate, setDueDate] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("none");
   const [recurrence, setRecurrence] = useState<RecurrenceRule | null>(null);
+  const [reminderOffsets, setReminderOffsets] = useState<number[]>([]);
   /** The quick-add phrase the user waved away, or null — see `activeQuickDate`. */
   const [dismissedPhrase, setDismissedPhrase] = useState<string | null>(null);
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
@@ -420,7 +449,15 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     setDueDate("");
     setPriority("none");
     setRecurrence(null);
+    setReminderOffsets([]);
     setDismissedPhrase(null);
+  }
+
+  /** Adds or removes one lead time; the store owns ordering, so the set is kept as picked. */
+  function toggleReminder(days: number): void {
+    setReminderOffsets((prev) =>
+      prev.includes(days) ? prev.filter((current) => current !== days) : [...prev, days],
+    );
   }
 
   /** Loads a task into the shared form and switches it to edit mode. */
@@ -433,6 +470,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     setDueDate(task.dueDate === null ? "" : task.dueDate.slice(0, 10));
     setPriority(task.priority);
     setRecurrence(task.recurrence);
+    setReminderOffsets([...task.reminderOffsets]);
     inputRef.current?.focus();
   }
 
@@ -457,6 +495,10 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     // the field too, and a second anchor mid-edit would let a rule phase from a
     // date the form does not show.
     const rule = isValidDayKey(dueDate) ? recurrence : null;
+    // The reminder ladder counts back from the very same anchor, and the store
+    // refuses a ladder without one, so it is read off the FIELD for exactly the
+    // reason the rule above is — the chips are anchored to the field too.
+    const ladder = isValidDayKey(dueDate) ? reminderOffsets : [];
     try {
       if (editingId != null) {
         const changes: TaskFieldChanges = {
@@ -464,6 +506,9 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
           dueDate: due,
           priority,
           recurrence: rule,
+          // An empty array is meaningful here: it clears whatever ladder the
+          // task carried.
+          reminderOffsets: ladder,
         };
         replaceTask(await window.nexus.updateTask(profileId, editingId, changes));
       } else {
@@ -472,6 +517,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         if (due !== null) fields.dueDate = due;
         if (priority !== "none") fields.priority = priority;
         if (rule !== null) fields.recurrence = rule;
+        if (ladder.length > 0) fields.reminderOffsets = ladder;
         const created = await window.nexus.createTask(profileId, fields);
         setTasks((prev) => (prev ? [...prev, created] : [created]));
       }
@@ -839,9 +885,13 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
               onChange={(event) => {
                 const next = event.target.value;
                 setDueDate(next);
-                // A rule has to phase from a real day, so clearing the due date
-                // clears the rule where the user can see it happen.
-                if (!isValidDayKey(next)) setRecurrence(null);
+                // A rule has to phase from a real day, and a reminder ladder has
+                // to count back from one, so clearing the due date clears both
+                // where the user can see it happen.
+                if (!isValidDayKey(next)) {
+                  setRecurrence(null);
+                  setReminderOffsets([]);
+                }
               }}
             />
             <select
@@ -864,6 +914,41 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
               onChange={setRecurrence}
               anchor={dueDate}
             />
+            {/* Podsetnik (ADR-028) — bound to the rok FIELD, exactly like the
+                rule above: the ladder counts back from the date the form is
+                showing, and the store refuses one that has no date to count
+                back from, so the chips say why rather than letting the user hit
+                that error blind. A date read out of the quick-add line is not
+                that anchor yet; it becomes one once it lands in the field. */}
+            <div className="tasks__reminders">
+              <span className="tasks__reminders-label">{strings.tasks.reminders.label}</span>
+              {isValidDayKey(dueDate) ? (
+                <div
+                  className="tasks__reminder-chips"
+                  role="group"
+                  aria-label={strings.tasks.reminders.label}
+                >
+                  {reminderChoices(reminderOffsets).map((days) => {
+                    const selected = reminderOffsets.includes(days);
+                    return (
+                      <Button
+                        key={days}
+                        size="sm"
+                        className={
+                          selected ? "tasks__reminder tasks__reminder--active" : "tasks__reminder"
+                        }
+                        aria-pressed={selected}
+                        onClick={() => toggleReminder(days)}
+                      >
+                        {taskReminderLabel(days)}
+                      </Button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="tasks__reminders-caption">{strings.tasks.reminders.needsDate}</p>
+              )}
+            </div>
           </div>
         </form>
 

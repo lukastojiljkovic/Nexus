@@ -100,14 +100,21 @@ export function examNotificationCopy(
  * main and renderer never share a module.
  */
 function leadPhrase(offsetMinutes: number): string {
-  if (offsetMinutes % MINUTES_PER_DAY === 0) {
-    const days = offsetMinutes / MINUTES_PER_DAY;
-    return `${days} ${dayUnit(days)} ranije`;
-  }
+  if (offsetMinutes % MINUTES_PER_DAY === 0) return dayLeadPhrase(offsetMinutes / MINUTES_PER_DAY);
   if (offsetMinutes % MINUTES_PER_HOUR === 0) {
     return `${offsetMinutes / MINUTES_PER_HOUR} h ranije`;
   }
   return `${offsetMinutes} min ranije`;
+}
+
+/**
+ * A lead time already counted in whole days: "3 dana ranije". `leadPhrase`
+ * above is minutes-based (an event's ladder), so its day branch delegates here
+ * rather than the two spelling the same phrase twice — a task's ladder
+ * (ADR-028) is in days to begin with and has no minutes to divide down.
+ */
+function dayLeadPhrase(days: number): string {
+  return `${days} ${dayUnit(days)} ranije`;
 }
 
 /**
@@ -144,6 +151,32 @@ export function eventNotificationCopy(
   };
 }
 
+/**
+ * Task reminder copy (ADR-028). `dueDate`/`today` are bare "YYYY-MM-DD" and
+ * `offsetDays` is the whole-day lead time that produced this occurrence.
+ *
+ * Like the event copy, the body states WHEN the task is due rather than how
+ * long is left: a reminder that came due while the app was closed surfaces on
+ * the next check, so a countdown would be a lie exactly when it matters. The
+ * lead time is still named — it is what the user set, and it is what tells two
+ * reminders for the same due date apart — but only when it is non-zero: "0 dana
+ * ranije" on the day itself would describe nothing.
+ */
+export function taskNotificationCopy(
+  title: string,
+  dueDate: string,
+  today: string,
+  offsetDays: number,
+): NotificationCopy {
+  const days = daysUntil(today, dueDate);
+  const duePhrase =
+    days === 0 ? "Rok je danas" : days === 1 ? "Rok je sutra" : `Rok: ${formatDate(dueDate)}`;
+  return {
+    title: `Zadatak: ${title}`,
+    body: offsetDays > 0 ? `${duePhrase} · ${dayLeadPhrase(offsetDays)}` : duePhrase,
+  };
+}
+
 /** Today's study-day reminder copy: how many blocks are planned and their total length. */
 export function studyDayNotificationCopy(blockCount: number, totalMinutes: number): NotificationCopy {
   const blockPhrase = pluralize(blockCount, "blok", "bloka", "blokova");
@@ -156,7 +189,6 @@ export interface DigestCounts {
   exam: number;
   "study-day": number;
   event: number;
-  /** ADR-028; `groupedDigestCopy` gets its Serbian phrase in the next slice, with the rest of the task copy. */
   task: number;
 }
 
@@ -179,6 +211,9 @@ export function groupedDigestCopy(total: number, counts: DigestCounts): Notifica
   }
   if (counts.event > 0) {
     parts.push(`${counts.event} ${pluralize(counts.event, "događaj", "događaja", "događaja")}`);
+  }
+  if (counts.task > 0) {
+    parts.push(`${counts.task} ${pluralize(counts.task, "zadatak", "zadatka", "zadataka")}`);
   }
   return { title, body: parts.join(" · ") };
 }
