@@ -5290,6 +5290,14 @@ button.cal__grid-event--dragging {
   padding: 0;
 }
 
+/* A refused list-pane action (NOTE-010's „Dupliraj") — the organizer's own
+   error line, in the middle pane. */
+.note__list-error {
+  margin: var(--nx-space-2) 0 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-danger);
+}
+
 /* Delete + undo: the inline, token-styled undo bar (mirrors the tasks pattern). */
 .note__undo {
   display: flex;

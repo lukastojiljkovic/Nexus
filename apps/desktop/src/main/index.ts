@@ -223,6 +223,7 @@ import { localToday } from "./clock.js";
 import { releaseGlobalCapture, setGlobalCaptureAccelerator } from "./globalCapture.js";
 import { handleExport, handleIcsExport } from "./imex.js";
 import { handleMarkdownImport } from "./markdownImport.js";
+import { duplicateNote } from "./noteDuplicate.js";
 import {
   cancelIdleCompactions,
   captureNoteVersion,
@@ -298,6 +299,7 @@ import {
   type NoteCardDisposition,
   type NoteCardSpec,
   type NoteDocPayload,
+  type NoteDuplicateResult,
   type NoteVersionMeta,
   type Profile,
   type ProfilePicturePickResult,
@@ -4816,6 +4818,30 @@ function registerIpc(): void {
       }
       notes.softDelete(id, now);
     })();
+  });
+
+  /**
+   * „Dupliraj belešku" (NOTE-010). The whole operation — the document rewrite
+   * and every row that travels with it — lives in `noteDuplicate.ts`, which
+   * also documents what deliberately does NOT travel (the pin, the version
+   * history, the deck mapping). Here: the trust gate, the note id, and main's
+   * own clock.
+   */
+  ipcMain.handle(IpcChannel.notesDuplicate, (event, payload): NoteDuplicateResult => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return duplicateNote(
+      {
+        notes: noteStore(profileId),
+        org: noteOrgStore(profileId),
+        attachments: noteAttachmentStore(profileId),
+        runInTransaction: (write) => requireDb().raw.transaction(write)(),
+      },
+      id,
+      new Date().toISOString(),
+    );
   });
 
   ipcMain.handle(IpcChannel.notesRestore, (event, payload): void => {

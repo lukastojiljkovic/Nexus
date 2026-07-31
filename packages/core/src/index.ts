@@ -79,6 +79,9 @@ export type { MergedNoteState } from "./notes/yjsMerge.js";
 
 export { extractNoteLinkTargets, remapNoteState } from "./notes/noteLinks.js";
 
+export { duplicateNoteState } from "./notes/noteDuplicate.js";
+export type { DuplicatedNoteState, DuplicateNoteStateInput } from "./notes/noteDuplicate.js";
+
 export { collectNoteCards, NOTE_CARD_MAX_TEXT_LENGTH, parseCardBlock } from "./notes/noteCards.js";
 export type { CardKind, CardSyntaxSpan, NoteCardSpec, ParsedBlock, ParsedCard } from "./notes/noteCards.js";
 

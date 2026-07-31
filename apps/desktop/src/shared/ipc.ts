@@ -175,6 +175,7 @@ export const IpcChannel = {
   notesLoad: "notes:load",
   notesAppendUpdate: "notes:append-update",
   notesDelete: "notes:delete",
+  notesDuplicate: "notes:duplicate",
   notesRestore: "notes:restore",
   noteFoldersList: "note-folders:list",
   noteFoldersCreate: "note-folders:create",
@@ -2408,6 +2409,19 @@ export interface NoteMeta {
 }
 
 /**
+ * What `notes:duplicate` answers with (NOTE-010). A result rather than a bare
+ * `NoteMeta` because the operation has exactly one refusal worth naming: the
+ * copy is written through the same `notes:append-update` path every other new
+ * note uses, so a document whose merged state exceeds `NOTE_UPDATE_MAX_BYTES`
+ * cannot be written in one call. Nothing is left behind when that happens — the
+ * whole copy is one transaction — and the UI says which of the two it was
+ * rather than guessing.
+ */
+export type NoteDuplicateResult =
+  | { ok: true; note: NoteMeta }
+  | { ok: false; reason: "too-large" };
+
+/**
  * One note's persisted Yjs document state (ADR-012): the merged snapshot (or
  * null before the first compaction) plus every update past it, in order. The
  * renderer replays them onto a fresh `Y.Doc` and binds the editor.
@@ -4000,6 +4014,12 @@ export interface NexusApi {
    * no-op and the delete is exactly what it always was.
    */
   deleteNote(profileId: string, noteId: string, cards?: NoteCardDisposition): Promise<void>;
+  /**
+   * Copies a note into a new, independent one (NOTE-010): same content, fresh
+   * card keys, its own attachment rows, the same tags and folder — unpinned,
+   * unmapped from any deck, and with no version history of its own yet.
+   */
+  duplicateNote(profileId: string, noteId: string): Promise<NoteDuplicateResult>;
   /** Undo of `deleteNote`: restores the note, and the cards deleted in that same act (never any other). */
   restoreNote(profileId: string, noteId: string): Promise<void>;
   /** How many live flashcards this note currently generates — what the delete dialog counts (PRD 09 section 7). */

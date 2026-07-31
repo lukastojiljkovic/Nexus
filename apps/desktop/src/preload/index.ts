@@ -307,6 +307,8 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.notesAppendUpdate, { profileId, id: noteId, update, title }),
   deleteNote: (profileId, noteId, cards = "keep") =>
     ipcRenderer.invoke(IpcChannel.notesDelete, { profileId, id: noteId, cards }),
+  duplicateNote: (profileId, noteId) =>
+    ipcRenderer.invoke(IpcChannel.notesDuplicate, { profileId, id: noteId }),
   restoreNote: (profileId, noteId) =>
     ipcRenderer.invoke(IpcChannel.notesRestore, { profileId, id: noteId }),
   countNoteCards: (profileId, noteId) =>

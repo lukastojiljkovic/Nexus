@@ -799,6 +799,15 @@ export const strings = {
     placeholder: "Počni da pišeš, ili otkucaj „/” za komande…",
     deleteLabel: "Obriši belešku",
     deletedNotice: "Beleška obrisana",
+    /**
+     * „Dupliraj" (NOTE-010). The copy's own „ (kopija)" mark is written into
+     * the document by the main process and therefore lives there
+     * (`main/noteDuplicate.ts`) — main cannot import this file, the same split
+     * `notificationStrings.ts` documents.
+     */
+    duplicate: "Dupliraj",
+    duplicateError: "Dupliranje beleške nije uspelo. Pokušaj ponovo.",
+    duplicateTooLarge: "Beleška je prevelika da bi se duplirala odjednom.",
     undo: "Vrati",
     dismiss: "Zatvori",
     loadError: "Beleške se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",

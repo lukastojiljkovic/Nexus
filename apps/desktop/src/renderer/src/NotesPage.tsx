@@ -119,6 +119,9 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
   const [pendingDelete, setPendingDelete] = useState<{ note: NoteMeta; cardCount: number } | null>(
     null,
   );
+  // Why the last „Dupliraj" did not produce a copy, or null when nothing is
+  // wrong — the transient error line the folder/tag panes already use.
+  const [duplicateError, setDuplicateError] = useState<"generic" | "tooLarge" | null>(null);
   const [tags, setTags] = useState<NoteTag[]>([]);
   const [links, setLinks] = useState<NoteTagLink[]>([]);
   const [tagFilter, setTagFilter] = useState<string[]>([]);
@@ -150,6 +153,10 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
           : await window.nexus.listNotes(profileId, filter);
       setNotes(list);
       setFailed(false);
+      // A refused „Dupliraj" changes nothing and therefore never refetches, so
+      // its line survives until the pane genuinely moves on — any other note
+      // action, or a change of folder.
+      setDuplicateError(null);
     } catch (error) {
       setFailed(true);
       console.error("Nexus: failed to load notes:", error);
@@ -387,6 +394,30 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
     }
   }
 
+  /**
+   * „Dupliraj" (NOTE-010). Main does the whole copy in one transaction; the
+   * page's job afterwards is to make it findable — the tag links moved too, so
+   * both fetches are refreshed before the copy is selected, otherwise an active
+   * tag filter would hide the note that was just made.
+   *
+   * The copy lands in the source's folder and carries its tags, so the current
+   * selection always contains it — no filter reset, unlike the „reveal" intent.
+   */
+  async function duplicate(note: NoteMeta): Promise<void> {
+    try {
+      const result = await window.nexus.duplicateNote(profileId, note.id);
+      if (!result.ok) {
+        setDuplicateError("tooLarge");
+        return;
+      }
+      await Promise.all([loadNotes(), loadTags()]);
+      setSelectedId(result.note.id);
+    } catch (error) {
+      setDuplicateError("generic");
+      console.error("Nexus: failed to duplicate note:", error);
+    }
+  }
+
   async function togglePin(note: NoteMeta): Promise<void> {
     try {
       await window.nexus.setNotePinned(profileId, note.id, !note.pinned);
@@ -556,6 +587,17 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
               )}
               <div className="note__menu-sep" role="separator" />
               <button
+                className="note__menu-item"
+                role="menuitem"
+                type="button"
+                onClick={() => {
+                  void duplicate(note);
+                  close();
+                }}
+              >
+                {strings.notes.duplicate}
+              </button>
+              <button
                 className="note__menu-item note__menu-item--danger"
                 role="menuitem"
                 type="button"
@@ -631,6 +673,14 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
               ×
             </Button>
           </div>
+        )}
+
+        {duplicateError !== null && (
+          <p className="note__list-error" role="status">
+            {duplicateError === "tooLarge"
+              ? strings.notes.duplicateTooLarge
+              : strings.notes.duplicateError}
+          </p>
         )}
 
         {failed ? (
