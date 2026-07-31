@@ -7,7 +7,14 @@ import {
   type ArchiveProfilePicture,
   type ProfileData,
 } from "./exportArchive.js";
-import { planForeignImport, type ForeignImportTarget } from "./foreignImport.js";
+import {
+  documentDuplicateKey,
+  eventDuplicateKey,
+  personDuplicateKey,
+  planForeignImport,
+  type ForeignImportTarget,
+  type ImportDuplicateChoices,
+} from "./foreignImport.js";
 import type { ImportDrop } from "./importArchive.js";
 
 const T0 = "2026-07-01T00:00:00.000Z";
@@ -180,6 +187,11 @@ function emptyTarget(overrides: Partial<ForeignImportTarget> = {}): ForeignImpor
     taskTags: [],
     taskTemplateNames: [],
     eventTemplateNames: [],
+    noteTemplateNames: new Set(),
+    attachmentHashes: new Set(),
+    eventKeys: new Set(),
+    personKeys: new Set(),
+    documentKeys: new Set(),
     claimsCaptureDefault: false,
     ...overrides,
   };
@@ -190,8 +202,9 @@ function plan(
   target = emptyTarget(),
   dropped: readonly ImportDrop[] = [],
   profilePicture: ArchiveProfilePicture | null = null,
+  choices?: ImportDuplicateChoices,
 ) {
-  return planForeignImport({ data, dropped, profilePicture }, target, counterMint());
+  return planForeignImport({ data, dropped, profilePicture }, target, counterMint(), choices);
 }
 
 /** Every id-shaped string the planned data holds, so a test can assert no source id survived. */
@@ -854,5 +867,421 @@ describe("planForeignImport — task attachments, templates, dependencies, dashb
     for (const counts of Object.values(result.report.modules)) {
       expect(counts.parsed).toBe(counts.imported + counts.merged + counts.skipped);
     }
+  });
+});
+
+// --- ADR-051 / IMEX-008 ------------------------------------------------------
+
+describe("planForeignImport — a note template's name is its identity too", () => {
+  // Migration 015 puts the SAME `UNIQUE (profile_id, name)` on note templates
+  // that migrations 027/036 put on the task and event ones, so a source template
+  // whose name the target already holds could never have been inserted: it took
+  // the whole import down with a constraint failure, which is what this rule
+  // repairs.
+  it("skips a note template whose name the target already holds, and names it", () => {
+    const result = plan(
+      foreignProfileData(),
+      emptyTarget({ noteTemplateNames: new Set(["Sastanak"]) }),
+    );
+
+    expect(result.data.noteTemplates).toEqual([]);
+    expect(result.report.skips).toContainEqual({
+      code: "template-name-taken",
+      module: "notes",
+      type: "note-template",
+      count: 1,
+    });
+  });
+
+  it("collapses two SOURCE note templates of one name — first writer wins", () => {
+    const source: ProfileData = {
+      ...emptyProfileData(),
+      noteTemplates: [
+        { id: "src-a", profileId: "src", name: "Dnevnik", content: '{"type":"doc"}', createdAt: T0, updatedAt: T0 },
+        { id: "src-b", profileId: "src", name: "Dnevnik", content: '{"type":"other"}', createdAt: T0, updatedAt: T0 },
+      ],
+    };
+    const { data, report } = plan(source);
+
+    expect(data.noteTemplates.map((row) => row.content)).toEqual(['{"type":"doc"}']);
+    expect(report.skips).toContainEqual({
+      code: "template-name-taken",
+      module: "notes",
+      type: "note-template",
+      count: 1,
+    });
+  });
+
+  it("keeps the three template name spaces separate — one name in all three tables imports twice and skips once", () => {
+    const source: ProfileData = {
+      ...emptyProfileData(),
+      noteTemplates: [
+        { id: "src-nt", profileId: "src", name: "Zauzeto", content: "{}", createdAt: T0, updatedAt: T0 },
+      ],
+      taskTemplates: [
+        {
+          id: "src-tt", profileId: "src", name: "Zauzeto", createdAt: T0, updatedAt: T0,
+          payload: {
+            title: "Zauzeto", description: null, priority: "none", dueOffsetDays: null,
+            reminderOffsets: [], recurrence: null, tagNames: [], subtaskTitles: [],
+          },
+        },
+      ],
+      eventTemplates: [
+        {
+          id: "src-et", profileId: "src", name: "Zauzeto", createdAt: T0, updatedAt: T0,
+          payload: {
+            title: "Zauzeto", allDay: true, startTime: null, durationMinutes: null,
+            location: null, description: null, category: null, reminderOffsets: [], recurrence: null,
+          },
+        },
+      ],
+    };
+    const { data } = plan(source, emptyTarget({ noteTemplateNames: new Set(["Zauzeto"]) }));
+
+    expect(data.noteTemplates).toEqual([]);
+    expect(data.taskTemplates).toHaveLength(1);
+    expect(data.eventTemplates).toHaveLength(1);
+  });
+
+  it("still balances when a note template is skipped", () => {
+    const result = plan(
+      foreignProfileData(),
+      emptyTarget({ noteTemplateNames: new Set(["Sastanak"]) }),
+    );
+    for (const counts of Object.values(result.report.modules)) {
+      expect(counts.parsed).toBe(counts.imported + counts.merged + counts.skipped);
+    }
+  });
+});
+
+describe("planForeignImport — a folder's default template tolerates an unmappable id", () => {
+  function folderWithDefault(defaultTemplateId: string | null): ProfileData {
+    return {
+      ...emptyProfileData(),
+      noteFolders: [
+        {
+          id: "src-f", profileId: "src", parentId: null, name: "Fakultet", color: null,
+          defaultTemplateId, isCaptureDefault: false, createdAt: T0, updatedAt: T0,
+        },
+      ],
+    };
+  }
+
+  // Migration 028 deliberately declares no foreign key here: the column holds a
+  // `note_templates` id OR a `builtin:` CODE constant, and a built-in names the
+  // same template in every profile — so it crosses unchanged rather than
+  // failing the whole preview, which is what the strict remap used to do.
+  it("carries a built-in default through untouched", () => {
+    const { data } = plan(folderWithDefault("builtin:sastanak"));
+    expect(data.noteFolders[0]?.defaultTemplateId).toBe("builtin:sastanak");
+  });
+
+  it("clears a default naming a template the archive does not carry", () => {
+    const { data } = plan(folderWithDefault("src-tpl-gone"));
+    expect(data.noteFolders[0]?.defaultTemplateId).toBeNull();
+  });
+
+  it("clears a default whose template the name rule skipped — the target's template wins, the folder loses its default", () => {
+    const { data } = plan(
+      foreignProfileData(),
+      emptyTarget({ noteTemplateNames: new Set(["Sastanak"]) }),
+    );
+    expect(data.noteFolders[0]?.defaultTemplateId).toBeNull();
+  });
+
+  it("leaves no source id behind in any of those cases", () => {
+    const skipped = plan(
+      foreignProfileData(),
+      emptyTarget({ noteTemplateNames: new Set(["Sastanak"]) }),
+    );
+    expect(allIdsIn(skipped.data)).toEqual([]);
+    expect(allIdsIn(plan(folderWithDefault("src-tpl-gone")).data)).toEqual([]);
+  });
+});
+
+describe("planForeignImport — duplicate keys are composed collision-proof", () => {
+  it("never lets two different identities share one event key", () => {
+    // A separator-joined key would make these two the same row.
+    expect(eventDuplicateKey({ title: "A", startAt: " B", allDay: false })).not.toBe(
+      eventDuplicateKey({ title: "A B", startAt: "", allDay: false }),
+    );
+    expect(eventDuplicateKey({ title: "A", startAt: "S", allDay: false })).not.toBe(
+      eventDuplicateKey({ title: "A", startAt: "S", allDay: true }),
+    );
+  });
+
+  it("never lets two different identities share one person or document key", () => {
+    expect(personDuplicateKey({ name: "Ana", month: 1, day: 12 })).not.toBe(
+      personDuplicateKey({ name: "Ana", month: 11, day: 2 }),
+    );
+    expect(documentDuplicateKey({ docType: "a", label: "b,c" })).not.toBe(
+      documentDuplicateKey({ docType: "a,b", label: "c" }),
+    );
+  });
+
+  it("gives identical rows the identical key", () => {
+    expect(eventDuplicateKey({ title: "Sastanak", startAt: "2026-07-10T09:00:00.000Z", allDay: false })).toBe(
+      eventDuplicateKey({ title: "Sastanak", startAt: "2026-07-10T09:00:00.000Z", allDay: false }),
+    );
+  });
+});
+
+describe("planForeignImport — duplicate detection", () => {
+  const EVENT_KEY = eventDuplicateKey({
+    title: "Sastanak",
+    startAt: "2026-07-10T09:00:00.000Z",
+    allDay: false,
+  });
+  const PERSON_KEY = personDuplicateKey({ name: "Marko", month: 3, day: 14 });
+  const DOCUMENT_KEY = documentDuplicateKey({ docType: "pasos", label: "Pasoš" });
+  const ATTACHMENT_SHA = "a".repeat(64);
+
+  it("skips a duplicate event by default, names it, and summarises the group", () => {
+    const { data, report } = plan(
+      foreignProfileData(),
+      emptyTarget({ eventKeys: new Set([EVENT_KEY]) }),
+    );
+
+    expect(data.events).toEqual([]);
+    expect(report.duplicates).toContainEqual({ type: "event", count: 1 });
+    expect(report.skips).toContainEqual({
+      code: "duplicate-of-existing",
+      module: "calendar",
+      type: "event",
+      count: 1,
+    });
+  });
+
+  it("imports the very same event when the choice says so, and still summarises the group", () => {
+    const { data, report } = plan(
+      foreignProfileData(),
+      emptyTarget({ eventKeys: new Set([EVENT_KEY]) }),
+      [],
+      null,
+      { event: "import" },
+    );
+
+    expect(data.events).toHaveLength(1);
+    // The group is reported whichever way the choice points — the UI needs the
+    // row to offer the other choice back.
+    expect(report.duplicates).toContainEqual({ type: "event", count: 1 });
+    expect(report.skips.map((skip) => skip.code)).not.toContain("duplicate-of-existing");
+  });
+
+  it("does not touch an event whose identity the target does not hold", () => {
+    const { data, report } = plan(
+      foreignProfileData(),
+      emptyTarget({
+        eventKeys: new Set([
+          eventDuplicateKey({ title: "Sastanak", startAt: "2026-07-10T10:00:00.000Z", allDay: false }),
+        ]),
+      }),
+    );
+
+    expect(data.events).toHaveLength(1);
+    expect(report.duplicates).toEqual([]);
+  });
+
+  it("skips a duplicate person", () => {
+    const { data, report } = plan(
+      foreignProfileData(),
+      emptyTarget({ personKeys: new Set([PERSON_KEY]) }),
+    );
+
+    expect(data.people).toEqual([]);
+    expect(report.duplicates).toContainEqual({ type: "person", count: 1 });
+    expect(report.skips).toContainEqual({
+      code: "duplicate-of-existing",
+      module: "calendar",
+      type: "person",
+      count: 1,
+    });
+  });
+
+  it("skips a duplicate document AND the renewals that hang off it", () => {
+    const { data, report } = plan(
+      foreignProfileData(),
+      emptyTarget({ documentKeys: new Set([DOCUMENT_KEY]) }),
+    );
+
+    expect(data.documents).toEqual([]);
+    // A renewal's whole identity is the document it belongs to (migration 019's
+    // foreign key): keeping one whose document is not imported would be a row
+    // pointing at nothing.
+    expect(data.renewals).toEqual([]);
+    expect(report.duplicates).toContainEqual({ type: "document", count: 1 });
+    expect(report.skips).toContainEqual({
+      code: "duplicate-of-existing",
+      module: "calendar",
+      type: "document",
+      count: 1,
+    });
+    expect(report.skips).toContainEqual({
+      code: "duplicate-of-existing",
+      module: "calendar",
+      type: "renewal",
+      count: 1,
+    });
+  });
+
+  it("keeps a document's renewals when the choice imports the duplicate", () => {
+    const { data } = plan(
+      foreignProfileData(),
+      emptyTarget({ documentKeys: new Set([DOCUMENT_KEY]) }),
+      [],
+      null,
+      { document: "import" },
+    );
+
+    expect(data.documents).toHaveLength(1);
+    expect(data.renewals).toHaveLength(1);
+    expect(data.renewals[0]?.documentId).toBe(data.documents[0]?.id);
+  });
+
+  it("skips a duplicate attachment ROW without touching the note it hangs off", () => {
+    const { data, report, blobNames } = plan(
+      foreignProfileData(),
+      emptyTarget({ attachmentHashes: new Set([ATTACHMENT_SHA]) }),
+    );
+
+    expect(data.noteAttachments).toEqual([]);
+    // The parent survives untouched: a file the user already has is no reason
+    // to lose the note that referenced it.
+    expect(data.notes).toHaveLength(2);
+    // `blobNames` is computed off the SURVIVING rows, so nothing names these
+    // bytes anymore and the apply copies nothing.
+    expect(blobNames.size).toBe(0);
+    expect(report.duplicates).toContainEqual({ type: "attachment", count: 2 });
+    expect(report.skips).toContainEqual({
+      code: "duplicate-of-existing",
+      module: "notes",
+      type: "note-attachment",
+      count: 2,
+    });
+  });
+
+  it("keeps a blob a SURVIVING row still names, even when a duplicate row of the same file is skipped", () => {
+    // The task attachment's bytes are the note attachments' bytes; only the
+    // note table's rows are skipped here, so the file still has to travel.
+    const source: ProfileData = {
+      ...foreignProfileData(),
+      taskAttachments: [
+        { id: "src-ta1", taskId: "src-t1", fileName: "ista.png", mime: "image/png", sizeBytes: 10, sha256: ATTACHMENT_SHA, createdAt: T0 },
+      ],
+    };
+    const { data, blobNames } = plan(
+      source,
+      emptyTarget({ attachmentHashes: new Set([ATTACHMENT_SHA]) }),
+      [],
+      null,
+      { attachment: "skip" },
+    );
+
+    // Every attachment row here names the one duplicate hash, so all three go —
+    // and with them the blob. Flip the choice and the file travels again.
+    expect(data.taskAttachments).toEqual([]);
+    expect(blobNames.size).toBe(0);
+
+    const imported = plan(source, emptyTarget({ attachmentHashes: new Set([ATTACHMENT_SHA]) }), [], null, {
+      attachment: "import",
+    });
+    expect(imported.blobNames.has(ATTACHMENT_SHA)).toBe(true);
+  });
+
+  it("counts one attachment GROUP across all three attachment tables, on their own report lines", () => {
+    const source: ProfileData = {
+      ...foreignProfileData(),
+      taskAttachments: [
+        { id: "src-ta1", taskId: "src-t1", fileName: "ugovor.pdf", mime: "application/pdf", sizeBytes: 9, sha256: "b".repeat(64), createdAt: T0 },
+      ],
+      subjectAttachments: [
+        { id: "src-sa1", subjectId: "src-s1", fileName: "skripta.pdf", mime: "application/pdf", sizeBytes: 9, sha256: "c".repeat(64), createdAt: T0 },
+      ],
+    };
+    const { report } = plan(
+      source,
+      emptyTarget({ attachmentHashes: new Set([ATTACHMENT_SHA, "b".repeat(64), "c".repeat(64)]) }),
+    );
+
+    // One user-facing group — the identity is the FILE, which is the same fact
+    // in all three tables…
+    expect(report.duplicates).toContainEqual({ type: "attachment", count: 4 });
+    // …and three honest report lines, because the arithmetic is per module.
+    expect(report.skips).toContainEqual({
+      code: "duplicate-of-existing", module: "notes", type: "note-attachment", count: 2,
+    });
+    expect(report.skips).toContainEqual({
+      code: "duplicate-of-existing", module: "tasks", type: "task-attachment", count: 1,
+    });
+    expect(report.skips).toContainEqual({
+      code: "duplicate-of-existing", module: "study", type: "subject-attachment", count: 1,
+    });
+  });
+
+  it("names no duplicates at all against a target that holds none", () => {
+    const { report } = plan(foreignProfileData());
+    expect(report.duplicates).toEqual([]);
+    expect(report.skips.map((skip) => skip.code)).not.toContain("duplicate-of-existing");
+  });
+
+  it("balances every module with all four groups skipped at once", () => {
+    const source: ProfileData = {
+      ...foreignProfileData(),
+      taskAttachments: [
+        { id: "src-ta1", taskId: "src-t1", fileName: "ugovor.pdf", mime: "application/pdf", sizeBytes: 9, sha256: "b".repeat(64), createdAt: T0 },
+      ],
+      subjectAttachments: [
+        { id: "src-sa1", subjectId: "src-s1", fileName: "skripta.pdf", mime: "application/pdf", sizeBytes: 9, sha256: "c".repeat(64), createdAt: T0 },
+      ],
+    };
+    const { report } = plan(
+      source,
+      emptyTarget({
+        eventKeys: new Set([EVENT_KEY]),
+        personKeys: new Set([PERSON_KEY]),
+        documentKeys: new Set([DOCUMENT_KEY]),
+        attachmentHashes: new Set([ATTACHMENT_SHA, "b".repeat(64), "c".repeat(64)]),
+        noteTemplateNames: new Set(["Sastanak"]),
+      }),
+    );
+
+    for (const counts of Object.values(report.modules)) {
+      expect(counts.parsed).toBe(counts.imported + counts.merged + counts.skipped);
+    }
+    // And every skipped row is accounted for by a NAMED reason, module by module.
+    for (const module of ["tasks", "calendar", "study", "notifications", "notes"] as const) {
+      const named = report.skips
+        .filter((skip) => skip.module === module)
+        .reduce((sum, skip) => sum + skip.count, 0);
+      expect(named).toBe(report.modules[module].skipped);
+    }
+  });
+
+  it("leaves the source untouched and plans identically twice with the same choices", () => {
+    const target = emptyTarget({ personKeys: new Set([PERSON_KEY]) });
+    const choices: ImportDuplicateChoices = { person: "skip", event: "import" };
+    const source = foreignProfileData();
+    const before = JSON.stringify(source, (_key, value: unknown) =>
+      value instanceof Uint8Array ? [...value] : value,
+    );
+
+    const first = planForeignImport(
+      { data: source, dropped: [], profilePicture: null },
+      target,
+      counterMint(),
+      choices,
+    );
+    const second = planForeignImport(
+      { data: foreignProfileData(), dropped: [], profilePicture: null },
+      target,
+      counterMint(),
+      choices,
+    );
+
+    expect(
+      JSON.stringify(source, (_key, value: unknown) => (value instanceof Uint8Array ? [...value] : value)),
+    ).toBe(before);
+    expect(second.report).toEqual(first.report);
   });
 });

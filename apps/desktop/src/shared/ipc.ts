@@ -245,6 +245,13 @@ export const IpcChannel = {
   // duplicated: both operations share ONE undo slot and ONE banner.
   imexImportPick: "imex:import-pick",
   imexImportPreview: "imex:import-preview",
+  // ADR-051: re-plans the archive already open for THIS preview under different
+  // duplicate choices. Its own channel rather than a field on the preview one,
+  // because the two ask different things of main: a preview OPENS a file (and,
+  // for an NXA1 container, runs Argon2id and needs the passphrase), while a
+  // re-plan may do neither — it re-uses the parse inputs the open archive is
+  // already holding, so changing a choice can never re-ask for a passphrase.
+  imexImportReplan: "imex:import-replan",
   imexImportApply: "imex:import-apply",
   imexImportCancel: "imex:import-cancel",
   // Plain `.md` files into notes (IMEX-007). Deliberately NOT a mode on the
@@ -3465,13 +3472,42 @@ export type ImportSkipCode =
   | "study-settings-not-imported"
   | "profile-picture-not-imported"
   | "template-name-taken"
-  | "source-inbox-collapsed";
+  | "source-inbox-collapsed"
+  | "duplicate-of-existing";
 
 /** One named, counted group of skipped rows, grouped by `(code, module, type)` in first-seen order. `module`/`type` are null for a skip that belongs to neither (the manifest's settings). */
 export interface ImportSkipReason {
   code: ImportSkipCode;
   module: ArchiveModuleName | null;
   type: ImportRecordType | null;
+  count: number;
+}
+
+/**
+ * The kinds of row an import can recognise as something this profile ALREADY
+ * HAS (ADR-051 / IMEX-008). Mirrors `@nexus/core`'s `ImportDuplicateType`
+ * exactly, redeclared here like every other shape in this file; `main`'s
+ * assignment of a core value to this type is what turns a group added in core
+ * into a compile error rather than a row the screen silently cannot label.
+ *
+ * `"attachment"` is one group across all three attachment tables: the identity
+ * is the FILE („ista datoteka"), which is the same sentence wherever the row
+ * hangs. The report still counts the skips per module.
+ */
+export type ImportDuplicateType = "event" | "person" | "document" | "attachment";
+
+/** Every `ImportDuplicateType`, in the order the preview lists them — also the closed domain `main` validates a re-plan payload against. */
+export const IMPORT_DUPLICATE_TYPES = ["event", "person", "document", "attachment"] as const;
+
+/** What to do with one group. `"skip"` is the default for every group main has not been told about. */
+export type ImportDuplicateChoice = "skip" | "import";
+
+/** The renderer's answer per group — partial, because a group nobody has answered is skipped. */
+export type ImportDuplicateChoices = Partial<Record<ImportDuplicateType, ImportDuplicateChoice>>;
+
+/** One detected group and how many rows it covers. Reported whichever way the group's choice currently points, so the screen can always offer the other one. */
+export interface ImportDuplicateGroup {
+  type: ImportDuplicateType;
   count: number;
 }
 
@@ -3491,6 +3527,8 @@ export interface ImportModuleCounts {
 export interface ImportPlanReport {
   modules: Record<ArchiveModuleName, ImportModuleCounts>;
   skips: ImportSkipReason[];
+  /** Every duplicate group detected (ADR-051), groups with none omitted — one choice row each on the preview screen. */
+  duplicates: ImportDuplicateGroup[];
 }
 
 /**
@@ -3560,6 +3598,24 @@ export interface ImexImportPreviewRequest {
   profileId: string;
   /** `null` for a plain `.nexus.zip`. Bounded but never policy-checked, for exactly the reason `ImexRestorePreviewRequest`'s is not: the file on disk is the authority on what opens it. */
   passphrase: string | null;
+}
+
+/**
+ * Re-plans the archive THIS preview already has open, under different duplicate
+ * choices (ADR-051). `token` names the plan being replaced — main refuses any
+ * other value, exactly as an apply does, so a stale screen can never re-plan an
+ * archive it is no longer looking at.
+ *
+ * The answer is a full `ImportPreviewResult`: re-planning mints a FRESH token
+ * (the old plan is gone, and a screen still holding its token must not be able
+ * to apply it), so the renderer needs the whole preview back rather than a diff.
+ * No passphrase field, and deliberately so — the archive is already open, so a
+ * re-plan never touches the KDF and the user is never asked twice.
+ */
+export interface ImexImportReplanRequest {
+  profileId: string;
+  token: string;
+  choices: ImportDuplicateChoices;
 }
 
 /** `token` names the exact plan being confirmed — main refuses any other value, so a stale screen can never apply a plan the user did not see. */
@@ -4197,6 +4253,17 @@ export interface NexusApi {
    * `{ status: "unreadable", code: "passphrase-wrong" }` rather than as a rejection.
    */
   previewImport(profileId: string, passphrase: string | null): Promise<ImportPreviewResult>;
+  /**
+   * Re-plans the archive `token`'s preview already has open, under `choices`
+   * (ADR-051), and answers a fresh preview carrying a fresh token. Never
+   * re-opens the file, never re-runs the KDF and never asks for the passphrase
+   * again — changing a duplicate choice costs a re-plan, not a re-read.
+   */
+  replanImport(
+    profileId: string,
+    token: string,
+    choices: ImportDuplicateChoices,
+  ): Promise<ImportPreviewResult>;
   /**
    * Confirms the plan `token` names, MERGING it into this profile: every row is
    * added under a new id and nothing already there is touched. Undoable through

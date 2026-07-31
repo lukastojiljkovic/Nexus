@@ -253,6 +253,7 @@ import {
   pickRestoreFile,
   previewImport,
   previewRestore,
+  replanImport,
   restoreStatus,
   undoRestore,
   type ImportDeps,
@@ -260,6 +261,7 @@ import {
 import {
   CARD_KINDS,
   CARD_TEXT_MAX_LENGTH,
+  IMPORT_DUPLICATE_TYPES,
   IpcChannel,
   MAX_BACKGROUND_BYTES,
   MAX_BACKGROUND_DIM,
@@ -294,6 +296,8 @@ import {
   type GlobalShortcutResult,
   type IcsExportResult,
   type ImportApplyResult,
+  type ImportDuplicateChoices,
+  type ImportDuplicateType,
   type ImportPickResult,
   type ImportPreviewResult,
   type MarkdownImportResult,
@@ -987,6 +991,31 @@ function asRestorePassphrase(value: unknown, field: string): string | null {
 const MAX_RESTORE_TOKEN_LENGTH = 64;
 
 /** `imex:restore-apply`'s token field: a non-empty string within `MAX_RESTORE_TOKEN_LENGTH`. Whether it is the CURRENT preview's token is `applyRestore`'s call, not this structural check's — the same division `asRecoveryCodeInput` follows. */
+/**
+ * `imex:import-replan`'s duplicate choices (ADR-051). Validated against the
+ * CLOSED `IMPORT_DUPLICATE_TYPES` domain on both axes — an unknown group name
+ * and an unknown answer are each refused by name — and rebuilt into a fresh
+ * object rather than passed through, so nothing the renderer put on that value
+ * (an extra key, a prototype, a getter) ever reaches the planner. Absent keys
+ * stay absent: the planner reads an unanswered group as `"skip"`, which is the
+ * safe direction, and an empty object is a perfectly legitimate payload.
+ */
+function asImportDuplicateChoices(value: unknown, field: string): ImportDuplicateChoices {
+  const body = asRecord(value);
+  const choices: ImportDuplicateChoices = {};
+  for (const key of Object.keys(body)) {
+    if (!(IMPORT_DUPLICATE_TYPES as readonly string[]).includes(key)) {
+      throw new Error(`Invalid IPC payload: "${field}" names an unknown duplicate group.`);
+    }
+    const answer = body[key];
+    if (answer !== "skip" && answer !== "import") {
+      throw new Error(`Invalid IPC payload: "${field}.${key}" must be "skip" or "import".`);
+    }
+    choices[key as ImportDuplicateType] = answer;
+  }
+  return choices;
+}
+
 function asRestoreToken(value: unknown, field: string): string {
   if (typeof value !== "string" || value.length === 0 || value.length > MAX_RESTORE_TOKEN_LENGTH) {
     throw new Error(
@@ -5493,6 +5522,19 @@ function registerIpc(): void {
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const passphrase = asRestorePassphrase(body.passphrase, "passphrase");
     return previewImport(restoreDeps(), profileId, passphrase);
+  });
+
+  // ADR-051: the same plan, re-computed under different duplicate choices. The
+  // renderer names the plan it is looking at by token and nothing else — no
+  // path, no passphrase, no archive — so a re-plan can only ever touch the
+  // archive main already has open for this profile.
+  ipcMain.handle(IpcChannel.imexImportReplan, (event, payload): ImportPreviewResult => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const token = asRestoreToken(body.token, "token");
+    const choices = asImportDuplicateChoices(body.choices, "choices");
+    return replanImport(restoreDeps(), profileId, token, choices);
   });
 
   ipcMain.handle(IpcChannel.imexImportApply, (event, payload): Promise<ImportApplyResult> => {

@@ -23,6 +23,10 @@ import type {
   AppInfo,
   DashboardSettings,
   FlagState,
+  ImportDuplicateChoice,
+  ImportDuplicateChoices,
+  ImportDuplicateGroup,
+  ImportDuplicateType,
   ImportPreview,
   ImportSkipReason,
   MarkdownImportResult,
@@ -914,7 +918,14 @@ type ImportState =
       error: string | null;
     }
   | { phase: "invalid"; pick: PickedArchive; problems: RestoreProblem[] }
-  | { phase: "ready"; pick: PickedArchive; preview: ImportPreview; error: string | null }
+  | {
+      phase: "ready";
+      pick: PickedArchive;
+      preview: ImportPreview;
+      /** True while a duplicate choice is being re-planned (ADR-051) — the plan on screen is still the valid one until the answer lands. */
+      busy: boolean;
+      error: string | null;
+    }
   | { phase: "applying"; pick: PickedArchive; preview: ImportPreview }
   | { phase: "applied" };
 
@@ -928,6 +939,62 @@ function ImportSkipRow({ reason }: { reason: ImportSkipReason }) {
       <span className="set__import-skip-meta">
         {moduleLabel !== null && <>{moduleLabel} · </>}
         {reason.count}
+      </span>
+    </li>
+  );
+}
+
+/** The two answers, in the order the row offers them: the default first. */
+const DUPLICATE_CHOICES: readonly ImportDuplicateChoice[] = ["skip", "import"];
+
+interface ImportDuplicateRowProps {
+  group: ImportDuplicateGroup;
+  /** What this group is currently planned as — `"skip"` until the user says otherwise. */
+  choice: ImportDuplicateChoice;
+  disabled: boolean;
+  onChoose: (choice: ImportDuplicateChoice) => void;
+}
+
+/**
+ * One detected duplicate group (ADR-051): what it is, how many rows it covers,
+ * what „isto“ means for it — spelled out, because a choice nobody can evaluate
+ * is not a choice — and the two-state answer.
+ *
+ * Two quiet buttons rather than a checkbox, deliberately: neither answer is the
+ * „off“ of the other. „Preskoči“ and „Uvezi svejedno“ are both something the
+ * user is doing on purpose, and a checkbox would frame one of them as the
+ * absence of an action. The active one is typographic — accent text and weight,
+ * no fill, no glow, no inset bar — the same recipe the search chips use.
+ */
+function ImportDuplicateRow({ group, choice, disabled, onChoose }: ImportDuplicateRowProps) {
+  const s = strings.settings.import;
+  return (
+    <li className="set__import-duplicate">
+      <span className="set__import-duplicate-name">{s.duplicateLabels[group.type]}</span>
+      <span className="set__import-duplicate-meta">
+        {group.count} · {s.duplicateIdentities[group.type]}
+      </span>
+      <span
+        className="set__import-duplicate-choice"
+        role="group"
+        aria-label={`${s.duplicateLabels[group.type]}: ${s.duplicateChoiceLabel}`}
+      >
+        {DUPLICATE_CHOICES.map((option) => (
+          <Button
+            key={option}
+            size="sm"
+            className={
+              option === choice
+                ? "set__import-choice set__import-choice--active"
+                : "set__import-choice"
+            }
+            aria-pressed={option === choice}
+            disabled={disabled}
+            onClick={() => onChoose(option)}
+          >
+            {option === "skip" ? s.duplicateSkipButton : s.duplicateImportButton}
+          </Button>
+        ))}
       </span>
     </li>
   );
@@ -969,6 +1036,13 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
   // passphrase comes back as a status, not a rejection, and the user corrects
   // the value already typed rather than retyping it.
   const [passphrase, setPassphrase] = useState("");
+  // The duplicate answers the PLAN on screen was computed with (ADR-051) —
+  // committed only once main has actually re-planned on them, never
+  // optimistically, so a failed re-plan leaves the buttons agreeing with the
+  // plan the user is still looking at rather than with one that does not exist.
+  // Outside the state machine for the same reason `passphrase` is: it survives
+  // the phase changes around it, and resets exactly where a new pick starts.
+  const [choices, setChoices] = useState<ImportDuplicateChoices>({});
   // Read by the unmount cleanup only. An apply in flight must never be
   // cancelled from here: main is copying blobs out of the very archive
   // `cancelImport` would close under it.
@@ -995,7 +1069,10 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
           // Main holds the opened archive now; nothing after this point ever
           // needs the passphrase again (`BackupSection`'s own hygiene rule).
           setPassphrase("");
-          setState({ phase: "ready", pick, preview: result.preview, error: null });
+          // A fresh preview is always planned on the defaults (every duplicate
+          // group skipped), so the rows start there too.
+          setChoices({});
+          setState({ phase: "ready", pick, preview: result.preview, busy: false, error: null });
           return;
         case "invalid":
           setState({ phase: "invalid", pick, problems: result.problems });
@@ -1028,10 +1105,43 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
     }
   }
 
+  /**
+   * Re-plans the open archive under one changed duplicate answer (ADR-051) and
+   * swaps in the fresh preview — and, with it, the fresh token, since the plan
+   * the old one named no longer exists.
+   *
+   * Nothing here re-picks or re-previews: main re-uses the archive it already
+   * has open, so a changed answer never costs a second passphrase prompt. A
+   * rejected re-plan leaves the preview and the token exactly as they were, and
+   * the buttons with them.
+   */
+  async function chooseDuplicate(
+    pick: PickedArchive,
+    preview: ImportPreview,
+    type: ImportDuplicateType,
+    choice: ImportDuplicateChoice,
+  ): Promise<void> {
+    const next: ImportDuplicateChoices = { ...choices, [type]: choice };
+    setState({ phase: "ready", pick, preview, busy: true, error: null });
+    try {
+      const result = await window.nexus.replanImport(profileId, preview.token, next);
+      if (result.status === "ready") {
+        setChoices(next);
+        setState({ phase: "ready", pick, preview: result.preview, busy: false, error: null });
+        return;
+      }
+      setState({ phase: "ready", pick, preview, busy: false, error: s.duplicateError });
+    } catch (replanError) {
+      setState({ phase: "ready", pick, preview, busy: false, error: s.duplicateError });
+      console.error("Nexus: failed to re-plan an import:", replanError);
+    }
+  }
+
   /** Picking from any phase starts over — main closes the superseded pick itself. */
   async function choose(): Promise<void> {
     setState({ phase: "idle", error: null });
     setPassphrase("");
+    setChoices({});
     try {
       const picked = await window.nexus.pickImportArchive();
       if (picked.canceled) return;
@@ -1059,7 +1169,7 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
     } catch (applyError) {
       // A failed apply leaves the plan — and the token main accepts —
       // untouched, so the screen goes back to it rather than to idle.
-      setState({ phase: "ready", pick, preview, error: s.error });
+      setState({ phase: "ready", pick, preview, busy: false, error: s.error });
       console.error("Nexus: failed to apply an import:", applyError);
     } finally {
       applying.current = false;
@@ -1069,6 +1179,7 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
   async function cancel(): Promise<void> {
     setState({ phase: "idle", error: null });
     setPassphrase("");
+    setChoices({});
     try {
       await window.nexus.cancelImport();
     } catch (cancelError) {
@@ -1077,6 +1188,9 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
   }
 
   const previewing = state.phase === "ready" || state.phase === "applying";
+  // A re-plan is replacing the token this screen holds (ADR-051), so nothing
+  // that would spend it — least of all the apply — may fire meanwhile.
+  const replanning = state.phase === "ready" && state.busy;
 
   return (
     <div className="set__import-block">
@@ -1186,6 +1300,29 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
           </table>
           <p className="set__section-caption">{s.tableCaption}</p>
 
+          {/* ADR-051: above the skip list, because these rows are the one part
+              of the report the user can still CHANGE — everything below them
+              states what will happen, while this states what they decided. */}
+          {state.preview.report.duplicates.length > 0 && (
+            <>
+              <h4 className="set__module-group-title">{s.duplicatesTitle}</h4>
+              <p className="set__section-caption">{s.duplicatesCaption}</p>
+              <ul className="set__import-duplicates">
+                {state.preview.report.duplicates.map((group) => (
+                  <ImportDuplicateRow
+                    key={group.type}
+                    group={group}
+                    choice={choices[group.type] ?? "skip"}
+                    disabled={state.phase === "applying" || replanning}
+                    onChoose={(choice) =>
+                      void chooseDuplicate(state.pick, state.preview, group.type, choice)
+                    }
+                  />
+                ))}
+              </ul>
+            </>
+          )}
+
           {state.preview.report.skips.length > 0 && (
             <>
               <h4 className="set__module-group-title">{s.skipsTitle}</h4>
@@ -1222,7 +1359,7 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
             <Button
               size="sm"
               variant="primary"
-              disabled={state.phase === "applying"}
+              disabled={state.phase === "applying" || replanning}
               onClick={() => void apply(state.pick, state.preview)}
             >
               {s.applyButton}
@@ -1230,7 +1367,7 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
             <Button
               size="sm"
               variant="ghost"
-              disabled={state.phase === "applying"}
+              disabled={state.phase === "applying" || replanning}
               onClick={() => void cancel()}
             >
               {shared.cancelButton}
@@ -1238,6 +1375,7 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
           </div>
 
           {state.phase === "applying" && <p className="app__muted">{s.applying}</p>}
+          {replanning && <p className="app__muted">{shared.previewRunning}</p>}
           {state.phase === "ready" && state.error != null && <p className="set__error">{state.error}</p>}
         </>
       )}

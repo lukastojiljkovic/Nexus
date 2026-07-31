@@ -2,12 +2,17 @@ import { createHash, randomBytes } from "node:crypto";
 import { basename } from "node:path";
 import {
   countProfileModules,
+  documentDuplicateKey,
+  eventDuplicateKey,
   parseImportArchive,
+  personDuplicateKey,
   planForeignImport,
   type ArchiveProfilePicture,
   type ExportSettings,
   type ForeignImportPlan,
   type ForeignImportTarget,
+  type ImportDuplicateChoices as CoreImportDuplicateChoices,
+  type ImportDuplicateGroup as CoreImportDuplicateGroup,
   type ImportPlanReport as CoreImportPlanReport,
   type ImportSkipReason as CoreImportSkipReason,
   type ImportProblem,
@@ -27,6 +32,9 @@ import {
 import type {
   ArchiveModuleName,
   ImportApplyResult,
+  ImportDuplicateChoices,
+  ImportDuplicateGroup,
+  ImportDuplicateType,
   ImportPickResult,
   ImportPlanReport,
   ImportPreview,
@@ -314,14 +322,82 @@ function toImportSkip(skip: CoreImportSkipReason): ImportSkipReason {
   return { code, module, type, count: skip.count };
 }
 
+/**
+ * Maps one core `ImportDuplicateGroup` onto the wire. The annotated `type`
+ * assignment is the same drift check `toImportSkip`'s three are: a duplicate
+ * group added in `@nexus/core` and forgotten in `shared/ipc.ts` stops this file
+ * compiling, rather than reaching a renderer that has no label for it.
+ */
+function toImportDuplicate(group: CoreImportDuplicateGroup): ImportDuplicateGroup {
+  const type: ImportDuplicateType = group.type;
+  return { type, count: group.count };
+}
+
 /** The plan's report on the wire — copied rather than passed through, because the wire shape is mutable and core's is readonly. */
 function toImportReport(report: CoreImportPlanReport): ImportPlanReport {
-  return { modules: report.modules, skips: report.skips.map(toImportSkip) };
+  return {
+    modules: report.modules,
+    skips: report.skips.map(toImportSkip),
+    duplicates: report.duplicates.map(toImportDuplicate),
+  };
 }
 
 /** sha256 hex over a UTF-8 string — the same injection `handleExport` (`imex.ts`) gives `buildExportArchive`. */
 function sha256Hex(content: string): string {
   return createHash("sha256").update(content, "utf8").digest("hex");
+}
+
+/**
+ * What an import parse consumes, taken straight off an OPEN archive. Extracted
+ * because it is exactly what a re-plan re-uses (ADR-051): these three maps are
+ * already decoded and resident for the archive's whole lifetime, so re-planning
+ * costs a parse of memory rather than a second open, a second KDF pass and a
+ * second walk over every blob.
+ *
+ * `"import"` mode is the whole difference at the parser: a per-row problem
+ * becomes a warning and costs that row its place instead of refusing the
+ * archive, since a merge that threw away nine thousand good rows over one
+ * damaged one would be the wrong answer. Archive-level problems — a bad
+ * manifest, a checksum mismatch, an unsupported version — are still errors, and
+ * still refuse.
+ */
+function importParseInput(archive: OpenedArchive): Parameters<typeof parseImportArchive>[0] {
+  return {
+    files: archive.files,
+    ydocs: archive.ydocs,
+    blobNames: archive.blobNames,
+    hash: sha256Hex,
+    mode: "import",
+  };
+}
+
+/**
+ * One import preview on the wire, from the parse and the plan that produced it.
+ * Shared by `previewImport` and `replanImport` so the two can never describe the
+ * same archive differently — the ONLY thing that legitimately differs between
+ * them is the plan (and therefore the token).
+ */
+function importPreviewOf(
+  picked: PendingImport,
+  archive: OpenedArchive,
+  manifest: { createdAt: string; appVersion: string; profile: { name: string } },
+  problems: readonly ImportProblem[],
+  plan: ForeignImportPlan,
+  targetProfileName: string,
+  token: string,
+): ImportPreview {
+  return {
+    token,
+    fileName: picked.fileName,
+    encrypted: picked.encrypted,
+    createdAt: manifest.createdAt,
+    appVersion: manifest.appVersion,
+    sourceProfileName: manifest.profile.name,
+    targetProfileName,
+    report: toImportReport(plan.report),
+    warnings: problems.filter((problem) => problem.severity === "warning").map(toRestoreProblem),
+    corruptBlobs: archive.corruptBlobNames.size,
+  };
 }
 
 /**
@@ -722,12 +798,57 @@ export async function pickImportFile(deps: RestoreDeps): Promise<ImportPickResul
 }
 
 /**
+ * Every attachment blob this profile already holds, across ALL THREE attachment
+ * tables (ADR-051) — the index the planner's duplicate rule looks a source
+ * attachment's `sha256` up in.
+ *
+ * Read by fanning out over the live parents, exactly as `gatherProfileData`
+ * does, because each attachment store is scoped through its own parent row (a
+ * note, a task, a subject) rather than through the profile. Deliberately NOT
+ * `gatherProfileData` itself: that merges every note's Yjs state, which is a
+ * large cost for an answer that needs only hashes.
+ *
+ * Three tables and not two, for the reason `blobRefCount` (`main/index.ts`)
+ * unions five: the blob store is content-addressed across the whole database, so
+ * an index that saw only one table would call a file "new" that the profile is
+ * already showing somewhere else.
+ */
+function targetAttachmentHashes(deps: ProfileDataDeps, profileId: string): Set<string> {
+  const hashes = new Set<string>();
+
+  const noteAttachments = deps.noteAttachmentStore(profileId);
+  for (const note of deps.noteStore(profileId).list()) {
+    for (const row of noteAttachments.list(note.id)) hashes.add(row.sha256);
+  }
+
+  const taskAttachments = deps.taskAttachmentStore(profileId);
+  for (const task of deps.taskStore(profileId).listActive()) {
+    for (const row of taskAttachments.list(task.id)) hashes.add(row.sha256);
+  }
+
+  const subjectAttachments = deps.subjectAttachmentStore(profileId);
+  for (const subject of deps.subjectStore(profileId).listActive()) {
+    for (const row of subjectAttachments.list(subject.id)) hashes.add(row.sha256);
+  }
+
+  return hashes;
+}
+
+/**
  * Everything the planner needs to know about the profile being merged INTO,
  * read off the profile's OWN stores — never off a cached view. Each answer
  * decides an identity question the planner then resolves once and for all:
  * which Inbox the source's tasks land in, which tags are already there by name,
- * which template names are taken, and whether the quick-capture folder is
- * already claimed (migration 028 allows exactly one).
+ * which template names are taken in each of the three template tables, whether
+ * the quick-capture folder is already claimed (migration 028 allows exactly
+ * one), and — ADR-051 — which files, appointments, birthdays and documents this
+ * profile ALREADY HAS.
+ *
+ * The four duplicate indexes are composed with the SAME exported key functions
+ * the planner composes a source row's key with (`eventDuplicateKey` and its two
+ * siblings): two spellings of one key would be a rule that quietly stopped
+ * matching, which for a duplicate rule is the worst possible failure — it
+ * reports nothing and looks fine.
  *
  * The Inbox is read, never created: every profile has one (migration 022
  * backfills the ones that predate ADR-029, `main` seeds the ones it creates), so
@@ -747,6 +868,13 @@ function importTargetFor(deps: ProfileDataDeps, profileId: string): ForeignImpor
     taskTags: deps.taskTagStore(profileId).listTags(),
     taskTemplateNames: deps.taskTemplateStore(profileId).list().map((template) => template.name),
     eventTemplateNames: deps.eventTemplateStore(profileId).list().map((template) => template.name),
+    noteTemplateNames: new Set(
+      deps.noteTemplateStore(profileId).list().map((template) => template.name),
+    ),
+    attachmentHashes: targetAttachmentHashes(deps, profileId),
+    eventKeys: new Set(deps.eventStore(profileId).listActive().map(eventDuplicateKey)),
+    personKeys: new Set(deps.peopleStore(profileId).listActive().map(personDuplicateKey)),
+    documentKeys: new Set(deps.documentStore(profileId).listActive().map(documentDuplicateKey)),
     claimsCaptureDefault: org.listFolders().some((folder) => folder.isCaptureDefault),
   };
 }
@@ -758,12 +886,8 @@ function importTargetFor(deps: ProfileDataDeps, profileId: string): ForeignImpor
  * counts. Drops any previous `ready` first, for the same file-handle reason
  * `previewRestore` does.
  *
- * `"import"` mode is the whole difference at the parser: a per-row problem
- * becomes a warning and costs that row its place instead of refusing the
- * archive, since a merge that threw away nine thousand good rows over one
- * damaged one would be the wrong answer. Archive-level problems — a bad
- * manifest, a checksum mismatch, an unsupported version — are still errors, and
- * still refuse.
+ * `"import"` mode is the whole difference at the parser — see
+ * `importParseInput`, which is also exactly what a later re-plan re-uses.
  *
  * The ids are minted with `uuidv7`, the same generator every store mints with,
  * so imported rows sort by id exactly as rows created at this moment would.
@@ -799,13 +923,7 @@ export async function previewImport(
   }
   await closeReady(picked);
 
-  const parsed = parseImportArchive({
-    files: archive.files,
-    ydocs: archive.ydocs,
-    blobNames: archive.blobNames,
-    hash: sha256Hex,
-    mode: "import",
-  });
+  const parsed = parseImportArchive(importParseInput(archive));
 
   if (parsed.data === null || parsed.manifest === null) {
     await archive.close();
@@ -828,6 +946,10 @@ export async function previewImport(
       },
       importTargetFor(deps, profileId),
       uuidv7,
+      // No choices: a first preview is always planned on the defaults — every
+      // duplicate group skipped (ADR-051) — because the user has not been shown
+      // a group yet, let alone answered one. `replanImport` is what carries an
+      // answer back.
     );
   } catch (error) {
     // `picked.ready` is still null, so nothing else holds a reference to this
@@ -840,21 +962,97 @@ export async function previewImport(
 
   picked.ready = { archive, token, profileId, plan };
 
-  const preview: ImportPreview = {
-    token,
-    fileName: picked.fileName,
-    encrypted: picked.encrypted,
-    createdAt: parsed.manifest.createdAt,
-    appVersion: parsed.manifest.appVersion,
-    sourceProfileName: parsed.manifest.profile.name,
-    targetProfileName: deps.getProfile(profileId).name,
-    report: toImportReport(plan.report),
-    warnings: parsed.problems
-      .filter((problem) => problem.severity === "warning")
-      .map(toRestoreProblem),
-    corruptBlobs: archive.corruptBlobNames.size,
+  return {
+    status: "ready",
+    preview: importPreviewOf(picked, archive, parsed.manifest, parsed.problems, plan, deps.getProfile(profileId).name, token),
   };
-  return { status: "ready", preview };
+}
+
+/**
+ * Re-plans the archive an import preview already has open, under different
+ * duplicate choices (ADR-051), and answers a whole fresh preview.
+ *
+ * What this deliberately does NOT do is the entire point. It does not re-open
+ * the file, does not re-derive the archive key (a sealed archive's Argon2id pass
+ * is measured in seconds by design), does not ask for the passphrase a second
+ * time, and does not re-hash a single blob: the open `OpenedArchive` is still
+ * holding the decoded `files`/`ydocs`/`blobNames` a parse consumes, so a
+ * re-plan is a re-PARSE of bytes already in memory plus a fresh planning pass —
+ * the same two pure steps a preview does after the expensive part is over.
+ * Changing a checkbox must not cost what opening the archive cost.
+ *
+ * The TARGET is read again rather than reused, on the same terms `previewImport`
+ * reads it: every identity question is answered about the profile as it is now,
+ * and "now" has moved since the first preview.
+ *
+ * Synchronous on purpose — there is no `await` anywhere below the guards, so
+ * `pendingImport` cannot be replaced out from under this call the way it can
+ * across `previewImport`'s opens. The token check is what makes the guards
+ * enough: an apply still refuses everything but the token this call just minted.
+ */
+export function replanImport(
+  deps: ImportDeps,
+  profileId: string,
+  token: string,
+  choices: ImportDuplicateChoices,
+): ImportPreviewResult {
+  const picked = pendingImport;
+  const ready = picked?.ready ?? null;
+  if (picked === null || ready === null) {
+    throw new Error("No import preview is ready to re-plan.");
+  }
+  if (ready.token !== token) {
+    throw new Error("This import preview is stale; re-run the preview before re-planning it.");
+  }
+  if (ready.profileId !== profileId) {
+    throw new Error("This import preview was computed for a different profile.");
+  }
+
+  const parsed = parseImportArchive(importParseInput(ready.archive));
+  if (parsed.data === null || parsed.manifest === null) {
+    // Unreachable by construction: these are the same bytes, in the same mode,
+    // through the same pure parser that already accepted them once. Reported
+    // rather than thrown because the channel's own type says how an unreadable
+    // archive is described — and the existing plan is deliberately left in
+    // place, so the token the screen is holding still applies the archive the
+    // user already saw.
+    return { status: "invalid", problems: parsed.problems.map(toRestoreProblem) };
+  }
+
+  // The drift check every wire→core hand-off in this file makes, in the one
+  // direction that runs this way: a duplicate group added in `@nexus/core` and
+  // forgotten in `shared/ipc.ts` (or the reverse) stops this line compiling.
+  const plannerChoices: CoreImportDuplicateChoices = choices;
+  const plan = planForeignImport(
+    {
+      data: parsed.data,
+      dropped: parsed.dropped,
+      profilePicture: parsed.manifest.profile.picture,
+    },
+    importTargetFor(deps, profileId),
+    uuidv7,
+    plannerChoices,
+  );
+
+  // A FRESH token, and `ready` replaced wholesale: the plan the previous token
+  // named no longer exists, so a screen still holding it must not be able to
+  // apply it. The archive itself is carried across untouched — it is the one
+  // thing this call must not re-do.
+  const nextToken = randomBytes(16).toString("hex");
+  picked.ready = { archive: ready.archive, token: nextToken, profileId, plan };
+
+  return {
+    status: "ready",
+    preview: importPreviewOf(
+      picked,
+      ready.archive,
+      parsed.manifest,
+      parsed.problems,
+      plan,
+      deps.getProfile(profileId).name,
+      nextToken,
+    ),
+  };
 }
 
 /**

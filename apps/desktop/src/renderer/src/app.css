@@ -5058,6 +5058,65 @@ button.cal__grid-event--dragging {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+/* „Već postoji kod tebe" (ADR-051): one quiet row per detected duplicate group
+   — the group's name, then how many rows and what „isto" means for it, then the
+   two-state answer pushed to the trailing edge so the answers line up in a
+   column across rows. Hairlines between rows, like the module list above; no
+   card, no fill, nothing that would make a question look like a warning. */
+.set__import-duplicates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-width: 460px;
+}
+.set__import-duplicate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-1) var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+}
+.set__import-duplicate + .set__import-duplicate {
+  padding-top: var(--nx-space-1);
+  border-top: 1px solid var(--nx-border);
+}
+.set__import-duplicate-name {
+  font-weight: var(--nx-font-weight-medium);
+}
+.set__import-duplicate-meta {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+  font-variant-numeric: tabular-nums;
+}
+.set__import-duplicate-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  margin-left: auto;
+}
+/* Overrides `.set__import-block .nx-button`'s `align-self: flex-start`, which
+   is meant for the block's own column and would top-align these in their row. */
+.set__import-duplicate-choice .nx-button {
+  align-self: center;
+}
+/* The answer itself is typographic, exactly as `.search__chip` is: no fill, no
+   border, no glow — the active one carried by accent text and weight alone. */
+.set__import-choice.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.set__import-choice.nx-button:hover:not(:disabled) {
+  background: transparent;
+  color: var(--nx-text);
+}
+.set__import-choice--active.nx-button {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
 /* Native select matched to the textfield input (tokens only, no custom arrow; mirrors .study__select). */
 .set__select {
   font: inherit;

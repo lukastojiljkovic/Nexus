@@ -7,6 +7,7 @@ import type { SmartListId } from "@nexus/core";
 import type {
   ArchiveReadErrorCode,
   DashboardPickErrorCode,
+  ImportDuplicateType,
   ImportSkipCode,
   MarkdownImportSkipCode,
   ProfilePicturePickErrorCode,
@@ -2147,7 +2148,49 @@ export const strings = {
         "template-name-taken": "Šablon istog imena već postoji kod tebe — tvoj se zadržava.",
         "source-inbox-collapsed":
           "Podrazumevana lista iz arhive se ne pravi ponovo — njeni zadaci ulaze u tvoju podrazumevanu listu.",
+        "duplicate-of-existing": "Već postoji kod tebe — preskočeno po tvom izboru.",
       } satisfies Record<ImportSkipCode, string>,
+      /**
+       * „Već postoji kod tebe“ (ADR-051 / IMEX-008) — the choice rows above the
+       * skip list. One row per duplicate group the plan detected, each naming
+       * what the group is, how many rows it covers, and — the part that makes
+       * the choice answerable — WHAT „isto“ means for it, in words.
+       *
+       * The heading is a statement of fact, not a warning: nothing is wrong, the
+       * archive simply overlaps with what this profile already has, and the user
+       * decides which way that goes.
+       */
+      duplicatesTitle: "Već postoji kod tebe",
+      duplicatesCaption:
+        "Ovo iz arhive poklapa se sa nečim što već imaš. Podrazumevano se preskače. Ako ti ipak treba, uvozi se kao zaseban, nov zapis — ono što već imaš se ni u jednom slučaju ne menja.",
+      /**
+       * What each group IS, in the module's own word („Ljudi“ is the panel
+       * CAL-007 calls it, „Prilozi“ the one every attachment block calls it), and
+       * what „isto“ means for it. Two closed maps over the wire's own
+       * `ImportDuplicateType`, so a group added in `shared/ipc.ts` is a compile
+       * error here rather than a row the screen cannot label — which for a row
+       * that asks the user a question would be the worst possible gap.
+       */
+      duplicateLabels: {
+        event: "Događaji",
+        person: "Ljudi",
+        document: "Dokumenti",
+        attachment: "Prilozi",
+      } satisfies Record<ImportDuplicateType, string>,
+      duplicateIdentities: {
+        event: "isti naslov i vreme",
+        person: "isto ime i datum",
+        document: "ista vrsta i naziv",
+        // One group for all three attachment tables: the identity is the file.
+        attachment: "ista datoteka",
+      } satisfies Record<ImportDuplicateType, string>,
+      /** The two-state control. „Uvezi svejedno“ says out loud that this is the deliberate choice, not the ordinary one. */
+      duplicateSkipButton: "Preskoči",
+      duplicateImportButton: "Uvezi svejedno",
+      /** The group's accessible name, since the two buttons alone do not say what they are answering. */
+      duplicateChoiceLabel: "Šta sa poklapanjima",
+      /** A rejected re-plan; the preview on screen stays valid, so this invites a retry rather than starting over. */
+      duplicateError: "Izbor nije mogao da se primeni. Pokušaj ponovo.",
       /**
        * The corrupt-blob line's closing clause only: the count, its numeral
        * agreement and the „Arhiva sadrži“ opening are the restore's, and only

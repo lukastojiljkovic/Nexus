@@ -428,6 +428,8 @@ const api: NexusApi = {
   pickImportArchive: () => ipcRenderer.invoke(IpcChannel.imexImportPick),
   previewImport: (profileId, passphrase) =>
     ipcRenderer.invoke(IpcChannel.imexImportPreview, { profileId, passphrase }),
+  replanImport: (profileId, token, choices) =>
+    ipcRenderer.invoke(IpcChannel.imexImportReplan, { profileId, token, choices }),
   applyImport: (profileId, token) =>
     ipcRenderer.invoke(IpcChannel.imexImportApply, { profileId, token }),
   cancelImport: () => ipcRenderer.invoke(IpcChannel.imexImportCancel),

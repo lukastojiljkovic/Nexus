@@ -86,6 +86,7 @@ import {
   pickRestoreFile,
   previewImport,
   previewRestore,
+  replanImport,
   restoreStatus,
   undoRestore,
   type ImportDeps,
@@ -1576,6 +1577,353 @@ describe("foreign import", () => {
       expect((await previewImport(deps, profileB, null)).status).toBe("ready");
       clearRestoreState();
       await expect(previewImport(deps, profileB, null)).resolves.toEqual({ status: "no-file" });
+    });
+  });
+});
+
+// --- Duplicate detection and re-planning (ADR-051 / IMEX-008) ----------------
+
+describe("foreign import — what the target already has", () => {
+  const T = "2026-01-01T00:00:00.000Z";
+
+  /**
+   * Profile A's archive on disk and profile B seeded beside it, with `shape`
+   * given a chance to rewrite what the ARCHIVE carries (the archive is built
+   * from the gathered `ProfileData`, so a row nobody stored can still travel in
+   * it) and `overlap` a chance to put rows into B.
+   *
+   * `twoProfiles` above is the plain version; this one exists because every
+   * test here is about the relationship BETWEEN the two profiles, which is
+   * exactly what that helper cannot express.
+   */
+  async function twoProfilesWith(
+    fileName: string,
+    options: {
+      shape?: (data: ProfileData, profileA: string) => ProfileData;
+      overlap?: (profileB: string, fixtureA: SeededFixture) => void;
+      seal?: string;
+    } = {},
+  ): Promise<{ profileB: string; fixtureA: SeededFixture; handle: TestDepsHandle }> {
+    const profileA = createProfile(dbA, "A");
+    const fixtureA = seedProfile(dbA, profileA, "A");
+    const data = options.shape ? options.shape(fixtureA.data, profileA) : fixtureA.data;
+    const archive = buildArchiveFor({ ...fixtureA, data }, profileA, "A");
+    const zipBytes = await buildArchiveZip(archive, fixtureA.blobBytes);
+    const filePath = fixturePath(fileName);
+    await writeFile(
+      filePath,
+      options.seal === undefined ? zipBytes : await sealAsNxa1(zipBytes, options.seal),
+    );
+
+    const profileB = createProfile(dbB, "B-target");
+    seedProfile(dbB, profileB, "B");
+    options.overlap?.(profileB, fixtureA);
+    return { profileB, fixtureA, handle: makeTestDeps(dbB, filePath) };
+  }
+
+  describe("the two latent crashes", () => {
+    // Migration 028's `default_template_id` is deliberately NOT a foreign key:
+    // it holds a `note_templates` id OR a `builtin:` code constant. The planner
+    // used to remap it strictly, so any archive whose folder carried a built-in
+    // default failed its whole PREVIEW — nothing about it could be seen, let
+    // alone imported.
+    it("previews and applies an archive whose folder default is a built-in template", async () => {
+      const { profileB, handle } = await twoProfilesWith("builtin.nexus.zip", {
+        shape: (data) => ({
+          ...data,
+          noteFolders: data.noteFolders.map((folder) => ({
+            ...folder,
+            defaultTemplateId: "builtin:sastanak",
+          })),
+        }),
+      });
+      const { deps } = handle;
+
+      await pickImportFile(deps);
+      const preview = await previewImport(deps, profileB, null);
+      if (preview.status !== "ready") unreachable();
+
+      await applyImport(deps, profileB, preview.preview.token);
+
+      const folders = new NoteOrgStore(dbB.raw, profileB).listFolders();
+      // The constant crossed unchanged: it names the same template in every
+      // profile, so there was never anything to remap.
+      expect(folders.some((folder) => folder.defaultTemplateId === "builtin:sastanak")).toBe(true);
+    });
+
+    // Migration 015 puts `UNIQUE (profile_id, name)` on note templates, and the
+    // planner used to plan every source template unconditionally — so an archive
+    // carrying a name the target already held took the ENTIRE import down with a
+    // constraint failure at apply time, reported as a generic error.
+    it("skips a note template whose name the target holds, and applies cleanly", async () => {
+      const { profileB, handle } = await twoProfilesWith("template-clash.nexus.zip", {
+        overlap: (targetProfile) => {
+          new NoteTemplateStore(dbB.raw, targetProfile).save(
+            "A template",
+            JSON.stringify({ type: "doc", content: [] }),
+            T,
+          );
+        },
+      });
+      const { deps } = handle;
+
+      await pickImportFile(deps);
+      const preview = await previewImport(deps, profileB, null);
+      if (preview.status !== "ready") unreachable();
+
+      expect(preview.preview.report.skips).toContainEqual({
+        code: "template-name-taken",
+        module: "notes",
+        type: "note-template",
+        count: 1,
+      });
+
+      // The apply is the actual regression: this is the call that used to throw
+      // `UNIQUE constraint failed: note_templates.profile_id, note_templates.name`,
+      // rolling the whole import back into a generic failure.
+      await applyImport(deps, profileB, preview.preview.token);
+
+      const templates = new NoteTemplateStore(dbB.raw, profileB).list();
+      expect(templates.filter((row) => row.name === "A template")).toHaveLength(1);
+    });
+  });
+
+  describe("detection against the live target", () => {
+    /** Puts A's event, person, document and note attachment into B, so all four indexes have something to match. */
+    function overlapAllFour(targetProfile: string, fixtureA: SeededFixture): void {
+      new EventStore(dbB.raw, targetProfile).create({
+        title: "A event",
+        startAt: "2026-03-01T10:00:00.000Z",
+      });
+      // The same name and the same day, a DIFFERENT year — which must still
+      // match, because a birthday's year is trivia the user often leaves blank.
+      new PeopleStore(dbB.raw, targetProfile).create(
+        { name: "A person", kind: "birthday", month: 2, day: 29, year: null, note: null },
+        T,
+      );
+      new DocumentStore(dbB.raw, targetProfile).create({
+        docType: "pasos",
+        label: "Pasoš",
+        expiryDate: "2031-05-05",
+      });
+      const note = new NoteStore(dbB.raw, targetProfile).list()[0];
+      if (note === undefined) throw new Error("Test setup: profile B has no note to attach to.");
+      new NoteAttachmentStore(dbB.raw, targetProfile).add(
+        note.id,
+        {
+          fileName: "vec-je-tu.png",
+          mime: "image/png",
+          sizeBytes: 1,
+          sha256: fixtureA.ids.attachmentSha,
+        },
+        T,
+      );
+    }
+
+    /** A document and its renewal, added to what the ARCHIVE carries — `seedProfile` stores neither. */
+    function withDocument(data: ProfileData, profileA: string): ProfileData {
+      const documentId = uuidv7();
+      return {
+        ...data,
+        documents: [
+          {
+            id: documentId,
+            profileId: profileA,
+            docType: "pasos",
+            label: "Pasoš",
+            expiryDate: "2030-01-01",
+            reminderOffsets: [90, 30, 7],
+            notes: null,
+            createdAt: T,
+            updatedAt: T,
+          },
+        ],
+        renewals: [
+          { id: uuidv7(), documentId, previousExpiry: "2020-01-01", renewedAt: T },
+        ],
+      };
+    }
+
+    it("names all four groups, skips them by default, and leaves the target's own rows alone", async () => {
+      const { profileB, fixtureA, handle } = await twoProfilesWith("duplicates.nexus.zip", {
+        shape: withDocument,
+        overlap: overlapAllFour,
+      });
+      const { deps, blobs } = handle;
+
+      await pickImportFile(deps);
+      const preview = await previewImport(deps, profileB, null);
+      if (preview.status !== "ready") unreachable();
+
+      expect(preview.preview.report.duplicates).toEqual([
+        { type: "event", count: 1 },
+        { type: "person", count: 1 },
+        { type: "document", count: 1 },
+        { type: "attachment", count: 1 },
+      ]);
+      const duplicateSkips = preview.preview.report.skips.filter(
+        (skip) => skip.code === "duplicate-of-existing",
+      );
+      expect(duplicateSkips).toContainEqual({
+        code: "duplicate-of-existing", module: "calendar", type: "event", count: 1,
+      });
+      expect(duplicateSkips).toContainEqual({
+        code: "duplicate-of-existing", module: "calendar", type: "person", count: 1,
+      });
+      expect(duplicateSkips).toContainEqual({
+        code: "duplicate-of-existing", module: "calendar", type: "document", count: 1,
+      });
+      // The renewal goes with its document: it has no identity of its own.
+      expect(duplicateSkips).toContainEqual({
+        code: "duplicate-of-existing", module: "calendar", type: "renewal", count: 1,
+      });
+      expect(duplicateSkips).toContainEqual({
+        code: "duplicate-of-existing", module: "notes", type: "note-attachment", count: 1,
+      });
+
+      for (const counts of Object.values(preview.preview.report.modules)) {
+        expect(counts.parsed).toBe(counts.imported + counts.merged + counts.skipped);
+      }
+
+      await applyImport(deps, profileB, preview.preview.token);
+
+      // Nothing arrived twice, and what B already had is untouched.
+      expect(
+        new EventStore(dbB.raw, profileB).listActive().filter((row) => row.title === "A event"),
+      ).toHaveLength(1);
+      expect(
+        new PeopleStore(dbB.raw, profileB).listActive().filter((row) => row.name === "A person"),
+      ).toHaveLength(1);
+      expect(
+        new DocumentStore(dbB.raw, profileB).listActive().filter((row) => row.label === "Pasoš"),
+      ).toHaveLength(1);
+      // The note that carried the skipped attachment still arrived — a file the
+      // user already has is no reason to lose the note that referenced it.
+      expect(new NoteStore(dbB.raw, profileB).list().length).toBeGreaterThan(2);
+      // Its blob was never fetched: no surviving row names it, so `blobNames`
+      // never held it and the apply had nothing to copy. The two attachments
+      // that were NOT duplicates did travel, which is what makes this a real
+      // assertion rather than an empty store.
+      expect(blobs.has(fixtureA.ids.attachmentSha)).toBe(false);
+      expect(blobs.has(fixtureA.ids.taskAttachmentSha)).toBe(true);
+      expect(blobs.has(fixtureA.ids.subjectAttachmentSha)).toBe(true);
+    });
+
+    it("re-plans on a changed answer, minting a fresh token and importing the very same row", async () => {
+      const { profileB, handle } = await twoProfilesWith("replan.nexus.zip", {
+        shape: withDocument,
+        overlap: overlapAllFour,
+      });
+      const { deps } = handle;
+
+      await pickImportFile(deps);
+      const first = await previewImport(deps, profileB, null);
+      if (first.status !== "ready") unreachable();
+
+      const replanned = replanImport(deps, profileB, first.preview.token, { event: "import" });
+      if (replanned.status !== "ready") unreachable();
+
+      // A FRESH token: the plan the old one named no longer exists.
+      expect(replanned.preview.token).not.toBe(first.preview.token);
+      // The group is still reported — the user has to be able to change back.
+      expect(replanned.preview.report.duplicates).toContainEqual({ type: "event", count: 1 });
+      // …and it is no longer among the skips.
+      expect(
+        replanned.preview.report.skips.filter(
+          (skip) => skip.code === "duplicate-of-existing" && skip.type === "event",
+        ),
+      ).toEqual([]);
+      // Everything else about the archive is described identically.
+      expect(replanned.preview.sourceProfileName).toBe(first.preview.sourceProfileName);
+      expect(replanned.preview.fileName).toBe(first.preview.fileName);
+      expect(replanned.preview.createdAt).toBe(first.preview.createdAt);
+      expect(replanned.preview.warnings).toEqual(first.preview.warnings);
+
+      // The stale token cannot apply anymore; the fresh one can.
+      await expect(applyImport(deps, profileB, first.preview.token)).rejects.toThrow();
+      await applyImport(deps, profileB, replanned.preview.token);
+
+      expect(
+        new EventStore(dbB.raw, profileB).listActive().filter((row) => row.title === "A event"),
+      ).toHaveLength(2);
+      // The three groups nobody answered are still skipped — a re-plan carries
+      // the WHOLE answer, and an unanswered group stays on the safe default.
+      expect(
+        new PeopleStore(dbB.raw, profileB).listActive().filter((row) => row.name === "A person"),
+      ).toHaveLength(1);
+    });
+
+    it("re-plans a SEALED archive without re-opening the file or asking for the passphrase again", async () => {
+      const { profileB, handle } = await twoProfilesWith("replan-sealed.nexus", {
+        shape: withDocument,
+        overlap: overlapAllFour,
+        seal: "correct horse battery staple",
+      });
+      const { deps } = handle;
+
+      await pickImportFile(deps);
+      const first = await previewImport(deps, profileB, "correct horse battery staple");
+      if (first.status !== "ready") unreachable();
+
+      // From here on, ANY second open would be a second Argon2id pass and a
+      // second passphrase prompt. The spy is installed after the preview, so a
+      // single call would be one too many.
+      const openArchiveSpy = vi.spyOn(archiveReaderModule, "openArchive");
+
+      const replanned = replanImport(deps, profileB, first.preview.token, { attachment: "import" });
+      if (replanned.status !== "ready") unreachable();
+
+      expect(openArchiveSpy).not.toHaveBeenCalled();
+      // And the re-plan really did re-plan: the attachment group is no longer
+      // skipped, so its blob is back in the plan and the apply writes it.
+      expect(
+        replanned.preview.report.skips.filter(
+          (skip) => skip.code === "duplicate-of-existing" && skip.type === "note-attachment",
+        ),
+      ).toEqual([]);
+
+      const result = await applyImport(deps, profileB, replanned.preview.token);
+      expect(result.missingBlobs).toBe(0);
+    });
+
+    it("refuses a re-plan with a stale token, a foreign profile, or no preview at all", async () => {
+      const { profileB, handle } = await twoProfilesWith("replan-guards.nexus.zip", {
+        overlap: overlapAllFour,
+      });
+      const { deps } = handle;
+      const otherProfile = createProfile(dbB, "B-other");
+
+      expect(() => replanImport(deps, profileB, "no-preview-yet", {})).toThrow();
+
+      await pickImportFile(deps);
+      const preview = await previewImport(deps, profileB, null);
+      if (preview.status !== "ready") unreachable();
+
+      expect(() => replanImport(deps, profileB, "not-the-real-token", {})).toThrow();
+      expect(() => replanImport(deps, otherProfile, preview.preview.token, {})).toThrow();
+      // The refusals left the plan exactly where it was.
+      await applyImport(deps, profileB, preview.preview.token);
+    });
+
+    it("re-reads the target, so a row added between preview and re-plan is seen", async () => {
+      const { profileB, handle } = await twoProfilesWith("replan-fresh-target.nexus.zip");
+      const { deps } = handle;
+
+      await pickImportFile(deps);
+      const first = await previewImport(deps, profileB, null);
+      if (first.status !== "ready") unreachable();
+      expect(first.preview.report.duplicates).toEqual([]);
+
+      // The user adds the very appointment the archive carries, in another
+      // window, before answering anything.
+      new EventStore(dbB.raw, profileB).create({
+        title: "A event",
+        startAt: "2026-03-01T10:00:00.000Z",
+      });
+
+      const replanned = replanImport(deps, profileB, first.preview.token, {});
+      if (replanned.status !== "ready") unreachable();
+      expect(replanned.preview.report.duplicates).toEqual([{ type: "event", count: 1 }]);
     });
   });
 });

@@ -1,4 +1,5 @@
 import { remapNoteState } from "../notes/noteLinks.js";
+import { isBuiltinNoteTemplateId } from "../notes/noteTemplateIds.js";
 import { ARCHIVE_MODULE_IDS, countProfileModules } from "./exportArchive.js";
 import type { ArchiveModuleId, ArchiveProfilePicture, ProfileData } from "./exportArchive.js";
 import type { ArchiveRecordType, ImportDrop, ImportDropReason } from "./importArchive.js";
@@ -30,6 +31,83 @@ export interface ForeignImportTargetTag {
   name: string;
 }
 
+/**
+ * The kinds of row this planner can recognise as something the target ALREADY
+ * HAS (ADR-051 / IMEX-008) — the four whose identity is certain enough to say so
+ * out loud, and no others.
+ *
+ * Certainty is the whole gate. An attachment's identity is its BYTES: the same
+ * sha256 is the same file in any profile, which is not a guess at all. An
+ * event's is `(title, startAt, allDay)`, a person's `(name, month, day)` and a
+ * document's `(docType, label)` — each one the tuple the app's own UI treats as
+ * "the same appointment / the same birthday / the same passport", and each one
+ * a fact the user can check on screen in one glance. Nothing else qualifies:
+ * two tasks called „Kupovina“, two notes called „Ideje“ and two subjects called
+ * „Analiza“ are routinely different rows, and merging them would be exactly the
+ * guess about somebody else's data this module was written never to make.
+ *
+ * `"attachment"` is ONE group covering all three attachment tables. The identity
+ * is the file, and „ista datoteka“ is the same sentence whether the row hangs
+ * off a note, a task or a subject — three groups would ask the user the same
+ * question three times and get the same answer. The REPORT still counts them
+ * per module, because the arithmetic is per module.
+ */
+export type ImportDuplicateType = "event" | "person" | "document" | "attachment";
+
+/** Every `ImportDuplicateType`, in the order the preview lists them. A `Record` over this type would not give an ORDER, and the UI needs one. */
+export const IMPORT_DUPLICATE_TYPES: readonly ImportDuplicateType[] = [
+  "event",
+  "person",
+  "document",
+  "attachment",
+];
+
+/** What to do with one group of duplicates. `"skip"` is the default everywhere — see `planForeignImport`. */
+export type ImportDuplicateChoice = "skip" | "import";
+
+/** The user's answer per group. Partial: an unanswered group is `"skip"`, so a caller that has asked nothing gets the safe plan. */
+export type ImportDuplicateChoices = Partial<Record<ImportDuplicateType, ImportDuplicateChoice>>;
+
+/** One detected group, counted whether the current choice skips it or imports it — the preview shows the row either way, or the user could never change their mind. */
+export interface ImportDuplicateGroup {
+  type: ImportDuplicateType;
+  count: number;
+}
+
+/**
+ * The three identity keys, composed as a JSON ARRAY rather than by joining the
+ * parts with a separator. A separator can appear inside a title, a name or a
+ * label — „Sastanak | 10h“ is a perfectly ordinary event title — and a joined
+ * key would then make two genuinely different rows collide, which for a
+ * duplicate rule means silently dropping somebody's data. `JSON.stringify` of a
+ * fixed-length array escapes every part and cannot be ambiguous.
+ *
+ * Exported because the TARGET's index is built by the CALLER (`main`, off the
+ * live stores) while the SOURCE's key is composed here: two spellings of one
+ * key would be a rule that quietly stopped matching, so there is exactly one.
+ */
+export function eventDuplicateKey(event: {
+  title: string;
+  startAt: string;
+  allDay: boolean;
+}): string {
+  return JSON.stringify([event.title, event.startAt, event.allDay]);
+}
+
+/** A person's identity (CAL-007): the name and the recurring day. `year` is deliberately out — it is separately-known trivia a user often leaves blank, so two rows for one birthday would stop matching the moment one of them learned it. */
+export function personDuplicateKey(person: {
+  name: string;
+  month: number;
+  day: number;
+}): string {
+  return JSON.stringify([person.name, person.month, person.day]);
+}
+
+/** A tracked document's identity: what kind it is and what the user calls it. `expiryDate` is out on purpose — a renewed passport is the SAME document with a new date, and keying on the date would import a second copy of it every year. */
+export function documentDuplicateKey(document: { docType: string; label: string }): string {
+  return JSON.stringify([document.docType, document.label]);
+}
+
 /** Everything the planner needs to know about the profile being merged INTO. */
 export interface ForeignImportTarget {
   /** The target profile's id — every imported row is stamped with it, never with the archive's. */
@@ -59,6 +137,31 @@ export interface ForeignImportTarget {
    * „Trening“ does not stop an event template of the same name from importing.
    */
   eventTemplateNames: readonly string[];
+  /**
+   * The target's existing NOTE template names (migration 015), by exactly the
+   * rule the two above state. Declared separately for the reason they are
+   * separate from each other: three tables, three UNIQUE indexes, three name
+   * spaces — a note template called „Sastanak“ does not stop an event template
+   * of that name from importing, and vice versa.
+   *
+   * A `Set` rather than an array, unlike its two siblings, because this one is
+   * built by fanning out over the target's whole template list and is only ever
+   * asked "is this name taken?" — the shape the question has.
+   */
+  noteTemplateNames: ReadonlySet<string>;
+  /**
+   * Every attachment blob the target profile already holds, across all three
+   * attachment tables (ADR-051). Content addressing makes this the one identity
+   * in the whole planner that involves no judgement at all: the same sha256 IS
+   * the same bytes.
+   */
+  attachmentHashes: ReadonlySet<string>;
+  /** The target's existing events, by `eventDuplicateKey`. */
+  eventKeys: ReadonlySet<string>;
+  /** The target's existing people, by `personDuplicateKey`. */
+  personKeys: ReadonlySet<string>;
+  /** The target's existing tracked documents, by `documentDuplicateKey`. */
+  documentKeys: ReadonlySet<string>;
   /**
    * Whether the target already claims a quick-capture folder (migration 028's
    * partial unique index allows exactly one). When true, an imported folder's
@@ -98,7 +201,8 @@ export type ImportSkipCode =
   | "study-settings-not-imported"
   | "profile-picture-not-imported"
   | "template-name-taken"
-  | "source-inbox-collapsed";
+  | "source-inbox-collapsed"
+  | "duplicate-of-existing";
 
 /** One named, counted group of skipped rows. Grouped by `(code, module, type)`, in first-seen order. */
 export interface ImportSkipReason {
@@ -129,6 +233,18 @@ export interface ImportModuleCounts {
 export interface ImportPlanReport {
   modules: Record<ArchiveModuleId, ImportModuleCounts>;
   skips: readonly ImportSkipReason[];
+  /**
+   * Every duplicate group this plan DETECTED (ADR-051), in
+   * `IMPORT_DUPLICATE_TYPES` order, groups with none omitted. Reported whichever
+   * way each group's choice currently points — a group the user chose to import
+   * still has to appear, or the screen would offer no way back to skipping it.
+   *
+   * A sibling of `skips` rather than part of it: a skip is a fact about what
+   * this plan does, while a duplicate is a QUESTION the user can still answer
+   * differently. `skips` already carries the answer's consequence, under
+   * `duplicate-of-existing`.
+   */
+  duplicates: readonly ImportDuplicateGroup[];
 }
 
 export interface ForeignImportPlan {
@@ -161,19 +277,140 @@ interface PlanContext {
   skippedTaskTemplateIds: Set<string>;
   /** Event templates skipped for the same reason, against the CAL module's own name space (CAL-009). */
   skippedEventTemplateIds: Set<string>;
+  /** Note templates skipped for the same reason, against the NOTE module's own name space (migration 015). */
+  skippedNoteTemplateIds: Set<string>;
+  /** The choices, with every unanswered group resolved to `"skip"` — see `resolveChoices`. */
+  choices: Record<ImportDuplicateType, ImportDuplicateChoice>;
+  /** How many rows each group DETECTED, whether or not the choice skipped them. */
+  duplicates: Record<ImportDuplicateType, number>;
+  /** Source ids the duplicate rule skipped: never minted, so pass 2 drops them and nothing can reference them. One set for all four groups — a skipped row is a skipped row, whichever table it came from. */
+  duplicateSkipped: Set<string>;
+  /** One entry per skipped duplicate row, saying where it counts. Grouped into report lines by `buildReport`'s own `note`, exactly as the parser's drops are. */
+  duplicateSkips: { module: ArchiveModuleId; type: ArchiveRecordType }[];
 }
 
 /**
- * The one name-is-identity rule both template modules share (ADR-043 §2): a
+ * Every group's answer, with the unanswered ones resolved to `"skip"` (ADR-051).
+ * Written as a loop over `IMPORT_DUPLICATE_TYPES` rather than a spread over the
+ * caller's object, because a caller reaching this from the IPC boundary could
+ * hand over a key whose value is literally `undefined`, and a spread would then
+ * write that `undefined` straight over the default.
+ */
+function resolveChoices(
+  choices: ImportDuplicateChoices | undefined,
+): Record<ImportDuplicateType, ImportDuplicateChoice> {
+  const resolved = {} as Record<ImportDuplicateType, ImportDuplicateChoice>;
+  for (const type of IMPORT_DUPLICATE_TYPES) resolved[type] = choices?.[type] ?? "skip";
+  return resolved;
+}
+
+/** Zero per duplicate group — the counterpart of `zeroPerModule` for the other axis the report counts along. */
+function zeroPerDuplicateType(): Record<ImportDuplicateType, number> {
+  return { event: 0, person: 0, document: 0, attachment: 0 };
+}
+
+/**
+ * How one source collection is checked against the target (ADR-051): which
+ * user-facing group its duplicates belong to, where a skipped row lands in the
+ * per-module arithmetic, how a row's identity is composed, and which of the
+ * target's indexes that identity is looked up in.
+ *
+ * A value rather than four arguments at each call site, so the five collections
+ * that take this rule cannot drift in how they apply it.
+ */
+interface DuplicateRule<T> {
+  duplicate: ImportDuplicateType;
+  module: ArchiveModuleId;
+  type: ArchiveRecordType;
+  keyOf: (row: T) => string;
+  index: (target: ForeignImportTarget) => ReadonlySet<string>;
+}
+
+const EVENT_DUPLICATES: DuplicateRule<{ id: string; title: string; startAt: string; allDay: boolean }> = {
+  duplicate: "event",
+  module: "calendar",
+  type: "event",
+  keyOf: eventDuplicateKey,
+  index: (target) => target.eventKeys,
+};
+
+const PERSON_DUPLICATES: DuplicateRule<{ id: string; name: string; month: number; day: number }> = {
+  duplicate: "person",
+  module: "calendar",
+  type: "person",
+  keyOf: personDuplicateKey,
+  index: (target) => target.personKeys,
+};
+
+const DOCUMENT_DUPLICATES: DuplicateRule<{ id: string; docType: string; label: string }> = {
+  duplicate: "document",
+  module: "calendar",
+  type: "document",
+  keyOf: documentDuplicateKey,
+  index: (target) => target.documentKeys,
+};
+
+/** The three attachment tables' rule, which differs only in where a skip is counted — one group, one identity, three modules. */
+function attachmentDuplicates(
+  module: ArchiveModuleId,
+  type: ArchiveRecordType,
+): DuplicateRule<{ id: string; sha256: string }> {
+  return {
+    duplicate: "attachment",
+    module,
+    type,
+    keyOf: (row) => row.sha256,
+    index: (target) => target.attachmentHashes,
+  };
+}
+
+/**
+ * Mints one collection under the duplicate rule (ADR-051). A row whose identity
+ * the target already holds is DETECTED either way — the preview shows the group
+ * regardless of the current choice — and then either skipped (no id minted at
+ * all, so pass 2 drops it and nothing can reference it) or minted exactly as it
+ * would have been without the rule.
+ *
+ * Deliberately checked against the TARGET only, never against earlier SOURCE
+ * rows: an archive that carries the same appointment twice is describing a
+ * profile that has it twice, and collapsing the pair would be this planner
+ * deciding something about somebody else's data that they did not ask.
+ */
+function mintUnlessDuplicate<T extends { id: string }>(
+  rows: readonly T[],
+  rule: DuplicateRule<T>,
+  ctx: PlanContext,
+): void {
+  const index = rule.index(ctx.target);
+  for (const row of rows) {
+    if (!index.has(rule.keyOf(row))) {
+      mint(row.id, ctx);
+      continue;
+    }
+    ctx.duplicates[rule.duplicate] += 1;
+    if (ctx.choices[rule.duplicate] === "import") {
+      mint(row.id, ctx);
+      continue;
+    }
+    ctx.duplicateSkipped.add(row.id);
+    ctx.duplicateSkips.push({ module: rule.module, type: rule.type });
+  }
+}
+
+/**
+ * The one name-is-identity rule all three template modules share (ADR-043 §2): a
  * source template whose name the target already uses is not planned at all — no
  * row, no id mapping to leave behind — and neither is a second source template
  * that claims a name an earlier one just took. First writer wins within the
- * source, the target wins over both. Extracted so the two modules cannot drift:
- * they are the same decision about two tables.
+ * source, the target wins over both. Extracted so the three modules cannot
+ * drift: they are the same decision about three tables, each under its own
+ * `UNIQUE (profile_id, name)` (migrations 015, 027, 036) — and a template whose
+ * name is taken is not a preference, it is a row the database would REFUSE,
+ * taking the whole import down with it.
  */
 function mintTemplates(
   sourceTemplates: readonly { id: string; name: string }[],
-  targetNames: readonly string[],
+  targetNames: Iterable<string>,
   skipped: Set<string>,
   ctx: PlanContext,
 ): void {
@@ -213,7 +450,12 @@ const ID_MINTERS: Record<keyof ProfileData, (data: ProfileData, ctx: PlanContext
   taskSections: (data, ctx) => mintAll(data.taskSections, ctx),
   taskTags: (data, ctx) => mintTags(data.taskTags, ctx.target.taskTags, "tasks", ctx),
   taskTagLinks: NO_IDS,
-  taskAttachments: (data, ctx) => mintAll(data.taskAttachments, ctx),
+  // ADR-051: an attachment's identity is its BYTES, so a file the target
+  // already holds is a duplicate the user may skip. The TASK it hangs off is
+  // untouched either way — a file somebody already has is no reason to lose the
+  // task that referenced it.
+  taskAttachments: (data, ctx) =>
+    mintUnlessDuplicate(data.taskAttachments, attachmentDuplicates("tasks", "task-attachment"), ctx),
   // A template's name is its identity and nothing references a task template
   // by id, so a name-taken row is simply not planned — see `mintTemplates`.
   taskTemplates: (data, ctx) =>
@@ -238,7 +480,9 @@ const ID_MINTERS: Record<keyof ProfileData, (data: ProfileData, ctx: PlanContext
   dashboardWidgets: (data, ctx) => {
     for (const widget of data.dashboardWidgets) mint(widget.instanceId, ctx);
   },
-  events: (data, ctx) => mintAll(data.events, ctx),
+  // ADR-051: `(title, startAt, allDay)` is what the calendar itself treats as
+  // "the same appointment", so an event the target already has is a duplicate.
+  events: (data, ctx) => mintUnlessDuplicate(data.events, EVENT_DUPLICATES, ctx),
   // The same name-is-identity rule as the task templates above, against the CAL
   // module's own name space (CAL-009).
   eventTemplates: (data, ctx) =>
@@ -248,11 +492,35 @@ const ID_MINTERS: Record<keyof ProfileData, (data: ProfileData, ctx: PlanContext
       ctx.skippedEventTemplateIds,
       ctx,
     ),
-  documents: (data, ctx) => mintAll(data.documents, ctx),
-  renewals: (data, ctx) => mintAll(data.renewals, ctx),
-  people: (data, ctx) => mintAll(data.people, ctx),
+  documents: (data, ctx) => mintUnlessDuplicate(data.documents, DOCUMENT_DUPLICATES, ctx),
+  // A renewal has no identity of its own — it is a dated line in ITS document's
+  // history (migration 019's foreign key). So it follows its document: when that
+  // was skipped as a duplicate, keeping the renewal would be a row pointing at
+  // nothing. Counted on its own report line, never folded into the document's,
+  // because the arithmetic counts rows and these are rows.
+  //
+  // Declared AFTER `documents` on purpose: pass 1 walks this record in
+  // declaration order, so the document's verdict is already known here.
+  renewals: (data, ctx) => {
+    for (const renewal of data.renewals) {
+      if (ctx.duplicateSkipped.has(renewal.documentId)) {
+        ctx.duplicateSkipped.add(renewal.id);
+        ctx.duplicateSkips.push({ module: "calendar", type: "renewal" });
+        continue;
+      }
+      mint(renewal.id, ctx);
+    }
+  },
+  // ADR-051: `(name, month, day)` — the recurring day CAL-007 actually
+  // celebrates. The year is out of the key; see `personDuplicateKey`.
+  people: (data, ctx) => mintUnlessDuplicate(data.people, PERSON_DUPLICATES, ctx),
   subjects: (data, ctx) => mintAll(data.subjects, ctx),
-  subjectAttachments: (data, ctx) => mintAll(data.subjectAttachments, ctx),
+  subjectAttachments: (data, ctx) =>
+    mintUnlessDuplicate(
+      data.subjectAttachments,
+      attachmentDuplicates("study", "subject-attachment"),
+      ctx,
+    ),
   // A link's identity is its (subject, note) pair — both ids already minted.
   subjectNoteLinks: NO_IDS,
   exams: (data, ctx) => mintAll(data.exams, ctx),
@@ -273,8 +541,19 @@ const ID_MINTERS: Record<keyof ProfileData, (data: ProfileData, ctx: PlanContext
   noteFolders: (data, ctx) => mintAll(data.noteFolders, ctx),
   noteTags: (data, ctx) => mintTags(data.noteTags, ctx.target.noteTags, "notes", ctx),
   noteTagLinks: NO_IDS,
-  noteTemplates: (data, ctx) => mintAll(data.noteTemplates, ctx),
-  noteAttachments: (data, ctx) => mintAll(data.noteAttachments, ctx),
+  // The same name-is-identity rule as the two template tables above, against the
+  // NOTE module's own name space (migration 015's `UNIQUE (profile_id, name)`).
+  // The same name-is-identity rule as the two template tables above, against the
+  // NOTE module's own name space (migration 015's `UNIQUE (profile_id, name)`).
+  noteTemplates: (data, ctx) =>
+    mintTemplates(
+      data.noteTemplates,
+      ctx.target.noteTemplateNames,
+      ctx.skippedNoteTemplateIds,
+      ctx,
+    ),
+  noteAttachments: (data, ctx) =>
+    mintUnlessDuplicate(data.noteAttachments, attachmentDuplicates("notes", "note-attachment"), ctx),
   // A version's identity is `(noteId, coveredSeq)`, both of which travel with
   // the note — there is no id of its own to mint.
   noteVersions: NO_IDS,
@@ -350,6 +629,27 @@ function mappedOrNull(oldId: string | null, ctx: PlanContext): string | null {
   return oldId === null ? null : mapped(oldId, ctx);
 }
 
+/**
+ * A note folder's default template (migration 028 / ADR-036) — the ONE reference
+ * in this planner that must tolerate an id the map cannot answer, and the reason
+ * it exists: `mapped` used to be called here and THREW, which took down the
+ * whole preview of any archive whose folder had a built-in default.
+ *
+ * The column deliberately carries no foreign key, because it holds either a
+ * `note_templates` id or a `builtin:` CODE constant. A built-in names the same
+ * template in every profile, so it crosses unchanged. Anything else the map
+ * cannot answer is a SOURCE id — a template the archive did not carry, or one
+ * the name rule skipped in favour of the target's — and it becomes null:
+ * ADR-036 already reads a dangling default as "no template", and null says that
+ * without leaving a foreign profile's id in this profile's column.
+ */
+function mappedTemplateOrNone(oldId: string | null, ctx: PlanContext): string | null {
+  if (oldId === null) return null;
+  const next = ctx.ids.get(oldId);
+  if (next !== undefined) return next;
+  return isBuiltinNoteTemplateId(oldId) ? oldId : null;
+}
+
 /** A task's list: the one the source named, or — for an archive written before ADR-029, whose `listId` is null — the target's Inbox, exactly as a restore reads it. */
 function mappedList(listId: string | null, ctx: PlanContext): string {
   return listId === null ? ctx.target.inboxListId : mapped(listId, ctx);
@@ -363,6 +663,11 @@ function mappedState(snapshot: Uint8Array, ctx: PlanContext): Uint8Array {
 /** Drops the rows that resolved onto an id the target already has — they are references now, not rows. */
 function notAbsorbed<T extends { id: string }>(rows: readonly T[], ctx: PlanContext): readonly T[] {
   return rows.filter((row) => !ctx.absorbed.has(row.id));
+}
+
+/** Drops the rows the duplicate rule skipped (ADR-051) — unlike an absorbed row, these resolve onto NOTHING: they were never minted, so they are not references either. */
+function notDuplicate<T extends { id: string }>(rows: readonly T[], ctx: PlanContext): readonly T[] {
+  return rows.filter((row) => !ctx.duplicateSkipped.has(row.id));
 }
 
 /**
@@ -386,11 +691,21 @@ function dedupePairs<T>(rows: readonly T[], key: (row: T) => string): { rows: T[
 /**
  * Plans a foreign import: what to insert, which blobs to copy, and an honest
  * account of everything that did not make it.
+ *
+ * `choices` is the user's answer to the duplicate groups this planner detects
+ * (ADR-051), and every unanswered group defaults to `"skip"` — the safe
+ * direction, and the one the card's own promise („uvoz ništa ne briše") makes
+ * least surprising: a file, an appointment, a birthday or a document the user
+ * already has does not arrive a second time unless they say so. Nothing here
+ * ever UPDATES a row the target already has, under either choice; „uvezi
+ * svejedno" plans a second, independent row, exactly as it would for any other
+ * source row.
  */
 export function planForeignImport(
   parsed: ForeignImportSource,
   target: ForeignImportTarget,
   mintId: () => string,
+  choices?: ImportDuplicateChoices,
 ): ForeignImportPlan {
   const source = parsed.data;
   const ctx: PlanContext = {
@@ -402,6 +717,11 @@ export function planForeignImport(
     inboxCollapsed: 0,
     skippedTaskTemplateIds: new Set(),
     skippedEventTemplateIds: new Set(),
+    skippedNoteTemplateIds: new Set(),
+    choices: resolveChoices(choices),
+    duplicates: zeroPerDuplicateType(),
+    duplicateSkipped: new Set(),
+    duplicateSkips: [],
   };
 
   // Pass 1: every id in the archive gets its answer before any reference is
@@ -456,7 +776,7 @@ export function planForeignImport(
       profileId: target.profileId,
     })),
     taskTagLinks: taskTagLinks.rows,
-    taskAttachments: source.taskAttachments.map((row) => ({
+    taskAttachments: notDuplicate(source.taskAttachments, ctx).map((row) => ({
       ...row,
       id: mapped(row.id, ctx),
       taskId: mapped(row.taskId, ctx),
@@ -476,7 +796,7 @@ export function planForeignImport(
       blockerId: mapped(row.blockerId, ctx),
       blockedId: mapped(row.blockedId, ctx),
     })),
-    events: source.events.map((row) => ({
+    events: notDuplicate(source.events, ctx).map((row) => ({
       ...row,
       id: mapped(row.id, ctx),
       profileId: target.profileId,
@@ -490,17 +810,17 @@ export function planForeignImport(
         // The payload names no row at all (CAL-009: a time of day, a length, a
         // rule), so nothing inside it needs the id map.
       })),
-    documents: source.documents.map((row) => ({
+    documents: notDuplicate(source.documents, ctx).map((row) => ({
       ...row,
       id: mapped(row.id, ctx),
       profileId: target.profileId,
     })),
-    renewals: source.renewals.map((row) => ({
+    renewals: notDuplicate(source.renewals, ctx).map((row) => ({
       ...row,
       id: mapped(row.id, ctx),
       documentId: mapped(row.documentId, ctx),
     })),
-    people: source.people.map((row) => ({
+    people: notDuplicate(source.people, ctx).map((row) => ({
       ...row,
       id: mapped(row.id, ctx),
       profileId: target.profileId,
@@ -510,7 +830,7 @@ export function planForeignImport(
       id: mapped(row.id, ctx),
       profileId: target.profileId,
     })),
-    subjectAttachments: source.subjectAttachments.map((row) => ({
+    subjectAttachments: notDuplicate(source.subjectAttachments, ctx).map((row) => ({
       ...row,
       id: mapped(row.id, ctx),
       subjectId: mapped(row.subjectId, ctx),
@@ -592,7 +912,8 @@ export function planForeignImport(
       id: mapped(row.id, ctx),
       profileId: target.profileId,
       parentId: mappedOrNull(row.parentId, ctx),
-      defaultTemplateId: mappedOrNull(row.defaultTemplateId, ctx),
+      // Tolerant, unlike every other reference here — see `mappedTemplateOrNone`.
+      defaultTemplateId: mappedTemplateOrNone(row.defaultTemplateId, ctx),
       // Migration 028 allows exactly one quick-capture folder per profile;
       // when the target already claims it, the target's choice wins (ADR-043
       // §2) and the imported folder arrives as an ordinary folder.
@@ -604,12 +925,14 @@ export function planForeignImport(
       profileId: target.profileId,
     })),
     noteTagLinks: noteTagLinks.rows,
-    noteTemplates: source.noteTemplates.map((row) => ({
-      ...row,
-      id: mapped(row.id, ctx),
-      profileId: target.profileId,
-    })),
-    noteAttachments: source.noteAttachments.map((row) => ({
+    noteTemplates: source.noteTemplates
+      .filter((row) => !ctx.skippedNoteTemplateIds.has(row.id))
+      .map((row) => ({
+        ...row,
+        id: mapped(row.id, ctx),
+        profileId: target.profileId,
+      })),
+    noteAttachments: notDuplicate(source.noteAttachments, ctx).map((row) => ({
       ...row,
       id: mapped(row.id, ctx),
       noteId: mapped(row.noteId, ctx),
@@ -702,6 +1025,14 @@ function buildReport(
   // so the two modules' skips stay two named, separately-counted lines rather
   // than one number nobody can act on.
   note("template-name-taken", "calendar", "event-template", ctx.skippedEventTemplateIds.size);
+  // And the NOTE module's own name space (migration 015) — a third separately
+  // counted line, for the reason the calendar one is a second.
+  note("template-name-taken", "notes", "note-template", ctx.skippedNoteTemplateIds.size);
+  // ADR-051: one entry per skipped duplicate ROW, grouped by `note` into a line
+  // per (module, record type) — the parser's drops are folded in exactly this
+  // way just above, and for the same reason: the arithmetic is per module, so
+  // the reasons have to be too.
+  for (const skip of ctx.duplicateSkips) note("duplicate-of-existing", skip.module, skip.type, 1);
   note("notifications-not-imported", "notifications", "notification", source.notifications.length);
   note(
     "dashboard-settings-not-imported",
@@ -739,5 +1070,9 @@ function buildReport(
     };
   }
 
-  return { modules, skips };
+  const duplicates = IMPORT_DUPLICATE_TYPES.filter((type) => ctx.duplicates[type] > 0).map(
+    (type): ImportDuplicateGroup => ({ type, count: ctx.duplicates[type] }),
+  );
+
+  return { modules, skips, duplicates };
 }

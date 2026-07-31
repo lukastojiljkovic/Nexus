@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { planForeignImport } from "@nexus/core";
+import {
+  documentDuplicateKey,
+  eventDuplicateKey,
+  personDuplicateKey,
+  planForeignImport,
+} from "@nexus/core";
 import type {
   ExportNote,
   ExportNoteFolder,
@@ -303,6 +308,25 @@ function targetFor(profileId: string): ForeignImportTarget {
     taskTags: new TaskTagStore(db.raw, profileId).listTags(),
     taskTemplateNames: new TaskTemplateStore(db.raw, profileId).list().map((row) => row.name),
     eventTemplateNames: new EventTemplateStore(db.raw, profileId).list().map((row) => row.name),
+    noteTemplateNames: new Set(new NoteTemplateStore(db.raw, profileId).list().map((row) => row.name)),
+    // ADR-051's four identity indexes, composed with core's own key functions
+    // for the reason `main/restore.ts` composes them that way: one spelling of
+    // each key, or the rule quietly stops matching. This fixture's target
+    // profile is empty of all four, which is what these tests want — they are
+    // about the STORE's insert, not about the planner's duplicate rule (which
+    // `foreignImport.test.ts` owns) — but they are read off the real stores all
+    // the same, so a target that gained rows would be answered honestly.
+    attachmentHashes: new Set(
+      new NoteStore(db.raw, profileId)
+        .list()
+        .flatMap((meta) => new NoteAttachmentStore(db.raw, profileId).list(meta.id))
+        .map((row) => row.sha256),
+    ),
+    eventKeys: new Set(new EventStore(db.raw, profileId).listActive().map(eventDuplicateKey)),
+    personKeys: new Set(new PeopleStore(db.raw, profileId).listActive().map(personDuplicateKey)),
+    documentKeys: new Set(
+      new DocumentStore(db.raw, profileId).listActive().map(documentDuplicateKey),
+    ),
     claimsCaptureDefault: org.listFolders().some((folder) => folder.isCaptureDefault),
   };
 }

@@ -202,12 +202,22 @@ export type {
   ImportProblemCode,
 } from "./imex/importArchive.js";
 
-export { planForeignImport } from "./imex/foreignImport.js";
+export {
+  documentDuplicateKey,
+  eventDuplicateKey,
+  personDuplicateKey,
+  planForeignImport,
+  IMPORT_DUPLICATE_TYPES,
+} from "./imex/foreignImport.js";
 export type {
   ForeignImportPlan,
   ForeignImportSource,
   ForeignImportTarget,
   ForeignImportTargetTag,
+  ImportDuplicateChoice,
+  ImportDuplicateChoices,
+  ImportDuplicateGroup,
+  ImportDuplicateType,
   ImportModuleCounts,
   ImportPlanReport,
   ImportSkipCode,
