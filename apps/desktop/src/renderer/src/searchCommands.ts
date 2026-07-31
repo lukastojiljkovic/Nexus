@@ -1,10 +1,11 @@
-import { foldSearchText } from "@nexus/core";
+import { foldSearchText, SMART_LIST_IDS, type SmartListId } from "@nexus/core";
 import { dayUnit, strings } from "./strings.js";
 
 /**
  * The search palette's command registry (021-d): a fixed, locally-matched
  * list of shell actions — navigate to a module, start a new entity in one,
- * flip the theme, lock the app, or repair the search index (PRD 08 §7's
+ * open one of the TASK views (ADR-049), flip the theme, lock the app, or repair
+ * the search index (PRD 08 §7's
  * "index corruption ->
  * transparent rebuild", the only user-facing trigger for one). Matching
  * (`matchCommands`) is synchronous and never touches IPC; only the rebuild
@@ -40,6 +41,8 @@ export interface SearchCommandsContext {
   onNavigate: (moduleId: string) => void;
   /** Runs a quick-create command: switches to that module and asks it to start a fresh entity (PRD 08 SRCH-003). */
   onCreate: (moduleId: CreatableModuleId) => void;
+  /** Opens one of TASK's five views (ADR-049): switches to Zadaci with that view selected in the rail. */
+  onOpenSmartList: (listId: SmartListId) => void;
   onToggleTheme: () => void;
   onLock: () => void;
   /** Opens the shortcuts reference (ADR-040) — the same overlay F1 opens. */
@@ -69,6 +72,19 @@ const CREATABLE = [
   keywords: readonly string[];
 }[];
 
+/**
+ * Extra words each TASK view answers to (ADR-049), beside its own name in the
+ * label. Spelled already folded, like `CREATABLE`'s: the label carries the
+ * Serbian orthography, these carry the synonyms someone would really type.
+ */
+const SMART_LIST_KEYWORDS: Readonly<Record<SmartListId, readonly string[]>> = {
+  danas: ["pregled", "dan"],
+  sledecih7: ["nedelja", "sedmica", "predstojece"],
+  hitno: ["prioritet", "visok"],
+  kasni: ["kasnjenje", "prekoraceno", "rok"],
+  zavrseno: ["gotovo", "obavljeno"],
+};
+
 function formatRebuildDone(count: number): string {
   const c = strings.search.commands;
   return `${c.rebuildDonePrefix} ${count} ${dayUnit(count, c.rebuildRecordsUnitOne, c.rebuildRecordsUnitMany)}`;
@@ -76,7 +92,8 @@ function formatRebuildDone(count: number): string {
 
 /**
  * Builds the fixed command list, in display order: one "Idi na: <modul>" per
- * enabled module, the quick-create commands (`CREATABLE` above), then theme
+ * enabled module, the quick-create commands (`CREATABLE` above), the five TASK
+ * views (ADR-049), then theme
  * toggle, lock, shortcuts and index rebuild. Every `run` is a plain callback into the
  * shell except the rebuild's, which is the one
  * command with no dedicated shell action to call — it talks to
@@ -99,6 +116,19 @@ export function buildSearchCommands(context: SearchCommandsContext): SearchComma
       keywords: entry.keywords,
       run: () => context.onCreate(entry.moduleId),
     });
+  }
+
+  // Only with TASK enabled, on the quick-creates' own rule: a command that
+  // switched to a disabled module would be a dead end.
+  if (context.enabledModuleIds.includes("tasks")) {
+    for (const listId of SMART_LIST_IDS) {
+      commands.push({
+        id: `tasks-smart-${listId}`,
+        label: `${c.smartListPrefix}${strings.tasks.smart.names[listId]}`,
+        keywords: SMART_LIST_KEYWORDS[listId],
+        run: () => context.onOpenSmartList(listId),
+      });
+    }
   }
 
   commands.push(

@@ -1,4 +1,4 @@
-import { foldSearchText } from "@nexus/core";
+import { foldSearchText, SMART_LIST_IDS } from "@nexus/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -40,6 +40,7 @@ const MODULE_NAMES: Readonly<Record<string, string>> = {
 interface Recorder {
   navigated: string[];
   created: string[];
+  smartLists: string[];
   themeToggles: number;
   locks: number;
   shortcutsOpens: number;
@@ -53,6 +54,7 @@ function makeContext(enabledModuleIds: readonly string[] = ALL_MODULES): {
   const recorder: Recorder = {
     navigated: [],
     created: [],
+    smartLists: [],
     themeToggles: 0,
     locks: 0,
     shortcutsOpens: 0,
@@ -64,6 +66,7 @@ function makeContext(enabledModuleIds: readonly string[] = ALL_MODULES): {
     moduleName: (id) => MODULE_NAMES[id] ?? id,
     onNavigate: (moduleId) => recorder.navigated.push(moduleId),
     onCreate: (moduleId) => recorder.created.push(moduleId),
+    onOpenSmartList: (listId) => recorder.smartLists.push(listId),
     onToggleTheme: () => {
       recorder.themeToggles += 1;
     },
@@ -85,7 +88,7 @@ function byId(commands: readonly SearchCommand[], id: string): SearchCommand {
 }
 
 describe("buildSearchCommands", () => {
-  it("builds one goto per enabled module in the given order, then the creates, then the shell actions", () => {
+  it("builds one goto per enabled module in the given order, then the creates, the task views, then the shell actions", () => {
     const { context } = makeContext();
     expect(buildSearchCommands(context).map((command) => command.id)).toEqual([
       "goto-dashboard",
@@ -97,11 +100,41 @@ describe("buildSearchCommands", () => {
       "create-tasks",
       "create-calendar",
       "create-notes",
+      "tasks-smart-danas",
+      "tasks-smart-sledecih7",
+      "tasks-smart-hitno",
+      "tasks-smart-kasni",
+      "tasks-smart-zavrseno",
       "toggle-theme",
       "lock",
       "shortcuts",
       REBUILD_COMMAND_ID,
     ]);
+  });
+
+  // ADR-049: one command per view, in SMART_LIST_IDS' own order, labelled with
+  // the very names the rail draws — a palette row and a rail row must not spell
+  // the same view two ways.
+  it("labels each task view with the module prefix and the rail's own name", () => {
+    const { context } = makeContext(["tasks"]);
+    const commands = buildSearchCommands(context);
+    for (const listId of SMART_LIST_IDS) {
+      expect(byId(commands, `tasks-smart-${listId}`).label).toBe(
+        `${strings.search.commands.smartListPrefix}${strings.tasks.smart.names[listId]}`,
+      );
+    }
+  });
+
+  it("omits the task views when TASK is disabled, and routes each one that is drawn", () => {
+    const { context: withoutTasks } = makeContext(["notes"]);
+    expect(buildSearchCommands(withoutTasks).map((command) => command.id)).not.toContain(
+      "tasks-smart-danas",
+    );
+
+    const { context, recorder } = makeContext();
+    const commands = buildSearchCommands(context);
+    for (const listId of SMART_LIST_IDS) byId(commands, `tasks-smart-${listId}`).run();
+    expect(recorder.smartLists).toEqual([...SMART_LIST_IDS]);
   });
 
   it("labels a goto with the shell's own module name, behind the shared prefix", () => {
@@ -216,8 +249,19 @@ describe("matchCommands", () => {
   });
 
   it("matches a folded prefix of any word in the label or the keywords", () => {
-    expect(idsFor("zada")).toEqual(["goto-tasks", "create-tasks"]);
+    // Every task view's label opens with the module name, so „zada“ reaches
+    // them too — which is the point of prefixing them with it.
+    expect(idsFor("zada")).toEqual([
+      "goto-tasks",
+      "create-tasks",
+      ...SMART_LIST_IDS.map((listId) => `tasks-smart-${listId}`),
+    ]);
     expect(idsFor("dodaj")).toEqual(["create-tasks", "create-calendar", "create-notes"]);
+  });
+
+  it("narrows to one task view once its own name is typed, diacritics or not", () => {
+    expect(idsFor("zadaci", "sledecih")).toEqual(["tasks-smart-sledecih7"]);
+    expect(idsFor("kasni")).toEqual(["tasks-smart-kasni"]);
   });
 
   it("matches through the Serbian folding — 'noc' finds the Noć keyword", () => {

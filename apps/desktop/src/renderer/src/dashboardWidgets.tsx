@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
-import { computeStreak } from "@nexus/core";
+import { computeStreak, matchesSmartList } from "@nexus/core";
 import { Button, Chip, ListRow } from "@nexus/ui";
 import type { DocumentStatus, Event, Exam, Subject } from "../../shared/ipc.js";
 import { buildCalendarItems } from "./calendarItems.js";
@@ -246,8 +246,20 @@ function TodayWidget({ profileId, enabledModules, onOpenModule }: DashboardWidge
         const todayBirthdays = items.filter(
           (item): item is CalendarItem & { kind: "birthday" } => item.kind === "birthday",
         );
-        const todayTasks = tasks.filter(
-          (task) => !task.done && task.dueDate != null && task.dueDate.slice(0, 10) === todayKey,
+        // The very predicate TASK's „Danas“ view runs (ADR-049), so the card and
+        // that view cannot drift on what "today" means — including the rule that
+        // a task starting later is not yet today's.
+        //
+        // `includeBlocked` is deliberately true: this widget reads the task list
+        // alone and never the dependency edges, so it has no honest way to tell
+        // a blocked task from a free one, and stating a rule it cannot apply
+        // would be worse than showing every task due today.
+        const todayTasks = tasks.filter((task) =>
+          matchesSmartList(task, "danas", {
+            today: todayKey,
+            isBlocked: () => false,
+            includeBlocked: true,
+          }),
         );
         if (todayEvents.length + todayBirthdays.length + todayTasks.length === 0) {
           return <p className="dash__empty">{s.empty}</p>;

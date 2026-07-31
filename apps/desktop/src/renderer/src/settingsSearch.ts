@@ -95,6 +95,21 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
       "sedmica",
     ],
   },
+  // ADR-049: the one TASK device preference. „blokirani“ and „danas“ already
+  // sit in the label, so the keywords carry what someone would type instead —
+  // the concept („zavisnost“) and the two answers.
+  {
+    id: "tasks-blocked-today",
+    section: "tasks",
+    label: s.tasks.blockedInTodayLabel,
+    keywords: [
+      s.tasks.blockedInTodayOptions.sakrij,
+      s.tasks.blockedInTodayOptions.prikazi,
+      "zadaci",
+      "zavisnost",
+      "pregled",
+    ],
+  },
   {
     id: "note-width",
     section: "notes",

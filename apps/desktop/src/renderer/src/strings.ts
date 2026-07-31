@@ -3,6 +3,7 @@
  * founder decision #2). Centralized so the later i18n extraction is a mechanical
  * move of this table into the i18n layer — no framework yet, by design.
  */
+import type { SmartListId } from "@nexus/core";
 import type {
   ArchiveReadErrorCode,
   DashboardPickErrorCode,
@@ -10,6 +11,7 @@ import type {
   RestoreModuleCounts,
   RestoreProblemCode,
 } from "../../shared/ipc.js";
+import type { BlockedInToday } from "./taskPrefs.js";
 import type { WeekStartPreference } from "./weekStart.js";
 
 export const strings = {
@@ -279,6 +281,13 @@ export const strings = {
     },
     /** Detail fields of the shared add/edit form (the quick-add line stays the fast path). */
     dueDateLabel: "Rok",
+    /**
+     * The day a task becomes actionable (TASK-001), beside „Rok“ on the same
+     * form row. „Počinje“ rather than „Početak“: the field answers *when* it
+     * starts, and the smart lists read it as exactly that — a task that starts
+     * after today is not yet something to do today.
+     */
+    startDateLabel: "Počinje",
     priorityLabel: "Prioritet",
     save: "Sačuvaj",
     cancel: "Otkaži",
@@ -314,6 +323,53 @@ export const strings = {
       completeAll: "Završi i podzadatke",
       completeOne: "Završi samo zadatak",
       cancel: "Otkaži",
+    },
+    /**
+     * Pregledi (ADR-049) — the five VIRTUAL lists the rail draws ABOVE „Liste“.
+     * They are queries, not places: nothing is filed into one, which is why the
+     * section has no „Nova …“ action and why its rows carry neither the hover
+     * cluster nor a drop target.
+     *
+     * The names are flat-keyed by the wire id, the way `status` and `priority`
+     * below are — one label per value, resolved by lookup rather than by a
+     * switch that could go stale when a sixth view is added.
+     */
+    smart: {
+      /** Heading of the rail's first section, above „Liste“. */
+      heading: "Pregledi",
+      /** Names the group of view rows for a screen reader — „Pregledi“ alone says little out of context, exactly as with `lists.railLabel`. */
+      regionLabel: "Pregledi zadataka",
+      names: {
+        danas: "Danas",
+        sledecih7: "Sledećih 7 dana",
+        hitno: "Hitno",
+        kasni: "Kasni",
+        zavrseno: "Završeno",
+      } satisfies Record<SmartListId, string>,
+      /**
+       * Each view's own empty state. Calm statements of fact, never the list's
+       * „zapiši prvi zadatak“ invitation: there is no typing into a view, so an
+       * invitation here would point at a field that is not on screen.
+       */
+      empty: {
+        danas: "Nema zadataka za danas.",
+        sledecih7: "Nema zadataka u narednih sedam dana.",
+        hitno: "Nema zadataka visokog prioriteta.",
+        kasni: "Ništa ne kasni.",
+        zavrseno: "Još nijedan zadatak nije završen.",
+      } satisfies Record<SmartListId, string>,
+      /** Tooltip on the muted count beside „Danas“ and „Kasni“ — a bare number cannot say what it counts. */
+      countTitle: "Broj zadataka u pregledu",
+      /**
+       * „Završeno“ is bounded (ADR-039 §4): the first 100, then „Prikaži još“.
+       * Worded as „Prikazano prvih 100 od 340“ — the counts are stated after
+       * the words, where Serbian owes no numeral agreement.
+       */
+      shownPrefix: "Prikazano prvih",
+      shownOf: "od",
+      showMore: "Prikaži još",
+      /** Tooltip on the row chip that names a task's list — inside a view the rows come from every list at once. */
+      listChipTitle: "Lista kojoj zadatak pripada",
     },
     /**
      * The list rail and the sections inside a list (TASK-004 / ADR-029).
@@ -1276,6 +1332,7 @@ export const strings = {
       profile: "Profil",
       security: "Sigurnost",
       appearance: "Izgled",
+      tasks: "Zadaci",
       notes: "Beleške",
       shortcuts: "Prečice",
       dashboard: "Kontrolna tabla",
@@ -1336,6 +1393,21 @@ export const strings = {
         monday: "Ponedeljak",
         sunday: "Nedelja",
       } satisfies Record<WeekStartPreference, string>,
+    },
+    /**
+     * Zadaci section (ADR-049): a device preference over the „Danas“ and
+     * „Sledećih 7 dana“ views, beside the Beleške card below and for the same
+     * reason — it describes how this machine reads one module, not what the
+     * profile holds, so it belongs to that module rather than to „Izgled“.
+     */
+    tasks: {
+      blockedInTodayLabel: "Blokirani zadaci u pregledu Danas",
+      blockedInTodayCaption:
+        "Zadatak koji čeka na drugi zadatak. Važi i za pregled „Sledećih 7 dana”.",
+      blockedInTodayOptions: {
+        sakrij: "Sakrij",
+        prikazi: "Prikaži",
+      } satisfies Record<BlockedInToday, string>,
     },
     /** Beleške section (ADR-036): the note editor's reading measure and its markdown shortcuts. */
     notes: {
@@ -1728,6 +1800,12 @@ export const strings = {
       newTask: "Novi zadatak",
       newEvent: "Novi događaj",
       newNote: "Nova beleška",
+      /**
+       * ADR-049: one command per task view, between the quick-creates and the
+       * shell actions. Prefixed with the module rather than „Idi na“, because
+       * it lands on a VIEW inside Zadaci, not on the module's front door.
+       */
+      smartListPrefix: "Zadaci: ",
       lock: "Zaključaj aplikaciju",
       rebuildIndex: "Ponovo izgradi indeks pretrage",
       rebuildDonePrefix: "Indeks je ponovo izgrađen:",

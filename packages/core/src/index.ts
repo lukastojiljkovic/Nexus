@@ -335,6 +335,14 @@ export { MAX_RELATIVE_DAYS, parseQuickAddDate } from "./tasks/quickAddDate.js";
 export type { QuickAddDateMatch } from "./tasks/quickAddDate.js";
 
 export {
+  compareSmartListTasks,
+  matchesSmartList,
+  selectSmartList,
+  SMART_LIST_IDS,
+} from "./tasks/taskSmartLists.js";
+export type { SmartListContext, SmartListId, SmartListTask } from "./tasks/taskSmartLists.js";
+
+export {
   chordAccelerator,
   chordFromEvent,
   findChordConflict,

@@ -377,6 +377,19 @@ body {
   text-transform: uppercase;
   color: var(--nx-text-muted);
 }
+/* A rail section that is not the first one gets the room „Oznake“ already takes
+   above it (see .tasks__tag-heading) — since ADR-049 „Liste“ is the second. */
+.tasks__rail-heading--stacked {
+  margin-top: var(--nx-space-4);
+}
+/* „Pregledi“ (ADR-049) are ONE named group — unlike the lists, which are a tree
+   of independent rows — so the group element restates the rail's own column
+   rhythm rather than letting its rows fall out of it. */
+.tasks__rail-views {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
 /* The transparent border is reserved for the drop state, so lighting a row up
    never shifts the rail's layout by a pixel. */
 .tasks__rail-row {
@@ -424,6 +437,17 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* „Pregledi“ (ADR-049): the count beside „Danas“ / „Kasni“ is muted plain text,
+   deliberately NOT a chip — a pill beside a name reads as a state of it, and
+   this is only a fact about the view. It stays muted while the row is active,
+   so the gold weight keeps saying which view is selected on its own. */
+.tasks__rail-count {
+  flex: none;
+  margin-left: var(--nx-space-2);
+  font-size: var(--nx-font-size-caption);
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text-muted);
 }
 /* Row actions stay quiet until the row is hovered or one of them is focused —
    mirrors .note__tag-menu, so the rail reads as names rather than as buttons. */
@@ -937,17 +961,13 @@ body {
   border: 1px solid var(--nx-border);
   padding: 1px 8px;
 }
+.tasks__blocked-chip.nx-chip {
+  color: var(--nx-text-muted);
+}
 /* The per-task "⋯" menu (tags + „Sačuvaj kao šablon“) sits in the row's action
    cluster, so it takes that cluster's hover treatment rather than the popover
    trigger's bare colour change, and stays visible like the + ✎ × beside it. */
 .tasks__row-menu:hover {
-.tasks__blocked-chip.nx-chip {
-  color: var(--nx-text-muted);
-}
-/* The per-task tag menu sits in the row's action cluster, so it takes that
-   cluster's hover treatment rather than the popover trigger's bare colour
-   change, and stays visible like the + ✎ × beside it. */
-.tasks__row-tags:hover {
   background: var(--nx-surface-alt);
 }
 .tasks__add-subtask.nx-button,
@@ -966,6 +986,29 @@ body {
 .tasks__delete.nx-button:hover {
   background: var(--nx-danger-soft);
   color: var(--nx-danger);
+}
+/* The „Završeno“ bound (ADR-049 / ADR-039 §4): one muted line saying how far
+   the view currently reaches, and one quiet step that widens it — the same
+   ghost treatment as „Nova lista“, since neither is the point of the screen. */
+.tasks__more {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-3) var(--nx-space-2) 0;
+}
+.tasks__more-note {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+.tasks__more-action.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.tasks__more-action.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
 }
 
 /* Subtasks (TASK-008) ---------------------------------------------------
@@ -1135,6 +1178,11 @@ body {
 }
 /* Matched to .tasks__reminders-label, the field label right above it. */
 .tasks__attachments-label {
+  flex: none;
+  font-size: var(--nx-font-size-label);
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+}
 /* Zavisnosti (migration 029 / ADR-037) — the edit form's "this one first" block.
    Takes a full row of the wrapping form exactly as .tasks__reminders above does,
    so a long list of blockers wraps under itself instead of pushing the submit
@@ -1221,6 +1269,7 @@ body {
   background: transparent;
   border: 1px solid var(--nx-border);
   padding: 1px 8px;
+}
 .tasks__dep-list {
   display: flex;
   align-items: center;

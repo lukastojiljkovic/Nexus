@@ -678,6 +678,11 @@ export function App() {
         moduleName,
         onNavigate: setActiveId,
         onCreate: createInModule,
+        // ADR-049: the five TASK views ride the same intent mechanism as a
+        // reveal — the page owns which view is selected, so the palette says
+        // which one rather than reaching into it.
+        onOpenSmartList: (listId) =>
+          dispatchIntent({ module: "tasks", intent: { kind: "smart-list", listId } }),
         onToggleTheme: toggleTheme,
         onLock: () => void handleLock(),
         onOpenShortcuts: () => setShortcutsHelpOpen(true),

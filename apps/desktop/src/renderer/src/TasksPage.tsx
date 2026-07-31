@@ -12,8 +12,22 @@ import {
   ListView,
   TextField,
 } from "@nexus/ui";
-import { foldSearchText, isInlineImageMime, isValidDayKey, parseQuickAddDate } from "@nexus/core";
-import type { CollectionSchema, KanbanViewConfig, ListViewConfig } from "@nexus/core";
+import {
+  foldSearchText,
+  isInlineImageMime,
+  isValidDayKey,
+  matchesSmartList,
+  parseQuickAddDate,
+  selectSmartList,
+  SMART_LIST_IDS,
+} from "@nexus/core";
+import type {
+  CollectionSchema,
+  KanbanViewConfig,
+  ListViewConfig,
+  SmartListContext,
+  SmartListId,
+} from "@nexus/core";
 import {
   MAX_TASK_LIST_NAME_LENGTH,
   MAX_TASK_TAG_NAME_LENGTH,
@@ -41,6 +55,7 @@ import { NotePopover } from "./notePopover.js";
 import { RecurrenceMark, RecurrencePicker } from "./RecurrencePicker.js";
 import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
 import { dayUnit, strings } from "./strings.js";
+import { readStoredBlockedInToday, toIncludeBlocked } from "./taskPrefs.js";
 
 // --- Field orderings (renderer mirror of @nexus/db) -------------------------
 //
@@ -420,23 +435,38 @@ function attachmentChip(count: number): ReactNode {
   );
 }
 
+interface TaskChipsInput {
+  task: TaskFields;
+  /** The task's direct children — the roll-up counts them. */
+  children: readonly TaskFields[];
+  tags: readonly TaskTag[];
+  attachmentCount: number;
+  blocked: boolean;
+  /** The local day key, so the rok chip can say whether it has passed. */
+  today: string;
+  /** The task's own list, named only inside a smart list — an ordinary list already IS the answer. */
+  listName: string | null;
+}
+
 /**
  * The series marker (when the task repeats), subtask roll-up (when it has
- * children), the „Blokiran“ mark (when something it waits on is still open), tag
- * labels (when any are attached), priority (when not 'none') and due-date (when
- * set) chips; null when none apply.
+ * children), the „Blokiran“ mark (when something it waits on is still open), the
+ * list name (inside a smart list only), tag labels (when any are attached),
+ * priority (when not 'none') and due-date (when set) chips; null when none apply.
  *
  * One cluster for both renderings, so a list row and a kanban card say the same
  * things about a task — which is why the tags and the blocked mark travel here
  * rather than being spliced into the list row alone.
  */
-function taskChips(
-  task: TaskFields,
-  children: readonly TaskFields[],
-  tags: readonly TaskTag[],
-  attachmentCount: number,
-  blocked: boolean,
-): ReactNode {
+function taskChips({
+  task,
+  children,
+  tags,
+  attachmentCount,
+  blocked,
+  today,
+  listName,
+}: TaskChipsInput): ReactNode {
   const chips: ReactNode[] = [];
   if (task.recurrence !== null) chips.push(<RecurrenceMark key="recurrence" />);
   const rollUp = progressChip(children);
@@ -458,6 +488,16 @@ function taskChips(
       </Chip>,
     );
   }
+  // Which list a row came from — the one question a SMART list raises and an
+  // ordinary one cannot: there the rail already answers it, which is why the
+  // chip is drawn only when the caller hands a name over.
+  if (listName !== null) {
+    chips.push(
+      <Chip key="list" variant="data" title={strings.tasks.smart.listChipTitle}>
+        {listName}
+      </Chip>,
+    );
+  }
   // Outlined rather than filled (see .tasks__tag-chip): a label is not a state,
   // and next to prioritet/rok it must not read as one.
   for (const tag of tags) {
@@ -475,8 +515,14 @@ function taskChips(
     );
   }
   if (task.dueDate) {
+    // The app's first overdue affordance (ADR-049): a rok already past on an
+    // open task reads as danger, the same colour CAL gives an expired document
+    // (DocumentsPanel's STATUS_VARIANT) — one fact, one hue, everywhere the
+    // cluster is drawn. A finished task keeps the plain data chip: its rok is
+    // history, not a warning.
+    const overdue = !task.done && task.dueDate.slice(0, 10) < today;
     chips.push(
-      <Chip key="due" variant="data">
+      <Chip key="due" variant={overdue ? "danger" : "data"}>
         {formatDue(task.dueDate)}
       </Chip>,
     );
@@ -744,8 +790,32 @@ function TaskListDeleteDialog({ list, inboxName, onChoose, onCancel }: TaskListD
   );
 }
 
-/** A pending deep-link target (021-e global search / palette commands): reveal one task, or focus the quick-add input for a fresh one. */
-export type TasksIntent = { kind: "reveal"; taskId: string } | { kind: "create" };
+/** A pending deep-link target (021-e global search / palette commands): reveal one task, focus the quick-add input for a fresh one, or open one of the five views (ADR-049). */
+export type TasksIntent =
+  | { kind: "reveal"; taskId: string }
+  | { kind: "create" }
+  | { kind: "smart-list"; listId: SmartListId };
+
+/**
+ * What the rail has selected: a real list, or one of the five VIRTUAL ones
+ * (ADR-049). A tagged union rather than two nullable ids, because the two are
+ * mutually exclusive by construction — a page cannot be showing both — and the
+ * one that is set decides where the rows come from at all.
+ *
+ * Like `selectedListId` before it this is a PREFERENCE, not the answer: the
+ * list half is still resolved below and falls back to the Inbox, and neither
+ * half is persisted.
+ */
+type TaskSelection = { kind: "list"; id: string } | { kind: "smart"; id: SmartListId };
+
+/**
+ * How many finished tasks „Završeno“ draws at once, and how many „Prikaži još“
+ * adds (ADR-039 §4's recipe). The rows are already in memory, so this bounds the
+ * DOM rather than a query: a profile with years of history would otherwise pay
+ * for every one of them on a view nobody scrolls to the end of.
+ */
+const COMPLETED_PAGE_SIZE = 100;
+const COMPLETED_PAGE_STEP = 50;
 
 /** DOM id for a task's row — shared by both the list and kanban renderings (only one is ever mounted at a time), so `scrollRevealedIntoView` has one stable target regardless of which view is active. */
 function taskRowDomId(taskId: string): string {
@@ -780,12 +850,22 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const [lists, setLists] = useState<TaskList[] | null>(null);
   const [sections, setSections] = useState<TaskSection[]>([]);
   /**
-   * Which list the rail has selected — a PREFERENCE, not the answer: what the
-   * page renders is derived below and falls back to the Inbox, so a selection
-   * left over from another profile, or naming a list that has since been
-   * deleted, resolves itself instead of blanking the page.
+   * What the rail has selected — a list or one of the views (see
+   * `TaskSelection`). A PREFERENCE, not the answer: what the page renders is
+   * derived below and falls back to the Inbox, so a selection left over from
+   * another profile, or naming a list that has since been deleted, resolves
+   * itself instead of blanking the page.
    */
-  const [selectedListId, setSelectedListId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<TaskSelection | null>(null);
+  /** How many rows „Završeno“ is currently drawing; reset whenever the rail's selection changes. */
+  const [completedShown, setCompletedShown] = useState(COMPLETED_PAGE_SIZE);
+  /**
+   * Whether the two "what now" views show blocked tasks (ADR-049). A device
+   * preference read on mount, exactly as the calendar reads the week start: a
+   * change in Podešavanja shows the next time this page is opened, and page
+   * switching remounts it.
+   */
+  const [blockedInToday] = useState(() => readStoredBlockedInToday());
   /** True when the last list/section action failed — the rail says so rather than failing silently. */
   const [listFailed, setListFailed] = useState(false);
   const [railEditing, setRailEditing] = useState<RailEditing>(null);
@@ -835,6 +915,8 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [dueDate, setDueDate] = useState("");
+  /** „Počinje“ (TASK-001) — the day the task becomes actionable; the two date views read it. */
+  const [startDate, setStartDate] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("none");
   const [recurrence, setRecurrence] = useState<RecurrenceRule | null>(null);
   const [reminderOffsets, setReminderOffsets] = useState<number[]>([]);
@@ -843,7 +925,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const [pendingUndo, setPendingUndo] = useState<PendingUndo>(null);
   /**
    * Izbor (ADR-038): whether the list view is in batch-selection mode, and which
-   * rows are picked in it. The ids are a PREFERENCE, like `selectedListId` — the
+   * rows are picked in it. The ids are a PREFERENCE, like `selection` — the
    * rows actually acted on are derived below from what this render draws, so a
    * pick that the tag filter, a list switch or a refetch has taken off screen
    * never travels into a write.
@@ -867,62 +949,31 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const subtaskInputRef = useRef<HTMLInputElement>(null);
   const { revealedId, reveal } = useRevealedRow();
 
+  /** The view the rail has selected, or null when a real list is selected (ADR-049). */
+  const smartListId: SmartListId | null = selection?.kind === "smart" ? selection.id : null;
+
   /**
    * The selected list, resolved rather than trusted: the stored preference if it
    * still names a list of this profile, else the Inbox, else nothing (only while
    * the first fetch is in flight — every profile has an Inbox).
+   *
+   * A view has no list at all, which is exactly what makes „Nova sekcija“, the
+   * section select and the templates action disappear with it: each of them is
+   * already conditioned on there being a list to act on.
    */
   const selectedList =
-    lists === null
+    lists === null || smartListId !== null
       ? null
-      : (lists.find((list) => list.id === selectedListId) ??
+      : (lists.find((list) => selection?.kind === "list" && list.id === selection.id) ??
         lists.find((list) => list.isInbox) ??
         lists[0] ??
         null);
   const selectedId = selectedList?.id ?? null;
   const inboxList = lists?.find((list) => list.isInbox) ?? null;
-
-  /**
-   * WHICH VIEW is now a per-list property (TASK-004/005): the toggle writes
-   * `setTaskListView` and the list itself remembers, so switching lists switches
-   * shape with them. This replaces the old per-profile localStorage memory
-   * outright — the `nexus.tasks.view.<profileId>` key is simply left where it is
-   * and never read again, which is the whole migration: the value it held was a
-   * UI preference, and the Inbox's own `defaultView` now stands in its place.
-   */
-  const view: TaskListView = selectedList?.defaultView ?? "list";
-
-  /**
-   * The page shows ONE list at a time — that is what selecting in the rail
-   * means. A task whose `listId` matches no fetched list would belong to a
-   * soft-deleted list and be unreachable here; nothing can produce one: deleting
-   * a list either moves its tasks to the Inbox or deletes them with it, and the
-   * per-task undo re-places a task whose list is gone into the Inbox
-   * (`TaskStore.restore`).
-   */
-  const listTasks =
-    selectedId === null ? [] : (tasks ?? []).filter((task) => task.listId === selectedId);
-  /** Already in `position` order: main returns sections grouped by list, each list's in its own order, so filtering preserves it. */
-  const listSections =
-    selectedId === null ? [] : sections.filter((section) => section.listId === selectedId);
-  /** That order as bare ids — the scope „Pomeri gore/dole“ steps a heading through (`stepNeighbours`). */
-  const sectionOrder = listSections.map((section) => section.id);
-
-  // The tag ids each task carries, from the flat link list — one pass over an
-  // array the page already holds, like the tree below.
-  const tagIdsByTask = new Map<string, Set<string>>();
-  for (const link of tagLinks) {
-    const ids = tagIdsByTask.get(link.taskId);
-    if (ids) ids.add(link.tagId);
-    else tagIdsByTask.set(link.taskId, new Set([link.tagId]));
-  }
-  const sortedTags = tags.slice().sort((a, b) => collator.compare(a.name, b.name));
-  /** The store orders by SQLite's binary collation, which mis-tailors Serbian Latin — so the popover re-sorts, exactly as the tag chips do. */
-  const sortedTemplates = templates.slice().sort((a, b) => collator.compare(a.name, b.name));
-  const tagsOf = (taskId: string): readonly TaskTag[] => {
-    const ids = tagIdsByTask.get(taskId);
-    return ids === undefined ? NO_TAGS : sortedTags.filter((tag) => ids.has(tag.id));
-  };
+  /** The list each task belongs to, by name — what the row chip inside a view names (see `taskChips`). */
+  const listNameById = new Map((lists ?? []).map((list) => [list.id, list.name]));
+  /** Read once per render: the rok chip's overdue test and the views' own day both need it, and both must agree. */
+  const todayKey = localTodayKey();
 
   // --- Zavisnosti (ADR-037), derived on every render ------------------------
   //
@@ -930,6 +981,9 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   // rather than the selected list's: a dependency crosses lists freely, so a
   // blocker sitting in another list must still block, and must still be
   // nameable in the picker.
+  //
+  // Derived HERE, above the rows, because „Danas“ and „Sledećih 7 dana“ ask
+  // about blocked-ness while they are still deciding which rows exist at all.
   const tasksById = new Map((tasks ?? []).map((task) => [task.id, task]));
   const blockersByTask = new Map<string, string[]>();
   const blockedByBlocker = new Map<string, string[]>();
@@ -964,7 +1018,65 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     blockersOf(taskId).some((blocker) => !blocker.done);
 
   /**
-   * The rows the page actually draws: the selected list first (that is what
+   * WHICH VIEW is now a per-list property (TASK-004/005): the toggle writes
+   * `setTaskListView` and the list itself remembers, so switching lists switches
+   * shape with them. This replaces the old per-profile localStorage memory
+   * outright — the `nexus.tasks.view.<profileId>` key is simply left where it is
+   * and never read again, which is the whole migration: the value it held was a
+   * UI preference, and the Inbox's own `defaultView` now stands in its place.
+   *
+   * A smart list is always a LIST view (ADR-049): its order is derived
+   * (`selectSmartList`), and a board would both discard that order and offer a
+   * status drag whose result the view has no place to put.
+   */
+  const view: TaskListView = smartListId !== null ? "list" : (selectedList?.defaultView ?? "list");
+
+  /** What the five views ask about this render — the day, the derived blocked-ness, and the device preference over it. */
+  const smartContext: SmartListContext = {
+    today: todayKey,
+    isBlocked,
+    includeBlocked: toIncludeBlocked(blockedInToday),
+  };
+
+  /** One view's rows over the WHOLE profile, already in the module's own order, or null when a real list is selected. */
+  const smartRows =
+    smartListId === null ? null : selectSmartList(tasks ?? [], smartListId, smartContext);
+
+  /**
+   * The page shows ONE scope at a time — that is what selecting in the rail
+   * means: one list's tasks, or one view's query across every list. A task whose
+   * `listId` matches no fetched list would belong to a soft-deleted list and be
+   * unreachable here; nothing can produce one: deleting a list either moves its
+   * tasks to the Inbox or deletes them with it, and the per-task undo re-places
+   * a task whose list is gone into the Inbox (`TaskStore.restore`).
+   */
+  const listTasks =
+    smartRows ??
+    (selectedId === null ? [] : (tasks ?? []).filter((task) => task.listId === selectedId));
+  /** Already in `position` order: main returns sections grouped by list, each list's in its own order, so filtering preserves it. */
+  const listSections =
+    selectedId === null ? [] : sections.filter((section) => section.listId === selectedId);
+  /** That order as bare ids — the scope „Pomeri gore/dole“ steps a heading through (`stepNeighbours`). */
+  const sectionOrder = listSections.map((section) => section.id);
+
+  // The tag ids each task carries, from the flat link list — one pass over an
+  // array the page already holds, like the tree below.
+  const tagIdsByTask = new Map<string, Set<string>>();
+  for (const link of tagLinks) {
+    const ids = tagIdsByTask.get(link.taskId);
+    if (ids) ids.add(link.tagId);
+    else tagIdsByTask.set(link.taskId, new Set([link.tagId]));
+  }
+  const sortedTags = tags.slice().sort((a, b) => collator.compare(a.name, b.name));
+  /** The store orders by SQLite's binary collation, which mis-tailors Serbian Latin — so the popover re-sorts, exactly as the tag chips do. */
+  const sortedTemplates = templates.slice().sort((a, b) => collator.compare(a.name, b.name));
+  const tagsOf = (taskId: string): readonly TaskTag[] => {
+    const ids = tagIdsByTask.get(taskId);
+    return ids === undefined ? NO_TAGS : sortedTags.filter((tag) => ids.has(tag.id));
+  };
+
+  /**
+   * The rows the page actually draws: the selected scope first (that is what
    * selecting in the rail means), then narrowed by the tag filter with AND
    * semantics — a task must carry EVERY selected tag, the same rule NotesPage's
    * filter applies to notes.
@@ -974,11 +1086,21 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
    * filter — the rows on screen are exactly the tasks carrying the tags — and it
    * is why the filter never touches what a task's subtasks ARE (see below).
    */
-  const visibleTasks =
+  const matchedTasks =
     tagFilter.length === 0
       ? listTasks
       : listTasks.filter((task) => tagFilter.every((id) => tagIdsByTask.get(task.id)?.has(id)));
-  /** True when the list holds rows but the filter shows none of them — its own empty state, not "the list is empty". */
+  /**
+   * „Završeno“ is BOUNDED (ADR-039 §4): a profile accumulates finished tasks
+   * without limit, and every one of them would otherwise be a DOM row. The
+   * rows are already in memory, so the bound is a slice and „Prikaži još“ is a
+   * counter — no second query, and the ordering is untouched.
+   */
+  const completedTruncated =
+    smartListId === "zavrseno" && matchedTasks.length > completedShown;
+  /** Everything on screen — and nothing that is not, which is what makes the derived batch selection below honest. */
+  const visibleTasks = completedTruncated ? matchedTasks.slice(0, completedShown) : matchedTasks;
+  /** True when the scope holds rows but the filter shows none of them — its own empty state, not "the list is empty". */
   const filterHidesEverything = tagFilter.length > 0 && visibleTasks.length === 0;
 
   // Rebuilt from the flat list on every render: it is one pass over an array
@@ -990,7 +1112,11 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   // a roll-up count only what is on screen ("1/1" on a task with five open
   // subtasks) and would let completing a parent quietly skip the subtasks the
   // filter hides — the very reach PRD 03 §4 makes this page ask about.
-  const { children } = buildTaskTree(listTasks);
+  //
+  // Inside a VIEW the first tree is built over the whole profile: the rows come
+  // from every list at once, so "this list's tasks" is not the set a roll-up or
+  // a completion cascade may reason about.
+  const { children } = buildTaskTree(smartListId !== null ? (tasks ?? []) : listTasks);
   const { roots, children: visibleChildren } = buildTaskTree(visibleTasks);
   const childrenOf = (taskId: string): readonly TaskFields[] =>
     children.get(taskId) ?? NO_CHILDREN;
@@ -1001,13 +1127,22 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   /** The heading a row renders under: its own section, or the body for a section this fetch does not know (only reachable between a section delete and the refetch that follows it). */
   const groupKeyOf = (task: TaskFields): string | null =>
     task.sectionId !== null && knownSectionIds.has(task.sectionId) ? task.sectionId : null;
-  const groups: TaskGroup[] = [
-    { section: null, roots: roots.filter((task) => groupKeyOf(task) === null) },
-    ...listSections.map((section) => ({
-      section,
-      roots: roots.filter((task) => task.sectionId === section.id),
-    })),
-  ];
+  /**
+   * A VIEW is ONE flat group, in the order `selectSmartList` derived: its rows
+   * belong to many lists (so no heading of any one of them applies) and nesting
+   * a matching subtask under a matching parent would contradict that order —
+   * which is also why the engine is handed the rows exactly as they arrive.
+   */
+  const groups: TaskGroup[] =
+    smartListId !== null
+      ? [{ section: null, roots: [...visibleTasks] }]
+      : [
+          { section: null, roots: roots.filter((task) => groupKeyOf(task) === null) },
+          ...listSections.map((section) => ({
+            section,
+            roots: roots.filter((task) => task.sectionId === section.id),
+          })),
+        ];
 
   const draggedTask =
     draggedTaskId === null
@@ -1029,9 +1164,15 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
    * the rail's own drop target leaves itself out for the same reason. A profile
    * whose only list is the one being shown therefore has NO targets, and the
    * „Premesti…“ trigger is not drawn at all rather than opening onto nothing.
+   *
+   * Inside a VIEW there is no such list: the picked rows come from wherever
+   * they live, so every list is a real destination for at least one of them and
+   * none is left out.
    */
   const moveTargets = selecting
-    ? flattenRail(buildListTree(lists ?? [])).filter(({ list }) => list.id !== selectedId)
+    ? flattenRail(buildListTree(lists ?? [])).filter(
+        ({ list }) => smartListId !== null || list.id !== selectedId,
+      )
     : [];
   /**
    * Whether a move would carry every picked row honestly. A subtask lives where
@@ -1109,7 +1250,21 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   // fetched) resolves itself once `tasks` changes instead of dropping it.
   useEffect(() => {
     if (!intent) return;
+    if (intent.kind === "smart-list") {
+      selectSmart(intent.listId);
+      onIntentHandled?.();
+      return;
+    }
     if (intent.kind === "create") {
+      // A view has no quick-add to focus (ADR-049), so the intent first leaves
+      // it — for a real list, whose Inbox fallback the selection resolves to —
+      // and is deliberately left standing so the next pass does the focusing,
+      // by which time the form is actually mounted.
+      if (smartListId !== null) {
+        setSelection(null); // resolves to the Inbox, like any unset selection
+        leaveScope();
+        return;
+      }
       inputRef.current?.focus();
       onIntentHandled?.();
       return;
@@ -1136,7 +1291,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     reveal(intent.taskId);
     scrollRevealedIntoView(taskRowDomId(intent.taskId));
     onIntentHandled?.();
-  }, [intent, tasks, lists, selectedId, tagFilter, reveal, onIntentHandled]);
+  }, [intent, tasks, lists, selectedId, smartListId, tagFilter, reveal, onIntentHandled]);
 
   // Escape leaves Izbor (ADR-038) — the way out of every other mode on this
   // page. `defaultPrevented` is what keeps it from firing behind an inline name
@@ -1182,17 +1337,32 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
 
   /** Switches the page to another list, closing everything that was bound to the one being left. */
   function selectList(id: string): void {
-    if (id === selectedId) return;
-    setSelectedListId(id);
-    // The form, the inline subtask line, the section editor and any batch
-    // selection were all bound to rows of the list being left — none of which
-    // this list shows.
+    if (smartListId === null && id === selectedId) return;
+    setSelection({ kind: "list", id });
+    leaveScope();
+  }
+
+  /** The same, onto one of the five views (ADR-049) — a query rather than a place, but the same "everything bound to what we are leaving goes with it" rule. */
+  function selectSmart(id: SmartListId): void {
+    if (smartListId === id) return;
+    setSelection({ kind: "smart", id });
+    leaveScope();
+  }
+
+  /**
+   * Closes everything that was bound to the scope being left: the form, the
+   * inline subtask line, the section editor, any batch selection, and the
+   * „Završeno“ page counter — none of which describes the rows about to be
+   * drawn.
+   */
+  function leaveScope(): void {
     resetForm();
     closeSubtaskInput();
     exitSelection();
     setSectionEditing(null);
     setSectionDraft("");
     setListFailed(false);
+    setCompletedShown(COMPLETED_PAGE_SIZE);
   }
 
   function replaceTask(updated: Task): void {
@@ -1776,6 +1946,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     setEditingId(null);
     setDraft("");
     setDueDate("");
+    setStartDate("");
     setPriority("none");
     setRecurrence(null);
     setReminderOffsets([]);
@@ -1808,6 +1979,8 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     // The store accepts a date-time due date too, but this form only speaks in
     // whole days, so it shows (and on save keeps) the day part.
     setDueDate(task.dueDate === null ? "" : task.dueDate.slice(0, 10));
+    // „Počinje“ takes the same day-part treatment as the rok beside it.
+    setStartDate(task.startDate === null ? "" : task.startDate.slice(0, 10));
     setPriority(task.priority);
     setRecurrence(task.recurrence);
     setReminderOffsets([...task.reminderOffsets]);
@@ -1832,6 +2005,10 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     // The date field always wins: it is the explicit correction the user makes
     // when the reading is wrong.
     const due = dueDate.length > 0 ? dueDate : (activeQuickDate?.date ?? null);
+    // „Počinje“ mirrors the rok field exactly: an empty date input clears it,
+    // anything else travels as typed and the store re-validates it. There is no
+    // quick-add reading behind it — a start date is never guessed from a title.
+    const start = startDate.length > 0 ? startDate : null;
     // A rule phases from the due date, so there is no such thing as one without
     // it; the picker is already disabled in that state, and this is the guard
     // for the order the user could still reach it in (set a rule, clear the date).
@@ -1848,6 +2025,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         const changes: TaskFieldChanges = {
           title,
           dueDate: due,
+          startDate: start,
           priority,
           recurrence: rule,
           // An empty array is meaningful here: it clears whatever ladder the
@@ -1868,6 +2046,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         const fields: NewTaskFields = { title };
         // Only send what is set (exactOptionalPropertyTypes).
         if (due !== null) fields.dueDate = due;
+        if (start !== null) fields.startDate = start;
         if (priority !== "none") fields.priority = priority;
         if (rule !== null) fields.recurrence = rule;
         if (ladder.length > 0) fields.reminderOffsets = ladder;
@@ -2187,7 +2366,10 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
    */
   function renderRowLead(task: TaskFields, depth: number): ReactNode {
     // In Izbor the grip column becomes the pick column — the same width, so
-    // entering the mode moves nothing on screen, and no drag can start.
+    // entering the mode moves nothing on screen, and no drag can start. Inside a
+    // VIEW, which has no grip at all (see below), the rows do step right by that
+    // column; reserving an empty gutter at rest instead would cost every row a
+    // permanently blank column for a mode that is usually off.
     //
     // The button carries no handler of its own: the row is the toggle, and a
     // keyboard activation here dispatches a click that bubbles to it. That is
@@ -2215,6 +2397,10 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
       );
     }
     if (depth > 0) return leadSpacer(depth);
+    // A VIEW has no manual order to grab hold of — its rows are ordered by the
+    // query (ADR-049) — so there is no grip and no lead column at all, rather
+    // than a grip that would start a drag with nowhere honest to drop.
+    if (smartListId !== null) return null;
     return (
       <span
         className="tasks__grip"
@@ -2245,7 +2431,15 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         leading={renderRowLead(task, depth)}
         trailing={
           <span className="tasks__row-meta">
-            {taskChips(task, children, tagsOf(task.id), attachmentCountOf(task.id), isBlocked(task.id))}
+            {taskChips({
+              task,
+              children,
+              tags: tagsOf(task.id),
+              attachmentCount: attachmentCountOf(task.id),
+              blocked: isBlocked(task.id),
+              today: todayKey,
+              listName: smartListId === null ? null : (listNameById.get(task.listId) ?? null),
+            })}
             {/* Izbor (ADR-038) draws chips only: the row actions below would
                 each be a second meaning for a click in a mode that has exactly
                 one. */}
@@ -2323,14 +2517,19 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                     </>
                   )}
                 </NotePopover>
-                <Button
-                  size="sm"
-                  className="tasks__add-subtask"
-                  aria-label={strings.tasks.addSubtaskLabel}
-                  onClick={() => openSubtaskInput(task.id)}
-                >
-                  +
-                </Button>
+                {/* A VIEW draws every row flat (see `renderBranch`), so a
+                    subtask added here would land somewhere this screen cannot
+                    show — the same reason the quick-add is not drawn in one. */}
+                {smartListId === null && (
+                  <Button
+                    size="sm"
+                    className="tasks__add-subtask"
+                    aria-label={strings.tasks.addSubtaskLabel}
+                    onClick={() => openSubtaskInput(task.id)}
+                  >
+                    +
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   className="tasks__edit"
@@ -2527,6 +2726,12 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     // guard is what keeps a malformed row from becoming an infinite render.
     if (seen.has(task.id)) return [];
     seen.add(task.id);
+    // A VIEW is FLAT: its rows are the query's answer in the query's order, and
+    // a subtree drawn under one of them would put rows on screen that the query
+    // did not select — while pushing the ones it did out of that order. The row
+    // still knows all its subtasks (the roll-up counts them, and completing it
+    // still asks about them); it simply does not draw them here.
+    if (smartListId !== null) return [renderRow(task, 0, childrenOf(task.id))];
     // The row is told about ALL its subtasks (its roll-up counts them), while the
     // recursion follows only the ones this render draws — see the two trees above.
     const nodes: ReactNode[] = [renderRow(task, depth, childrenOf(task.id))];
@@ -2897,10 +3102,70 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     );
   }
 
+  /**
+   * One „Pregledi“ row (ADR-049). Rendered like a list row typographically —
+   * same button, same gold-text active state — and deliberately NOT like one
+   * otherwise: no hover cluster and no drop handlers, because a view can be
+   * neither renamed, reordered, deleted nor filed into, and this house does not
+   * draw an affordance that cannot act.
+   *
+   * The count is muted plain text, not a pill: it is a fact about the view, and
+   * a badge beside a name would read as a state of it.
+   */
+  function renderSmartRow(listId: SmartListId, count: number | null): ReactNode {
+    const s = strings.tasks.smart;
+    const active = smartListId === listId;
+    return (
+      <div className="tasks__rail-row" key={listId}>
+        <button
+          type="button"
+          className={active ? "tasks__rail-list tasks__rail-list--active" : "tasks__rail-list"}
+          aria-current={active ? "true" : undefined}
+          onClick={() => selectSmart(listId)}
+        >
+          <span className="tasks__rail-name">{s.names[listId]}</span>
+          {count !== null && (
+            <span className="tasks__rail-count" title={s.countTitle}>
+              {count}
+            </span>
+          )}
+        </button>
+      </div>
+    );
+  }
+
+  // Counted from the array this page already holds — the predicate rather than
+  // the full selection, since a count owes nothing to the ordering. Only for the
+  // two views where a number changes what the user does next: „Danas“ says how
+  // much today is, „Kasni“ how much is owed. A count on the other three would be
+  // noise — „Završeno“'s in particular only ever grows.
+  const countSmart = (listId: SmartListId): number =>
+    (tasks ?? []).reduce(
+      (count, task) => (matchesSmartList(task, listId, smartContext) ? count + 1 : count),
+      0,
+    );
+  const smartCounts: Partial<Record<SmartListId, number>> = {
+    danas: countSmart("danas"),
+    kasni: countSmart("kasni"),
+  };
+
   return (
     <div className="tasks">
       <aside className="tasks__rail" aria-label={strings.tasks.lists.railLabel}>
-        <div className="tasks__rail-heading">{strings.tasks.lists.title}</div>
+        {/* Pregledi (ADR-049), above the lists: five VIRTUAL lists — queries
+            over every list at once, never places anything is filed into. */}
+        <div className="tasks__rail-heading">{strings.tasks.smart.heading}</div>
+        <div
+          className="tasks__rail-views"
+          role="group"
+          aria-label={strings.tasks.smart.regionLabel}
+        >
+          {SMART_LIST_IDS.map((listId) => renderSmartRow(listId, smartCounts[listId] ?? null))}
+        </div>
+
+        <div className="tasks__rail-heading tasks__rail-heading--stacked">
+          {strings.tasks.lists.title}
+        </div>
         {/* The Inbox's own name is rendered like every other list's: it is a
             stored, renamable row, so a hard-coded label would go stale the
             moment it is renamed. */}
@@ -3030,230 +3295,256 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
 
       <div className="tasks__main">
         <div className="tasks__toolbar">
-          <form className="tasks__form" onSubmit={submitForm}>
-            <div className="tasks__quick-add">
-              <input
-                ref={inputRef}
-                className="nx-textfield__input"
-                value={draft}
-                placeholder={strings.tasks.quickAddPlaceholder}
-                aria-label={strings.tasks.quickAddLabel}
-                autoFocus
-                onChange={(event: ChangeEvent<HTMLInputElement>) => setDraft(event.target.value)}
-              />
-              <Button type="submit" variant="primary">
-                {editingId != null ? strings.tasks.save : strings.tasks.quickAddSubmit}
-              </Button>
-              {editingId != null && (
-                <Button type="button" className="tasks__cancel" onClick={() => resetForm()}>
-                  {strings.tasks.cancel}
+          {/* The add/edit form is hidden inside a VIEW while nothing is being
+              edited (ADR-049): a capture typed under „Danas“ would file into the
+              Inbox, which is a lie about where the row went — and an empty view
+              must not invite typing that goes somewhere else. Editing an
+              existing row is a different act entirely, so ✎ still opens it. */}
+          {(smartListId === null || editingId !== null) && (
+            <form className="tasks__form" onSubmit={submitForm}>
+              <div className="tasks__quick-add">
+                <input
+                  ref={inputRef}
+                  className="nx-textfield__input"
+                  value={draft}
+                  placeholder={strings.tasks.quickAddPlaceholder}
+                  aria-label={strings.tasks.quickAddLabel}
+                  autoFocus
+                  onChange={(event: ChangeEvent<HTMLInputElement>) => setDraft(event.target.value)}
+                />
+                <Button type="submit" variant="primary">
+                  {editingId != null ? strings.tasks.save : strings.tasks.quickAddSubmit}
                 </Button>
-              )}
-            </div>
-
-            {activeQuickDate !== null && (
-              <div
-                className="tasks__quick-date"
-                role="status"
-                aria-label={strings.tasks.quickDate.regionLabel}
-              >
-                <span className="tasks__quick-date-mark" aria-hidden="true">
-                  →
-                </span>
-                <Chip variant="data" title={strings.tasks.quickDate.chipTitle}>
-                  {formatQuickDate(activeQuickDate.date)}
-                </Chip>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="tasks__quick-date-dismiss"
-                  aria-label={strings.tasks.quickDate.dismissLabel}
-                  onClick={() => {
-                    setDismissedPhrase(activeQuickDate.phrase);
-                    // The button it sits on is about to unmount, so focus has to
-                    // be handed somewhere deliberate — back to the line the user
-                    // was typing in.
-                    inputRef.current?.focus();
-                  }}
-                >
-                  ×
-                </Button>
-              </div>
-            )}
-
-            <div className="tasks__fields">
-              <TextField
-                type="date"
-                value={dueDate}
-                aria-label={strings.tasks.dueDateLabel}
-                onChange={(event) => {
-                  const next = event.target.value;
-                  setDueDate(next);
-                  // A rule has to phase from a real day, and a reminder ladder has
-                  // to count back from one, so clearing the due date clears both
-                  // where the user can see it happen.
-                  if (!isValidDayKey(next)) {
-                    setRecurrence(null);
-                    setReminderOffsets([]);
-                  }
-                }}
-              />
-              <select
-                className="tasks__select"
-                value={priority}
-                aria-label={strings.tasks.priorityLabel}
-                onChange={(event) => setPriority(asPriority(event.target.value))}
-              >
-                {TASK_PRIORITIES.map((option) => (
-                  <option key={option} value={option}>
-                    {strings.tasks.priority[option]}
-                  </option>
-                ))}
-              </select>
-              {/* Sekcija (TASK-004) — only where there is a heading to pick: a
-                  select whose one option is "Bez sekcije" says nothing, and a
-                  task of the selected list can only carry a heading of that same
-                  list, so this row appearing at all means there is a real choice.
-                  It is also the way BACK to the list body, which the drag (whose
-                  targets are the headings) deliberately does not offer. */}
-              {listSections.length > 0 && (
-                <select
-                  className="tasks__select"
-                  value={formSectionId ?? ""}
-                  aria-label={strings.tasks.lists.sectionLabel}
-                  onChange={(event) =>
-                    setFormSectionId(event.target.value.length === 0 ? null : event.target.value)
-                  }
-                >
-                  <option value="">{strings.tasks.lists.noSection}</option>
-                  {listSections.map((section) => (
-                    <option key={section.id} value={section.id}>
-                      {section.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-              {/* Keyed by the record being edited: switching tasks re-derives
-                  whether the rule reads as a preset or as Prilagođeno. */}
-              <RecurrencePicker
-                key={editingId ?? "new"}
-                value={recurrence}
-                onChange={setRecurrence}
-                anchor={dueDate}
-              />
-              {/* Podsetnik (ADR-028) — bound to the rok FIELD, exactly like the
-                  rule above: the ladder counts back from the date the form is
-                  showing, and the store refuses one that has no date to count
-                  back from, so the chips say why rather than letting the user hit
-                  that error blind. A date read out of the quick-add line is not
-                  that anchor yet; it becomes one once it lands in the field. */}
-              <div className="tasks__reminders">
-                <span className="tasks__reminders-label">{strings.tasks.reminders.label}</span>
-                {isValidDayKey(dueDate) ? (
-                  <div
-                    className="tasks__reminder-chips"
-                    role="group"
-                    aria-label={strings.tasks.reminders.label}
-                  >
-                    {reminderChoices(reminderOffsets).map((days) => {
-                      const selected = reminderOffsets.includes(days);
-                      return (
-                        <Button
-                          key={days}
-                          size="sm"
-                          className={
-                            selected ? "tasks__reminder tasks__reminder--active" : "tasks__reminder"
-                          }
-                          aria-pressed={selected}
-                          onClick={() => toggleReminder(days)}
-                        >
-                          {taskReminderLabel(days)}
-                        </Button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="tasks__reminders-caption">{strings.tasks.reminders.needsDate}</p>
+                {editingId != null && (
+                  <Button type="button" className="tasks__cancel" onClick={() => resetForm()}>
+                    {strings.tasks.cancel}
+                  </Button>
                 )}
               </div>
 
-              {/* Prilozi (migration 024) — only while EDITING: an uncreated task
-                  has no id to hang a file off, which is the same constraint the
-                  note editor lives under (it only ever opens on a note that
-                  already exists). The picker itself is native and lives in main,
-                  so there is no drop zone and no file input here. */}
-              {editingId !== null && renderAttachments(editingId)}
-              {/* Zavisnosti (ADR-037) — EDIT ONLY, and not because it would be
-                  cluttered otherwise: an edge names two task ids, and a task
-                  being created has none yet. The picker offers only what the
-                  store would accept (see `dependencyCandidates`), so the error
-                  line below reports a race, never an ordinary refusal. */}
-              {editingId !== null && renderDependencies(editingId)}
-            </div>
-          </form>
+              {activeQuickDate !== null && (
+                <div
+                  className="tasks__quick-date"
+                  role="status"
+                  aria-label={strings.tasks.quickDate.regionLabel}
+                >
+                  <span className="tasks__quick-date-mark" aria-hidden="true">
+                    →
+                  </span>
+                  <Chip variant="data" title={strings.tasks.quickDate.chipTitle}>
+                    {formatQuickDate(activeQuickDate.date)}
+                  </Chip>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="tasks__quick-date-dismiss"
+                    aria-label={strings.tasks.quickDate.dismissLabel}
+                    onClick={() => {
+                      setDismissedPhrase(activeQuickDate.phrase);
+                      // The button it sits on is about to unmount, so focus has to
+                      // be handed somewhere deliberate — back to the line the user
+                      // was typing in.
+                      inputRef.current?.focus();
+                    }}
+                  >
+                    ×
+                  </Button>
+                </div>
+              )}
+
+              <div className="tasks__fields">
+                <TextField
+                  type="date"
+                  value={dueDate}
+                  aria-label={strings.tasks.dueDateLabel}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setDueDate(next);
+                    // A rule has to phase from a real day, and a reminder ladder has
+                    // to count back from one, so clearing the due date clears both
+                    // where the user can see it happen.
+                    if (!isValidDayKey(next)) {
+                      setRecurrence(null);
+                      setReminderOffsets([]);
+                    }
+                  }}
+                />
+                {/* „Počinje“ (TASK-001), beside the rok and on the same recipe: a
+                    bare day, cleared by emptying the field, revalidated by the
+                    store. It anchors nothing — no repetition and no reminder counts
+                    from it — so clearing it takes nothing else with it. */}
+                <TextField
+                  type="date"
+                  value={startDate}
+                  aria-label={strings.tasks.startDateLabel}
+                  onChange={(event) => setStartDate(event.target.value)}
+                />
+                <select
+                  className="tasks__select"
+                  value={priority}
+                  aria-label={strings.tasks.priorityLabel}
+                  onChange={(event) => setPriority(asPriority(event.target.value))}
+                >
+                  {TASK_PRIORITIES.map((option) => (
+                    <option key={option} value={option}>
+                      {strings.tasks.priority[option]}
+                    </option>
+                  ))}
+                </select>
+                {/* Sekcija (TASK-004) — only where there is a heading to pick: a
+                    select whose one option is "Bez sekcije" says nothing, and a
+                    task of the selected list can only carry a heading of that same
+                    list, so this row appearing at all means there is a real choice.
+                    It is also the way BACK to the list body, which the drag (whose
+                    targets are the headings) deliberately does not offer. */}
+                {listSections.length > 0 && (
+                  <select
+                    className="tasks__select"
+                    value={formSectionId ?? ""}
+                    aria-label={strings.tasks.lists.sectionLabel}
+                    onChange={(event) =>
+                      setFormSectionId(event.target.value.length === 0 ? null : event.target.value)
+                    }
+                  >
+                    <option value="">{strings.tasks.lists.noSection}</option>
+                    {listSections.map((section) => (
+                      <option key={section.id} value={section.id}>
+                        {section.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {/* Keyed by the record being edited: switching tasks re-derives
+                    whether the rule reads as a preset or as Prilagođeno. */}
+                <RecurrencePicker
+                  key={editingId ?? "new"}
+                  value={recurrence}
+                  onChange={setRecurrence}
+                  anchor={dueDate}
+                />
+                {/* Podsetnik (ADR-028) — bound to the rok FIELD, exactly like the
+                    rule above: the ladder counts back from the date the form is
+                    showing, and the store refuses one that has no date to count
+                    back from, so the chips say why rather than letting the user hit
+                    that error blind. A date read out of the quick-add line is not
+                    that anchor yet; it becomes one once it lands in the field. */}
+                <div className="tasks__reminders">
+                  <span className="tasks__reminders-label">{strings.tasks.reminders.label}</span>
+                  {isValidDayKey(dueDate) ? (
+                    <div
+                      className="tasks__reminder-chips"
+                      role="group"
+                      aria-label={strings.tasks.reminders.label}
+                    >
+                      {reminderChoices(reminderOffsets).map((days) => {
+                        const selected = reminderOffsets.includes(days);
+                        return (
+                          <Button
+                            key={days}
+                            size="sm"
+                            className={
+                              selected ? "tasks__reminder tasks__reminder--active" : "tasks__reminder"
+                            }
+                            aria-pressed={selected}
+                            onClick={() => toggleReminder(days)}
+                          >
+                            {taskReminderLabel(days)}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="tasks__reminders-caption">{strings.tasks.reminders.needsDate}</p>
+                  )}
+                </div>
+
+                {/* Prilozi (migration 024) — only while EDITING: an uncreated task
+                    has no id to hang a file off, which is the same constraint the
+                    note editor lives under (it only ever opens on a note that
+                    already exists). The picker itself is native and lives in main,
+                    so there is no drop zone and no file input here. */}
+                {editingId !== null && renderAttachments(editingId)}
+                {/* Zavisnosti (ADR-037) — EDIT ONLY, and not because it would be
+                    cluttered otherwise: an edge names two task ids, and a task
+                    being created has none yet. The picker offers only what the
+                    store would accept (see `dependencyCandidates`), so the error
+                    line below reports a race, never an ordinary refusal. */}
+                {editingId !== null && renderDependencies(editingId)}
+              </div>
+            </form>
+          )}
 
           <div className="tasks__toolbar-actions">
             {/* Šabloni (ADR-035). Beside the view toggle rather than on a row,
                 because applying one is an action on the LIST the rail has
                 selected — and it behaves identically in the kanban view, which
-                shows that same list. */}
-            <NotePopover
-              label={strings.tasks.templates.menuLabel}
-              triggerClassName="tasks__templates-trigger"
-              triggerContent={strings.tasks.templates.title}
-            >
-              {(close) => (
-                <>
-                  <span className="note__menu-label">{strings.tasks.templates.title}</span>
-                  {sortedTemplates.length === 0 ? (
-                    <p className="note__menu-caption">{strings.tasks.templates.empty}</p>
-                  ) : (
-                    sortedTemplates.map((template) => (
-                      <div key={template.id} className="tasks__template-row">
-                        <button
-                          className="note__menu-item tasks__template-apply"
-                          role="menuitem"
-                          type="button"
-                          title={strings.tasks.templates.applyTitle}
-                          onClick={() => void applyTemplate(template, close)}
-                        >
-                          {template.name}
-                        </button>
-                        <button
-                          className="tasks__template-delete"
-                          type="button"
-                          aria-label={strings.tasks.templates.delete}
-                          onClick={() => void deleteTemplate(template.id)}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))
-                  )}
-                  {templateFailed && (
-                    <p className="note__menu-caption" role="status">
-                      {strings.tasks.templates.actionError}
-                    </p>
-                  )}
-                </>
-              )}
-            </NotePopover>
+                shows that same list. That is also why it is absent inside a
+                VIEW: there is no list for a new task to land in, so every item
+                in this menu would be an affordance that can do nothing. */}
+            {smartListId === null && (
+              <NotePopover
+                label={strings.tasks.templates.menuLabel}
+                triggerClassName="tasks__templates-trigger"
+                triggerContent={strings.tasks.templates.title}
+              >
+                {(close) => (
+                  <>
+                    <span className="note__menu-label">{strings.tasks.templates.title}</span>
+                    {sortedTemplates.length === 0 ? (
+                      <p className="note__menu-caption">{strings.tasks.templates.empty}</p>
+                    ) : (
+                      sortedTemplates.map((template) => (
+                        <div key={template.id} className="tasks__template-row">
+                          <button
+                            className="note__menu-item tasks__template-apply"
+                            role="menuitem"
+                            type="button"
+                            title={strings.tasks.templates.applyTitle}
+                            onClick={() => void applyTemplate(template, close)}
+                          >
+                            {template.name}
+                          </button>
+                          <button
+                            className="tasks__template-delete"
+                            type="button"
+                            aria-label={strings.tasks.templates.delete}
+                            onClick={() => void deleteTemplate(template.id)}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))
+                    )}
+                    {templateFailed && (
+                      <p className="note__menu-caption" role="status">
+                        {strings.tasks.templates.actionError}
+                      </p>
+                    )}
+                  </>
+                )}
+              </NotePopover>
+            )}
 
-            <div className="tasks__views" role="group" aria-label={strings.tasks.viewLabel}>
-              {(["list", "kanban"] as const).map((option) => (
-                <Button
-                  key={option}
-                  size="sm"
-                  className={
-                    view === option ? "tasks__view tasks__view--active" : "tasks__view"
-                  }
-                  aria-pressed={view === option}
-                  onClick={() => void selectView(option)}
-                >
-                  {option === "list" ? strings.tasks.viewList : strings.tasks.viewKanban}
-                </Button>
-              ))}
-            </div>
+            {/* The shape toggle is a per-LIST memory (TASK-005); a view has no
+                row to remember one in and is always a list, so the group is not
+                drawn rather than drawn disabled. */}
+            {smartListId === null && (
+              <div className="tasks__views" role="group" aria-label={strings.tasks.viewLabel}>
+                {(["list", "kanban"] as const).map((option) => (
+                  <Button
+                    key={option}
+                    size="sm"
+                    className={
+                      view === option ? "tasks__view tasks__view--active" : "tasks__view"
+                    }
+                    aria-pressed={view === option}
+                    onClick={() => void selectView(option)}
+                  >
+                    {option === "list" ? strings.tasks.viewList : strings.tasks.viewKanban}
+                  </Button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Izbor sits beside the view toggle and borrows its typographic
@@ -3464,6 +3755,13 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                 title={strings.tasks.emptyTitle}
                 description={strings.tasks.tags.filterEmptyDescription}
               />
+            ) : smartListId !== null && visibleTasks.length === 0 ? (
+              // A view's own calm statement of fact, never the list's „zapiši
+              // prvi zadatak“ invitation: there is no field to type into here.
+              <EmptyState
+                title={strings.tasks.smart.names[smartListId]}
+                description={strings.tasks.smart.empty[smartListId]}
+              />
             ) : listTasks.length === 0 && listSections.length === 0 ? (
               <EmptyState
                 title={strings.tasks.emptyTitle}
@@ -3471,6 +3769,25 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
               />
             ) : (
               groups.map((group) => renderGroup(group))
+            )}
+            {/* The „Završeno“ bound (ADR-039 §4): a quiet line saying what is on
+                screen out of what there is, and one step that widens it. Never a
+                page count — the rows are already in memory, and the only honest
+                thing to say is how far down this list currently reaches. */}
+            {completedTruncated && (
+              <div className="tasks__more">
+                <p className="tasks__more-note">
+                  {strings.tasks.smart.shownPrefix} {visibleTasks.length}{" "}
+                  {strings.tasks.smart.shownOf} {matchedTasks.length}
+                </p>
+                <Button
+                  size="sm"
+                  className="tasks__more-action"
+                  onClick={() => setCompletedShown((shown) => shown + COMPLETED_PAGE_STEP)}
+                >
+                  {strings.tasks.smart.showMore}
+                </Button>
+              </div>
             )}
             {selectedId !== null &&
               (sectionEditing?.mode === "new" ? (
@@ -3515,13 +3832,17 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
             itemKey={(task) => task.id}
             renderCard={(task) => (
               <KanbanCard
-                tag={taskChips(
+                tag={taskChips({
                   task,
-                  childrenOf(task.id),
-                  tagsOf(task.id),
-                  attachmentCountOf(task.id),
-                  isBlocked(task.id),
-                )}
+                  children: childrenOf(task.id),
+                  tags: tagsOf(task.id),
+                  attachmentCount: attachmentCountOf(task.id),
+                  blocked: isBlocked(task.id),
+                  today: todayKey,
+                  // The board only ever shows ONE list, so its own name would be
+                  // on every card and say nothing.
+                  listName: null,
+                })}
               >
                 <span
                   id={taskRowDomId(task.id)}

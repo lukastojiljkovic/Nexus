@@ -62,6 +62,12 @@ import {
   readStoredNoteWidth,
   type NoteWidth,
 } from "./notePrefs.js";
+import {
+  BLOCKED_IN_TODAY_OPTIONS,
+  persistBlockedInToday,
+  readStoredBlockedInToday,
+  type BlockedInToday,
+} from "./taskPrefs.js";
 import { dayUnit, strings } from "./strings.js";
 
 /** Sidebar/page display name for a module id; mirrors App.tsx's private helper (kept local — App renders this page, so importing it back would be circular). */
@@ -1731,6 +1737,10 @@ export function SettingsPage({
 }: SettingsPageProps) {
   const [accent, setAccent] = useState<AccentId>(() => readStoredAccent());
   const [weekStart, setWeekStart] = useState<WeekStartPreference>(() => readStoredWeekStart());
+  /** ADR-049: whether blocked tasks appear in the „Danas“ / „Sledećih 7 dana“ views. A device preference, exactly like the week start above. */
+  const [blockedInToday, setBlockedInToday] = useState<BlockedInToday>(() =>
+    readStoredBlockedInToday(),
+  );
   // SET-014: the raw query. Empty means "render everything exactly as before" —
   // the filter is additive, it never becomes the page's normal state.
   const [query, setQuery] = useState("");
@@ -1893,6 +1903,37 @@ export function SettingsPage({
             </Button>
           ))}
         </div>
+      </Card>
+
+      {/* Zadaci (ADR-049). Its own card rather than a row under „Izgled“, on the
+          Beleške precedent below: a preference that describes how ONE module
+          reads belongs to that module. The page reads it on mount, so a change
+          here shows the next time Zadaci is opened. */}
+      <Card title={strings.settings.sectionTitle.tasks} className={sectionClass(sections.has("tasks"))}>
+        <p className={labelClass("set__section-caption", hits.has("tasks-blocked-today"))}>
+          {strings.settings.tasks.blockedInTodayLabel}
+        </p>
+        <div
+          className="set__segmented"
+          role="group"
+          aria-label={strings.settings.tasks.blockedInTodayLabel}
+        >
+          {BLOCKED_IN_TODAY_OPTIONS.map((option) => (
+            <Button
+              key={option}
+              size="sm"
+              variant={blockedInToday === option ? "primary" : "ghost"}
+              aria-pressed={blockedInToday === option}
+              onClick={() => {
+                persistBlockedInToday(option);
+                setBlockedInToday(option);
+              }}
+            >
+              {strings.settings.tasks.blockedInTodayOptions[option]}
+            </Button>
+          ))}
+        </div>
+        <p className="set__section-caption">{strings.settings.tasks.blockedInTodayCaption}</p>
       </Card>
 
       <Card title={strings.settings.sectionTitle.notes} className={sectionClass(sections.has("notes"))}>
