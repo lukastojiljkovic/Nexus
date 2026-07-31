@@ -103,6 +103,12 @@ const V0_MODULES: ModuleManifest[] = [
   { id: "calendar", prefix: "CAL", category: "Core experience", defaultEnabled: true, widgets: CALENDAR_WIDGETS },
   { id: "settings", prefix: "SET", category: "Core experience", defaultEnabled: true },
   { id: "notes", prefix: "NOTE", category: "Content & knowledge", defaultEnabled: true, widgets: NOTES_WIDGETS },
+  // Private notes (ADR-057): OFF by default — first enabled from the Moduli
+  // gallery, deliberately. It contributes NO widgets and NO searchIndexers:
+  // while the section is locked nothing of it may render anywhere — no
+  // dashboard card, no palette hit, no titles — and a contract slot filled
+  // here would be exactly such a surface.
+  { id: "priv", prefix: "PRIV", category: "Content & knowledge", defaultEnabled: false },
   { id: "study", prefix: "STUDY", category: "Life hubs", defaultEnabled: true, widgets: STUDY_WIDGETS },
 ];
 

@@ -50,6 +50,7 @@ import type {
   MarkdownImportSource,
   NoteFolder,
   NotificationSource,
+  PrivStatus,
   Profile,
   ProfileKind,
   RestoreModuleCounts,
@@ -3665,6 +3666,108 @@ function SecuritySection({ autoLockMinutes, onAutoLockChange, hits }: SecuritySe
   );
 }
 
+interface PrivSettingsSectionProps {
+  profileId: string;
+  /** SET-014 hit ids — the two control labels highlight under their entry ids. */
+  hits: ReadonlySet<string>;
+}
+
+/**
+ * Privatne beleške card (PRIV v1 / ADR-057): the two lock preferences and the
+ * Recovery Kit status line. `priv:status` and `priv:set-lock-prefs` answer
+ * FACTS, never contents, so this card is safe while the section is locked —
+ * which is exactly when its auto-lock knob matters most. Before setup there is
+ * nothing to configure and the card says so instead of drawing dead controls.
+ */
+function PrivSettingsSection({ profileId, hits }: PrivSettingsSectionProps) {
+  const s = strings.settings.priv;
+  const [status, setStatus] = useState<PrivStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const next = await window.nexus.privStatus(profileId);
+        if (active) setStatus(next);
+      } catch (loadError) {
+        if (active) setError(s.loadError);
+        console.error("Nexus: failed to read the private section's status:", loadError);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profileId, s.loadError]);
+
+  async function savePrefs(autoLockMinutes: number, lockOnMinimize: boolean): Promise<void> {
+    setError(null);
+    try {
+      setStatus(await window.nexus.privSetLockPrefs(profileId, autoLockMinutes, lockOnMinimize));
+    } catch (saveError) {
+      setError(s.saveError);
+      console.error("Nexus: failed to save private lock preferences:", saveError);
+    }
+  }
+
+  if (status === null) {
+    return error != null ? (
+      <p className="set__error">{error}</p>
+    ) : (
+      <p className="app__muted">{strings.app.loading}</p>
+    );
+  }
+  if (!status.setUp) {
+    return (
+      <>
+        <p className="set__section-caption">{s.caption}</p>
+        <p className="set__section-caption">{s.notSetUp}</p>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <p className={labelClass("set__section-caption", hits.has("priv-kit-status"))}>{s.caption}</p>
+      <div className="set__security-block">
+        <h3 className={labelClass("set__module-group-title", hits.has("priv-auto-lock"))}>
+          {s.autoLockLabel}
+        </h3>
+        <p className="set__section-caption">{s.autoLockHint}</p>
+        <select
+          className="set__select"
+          value={status.autoLockMinutes}
+          aria-label={s.autoLockLabel}
+          onChange={(event) => void savePrefs(Number(event.target.value), status.lockOnMinimize)}
+        >
+          {/* The store's whole 1..60 range (migration 045's CHECK) — the select IS the domain, not a curated subset of it. */}
+          {Array.from({ length: 60 }, (_, index) => index + 1).map((minutes) => (
+            <option key={minutes} value={minutes}>
+              {`${s.autoLockOptionPrefix} ${minutes} ${s.minuteUnit}`}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="set__module-row">
+        <div className="set__module-info">
+          <span className={labelClass("set__module-name", hits.has("priv-lock-minimize"))}>
+            {s.lockOnMinimizeLabel}
+          </span>
+        </div>
+        <Checkbox
+          checked={status.lockOnMinimize}
+          aria-label={s.lockOnMinimizeLabel}
+          onChange={(event) => void savePrefs(status.autoLockMinutes, event.target.checked)}
+        />
+      </div>
+      <p className="set__section-caption">
+        {status.hasRecoveryKit ? s.kitStatusSet : s.kitStatusMissing}
+      </p>
+      {error != null && <p className="set__error">{error}</p>}
+    </>
+  );
+}
+
 interface ShortcutsSectionProps {
   overrides: ShortcutOverrides;
   onChange: (overrides: ShortcutOverrides) => void;
@@ -4246,6 +4349,19 @@ export function SettingsPage({
         </div>
         <ResetLink onClick={() => setResetting("notes")} />
       </Card>
+
+      {/* PRIV v1 (ADR-057): only while the „Privatno" module is enabled — a
+          card for a section the sidebar does not show would be a dangling
+          control. The flag read mirrors the gallery's own (defaultEnabled is
+          false, so an absent flag means off). */}
+      {(flags["priv"] ?? false) && (
+        <Card
+          title={strings.settings.sectionTitle.priv}
+          className={sectionClass(sections.has("priv"))}
+        >
+          <PrivSettingsSection profileId={profileId} hits={hits} />
+        </Card>
+      )}
 
       <Card title={strings.settings.sectionTitle.shortcuts} className={sectionClass(sections.has("shortcuts"))}>
         <ShortcutsSection

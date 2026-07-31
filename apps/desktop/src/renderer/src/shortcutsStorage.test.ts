@@ -77,7 +77,7 @@ const DEFAULTS = resolveShortcuts({});
 // --- the action registry ------------------------------------------------------
 
 describe("SHORTCUT_ACTIONS", () => {
-  it("is the six declared ids, in order and without duplicates", () => {
+  it("is the seven declared ids, in order and without duplicates", () => {
     expect(SHORTCUT_ACTIONS.map((action) => action.id)).toEqual([...SHORTCUT_ACTION_IDS]);
     expect(new Set(SHORTCUT_ACTION_IDS).size).toBe(SHORTCUT_ACTION_IDS.length);
   });
@@ -115,6 +115,8 @@ describe("SHORTCUT_ACTIONS", () => {
       // AltGr+N prints „}" on the Serbian Latin layout.
       globalCapture: "Ctrl+Shift+N",
       lock: "Ctrl+L",
+      // The PRIV panic chord (ADR-057 §5): the app lock's L, one modifier more.
+      privLock: "Ctrl+Shift+L",
       settings: "Ctrl+,",
       // F1 rather than Ctrl+/: „/" is Shift+7 on the Serbian QWERTZ layout.
       shortcutsHelp: "F1",
@@ -174,6 +176,7 @@ describe("resolveShortcuts", () => {
       "Alt+F5",
       "Alt+F6",
       "Alt+F7",
+      "Alt+F8",
     ]);
   });
 

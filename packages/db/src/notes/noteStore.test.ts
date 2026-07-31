@@ -878,4 +878,63 @@ describe("NoteStore — version history (note_versions, ADR-015)", () => {
     notes.compact(note.id, bytes(8), "", 1, T2);
     expect(notes.readForCompaction(note.id).coveredSeq).toBe(1);
   });
+
+  describe("hardDelete (PRIV move-in, ADR-057 §5)", () => {
+    /** Row count of `table` for one note id — the cascade probe. */
+    function countRows(table: string, column: string, id: string): number {
+      const { n } = db.raw
+        .prepare(`SELECT count(*) AS n FROM ${table} WHERE ${column} = ?`)
+        .get(id) as { n: number };
+      return n;
+    }
+
+    it("removes the row and cascades updates, snapshot, versions and links", () => {
+      const notes = store();
+      const note = notes.create(T0);
+      const target = notes.create(T0);
+      notes.appendUpdate(note.id, bytes(8, 1), "Odlazi", T1);
+      notes.compact(note.id, bytes(16), "telo", 1, T2);
+      notes.appendUpdate(note.id, bytes(8, 2), "Odlazi", T2);
+      notes.captureVersion(note.id, bytes(16), 1, T2);
+      notes.setOutboundLinks(note.id, [target.id]);
+      notes.setOutboundLinks(target.id, [note.id]);
+
+      notes.hardDelete(note.id);
+
+      expect(notes.list().map((entry) => entry.id)).toEqual([target.id]);
+      expect(countRows("notes", "id", note.id)).toBe(0);
+      expect(countRows("note_updates", "note_id", note.id)).toBe(0);
+      expect(countRows("note_snapshots", "note_id", note.id)).toBe(0);
+      expect(countRows("note_versions", "note_id", note.id)).toBe(0);
+      expect(countRows("note_links", "source_note_id", note.id)).toBe(0);
+      expect(countRows("note_links", "target_note_id", note.id)).toBe(0);
+    });
+
+    it("scrubs the note's search entry through the AD trigger", () => {
+      const notes = store();
+      const note = notes.create(T0);
+      notes.appendUpdate(note.id, bytes(8), "Nađi me", T1);
+      expect(countRows("search_entries", "entity_id", note.id)).toBe(1);
+
+      notes.hardDelete(note.id);
+      expect(countRows("search_entries", "entity_id", note.id)).toBe(0);
+    });
+
+    it("also removes a SOFT-deleted note — a teardown reaches the trash too", () => {
+      const notes = store();
+      const note = notes.create(T0);
+      notes.softDelete(note.id, T1);
+      notes.hardDelete(note.id);
+      expect(countRows("notes", "id", note.id)).toBe(0);
+    });
+
+    it("refuses an unknown id and another profile's id", () => {
+      const a = new NoteStore(db.raw, createProfile());
+      const b = new NoteStore(db.raw, createProfile());
+      const note = a.create(T0);
+      expect(() => b.hardDelete(note.id)).toThrow(NoteNotFoundError);
+      expect(() => a.hardDelete("missing")).toThrow(NoteNotFoundError);
+      expect(a.list().map((entry) => entry.id)).toEqual([note.id]);
+    });
+  });
 });

@@ -507,6 +507,11 @@ const api: NexusApi = {
       autoLockMinutes,
       lockOnMinimize,
     }),
+  privPickAttachment: (profileId) =>
+    ipcRenderer.invoke(IpcChannel.privAttachmentPick, { profileId }),
+  privMoveIn: (profileId, noteId) =>
+    ipcRenderer.invoke(IpcChannel.privMoveIn, { profileId, noteId }),
+  privMoveOut: (profileId, id) => ipcRenderer.invoke(IpcChannel.privMoveOut, { profileId, id }),
   setGlobalShortcut: (chord) => ipcRenderer.invoke(IpcChannel.shortcutsSetGlobal, { chord }),
   onGlobalCapture: (listener) => {
     const handler = (): void => listener();

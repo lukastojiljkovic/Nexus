@@ -1,7 +1,14 @@
 import { createHash, randomBytes } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { readFile as readFileAsync, stat as statAsync } from "node:fs/promises";
-import { join } from "node:path";
+import {
+  mkdir as mkdirAsync,
+  readFile as readFileAsync,
+  rename as renameAsync,
+  stat as statAsync,
+  unlink as unlinkAsync,
+  writeFile as writeFileAsync,
+} from "node:fs/promises";
+import { basename, join } from "node:path";
 import { app, BrowserWindow, dialog, ipcMain, protocol } from "electron";
 import type { IpcMainInvokeEvent, OpenDialogOptions } from "electron";
 import { autoUpdater } from "electron-updater";
@@ -18,6 +25,7 @@ import {
   isValidDayKey,
   MAX_ARCHIVE_PASSPHRASE_LENGTH,
   isInlineImageMime,
+  openPrivBlob,
   parseSearchQuery,
   rankSearchResults,
   resolveDueRange,
@@ -243,12 +251,14 @@ import {
   verifyPasscode,
 } from "./auth.js";
 import {
+  privAddAttachment,
   privDelete,
   privHandleMinimize,
   privList,
   privLock,
   privRead,
   privSearch,
+  privSessionBlobKey,
   privSetLockPrefs,
   privSetup,
   privStatus,
@@ -258,6 +268,7 @@ import {
   type AccountPasscodeCheck,
   type PrivDeps,
 } from "./priv.js";
+import { moveNoteToPrivate, movePrivateNoteOut, type PrivMoveDeps } from "./privMove.js";
 import {
   runBackupNow,
   startBackupScheduler,
@@ -338,6 +349,8 @@ import {
   NOTE_CARD_DISPOSITIONS,
   NOTE_CARD_KEY_MAX_LENGTH,
   NOTE_CARDS_MAX_COUNT,
+  PRIV_ATTACHMENT_MAX_BYTES,
+  PRIV_ATTACHMENTS_MAX_COUNT,
   PRIV_PLAINTEXT_MAX_BYTES,
   PRIV_STATE_MAX_BYTES,
   PRIV_TITLE_MAX_BYTES,
@@ -387,6 +400,10 @@ import {
   type NoteDocPayload,
   type NoteDuplicateResult,
   type NoteVersionMeta,
+  type PrivAttachmentPickResult,
+  type PrivAttachmentRef,
+  type PrivMoveInResult,
+  type PrivMoveOutResult,
   type PrivNoteEnvelopePayload,
   type PrivNoteListEntry,
   type PrivSetupResult,
@@ -433,6 +450,9 @@ const SMOKE_SECOND_PASSCODE = "second-passcode-2";
 // future inline `<img src="nx-blob://...">` (slice 003-b) load at all.
 protocol.registerSchemesAsPrivileged([
   { scheme: "nx-blob", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+  // The private section's read protocol (PRIV v1 / ADR-057): same privileges,
+  // entirely different gate — it serves ONLY while a section is unlocked.
+  { scheme: "priv-blob", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
 ]);
 
 // Stable product name so userData resolves to a clean, branded directory
@@ -546,6 +566,11 @@ function blobStorePathsFor(): BlobStorePaths {
 /** `<account>/tmp-open` — where `openExternally` copies a blob before handing it to the OS's default app. */
 function tmpOpenDirPath(): string {
   return join(activeAccountDir(), "tmp-open");
+}
+
+/** `<account>/private-blobs` — the sealed private-attachment store (PRIV v1 / ADR-057): one NXPB container per file, named by its random reference id. No content addressing, no dedup, by design. */
+function privBlobsDirPath(): string {
+  return join(activeAccountDir(), "private-blobs");
 }
 
 /** Removes a directory and everything under it, forgiving the busy files Windows refuses to delete — see `wipeTmpOpenDir`. */
@@ -1200,22 +1225,57 @@ function asPrivAutoLockMinutes(value: unknown, field: string): number {
 }
 
 /**
+ * One private attachment reference, rebuilt field by field (SEC-EL-02). The
+ * id must be exactly the UUID shape main itself mints — it names a file under
+ * `private-blobs` AND is the container's AAD, so an arbitrary string here
+ * would be a path component the renderer chose.
+ */
+function asPrivAttachmentRef(value: unknown, field: string): PrivAttachmentRef {
+  const body = asRecord(value);
+  const id = asNonEmptyString(body.id, `${field}.id`);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)) {
+    throw new Error(`Invalid IPC payload: "${field}.id" is not a private attachment id.`);
+  }
+  const fileName = asNonEmptyString(body.fileName, `${field}.fileName`);
+  const mime = asNonEmptyString(body.mime, `${field}.mime`);
+  if (fileName.length > 255 || mime.length > 255) {
+    throw new Error(`Invalid IPC payload: "${field}" carries an over-long fileName or mime.`);
+  }
+  const sizeBytes = body.sizeBytes;
+  if (
+    typeof sizeBytes !== "number" ||
+    !Number.isInteger(sizeBytes) ||
+    sizeBytes < 1 ||
+    sizeBytes > PRIV_ATTACHMENT_MAX_BYTES
+  ) {
+    throw new Error(
+      `Invalid IPC payload: "${field}.sizeBytes" must be a whole number of 1..${PRIV_ATTACHMENT_MAX_BYTES} bytes.`,
+    );
+  }
+  return { id, fileName, mime, sizeBytes };
+}
+
+/**
  * `priv:write`'s envelope, rebuilt field by field (SEC-EL-02): three capped
- * text fields plus — THIS slice — an attachments list that must be EMPTY
- * (private attachments and their `priv-blob:` protocol land with slice c, so
- * a non-empty list is refused outright rather than half-honoured).
+ * text fields plus up to `PRIV_ATTACHMENTS_MAX_COUNT` attachment references,
+ * each re-validated — the reference list is renderer-authored content exactly
+ * like the note's text, and the id shape is the load-bearing check (see
+ * `asPrivAttachmentRef`).
  */
 function asPrivEnvelope(value: unknown, field: string): PrivNoteEnvelopePayload {
   const body = asRecord(value);
   const title = asCappedString(body.title, `${field}.title`, PRIV_TITLE_MAX_BYTES);
   const yjsState = asCappedString(body.yjsState, `${field}.yjsState`, PRIV_STATE_MAX_BYTES);
   const plaintext = asCappedString(body.plaintext, `${field}.plaintext`, PRIV_PLAINTEXT_MAX_BYTES);
-  if (!Array.isArray(body.attachments) || body.attachments.length !== 0) {
+  if (!Array.isArray(body.attachments) || body.attachments.length > PRIV_ATTACHMENTS_MAX_COUNT) {
     throw new Error(
-      `Invalid IPC payload: "${field}.attachments" must be an empty array (private attachments arrive with slice c).`,
+      `Invalid IPC payload: "${field}.attachments" must be an array of at most ${PRIV_ATTACHMENTS_MAX_COUNT} references.`,
     );
   }
-  return { title, yjsState, plaintext, attachments: [] };
+  const attachments = body.attachments.map((entry, index) =>
+    asPrivAttachmentRef(entry, `${field}.attachments[${index}]`),
+  );
+  return { title, yjsState, plaintext, attachments };
 }
 
 /**
@@ -3712,11 +3772,58 @@ function backupSettingsView(profileId: string): BackupSettingsView {
  * and `regenerateRecoveryKit` is the existing reissue flow, security notice
  * included.
  */
+/**
+ * A private attachment's reference id — main mints these with
+ * `crypto.randomUUID`, and NOTHING else may ever become a file name under
+ * `private-blobs`: an id is used in `join(dir, id)`, so this shape check is
+ * the path-traversal gate for every read, write and unlink below (an envelope
+ * is renderer-authored content, and a hand-edited one could otherwise name
+ * `..\\..` as an "id").
+ */
+const PRIV_BLOB_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+function privBlobFilePath(id: string): string {
+  if (!PRIV_BLOB_ID_PATTERN.test(id)) {
+    throw new Error("Invalid private attachment id.");
+  }
+  return join(privBlobsDirPath(), id);
+}
+
+/**
+ * `PrivDeps.privBlobs` over the real filesystem. Writes are atomic
+ * (temp + rename, `saveBlob`'s own arrangement) so a crash mid-write can
+ * never leave a half-sealed container at the real path; `remove` is
+ * best-effort by the seam's contract — a busy or missing file is logged and
+ * forgiven, since a sealed stray is disk space, never a correctness problem.
+ */
+const privBlobFiles: PrivDeps["privBlobs"] = {
+  async write(id, sealed) {
+    const path = privBlobFilePath(id);
+    await mkdirAsync(privBlobsDirPath(), { recursive: true });
+    const tempPath = `${path}.tmp-${randomBytes(8).toString("hex")}`;
+    await writeFileAsync(tempPath, sealed);
+    await renameAsync(tempPath, path);
+  },
+  async read(id) {
+    return readFileAsync(privBlobFilePath(id));
+  },
+  async remove(id) {
+    try {
+      await unlinkAsync(privBlobFilePath(id));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        console.error(`Failed to remove private blob "${id}":`, error);
+      }
+    }
+  },
+};
+
 function privDeps(): PrivDeps {
   const session = requireDb();
   return {
     privateNotes: privateNoteStore,
     privateSettings: privateSettingsStore,
+    privBlobs: privBlobFiles,
     listProfileIds: () => listProfiles(requireDb()).map((profile) => profile.id),
     deviceSecret: () => readDeviceSecret(activeAccountDir()),
     kdfParams: () => DEFAULT_KDF_PARAMS,
@@ -3763,6 +3870,70 @@ function privDeps(): PrivDeps {
     stillThisSession: () => db === session,
     now: () => new Date(),
   };
+}
+
+/** Everything `main/privMove.ts` runs on — `privDeps` plus the public-note half, every getter resolved at call time like the rest. */
+function privMoveDeps(): PrivMoveDeps {
+  return {
+    priv: privDeps(),
+    notes: noteStore,
+    noteAttachments: noteAttachmentStore,
+    cards: cardStore,
+    readBlob: (sha256) => readBlob(blobStorePathsFor(), requireBlobKeys(), sha256),
+    saveBlob: (bytes) => saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes),
+    releaseBlob: (profileId, sha256) =>
+      deleteBlobIfOrphaned(
+        blobStorePathsFor(),
+        requireBlobKeys(),
+        sha256,
+        blobRefCount(profileId, sha256),
+      ),
+    sniffMime,
+    runInTransaction: (write) => requireDb().raw.transaction(write)(),
+    rebuildSearchIndex: () => {
+      rebuildSearchIndex(requireDb().raw);
+    },
+    now: () => new Date(),
+  };
+}
+
+/**
+ * The whole private-attachment pick flow (PRIV v1 / ADR-057), in main and
+ * nowhere else: the native dialog is the ONLY source of a path (SEC-EL), the
+ * size gate is a `stat` BEFORE the read (the dashboard picker's reasoning —
+ * a cap checked after the read is decorative), the mime is sniffed from the
+ * bytes (SEC-FILE-02), and the sealed container is on disk before the
+ * reference is answered. The renderer's next `priv:write` is what makes the
+ * reference durable — see the channel comment in `shared/ipc.ts`.
+ */
+async function handlePrivAttachmentPick(profileId: string): Promise<PrivAttachmentPickResult> {
+  const options: OpenDialogOptions = { properties: ["openFile"] };
+  const { canceled, filePaths } = mainWindow
+    ? await dialog.showOpenDialog(mainWindow, options)
+    : await dialog.showOpenDialog(options);
+  const filePath = canceled ? null : (filePaths[0] ?? null);
+  if (filePath === null) return { status: "canceled" };
+
+  let bytes: Uint8Array;
+  try {
+    const stats = await statAsync(filePath);
+    if (!stats.isFile() || stats.size === 0) return { status: "rejected", code: "unreadable" };
+    if (stats.size > PRIV_ATTACHMENT_MAX_BYTES) return { status: "rejected", code: "too-large" };
+    bytes = await readFileAsync(filePath);
+  } catch {
+    return { status: "rejected", code: "unreadable" };
+  }
+  if (bytes.byteLength === 0) return { status: "rejected", code: "unreadable" };
+  if (bytes.byteLength > PRIV_ATTACHMENT_MAX_BYTES) return { status: "rejected", code: "too-large" };
+
+  const ref = await privAddAttachment(privDeps(), profileId, {
+    // The display name is derived from the dialog's own path, never accepted
+    // from the renderer — `pickAttachmentFiles`' arrangement.
+    fileName: basename(filePath).slice(0, 255),
+    mime: sniffMime(bytes),
+    bytes,
+  });
+  return { status: "ok", ref };
 }
 
 // --- Dashboard background (SET-006 / ADR-041) --------------------------------
@@ -6664,13 +6835,41 @@ function registerIpc(): void {
     return privWrite(privDeps(), profileId, id, envelope);
   });
 
-  ipcMain.handle(IpcChannel.privDelete, (event, payload): void => {
+  ipcMain.handle(IpcChannel.privDelete, (event, payload): Promise<void> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const id = asNonEmptyString(body.id, "id");
     requireProfile(requireDb(), profileId);
-    privDelete(privDeps(), profileId, id);
+    return privDelete(privDeps(), profileId, id);
+  });
+
+  ipcMain.handle(
+    IpcChannel.privAttachmentPick,
+    (event, payload): Promise<PrivAttachmentPickResult> => {
+      assertTrustedSender(event);
+      const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+      requireProfile(requireDb(), profileId);
+      return handlePrivAttachmentPick(profileId);
+    },
+  );
+
+  ipcMain.handle(IpcChannel.privMoveIn, (event, payload): Promise<PrivMoveInResult> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const noteId = asNonEmptyString(body.noteId, "noteId");
+    requireProfile(requireDb(), profileId);
+    return moveNoteToPrivate(privMoveDeps(), profileId, noteId);
+  });
+
+  ipcMain.handle(IpcChannel.privMoveOut, (event, payload): Promise<PrivMoveOutResult> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    requireProfile(requireDb(), profileId);
+    return movePrivateNoteOut(privMoveDeps(), profileId, id);
   });
 
   ipcMain.handle(IpcChannel.privSearch, (event, payload): Promise<string[]> => {
@@ -7303,6 +7502,36 @@ app.whenReady().then(async () => {
       blobStorePathsFor,
       () => blobKeys,
     );
+
+    // The private section's read protocol (PRIV v1 / ADR-057): decrypts a
+    // sealed attachment ONLY while a section is unlocked — a locked section
+    // answers 404 for everything, and so does a container the open section's
+    // key does not authenticate (another profile's file, edited bytes, a
+    // swapped id: AES-GCM cannot tell them apart and neither does this). The
+    // served Content-Type is sniffed from the DECRYPTED bytes (SEC-FILE-02) —
+    // an envelope's mime claim is renderer-authored and never trusted here.
+    protocol.handle("priv-blob", async (request) => {
+      const host = new URL(request.url).hostname;
+      let sealed: Uint8Array;
+      try {
+        // `privBlobFilePath` re-checks the id shape — the path-traversal gate.
+        sealed = await readFileAsync(privBlobFilePath(host));
+      } catch {
+        return new Response(null, { status: 404 });
+      }
+      const key = await privSessionBlobKey();
+      if (key === null) return new Response(null, { status: 404 });
+      let bytes: Uint8Array;
+      try {
+        bytes = await openPrivBlob(key, host, sealed);
+      } catch {
+        return new Response(null, { status: 404 });
+      }
+      return new Response(bytes, {
+        status: 200,
+        headers: { "Content-Type": sniffMime(bytes), "X-Content-Type-Options": "nosniff" },
+      });
+    });
 
     if (isSmoke) {
       // Unlike a real launch, the smoke run cannot wait for a renderer-driven

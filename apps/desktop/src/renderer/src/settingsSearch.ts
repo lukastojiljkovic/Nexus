@@ -166,6 +166,28 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
     label: s.notes.markdownLabel,
     keywords: ["beleske", "markdown", "precice", "formatiranje", "naslov", "lista", "slash"],
   },
+  // PRIV v1 (ADR-057): the „Privatne beleške" card's three surfaces. The card
+  // renders only while the module is enabled, so a hit can steer to a section
+  // that is not on the page — the same honest gap a disabled module's own
+  // gallery row already has.
+  {
+    id: "priv-auto-lock",
+    section: "priv",
+    label: s.priv.autoLockLabel,
+    keywords: ["privatno", "privatne", "beleske", "zakljucavanje", "neaktivnost", "minuti"],
+  },
+  {
+    id: "priv-lock-minimize",
+    section: "priv",
+    label: s.priv.lockOnMinimizeLabel,
+    keywords: ["privatno", "privatne", "beleske", "minimizovanje", "prozor", "zakljucaj"],
+  },
+  {
+    id: "priv-kit-status",
+    section: "priv",
+    label: s.priv.caption,
+    keywords: ["privatno", "privatne", "beleske", "oporavak", "kod", "sifrovanje", "tajno"],
+  },
   // One entry per remappable action (ADR-040) — a user hunting for "novi
   // unos" or "zakljucaj" should land on the exact row that rebinds it — plus
   // one for the reference dialog itself.
@@ -175,6 +197,7 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
       ["quickCreate", ["novi", "unos", "kreiranje", "ctrl", "n"]],
       ["globalCapture", ["globalna", "brzi", "unos", "zadatak", "pozadina", "sistem", "hotkey"]],
       ["lock", ["zakljucaj", "zakljucavanje", "ctrl", "l"]],
+      ["privLock", ["privatno", "privatne", "beleske", "zakljucaj", "panika", "ctrl", "shift", "l"]],
       ["settings", ["podesavanja", "ctrl"]],
       ["shortcutsHelp", ["pomoc", "referenca", "f1"]],
     ] as const

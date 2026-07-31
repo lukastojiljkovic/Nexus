@@ -18,14 +18,18 @@ import {
   PrivateSettingsStore,
   openDatabase,
 } from "@nexus/db";
+import { PRIV_ATTACHMENTS_MAX_COUNT } from "../shared/ipc.js";
 import {
   PRIV_VERSION_WRITE_CADENCE,
+  privAddAttachment,
   privDelete,
   privHandleMinimize,
   privList,
   privLock,
+  privOpenAttachment,
   privRead,
   privSearch,
+  privSessionBlobKey,
   privSetLockPrefs,
   privSetup,
   privStatus,
@@ -51,6 +55,8 @@ const PASSPHRASE = "tajna-lozinka-1";
 let dir: string;
 let db: NexusDatabase;
 let profileId: string;
+/** The `PrivDeps.privBlobs` seam, in memory — id → sealed container, exactly what the disk would hold. */
+let privBlobFiles: Map<string, Uint8Array>;
 
 function createProfile(name: string): string {
   const id = `p-${name}`;
@@ -71,6 +77,19 @@ function makeDeps(overrides: Partial<PrivDeps> = {}): PrivDeps {
     verifyAccountPasscode: async () => ({ ok: true }),
     regenerateRecoveryKit: async () => generateRecoveryCode(),
     runInTransaction: (write) => db.raw.transaction(write)(),
+    privBlobs: {
+      write: async (id, sealed) => {
+        privBlobFiles.set(id, sealed);
+      },
+      read: async (id) => {
+        const sealed = privBlobFiles.get(id);
+        if (sealed === undefined) throw new Error(`No private blob "${id}".`);
+        return sealed;
+      },
+      remove: async (id) => {
+        privBlobFiles.delete(id);
+      },
+    },
     stillThisSession: () => true,
     now: () => new Date(),
     ...overrides,
@@ -101,6 +120,7 @@ beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "nexus-priv-"));
   db = openDatabase({ path: join(dir, "test.db") });
   profileId = createProfile("A");
+  privBlobFiles = new Map();
 });
 
 afterEach(async () => {
@@ -123,6 +143,7 @@ describe("privStatus", () => {
       setUp: false,
       unlocked: false,
       usesAccountPasscode: false,
+      hasRecoveryKit: false,
       autoLockMinutes: 5,
       lockOnMinimize: true,
     });
@@ -144,6 +165,7 @@ describe("privSetup", () => {
         setUp: true,
         unlocked: true,
         usesAccountPasscode: false,
+        hasRecoveryKit: false,
         autoLockMinutes: 5,
         lockOnMinimize: true,
       },
@@ -199,6 +221,7 @@ describe("privSetup", () => {
     });
     if (!result.ok) throw new Error("setup failed");
     expect(result.recoveryCode).toBe(code);
+    expect(result.status.hasRecoveryKit).toBe(true);
 
     // The stored kit wrap opens under the canonical code — proving the same
     // sheet the account flow just printed also carries the private notes.
@@ -277,8 +300,13 @@ describe("privLock", () => {
     await expect(privList(deps, profileId)).rejects.toThrow("locked");
     await expect(privRead(deps, profileId, id)).rejects.toThrow("locked");
     await expect(privWrite(deps, profileId, id, envelope())).rejects.toThrow("locked");
-    expect(() => privDelete(deps, profileId, id)).toThrow("locked");
+    await expect(privDelete(deps, profileId, id)).rejects.toThrow("locked");
     await expect(privSearch(deps, profileId, "dnevnik")).rejects.toThrow("locked");
+    await expect(
+      privAddAttachment(deps, profileId, { fileName: "a.png", mime: "image/png", bytes: new Uint8Array([1]) }),
+    ).rejects.toThrow("locked");
+    await expect(privOpenAttachment(deps, profileId, "any")).rejects.toThrow("locked");
+    expect(await privSessionBlobKey()).toBeNull();
   });
 
   it("locks by itself once the auto-lock interval passes without a data call", async () => {
@@ -314,19 +342,68 @@ describe("privWrite", () => {
     expect(sealedTitles).toEqual(["v4", "v9"]);
   });
 
-  it("refuses an envelope carrying attachments — those arrive with slice c", async () => {
+  it("round-trips an envelope carrying attachment references", async () => {
     const deps = makeDeps();
     await setUp(deps);
+    const refs = [{ id: "a1", fileName: "x.png", mime: "image/png", sizeBytes: 1 }];
+    const { id } = await privWrite(deps, profileId, null, envelope({ attachments: refs }));
+    expect((await privRead(deps, profileId, id)).attachments).toEqual(refs);
+  });
+
+  it(`refuses an envelope past the ${PRIV_ATTACHMENTS_MAX_COUNT}-attachment cap`, async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    const refs = Array.from({ length: PRIV_ATTACHMENTS_MAX_COUNT + 1 }, (_, index) => ({
+      id: `a${index}`,
+      fileName: "x.bin",
+      mime: "application/octet-stream",
+      sizeBytes: 1,
+    }));
     await expect(
-      privWrite(
-        deps,
-        profileId,
-        null,
-        envelope({
-          attachments: [{ id: "a1", fileName: "x.png", mime: "image/png", sizeBytes: 1 }],
-        }),
-      ),
-    ).rejects.toThrow("attachments");
+      privWrite(deps, profileId, null, envelope({ attachments: refs })),
+    ).rejects.toThrow("at most");
+  });
+});
+
+describe("private attachments", () => {
+  it("seals bytes under a random id and opens them back — and only under that id", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    const bytes = new Uint8Array([9, 8, 7, 6, 5]);
+    const ref = await privAddAttachment(deps, profileId, {
+      fileName: "tajna.pdf",
+      mime: "application/pdf",
+      bytes,
+    });
+    expect(ref).toMatchObject({ fileName: "tajna.pdf", mime: "application/pdf", sizeBytes: 5 });
+
+    // The stored file is a sealed NXPB container, never the plaintext.
+    const sealed = privBlobFiles.get(ref.id);
+    expect(sealed).toBeDefined();
+    expect(Buffer.from(sealed!).includes(Buffer.from(bytes))).toBe(false);
+
+    expect(await privOpenAttachment(deps, profileId, ref.id)).toEqual(bytes);
+    // A swapped id fails the AAD — the whole point of binding it.
+    privBlobFiles.set("other-id", sealed!);
+    await expect(privOpenAttachment(deps, profileId, "other-id")).rejects.toThrow();
+  });
+
+  it("privSessionBlobKey answers the open section's key, and null once locked", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    expect(await privSessionBlobKey()).toHaveLength(32);
+    privLock();
+    expect(await privSessionBlobKey()).toBeNull();
+  });
+
+  it("sealing identical bytes twice yields two unrelated containers — no content addressing, by design", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    const bytes = new Uint8Array([1, 2, 3]);
+    const first = await privAddAttachment(deps, profileId, { fileName: "a", mime: "x/y", bytes });
+    const second = await privAddAttachment(deps, profileId, { fileName: "a", mime: "x/y", bytes });
+    expect(first.id).not.toBe(second.id);
+    expect(privBlobFiles.get(first.id)).not.toEqual(privBlobFiles.get(second.id));
   });
 });
 
@@ -388,11 +465,31 @@ describe("privDelete", () => {
     const deps = makeDeps();
     await setUp(deps);
     const { id } = await privWrite(deps, profileId, null, envelope());
-    privDelete(deps, profileId, id);
+    await privDelete(deps, profileId, id);
     expect(await privList(deps, profileId)).toEqual([]);
     expect(
       (db.raw.prepare("SELECT count(*) AS n FROM private_notes").get() as { n: number }).n,
     ).toBe(0);
+  });
+
+  it("unlinks the note's sealed attachment blobs with the row", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    const ref = await privAddAttachment(deps, profileId, {
+      fileName: "a.bin",
+      mime: "application/octet-stream",
+      bytes: new Uint8Array([1, 2]),
+    });
+    const kept = await privAddAttachment(deps, profileId, {
+      fileName: "b.bin",
+      mime: "application/octet-stream",
+      bytes: new Uint8Array([3]),
+    });
+    const { id } = await privWrite(deps, profileId, null, envelope({ attachments: [ref] }));
+    await privDelete(deps, profileId, id);
+    expect(privBlobFiles.has(ref.id)).toBe(false);
+    // A blob another envelope may still name is not this delete's to take.
+    expect(privBlobFiles.has(kept.id)).toBe(true);
   });
 });
 

@@ -211,6 +211,7 @@ describe("buildSettingsSearchEntries", () => {
       shortcutEntryId("quickCreate"),
       shortcutEntryId("globalCapture"),
       shortcutEntryId("lock"),
+      shortcutEntryId("privLock"),
       shortcutEntryId("settings"),
       shortcutEntryId("shortcutsHelp"),
       "shortcuts-reference",

@@ -217,6 +217,7 @@ export const strings = {
     settings: "Podešavanja",
     notes: "Beleške",
     study: "Učenje",
+    priv: "Privatno",
   } as Record<string, string>,
 
   dashboard: {
@@ -1155,6 +1156,141 @@ export const strings = {
       replaceAll: "Zameni sve",
       close: "Zatvori",
     },
+    /** „Premesti u Privatno“ (ADR-057 §5) — the row-menu action and its typed-confirm dialog. Offered only while the private section is unlocked. */
+    moveToPriv: {
+      action: "Premesti u Privatno",
+      title: "Premeštanje u Privatno",
+      warning:
+        "Beleška se šifruje i nestaje iz Beleški, pretrage, izvoza i rezervnih kopija — istorija verzija i veze sa drugim beleškama se brišu.",
+      /** The two things that deliberately SURVIVE the move, said before the field. */
+      keepNote:
+        "Kartice za učenje nastale iz beleške ostaju u svom špilu, bez veze sa njom; zadaci napravljeni iz njene liste ostaju u Zadacima.",
+      confirmLabel: "Naslov beleške za potvrdu",
+      confirmPlaceholder: "Upiši tačan naslov",
+      submit: "Premesti",
+      cancel: "Otkaži",
+      tooLarge: "Beleška je prevelika za privatnu sekciju.",
+      tooManyAttachments: "Beleška ima previše priloga — privatna beleška ih nosi najviše 50.",
+      error: "Premeštanje nije uspelo. Ništa nije promenjeno — pokušaj ponovo.",
+    },
+  },
+
+  /**
+   * Private notes (PRIV v1 / ADR-057): the sealed section. Every sentence here
+   * is HONEST about guarantees — what locking protects, what deletion means,
+   * what opting out of the Recovery Kit costs — never marketing. Masculine
+   * second person, the house register.
+   */
+  priv: {
+    /** First open, nothing set up yet: the two-sentence honest explanation, the credential choice, the kit step. */
+    setup: {
+      title: "Privatne beleške",
+      intro:
+        "Privatne beleške se šifruju posebnim ključem i čitljive su samo dok je ova sekcija otključana — ne pojavljuju se u pretrazi, na kontrolnoj tabli, u izvozima ni u rezervnim kopijama.",
+      introSecond:
+        "Ako izgubiš i lozinku i kod za oporavak, sadržaj je nepovratno izgubljen — ne postoji pomoćni ulaz, ni za tebe ni za aplikaciju.",
+      credentialLabel: "Čime se sekcija otključava",
+      useAccountPasscode: "Pristupnim kodom naloga",
+      useAccountPasscodeNote: "Isti kod koji otključava aplikaciju otključava i ovu sekciju.",
+      useSeparate: "Posebnom lozinkom",
+      useSeparateNote: "Lozinka koju znaš samo ti — ko zna kod naloga, ne zna i nju.",
+      accountPasscodeLabel: "Pristupni kod naloga",
+      accountPasscodePlaceholder: "Upiši pristupni kod",
+      passphraseLabel: "Lozinka za privatne beleške",
+      passphrasePlaceholder: "Najmanje 8 karaktera, slovo i cifra",
+      confirmLabel: "Potvrdi lozinku",
+      confirmPlaceholder: "Ponovi lozinku",
+      kitLabel: "Kod za oporavak",
+      kitRegenerate: "Obnovi kod za oporavak",
+      kitRegenerateNote:
+        "Pravi se novi kod za oporavak koji otvara i nalog i privatne beleške. Stari kod odmah prestaje da važi — prepiši preko njega novi.",
+      kitOptOut: "Bez koda za oporavak",
+      kitOptOutNote:
+        "Zaboravljena lozinka tada znači trajno izgubljene privatne beleške. Nema trećeg puta.",
+      /** The informed opt-out's own gate — the dead end, restated as the thing being agreed to. */
+      kitOptOutConfirm: "Razumem: bez lozinke i bez koda, privatne beleške su nepovratne.",
+      submit: "Uključi privatne beleške",
+      mismatch: "Lozinke se ne poklapaju.",
+      weak: "Lozinka mora imati bar 8 karaktera, uz najmanje jedno slovo i jednu cifru.",
+      alreadySetUp: "Sekcija je već podešena — otključaj je svojom lozinkom.",
+    },
+    /** Set up but locked: one field, the throttle countdown reuses the lock screen's own prefix. */
+    lock: {
+      title: "Privatne beleške su zaključane",
+      description: "Unesi lozinku za privatne beleške. Dok su zaključane, sadržaj je šifrovan i nedostupan.",
+      descriptionAccount: "Unesi pristupni kod naloga. Dok su zaključane, sadržaj je šifrovan i nedostupan.",
+      fieldLabel: "Lozinka",
+      fieldLabelAccount: "Pristupni kod",
+      placeholder: "Upiši lozinku",
+      placeholderAccount: "Upiši pristupni kod",
+      submit: "Otključaj",
+      wrongCredential: "Pogrešna lozinka.",
+      wrongPasscode: "Pogrešan pristupni kod.",
+      error: "Otključavanje nije uspelo. Pokušaj ponovo.",
+    },
+    /** The unlocked section: header, list, search, delete. */
+    section: {
+      lockNow: "Zaključaj",
+      newNote: "Nova beleška",
+      searchLabel: "Pretraga privatnih beležaka",
+      searchPlaceholder: "Pretraži privatne beleške…",
+      emptyTitle: "Nema privatnih beležaka",
+      emptyDescription: "Napravi prvu dugmetom iznad — sve ovde ostaje šifrovano na disku.",
+      searchEmpty: "Nijedna privatna beleška ne odgovara upitu.",
+      /** A row whose sealed container no longer opens: named, dead, honest. */
+      unreadable: "Nečitljiva beleška",
+      loadError: "Privatne beleške se trenutno ne mogu učitati. Pokušaj ponovo.",
+      noSelectionTitle: "Nijedna beleška nije izabrana",
+      noSelectionDescription: "Izaberi belešku sa leve strane ili napravi novu.",
+      deleteLabel: "Obriši",
+      moveOut: "Premesti u Beleške",
+      noteMenuLabel: "Više opcija",
+    },
+    /** The private editor's own surfaces — save channel, attachments, the honest v1 limits. */
+    editor: {
+      loadError: "Beleška se ne može otvoriti. Pokušaj ponovo.",
+      saveError: "Čuvanje nije uspelo — pokušaćemo ponovo pri sledećoj izmeni.",
+      saveTooLarge: "Beleška je prevelika da bi se sačuvala. Skrati je ili podeli na više beležaka.",
+      attachmentsTitle: "Prilozi",
+      attach: "Priloži datoteku",
+      attachmentTooLarge: "Datoteka je veća od 100 MB i ne može se priložiti.",
+      attachmentError: "Prilaganje nije uspelo. Pokušaj ponovo.",
+      /** The recorded v1 limit, said where the files live: no external opening, no plaintext temp copies. */
+      attachmentsNote:
+        "Prilozi su šifrovani i otvaraju se samo ovde, dok je sekcija otključana — bez otvaranja u spoljnim programima.",
+    },
+    /**
+     * The best-effort clipboard guard (PRIV-012): copying inside the section
+     * offers a 30-second auto-clear. Honest about its own reach — clearing
+     * needs the app focused at that moment, and another copy elsewhere
+     * replaces the content anyway.
+     */
+    clipboard: {
+      notice: "Kopirano — klipbord se briše za 30 s ako je Nexus tada u prvom planu.",
+      cancel: "Zadrži u klipbordu",
+    },
+    /** Typed-confirm HARD delete — no trash, no undo, and the copy says so before the field. */
+    deleteDialog: {
+      title: "Brisanje privatne beleške",
+      warning: "Beleška i njeni prilozi biće odmah i trajno obrisani. Nema korpe i nema opoziva.",
+      confirmLabel: "Naslov beleške za potvrdu",
+      confirmPlaceholder: "Upiši tačan naslov",
+      submit: "Obriši trajno",
+      cancel: "Otkaži",
+      error: "Brisanje nije uspelo. Pokušaj ponovo.",
+    },
+    /** „Premesti u Beleške“ — the move OUT, with the consequence stated plainly: it becomes searchable. */
+    moveOutDialog: {
+      title: "Premeštanje u Beleške",
+      warning:
+        "Beleška se dešifruje i postaje obična beleška — vidljiva u Beleškama, u pretrazi, u izvozima i rezervnim kopijama.",
+      confirmLabel: "Naslov beleške za potvrdu",
+      confirmPlaceholder: "Upiši tačan naslov",
+      submit: "Premesti",
+      cancel: "Otkaži",
+      tooLarge: "Beleška je prevelika da bi se premestila odjednom.",
+      error: "Premeštanje nije uspelo. Ništa nije promenjeno — pokušaj ponovo.",
+    },
   },
 
   calendar: {
@@ -1893,6 +2029,7 @@ export const strings = {
       appearance: "Izgled",
       tasks: "Zadaci",
       notes: "Beleške",
+      priv: "Privatne beleške",
       shortcuts: "Prečice",
       dashboard: "Kontrolna tabla",
       study: "Učenje",
@@ -2078,6 +2215,27 @@ export const strings = {
         "Kucanje „# ”, „- ” ili „> ” odmah pretvara blok. „/” meni radi i kada je isključeno.",
     },
     /**
+     * Privatne beleške card (PRIV v1 / ADR-057) — shown only while the
+     * „Privatno" module is enabled. The kit status line states a fact the
+     * user chose at setup, in the honest register the whole section keeps.
+     */
+    priv: {
+      caption:
+        "Privatne beleške su šifrovana sekcija koja se otključava odvojeno od ostatka aplikacije.",
+      notSetUp: "Sekcija se podešava pri prvom otvaranju modula Privatno.",
+      autoLockLabel: "Automatsko zaključavanje sekcije",
+      autoLockHint: "Sekcija se sama zaključava posle ovoliko minuta bez rada u njoj.",
+      /** „Posle N minuta“ — after „posle" the genitive holds for every count, so one form serves all sixty options. */
+      autoLockOptionPrefix: "Posle",
+      minuteUnit: "minuta",
+      lockOnMinimizeLabel: "Zaključaj pri minimizovanju prozora",
+      kitStatusSet: "Kod za oporavak je podešen — isti kod otvara i nalog i privatne beleške.",
+      kitStatusMissing:
+        "Bez koda za oporavak — ako zaboraviš lozinku, privatne beleške su nepovratno izgubljene.",
+      saveError: "Čuvanje nije uspelo. Pokušaj ponovo.",
+      loadError: "Podešavanja privatnih beležaka se trenutno ne mogu učitati.",
+    },
+    /**
      * Kontrolna tabla section (SET-006 / ADR-041): the dashboard's own
      * background image and how far it is dimmed behind the widgets.
      */
@@ -2151,6 +2309,7 @@ export const strings = {
       settings: "Profil, izgled, moduli i obaveštenja.",
       notes: "Beleške sa blok-editorom — markdown prečice i „/” meni za formatiranje.",
       study: "Predmeti, ispiti, kartice za učenje i planovi pripreme za ispite.",
+      priv: "Šifrovane privatne beleške — otključavaju se posebno i ne pojavljuju se u pretrazi.",
     } as Record<string, string>,
     /** Category-group headings above the module gallery, keyed by registry category. */
     moduleCategories: {
@@ -3048,6 +3207,7 @@ export const strings = {
       quickCreate: "Novi unos u aktivnom modulu",
       globalCapture: "Brzi unos zadatka — globalna prečica",
       lock: "Zaključaj aplikaciju",
+      privLock: "Zaključaj privatne beleške",
       settings: "Otvori Podešavanja",
       shortcutsHelp: "Prikaži prečice",
     },

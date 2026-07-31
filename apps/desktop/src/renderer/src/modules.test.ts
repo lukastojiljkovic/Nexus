@@ -28,6 +28,7 @@ describe("createModuleRegistry", () => {
       "calendar",
       "settings",
       "notes",
+      "priv",
       "study",
     ]);
   });
@@ -41,12 +42,15 @@ describe("createModuleRegistry", () => {
     }
   });
 
-  it("only uses canonical categories, and every registered module is on by default", () => {
+  it("only uses canonical categories, and every registered module except PRIV is on by default", () => {
     for (const manifest of createModuleRegistry().all()) {
       expect(MODULE_CATEGORIES, manifest.id).toContain(manifest.category);
       // Founder decision 2026-07-12: only BUILT modules are registered, so an
       // entry that shipped disabled would be an entry that leads nowhere.
-      expect(manifest.defaultEnabled, manifest.id).toBe(true);
+      // PRIV is the one deliberate exception (ADR-057): built AND registered,
+      // but OFF until the user enables it in the Moduli gallery — an opt-in
+      // section, not an unbuilt page.
+      expect(manifest.defaultEnabled, manifest.id).toBe(manifest.id !== "priv");
     }
   });
 
@@ -59,7 +63,10 @@ describe("createModuleRegistry", () => {
       "calendar",
       "settings",
     ]);
-    expect(grouped.get("Content & knowledge")?.map((manifest) => manifest.id)).toEqual(["notes"]);
+    expect(grouped.get("Content & knowledge")?.map((manifest) => manifest.id)).toEqual([
+      "notes",
+      "priv",
+    ]);
     expect(grouped.get("Life hubs")?.map((manifest) => manifest.id)).toEqual(["study"]);
   });
 
@@ -73,8 +80,9 @@ describe("createModuleRegistry", () => {
     );
   });
 
-  it("resolves to the full set with no flags, and honours an explicit off flag", () => {
+  it("resolves to the default-on set with no flags, and honours explicit flags both ways", () => {
     const registry = createModuleRegistry();
+    // PRIV is absent by DEFAULT (ADR-057) — the one module the gallery turns on.
     expect(resolveEnabled(registry, {})).toEqual([
       "dashboard",
       "tasks",
@@ -84,6 +92,15 @@ describe("createModuleRegistry", () => {
       "study",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
+    expect(resolveEnabled(registry, { priv: true })).toContain("priv");
+  });
+
+  it("keeps PRIV free of every render-while-locked surface: no widgets, no search indexers", () => {
+    const registry = createModuleRegistry();
+    // While the section is locked NOTHING of it may render anywhere (ADR-057):
+    // a widget contract or a search indexer would be exactly such a surface.
+    expect(registry.widgetsOf("priv")).toEqual([]);
+    expect(registry.all().find((manifest) => manifest.id === "priv")?.searchIndexers).toBeUndefined();
   });
 });
 

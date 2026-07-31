@@ -339,11 +339,9 @@ export const IpcChannel = {
   // Private notes (PRIV v1 / ADR-057). The renderer sees decrypted envelopes
   // ONLY while the section is unlocked — the PRIV DEK lives in main and never
   // crosses this bridge in any form, wrapped or not. `priv:lock` doubles as
-  // the renderer's panic path (its shortcut wiring is slice c); main also
+  // the renderer's panic path (the remappable `privLock` shortcut); main also
   // locks on its own idle timer, on minimize when the preference says so, and
-  // unconditionally inside every app lock. Note-move channels (move-in /
-  // move-out) are deliberately absent until slice c: they orchestrate note
-  // deletion + FTS rebuild + attachments and belong beside their dialogs.
+  // unconditionally inside every app lock.
   privStatus: "priv:status",
   privSetup: "priv:setup",
   privUnlock: "priv:unlock",
@@ -354,6 +352,18 @@ export const IpcChannel = {
   privDelete: "priv:delete",
   privSearch: "priv:search",
   privSetLockPrefs: "priv:set-lock-prefs",
+  // `priv:attachment-pick` is the ONE way bytes enter the private store: the
+  // native dialog in main picks the file (the renderer never names a path,
+  // SEC-EL), main seals the bytes and answers with the reference — the
+  // RENDERER then owns writing that reference into the envelope, because the
+  // envelope is renderer-authored content exactly like the note's text.
+  privAttachmentPick: "priv:attachment-pick",
+  // The two move flows (ADR-057 §5). Whole-note transactions in main: move-in
+  // seals a public note as a NEW private one and tears the public one down
+  // (hard delete + FTS scrub + blob migration); move-out is the exact inverse
+  // through the NORMAL note-creation path, so triggers index the result.
+  privMoveIn: "priv:move-in",
+  privMoveOut: "priv:move-out",
   // ADR-040's OS-level half (TASK-002). The chord lives in the renderer's
   // `localStorage` (a device preference, never profile data), so the renderer
   // is the only side that knows it — it tells main at boot and on every remap,
@@ -3599,6 +3609,10 @@ export const PRIV_TITLE_MAX_BYTES = 1024;
 export const PRIV_STATE_MAX_BYTES = 8_388_608; // the whole Yjs document state, base64 — a private note carries no incremental update log
 export const PRIV_PLAINTEXT_MAX_BYTES = 2_097_152;
 
+/** One private attachment's byte cap (`priv:attachment-pick`, stat-before-read) and how many references one envelope may carry. */
+export const PRIV_ATTACHMENT_MAX_BYTES = 104_857_600; // 100 MB
+export const PRIV_ATTACHMENTS_MAX_COUNT = 50;
+
 /**
  * The private section's whole visible state (`priv:status`). While `setUp` is
  * false the lock preferences report the defaults a fresh setup would write
@@ -3609,17 +3623,49 @@ export interface PrivStatus {
   unlocked: boolean;
   /** Whether the credential is the account passcode (true) or a separate passphrase (false). */
   usesAccountPasscode: boolean;
+  /** Whether the Recovery Kit wrap exists (setup's `regenerateKit`, or a later regeneration while unlocked) — the Settings status line's one fact. False also before setup. */
+  hasRecoveryKit: boolean;
   autoLockMinutes: number;
   lockOnMinimize: boolean;
 }
 
-/** One attachment's reference INSIDE the sealed envelope — mirrors `@nexus/core`'s `PrivAttachmentRef`, redeclared (main assigns one to the other, so drift is a compile error). This slice accepts only an EMPTY list; private attachments arrive with slice c. */
+/** One attachment's reference INSIDE the sealed envelope — mirrors `@nexus/core`'s `PrivAttachmentRef`, redeclared (main assigns one to the other, so drift is a compile error). `id` is main-minted (a UUID) and is BOTH the sealed blob's file name and its AES-GCM AAD. */
 export interface PrivAttachmentRef {
   id: string;
   fileName: string;
   mime: string;
   sizeBytes: number;
 }
+
+/**
+ * `priv:attachment-pick`'s outcome. `rejected` carries the one reason the UI
+ * has a distinct sentence for (the 100 MB cap) plus the catch-all `unreadable`;
+ * a canceled dialog is not an error. On `ok` the blob is already sealed on
+ * disk — the renderer's next `priv:write` is what makes the reference durable,
+ * and a reference never written simply leaves an orphaned sealed file behind
+ * (encrypted, unreachable, reclaimed when the note is deleted or never).
+ */
+export type PrivAttachmentPickResult =
+  | { status: "canceled" }
+  | { status: "rejected"; code: "too-large" | "unreadable" }
+  | { status: "ok"; ref: PrivAttachmentRef };
+
+/**
+ * `priv:move-in`'s outcome (public note → private, ADR-057 §5). `too-large`
+ * is a merged public document whose sealed envelope would exceed the wire's
+ * own caps; `too-many-attachments` is a note past `PRIV_ATTACHMENTS_MAX_COUNT`.
+ * Both refuse BEFORE anything is written — the public note stands untouched.
+ */
+export type PrivMoveInResult =
+  | { ok: true; id: string }
+  | { ok: false; reason: "too-large" | "too-many-attachments" };
+
+/**
+ * `priv:move-out`'s outcome (private note → public). `too-large` is a private
+ * document past the public creation path's own per-update cap — the same
+ * honest limit `notes:duplicate` inherits; the private note stands untouched.
+ */
+export type PrivMoveOutResult = { ok: true; note: NoteMeta } | { ok: false; reason: "too-large" };
 
 /** A private note's entire decrypted payload — `@nexus/core`'s `PrivNoteEnvelope`, redeclared on `PrivAttachmentRef`'s terms. Crosses the bridge ONLY while the section is unlocked. */
 export interface PrivNoteEnvelopePayload {
@@ -5302,6 +5348,17 @@ export interface NexusApi {
     autoLockMinutes: number,
     lockOnMinimize: boolean,
   ): Promise<PrivStatus>;
+  /**
+   * Attaches one file to the unlocked private section: the native dialog in
+   * MAIN picks it (no path ever crosses this bridge), main seals the bytes,
+   * and the returned reference is the renderer's to write into the envelope —
+   * see `priv:attachment-pick`'s channel comment. Rejects while locked.
+   */
+  privPickAttachment(profileId: string): Promise<PrivAttachmentPickResult>;
+  /** Moves a PUBLIC note into the private section (ADR-057 §5): seals it as a new private note, then tears the public one down — hard delete, FTS scrub, attachment bytes re-sealed privately. Requires the section unlocked. */
+  privMoveIn(profileId: string, noteId: string): Promise<PrivMoveInResult>;
+  /** Moves a PRIVATE note out into an ordinary, searchable note through the normal creation path, then hard-deletes the sealed rows and their blobs. Requires the section unlocked. */
+  privMoveOut(profileId: string, id: string): Promise<PrivMoveOutResult>;
   /**
    * Asks main to hold `chord` as an OS-wide hotkey (TASK-002), replacing
    * whatever it held before. Called once at boot — after the renderer has read

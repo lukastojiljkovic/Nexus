@@ -24,12 +24,13 @@ import {
 } from "@nexus/core";
 import { strings } from "./strings.js";
 
-/** The six remappable actions, in the order the Settings card and the reference list them. */
+/** The seven remappable actions, in the order the Settings card and the reference list them. `privLock` sits beside `lock` — the two locks belong together. */
 export const SHORTCUT_ACTION_IDS = [
   "palette",
   "quickCreate",
   "globalCapture",
   "lock",
+  "privLock",
   "settings",
   "shortcutsHelp",
 ] as const;
@@ -71,6 +72,10 @@ const DEFAULT_CHORDS: Readonly<Record<ShortcutActionId, Chord>> = {
   quickCreate: { ctrl: true, alt: false, shift: false, key: "n" },
   globalCapture: { ctrl: true, alt: false, shift: true, key: "n" },
   lock: { ctrl: true, alt: false, shift: false, key: "l" },
+  // The PRIV panic chord (ADR-057 §5): Ctrl+L's shifted sibling, free of every
+  // other default — locking the private section is the app lock's L, one
+  // modifier more, the exact relationship globalCapture keeps with quickCreate.
+  privLock: { ctrl: true, alt: false, shift: true, key: "l" },
   settings: { ctrl: true, alt: false, shift: false, key: "," },
   shortcutsHelp: { ctrl: false, alt: false, shift: false, key: "F1" },
 };

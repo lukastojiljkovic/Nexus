@@ -24,6 +24,7 @@ import { DashboardPage } from "./DashboardPage.js";
 import { TasksPage, type TasksIntent } from "./TasksPage.js";
 import { CalendarPage, type CalendarIntent } from "./CalendarPage.js";
 import { NotesPage, type NotesIntent } from "./NotesPage.js";
+import { PrivPage, PRIV_LOCKED_EVENT } from "./PrivPage.js";
 import { StudyPage, type StudyIntent } from "./StudyPage.js";
 import { SettingsPage, formatArchiveInstant } from "./SettingsPage.js";
 import { NotificationCenter } from "./NotificationCenter.js";
@@ -773,6 +774,15 @@ export function App() {
       case "lock":
         void handleLock();
         return;
+      case "privLock":
+        // The PRIV panic path (ADR-057 §5): drop the held DEK in main first,
+        // then tell a mounted „Privatno" page to swap the lock screen in —
+        // the event is presentation only, the lock already happened.
+        void window.nexus.privLock().catch((error: unknown) => {
+          console.error("Nexus: failed to lock the private section:", error);
+        });
+        window.dispatchEvent(new Event(PRIV_LOCKED_EVENT));
+        return;
       case "settings":
         setActiveId("settings");
         return;
@@ -1185,6 +1195,8 @@ export function App() {
               intent={pending?.module === "notes" ? pending.intent : null}
               onIntentHandled={clearIntent}
             />
+          ) : effectiveId === "priv" && activeProfile ? (
+            <PrivPage key={activeProfile.id} profileId={activeProfile.id} />
           ) : effectiveId === "study" && activeProfile ? (
             <StudyPage
               key={activeProfile.id}

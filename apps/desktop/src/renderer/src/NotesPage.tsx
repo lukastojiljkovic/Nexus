@@ -15,6 +15,8 @@ import { NoteCardsDeleteDialog } from "./NoteCardsDeleteDialog.js";
 import { NoteChecklistTasksDialog } from "./NoteChecklistTasksDialog.js";
 import { NoteEditor } from "./NoteEditor.js";
 import { NoteOrganizer, type FolderSelection } from "./NoteOrganizer.js";
+import { PRIV_LOCKED_EVENT } from "./PrivPage.js";
+import { TypedConfirmDialog } from "./TypedConfirmDialog.js";
 import { formatNotificationWhen } from "./notificationFormat.js";
 import { NotePopover } from "./notePopover.js";
 import { persistRootNoteView, readStoredRootNoteView } from "./notePrefs.js";
@@ -183,6 +185,15 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
   // selections with no folder row to remember one in. Read once from the device
   // preference; a folder's own shape comes off its row instead.
   const [rootView, setRootView] = useState<NoteFolderView>(readStoredRootNoteView);
+  // Whether the PRIVATE section is unlocked right now (ADR-057 §5): the one
+  // fact that decides whether „Premesti u Privatno" appears in the row menu.
+  // Re-read on focus and on the panic shortcut's event — the section locks
+  // underneath this page exactly as it locks underneath its own.
+  const [privUnlocked, setPrivUnlocked] = useState(false);
+  // The note whose move into the private section awaits its typed confirm.
+  const [pendingMoveIn, setPendingMoveIn] = useState<NoteMeta | null>(null);
+  const [moveInError, setMoveInError] = useState<string | null>(null);
+  const [movingIn, setMovingIn] = useState(false);
 
   const loadFolders = useCallback(async () => {
     try {
@@ -241,6 +252,29 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
   useEffect(() => {
     void loadTags();
   }, [loadTags]);
+
+  // `priv:status` answers facts, never contents, so this is safe while locked.
+  useEffect(() => {
+    let active = true;
+    const check = () => {
+      void window.nexus
+        .privStatus(profileId)
+        .then((status) => {
+          if (active) setPrivUnlocked(status.unlocked);
+        })
+        .catch((error: unknown) => {
+          console.error("Nexus: failed to read the private section's status:", error);
+        });
+    };
+    check();
+    window.addEventListener("focus", check);
+    window.addEventListener(PRIV_LOCKED_EVENT, check);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", check);
+      window.removeEventListener(PRIV_LOCKED_EVENT, check);
+    };
+  }, [profileId]);
 
   // Consumes a pending deep-link (021-e): "create" starts a fresh note;
   // "reveal" (also the STUDY -> a note cross-module link, ADR-017) selects an
@@ -509,6 +543,36 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
     }
   }
 
+  /**
+   * „Premesti u Privatno" (ADR-057 §5), after its typed confirm: main does the
+   * whole transaction — seal, hard delete, FTS scrub, attachment migration.
+   * On success the note is simply GONE from this page, which is the point;
+   * both refusals leave everything untouched and are told apart by name.
+   */
+  async function performMoveIn(note: NoteMeta): Promise<void> {
+    setMovingIn(true);
+    setMoveInError(null);
+    try {
+      const result = await window.nexus.privMoveIn(profileId, note.id);
+      if (!result.ok) {
+        setMoveInError(
+          result.reason === "too-large"
+            ? strings.notes.moveToPriv.tooLarge
+            : strings.notes.moveToPriv.tooManyAttachments,
+        );
+        return;
+      }
+      if (selectedId === note.id) setSelectedId(null);
+      setPendingMoveIn(null);
+      await Promise.all([loadNotes(), loadTags()]);
+    } catch (error) {
+      setMoveInError(strings.notes.moveToPriv.error);
+      console.error("Nexus: failed to move a note into the private section:", error);
+    } finally {
+      setMovingIn(false);
+    }
+  }
+
   async function togglePin(note: NoteMeta): Promise<void> {
     try {
       await window.nexus.setNotePinned(profileId, note.id, !note.pinned);
@@ -699,6 +763,23 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
               >
                 {strings.notes.checklistTasks.action}
               </button>
+              {/* Only while the private section is unlocked (ADR-057 §5): a
+                  locked section cannot seal anything, and offering the row
+                  just to refuse it would be a lie about what is possible. */}
+              {privUnlocked && (
+                <button
+                  className="note__menu-item"
+                  role="menuitem"
+                  type="button"
+                  onClick={() => {
+                    setMoveInError(null);
+                    setPendingMoveIn(note);
+                    close();
+                  }}
+                >
+                  {strings.notes.moveToPriv.action}
+                </button>
+              )}
               <button
                 className="note__menu-item note__menu-item--danger"
                 role="menuitem"
@@ -881,6 +962,28 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
             void performDelete(note, disposition);
           }}
           onCancel={() => setPendingDelete(null)}
+        />
+      )}
+
+      {pendingMoveIn != null && (
+        <TypedConfirmDialog
+          title={strings.notes.moveToPriv.title}
+          name={
+            pendingMoveIn.title.trim().length > 0 ? pendingMoveIn.title : strings.notes.untitled
+          }
+          warning={strings.notes.moveToPriv.warning}
+          note={strings.notes.moveToPriv.keepNote}
+          confirmLabel={strings.notes.moveToPriv.confirmLabel}
+          confirmPlaceholder={strings.notes.moveToPriv.confirmPlaceholder}
+          confirmValue={
+            pendingMoveIn.title.trim().length > 0 ? pendingMoveIn.title : strings.notes.untitled
+          }
+          submitLabel={strings.notes.moveToPriv.submit}
+          cancelLabel={strings.notes.moveToPriv.cancel}
+          error={moveInError}
+          busy={movingIn}
+          onConfirm={() => void performMoveIn(pendingMoveIn)}
+          onCancel={() => setPendingMoveIn(null)}
         />
       )}
 

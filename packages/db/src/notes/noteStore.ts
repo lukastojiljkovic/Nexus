@@ -135,6 +135,7 @@ export class NoteStore {
   private readonly upsertSnapshot: Database.Statement;
   private readonly deleteCoveredUpdates: Database.Statement;
   private readonly markDeleted: Database.Statement;
+  private readonly deleteRow: Database.Statement;
   private readonly markRestored: Database.Statement;
   private readonly selectDeletedAt: Database.Statement;
   private readonly selectFolderInProfile: Database.Statement;
@@ -228,6 +229,9 @@ export class NoteStore {
       `UPDATE notes SET deleted_at = ?, updated_at = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
     );
+    // Deliberately NOT filtered by deleted_at: a hard delete is a teardown
+    // (PRIV move-in, ADR-057 §5), and a teardown reaches the trash too.
+    this.deleteRow = db.prepare(`DELETE FROM notes WHERE id = ? AND profile_id = ?`);
     this.markRestored = db.prepare(
       `UPDATE notes SET deleted_at = NULL, updated_at = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NOT NULL`,
@@ -436,6 +440,24 @@ export class NoteStore {
     const { changes } = this.markDeleted.run(validNow, validNow, id, this.profileId);
     if (changes === 0) {
       throw new NoteNotFoundError(`No active note "${id}" to delete in this profile.`);
+    }
+  }
+
+  /**
+   * HARD-deletes a note — the row itself, so every child table cascades with
+   * it (updates, snapshot, versions, links both ways, tag links, attachment
+   * rows, subject links) and the search triggers scrub its entries. This is
+   * PRIV move-in's teardown (ADR-057 §5), NOT an undoable user delete: the
+   * caller has already re-sealed the content elsewhere, and `restore` has
+   * nothing left to bring back. Reaches soft-deleted rows too, and refuses an
+   * id this profile does not own. Blob GC for the attachment rows this
+   * cascades is the CALLER's job — only main can sum reference counts across
+   * every table that names a hash.
+   */
+  hardDelete(id: string): void {
+    const { changes } = this.deleteRow.run(id, this.profileId);
+    if (changes === 0) {
+      throw new NoteNotFoundError(`No note "${id}" to hard-delete in this profile.`);
     }
   }
 

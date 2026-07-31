@@ -10,8 +10,8 @@
  *    `priv:*` data call);
  *  - window minimize, when `lock_on_minimize` says so (`privHandleMinimize`,
  *    hooked to the BrowserWindow's 'minimize' event in `main/index.ts`);
- *  - the renderer's explicit `priv:lock` (the panic path — its shortcut
- *    wiring is slice c);
+ *  - the renderer's explicit `priv:lock` (the panic path — the section
+ *    header's „Zaključaj" and the remappable `privLock` shortcut);
  *  - unconditionally inside `performLock()` — an app lock IS a PRIV lock.
  *
  * Wrong-attempt throttling reuses `unlockThrottle`'s state machine
@@ -28,9 +28,13 @@
 import {
   PrivSealError,
   buildPrivIndex,
+  derivePrivBlobKey,
+  openPrivBlob,
   openPrivNote,
+  sealPrivBlob,
   sealPrivNote,
   searchPrivIndex,
+  type PrivAttachmentRef,
   type PrivIndexNote,
   type PrivNoteEnvelope,
 } from "@nexus/core";
@@ -58,6 +62,7 @@ import {
   type PrivateSettingsStore,
   type ReplacePrivateWrapsInput,
 } from "@nexus/db";
+import { PRIV_ATTACHMENTS_MAX_COUNT } from "../shared/ipc.js";
 import type {
   PrivNoteListEntry,
   PrivSetupResult,
@@ -99,6 +104,20 @@ export interface PrivDeps {
   regenerateRecoveryKit(): Promise<string>;
   /** One database transaction around a multi-statement write (`markdownImport`'s seam) — what makes a capturing write's version + live row land or fail together. */
   runInTransaction<T>(write: () => T): T;
+  /**
+   * The sealed private-attachment files (`<account>/private-blobs/<id>`, one
+   * NXPB container per file — random id names, NO content addressing, by
+   * design), injected so this module stays Electron/fs-free. `remove` is
+   * best-effort by contract: the implementation logs and swallows its own
+   * failures, because a blob that outlives its envelope is disk space, never
+   * a correctness problem — the bytes stay sealed under a key that no longer
+   * names them.
+   */
+  privBlobs: {
+    write(id: string, sealed: Uint8Array): Promise<void>;
+    read(id: string): Promise<Uint8Array>;
+    remove(id: string): Promise<void>;
+  };
   /** The `db === session` identity guard (the house idiom for work outliving a lock). */
   stillThisSession(): boolean;
   now(): Date;
@@ -234,6 +253,7 @@ export function privStatus(deps: PrivDeps, profileId: string): PrivStatus {
       setUp: false,
       unlocked: false,
       usesAccountPasscode: false,
+      hasRecoveryKit: false,
       autoLockMinutes: DEFAULT_PRIV_AUTO_LOCK_MINUTES,
       lockOnMinimize: true,
     };
@@ -242,6 +262,8 @@ export function privStatus(deps: PrivDeps, profileId: string): PrivStatus {
     setUp: true,
     unlocked: privSession !== null && privSession.profileId === profileId,
     usesAccountPasscode: settings.usesAccountPasscode,
+    // The row's CHECK holds salt and wrap both-or-neither, so either column answers.
+    hasRecoveryKit: settings.kitSalt !== null,
     autoLockMinutes: settings.autoLockMinutes,
     lockOnMinimize: settings.lockOnMinimize,
   };
@@ -393,9 +415,11 @@ export async function privRead(
  * transaction with the new write, so a crash can never leave the live row's
  * sequence arithmetic pointing past its own bytes.
  *
- * This slice's envelopes carry `attachments: []` — private attachments and
- * their `priv-blob:` protocol land with slice c (the editor adapter), so a
- * non-empty list here is refused outright rather than half-honoured.
+ * The envelope's `attachments` are renderer-authored references to sealed
+ * blobs `privAddAttachment` already wrote — re-capped here (the wire validator
+ * holds the same bound, SEC-EL-02) but otherwise carried verbatim: the list
+ * lives INSIDE the sealed envelope, so a reference is durable exactly when the
+ * envelope that names it is.
  */
 export async function privWrite(
   deps: PrivDeps,
@@ -404,8 +428,10 @@ export async function privWrite(
   envelope: PrivNoteEnvelope,
 ): Promise<{ id: string }> {
   const dek = requirePrivDek(deps, profileId);
-  if (envelope.attachments.length !== 0) {
-    throw new Error("Private note attachments arrive with slice c; this envelope must carry none.");
+  if (envelope.attachments.length > PRIV_ATTACHMENTS_MAX_COUNT) {
+    throw new Error(
+      `A private note may carry at most ${PRIV_ATTACHMENTS_MAX_COUNT} attachments.`,
+    );
   }
   const store = deps.privateNotes(profileId);
   const nowIso = deps.now().toISOString();
@@ -436,11 +462,30 @@ export async function privWrite(
   return { id };
 }
 
-/** HARD delete (ADR-057 — no undo bar; the renderer's typed confirm is the UX gate, this just deletes). The cascade takes the version history. */
-export function privDelete(deps: PrivDeps, profileId: string, id: string): void {
+/**
+ * HARD delete (ADR-057 — no undo bar; the renderer's typed confirm is the UX
+ * gate, this just deletes). The cascade takes the version history, and the
+ * note's sealed attachment blobs are unlinked afterwards — best-effort, AFTER
+ * the row is gone: a file that outlives a failed unlink is sealed disk space,
+ * while a row deleted after a failed envelope read would strand every blob it
+ * names, which is why the references are collected FIRST. An envelope that no
+ * longer opens (a corrupt row being disposed of) simply has no references to
+ * collect — its blobs, if any, stay behind sealed.
+ */
+export async function privDelete(deps: PrivDeps, profileId: string, id: string): Promise<void> {
   requirePrivDek(deps, profileId);
-  deps.privateNotes(profileId).delete(id);
+  const store = deps.privateNotes(profileId);
+  let attachments: PrivAttachmentRef[] = [];
+  try {
+    attachments = (await privRead(deps, profileId, id)).attachments;
+  } catch (error) {
+    if (!(error instanceof PrivSealError)) throw error;
+  }
+  store.delete(id);
   sessionWriteCounts.delete(id);
+  for (const ref of attachments) {
+    await deps.privBlobs.remove(ref.id); // best-effort by the seam's own contract
+  }
 }
 
 /**
@@ -501,6 +546,51 @@ export async function privSearch(
     }
   }
   return searchPrivIndex(buildPrivIndex(notes), query);
+}
+
+// --- Private attachments (sealed blobs) --------------------------------------
+
+/**
+ * Seals `bytes` as a new private attachment and writes the container to disk,
+ * answering the reference the RENDERER then writes into the envelope (the
+ * envelope is renderer-authored content, so the reference's durability is the
+ * renderer's next `privWrite` — see `priv:attachment-pick`'s channel comment).
+ * The id is random on purpose: it names the file AND is the container's AAD,
+ * and NO content addressing means sealing identical bytes twice yields two
+ * unrelated files (no existence oracle, `privEnvelope.ts`'s design).
+ */
+export async function privAddAttachment(
+  deps: PrivDeps,
+  profileId: string,
+  input: { fileName: string; mime: string; bytes: Uint8Array },
+): Promise<{ id: string; fileName: string; mime: string; sizeBytes: number }> {
+  const dek = requirePrivDek(deps, profileId);
+  const id = crypto.randomUUID();
+  const blobKey = await derivePrivBlobKey(dek);
+  await deps.privBlobs.write(id, await sealPrivBlob(blobKey, id, input.bytes));
+  return { id, fileName: input.fileName, mime: input.mime, sizeBytes: input.bytes.byteLength };
+}
+
+/** One private attachment's plaintext bytes — the move-out flow's read half. Throws `PrivSealError` for a swapped, edited, or foreign container. */
+export async function privOpenAttachment(
+  deps: PrivDeps,
+  profileId: string,
+  attachmentId: string,
+): Promise<Uint8Array> {
+  const dek = requirePrivDek(deps, profileId);
+  const blobKey = await derivePrivBlobKey(dek);
+  return openPrivBlob(blobKey, attachmentId, await deps.privBlobs.read(attachmentId));
+}
+
+/**
+ * The open section's blob key, or null while every section is locked — the
+ * `priv-blob:` protocol's whole gate. Deliberately not profile-scoped: the
+ * protocol handler cannot know a profile, and a file another profile's key
+ * sealed simply fails its AES-GCM tag under this one (a 404, never bytes).
+ */
+export async function privSessionBlobKey(): Promise<Uint8Array | null> {
+  if (privSession === null) return null;
+  return derivePrivBlobKey(privSession.dek);
 }
 
 // --- Preferences and the minimize hook ---------------------------------------
