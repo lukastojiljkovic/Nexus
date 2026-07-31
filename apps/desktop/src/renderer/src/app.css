@@ -3655,6 +3655,42 @@ button.cal__grid-event--dragging {
   align-items: center;
   gap: var(--nx-space-2);
 }
+/* End-of-session summary (STUDY-009): the four ratings on one quiet row, the
+   duration under them. No emphasis anywhere — the session is over, and this is
+   a report, not a scoreboard. */
+.review__summary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.review__summary-ratings {
+  display: flex;
+  gap: var(--nx-space-4);
+  margin: 0;
+}
+.review__summary-rating {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.review__summary-rating-label {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.review__summary-rating-count {
+  margin: 0;
+  font-family: var(--nx-font-family-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text);
+}
+.review__summary-duration,
+.review__summary-cap {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
 
 /* Notifications (NTF bell + center panel, piece a3) --------------------- */
 /* Sidebar footer: pinned to the bottom of the nav column (flex auto-margin),
@@ -4009,6 +4045,29 @@ button.cal__grid-event--dragging {
 .set__dash-slider:focus-visible {
   outline: 2px solid var(--nx-accent);
   outline-offset: 2px;
+}
+
+/* Učenje (STUDY-007): the retention presets reuse `.set__segmented`; the two
+   daily caps sit side by side, each a label + narrow number field + its hint. */
+.set__study-fields {
+  display: flex;
+  gap: var(--nx-space-4);
+  flex-wrap: wrap;
+}
+.set__study-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  max-width: 260px;
+}
+.set__study-label {
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.set__study-number {
+  max-width: 110px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Moduli: category heading + one bordered row per module. */

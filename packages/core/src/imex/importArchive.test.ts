@@ -71,6 +71,7 @@ function emptyExportInput(): ExportArchiveInput {
       plans: [],
       blocks: [],
       focusSessions: [],
+      studySettings: [],
       notifications: [],
       notes: [],
       noteFolders: [],
@@ -319,6 +320,11 @@ function richProfileData(): ProfileData {
         endedAt: "2026-07-01T11:00:00.000Z", createdAt: "2026-07-01T11:00:00.000Z",
         updatedAt: "2026-07-01T11:00:00.000Z",
       },
+    ],
+    // Deliberately NON-default on all three (STUDY-007): a round trip that
+    // carried the defaults would pass even if the record were dropped entirely.
+    studySettings: [
+      { profileId: "profile1", targetRetention: 0.95, newPerDay: 7, maxReviewsPerDay: 120 },
     ],
     notifications: [
       {
@@ -583,13 +589,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.13.0`: the nearest minor strictly ahead of this build's `1.12.0`.
+  // `1.14.0`: the nearest minor strictly ahead of this build's `1.13.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.13.0" });
+    const files = baseFiles({ schemaVersion: "1.14.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.13.0" },
-
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.14.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -1332,6 +1337,111 @@ describe("parseImportArchive — task attachments (migration 024)", () => {
     const result = parseImportArchive(
       emptyInputWith(
         baseFiles({ fileContents: { "data/notes.ndjson": ndjson([VALID_TASK_ATTACHMENT]) } }),
+      ),
+    );
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "invalid-record", path: "data/notes.ndjson", line: 1, detail: "type",
+    });
+    expect(result.data).toBeNull();
+  });
+});
+
+describe("parseImportArchive — study settings (migration 034 / STUDY-007)", () => {
+  const VALID_STUDY_SETTINGS = {
+    type: "study-settings", profileId: "profile1", targetRetention: 0.9,
+    newPerDay: 20, maxReviewsPerDay: 200,
+  };
+
+  function parseStudyFile(rows: readonly Record<string, unknown>[]) {
+    return parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/study.ndjson": ndjson(rows) } })),
+    );
+  }
+
+  function studyProblem(detail: string) {
+    return {
+      severity: "error", code: "invalid-record", path: "data/study.ndjson", line: 1, detail,
+    };
+  }
+
+  it("round-trips the retention and both daily caps", () => {
+    const result = parseStudyFile([VALID_STUDY_SETTINGS]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.studySettings).toEqual([
+      { profileId: "profile1", targetRetention: 0.9, newPerDay: 20, maxReviewsPerDay: 200 },
+    ]);
+  });
+
+  it("keeps a null review cap as null — that is how 'no cap at all' is said", () => {
+    const result = parseStudyFile([{ ...VALID_STUDY_SETTINGS, maxReviewsPerDay: null }]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.studySettings[0]?.maxReviewsPerDay).toBeNull();
+  });
+
+  it("accepts both ends of the retention window and refuses either side of them", () => {
+    for (const targetRetention of [0.7, 0.97, 0.835]) {
+      expect(parseStudyFile([{ ...VALID_STUDY_SETTINGS, targetRetention }]).problems).toEqual([]);
+    }
+    for (const targetRetention of [0.69, 0.98, 0, 1, "0.9"]) {
+      const result = parseStudyFile([{ ...VALID_STUDY_SETTINGS, targetRetention }]);
+      expect(result.problems).toContainEqual(studyProblem("targetRetention"));
+      expect(result.data).toBeNull();
+    }
+  });
+
+  it("accepts 0..100 new cards a day and refuses anything outside, or fractional", () => {
+    for (const newPerDay of [0, 100]) {
+      expect(parseStudyFile([{ ...VALID_STUDY_SETTINGS, newPerDay }]).problems).toEqual([]);
+    }
+    for (const newPerDay of [-1, 101, 2.5, null]) {
+      const result = parseStudyFile([{ ...VALID_STUDY_SETTINGS, newPerDay }]);
+      expect(result.problems).toContainEqual(studyProblem("newPerDay"));
+      expect(result.data).toBeNull();
+    }
+  });
+
+  it("accepts 1..1000 reviews a day and refuses zero — a cap of nothing is not a cap", () => {
+    for (const maxReviewsPerDay of [1, 1000]) {
+      expect(parseStudyFile([{ ...VALID_STUDY_SETTINGS, maxReviewsPerDay }]).problems).toEqual([]);
+    }
+    for (const maxReviewsPerDay of [0, -1, 1001, 10.5]) {
+      const result = parseStudyFile([{ ...VALID_STUDY_SETTINGS, maxReviewsPerDay }]);
+      expect(result.problems).toContainEqual(studyProblem("maxReviewsPerDay"));
+      expect(result.data).toBeNull();
+    }
+  });
+
+  it("refuses a row missing any of the three, or its profile", () => {
+    for (const [field, row] of [
+      ["profileId", { profileId: undefined }],
+      ["targetRetention", { targetRetention: undefined }],
+      ["newPerDay", { newPerDay: undefined }],
+      ["maxReviewsPerDay", { maxReviewsPerDay: undefined }],
+    ] as const) {
+      const result = parseStudyFile([{ ...VALID_STUDY_SETTINGS, ...row }]);
+      expect(result.problems).toContainEqual(studyProblem(field));
+      expect(result.data).toBeNull();
+    }
+  });
+
+  // One row per profile is migration 034's PRIMARY KEY, so the profile id IS the
+  // row's identity — the same rule `dashboard-settings` lives under.
+  it("refuses two rows for the same profile", () => {
+    const result = parseStudyFile([
+      VALID_STUDY_SETTINGS,
+      { ...VALID_STUDY_SETTINGS, newPerDay: 5 },
+    ]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "duplicate-id", path: "data/study.ndjson", line: 2,
+      detail: "profile1",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  it("refuses a study-settings record filed in another data file", () => {
+    const result = parseImportArchive(
+      emptyInputWith(
+        baseFiles({ fileContents: { "data/notes.ndjson": ndjson([VALID_STUDY_SETTINGS]) } }),
       ),
     );
     expect(result.problems).toContainEqual({
@@ -2111,9 +2221,8 @@ describe("parseImportArchive — note folder preferences (the 1.7.0 era gate)", 
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.12.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.12.0");
-
+  it("is 1.13.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.13.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -2226,17 +2335,27 @@ describe("parseImportArchive — schema version", () => {
     expect(result.data).not.toBeNull();
   });
 
+  // And for the one STUDY-007's preferences superseded: a 1.12 archive carries
+  // no `study-settings` row at all, which is exactly what a profile that never
+  // touched its retention or its daily caps looks like — a whole absent record
+  // type, so again no era flag, and the defaults stand.
+  it("accepts an older minor — a 1.12 archive still parses here, the preferences empty", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.12.0" })));
+    expect(result.problems).toEqual([]);
+    expect(result.data).toMatchObject({ studySettings: [] });
+  });
+
   it("accepts a newer patch", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.12.7" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.13.7" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
 
-  // `1.13.0`: the nearest minor strictly ahead of this build's `1.12.0`.
+  // `1.14.0`: the nearest minor strictly ahead of this build's `1.13.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.13.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.14.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.13.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.14.0" },
     ]);
     expect(result.data).toBeNull();
   });

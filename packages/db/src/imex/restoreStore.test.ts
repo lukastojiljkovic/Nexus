@@ -17,6 +17,8 @@ import {
   DashboardWidgetStore,
   DEFAULT_DASHBOARD_LAYOUT,
   DEFAULT_BACKGROUND_DIM,
+  DEFAULT_NEW_PER_DAY,
+  DEFAULT_TARGET_RETENTION,
   DeckStore,
   DocumentStore,
   EventStore,
@@ -35,6 +37,7 @@ import {
   RestoreValidationError,
   RESTORE_WIPE_TABLES,
   SqliteFlagStore,
+  StudySettingsStore,
   SubjectStore,
   TASK_ORDER_GAP,
   TaskAttachmentStore,
@@ -136,6 +139,7 @@ function emptyProfileData(): ProfileData {
     plans: [],
     blocks: [],
     focusSessions: [],
+    studySettings: [],
     notifications: [],
     notes: [],
     noteFolders: [],
@@ -237,6 +241,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   const taskTemplateStore = new TaskTemplateStore(handle.raw, profileId);
   const dashboardStore = new DashboardSettingsStore(handle.raw, profileId);
   const dashboardWidgetStore = new DashboardWidgetStore(handle.raw, profileId);
+  const studySettingsStore = new StudySettingsStore(handle.raw, profileId);
 
   // The merged Yjs state and derived body an export would carry for the edited
   // note — stand-ins for real Yjs bytes (see `bytes()`), but genuinely stored
@@ -386,6 +391,9 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   // rather than the get-or-default emptiness a untouched profile would give.
   // Adding one widget materializes the default five beside it.
   dashboardWidgetStore.add("study:ispiti", "L", t2);
+  // STUDY-007: NON-default on all three, so the round trip below would fail if
+  // the settings row were dropped rather than passing on the defaults.
+  studySettingsStore.save({ targetRetention: 0.95, newPerDay: 7, maxReviewsPerDay: 120 }, t2);
 
   const taskLists = taskListStore.listActive();
   const data: ProfileData = {
@@ -426,6 +434,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
       createdAt: version.createdAt,
       snapshot: noteStore.loadVersion(editedNote.id, version.coveredSeq),
     })),
+    studySettings: [{ profileId, ...studySettingsStore.get() }],
     dashboardSettings: [{ profileId, ...dashboardStore.get() }],
     dashboardWidgets: dashboardWidgetStore.listAll(),
   };
@@ -626,6 +635,12 @@ function assertModulesMatch(
     fixture.derived.get(fixture.ids.editedNote.id)?.plaintext,
   );
 
+  // STUDY-007: the retention and both daily caps, remapped onto the reading
+  // profile exactly as every row below is.
+  expect(
+    [{ profileId: remapTo, ...new StudySettingsStore(handle.raw, readProfileId).get() }],
+  ).toEqual(remap(fixture.data.studySettings));
+
   // ADR-041: the dashboard's background and dim, remapped onto the reading
   // profile exactly as every row above is.
   expect(
@@ -729,6 +744,14 @@ describe("RestoreStore", () => {
     expect(new NoteOrgStore(db.raw, profileB).listFolders()).toEqual([]);
     expect(new NoteOrgStore(db.raw, profileB).listTags()).toEqual([]);
     expect(new TaskTagStore(db.raw, profileB).listTags()).toEqual([]);
+    // An archive carrying no study-settings row puts the profile back on the
+    // scheduler's own defaults (STUDY-007) — B's chosen retention and caps are
+    // gone, not merely unreferenced.
+    expect(new StudySettingsStore(db.raw, profileB).get()).toEqual({
+      targetRetention: DEFAULT_TARGET_RETENTION,
+      newPerDay: DEFAULT_NEW_PER_DAY,
+      maxReviewsPerDay: null,
+    });
     // An archive carrying no dashboard row puts the profile back on the
     // dashboard's own defaults (ADR-041) — the background B had is gone, not
     // merely unreferenced.

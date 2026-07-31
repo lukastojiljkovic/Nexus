@@ -28,6 +28,7 @@ import type {
   ExportSettings,
   ExportStudyBlock,
   ExportStudyPlan,
+  ExportStudySettings,
   ExportSubject,
   ExportTask,
   ExportTaskAttachment,
@@ -173,7 +174,10 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.12.0` added a
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.13.0` added the
+ * `study-settings` record type — one profile's FSRS target retention and its
+ * two daily caps (STUDY-007, migration 034), riding in the data file the STUDY
+ * module already had — after `1.12.0` added a
  * card's `problemSteps` — the worked solution its `back` is derived from
  * (ADR-046) — after `1.11.0` added the `dashboard-widget` record type — the
  * profile's dashboard layout (DASH-002 / ADR-045, migration 032) — riding in
@@ -200,7 +204,8 @@ export interface ImportArchiveResult {
  * existing type: an older archive simply carries none of it, which is
  * indistinguishable from a profile that had no dependencies — or, at `1.9.0`,
  * from one that never chose a dashboard background, or, at `1.11.0`, from one
- * that never rearranged its dashboard — while a NEWER archive
+ * that never rearranged its dashboard, or, at `1.13.0`, from one that never
+ * touched its study preferences — while a NEWER archive
  * never reaches a parser at all, because the gate above refuses it. Era flags
  * exist only for the "this row is missing a field it now must have" question,
  * which a whole absent type never asks — and which an OPTIONAL-with-a-default
@@ -214,12 +219,13 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  * SUPERVISOR NOTE: `1.11.0` belongs to the sibling lane (dashboard layout) and
- * is not in this worktree; this lane writes `1.12.0` directly, leaving the gap
- * for the supervisor to reconcile at merge. The too-new refusal fixtures in
- * `importArchive.test.ts` moved to `1.13.0` for the same reason — `1.11.0` is
- * no longer "strictly ahead of this build".
+ * is not in this worktree; the `1.12.0` lane wrote its version directly and this
+ * one writes `1.13.0` on top, leaving the gap for the supervisor to reconcile at
+ * merge. The too-new refusal fixtures in `importArchive.test.ts` moved to
+ * `1.14.0` for the same reason — `1.13.0` is no longer "strictly ahead of this
+ * build".
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.12.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.13.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -422,6 +428,13 @@ function int(value: unknown, field: string): number {
 
 function intInRange(value: unknown, field: string, min: number, max: number): number {
   const n = int(value, field);
+  if (n < min || n > max) throw new InvalidFieldError(field);
+  return n;
+}
+
+/** `intInRange`'s twin for a REAL column — the one interchange field (a target retention) that is deliberately not a whole number. */
+function numberInRange(value: unknown, field: string, min: number, max: number): number {
+  const n = finiteNumber(value, field);
   if (n < min || n > max) throw new InvalidFieldError(field);
   return n;
 }
@@ -637,6 +650,19 @@ const TASK_LIST_VIEWS = ["list", "kanban"] as const;
 const MAX_BACKGROUND_DIM = 90;
 
 /**
+ * Mirrors `MIN_TARGET_RETENTION`/`MAX_TARGET_RETENTION`/`MAX_NEW_PER_DAY`/
+ * `MAX_REVIEWS_PER_DAY` in `@nexus/db`'s `study/studySettingsStore.ts` and
+ * migration 034's three CHECKs (copied, not imported — the `NOTE_FOLDER_COLORS`
+ * arrangement). Each is restated here so an out-of-range value in an archive is
+ * a named `invalid-record` rather than a raw SQLite constraint error inside the
+ * restore transaction.
+ */
+const MIN_TARGET_RETENTION = 0.7;
+const MAX_TARGET_RETENTION = 0.97;
+const MAX_NEW_PER_DAY = 100;
+const MAX_REVIEWS_PER_DAY = 1000;
+
+/**
  * Mirrors `DASHBOARD_WIDGET_SIZES` in `@nexus/db`'s
  * `dashboard/dashboardWidgetStore.ts`, migration 032's `size` CHECK and
  * `WidgetSize` in this package's own widget contract (copied here rather than
@@ -728,6 +754,7 @@ export type ArchiveRecordType =
   | "plan"
   | "block"
   | "focus-session"
+  | "study-settings"
   | "notification"
   | "note-folder"
   | "note-tag"
@@ -760,6 +787,7 @@ const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "plan",
   "block",
   "focus-session",
+  "study-settings",
   "notification",
   "note-folder",
   "note-tag",
@@ -787,7 +815,17 @@ const FILE_RECORD_TYPES: Record<DataFilePath, readonly ArchiveRecordType[]> = {
     "task-dependency",
   ],
   "data/calendar.ndjson": ["event", "document", "renewal", "person"],
-  "data/study.ndjson": ["subject", "exam", "deck", "card", "review", "plan", "block", "focus-session"],
+  "data/study.ndjson": [
+    "study-settings",
+    "subject",
+    "exam",
+    "deck",
+    "card",
+    "review",
+    "plan",
+    "block",
+    "focus-session",
+  ],
   "data/notifications.ndjson": ["notification"],
   "data/notes.ndjson": [
     "note-folder",
@@ -1440,6 +1478,37 @@ function parseNoteAttachment(raw: Record<string, unknown>): ExportNoteAttachment
 }
 
 /**
+ * One profile's study-scheduling preferences (STUDY-007). Three bounds, each of
+ * them migration 034's own CHECK restated — an archive is the one way a value
+ * can reach that table without passing through `StudySettingsStore`, and an
+ * out-of-range one would otherwise abort a restore halfway through:
+ *
+ * - `targetRetention` inside 0.70..0.97, and a real number rather than a whole
+ *   one — it is ts-fsrs's `request_retention`, a probability, and the only
+ *   non-integer numeric field in this whole contract;
+ * - `newPerDay` a whole number inside 0..100, zero included: "no new cards
+ *   today" is an answer, not an absence;
+ * - `maxReviewsPerDay` either `null` — which MEANS uncapped, and is the one way
+ *   to say it — or a whole number inside 1..1000. Zero is refused rather than
+ *   read as "uncapped": a cap of nothing is not a cap.
+ */
+function parseStudySettings(raw: Record<string, unknown>): ExportStudySettings {
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const targetRetention = numberInRange(
+    raw.targetRetention,
+    "targetRetention",
+    MIN_TARGET_RETENTION,
+    MAX_TARGET_RETENTION,
+  );
+  const newPerDay = intInRange(raw.newPerDay, "newPerDay", 0, MAX_NEW_PER_DAY);
+  const maxReviewsPerDay =
+    raw.maxReviewsPerDay === null
+      ? null
+      : intInRange(raw.maxReviewsPerDay, "maxReviewsPerDay", 1, MAX_REVIEWS_PER_DAY);
+  return { profileId, targetRetention, newPerDay, maxReviewsPerDay };
+}
+
+/**
  * The dashboard's background choice and dim (SET-006 / ADR-041). Three rules no
  * SQL CHECK on its own could have caught in an archive, and each of them is a
  * rule `DashboardSettingsStore` enforces on every live write:
@@ -1632,6 +1701,7 @@ interface Collections {
   plans: Bucket<ExportStudyPlan>;
   blocks: Bucket<ExportStudyBlock>;
   focusSessions: Bucket<ExportFocusSession>;
+  studySettings: Bucket<ExportStudySettings>;
   notifications: Bucket<ExportNotification>;
   noteFolders: Bucket<ExportNoteFolder>;
   noteTags: Bucket<ExportNoteTag>;
@@ -1652,6 +1722,7 @@ function newCollections(): Collections {
     events: newBucket(), documents: newBucket(), renewals: newBucket(),
     people: newBucket(), subjects: newBucket(), exams: newBucket(), decks: newBucket(), cards: newBucket(),
     reviewLog: newBucket(), plans: newBucket(), blocks: newBucket(), focusSessions: newBucket(),
+    studySettings: newBucket(),
     notifications: newBucket(), noteFolders: newBucket(), noteTags: newBucket(), notes: newBucket(),
     noteTagLinks: newBucket(), noteAttachments: newBucket(), noteVersions: newBucket(),
     noteTemplates: newBucket(), dashboardSettings: newBucket(), dashboardWidgets: newBucket(),
@@ -1780,6 +1851,14 @@ function dispatchRecord(
     case "focus-session": {
       const row = parseFocusSession(raw);
       pushRow(collections.focusSessions, row.id, row, type, path, line, ctx);
+      return;
+    }
+    // One row per profile (migration 034's PRIMARY KEY), so `profileId` IS the
+    // row's identity and a second one is a `duplicate-id` — exactly as for
+    // `dashboard-settings`.
+    case "study-settings": {
+      const row = parseStudySettings(raw);
+      pushRow(collections.studySettings, row.profileId, row, type, path, line, ctx);
       return;
     }
     case "notification": {
@@ -2975,6 +3054,10 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         plans: rowsOf(collections.plans),
         blocks: rowsOf(collections.blocks),
         focusSessions: rowsOf(collections.focusSessions),
+        // Empty for every pre-1.13.0 archive, which carries no such row at all —
+        // and a restore reads that emptiness as "leave the profile on the
+        // scheduler's own defaults", which is exactly where it was.
+        studySettings: rowsOf(collections.studySettings),
         notifications: rowsOf(collections.notifications),
         notes,
         noteFolders: rowsOf(collections.noteFolders),

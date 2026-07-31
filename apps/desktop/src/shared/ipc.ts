@@ -135,6 +135,8 @@ export const IpcChannel = {
   focusDelete: "focus:delete",
   focusRestore: "focus:restore",
   statsStudy: "stats:study",
+  studySettingsGet: "study:settings-get",
+  studySettingsSet: "study:settings-set",
   notificationsCenterList: "notifications:center-list",
   notificationsSnooze: "notifications:snooze",
   notificationsDismiss: "notifications:dismiss",
@@ -1651,6 +1653,67 @@ export interface ReviewQueueRequest extends ReviewQueueScope {
   profileId: string;
 }
 
+/**
+ * What one queue fetch answers with (mirrors `ReviewQueue` in `@nexus/db`): the
+ * cards, plus whether the profile's daily review cap cut the due section short
+ * (STUDY-007).
+ *
+ * `capReached` is a fact about this QUEUE, not about the setting — a profile
+ * with nothing due gets `false`. The end-of-session summary is the one surface
+ * that reads it, because "you are finished" and "you have hit today's ceiling"
+ * are different things to tell someone.
+ */
+export interface ReviewQueue {
+  cards: Card[];
+  capReached: boolean;
+}
+
+/**
+ * Bounds on the study preferences, mirroring `@nexus/db`'s
+ * `study/studySettingsStore.ts` and migration 034's three CHECKs: the same
+ * numbers, declared on both sides so neither imports the other. Main
+ * re-validates every one of them (SEC-EL-02), and the store re-validates after
+ * main.
+ */
+export const MIN_TARGET_RETENTION = 0.7;
+export const MAX_TARGET_RETENTION = 0.97;
+export const MAX_NEW_PER_DAY = 100;
+export const MAX_REVIEWS_PER_DAY = 1000;
+
+/** The retention a profile that has never chosen one is scheduled at — ts-fsrs's own default, and migration 034's column default. */
+export const DEFAULT_TARGET_RETENTION = 0.9;
+
+/** New cards a day for a profile that has never chosen — migration 034's column default. */
+export const DEFAULT_NEW_PER_DAY = 20;
+
+/**
+ * The retention presets „Ciljana zapamćenost" offers. A closed set rather than a
+ * free field: the number is a probability the scheduler aims for, not a
+ * quantity anyone has an intuition about at three decimal places, and five
+ * sensible steps say everything a slider would.
+ */
+export const TARGET_RETENTION_PRESETS = [0.8, 0.85, 0.9, 0.93, 0.95] as const;
+
+/** This profile's resolved study preferences (defaults already applied by the store). */
+export interface StudySettings {
+  /** ts-fsrs's `request_retention`, `MIN_TARGET_RETENTION`..`MAX_TARGET_RETENTION`. */
+  targetRetention: number;
+  /** How many New cards one day's queue may offer, 0..`MAX_NEW_PER_DAY`. */
+  newPerDay: number;
+  /** How many reviews one local day may hold, 1..`MAX_REVIEWS_PER_DAY`, or `null` for no cap at all. */
+  maxReviewsPerDay: number | null;
+}
+
+/** Reads this profile's study preferences. Never writes. */
+export interface StudySettingsRequest {
+  profileId: string;
+}
+
+/** Writes all three preferences at once — they are one form, and a per-field channel would let a renderer leave one of them describing a decision nobody made. */
+export interface StudySettingsSetRequest extends StudySettings {
+  profileId: string;
+}
+
 /** Grades one review. `now` is stamped by main, never accepted from the renderer. */
 export interface ReviewGradeRequest {
   profileId: string;
@@ -2936,6 +2999,7 @@ export type ImportRecordType =
   | "plan"
   | "block"
   | "focus-session"
+  | "study-settings"
   | "notification"
   | "note-folder"
   | "note-tag"
@@ -2964,6 +3028,7 @@ export type ImportSkipCode =
   | "settings-not-imported"
   | "notifications-not-imported"
   | "dashboard-settings-not-imported"
+  | "study-settings-not-imported"
   | "template-name-taken"
   | "source-inbox-collapsed";
 
@@ -3322,10 +3387,20 @@ export interface NexusApi {
   deleteCard(profileId: string, id: string): Promise<void>;
   restoreCard(profileId: string, id: string): Promise<void>;
   cardCounts(profileId: string): Promise<DeckCounts[]>;
-  reviewQueue(profileId: string, scope?: ReviewQueueScope): Promise<Card[]>;
+  /**
+   * The session's cards, plus whether the profile's daily review cap truncated
+   * the due section (STUDY-007). `newLimit` is deliberately never sent by the
+   * reviewer: omitted, the store resolves it from the profile's own
+   * „Novih kartica dnevno".
+   */
+  reviewQueue(profileId: string, scope?: ReviewQueueScope): Promise<ReviewQueue>;
   gradeReview(profileId: string, id: string, rating: CardRating): Promise<Card>;
   undoReview(profileId: string, id: string): Promise<Card>;
   previewReview(profileId: string, id: string): Promise<PreviewIntervals>;
+  /** This profile's target retention and daily caps, defaults already applied (STUDY-007). Never writes. */
+  studySettings(profileId: string): Promise<StudySettings>;
+  /** Writes all three preferences and answers with the fresh row. Existing cards are never retro-rescheduled. */
+  setStudySettings(profileId: string, settings: StudySettings): Promise<StudySettings>;
   listPlans(profileId: string): Promise<StudyPlan[]>;
   createPlan(profileId: string, plan: NewPlanFields): Promise<StudyPlan>;
   updatePlan(profileId: string, id: string, changes: PlanFieldChanges): Promise<StudyPlan>;

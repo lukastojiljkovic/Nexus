@@ -79,6 +79,11 @@ export const RESTORE_WIPE_TABLES = [
   "feature_flags",
   "ntf_settings",
   "ntf_source_settings",
+  // The STUDY module's scheduling preferences (migration 034 / STUDY-007): a
+  // per-profile settings row like the three above it, wiped and rewritten the
+  // same way. Nothing hangs off it — the cards it governs are already gone by
+  // the time this line runs.
+  "study_settings",
   // The dashboard's background choice (migration 030 / ADR-041): a per-profile
   // settings row like the two above it, wiped and rewritten the same way. The
   // blob it names is main's to garbage-collect afterward, never this store's.
@@ -181,6 +186,7 @@ export class RestoreStore {
   private readonly insertFlag: Database.Statement;
   private readonly insertNtfSettings: Database.Statement;
   private readonly insertNtfSourceSetting: Database.Statement;
+  private readonly insertStudySettings: Database.Statement;
   private readonly insertDashboardSettings: Database.Statement;
   private readonly insertDashboardWidget: Database.Statement;
 
@@ -344,6 +350,21 @@ export class RestoreStore {
     );
     this.insertNtfSourceSetting = db.prepare(
       `INSERT INTO ntf_source_settings (profile_id, source, enabled) VALUES (?, ?, 0)`,
+    );
+    // An UPSERT rather than a plain INSERT, even though the wipe above has just
+    // emptied this table for the profile: the row is keyed by the profile alone,
+    // and the upsert shape stays correct even if a future caller runs it against
+    // a profile nothing was wiped from. (Foreign import deliberately carries no
+    // study settings at all — the target's workload choices are their own.)
+    this.insertStudySettings = db.prepare(
+      `INSERT INTO study_settings
+         (profile_id, target_retention, new_per_day, max_reviews_per_day, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT (profile_id) DO UPDATE SET
+         target_retention = excluded.target_retention,
+         new_per_day = excluded.new_per_day,
+         max_reviews_per_day = excluded.max_reviews_per_day,
+         updated_at = excluded.updated_at`,
     );
     this.insertDashboardSettings = db.prepare(
       `INSERT INTO dashboard_settings
@@ -630,6 +651,23 @@ export class RestoreStore {
         this.insertFocusSession.run(
           session.id, this.profileId, session.subjectId, session.startedAt, session.endedAt,
           session.createdAt, session.updatedAt,
+        );
+        written += 1;
+      }
+
+      // STUDY-007, retargeted onto THIS profile like every other row here. Zero
+      // rows is the shape every pre-1.13.0 archive has, and the absence of a row
+      // IS the default (`StudySettingsStore.get`) — so nothing is written to say
+      // "retention 0.9, 20 new a day, no review cap", because that is what no
+      // row already means.
+      for (const settings of input.data.studySettings) {
+        this.insertStudySettings.run(
+          this.profileId,
+          settings.targetRetention,
+          settings.newPerDay,
+          settings.maxReviewsPerDay,
+          now,
+          now,
         );
         written += 1;
       }

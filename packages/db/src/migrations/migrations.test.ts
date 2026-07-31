@@ -16,8 +16,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 33 (problem cards), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(33);
+  it("is at version 34 (study settings), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(34);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -3550,6 +3550,121 @@ describe("migration 033 — problem cards", () => {
     expect(triggers).toContain("cards_search_ai");
     expect(triggers).toContain("cards_search_au");
     expect(triggers).toContain("cards_search_ad");
+    db.close();
+  });
+});
+
+describe("migration 034 — study settings", () => {
+  const now = () => new Date().toISOString();
+
+  const insertSettings = (
+    db: NexusDatabase,
+    profileId: string,
+    targetRetention: number,
+    newPerDay: number,
+    maxReviewsPerDay: number | null,
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO study_settings
+           (profile_id, target_retention, new_per_day, max_reviews_per_day, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(profileId, targetRetention, newPerDay, maxReviewsPerDay, now(), now());
+
+  it("creates the study_settings table and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh-034.db") });
+    expect(tableNames(db)).toContain("study_settings");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("creates the review_log_profile_review index the daily cap counts through", () => {
+    const db = openDatabase({ path: join(dir, "index-034.db") });
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("review_log_profile_review");
+    db.close();
+  });
+
+  it("allows at most one row per profile", () => {
+    const db = openDatabase({ path: join(dir, "one-row-034.db") });
+    insertProfile(db, "p1");
+    insertSettings(db, "p1", 0.9, 20, null);
+    expect(() => insertSettings(db, "p1", 0.85, 10, null)).toThrow();
+    db.close();
+  });
+
+  it("defaults retention to 0.9, new cards to 20 and the review cap to NULL when the columns are omitted", () => {
+    const db = openDatabase({ path: join(dir, "defaults-034.db") });
+    insertProfile(db, "p1");
+    db.raw
+      .prepare(`INSERT INTO study_settings (profile_id, created_at, updated_at) VALUES (?, ?, ?)`)
+      .run("p1", now(), now());
+    const row = db.raw
+      .prepare(
+        "SELECT target_retention, new_per_day, max_reviews_per_day FROM study_settings WHERE profile_id = ?",
+      )
+      .get("p1") as {
+      target_retention: number;
+      new_per_day: number;
+      max_reviews_per_day: number | null;
+    };
+    expect(row.target_retention).toBeCloseTo(0.9, 10);
+    expect(row.new_per_day).toBe(20);
+    expect(row.max_reviews_per_day).toBeNull();
+    db.close();
+  });
+
+  it("rejects a target_retention outside 0.70..0.97 with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-retention.db") });
+    insertProfile(db, "p1");
+    expect(() => insertSettings(db, "p1", 0.69, 20, null)).toThrow();
+    expect(() => insertSettings(db, "p1", 0.98, 20, null)).toThrow();
+    expect(() => insertSettings(db, "p1", 0.7, 20, null)).not.toThrow();
+    insertProfile(db, "p2");
+    expect(() => insertSettings(db, "p2", 0.97, 20, null)).not.toThrow();
+    db.close();
+  });
+
+  it("rejects a new_per_day outside 0..100 with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-new.db") });
+    insertProfile(db, "p1");
+    expect(() => insertSettings(db, "p1", 0.9, -1, null)).toThrow();
+    expect(() => insertSettings(db, "p1", 0.9, 101, null)).toThrow();
+    // Zero is a real answer here — "no new cards today", not "unset".
+    expect(() => insertSettings(db, "p1", 0.9, 0, null)).not.toThrow();
+    insertProfile(db, "p2");
+    expect(() => insertSettings(db, "p2", 0.9, 100, null)).not.toThrow();
+    db.close();
+  });
+
+  it("rejects a max_reviews_per_day outside 1..1000, while NULL means uncapped", () => {
+    const db = openDatabase({ path: join(dir, "check-reviews.db") });
+    insertProfile(db, "p1");
+    // Zero is NOT "uncapped" — NULL is, and a cap of nothing is not a cap.
+    expect(() => insertSettings(db, "p1", 0.9, 20, 0)).toThrow();
+    expect(() => insertSettings(db, "p1", 0.9, 20, 1001)).toThrow();
+    expect(() => insertSettings(db, "p1", 0.9, 20, 1)).not.toThrow();
+    insertProfile(db, "p2");
+    expect(() => insertSettings(db, "p2", 0.9, 20, 1000)).not.toThrow();
+    insertProfile(db, "p3");
+    expect(() => insertSettings(db, "p3", 0.9, 20, null)).not.toThrow();
+    db.close();
+  });
+
+  it("cascades the settings row when the owning profile is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade-034.db") });
+    insertProfile(db, "p1");
+    insertSettings(db, "p1", 0.9, 20, 50);
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM study_settings").get() as { n: number }).n,
+    ).toBe(0);
     db.close();
   });
 });

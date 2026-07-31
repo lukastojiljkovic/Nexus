@@ -199,6 +199,9 @@ const api: NexusApi = {
   undoReview: (profileId, id) => ipcRenderer.invoke(IpcChannel.reviewUndo, { profileId, id }),
   previewReview: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.reviewPreview, { profileId, id }),
+  studySettings: (profileId) => ipcRenderer.invoke(IpcChannel.studySettingsGet, { profileId }),
+  setStudySettings: (profileId, settings) =>
+    ipcRenderer.invoke(IpcChannel.studySettingsSet, { profileId, ...settings }),
   listPlans: (profileId) => ipcRenderer.invoke(IpcChannel.plansList, { profileId }),
   createPlan: (profileId, plan) =>
     ipcRenderer.invoke(IpcChannel.plansCreate, { profileId, plan }),

@@ -44,6 +44,7 @@ import type {
   PeopleStore,
   PlanStore,
   SqliteFlagStore,
+  StudySettingsStore,
   SubjectStore,
   TaskAttachmentStore,
   TaskDependencyStore,
@@ -74,6 +75,7 @@ export interface ProfileDataDeps {
   deckStore(profileId: string): DeckStore;
   cardStore(profileId: string): CardStore;
   planStore(profileId: string): PlanStore;
+  studySettingsStore(profileId: string): StudySettingsStore;
   focusStore(profileId: string): FocusStore;
   notificationStore(profileId: string): NotificationStore;
   noteStore(profileId: string): NoteStore;
@@ -213,6 +215,12 @@ export function gatherProfileData(deps: ProfileDataDeps, profileId: string): Pro
     plans,
     blocks: plans.flatMap((plan) => plansStore.listBlocks(plan.id)),
     focusSessions: deps.focusStore(profileId).listActive(),
+    // Always exactly one row (STUDY-007), on the `dashboardSettings` argument
+    // below: `get` resolves the defaults a profile with no row still has, so an
+    // archive that carried nothing here would restore as "retention 0.9, 20 new
+    // a day, no review cap" anyway — writing the resolved values says the same
+    // thing out loud, and lets the undo snapshot put back caps the user had set.
+    studySettings: [{ profileId, ...deps.studySettingsStore(profileId).get() }],
     notifications: deps.notificationStore(profileId).listAll(),
     ...gatherNotes(deps, profileId),
     // Always exactly one row (ADR-041), because `get` resolves the defaults a

@@ -4,6 +4,7 @@ import { createEmptyCard, fsrs, Rating } from "ts-fsrs";
 import { findClozeRuns, renderClozeCard, renderProblemBack, splitProblemSteps } from "@nexus/core";
 import { CardNotFoundError, CardValidationError } from "../errors.js";
 import { uuidv7 } from "../ids.js";
+import { MAX_NEW_PER_DAY, StudySettingsStore } from "./studySettingsStore.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -152,7 +153,28 @@ export interface DueQueueOptions {
    * steps column is what makes it a problem.
    */
   problemsOnly?: boolean;
+  /**
+   * How many New cards the queue may offer. OMITTED means the profile's own
+   * stored `new_per_day` (STUDY-007), which is what the reviewer always sends —
+   * an explicit value is an override for a caller that knows better, and is
+   * bounded by the same 0..`MAX_NEW_PER_DAY` the setting is.
+   */
   newLimit?: number;
+}
+
+/**
+ * What one `dueQueue` call answers with: the cards, and whether the profile's
+ * daily review cap (STUDY-007) cut the due section short.
+ *
+ * `capReached` is a fact about the QUEUE, not about the setting: it is true only
+ * when a cap is set AND there were more due cards than today's remaining
+ * allowance. A profile that simply has nothing due gets `false` — "you are
+ * finished" and "you have hit your ceiling" are different things to tell
+ * someone, and the end-of-session summary says the second one out loud.
+ */
+export interface ReviewQueue {
+  cards: Card[];
+  capReached: boolean;
 }
 
 /** Per-deck review-queue badge counts (STUDY flashcards). */
@@ -265,8 +287,6 @@ const REVIEW_LOG_COLUMNS =
   "last_elapsed_days, scheduled_days, learning_steps, review";
 
 const MAX_TEXT_LENGTH = 10000;
-const DEFAULT_NEW_LIMIT = 20;
-const MAX_NEW_LIMIT = 100;
 
 /**
  * The most decks one `deckIds` practice scope may name (ADR-047). The dialog
@@ -293,6 +313,15 @@ const dueQueueSql = (scope: string): string =>
     WHERE c.profile_id = ? AND c.deleted_at IS NULL AND c.state != 0 AND c.due <= ? ${scope}
     ORDER BY c.due, c.id`;
 
+/**
+ * The same due section under a daily review cap (STUDY-007): `(profileId, now,
+ * …scope, limit)`. A separate shape rather than a `LIMIT -1` on the one above,
+ * so an uncapped profile's statement is byte-identical to what it always was —
+ * and so the capped one asks the database for what it will actually hand out
+ * plus the single row that proves there was more.
+ */
+const cappedDueQueueSql = (scope: string): string => `${dueQueueSql(scope)}\n    LIMIT ?`;
+
 /** New cards in creation order, capped: `(profileId, …scope, newLimit)`. */
 const newQueueSql = (scope: string): string =>
   `SELECT ${QUEUE_CARD_COLUMNS} ${QUEUE_FROM}
@@ -313,8 +342,8 @@ const MAX_CARD_KEY_LENGTH = 200;
 const ISO_8601_DATETIME =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})?$/;
 
-/** The FSRS scheduler, at the library's default parameters (default request retention) — no custom tuning (STUDY). */
-const scheduler = fsrs();
+/** A configured ts-fsrs scheduler. Named off `fsrs` itself so nothing here depends on which class the library exports. */
+type Scheduler = ReturnType<typeof fsrs>;
 
 /**
  * Card + FSRS-review persistence for a single profile, over prepared,
@@ -357,11 +386,31 @@ export class CardStore {
    * `?` placeholder run.
    */
   private readonly queueStatements = new Map<string, Database.Statement>();
+  private readonly countReviewsInDay: Database.Statement;
+
+  /**
+   * This profile's scheduling preferences (STUDY-007). Read THROUGH on every
+   * scheduling call rather than snapshotted in the constructor: main builds a
+   * fresh `CardStore` per IPC call, so a snapshot would be no cache at all —
+   * and a store that outlives a settings write must not keep scheduling at the
+   * retention the user just changed.
+   */
+  private readonly settings: StudySettingsStore;
+
+  /**
+   * The scheduler built for the retention currently stored, kept until that
+   * number changes. One slot, not a map: a store is scoped to one profile, and
+   * one profile has one retention — so this is a memo of the ts-fsrs parameter
+   * generation, not a cache with an invalidation problem. A settings write is
+   * picked up on the very next call, because the KEY is the value itself.
+   */
+  private schedulerFor: { retention: number; instance: Scheduler } | null = null;
 
   constructor(
     private readonly db: DatabaseHandle,
     private readonly profileId: string,
   ) {
+    this.settings = new StudySettingsStore(db, profileId);
     this.insert = db.prepare(
       `INSERT INTO cards
          (id, profile_id, deck_id, front, back, source_note_id, source_block_key,
@@ -455,6 +504,13 @@ export class CardStore {
        ORDER BY review, id`,
     );
     this.deleteReviewLog = db.prepare(`DELETE FROM review_log WHERE id = ? AND profile_id = ?`);
+    // The daily review cap's own count (STUDY-007), over migration 034's
+    // `review_log_profile_review` index. A half-open window, so a review logged
+    // at exactly midnight belongs to the day that starts there and to no other.
+    this.countReviewsInDay = db.prepare(
+      `SELECT count(*) AS n FROM review_log
+        WHERE profile_id = ? AND review >= ? AND review < ?`,
+    );
     this.countsByDeckStatement = db.prepare(
       `SELECT d.id AS deck_id,
               SUM(CASE WHEN c.id IS NOT NULL AND c.state = 0 THEN 1 ELSE 0 END) AS new_count,
@@ -937,6 +993,28 @@ export class CardStore {
   }
 
   /**
+   * The scheduler this profile's CURRENT target retention describes (STUDY-007).
+   *
+   * The pinned semantics, and the whole reason this is a read-through rather
+   * than something computed once: **grading and preview use the retention
+   * stored at that moment, and existing cards are never retro-rescheduled.** A
+   * change to the setting therefore shows up on the next review of each card,
+   * as its own next interval — never as a silent, profile-wide rewrite of every
+   * `due` the user has already seen. (ts-fsrs offers `reschedule` for that; it
+   * is deliberately not called anywhere.)
+   */
+  private scheduler(): Scheduler {
+    const { targetRetention } = this.settings.get();
+    if (this.schedulerFor === null || this.schedulerFor.retention !== targetRetention) {
+      this.schedulerFor = {
+        retention: targetRetention,
+        instance: fsrs({ request_retention: targetRetention }),
+      };
+    }
+    return this.schedulerFor.instance;
+  }
+
+  /**
    * Grades a review: schedules the card via ts-fsrs at `now`, persists the
    * resulting FSRS fields, and appends the corresponding `review_log` row — all
    * in one transaction.
@@ -945,6 +1023,7 @@ export class CardStore {
     const validRating = validateRating(rating);
     const validNow = validateNow(now);
     const current = this.requireActive(id);
+    const scheduler = this.scheduler();
 
     return this.db.transaction((): Card => {
       const { card: nextCard, log } = scheduler.next(toCardInput(current), validNow, validRating);
@@ -1001,6 +1080,7 @@ export class CardStore {
     if (!logRow) {
       throw new CardValidationError(`No review to undo for card "${id}" in this profile.`);
     }
+    const scheduler = this.scheduler();
 
     return this.db.transaction((): Card => {
       const prevCard = scheduler.rollback(toCardInput(current), toReviewLogInput(logRow));
@@ -1032,7 +1112,7 @@ export class CardStore {
   previewIntervals(id: string, now: string): PreviewIntervals {
     const validNow = validateNow(now);
     const current = this.requireActive(id);
-    const preview = scheduler.repeat(toCardInput(current), validNow);
+    const preview = this.scheduler().repeat(toCardInput(current), validNow);
 
     return {
       again: preview[Rating.Again].card.due.toISOString(),
@@ -1050,25 +1130,92 @@ export class CardStore {
    * filters apply to both sections; ordering the two sections into one
    * interleaved practice run is `@nexus/core`'s `interleavePractice`, not this
    * store's: the queue answers what is studiable, never in what mood.
+   *
+   * Both of the profile's daily caps (STUDY-007) apply here, and they are
+   * deliberately SEPARATE budgets. `new_per_day` bounds the New section — it is
+   * what an omitted `newLimit` resolves to. `max_reviews_per_day`, when set,
+   * bounds the DUE section by what is left of today: `cap` minus the reviews
+   * already logged inside today's local calendar day. New cards are not counted
+   * against it and are not truncated by it — a card seen for the first time is
+   * not a repetition, and the two ceilings exist precisely so one can be spent
+   * without spending the other.
    */
-  dueQueue(options: DueQueueOptions = {}, now: string): Card[] {
+  dueQueue(options: DueQueueOptions = {}, now: string): ReviewQueue {
     const validNow = validateNow(now);
-    const newLimit = validateNewLimit(options.newLimit);
+    const settings = this.settings.get();
+    // An explicit `newLimit` wins, and is bounded exactly as the stored setting
+    // is; omitted means the profile's own choice. The reviewer never sends one.
+    const newLimit =
+      options.newLimit === undefined ? settings.newPerDay : validateNewLimit(options.newLimit);
     const scope = this.resolveQueueScope(options);
     const predicate =
       options.problemsOnly === true ? `${scope.sql} ${PROBLEMS_ONLY_SCOPE}` : scope.sql;
 
-    const dueRows = this.queueStatement(dueQueueSql(predicate)).all(
-      this.profileId,
-      validNow,
-      ...scope.params,
-    ) as CardRow[];
+    const due = this.dueSection(predicate, scope.params, settings.maxReviewsPerDay, validNow);
     const newRows = this.queueStatement(newQueueSql(predicate)).all(
       this.profileId,
       ...scope.params,
       newLimit,
     ) as CardRow[];
-    return [...dueRows.map(toCard), ...newRows.map(toCard)];
+    return {
+      cards: [...due.rows.map(toCard), ...newRows.map(toCard)],
+      capReached: due.capReached,
+    };
+  }
+
+  /** The due half of the queue, under the daily review cap when the profile has one. */
+  private dueSection(
+    predicate: string,
+    params: readonly string[],
+    cap: number | null,
+    now: string,
+  ): { rows: CardRow[]; capReached: boolean } {
+    if (cap === null) {
+      return {
+        rows: this.queueStatement(dueQueueSql(predicate)).all(
+          this.profileId,
+          now,
+          ...params,
+        ) as CardRow[],
+        capReached: false,
+      };
+    }
+
+    const allowance = Math.max(0, cap - this.reviewsDoneToday(now));
+    // One row past the allowance: enough to know the queue was cut short,
+    // never a row the caller is offered. An allowance of 0 therefore still
+    // asks for a single row, which is exactly how "the cap is spent AND there
+    // was something left" is told apart from "there is nothing due".
+    const rows = this.queueStatement(cappedDueQueueSql(predicate)).all(
+      this.profileId,
+      now,
+      ...params,
+      allowance + 1,
+    ) as CardRow[];
+    return { rows: rows.slice(0, allowance), capReached: rows.length > allowance };
+  }
+
+  /**
+   * How many reviews this profile has logged inside the LOCAL calendar day
+   * containing `now`.
+   *
+   * The day boundary is local wall clock, not UTC — the `localTodayKey` idiom
+   * the study planner, the calendar and the dashboard all already use. A daily
+   * cap is a promise about the user's day, and a user in UTC+2 whose ceiling
+   * lifted at 02:00 would rightly call that broken. The window is computed from
+   * `now`'s own y/m/d fields and compared as ISO text, which is what every other
+   * `review_log` ordering in this store already does.
+   */
+  private reviewsDoneToday(now: string): number {
+    const at = new Date(now);
+    const dayStart = new Date(at.getFullYear(), at.getMonth(), at.getDate());
+    const nextDay = new Date(at.getFullYear(), at.getMonth(), at.getDate() + 1);
+    const { n } = this.countReviewsInDay.get(
+      this.profileId,
+      dayStart.toISOString(),
+      nextDay.toISOString(),
+    ) as { n: number };
+    return n;
   }
 
   /** Prepares one queue shape, or returns the one already prepared for it. */
@@ -1439,10 +1586,10 @@ function validateDeckIds(deckIds: readonly string[]): string[] {
   return [...deckIds];
 }
 
-function validateNewLimit(value: number | undefined): number {
-  if (value === undefined) return DEFAULT_NEW_LIMIT;
-  if (!Number.isInteger(value) || value < 0 || value > MAX_NEW_LIMIT) {
-    throw new CardValidationError(`"newLimit" must be an integer between 0 and ${MAX_NEW_LIMIT}.`);
+/** An EXPLICIT `newLimit` override, bounded by the same range the stored `new_per_day` is (migration 034's CHECK). Omission is resolved by `dueQueue` itself, from the profile's settings. */
+function validateNewLimit(value: number): number {
+  if (!Number.isInteger(value) || value < 0 || value > MAX_NEW_PER_DAY) {
+    throw new CardValidationError(`"newLimit" must be an integer between 0 and ${MAX_NEW_PER_DAY}.`);
   }
   return value;
 }

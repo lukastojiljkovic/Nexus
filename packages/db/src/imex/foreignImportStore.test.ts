@@ -30,6 +30,7 @@ import {
   PeopleStore,
   PlanStore,
   RestoreValidationError,
+  StudySettingsStore,
   SubjectStore,
   TaskAttachmentStore,
   TaskDependencyStore,
@@ -105,6 +106,7 @@ function emptyProfileData(): ProfileData {
     plans: [],
     blocks: [],
     focusSessions: [],
+    studySettings: [],
     notifications: [],
     notes: [],
     noteFolders: [],
@@ -273,6 +275,7 @@ function gather(profileId: string): ProfileData {
     plans: activePlans,
     blocks: activePlans.flatMap((plan) => plans.listBlocks(plan.id)),
     focusSessions: new FocusStore(db.raw, profileId).listActive(),
+    studySettings: [{ profileId, ...new StudySettingsStore(db.raw, profileId).get() }],
     notifications: new NotificationStore(db.raw, profileId).listAll(),
     notes: notes.list().map((meta) => ({ ...meta, snapshot: null })),
     noteFolders: org.listFolders(),
@@ -680,6 +683,23 @@ describe("ForeignImportStore", () => {
           size: "S", position: 4096, config: '{"a":1}', createdAt: t, updatedAt: t,
         },
       ]);
+    });
+
+    // STUDY-007's preferences never arrive here: the planner drops them by
+    // design (the target's workload choices are their own), so the store has no
+    // statement for them and the row must survive any import untouched.
+    it("leaves the target's own study settings alone when the plan carries none", () => {
+      const target = createProfile("Odredište");
+      const settings = new StudySettingsStore(db.raw, target);
+      settings.save({ targetRetention: 0.8, newPerDay: 3, maxReviewsPerDay: 25 }, NOW);
+
+      new ForeignImportStore(db.raw, target).insertPlanned(emptyProfileData(), new Map(), NOW);
+
+      expect(settings.get()).toEqual({
+        targetRetention: 0.8,
+        newPerDay: 3,
+        maxReviewsPerDay: 25,
+      });
     });
 
     it("refuses a task that names no list", () => {

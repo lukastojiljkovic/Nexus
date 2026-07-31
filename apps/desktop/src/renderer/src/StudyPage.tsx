@@ -2825,7 +2825,14 @@ interface GradeHistoryEntry {
   cardId: string;
   /** Whether grading this card requeued it at the end of the session (vs. leaving permanently). */
   requeued: boolean;
+  /** Which button was pressed — kept so undo can take the grade back out of the session's tally (STUDY-009). */
+  rating: CardRating;
 }
+
+/** How many times each button was pressed this session (STUDY-009). Grades, not cards: a requeued card graded twice is two presses, which is what a breakdown of ratings means. */
+type RatingTally = Record<CardRating, number>;
+
+const EMPTY_RATING_TALLY: RatingTally = { 1: 0, 2: 0, 3: 0, 4: 0 };
 
 /**
  * A keyboard-first review session over `reviewQueue(profileId, scope)`,
@@ -2855,6 +2862,19 @@ function ReviewSession({ profileId, scope, practice, decks, onExit }: ReviewSess
   // more of them, revealed one press at a time.
   const [revealedSteps, setRevealedSteps] = useState(0);
   const [preview, setPreview] = useState<PreviewIntervals | null>(null);
+  // STUDY-009's summary state. The tally counts button presses and undo takes
+  // one back out, so what the completion screen reports is always exactly the
+  // session that stands — never a graded card the user has since rolled back.
+  const [ratings, setRatings] = useState<RatingTally>(EMPTY_RATING_TALLY);
+  // Whether the profile's daily review cap truncated THIS queue (STUDY-007) —
+  // read once, from the fetch, because it is a fact about what was handed over.
+  const [capReached, setCapReached] = useState(false);
+  // Start and finish of the session as wall-clock ms. `startedAt` is the moment
+  // the reviewer mounted (the fetch is part of the session, not before it);
+  // `finishedAt` is set when the queue empties and cleared when an undo refills
+  // it, so a resumed session is re-measured rather than reporting a stale span.
+  const startedAtRef = useRef(Date.now());
+  const [finishedAt, setFinishedAt] = useState<number | null>(null);
   const historyRef = useRef<GradeHistoryEntry[]>([]);
   const scopeRef = useRef(scope);
   const practiceRef = useRef(practice);
@@ -2872,10 +2892,11 @@ function ReviewSession({ profileId, scope, practice, decks, onExit }: ReviewSess
         const config = practiceRef.current;
         // The single application of the interleave, before the queue exists.
         const initial = config
-          ? interleavePractice(fetched, (card) => card.deckId, config.seed)
-          : fetched;
+          ? interleavePractice(fetched.cards, (card) => card.deckId, config.seed)
+          : fetched.cards;
         setQueue(initial);
         setTotal(initial.length);
+        setCapReached(fetched.capReached);
         setSpansDecks(new Set(initial.map((card) => card.deckId)).size > 1);
       } catch (error) {
         console.error("Nexus: failed to load review queue:", error);
@@ -2921,10 +2942,11 @@ function ReviewSession({ profileId, scope, practice, decks, onExit }: ReviewSess
       const graded = await window.nexus.gradeReview(profileId, current.id, rating);
       const requeue = (graded.state === 1 || graded.state === 3) && isDueWithinSession(now, graded.due);
 
-      historyRef.current.push({ cardId: current.id, requeued: requeue });
+      historyRef.current.push({ cardId: current.id, requeued: requeue, rating });
       const rest = queue.slice(1);
       setQueue(requeue ? [...rest, graded] : rest);
       if (!requeue) setCompletedCount((n) => n + 1);
+      setRatings((tally) => ({ ...tally, [rating]: tally[rating] + 1 }));
       setRevealedSteps(0);
       setPreview(null);
     } catch (error) {
@@ -2945,6 +2967,7 @@ function ReviewSession({ profileId, scope, practice, decks, onExit }: ReviewSess
         return [restored, ...withoutRequeuedCopy];
       });
       if (!entry.requeued) setCompletedCount((n) => Math.max(0, n - 1));
+      setRatings((tally) => ({ ...tally, [entry.rating]: Math.max(0, tally[entry.rating] - 1) }));
       // Back to nothing uncovered — the restored card is asked again from its
       // statement, however many steps it has.
       setRevealedSteps(0);
@@ -2955,6 +2978,14 @@ function ReviewSession({ profileId, scope, practice, decks, onExit }: ReviewSess
       historyRef.current.push(entry);
     }
   }
+
+  // The moment the session ended, stamped once (STUDY-009). An undo that puts a
+  // card back clears it, so the summary a resumed-then-finished session shows
+  // measures the whole thing rather than the first time it happened to empty.
+  useEffect(() => {
+    if (queue === null) return;
+    setFinishedAt(queue.length === 0 ? Date.now() : null);
+  }, [queue]);
 
   // Keyboard is the primary interface here — no inputs exist in this view, so
   // no target-type filtering is needed. Re-subscribing every render keeps the
@@ -3001,7 +3032,9 @@ function ReviewSession({ profileId, scope, practice, decks, onExit }: ReviewSess
 
   // A practice selection that yielded nothing is not an accomplishment: the
   // user chose špilovi (and possibly „Samo zadaci") and there was nothing in
-  // them, which the celebratory „Sve obnovljeno za sada." would misreport.
+  // them, which the celebratory „Sve obnovljeno za sada." would misreport. The
+  // empty selection is deliberately left exactly as it was — there is no
+  // session to summarize.
   if (practice !== null && total === 0) {
     return (
       <div className="review review--complete">
@@ -3016,12 +3049,40 @@ function ReviewSession({ profileId, scope, practice, decks, onExit }: ReviewSess
   }
 
   if (current == null) {
+    const summary = strings.study.summary;
+    const gradeCount = CARD_RATINGS.reduce((sum, rating) => sum + ratings[rating], 0);
     return (
       <div className="review review--complete">
         <p className="review__complete-title">{strings.study.reviewCompleteTitle}</p>
         <p className="review__complete-count">
           {strings.study.reviewCompleteLabel}: {completedCount}
         </p>
+        {/* The detail only exists once something was actually graded — a queue
+            that was empty on arrival has nothing to break down. */}
+        {gradeCount > 0 && (
+          <div className="review__summary">
+            {/* The four labels ARE the row's own caption — „Ponovo 3 · Teško 1"
+                needs no heading above it to say what it is. */}
+            <dl className="review__summary-ratings">
+              {CARD_RATINGS.map((rating) => (
+                <div key={rating} className="review__summary-rating">
+                  <dt className="review__summary-rating-label">
+                    {strings.study.rating[RATING_KEYS[rating]]}
+                  </dt>
+                  <dd className="review__summary-rating-count">{ratings[rating]}</dd>
+                </div>
+              ))}
+            </dl>
+            {finishedAt !== null && (
+              <p className="review__summary-duration">
+                {summary.durationLabel}: {formatElapsed(finishedAt - startedAtRef.current)}
+              </p>
+            )}
+          </div>
+        )}
+        {/* STUDY-007: said out loud, because "nothing left" and "today's ceiling
+            is spent" are different reasons for the same empty queue. */}
+        {capReached && <p className="review__summary-cap">{summary.capReached}</p>}
         <div className="review__complete-actions">
           {historyRef.current.length > 0 && (
             <Button onClick={() => void undoLast()}>{strings.study.reviewUndo}</Button>

@@ -12,7 +12,13 @@ import {
   type ModuleRegistry,
 } from "@nexus/core";
 import { ACCENT_IDS, type AccentId } from "@nexus/tokens";
-import { MAX_BACKGROUND_DIM } from "../../shared/ipc.js";
+import {
+  DEFAULT_TARGET_RETENTION,
+  MAX_BACKGROUND_DIM,
+  MAX_NEW_PER_DAY,
+  MAX_REVIEWS_PER_DAY,
+  TARGET_RETENTION_PRESETS,
+} from "../../shared/ipc.js";
 import type {
   AppInfo,
   DashboardSettings,
@@ -23,6 +29,7 @@ import type {
   RestoreModuleCounts,
   RestorePreview,
   RestoreProblem,
+  StudySettings,
 } from "../../shared/ipc.js";
 import { authErrorMessage, passcodeMeetsPolicy, RecoveryKitPanel } from "./AuthGate.js";
 import { ALL_NOTIFICATION_SOURCES, NOTIFICATION_PRESETS } from "./notificationFormat.js";
@@ -1162,6 +1169,185 @@ function DashboardSection({ profileId, hits }: DashboardSectionProps) {
   );
 }
 
+interface StudySectionProps {
+  profileId: string;
+  /** SET-014 hit ids — one per control: `study-retention`, `study-new-per-day`, `study-review-cap`. */
+  hits: ReadonlySet<string>;
+}
+
+/**
+ * Učenje section (STUDY-007): the FSRS target retention and the two daily caps.
+ *
+ * „Ciljana zapamćenost" is a closed segmented row over `TARGET_RETENTION_PRESETS`,
+ * not a numeric field — the value is a probability the scheduler aims for, and
+ * nobody has an intuition about 0.9137. It follows the theme/week-start recipe
+ * exactly, which is this app's spelling of a small closed select.
+ *
+ * The two caps are ordinary number inputs held as TEXT while being typed, and
+ * committed only once the draft parses inside its own range — otherwise
+ * backspacing "20" to "" would fire a write for a number the user is in the
+ * middle of replacing. Blur snaps a half-typed draft back to what is stored, so
+ * the field can never show something the profile does not have. The empty cap
+ * field is a real value (`null`, "no limit"), so it commits on the spot.
+ *
+ * Every write is the WHOLE triple (one channel, one form), commits immediately
+ * like the dashboard's dim, and carries a `latest`-wins guard for the same
+ * reason: replies to a fast sequence of edits can land out of order.
+ */
+function StudySection({ profileId, hits }: StudySectionProps) {
+  const s = strings.settings.study;
+  const [settings, setSettings] = useState<StudySettings | null>(null);
+  const [newPerDayDraft, setNewPerDayDraft] = useState("");
+  const [reviewCapDraft, setReviewCapDraft] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const latest = useRef<StudySettings | null>(null);
+
+  function adopt(next: StudySettings): void {
+    setSettings(next);
+    setNewPerDayDraft(String(next.newPerDay));
+    setReviewCapDraft(next.maxReviewsPerDay === null ? "" : String(next.maxReviewsPerDay));
+  }
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const next = await window.nexus.studySettings(profileId);
+        if (active) adopt(next);
+      } catch (loadError) {
+        if (active) setError(strings.settings.study.error);
+        console.error("Nexus: failed to load study settings:", loadError);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profileId]);
+
+  async function save(next: StudySettings): Promise<void> {
+    latest.current = next;
+    setSettings(next);
+    setError(null);
+    try {
+      const stored = await window.nexus.setStudySettings(profileId, next);
+      if (latest.current === next) adopt(stored);
+    } catch (saveError) {
+      setError(s.error);
+      console.error("Nexus: failed to save study settings:", saveError);
+    }
+  }
+
+  if (settings === null) {
+    return error != null ? (
+      <p className="set__error">{error}</p>
+    ) : (
+      <p className="app__muted">{strings.app.loading}</p>
+    );
+  }
+
+  const current = settings;
+
+  const changeNewPerDay = (text: string): void => {
+    setNewPerDayDraft(text);
+    // The empty check leads: `Number("")` is 0, which is a legal value here, so
+    // an unfinished edit would otherwise commit "no new cards today".
+    const parsed = Number(text);
+    if (text.trim() === "" || !Number.isInteger(parsed) || parsed < 0 || parsed > MAX_NEW_PER_DAY) {
+      return;
+    }
+    void save({ ...current, newPerDay: parsed });
+  };
+
+  const changeReviewCap = (text: string): void => {
+    setReviewCapDraft(text);
+    // Here an empty field is the VALUE "no limit", not an unfinished edit — so
+    // it commits, unlike an empty „Novih kartica dnevno".
+    if (text.trim() === "") {
+      void save({ ...current, maxReviewsPerDay: null });
+      return;
+    }
+    const parsed = Number(text);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_REVIEWS_PER_DAY) return;
+    void save({ ...current, maxReviewsPerDay: parsed });
+  };
+
+  return (
+    <>
+      <p className="set__section-caption">{s.caption}</p>
+
+      <p className={labelClass("set__section-caption", hits.has("study-retention"))}>
+        {s.retentionLabel}
+      </p>
+      <div className="set__segmented" role="group" aria-label={s.retentionLabel}>
+        {TARGET_RETENTION_PRESETS.map((preset) => (
+          <Button
+            key={preset}
+            size="sm"
+            variant={current.targetRetention === preset ? "primary" : "ghost"}
+            aria-pressed={current.targetRetention === preset}
+            onClick={() => void save({ ...current, targetRetention: preset })}
+          >
+            {retentionLabel(preset)}
+          </Button>
+        ))}
+      </div>
+      <p className="set__section-caption">{s.retentionHint}</p>
+
+      <div className="set__study-fields">
+        <label className="set__study-field">
+          <span className={labelClass("set__study-label", hits.has("study-new-per-day"))}>
+            {s.newPerDayLabel}
+          </span>
+          <input
+            type="number"
+            inputMode="numeric"
+            className="nx-textfield__input set__study-number"
+            min={0}
+            max={MAX_NEW_PER_DAY}
+            value={newPerDayDraft}
+            onChange={(event) => changeNewPerDay(event.target.value)}
+            onBlur={() => setNewPerDayDraft(String(current.newPerDay))}
+          />
+          <span className="set__section-caption">{s.newPerDayHint}</span>
+        </label>
+
+        <label className="set__study-field">
+          <span className={labelClass("set__study-label", hits.has("study-review-cap"))}>
+            {s.reviewCapLabel}
+          </span>
+          <input
+            type="number"
+            inputMode="numeric"
+            className="nx-textfield__input set__study-number"
+            min={1}
+            max={MAX_REVIEWS_PER_DAY}
+            placeholder={s.reviewCapPlaceholder}
+            value={reviewCapDraft}
+            onChange={(event) => changeReviewCap(event.target.value)}
+            onBlur={() =>
+              setReviewCapDraft(
+                current.maxReviewsPerDay === null ? "" : String(current.maxReviewsPerDay),
+              )
+            }
+          />
+          <span className="set__section-caption">{s.reviewCapHint}</span>
+        </label>
+      </div>
+
+      <p className="set__section-caption">{s.retroNotice}</p>
+      {error != null && <p className="set__error">{error}</p>}
+    </>
+  );
+}
+
+/** A retention preset as a whole percent, with the scheduler's own default named as such. */
+function retentionLabel(preset: number): string {
+  const percent = `${Math.round(preset * 100)}%`;
+  return preset === DEFAULT_TARGET_RETENTION
+    ? `${percent} · ${strings.settings.study.retentionDefault}`
+    : percent;
+}
+
 /** A settings-form result line: green-ish caption on success, `.set__error` on failure — same idiom as `ProfileSection`/`BackupSection`, just shared across the two Sigurnost sub-forms. */
 interface SecurityMessage {
   text: string;
@@ -1762,6 +1948,13 @@ export function SettingsPage({
         className={sectionClass(sections.has("dashboard"))}
       >
         <DashboardSection profileId={profileId} hits={hits} />
+      </Card>
+
+      <Card
+        title={strings.settings.sectionTitle.study}
+        className={sectionClass(sections.has("study"))}
+      >
+        <StudySection profileId={profileId} hits={hits} />
       </Card>
 
       <Card title={strings.settings.sectionTitle.modules} className={sectionClass(sections.has("modules"))}>

@@ -53,7 +53,7 @@ function emptyProfileData(): ProfileData {
     taskAttachments: [], taskTemplates: [], taskDependencies: [],
     events: [], documents: [], renewals: [], people: [],
     subjects: [], exams: [], decks: [], cards: [], reviewLog: [], plans: [], blocks: [],
-    focusSessions: [], notifications: [],
+    focusSessions: [], studySettings: [], notifications: [],
     notes: [], noteFolders: [], noteTags: [], noteTagLinks: [], noteTemplates: [],
     noteAttachments: [], noteVersions: [],
     dashboardSettings: [], dashboardWidgets: [],
@@ -121,6 +121,9 @@ function foreignProfileData(): ProfileData {
     ],
     focusSessions: [
       { id: "src-fs1", profileId: "src", subjectId: "src-s1", startedAt: "2026-01-02T09:00:00.000Z", endedAt: "2026-01-02T10:00:00.000Z", createdAt: T0, updatedAt: T0 },
+    ],
+    studySettings: [
+      { profileId: "src", targetRetention: 0.95, newPerDay: 7, maxReviewsPerDay: 120 },
     ],
     notifications: [
       { id: "src-nt1", profileId: "src", source: "exam", entityId: "src-ex1", occurrenceKey: "k", title: "T", body: "B", status: "delivered", snoozedUntil: null, deliveredAt: T0, createdAt: T0, updatedAt: T0 },
@@ -576,8 +579,21 @@ describe("planForeignImport — the report adds up", () => {
 
   it("counts an all-imported module honestly", () => {
     const { report } = plan(foreignProfileData());
-    // 1 subject + 1 exam + 1 deck + 1 card + 1 review + 1 plan + 1 block + 1 session.
-    expect(report.modules.study).toEqual({ parsed: 8, imported: 8, merged: 0, skipped: 0 });
+    // 1 subject + 1 exam + 1 deck + 1 card + 1 review + 1 plan + 1 block +
+    // 1 session imported; the scheduling-preferences row (STUDY-007) is the
+    // module's one by-design skip — the target's own workload choices stay.
+    expect(report.modules.study).toEqual({ parsed: 9, imported: 8, merged: 0, skipped: 1 });
+  });
+
+  it("never imports the study preferences — the skip is named, the target's choices stay", () => {
+    const { data, report } = plan(foreignProfileData());
+    expect(data.studySettings).toEqual([]);
+    expect(report.skips).toContainEqual({
+      code: "study-settings-not-imported",
+      module: "study",
+      type: "study-settings",
+      count: 1,
+    });
   });
 
   it("counts the notifications module as entirely skipped", () => {

@@ -85,6 +85,7 @@ import {
   SqliteFlagStore,
   StatsStore,
   STUDY_BLOCK_STATUSES,
+  StudySettingsStore,
   SUBJECT_COLORS,
   SubjectStore,
   TaskAttachmentNotFoundError,
@@ -237,6 +238,10 @@ import {
   IpcChannel,
   MAX_BACKGROUND_BYTES,
   MAX_BACKGROUND_DIM,
+  MAX_NEW_PER_DAY,
+  MAX_REVIEWS_PER_DAY,
+  MAX_TARGET_RETENTION,
+  MIN_TARGET_RETENTION,
   MAX_TASK_TAG_NAME_LENGTH,
   MAX_TASK_TEMPLATE_NAME_LENGTH,
   NOTE_CARD_KEY_MAX_LENGTH,
@@ -251,6 +256,8 @@ import {
   type AuthStatus,
   type DashboardPickResult,
   type DashboardSettings,
+  type ReviewQueue,
+  type StudySettings,
   type DashboardWidgetInstance,
   type DashboardWidgetSize,
   type ExportResult,
@@ -1263,6 +1270,30 @@ function asGlobalShortcutChord(value: unknown, field: string): GlobalShortcutCho
   };
 }
 
+/**
+ * A finite REAL field inside an inclusive range — the target retention
+ * (STUDY-007) is the one number crossing this bridge that is deliberately not a
+ * whole one, since it is a probability the scheduler aims for.
+ */
+function asBoundedNumber(value: unknown, field: string, min: number, max: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be a number between ${min} and ${max}.`,
+    );
+  }
+  return value;
+}
+
+/** An optional bounded whole number: an explicit null — which MEANS "no cap" — or an integer inside the range. */
+function asNullableBoundedInteger(
+  value: unknown,
+  field: string,
+  min: number,
+  max: number,
+): number | null {
+  return value === null ? null : asBoundedInteger(value, field, min, max);
+}
+
 // A person's date is (month, day) rather than a date string, so each half is
 // bounded on its own here. These are the PER-COLUMN bounds only — that the pair
 // names a real calendar day (never 30 February) and that a year falls inside
@@ -1875,6 +1906,10 @@ function cardStore(profileId: string): CardStore {
 
 function planStore(profileId: string): PlanStore {
   return new PlanStore(requireDb().raw, profileId);
+}
+
+function studySettingsStore(profileId: string): StudySettingsStore {
+  return new StudySettingsStore(requireDb().raw, profileId);
 }
 
 function focusStore(profileId: string): FocusStore {
@@ -2640,6 +2675,7 @@ function restoreDeps(): ImportDeps {
     deckStore,
     cardStore,
     planStore,
+    studySettingsStore,
     focusStore,
     notificationStore,
     noteStore,
@@ -3729,7 +3765,7 @@ function registerIpc(): void {
 
   // SEC-EL-02: `now` is always stamped here from the main process's own clock —
   // the renderer's `now` is never trusted for FSRS scheduling decisions.
-  ipcMain.handle(IpcChannel.reviewQueue, (event, payload): Card[] => {
+  ipcMain.handle(IpcChannel.reviewQueue, (event, payload): ReviewQueue => {
     assertTrustedSender(event);
     const body = asRecord(payload);
     const profileId = asNonEmptyString(body.profileId, "profileId");
@@ -3940,6 +3976,46 @@ function registerIpc(): void {
       reviews: stats.reviewCounts(fromDate, toDate),
       blocks: stats.blockTotals(fromDate, toDate),
     };
+  });
+
+  // Study preferences (STUDY-007). SEC-EL-02 as everywhere else:
+  // `assertTrustedSender` first, `asRecord` on the payload, one `as*` validator
+  // per field mirroring migration 034's own CHECKs — and the store re-validates
+  // all three after this, because a store is never the place that assumes its
+  // caller did. `now` is stamped from main's own clock.
+  ipcMain.handle(IpcChannel.studySettingsGet, (event, payload): StudySettings => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return studySettingsStore(profileId).get();
+  });
+
+  ipcMain.handle(IpcChannel.studySettingsSet, (event, payload): StudySettings => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    // All three together, never one at a time: they are one form, and a write
+    // that carried two of them would leave the third describing a decision the
+    // user did not make.
+    return studySettingsStore(profileId).save(
+      {
+        targetRetention: asBoundedNumber(
+          body.targetRetention,
+          "targetRetention",
+          MIN_TARGET_RETENTION,
+          MAX_TARGET_RETENTION,
+        ),
+        newPerDay: asBoundedInteger(body.newPerDay, "newPerDay", 0, MAX_NEW_PER_DAY),
+        // `null` is the value, not a missing field: it MEANS "no cap at all",
+        // which is why the floor below it is 1 rather than 0.
+        maxReviewsPerDay: asNullableBoundedInteger(
+          body.maxReviewsPerDay,
+          "maxReviewsPerDay",
+          1,
+          MAX_REVIEWS_PER_DAY,
+        ),
+      },
+      new Date().toISOString(),
+    );
   });
 
   ipcMain.handle(IpcChannel.notificationsCenterList, (event, payload): NotificationRecord[] => {
@@ -4620,6 +4696,7 @@ function registerIpc(): void {
         deckStore,
         cardStore,
         planStore,
+        studySettingsStore,
         focusStore,
         notificationStore,
         noteStore,

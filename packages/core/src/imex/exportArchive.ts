@@ -27,7 +27,9 @@ import { renderNoteMarkdown } from "./noteMarkdown.js";
 import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown.js";
 
 /**
- * IMEX-004: the archive's own semver. `1.12.0` adds a card's `problemSteps` —
+ * IMEX-004: the archive's own semver. `1.13.0` adds the `study-settings` record
+ * type — the profile's FSRS target retention and its two daily caps (STUDY-007,
+ * migration 034) — after `1.12.0` added a card's `problemSteps` —
  * the worked solution a problem card's `back` is derived from (ADR-046) —
  * after `1.11.0` added the `dashboard-widget` record type — the profile's
  * dashboard layout (DASH-002 / ADR-045, migration 032) — `1.10.0` a card's
@@ -42,20 +44,22 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * `reminderOffsets` (ADR-028) and `1.1.0` the `person` record type (CAL-007 /
  * ADR-026). Additive, so a MINOR bump by the same honesty each of those made
  * one: an archive this build writes is refused by an older reader, which would
- * otherwise parse every problem card and restore it as a plain front/back card
- * whose steps — the only text its owner can edit, and the thing the reviewer
- * reveals one at a time — are gone; the same honesty `1.11.0` owed the
- * arranged dashboard and `1.10.0` owed every cloze template. Kept in step
+ * otherwise restore a profile onto the library-default retention and the
+ * built-in daily caps — silently undoing a decision about how hard its owner
+ * had chosen to study; the same honesty `1.12.0` owed every problem card's
+ * steps, `1.11.0` owed the arranged dashboard and `1.10.0` owed every cloze
+ * template. Kept in step
  * with `INTERCHANGE_SCHEMA_VERSION` (`importArchive.ts`) — two constants
  * rather than one import, since the reader already imports from this module
  * and the cycle would be worse than the duplication; `importArchive.test.ts`
  * pins them equal.
  *
  * SUPERVISOR NOTE: `1.11.0` belongs to the sibling lane (dashboard layout) and
- * is not in this worktree; this lane writes `1.12.0` directly, leaving the gap
- * for the supervisor to reconcile at merge.
+ * is not in this worktree; the `1.12.0` lane wrote its version directly and
+ * this one writes `1.13.0` on top, leaving the gap for the supervisor to
+ * reconcile at merge.
  */
-const SCHEMA_VERSION = "1.12.0";
+const SCHEMA_VERSION = "1.13.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -442,6 +446,24 @@ export interface ExportStudyBlock {
   updatedAt: string;
 }
 
+/**
+ * One profile's study-scheduling preferences (STUDY-007, migration 034): the
+ * FSRS target retention plus the two daily caps. Rides in `data/study.ndjson`,
+ * FIRST — it references nothing and nothing references it, so its position is
+ * readability (the settings the rest of the module is studied under, before the
+ * rows), exactly as `dashboard-settings` leads its own file.
+ *
+ * `maxReviewsPerDay` is `null` for "no cap at all", never 0 — the distinction
+ * the column itself makes, carried through the interchange rather than
+ * flattened into a sentinel a reader would have to know about.
+ */
+export interface ExportStudySettings {
+  profileId: string;
+  targetRetention: number;
+  newPerDay: number;
+  maxReviewsPerDay: number | null;
+}
+
 export interface ExportFocusSession {
   id: string;
   profileId: string;
@@ -648,6 +670,15 @@ export interface ProfileData {
   plans: readonly ExportStudyPlan[];
   blocks: readonly ExportStudyBlock[];
   focusSessions: readonly ExportFocusSession[];
+  /**
+   * Zero or one row (STUDY-007) — the profile's target retention and daily
+   * caps. Required, like every field above and for the same reason: a module
+   * the caller forgets must be a type error, not a quiet omission. An EMPTY
+   * array is the honest shape for "this archive carries no such row", which is
+   * exactly what every pre-`1.13.0` archive is, and what a restore then reads as
+   * "leave the profile on the store's own defaults".
+   */
+  studySettings: readonly ExportStudySettings[];
   notifications: readonly ExportNotification[];
   // Required, like every field above, and deliberately so: this archive
   // shipped for two weeks writing zero notes because the export simply had
@@ -762,6 +793,10 @@ export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, 
       data.taskDependencies.length,
     calendar:
       data.events.length + data.documents.length + data.renewals.length + data.people.length,
+    // The scheduling-preferences row (zero or one) counts into STUDY beside the
+    // rows it governs, for the reason the dashboard's background row counts into
+    // its own module: a restore preview that showed one number too few would be
+    // telling the user something untrue about what is about to change.
     study:
       data.subjects.length +
       data.exams.length +
@@ -770,7 +805,8 @@ export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, 
       data.reviewLog.length +
       data.plans.length +
       data.blocks.length +
-      data.focusSessions.length,
+      data.focusSessions.length +
+      data.studySettings.length,
     notifications: data.notifications.length,
     notes:
       data.notes.length +
@@ -819,7 +855,11 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     ...input.data.renewals.map((row) => ({ type: "renewal", ...row })),
     ...input.data.people.map((row) => ({ type: "person", ...row })),
   ]);
+  // The preferences row leads, then the rows themselves in dependency order —
+  // the shape `data/dashboard.ndjson` already has. It points at nothing, so
+  // this is how the file reads, not what it requires.
   const studyNdjson = toNdjson([
+    ...input.data.studySettings.map((row) => ({ type: "study-settings", ...row })),
     ...input.data.subjects.map((row) => ({ type: "subject", ...row })),
     ...input.data.exams.map((row) => ({ type: "exam", ...row })),
     ...input.data.decks.map((row) => ({ type: "deck", ...row })),

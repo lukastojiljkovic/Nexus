@@ -75,6 +75,7 @@ export type ImportSkipCode =
   | "settings-not-imported"
   | "notifications-not-imported"
   | "dashboard-settings-not-imported"
+  | "study-settings-not-imported"
   | "template-name-taken"
   | "source-inbox-collapsed";
 
@@ -206,6 +207,10 @@ const ID_MINTERS: Record<keyof ProfileData, (data: ProfileData, ctx: PlanContext
   plans: (data, ctx) => mintAll(data.plans, ctx),
   blocks: (data, ctx) => mintAll(data.blocks, ctx),
   focusSessions: (data, ctx) => mintAll(data.focusSessions, ctx),
+  // A settings row is keyed by its profile alone (migration 034's PRIMARY KEY),
+  // and the remap below retargets it onto the target profile — so there is no
+  // id of its own to mint.
+  studySettings: NO_IDS,
   // Not imported at all (the remap literal in `planForeignImport` plans an
   // empty array for it), so its ids are never needed.
   notifications: NO_IDS,
@@ -487,6 +492,12 @@ export function planForeignImport(
       profileId: target.profileId,
       subjectId: mapped(row.subjectId, ctx),
     })),
+    // STUDY-007's scheduling preferences are NOT imported, for the same reason
+    // the dashboard background is not: retention and the two daily caps are the
+    // TARGET user's own workload choices, keyed by their profile alone — and
+    // the import card promises DODAJE, which an upsert over their row would
+    // break. The skip is named below, like every by-design skip.
+    studySettings: [],
     // ADR-043: a notification is a delivery RECORD — "we told the user this, at
     // this moment" — not portable content. Re-delivering somebody else's
     // reminders into this profile's history would be a lie about what happened.
@@ -612,6 +623,7 @@ function buildReport(
     "dashboard-settings",
     source.dashboardSettings.length,
   );
+  note("study-settings-not-imported", "study", "study-settings", source.studySettings.length);
   // The manifest's settings section — the target's flags and notification
   // preferences are the user's own choices, not the archive author's. It rides
   // in the manifest rather than in a module, so it is named without being

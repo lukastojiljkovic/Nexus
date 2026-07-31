@@ -45,6 +45,7 @@ export {
   RestoreValidationError,
   SchemaVersionError,
   SearchValidationError,
+  StudySettingsValidationError,
   SubjectNotFoundError,
   SubjectValidationError,
   TaskAttachmentNotFoundError,
@@ -197,9 +198,21 @@ export type {
   NoteCardSpecInput,
   PreviewIntervals,
   ReviewLogEntry,
+  ReviewQueue,
   SyncFromNoteResult,
   UpdateCardFields,
 } from "./study/cardStore.js";
+
+export {
+  StudySettingsStore,
+  DEFAULT_NEW_PER_DAY,
+  DEFAULT_TARGET_RETENTION,
+  MAX_NEW_PER_DAY,
+  MAX_REVIEWS_PER_DAY,
+  MAX_TARGET_RETENTION,
+  MIN_TARGET_RETENTION,
+} from "./study/studySettingsStore.js";
+export type { StudySettings } from "./study/studySettingsStore.js";
 
 export { PlanStore, STUDY_BLOCK_STATUSES } from "./study/planStore.js";
 export type {

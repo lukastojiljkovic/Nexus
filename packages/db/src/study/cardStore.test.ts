@@ -11,6 +11,7 @@ import {
   MAX_QUEUE_DECK_IDS,
   NexusDatabase,
   openDatabase,
+  StudySettingsStore,
   SubjectStore,
   uuidv7,
 } from "../index.js";
@@ -38,6 +39,16 @@ function createProfile(): string {
     .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
     .run(id, "personal", "P", new Date().toISOString());
   return id;
+}
+
+/**
+ * Local noon of a bare `YYYY-MM-DD`, as an ISO instant. The daily review cap
+ * counts by the LOCAL calendar day, so a fixture that named a UTC instant would
+ * land on the previous or next day depending on where the suite runs.
+ */
+function localNoon(dayKey: string): string {
+  const [year, month, day] = dayKey.split("-").map(Number);
+  return new Date(year ?? 0, (month ?? 1) - 1, day ?? 1, 12).toISOString();
 }
 
 function countReviewLogs(cardId: string): number {
@@ -407,7 +418,7 @@ describe("CardStore", () => {
       cards.create({ deckId, front: "n3", back: "n3" }, T0);
 
       const queryNow = "2026-07-09T00:00:00.000Z"; // well after both dueA/dueB
-      const queue = cards.dueQueue({ newLimit: 2 }, queryNow);
+      const queue = cards.dueQueue({ newLimit: 2 }, queryNow).cards;
 
       expect(queue.map((c) => c.id)).toEqual([dueA.id, dueB.id, n1.id, n2.id]);
     });
@@ -418,7 +429,7 @@ describe("CardStore", () => {
       const inDeck = cards.create({ deckId, front: "a", back: "a" }, T0);
       cards.create({ deckId: otherDeckId, front: "b", back: "b" }, T0);
 
-      const queue = cards.dueQueue({ deckId, newLimit: 10 }, T0);
+      const queue = cards.dueQueue({ deckId, newLimit: 10 }, T0).cards;
       expect(queue.map((c) => c.id)).toEqual([inDeck.id]);
     });
 
@@ -429,7 +440,7 @@ describe("CardStore", () => {
       const inSubject = cards.create({ deckId, front: "a", back: "a" }, T0);
       cards.create({ deckId: otherDeckId, front: "b", back: "b" }, T0);
 
-      const queue = cards.dueQueue({ subjectId, newLimit: 10 }, T0);
+      const queue = cards.dueQueue({ subjectId, newLimit: 10 }, T0).cards;
       expect(queue.map((c) => c.id)).toEqual([inSubject.id]);
     });
 
@@ -457,7 +468,7 @@ describe("CardStore", () => {
       cards.review(orphanDue.id, 3, T0); // leaves the New section, enters the due one
       decks.softDelete(goneDeckId);
 
-      const queue = cards.dueQueue({ newLimit: 10 }, "2026-07-09T00:00:00.000Z");
+      const queue = cards.dueQueue({ newLimit: 10 }, "2026-07-09T00:00:00.000Z").cards;
       const ids = queue.map((c) => c.id);
       expect(ids).toContain(kept.id);
       expect(ids).not.toContain(orphanNew.id);
@@ -471,7 +482,7 @@ describe("CardStore", () => {
       const card = cards.create({ deckId, front: "a", back: "a" }, T0);
       subjects.update(subjectId, { archived: true });
 
-      expect(cards.dueQueue({ newLimit: 10 }, T0).map((c) => c.id)).toEqual([card.id]);
+      expect(cards.dueQueue({ newLimit: 10 }, T0).cards.map((c) => c.id)).toEqual([card.id]);
     });
 
     it("filters by a deck SET (interleaved practice, ADR-047)", () => {
@@ -482,7 +493,7 @@ describe("CardStore", () => {
       const b = cards.create({ deckId: secondDeckId, front: "b", back: "b" }, T0);
       cards.create({ deckId: thirdDeckId, front: "c", back: "c" }, T0);
 
-      const queue = cards.dueQueue({ deckIds: [deckId, secondDeckId], newLimit: 10 }, T0);
+      const queue = cards.dueQueue({ deckIds: [deckId, secondDeckId], newLimit: 10 }, T0).cards;
       expect(new Set(queue.map((c) => c.id))).toEqual(new Set([a.id, b.id]));
     });
 
@@ -495,7 +506,8 @@ describe("CardStore", () => {
       const orphan = cards.create({ deckId: goneDeckId, front: "b", back: "b" }, T0);
       decks.softDelete(goneDeckId);
 
-      const queue = cards.dueQueue({ deckIds: [deckId, goneDeckId, "missing"], newLimit: 10 }, T0);
+      const queue = cards.dueQueue({ deckIds: [deckId, goneDeckId, "missing"], newLimit: 10 }, T0)
+        .cards;
       expect(queue.map((c) => c.id)).toEqual([kept.id]);
       expect(queue.map((c) => c.id)).not.toContain(orphan.id);
     });
@@ -526,7 +538,10 @@ describe("CardStore", () => {
       const plainDue = cards.create({ deckId, front: "b", back: "b" }, T0);
       cards.review(plainDue.id, 3, T0);
 
-      const queue = cards.dueQueue({ problemsOnly: true, newLimit: 10 }, "2026-07-09T00:00:00.000Z");
+      const queue = cards.dueQueue(
+        { problemsOnly: true, newLimit: 10 },
+        "2026-07-09T00:00:00.000Z",
+      ).cards;
       const ids = queue.map((c) => c.id);
       expect(new Set(ids)).toEqual(new Set([problemNew.id, problemDue.id]));
       expect(ids).not.toContain(plainNew.id);
@@ -540,7 +555,8 @@ describe("CardStore", () => {
       cards.create({ deckId, front: "a", back: "a" }, T0); // right deck, not a problem
       cards.createProblem(secondDeckId, "Drugi", "korak", T0); // a problem, wrong deck
 
-      const queue = cards.dueQueue({ deckIds: [deckId], problemsOnly: true, newLimit: 10 }, T0);
+      const queue = cards.dueQueue({ deckIds: [deckId], problemsOnly: true, newLimit: 10 }, T0)
+        .cards;
       expect(queue.map((c) => c.id)).toEqual([wanted.id]);
     });
 
@@ -551,6 +567,239 @@ describe("CardStore", () => {
       expect(() => cards.dueQueue({ subjectId, deckIds: [deckId] }, T0)).toThrow(
         CardValidationError,
       );
+    });
+
+    it("answers with capReached false when the profile has no review cap", () => {
+      const { cards, deckId } = fixture();
+      const due = cards.create({ deckId, front: "a", back: "a" }, T0);
+      cards.review(due.id, 3, T0);
+
+      expect(cards.dueQueue({}, "2026-07-09T00:00:00.000Z").capReached).toBe(false);
+    });
+  });
+
+  // --- STUDY-007: the profile's own scheduling preferences ------------------
+
+  describe("study settings", () => {
+    /** Forces a card into the Review state, where the requested retention actually decides an interval. */
+    function makeReviewState(cardId: string): void {
+      db.raw
+        .prepare(
+          `UPDATE cards
+              SET state = 2, stability = 10, difficulty = 5, reps = 3,
+                  scheduled_days = 10, elapsed_days = 10, last_review = ?
+            WHERE id = ?`,
+        )
+        .run(T0, cardId);
+    }
+
+    it("schedules at the profile's stored target retention — a lower one buys a longer interval", () => {
+      const { cards, profileId, deckId } = fixture();
+      const settings = new StudySettingsStore(db.raw, profileId);
+      const card = cards.create({ deckId, front: "a", back: "a" }, T0);
+      makeReviewState(card.id);
+
+      settings.save({ targetRetention: 0.97, newPerDay: 20, maxReviewsPerDay: null }, T0);
+      const strict = cards.previewIntervals(card.id, T0).good;
+
+      settings.save({ targetRetention: 0.7, newPerDay: 20, maxReviewsPerDay: null }, T0);
+      const relaxed = cards.previewIntervals(card.id, T0).good;
+
+      expect(relaxed > strict).toBe(true);
+    });
+
+    it("reads the retention through on every call — a store built before the change picks it up", () => {
+      const { cards, profileId, deckId } = fixture();
+      const settings = new StudySettingsStore(db.raw, profileId);
+      const card = cards.create({ deckId, front: "a", back: "a" }, T0);
+      makeReviewState(card.id);
+
+      const before = cards.previewIntervals(card.id, T0).good;
+      settings.save({ targetRetention: 0.7, newPerDay: 20, maxReviewsPerDay: null }, T0);
+      expect(cards.previewIntervals(card.id, T0).good > before).toBe(true);
+    });
+
+    it("never retro-reschedules an existing card when the retention changes", () => {
+      const { cards, profileId, deckId } = fixture();
+      const settings = new StudySettingsStore(db.raw, profileId);
+      const card = cards.create({ deckId, front: "a", back: "a" }, T0);
+      const graded = cards.review(card.id, 3, T0);
+
+      settings.save({ targetRetention: 0.7, newPerDay: 20, maxReviewsPerDay: null }, T0);
+
+      const stored = cards.listByDeck(deckId).find((c) => c.id === card.id);
+      expect(stored?.due).toBe(graded.due);
+    });
+
+    it("caps the New section at the profile's stored new_per_day when no newLimit is passed", () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-07-06T10:00:00.000Z"));
+      const { cards, profileId, deckId } = fixture();
+      new StudySettingsStore(db.raw, profileId).save(
+        { targetRetention: 0.9, newPerDay: 2, maxReviewsPerDay: null },
+        T0,
+      );
+      for (let index = 0; index < 4; index += 1) {
+        vi.setSystemTime(new Date(`2026-07-06T10:00:0${index}.000Z`));
+        cards.create({ deckId, front: `n${index}`, back: `n${index}` }, T0);
+      }
+
+      expect(cards.dueQueue({}, T0).cards).toHaveLength(2);
+    });
+
+    it("lets an explicit newLimit win over the stored setting", () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-07-06T10:00:00.000Z"));
+      const { cards, profileId, deckId } = fixture();
+      new StudySettingsStore(db.raw, profileId).save(
+        { targetRetention: 0.9, newPerDay: 1, maxReviewsPerDay: null },
+        T0,
+      );
+      for (let index = 0; index < 4; index += 1) {
+        vi.setSystemTime(new Date(`2026-07-06T10:00:0${index}.000Z`));
+        cards.create({ deckId, front: `n${index}`, back: `n${index}` }, T0);
+      }
+
+      expect(cards.dueQueue({ newLimit: 3 }, T0).cards).toHaveLength(3);
+      expect(cards.dueQueue({ newLimit: 0 }, T0).cards).toHaveLength(0);
+    });
+
+    /**
+     * Three due cards and one review already logged today, so a cap of 2 leaves
+     * an allowance of 1. `now` is a LOCAL-noon instant so the day window is the
+     * same day in every time zone the suite might run in.
+     */
+    function dueCardsFixture(count: number): {
+      cards: CardStore;
+      profileId: string;
+      deckId: string;
+      now: string;
+      ids: string[];
+    } {
+      const { cards, profileId, deckId } = fixture();
+      const ids: string[] = [];
+      for (let index = 0; index < count; index += 1) {
+        const card = cards.create({ deckId, front: `c${index}`, back: `c${index}` }, T0);
+        cards.review(card.id, 3, T0); // leaves the New section for the due one
+        ids.push(card.id);
+      }
+      // Every review above is logged at T0; the queue is read two days later, by
+      // which time all of them are due and none of them counts as "done today".
+      return { cards, profileId, deckId, now: localNoon("2026-07-10"), ids };
+    }
+
+    it("truncates the due section to what is left of the daily review cap", () => {
+      const { cards, profileId, now } = dueCardsFixture(3);
+      new StudySettingsStore(db.raw, profileId).save(
+        { targetRetention: 0.9, newPerDay: 20, maxReviewsPerDay: 2 },
+        T0,
+      );
+
+      const queue = cards.dueQueue({}, now);
+      expect(queue.cards).toHaveLength(2);
+      expect(queue.capReached).toBe(true);
+    });
+
+    it("counts today's own reviews against the allowance", () => {
+      const { cards, profileId, deckId, now } = dueCardsFixture(3);
+      // One more card, reviewed TODAY — it spends one of the two allowed.
+      const extra = cards.create({ deckId, front: "x", back: "x" }, T0);
+      cards.review(extra.id, 3, now);
+      new StudySettingsStore(db.raw, profileId).save(
+        { targetRetention: 0.9, newPerDay: 20, maxReviewsPerDay: 2 },
+        T0,
+      );
+
+      const queue = cards.dueQueue({}, now);
+      expect(queue.cards).toHaveLength(1);
+      expect(queue.capReached).toBe(true);
+    });
+
+    it("yields an empty due section once the cap is fully spent", () => {
+      const { cards, profileId, deckId, now } = dueCardsFixture(3);
+      const spender = cards.create({ deckId, front: "x", back: "x" }, T0);
+      cards.review(spender.id, 3, now);
+      new StudySettingsStore(db.raw, profileId).save(
+        { targetRetention: 0.9, newPerDay: 20, maxReviewsPerDay: 1 },
+        T0,
+      );
+
+      const queue = cards.dueQueue({}, now);
+      expect(queue.cards).toHaveLength(0);
+      expect(queue.capReached).toBe(true);
+    });
+
+    it("reports capReached false when the cap is set but nothing was actually cut", () => {
+      const { cards, profileId, now } = dueCardsFixture(2);
+      new StudySettingsStore(db.raw, profileId).save(
+        { targetRetention: 0.9, newPerDay: 20, maxReviewsPerDay: 5 },
+        T0,
+      );
+
+      const queue = cards.dueQueue({}, now);
+      expect(queue.cards).toHaveLength(2);
+      expect(queue.capReached).toBe(false);
+    });
+
+    it("does not count New cards against the review cap, nor truncate them by it", () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-07-06T10:00:00.000Z"));
+      const { cards, profileId, deckId } = fixture();
+      const due = cards.create({ deckId, front: "due", back: "due" }, T0);
+      cards.review(due.id, 3, T0);
+      for (let index = 0; index < 3; index += 1) {
+        vi.setSystemTime(new Date(`2026-07-06T10:00:0${index + 1}.000Z`));
+        cards.create({ deckId, front: `n${index}`, back: `n${index}` }, T0);
+      }
+      new StudySettingsStore(db.raw, profileId).save(
+        { targetRetention: 0.9, newPerDay: 20, maxReviewsPerDay: 1 },
+        T0,
+      );
+      vi.useRealTimers();
+
+      // The cap is 1 and nothing has been reviewed today, so the one due card
+      // fits; all three New cards ride along untouched by that ceiling.
+      const queue = cards.dueQueue({}, localNoon("2026-07-10"));
+      expect(queue.cards).toHaveLength(4);
+      expect(queue.capReached).toBe(false);
+    });
+
+    it("counts the cap by the LOCAL calendar day — yesterday's reviews do not spend today's", () => {
+      const { cards, profileId, deckId } = fixture();
+      const yesterday = localNoon("2026-07-09");
+      const today = localNoon("2026-07-10");
+      const spent = cards.create({ deckId, front: "x", back: "x" }, T0);
+      cards.review(spent.id, 3, yesterday);
+      const due = cards.create({ deckId, front: "a", back: "a" }, T0);
+      cards.review(due.id, 3, T0);
+      new StudySettingsStore(db.raw, profileId).save(
+        { targetRetention: 0.9, newPerDay: 20, maxReviewsPerDay: 1 },
+        T0,
+      );
+
+      // Cap 1, nothing reviewed TODAY: the allowance is a whole 1, so one card
+      // comes back. Had yesterday's review counted, the allowance would be 0
+      // and this queue would be empty.
+      const queue = cards.dueQueue({}, today);
+      expect(queue.cards.map((c) => c.id)).toEqual([due.id]);
+    });
+
+    it("applies the cap alongside a scope rather than instead of it", () => {
+      const { cards, decks, subjectId, deckId, profileId } = fixture();
+      const otherDeckId = decks.create({ subjectId, name: "Glava 2" }).id;
+      for (const target of [deckId, deckId, otherDeckId]) {
+        const card = cards.create({ deckId: target, front: "a", back: "a" }, T0);
+        cards.review(card.id, 3, T0);
+      }
+      new StudySettingsStore(db.raw, profileId).save(
+        { targetRetention: 0.9, newPerDay: 20, maxReviewsPerDay: 1 },
+        T0,
+      );
+
+      const queue = cards.dueQueue({ deckId }, localNoon("2026-07-10"));
+      expect(queue.cards).toHaveLength(1);
+      expect(queue.cards[0]?.deckId).toBe(deckId);
+      expect(queue.capReached).toBe(true);
     });
   });
 
@@ -828,7 +1077,7 @@ describe("CardStore", () => {
       expect(listed.map((c) => c.front).sort()).toEqual(["Manual", "Q"]);
 
       const generated = listed.find((c) => c.front === "Q")!;
-      const queue = cards.dueQueue({ deckId, newLimit: 10 }, T0);
+      const queue = cards.dueQueue({ deckId, newLimit: 10 }, T0).cards;
       expect(queue.map((c) => c.id).sort()).toEqual([handMade.id, generated.id].sort());
     });
 

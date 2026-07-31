@@ -145,6 +145,26 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
     label: strings.settings.dashboard.dimLabel,
     keywords: ["zatamnjenje", "pozadina", "kontrolna", "tabla"],
   },
+  // STUDY-007: three controls, three entries — each is a drawn control label, so
+  // each earns the hit highlight as well as steering the section.
+  {
+    id: "study-retention",
+    section: "study",
+    label: s.study.retentionLabel,
+    keywords: ["ucenje", "kartice", "fsrs", "zapamcenost", "retencija", "raspored", "interval"],
+  },
+  {
+    id: "study-new-per-day",
+    section: "study",
+    label: s.study.newPerDayLabel,
+    keywords: ["ucenje", "kartice", "nove", "dnevno", "limit", "ogranicenje"],
+  },
+  {
+    id: "study-review-cap",
+    section: "study",
+    label: s.study.reviewCapLabel,
+    keywords: ["ucenje", "ponavljanje", "dnevno", "limit", "ogranicenje", "kapa"],
+  },
   {
     id: "notifications-presets",
     section: "notifications",

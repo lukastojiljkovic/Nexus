@@ -38,6 +38,7 @@ import {
   PlanStore,
   RestoreStore,
   SqliteFlagStore,
+  StudySettingsStore,
   SubjectStore,
   TaskAttachmentStore,
   TaskDependencyStore,
@@ -155,6 +156,7 @@ function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
     deckStore: (profileId) => new DeckStore(handle.raw, profileId),
     cardStore: (profileId) => new CardStore(handle.raw, profileId),
     planStore: (profileId) => new PlanStore(handle.raw, profileId),
+    studySettingsStore: (profileId) => new StudySettingsStore(handle.raw, profileId),
     focusStore: (profileId) => new FocusStore(handle.raw, profileId),
     notificationStore: (profileId) => new NotificationStore(handle.raw, profileId),
     noteStore: (profileId) => new NoteStore(handle.raw, profileId),
@@ -462,6 +464,8 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     plans: [],
     blocks: [],
     focusSessions: [],
+    // STUDY-007: always exactly one row, since `get` resolves the defaults.
+    studySettings: [{ profileId, ...new StudySettingsStore(handle.raw, profileId).get() }],
     notifications: notificationStore.listAll(),
     notes: noteStore.list().map((meta) => ({
       ...meta,

@@ -486,6 +486,17 @@ export class RestoreValidationError extends DatabaseError {}
 export class DashboardSettingsValidationError extends DatabaseError {}
 
 /**
+ * Thrown when a study-settings write breaks a rule migration 034's CHECKs
+ * cannot express on their own (STUDY-007): a target retention outside
+ * `MIN_TARGET_RETENTION`..`MAX_TARGET_RETENTION` or not a finite number at all,
+ * a `newPerDay` that is not a whole number inside 0..`MAX_NEW_PER_DAY`, a
+ * review cap that is neither `null` (uncapped) nor a whole number inside
+ * 1..`MAX_REVIEWS_PER_DAY`, or a malformed `now`. The store revalidates because
+ * renderer input is untrusted (SEC-EL-02).
+ */
+export class StudySettingsValidationError extends DatabaseError {}
+
+/**
  * Thrown when a dashboard-layout write breaks a rule migration 032's CHECK
  * cannot express on its own (DASH-002 / ADR-045): a size outside `S`/`M`/`L`, a
  * widget id that is not a `moduleId:widgetId` slug, a `now` that is not an

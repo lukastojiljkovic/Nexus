@@ -1094,6 +1094,18 @@ export const strings = {
     reviewBack: "Nazad",
 
     /**
+     * End-of-session summary (STUDY-009). Quiet on purpose: the session is
+     * over, so this reports what it was — how the ratings fell, how long it
+     * took — rather than congratulating anyone. The four rating labels are
+     * `rating` above, reused: the same word must mean the same button.
+     */
+    summary: {
+      durationLabel: "Trajanje",
+      /** Shown only when the profile's daily review cap actually cut this queue short (STUDY-007). */
+      capReached: "Dnevni limit ponavljanja je dostignut.",
+    },
+
+    /**
      * Interleaved practice (STUDY-010 / ADR-047): pick špilovi, get one mixed
      * session across them. „Vežbanje" against „Učenje" is the whole distinction
      * on screen — the ordinary reviewer works through what is due, practice
@@ -1267,6 +1279,7 @@ export const strings = {
       notes: "Beleške",
       shortcuts: "Prečice",
       dashboard: "Kontrolna tabla",
+      study: "Učenje",
       modules: "Moduli",
       notifications: "Obaveštenja",
       backup: "Rezervna kopija",
@@ -1357,6 +1370,28 @@ export const strings = {
       } satisfies Record<DashboardPickErrorCode, string>,
       /** A rejected IPC call (not one of the named reasons above). */
       error: "Promena pozadine nije uspela. Pokušaj ponovo.",
+    },
+    /**
+     * Učenje section (STUDY-007): how hard the scheduler aims, and how much of
+     * it lands on one day. Three settings, one card — they are read together on
+     * every session, and a user deciding "less per day" usually means all of it.
+     */
+    study: {
+      caption: "Podešava kako se ponavljanja raspoređuju i koliko ih dnevno stiže.",
+      retentionLabel: "Ciljana zapamćenost",
+      /** Suffix on the preset the scheduler uses when nothing was ever chosen. */
+      retentionDefault: "podrazumevano",
+      retentionHint:
+        "Veća vrednost znači kraće razmake i manje zaboravljanja, ali i više ponavljanja svakog dana.",
+      newPerDayLabel: "Novih kartica dnevno",
+      newPerDayHint: "Koliko novih kartica jedna sesija najviše nudi. Nula znači samo obnavljanje.",
+      reviewCapLabel: "Dnevni limit ponavljanja",
+      reviewCapHint: "Prazno polje znači bez limita. Nove kartice se ne računaju u ovaj limit.",
+      /** Placeholder in the empty cap field — the field's own empty state, said out loud. */
+      reviewCapPlaceholder: "bez limita",
+      /** The one thing about this card a user could otherwise get wrong: nothing already scheduled moves. */
+      retroNotice: "Promena važi od sledećeg ponavljanja — već zakazane kartice ostaju kako jesu.",
+      error: "Čuvanje podešavanja učenja nije uspelo. Pokušaj ponovo.",
     },
     /** One-line module descriptions for the gallery, keyed by module id. */
     moduleDescriptions: {
@@ -1608,6 +1643,8 @@ export const strings = {
           "Zabeležena obaveštenja se ne uvoze — taj spisak pripada profilu u kom je nastao.",
         "dashboard-settings-not-imported":
           "Pozadina kontrolne table se ne uvozi — izgled tvoje table ostaje tvoj.",
+        "study-settings-not-imported":
+          "Podešavanja učenja iz arhive se ne uvoze — tvoja ciljana zapamćenost i dnevni limiti ostaju tvoji.",
         "template-name-taken": "Šablon istog imena već postoji kod tebe — tvoj se zadržava.",
         "source-inbox-collapsed":
           "Podrazumevana lista iz arhive se ne pravi ponovo — njeni zadaci ulaze u tvoju podrazumevanu listu.",

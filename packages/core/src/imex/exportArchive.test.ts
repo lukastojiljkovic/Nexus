@@ -47,6 +47,7 @@ function emptyInput(): ExportArchiveInput {
       plans: [],
       blocks: [],
       focusSessions: [],
+      studySettings: [],
       notifications: [],
       notes: [],
       noteFolders: [],
@@ -231,7 +232,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.12.0");
+      expect(manifest.schemaVersion).toBe("1.13.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       expect(manifest.profile).toEqual({ id: "profile1", name: "Luka" });
@@ -688,12 +689,35 @@ describe("buildExportArchive", () => {
         },
       ];
 
+      input.data.studySettings = [
+        { profileId: "profile1", targetRetention: 0.85, newPerDay: 10, maxReviewsPerDay: 150 },
+      ];
+
       const archive = buildExportArchive(input);
       const rows = parseNdjson(archive.files.get("data/study.ndjson") ?? "") as Array<{ type: string }>;
       expect(rows.map((row) => row.type)).toEqual([
-        "subject", "exam", "deck", "card", "review", "plan", "block", "focus-session",
+        "study-settings", "subject", "exam", "deck", "card", "review", "plan", "block", "focus-session",
       ]);
-      expect(archive.byModule.study).toBe(8);
+      expect(archive.byModule.study).toBe(9);
+    });
+
+    // STUDY-007: the scheduling preferences, one line, and counted into STUDY
+    // like every row the module owns.
+    it("writes the study-settings row as one type-discriminated line", () => {
+      const input = emptyInput();
+      input.data.studySettings = [
+        { profileId: "profile1", targetRetention: 0.93, newPerDay: 0, maxReviewsPerDay: null },
+      ];
+      const archive = buildExportArchive(input);
+
+      expect(parseNdjson(archive.files.get("data/study.ndjson") ?? "")).toEqual([
+        {
+          type: "study-settings", profileId: "profile1", targetRetention: 0.93,
+          newPerDay: 0, maxReviewsPerDay: null,
+        },
+      ]);
+      expect(archive.byModule.study).toBe(1);
+      expect(archive.totalRecords).toBe(1);
     });
   });
 
@@ -860,6 +884,9 @@ describe("buildExportArchive", () => {
         focusSessions: [
           { id: "f1", profileId: "p1", subjectId: "s1", startedAt: t, endedAt: t, createdAt: t, updatedAt: t },
         ],
+        studySettings: [
+          { profileId: "p1", targetRetention: 0.95, newPerDay: 15, maxReviewsPerDay: 120 },
+        ],
         notifications: [
           {
             id: "n1", profileId: "p1", source: "exam", entityId: "ex1", occurrenceKey: "occ", title: "T", body: "B",
@@ -897,7 +924,7 @@ describe("buildExportArchive", () => {
       expect(countProfileModules(data)).toEqual({
         tasks: 9, // 2 tasks + 1 list + 1 section + 1 tag + 1 tag link + 1 attachment + 1 template + 1 dependency
         calendar: 4, // 1 event + 1 document + 1 renewal + 1 person
-        study: 8, // 1 each of subject/exam/deck/card/review/plan/block/focus-session
+        study: 9, // 1 each of subject/exam/deck/card/review/plan/block/focus-session + the settings row
         notifications: 1,
         notes: 7, // 1 each of note/folder/tag/tag-link/template/attachment/version
         dashboard: 2, // the one settings row a profile can ever have + 1 placed widget
