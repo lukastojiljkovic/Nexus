@@ -77,7 +77,16 @@ const STUDY_WIDGETS: WidgetContract[] = [
 ];
 
 /**
- * The v0 module set (roadmap "v0 — Founder Build"), as ADR-008 manifests:
+ * The v0 module set (roadmap "v0 — Founder Build"), as ADR-008 manifests.
+ *
+ * Lives in `shared/` (moved from the renderer, ADR-058 §5) because BOTH
+ * processes now resolve the same enabled set from it: the renderer for the
+ * sidebar/routes/palette commands, main for the search-result module gate
+ * (`searchGate.ts`) — two hand-copied manifest lists would be exactly the
+ * drift `BUSINESS_DEFAULT_FLAGS`'s comment warns about. Imports nothing but
+ * `@nexus/core`, so neither side links anything new.
+ *
+ * The manifests themselves:
  * identity plus the contract slots each module actually fills — `widgets` from
  * ADR-045 onward, the rest as each lands. Categories mirror the PRD 00 registry;
  * registration order follows the PRD numbering, and the sidebar groups them by
@@ -97,7 +106,7 @@ const V0_MODULES: ModuleManifest[] = [
   { id: "study", prefix: "STUDY", category: "Life hubs", defaultEnabled: true, widgets: STUDY_WIDGETS },
 ];
 
-/** Builds the renderer's registry. Constructed (not a singleton) per ADR-008. */
+/** Builds the app's registry — each process constructs its own (not a singleton) per ADR-008. */
 export function createModuleRegistry(): ModuleRegistry {
   const registry = new ModuleRegistry();
   for (const manifest of V0_MODULES) {

@@ -39,6 +39,13 @@ export const IpcChannel = {
   // an unlock may (re)open the database, while a verify must never touch it —
   // and a shared channel would put that difference behind a boolean.
   profilesVerifySwitch: "profiles:verify-switch",
+  // ADR-058 (NTF active-profile rule): the renderer reports which profile its
+  // shell is standing in — at unlock landing and on every verified switch —
+  // so main can serve notifications for the ACTIVE profile only. A report,
+  // not a request: it changes what the scheduler serves, never what the
+  // renderer may read, so there is nothing here for a compromised renderer
+  // to widen.
+  profilesSetActive: "profiles:set-active",
   profilesRename: "profiles:rename",
   profilesPicturePick: "profiles:picture-pick",
   profilesPictureClear: "profiles:picture-clear",
@@ -104,6 +111,12 @@ export const IpcChannel = {
   eventTemplatesDelete: "event-templates:delete",
   calendarGetSettings: "calendar:get-settings",
   calendarSetSettings: "calendar:set-settings",
+  // CAL-005 (founder decision #4) / ADR-058 §5: the ONE cross-profile read in
+  // the system — the other profile's EVENTS (and only events) for the calendar
+  // grid, minimized and pre-marked. The renderer names only the profile it is
+  // SHOWING; main derives the other profile(s) from the profiles list itself,
+  // so no other profile's id ever travels renderer→main.
+  calendarOverlay: "calendar:overlay",
   peopleList: "people:list",
   peopleCreate: "people:create",
   peopleUpdate: "people:update",
@@ -600,6 +613,17 @@ export interface ProfilesDeleteRequest {
  */
 export interface ProfilesVerifySwitchRequest {
   passcode: string;
+}
+
+/**
+ * Reports which profile the renderer's shell is standing in (ADR-058, the NTF
+ * active-profile rule) — sent at unlock landing and on every verified switch.
+ * Main validates the id against the live profile list and restarts the
+ * notification scheduler on a real change, which is what re-arms the catch-up
+ * burst („Dok te nije bilo: N“) for the profile being entered.
+ */
+export interface ProfilesSetActiveRequest {
+  profileId: string;
 }
 
 /**
@@ -1440,6 +1464,41 @@ export interface EventTemplatesApplyRequest {
   profileId: string;
   templateId: string;
   dayKey: string;
+}
+
+/**
+ * One foreign event as the cross-profile calendar overlay hands it to the
+ * renderer (CAL-005, founder decision #4 / ADR-058 §5). Mirrors `@nexus/db`'s
+ * `CalendarOverlayEvent` — redeclared like every closed shape here, and main's
+ * assignment of the store's rows to this type is the drift check.
+ *
+ * MINIMIZED by design: no description, no location, no category — data
+ * minimization across the trust boundary, so the renderer never even receives
+ * what it must not show. No recurrence either: a series arrives already
+ * expanded into concrete occurrences (which share the master's `id`; the day
+ * tells them apart). `foreign` is always true — stamped at the source so no
+ * layer can forget to mark a guest row.
+ */
+export interface CalendarOverlayEvent {
+  id: string;
+  title: string;
+  startAt: string;
+  endAt: string | null;
+  allDay: boolean;
+  foreign: true;
+}
+
+/**
+ * `calendar:overlay` — the system's ONE cross-profile read. `profileId` names
+ * the profile the renderer is SHOWING (main derives the other profile(s) from
+ * the profiles list itself, so no other profile's id ever travels
+ * renderer→main); `from`/`to` are the visible range's inclusive bare day
+ * keys, bounded in main and again in the store (`MAX_OVERLAY_RANGE_DAYS`).
+ */
+export interface CalendarOverlayRequest {
+  profileId: string;
+  from: string;
+  to: string;
 }
 
 /** Deleting a template is final — nothing references one (migration 036). */
@@ -4535,6 +4594,8 @@ export interface NexusApi {
   deleteProfile(id: string): Promise<void>;
   /** Proves the account passcode at the profile-switch gate (ADR-058), on the unlock's own throttle counter and `AuthResult` vocabulary — the session stays untouched either way. */
   verifyProfileSwitch(passcode: string): Promise<AuthResult>;
+  /** Reports which profile the shell is standing in (ADR-058, NTF active-profile rule) — at unlock landing and on every verified switch — so main serves notifications for the active profile only. */
+  setActiveProfile(profileId: string): Promise<void>;
   renameProfile(id: string, name: string): Promise<void>;
   /**
    * Opens the native picker and, if the user chooses a file, stores the square
@@ -4701,6 +4762,8 @@ export interface NexusApi {
   applyEventTemplate(profileId: string, templateId: string, dayKey: string): Promise<Event>;
   /** Deletes a template; no event created from it is touched. */
   deleteEventTemplate(profileId: string, id: string): Promise<void>;
+  /** The other profile's events for the visible range, minimized and pre-marked (CAL-005 / ADR-058 §5) — the system's ONE cross-profile read. Never writes; the rows never join search, drag or selection. */
+  calendarOverlay(profileId: string, from: string, to: string): Promise<CalendarOverlayEvent[]>;
   /** This profile's semester dates (CAL-010 / ADR-054), both null while no term is set. Never writes. */
   calendarSettings(profileId: string): Promise<CalendarSettings>;
   /** Writes the whole pair at once — both dates, or both null to clear — and answers with what is now stored. */

@@ -1196,6 +1196,31 @@ export const strings = {
     sourceBlocks: "Učenje",
     sourceBirthdays: "Rođendani",
     /**
+     * The cross-profile overlay chip (CAL-005 / ADR-058 §5) — labelled by what
+     * it SHOWS, so the pair is kind-dependent: „Poslovni kalendar“ while the
+     * personal profile is active, „Privatni kalendar“ while the business one
+     * is. The chip exists only when the account has another profile at all.
+     */
+    sourceOverlayBusiness: "Poslovni kalendar",
+    sourceOverlayPrivate: "Privatni kalendar",
+    /**
+     * The foreign items that chip brings in: read-only guests. The ⇄ glyph
+     * marks each one; clicking opens a small popover headed by the origin
+     * profile's own name, and its one action routes through the same
+     * passcode-gated switch every profile change passes (AUTH-024).
+     */
+    overlay: {
+      /** Accessible name of the ⇄ origin glyph. */
+      markerLabel: "Događaj iz drugog profila",
+      /** Accessible name of the origin popover (and of the agenda row's „⋯“ that opens it); the visible heading is the profile's name. */
+      popoverLabel: "Poreklo događaja",
+      /** Why the event cannot be opened here — said in the popover, before the one action it offers. */
+      originNote: "Događaj pripada ovom profilu i ovde se ne može menjati.",
+      switchAction: "Prebaci profil",
+      /** Quiet inline line when the overlay fetch fails; the profile's own calendar is unaffected. */
+      loadError: "Kalendar drugog profila se trenutno ne može učitati.",
+    },
+    /**
      * The "Podsetnici" chip row on the event form (CAL-006). Every chip's label
      * is built from these by one formatter, so the fixed ladder and an offset
      * loaded from a stored event read the same way: "U vreme početka",

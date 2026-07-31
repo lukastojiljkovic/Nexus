@@ -32,7 +32,7 @@ import { SearchPalette } from "./SearchPalette.js";
 import { SearchPage } from "./SearchPage.js";
 import { ShortcutsDialog } from "./ShortcutsDialog.js";
 import { buildSearchCommands } from "./searchCommands.js";
-import { createModuleRegistry } from "./modules.js";
+import { createModuleRegistry } from "../../shared/modules.js";
 import { ProfileAvatar } from "./profileAvatar.js";
 import { persistAutoLock, readStoredAutoLock, type AutoLockMinutes } from "./autoLock.js";
 import {
@@ -96,6 +96,20 @@ const IDLE_RESET_THROTTLE_MS = 1000;
 
 // The registry is static, compiled-in data (ADR-008) — built once per renderer.
 const registry = createModuleRegistry();
+
+/**
+ * ADR-058 (NTF active-profile rule): tells main which profile this shell is
+ * standing in, so the notification scheduler serves the active profile only —
+ * called from both landings (the unlock load and a verified switch).
+ * Best-effort by design: a shell that loaded matters more than a scheduler
+ * told late, and main's own default (the personal anchor) holds until the
+ * report arrives. Module-level because it touches no component state.
+ */
+function reportActiveProfile(profileId: string): void {
+  window.nexus.setActiveProfile(profileId).catch((error: unknown) => {
+    console.error("Nexus: failed to report the active profile:", error);
+  });
+}
 
 /** Sidebar/page display name for a module id; falls back to the id. Exported for `searchCommands.ts`'s "Idi na: <modul>" labels, so they are never re-spelled. */
 export function moduleName(id: string): string {
@@ -207,6 +221,7 @@ export function App() {
     if (active) {
       persistActiveProfile(active.id);
       applyProfileAccent(active.id, active.kind);
+      reportActiveProfile(active.id);
     }
     // Signal the --smoke harness that the full renderer -> main -> DB path worked.
     window.__nexusReady = true;
@@ -396,6 +411,10 @@ export function App() {
     setActiveProfileId(profile.id);
     persistActiveProfile(profile.id);
     applyProfileAccent(profile.id, profile.kind);
+    // ADR-058 (NTF rule): the switch landing informs main, which restarts the
+    // scheduler for the entered profile — its backlog arrives as the catch-up
+    // burst, because its ledger was untouched while it was inactive.
+    reportActiveProfile(profile.id);
     setPending(null);
     setSearchSeed(null);
     closePalette();
@@ -1147,6 +1166,15 @@ export function App() {
             <CalendarPage
               key={activeProfile.id}
               profileId={activeProfile.id}
+              // CAL-005 / ADR-058 §5: the account's OTHER profile is the
+              // overlay chip's origin — v1 keeps one personal anchor plus at
+              // most one business profile, so "the other" is at most one row.
+              // „Prebaci profil“ routes through the SAME passcode-gated
+              // dialog every switch passes (setSwitchTarget → AUTH-024).
+              overlayProfile={
+                profiles.find((profile) => profile.id !== activeProfile.id) ?? null
+              }
+              onSwitchToProfile={setSwitchTarget}
               intent={pending?.module === "calendar" ? pending.intent : null}
               onIntentHandled={clearIntent}
             />

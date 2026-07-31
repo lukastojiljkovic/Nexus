@@ -2161,6 +2161,43 @@ button.cal__month-bar--event {
   border: 1px solid var(--nx-border);
   color: var(--nx-text);
 }
+/* A cross-profile guest (CAL-005/ADR-058): clickable but never draggable —
+   the click opens the origin popover, never an editor. Muted through COLOUR
+   (text-muted on the quiet surface) plus a dashed border and the ⇄ glyph:
+   visibly a guest in both themes, no new hue, no glow. */
+button.cal__month-bar--foreign {
+  pointer-events: auto;
+  cursor: pointer;
+  text-align: left;
+  background: var(--nx-surface-alt);
+  border: 1px dashed var(--nx-border);
+  color: var(--nx-text-muted);
+}
+.cal__month-bar--foreign:hover {
+  text-decoration: underline;
+}
+.cal__month-bar--foreign:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 1px;
+}
+/* The same guest treatment on a month cell's timed chip and on an hour-grid
+   block — one look wherever a foreign occurrence shows up. */
+button.cal__month-chip--foreign {
+  background: var(--nx-surface-alt);
+  border: 1px dashed var(--nx-border);
+  color: var(--nx-text-muted);
+}
+button.cal__grid-event--foreign {
+  background: var(--nx-surface-alt);
+  border: 1px dashed var(--nx-border);
+  color: var(--nx-text-muted);
+}
+/* The ⇄ origin glyph (typographic, like the ↻ series marker). */
+.cal__foreign-mark {
+  flex: none;
+  margin-right: 2px;
+}
+
 /* Clickable but never draggable (CAL-007): a birthday is not something you
    move — the click leads to the Ljudi panel, where it is edited. Quiet surface
    like the read-only bars, with the pointer affordance an event bar has. */

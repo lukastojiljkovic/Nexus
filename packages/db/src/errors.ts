@@ -562,6 +562,17 @@ export class BackupSettingsValidationError extends DatabaseError {}
 export class CalendarSettingsValidationError extends DatabaseError {}
 
 /**
+ * Thrown when the cross-profile calendar overlay (CAL-005 / ADR-058 §5) is
+ * asked something it must refuse: a viewer and foreign profile that are the
+ * same id (an overlay of yourself is a caller bug, not a query), an empty id
+ * on either side, a bound that is not a real calendar day, a reversed range,
+ * or a span wider than `MAX_OVERLAY_RANGE_DAYS` (the DoS bound on recurrence
+ * expansion). The store revalidates because renderer input is untrusted
+ * (SEC-EL-02), even after main has checked the same rules at the IPC boundary.
+ */
+export class CalendarOverlayValidationError extends DatabaseError {}
+
+/**
  * Thrown when a study-settings write breaks a rule migration 034's CHECKs
  * cannot express on their own (STUDY-007): a target retention outside
  * `MIN_TARGET_RETENTION`..`MAX_TARGET_RETENTION` or not a finite number at all,

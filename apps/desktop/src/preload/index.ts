@@ -29,6 +29,8 @@ const api: NexusApi = {
   deleteProfile: (id) => ipcRenderer.invoke(IpcChannel.profilesDelete, { id }),
   verifyProfileSwitch: (passcode) =>
     ipcRenderer.invoke(IpcChannel.profilesVerifySwitch, { passcode }),
+  setActiveProfile: (profileId) =>
+    ipcRenderer.invoke(IpcChannel.profilesSetActive, { profileId }),
   renameProfile: (id, name) =>
     ipcRenderer.invoke(IpcChannel.profilesRename, { id, name }),
   pickProfilePicture: (profileId) =>
@@ -149,6 +151,8 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.eventTemplatesApply, { profileId, templateId, dayKey }),
   deleteEventTemplate: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.eventTemplatesDelete, { profileId, id }),
+  calendarOverlay: (profileId, from, to) =>
+    ipcRenderer.invoke(IpcChannel.calendarOverlay, { profileId, from, to }),
   calendarSettings: (profileId) =>
     ipcRenderer.invoke(IpcChannel.calendarGetSettings, { profileId }),
   setCalendarSettings: (profileId, settings) =>

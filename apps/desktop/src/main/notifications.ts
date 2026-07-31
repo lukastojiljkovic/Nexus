@@ -56,6 +56,13 @@ import { IpcChannel } from "../shared/ipc.js";
  */
 export interface NotificationSchedulerDeps {
   listProfiles(): ReadonlyArray<{ id: string }>;
+  /**
+   * The profile the renderer's shell is standing in (ADR-058, the NTF
+   * active-profile rule) — resolved by main on every call, so a stale report
+   * already falls back to the personal anchor before it gets here. The check
+   * loop serves exactly this profile and no other.
+   */
+  activeProfileId(): string | null;
   documentStore(profileId: string): DocumentStore;
   eventStore(profileId: string): EventStore;
   examStore(profileId: string): ExamStore;
@@ -202,14 +209,22 @@ export function runNotificationCheck(deps: NotificationSchedulerDeps): void {
   const today = localToday();
   const nowTime = localTime();
 
-  // Every profile is checked today because there is effectively only one
-  // (personal). Once profile switching lands (AUTH), the NTF PRD's
-  // cross-profile discretion rule applies here (PRD 05 §7, "Profile
-  // separation"): a non-active profile's notifications should not render as
-  // OS toasts while another profile is active, beyond a neutral badge — so
-  // this loop will need an "active profile" concept to scope which
-  // profile(s) actually fire OS notifications on a given check.
+  // ADR-058 (NTF active-profile rule, PRD 05 §7 "Profile separation"): the
+  // scheduler serves the ACTIVE profile only. An inactive profile's due
+  // reminders are neither derived nor recorded — a recorded row is a delivered
+  // row (the ledger is truth), so "derive but hold" was never an option — and
+  // that untouched per-profile ledger is exactly what lets the catch-up burst
+  // („Dok te nije bilo: N") deliver the backlog when a switch lands there:
+  // `profiles:set-active` restarts this scheduler, re-arming the launch pass
+  // for the profile being entered.
+  //
+  // This is also what keeps CAL-005's calendar overlay silent across profiles
+  // (a reminder belongs to its profile): the overlay is a separate read-only
+  // query that never reaches this scheduler, and the other profile's own
+  // events are skipped here with the rest of that profile.
+  const activeProfileId = deps.activeProfileId();
   for (const profile of profiles) {
+    if (profile.id !== activeProfileId) continue;
     try {
       checkProfile(deps, profile.id, nowIso, nowMs, today, nowTime);
     } catch (error) {
@@ -413,12 +428,10 @@ function checkProfile(
   // never held hostage by a dialog nobody can see.
   //
   // The push is payload-free, so the renderer answers for the profile it is
-  // showing. That is exact while there is one profile (see the loop comment in
-  // `runNotificationCheck`), and it is the SAME assumption the surrounding loop
-  // already makes — but it fails harder: an ask raised for a non-active profile
-  // would be answered for the active one, leaving the first still unasked and
-  // its cycle held on every future check. Whoever lands profile switching must
-  // scope this ask along with the rest of the loop.
+  // showing — which is EXACT now that the check loop is scoped to the active
+  // profile (ADR-058): only the profile the shell is standing in can reach
+  // this line, so the profile that raises the ask is always the one that
+  // answers it.
   if (!settings.appetiteAsked && (fresh.length > 0 || refiring.length > 0)) {
     const visibleWindow = visibleMainWindow(deps);
     if (visibleWindow) {

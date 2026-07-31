@@ -1,7 +1,7 @@
 import { foldSearchText } from "@nexus/core";
 import { describe, expect, it } from "vitest";
 
-import { createModuleRegistry } from "./modules.js";
+import { createModuleRegistry } from "../../shared/modules.js";
 import {
   buildSettingsSearchEntries,
   foldSettingsQuery,

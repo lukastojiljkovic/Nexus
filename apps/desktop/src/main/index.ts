@@ -21,6 +21,7 @@ import {
   parseSearchQuery,
   rankSearchResults,
   resolveDueRange,
+  resolveEnabled,
   shiftDayKey,
   sniffMime,
   toFtsMatchExpression,
@@ -52,6 +53,7 @@ import {
 } from "@nexus/core/auth";
 import {
   BackupSettingsStore,
+  CalendarOverlayStore,
   CalendarSettingsStore,
   CARD_RATINGS,
   CardStore,
@@ -276,13 +278,16 @@ import {
   healNotes,
   scheduleIdleCompaction,
 } from "./notes.js";
+import { resolveActiveProfileId } from "./activeProfile.js";
 import {
   deliverSecurityNotices,
   runCheckNow,
   startNotificationScheduler,
   stopNotificationScheduler,
+  type NotificationSchedulerDeps,
   type SecurityNotificationDeps,
 } from "./notifications.js";
+import { filterSearchHitsByModules } from "./searchGate.js";
 import type { SecurityNotice } from "./notificationStrings.js";
 import { computeSnoozeUntil, resolveDefaultSnoozePreset } from "./snooze.js";
 import { pickProfilePicture } from "./profilePicture.js";
@@ -350,6 +355,7 @@ import {
   type AuthStatus,
   type BackupCadence,
   type BackupSettingsView,
+  type CalendarOverlayEvent,
   type CalendarSettings,
   type DashboardPickResult,
   type DashboardSettings,
@@ -406,6 +412,7 @@ import {
   type TaskAttachmentsAddResult,
   type TaskListsSnapshot,
 } from "../shared/ipc.js";
+import { createModuleRegistry } from "../shared/modules.js";
 
 const isSmoke = process.argv.includes("--smoke");
 
@@ -486,6 +493,25 @@ const runningFocusSessions = new Map<string, RunningFocusSession>();
  * than one unlocked account. Null only until the very first account exists.
  */
 let activeAccountId: string | null = null;
+
+/**
+ * ADR-058 (NTF active-profile rule): which profile the renderer's shell is
+ * standing in — reported over `profiles:set-active` at unlock landing and on
+ * every verified switch, held here so the notification scheduler serves the
+ * ACTIVE profile only. Null while locked and until the first report after an
+ * unlock, which `resolveActiveProfileId` reads as "the personal anchor" — the
+ * rule's own default.
+ */
+let activeProfileId: string | null = null;
+
+/**
+ * The module manifests, registered once per process (ADR-008: static,
+ * compiled-in data) — the same list the renderer registers, imported from the
+ * one `shared/modules.ts` both sides read. Main needs it for exactly one
+ * thing: resolving a profile's enabled-module set for the search-result gate
+ * (ADR-058 §5, `searchGate.ts`).
+ */
+const moduleRegistry = createModuleRegistry();
 
 /** The `userData` directory itself — the registry's home, and the root every account directory hangs off. */
 function userDataDir(): string {
@@ -2714,6 +2740,17 @@ function recentHits(
 }
 
 /**
+ * The profile's enabled-module set (SET-007), resolved exactly as the shell
+ * resolves it — the same `resolveEnabled` over the same shared manifests, fed
+ * by the profile's own flag rows. This is what drives the search-result module
+ * gate (ADR-058 §5, `filterSearchHitsByModules`): results gain the gate the
+ * palette's COMMANDS have always had renderer-side, from the same two inputs.
+ */
+async function enabledModuleIdsFor(profileId: string): Promise<ReadonlySet<string>> {
+  return new Set(resolveEnabled(moduleRegistry, await flagStore(profileId).get()));
+}
+
+/**
  * The profile's most recently touched entries, already in their FINAL order
  * (`SearchStore.recent`) — deliberately NOT passed through
  * `rankSearchResults`, which would reorder them by kind prior/recency instead
@@ -2724,13 +2761,22 @@ function recentHits(
  * palette's chips send `z:` with no words behind it, which has no matchable
  * term and so falls through here from `runSearchQuery`. Dropping the filter at
  * that point would answer "show me only my tasks" with everything.
+ *
+ * Sourced at `MAX_SEARCH_LIMIT` rather than `limit` since the module gate
+ * (ADR-058 §5) became a post-filter: a list cut to `limit` BEFORE gating would
+ * come up short exactly when a module is disabled. Order is untouched — the
+ * gate only removes rows — so the first `limit` survivors are the same rows
+ * the ungated list would have led with.
  */
-function runRecentSearch(
+async function runRecentSearch(
   profileId: string,
   limit: number,
   kinds: readonly SearchKind[] = [],
-): SearchResult[] {
-  return recentHits(profileId, limit, kinds).map((hit) => toSearchResult(hit, []));
+): Promise<SearchResult[]> {
+  const enabled = await enabledModuleIdsFor(profileId);
+  return filterSearchHitsByModules(recentHits(profileId, MAX_SEARCH_LIMIT, kinds), enabled)
+    .slice(0, limit)
+    .map((hit) => toSearchResult(hit, []));
 }
 
 /** Every entity id carrying a tag whose `foldSearchTag` form starts with `token`, for one `#` token and one module. */
@@ -2825,14 +2871,22 @@ function searchOperatorFilters(
  * never be re-ranked, per its contract) rather than pretending to a relevance
  * it has no query to measure.
  */
-function runSearchQuery(profileId: string, rawQuery: string, limit: number): SearchResult[] {
+async function runSearchQuery(
+  profileId: string,
+  rawQuery: string,
+  limit: number,
+): Promise<SearchResult[]> {
   const parsed = parseSearchQuery(rawQuery);
   const filters = searchOperatorFilters(profileId, parsed);
   const match = toFtsMatchExpression(parsed.terms, { prefixLast: parsed.prefixLast });
 
   if (match === null) {
     if (filters === null) return runRecentSearch(profileId, limit, parsed.kinds);
-    const hits = recentHits(profileId, MAX_SEARCH_LIMIT, parsed.kinds);
+    const enabled = await enabledModuleIdsFor(profileId);
+    const hits = filterSearchHitsByModules(
+      recentHits(profileId, MAX_SEARCH_LIMIT, parsed.kinds),
+      enabled,
+    );
     return applySearchOperators(hits, filters)
       .slice(0, limit)
       .map((hit) => toSearchResult(hit, []));
@@ -2853,7 +2907,11 @@ function runSearchQuery(profileId: string, rawQuery: string, limit: number): Sea
     parsed.kinds.length > 0
       ? store.search({ match, limit: candidateLimit, kinds: parsed.kinds })
       : store.search({ match, limit: candidateLimit });
-  const filtered = filters === null ? candidates : applySearchOperators(candidates, filters);
+  // The enabled-module gate (ADR-058 §5) is applied to the CANDIDATES, before
+  // operators and ranking, so a page of `limit` results is filled from rows
+  // that may actually be shown rather than thinned after the cut.
+  const gated = filterSearchHitsByModules(candidates, await enabledModuleIdsFor(profileId));
+  const filtered = filters === null ? gated : applySearchOperators(gated, filters);
 
   const ranked = rankSearchResults(filtered, { now: new Date().toISOString(), query: parsed });
   return ranked.slice(0, limit).map((hit) => toSearchResult(hit, parsed.terms));
@@ -2914,16 +2972,23 @@ function tagFacetSources(profileId: string): TagFacetSource[] {
  * and the facet rows, where the palette path reads them only when a `#` token
  * is present.
  */
-function runSearchPage(profileId: string, rawQuery: string): SearchPageResult {
+async function runSearchPage(profileId: string, rawQuery: string): Promise<SearchPageResult> {
   const parsed = parseSearchQuery(rawQuery);
   const match = toFtsMatchExpression(parsed.terms, { prefixLast: parsed.prefixLast });
   const store = searchStore(profileId);
 
-  const candidates: SearchHit[] =
+  const sourced: SearchHit[] =
     match === null
       ? store.recent({ limit: MAX_SEARCH_BROWSE_LIMIT })
       : store.search({ match, limit: MAX_SEARCH_BROWSE_LIMIT });
-  const truncated = candidates.length >= MAX_SEARCH_BROWSE_LIMIT;
+  // Read off the PRE-gate length: the bound is the store's, and only a sourced
+  // set that hit it can be hiding more rows.
+  const truncated = sourced.length >= MAX_SEARCH_BROWSE_LIMIT;
+  // ADR-058 §5: the enabled-module gate, applied before the operators and
+  // before EVERY count below — so a disabled module surfaces neither rows nor
+  // phantom facet chips (`kindCounts`/`tagFacets` are computed strictly
+  // post-gate, and a kind with nothing left simply never appears in them).
+  const candidates = filterSearchHitsByModules(sourced, await enabledModuleIdsFor(profileId));
 
   const sources = tagFacetSources(profileId);
   const filters: SearchOperatorFilters | null =
@@ -3033,11 +3098,19 @@ function computeAuthStatus(): AuthStatus {
   };
 }
 
-/** Starts everything that only makes sense once the database is open. Never during the smoke run — a scheduled check firing mid-smoke would make its deterministic exit flaky, the same reason `app.whenReady` used to skip it. */
-function startUnlockedServices(): void {
-  if (isSmoke) return;
-  startNotificationScheduler({
+/**
+ * The scheduler's store bundle, resolved at call time like every other deps
+ * literal here. Extracted because TWO places now start the scheduler — the
+ * unlock path below and the `profiles:set-active` restart (ADR-058) — and the
+ * two must never drift on what it reads. `activeProfileId` resolves through
+ * `resolveActiveProfileId` on every call, so the scheduler always serves a
+ * LIVE profile: the reported one, or the personal anchor before any report
+ * lands (the rule's unlock default).
+ */
+function notificationSchedulerDeps(): NotificationSchedulerDeps {
+  return {
     listProfiles: () => listProfiles(requireDb()),
+    activeProfileId: () => resolveActiveProfileId(listProfiles(requireDb()), activeProfileId),
     documentStore,
     eventStore,
     examStore,
@@ -3046,7 +3119,13 @@ function startUnlockedServices(): void {
     taskStore,
     notificationStore,
     getMainWindow: () => mainWindow,
-  });
+  };
+}
+
+/** Starts everything that only makes sense once the database is open. Never during the smoke run — a scheduled check firing mid-smoke would make its deterministic exit flaky, the same reason `app.whenReady` used to skip it. */
+function startUnlockedServices(): void {
+  if (isSmoke) return;
+  startNotificationScheduler(notificationSchedulerDeps());
 
   // The one-time note-healing sweep (see `notes.ts`'s doc comment).
   // Unawaited, mirroring `adoptUnlockedKey`'s legacy-blob drain: an unlock
@@ -3149,6 +3228,10 @@ function performLock(): void {
   // nothing below may run against a still-open private section.
   privLock();
   stopNotificationScheduler();
+  // ADR-058: the active-profile report dies with the session — the next unlock
+  // may be a DIFFERENT account, and the renderer re-reports its landing anyway.
+  // Until it does, `resolveActiveProfileId` serves the personal anchor.
+  activeProfileId = null;
   // A backup run needs the data key and the open database; both die here. A
   // run already in flight bails on its own `stillThisSession` check.
   stopBackupScheduler();
@@ -3923,6 +4006,28 @@ function registerIpc(): void {
     return handleProfilesVerifySwitch(passcode);
   });
 
+  // ADR-058 (NTF active-profile rule): the renderer reports which profile its
+  // shell is standing in — at unlock landing and on every verified switch. A
+  // REAL change of the profile the scheduler serves restarts it, which re-arms
+  // the session's launch pass, so the profile being entered gets its backlog
+  // as the catch-up burst („Dok te nije bilo: N“) — its ledger is per-profile
+  // and stayed untouched while it was inactive, so exactly the missed
+  // reminders are what that first pass derives. A report that matches what the
+  // scheduler already serves (the unlock landing on the personal default) is
+  // recorded without a restart, so unlock never double-fires the first check.
+  ipcMain.handle(IpcChannel.profilesSetActive, (event, payload): void => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const database = requireDb();
+    requireProfile(database, profileId); // an unknown id is refused, never stored
+    const alreadyServed =
+      profileId === resolveActiveProfileId(listProfiles(database), activeProfileId);
+    activeProfileId = profileId;
+    if (alreadyServed) return;
+    // Never during the smoke run — the scheduler never runs there at all.
+    if (!isSmoke) startNotificationScheduler(notificationSchedulerDeps());
+  });
+
   ipcMain.handle(IpcChannel.profilesRename, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
@@ -4627,6 +4732,32 @@ function registerIpc(): void {
       throw new Error(`Invalid IPC payload: "semesterStart" must not be after "semesterEnd".`);
     }
     return calendarSettingsStore(profileId).save({ semesterStart, semesterEnd });
+  });
+
+  // CAL-005 (founder decision #4) / ADR-058 §5: the ONE cross-profile read in
+  // the system — the OTHER profile's events for the calendar grid. The
+  // renderer names only the profile it is SHOWING; the other side of the read
+  // is derived HERE from the profiles list, so no channel ever carries another
+  // profile's id renderer→main. Rows come back minimized and pre-marked by the
+  // store (no description/location/category — the renderer never even receives
+  // what it must not show) with series already expanded for the validated,
+  // bounded range. SRCH-005 stays intact by construction and is pinned here:
+  // this is a read-only reply, never a write — the per-profile search index
+  // (`search_entries.profile_id`) never sees an overlay row, so foreign events
+  // cannot surface in the viewer's search.
+  ipcMain.handle(IpcChannel.calendarOverlay, (event, payload): CalendarOverlayEvent[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const from = asBareDate(body.from, "from");
+    const to = asBareDate(body.to, "to");
+    const database = requireDb();
+    requireProfile(database, profileId);
+    return listProfiles(database)
+      .filter((profile) => profile.id !== profileId)
+      .flatMap((other) =>
+        new CalendarOverlayStore(database.raw, profileId, other.id).listRange(from, to),
+      );
   });
 
   // CAL-007 (ADR-026). `PeopleStore` takes `now` from its caller rather than
@@ -6118,7 +6249,7 @@ function registerIpc(): void {
   // Global search (ADR-021 / PRD 08 SRCH-001/002): `runSearchQuery`/
   // `runRecentSearch` own the actual pipeline (see their doc comments) so the
   // smoke rehearsal can call the exact same code the renderer does.
-  ipcMain.handle(IpcChannel.searchQuery, (event, payload): SearchResult[] => {
+  ipcMain.handle(IpcChannel.searchQuery, (event, payload): Promise<SearchResult[]> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
     const profileId = asNonEmptyString(body.profileId, "profileId");
@@ -6127,7 +6258,7 @@ function registerIpc(): void {
     return runSearchQuery(profileId, query, limit);
   });
 
-  ipcMain.handle(IpcChannel.searchRecent, (event, payload): SearchResult[] => {
+  ipcMain.handle(IpcChannel.searchRecent, (event, payload): Promise<SearchResult[]> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
     const profileId = asNonEmptyString(body.profileId, "profileId");
@@ -6143,7 +6274,7 @@ function registerIpc(): void {
    * page was designed to carry. An empty query is browse mode, which is why
    * `query` is capped but not required to be non-empty.
    */
-  ipcMain.handle(IpcChannel.searchPage, (event, payload): SearchPageResult => {
+  ipcMain.handle(IpcChannel.searchPage, (event, payload): Promise<SearchPageResult> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
     const profileId = asNonEmptyString(body.profileId, "profileId");
@@ -6856,14 +6987,14 @@ async function runSmokeBlobMigrationRehearsal(): Promise<void> {
  * packaged app's own connection (the `nx_fold` SQL function `openDatabase`
  * registers), not just against `@nexus/core`'s pure functions in isolation.
  */
-function runSmokeSearchRehearsal(): void {
+async function runSmokeSearchRehearsal(): Promise<void> {
   const [profile] = listProfiles(requireDb());
   if (!profile) throw new Error("expected at least one profile for the search rehearsal");
 
   const task = taskStore(profile.id).create({ title: "Rešenje za Đorđa" });
   try {
     for (const query of ["resenje", "djordja"]) {
-      const results = runSearchQuery(profile.id, query, 10);
+      const results = await runSearchQuery(profile.id, query, 10);
       const hit = results.find((result) => result.entityId === task.id);
       if (!hit) {
         throw new Error(
@@ -6875,7 +7006,7 @@ function runSmokeSearchRehearsal(): void {
       }
     }
 
-    const recent = runRecentSearch(profile.id, 10);
+    const recent = await runRecentSearch(profile.id, 10);
     if (!recent.some((result) => result.entityId === task.id)) {
       throw new Error("expected the freshly created task to appear in runRecentSearch");
     }
@@ -6886,7 +7017,7 @@ function runSmokeSearchRehearsal(): void {
     // tasks" answers with everything.
     const note = noteStore(profile.id).create(new Date().toISOString());
     try {
-      const kindOnly = runSearchQuery(profile.id, "z:", 10);
+      const kindOnly = await runSearchQuery(profile.id, "z:", 10);
       if (!kindOnly.some((result) => result.entityId === task.id)) {
         throw new Error('expected the kind-only query "z:" to still list the task');
       }
@@ -6912,7 +7043,7 @@ function runSmokeSearchRehearsal(): void {
       );
     }
 
-    const afterRebuild = runSearchQuery(profile.id, "resenje", 10);
+    const afterRebuild = await runSearchQuery(profile.id, "resenje", 10);
     if (!afterRebuild.some((result) => result.entityId === task.id)) {
       throw new Error("expected the task to still be findable after rebuildSearchIndex");
     }
@@ -7062,7 +7193,7 @@ async function runSmoke(win: BrowserWindow): Promise<void> {
 
   await runSmokeMigrationRehearsal();
   await runSmokeBlobMigrationRehearsal();
-  runSmokeSearchRehearsal();
+  await runSmokeSearchRehearsal();
   await runSmokeMultiAccountRehearsal();
 }
 

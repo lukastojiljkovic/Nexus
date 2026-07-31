@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { Event, Exam, Person, StudyBlockWithExam, Subject, Task } from "../../shared/ipc.js";
+import type {
+  CalendarOverlayEvent,
+  Event,
+  Exam,
+  Person,
+  StudyBlockWithExam,
+  Subject,
+  Task,
+} from "../../shared/ipc.js";
 import {
   buildCalendarItems,
   CALENDAR_SOURCES,
@@ -9,6 +17,7 @@ import {
   isMutedItem,
   isSpanItem,
   isTimedEventItem,
+  isTimedForeignItem,
   LAST_MINUTE_OF_DAY,
   parseClock,
   persistSources,
@@ -134,6 +143,18 @@ function makePerson(fields: Partial<Person> & Pick<Person, "id" | "month" | "day
   };
 }
 
+function makeOverlay(
+  fields: Partial<CalendarOverlayEvent> & Pick<CalendarOverlayEvent, "id" | "startAt">,
+): CalendarOverlayEvent {
+  return {
+    title: `Foreign ${fields.id}`,
+    endAt: null,
+    allDay: false,
+    foreign: true,
+    ...fields,
+  };
+}
+
 const EMPTY_ROWS: CalendarSourceRows = {
   events: [],
   tasks: [],
@@ -141,6 +162,7 @@ const EMPTY_ROWS: CalendarSourceRows = {
   blocks: [],
   subjects: [],
   people: [],
+  overlay: [],
 };
 
 const JULY: CalendarRange = { from: "2026-07-01", to: "2026-07-31" };
@@ -217,6 +239,7 @@ describe("buildCalendarItems — source selection", () => {
     blocks: [makeBlock({ id: "b1", examId: "x1", blockDate: "2026-07-09" })],
     subjects: [makeSubject("s1")],
     people: [makePerson({ id: "p1", month: 7, day: 10 })],
+    overlay: [makeOverlay({ id: "f1", startAt: "2026-07-10T11:00" })],
   };
 
   it("builds only the requested sources", () => {
@@ -226,7 +249,14 @@ describe("buildCalendarItems — source selection", () => {
   });
 
   it("appends new sources rather than slotting them in, so a stored toggle set keeps its meaning", () => {
-    expect(CALENDAR_SOURCES).toEqual(["events", "tasks", "exams", "blocks", "birthdays"]);
+    expect(CALENDAR_SOURCES).toEqual([
+      "events",
+      "tasks",
+      "exams",
+      "blocks",
+      "birthdays",
+      "overlay",
+    ]);
   });
 
   it("gives every item an id unique across sources", () => {
@@ -546,6 +576,84 @@ describe("buildCalendarItems — birthdays (ADR-026)", () => {
   });
 });
 
+// --- Cross-profile overlay (CAL-005 / ADR-058 §5) -----------------------------
+
+describe("buildCalendarItems — foreign overlay items", () => {
+  it("derives keys and minutes exactly as for own events, prefixing the id with its source", () => {
+    const [item] = build(
+      {
+        overlay: [
+          makeOverlay({ id: "f1", startAt: "2026-07-10T09:15", endAt: "2026-07-10T10:45" }),
+        ],
+      },
+      ["overlay"],
+    );
+    expect(item).toMatchObject({
+      id: "foreign-f1@2026-07-10",
+      source: "overlay",
+      kind: "foreign",
+      startKey: "2026-07-10",
+      endKey: "2026-07-10",
+      startMinutes: 9 * 60 + 15,
+      endMinutes: 10 * 60 + 45,
+      sortKey: "2026-07-10T09:15",
+    });
+  });
+
+  it("keeps two occurrences of one foreign master apart by their day — main pre-expands series", () => {
+    const items = build(
+      {
+        overlay: [
+          makeOverlay({ id: "f1", startAt: "2026-07-06T09:00" }),
+          makeOverlay({ id: "f1", startAt: "2026-07-13T09:00" }),
+        ],
+      },
+      ["overlay"],
+    );
+    expect(items.map((item) => item.id)).toEqual([
+      "foreign-f1@2026-07-06",
+      "foreign-f1@2026-07-13",
+    ]);
+  });
+
+  it("treats an all-day foreign row as day-granular and a multi-day one as a span", () => {
+    const [allDay, span] = build(
+      {
+        overlay: [
+          makeOverlay({ id: "f1", startAt: "2026-07-10", allDay: true }),
+          makeOverlay({ id: "f2", startAt: "2026-07-12T09:00", endAt: "2026-07-14T10:00" }),
+        ],
+      },
+      ["overlay"],
+    );
+    expect(allDay).toMatchObject({ startMinutes: null, endMinutes: null, sortKey: "2026-07-10" });
+    expect(span).toMatchObject({ startKey: "2026-07-12", endKey: "2026-07-14", endMinutes: null });
+    expect(isSpanItem(allDay as CalendarItem)).toBe(true);
+    expect(isSpanItem(span as CalendarItem)).toBe(true);
+  });
+
+  it("drops a foreign row whose start is not a usable day, and collapses a backwards end", () => {
+    expect(build({ overlay: [makeOverlay({ id: "f1", startAt: "garbage" })] }, ["overlay"])).toEqual(
+      [],
+    );
+    const [item] = build(
+      {
+        overlay: [
+          makeOverlay({ id: "f2", startAt: "2026-07-10T09:00", endAt: "2026-07-08T10:00" }),
+        ],
+      },
+      ["overlay"],
+    );
+    expect(item?.endKey).toBe("2026-07-10");
+  });
+
+  it("contributes nothing while the overlay chip is off", () => {
+    expect(
+      build({ overlay: [makeOverlay({ id: "f1", startAt: "2026-07-10T09:00" })] }, ["events"]),
+    ).toEqual([]);
+  });
+});
+
 // --- Item predicates ----------------------------------------------------------
 
 describe("isSpanItem / isTimedEventItem / isMutedItem", () => {
@@ -585,7 +693,7 @@ describe("isSpanItem / isTimedEventItem / isMutedItem", () => {
     );
   });
 
-  it("makes isTimedEventItem the exact complement of isSpanItem", () => {
+  it("makes isTimedEventItem the exact complement of isSpanItem over the profile's OWN items", () => {
     for (const item of [
       timed(),
       allDay(),
@@ -595,6 +703,24 @@ describe("isSpanItem / isTimedEventItem / isMutedItem", () => {
     ]) {
       expect(isTimedEventItem(item), item.id).toBe(!isSpanItem(item));
     }
+  });
+
+  it("keeps foreign timed items in the hour grid WITHOUT the event affordances (CAL-005)", () => {
+    const foreignTimed = only(
+      { overlay: [makeOverlay({ id: "f1", startAt: "2026-07-10T09:00" })] },
+      "overlay",
+    );
+    // In the hour grid's geometry, but never in its gestures: not a span, not
+    // a TimedEventItem — the guard every drag/edit path narrows through.
+    expect(isSpanItem(foreignTimed)).toBe(false);
+    expect(isTimedEventItem(foreignTimed)).toBe(false);
+    expect(isTimedForeignItem(foreignTimed)).toBe(true);
+    // And a day-granular foreign row stays out of the hour grid entirely.
+    const foreignAllDay = only(
+      { overlay: [makeOverlay({ id: "f2", startAt: "2026-07-10", allDay: true })] },
+      "overlay",
+    );
+    expect(isTimedForeignItem(foreignAllDay)).toBe(false);
   });
 
   it("quietens a done task and a missed block, and nothing else", () => {
@@ -648,6 +774,12 @@ describe("readStoredSources / persistSources", () => {
     // starts off rather than being silently re-enabled.
     stubStorage({ [KEY]: "events,tasks,exams,blocks" });
     expect(readStoredSources(PROFILE)).toEqual(new Set(["events", "tasks", "exams", "blocks"]));
+
+    // The same CAL-007 rule carries the overlay chip (CAL-005/ADR-058): a
+    // profile that stored toggles before it existed starts it OFF, while a
+    // fresh profile — nothing stored, the all-on default above — starts it ON.
+    stubStorage({ [KEY]: "events,tasks,exams,blocks,birthdays" });
+    expect(readStoredSources(PROFILE).has("overlay")).toBe(false);
 
     stubStorage({ [KEY]: "tasks,ufo" });
     expect(readStoredSources(PROFILE)).toEqual(new Set(["tasks"]));

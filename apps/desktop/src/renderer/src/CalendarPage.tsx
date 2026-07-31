@@ -5,6 +5,7 @@ import { isValidDayKey, monthKeyOf, shiftDayKey, shiftMonthKey, weekDayKeys } fr
 import type { WeekStart } from "@nexus/core";
 import { MAX_EVENT_TEMPLATE_NAME_LENGTH } from "../../shared/ipc.js";
 import type {
+  CalendarOverlayEvent,
   CalendarSettings,
   Event,
   EventFieldChanges,
@@ -12,13 +13,15 @@ import type {
   Exam,
   NewEventFields,
   Person,
+  Profile,
   RecurrenceRule,
   StudyBlockWithExam,
   Subject,
   Task,
 } from "../../shared/ipc.js";
 import { CalendarMiniMonth } from "./CalendarMiniMonth.js";
-import { CalendarMonth } from "./CalendarMonth.js";
+import { CalendarMonth, ForeignMark } from "./CalendarMonth.js";
+import { profileDisplayName } from "./profilePrefs.js";
 import { CalendarTimeGrid } from "./CalendarTimeGrid.js";
 import type { TimedEventDragTarget } from "./CalendarTimeGrid.js";
 import {
@@ -112,7 +115,11 @@ function persistView(profileId: string, view: CalendarView): void {
 /** Serbian Latin tailoring — plain `"sr"` mis-orders š/č/ć (the house pattern every alphabetical list here follows). */
 const collator = new Intl.Collator(["sr-Latn", "sr"]);
 
-const SOURCE_LABEL: Record<CalendarSource, string> = {
+// "overlay" is deliberately absent: its label is kind-dependent (CAL-005 —
+// „Poslovni kalendar“ / „Privatni kalendar“), so the page derives it from the
+// OTHER profile's kind where the chip renders, and `Exclude` makes forgetting
+// that a compile error rather than an undefined label.
+const SOURCE_LABEL: Record<Exclude<CalendarSource, "overlay">, string> = {
   events: strings.calendar.sourceEvents,
   tasks: strings.calendar.sourceTasks,
   exams: strings.calendar.sourceExams,
@@ -133,10 +140,14 @@ const SOURCE_LABEL: Record<CalendarSource, string> = {
 // after events — a name is the first thing a day should say.
 const KIND_RANK: Record<CalendarItem["kind"], number> = {
   event: 0,
-  birthday: 1,
-  task: 2,
-  exam: 3,
-  block: 4,
+  // A foreign event IS an event — it sits with the events, right after the
+  // profile's own on a shared bare date (timed rows interleave by startAt
+  // regardless, since rank only breaks sortKey ties).
+  foreign: 1,
+  birthday: 2,
+  task: 3,
+  exam: 4,
+  block: 5,
 };
 
 /** Calendar items bucketed by calendar day, days and rows both ascending. */
@@ -175,8 +186,8 @@ function formatDay(key: string): string {
       }).format(date);
 }
 
-/** Row time label — "Ceo dan" for all-day, else the device's clock (CAL §5); raw start on bad input. */
-function formatTime(event: Event, clock: ClockPreference): string {
+/** Row time label — "Ceo dan" for all-day, else the device's clock (CAL §5); raw start on bad input. Takes the two fields it reads, so the overlay's minimized rows use the same rule as full events. */
+function formatTime(event: Pick<Event, "allDay" | "startAt">, clock: ClockPreference): string {
   if (event.allDay) return strings.calendar.allDay;
   const date = new Date(event.startAt);
   return Number.isNaN(date.getTime())
@@ -473,6 +484,15 @@ export type CalendarIntent =
 
 export interface CalendarPageProps {
   profileId: string;
+  /**
+   * The account's OTHER profile, or null while there is none (CAL-005 /
+   * ADR-058 §5) — the overlay chip's origin. V1 keeps one personal anchor
+   * plus at most one business profile, so "the other profile" is at most one
+   * row; the chip, the fetch and the popover all hang off it being non-null.
+   */
+  overlayProfile: Profile | null;
+  /** The origin popover's „Prebaci profil“ — routes through App's passcode-gated switch dialog (AUTH-024), never a switch of its own. */
+  onSwitchToProfile: (profile: Profile) => void;
   intent?: CalendarIntent | null;
   /** Reports that `intent` above has been acted on, so the caller (App.tsx) can clear it. */
   onIntentHandled?: () => void;
@@ -487,8 +507,20 @@ export interface CalendarPageProps {
  * birthdays (CAL-007) are merged in as read-only rows; tasks are read-only too
  * apart from a due-date drag — editing any of them lives on their own pages
  * (a birthday's is the Ljudi panel a click on its bar switches to).
+ *
+ * The cross-profile overlay (CAL-005 / ADR-058 §5) merges the OTHER profile's
+ * events in as `foreign` items: read-only guests that never join drag, resize
+ * or the form. Creating an event always targets the ACTIVE profile — every
+ * write on this page goes through the `profileId` prop, and a foreign item
+ * reaches no write path (each is guarded by its own `kind`).
  */
-export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPageProps) {
+export function CalendarPage({
+  profileId,
+  overlayProfile,
+  onSwitchToProfile,
+  intent,
+  onIntentHandled,
+}: CalendarPageProps) {
   const [events, setEvents] = useState<Event[] | null>(null);
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [subjects, setSubjects] = useState<Subject[] | null>(null);
@@ -528,6 +560,18 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
   // the three is showing.
   const [anchorKey, setAnchorKey] = useState<string>(() => localTodayKey());
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
+  // The other profile's events for the current range (CAL-005) — [] while the
+  // chip is off, the fetch is in flight, or the account has one profile.
+  // Deliberately outside `dataLoading`: a courtesy layer pops in when it
+  // arrives rather than gating the profile's own calendar.
+  const [overlay, setOverlay] = useState<CalendarOverlayEvent[]>([]);
+  const [overlayFailed, setOverlayFailed] = useState(false);
+  // The origin popover a foreign item's click opens (CAL-005): the fixed
+  // position derived from the clicked element's rect, or null while closed.
+  // Anchored the way NotePopover anchors its panel — but state-driven, since
+  // its triggers are scattered across three grids and the agenda.
+  const [foreignAnchor, setForeignAnchor] = useState<{ top: number; right: number } | null>(null);
+  const foreignPopoverRef = useRef<HTMLDivElement>(null);
 
   // One form serves both modes; a non-null editingId means "editing that event".
   // When that event is one occurrence of a series, `editingOccurrence` says
@@ -632,6 +676,37 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
       return next;
     });
   }
+
+  /**
+   * A foreign item's one interaction (CAL-005): opens the origin popover under
+   * the clicked element — never an editor. Anchoring mirrors `NotePopover`'s
+   * fixed-position arithmetic, so the panel escapes the scrolling grids.
+   */
+  function openForeignPopover(anchor: DOMRect): void {
+    setForeignAnchor({ top: anchor.bottom + 2, right: window.innerWidth - anchor.right });
+  }
+
+  // Outside click / Escape close the origin popover — `NotePopover`'s own
+  // pair of listeners, re-created here because this popover has no single
+  // trigger to live inside. The DOM event types are globalThis-qualified:
+  // this file imports React's KeyboardEvent, which shadows the global.
+  const foreignPopoverOpen = foreignAnchor !== null;
+  useEffect(() => {
+    if (!foreignPopoverOpen) return;
+    const onPointerDown = (event: globalThis.MouseEvent): void => {
+      const wrap = foreignPopoverRef.current;
+      if (wrap && !wrap.contains(event.target as Node)) setForeignAnchor(null);
+    };
+    const onKeyDown = (event: globalThis.KeyboardEvent): void => {
+      if (event.key === "Escape") setForeignAnchor(null);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [foreignPopoverOpen]);
 
   function resetForm(): void {
     setEditingId(null);
@@ -1261,9 +1336,47 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
                 from: shiftDayKey(todayKey, -BLOCKS_PAST_DAYS),
                 to: shiftDayKey(todayKey, BLOCKS_FUTURE_DAYS),
               };
+
+  // CAL-005 / ADR-058 §5: the other profile's events for the visible range —
+  // fetched only while the chip is ON and there is another profile at all, so
+  // a switched-off overlay costs nothing and no foreign row ever reaches this
+  // renderer unasked (data minimization starts at the fetch). Keyed on the
+  // range's CONTENT, not the object: `expansionRange` is rebuilt every render.
+  const overlayOn = overlayProfile !== null && sources.has("overlay") && !isPanelView(view);
+  useEffect(() => {
+    if (!overlayOn) {
+      setOverlay([]);
+      setOverlayFailed(false);
+      return;
+    }
+    let active = true;
+    void (async () => {
+      try {
+        const rows = await window.nexus.calendarOverlay(
+          profileId,
+          expansionRange.from,
+          expansionRange.to,
+        );
+        if (!active) return;
+        setOverlay(rows);
+        setOverlayFailed(false);
+      } catch (error) {
+        if (active) setOverlayFailed(true);
+        console.error("Nexus: failed to load the calendar overlay:", error);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profileId, overlayOn, expansionRange.from, expansionRange.to]);
+
   const calendarItems = dataLoading
     ? []
-    : buildCalendarItems({ events, tasks, exams, blocks, subjects, people }, sources, expansionRange);
+    : buildCalendarItems(
+        { events, tasks, exams, blocks, subjects, people, overlay },
+        sources,
+        expansionRange,
+      );
   // Only Semestar reads density, and it reads it off that single merge.
   const dayDensity = view === "semestar" ? buildDayDensity(calendarItems) : EMPTY_DENSITY;
   const periodLabel =
@@ -1287,6 +1400,37 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
         />
       )}
 
+      {/* The origin popover a foreign item opens (CAL-005): headed by the
+          origin profile's own name, one sentence on why the event cannot be
+          opened here, and the one action that makes sense — the SAME
+          passcode-gated switch every profile change passes (AUTH-024), lifted
+          to App through onSwitchToProfile. Reuses NotePopover's panel classes
+          so the two cannot drift visually. */}
+      {foreignAnchor !== null && overlayProfile !== null && (
+        <div className="note__menu" ref={foreignPopoverRef}>
+          <div
+            className="note__menu-panel"
+            role="menu"
+            aria-label={strings.calendar.overlay.popoverLabel}
+            style={{ position: "fixed", top: foreignAnchor.top, right: foreignAnchor.right }}
+          >
+            <span className="note__menu-label">{profileDisplayName(overlayProfile)}</span>
+            <p className="note__menu-caption">{strings.calendar.overlay.originNote}</p>
+            <button
+              className="note__menu-item"
+              role="menuitem"
+              type="button"
+              onClick={() => {
+                setForeignAnchor(null);
+                onSwitchToProfile(overlayProfile);
+              }}
+            >
+              {strings.calendar.overlay.switchAction}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="cal__views" role="group" aria-label={strings.calendar.viewLabel}>
         {CALENDAR_VIEWS.map((option) => (
           <Button
@@ -1303,18 +1447,37 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
 
       {!isPanelView(view) && (
         <div className="cal__sources" role="group" aria-label={strings.calendar.sourcesLabel}>
-          {CALENDAR_SOURCES.map((source) => (
-            <Button
-              key={source}
-              size="sm"
-              className={sources.has(source) ? "cal__source cal__source--active" : "cal__source"}
-              aria-pressed={sources.has(source)}
-              onClick={() => toggleSource(source)}
-            >
-              {SOURCE_LABEL[source]}
-            </Button>
-          ))}
+          {CALENDAR_SOURCES
+            // The overlay chip exists only when the account has another
+            // profile to overlay (CAL-005) — with one profile there is
+            // nothing for it to say.
+            .filter((source) => source !== "overlay" || overlayProfile !== null)
+            .map((source) => (
+              <Button
+                key={source}
+                size="sm"
+                className={sources.has(source) ? "cal__source cal__source--active" : "cal__source"}
+                aria-pressed={sources.has(source)}
+                onClick={() => toggleSource(source)}
+              >
+                {source === "overlay"
+                  ? // Labelled by what it SHOWS: the OTHER profile's calendar.
+                    overlayProfile?.kind === "business"
+                    ? strings.calendar.sourceOverlayBusiness
+                    : strings.calendar.sourceOverlayPrivate
+                  : SOURCE_LABEL[source]}
+              </Button>
+            ))}
         </div>
+      )}
+
+      {/* Quiet, inline and non-blocking: the profile's own calendar is
+          unaffected by an overlay fetch failing — the guests just say why
+          they are missing. */}
+      {overlayFailed && overlayOn && (
+        <p className="app__muted" role="status">
+          {strings.calendar.overlay.loadError}
+        </p>
       )}
 
       {view === "dokumenta" ? (
@@ -1623,6 +1786,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
                   onOpenDay={openDay}
                   onEditEvent={startEdit}
                   onOpenPeople={() => selectView("ljudi")}
+                  onOpenForeign={openForeignPopover}
                   onMoveItem={(item, dayKey) => void moveItem(item, dayKey)}
                 />
               ) : view === "semestar" ? (
@@ -1671,6 +1835,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
                   onOpenDay={openDay}
                   onEditEvent={startEdit}
                   onOpenPeople={() => selectView("ljudi")}
+                  onOpenForeign={openForeignPopover}
                   onMoveTimedEvent={(item, target) => void moveTimedEvent(item, target)}
                 />
               )}
@@ -1718,6 +1883,37 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
                             {item.event.location ? (
                               <Chip variant="data">{item.event.location}</Chip>
                             ) : null}
+                          </span>
+                        </ListRow>
+                      );
+                    }
+                    // Foreign row (CAL-005): a read-only guest. No edit, no
+                    // delete — the „⋯“ opens the origin popover, whose one
+                    // action is the passcode-gated profile switch.
+                    if (item.kind === "foreign") {
+                      return (
+                        <ListRow
+                          key={item.id}
+                          muted
+                          leading={
+                            <span className="cal__time">{formatTime(item.foreign, clock)}</span>
+                          }
+                          trailing={
+                            <Button
+                              size="sm"
+                              className="cal__foreign-origin"
+                              aria-label={strings.calendar.overlay.popoverLabel}
+                              onClick={(e) =>
+                                openForeignPopover(e.currentTarget.getBoundingClientRect())
+                              }
+                            >
+                              ⋯
+                            </Button>
+                          }
+                        >
+                          <span className="cal__event">
+                            <ForeignMark />
+                            <span className="cal__event-title">{item.foreign.title}</span>
                           </span>
                         </ListRow>
                       );

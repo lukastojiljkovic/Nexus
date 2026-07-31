@@ -3,8 +3,13 @@ import type { DragEvent, MouseEvent, ReactNode } from "react";
 import { isoWeekNumber, layoutMonthBars, monthGridDays } from "@nexus/core";
 import type { MonthGridDay, SpanItem, WeekStart } from "@nexus/core";
 import type { Event } from "../../shared/ipc.js";
-import { isMutedItem, isSpanItem, isTimedEventItem } from "./calendarItems.js";
-import type { CalendarItem, EventOccurrence } from "./calendarItems.js";
+import { isMutedItem, isSpanItem, isTimedEventItem, isTimedForeignItem } from "./calendarItems.js";
+import type {
+  CalendarItem,
+  EventOccurrence,
+  TimedEventItem,
+  TimedForeignItem,
+} from "./calendarItems.js";
 import { formatClockLabel } from "./calendarPrefs.js";
 import type { ClockPreference } from "./calendarPrefs.js";
 import { RecurrenceMark } from "./RecurrencePicker.js";
@@ -39,6 +44,12 @@ export interface CalendarMonthProps {
   onEditEvent: (event: Event, occurrence: EventOccurrence | null) => void;
   /** Click on a birthday bar — the page switches to its Ljudi panel (ADR-026); a birthday is edited there, never from the grid. */
   onOpenPeople: () => void;
+  /**
+   * Click on a FOREIGN bar/chip (CAL-005): the page opens the origin popover
+   * anchored on the clicked element's rect. Never an editor — foreign items
+   * are unopenable guests, and they never join a drag either.
+   */
+  onOpenForeign: (anchor: DOMRect) => void;
   /** A drag finished on `dayKey`; only events and tasks are draggable. */
   onMoveItem: (item: CalendarItem, dayKey: string) => void;
 }
@@ -82,10 +93,26 @@ export function itemLabel(item: CalendarItem): string {
     // kind, so one composition serves both.
     case "birthday":
       return item.age === null ? item.person.name : `${item.person.name} (${item.age})`;
+    case "foreign":
+      return item.foreign.title;
   }
 }
 
-/** A subject-swatch dot (exam/block) or a series marker (a recurring event's occurrence), followed by the ellipsized label. Exported for the week/day grid's all-day band, which reuses these very classes. */
+/**
+ * The origin glyph every cross-profile item carries (CAL-005 / ADR-058 §5) —
+ * typographic like the ↻ series marker, never a new hue: ⇄ reads as "from the
+ * other side", and the popover behind the item says which profile in words.
+ * Exported for the week/day grid and the agenda, which mark the same guests.
+ */
+export function ForeignMark() {
+  return (
+    <span className="cal__foreign-mark" role="img" aria-label={strings.calendar.overlay.markerLabel}>
+      ⇄
+    </span>
+  );
+}
+
+/** A subject-swatch dot (exam/block), a series marker (a recurring event's occurrence) or the ⇄ origin glyph (a foreign item), followed by the ellipsized label. Exported for the week/day grid's all-day band, which reuses these very classes. */
 export function renderBarContent(item: CalendarItem): ReactNode {
   switch (item.kind) {
     case "exam":
@@ -100,6 +127,13 @@ export function renderBarContent(item: CalendarItem): ReactNode {
       return (
         <>
           {item.occurrence !== null && <RecurrenceMark />}
+          <span className="cal__month-bar-label">{itemLabel(item)}</span>
+        </>
+      );
+    case "foreign":
+      return (
+        <>
+          <ForeignMark />
           <span className="cal__month-bar-label">{itemLabel(item)}</span>
         </>
       );
@@ -125,6 +159,7 @@ export function CalendarMonth({
   onOpenDay,
   onEditEvent,
   onOpenPeople,
+  onOpenForeign,
   onMoveItem,
 }: CalendarMonthProps) {
   const [expandedWeeks, setExpandedWeeks] = useState<ReadonlySet<number>>(new Set());
@@ -145,7 +180,13 @@ export function CalendarMonth({
   const barItems: SpanItem[] = items
     .filter(isSpanItem)
     .map((item) => ({ id: item.id, startKey: item.startKey, endKey: item.endKey }));
-  const chipItems = items.filter(isTimedEventItem);
+  // Timed foreign occurrences share the chip lane with the profile's own timed
+  // events (CAL-005) — same geometry, entirely different affordances: a
+  // foreign chip opens the origin popover and never drags.
+  const chipItems: (TimedEventItem | TimedForeignItem)[] = [
+    ...items.filter(isTimedEventItem),
+    ...items.filter(isTimedForeignItem),
+  ];
 
   function toggleWeek(weekIndex: number): void {
     setExpandedWeeks((prev) => {
@@ -306,20 +347,38 @@ export function CalendarMonth({
                     />
                     {visibleChips.length > 0 && (
                       <div className="cal__month-chips">
-                        {visibleChips.map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            className="cal__month-chip"
-                            draggable
-                            onClick={(e) => activateEvent(e, item)}
-                            onDragStart={(e) => startDrag(e, item)}
-                            onDragEnd={endDrag}
-                          >
-                            {item.occurrence !== null && <RecurrenceMark />}
-                            {formatClockLabel(item.startMinutes, clock)} — {item.event.title}
-                          </button>
-                        ))}
+                        {visibleChips.map((item) =>
+                          item.kind === "foreign" ? (
+                            // A guest chip (CAL-005): unopenable and never
+                            // draggable — its one interaction is the origin
+                            // popover the page anchors on this very element.
+                            <button
+                              key={item.id}
+                              type="button"
+                              className="cal__month-chip cal__month-chip--foreign"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenForeign(e.currentTarget.getBoundingClientRect());
+                              }}
+                            >
+                              <ForeignMark />
+                              {formatClockLabel(item.startMinutes, clock)} — {item.foreign.title}
+                            </button>
+                          ) : (
+                            <button
+                              key={item.id}
+                              type="button"
+                              className="cal__month-chip"
+                              draggable
+                              onClick={(e) => activateEvent(e, item)}
+                              onDragStart={(e) => startDrag(e, item)}
+                              onDragEnd={endDrag}
+                            >
+                              {item.occurrence !== null && <RecurrenceMark />}
+                              {formatClockLabel(item.startMinutes, clock)} — {item.event.title}
+                            </button>
+                          ),
+                        )}
                       </div>
                     )}
                     {hiddenCount > 0 && (
@@ -382,6 +441,26 @@ export function CalendarMonth({
                         // onSelectDay beneath, exactly as an event bar does.
                         e.stopPropagation();
                         onOpenPeople();
+                      }}
+                    >
+                      {renderBarContent(item)}
+                    </button>
+                  );
+                }
+                if (item.kind === "foreign") {
+                  return (
+                    // A guest bar (CAL-005): clickable but unopenable — the
+                    // click opens the origin popover, never an editor — and
+                    // deliberately not draggable, so it can never join
+                    // onMoveItem.
+                    <button
+                      key={bar.id}
+                      type="button"
+                      className={classes.join(" ")}
+                      style={style}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenForeign(e.currentTarget.getBoundingClientRect());
                       }}
                     >
                       {renderBarContent(item)}

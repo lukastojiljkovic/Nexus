@@ -8,7 +8,7 @@ import { DEFAULT_DASHBOARD_LAYOUT } from "@nexus/db";
 import { describe, expect, it } from "vitest";
 
 import { DASHBOARD_WIDGETS } from "./dashboardWidgets.js";
-import { createModuleRegistry } from "./modules.js";
+import { createModuleRegistry } from "../../shared/modules.js";
 import { strings } from "./strings.js";
 
 /**

@@ -252,7 +252,9 @@ function TodayWidget({ profileId, enabledModules, onOpenModule }: DashboardWidge
         // and each item's `event` is that occurrence's own copy, so the time
         // shown is the time it happens at.
         const items = buildCalendarItems(
-          { events, tasks: [], exams: [], blocks: [], subjects: [], people },
+          // `overlay` stays empty by design: the cross-profile read is the
+          // calendar grid's alone (CAL-005) — no widget shows another profile.
+          { events, tasks: [], exams: [], blocks: [], subjects: [], people, overlay: [] },
           TODAY_SOURCES,
           { from: todayKey, to: todayKey },
         )

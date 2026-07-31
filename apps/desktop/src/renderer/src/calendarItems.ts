@@ -5,7 +5,15 @@ import {
   occurrenceDatesInRange,
   shiftDayKey,
 } from "@nexus/core";
-import type { Event, Exam, Person, StudyBlockWithExam, Subject, Task } from "../../shared/ipc.js";
+import type {
+  CalendarOverlayEvent,
+  Event,
+  Exam,
+  Person,
+  StudyBlockWithExam,
+  Subject,
+  Task,
+} from "../../shared/ipc.js";
 
 /**
  * Shared calendar source merge (ADR-020). Every calendar surface — the month
@@ -34,12 +42,16 @@ import type { Event, Exam, Person, StudyBlockWithExam, Subject, Task } from "../
  * appear.
  */
 
-export type CalendarSource = "events" | "tasks" | "exams" | "blocks" | "birthdays";
+export type CalendarSource = "events" | "tasks" | "exams" | "blocks" | "birthdays" | "overlay";
 /**
  * Chip order — and, because `persistSources` writes this order, the stored
  * format's order too. New sources are APPENDED rather than slotted in beside a
  * related one: every previously stored toggle set then still parses to exactly
- * the sources it named.
+ * the sources it named. "overlay" (CAL-005 / ADR-058: the other profile's
+ * events) is the CAL-007 precedent's second application: appended, so a
+ * profile that stored its toggles before it existed keeps it OFF, while a
+ * fresh profile — nothing stored, `readStoredSources`' all-on default — starts
+ * it ON.
  */
 export const CALENDAR_SOURCES: readonly CalendarSource[] = [
   "events",
@@ -47,6 +59,7 @@ export const CALENDAR_SOURCES: readonly CalendarSource[] = [
   "exams",
   "blocks",
   "birthdays",
+  "overlay",
 ];
 
 const DAY_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -85,6 +98,13 @@ export type CalendarItem = CalendarItemBase &
     | { kind: "block"; block: StudyBlockWithExam; exam: Exam; subject: Subject }
     /** One year's celebration of a person's date (ADR-026); `age` is null whenever the year is unknown. */
     | { kind: "birthday"; person: Person; age: number | null }
+    /**
+     * One occurrence of the OTHER profile's calendar (CAL-005 / ADR-058 §5) —
+     * a read-only guest: unopenable (its click opens the origin popover, never
+     * an editor), never draggable, never resizable. Its own kind, so every
+     * switch over items is forced to decide what a guest row may do there.
+     */
+    | { kind: "foreign"; foreign: CalendarOverlayEvent }
   );
 
 export interface CalendarSourceRows {
@@ -94,6 +114,8 @@ export interface CalendarSourceRows {
   readonly blocks: readonly StudyBlockWithExam[];
   readonly subjects: readonly Subject[];
   readonly people: readonly Person[];
+  /** The other profile's events for the current range (CAL-005), already expanded and minimized by main; empty while the chip is off or the account has one profile. */
+  readonly overlay: readonly CalendarOverlayEvent[];
 }
 
 /** The window a recurring master is expanded over — inclusive bare day keys. */
@@ -330,9 +352,54 @@ function buildBirthdayItems(people: readonly Person[], range: CalendarRange): Ca
 }
 
 /**
+ * The other profile's events as calendar items (CAL-005 / ADR-058 §5). No
+ * range parameter and no recurrence handling, deliberately: main's overlay
+ * query already answered for exactly the visible range with every series
+ * expanded into concrete occurrences, so this builder only derives keys and
+ * minutes — the same slicing `eventItem` does for the profile's own rows, and
+ * the same skip-not-throw discipline on a malformed start.
+ */
+function buildForeignItems(rows: readonly CalendarOverlayEvent[]): CalendarItem[] {
+  const items: CalendarItem[] = [];
+  for (const row of rows) {
+    const startKey = row.startAt.slice(0, 10);
+    if (!isDayKey(startKey)) continue;
+
+    let endKey = row.endAt ? row.endAt.slice(0, 10) : startKey;
+    if (!isDayKey(endKey) || endKey < startKey) endKey = startKey;
+
+    let startMinutes: number | null = null;
+    let endMinutes: number | null = null;
+    if (!row.allDay) {
+      startMinutes = parseMinutes(row.startAt.slice(11, 16));
+      if (row.endAt && row.endAt.slice(0, 10) === startKey) {
+        endMinutes = parseMinutes(row.endAt.slice(11, 16));
+      }
+    }
+
+    items.push({
+      // Occurrences of one foreign master share its row id, so the day is what
+      // separates them; the `foreign-` prefix keeps these ids disjoint from
+      // the viewer's own `event-` ids in every by-id map downstream.
+      id: `foreign-${row.id}@${startKey}`,
+      source: "overlay",
+      kind: "foreign",
+      foreign: row,
+      startKey,
+      endKey,
+      startMinutes,
+      endMinutes,
+      sortKey: row.allDay ? startKey : row.startAt,
+    });
+  }
+  return items;
+}
+
+/**
  * Merges the enabled sources into one calendar stream; only requested sources
  * are built at all. `range` bounds the expansion of recurring event masters
- * and of birthday occurrences, and nothing else — see the file header.
+ * and of birthday occurrences, and nothing else — see the file header. (The
+ * overlay rows arrive already range-bounded by main, so they take no `range`.)
  */
 export function buildCalendarItems(
   rows: CalendarSourceRows,
@@ -348,6 +415,7 @@ export function buildCalendarItems(
   if (enabled.has("exams")) items.push(...buildExamItems(rows.exams, subjectsById));
   if (enabled.has("blocks")) items.push(...buildBlockItems(rows.blocks, examsById, subjectsById));
   if (enabled.has("birthdays")) items.push(...buildBirthdayItems(rows.people, range));
+  if (enabled.has("overlay")) items.push(...buildForeignItems(rows.overlay));
   return items;
 }
 
@@ -390,15 +458,22 @@ export function isSpanItem(item: CalendarItem): boolean {
 }
 
 /**
- * A single-day timed event — the only kind of item that lands *in* the hour
- * grid rather than in its all-day band, and so the only kind the week/day grid
- * lets the pointer move and resize (ADR-034).
+ * A single-day timed event — the only kind of item the week/day grid lets the
+ * pointer move and resize (ADR-034). A timed foreign occurrence lands in the
+ * hour grid too (`isTimedForeignItem`), but never in a gesture.
  */
 export type TimedEventItem = CalendarItem & { kind: "event"; startMinutes: number };
 
-/** The exact complement of `isSpanItem`: a single-day timed event, the only kind that lands in the hour grid. */
+/** A single-day timed OWN event — hour-grid geometry plus the drag/resize/edit affordances foreign items never get. */
 export function isTimedEventItem(item: CalendarItem): item is TimedEventItem {
   return item.kind === "event" && item.startMinutes !== null && item.endKey === item.startKey;
+}
+
+/** A single-day timed occurrence of the OTHER profile's calendar (CAL-005): hour-grid geometry, no gestures — its one interaction is the origin popover. */
+export type TimedForeignItem = CalendarItem & { kind: "foreign"; startMinutes: number };
+
+export function isTimedForeignItem(item: CalendarItem): item is TimedForeignItem {
+  return item.kind === "foreign" && item.startMinutes !== null && item.endKey === item.startKey;
 }
 
 /** Quietened rather than hidden: a task already done, a study block already missed. */

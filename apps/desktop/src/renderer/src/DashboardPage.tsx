@@ -741,7 +741,17 @@ export function DashboardPage({
       strip === null
         ? []
         : buildCalendarItems(
-            { events: strip.events, tasks: [], exams: [], blocks: [], subjects: [], people: [] },
+            // `overlay` stays empty by design: the cross-profile read is the
+            // calendar grid's alone (CAL-005) — the dashboard never shows it.
+            {
+              events: strip.events,
+              tasks: [],
+              exams: [],
+              blocks: [],
+              subjects: [],
+              people: [],
+              overlay: [],
+            },
             STRIP_SOURCES,
             { from: todayKey, to: todayKey },
           ),

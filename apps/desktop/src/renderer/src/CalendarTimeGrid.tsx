@@ -17,9 +17,14 @@ import type { Event } from "../../shared/ipc.js";
 // The bar recipe (label + swatch + classes) lives with the month grid that
 // defines those classes; importing it is what keeps the two views from
 // drifting apart the way two copies eventually would.
-import { renderBarContent } from "./CalendarMonth.js";
-import { isMutedItem, isSpanItem, isTimedEventItem } from "./calendarItems.js";
-import type { CalendarItem, EventOccurrence, TimedEventItem } from "./calendarItems.js";
+import { ForeignMark, renderBarContent } from "./CalendarMonth.js";
+import { isMutedItem, isSpanItem, isTimedEventItem, isTimedForeignItem } from "./calendarItems.js";
+import type {
+  CalendarItem,
+  EventOccurrence,
+  TimedEventItem,
+  TimedForeignItem,
+} from "./calendarItems.js";
 import { formatClockLabel } from "./calendarPrefs.js";
 import type { ClockPreference } from "./calendarPrefs.js";
 import { RecurrenceMark } from "./RecurrencePicker.js";
@@ -58,6 +63,8 @@ export interface CalendarTimeGridProps {
   onEditEvent: (event: Event, occurrence: EventOccurrence | null) => void;
   /** Click on a birthday bar in the all-day band — the page switches to its Ljudi panel (ADR-026). */
   onOpenPeople: () => void;
+  /** Click on a FOREIGN block/bar (CAL-005): the page opens the origin popover on the clicked element's rect — never an editor, and foreign items never join the drag below. */
+  onOpenForeign: (anchor: DOMRect) => void;
   /**
    * A pointer drag of a timed event finished somewhere it did not start
    * (ADR-034). The page owns the write — including asking the scope dialog
@@ -174,6 +181,7 @@ export function CalendarTimeGrid({
   onOpenDay,
   onEditEvent,
   onOpenPeople,
+  onOpenForeign,
   onMoveTimedEvent,
 }: CalendarTimeGridProps) {
   const [nowMinutes, setNowMinutes] = useState(currentMinutes);
@@ -401,7 +409,14 @@ export function CalendarTimeGrid({
 
   const itemById = new Map(items.map((item) => [item.id, item] as const));
   const bandItems = items.filter(isSpanItem);
-  const timedItems = items.filter(isTimedEventItem);
+  // Foreign timed occurrences share the overlap layout with the profile's own
+  // blocks (CAL-005) — a foreign 10:00 meeting visibly displaces yours into a
+  // half-width column — but never the gestures: only `TimedEventItem`s get
+  // pointer handlers below.
+  const timedItems: (TimedEventItem | TimedForeignItem)[] = [
+    ...items.filter(isTimedEventItem),
+    ...items.filter(isTimedForeignItem),
+  ];
 
   const isWeek = dayKeys.length === 7;
   const singleDayKey = dayKeys.length === 1 ? dayKeys[0] : undefined;
@@ -458,6 +473,20 @@ export function CalendarTimeGrid({
           className={classes.join(" ")}
           style={geometry}
           onClick={onOpenPeople}
+        >
+          {renderBarContent(item)}
+        </button>
+      );
+    }
+    if (item.kind === "foreign") {
+      // A guest bar (CAL-005): the click opens the origin popover, never an editor.
+      return (
+        <button
+          key={item.id}
+          type="button"
+          className={classes.join(" ")}
+          style={geometry}
+          onClick={(e) => onOpenForeign(e.currentTarget.getBoundingClientRect())}
         >
           {renderBarContent(item)}
         </button>
@@ -598,6 +627,33 @@ export function CalendarTimeGrid({
                   // node that holds the pointer capture.
                   if (geometry.dayOffset !== 0) {
                     style.transform = `translateX(${geometry.dayOffset * col.columns * 100}%)`;
+                  }
+                  if (item.kind === "foreign") {
+                    // A guest block (CAL-005): laid out like any other, but
+                    // with NO pointer handlers — it can never arm a drag or a
+                    // resize, and its click opens the origin popover instead
+                    // of the editor. No resize handle either: there is no end
+                    // to grab on something that cannot be changed here.
+                    return (
+                      <button
+                        key={col.id}
+                        type="button"
+                        className="cal__grid-event cal__grid-event--foreign"
+                        style={style}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onOpenForeign(event.currentTarget.getBoundingClientRect());
+                        }}
+                      >
+                        <span className="cal__grid-event-time">
+                          {formatClockLabel(item.startMinutes, clock)}
+                        </span>
+                        <span className="cal__grid-event-title">
+                          <ForeignMark />
+                          {item.foreign.title}
+                        </span>
+                      </button>
+                    );
                   }
                   const isGhost = dragged?.candidate != null;
                   return (

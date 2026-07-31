@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { lookupString, moveNeighbours } from "./dashboardLayout.js";
 import { strings } from "./strings.js";
-import { createModuleRegistry } from "./modules.js";
+import { createModuleRegistry } from "../../shared/modules.js";
 
 /**
  * The layout arithmetic behind the dashboard's edit mode (ADR-045 slice b).

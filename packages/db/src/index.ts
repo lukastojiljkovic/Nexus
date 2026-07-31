@@ -11,6 +11,7 @@ export {
   PrivateNoteNotFoundError,
   PrivateNoteValidationError,
   PrivateSettingsValidationError,
+  CalendarOverlayValidationError,
   CalendarSettingsValidationError,
   CardNotFoundError,
   CardValidationError,
@@ -99,6 +100,12 @@ export type { DashboardSettings } from "./dashboard/dashboardSettingsStore.js";
 
 export { CalendarSettingsStore } from "./calendar/calendarSettingsStore.js";
 export type { CalendarSettings } from "./calendar/calendarSettingsStore.js";
+
+export {
+  CalendarOverlayStore,
+  MAX_OVERLAY_RANGE_DAYS,
+} from "./calendar/calendarOverlayStore.js";
+export type { CalendarOverlayEvent } from "./calendar/calendarOverlayStore.js";
 
 export {
   BackupSettingsStore,
