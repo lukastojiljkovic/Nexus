@@ -37,6 +37,7 @@ import type {
   StudyBlock,
   StudyBlockStatus,
   StudyBlockWithExam,
+  StudyLogDay,
   StudyPlan,
   StudyStats,
   Subject,
@@ -59,6 +60,7 @@ import { NotePopover } from "./notePopover.js";
 import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
 import { intervalLabel, isDueWithinSession } from "./reviewIntervals.js";
 import { countUnit, dayUnit, strings } from "./strings.js";
+import { STUDY_LOG_WINDOW_DAYS, studyLogExamLabels, studyLogFacts } from "./studyLog.js";
 
 // --- Field orderings (renderer mirror of @nexus/db) -------------------------
 //
@@ -485,6 +487,26 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   const [linkedNoteError, setLinkedNoteError] = useState(false);
   const [attaching, setAttaching] = useState(false);
 
+  // „Dnevnik učenja" (STUDY-014). Unlike the two sections above it, this one is
+  // NOT kept loaded for every subject: it is collapsed until asked for, and
+  // only one subject's log is open at a time (the plan card's `expandedPlanId`
+  // idiom). The panel is already long, and a log nobody opened is a query
+  // nobody needed.
+  //
+  // `expandedLog` carries the whole request — which subject, and how far back.
+  // „Prikaži još" moves `fromDay` and the effect below re-reads the WIDENED
+  // window in one call, so there are no pages to stitch and what is on screen
+  // is always exactly one store answer. `logRevision` is that same request
+  // asked again, bumped by the writes that can move a log while it is open.
+  const [expandedLog, setExpandedLog] = useState<{ subjectId: string; fromDay: string } | null>(
+    null,
+  );
+  const [logRevision, setLogRevision] = useState(0);
+  const [logDays, setLogDays] = useState<StudyLogDay[]>([]);
+  const [logHasOlder, setLogHasOlder] = useState(false);
+  const [logLoading, setLogLoading] = useState(false);
+  const [logFailed, setLogFailed] = useState(false);
+
   // The deck form mirrors the exam form's idiom exactly (inline reveal, one
   // subject at a time).
   const [deckFormSubjectId, setDeckFormSubjectId] = useState<string | null>(null);
@@ -772,6 +794,42 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     }, 1000);
     return () => window.clearInterval(id);
   }, [focusRunning]);
+
+  // The open subject's „Dnevnik učenja" (STUDY-014). Keyed on the request's own
+  // fields rather than the object holding them, so only a real change re-reads.
+  // The rows already on screen are deliberately left up while a widened window
+  // loads — „Prikaži još" must extend the list, not blank it — and the range
+  // always ends TODAY: the log is what has happened, and everything ahead of
+  // now already has the countdown chips and the plan cards above it.
+  const logSubjectId = expandedLog?.subjectId ?? null;
+  const logFromDay = expandedLog?.fromDay ?? null;
+  useEffect(() => {
+    if (logSubjectId === null || logFromDay === null) return;
+    let active = true;
+    setLogLoading(true);
+    setLogFailed(false);
+    void (async () => {
+      try {
+        const log = await window.nexus.subjectStudyLog(
+          profileId,
+          logSubjectId,
+          logFromDay,
+          localTodayKey(),
+        );
+        if (!active) return;
+        setLogDays(log.days);
+        setLogHasOlder(log.hasOlder);
+      } catch (error) {
+        if (active) setLogFailed(true);
+        console.error("Nexus: failed to load the study log:", error);
+      } finally {
+        if (active) setLogLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profileId, logSubjectId, logFromDay, logRevision]);
 
   useEffect(() => {
     if (activeDeckId == null) return;
@@ -1353,6 +1411,34 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     setStatsYear(nextStatsYear);
     setStatsRecent(nextStatsRecent);
     setFocusSessions(nextFocusSessions);
+    // A focus session that just started, ended or came back changes a day of
+    // the open study log too (STUDY-014); a closed one has nothing to re-read.
+    setLogRevision((revision) => revision + 1);
+  }
+
+  /**
+   * Opens one subject's „Dnevnik učenja" at the most recent window, or closes
+   * the open one. Opening a second subject replaces the first: one log at a
+   * time, so the rows on screen always belong to exactly one course.
+   */
+  function toggleStudyLog(subjectId: string): void {
+    setLogDays([]);
+    setLogHasOlder(false);
+    setLogFailed(false);
+    setExpandedLog(
+      expandedLog?.subjectId === subjectId
+        ? null
+        : { subjectId, fromDay: shiftDayKey(localTodayKey(), -(STUDY_LOG_WINDOW_DAYS - 1)) },
+    );
+  }
+
+  /** Widens the open log by one more window; the effect re-reads the whole range. */
+  function extendStudyLog(): void {
+    setExpandedLog((current) =>
+      current === null
+        ? current
+        : { ...current, fromDay: shiftDayKey(current.fromDay, -STUDY_LOG_WINDOW_DAYS) },
+    );
   }
 
   async function beginFocus(subjectId: string): Promise<void> {
@@ -1608,6 +1694,9 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   function exitReview(): void {
     setRoute({ kind: "hub" });
     void reloadDeckCounts();
+    // Grades just landed in `review_log`, which is a column of today's study
+    // log row (STUDY-014) — re-read it if one is open behind this session.
+    setLogRevision((revision) => revision + 1);
   }
 
   const loading =
@@ -2256,6 +2345,92 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     );
   }
 
+  /**
+   * The „Dnevnik učenja" section (STUDY-014): a read-only, day-grouped record
+   * of what this course actually took — its ponavljanja, its fokus time, what
+   * its plans asked for, and the exams it hit — newest day first. Nothing here
+   * is new data; it is the four things the app already stores, composed.
+   *
+   * COLLAPSED by default, and it is the only section of the panel that is. The
+   * two above it are short and always relevant; this one is a query per subject
+   * over sixty days of history, sitting under exams, materials, notes and (just
+   * below) špilovi. So it opens on request, one subject at a time — and the
+   * toggle names what it opens rather than saying "Prikaži", which on a panel
+   * of five sections would say nothing.
+   *
+   * Each day is one quiet line: the date, the day's facts run together with
+   * „·", and an exam as an accent Chip — the same milestone treatment the exam
+   * rows above use, because a chip is what an exam looks like on this page.
+   */
+  function renderStudyLog(subjectId: string) {
+    const copy = strings.study.log;
+    const open = expandedLog?.subjectId === subjectId;
+    // Only the OPEN subject's exams are indexed: a closed section resolves no
+    // names, so it should build no map either.
+    const examTypes = open
+      ? new Map(examsForSubject(subjectId).map((exam) => [exam.id, exam.examType]))
+      : new Map<string, ExamType>();
+
+    return (
+      <div className="study__log">
+        <div className="study__log-header">
+          <h3 className="study__log-title">{copy.title}</h3>
+          <Button size="sm" className="study__log-toggle" onClick={() => toggleStudyLog(subjectId)}>
+            {open ? copy.hide : copy.show}
+          </Button>
+        </div>
+        {open &&
+          (logFailed ? (
+            <p className="study__log-error" role="status">
+              {copy.loadError}
+            </p>
+          ) : logDays.length === 0 ? (
+            <p className="study__log-empty">{logLoading ? strings.app.loading : copy.empty}</p>
+          ) : (
+            <>
+              <div className="study__log-list">
+                {logDays.map((entry) => {
+                  const facts = studyLogFacts(entry);
+                  return (
+                    <div key={entry.day} className="study__log-day">
+                      {/* `formatExamDate` despite the name: a log day is a bare
+                          calendar date, which is exactly what it renders ("8.
+                          jul 2026."). The year is the reason it, and not the
+                          plan list's weekday heading, is the right formatter —
+                          a log scrolls back through semesters. */}
+                      <span className="study__log-date">{formatExamDate(entry.day)}</span>
+                      {facts.length > 0 && (
+                        <span className="study__log-facts">{facts.join(" · ")}</span>
+                      )}
+                      {studyLogExamLabels(entry.examIds, examTypes).map((exam) => (
+                        <Chip key={exam.id} variant="accent">
+                          {exam.label}
+                        </Chip>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+              {/* The honest bound: offered only while the subject actually HAS
+                  something older than the window on screen — the store answers
+                  that, so a quiet summer between two semesters never reads as
+                  the end of the history. */}
+              {logHasOlder && (
+                <Button
+                  size="sm"
+                  className="study__log-more"
+                  disabled={logLoading}
+                  onClick={extendStudyLog}
+                >
+                  {copy.showMore}
+                </Button>
+              )}
+            </>
+          ))}
+      </div>
+    );
+  }
+
   // --- Hub route (subjects, exams, decks) -------------------------------------
   return (
     <div className="study">
@@ -2548,6 +2723,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
 
                   {renderMaterials(subject.id)}
                   {renderLinkedNotes(subject.id)}
+                  {renderStudyLog(subject.id)}
 
                   <div className="study__decks">
                     <div className="study__decks-header">

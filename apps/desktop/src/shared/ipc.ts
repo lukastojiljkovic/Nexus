@@ -147,6 +147,7 @@ export const IpcChannel = {
   focusDelete: "focus:delete",
   focusRestore: "focus:restore",
   statsStudy: "stats:study",
+  studyLog: "study:log",
   studySettingsGet: "study:settings-get",
   studySettingsSet: "study:settings-set",
   notificationsCenterList: "notifications:center-list",
@@ -2117,6 +2118,34 @@ export interface StatsStudyRequest {
   toDate: string;
 }
 
+/**
+ * One local calendar day of a subject's study log (STUDY-014), as seen by the
+ * renderer (mirrors `@nexus/db`'s `StudyLogDay`). Redeclared here so the
+ * renderer never imports DB code. Exam names are not carried: the renderer
+ * already holds this subject's exams and resolves each id against them.
+ */
+export interface StudyLogDay {
+  day: string;
+  reviews: number;
+  focusMinutes: number;
+  plannedMinutes: number;
+  examIds: string[];
+}
+
+/** A subject's study log over one bounded range, newest day first, plus whether anything predates it. */
+export interface SubjectStudyLog {
+  days: StudyLogDay[];
+  hasOlder: boolean;
+}
+
+/** One bounded page of a subject's study log; both bounds are bare "YYYY-MM-DD" calendar days. */
+export interface StudyLogRequest {
+  profileId: string;
+  subjectId: string;
+  fromDay: string;
+  toDay: string;
+}
+
 /** The five NTF-001..003/CAL-006/ADR-028 source kinds (mirrors `@nexus/core`'s `NotificationSource`; redeclared here so the renderer never imports core/DB code). */
 export type NotificationSource = "document" | "exam" | "study-day" | "event" | "task";
 
@@ -3691,6 +3720,12 @@ export interface NexusApi {
   deleteFocus(profileId: string, id: string): Promise<void>;
   restoreFocus(profileId: string, id: string): Promise<void>;
   studyStats(profileId: string, fromDate: string, toDate: string): Promise<StudyStats>;
+  subjectStudyLog(
+    profileId: string,
+    subjectId: string,
+    fromDay: string,
+    toDay: string,
+  ): Promise<SubjectStudyLog>;
   listCenterNotifications(profileId: string): Promise<NotificationRecord[]>;
   snoozeNotification(
     profileId: string,

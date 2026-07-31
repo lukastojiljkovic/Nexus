@@ -296,6 +296,7 @@ import {
   type SnoozePreset,
   type StudyStats,
   type SubjectAttachmentsAddResult,
+  type SubjectStudyLog,
   type TaskAttachmentsAddResult,
   type TaskListsSnapshot,
 } from "../shared/ipc.js";
@@ -4251,6 +4252,20 @@ function registerIpc(): void {
       reviews: stats.reviewCounts(fromDate, toDate),
       blocks: stats.blockTotals(fromDate, toDate),
     };
+  });
+
+  // One subject's study log (STUDY-014) — a read, nothing else. Both bounds go
+  // through `asBareDate` rather than the plain string the older stats channel
+  // accepts: they are calendar days, so "2026-02-30" is refused here instead of
+  // reaching the store as a day that does not exist.
+  ipcMain.handle(IpcChannel.studyLog, (event, payload): SubjectStudyLog => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const subjectId = asNonEmptyString(body.subjectId, "subjectId");
+    const fromDay = asBareDate(body.fromDay, "fromDay");
+    const toDay = asBareDate(body.toDay, "toDay");
+    return statsStore(profileId).studyLogForSubject(subjectId, fromDay, toDay);
   });
 
   // Study preferences (STUDY-007). SEC-EL-02 as everywhere else:

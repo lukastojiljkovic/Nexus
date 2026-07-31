@@ -263,6 +263,8 @@ const api: NexusApi = {
   restoreFocus: (profileId, id) => ipcRenderer.invoke(IpcChannel.focusRestore, { profileId, id }),
   studyStats: (profileId, fromDate, toDate) =>
     ipcRenderer.invoke(IpcChannel.statsStudy, { profileId, fromDate, toDate }),
+  subjectStudyLog: (profileId, subjectId, fromDay, toDay) =>
+    ipcRenderer.invoke(IpcChannel.studyLog, { profileId, subjectId, fromDay, toDay }),
   listCenterNotifications: (profileId) =>
     ipcRenderer.invoke(IpcChannel.notificationsCenterList, { profileId }),
   snoozeNotification: (profileId, id, preset) =>

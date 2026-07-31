@@ -99,15 +99,23 @@ function insertReview(profileId: string, cardId: string, review: string): void {
     .run(uuidv7(), profileId, cardId, 3, 2, now, 1, 1, 0, 0, 1, 0, review, now);
 }
 
-function insertExam(profileId: string, subjectId: string, examDate: string): string {
-  const id = uuidv7();
+function insertExam(
+  profileId: string,
+  subjectId: string,
+  examDate: string,
+  // Explicit where the ORDER of the returned ids is what a test asserts (two
+  // exams on one day tie-break by id); generated everywhere else.
+  id: string = uuidv7(),
+  deletedAt: string | null = null,
+): string {
   const now = new Date().toISOString();
   db.raw
     .prepare(
-      `INSERT INTO exams (id, profile_id, subject_id, exam_type, exam_date, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO exams
+         (id, profile_id, subject_id, exam_type, exam_date, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(id, profileId, subjectId, "pismeni", examDate, now, now);
+    .run(id, profileId, subjectId, "pismeni", examDate, now, now, deletedAt);
   return id;
 }
 
@@ -131,6 +139,7 @@ function insertBlock(
   blockDate: string,
   status: string,
   updatedAt: string,
+  minutes = 30,
 ): void {
   const now = new Date().toISOString();
   db.raw
@@ -139,7 +148,7 @@ function insertBlock(
          (id, plan_id, profile_id, block_date, minutes, status, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(uuidv7(), planId, profileId, blockDate, 30, status, now, updatedAt);
+    .run(uuidv7(), planId, profileId, blockDate, minutes, status, now, updatedAt);
 }
 
 /** A profile with one subject, plus the stats store scoped to it. */
@@ -380,6 +389,270 @@ describe("StatsStore", () => {
     it("rejects a malformed fromDate or toDate", () => {
       const { stats } = fixture();
       expect(() => stats.blockTotals("not-a-date", "2026-07-31")).toThrow(FocusValidationError);
+    });
+  });
+
+  describe("studyLogForSubject", () => {
+    /** One card of this subject, ready to be reviewed against. */
+    function cardOf(profileId: string, subjectId: string): string {
+      return insertCard(profileId, insertDeck(profileId, subjectId));
+    }
+
+    /** An active plan of this subject, via a (necessarily active) exam of it. */
+    function planOf(profileId: string, subjectId: string, examDate = "2026-08-01"): string {
+      return insertPlan(profileId, insertExam(profileId, subjectId, examDate));
+    }
+
+    it("returns an empty log with nothing older for a subject that has no history", () => {
+      const { stats, subjectId } = fixture();
+      expect(stats.studyLogForSubject(subjectId, "2026-07-01", "2026-07-31")).toEqual({
+        days: [],
+        hasOlder: false,
+      });
+    });
+
+    it("buckets this subject's reviews per local day, newest day first", () => {
+      const { stats, profileId, subjectId } = fixture();
+      const cardId = cardOf(profileId, subjectId);
+      insertReview(profileId, cardId, "2026-07-08T12:00:00.000Z");
+      insertReview(profileId, cardId, "2026-07-08T18:00:00.000Z");
+      insertReview(profileId, cardId, "2026-07-09T12:00:00.000Z");
+
+      const log = stats.studyLogForSubject(subjectId, "2026-07-01", "2026-07-31");
+      expect(log.days).toEqual([
+        { day: "2026-07-09", reviews: 1, focusMinutes: 0, plannedMinutes: 0, examIds: [] },
+        { day: "2026-07-08", reviews: 2, focusMinutes: 0, plannedMinutes: 0, examIds: [] },
+      ]);
+    });
+
+    it("counts only reviews of cards in THIS subject's decks", () => {
+      const { stats, subjects, profileId, subjectId } = fixture();
+      const otherSubjectId = subjects.create({ name: "Fizika" }).id;
+      insertReview(profileId, cardOf(profileId, otherSubjectId), "2026-07-08T12:00:00.000Z");
+
+      expect(stats.studyLogForSubject(subjectId, "2026-07-01", "2026-07-31").days).toEqual([]);
+    });
+
+    it("sums focus minutes per day, rounding the day's total once", () => {
+      const { stats, profileId, subjectId } = fixture();
+      // 20 min + 25 min 40 s = 45.667 min for the day -> 46, not 20 + 26.
+      insertFocusSession(profileId, subjectId, "2026-07-08T12:00:00.000Z", "2026-07-08T12:20:00.000Z");
+      insertFocusSession(profileId, subjectId, "2026-07-08T14:00:00.000Z", "2026-07-08T14:25:40.000Z");
+
+      expect(stats.studyLogForSubject(subjectId, "2026-07-01", "2026-07-31").days).toEqual([
+        { day: "2026-07-08", reviews: 0, focusMinutes: 46, plannedMinutes: 0, examIds: [] },
+      ]);
+    });
+
+    it("gives no day of its own to focus time that rounds to zero minutes", () => {
+      const { stats, profileId, subjectId } = fixture();
+      insertFocusSession(profileId, subjectId, "2026-07-08T12:00:00.000Z", "2026-07-08T12:00:20.000Z");
+
+      expect(stats.studyLogForSubject(subjectId, "2026-07-01", "2026-07-31").days).toEqual([]);
+    });
+
+    it("excludes soft-deleted focus sessions and another subject's sessions", () => {
+      const { stats, subjects, profileId, subjectId } = fixture();
+      const otherSubjectId = subjects.create({ name: "Fizika" }).id;
+      insertFocusSession(
+        profileId,
+        subjectId,
+        "2026-07-08T12:00:00.000Z",
+        "2026-07-08T13:00:00.000Z",
+        "2026-07-08T13:00:00.000Z",
+      );
+      insertFocusSession(profileId, otherSubjectId, "2026-07-08T12:00:00.000Z", "2026-07-08T13:00:00.000Z");
+
+      expect(stats.studyLogForSubject(subjectId, "2026-07-01", "2026-07-31").days).toEqual([]);
+    });
+
+    it("sums a day's planned block minutes whatever each block's status is", () => {
+      const { stats, profileId, subjectId } = fixture();
+      // Two plans, because a plan holds at most one block per date (migration
+      // 007's unique index) — a day only accumulates minutes when the subject
+      // is being studied for two exams at once, which is exactly the case worth
+      // summing.
+      const planId = planOf(profileId, subjectId, "2026-08-01");
+      const secondPlanId = planOf(profileId, subjectId, "2026-08-15");
+      insertBlock(profileId, planId, "2026-07-08", "done", "2026-07-08T12:00:00.000Z", 30);
+      insertBlock(profileId, secondPlanId, "2026-07-08", "missed", "2026-07-08T12:00:00.000Z", 20);
+      insertBlock(profileId, planId, "2026-07-09", "planned", "2026-07-09T12:00:00.000Z", 45);
+
+      expect(stats.studyLogForSubject(subjectId, "2026-07-01", "2026-07-31").days).toEqual([
+        { day: "2026-07-09", reviews: 0, focusMinutes: 0, plannedMinutes: 45, examIds: [] },
+        { day: "2026-07-08", reviews: 0, focusMinutes: 0, plannedMinutes: 50, examIds: [] },
+      ]);
+    });
+
+    it("excludes blocks of a soft-deleted plan and blocks of another subject's plan", () => {
+      const { stats, subjects, profileId, subjectId } = fixture();
+      const deletedPlanId = insertPlan(
+        profileId,
+        insertExam(profileId, subjectId, "2026-08-01"),
+        "2026-07-10T12:00:00.000Z",
+      );
+      insertBlock(profileId, deletedPlanId, "2026-07-08", "planned", "2026-07-08T12:00:00.000Z");
+      const otherPlanId = planOf(profileId, subjects.create({ name: "Fizika" }).id);
+      insertBlock(profileId, otherPlanId, "2026-07-08", "planned", "2026-07-08T12:00:00.000Z");
+
+      expect(stats.studyLogForSubject(subjectId, "2026-07-01", "2026-07-31").days).toEqual([]);
+    });
+
+    it("marks each exam day with its exam ids, ordered by date then id", () => {
+      const { stats, profileId, subjectId } = fixture();
+      // Two exams on ONE day: explicit ids, because their order is the assertion.
+      const second = insertExam(profileId, subjectId, "2026-07-08", "exam-b");
+      const first = insertExam(profileId, subjectId, "2026-07-08", "exam-a");
+      const later = insertExam(profileId, subjectId, "2026-07-09");
+
+      expect(stats.studyLogForSubject(subjectId, "2026-07-01", "2026-07-31").days).toEqual([
+        { day: "2026-07-09", reviews: 0, focusMinutes: 0, plannedMinutes: 0, examIds: [later] },
+        {
+          day: "2026-07-08",
+          reviews: 0,
+          focusMinutes: 0,
+          plannedMinutes: 0,
+          examIds: [first, second],
+        },
+      ]);
+    });
+
+    it("reads an exam date that carries a time part as its calendar day", () => {
+      const { stats, profileId, subjectId } = fixture();
+      const examId = insertExam(profileId, subjectId, "2026-07-08T09:30");
+
+      expect(stats.studyLogForSubject(subjectId, "2026-07-08", "2026-07-08").days).toEqual([
+        { day: "2026-07-08", reviews: 0, focusMinutes: 0, plannedMinutes: 0, examIds: [examId] },
+      ]);
+    });
+
+    it("excludes soft-deleted exams", () => {
+      const { stats, profileId, subjectId } = fixture();
+      insertExam(profileId, subjectId, "2026-07-08", uuidv7(), "2026-07-09T12:00:00.000Z");
+
+      expect(stats.studyLogForSubject(subjectId, "2026-07-01", "2026-07-31").days).toEqual([]);
+    });
+
+    it("composes all four sources onto one day", () => {
+      const { stats, profileId, subjectId } = fixture();
+      const cardId = cardOf(profileId, subjectId);
+      insertReview(profileId, cardId, "2026-07-08T12:00:00.000Z");
+      insertFocusSession(profileId, subjectId, "2026-07-08T12:00:00.000Z", "2026-07-08T12:45:00.000Z");
+      const examId = insertExam(profileId, subjectId, "2026-07-08");
+      insertBlock(profileId, insertPlan(profileId, examId), "2026-07-08", "done", "2026-07-08T12:00:00.000Z");
+
+      expect(stats.studyLogForSubject(subjectId, "2026-07-08", "2026-07-08").days).toEqual([
+        { day: "2026-07-08", reviews: 1, focusMinutes: 45, plannedMinutes: 30, examIds: [examId] },
+      ]);
+    });
+
+    it("keeps a day out of the log when it falls outside the range", () => {
+      const { stats, profileId, subjectId } = fixture();
+      const cardId = cardOf(profileId, subjectId);
+      insertReview(profileId, cardId, "2026-07-07T12:00:00.000Z");
+      insertReview(profileId, cardId, "2026-07-11T12:00:00.000Z");
+      insertFocusSession(profileId, subjectId, "2026-07-09T12:00:00.000Z", "2026-07-09T13:00:00.000Z");
+
+      expect(stats.studyLogForSubject(subjectId, "2026-07-08", "2026-07-10").days).toEqual([
+        { day: "2026-07-09", reviews: 0, focusMinutes: 60, plannedMinutes: 0, examIds: [] },
+      ]);
+    });
+
+    it("isolates between profiles", () => {
+      const a = fixture();
+      const b = fixture();
+      insertReview(a.profileId, cardOf(a.profileId, a.subjectId), "2026-07-08T12:00:00.000Z");
+      insertFocusSession(a.profileId, a.subjectId, "2026-07-08T12:00:00.000Z", "2026-07-08T13:00:00.000Z");
+
+      // The same subject id, asked of the other profile's store: no rows, and
+      // nothing older either.
+      expect(b.stats.studyLogForSubject(a.subjectId, "2026-07-01", "2026-07-31")).toEqual({
+        days: [],
+        hasOlder: false,
+      });
+    });
+
+    describe("hasOlder", () => {
+      it("is false when the subject's whole history sits inside the range", () => {
+        const { stats, profileId, subjectId } = fixture();
+        insertReview(profileId, cardOf(profileId, subjectId), "2026-07-08T12:00:00.000Z");
+
+        expect(stats.studyLogForSubject(subjectId, "2026-07-01", "2026-07-31").hasOlder).toBe(false);
+      });
+
+      it("is true for a review before the range", () => {
+        const { stats, profileId, subjectId } = fixture();
+        insertReview(profileId, cardOf(profileId, subjectId), "2026-06-30T12:00:00.000Z");
+
+        expect(stats.studyLogForSubject(subjectId, "2026-07-01", "2026-07-31").hasOlder).toBe(true);
+      });
+
+      it("is true for a focus session before the range", () => {
+        const { stats, profileId, subjectId } = fixture();
+        insertFocusSession(profileId, subjectId, "2026-06-30T12:00:00.000Z", "2026-06-30T13:00:00.000Z");
+
+        expect(stats.studyLogForSubject(subjectId, "2026-07-01", "2026-07-31").hasOlder).toBe(true);
+      });
+
+      it("is true for a study block before the range", () => {
+        const { stats, profileId, subjectId } = fixture();
+        insertBlock(
+          profileId,
+          planOf(profileId, subjectId),
+          "2026-06-30",
+          "done",
+          "2026-06-30T12:00:00.000Z",
+        );
+
+        expect(stats.studyLogForSubject(subjectId, "2026-07-01", "2026-07-31").hasOlder).toBe(true);
+      });
+
+      it("is true for an exam before the range", () => {
+        const { stats, profileId, subjectId } = fixture();
+        insertExam(profileId, subjectId, "2026-06-30");
+
+        expect(stats.studyLogForSubject(subjectId, "2026-07-01", "2026-07-31").hasOlder).toBe(true);
+      });
+
+      it("ignores a soft-deleted focus session, plan and exam", () => {
+        const { stats, profileId, subjectId } = fixture();
+        insertFocusSession(
+          profileId,
+          subjectId,
+          "2026-06-30T12:00:00.000Z",
+          "2026-06-30T13:00:00.000Z",
+          "2026-06-30T13:00:00.000Z",
+        );
+        const examId = insertExam(profileId, subjectId, "2026-06-29", uuidv7(), "2026-06-30T12:00:00.000Z");
+        insertBlock(
+          profileId,
+          insertPlan(profileId, examId, "2026-06-30T12:00:00.000Z"),
+          "2026-06-28",
+          "done",
+          "2026-06-28T12:00:00.000Z",
+        );
+
+        expect(stats.studyLogForSubject(subjectId, "2026-07-01", "2026-07-31").hasOlder).toBe(false);
+      });
+
+      it("ignores another subject's older history", () => {
+        const { stats, subjects, profileId, subjectId } = fixture();
+        const otherSubjectId = subjects.create({ name: "Fizika" }).id;
+        insertReview(profileId, cardOf(profileId, otherSubjectId), "2026-06-30T12:00:00.000Z");
+        insertFocusSession(profileId, otherSubjectId, "2026-06-30T12:00:00.000Z", "2026-06-30T13:00:00.000Z");
+
+        expect(stats.studyLogForSubject(subjectId, "2026-07-01", "2026-07-31").hasOlder).toBe(false);
+      });
+    });
+
+    it("rejects a malformed fromDay or toDay", () => {
+      const { stats, subjectId } = fixture();
+      expect(() => stats.studyLogForSubject(subjectId, "not-a-date", "2026-07-31")).toThrow(
+        FocusValidationError,
+      );
+      expect(() => stats.studyLogForSubject(subjectId, "2026-07-01", "not-a-date")).toThrow(
+        FocusValidationError,
+      );
     });
   });
 });

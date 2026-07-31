@@ -3207,6 +3207,85 @@ button.cal__grid-event--dragging {
   color: var(--nx-danger);
 }
 
+/* Dnevnik učenja under a subject (STUDY-014) — the same section frame as the
+   two above it (heading opposite one action, muted empty line), with the plan
+   card's quiet text toggle for opening it and its own day rows. Read-only, so
+   nothing here is hoverable or clickable: no row background, no "⋯". ------ */
+.study__log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.study__log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
+}
+.study__log-title {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* .study__plan-toggle's treatment: an affordance that opens a list is text, not a button face. */
+.study__log-toggle.nx-button,
+.study__log-more.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.study__log-toggle.nx-button:hover,
+.study__log-more.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.study__log-more.nx-button {
+  align-self: flex-start;
+}
+.study__log-empty {
+  margin: 0;
+  padding: var(--nx-space-2) 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+/* Same recipe as .study__linked-error, scoped to this section's channel. */
+.study__log-error {
+  margin: 0;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+  border-radius: var(--nx-radius-md);
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__log-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  padding: var(--nx-space-1) 0;
+}
+/* One day, one line. The date is the anchor and the facts trail it in muted
+   text — the row is a record, not a control, so it stays flat. */
+.study__log-day {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__log-date {
+  flex-shrink: 0;
+  min-width: 8.5rem;
+  font-variant-numeric: tabular-nums;
+}
+.study__log-facts {
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Study plans (Planovi učenja, STUDY piece 3b) — a top-level hub section: a
    "Danas za učenje" strip, one card per active plan (countdown chip via the
    shared exam-date math), and the inline plan form (exam-form idiom). Done

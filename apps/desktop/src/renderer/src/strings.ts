@@ -1159,6 +1159,40 @@ export const strings = {
       actionError: "Povezivanje beleške nije uspelo. Pokušaj ponovo.",
     },
 
+    // --- Study log (Dnevnik učenja), under each subject (STUDY-014) ---------
+    /**
+     * What actually happened on this course, day by day, newest first — built
+     * from the ponavljanja, the fokus sessions, the plan blocks and the exams
+     * the app already records. „Dnevnik" rather than „Istorija": it reads as a
+     * record kept along the way, which is what it is; nothing here can be
+     * edited.
+     *
+     * The section is collapsed until asked for (see StudyPage), so its toggle
+     * names the thing it opens, exactly as the plan card's block toggle does.
+     */
+    log: {
+      title: "Dnevnik učenja",
+      show: "Prikaži dnevnik",
+      hide: "Sakrij dnevnik",
+      empty: "Još nema zabeleženog učenja.",
+      loadError: "Dnevnik učenja se trenutno ne može učitati. Pokušaj ponovo kasnije.",
+      /** Widens the window by another 60 days; hidden once nothing older exists. */
+      showMore: "Prikaži još",
+      /**
+       * „5 ponavljanja" — the counted noun takes all three Serbian forms
+       * (1 / 2–4 / 5+), so it goes through `countUnit`.
+       */
+      reviewOne: "ponavljanje",
+      reviewFew: "ponavljanja",
+      reviewMany: "ponavljanja",
+      /** „45 min fokusa" — the duration itself comes from `formatDurationMinutes`. */
+      focusSuffix: "fokusa",
+      /** „plan 30 min" — what the plan asked of the day, whatever came of it. */
+      planPrefix: "plan",
+      /** Milestone chip on a day that carries an exam: „Ispit: Pismeni". */
+      examTag: "Ispit",
+    },
+
     // --- Decks (Špilovi), under each subject --------------------------------
     decksTitle: "Špilovi",
     noDecks: "Nema špilova za ovaj predmet.",
