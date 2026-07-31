@@ -204,6 +204,56 @@ describe("mergeNoteState", () => {
     expect(plaintextOf(doc)).toBe("Pre slike\nPosle slike");
   });
 
+  it("derives a callout's blocks as ordinary lines, so a boxed note stays searchable", () => {
+    const doc = new Y.Doc();
+    const fragment = doc.getXmlFragment("default");
+    const box = new Y.XmlElement("callout");
+    box.setAttribute("variant", "warning");
+    const first = new Y.XmlElement("paragraph");
+    first.insert(0, [new Y.XmlText("Rok je sutra")]);
+    const second = new Y.XmlElement("paragraph");
+    second.insert(0, [new Y.XmlText("Ne zaboravi")]);
+    box.insert(0, [first, second]);
+    fragment.push([box]);
+
+    expect(plaintextOf(doc)).toBe("Rok je sutra\nNe zaboravi");
+  });
+
+  it("derives a COLLAPSED toggle's summary and hidden content as lines all the same", () => {
+    // The whole point: folding a section is a view state, and the walk reads
+    // structure, never attributes — so text a reader cannot currently see is
+    // still text the search index must find (SRCH / migration 017).
+    const doc = new Y.Doc();
+    const fragment = doc.getXmlFragment("default");
+    const summary = new Y.XmlElement("toggleSummary");
+    summary.insert(0, [new Y.XmlText("Detalji o ispitu")]);
+    const body = new Y.XmlElement("toggleContent");
+    const hidden = new Y.XmlElement("paragraph");
+    hidden.insert(0, [new Y.XmlText("Termin je u sredu")]);
+    body.insert(0, [hidden]);
+    const toggle = new Y.XmlElement("toggle");
+    toggle.setAttribute("collapsed", "true");
+    toggle.insert(0, [summary, body]);
+    fragment.push([toggle]);
+
+    expect(plaintextOf(doc)).toBe("Detalji o ispitu\nTermin je u sredu");
+  });
+
+  it("derives a tableOfContents block as contributing no text of its own", () => {
+    // It renders live from the headings it lists, so indexing it would put
+    // every heading into the note's body a second time.
+    const doc = new Y.Doc();
+    const fragment = doc.getXmlFragment("default");
+    const before = new Y.XmlElement("heading");
+    before.setAttribute("level", "1");
+    before.insert(0, [new Y.XmlText("Naslov")]);
+    const after = new Y.XmlElement("paragraph");
+    after.insert(0, [new Y.XmlText("Telo")]);
+    fragment.push([before, new Y.XmlElement("tableOfContents"), after]);
+
+    expect(plaintextOf(doc)).toBe("Naslov\nTelo");
+  });
+
   it("produces no blank line for an empty paragraph between two non-empty ones", () => {
     const doc = new Y.Doc();
     const fragment = doc.getXmlFragment("default");

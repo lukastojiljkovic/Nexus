@@ -75,6 +75,14 @@ export { collectNoteCards, NOTE_CARD_MAX_TEXT_LENGTH, parseCardBlock } from "./n
 export type { CardKind, CardSyntaxSpan, NoteCardSpec, ParsedBlock, ParsedCard } from "./notes/noteCards.js";
 
 export {
+  CALLOUT_VARIANTS,
+  DEFAULT_CALLOUT_VARIANT,
+  isCalloutVariant,
+  normalizeCalloutVariant,
+} from "./notes/noteBlocks.js";
+export type { CalloutVariant } from "./notes/noteBlocks.js";
+
+export {
   CLOZE_MASK,
   findClozeRuns,
   renderClozeCard,

@@ -2,6 +2,10 @@ import { Extension } from "@tiptap/core";
 import type { Editor, Range } from "@tiptap/core";
 import { Suggestion } from "@tiptap/suggestion";
 import type { SuggestionProps } from "@tiptap/suggestion";
+import { CALLOUT_VARIANTS } from "@nexus/core";
+import type { CalloutVariant } from "@nexus/core";
+import { applyCallout } from "./noteCallout.js";
+import { insertToggle } from "./noteToggle.js";
 import { SuggestionMenu } from "./suggestionMenu.js";
 import type { TemplateEntry } from "./noteTemplates.js";
 import { strings } from "./strings.js";
@@ -15,7 +19,7 @@ import { strings } from "./strings.js";
  * Executing an item deletes the typed `/query` range, then runs the block
  * command; task lists render visual checkboxes only (they are not TASK items).
  *
- * NOTE-009c appends a templates section after the ten block commands: every
+ * NOTE-009c appends a templates section after the block commands: every
  * insertable template (ADR-016), fed live through a `getTemplates` accessor so
  * the extension — built once per editor — always sees the current list even
  * though the extension instance itself never changes. A template item's `run`
@@ -29,6 +33,33 @@ interface SlashItem {
   label: string;
   run: (editor: Editor, range: Range) => void;
 }
+
+/**
+ * The four callout entries (NOTE-011), built from the shared variant list so
+ * a fifth variant is one label away from appearing here. Four flat rows
+ * rather than a submenu or a per-block popover: the panel is one filtered
+ * list by construction (`SuggestionMenu` renders exactly that), so typing
+ * „/okvir" already narrows to these four — a submenu would be a second
+ * interaction model, and a popover anchored to the block would be a whole
+ * node view, positioning and keyboard story for a choice made once.
+ *
+ * `applyCallout` also restyles the callout the caret is already in, which is
+ * what makes these four rows the way to CHANGE a variant, not only to create
+ * one — and re-running the row that is already active lifts the block out,
+ * exactly as re-running „Citat" does.
+ */
+const CALLOUT_SLASH_LABELS: Record<CalloutVariant, string> = {
+  info: strings.notes.slash.calloutInfo,
+  tip: strings.notes.slash.calloutTip,
+  warning: strings.notes.slash.calloutWarning,
+  danger: strings.notes.slash.calloutDanger,
+};
+
+const CALLOUT_ITEMS: readonly SlashItem[] = CALLOUT_VARIANTS.map((variant) => ({
+  key: `callout:${variant}`,
+  label: CALLOUT_SLASH_LABELS[variant],
+  run: (editor: Editor, range: Range) => applyCallout(editor, range, variant),
+}));
 
 /** The v1 command set, in menu order (ADR-012). Each deletes `/query` first. */
 const SLASH_ITEMS: readonly SlashItem[] = [
@@ -85,6 +116,20 @@ const SLASH_ITEMS: readonly SlashItem[] = [
     label: strings.notes.slash.divider,
     run: (editor, range) => editor.chain().focus().deleteRange(range).setHorizontalRule().run(),
   },
+  ...CALLOUT_ITEMS,
+  {
+    key: "toggle",
+    label: strings.notes.slash.toggle,
+    run: (editor, range) => insertToggle(editor, range),
+  },
+  {
+    key: "tableOfContents",
+    label: strings.notes.slash.tableOfContents,
+    // A leaf atom with no attributes: everything it shows is derived from the
+    // document's headings at render time (see `noteTableOfContents.tsx`).
+    run: (editor, range) =>
+      editor.chain().focus().deleteRange(range).insertContent({ type: "tableOfContents" }).run(),
+  },
   {
     key: "flashcard",
     label: strings.notes.slash.flashcard,
@@ -121,8 +166,8 @@ function templateSlashItems(templates: readonly TemplateEntry[]): SlashItem[] {
 }
 
 /**
- * Case-insensitive sr-Latn substring match over the combined list: the ten
- * block commands, then every insertable template. Takes the template items
+ * Case-insensitive sr-Latn substring match over the combined list: the block
+ * commands, then every insertable template. Takes the template items
  * rather than reaching for a module global, since the live set changes as
  * templates are saved/renamed/deleted.
  */

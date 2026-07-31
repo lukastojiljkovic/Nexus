@@ -807,8 +807,31 @@ export const strings = {
       blockquote: "Citat",
       codeBlock: "Blok koda",
       divider: "Razdvajač",
+      calloutInfo: "Okvir: napomena",
+      calloutTip: "Okvir: savet",
+      calloutWarning: "Okvir: upozorenje",
+      calloutDanger: "Okvir: opasnost",
+      toggle: "Sklopivi odeljak",
+      tableOfContents: "Sadržaj",
       flashcard: "Kartica (pitanje :: odgovor)",
     },
+    /**
+     * Callout variants (NOTE-011). These name the block for a screen reader —
+     * the block itself carries no visible label, so colour is not the only
+     * thing distinguishing a warning from a note.
+     */
+    callout: {
+      info: "Napomena",
+      tip: "Savet",
+      warning: "Upozorenje",
+      danger: "Opasnost",
+    },
+    /** The collapsible section's chevron (NOTE-011) — its label states what the click will do. */
+    toggleExpand: "Rasklopi odeljak",
+    toggleCollapse: "Sklopi odeljak",
+    /** The live table of contents (NOTE-011). */
+    tocTitle: "Sadržaj",
+    tocEmpty: "Ova beleška nema naslova.",
     /** Inline flashcards (NOTE-006c / ADR-017): the `::` / `{{…}}` syntax + the deck-mapping bar. */
     cardsLabel: "Kartice",
     cardsUnmapped: "Ova beleška pravi kartice za učenje. Izaberi špil:",

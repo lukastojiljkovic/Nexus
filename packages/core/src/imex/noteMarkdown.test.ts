@@ -93,6 +93,25 @@ function codeBlock(text: string, language?: string): Y.XmlElement {
   return el;
 }
 
+/** A NOTE-011 callout wrapping the given blocks; `variant` omitted leaves the attribute unset. */
+function callout(variant: string | null, ...blocks: Y.XmlElement[]): Y.XmlElement {
+  const el = new Y.XmlElement("callout");
+  if (variant !== null) el.setAttribute("variant", variant);
+  if (blocks.length > 0) el.insert(0, blocks);
+  return el;
+}
+
+/** A NOTE-011 toggle: `summary` inline children, then `content` blocks — either side may be empty. */
+function toggle(summary: (Y.XmlElement | Y.XmlText)[], ...blocks: Y.XmlElement[]): Y.XmlElement {
+  const summaryEl = new Y.XmlElement("toggleSummary");
+  if (summary.length > 0) summaryEl.insert(0, summary);
+  const contentEl = new Y.XmlElement("toggleContent");
+  if (blocks.length > 0) contentEl.insert(0, blocks);
+  const el = new Y.XmlElement("toggle");
+  el.insert(0, [summaryEl, contentEl]);
+  return el;
+}
+
 function noteLink(label: string, noteId = "note-1"): Y.XmlElement {
   const el = new Y.XmlElement("noteLink");
   el.setAttribute("noteId", noteId);
@@ -341,6 +360,131 @@ describe("renderNoteMarkdown — text escaping", () => {
   it("escapes a paragraph line beginning with a list-like dash", () => {
     const doc = docWithBlocks(paragraph("- nije stavka"));
     expect(markdownOf(doc)).toBe("\\- nije stavka\n");
+  });
+});
+
+describe("renderNoteMarkdown — callouts (NOTE-011)", () => {
+  it("renders a callout as a ::: fence carrying its variant", () => {
+    const doc = docWithBlocks(callout("warning", paragraph("Pazi na rok.")));
+    expect(markdownOf(doc)).toBe("::: warning\nPazi na rok.\n:::\n");
+  });
+
+  it("renders every variant under its own id", () => {
+    const doc = docWithBlocks(
+      callout("info", paragraph("a")),
+      callout("tip", paragraph("b")),
+      callout("warning", paragraph("c")),
+      callout("danger", paragraph("d")),
+    );
+    expect(markdownOf(doc)).toBe(
+      "::: info\na\n:::\n\n::: tip\nb\n:::\n\n::: warning\nc\n:::\n\n::: danger\nd\n:::\n",
+    );
+  });
+
+  it("falls back to the neutral variant for a missing or unknown one", () => {
+    const doc = docWithBlocks(callout(null, paragraph("bez")), callout("mystery", paragraph("cudno")));
+    expect(markdownOf(doc)).toBe("::: info\nbez\n:::\n\n::: info\ncudno\n:::\n");
+  });
+
+  it("renders a callout's several blocks, blank-line separated, inside one fence", () => {
+    const doc = docWithBlocks(
+      callout("tip", paragraph("Prvo"), bulletList(listItem(paragraph("stavka")))),
+    );
+    expect(markdownOf(doc)).toBe("::: tip\nPrvo\n\n- stavka\n:::\n");
+  });
+
+  it("lengthens the fence past a ::: line the callout's own content contains", () => {
+    // The paragraph's leading ':' is not a Markdown construct, so it is not
+    // escaped — the fence is what has to give way.
+    const doc = docWithBlocks(callout("info", paragraph("::: nije kraj")));
+    expect(markdownOf(doc)).toBe(":::: info\n::: nije kraj\n::::\n");
+  });
+
+  it("produces no block for an empty callout", () => {
+    const doc = docWithBlocks(paragraph("pre"), callout("info"), paragraph("posle"));
+    expect(markdownOf(doc)).toBe("pre\n\nposle\n");
+  });
+
+  it("renders a callout nested inside a blockquote as quoted fence lines", () => {
+    const doc = docWithBlocks(blockquote(callout("danger", paragraph("unutra"))));
+    expect(markdownOf(doc)).toBe("> ::: danger\n> unutra\n> :::\n");
+  });
+});
+
+describe("renderNoteMarkdown — toggles (NOTE-011)", () => {
+  it("renders a toggle as a ::: toggle fence with the summary on the opening line", () => {
+    const doc = docWithBlocks(toggle([new Y.XmlText("Detalji")], paragraph("Skriveni tekst.")));
+    expect(markdownOf(doc)).toBe("::: toggle Detalji\nSkriveni tekst.\n:::\n");
+  });
+
+  it("exports a collapsed toggle exactly like an expanded one", () => {
+    const collapsed = toggle([new Y.XmlText("Detalji")], paragraph("Skriveni tekst."));
+    setRawAttribute(collapsed, "collapsed", true);
+    const expanded = toggle([new Y.XmlText("Detalji")], paragraph("Skriveni tekst."));
+    setRawAttribute(expanded, "collapsed", false);
+    // Markdown has no fold state, and the .md mirror is for reading: the
+    // content inside a folded section must be in the file either way.
+    expect(markdownOf(docWithBlocks(collapsed))).toBe(
+      markdownOf(docWithBlocks(expanded)),
+    );
+    expect(markdownOf(docWithBlocks(toggle([new Y.XmlText("A")], paragraph("B"))))).not.toContain(
+      "collapsed",
+    );
+  });
+
+  it("renders a summary's inline marks and wiki-links", () => {
+    const doc = docWithBlocks(
+      toggle([new Y.XmlText("Vidi "), noteLink("Druga beleska")], paragraph("telo")),
+    );
+    expect(markdownOf(doc)).toBe("::: toggle Vidi [[Druga beleska]]\ntelo\n:::\n");
+  });
+
+  it("flattens a hard break in the summary rather than breaking the fence's opening line", () => {
+    const doc = docWithBlocks(
+      toggle(
+        [new Y.XmlText("Prva"), new Y.XmlElement("hardBreak"), new Y.XmlText("druga")],
+        paragraph("telo"),
+      ),
+    );
+    expect(markdownOf(doc)).toBe("::: toggle Prva druga\ntelo\n:::\n");
+  });
+
+  it("renders a toggle with an empty body as a bare fence pair", () => {
+    const doc = docWithBlocks(toggle([new Y.XmlText("Prazno")]));
+    expect(markdownOf(doc)).toBe("::: toggle Prazno\n:::\n");
+  });
+
+  it("renders a toggle with no summary without a trailing space on the opening line", () => {
+    const doc = docWithBlocks(toggle([], paragraph("telo")));
+    expect(markdownOf(doc)).toBe("::: toggle\ntelo\n:::\n");
+  });
+
+  it("produces no block for a toggle with neither summary nor content", () => {
+    const doc = docWithBlocks(paragraph("pre"), toggle([]), paragraph("posle"));
+    expect(markdownOf(doc)).toBe("pre\n\nposle\n");
+  });
+
+  it("renders a toggle nested inside a callout, each with its own fence", () => {
+    const doc = docWithBlocks(
+      callout("tip", toggle([new Y.XmlText("Vise")], paragraph("detalj"))),
+    );
+    expect(markdownOf(doc)).toBe(":::: tip\n::: toggle Vise\ndetalj\n:::\n::::\n");
+  });
+});
+
+describe("renderNoteMarkdown — table of contents (NOTE-011)", () => {
+  it("renders the block as an HTML comment marker carrying no content", () => {
+    const doc = docWithBlocks(
+      heading(1, "Naslov"),
+      new Y.XmlElement("tableOfContents"),
+      paragraph("telo"),
+    );
+    expect(markdownOf(doc)).toBe("# Naslov\n\n<!-- toc -->\n\ntelo\n");
+  });
+
+  it("never spells the marker as a wiki-link, which would read as a note titled TOC", () => {
+    const doc = docWithBlocks(new Y.XmlElement("tableOfContents"));
+    expect(markdownOf(doc)).not.toContain("[[");
   });
 });
 

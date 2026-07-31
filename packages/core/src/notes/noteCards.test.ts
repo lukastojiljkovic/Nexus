@@ -199,6 +199,28 @@ describe("collectNoteCards", () => {
     expect(collectNoteCards(doc)).toEqual([basicSpec("key-nested", "Q", "A")]);
   });
 
+  it("collects keyed paragraphs from inside NOTE-011's callout and collapsed toggle", () => {
+    // The walk is by attribute, not by ancestry, so a card written inside one
+    // of the new container blocks is the same card it would be outside one —
+    // and a folded section's cards keep syncing to their deck (ADR-017).
+    const box = new Y.XmlElement("callout");
+    box.setAttribute("variant", "tip");
+    box.insert(0, [paragraph("U okviru :: da", "key-callout")]);
+
+    const summary = new Y.XmlElement("toggleSummary");
+    const body = new Y.XmlElement("toggleContent");
+    body.insert(0, [paragraph("Sklopljeno :: takođe", "key-toggle")]);
+    const toggle = new Y.XmlElement("toggle");
+    toggle.setAttribute("collapsed", "true");
+    toggle.insert(0, [summary, body]);
+
+    const doc = docWithBlocks(box, toggle);
+    expect(collectNoteCards(doc)).toEqual([
+      basicSpec("key-callout", "U okviru", "da"),
+      basicSpec("key-toggle", "Sklopljeno", "takođe"),
+    ]);
+  });
+
   it("skips a codeBlock entirely, even one carrying a cardKey", () => {
     const doc = docWithBlocks(codeBlock("std::vector<int> v; // :: Q", "key-code"));
     expect(collectNoteCards(doc)).toEqual([]);

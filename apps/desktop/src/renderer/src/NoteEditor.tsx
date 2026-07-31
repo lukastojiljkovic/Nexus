@@ -27,13 +27,16 @@ import {
   type Subject,
 } from "../../shared/ipc.js";
 import { AttachmentImage, NoteAttachmentProvider } from "./noteAttachmentImage.js";
+import { Callout } from "./noteCallout.js";
 import { countEditorCards, NoteFlashcard } from "./noteFlashcard.js";
 import { NoteLink, NoteLinkProvider } from "./noteLink.js";
 import { createNoteLinkExtension, NoteLinkMenu, type NoteLinkRenderState } from "./noteLinkMenu.js";
 import { NotePopover } from "./notePopover.js";
 import { readStoredNoteMarkdownShortcuts } from "./notePrefs.js";
 import { createSlashExtension, SlashMenu, type SlashRenderState } from "./noteSlashMenu.js";
+import { NoteTableOfContents } from "./noteTableOfContents.js";
 import { NoteTemplatePane } from "./noteTemplatePane.js";
+import { Toggle, ToggleContent, ToggleSummary } from "./noteToggle.js";
 import { mergeTemplateEntries, stripAttachmentNodes, type TemplateEntry } from "./noteTemplates.js";
 import { NoteVersionHistory } from "./noteVersionHistory.js";
 import { strings } from "./strings.js";
@@ -1036,6 +1039,15 @@ function EditorCanvas({
       NoteLink,
       AttachmentImage,
       NoteFlashcard,
+      // NOTE-011's three container blocks. All three are ordinary schema
+      // nodes, so they ride the same Collaboration binding as everything
+      // above: `@nexus/core`'s plaintext walk descends into them for the
+      // search index, and its Markdown export gives each one a mapping.
+      Callout,
+      Toggle,
+      ToggleSummary,
+      ToggleContent,
+      NoteTableOfContents,
       createSlashExtension(
         {
           onStart: setSlash,

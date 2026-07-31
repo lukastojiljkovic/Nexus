@@ -1,4 +1,5 @@
 import * as Y from "yjs";
+import { normalizeCalloutVariant } from "../notes/noteBlocks.js";
 import { xmlTextContent } from "../notes/yjsText.js";
 
 /**
@@ -16,6 +17,14 @@ import { xmlTextContent } from "../notes/yjsText.js";
  * must never silently swallow its text (the exact bug `yjsMerge.ts`'s inline
  * allow-list comment warns about), so both passes end in a catch-all that
  * recurses into children rather than dropping them.
+ *
+ * EXPORT ONLY. There is no Markdown parser anywhere in IMEX: an archive's
+ * `.md` files are the human-readable mirror, and the note's Yjs snapshot
+ * beside them is the truth a restore or a foreign import actually reads
+ * (ADR-022 section 3 / `importArchive.ts`). Every mapping below is therefore
+ * one-directional by design — including NOTE-011's three container blocks,
+ * whose fences are chosen to READ well in a plain `.md` viewer rather than to
+ * survive a parser this codebase does not have.
  */
 
 /** The subset of an attachment row a Markdown image node needs. */
@@ -101,6 +110,12 @@ function renderBlock(
       return renderTaskList(node, context);
     case "attachmentImage":
       return renderAttachmentImage(node, context);
+    case "callout":
+      return renderCallout(node, context);
+    case "toggle":
+      return renderToggle(node, context);
+    case "tableOfContents":
+      return TABLE_OF_CONTENTS_MARKER;
     default:
       return renderUnknownBlock(node, context);
   }
@@ -170,11 +185,26 @@ function collectXmlText(node: Y.XmlElement): string {
   return out;
 }
 
-/** The shortest fence, at least `minimum` backticks, that stays longer than any backtick run already in `text` — 3 for a fenced code block, 1 for an inline code span. */
-function fenceLengthFor(text: string, minimum: number): number {
-  const runs = text.match(/`+/g) ?? [];
-  const longestRun = runs.reduce((max, run) => Math.max(max, run.length), 0);
-  return Math.max(minimum, longestRun + 1);
+/**
+ * The shortest fence, at least `minimum` repeats of `character`, that stays
+ * longer than any run of it already in `text` — 3 backticks for a fenced code
+ * block, 1 for an inline code span, 3 colons for a callout or a toggle. One
+ * rule for every fence in the file, so a nested container can never close its
+ * own parent early.
+ */
+function fenceLengthFor(text: string, minimum: number, character = "`"): number {
+  return Math.max(minimum, longestRunOf(text, character) + 1);
+}
+
+/** The length of the longest consecutive run of `character` in `text` (0 when it never appears). */
+function longestRunOf(text: string, character: string): number {
+  let longest = 0;
+  let current = 0;
+  for (const ch of text) {
+    current = ch === character ? current + 1 : 0;
+    if (current > longest) longest = current;
+  }
+  return longest;
 }
 
 /** One entry per `listItem` child: its own children rendered as blocks, first line marked, continuation lines indented past the marker; entries joined tightly (one blank line between blocks WITHIN an item, none between items). */
@@ -247,6 +277,79 @@ function renderAttachmentImage(node: Y.XmlElement, context: NoteMarkdownContext)
   if (!attachment) return null;
   const alt = attachment.fileName.replace(/[\\[\]]/g, (ch) => `\\${ch}`);
   return `![${alt}](${context.rootPrefix}blobs/${attachment.sha256})`;
+}
+
+// --- NOTE-011 container blocks -------------------------------------------
+
+/**
+ * The callout („Okvir") and the toggle („Sklopivi odeljak") both export as a
+ * colon-fenced container — the `:::` directive spelling markdown-it,
+ * VitePress and Docusaurus all read, and the closest thing plain Markdown has
+ * to a named block. One vocabulary for both keeps the file's fence discipline
+ * (see `fenceLengthFor`) doing the work in one place:
+ *
+ *     ::: warning          ::: toggle Naslov odeljka
+ *     Tekst u okviru.      Sadržaj koji se sklapa.
+ *     :::                  :::
+ */
+const CONTAINER_FENCE = ":";
+
+/**
+ * The table of contents carries no content of its own — it renders live from
+ * the document's headings, so there is nothing to write but a marker saying
+ * the block was there. An HTML comment is invisible in every Markdown viewer
+ * and unambiguous; deliberately NOT `[[TOC]]`, because `[[…]]` is this very
+ * file's wiki-link syntax and that spelling would read as a link to a note
+ * titled "TOC".
+ */
+const TABLE_OF_CONTENTS_MARKER = "<!-- toc -->";
+
+/** `::: <variant>` around its blocks; an unknown/missing variant normalises to the neutral one. Empty -> no block, like a blockquote. */
+function renderCallout(node: Y.XmlElement, context: NoteMarkdownContext): string | null {
+  const inner = renderBlocks(node.toArray(), context);
+  if (inner.length === 0) return null;
+  const variant = normalizeCalloutVariant(node.getAttribute("variant"));
+  const fence = CONTAINER_FENCE.repeat(fenceLengthFor(inner, 3, CONTAINER_FENCE));
+  return `${fence} ${variant}\n${inner}\n${fence}`;
+}
+
+/**
+ * `::: toggle <summary>` around the content. The `collapsed` attribute is
+ * deliberately NOT exported: Markdown has no fold state, and the `.md` mirror
+ * is for reading — a reader must see everything the note holds, which is also
+ * exactly why the summary and the content are both plain text here rather
+ * than an HTML `<details>` element that a plain-text viewer would show raw.
+ *
+ * A toggle with neither a summary nor content contributes nothing.
+ */
+function renderToggle(node: Y.XmlElement, context: NoteMarkdownContext): string | null {
+  const summary = flattenToLine(renderInline(childrenOfNamed(node, "toggleSummary")));
+  const body = renderBlocks(childrenOfNamed(node, "toggleContent"), context);
+  if (summary.length === 0 && body.length === 0) return null;
+  const fence = CONTAINER_FENCE.repeat(fenceLengthFor(body, 3, CONTAINER_FENCE));
+  const open = summary.length > 0 ? `${fence} toggle ${summary}` : `${fence} toggle`;
+  return body.length > 0 ? `${open}\n${body}\n${fence}` : `${open}\n${fence}`;
+}
+
+/** The children of `node`'s first child element named `name` — `[]` when it has none (a half-built toggle never throws). */
+function childrenOfNamed(
+  node: Y.XmlElement,
+  name: string,
+): (Y.XmlElement | Y.XmlText | Y.XmlHook)[] {
+  for (const child of node.toArray()) {
+    if (child instanceof Y.XmlElement && child.nodeName === name) return child.toArray();
+  }
+  return [];
+}
+
+/**
+ * Collapses a rendered inline run onto one line, for text that has to sit on a
+ * fence's info line. A toggle summary is single-line by construction (Enter
+ * leaves it for the content), but Shift+Enter can still put a `hardBreak` in
+ * one — and a two-line info string would not be a fence at all.
+ */
+function flattenToLine(text: string): string {
+  return text.replace(/\\?\n/g, " ").replace(/ {2,}/g, " ").trim();
 }
 
 function clamp(value: number, min: number, max: number): number {

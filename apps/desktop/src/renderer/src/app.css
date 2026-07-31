@@ -5571,6 +5571,162 @@ button.cal__grid-event--dragging {
   outline-offset: 2px;
   border-radius: var(--nx-radius-md);
 }
+
+/* NOTE-011 container blocks — „Okvir", „Sklopivi odeljak", „Sadržaj". All
+   three read as quiet paper and as siblings of the block set above: a soft
+   token fill, a 2px left rule in the block's own hue (blockquote's and
+   .note__card-block's idiom), token radius. No box outline, no glow, and no
+   hue outside the system's gold / jade / garnet. */
+
+/* Callout: `variant` is its only stored attribute, and colour is all it
+   changes — the block carries no visible label, so the node's own aria-label
+   is what tells a screen reader „Upozorenje" where the eye sees gold. */
+.note__editor .ProseMirror [data-callout] {
+  padding: var(--nx-space-3);
+  border-left: 2px solid var(--nx-border);
+  /* Square on the ruled edge: a radius there would clip the rule's ends and
+     turn a left rule into a hairline outline. */
+  border-radius: 0 var(--nx-radius-md) var(--nx-radius-md) 0;
+  background: var(--nx-surface-alt);
+}
+/* The top-level block rhythm stops at .ProseMirror's own children, so a
+   container has to restate it for the blocks nested inside it. */
+.note__editor .ProseMirror [data-callout] > * + * {
+  margin-top: var(--nx-space-3);
+}
+.note__editor .ProseMirror [data-callout][data-variant="tip"] {
+  border-left-color: var(--nx-data);
+  background: var(--nx-data-soft);
+}
+.note__editor .ProseMirror [data-callout][data-variant="warning"] {
+  border-left-color: var(--nx-accent);
+  background: var(--nx-accent-soft);
+}
+.note__editor .ProseMirror [data-callout][data-variant="danger"] {
+  border-left-color: var(--nx-danger);
+  background: var(--nx-danger-soft);
+}
+
+/* Collapsible section: a marker column beside the summary + content column.
+   The marker is a CSS triangle (a bordered zero-size box) turned by a
+   transform — no icon library, no glyph font. Its rotation IS the state, so
+   the reduced-motion blanket in @nexus/ui's styles.css only collapses the
+   transition; the marker still ends up pointing the right way. */
+.note__toggle {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--nx-space-2);
+  align-items: start;
+}
+.note__toggle-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  /* .ProseMirror's own line-height, so the marker sits on the summary's line. */
+  height: 1.6em;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-xs);
+  color: var(--nx-text-muted);
+  cursor: pointer;
+  transition: color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__toggle-mark:hover {
+  color: var(--nx-text);
+}
+.note__toggle-mark:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+.note__toggle-mark::before {
+  content: "";
+  border-style: solid;
+  border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent currentColor;
+  transform: rotate(90deg);
+  transition: transform var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__toggle--collapsed > .note__toggle-mark::before {
+  transform: rotate(0deg);
+}
+/* Descendant, not child, selectors below: TipTap's React node view puts its
+   own content element between .note__toggle-body and the schema's two child
+   nodes, and naming that internal element in a selector would make these
+   rules an upgrade hazard. Depth-independent is also exactly right here — a
+   nested toggle's summary should read like a summary, and its content is
+   inside a hidden subtree whenever an ancestor is folded, so hiding it twice
+   changes nothing. */
+.note__toggle-body [data-toggle-summary] {
+  font-weight: var(--nx-font-weight-medium);
+}
+.note__toggle-body [data-toggle-summary] + [data-toggle-content] {
+  margin-top: var(--nx-space-2);
+}
+.note__toggle-body [data-toggle-content] > * + * {
+  margin-top: var(--nx-space-2);
+}
+.note__toggle--collapsed > .note__toggle-body [data-toggle-content] {
+  display: none;
+}
+
+/* Table of contents: a block atom rendering the note's live headings. Same
+   paper recipe as the callout; entries are quiet typographic rows on
+   .note__backlink's recipe, indented by heading level. */
+.note__toc {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--nx-space-3);
+  border-left: 2px solid var(--nx-border);
+  border-radius: 0 var(--nx-radius-md) var(--nx-radius-md) 0;
+  background: var(--nx-surface-alt);
+}
+.note__toc-title {
+  margin-bottom: var(--nx-space-2);
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+.note__toc-empty {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+.note__toc-item {
+  display: block;
+  width: 100%;
+  padding: var(--nx-space-1) var(--nx-space-2);
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-sm);
+  cursor: pointer;
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__toc-item:hover {
+  background: var(--nx-surface);
+}
+.note__toc-item:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+.note__toc-item--l2 {
+  padding-left: var(--nx-space-4);
+}
+.note__toc-item--l3 {
+  padding-left: var(--nx-space-6);
+}
+.note__toc.ProseMirror-selectednode {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
 /* The active "/query" range while the slash menu is open reads as a command. */
 .note__editor .ProseMirror .suggestion {
   color: var(--nx-accent-strong);
