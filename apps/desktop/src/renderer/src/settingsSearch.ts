@@ -190,7 +190,10 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
     id: "backup-export",
     section: "backup",
     label: s.backup.exportButton,
-    keywords: ["izvoz", "arhiva", "kopija"],
+    // „moduli“ answers for the „Šta se izvozi“ picker (IMEX-003), which lives
+    // inside this block rather than as an entry of its own: it is one choice
+    // about the export above it, not a fifth thing the card can do.
+    keywords: ["izvoz", "arhiva", "kopija", "moduli"],
   },
   // The "Rezervna kopija" card holds four blocks — export, calendar, restore,
   // import — so each gets its own entry inside that one section rather than a

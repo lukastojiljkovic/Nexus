@@ -18,6 +18,11 @@
  * and order of each interface IS the interchange contract (ADR-009: "the
  * interchange schema becomes the de-facto public API of Nexus data") — changed
  * deliberately, not incidentally.
+ *
+ * IMEX-003 lets the caller name WHICH modules ride (`ExportArchiveInput.modules`,
+ * absent = all). The result is a real archive of fewer modules, not a partial
+ * one: see `filterProfileData` for the module↔collection mapping and the three
+ * cross-module references it repairs so nothing in a subset archive dangles.
  */
 
 import type { RecurrenceRule } from "../recurrence/recurrence.js";
@@ -715,7 +720,22 @@ export interface ExportDashboardWidget {
   updatedAt: string;
 }
 
-/** Everything the manifest's "settings" section carries (founder decision #11: flags + NTF settings ship with the export). */
+/**
+ * Everything the manifest's "settings" section carries (founder decision #11:
+ * flags + NTF settings ship with the export).
+ *
+ * NOT subject to a module choice (IMEX-003), and deliberately so: this is a
+ * MANIFEST section, not rows — `countProfileModules` counts none of it, so it
+ * has no module home in the one mapping that exists, and inventing one for it
+ * would be the second mapping this whole arrangement avoids. The three
+ * settings-SHAPED things that ARE rows do have homes and are filtered by them:
+ * `studySettings` into study, `dashboardSettings` and `dashboardWidgets` into
+ * dashboard. Note the resulting split on notifications, which is the honest one:
+ * the `notifications` module is the delivered LEDGER, while the quiet hours and
+ * per-source toggles below are preferences, and a user who unticks „Obaveštenja“
+ * is asking not to export a history of what was shown — not to forget when they
+ * like being disturbed.
+ */
 export interface ExportSettings {
   flags: Record<string, boolean>;
   notifications: {
@@ -837,6 +857,21 @@ export interface ExportArchiveInput {
   createdAt: string;
   settings: ExportSettings;
   data: ProfileData;
+  /**
+   * Which of the archive's modules ride (IMEX-003). ABSENT means all of them —
+   * the whole-profile export this builder has always written, and what every
+   * caller that does not offer the choice keeps getting.
+   *
+   * A subset is a real, complete archive of fewer modules, not a truncated one:
+   * `data` is filtered through `filterProfileData` (which also repairs the
+   * three cross-module references, see there), the manifest's per-module counts
+   * report the filtered reality, only the surviving rows' blobs are declared,
+   * and `data/calendar.ics` rides only with the calendar. A restore of it is a
+   * restore like any other — it wipes the target profile whole and writes what
+   * the archive carries, so an omitted module simply comes back empty
+   * (`RestoreStore.replaceProfileData`, ADR-023).
+   */
+  modules?: ReadonlySet<ArchiveModuleId>;
   /** sha256 hex over a UTF-8 string, injected so this module never imports `node:crypto`. */
   hash: (content: string) => string;
 }
@@ -948,62 +983,181 @@ export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, 
   };
 }
 
+/** Every module — what an export that names no subset carries (IMEX-003). Read-only by construction: nothing here ever mutates it. */
+const ALL_ARCHIVE_MODULES: ReadonlySet<ArchiveModuleId> = new Set(ARCHIVE_MODULE_IDS);
+
+/** The empty array every dropped module's field becomes. One shared value, since nothing ever mutates a `ProfileData` field. */
+const NO_ROWS: readonly never[] = [];
+
+/**
+ * One profile's rows narrowed to `modules` (IMEX-003) — `countProfileModules`'
+ * twin, and deliberately grouped by the SAME module↔collection mapping: a
+ * module the counter puts in one bucket and the filter in another would make
+ * the manifest lie about its own contents.
+ *
+ * A module's rows drop as a unit. What that cannot do on its own is the three
+ * references that cross a module boundary, each of which would otherwise be
+ * left dangling — and a dangling reference is precisely what `parseImportArchive`
+ * refuses outright in restore mode, so an archive carrying one would be a backup
+ * that cannot be restored:
+ *
+ * - `subject-note-link.noteId` (STUDY→NOTES) — DROPPED when its note is not
+ *   carried. The row IS the pair; without the note there is nothing left of it.
+ *   The reverse needs no rule: the link is a STUDY row, so dropping STUDY takes
+ *   it along.
+ * - `card.sourceNoteId`/`sourceBlockKey` (STUDY→NOTES) — DETACHED, both nulled
+ *   together (the parser refuses one without the other). A note-derived card and
+ *   its FSRS history are STUDY data the user asked for; the note is gone by
+ *   their own choice, so the honest archive is the card without its origin, not
+ *   a study export quietly missing the cards its owner made from notes.
+ * - `note.cardDeckId` (NOTES→STUDY) — DETACHED, for the reason the interchange
+ *   contract makes it nullable at all: the deck a note generates cards into is
+ *   decoration on the note, and losing the note over it would be the opposite
+ *   of what the user asked for. The same policy `importArchive.ts`'s reference
+ *   table already gives both detached edges.
+ *
+ * Nothing else crosses. Every other reference in that table has both ends inside
+ * ONE module: a task's parent, list, section, tags, files and dependencies; a
+ * renewal's document; an exam's, deck's, material's, link's and focus session's
+ * subject; a card's deck; a review's card; a plan's exam; a block's plan; a
+ * note's folder, parent folder, tags, files and versions. Nor is anything else
+ * on a row a reference this archive resolves: a folder's `defaultTemplateId` is
+ * a NOTES-module id or a built-in constant and deliberately carries no foreign
+ * key (migration 028); a notification's `entityId` is checked by no rule and
+ * constrained by no column, because a delivered notification is ledger history
+ * that already outlives the row it names; a dashboard widget's `widgetId` names
+ * a module manifest's slug, not a row; a task template's `tagNames` and an event
+ * template's payload name no row at all; and a note's wiki-links live inside its
+ * Yjs state, are re-derived at restore time, and already tolerate a target that
+ * is not there.
+ *
+ * BLOBS need no rule of their own: every blob is named by a row
+ * (`taskAttachments`, `subjectAttachments`, `noteAttachments`,
+ * `dashboardSettings.backgroundHash`), each of which lives in exactly one
+ * module, so `buildExportArchive` declaring blobs off the FILTERED rows already
+ * carries exactly the ones a chosen module needs — including the deduplication
+ * that lets one file shared across two modules travel once when both ride.
+ */
+export function filterProfileData(
+  data: ProfileData,
+  modules: ReadonlySet<ArchiveModuleId>,
+): ProfileData {
+  const only = <T>(module: ArchiveModuleId, rows: readonly T[]): readonly T[] =>
+    modules.has(module) ? rows : NO_ROWS;
+
+  // Read off the SURVIVING rows, so each repair below asks the one question
+  // that matters: is the row this points at still in the archive?
+  const notes = only("notes", data.notes);
+  const decks = only("study", data.decks);
+  const noteIds = new Set(notes.map((note) => note.id));
+  const deckIds = new Set(decks.map((deck) => deck.id));
+
+  return {
+    tasks: only("tasks", data.tasks),
+    taskLists: only("tasks", data.taskLists),
+    taskSections: only("tasks", data.taskSections),
+    taskTags: only("tasks", data.taskTags),
+    taskTagLinks: only("tasks", data.taskTagLinks),
+    taskAttachments: only("tasks", data.taskAttachments),
+    taskTemplates: only("tasks", data.taskTemplates),
+    taskDependencies: only("tasks", data.taskDependencies),
+    events: only("calendar", data.events),
+    eventTemplates: only("calendar", data.eventTemplates),
+    documents: only("calendar", data.documents),
+    renewals: only("calendar", data.renewals),
+    people: only("calendar", data.people),
+    subjects: only("study", data.subjects),
+    subjectAttachments: only("study", data.subjectAttachments),
+    subjectNoteLinks: only("study", data.subjectNoteLinks).filter((link) => noteIds.has(link.noteId)),
+    exams: only("study", data.exams),
+    decks,
+    cards: only("study", data.cards).map((card) =>
+      card.sourceNoteId === null || noteIds.has(card.sourceNoteId)
+        ? card
+        : { ...card, sourceNoteId: null, sourceBlockKey: null },
+    ),
+    reviewLog: only("study", data.reviewLog),
+    plans: only("study", data.plans),
+    blocks: only("study", data.blocks),
+    focusSessions: only("study", data.focusSessions),
+    studySettings: only("study", data.studySettings),
+    notifications: only("notifications", data.notifications),
+    notes: notes.map((note) =>
+      note.cardDeckId === null || deckIds.has(note.cardDeckId) ? note : { ...note, cardDeckId: null },
+    ),
+    noteFolders: only("notes", data.noteFolders),
+    noteTags: only("notes", data.noteTags),
+    noteTagLinks: only("notes", data.noteTagLinks),
+    noteTemplates: only("notes", data.noteTemplates),
+    noteAttachments: only("notes", data.noteAttachments),
+    noteVersions: only("notes", data.noteVersions),
+    dashboardSettings: only("dashboard", data.dashboardSettings),
+    dashboardWidgets: only("dashboard", data.dashboardWidgets),
+  };
+}
+
 /** Builds the full `.nexus.zip` contents in memory (IMEX-001). Deterministic: identical input always yields identical file content and checksums. */
 export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   const files = new Map<string, string>();
 
+  // The module choice, resolved once (IMEX-003). One code path rather than a
+  // branch: an export that named no subset filters against every module, which
+  // changes nothing at all.
+  const modules = input.modules ?? ALL_ARCHIVE_MODULES;
+  const data = filterProfileData(input.data, modules);
+
   // Read once and named locally — the note section below reaches for these
-  // often enough that `input.data.` on every line only adds noise.
+  // often enough that `data.` on every line only adds noise.
   const { notes, noteFolders, noteTags, noteTagLinks, noteTemplates, noteAttachments, noteVersions } =
-    input.data;
+    data;
 
   // Dependency order, as in `data/notes.ndjson`: the containers and labels a
   // task points at come first and the joins that need BOTH ends come last, so
   // a reader that streamed the file could resolve every reference as it went.
   const tasksNdjson = toNdjson([
-    ...input.data.taskLists.map((row) => ({ type: "task-list", ...row })),
-    ...input.data.taskSections.map((row) => ({ type: "task-section", ...row })),
-    ...input.data.taskTags.map((row) => ({ type: "task-tag", ...row })),
-    ...input.data.tasks.map((row) => ({ type: "task", ...row })),
-    ...input.data.taskTagLinks.map((row) => ({ type: "task-tag-link", ...row })),
-    ...input.data.taskAttachments.map((row) => ({ type: "task-attachment", ...row })),
+    ...data.taskLists.map((row) => ({ type: "task-list", ...row })),
+    ...data.taskSections.map((row) => ({ type: "task-section", ...row })),
+    ...data.taskTags.map((row) => ({ type: "task-tag", ...row })),
+    ...data.tasks.map((row) => ({ type: "task", ...row })),
+    ...data.taskTagLinks.map((row) => ({ type: "task-tag-link", ...row })),
+    ...data.taskAttachments.map((row) => ({ type: "task-attachment", ...row })),
     // Last: a template points at no row in this file (its tags are NAMES), so it
     // constrains nothing and sits after the join that needed both its ends.
-    ...input.data.taskTemplates.map((row) => ({ type: "task-template", ...row })),
-    ...input.data.taskDependencies.map((row) => ({ type: "task-dependency", ...row })),
+    ...data.taskTemplates.map((row) => ({ type: "task-template", ...row })),
+    ...data.taskDependencies.map((row) => ({ type: "task-dependency", ...row })),
   ]);
   const calendarNdjson = toNdjson([
-    ...input.data.events.map((row) => ({ type: "event", ...row })),
-    ...input.data.documents.map((row) => ({ type: "document", ...row })),
-    ...input.data.renewals.map((row) => ({ type: "renewal", ...row })),
-    ...input.data.people.map((row) => ({ type: "person", ...row })),
+    ...data.events.map((row) => ({ type: "event", ...row })),
+    ...data.documents.map((row) => ({ type: "document", ...row })),
+    ...data.renewals.map((row) => ({ type: "renewal", ...row })),
+    ...data.people.map((row) => ({ type: "person", ...row })),
     // Last, for the reason `task-template` is last in the tasks file: a template
     // points at no row here, so it constrains nothing and sits after everything
     // that does.
-    ...input.data.eventTemplates.map((row) => ({ type: "event-template", ...row })),
+    ...data.eventTemplates.map((row) => ({ type: "event-template", ...row })),
   ]);
   // The preferences row leads, then the rows themselves in dependency order —
   // the shape `data/dashboard.ndjson` already has. It points at nothing, so
   // this is how the file reads, not what it requires.
   const studyNdjson = toNdjson([
-    ...input.data.studySettings.map((row) => ({ type: "study-settings", ...row })),
-    ...input.data.subjects.map((row) => ({ type: "subject", ...row })),
+    ...data.studySettings.map((row) => ({ type: "study-settings", ...row })),
+    ...data.subjects.map((row) => ({ type: "subject", ...row })),
     // Straight after the subjects they hang off, exactly as `task-attachment`
     // follows its tasks. The links' other end is a NOTE, which lives in a
     // different file entirely — so their position here is readability, and the
     // reader resolves that reference across files rather than in order.
-    ...input.data.subjectAttachments.map((row) => ({ type: "subject-attachment", ...row })),
-    ...input.data.subjectNoteLinks.map((row) => ({ type: "subject-note-link", ...row })),
-    ...input.data.exams.map((row) => ({ type: "exam", ...row })),
-    ...input.data.decks.map((row) => ({ type: "deck", ...row })),
-    ...input.data.cards.map((row) => ({ type: "card", ...row })),
-    ...input.data.reviewLog.map((row) => ({ type: "review", ...row })),
-    ...input.data.plans.map((row) => ({ type: "plan", ...row })),
-    ...input.data.blocks.map((row) => ({ type: "block", ...row })),
-    ...input.data.focusSessions.map((row) => ({ type: "focus-session", ...row })),
+    ...data.subjectAttachments.map((row) => ({ type: "subject-attachment", ...row })),
+    ...data.subjectNoteLinks.map((row) => ({ type: "subject-note-link", ...row })),
+    ...data.exams.map((row) => ({ type: "exam", ...row })),
+    ...data.decks.map((row) => ({ type: "deck", ...row })),
+    ...data.cards.map((row) => ({ type: "card", ...row })),
+    ...data.reviewLog.map((row) => ({ type: "review", ...row })),
+    ...data.plans.map((row) => ({ type: "plan", ...row })),
+    ...data.blocks.map((row) => ({ type: "block", ...row })),
+    ...data.focusSessions.map((row) => ({ type: "focus-session", ...row })),
   ]);
   const notificationsNdjson = toNdjson(
-    input.data.notifications.map((row) => ({ type: "notification", ...row })),
+    data.notifications.map((row) => ({ type: "notification", ...row })),
   );
   // Bytes are not JSON: `snapshot` is destructured off before the row joins
   // the NDJSON (it travels instead as a `bytes` binary entry below, keyed by
@@ -1029,8 +1183,8 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   // has its widgets, and a widget names no settings row — so the order here is
   // readability, not a dependency.
   const dashboardNdjson = toNdjson([
-    ...input.data.dashboardSettings.map((row) => ({ type: "dashboard-settings", ...row })),
-    ...input.data.dashboardWidgets.map((row) => ({ type: "dashboard-widget", ...row })),
+    ...data.dashboardSettings.map((row) => ({ type: "dashboard-settings", ...row })),
+    ...data.dashboardWidgets.map((row) => ({ type: "dashboard-widget", ...row })),
   ]);
 
   files.set("data/tasks.ndjson", tasksNdjson);
@@ -1080,12 +1234,12 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   };
   for (const attachment of [
     ...noteAttachments,
-    ...input.data.taskAttachments,
-    ...input.data.subjectAttachments,
+    ...data.taskAttachments,
+    ...data.subjectAttachments,
   ]) {
     declareBlob(attachment.sha256, attachment.sizeBytes);
   }
-  for (const dashboard of input.data.dashboardSettings) {
+  for (const dashboard of data.dashboardSettings) {
     // Both non-null together (migration 030's CHECK, re-checked by the reader),
     // so one guard covers the pair without the other needing a non-null claim.
     if (dashboard.backgroundHash === null || dashboard.backgroundSizeBytes === null) continue;
@@ -1098,19 +1252,27 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   // ignores this file entirely (see `SCHEMA_VERSION`'s note). Stamped with the
   // archive's own `createdAt`, so it reads no clock either and two exports of
   // the same profile at the same moment are byte-identical.
-  files.set("data/calendar.ics", buildIcsCalendar(input.data.events, { now: input.createdAt }).text);
+  //
+  // ABSENT when the calendar is not among the chosen modules (IMEX-003), unlike
+  // the NDJSON files, which are always written: an empty `data/calendar.ndjson`
+  // is what a profile with no events produces and the format expects, while an
+  // empty `VCALENDAR` is a file the user would open in their other calendar and
+  // find nothing in — a promise of a calendar they did not ask us to export.
+  if (modules.has("calendar")) {
+    files.set("data/calendar.ics", buildIcsCalendar(data.events, { now: input.createdAt }).text);
+  }
 
-  files.set("tables/tasks.csv", tasksCsv(input.data.tasks));
-  files.set("tables/events.csv", eventsCsv(input.data.events));
-  files.set("tables/documents.csv", documentsCsv(input.data.documents));
-  files.set("tables/subjects.csv", subjectsCsv(input.data.subjects));
-  files.set("tables/exams.csv", examsCsv(input.data.exams));
-  files.set("tables/cards.csv", cardsCsv(input.data.cards));
-  files.set("tables/study-plans.csv", plansCsv(input.data.plans));
-  files.set("tables/study-blocks.csv", blocksCsv(input.data.blocks));
-  files.set("tables/focus-sessions.csv", focusSessionsCsv(input.data.focusSessions));
+  files.set("tables/tasks.csv", tasksCsv(data.tasks));
+  files.set("tables/events.csv", eventsCsv(data.events));
+  files.set("tables/documents.csv", documentsCsv(data.documents));
+  files.set("tables/subjects.csv", subjectsCsv(data.subjects));
+  files.set("tables/exams.csv", examsCsv(data.exams));
+  files.set("tables/cards.csv", cardsCsv(data.cards));
+  files.set("tables/study-plans.csv", plansCsv(data.plans));
+  files.set("tables/study-blocks.csv", blocksCsv(data.blocks));
+  files.set("tables/focus-sessions.csv", focusSessionsCsv(data.focusSessions));
 
-  const byModule = countProfileModules(input.data);
+  const byModule = countProfileModules(data);
   const totalRecords = Object.values(byModule).reduce((sum, count) => sum + count, 0);
 
   const checksums: Record<string, string> = {};

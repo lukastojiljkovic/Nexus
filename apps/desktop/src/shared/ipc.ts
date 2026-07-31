@@ -3017,6 +3017,19 @@ export interface SearchPageResult {
 export interface ImexExportRequest {
   profileId: string;
   passphrase: string | null;
+  /**
+   * Which archive modules to write (IMEX-003), as `ArchiveModuleName`s.
+   * ABSENT means all of them — the whole-profile export, and what a caller that
+   * offers no choice keeps asking for.
+   *
+   * Untrusted like every other field here (SEC-EL-02): main checks each entry
+   * against `@nexus/core`'s `ARCHIVE_MODULE_IDS` and refuses an empty array
+   * outright, since an archive of nothing is not something the user can have
+   * meant. A subset is a complete archive of fewer modules — restoring it
+   * replaces the whole profile and the omitted modules simply come back empty,
+   * exactly as a restore has always worked.
+   */
+  modules?: readonly ArchiveModuleName[];
 }
 
 /**
@@ -3253,6 +3266,9 @@ export interface ImexRestoreStatusRequest {
  * own keys, so the set is declared exactly once in this file. `main` assigns
  * `@nexus/core`'s `Record<ArchiveModuleId, …>` to the report below, which makes
  * a module added in core and forgotten here a compile error.
+ *
+ * The same names an EXPORT names its module subset by (`ImexExportRequest.modules`,
+ * IMEX-003): one archive-module vocabulary on this wire, not two.
  */
 export type ArchiveModuleName = keyof RestoreModuleCounts;
 
@@ -3990,10 +4006,15 @@ export interface NexusApi {
    * Full-data export (IMEX slice a1, extended by ADR-022). `passphrase` seals
    * the archive under a passphrase-derived key (an `.nexus` `NXA1`
    * container); `null` means the explicitly-confirmed plaintext `.nexus.zip`
-   * export. Resolves after the native save dialog is settled — canceled or
-   * written.
+   * export. `modules` narrows the archive to those modules (IMEX-003) and
+   * omitting it exports all of them. Resolves after the native save dialog is
+   * settled — canceled or written.
    */
-  exportData(profileId: string, passphrase: string | null): Promise<ExportResult>;
+  exportData(
+    profileId: string,
+    passphrase: string | null,
+    modules?: readonly ArchiveModuleName[],
+  ): Promise<ExportResult>;
   /** The calendar alone, as an RFC 5545 `.ics` (CAL-008) — one open text file, no passphrase branch. Resolves after the native save dialog is settled. */
   exportCalendarIcs(profileId: string): Promise<IcsExportResult>;
   /** Opens the native "pick a restore archive" dialog (IMEX slice 3c, ADR-023). Main remembers the pick, which is why nothing below ever names a path. */

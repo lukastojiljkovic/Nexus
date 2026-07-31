@@ -6,7 +6,12 @@ import type { BrowserWindow } from "electron";
 import { app, dialog } from "electron";
 import { ZipFile } from "yazl";
 import { buildExportArchive, buildIcsCalendar, createArchiveWriter } from "@nexus/core";
-import type { ArchiveWriter, ExportBinaryEntry } from "@nexus/core";
+import type {
+  ArchiveModuleId,
+  ArchiveWriter,
+  ExportArchiveInput,
+  ExportBinaryEntry,
+} from "@nexus/core";
 // Main-process-only subpath (pulls in Argon2id's WASM) — see that module's own
 // header comment on why the renderer must never import it.
 import { ARCHIVE_KDF_PARAMS, deriveArchiveKey, generateSalt } from "@nexus/core/auth";
@@ -51,11 +56,25 @@ export interface ImexExportDeps extends ProfileDataDeps {
  * separate, deliberately-ticked confirmation, since shipping a database's
  * worth of data in the clear must always be a choice the user makes on
  * purpose, never one they fall into.
+ *
+ * `modules` (IMEX-003) narrows the archive to the modules the user ticked;
+ * `undefined` is the whole profile, which is what this function did before the
+ * choice existed and what it still does when nobody makes one.
+ *
+ * The narrowing happens inside `buildExportArchive`, not here: the gather above
+ * stays whole. That reads (and merges the Yjs state of) modules a subset export
+ * then discards — the same work every export has always done — and it is the
+ * right trade for now, because `gatherProfileData` is ALSO how a restore's undo
+ * snapshot is captured (`profileData.ts`), so teaching it about modules would
+ * put a second copy of the module↔collection mapping in the one place a
+ * disagreement with `countProfileModules` would silently corrupt an archive's
+ * own counts.
  */
 export async function handleExport(
   deps: ImexExportDeps,
   profile: { id: string; name: string },
   passphrase: string | null,
+  modules?: ReadonlySet<ArchiveModuleId>,
 ): Promise<ExportResult> {
   const win = deps.getMainWindow();
   const dialogOptions =
@@ -85,14 +104,19 @@ export async function handleExport(
     writer = await createArchiveWriter({ key, salt, kdf: ARCHIVE_KDF_PARAMS });
   }
 
-  const archive = buildExportArchive({
+  const archiveInput: ExportArchiveInput = {
     profile,
     appVersion: app.getVersion(),
     createdAt: new Date().toISOString(),
     settings: await gatherProfileSettings(deps, profile.id),
     data: gatherProfileData(deps, profile.id),
     hash: (content) => createHash("sha256").update(content, "utf8").digest("hex"),
-  });
+  };
+  // Only name a subset when there is one (exactOptionalPropertyTypes): an
+  // ABSENT key is what "every module" means to the builder, and an explicit
+  // `undefined` is not the same thing.
+  if (modules !== undefined) archiveInput.modules = modules;
+  const archive = buildExportArchive(archiveInput);
 
   const missingAttachments = await writeZip(archive.files, archive.binaries, filePath, deps.readBlob, writer);
 

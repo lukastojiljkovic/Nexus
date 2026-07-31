@@ -7,6 +7,7 @@ import type { IpcMainInvokeEvent, OpenDialogOptions } from "electron";
 import { autoUpdater } from "electron-updater";
 import {
   applySearchOperators,
+  ARCHIVE_MODULE_IDS,
   buildSearchSnippet,
   buildSearchTagFacets,
   chordAccelerator,
@@ -27,6 +28,7 @@ import {
   validateRecurrenceRule,
 } from "@nexus/core";
 import type {
+  ArchiveModuleId,
   NotificationSource,
   ParsedSearchQuery,
   SearchHit,
@@ -873,6 +875,37 @@ function asArchivePassphrase(value: unknown, field: string): string | null {
     throw new Error(`Invalid IPC payload: "${field}" must be null or a valid archive passphrase.`);
   }
   return value;
+}
+
+/**
+ * `imex:export`'s module subset (IMEX-003): `undefined` for the whole-profile
+ * export, otherwise a non-empty array of `ARCHIVE_MODULE_IDS` members. Returned
+ * as a `Set`, which is both what `buildExportArchive` takes and what makes a
+ * repeated id harmless.
+ *
+ * Empty is REFUSED rather than read as "everything" (SEC-EL-02: the renderer's
+ * own disabled button is UX, never the gate): an archive of no modules is not
+ * something a user can have meant, and silently turning it into an archive of
+ * ALL of them would answer a request with its opposite.
+ */
+function asArchiveModules(
+  value: unknown,
+  field: string,
+): ReadonlySet<ArchiveModuleId> | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length === 0 || value.length > ARCHIVE_MODULE_IDS.length) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be an array of 1-${ARCHIVE_MODULE_IDS.length} archive module ids.`,
+    );
+  }
+  const modules = new Set<ArchiveModuleId>();
+  for (const item of value) {
+    if (typeof item !== "string" || !(ARCHIVE_MODULE_IDS as readonly string[]).includes(item)) {
+      throw new Error(`Invalid IPC payload: "${field}" contains an unknown archive module id.`);
+    }
+    modules.add(item as ArchiveModuleId);
+  }
+  return modules;
 }
 
 /**
@@ -5149,12 +5182,14 @@ function registerIpc(): void {
   // profile's data and streams it to a path the native save dialog returns —
   // never a path the renderer supplies (SEC-EL) — either as a plain
   // `.nexus.zip` or, when `passphrase` is non-null, sealed into an `.nexus`
-  // `NXA1` container under a key derived from it.
+  // `NXA1` container under a key derived from it. `modules` narrows what the
+  // archive carries (IMEX-003); absent, it carries the whole profile.
   ipcMain.handle(IpcChannel.imexExport, (event, payload): Promise<ExportResult> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const passphrase = asArchivePassphrase(body.passphrase, "passphrase");
+    const modules = asArchiveModules(body.modules, "modules");
     const profile = requireProfile(requireDb(), profileId);
     return handleExport(
       {
@@ -5190,6 +5225,7 @@ function registerIpc(): void {
       },
       profile,
       passphrase,
+      modules,
     );
   });
 

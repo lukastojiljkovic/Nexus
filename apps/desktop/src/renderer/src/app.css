@@ -4477,6 +4477,52 @@ button.cal__grid-event--dragging {
   color: var(--nx-danger);
   font-size: var(--nx-font-size-body-sm);
 }
+/* Rezervna kopija → „Šta se izvozi" (IMEX-003): a disclosure over the module
+   checkboxes. Typographic, not a button — the default is everything, so this
+   asks for no attention until someone goes looking for it. The triangle is the
+   note toggle's own marker, rotating the same way. */
+.set__disclosure {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  align-self: flex-start;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--nx-radius-xs);
+  background: transparent;
+  color: var(--nx-text-muted);
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  cursor: pointer;
+  transition: color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.set__disclosure:hover {
+  color: var(--nx-text);
+}
+.set__disclosure:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.set__disclosure-mark {
+  border-style: solid;
+  border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent currentColor;
+  transition: transform var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.set__disclosure[aria-expanded="true"] > .set__disclosure-mark {
+  transform: rotate(90deg);
+}
+.set__disclosure-summary {
+  font-size: var(--nx-font-size-caption);
+}
+/* One row per module while there is width for it, then as many as fit. */
+.set__module-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1) var(--nx-space-5);
+  padding-left: var(--nx-space-4);
+}
 /* Sigurnost: change-passcode form, Recovery Kit regenerate, auto-lock select. */
 .set__security-block + .set__security-block {
   margin-top: var(--nx-space-4);

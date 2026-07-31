@@ -2,12 +2,17 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import * as Y from "yjs";
 import {
+  ARCHIVE_MODULE_IDS,
   buildExportArchive,
   countProfileModules,
+  filterProfileData,
+  type ArchiveModuleId,
   type ExportArchiveInput,
+  type ExportCard,
   type ExportNote,
   type ExportNoteAttachment,
   type ExportNoteFolder,
+  type ExportSubjectNoteLink,
   type ExportTaskList,
   type ProfileData,
 } from "./exportArchive.js";
@@ -1293,4 +1298,328 @@ describe("buildExportArchive", () => {
       expect(first.binaries).toEqual(second.binaries);
     });
   });
+
+  // --- IMEX-003: per-module export subsets ---------------------------------
+
+  describe("module subsets", () => {
+    it("omitting `modules` carries every module, exactly as before", () => {
+      const populated = everyModuleInput();
+      const chosen = everyModuleInput();
+      chosen.modules = new Set(ARCHIVE_MODULE_IDS);
+
+      const all = buildExportArchive(populated);
+      const explicit = buildExportArchive(chosen);
+
+      expect([...all.files.entries()]).toEqual([...explicit.files.entries()]);
+      expect(all.binaries).toEqual(explicit.binaries);
+    });
+
+    it("writes only the chosen modules' rows and empties the rest", () => {
+      const input = everyModuleInput();
+      input.modules = new Set<ArchiveModuleId>(["tasks"]);
+      const archive = buildExportArchive(input);
+
+      expect(parseNdjson(archive.files.get("data/tasks.ndjson") ?? "")).not.toEqual([]);
+      expect(archive.files.get("data/calendar.ndjson")).toBe("");
+      expect(archive.files.get("data/study.ndjson")).toBe("");
+      expect(archive.files.get("data/notifications.ndjson")).toBe("");
+      expect(archive.files.get("data/notes.ndjson")).toBe("");
+      expect(archive.files.get("data/dashboard.ndjson")).toBe("");
+    });
+
+    // The archive's shape is a property of the FORMAT, not of the choice: every
+    // NDJSON file is still written (empty is the honest "no such rows" shape a
+    // profile without them produces), and the manifest still declares all six
+    // modules — with counts that say zero out loud.
+    it("keeps every data file and every manifest module id, counted honestly", () => {
+      const input = everyModuleInput();
+      input.modules = new Set<ArchiveModuleId>(["notes", "dashboard"]);
+      const archive = buildExportArchive(input);
+      const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
+
+      for (const path of ["data/tasks.ndjson", "data/calendar.ndjson", "data/study.ndjson",
+        "data/notifications.ndjson", "data/notes.ndjson", "data/dashboard.ndjson"]) {
+        expect(archive.files.has(path)).toBe(true);
+      }
+      expect(manifest.modules).toEqual([
+        { id: "tasks", records: 0 },
+        { id: "calendar", records: 0 },
+        { id: "study", records: 0 },
+        { id: "notifications", records: 0 },
+        { id: "notes", records: archive.byModule.notes },
+        { id: "dashboard", records: archive.byModule.dashboard },
+      ]);
+      expect(archive.byModule.notes).toBeGreaterThan(0);
+      expect(archive.totalRecords).toBe(archive.byModule.notes + archive.byModule.dashboard);
+      expect((manifest.checksums as Record<string, string>)["data/tasks.ndjson"]).toBe(sha256(""));
+    });
+
+    it("mirrors the filtered reality in the CSV tables", () => {
+      const input = everyModuleInput();
+      input.modules = new Set<ArchiveModuleId>(["calendar"]);
+      const archive = buildExportArchive(input);
+
+      // Header-only: `toCsv` still writes the column row for an empty table.
+      expect(archive.files.get("tables/tasks.csv")?.split("\n").length).toBe(2);
+      expect(archive.files.get("tables/cards.csv")?.split("\n").length).toBe(2);
+      expect(archive.files.get("tables/events.csv")).toContain("Sastanak");
+    });
+
+    it("omits data/calendar.ics when the calendar is not chosen, and keeps it when it is", () => {
+      const without = everyModuleInput();
+      without.modules = new Set<ArchiveModuleId>(["tasks"]);
+      expect(buildExportArchive(without).files.has("data/calendar.ics")).toBe(false);
+
+      const with_ = everyModuleInput();
+      with_.modules = new Set<ArchiveModuleId>(["calendar"]);
+      expect(buildExportArchive(with_).files.get("data/calendar.ics")).toContain("BEGIN:VEVENT");
+    });
+
+    it("carries only the blobs the chosen modules' rows name", () => {
+      const input = everyModuleInput();
+      input.modules = new Set<ArchiveModuleId>(["study"]);
+      const archive = buildExportArchive(input);
+      const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
+
+      expect(manifest.blobs).toEqual([{ sha256: SUBJECT_BLOB, sizeBytes: 30 }]);
+      expect(archive.binaries).toEqual([
+        { kind: "attachment", path: `blobs/${SUBJECT_BLOB}`, sha256: SUBJECT_BLOB, sizeBytes: 30 },
+      ]);
+    });
+
+    it("drops the notes' Markdown mirror and ydocs when notes are not chosen", () => {
+      const input = everyModuleInput();
+      input.modules = new Set<ArchiveModuleId>(["tasks", "calendar", "study", "notifications", "dashboard"]);
+      const archive = buildExportArchive(input);
+
+      expect([...archive.files.keys()].some((path) => path.endsWith(".md"))).toBe(false);
+      expect(archive.binaries.some((entry) => entry.kind === "bytes")).toBe(false);
+    });
+
+    it("carries the dashboard background blob only with the dashboard", () => {
+      const input = everyModuleInput();
+      input.modules = new Set<ArchiveModuleId>(["dashboard"]);
+      const archive = buildExportArchive(input);
+      expect(archive.binaries).toEqual([
+        { kind: "attachment", path: `blobs/${BACKGROUND_BLOB}`, sha256: BACKGROUND_BLOB, sizeBytes: 40 },
+      ]);
+    });
+  });
 });
+
+/**
+ * IMEX-003's whole subject: what a module choice does to the rows that point
+ * ACROSS a module boundary. Three edges exist in the archive's reference graph
+ * (`importArchive.ts`'s `referenceRules`) — `subject-note-link.noteId` and
+ * `card.sourceNoteId`, both STUDY→NOTES, and `note.cardDeckId`, NOTES→STUDY —
+ * and each is repaired here rather than left to dangle, because the reader
+ * refuses a dangling reference outright in restore mode.
+ */
+describe("filterProfileData", () => {
+  const ALL = new Set(ARCHIVE_MODULE_IDS);
+
+  it("changes nothing when every module is chosen", () => {
+    const data = everyModuleInput().data;
+    expect(filterProfileData(data, ALL)).toEqual(data);
+  });
+
+  it("empties every array of a module that is not chosen", () => {
+    const data = everyModuleInput().data;
+    const filtered = filterProfileData(data, new Set<ArchiveModuleId>(["notifications"]));
+
+    expect(filtered.notifications).toEqual(data.notifications);
+    expect(filtered.tasks).toEqual([]);
+    expect(filtered.taskLists).toEqual([]);
+    expect(filtered.taskSections).toEqual([]);
+    expect(filtered.taskTags).toEqual([]);
+    expect(filtered.taskTagLinks).toEqual([]);
+    expect(filtered.taskAttachments).toEqual([]);
+    expect(filtered.taskTemplates).toEqual([]);
+    expect(filtered.taskDependencies).toEqual([]);
+    expect(filtered.events).toEqual([]);
+    expect(filtered.eventTemplates).toEqual([]);
+    expect(filtered.documents).toEqual([]);
+    expect(filtered.renewals).toEqual([]);
+    expect(filtered.people).toEqual([]);
+    expect(filtered.subjects).toEqual([]);
+    expect(filtered.subjectAttachments).toEqual([]);
+    expect(filtered.subjectNoteLinks).toEqual([]);
+    expect(filtered.exams).toEqual([]);
+    expect(filtered.decks).toEqual([]);
+    expect(filtered.cards).toEqual([]);
+    expect(filtered.reviewLog).toEqual([]);
+    expect(filtered.plans).toEqual([]);
+    expect(filtered.blocks).toEqual([]);
+    expect(filtered.focusSessions).toEqual([]);
+    expect(filtered.studySettings).toEqual([]);
+    expect(filtered.notes).toEqual([]);
+    expect(filtered.noteFolders).toEqual([]);
+    expect(filtered.noteTags).toEqual([]);
+    expect(filtered.noteTagLinks).toEqual([]);
+    expect(filtered.noteTemplates).toEqual([]);
+    expect(filtered.noteAttachments).toEqual([]);
+    expect(filtered.noteVersions).toEqual([]);
+    expect(filtered.dashboardSettings).toEqual([]);
+    expect(filtered.dashboardWidgets).toEqual([]);
+  });
+
+  it("drops a subject-note link whose note is not carried", () => {
+    const data = everyModuleInput().data;
+    expect(data.subjectNoteLinks).toHaveLength(1);
+
+    const filtered = filterProfileData(data, new Set<ArchiveModuleId>(["study"]));
+    expect(filtered.subjectNoteLinks).toEqual([]);
+    // The other direction needs no rule of its own: dropping STUDY drops the
+    // links with it, since the link row belongs to the STUDY module.
+    expect(filterProfileData(data, new Set<ArchiveModuleId>(["notes"])).subjectNoteLinks).toEqual([]);
+  });
+
+  it("detaches a note-derived card from its note rather than dropping the card", () => {
+    const data = everyModuleInput().data;
+    const filtered = filterProfileData(data, new Set<ArchiveModuleId>(["study"]));
+
+    expect(filtered.cards).toHaveLength(2);
+    const derived = filtered.cards.find((card) => card.id === "c2");
+    expect(derived).toMatchObject({ id: "c2", sourceNoteId: null, sourceBlockKey: null });
+    // The FSRS history of that card is study data and stays untouched.
+    expect(derived?.reps).toBe(4);
+    expect(filtered.reviewLog).toHaveLength(1);
+  });
+
+  it("keeps a note-derived card attached when notes ride too", () => {
+    const data = everyModuleInput().data;
+    const filtered = filterProfileData(data, new Set<ArchiveModuleId>(["study", "notes"]));
+    expect(filtered.cards.find((card) => card.id === "c2")).toMatchObject({
+      sourceNoteId: "n1",
+      sourceBlockKey: "blok-1",
+    });
+  });
+
+  it("nulls a note's cardDeckId when the deck's module is not carried", () => {
+    const data = everyModuleInput().data;
+    const filtered = filterProfileData(data, new Set<ArchiveModuleId>(["notes"]));
+
+    expect(filtered.notes).toHaveLength(1);
+    expect(filtered.notes[0]).toMatchObject({ id: "n1", cardDeckId: null });
+    // Everything else about the note survives — the deck is decoration on it.
+    expect(filtered.notes[0]?.title).toBe("Beleška");
+    expect(filtered.noteVersions).toHaveLength(1);
+  });
+
+  it("keeps a note's cardDeckId when study rides too", () => {
+    const data = everyModuleInput().data;
+    const filtered = filterProfileData(data, new Set<ArchiveModuleId>(["notes", "study"]));
+    expect(filtered.notes[0]?.cardDeckId).toBe("dk1");
+  });
+
+  it("leaves an archive whose every cross-module edge is repaired countable", () => {
+    const data = everyModuleInput().data;
+    const filtered = filterProfileData(data, new Set<ArchiveModuleId>(["study"]));
+    expect(countProfileModules(filtered)).toEqual({
+      tasks: 0,
+      calendar: 0,
+      // 1 subject + 1 material + 0 links + 1 exam + 1 deck + 2 cards + 1 review
+      // + 1 plan + 1 block + 1 focus session + 1 settings row.
+      study: 11,
+      notifications: 0,
+      notes: 0,
+      dashboard: 0,
+    });
+  });
+});
+
+/** The two blobs `everyModuleInput` hangs off a subject and off the dashboard — named so the subset tests can assert which one rode. */
+const SUBJECT_BLOB = "5".repeat(64);
+const BACKGROUND_BLOB = "6".repeat(64);
+
+/**
+ * One row in every module, wired up so that all three cross-module edges are
+ * live: a subject↔note link, a note-derived card, and a note whose generated
+ * cards go into a deck. Blobs hang off two different modules, so a subset can
+ * be asked which of them rode.
+ */
+function everyModuleInput(): ExportArchiveInput {
+  const input = emptyInput();
+  const at = "2026-07-01T00:00:00.000Z";
+
+  input.data.taskLists = [taskListRow({ id: LIST_ID, name: "Inbox" })];
+  input.data.tasks = [
+    {
+      id: "t1", profileId: "profile1", parentId: null, title: "Zadatak", description: null,
+      status: "todo", priority: "none", done: false, dueDate: null, startDate: null,
+      createdAt: at, updatedAt: at, completedAt: null, recurrence: null, reminderOffsets: [],
+      ...PLACED,
+    },
+  ];
+  input.data.events = [
+    {
+      id: "e1", profileId: "profile1", title: "Sastanak", description: null,
+      startAt: "2026-07-02T09:00:00.000Z", endAt: "2026-07-02T10:00:00.000Z", allDay: false,
+      location: null, category: null, createdAt: at, updatedAt: at,
+      recurrence: null, recurrenceExdates: [], reminderOffsets: [],
+    },
+  ];
+  input.data.subjects = [
+    {
+      id: "s1", profileId: "profile1", name: "Analiza", color: "jade", semester: null,
+      archived: false, createdAt: at, updatedAt: at,
+    },
+  ];
+  input.data.subjectAttachments = [
+    { id: "sa1", subjectId: "s1", fileName: "skripta.pdf", mime: "application/pdf", sizeBytes: 30, sha256: SUBJECT_BLOB, createdAt: at },
+  ];
+  input.data.subjectNoteLinks = [{ subjectId: "s1", noteId: "n1", createdAt: at } satisfies ExportSubjectNoteLink];
+  input.data.exams = [
+    { id: "ex1", profileId: "profile1", subjectId: "s1", examType: "pismeni", examDate: "2026-08-01", scope: null, createdAt: at, updatedAt: at },
+  ];
+  input.data.decks = [
+    { id: "dk1", profileId: "profile1", subjectId: "s1", name: "Glava 1", createdAt: at, updatedAt: at },
+  ];
+  const card = (overrides: Pick<ExportCard, "id" | "sourceNoteId" | "sourceBlockKey" | "reps">): ExportCard => ({
+    profileId: "profile1", deckId: "dk1", front: "Q", back: "A",
+    due: "2026-07-02T00:00:00.000Z", stability: 1, difficulty: 2, elapsedDays: 0,
+    scheduledDays: 1, learningSteps: 0, lapses: 0, state: 0, lastReview: null,
+    createdAt: at, updatedAt: at, ...overrides,
+  });
+  input.data.cards = [
+    card({ id: "c1", sourceNoteId: null, sourceBlockKey: null, reps: 0 }),
+    card({ id: "c2", sourceNoteId: "n1", sourceBlockKey: "blok-1", reps: 4 }),
+  ];
+  input.data.reviewLog = [
+    {
+      id: "rl1", profileId: "profile1", cardId: "c2", rating: 3, state: 2, due: "2026-07-03T00:00:00.000Z",
+      stability: 1, difficulty: 2, elapsedDays: 1, lastElapsedDays: 0, scheduledDays: 1, learningSteps: 0,
+      review: "2026-07-02T00:00:00.000Z", createdAt: "2026-07-02T00:00:00.000Z",
+    },
+  ];
+  input.data.plans = [
+    { id: "p1", profileId: "profile1", examId: "ex1", dailyMinutes: 60, startDate: "2026-07-01", examWeekBoost: true, createdAt: at, updatedAt: at },
+  ];
+  input.data.blocks = [
+    { id: "b1", planId: "p1", profileId: "profile1", blockDate: "2026-07-02", minutes: 60, status: "planned", createdAt: at, updatedAt: at },
+  ];
+  input.data.focusSessions = [
+    { id: "f1", profileId: "profile1", subjectId: "s1", startedAt: "2026-07-01T10:00:00.000Z", endedAt: "2026-07-01T11:00:00.000Z", createdAt: at, updatedAt: at },
+  ];
+  input.data.studySettings = [
+    { profileId: "profile1", targetRetention: 0.9, newPerDay: 20, maxReviewsPerDay: null },
+  ];
+  input.data.notifications = [
+    {
+      id: "ntf1", profileId: "profile1", source: "task", entityId: "t1", occurrenceKey: "d-1",
+      title: "Rok", body: "Zadatak", status: "delivered", snoozedUntil: null,
+      deliveredAt: at, createdAt: at, updatedAt: at,
+    },
+  ];
+  input.data.notes = [{ ...noteRow({ id: "n1", title: "Beleška", snapshot: emptyNoteSnapshot() }), cardDeckId: "dk1" }];
+  input.data.noteVersions = [
+    { noteId: "n1", coveredSeq: 1, title: "Beleška", createdAt: at, snapshot: emptyNoteSnapshot() },
+  ];
+  input.data.dashboardSettings = [
+    { profileId: "profile1", backgroundHash: BACKGROUND_BLOB, backgroundMime: "image/png", backgroundSizeBytes: 40, backgroundDim: 40 },
+  ];
+  input.data.dashboardWidgets = [
+    { instanceId: "w1", profileId: "profile1", widgetId: "tasks:danas", size: "M", position: 1024, config: null, createdAt: at, updatedAt: at },
+  ];
+  return input;
+}

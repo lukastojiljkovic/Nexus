@@ -1696,6 +1696,17 @@ export const strings = {
     backup: {
       description:
         "Izvezi sve svoje podatke u jednu arhivu — otvoreni formati (JSON i CSV), beleške kao Markdown fajlovi i prilozi u originalnom obliku, sve čitljivo i upotrebljivo bez Nexusa.",
+      /**
+       * IMEX-003 — the module picker, closed by default because the default IS
+       * everything and the description above already says so. The module names
+       * themselves are read off `settings.restore.modules`, the one archive-module
+       * vocabulary this screen has.
+       */
+      modulesToggle: "Šta se izvozi",
+      /** The disclosure's own summary when nothing is unticked; a subset shows „4/6“ instead, which needs no words at all. */
+      modulesAll: "sve",
+      /** Shown under the picker when every box is unticked — the state the export button is disabled in. */
+      modulesEmpty: "Izaberi bar jedan modul.",
       encryptLabel: "Zaštiti arhivu lozinkom",
       encryptedNotice:
         "Arhiva se šifruje tvojom lozinkom — Argon2id i AES-256-GCM. Lozinku ne čuvamo nigde.",
@@ -1795,6 +1806,9 @@ export const strings = {
        * Row labels of the current-vs-incoming table, keyed by
        * `RestoreModuleCounts`'s own five keys — deliberately NOT
        * `strings.modules`, whose key set is the module registry's, not this one.
+       *
+       * Also what the export's „Šta se izvozi“ picker labels its checkboxes with
+       * (IMEX-003): the same six archive modules, named once.
        */
       modules: {
         tasks: "Zadaci",

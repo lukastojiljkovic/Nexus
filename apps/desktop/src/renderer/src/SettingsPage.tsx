@@ -170,6 +170,19 @@ function ProfileSection({ profileId, initialName, onProfileRenamed, hits }: Prof
   );
 }
 
+/**
+ * The archive modules, in the order the export picker, the restore table and
+ * the import report all show them.
+ */
+const ARCHIVE_MODULES: (keyof RestoreModuleCounts)[] = [
+  "tasks",
+  "calendar",
+  "study",
+  "notifications",
+  "notes",
+  "dashboard",
+];
+
 interface BackupSectionProps {
   profileId: string;
 }
@@ -182,6 +195,13 @@ interface BackupSectionProps {
  * through its own separate, unchecked-by-default confirmation — the export
  * button is disabled until that box is ticked, so shipping data in the clear
  * is always something the user opts into, never something they click past.
+ *
+ * „Šta se izvozi“ (IMEX-003) is the quiet third choice: a disclosure over one
+ * checkbox per archive module, every box ticked, closed until the user wants
+ * it — the default is the whole profile, and a picker that shouted would make
+ * a decision out of something almost nobody needs to make. Unticking every box
+ * disables the button rather than silently exporting everything; main refuses
+ * the empty array too, since the disabled button is UX and never the gate.
  */
 function BackupSection({ profileId }: BackupSectionProps) {
   const s = strings.settings.backup;
@@ -199,6 +219,19 @@ function BackupSection({ profileId }: BackupSectionProps) {
   const [passphrase, setPassphrase] = useState("");
   const [confirmPassphrase, setConfirmPassphrase] = useState("");
   const [plaintextConfirmed, setPlaintextConfirmed] = useState(false);
+
+  const [modulesOpen, setModulesOpen] = useState(false);
+  const [modules, setModules] = useState<ReadonlySet<keyof RestoreModuleCounts>>(
+    () => new Set(ARCHIVE_MODULES),
+  );
+
+  function toggleModule(module: keyof RestoreModuleCounts): void {
+    setModules((chosen) => {
+      const next = new Set(chosen);
+      if (!next.delete(module)) next.add(module);
+      return next;
+    });
+  }
 
   async function runExport(): Promise<void> {
     if (running) return;
@@ -223,7 +256,14 @@ function BackupSection({ profileId }: BackupSectionProps) {
 
     setRunning(true);
     try {
-      const outcome = await window.nexus.exportData(profileId, encrypt ? passphrase : null);
+      // The chosen modules in the canonical order, never the Set's insertion
+      // order — a picker that unticked and re-ticked a box would otherwise send
+      // a differently-ordered list for the same choice.
+      const outcome = await window.nexus.exportData(
+        profileId,
+        encrypt ? passphrase : null,
+        ARCHIVE_MODULES.filter((module) => modules.has(module)),
+      );
       if (!outcome.canceled) {
         setSaved({
           path: outcome.path,
@@ -249,11 +289,39 @@ function BackupSection({ profileId }: BackupSectionProps) {
     }
   }
 
-  const disabled = running || (!encrypt && !plaintextConfirmed);
+  const disabled = running || (!encrypt && !plaintextConfirmed) || modules.size === 0;
 
   return (
     <>
       <p className="app__muted">{s.description}</p>
+      <button
+        type="button"
+        className="set__disclosure"
+        aria-expanded={modulesOpen}
+        onClick={() => setModulesOpen((open) => !open)}
+      >
+        <span className="set__disclosure-mark" aria-hidden="true" />
+        {s.modulesToggle}
+        <span className="set__disclosure-summary">
+          {modules.size === ARCHIVE_MODULES.length
+            ? s.modulesAll
+            : `${modules.size}/${ARCHIVE_MODULES.length}`}
+        </span>
+      </button>
+      {modulesOpen && (
+        <div className="set__module-picker">
+          {ARCHIVE_MODULES.map((module) => (
+            <Checkbox
+              key={module}
+              checked={modules.has(module)}
+              onChange={() => toggleModule(module)}
+            >
+              {strings.settings.restore.modules[module]}
+            </Checkbox>
+          ))}
+        </div>
+      )}
+      {modules.size === 0 && <p className="set__section-caption">{s.modulesEmpty}</p>}
       <Checkbox
         checked={encrypt}
         onChange={(event) => {
@@ -404,16 +472,6 @@ type RestoreState =
   | { phase: "ready"; pick: PickedArchive; preview: RestorePreview; error: string | null }
   | { phase: "applying"; pick: PickedArchive; preview: RestorePreview }
   | { phase: "applied" };
-
-/** The archive modules, in the order both the restore table and the import report show them. */
-const ARCHIVE_MODULES: (keyof RestoreModuleCounts)[] = [
-  "tasks",
-  "calendar",
-  "study",
-  "notifications",
-  "notes",
-  "dashboard",
-];
 
 /**
  * An instant as a full sr-Latn day + time label ("8. jul 2026. 14:32").
