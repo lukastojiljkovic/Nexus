@@ -886,6 +886,7 @@ export function App() {
               registry={registry}
               enabledModules={enabledIds}
               onOpenModule={setActiveId}
+              onOpenNote={openNote}
             />
           ) : effectiveId === "tasks" && activeProfile ? (
             <TasksPage

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
-import { computeStreak, matchesSmartList } from "@nexus/core";
+import { computeStreak, matchesSmartList, selectSmartList } from "@nexus/core";
+import type { SmartListContext } from "@nexus/core";
 import { Button, Chip, ListRow } from "@nexus/ui";
 import type { DocumentStatus, Event, Exam, Subject } from "../../shared/ipc.js";
 import { buildCalendarItems } from "./calendarItems.js";
@@ -14,6 +15,7 @@ import {
   shiftDayKey,
 } from "./examDates.js";
 import { focusSessionMinutes, formatDurationMinutes } from "./focusFormat.js";
+import { formatNotificationWhen } from "./notificationFormat.js";
 import { dayUnit, strings } from "./strings.js";
 
 /**
@@ -28,8 +30,13 @@ import { dayUnit, strings } from "./strings.js";
  * two widgets both read the task list; that is a boundary being real, and the
  * store is a local SQLite call away.
  *
- * Everything here is READ-ONLY: rows deep-link into their module (DASH-005) and
- * nothing writes. The page owns the layout, the frame and the edit mode.
+ * The catalogue has grown past those five since (DASH-003): a card added here
+ * and to its module's manifest is one the user can place from „Dodaj vidžet“,
+ * while the default layout stays exactly the five a new profile opens onto.
+ *
+ * Everything here is READ-ONLY: rows deep-link into their module (DASH-005) —
+ * or, where the module has an intent for it, onto the very entity the row names
+ * — and nothing writes. The page owns the layout, the frame and the edit mode.
  */
 
 // --- Formatting helpers (renderer-local, mirror the module pages) -----------
@@ -190,6 +197,13 @@ export interface DashboardWidgetBodyProps {
   /** SET-007 flags, for the one widget that reads across two modules. */
   enabledModules: ReadonlySet<string>;
   onOpenModule: (id: string) => void;
+  /**
+   * Opens ONE note (021-e's reveal intent), for the widget whose rows name
+   * notes. The same link STUDY's flashcards ride (ADR-017) — a row that names
+   * a thing should land on that thing, and NOTE is the one module that already
+   * has an intent saying so.
+   */
+  onOpenNote: (noteId: string) => void;
 }
 
 /**
@@ -342,6 +356,136 @@ function UpcomingTasksWidget({ profileId, onOpenModule }: DashboardWidgetBodyPro
                 }
               >
                 <span className="dash__row-title">{task.title}</span>
+              </DashRow>
+            ))}
+          </div>
+        );
+      }}
+    </WidgetData>
+  );
+}
+
+/**
+ * „Hitno i kasni" — TASK's „Kasni" and „Hitno" smart lists (ADR-049) read as
+ * ONE card, because they answer one question together: what should already
+ * have been done, and what is on fire.
+ *
+ * The union rule, in full: every late task first, longest overdue leading, then
+ * every high-priority task that is not already among them, earliest rok first
+ * (undated last) — the two lists' OWN orders, `selectSmartList`'s. Five rows
+ * total, so a bad week reads as five things to look at and not as a backlog;
+ * that a late row can also be high priority is why the cap is on the union
+ * rather than on each half.
+ *
+ * The predicates are `@nexus/core`'s, the very ones the two views run, so the
+ * card and those views cannot drift on what "late" or "urgent" means.
+ */
+function UrgentTasksWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps) {
+  const load = useCallback(() => window.nexus.listTasks(profileId), [profileId]);
+  const { state, retry } = useWidgetData(load);
+  const s = strings.dashboard.urgent;
+  const todayKey = localTodayKey();
+
+  return (
+    <WidgetData state={state} retry={retry}>
+      {(tasks) => {
+        // `includeBlocked` is true for the reason „Danas" gives: this widget
+        // reads the task list alone and never the dependency edges (ADR-037),
+        // so it has no honest way to tell a blocked task from a free one.
+        // Neither of these two lists filters on blocked-ness anyway — the
+        // predicate is here because the context shape requires one.
+        const context: SmartListContext = {
+          today: todayKey,
+          isBlocked: () => false,
+          includeBlocked: true,
+        };
+        const late = selectSmartList(tasks, "kasni", context);
+        const lateIds = new Set(late.map((task) => task.id));
+        const urgent = selectSmartList(tasks, "hitno", context).filter(
+          (task) => !lateIds.has(task.id),
+        );
+        const rows = [...late, ...urgent].slice(0, 5);
+        if (rows.length === 0) return <p className="dash__empty">{s.empty}</p>;
+        return (
+          <div className="dash__list">
+            {rows.map((task) => {
+              // TasksPage's own rok test (ADR-049), so one task reads the same
+              // on both surfaces: a rok already past is danger, anything else
+              // plain data. Its `!task.done` half is left out because neither
+              // list admits a finished task — the row cannot be one.
+              const overdue = task.dueDate !== null && task.dueDate.slice(0, 10) < todayKey;
+              return (
+                <DashRow
+                  key={task.id}
+                  onClick={() => onOpenModule("tasks")}
+                  // TASK's own chip cluster, class and order included: prioritet
+                  // then rok. The accent „Visok" is what says why a task with a
+                  // rok still ahead is on a card about lateness, and a row here
+                  // always carries at least one of the two — it is on the card
+                  // because it is late (so it has a rok) or because it is high.
+                  trailing={
+                    <span className="tasks__chips">
+                      {task.priority === "high" ? (
+                        <Chip variant="accent">{strings.tasks.priority.high}</Chip>
+                      ) : null}
+                      {task.dueDate !== null ? (
+                        <Chip variant={overdue ? "danger" : "data"}>
+                          {formatDueDate(task.dueDate)}
+                        </Chip>
+                      ) : null}
+                    </span>
+                  }
+                >
+                  <span className="dash__row-title">{task.title}</span>
+                </DashRow>
+              );
+            })}
+          </div>
+        );
+      }}
+    </WidgetData>
+  );
+}
+
+/**
+ * „Nedavne beleške" — the five notes touched most recently, each row landing on
+ * the note itself through the reveal intent (021-e) rather than on the module.
+ *
+ * Ordered strictly by `updatedAt`: `listNotes` answers pinned-first, and a pin
+ * is an organizing decision made on the notes page, never a claim about
+ * recency — a note pinned last month leading a card called „Nedavne beleške"
+ * would simply be false.
+ */
+function RecentNotesWidget({ profileId, onOpenNote }: DashboardWidgetBodyProps) {
+  const load = useCallback(() => window.nexus.listNotes(profileId), [profileId]);
+  const { state, retry } = useWidgetData(load);
+  const s = strings.dashboard.recentNotes;
+
+  return (
+    <WidgetData state={state} retry={retry}>
+      {(notes) => {
+        // Copied before sorting: the array is this widget's loaded state, and
+        // sorting it in place would be a render mutating what it renders.
+        const recent = [...notes]
+          .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id))
+          .slice(0, 5);
+        if (recent.length === 0) return <p className="dash__empty">{s.empty}</p>;
+        return (
+          <div className="dash__list">
+            {recent.map((note) => (
+              <DashRow
+                key={note.id}
+                onClick={() => onOpenNote(note.id)}
+                // "HH:MM" for a note touched today, "D. mon, HH:MM" otherwise —
+                // the instant label NTF and the search results already use, so
+                // a timestamp reads the same wherever the app shows one.
+                trailing={
+                  <span className="dash__days">{formatNotificationWhen(note.updatedAt)}</span>
+                }
+              >
+                <span className="dash__row-title">
+                  {note.title.trim().length > 0 ? note.title : strings.notes.untitled}
+                </span>
               </DashRow>
             ))}
           </div>
@@ -531,10 +675,12 @@ export const DASHBOARD_WIDGETS: Record<string, DashboardWidgetRenderer> = {
     visible: (enabled) => enabled.has("calendar") || enabled.has("tasks"),
   },
   "tasks:predstojece": { Body: UpcomingTasksWidget, visible: (enabled) => enabled.has("tasks") },
+  "tasks:hitno-kasni": { Body: UrgentTasksWidget, visible: (enabled) => enabled.has("tasks") },
   "calendar:isticanja": {
     Body: ExpiringDocumentsWidget,
     visible: (enabled) => enabled.has("calendar"),
   },
   "study:ispiti": { Body: ExamsWidget, visible: (enabled) => enabled.has("study") },
   "study:ucenje": { Body: StudyWidget, visible: (enabled) => enabled.has("study") },
+  "notes:nedavno": { Body: RecentNotesWidget, visible: (enabled) => enabled.has("notes") },
 };

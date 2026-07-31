@@ -196,6 +196,20 @@ export const strings = {
       empty: "Sva dokumenta su u redu ✅",
     },
     /**
+     * Hitno i kasni widget — TASK's „Kasni“ and „Hitno“ smart lists (ADR-049)
+     * read as one card. The empty line has to answer for both halves at once,
+     * which is why it names them both rather than saying „nema zadataka“.
+     */
+    urgent: {
+      title: "Hitno i kasni",
+      empty: "Ništa ne kasni i ništa nije hitno",
+    },
+    /** Nedavne beleške widget — the notes touched most recently (NOTE's first card). */
+    recentNotes: {
+      title: "Nedavne beleške",
+      empty: "Još nema beležaka",
+    },
+    /**
      * A single widget's own boundary (ADR-045 section 4): each card loads and
      * fails alone, so this copy is per-card and deliberately says nothing about
      * the page — the four cards beside it are fine.

@@ -7,6 +7,7 @@ import { MODULE_CATEGORIES, resolveEnabled } from "@nexus/core";
 import { DEFAULT_DASHBOARD_LAYOUT } from "@nexus/db";
 import { describe, expect, it } from "vitest";
 
+import { DASHBOARD_WIDGETS } from "./dashboardWidgets.js";
 import { createModuleRegistry } from "./modules.js";
 import { strings } from "./strings.js";
 
@@ -87,14 +88,39 @@ describe("createModuleRegistry", () => {
 });
 
 describe("the widgets the v0 modules publish (ADR-045)", () => {
-  it("publishes today's five dashboard cards, each owned by the module it opens", () => {
+  it("publishes today's dashboard cards, each owned by the module it opens", () => {
     const registry = createModuleRegistry();
     expect(registry.widgetsOf("calendar").map((widget) => widget.id)).toEqual([
       "danas",
       "isticanja",
     ]);
-    expect(registry.widgetsOf("tasks").map((widget) => widget.id)).toEqual(["predstojece"]);
+    expect(registry.widgetsOf("tasks").map((widget) => widget.id)).toEqual([
+      "predstojece",
+      "hitno-kasni",
+    ]);
     expect(registry.widgetsOf("study").map((widget) => widget.id)).toEqual(["ispiti", "ucenje"]);
+    expect(registry.widgetsOf("notes").map((widget) => widget.id)).toEqual(["nedavno"]);
+    // The catalogue is bigger than the default layout (DASH-003): the two
+    // additions are gallery-only, and `DEFAULT_DASHBOARD_LAYOUT` still holds
+    // exactly the original five.
+    expect(DEFAULT_DASHBOARD_LAYOUT.map((entry) => entry.widgetId)).not.toContain(
+      "tasks:hitno-kasni",
+    );
+    expect(DEFAULT_DASHBOARD_LAYOUT.map((entry) => entry.widgetId)).not.toContain("notes:nedavno");
+  });
+
+  it("pairs every registered widget with a renderer, and every renderer with a contract", () => {
+    // The pairing ADR-045 section 3 rests on. A registered widget with no
+    // renderer is one „Dodaj vidžet“ silently withholds; a renderer with no
+    // contract is a card that can never be placed. Neither fails loudly in the
+    // app, which is exactly why it is pinned here.
+    const registry = createModuleRegistry();
+    const qualified = registry
+      .all()
+      .flatMap((manifest) =>
+        registry.widgetsOf(manifest.id).map((widget) => `${manifest.id}:${widget.id}`),
+      );
+    expect([...qualified].sort()).toEqual(Object.keys(DASHBOARD_WIDGETS).sort());
   });
 
   it("resolves every widget of the DEFAULT layout — a new profile must not open onto blanks", () => {

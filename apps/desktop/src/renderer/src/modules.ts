@@ -1,10 +1,14 @@
 import { ModuleRegistry, type ModuleManifest, type WidgetContract } from "@nexus/core";
 
 /**
- * The five dashboard cards the app draws today, declared as the contracts their
- * OWNING modules publish (DASH-002 / ADR-045). Until this slice they were five
+ * The dashboard cards the app can draw, declared as the contracts their OWNING
+ * modules publish (DASH-002 / ADR-045). Until that slice five of them were
  * hard-coded `<Card>`s in `DashboardPage.tsx`; the manifests are what turn them
  * into a catalogue the layout can be assembled from.
+ *
+ * The catalogue is bigger than the DEFAULT layout, and deliberately so: the
+ * five in `DEFAULT_DASHBOARD_LAYOUT` are what a new profile opens onto, and
+ * every other card here is one the user adds himself from „Dodaj vidžet“.
  *
  * `title` is the strings KEY path, not Serbian text (`WidgetContract.title`):
  * `"dashboard.today.title"` means `strings.dashboard.today.title`, so the copy
@@ -13,13 +17,14 @@ import { ModuleRegistry, type ModuleManifest, type WidgetContract } from "@nexus
  *
  * `id`s are ASCII, because a widget id is a key that ends up in the database
  * (`dashboard_widgets.widget_id`, qualified as `moduleId:widgetId`) — never a
- * label. Every one of the five accepts all three presets: none has content that
- * breaks at a third of the width, and a preset a widget genuinely cannot honour
- * is what `sizes` exists to withhold.
+ * label. `sizes` is what a widget uses to withhold a preset it cannot honour:
+ * the five original cards accept all three, while the two strictly-capped
+ * five-row lists (`hitno-kasni`, `nedavno`) stop at M — a row of theirs is a
+ * title and one chip, and a full-width card would be mostly empty space.
  *
- * `deepLink` is the module id whose page the card opens (DASH-005) — the two
- * CAL widgets and the TASK one deliberately point at their own modules rather
- * than at the dashboard they are drawn on.
+ * `deepLink` is the module id whose page the card opens (DASH-005) — every
+ * widget deliberately points at its own module rather than at the dashboard it
+ * is drawn on.
  */
 const CALENDAR_WIDGETS: WidgetContract[] = [
   // The agenda card: today's events, birthdays and tasks. Owned by CAL because
@@ -40,6 +45,24 @@ const TASKS_WIDGETS: WidgetContract[] = [
     title: "dashboard.upcoming.title",
     sizes: ["S", "M", "L"],
     deepLink: "tasks",
+  },
+  // „Kasni“ and „Hitno“ (ADR-049) as one card — the two smart lists that answer
+  // „šta je već trebalo da bude gotovo, i šta gori“.
+  {
+    id: "hitno-kasni",
+    title: "dashboard.urgent.title",
+    sizes: ["S", "M"],
+    deepLink: "tasks",
+  },
+];
+
+/** NOTE's first dashboard card: the notes touched most recently (DASH-003). */
+const NOTES_WIDGETS: WidgetContract[] = [
+  {
+    id: "nedavno",
+    title: "dashboard.recentNotes.title",
+    sizes: ["S", "M"],
+    deepLink: "notes",
   },
 ];
 
@@ -70,7 +93,7 @@ const V0_MODULES: ModuleManifest[] = [
   { id: "tasks", prefix: "TASK", category: "Core experience", defaultEnabled: true, widgets: TASKS_WIDGETS },
   { id: "calendar", prefix: "CAL", category: "Core experience", defaultEnabled: true, widgets: CALENDAR_WIDGETS },
   { id: "settings", prefix: "SET", category: "Core experience", defaultEnabled: true },
-  { id: "notes", prefix: "NOTE", category: "Content & knowledge", defaultEnabled: true },
+  { id: "notes", prefix: "NOTE", category: "Content & knowledge", defaultEnabled: true, widgets: NOTES_WIDGETS },
   { id: "study", prefix: "STUDY", category: "Life hubs", defaultEnabled: true, widgets: STUDY_WIDGETS },
 ];
 

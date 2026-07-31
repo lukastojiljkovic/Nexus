@@ -265,12 +265,14 @@ export interface DashboardPageProps {
   /** Modules enabled by SET-007 flags; a disabled module's widgets draw nothing and fetch nothing. */
   enabledModules: ReadonlySet<string>;
   onOpenModule: (id: string) => void;
+  /** Opens one note (021-e's reveal intent) — what „Nedavne beleške"'s rows deep-link with. */
+  onOpenNote: (noteId: string) => void;
 }
 
 /**
  * The DASH home surface: a personalized greeting over the profile's own widget
  * layout (DASH-002 / ADR-045). The page holds the LAYOUT and nothing else — the
- * five cards are components that own their reads (`dashboardWidgets.tsx`), so a
+ * cards are components that own their reads (`dashboardWidgets.tsx`), so a
  * failing card fails alone and there is no page-wide loading gate left to hold
  * anything up.
  *
@@ -286,6 +288,7 @@ export function DashboardPage({
   registry,
   enabledModules,
   onOpenModule,
+  onOpenNote,
 }: DashboardPageProps) {
   const [layout, setLayout] = useState<DashboardWidgetInstance[] | null>(null);
   const [layoutFailed, setLayoutFailed] = useState(false);
@@ -587,6 +590,7 @@ export function DashboardPage({
                   profileId={profileId}
                   enabledModules={enabledModules}
                   onOpenModule={onOpenModule}
+                  onOpenNote={onOpenNote}
                 />
                 {landed?.instanceId === entry.instanceId && (
                   <span
