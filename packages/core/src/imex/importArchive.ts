@@ -5,11 +5,15 @@ import { validateRecurrenceRule } from "../recurrence/recurrence.js";
 import type { RecurrenceRule } from "../recurrence/recurrence.js";
 import { renderClozeCard } from "../study/clozeText.js";
 import { isEmptyTaskViewConfig, validateTaskViewConfig } from "../tasks/taskViewConfig.js";
-import { ARCHIVE_PROFILE_KINDS, DATA_FILES } from "./exportArchive.js";
+import { ARCHIVE_PROFILE_KINDS, base64ToBytes, DATA_FILES } from "./exportArchive.js";
 import type {
   ArchiveModuleId,
   ArchiveProfileKind,
   ArchiveProfilePicture,
+  ExportPrivateAttachment,
+  ExportPrivateNote,
+  ExportPrivateNotes,
+  ExportPrivateNoteVersion,
   ExportCalendarSettings,
   ExportCard,
   ExportDashboardSet,
@@ -123,6 +127,13 @@ export interface ImportManifest {
   settings: ExportSettings;
   modules: readonly { id: string; records: number }[];
   blobs: readonly { sha256: string; sizeBytes: number }[];
+  /**
+   * The private attachments' inventory (ADR-057 §6, `1.23.0`), beside `blobs`
+   * exactly as the writer lists it. OPTIONAL with the empty default — every
+   * pre-`1.23.0` archive simply has no key here, and an archive whose private
+   * notes did not ride writes `[]`, which mean the same thing.
+   */
+  privateBlobs: readonly { id: string; sizeBytes: number }[];
 }
 
 /**
@@ -164,8 +175,8 @@ export type ImportDropReason =
  * Always empty in restore mode, which refuses rather than drops.
  */
 export interface ImportDrop {
-  /** The manifest module the dropped row belonged to, from the data file it rode in. */
-  module: ArchiveModuleId;
+  /** The manifest module the dropped row belonged to, from the data file it rode in — or null for a row of `data/private-notes.ndjson`, which belongs to no module (ADR-057 §6: the private section rides outside the module choice entirely). */
+  module: ArchiveModuleId | null;
   /** The record type, or null when the row's own `type` was not one this build knows (the raw string is then in `detail`). */
   type: ArchiveRecordType | null;
   reason: ImportDropReason;
@@ -180,6 +191,14 @@ export interface ImportArchiveInput {
   ydocs: ReadonlyMap<string, Uint8Array>;
   /** Names of `blobs/<name>` entries the caller has already read AND verified hash to their own name. Bytes never reach this module. */
   blobNames: ReadonlySet<string>;
+  /**
+   * Ids of `private-blobs/<id>` entries present in the archive (ADR-057 §6).
+   * No verification is possible for them — a private attachment has no content
+   * address, by design — so presence is the whole fact. OPTIONAL with the empty
+   * default, because every pre-PRIV caller (and every archive without private
+   * notes) has nothing to name here.
+   */
+  privateBlobNames?: ReadonlySet<string>;
   /** sha256 hex over a UTF-8 string — injected exactly as `buildExportArchive` injects it, so this module imports no crypto. */
   hash: (content: string) => string;
   /** Row-level strictness. Absent means `"restore"`, so every pre-ADR-043 caller keeps the contract it was written against. */
@@ -193,6 +212,14 @@ export interface ImportArchiveResult {
   manifest: ImportManifest | null;
   /** Non-null only when NO problem has severity "error". Warnings do not withhold it. */
   data: ProfileData | null;
+  /**
+   * The archive's private notes (ADR-057 §6), BESIDE `data` rather than inside
+   * it — the same parallel-input arrangement `ExportArchiveInput.privateNotes`
+   * keeps, and non-null exactly when `data` is. Empty (never null) for every
+   * pre-`1.23.0` archive and for one whose private notes did not ride: both
+   * simply carry zero `private-note` rows, indistinguishable on purpose.
+   */
+  privateNotes: ExportPrivateNotes | null;
   /** Every row import mode salvaged past, in discovery order. Always empty in restore mode. */
   dropped: readonly ImportDrop[];
 }
@@ -208,8 +235,17 @@ export interface ImportArchiveResult {
  * is re-validated STRICTLY here (`parseTaskList`): a pre-`1.24.0` build handed
  * these members would refuse the row as malformed rather than carry it blind,
  * and the version gate owes it the honest answer instead of that baffling
- * field error. (`1.23.0` is a concurrent lane's own entry — see the note at
- * the constant.) Before it, `1.22.0` added the
+ * field error — after `1.23.0` added
+ * private notes (PRIV v1, ADR-057 §6) — the `private-note` and
+ * `private-note-version` record types, riding in their own
+ * `data/private-notes.ndjson` (a new `DATA_FILES` entry the checksum walk's
+ * union absorbs unchanged), each carrying the DECRYPTED envelope, plus the
+ * manifest's `privateBlobs` inventory of the decrypted `private-blobs/<id>`
+ * attachment entries (their own namespace — no sha256 identity exists for a
+ * private attachment, by design). Neither type needs an `ArchiveEra` flag (the
+ * whole-absent-type rule below): a pre-`1.23.0` archive simply carries zero
+ * private rows, exactly as one whose section was locked at export time does —
+ * after `1.22.0` added the
  * profile's `kind` on the manifest's own `profile` object (ADR-058, business
  * profiles) — always written on the way out, OPTIONAL with the default
  * `"personal"` on the way in, since a personal profile is the only kind any
@@ -298,10 +334,6 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-// SUPERVISOR NOTE: 1.24.0 skips 1.23.0 on purpose — a sibling lane concurrently
-// holds 1.23.0. Kept equal to `SCHEMA_VERSION` (exportArchive.ts) by
-// importArchive.test.ts; whichever lane merges second leaves the HIGHER number
-// standing and keeps both history entries.
 export const INTERCHANGE_SCHEMA_VERSION = "1.24.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
@@ -910,7 +942,9 @@ export type ArchiveRecordType =
   | "note-template"
   | "dashboard-settings"
   | "dashboard-set"
-  | "dashboard-widget";
+  | "dashboard-widget"
+  | "private-note"
+  | "private-note-version";
 
 const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "task",
@@ -949,6 +983,8 @@ const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "dashboard-settings",
   "dashboard-set",
   "dashboard-widget",
+  "private-note",
+  "private-note-version",
 ];
 
 type DataFilePath = (typeof DATA_FILES)[number];
@@ -997,6 +1033,7 @@ const FILE_RECORD_TYPES: Record<DataFilePath, readonly ArchiveRecordType[]> = {
     "note-template",
   ],
   "data/dashboard.ndjson": ["dashboard-settings", "dashboard-set", "dashboard-widget"],
+  "data/private-notes.ndjson": ["private-note", "private-note-version"],
 };
 
 /**
@@ -1005,14 +1042,20 @@ const FILE_RECORD_TYPES: Record<DataFilePath, readonly ArchiveRecordType[]> = {
  * relying on `DATA_FILES` and `ARCHIVE_MODULE_IDS` happening to be in the same
  * order. A dropped row is reported against its module (ADR-043), and a report
  * that attributed drops to the wrong module would be worse than none.
+ *
+ * `data/private-notes.ndjson` maps to null (ADR-057 §6): the private section
+ * belongs to no archive module — it rides outside the module choice and outside
+ * `countProfileModules` alike — so a drop from it is named without a module,
+ * which the report's per-module arithmetic correctly counts nowhere.
  */
-const MODULE_OF_DATA_FILE: Record<DataFilePath, ArchiveModuleId> = {
+const MODULE_OF_DATA_FILE: Record<DataFilePath, ArchiveModuleId | null> = {
   "data/tasks.ndjson": "tasks",
   "data/calendar.ndjson": "calendar",
   "data/study.ndjson": "study",
   "data/notifications.ndjson": "notifications",
   "data/notes.ndjson": "notes",
   "data/dashboard.ndjson": "dashboard",
+  "data/private-notes.ndjson": null,
 };
 
 // --- Per-record parsers, one field validator call per interface field, in --
@@ -1940,6 +1983,83 @@ function parseNoteVersionMeta(raw: Record<string, unknown>): Omit<ExportNoteVers
   return { noteId, coveredSeq, title, createdAt };
 }
 
+// --- Private notes (PRIV v1, ADR-057 §6) -------------------------------------
+
+/** Mirrors `PRIV_ATTACHMENTS_MAX_COUNT` (`apps/desktop`'s wire cap) — copied, not imported, on `NOTE_FOLDER_COLORS`' terms: this package cannot depend on the app's shared wire file. */
+const MAX_PRIVATE_NOTE_ATTACHMENTS = 50;
+
+/**
+ * The highest version `seq` an archive may carry: one BELOW the AAD's own
+ * uint32 ceiling (`privEnvelope.ts`'s `MAX_SEQ`), because a restore re-seals
+ * the live container at `max(seq) + 1` and that sum must still fit.
+ */
+const MAX_PRIVATE_VERSION_SEQ = 0xffff_fffe;
+
+/**
+ * The envelope's Yjs state: base64 whose decoded bytes are a non-empty,
+ * decodable Yjs update. The decode check is rule 7 applied where this state
+ * actually lives — INSIDE the row rather than in a `.ydoc` entry — so a
+ * damaged one is `invalid-record` naming the field, not a separate ydoc code.
+ */
+function privateYjsState(value: unknown, field: string): string {
+  const s = nonEmptyStr(value, field);
+  let bytes: Uint8Array;
+  try {
+    bytes = base64ToBytes(s);
+  } catch {
+    throw new InvalidFieldError(field);
+  }
+  if (bytes.length === 0 || !isValidYUpdate(bytes)) throw new InvalidFieldError(field);
+  return s;
+}
+
+/** The envelope's attachment references, re-validated field for field — `privEnvelope.ts`'s own shape check, restated over untrusted JSON. */
+function privateAttachments(value: unknown, field: string): ExportPrivateAttachment[] {
+  if (!Array.isArray(value)) throw new InvalidFieldError(field);
+  const entries: readonly unknown[] = value;
+  if (entries.length > MAX_PRIVATE_NOTE_ATTACHMENTS) throw new InvalidFieldError(field);
+  const refs = entries.map((entry, index): ExportPrivateAttachment => {
+    const root = expectRecord(entry, `${field}[${index}]`);
+    return {
+      id: nonEmptyStr(root.id, `${field}[${index}].id`),
+      fileName: nonEmptyStr(root.fileName, `${field}[${index}].fileName`),
+      mime: nonEmptyStr(root.mime, `${field}[${index}].mime`),
+      sizeBytes: nonNegativeInt(root.sizeBytes, `${field}[${index}].sizeBytes`),
+    };
+  });
+  // Two references to one id inside one envelope would make the restore's
+  // fresh-id remap ambiguous about nothing — refuse the shape the writer
+  // never produces.
+  if (new Set(refs.map((ref) => ref.id)).size !== refs.length) throw new InvalidFieldError(field);
+  return refs;
+}
+
+function parsePrivateNote(raw: Record<string, unknown>): ExportPrivateNote {
+  return {
+    id: nonEmptyStr(raw.id, "id"),
+    // The title may legitimately be empty (an untitled note), exactly as a
+    // public note's may — `str`, not `nonEmptyStr`.
+    title: str(raw.title, "title"),
+    yjsState: privateYjsState(raw.yjsState, "yjsState"),
+    plaintext: str(raw.plaintext, "plaintext"),
+    attachments: privateAttachments(raw.attachments, "attachments"),
+    createdAt: isoDateTime(raw.createdAt, "createdAt"),
+    updatedAt: isoDateTime(raw.updatedAt, "updatedAt"),
+  };
+}
+
+function parsePrivateNoteVersion(raw: Record<string, unknown>): ExportPrivateNoteVersion {
+  return {
+    noteId: nonEmptyStr(raw.noteId, "noteId"),
+    seq: intInRange(raw.seq, "seq", 1, MAX_PRIVATE_VERSION_SEQ),
+    title: str(raw.title, "title"),
+    yjsState: privateYjsState(raw.yjsState, "yjsState"),
+    plaintext: str(raw.plaintext, "plaintext"),
+    attachments: privateAttachments(raw.attachments, "attachments"),
+    createdAt: isoDateTime(raw.createdAt, "createdAt"),
+  };
+}
+
 // --- Collecting parsed rows with their archive origin -----------------------
 
 /** One parsed row plus where it came from — needed after the fact, to attach `path`/`line` to a reference or cycle problem discovered only once every row is known, and to name the module a dropped row belonged to. */
@@ -2066,6 +2186,8 @@ interface Collections {
   dashboardSettings: Bucket<ExportDashboardSettings>;
   dashboardSets: Bucket<ExportDashboardSet>;
   dashboardWidgets: Bucket<ExportDashboardWidget>;
+  privateNotes: Bucket<ExportPrivateNote>;
+  privateNoteVersions: Bucket<ExportPrivateNoteVersion>;
 }
 
 function newCollections(): Collections {
@@ -2083,7 +2205,7 @@ function newCollections(): Collections {
     notifications: newBucket(), noteFolders: newBucket(), noteTags: newBucket(), notes: newBucket(),
     noteTagLinks: newBucket(), noteAttachments: newBucket(), noteVersions: newBucket(),
     noteTemplates: newBucket(), dashboardSettings: newBucket(), dashboardSets: newBucket(),
-    dashboardWidgets: newBucket(),
+    dashboardWidgets: newBucket(), privateNotes: newBucket(), privateNoteVersions: newBucket(),
   };
 }
 
@@ -2321,6 +2443,26 @@ function dispatchRecord(
       pushRow(collections.dashboardSets, row.id, row, type, path, line, ctx);
       return;
     }
+    case "private-note": {
+      const row = parsePrivateNote(raw);
+      pushRow(collections.privateNotes, row.id, row, type, path, line, ctx);
+      return;
+    }
+    // A version's identity is the `(noteId, seq)` pair — migration 045's
+    // PRIMARY KEY, and the very pair its container's AAD was sealed under.
+    case "private-note-version": {
+      const row = parsePrivateNoteVersion(raw);
+      pushRow(
+        collections.privateNoteVersions,
+        `noteId=${row.noteId},seq=${row.seq}`,
+        row,
+        type,
+        path,
+        line,
+        ctx,
+      );
+      return;
+    }
   }
 }
 
@@ -2433,6 +2575,21 @@ function parseBlobs(value: unknown): { sha256: string; sizeBytes: number }[] {
   });
 }
 
+/** `blobs`' twin for the private inventory (ADR-057 §6). OPTIONAL with the empty default — no `ArchiveEra` flag, since a pre-`1.23.0` manifest's absence and a `[]` mean the same thing. A key that IS present is validated strictly. */
+function parsePrivateBlobs(value: unknown): { id: string; sizeBytes: number }[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new InvalidFieldError("privateBlobs");
+  return value.map((item, index) => {
+    const entry = expectRecord(item, `privateBlobs[${index}]`);
+    return {
+      id: nonEmptyStr(entry.id, `privateBlobs[${index}].id`),
+      // Zero is legal, unlike a content-addressed blob's size: an empty file
+      // can be privately attached, and its sealed container still has bytes.
+      sizeBytes: nonNegativeInt(entry.sizeBytes, `privateBlobs[${index}].sizeBytes`),
+    };
+  });
+}
+
 /** `checksums` rides along internally (step 4 needs it) but is stripped before the manifest is handed back — it is not part of the public `ImportManifest` contract. */
 function parseManifest(
   text: string,
@@ -2471,8 +2628,11 @@ function parseManifest(
     const modules = parseModules(root.modules);
     const checksums = parseChecksums(root.checksums);
     const blobs = parseBlobs(root.blobs);
+    const privateBlobs = parsePrivateBlobs(root.privateBlobs);
 
-    const manifest: ImportManifest = { schemaVersion, appVersion, createdAt, profile, settings, modules, blobs };
+    const manifest: ImportManifest = {
+      schemaVersion, appVersion, createdAt, profile, settings, modules, blobs, privateBlobs,
+    };
     return { manifest, checksums };
   });
 
@@ -3161,6 +3321,20 @@ function referenceRules(collections: Collections): ReferenceRule[] {
       },
       onDangling: { detach: (row) => ({ ...row, activeSetId: null }) },
     }),
+    // ADR-057 §6: a private version without its note is `note-version`'s exact
+    // case one section over — a checkpoint of a row that is not there — and
+    // takes its policy verbatim.
+    referenceRule({
+      bucket: collections.privateNoteVersions,
+      type: "private-note-version",
+      field: "noteId",
+      ref: (row) => row.noteId,
+      resolver: () => {
+        const ids = idsOf(collections.privateNotes);
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
   ];
 }
 
@@ -3321,7 +3495,7 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
   const manifestText = input.files.get("manifest.json");
   if (manifestText === undefined) {
     problems.push(problem("error", "missing-manifest", { path: "manifest.json" }));
-    return { problems, manifest: null, data: null, dropped: drops };
+    return { problems, manifest: null, data: null, privateNotes: null, dropped: drops };
   }
 
   const manifestOutcome = parseManifest(manifestText);
@@ -3335,7 +3509,7 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
           : { path: "manifest.json" },
       ),
     );
-    return { problems, manifest: null, data: null, dropped: drops };
+    return { problems, manifest: null, data: null, privateNotes: null, dropped: drops };
   }
   const { manifest, checksums } = manifestOutcome;
 
@@ -3343,7 +3517,7 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
     problems.push(
       problem("error", "unsupported-schema-version", { path: "manifest.json", detail: manifest.schemaVersion }),
     );
-    return { problems, manifest, data: null, dropped: drops };
+    return { problems, manifest, data: null, privateNotes: null, dropped: drops };
   }
 
   // --- Checksums (rule 4). Iterating the UNION of the files this build knows
@@ -3535,6 +3709,25 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
       }),
     );
   }
+  // A private attachment whose `private-blobs/<id>` entry the archive lacks
+  // (ADR-057 §6), on the attachment rows' own terms: a warning per lost FILE —
+  // once per id, however many envelopes still reference it — and the envelope's
+  // reference restores regardless. Presence is the whole check: no content
+  // address exists to verify a private blob against, by design.
+  const privateBlobNames = input.privateBlobNames ?? new Set<string>();
+  const warnedPrivateBlobIds = new Set<string>();
+  for (const entry of [
+    ...collections.privateNotes.entries,
+    ...collections.privateNoteVersions.entries,
+  ]) {
+    for (const ref of entry.row.attachments) {
+      if (privateBlobNames.has(ref.id) || warnedPrivateBlobIds.has(ref.id)) continue;
+      warnedPrivateBlobIds.add(ref.id);
+      problems.push(
+        problem("warning", "missing-blob", { path: `private-blobs/${ref.id}`, detail: ref.id }),
+      );
+    }
+  }
 
   // --- Reference integrity and cycles ------------------------------------------
   // One table (`referenceRules` / `cycleRules`), two policies: restore reports
@@ -3620,5 +3813,15 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         dashboardWidgets: rowsOf(collections.dashboardWidgets),
       };
 
-  return { problems, manifest, data, dropped: drops };
+  // Beside `data` and gated identically (ADR-057 §6): empty both for a
+  // pre-1.23.0 archive and for one whose private notes did not ride —
+  // indistinguishable on purpose, because both carry zero private rows.
+  const privateNotes: ExportPrivateNotes | null = hasError
+    ? null
+    : {
+        notes: rowsOf(collections.privateNotes),
+        versions: rowsOf(collections.privateNoteVersions),
+      };
+
+  return { problems, manifest, data, privateNotes, dropped: drops };
 }

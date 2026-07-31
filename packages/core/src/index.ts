@@ -173,6 +173,7 @@ export type { CropRect } from "./files/squareCrop.js";
 export {
   ARCHIVE_MODULE_IDS,
   ARCHIVE_PROFILE_KINDS,
+  base64ToBytes,
   buildExportArchive,
   countProfileModules,
   DATA_FILES,
@@ -205,6 +206,10 @@ export type {
   ExportNoteVersion,
   ExportNotification,
   ExportPerson,
+  ExportPrivateAttachment,
+  ExportPrivateNote,
+  ExportPrivateNotes,
+  ExportPrivateNoteVersion,
   ExportRenewal,
   ExportReviewLogEntry,
   ExportSettings,

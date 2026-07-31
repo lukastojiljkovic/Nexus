@@ -61,8 +61,28 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * that into the truthful answer an older reader owes a newer archive, exactly
  * as `1.16.0` did when `viewConfig` itself arrived.
  *
- * `1.23.0` is deliberately not this entry: it is reserved by a concurrent
- * change (see the note at the constant below).
+ * `1.23.0` adds private notes (PRIV v1, ADR-057 §6): the record types
+ * `private-note` and `private-note-version`, riding in their OWN
+ * `data/private-notes.ndjson` — a new `DATA_FILES` entry, checksummed like the
+ * six before it — each carrying the DECRYPTED envelope (`ExportPrivateNote`):
+ * the archive's own passphrase is the protection, the same trust everything
+ * else in it already rides on, and a sealed-forever export would be unreadable
+ * the moment the profile's Recovery Kit is regenerated. Private attachment
+ * BYTES travel decrypted as `private-blobs/<attachment id>` entries — their own
+ * zip directory, deliberately NOT the content-addressed `blobs/` union, because
+ * no sha256 identity exists for a private attachment by design (`privEnvelope.ts`'s
+ * no-existence-oracle rule) — and are listed in the manifest's `privateBlobs`
+ * exactly as the blob list is. Markdown mirrors live under
+ * `notes-private/<id>.md`, keyed by ID and never by title (see the mirror loop's
+ * comment). Neither record type needs an `ArchiveEra` flag (the parser's own
+ * precedent: a whole absent type is never ambiguous — an older archive simply
+ * carries none). Whether private notes ride AT ALL is the writer's gate, not
+ * this builder's: main supplies `ExportArchiveInput.privateNotes` only while
+ * the PRIV section is unlocked and the export is encrypted (NXA1) — a locked
+ * section or a plaintext export excludes them with a named skip in the export
+ * result. A MINOR bump by the same honesty every entry below made: an older
+ * reader handed an archive carrying someone's most private notes would restore
+ * a profile in which they are simply gone.
  *
  * `1.22.0` adds the profile's `kind` (ADR-058, business profiles): one field on
  * the manifest's own `profile` object, ALWAYS written — what kind of profile an
@@ -156,10 +176,6 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-// SUPERVISOR NOTE: this lane takes 1.24.0, skipping 1.23.0, because a sibling
-// lane concurrently holds 1.23.0 for its own addition. Whichever lane merges
-// second must keep BOTH history entries and leave this constant at the higher
-// number; the skip is deliberate, not a gap to "fix".
 const SCHEMA_VERSION = "1.24.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
@@ -1038,6 +1054,84 @@ export interface ProfileData {
   dashboardWidgets: readonly ExportDashboardWidget[];
 }
 
+// --- Private notes (PRIV v1, ADR-057 §6) ------------------------------------
+
+/**
+ * One private attachment's reference as the interchange carries it — the
+ * decrypted envelope's own `PrivAttachmentRef` (`priv/privEnvelope.ts`), field
+ * for field. `id` is the random id the sealed blob was named by on disk AND the
+ * name of the archive's decrypted `private-blobs/<id>` entry; it is NOT a
+ * content address, by design (no sha256 identity exists for a private
+ * attachment — `privEnvelope.ts`'s no-existence-oracle rule), and a restore
+ * re-seals the bytes under an entirely fresh id anyway.
+ */
+export interface ExportPrivateAttachment {
+  id: string;
+  fileName: string;
+  mime: string;
+  sizeBytes: number;
+}
+
+/**
+ * One private note, DECRYPTED (ADR-057 §6): the envelope's own fields plus the
+ * row's cleartext timestamps. Rides as a `private-note` record in
+ * `data/private-notes.ndjson` — and ONLY when the writer's gate lets private
+ * notes into the archive at all (see `SCHEMA_VERSION`'s `1.23.0` entry). The
+ * archive's passphrase is the protection: inside the container this row enjoys
+ * exactly the trust every other record does, and carrying the envelope sealed
+ * instead would make the export unreadable after any kit regeneration.
+ */
+export interface ExportPrivateNote {
+  id: string;
+  title: string;
+  /** The note's whole Yjs state, base64 (`base64ToBytes` is the codec both sides use). */
+  yjsState: string;
+  /** The flat text mirror the in-memory private search folds at unlock. */
+  plaintext: string;
+  attachments: readonly ExportPrivateAttachment[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One surviving version of a private note: the decrypted envelope it holds,
+ * at the sequence its container was sealed under — a restore re-seals it at
+ * that same `seq`, so the live row's `maxSeq + 1` arithmetic survives the trip.
+ */
+export interface ExportPrivateNoteVersion {
+  noteId: string;
+  seq: number;
+  title: string;
+  yjsState: string;
+  plaintext: string;
+  attachments: readonly ExportPrivateAttachment[];
+  createdAt: string;
+}
+
+/** The private section's whole interchange payload — what `ExportArchiveInput.privateNotes` supplies and `parseImportArchive` reads back. */
+export interface ExportPrivateNotes {
+  notes: readonly ExportPrivateNote[];
+  versions: readonly ExportPrivateNoteVersion[];
+}
+
+/** The empty section every export without private notes writes — one shared value, never mutated. */
+const EMPTY_PRIVATE_NOTES: ExportPrivateNotes = { notes: [], versions: [] };
+
+/**
+ * The interchange's base64 codec for `yjsState`, WebCrypto-era platform-neutral
+ * (no `node:` import, no `Buffer` — `privEnvelope.ts`'s discipline): `atob`
+ * exists in every environment this package runs in. Throws on input that is not
+ * base64 at all; the caller decides what that means (the reader refuses the
+ * row, the builder never sees one — its input came out of an authenticated
+ * envelope).
+ */
+export function base64ToBytes(value: string): Uint8Array {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
 /**
  * A profile's picture as the manifest carries it (SET-001, migration 040): the
  * blob store's plaintext sha256, the mime the bytes are served as, and their
@@ -1107,6 +1201,23 @@ export interface ExportArchiveInput {
    * (`RestoreStore.replaceProfileData`, ADR-023).
    */
   modules?: ReadonlySet<ArchiveModuleId>;
+  /**
+   * The profile's private notes, DECRYPTED (ADR-057 §6) — a parallel input
+   * beside `data`, deliberately NOT a `ProfileData` member: `ProfileData` is
+   * the shape `gatherProfileData` reads, a restore's undo snapshot captures and
+   * `RestoreStore` replaces, and private notes travel through none of those
+   * paths (they are sealed rows the gather cannot open and the undo must carry
+   * as bytes). ABSENT whenever they do not ride — a locked section, a plaintext
+   * export, a section never set up, or a caller (the scheduled backup) that
+   * never carries them — which writes an empty `data/private-notes.ndjson`,
+   * indistinguishable from a profile with no private notes, on purpose.
+   *
+   * Also deliberately OUTSIDE the module choice (IMEX-003), like `settings`
+   * and the profile picture: the private section belongs to no archive module,
+   * and inventing one for it would be the second module↔collection mapping this
+   * whole arrangement avoids.
+   */
+  privateNotes?: ExportPrivateNotes;
   /** sha256 hex over a UTF-8 string, injected so this module never imports `node:crypto`. */
   hash: (content: string) => string;
 }
@@ -1120,7 +1231,9 @@ export interface ExportArchiveInput {
  */
 export type ExportBinaryEntry =
   | { kind: "bytes"; path: string; bytes: Uint8Array }
-  | { kind: "attachment"; path: string; sha256: string; sizeBytes: number };
+  | { kind: "attachment"; path: string; sha256: string; sizeBytes: number }
+  /** A private attachment's decrypted bytes (ADR-057 §6), resolved by the writer's own private-blob reader — named by the envelope's random id, never by a content hash (none exists for it, by design). */
+  | { kind: "private-blob"; path: string; id: string; sizeBytes: number };
 
 /** The built archive: every file's exact content, plus the counts the manifest itself also carries (for the caller's own reporting, e.g. the Settings page's confirmation line). */
 export interface ExportArchive {
@@ -1138,6 +1251,13 @@ export const DATA_FILES = [
   "data/notifications.ndjson",
   "data/notes.ndjson",
   "data/dashboard.ndjson",
+  // Private notes (ADR-057 §6, `1.23.0`): their own file, ALWAYS written —
+  // empty whenever they do not ride, which is also what a profile with no
+  // private notes writes, indistinguishable on purpose. Appending here is what
+  // the union-walk comment above promises stays backward-compatible: a pre-1.23
+  // archive neither carries the file nor declares its checksum, and
+  // absent-and-undeclared is nothing at all.
+  "data/private-notes.ndjson",
 ] as const;
 
 /** The manifest's module ids, in manifest order — the grouping `countProfileModules` counts by and `buildExportArchive` builds `manifest.modules` from, so the two can never disagree. */
@@ -1442,12 +1562,23 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     ...data.dashboardWidgets.map((row) => ({ type: "dashboard-widget", ...row })),
   ]);
 
+  // Private notes (ADR-057 §6): notes first, then the versions that reference
+  // them — the "everything a row points at came before it" reading every other
+  // data file keeps. Absent input writes the empty file, exactly what a profile
+  // with no private notes writes.
+  const privateNotes = input.privateNotes ?? EMPTY_PRIVATE_NOTES;
+  const privateNotesNdjson = toNdjson([
+    ...privateNotes.notes.map((row) => ({ type: "private-note", ...row })),
+    ...privateNotes.versions.map((row) => ({ type: "private-note-version", ...row })),
+  ]);
+
   files.set("data/tasks.ndjson", tasksNdjson);
   files.set("data/calendar.ndjson", calendarNdjson);
   files.set("data/study.ndjson", studyNdjson);
   files.set("data/notifications.ndjson", notificationsNdjson);
   files.set("data/notes.ndjson", notesNdjson);
   files.set("data/dashboard.ndjson", dashboardNdjson);
+  files.set("data/private-notes.ndjson", privateNotesNdjson);
 
   // --- Notes: Markdown mirror + binary entries (ADR-022 section 3) -------
   const binaries: ExportBinaryEntry[] = [];
@@ -1509,6 +1640,49 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     declareBlob(input.profile.picture.hash, input.profile.picture.sizeBytes);
   }
 
+  // --- Private notes (ADR-057 §6): Markdown mirrors + decrypted blob entries.
+  //
+  // The mirror path is `notes-private/<id>.md` — the ID, never the title,
+  // deliberately DIVERGING from public notes' titled `notes/**` paths: a zip's
+  // entry listing is readable without the archive passphrase in some tools'
+  // metadata views, and even inside the sealed container a title has no
+  // business existing anywhere the note's content does not. Attachments have no
+  // Markdown story at all (an empty context — no `blobs/` link could name a
+  // private blob anyway), so an attachment image simply renders nothing.
+  for (const note of privateNotes.notes) {
+    const state = base64ToBytes(note.yjsState);
+    files.set(
+      `notes-private/${note.id}.md`,
+      state.length > 0
+        ? renderNoteMarkdown(state, { attachments: EMPTY_NOTE_ATTACHMENTS, rootPrefix: "../" })
+        : "",
+    );
+  }
+  // The decrypted attachment bytes, declared by the envelope's own random id —
+  // their OWN `private-blobs/` namespace, never the content-addressed `blobs/`
+  // union (no sha256 identity exists for them, by design). Deduplicated by id
+  // across the live envelopes and every version that still references the same
+  // attachment, so one file travels once however many envelopes name it.
+  const privateBlobSizeById = new Map<string, number>();
+  for (const row of [...privateNotes.notes, ...privateNotes.versions]) {
+    for (const ref of row.attachments) {
+      if (privateBlobSizeById.has(ref.id)) continue;
+      privateBlobSizeById.set(ref.id, ref.sizeBytes);
+      binaries.push({
+        kind: "private-blob",
+        path: `private-blobs/${ref.id}`,
+        id: ref.id,
+        sizeBytes: ref.sizeBytes,
+      });
+    }
+  }
+  // Id-sorted for the reason the blob list is sha-sorted: the manifest must
+  // read identically regardless of which envelope happened to name an
+  // attachment first.
+  const privateBlobs = [...privateBlobSizeById.entries()]
+    .map(([id, sizeBytes]) => ({ id, sizeBytes }))
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
   // The calendar as a standards-honest `.ics` beside the lossless NDJSON
   // (IMEX-001's "ICS for calendar" clause, CAL-008). A convenience copy for
   // whatever else the user keeps a calendar in — a restore reads the NDJSON and
@@ -1558,6 +1732,9 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     modules: ARCHIVE_MODULE_IDS.map((id) => ({ id, records: byModule[id] })),
     checksums,
     blobs,
+    // The private attachments' inventory (ADR-057 §6), beside the blob list it
+    // mirrors — always written, empty whenever no private notes ride.
+    privateBlobs,
   };
   files.set("manifest.json", JSON.stringify(manifest, null, 2));
 

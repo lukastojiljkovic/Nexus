@@ -50,6 +50,7 @@ import type {
   MarkdownImportSource,
   NoteFolder,
   NotificationSource,
+  PrivateNotesExportSkip,
   PrivStatus,
   Profile,
   ProfileKind,
@@ -618,6 +619,10 @@ function BackupSection({ profileId }: BackupSectionProps) {
     totalRecords: number;
     missingAttachments: number;
     encrypted: boolean;
+    /** How many private notes rode in the archive (ADR-057 §6) — zero whenever they did not. */
+    privateNotes: number;
+    /** Why the private section did NOT ride, or null — exactly one skip sentence is ever shown. */
+    privateNotesSkipped: PrivateNotesExportSkip | null;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -676,6 +681,8 @@ function BackupSection({ profileId }: BackupSectionProps) {
           totalRecords: outcome.totalRecords,
           missingAttachments: outcome.missingAttachments,
           encrypted: outcome.encrypted,
+          privateNotes: outcome.privateNotes,
+          privateNotesSkipped: outcome.privateNotesSkipped,
         });
       }
     } catch (exportError) {
@@ -785,6 +792,21 @@ function BackupSection({ profileId }: BackupSectionProps) {
           {s.missingAttachmentsPrefix} {saved.missingAttachments}{" "}
           {dayUnit(saved.missingAttachments, s.missingAttachmentsUnitOne, s.missingAttachmentsUnitMany)}{" "}
           {s.missingAttachmentsSuffix}
+        </p>
+      )}
+      {/* ADR-057 §6: the private section's fate, stated whenever there was one
+          to decide about — included with its count, or excluded with the named
+          reason. Never both: the result carries a count XOR a skip. */}
+      {saved != null && saved.privateNotes > 0 && (
+        <p className="set__section-caption">
+          {s.privateNotesIncludedPrefix} ({saved.privateNotes}).
+        </p>
+      )}
+      {saved != null && saved.privateNotesSkipped != null && (
+        <p className="set__error">
+          {saved.privateNotesSkipped === "locked"
+            ? s.privateNotesSkippedLocked
+            : s.privateNotesSkippedPlaintext}
         </p>
       )}
       {error != null && <p className="set__error">{error}</p>}
@@ -1390,6 +1412,17 @@ function RestoreSection({ profileId, hits }: RestoreSectionProps) {
               {dayUnit(state.preview.corruptBlobs, s.corruptBlobsUnitOne, s.corruptBlobsUnitMany)}{" "}
               {s.corruptBlobsSuffix}
             </p>
+          )}
+          {/* ADR-057 §6: the archive carrying private notes is stated whenever
+              it does, and the skip sentence joins it only when this apply will
+              NOT restore them (locked / never-set-up section). */}
+          {state.preview.privateNotes != null && (
+            <p className="set__section-caption">
+              {s.privateNotesIncomingPrefix} ({state.preview.privateNotes.count}).
+            </p>
+          )}
+          {state.preview.privateNotes != null && !state.preview.privateNotes.willRestore && (
+            <p className="set__error">{s.privateNotesSkippedNotice}</p>
           )}
 
           <div className="set__restore-actions">

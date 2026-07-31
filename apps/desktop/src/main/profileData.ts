@@ -26,9 +26,15 @@ import type {
   ExportSettings,
   ProfileData,
 } from "@nexus/core";
-import type { RestoredNoteDerived } from "@nexus/db";
+import type {
+  RestoredNoteDerived,
+  RestoredPrivateNote,
+  RestoredPrivateNoteVersion,
+  RestoredPrivateRows,
+} from "@nexus/db";
 import type {
   CalendarSettingsStore,
+  PrivateNoteStore,
   CardStore,
   DashboardSetStore,
   DashboardSettingsStore,
@@ -333,4 +339,37 @@ export function deriveRestoredNotes(
     });
   }
   return derived;
+}
+
+/**
+ * The undo snapshot's PRIVATE half (ADR-057 §6): every sealed container of one
+ * profile's private section, verbatim — bytes, never envelopes. Deliberately
+ * OUTSIDE `ProfileData` and outside `gatherProfileData`, unlike every public
+ * collection: the gather reads live rows in cleartext, while these rows are
+ * opaque without the PRIV DEK — and undoing a restore must NOT need the DEK,
+ * because the section may well have locked between the apply and the undo
+ * click. Captured only when a restore is actually about to replace the private
+ * tables, and put back byte-for-byte through the same conditional
+ * `privateSealed` path (`RestoreStore.replaceProfileData`) it was captured for.
+ */
+export function gatherPrivateSealedRows(store: PrivateNoteStore): RestoredPrivateRows {
+  const notes: RestoredPrivateNote[] = [];
+  const versions: RestoredPrivateNoteVersion[] = [];
+  for (const meta of store.list()) {
+    notes.push({
+      id: meta.id,
+      sealed: store.readSealed(meta.id),
+      createdAt: meta.createdAt,
+      updatedAt: meta.updatedAt,
+    });
+    for (const version of store.listVersions(meta.id)) {
+      versions.push({
+        noteId: meta.id,
+        seq: version.seq,
+        sealed: store.readVersion(meta.id, version.seq),
+        createdAt: version.createdAt,
+      });
+    }
+  }
+  return { notes, versions };
 }

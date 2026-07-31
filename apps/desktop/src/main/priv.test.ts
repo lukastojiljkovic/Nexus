@@ -2,7 +2,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { openPrivNote, type PrivNoteEnvelope } from "@nexus/core";
+import * as Y from "yjs";
+import { openPrivNote, type ExportPrivateNotes, type PrivNoteEnvelope } from "@nexus/core";
 import {
   derivePrivCredentialKey,
   generateRecoveryCode,
@@ -22,18 +23,22 @@ import { PRIV_ATTACHMENTS_MAX_COUNT } from "../shared/ipc.js";
 import {
   PRIV_VERSION_WRITE_CADENCE,
   privAddAttachment,
+  privCollectForExport,
   privDelete,
   privHandleMinimize,
   privList,
   privLock,
   privOpenAttachment,
   privRead,
+  privReadAttachmentForExport,
+  privResealForRestore,
   privSearch,
   privSessionBlobKey,
   privSetLockPrefs,
   privSetup,
   privStatus,
   privUnlock,
+  privUnlockedFor,
   privWrite,
   resetPrivStateForTests,
   rewrapPrivKitsForNewCode,
@@ -555,5 +560,203 @@ describe("rewrapPrivKitsForNewCode", () => {
     const settingsB = new PrivateSettingsStore(db.raw, otherProfile).get();
     expect(settingsB?.kitSalt).toBeNull();
     expect(settingsB?.kitWrap).toBeNull();
+  });
+});
+
+// --- Interchange (IMEX, ADR-057 §6) ------------------------------------------
+
+function b64(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString("base64");
+}
+
+/** A real, decodable Yjs state holding one `attachmentImage` node referencing `attachmentId` — what the re-seal's state remap has to rewrite. */
+function stateWithAttachment(attachmentId: string): Uint8Array {
+  const doc = new Y.Doc();
+  const el = new Y.XmlElement("attachmentImage");
+  doc.getXmlFragment("default").push([el]);
+  el.setAttribute("attachmentId", attachmentId);
+  const snapshot = Y.encodeStateAsUpdate(doc);
+  doc.destroy();
+  return snapshot;
+}
+
+/** Every `attachmentImage` node's `attachmentId` in `state`, in document order. */
+function attachmentIdsOf(state: Uint8Array): string[] {
+  const doc = new Y.Doc();
+  try {
+    Y.applyUpdate(doc, state);
+    return doc
+      .getXmlFragment("default")
+      .toArray()
+      .filter((node): node is Y.XmlElement => node instanceof Y.XmlElement && node.nodeName === "attachmentImage")
+      .map((node) => node.getAttribute("attachmentId") ?? "");
+  } finally {
+    doc.destroy();
+  }
+}
+
+describe("privCollectForExport (ADR-057 §6)", () => {
+  it("answers null/null while there is nothing to carry — no setup, or zero notes", async () => {
+    const deps = makeDeps();
+    expect(await privCollectForExport(deps, profileId, true)).toEqual({ data: null, skipped: null });
+
+    await setUp(deps);
+    // Set up, unlocked, zero notes: nothing rides AND nothing was skipped —
+    // even for a plaintext export, which has nothing to exclude.
+    expect(await privCollectForExport(deps, profileId, false)).toEqual({ data: null, skipped: null });
+  });
+
+  it("names 'plaintext' for an unencrypted export — dominant even over a locked section", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    await privWrite(deps, profileId, null, envelope());
+
+    expect(await privCollectForExport(deps, profileId, false)).toEqual({
+      data: null,
+      skipped: "plaintext",
+    });
+    privLock();
+    // Unlocking would change nothing about shipping data in the clear.
+    expect(await privCollectForExport(deps, profileId, false)).toEqual({
+      data: null,
+      skipped: "plaintext",
+    });
+  });
+
+  it("names 'locked' for an encrypted export while the section is sealed", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    await privWrite(deps, profileId, null, envelope());
+    privLock();
+
+    expect(await privCollectForExport(deps, profileId, true)).toEqual({
+      data: null,
+      skipped: "locked",
+    });
+    expect(privUnlockedFor(profileId)).toBe(false);
+  });
+
+  it("decrypts every live envelope AND every surviving version while unlocked and encrypted", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    const { id } = await privWrite(deps, profileId, null, envelope({ title: "Prva" }));
+    // Drive the write cadence to its capturing write, so a real version row
+    // exists: the state being replaced lands sealed at seq 1.
+    for (let write = 2; write <= PRIV_VERSION_WRITE_CADENCE; write += 1) {
+      await privWrite(deps, profileId, id, envelope({ title: `Prva v${write}` }));
+    }
+
+    const outcome = await privCollectForExport(deps, profileId, true);
+    expect(outcome.skipped).toBeNull();
+    if (outcome.data === null) throw new Error("expected the decrypted section");
+    expect(outcome.data.notes.map((note) => [note.id, note.title])).toEqual([
+      [id, `Prva v${PRIV_VERSION_WRITE_CADENCE}`],
+    ]);
+    expect(outcome.data.versions.map((version) => [version.noteId, version.seq, version.title])).toEqual([
+      [id, 1, `Prva v${PRIV_VERSION_WRITE_CADENCE - 1}`],
+    ]);
+  });
+});
+
+describe("privReadAttachmentForExport (ADR-057 §6)", () => {
+  it("answers the plaintext under the open section, and null for a lock or an unknown id", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    const bytes = new Uint8Array([9, 8, 7]);
+    const ref = await privAddAttachment(deps, profileId, {
+      fileName: "slika.png",
+      mime: "image/png",
+      bytes,
+    });
+
+    expect(await privReadAttachmentForExport(deps, ref.id)).toEqual(bytes);
+    expect(await privReadAttachmentForExport(deps, "no-such-id")).toBeNull();
+    privLock();
+    expect(await privReadAttachmentForExport(deps, ref.id)).toBeNull();
+  });
+});
+
+describe("privResealForRestore (ADR-057 §6)", () => {
+  const ARCHIVE_ATT_A = "0a1b2c3d-1111-4222-8333-abcdefabcdef";
+  const ARCHIVE_ATT_B = "ffffffff-2222-4333-8444-000000000001";
+
+  function archiveData(): ExportPrivateNotes {
+    return {
+      notes: [
+        {
+          id: "arch-note",
+          title: "Iz arhive",
+          yjsState: b64(stateWithAttachment(ARCHIVE_ATT_A)),
+          plaintext: "sadržaj iz arhive",
+          attachments: [
+            { id: ARCHIVE_ATT_A, fileName: "slika.png", mime: "image/png", sizeBytes: 3 },
+            { id: ARCHIVE_ATT_B, fileName: "nema.pdf", mime: "application/pdf", sizeBytes: 5 },
+          ],
+          createdAt: "2026-02-01T00:00:00.000Z",
+          updatedAt: "2026-02-02T00:00:00.000Z",
+        },
+      ],
+      versions: [
+        {
+          noteId: "arch-note",
+          seq: 3,
+          title: "Iz arhive (staro)",
+          yjsState: b64(stateWithAttachment(ARCHIVE_ATT_A)),
+          plaintext: "staro",
+          attachments: [{ id: ARCHIVE_ATT_A, fileName: "slika.png", mime: "image/png", sizeBytes: 3 }],
+          createdAt: "2026-02-01T00:00:00.000Z",
+        },
+      ],
+    };
+  }
+
+  it("answers null while the section is locked or was never set up — the named-skip path", async () => {
+    const deps = makeDeps();
+    expect(await privResealForRestore(deps, profileId, archiveData(), async () => null)).toBeNull();
+    await setUp(deps);
+    privLock();
+    expect(await privResealForRestore(deps, profileId, archiveData(), async () => null)).toBeNull();
+  });
+
+  it("re-seals under the CURRENT DEK — live at max(version seq) + 1, versions at their own seqs — with fresh attachment ids threaded through refs AND the Yjs state", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    const archiveBytes = new Uint8Array([1, 2, 3]);
+    const outcome = await privResealForRestore(deps, profileId, archiveData(), async (id) =>
+      id === ARCHIVE_ATT_A ? archiveBytes : null,
+    );
+    if (outcome === null) throw new Error("expected a re-seal");
+
+    // ATT_A resolved and was re-sealed under ONE fresh id shared by the live
+    // envelope and the version; ATT_B could not be supplied and is counted.
+    expect(outcome.addedBlobIds).toHaveLength(1);
+    expect(outcome.missingBlobs).toBe(1);
+    const freshA = outcome.addedBlobIds[0];
+    if (freshA === undefined) throw new Error("expected a fresh blob id");
+    expect(freshA).not.toBe(ARCHIVE_ATT_A);
+    // The fresh sealed file opens under the live session's own blob key.
+    expect(await privOpenAttachment(deps, profileId, freshA)).toEqual(archiveBytes);
+
+    const liveRow = outcome.rows.notes[0];
+    const versionRow = outcome.rows.versions[0];
+    if (liveRow === undefined || versionRow === undefined) throw new Error("expected rows");
+    expect(liveRow).toMatchObject({
+      id: "arch-note",
+      createdAt: "2026-02-01T00:00:00.000Z",
+      updatedAt: "2026-02-02T00:00:00.000Z",
+    });
+    expect(versionRow).toMatchObject({ noteId: "arch-note", seq: 3 });
+
+    // The live container is bound to max(seq) + 1 = 4 and opens under the
+    // CURRENT DEK; the version opens at its own archive seq.
+    const live = await openVersionForTest(deps, "arch-note", 4, liveRow.sealed);
+    expect(live.title).toBe("Iz arhive");
+    expect(live.attachments.map((ref) => ref.id)).toEqual([freshA, expect.not.stringMatching(ARCHIVE_ATT_B)]);
+    expect(attachmentIdsOf(Buffer.from(live.yjsState, "base64"))).toEqual([freshA]);
+
+    const version = await openVersionForTest(deps, "arch-note", 3, versionRow.sealed);
+    expect(version.title).toBe("Iz arhive (staro)");
+    expect(version.attachments.map((ref) => ref.id)).toEqual([freshA]);
+    expect(attachmentIdsOf(Buffer.from(version.yjsState, "base64"))).toEqual([freshA]);
   });
 });

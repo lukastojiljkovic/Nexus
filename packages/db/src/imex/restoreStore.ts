@@ -15,6 +15,28 @@ export interface RestoredNoteDerived {
   linkTargets: readonly string[];
 }
 
+/** One private note's row exactly as `private_notes` holds it (migration 045): the SEALED container verbatim, plus the cleartext timestamps. Bytes, never envelopes — writing these needs no key, which is what lets a restore's undo replay them while the section is locked. */
+export interface RestoredPrivateNote {
+  id: string;
+  sealed: Uint8Array;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One private version row, on the same bytes-verbatim terms — `seq` is the sequence its container's AAD was sealed under, stored faithfully like `PrivateNoteStore` stores it. */
+export interface RestoredPrivateNoteVersion {
+  noteId: string;
+  seq: number;
+  sealed: Uint8Array;
+  createdAt: string;
+}
+
+/** The private tables' whole replacement payload (ADR-057 §6): what a private-carrying restore writes after main re-seals under the current DEK, and what undo captured before it. */
+export interface RestoredPrivateRows {
+  notes: readonly RestoredPrivateNote[];
+  versions: readonly RestoredPrivateNoteVersion[];
+}
+
 export interface RestoreProfileInput {
   /** The profile's name from the archive's manifest — the restore renames the target profile to it. */
   profileName: string;
@@ -32,6 +54,18 @@ export interface RestoreProfileInput {
   data: ProfileData;
   /** Keyed by note id. REQUIRED for every note whose `snapshot` is non-null. */
   derived: ReadonlyMap<string, RestoredNoteDerived>;
+  /**
+   * The private tables' CONDITIONAL replacement (ADR-057 §6). Present ⇒
+   * `private_notes`/`private_note_versions` are wiped for this profile and
+   * refilled with exactly these sealed rows, inside the same transaction as
+   * everything else. Absent (or null) ⇒ the two tables are NOT TOUCHED AT ALL
+   * — the pre-PRIV behaviour every existing caller keeps, and the safe
+   * direction: an archive carrying no private records, or a target whose
+   * section is locked, must never cost a profile its sealed rows. Optional
+   * precisely because absence means "leave them standing", which — unlike a
+   * forgotten `ProfileData` member — loses nothing.
+   */
+  privateSealed?: RestoredPrivateRows | null;
 }
 
 /**
@@ -236,6 +270,10 @@ export class RestoreStore {
   private readonly insertDashboardSettings: Database.Statement;
   private readonly insertDashboardSet: Database.Statement;
   private readonly insertDashboardWidget: Database.Statement;
+  private readonly wipePrivateNoteVersions: Database.Statement;
+  private readonly wipePrivateNotes: Database.Statement;
+  private readonly insertPrivateNote: Database.Statement;
+  private readonly insertPrivateNoteVersion: Database.Statement;
 
   constructor(
     private readonly db: DatabaseHandle,
@@ -455,6 +493,23 @@ export class RestoreStore {
       `INSERT INTO dashboard_widgets
          (profile_id, instance_id, widget_id, size, set_id, position, config, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    // The private tables' CONDITIONAL wipe (ADR-057 §6) — deliberately NOT in
+    // `RESTORE_WIPE_TABLES`, which runs unconditionally: these two run only
+    // when `privateSealed` is supplied. Children before parents, scoped through
+    // the parent like every other no-profile-column table above.
+    this.wipePrivateNoteVersions = db.prepare(
+      `DELETE FROM private_note_versions
+        WHERE note_id IN (SELECT id FROM private_notes WHERE profile_id = ?)`,
+    );
+    this.wipePrivateNotes = db.prepare(`DELETE FROM private_notes WHERE profile_id = ?`);
+    this.insertPrivateNote = db.prepare(
+      `INSERT INTO private_notes (id, profile_id, sealed, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    );
+    this.insertPrivateNoteVersion = db.prepare(
+      `INSERT INTO private_note_versions (note_id, seq, sealed, created_at)
+       VALUES (?, ?, ?, ?)`,
     );
   }
 
@@ -965,6 +1020,31 @@ export class RestoreStore {
           widget.updatedAt,
         );
         written += 1;
+      }
+
+      // The private tables' CONDITIONAL replace (ADR-057 §6): wiped and
+      // refilled ONLY when the caller supplied sealed rows — a restore whose
+      // archive carried private records into an unlocked section, or an undo
+      // putting the pre-restore rows back. Otherwise UNTOUCHED, deliberately:
+      // sealed rows this write knows nothing about must never be collateral.
+      // Bytes verbatim — this store holds no key and needs none (SEC-ZK-05);
+      // whoever produced these rows already sealed them under the right DEK.
+      const privateSealed = input.privateSealed ?? null;
+      if (privateSealed !== null) {
+        this.wipePrivateNoteVersions.run(this.profileId);
+        this.wipePrivateNotes.run(this.profileId);
+        for (const note of privateSealed.notes) {
+          this.insertPrivateNote.run(
+            note.id, this.profileId, Buffer.from(note.sealed), note.createdAt, note.updatedAt,
+          );
+          written += 1;
+        }
+        for (const version of privateSealed.versions) {
+          this.insertPrivateNoteVersion.run(
+            version.noteId, version.seq, Buffer.from(version.sealed), version.createdAt,
+          );
+          written += 1;
+        }
       }
 
       return written;

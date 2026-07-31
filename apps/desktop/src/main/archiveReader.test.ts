@@ -376,6 +376,75 @@ describe("archiveReader", () => {
     });
   });
 
+  // ADR-057 §6: the decrypted private attachments, in their own namespace.
+  // Presence-only — a private blob has no content address to verify against —
+  // and the entry name must be exactly the lowercase UUID `main`'s own sealed
+  // store names files by; anything else under `private-blobs/` is skipped.
+  describe("private blobs (ADR-057 §6)", () => {
+    const PRIVATE_ID = "0a1b2c3d-1111-4222-8333-abcdefabcdef";
+
+    it("records a private-blob entry by id and reads its bytes on demand", async () => {
+      const content = Buffer.from("private attachment bytes", "utf8");
+      const zipBytes = await buildZip([
+        { path: "manifest.json", content: textEntry("{}") },
+        { path: `private-blobs/${PRIVATE_ID}`, content },
+      ]);
+      const filePath = fixturePath("archive.nexus.zip");
+      await writeFile(filePath, zipBytes);
+
+      const archive = await openArchive(filePath, null);
+      try {
+        expect(archive.privateBlobNames).toEqual(new Set([PRIVATE_ID]));
+        expect(Buffer.from(await archive.readPrivateBlob(PRIVATE_ID))).toEqual(content);
+      } finally {
+        await archive.close();
+      }
+    });
+
+    it("skips a non-UUID name under private-blobs/ and rejects readPrivateBlob for it — and after close()", async () => {
+      const zipBytes = await buildZip([
+        { path: "manifest.json", content: textEntry("{}") },
+        { path: "private-blobs/..strange", content: Buffer.from("nope") },
+        { path: `private-blobs/${PRIVATE_ID.toUpperCase()}`, content: Buffer.from("nope") },
+        { path: `private-blobs/${PRIVATE_ID}`, content: Buffer.from("da") },
+      ]);
+      const filePath = fixturePath("archive.nexus.zip");
+      await writeFile(filePath, zipBytes);
+
+      const archive = await openArchive(filePath, null);
+      try {
+        expect(archive.privateBlobNames).toEqual(new Set([PRIVATE_ID]));
+        await expect(archive.readPrivateBlob("..strange")).rejects.toThrow();
+      } finally {
+        await archive.close();
+      }
+      await expect(archive.readPrivateBlob(PRIVATE_ID)).rejects.toThrow();
+    });
+
+    it("caps one private-blob entry at maxPrivateBlobBytes — its OWN bound, wider than the public blob cap", async () => {
+      const content = Buffer.alloc(64, 1);
+      const zipBytes = await buildZip([
+        { path: "manifest.json", content: textEntry("{}") },
+        { path: `private-blobs/${PRIVATE_ID}`, content },
+      ]);
+      const filePath = fixturePath("archive.nexus.zip");
+      await writeFile(filePath, zipBytes);
+
+      const limits: ArchiveLimits = { ...DEFAULT_ARCHIVE_LIMITS, maxPrivateBlobBytes: 63 };
+      await expectArchiveError(() => openArchive(filePath, null, limits), "too-large");
+
+      // The PUBLIC blob cap does not gate a private entry: tighter than the
+      // entry's size on the wrong axis still opens.
+      const publicTight: ArchiveLimits = { ...DEFAULT_ARCHIVE_LIMITS, maxBlobBytes: 1 };
+      const archive = await openArchive(filePath, null, publicTight);
+      try {
+        expect(archive.privateBlobNames.has(PRIVATE_ID)).toBe(true);
+      } finally {
+        await archive.close();
+      }
+    });
+  });
+
   describe("limits", () => {
     it("rejects more entries than maxEntries, but the default limits accept the same fixture", async () => {
       const zipBytes = await buildZip([

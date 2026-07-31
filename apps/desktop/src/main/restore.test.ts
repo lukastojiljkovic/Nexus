@@ -16,6 +16,7 @@ import {
   type ArchiveProfilePicture,
   type ExportArchive,
   type ExportArchiveInput,
+  type ExportPrivateNotes,
   type ExportSettings,
   type ProfileData,
 } from "@nexus/core";
@@ -41,6 +42,7 @@ import {
   NotificationStore,
   PeopleStore,
   PlanStore,
+  PrivateNoteStore,
   ProfileStore,
   RestoreStore,
   SqliteFlagStore,
@@ -199,6 +201,22 @@ interface TestDepsHandle {
   blobs: Map<string, Uint8Array>;
   cancelFocusCalls: string[];
   getReloadCount: () => number;
+  /** The private-section seam's double (ADR-057 §6) — flip `unlocked` per test; `blobFiles` stands in for the sealed private-blob directory. */
+  priv: TestPrivSeam;
+}
+
+/**
+ * The fake private section `makeTestDeps` wires (ADR-057 §6). The DOUBLE
+ * mimics `privResealForRestore`'s contract — null while locked, fresh
+ * deterministic ids per archive attachment, blob files written before the
+ * caller's transaction, `missingBlobs` counted — while producing marked
+ * "sealed" bytes a test can recognise; the real crypto has its own tests in
+ * `priv.test.ts`, and THESE tests are about the orchestration around it.
+ */
+interface TestPrivSeam {
+  unlocked: boolean;
+  blobFiles: Map<string, Uint8Array>;
+  resealCalls: number;
 }
 
 /**
@@ -217,6 +235,7 @@ function makeTestDeps(
   const blobs = new Map<string, Uint8Array>();
   const cancelFocusCalls: string[] = [];
   let reloadCount = 0;
+  const priv: TestPrivSeam = { unlocked: false, blobFiles: new Map(), resealCalls: 0 };
 
   const deps: ImportDeps = {
     ...profileDataDeps(handle),
@@ -272,9 +291,67 @@ function makeTestDeps(
     deleteBlobIfOrphaned: async (sha256, refCount) => {
       if (refCount === 0) blobs.delete(sha256);
     },
+    // The REAL sealed store over the same database — undo's byte-fidelity is
+    // asserted against actual `private_notes` rows, never against a double.
+    privateNoteStore: (profileId) => new PrivateNoteStore(handle.raw, profileId),
+    privUnlocked: () => priv.unlocked,
+    // `privResealForRestore`'s contract, mimicked (see `TestPrivSeam`): null
+    // while locked; otherwise every archive attachment id re-minted onto a
+    // deterministic fresh id with its bytes "sealed" into `priv.blobFiles`
+    // before the caller's transaction, misses counted, and every envelope
+    // turned into marked bytes carrying the sequence the real reseal would
+    // have bound (live at max(version seq) + 1, versions at their own).
+    resealPrivateNotes: async (_profileId, data, readArchiveBlob) => {
+      if (!priv.unlocked) return null;
+      priv.resealCalls += 1;
+      const addedBlobIds: string[] = [];
+      let missingBlobs = 0;
+      const seen = new Set<string>();
+      for (const row of [...data.notes, ...data.versions]) {
+        for (const ref of row.attachments) {
+          if (seen.has(ref.id)) continue;
+          seen.add(ref.id);
+          const bytes = await readArchiveBlob(ref.id);
+          if (bytes === null) {
+            missingBlobs += 1;
+            continue;
+          }
+          const freshId = `fresh-${ref.id}`;
+          priv.blobFiles.set(freshId, bytes);
+          addedBlobIds.push(freshId);
+        }
+      }
+      const maxSeq = new Map<string, number>();
+      for (const version of data.versions) {
+        maxSeq.set(version.noteId, Math.max(maxSeq.get(version.noteId) ?? 0, version.seq));
+      }
+      return {
+        rows: {
+          notes: data.notes.map((note) => ({
+            id: note.id,
+            sealed: new TextEncoder().encode(
+              `resealed:${note.id}:${(maxSeq.get(note.id) ?? 0) + 1}`,
+            ),
+            createdAt: note.createdAt,
+            updatedAt: note.updatedAt,
+          })),
+          versions: data.versions.map((version) => ({
+            noteId: version.noteId,
+            seq: version.seq,
+            sealed: new TextEncoder().encode(`resealed:${version.noteId}:v${version.seq}`),
+            createdAt: version.createdAt,
+          })),
+        },
+        addedBlobIds,
+        missingBlobs,
+      };
+    },
+    removePrivateBlob: async (id) => {
+      priv.blobFiles.delete(id);
+    },
   };
 
-  return { deps, blobs, cancelFocusCalls, getReloadCount: () => reloadCount };
+  return { deps, blobs, cancelFocusCalls, getReloadCount: () => reloadCount, priv };
 }
 
 /** A tick past `setTimeout(…, 0)` — what `applyRestore`/`undoRestore` schedule their renderer reload on. */
@@ -627,6 +704,7 @@ function buildArchiveFor(
   profileId: string,
   profileName: string,
   profileKind: "personal" | "business" = "personal",
+  privateNotes?: ExportPrivateNotes,
 ): ExportArchive {
   const input: ExportArchiveInput = {
     profile: { id: profileId, name: profileName, kind: profileKind, picture: fixture.picture },
@@ -636,6 +714,9 @@ function buildArchiveFor(
     data: fixture.data,
     hash: hashUtf8,
   };
+  // The parallel input, exactly as `main` supplies it (ADR-057 §6) — absent
+  // whenever a test's archive carries no private section.
+  if (privateNotes !== undefined) input.privateNotes = privateNotes;
   return buildExportArchive(input);
 }
 
@@ -661,10 +742,13 @@ async function buildArchiveZip(
         zipfile.addBuffer(Buffer.from(entry.bytes), entry.path);
         continue;
       }
-      if (omitBlobShas.has(entry.sha256)) continue; // simulate a missing blob file
-      const bytes = blobBytes.get(entry.sha256);
+      // A private attachment's decrypted bytes (ADR-057 §6) resolve from the
+      // same fixture map, keyed by the envelope id its entry path carries.
+      const key = entry.kind === "private-blob" ? entry.id : entry.sha256;
+      if (omitBlobShas.has(key)) continue; // simulate a missing blob file
+      const bytes = blobBytes.get(key);
       if (!bytes) {
-        reject(new Error(`Test fixture is missing blob bytes for "${entry.sha256}".`));
+        reject(new Error(`Test fixture is missing blob bytes for "${key}".`));
         return;
       }
       zipfile.addBuffer(Buffer.from(bytes), entry.path);
@@ -1418,6 +1502,176 @@ function noteLinks(handle: NexusDatabase): { source: string; target: string }[] 
     .prepare("SELECT source_note_id AS source, target_note_id AS target FROM note_links")
     .all() as { source: string; target: string }[];
 }
+
+// --- Private notes through a restore (PRIV v1, ADR-057 §6) -------------------
+
+/** A lowercase UUID, so the archive reader's `private-blobs/` allowlist recognises the entry. */
+const ARCHIVE_PRIVATE_ATT = "0a1b2c3d-1111-4222-8333-abcdefabcdef";
+const ARCHIVE_PRIVATE_ATT_MISSING = "ffffffff-2222-4333-8444-000000000001";
+const ARCHIVE_PRIVATE_ATT_BYTES = new Uint8Array([11, 22, 33]);
+
+/** One private note with a version and two attachment references — one whose `private-blobs/` entry the zip carries, one it does not. States are REAL Yjs updates, because the parser refuses anything less. */
+function archivePrivateNotes(): ExportPrivateNotes {
+  const state = Buffer.from(noteSnapshotWithLink("elsewhere", "Privatni sadržaj", "veza")).toString("base64");
+  return {
+    notes: [
+      {
+        id: "arch-priv-1",
+        title: "Privatna iz arhive",
+        yjsState: state,
+        plaintext: "Privatni sadržaj",
+        attachments: [
+          { id: ARCHIVE_PRIVATE_ATT, fileName: "slika.png", mime: "image/png", sizeBytes: 3 },
+          { id: ARCHIVE_PRIVATE_ATT_MISSING, fileName: "nema.pdf", mime: "application/pdf", sizeBytes: 5 },
+        ],
+        createdAt: "2026-01-05T00:00:00.000Z",
+        updatedAt: "2026-01-06T00:00:00.000Z",
+      },
+    ],
+    versions: [
+      {
+        noteId: "arch-priv-1",
+        seq: 2,
+        title: "Privatna (staro)",
+        yjsState: state,
+        plaintext: "staro",
+        attachments: [],
+        createdAt: "2026-01-05T00:00:00.000Z",
+      },
+    ],
+  };
+}
+
+/** Writes profile A's archive CARRYING the private section to disk and answers its path. The missing attachment's entry is deliberately left out of the zip. */
+async function writePrivateArchive(name: string): Promise<{ filePath: string; profileA: string }> {
+  const profileA = createProfile(dbA, "A");
+  const fixtureA = seedProfile(dbA, profileA, "A");
+  const archive = buildArchiveFor(fixtureA, profileA, "A", "personal", archivePrivateNotes());
+  const blobBytes = new Map(fixtureA.blobBytes);
+  blobBytes.set(ARCHIVE_PRIVATE_ATT, ARCHIVE_PRIVATE_ATT_BYTES);
+  const zipBytes = await buildArchiveZip(archive, blobBytes, new Set([ARCHIVE_PRIVATE_ATT_MISSING]));
+  const filePath = fixturePath(name);
+  await writeFile(filePath, zipBytes);
+  return { filePath, profileA };
+}
+
+/** Seeds one sealed note + one sealed version on the TARGET through the real store — the rows a locked restore must preserve and an undo must put back byte-for-byte. */
+function seedTargetSealedRows(profileId: string): { note: Uint8Array; version: Uint8Array } {
+  const store = new PrivateNoteStore(dbB.raw, profileId);
+  const note = new TextEncoder().encode("target-sealed-live");
+  const version = new TextEncoder().encode("target-sealed-v1");
+  const now = "2026-01-01T00:00:00.000Z";
+  store.writeSealed("target-priv", note, now);
+  store.writeVersion("target-priv", 1, version, now);
+  return { note, version };
+}
+
+describe("private notes through a restore (ADR-057 §6)", () => {
+  it("preview states the count either way; a LOCKED apply leaves the target's sealed rows untouched", async () => {
+    const { filePath } = await writePrivateArchive("locked.nexus.zip");
+    const profileB = createProfile(dbB, "B-target");
+    const seeded = seedTargetSealedRows(profileB);
+    const { deps, priv } = makeTestDeps(dbB, filePath);
+    priv.unlocked = false;
+
+    await pickRestoreFile(deps);
+    const preview = await previewRestore(deps, profileB, null);
+    if (preview.status !== "ready") unreachable();
+    expect(preview.preview.privateNotes).toEqual({ count: 1, willRestore: false });
+    // The missing private attachment was already named at preview time.
+    expect(preview.preview.warnings).toContainEqual(
+      expect.objectContaining({ code: "missing-blob", path: `private-blobs/${ARCHIVE_PRIVATE_ATT_MISSING}` }),
+    );
+
+    await applyRestore(deps, profileB, preview.preview.token);
+
+    // The archive's private rows did NOT restore; the target's sealed rows
+    // stand, byte for byte — a locked section costs nothing.
+    const store = new PrivateNoteStore(dbB.raw, profileB);
+    expect(store.list().map((meta) => meta.id)).toEqual(["target-priv"]);
+    expect(new Uint8Array(store.readSealed("target-priv"))).toEqual(seeded.note);
+    expect(priv.resealCalls).toBe(0);
+    expect(priv.blobFiles.size).toBe(0);
+  });
+
+  it("preview reports null for an archive carrying no private notes", async () => {
+    const profileA = createProfile(dbA, "A");
+    const fixtureA = seedProfile(dbA, profileA, "A");
+    const zipBytes = await buildArchiveZip(buildArchiveFor(fixtureA, profileA, "A"), fixtureA.blobBytes);
+    const filePath = fixturePath("no-private.nexus.zip");
+    await writeFile(filePath, zipBytes);
+    const profileB = createProfile(dbB, "B-target");
+    const { deps, priv } = makeTestDeps(dbB, filePath);
+    priv.unlocked = true;
+
+    await pickRestoreFile(deps);
+    const preview = await previewRestore(deps, profileB, null);
+    if (preview.status !== "ready") unreachable();
+    expect(preview.preview.privateNotes).toBeNull();
+  });
+
+  it("an UNLOCKED apply re-seals and replaces; undo puts the original sealed rows back byte-for-byte and removes the fresh blob", async () => {
+    const { filePath } = await writePrivateArchive("unlocked.nexus.zip");
+    const profileB = createProfile(dbB, "B-target");
+    const seeded = seedTargetSealedRows(profileB);
+    const { deps, priv } = makeTestDeps(dbB, filePath);
+    priv.unlocked = true;
+
+    await pickRestoreFile(deps);
+    const preview = await previewRestore(deps, profileB, null);
+    if (preview.status !== "ready") unreachable();
+    expect(preview.preview.privateNotes).toEqual({ count: 1, willRestore: true });
+
+    const result = await applyRestore(deps, profileB, preview.preview.token);
+    expect(priv.resealCalls).toBe(1);
+    // The archive supplied one of the two private attachments; the other is
+    // counted beside the content-addressed misses (here: none).
+    expect(result.missingBlobs).toBe(1);
+    // The supplied one's bytes were "sealed" under a fresh id BEFORE the
+    // transaction — the double records exactly what the real reseal writes.
+    expect([...priv.blobFiles.keys()]).toEqual([`fresh-${ARCHIVE_PRIVATE_ATT}`]);
+    expect(priv.blobFiles.get(`fresh-${ARCHIVE_PRIVATE_ATT}`)).toEqual(ARCHIVE_PRIVATE_ATT_BYTES);
+
+    // The private tables were REPLACED: the archive's note at live seq
+    // max(2) + 1 = 3, its version at seq 2, the target's old row gone.
+    const store = new PrivateNoteStore(dbB.raw, profileB);
+    expect(store.list().map((meta) => meta.id)).toEqual(["arch-priv-1"]);
+    expect(new TextDecoder().decode(store.readSealed("arch-priv-1"))).toBe("resealed:arch-priv-1:3");
+    expect(store.listVersions("arch-priv-1")).toEqual([
+      { seq: 2, createdAt: "2026-01-05T00:00:00.000Z" },
+    ]);
+    expect(new TextDecoder().decode(store.readVersion("arch-priv-1", 2))).toBe("resealed:arch-priv-1:v2");
+
+    // UNDO: the pre-restore sealed rows come back byte-for-byte — no DEK
+    // involved anywhere — and the re-seal's fresh blob file is removed.
+    await undoRestore(deps, profileB);
+    expect(store.list().map((meta) => meta.id)).toEqual(["target-priv"]);
+    expect(new Uint8Array(store.readSealed("target-priv"))).toEqual(seeded.note);
+    expect(new Uint8Array(store.readVersion("target-priv", 1))).toEqual(seeded.version);
+    expect(priv.blobFiles.size).toBe(0);
+  });
+
+  it("an import preview names the private section as never imported, counted per record type", async () => {
+    const { filePath } = await writePrivateArchive("import-private.nexus.zip");
+    const profileB = createProfile(dbB, "B-target");
+    const { deps } = makeTestDeps(dbB, filePath);
+
+    await pickImportFile(deps);
+    const preview = await previewImport(deps, profileB, null);
+    if (preview.status !== "ready") unreachable();
+    expect(preview.preview.report.skips).toContainEqual({
+      code: "private-notes-not-imported", module: null, type: "private-note", count: 1,
+    });
+    expect(preview.preview.report.skips).toContainEqual({
+      code: "private-notes-not-imported", module: null, type: "private-note-version", count: 1,
+    });
+
+    // And the apply writes NOTHING into the target's private tables.
+    const applied = await applyImport(deps, profileB, preview.preview.token);
+    expect(applied.rowsWritten).toBeGreaterThan(0);
+    expect(new PrivateNoteStore(dbB.raw, profileB).list()).toEqual([]);
+  });
+});
 
 describe("foreign import", () => {
   /**

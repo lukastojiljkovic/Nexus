@@ -31,9 +31,13 @@ import {
   derivePrivBlobKey,
   openPrivBlob,
   openPrivNote,
+  remapNoteState,
   sealPrivBlob,
   sealPrivNote,
   searchPrivIndex,
+  type ExportPrivateNote,
+  type ExportPrivateNotes,
+  type ExportPrivateNoteVersion,
   type PrivAttachmentRef,
   type PrivIndexNote,
   type PrivNoteEnvelope,
@@ -61,9 +65,13 @@ import {
   type PrivateNoteStore,
   type PrivateSettingsStore,
   type ReplacePrivateWrapsInput,
+  type RestoredPrivateNote,
+  type RestoredPrivateNoteVersion,
+  type RestoredPrivateRows,
 } from "@nexus/db";
 import { PRIV_ATTACHMENTS_MAX_COUNT } from "../shared/ipc.js";
 import type {
+  PrivateNotesExportSkip,
   PrivNoteListEntry,
   PrivSetupResult,
   PrivStatus,
@@ -670,5 +678,253 @@ export async function rewrapPrivKitsForNewCode(
     } else {
       store.replaceWraps(unchanged, nowIso);
     }
+  }
+}
+
+// --- Interchange (IMEX, ADR-057 §6) ------------------------------------------
+//
+// The two functions the export and restore flows reach the sealed section
+// through. Both work on a local COPY of the DEK, zeroed in `finally`: a panic
+// lock or the idle timer firing between two awaits zeroes `privSession.dek` in
+// place, and an operation holding that same buffer would from then on seal (or
+// fail to open) under an all-zero key — for a restore's re-seal, that would be
+// restored notes nobody can ever open again. The copy makes each call atomic
+// with respect to a lock; the section still locks the moment the call returns.
+
+/** Whether `profileId`'s private section is unlocked right now — implies set up. The one gate both a restore preview's `willRestore` fact and the apply's re-seal read (ADR-057 §6). */
+export function privUnlockedFor(profileId: string): boolean {
+  return privSession !== null && privSession.profileId === profileId;
+}
+
+/** What `privCollectForExport` answers: the decrypted section when it rides, or the named reason it does not — both null when there is simply nothing to carry. */
+export interface PrivExportOutcome {
+  data: ExportPrivateNotes | null;
+  skipped: PrivateNotesExportSkip | null;
+}
+
+/**
+ * Decrypts the whole section for a manual export (ADR-057 §6): every live
+ * envelope plus every surviving version, opened under the live DEK, in the
+ * interchange's decrypted shape. The gate, in precedence order: nothing to
+ * carry (no setup, or zero notes) answers null/null; a PLAINTEXT export
+ * excludes with `"plaintext"` — dominant even over a locked section, because
+ * unlocking would change nothing about shipping data in the clear; a locked
+ * section excludes with `"locked"`. Attachment BYTES are deliberately not
+ * collected here: the writer resolves each `private-blobs/<id>` entry one at a
+ * time through `ImexArchiveDeps.readPrivateBlob`, the same memory discipline
+ * every content-addressed blob already gets.
+ *
+ * A row (or version) whose container no longer opens is skipped, exactly as
+ * `privList` reports it: unreadable everywhere is unreadable here, and one
+ * corrupt row must not cost the export of every other.
+ */
+export async function privCollectForExport(
+  deps: PrivDeps,
+  profileId: string,
+  encrypted: boolean,
+): Promise<PrivExportOutcome> {
+  if (deps.privateSettings(profileId).get() === null) return { data: null, skipped: null };
+  const store = deps.privateNotes(profileId);
+  const metas = store.list();
+  if (metas.length === 0) return { data: null, skipped: null };
+  if (!encrypted) return { data: null, skipped: "plaintext" };
+  if (!privUnlockedFor(profileId)) return { data: null, skipped: "locked" };
+
+  const dek = new Uint8Array(requirePrivDek(deps, profileId));
+  try {
+    const notes: ExportPrivateNote[] = [];
+    const versions: ExportPrivateNoteVersion[] = [];
+    for (const meta of metas) {
+      let envelope: PrivNoteEnvelope;
+      try {
+        envelope = await openPrivNote(
+          dek,
+          meta.id,
+          store.maxVersionSeq(meta.id) + 1,
+          store.readSealed(meta.id),
+        );
+      } catch (error) {
+        if (!(error instanceof PrivSealError)) throw error;
+        continue;
+      }
+      notes.push({
+        id: meta.id,
+        title: envelope.title,
+        yjsState: envelope.yjsState,
+        plaintext: envelope.plaintext,
+        attachments: envelope.attachments,
+        createdAt: meta.createdAt,
+        updatedAt: meta.updatedAt,
+      });
+      for (const versionMeta of store.listVersions(meta.id)) {
+        try {
+          const versionEnvelope = await openPrivNote(
+            dek,
+            meta.id,
+            versionMeta.seq,
+            store.readVersion(meta.id, versionMeta.seq),
+          );
+          versions.push({
+            noteId: meta.id,
+            seq: versionMeta.seq,
+            title: versionEnvelope.title,
+            yjsState: versionEnvelope.yjsState,
+            plaintext: versionEnvelope.plaintext,
+            attachments: versionEnvelope.attachments,
+            createdAt: versionMeta.createdAt,
+          });
+        } catch (error) {
+          if (!(error instanceof PrivSealError)) throw error;
+        }
+      }
+    }
+    return { data: { notes, versions }, skipped: null };
+  } finally {
+    dek.fill(0);
+  }
+}
+
+/**
+ * One sealed private attachment's plaintext for the ARCHIVE WRITER
+ * (`ImexArchiveDeps.readPrivateBlob`): opened under whatever section is open
+ * right now, and null for EVERYTHING else — a locked section (the export
+ * outlived its unlock), a missing file, a container that fails its tag. Null
+ * rather than a throw because the writer's contract for a blob it cannot get
+ * is "skip and count", the lost-image tolerance every attachment already has —
+ * and never an error, because only ids the collect itself just declared are
+ * ever asked for. Deliberately not profile-scoped, on `privSessionBlobKey`'s
+ * exact reasoning: a file some other profile's key sealed simply fails
+ * authentication under this one.
+ */
+export async function privReadAttachmentForExport(
+  deps: PrivDeps,
+  id: string,
+): Promise<Uint8Array | null> {
+  if (privSession === null) return null;
+  const dek = new Uint8Array(privSession.dek);
+  try {
+    const blobKey = await derivePrivBlobKey(dek);
+    try {
+      return await openPrivBlob(blobKey, id, await deps.privBlobs.read(id));
+    } finally {
+      blobKey.fill(0);
+    }
+  } catch {
+    return null;
+  } finally {
+    dek.fill(0);
+  }
+}
+
+/** What a successful re-seal hands back: the rows the conditional replace writes, the fresh sealed blob files it created (undo's removal list), and how many attachment files the archive could not supply. */
+export interface PrivResealOutcome {
+  rows: RestoredPrivateRows;
+  addedBlobIds: readonly string[];
+  missingBlobs: number;
+}
+
+/**
+ * Re-seals an archive's private notes under the target's CURRENT DEK for a
+ * restore (ADR-057 §6), or answers null while the section is locked or was
+ * never set up — the named-skip path, in which the profile's existing sealed
+ * rows stand untouched.
+ *
+ * Every archive attachment id is re-minted: bytes are read through
+ * `readArchiveBlob` (one at a time), sealed as fresh NXPB containers under
+ * fresh random ids, and written to the sealed store BEFORE the caller's
+ * database transaction — the house order, so a failed replace leaves only
+ * orphaned sealed files (disk space) rather than rows naming files never
+ * written. The envelope's references AND the ids embedded in its Yjs state are
+ * remapped onto the fresh ids together (`remapNoteState`, the move flows'
+ * companion), one shared map for live and version envelopes alike, so a file
+ * two envelopes name lands once. An id the archive cannot supply keeps its
+ * fresh-id reference and is counted — the row restores, the file is lost, the
+ * preview already warned (`missing-blob`), mirroring the public path exactly.
+ *
+ * Sequences: each version is re-sealed at its OWN archive `seq`, and the live
+ * container at `max(version seq) + 1` — 1 for a note with no versions — so the
+ * store's `maxVersionSeq + 1` arithmetic holds from the first read after the
+ * restore lands.
+ */
+export async function privResealForRestore(
+  deps: PrivDeps,
+  profileId: string,
+  data: ExportPrivateNotes,
+  readArchiveBlob: (id: string) => Promise<Uint8Array | null>,
+): Promise<PrivResealOutcome | null> {
+  if (deps.privateSettings(profileId).get() === null) return null;
+  if (!privUnlockedFor(profileId)) return null;
+
+  const dek = new Uint8Array(requirePrivDek(deps, profileId));
+  let blobKey: Uint8Array | null = null;
+  try {
+    blobKey = await derivePrivBlobKey(dek);
+    const idMap = new Map<string, string>();
+    const addedBlobIds: string[] = [];
+    let missingBlobs = 0;
+    for (const row of [...data.notes, ...data.versions]) {
+      for (const ref of row.attachments) {
+        if (idMap.has(ref.id)) continue;
+        const freshId = crypto.randomUUID();
+        idMap.set(ref.id, freshId);
+        const bytes = await readArchiveBlob(ref.id);
+        if (bytes === null) {
+          missingBlobs += 1;
+          continue;
+        }
+        await deps.privBlobs.write(freshId, await sealPrivBlob(blobKey, freshId, bytes));
+        addedBlobIds.push(freshId);
+      }
+    }
+
+    // `idMap.get` always answers below — every reference was just mapped — and
+    // the `?? ref.id` is the defensive spelling `noUncheckedIndexedAccess` asks
+    // for, never a path data can reach.
+    const remapEnvelope = (row: {
+      title: string;
+      yjsState: string;
+      plaintext: string;
+      attachments: readonly PrivAttachmentRef[];
+    }): PrivNoteEnvelope => ({
+      title: row.title,
+      yjsState:
+        idMap.size === 0
+          ? row.yjsState
+          : toBase64(remapNoteState(fromBase64(row.yjsState), idMap)),
+      plaintext: row.plaintext,
+      attachments: row.attachments.map((ref) => ({ ...ref, id: idMap.get(ref.id) ?? ref.id })),
+    });
+
+    const maxSeqByNote = new Map<string, number>();
+    for (const version of data.versions) {
+      maxSeqByNote.set(
+        version.noteId,
+        Math.max(maxSeqByNote.get(version.noteId) ?? 0, version.seq),
+      );
+    }
+
+    const notes: RestoredPrivateNote[] = [];
+    for (const note of data.notes) {
+      const liveSeq = (maxSeqByNote.get(note.id) ?? 0) + 1;
+      notes.push({
+        id: note.id,
+        sealed: await sealPrivNote(dek, note.id, liveSeq, remapEnvelope(note)),
+        createdAt: note.createdAt,
+        updatedAt: note.updatedAt,
+      });
+    }
+    const versions: RestoredPrivateNoteVersion[] = [];
+    for (const version of data.versions) {
+      versions.push({
+        noteId: version.noteId,
+        seq: version.seq,
+        sealed: await sealPrivNote(dek, version.noteId, version.seq, remapEnvelope(version)),
+        createdAt: version.createdAt,
+      });
+    }
+    return { rows: { notes, versions }, addedBlobIds, missingBlobs };
+  } finally {
+    dek.fill(0);
+    blobKey?.fill(0);
   }
 }

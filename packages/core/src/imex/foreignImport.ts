@@ -204,6 +204,15 @@ export interface ForeignImportSource {
    * forgets it must be a type error, not a quiet omission.
    */
   profilePicture: ArchiveProfilePicture | null;
+  /**
+   * How many private notes and sealed-version checkpoints the archive carries
+   * (`parseImportArchive`'s `privateNotes`, counted by the caller). COUNTS
+   * only, deliberately: a foreign import NEVER imports private notes — that is
+   * the whole posture (ADR-057 §6), stated once in `buildReport`'s own note —
+   * so the planner needs nothing of their content, only the numbers its named
+   * skip must say out loud. Required, on `profilePicture`'s exact terms.
+   */
+  privateNotes: { notes: number; versions: number };
 }
 
 /**
@@ -222,6 +231,7 @@ export type ImportSkipCode =
   | "study-settings-not-imported"
   | "calendar-settings-not-imported"
   | "profile-picture-not-imported"
+  | "private-notes-not-imported"
   | "template-name-taken"
   | "source-inbox-collapsed"
   | "duplicate-of-existing";
@@ -1014,7 +1024,9 @@ export function planForeignImport(
     // The profile picture is deliberately NOT among the blobs to copy: an
     // import never adopts it (see `buildReport`'s own note), so there is no
     // hash to fetch — the same reason the dashboard background is absent here.
-    report: buildReport(source, parsed.dropped, data, ctx, parsed.profilePicture),
+    // Nor is any `private-blobs/<id>` entry: private notes never import at all
+    // (ADR-057 §6, named in the report below), so their files never do either.
+    report: buildReport(source, parsed.dropped, data, ctx, parsed.profilePicture, parsed.privateNotes),
   };
 }
 
@@ -1036,6 +1048,7 @@ function buildReport(
   planned: ProfileData,
   ctx: PlanContext,
   profilePicture: ArchiveProfilePicture | null,
+  privateNotes: { notes: number; versions: number },
 ): ImportPlanReport {
   const skips: ImportSkipReason[] = [];
   const skipIndex = new Map<string, ImportSkipReason>();
@@ -1116,11 +1129,30 @@ function buildReport(
   // every manifest has — and, like it, counted into no module, because it
   // belongs to none.
   note("profile-picture-not-imported", null, null, profilePicture === null ? 0 : 1);
+  // Private notes: NEVER imported, whatever the archive carries (ADR-057 §6).
+  // The posture, in full: a foreign import merges somebody else's rows into a
+  // profile that keeps its own — and a private note is the one kind of row
+  // whose whole meaning is WHO may read it. Re-sealing another person's
+  // decrypted secrets under this profile's key would silently move them across
+  // a trust boundary no checkbox here is entitled to cross, so the rows are
+  // named and counted, never planned. Two lines, one per record type, on the
+  // dashboard sets' reasoning — one line covering both would attribute the
+  // versions to the note type, which is a report that lies. Counted into no
+  // module, because the private section belongs to none (its file maps to null
+  // in `MODULE_OF_DATA_FILE`), which is also what keeps the per-module
+  // arithmetic balanced without it.
+  note("private-notes-not-imported", null, "private-note", privateNotes.notes);
+  note("private-notes-not-imported", null, "private-note-version", privateNotes.versions);
 
   const parsedCounts = countProfileModules(source);
   const importedCounts = countProfileModules(planned);
   const droppedCounts = zeroPerModule();
-  for (const drop of dropped) droppedCounts[drop.module] += 1;
+  for (const drop of dropped) {
+    // A drop from `data/private-notes.ndjson` carries no module (ADR-057 §6) —
+    // it was already named in `skips` by the loop above, and there is no
+    // per-module bucket for it to count into.
+    if (drop.module !== null) droppedCounts[drop.module] += 1;
+  }
 
   const modules = {} as Record<ArchiveModuleId, ImportModuleCounts>;
   for (const module of ARCHIVE_MODULE_IDS) {

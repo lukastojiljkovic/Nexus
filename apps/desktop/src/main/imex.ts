@@ -11,13 +11,14 @@ import type {
   ArchiveWriter,
   ExportArchiveInput,
   ExportBinaryEntry,
+  ExportPrivateNotes,
 } from "@nexus/core";
 // Main-process-only subpath (pulls in Argon2id's WASM) — see that module's own
 // header comment on why the renderer must never import it.
 import { ARCHIVE_KDF_PARAMS, deriveArchiveKey, generateSalt } from "@nexus/core/auth";
 import { localToday } from "./clock.js";
 import { gatherProfileData, gatherProfileSettings, type ProfileDataDeps } from "./profileData.js";
-import type { ExportResult, IcsExportResult } from "../shared/ipc.js";
+import type { ExportResult, IcsExportResult, PrivateNotesExportSkip } from "../shared/ipc.js";
 
 /**
  * Everything `writeProfileArchive` needs: one profile's whole state
@@ -29,14 +30,39 @@ import type { ExportResult, IcsExportResult } from "../shared/ipc.js";
 export interface ImexArchiveDeps extends ProfileDataDeps {
   /** Decrypted attachment bytes by content hash, or null when the blob is missing from the store. Injected rather than reached for, so this module never touches blob paths or key material itself (mirrors the store getters above). */
   readBlob(sha256: string): Promise<Uint8Array | null>;
+  /**
+   * One private attachment's DECRYPTED bytes by its envelope id, or null when
+   * the sealed file is missing or no longer opens — including when the section
+   * locked mid-write, which downgrades that file to "missing" rather than
+   * failing the export (ADR-057 §6; the same lost-image tolerance `readBlob`
+   * has). Only ever called for the `private-blobs/<id>` entries a supplied
+   * `privateNotes` input declares, so a caller that never supplies one (the
+   * scheduled backup) never sees this invoked.
+   */
+  readPrivateBlob(id: string): Promise<Uint8Array | null>;
 }
 
-/** `writeProfileArchive`'s deps plus the one thing only the MANUAL flow uses: the window its save dialog belongs to. */
+/**
+ * What the manual export flow learns about the private section BEFORE writing
+ * (ADR-057 §6): the decrypted content when it rides, or the reason it does not
+ * — `"plaintext"` for an export the user chose to write in the clear (dominant
+ * even over a locked section: unlocking would change nothing), `"locked"` for
+ * a sealed section, and both null when there is simply nothing to carry (no
+ * setup, or zero private notes).
+ */
+export interface PrivateNotesForExport {
+  data: ExportPrivateNotes | null;
+  skipped: PrivateNotesExportSkip | null;
+}
+
+/** `writeProfileArchive`'s deps plus what only the MANUAL flow uses: the window its save dialog belongs to, and the private-section collect (the scheduled backup never carries private notes — ADR-057 §6 and the PRIV card's own promise). */
 export interface ImexExportDeps extends ImexArchiveDeps {
   getMainWindow(): BrowserWindow | null;
+  /** Resolves the private section's export payload — called AFTER the dialog, so decrypted envelopes never sit in memory while the user considers a save box. */
+  collectPrivateNotes(profileId: string, encrypted: boolean): Promise<PrivateNotesForExport>;
 }
 
-/** What landed on disk: the archive's record count and how many attachment blobs were missing from the store (skipped, never fatal). */
+/** What landed on disk: the archive's record count and how many attachment blobs — content-addressed and private alike — were missing from their stores (skipped, never fatal). */
 export interface ArchiveWriteOutcome {
   totalRecords: number;
   missingAttachments: number;
@@ -66,6 +92,7 @@ export async function writeProfileArchive(
   passphrase: string | null,
   filePath: string,
   modules?: ReadonlySet<ArchiveModuleId>,
+  privateNotes?: ExportPrivateNotes,
 ): Promise<ArchiveWriteOutcome> {
   let writer: ArchiveWriter | null = null;
   if (passphrase !== null) {
@@ -86,9 +113,21 @@ export async function writeProfileArchive(
   // ABSENT key is what "every module" means to the builder, and an explicit
   // `undefined` is not the same thing.
   if (modules !== undefined) archiveInput.modules = modules;
+  // Same arrangement for the private section (ADR-057 §6): a parallel input
+  // beside the gathered `ProfileData`, exactly as the profile picture rides in
+  // `profile` — never a `ProfileData` member. ABSENT is "they do not ride",
+  // which is every scheduled backup and every gated-out manual export.
+  if (privateNotes !== undefined) archiveInput.privateNotes = privateNotes;
   const archive = buildExportArchive(archiveInput);
 
-  const missingAttachments = await writeZip(archive.files, archive.binaries, filePath, deps.readBlob, writer);
+  const missingAttachments = await writeZip(
+    archive.files,
+    archive.binaries,
+    filePath,
+    deps.readBlob,
+    deps.readPrivateBlob,
+    writer,
+  );
   return { totalRecords: archive.totalRecords, missingAttachments };
 }
 
@@ -159,13 +198,27 @@ export async function handleExport(
     : await dialog.showSaveDialog(dialogOptions);
   if (canceled || !filePath) return { canceled: true };
 
-  const outcome = await writeProfileArchive(deps, profile, passphrase, filePath, modules);
+  // The private section's gate, resolved only now (ADR-057 §6): unlocked AND
+  // encrypted ⇒ the decrypted section rides; otherwise `skipped` names why, and
+  // the result says so — a silent exclusion of exactly the notes the user
+  // guards hardest would be the least forgivable quiet omission in this file.
+  const priv = await deps.collectPrivateNotes(profile.id, passphrase !== null);
+  const outcome = await writeProfileArchive(
+    deps,
+    profile,
+    passphrase,
+    filePath,
+    modules,
+    priv.data ?? undefined,
+  );
 
   return {
     canceled: false,
     path: filePath,
     ...outcome,
     encrypted: passphrase !== null,
+    privateNotes: priv.data?.notes.length ?? 0,
+    privateNotesSkipped: priv.skipped,
   };
 }
 
@@ -352,6 +405,7 @@ async function writeZip(
   binaries: readonly ExportBinaryEntry[],
   path: string,
   readBlob: (sha256: string) => Promise<Uint8Array | null>,
+  readPrivateBlob: (id: string) => Promise<Uint8Array | null>,
   writer: ArchiveWriter | null,
 ): Promise<number> {
   const zipfile = new ZipFile();
@@ -398,7 +452,14 @@ async function writeZip(
         zipfile.addBuffer(Buffer.from(entry.bytes), entry.path);
         continue;
       }
-      const bytes = await Promise.race([readBlob(entry.sha256), failed]);
+      // A private attachment (ADR-057 §6) resolves through its own reader —
+      // sealed on disk by random id, decrypted here for the archive — but is
+      // otherwise an attachment like any other: streamed one at a time, and a
+      // missing/unopenable one is skipped and counted, never fatal.
+      const bytes =
+        entry.kind === "private-blob"
+          ? await Promise.race([readPrivateBlob(entry.id), failed])
+          : await Promise.race([readBlob(entry.sha256), failed]);
       if (bytes === null) {
         missingAttachments += 1;
         continue;

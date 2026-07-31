@@ -254,17 +254,21 @@ import {
 } from "./auth.js";
 import {
   privAddAttachment,
+  privCollectForExport,
   privDelete,
   privHandleMinimize,
   privList,
   privLock,
   privRead,
+  privReadAttachmentForExport,
+  privResealForRestore,
   privSearch,
   privSessionBlobKey,
   privSetLockPrefs,
   privSetup,
   privStatus,
   privUnlock,
+  privUnlockedFor,
   privWrite,
   rewrapPrivKitsForNewCode,
   type AccountPasscodeCheck,
@@ -3683,6 +3687,15 @@ function restoreDeps(): ImportDeps {
     blobRefCount,
     deleteBlobIfOrphaned: (sha256, refCount) =>
       deleteBlobIfOrphaned(blobStorePathsFor(), requireBlobKeys(), sha256, refCount),
+    // The private section's four restore seams (ADR-057 §6): the sealed store
+    // undo's parallel capture reads through, the gate the preview reports,
+    // the re-seal `main/priv.ts` owns (the DEK lives there), and the
+    // best-effort unlink undo cleans a re-seal's fresh files with.
+    privateNoteStore,
+    privUnlocked: (profileId) => privUnlockedFor(profileId),
+    resealPrivateNotes: (profileId, data, readArchiveBlob) =>
+      privResealForRestore(privDeps(), profileId, data, readArchiveBlob),
+    removePrivateBlob: (id) => privBlobFiles.remove(id),
   };
 }
 
@@ -3726,6 +3739,12 @@ function imexArchiveDeps(): ImexArchiveDeps {
     dashboardSetStore,
     flagStore,
     readBlob: (sha256) => readBlob(blobStorePathsFor(), requireBlobKeys(), sha256),
+    // A private attachment's decrypted bytes, under whatever section is open
+    // right now (ADR-057 §6) — null for a locked section or an unreadable
+    // file, which the writer counts as missing. Only ever invoked for entries
+    // a supplied `privateNotes` input declared; the scheduled backup supplies
+    // none, so this never runs for it.
+    readPrivateBlob: (id) => privReadAttachmentForExport(privDeps(), id),
   };
 }
 
@@ -3748,6 +3767,10 @@ function backupRunnerDeps(): BackupRunnerDeps {
     unwrapPassphrase: (wrapped) => unwrapBackupPassphrase(requireUnlockedDataKeyHex(), wrapped),
     // The exact function the manual export writes with (`imex.ts`), over the
     // exact deps literal it gathers with — a scheduled archive IS a manual one.
+    // With one deliberate absence (ADR-057 §6): no `privateNotes` input, ever.
+    // The PRIV card promises private notes stay out of automatic copies, and a
+    // backup whose contents depended on whether the section happened to be
+    // unlocked at run time would be one nobody could reason about.
     writeArchive: async (profile, passphrase, filePath) => {
       await writeProfileArchive(imexArchiveDeps(), profile, passphrase, filePath);
     },
@@ -6517,7 +6540,16 @@ function registerIpc(): void {
     const modules = asArchiveModules(body.modules, "modules");
     const profile = requireProfile(requireDb(), profileId);
     return handleExport(
-      { ...imexArchiveDeps(), getMainWindow: () => mainWindow },
+      {
+        ...imexArchiveDeps(),
+        getMainWindow: () => mainWindow,
+        // ADR-057 §6: the private section rides only into an ENCRYPTED manual
+        // export while UNLOCKED — `privCollectForExport` owns the gate and the
+        // named skip. The scheduled backup deliberately never calls this: the
+        // PRIV card promises private notes stay out of automatic copies.
+        collectPrivateNotes: (exportProfileId, encrypted) =>
+          privCollectForExport(privDeps(), exportProfileId, encrypted),
+      },
       archiveProfileOf(profile),
       passphrase,
       modules,

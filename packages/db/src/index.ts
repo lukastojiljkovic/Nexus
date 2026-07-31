@@ -382,6 +382,12 @@ export type {
 export { uuidv7 } from "./ids.js";
 
 export { RestoreStore, RESTORE_WIPE_TABLES } from "./imex/restoreStore.js";
-export type { RestoreProfileInput, RestoredNoteDerived } from "./imex/restoreStore.js";
+export type {
+  RestoredPrivateNote,
+  RestoredPrivateNoteVersion,
+  RestoredPrivateRows,
+  RestoreProfileInput,
+  RestoredNoteDerived,
+} from "./imex/restoreStore.js";
 
 export { ForeignImportStore } from "./imex/foreignImportStore.js";

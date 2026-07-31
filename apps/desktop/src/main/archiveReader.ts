@@ -31,7 +31,7 @@
  *
  * Every archive entry not on the fixed allowlist (`manifest.json`,
  * `DATA_FILES`, `data/notes/<id>.ydoc`, `data/note-versions/<id>/<seq>.ydoc`,
- * `blobs/<sha256>`) is ignored. Two entries claiming the SAME allowlisted
+ * `blobs/<sha256>`, `private-blobs/<uuid>`) is ignored. Two entries claiming the SAME allowlisted
  * name is treated as damage (`"damaged"`), not "last one wins" — a zip
  * carrying two `manifest.json` entries is exactly the shape of a file built
  * so a preview and an apply could see different bytes under the same name.
@@ -72,7 +72,11 @@ import {
 } from "@nexus/core";
 import { deriveArchiveKey } from "@nexus/core/auth";
 
-import { NOTE_ATTACHMENT_MAX_BYTES, type ArchiveReadErrorCode } from "../shared/ipc.js";
+import {
+  NOTE_ATTACHMENT_MAX_BYTES,
+  PRIV_ATTACHMENT_MAX_BYTES,
+  type ArchiveReadErrorCode,
+} from "../shared/ipc.js";
 
 // Declared in `shared/ipc.ts` (the one file every wire shape lives in) and
 // re-exported here so this module's existing consumers are unaffected.
@@ -131,6 +135,8 @@ export interface ArchiveLimits {
   maxResidentBytes: number;
   /** Maximum size of one `blobs/<sha256>` entry. */
   maxBlobBytes: number;
+  /** Maximum size of one `private-blobs/<id>` entry (ADR-057 §6) — its own bound, because the private attachment ceiling is not the public one. */
+  maxPrivateBlobBytes: number;
 }
 
 /**
@@ -138,6 +144,8 @@ export interface ArchiveLimits {
  * own 50 MB attachment ceiling — because a blob bigger than that could never
  * have come from this app's own export writer; anything larger is simply not
  * a legitimate attachment, whichever archive it arrived in.
+ * `maxPrivateBlobBytes` is `PRIV_ATTACHMENT_MAX_BYTES` (100 MB) by the same
+ * argument applied to the private picker's own cap.
  */
 export const DEFAULT_ARCHIVE_LIMITS: ArchiveLimits = {
   maxEntries: 250_000,
@@ -145,6 +153,7 @@ export const DEFAULT_ARCHIVE_LIMITS: ArchiveLimits = {
   maxTotalBytes: 21_474_836_480,
   maxResidentBytes: 1_073_741_824,
   maxBlobBytes: NOTE_ATTACHMENT_MAX_BYTES,
+  maxPrivateBlobBytes: PRIV_ATTACHMENT_MAX_BYTES,
 };
 
 export interface OpenedArchive {
@@ -158,8 +167,17 @@ export interface OpenedArchive {
   readonly blobNames: ReadonlySet<string>;
   /** Blob names present but whose bytes did NOT hash to their name — reported for the preview, never restored. */
   readonly corruptBlobNames: ReadonlySet<string>;
+  /**
+   * `private-blobs/<id>` entries present in the archive (ADR-057 §6) — the
+   * decrypted private attachments. Presence only: they carry no content
+   * address to verify against, by design, so there is no corrupt-set twin.
+   * This is `ImportArchiveInput.privateBlobNames`.
+   */
+  readonly privateBlobNames: ReadonlySet<string>;
   /** Re-reads one verified blob's bytes, re-checking the hash. Rejects after `close()`. */
   readBlob(sha256: string): Promise<Uint8Array>;
+  /** Reads one private attachment's decrypted bytes by its id. Rejects for an id not in `privateBlobNames`, and after `close()`. */
+  readPrivateBlob(id: string): Promise<Uint8Array>;
   /** Releases the zip reader and the file handle. Idempotent. */
   close(): Promise<void>;
 }
@@ -266,11 +284,15 @@ const NOTE_YDOC_PATTERN = /^data\/notes\/[^/]+\.ydoc$/;
 const NOTE_VERSION_YDOC_PATTERN = /^data\/note-versions\/[^/]+\/\d+\.ydoc$/;
 /** Exactly 64 LOWERCASE hex characters — `createHash("sha256").digest("hex")` always produces lowercase, and this is compared byte-for-byte, so an uppercase or short name is never a blob this reader recognises. */
 const BLOB_PATTERN = /^blobs\/([0-9a-f]{64})$/;
+/** Exactly the lowercase UUID `crypto.randomUUID` mints (ADR-057) — the one shape `main`'s own private-blob store ever names a file by, so anything else under `private-blobs/` is never an entry this reader recognises. */
+const PRIVATE_BLOB_PATTERN =
+  /^private-blobs\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 
 type EntryClass =
   | { kind: "text" }
   | { kind: "ydoc" }
   | { kind: "blob"; sha256: string }
+  | { kind: "private-blob"; id: string }
   | { kind: "skip" };
 
 /**
@@ -285,6 +307,8 @@ function classifyEntryName(name: string): EntryClass {
   if (NOTE_YDOC_PATTERN.test(name) || NOTE_VERSION_YDOC_PATTERN.test(name)) return { kind: "ydoc" };
   const blobMatch = BLOB_PATTERN.exec(name);
   if (blobMatch?.[1] !== undefined) return { kind: "blob", sha256: blobMatch[1] };
+  const privateBlobMatch = PRIVATE_BLOB_PATTERN.exec(name);
+  if (privateBlobMatch?.[1] !== undefined) return { kind: "private-blob", id: privateBlobMatch[1] };
   return { kind: "skip" };
 }
 
@@ -388,6 +412,7 @@ export async function openArchive(
     const blobNames = new Set<string>();
     const corruptBlobNames = new Set<string>();
     const blobEntries = new Map<string, Entry>();
+    const privateBlobEntries = new Map<string, Entry>();
     const seenNames = new Set<string>();
 
     let entryCount = 0;
@@ -428,6 +453,12 @@ export async function openArchive(
             `Blob "${entry.fileName}" (${size} bytes) exceeds the ${limits.maxBlobBytes}-byte blob cap.`,
           );
         }
+        if (classified.kind === "private-blob" && size > limits.maxPrivateBlobBytes) {
+          throw new ArchiveReadError(
+            "too-large",
+            `Private blob "${entry.fileName}" (${size} bytes) exceeds the ${limits.maxPrivateBlobBytes}-byte cap.`,
+          );
+        }
         totalBytes += size;
         if (totalBytes > limits.maxTotalBytes) {
           throw new ArchiveReadError(
@@ -452,6 +483,11 @@ export async function openArchive(
           const stream = await zipFile.openReadStreamPromise(entry);
           const buffer = await collectStream(stream);
           ydocs.set(entry.fileName, new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength));
+        } else if (classified.kind === "private-blob") {
+          // Recorded, never opened during the walk: unlike a content-addressed
+          // blob there is no name to verify the bytes against (by design), so
+          // presence is the whole fact and the read happens on demand.
+          privateBlobEntries.set(classified.id, entry);
         } else {
           // Streamed through a running hash and discarded — never retained —
           // so an archive with many blobs never holds more than one at a
@@ -484,6 +520,17 @@ export async function openArchive(
       ydocs,
       blobNames,
       corruptBlobNames,
+      privateBlobNames: new Set(privateBlobEntries.keys()),
+      async readPrivateBlob(id: string): Promise<Uint8Array> {
+        if (closed) throw new Error("Cannot read a private blob: this archive has been closed.");
+        const entry = privateBlobEntries.get(id);
+        if (!entry) {
+          throw new Error(`No private blob named "${id}" in this archive.`);
+        }
+        const stream = await zipFile.openReadStreamPromise(entry);
+        const bytes = await collectStream(stream);
+        return new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      },
       async readBlob(sha256: string): Promise<Uint8Array> {
         if (closed) throw new Error("Cannot read a blob: this archive has been closed.");
         if (!blobNames.has(sha256)) {

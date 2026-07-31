@@ -3535,6 +3535,14 @@ export interface ImexExportRequest {
  * which kind of archive it wrote, since the two need different follow-up copy
  * (`settings.backup.savedEncryptedSuffix` vs. nothing extra).
  */
+/**
+ * Why an export excluded the private section (ADR-057 §6): `"locked"` while
+ * the section was sealed, `"plaintext"` for an export written in the clear —
+ * dominant over a lock, since unlocking would change nothing about it. Null on
+ * the result means "nothing was excluded": the notes rode, or there were none.
+ */
+export type PrivateNotesExportSkip = "locked" | "plaintext";
+
 export type ExportResult =
   | { canceled: true }
   | {
@@ -3543,6 +3551,15 @@ export type ExportResult =
       totalRecords: number;
       missingAttachments: number;
       encrypted: boolean;
+      /**
+       * How many private notes RODE in this archive (ADR-057 §6) — zero
+       * whenever they did not. Reported out loud because their inclusion is
+       * the sharpest fact an export result can carry: the user must never
+       * learn from a zip listing that their most guarded notes left the app.
+       */
+      privateNotes: number;
+      /** Why the private section did NOT ride, or null (see the type's own doc). The card renders its named sentence — a silent exclusion is the one kind this flow refuses to have. */
+      privateNotesSkipped: PrivateNotesExportSkip | null;
     };
 
 /**
@@ -3831,6 +3848,15 @@ export interface RestorePreview {
   warnings: RestoreProblem[];
   /** Blobs present in the archive whose bytes did not hash to their own name: their attachment rows restore, their files do not. */
   corruptBlobs: number;
+  /**
+   * Present exactly when the archive CARRIES private notes (ADR-057 §6): how
+   * many, and whether this apply will restore them — false while the target's
+   * private section is locked or was never set up, in which case the card shows
+   * the named skip sentence and the profile's existing sealed rows stand
+   * untouched. The count is stated either way: an archive holding somebody's
+   * private notes is a fact the person confirming a restore must see.
+   */
+  privateNotes: { count: number; willRestore: boolean } | null;
 }
 
 /**
@@ -3983,7 +4009,9 @@ export type ImportRecordType =
   | "note-template"
   | "dashboard-settings"
   | "dashboard-set"
-  | "dashboard-widget";
+  | "dashboard-widget"
+  | "private-note"
+  | "private-note-version";
 
 /**
  * Why rows the archive carried are not in the plan. Mirrors `@nexus/core`'s
@@ -4007,6 +4035,7 @@ export type ImportSkipCode =
   | "study-settings-not-imported"
   | "calendar-settings-not-imported"
   | "profile-picture-not-imported"
+  | "private-notes-not-imported"
   | "template-name-taken"
   | "source-inbox-collapsed"
   | "duplicate-of-existing";

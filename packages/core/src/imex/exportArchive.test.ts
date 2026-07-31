@@ -211,6 +211,7 @@ describe("buildExportArchive", () => {
           "data/notifications.ndjson",
           "data/notes.ndjson",
           "data/dashboard.ndjson",
+          "data/private-notes.ndjson",
           "data/calendar.ics",
           "tables/tasks.csv",
           "tables/events.csv",
@@ -230,6 +231,9 @@ describe("buildExportArchive", () => {
       expect(archive.files.get("data/notifications.ndjson")).toBe("");
       expect(archive.files.get("data/notes.ndjson")).toBe("");
       expect(archive.files.get("data/dashboard.ndjson")).toBe("");
+      // ADR-057 §6: an absent `privateNotes` input writes the empty file —
+      // indistinguishable from a profile with no private notes, on purpose.
+      expect(archive.files.get("data/private-notes.ndjson")).toBe("");
 
       // CSV mirrors still carry their header row.
       expect(archive.files.get("tables/tasks.csv")).toMatch(/^id,/);
@@ -251,8 +255,6 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      // SUPERVISOR NOTE: 1.24.0 skips 1.23.0 (a sibling lane's concurrent
-      // bump); after both merge this pin stays at the higher number.
       expect(manifest.schemaVersion).toBe("1.24.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
@@ -296,8 +298,12 @@ describe("buildExportArchive", () => {
         "data/notifications.ndjson": sha256(""),
         "data/notes.ndjson": sha256(""),
         "data/dashboard.ndjson": sha256(""),
+        "data/private-notes.ndjson": sha256(""),
       });
       expect(manifest.blobs).toEqual([]);
+      // The private inventory (ADR-057 §6), beside the blob list it mirrors —
+      // always written, empty whenever no private notes ride.
+      expect(manifest.privateBlobs).toEqual([]);
     });
 
     it("is pretty-printed (indented) JSON", () => {
@@ -1835,3 +1841,128 @@ function everyModuleInput(): ExportArchiveInput {
   ];
   return input;
 }
+
+// --- Private notes (PRIV v1, ADR-057 §6) -------------------------------------
+
+/** Encodes a doc whose "default" fragment holds one paragraph of `text` — a real, decodable Yjs state for a private envelope. */
+function privateTextSnapshot(text: string): Uint8Array {
+  const doc = new Y.Doc();
+  const paragraph = new Y.XmlElement("paragraph");
+  paragraph.insert(0, [new Y.XmlText(text)]);
+  doc.getXmlFragment("default").push([paragraph]);
+  const snapshot = Y.encodeStateAsUpdate(doc);
+  doc.destroy();
+  return snapshot;
+}
+
+function b64(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString("base64");
+}
+
+/** A lowercase UUID, the one shape `main` ever names a sealed blob file by. */
+const PRIVATE_ATT_A = "0a1b2c3d-1111-4222-8333-abcdefabcdef";
+const PRIVATE_ATT_B = "ffffffff-2222-4333-8444-000000000001";
+
+/** One live note carrying two attachments, one bare note, and one version of the first note still referencing the SAME first attachment — the dedup's case. */
+function privateNotesInput() {
+  const T0 = "2026-07-01T00:00:00.000Z";
+  const T1 = "2026-07-02T00:00:00.000Z";
+  return {
+    notes: [
+      {
+        id: "pn-1", title: "Tajni plan", yjsState: b64(privateTextSnapshot("Sadržaj")),
+        plaintext: "Sadržaj",
+        attachments: [
+          { id: PRIVATE_ATT_A, fileName: "slika.png", mime: "image/png", sizeBytes: 3 },
+          { id: PRIVATE_ATT_B, fileName: "ugovor.pdf", mime: "application/pdf", sizeBytes: 5 },
+        ],
+        createdAt: T0, updatedAt: T1,
+      },
+      {
+        id: "pn-2", title: "", yjsState: b64(privateTextSnapshot("Druga")), plaintext: "Druga",
+        attachments: [], createdAt: T0, updatedAt: T0,
+      },
+    ],
+    versions: [
+      {
+        noteId: "pn-1", seq: 1, title: "Tajni plan (staro)",
+        yjsState: b64(privateTextSnapshot("Staro")), plaintext: "Staro",
+        attachments: [{ id: PRIVATE_ATT_A, fileName: "slika.png", mime: "image/png", sizeBytes: 3 }],
+        createdAt: T0,
+      },
+    ],
+  };
+}
+
+describe("private notes in the archive (PRIV v1, ADR-057 §6)", () => {
+  it("writes the decrypted rows into data/private-notes.ndjson — notes first, then versions — and checksums the file", () => {
+    const input = emptyInput();
+    input.privateNotes = privateNotesInput();
+    const archive = buildExportArchive(input);
+
+    const rows = parseNdjson(archive.files.get("data/private-notes.ndjson") ?? "") as {
+      type: string;
+      id?: string;
+      noteId?: string;
+    }[];
+    expect(rows.map((row) => [row.type, row.id ?? row.noteId])).toEqual([
+      ["private-note", "pn-1"],
+      ["private-note", "pn-2"],
+      ["private-note-version", "pn-1"],
+    ]);
+    const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as {
+      checksums: Record<string, string>;
+    };
+    expect(manifest.checksums["data/private-notes.ndjson"]).toBe(
+      sha256(archive.files.get("data/private-notes.ndjson") ?? ""),
+    );
+  });
+
+  it("mirrors each note under notes-private/<id>.md — the ID, never the title, anywhere in the entry listing", () => {
+    const input = emptyInput();
+    input.privateNotes = privateNotesInput();
+    const archive = buildExportArchive(input);
+
+    expect(archive.files.get("notes-private/pn-1.md")).toContain("Sadržaj");
+    expect(archive.files.get("notes-private/pn-2.md")).toContain("Druga");
+    // The title must not leak into a zip listing even inside the sealed
+    // container — the whole reason the path diverges from public notes'.
+    expect([...archive.files.keys()].every((path) => !path.includes("Tajni"))).toBe(true);
+    // Versions get no mirror, exactly as note versions get none.
+    expect([...archive.files.keys()].filter((path) => path.startsWith("notes-private/"))).toHaveLength(2);
+  });
+
+  it("declares each attachment ONCE as a private-blob entry — its own namespace, never the blobs/ union — and lists it in the manifest", () => {
+    const input = emptyInput();
+    input.privateNotes = privateNotesInput();
+    const archive = buildExportArchive(input);
+
+    const privateEntries = archive.binaries.filter((entry) => entry.kind === "private-blob");
+    // ATT_A is referenced by the live envelope AND the version — one entry.
+    expect(privateEntries.map((entry) => entry.path).sort()).toEqual([
+      `private-blobs/${PRIVATE_ATT_A}`,
+      `private-blobs/${PRIVATE_ATT_B}`,
+    ]);
+    const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as {
+      blobs: unknown[];
+      privateBlobs: { id: string; sizeBytes: number }[];
+    };
+    expect(manifest.privateBlobs).toEqual([
+      { id: PRIVATE_ATT_A, sizeBytes: 3 },
+      { id: PRIVATE_ATT_B, sizeBytes: 5 },
+    ]);
+    // NOT the content-addressed union: no sha256 identity exists for them.
+    expect(manifest.blobs).toEqual([]);
+  });
+
+  it("rides OUTSIDE the module choice — a tasks-only subset still carries the whole private section", () => {
+    const input = emptyInput();
+    input.modules = new Set<ArchiveModuleId>(["tasks"]);
+    input.privateNotes = privateNotesInput();
+    const archive = buildExportArchive(input);
+
+    expect(parseNdjson(archive.files.get("data/private-notes.ndjson") ?? "")).toHaveLength(3);
+    // And counts into no module: the manifest's arithmetic is untouched.
+    expect(archive.totalRecords).toBe(0);
+  });
+});

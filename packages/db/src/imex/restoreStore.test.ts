@@ -35,6 +35,7 @@ import {
   NotificationStore,
   PeopleStore,
   PlanStore,
+  PrivateNoteStore,
   ProfileStore,
   RestoreStore,
   RestoreValidationError,
@@ -69,6 +70,7 @@ import type {
   NotificationRecord,
   Person,
   RestoredNoteDerived,
+  RestoredPrivateRows,
   StudyPlan,
   Subject,
   Task,
@@ -938,12 +940,20 @@ describe("RestoreStore", () => {
     //    opens only under this account's data key — and a restore deliberately
     //    does not touch the device's backup routine: backups keep running
     //    right through a restore, which is when they matter most.
-    //  - private_notes / private_note_versions / private_settings (migration
-    //    045 / ADR-057): PRIV slice d (interchange) decides how private notes
-    //    travel; until then a restore of ANY archive must not destroy sealed
-    //    rows it knows nothing about — no archive carries them, so wiping them
-    //    would be pure loss, and gather/undo deliberately do not carry them
-    //    either. The key-chain row goes with the notes it opens.
+    //  - private_notes / private_note_versions (migration 045 / ADR-057 §6):
+    //    NOT in the unconditional wipe list because they join the replace
+    //    CONDITIONALLY — wiped and refilled only when private records are
+    //    actually being restored (`RestoreProfileInput.privateSealed`, the
+    //    re-sealed rows main produced under the live DEK). An archive with no
+    //    private records — or a locked/un-set-up target section — passes no
+    //    `privateSealed`, and the sealed rows stand UNTOUCHED: a restore must
+    //    never cost a profile sealed rows the archive says nothing about.
+    //    The conditional-replace tests below pin both directions.
+    //  - private_settings (migration 045 / ADR-057): the per-profile KEY CHAIN
+    //    — wraps and lock preferences — which no archive ever carries and no
+    //    restore may ever touch: destroying it would destroy the only paths to
+    //    the DEK that opens the rows the conditional replace just preserved
+    //    (or wrote).
     const allowlist = new Set<string>([
       "meta",
       "profiles",
@@ -963,6 +973,100 @@ describe("RestoreStore", () => {
     const unaccounted = tables.filter((table) => !wipeTables.has(table) && !allowlist.has(table));
 
     expect(unaccounted).toEqual([]);
+  });
+
+  // --- The private tables' CONDITIONAL replace (ADR-057 §6) ------------------
+
+  /** Seeds one sealed note with one sealed version through the real store — opaque bytes; the crypto is main's business, never this store's. */
+  function seedSealedRows(profileId: string): { note: Uint8Array; version: Uint8Array } {
+    const store = new PrivateNoteStore(db.raw, profileId);
+    const note = new TextEncoder().encode(`sealed-live-${profileId}`);
+    const version = new TextEncoder().encode(`sealed-v1-${profileId}`);
+    store.writeSealed("priv-1", note, NOW);
+    store.writeVersion("priv-1", 1, version, NOW);
+    return { note, version };
+  }
+
+  function sealedRowsOf(profileId: string): { id: string; sealed: Buffer }[] {
+    return db.raw
+      .prepare("SELECT id, sealed FROM private_notes WHERE profile_id = ? ORDER BY id")
+      .all(profileId) as { id: string; sealed: Buffer }[];
+  }
+
+  it("T3b: leaves the sealed private tables UNTOUCHED when no privateSealed is supplied — absent and null alike", () => {
+    const profileA = createProfile(db, "A");
+    const fixtureA = seedFixture(db, profileA, "A");
+    const seeded = seedSealedRows(profileA);
+
+    new RestoreStore(db.raw, profileA).replaceProfileData(
+      { profileName: "A", profilePicture: null, settings: emptySettings(), data: fixtureA.data, derived: fixtureA.derived },
+      NOW,
+    );
+    new RestoreStore(db.raw, profileA).replaceProfileData(
+      { profileName: "A", profilePicture: null, settings: emptySettings(), data: fixtureA.data, derived: fixtureA.derived, privateSealed: null },
+      NOW,
+    );
+
+    // Byte-for-byte: two whole-profile replaces later, the sealed rows stand.
+    const store = new PrivateNoteStore(db.raw, profileA);
+    expect(new Uint8Array(store.readSealed("priv-1"))).toEqual(seeded.note);
+    expect(new Uint8Array(store.readVersion("priv-1", 1))).toEqual(seeded.version);
+  });
+
+  it("T3c: wipes and refills the private tables byte-for-byte when privateSealed IS supplied, counting the rows written", () => {
+    const profileA = createProfile(db, "A");
+    const fixtureA = seedFixture(db, profileA, "A");
+    seedSealedRows(profileA);
+
+    const incoming: RestoredPrivateRows = {
+      notes: [
+        { id: "arch-1", sealed: new TextEncoder().encode("resealed-live"), createdAt: "2026-02-01T00:00:00.000Z", updatedAt: "2026-02-02T00:00:00.000Z" },
+      ],
+      versions: [
+        { noteId: "arch-1", seq: 3, sealed: new TextEncoder().encode("resealed-v3"), createdAt: "2026-02-01T00:00:00.000Z" },
+      ],
+    };
+    // The first replace leaves the seeded sealed rows standing (T3b's fact),
+    // so the second one's wipe genuinely has something to prove.
+    const withoutPrivate = new RestoreStore(db.raw, profileA).replaceProfileData(
+      { profileName: "A", profilePicture: null, settings: emptySettings(), data: fixtureA.data, derived: fixtureA.derived },
+      NOW,
+    );
+    const withPrivate = new RestoreStore(db.raw, profileA).replaceProfileData(
+      { profileName: "A", profilePicture: null, settings: emptySettings(), data: fixtureA.data, derived: fixtureA.derived, privateSealed: incoming },
+      NOW,
+    );
+    expect(withPrivate).toBe(withoutPrivate + 2);
+
+    // The old rows are gone whole — versions with them — and the supplied ones
+    // stand verbatim, timestamps from the archive rows themselves.
+    expect(sealedRowsOf(profileA).map((row) => row.id)).toEqual(["arch-1"]);
+    const store = new PrivateNoteStore(db.raw, profileA);
+    expect(new Uint8Array(store.readSealed("arch-1"))).toEqual(new TextEncoder().encode("resealed-live"));
+    expect(store.listVersions("arch-1")).toEqual([{ seq: 3, createdAt: "2026-02-01T00:00:00.000Z" }]);
+    expect(new Uint8Array(store.readVersion("arch-1", 3))).toEqual(new TextEncoder().encode("resealed-v3"));
+    expect(store.list().map((meta) => ({ id: meta.id, createdAt: meta.createdAt, updatedAt: meta.updatedAt }))).toEqual([
+      { id: "arch-1", createdAt: "2026-02-01T00:00:00.000Z", updatedAt: "2026-02-02T00:00:00.000Z" },
+    ]);
+  });
+
+  it("T3d: scopes the conditional wipe to THIS profile — another profile's sealed rows survive", () => {
+    const profileA = createProfile(db, "A");
+    const profileB = createProfile(db, "B");
+    const fixtureA = seedFixture(db, profileA, "A");
+    seedSealedRows(profileB);
+
+    new RestoreStore(db.raw, profileA).replaceProfileData(
+      {
+        profileName: "A", profilePicture: null, settings: emptySettings(), data: fixtureA.data,
+        derived: fixtureA.derived, privateSealed: { notes: [], versions: [] },
+      },
+      NOW,
+    );
+
+    expect(sealedRowsOf(profileB).map((row) => row.id)).toEqual(["priv-1"]);
+    // And an EMPTY supplied payload honestly empties this profile's tables.
+    expect(sealedRowsOf(profileA)).toEqual([]);
   });
 
   it("T4: succeeds when a task's parent appears after its child in the archive's own array", () => {

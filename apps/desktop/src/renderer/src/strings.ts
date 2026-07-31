@@ -1238,8 +1238,11 @@ export const strings = {
     /** First open, nothing set up yet: the two-sentence honest explanation, the credential choice, the kit step. */
     setup: {
       title: "Privatne beleške",
+      // ADR-057 §6 changed the export half of this promise: private notes CAN
+      // ride in a manual, password-protected export while the section is
+      // unlocked — automatic backups still never carry them.
       intro:
-        "Privatne beleške se šifruju posebnim ključem i čitljive su samo dok je ova sekcija otključana — ne pojavljuju se u pretrazi, na kontrolnoj tabli, u izvozima ni u rezervnim kopijama.",
+        "Privatne beleške se šifruju posebnim ključem i čitljive su samo dok je ova sekcija otključana — ne pojavljuju se u pretrazi, na kontrolnoj tabli ni u automatskim rezervnim kopijama. U ručni izvoz ulaze samo dok je sekcija otključana i samo uz lozinku arhive.",
       introSecond:
         "Ako izgubiš i lozinku i kod za oporavak, sadržaj je nepovratno izgubljen — ne postoji pomoćni ulaz, ni za tebe ni za aplikaciju.",
       credentialLabel: "Čime se sekcija otključava",
@@ -2434,6 +2437,18 @@ export const strings = {
       missingAttachmentsUnitOne: "prilog",
       missingAttachmentsUnitMany: "priloga",
       missingAttachmentsSuffix: "— arhiva je ipak sačuvana.",
+      /**
+       * Privatne beleške u izvozu (ADR-057 §6). The included line renders as
+       * „… (N).“ with the count in parentheses — deliberately, so one form
+       * reads correctly at every count (a declined „beleške/beležaka“ would
+       * need three). Shown whenever `privateNotes > 0`: the user must never
+       * learn from a zip listing that their most guarded notes left the app.
+       * The two skip sentences map the result's `privateNotesSkipped` codes —
+       * exactly one is ever shown, and only when there was something to skip.
+       */
+      privateNotesIncludedPrefix: "U arhivu su uključene i privatne beleške",
+      privateNotesSkippedLocked: "Privatne beleške nisu izvezene — sekcija je zaključana.",
+      privateNotesSkippedPlaintext: "Privatne beleške nisu izvezene jer se izvozi bez lozinke.",
       error: "Izvoz nije uspeo. Pokušaj ponovo.",
     },
     /**
@@ -2586,6 +2601,19 @@ export const strings = {
       corruptBlobsUnitOne: "prilog",
       corruptBlobsUnitMany: "priloga",
       corruptBlobsSuffix: "sa oštećenim sadržajem — te datoteke neće biti vraćene.",
+      /**
+       * Privatne beleške u pregledu (ADR-057 §6). The carries line renders as
+       * „… (N).“ — the count in parentheses, one form for every count (the
+       * export block's own arrangement) — and is shown WHENEVER the archive
+       * carries private notes, restorable or not: someone confirming a
+       * restore must see that this file holds somebody's private section.
+       * The skip sentence joins it only while the target's section is locked
+       * or not set up; in the preview's own tense (the corrupt-blob line's
+       * precedent), because nothing has been skipped yet.
+       */
+      privateNotesIncomingPrefix: "Arhiva sadrži i privatne beleške",
+      privateNotesSkippedNotice:
+        "Privatne beleške iz arhive neće biti vraćene — otključaj privatnu sekciju pre vraćanja.",
       applyButton: "Vrati podatke",
       cancelButton: "Otkaži",
       applying: "Vraćanje u toku…",
@@ -2719,6 +2747,10 @@ export const strings = {
           "Datumi semestra iz arhive se ne uvoze — tvoj kalendar ostaje na tvom rasporedu.",
         "profile-picture-not-imported":
           "Slika profila iz arhive se ne uvozi — tvoja slika ostaje tvoja.",
+        // ADR-057 §6: privatne beleške se nikada ne uvoze — tuđe otključane
+        // tajne se ne zapečaćuju pod tvojim ključem.
+        "private-notes-not-imported":
+          "Privatne beleške iz arhive se ne uvoze — privatna sekcija je lična i ne prenosi se u tuđ profil.",
         "template-name-taken": "Šablon istog imena već postoji kod tebe — tvoj se zadržava.",
         "source-inbox-collapsed":
           "Podrazumevana lista iz arhive se ne pravi ponovo — njeni zadaci ulaze u tvoju podrazumevanu listu.",

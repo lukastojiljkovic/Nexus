@@ -26,7 +26,7 @@ function ndjson(records: readonly Record<string, unknown>[]): string {
   return `${records.map((record) => JSON.stringify(record)).join("\n")}\n`;
 }
 
-/** Converts a built archive into what a real caller would hand the reader: NDJSON/manifest text, `.ydoc` bytes, and the set of blob names actually on disk — never `tables/*.csv` or the Markdown mirror, which this module never reads. */
+/** Converts a built archive into what a real caller would hand the reader: NDJSON/manifest text, `.ydoc` bytes, and the sets of blob names — content-addressed and private (ADR-057 §6) — actually on disk. Never `tables/*.csv` or the Markdown mirrors, which this module never reads. */
 function toImportInput(archive: ExportArchive): ImportArchiveInput {
   const files = new Map<string, string>();
   for (const [path, content] of archive.files) {
@@ -34,11 +34,13 @@ function toImportInput(archive: ExportArchive): ImportArchiveInput {
   }
   const ydocs = new Map<string, Uint8Array>();
   const blobNames = new Set<string>();
+  const privateBlobNames = new Set<string>();
   for (const binary of archive.binaries) {
     if (binary.kind === "bytes") ydocs.set(binary.path, binary.bytes);
-    else blobNames.add(binary.sha256);
+    else if (binary.kind === "attachment") blobNames.add(binary.sha256);
+    else privateBlobNames.add(binary.id);
   }
-  return { files, ydocs, blobNames, hash: sha256 };
+  return { files, ydocs, blobNames, privateBlobNames, hash: sha256 };
 }
 
 function emptyExportInput(): ExportArchiveInput {
@@ -571,6 +573,10 @@ const EMPTY_DATA_FILE_NAMES = [
   "data/notifications.ndjson",
   "data/notes.ndjson",
   "data/dashboard.ndjson",
+  // ADR-057 §6 (`1.23.0`) — always written, empty when no private notes ride.
+  // The 1.22-era test below strips it (and its checksum) back off, because a
+  // 1.22 writer never produced it.
+  "data/private-notes.ndjson",
 ] as const;
 
 /** A minimal, fully valid manifest+data-files set (5 empty NDJSON files, checksums matching), so an individual test can override exactly one thing and stay isolated from every other rule. */
@@ -860,9 +866,7 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // SUPERVISOR NOTE: `1.25.0`, not `1.23.0` — the nearest minor strictly ahead
-  // of this build's `1.24.0`. `1.23.0` is a sibling lane's concurrent bump and
-  // sits BEHIND this build, so it would pass the gate, not exercise it.
+  // `1.25.0`: the nearest minor strictly ahead of this build's `1.24.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
     const files = baseFiles({ schemaVersion: "1.25.0" });
     const result = parseImportArchive(emptyInputWith(files));
@@ -2845,8 +2849,6 @@ describe("parseImportArchive — note folder preferences (the 1.7.0 era gate)", 
 });
 
 describe("parseImportArchive — schema version", () => {
-  // SUPERVISOR NOTE: 1.24.0 skips 1.23.0 deliberately — a sibling lane holds
-  // 1.23.0 concurrently. After both merge, this pin stays at the higher number.
   it("is 1.24.0 for this build", () => {
     expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.24.0");
   });
@@ -3038,9 +3040,7 @@ describe("parseImportArchive — schema version", () => {
     expect(result.manifest?.profile.kind).toBe("personal");
   });
 
-  // SUPERVISOR NOTE: `1.25.0`, not `1.23.0` — the nearest minor strictly ahead
-  // of this build's `1.24.0` (`1.23.0` belongs to a sibling lane and is BEHIND
-  // this build, so it parses; see the constant's note).
+  // `1.25.0`: the nearest minor strictly ahead of this build's `1.24.0`.
   it("refuses a newer minor", () => {
     const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.25.0" })));
     expect(result.problems).toEqual([
@@ -3979,5 +3979,168 @@ describe("parseImportArchive — mode is opt-in and restore is unchanged", () =>
     expect(salvaged.problems).toEqual([]);
     expect(salvaged.dropped).toEqual([]);
     expect(salvaged.data).toEqual(strict.data);
+  });
+});
+
+// --- Private notes (PRIV v1, ADR-057 §6) -------------------------------------
+
+function b64Of(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString("base64");
+}
+
+const PRIVATE_ATT = "0a1b2c3d-1111-4222-8333-abcdefabcdef";
+
+const VALID_PRIVATE_NOTE = {
+  type: "private-note", id: "pn-1", title: "Tajni plan",
+  yjsState: b64Of(docSnapshot("Sadržaj")), plaintext: "Sadržaj",
+  attachments: [{ id: PRIVATE_ATT, fileName: "slika.png", mime: "image/png", sizeBytes: 3 }],
+  createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-02T00:00:00.000Z",
+};
+
+const VALID_PRIVATE_VERSION = {
+  type: "private-note-version", noteId: "pn-1", seq: 1, title: "Tajni plan (staro)",
+  yjsState: b64Of(docSnapshot("Staro")), plaintext: "Staro",
+  attachments: [], createdAt: "2026-07-01T00:00:00.000Z",
+};
+
+/** `baseFiles` with `rows` in `data/private-notes.ndjson` — the checksum comes along for free, since the fixture computes it off the contents. */
+function privateFiles(rows: readonly Record<string, unknown>[]): Map<string, string> {
+  return baseFiles({ fileContents: { "data/private-notes.ndjson": ndjson(rows) } });
+}
+
+describe("parseImportArchive — private notes (PRIV v1, ADR-057 §6)", () => {
+  it("round-trips the whole private section — beside data, never inside it", () => {
+    const input = emptyExportInput();
+    input.privateNotes = {
+      notes: [
+        {
+          id: "pn-1", title: "Tajni plan", yjsState: b64Of(docSnapshot("Sadržaj")),
+          plaintext: "Sadržaj",
+          attachments: [{ id: PRIVATE_ATT, fileName: "slika.png", mime: "image/png", sizeBytes: 3 }],
+          createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-02T00:00:00.000Z",
+        },
+      ],
+      versions: [
+        {
+          noteId: "pn-1", seq: 2, title: "Staro", yjsState: b64Of(docSnapshot("Staro")),
+          plaintext: "Staro", attachments: [], createdAt: "2026-07-01T00:00:00.000Z",
+        },
+      ],
+    };
+    const archive = buildExportArchive(input);
+    const result = parseImportArchive(toImportInput(archive));
+
+    expect(result.problems).toEqual([]);
+    expect(result.privateNotes).toEqual(input.privateNotes);
+    // `ProfileData` itself is untouched — the section is a parallel payload.
+    expect(result.data).toEqual(input.data);
+  });
+
+  it("era: a 1.22 archive — no private file, no checksum, no manifest inventory — parses with zero private rows", () => {
+    const files = baseFiles({ schemaVersion: "1.22.0" });
+    // Strip what a 1.22 writer never wrote (absent-and-undeclared is nothing
+    // at all under the checksum walk's union rule).
+    files.delete("data/private-notes.ndjson");
+    const manifest = JSON.parse(files.get("manifest.json") ?? "") as {
+      checksums: Record<string, string>;
+    };
+    delete manifest.checksums["data/private-notes.ndjson"];
+    files.set("manifest.json", JSON.stringify(manifest));
+
+    const result = parseImportArchive(emptyInputWith(files));
+    expect(result.problems).toEqual([]);
+    expect(result.privateNotes).toEqual({ notes: [], versions: [] });
+    expect(result.manifest?.privateBlobs).toEqual([]);
+  });
+
+  it("refuses a private row outside its own file", () => {
+    const files = baseFiles({
+      fileContents: { "data/notes.ndjson": ndjson([VALID_PRIVATE_NOTE]) },
+    });
+    const result = parseImportArchive(emptyInputWith(files));
+    expect(result.problems).toEqual([
+      { severity: "error", code: "invalid-record", path: "data/notes.ndjson", line: 1, detail: "type" },
+    ]);
+  });
+
+  it("refuses a yjsState that is not a decodable Yjs update, naming the field", () => {
+    const files = privateFiles([{ ...VALID_PRIVATE_NOTE, yjsState: b64Of(new Uint8Array([9, 9, 9])) }]);
+    const result = parseImportArchive(emptyInputWith(files));
+    expect(result.problems).toEqual([
+      {
+        severity: "error", code: "invalid-record", path: "data/private-notes.ndjson",
+        line: 1, detail: "yjsState",
+      },
+    ]);
+  });
+
+  it("refuses a duplicate private-note id, and a version keyed on the same (noteId, seq) twice", () => {
+    const blobsPresent = { privateBlobNames: new Set([PRIVATE_ATT]) };
+    const withDuplicateNote = parseImportArchive(
+      emptyInputWith(privateFiles([VALID_PRIVATE_NOTE, VALID_PRIVATE_NOTE]), blobsPresent),
+    );
+    expect(withDuplicateNote.problems).toEqual([
+      { severity: "error", code: "duplicate-id", path: "data/private-notes.ndjson", line: 2, detail: "pn-1" },
+    ]);
+
+    const withDuplicateVersion = parseImportArchive(
+      emptyInputWith(
+        privateFiles([VALID_PRIVATE_NOTE, VALID_PRIVATE_VERSION, VALID_PRIVATE_VERSION]),
+        blobsPresent,
+      ),
+    );
+    expect(withDuplicateVersion.problems).toEqual([
+      {
+        severity: "error", code: "duplicate-id", path: "data/private-notes.ndjson",
+        line: 3, detail: "noteId=pn-1,seq=1",
+      },
+    ]);
+  });
+
+  it("refuses a version whose note the archive does not carry (restore) and drops it (import)", () => {
+    const files = privateFiles([VALID_PRIVATE_VERSION]);
+
+    const strict = parseImportArchive(emptyInputWith(files));
+    expect(strict.problems).toEqual([
+      {
+        severity: "error", code: "unknown-reference", path: "data/private-notes.ndjson",
+        line: 1, detail: "noteId=pn-1",
+      },
+    ]);
+    expect(strict.privateNotes).toBeNull();
+
+    const salvaged = parseImportArchive({ ...emptyInputWith(files), mode: "import" });
+    expect(salvaged.privateNotes).toEqual({ notes: [], versions: [] });
+    // The drop is named against NO module — the private section belongs to none.
+    expect(salvaged.dropped).toEqual([
+      { module: null, type: "private-note-version", reason: "unknown-reference", detail: "noteId=pn-1" },
+    ]);
+  });
+
+  it("warns ONCE per missing private-blob id — the rows still parse — and not at all when the id is present", () => {
+    const files = privateFiles([VALID_PRIVATE_NOTE, { ...VALID_PRIVATE_VERSION, attachments: VALID_PRIVATE_NOTE.attachments }]);
+
+    const missing = parseImportArchive(emptyInputWith(files));
+    expect(missing.problems).toEqual([
+      { severity: "warning", code: "missing-blob", path: `private-blobs/${PRIVATE_ATT}`, detail: PRIVATE_ATT },
+    ]);
+    expect(missing.privateNotes?.notes).toHaveLength(1);
+
+    const present = parseImportArchive(
+      emptyInputWith(files, { privateBlobNames: new Set([PRIVATE_ATT]) }),
+    );
+    expect(present.problems).toEqual([]);
+  });
+
+  it("refuses a malformed manifest privateBlobs inventory, naming the field", () => {
+    const files = baseFiles();
+    const manifest = JSON.parse(files.get("manifest.json") ?? "") as Record<string, unknown>;
+    manifest.privateBlobs = [{ id: "", sizeBytes: 3 }];
+    files.set("manifest.json", JSON.stringify(manifest));
+
+    const result = parseImportArchive(emptyInputWith(files));
+    expect(result.problems).toEqual([
+      { severity: "error", code: "invalid-manifest", path: "manifest.json", detail: "privateBlobs[0].id" },
+    ]);
   });
 });

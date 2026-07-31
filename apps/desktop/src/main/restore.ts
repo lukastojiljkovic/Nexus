@@ -21,6 +21,7 @@ import {
   type ImportDuplicateGroup as CoreImportDuplicateGroup,
   type ImportPlanReport as CoreImportPlanReport,
   type ImportSkipReason as CoreImportSkipReason,
+  type ExportPrivateNotes,
   type ImportProblem,
   type LlmAnswerReport,
   type LlmDeckChoice,
@@ -30,13 +31,21 @@ import {
   type ProfileData,
 } from "@nexus/core";
 import { uuidv7 } from "@nexus/db";
-import type { ForeignImportStore, RestoredNoteDerived, RestoreStore } from "@nexus/db";
+import type {
+  ForeignImportStore,
+  PrivateNoteStore,
+  RestoredNoteDerived,
+  RestoredPrivateRows,
+  RestoreStore,
+} from "@nexus/db";
 
 import { ApkgReadError, readApkg } from "./apkgReader.js";
 import { ArchiveReadError, inspectArchiveFile, openArchive, type OpenedArchive } from "./archiveReader.js";
 import { cancelIdleCompactions } from "./notes.js";
+import type { PrivResealOutcome } from "./priv.js";
 import {
   deriveRestoredNotes,
+  gatherPrivateSealedRows,
   gatherProfileData,
   gatherProfileSettings,
   type ProfileDataDeps,
@@ -174,6 +183,8 @@ interface ReadyRestore {
   profilePicture: ArchiveProfilePicture | null;
   settings: ExportSettings;
   data: ProfileData;
+  /** The archive's private notes (ADR-057 §6), beside `data` exactly as the parser answers them — empty when it carries none, which is also every pre-1.23 archive. */
+  privateNotes: ExportPrivateNotes;
 }
 
 /**
@@ -216,6 +227,19 @@ interface RestoreUndo {
     data: ProfileData;
     derived: ReadonlyMap<string, RestoredNoteDerived>;
   };
+  /**
+   * The private tables' pre-operation SEALED rows, verbatim (ADR-057 §6) —
+   * captured OUTSIDE `ProfileData`, and non-null exactly when the operation
+   * replaced those tables. Bytes rather than envelopes on purpose: undoing a
+   * restore must not need the PRIV DEK, because the section may well have
+   * locked between the apply and the undo click. Null means the operation left
+   * the tables untouched, so undo leaves them untouched too — clobbering
+   * sealed rows the operation never wrote would make undo itself the data
+   * loss.
+   */
+  privateSealed: RestoredPrivateRows | null;
+  /** The fresh sealed private-blob files the restore's re-seal wrote — removed (best-effort, no refcount: the ids are random and never shared) when undone. */
+  addedPrivateBlobs: readonly string[];
   /** Every blob hash `applyRestore` actually wrote (`saveBlob`'s `created: true`) — the only ones undo may ever remove. */
   addedBlobs: readonly string[];
   appliedAt: string;
@@ -263,6 +287,25 @@ export interface RestoreDeps extends ProfileDataDeps {
    */
   blobRefCount(profileId: string, sha256: string): number;
   deleteBlobIfOrphaned(sha256: string, refCount: number): Promise<void>;
+  /** The sealed private-note store (ADR-057 §6) — what undo's parallel sealed-rows capture reads through (`gatherPrivateSealedRows`). Never decrypts; it cannot. */
+  privateNoteStore(profileId: string): PrivateNoteStore;
+  /** Whether `profileId`'s private section is set up AND unlocked right now — the preview's `willRestore` fact, re-checked at apply time by the re-seal itself. */
+  privUnlocked(profileId: string): boolean;
+  /**
+   * `main/priv.ts`'s `privResealForRestore`, injected on `verifyAccountPasscode`'s
+   * terms (this module must stay importable under plain Node): re-seals the
+   * archive's decrypted private notes under the target's CURRENT DEK, writing
+   * each attachment's fresh sealed blob file as it goes, or answers null while
+   * the section is locked or not set up — the named-skip path, which leaves the
+   * profile's own sealed rows standing.
+   */
+  resealPrivateNotes(
+    profileId: string,
+    data: ExportPrivateNotes,
+    readArchiveBlob: (id: string) => Promise<Uint8Array | null>,
+  ): Promise<PrivResealOutcome | null>;
+  /** Best-effort removal of ONE sealed private-blob file the re-seal added — undo's cleanup. No refcount twin: the ids are random and never shared (no content addressing, by design). */
+  removePrivateBlob(id: string): Promise<void>;
 }
 
 /**
@@ -412,8 +455,20 @@ function importParseInput(archive: OpenedArchive): Parameters<typeof parseImport
     files: archive.files,
     ydocs: archive.ydocs,
     blobNames: archive.blobNames,
+    privateBlobNames: archive.privateBlobNames,
     hash: sha256Hex,
     mode: "import",
+  };
+}
+
+/** The planner's private-note COUNTS (ADR-057 §6): all it may ever learn about them — a foreign import never imports the private section, and the counts exist only so its named skip can say how much is staying behind. */
+function privateNoteCounts(privateNotes: ExportPrivateNotes | null): {
+  notes: number;
+  versions: number;
+} {
+  return {
+    notes: privateNotes?.notes.length ?? 0,
+    versions: privateNotes?.versions.length ?? 0,
   };
 }
 
@@ -531,10 +586,11 @@ export async function previewRestore(
     files: archive.files,
     ydocs: archive.ydocs,
     blobNames: archive.blobNames,
+    privateBlobNames: archive.privateBlobNames,
     hash: sha256Hex,
   });
 
-  if (parsed.data === null || parsed.manifest === null) {
+  if (parsed.data === null || parsed.manifest === null || parsed.privateNotes === null) {
     await archive.close();
     return { status: "invalid", problems: parsed.problems.map(toRestoreProblem) };
   }
@@ -588,6 +644,7 @@ export async function previewRestore(
     profilePicture: parsed.manifest.profile.picture,
     settings: parsed.manifest.settings,
     data: parsed.data,
+    privateNotes: parsed.privateNotes,
   };
 
   const preview: RestorePreview = {
@@ -602,6 +659,14 @@ export async function previewRestore(
     incoming,
     warnings,
     corruptBlobs: archive.corruptBlobNames.size,
+    // ADR-057 §6: the archive carrying N private notes is stated whenever it
+    // does, and `willRestore` is the section's gate as it stands NOW — the
+    // apply re-checks it, so a lock between preview and apply degrades to the
+    // same skip this preview would have named.
+    privateNotes:
+      parsed.privateNotes.notes.length > 0
+        ? { count: parsed.privateNotes.notes.length, willRestore: deps.privUnlocked(profileId) }
+        : null,
   };
   return { status: "ready", preview };
 }
@@ -624,8 +689,18 @@ export async function previewRestore(
  *    at most a few unreferenced blob files, which are harmless leftovers —
  *    the reverse order would instead leave rows pointing at attachment files
  *    that were never written.
+ * 3b. When the archive carries private notes AND the target's section is
+ *    unlocked (re-checked here — the preview's `willRestore` may have gone
+ *    stale), re-seals every envelope under the CURRENT DEK
+ *    (`resealPrivateNotes`), writing the fresh sealed attachment files under
+ *    the same before-the-transaction discipline, and captures the profile's
+ *    existing sealed rows for undo (`gatherPrivateSealedRows`) — bytes, never
+ *    envelopes. A section locked by now simply skips: the archive's private
+ *    rows do not restore, the profile's own sealed rows stand, which is
+ *    exactly what a locked preview promised.
  * 4. Replaces the profile's entire stored content in one transaction
- *    (`RestoreStore.replaceProfileData`).
+ *    (`RestoreStore.replaceProfileData`) — the private tables joining it
+ *    CONDITIONALLY, only when 3b produced rows (ADR-057 §6).
  * 5. Records the undo snapshot, closes the archive, and drops `pending` —
  *    the parse this call just consumed cannot be applied a second time.
  * 6. Schedules the renderer reload on `setTimeout(…, 0)` so this call's own
@@ -697,6 +772,28 @@ export async function applyRestore(
     if (created) addedBlobs.push(sha256);
   }
 
+  // Step 3b (ADR-057 §6): the private re-seal, gated on the section AS IT IS
+  // NOW — null when it locked since the preview, in which case the archive's
+  // private rows simply do not restore and the profile's own sealed rows stand.
+  // The undo capture happens only on the path that will actually replace the
+  // tables: a null capture is what tells undo to leave them untouched too.
+  let privateSealed: RestoredPrivateRows | null = null;
+  let undoPrivateSealed: RestoredPrivateRows | null = null;
+  let addedPrivateBlobs: readonly string[] = [];
+  let missingPrivateBlobs = 0;
+  if (ready.privateNotes.notes.length > 0) {
+    const archive = ready.archive;
+    const resealed = await deps.resealPrivateNotes(profileId, ready.privateNotes, (id) =>
+      archive.privateBlobNames.has(id) ? archive.readPrivateBlob(id) : Promise.resolve(null),
+    );
+    if (resealed !== null) {
+      undoPrivateSealed = gatherPrivateSealedRows(deps.privateNoteStore(profileId));
+      privateSealed = resealed.rows;
+      addedPrivateBlobs = resealed.addedBlobIds;
+      missingPrivateBlobs = resealed.missingBlobs;
+    }
+  }
+
   const now = new Date().toISOString();
   const derived = deriveRestoredNotes(ready.data.notes);
   const rowsWritten = deps.restoreStore(profileId).replaceProfileData(
@@ -706,13 +803,18 @@ export async function applyRestore(
       settings: ready.settings,
       data: ready.data,
       derived,
+      privateSealed,
     },
     now,
   );
 
-  const missingBlobs = restoredAttachments.filter(
-    (attachment) => !ready.archive.blobNames.has(attachment.sha256),
-  ).length;
+  // Private attachment files the archive could not supply count beside the
+  // content-addressed ones: both are attachment rows restored without their
+  // bytes, which is the one fact this number states.
+  const missingBlobs =
+    restoredAttachments.filter(
+      (attachment) => !ready.archive.blobNames.has(attachment.sha256),
+    ).length + missingPrivateBlobs;
 
   const summary: RestoreApplyResult = {
     restored: countProfileModules(ready.data),
@@ -731,6 +833,8 @@ export async function applyRestore(
       data: undoData,
       derived: undoDerived,
     },
+    privateSealed: undoPrivateSealed,
+    addedPrivateBlobs,
     addedBlobs,
     appliedAt: now,
     summary,
@@ -782,6 +886,10 @@ export async function undoRestore(deps: RestoreDeps, profileId: string): Promise
       settings: toUndo.snapshot.settings,
       data: toUndo.snapshot.data,
       derived: toUndo.snapshot.derived,
+      // Byte-for-byte, exactly as captured (ADR-057 §6) — and null whenever
+      // the operation left the private tables untouched, so this undo leaves
+      // them untouched too (edits made since must not be collateral).
+      privateSealed: toUndo.privateSealed,
     },
     now,
   );
@@ -791,6 +899,12 @@ export async function undoRestore(deps: RestoreDeps, profileId: string): Promise
     const refCount = deps.blobRefCount(profileId, sha256);
     if (refCount === 0) blobsRemoved += 1;
     await deps.deleteBlobIfOrphaned(sha256, refCount);
+  }
+  // The re-seal's fresh sealed files, unreferenced the moment the sealed rows
+  // above went back: removed outright — no refcount exists for a random-id
+  // file, by design — and best-effort, like every private-blob unlink.
+  for (const id of toUndo.addedPrivateBlobs) {
+    await deps.removePrivateBlob(id);
   }
 
   undo = null;
@@ -1025,6 +1139,9 @@ export async function previewImport(
         // rows whichever kind of profile wrote them — only the RESTORE, which
         // replaces a profile's identity wholesale, gates on the pair.
         profilePicture: parsed.manifest.profile.picture,
+        // Counts only (ADR-057 §6): private notes NEVER import, and the
+        // planner's named skip is the whole reason it hears about them.
+        privateNotes: privateNoteCounts(parsed.privateNotes),
       },
       importTargetFor(deps, profileId),
       uuidv7,
@@ -1110,6 +1227,7 @@ export function replanImport(
       data: parsed.data,
       dropped: parsed.dropped,
       profilePicture: parsed.manifest.profile.picture,
+      privateNotes: privateNoteCounts(parsed.privateNotes),
     },
     importTargetFor(deps, profileId),
     uuidv7,
@@ -1228,6 +1346,10 @@ export async function applyImport(
       data: undoData,
       derived: undoDerived,
     },
+    // An import never touches the private tables (ADR-057 §6), so its undo
+    // must not either — null is precisely that instruction.
+    privateSealed: null,
+    addedPrivateBlobs: [],
     addedBlobs,
     appliedAt: now,
     summary,
@@ -1415,7 +1537,9 @@ export async function previewApkgImport(
   // thing added to it (ADR-052): when the user chose an EXISTING subject, the
   // translator's `apkg:subject` resolves onto that row instead of minting one.
   const plan = planForeignImport(
-    { data: translation.data, dropped: [], profilePicture: null },
+    // An `.apkg` has no profile picture and no private section — both facts
+    // stated as the zeros they are, never inferred.
+    { data: translation.data, dropped: [], profilePicture: null, privateNotes: { notes: 0, versions: 0 } },
     { ...importTargetFor(deps, profileId), seededIds: translation.seededIds },
     uuidv7,
   );
@@ -1522,6 +1646,9 @@ export async function applyApkgImport(
   undo = {
     kind: "apkg",
     profileId,
+    // Never touches the private tables, so its undo must not either (ADR-057 §6).
+    privateSealed: null,
+    addedPrivateBlobs: [],
     snapshot: {
       profileName: currentProfile.name,
       profilePicture: currentProfile.picture,
@@ -1621,7 +1748,9 @@ function planLlm(
   // `llm:subject` onto the chosen subject, and the deck row is then minted
   // exactly as every other planned row is.
   const plan = planForeignImport(
-    { data: translation.data, dropped: [], profilePicture: null },
+    // A pasted LLM answer has no profile picture and no private section —
+    // both facts stated as the zeros they are, never inferred.
+    { data: translation.data, dropped: [], profilePicture: null, privateNotes: { notes: 0, versions: 0 } },
     { ...importTargetFor(deps, profileId), seededIds: translation.seededIds },
     uuidv7,
     { event: importDuplicates ? "import" : "skip" },
@@ -1831,6 +1960,9 @@ export async function applyLlmImport(
   undo = {
     kind: "llm",
     profileId,
+    // Never touches the private tables, so its undo must not either (ADR-057 §6).
+    privateSealed: null,
+    addedPrivateBlobs: [],
     snapshot: {
       profileName: currentProfile.name,
       profilePicture: currentProfile.picture,

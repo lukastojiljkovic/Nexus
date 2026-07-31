@@ -205,7 +205,7 @@ function plan(
   profilePicture: ArchiveProfilePicture | null = null,
   choices?: ImportDuplicateChoices,
 ) {
-  return planForeignImport({ data, dropped, profilePicture }, target, counterMint(), choices);
+  return planForeignImport({ data, dropped, profilePicture, privateNotes: { notes: 0, versions: 0 } }, target, counterMint(), choices);
 }
 
 /** Every id-shaped string the planned data holds, so a test can assert no source id survived. */
@@ -512,6 +512,38 @@ describe("planForeignImport — singletons collapse", () => {
     expect(report.skips.map((skip) => skip.code)).not.toContain("profile-picture-not-imported");
   });
 
+  // ADR-057 §6: private notes NEVER import — somebody else's decrypted secrets
+  // must not be re-sealed under this profile's key. The planner hears COUNTS
+  // only, names them as two typed skip lines (module null: the private section
+  // belongs to no module), and the per-module arithmetic balances without them.
+  it("never imports private notes — two named, module-less skip lines, and the balance holds", () => {
+    const report = planForeignImport(
+      {
+        data: foreignProfileData(),
+        dropped: [],
+        profilePicture: null,
+        privateNotes: { notes: 2, versions: 3 },
+      },
+      emptyTarget(),
+      counterMint(),
+    ).report;
+
+    expect(report.skips).toContainEqual({
+      code: "private-notes-not-imported", module: null, type: "private-note", count: 2,
+    });
+    expect(report.skips).toContainEqual({
+      code: "private-notes-not-imported", module: null, type: "private-note-version", count: 3,
+    });
+    for (const counts of Object.values(report.modules)) {
+      expect(counts.parsed).toBe(counts.imported + counts.merged + counts.skipped);
+    }
+  });
+
+  it("names no private-notes skip when the archive carries none", () => {
+    const { report } = plan(foreignProfileData());
+    expect(report.skips.map((skip) => skip.code)).not.toContain("private-notes-not-imported");
+  });
+
   it("imports the review log and focus sessions — FSRS history is study data", () => {
     const { data } = plan(foreignProfileData());
     expect(data.reviewLog).toHaveLength(1);
@@ -721,12 +753,12 @@ describe("planForeignImport — purity", () => {
 
   it("plans the same archive identically twice, given the same minting sequence", () => {
     const first = planForeignImport(
-      { data: foreignProfileData(), dropped: [], profilePicture: null },
+      { data: foreignProfileData(), dropped: [], profilePicture: null, privateNotes: { notes: 0, versions: 0 } },
       emptyTarget(),
       counterMint(),
     );
     const second = planForeignImport(
-      { data: foreignProfileData(), dropped: [], profilePicture: null },
+      { data: foreignProfileData(), dropped: [], profilePicture: null, privateNotes: { notes: 0, versions: 0 } },
       emptyTarget(),
       counterMint(),
     );
@@ -1322,13 +1354,13 @@ describe("planForeignImport — duplicate detection", () => {
     );
 
     const first = planForeignImport(
-      { data: source, dropped: [], profilePicture: null },
+      { data: source, dropped: [], profilePicture: null, privateNotes: { notes: 0, versions: 0 } },
       target,
       counterMint(),
       choices,
     );
     const second = planForeignImport(
-      { data: foreignProfileData(), dropped: [], profilePicture: null },
+      { data: foreignProfileData(), dropped: [], profilePicture: null, privateNotes: { notes: 0, versions: 0 } },
       target,
       counterMint(),
       choices,
@@ -1396,7 +1428,7 @@ describe("planForeignImport — seeded ids", () => {
     let minted = 0;
     const mintId = (): string => `new-${++minted}`;
     planForeignImport(
-      { data: deckedData(false), dropped: [], profilePicture: null },
+      { data: deckedData(false), dropped: [], profilePicture: null, privateNotes: { notes: 0, versions: 0 } },
       emptyTarget({ seededIds: new Map([[SEEDED, "subject-live"]]) }),
       mintId,
     );
