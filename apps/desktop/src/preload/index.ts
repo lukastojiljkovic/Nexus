@@ -261,10 +261,12 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.notesLoad, { profileId, id: noteId }),
   appendNoteUpdate: (profileId, noteId, update, title) =>
     ipcRenderer.invoke(IpcChannel.notesAppendUpdate, { profileId, id: noteId, update, title }),
-  deleteNote: (profileId, noteId) =>
-    ipcRenderer.invoke(IpcChannel.notesDelete, { profileId, id: noteId }),
+  deleteNote: (profileId, noteId, cards = "keep") =>
+    ipcRenderer.invoke(IpcChannel.notesDelete, { profileId, id: noteId, cards }),
   restoreNote: (profileId, noteId) =>
     ipcRenderer.invoke(IpcChannel.notesRestore, { profileId, id: noteId }),
+  countNoteCards: (profileId, noteId) =>
+    ipcRenderer.invoke(IpcChannel.notesCardsCount, { profileId, id: noteId }),
   listNoteFolders: (profileId) => ipcRenderer.invoke(IpcChannel.noteFoldersList, { profileId }),
   createNoteFolder: (profileId, input) =>
     ipcRenderer.invoke(IpcChannel.noteFoldersCreate, { profileId, input }),

@@ -136,6 +136,7 @@ export class NoteStore {
   private readonly deleteCoveredUpdates: Database.Statement;
   private readonly markDeleted: Database.Statement;
   private readonly markRestored: Database.Statement;
+  private readonly selectDeletedAt: Database.Statement;
   private readonly selectFolderInProfile: Database.Statement;
   private readonly updateFolderId: Database.Statement;
   private readonly updatePinned: Database.Statement;
@@ -229,6 +230,12 @@ export class NoteStore {
     );
     this.markRestored = db.prepare(
       `UPDATE notes SET deleted_at = NULL, updated_at = ?
+       WHERE id = ? AND profile_id = ? AND deleted_at IS NOT NULL`,
+    );
+    // Read immediately before `markRestored` clears it — the stamp that names
+    // the delete being undone (see `restore`).
+    this.selectDeletedAt = db.prepare(
+      `SELECT deleted_at FROM notes
        WHERE id = ? AND profile_id = ? AND deleted_at IS NOT NULL`,
     );
     this.selectFolderInProfile = db.prepare(
@@ -432,13 +439,24 @@ export class NoteStore {
     }
   }
 
-  /** Restores a soft-deleted note (undo of a delete — exactly what soft-delete removed). */
-  restore(id: string, now: string): void {
+  /**
+   * Restores a soft-deleted note (undo of a delete — exactly what soft-delete
+   * removed) and returns the `deleted_at` stamp it cleared.
+   *
+   * That stamp is the identity of ONE delete: `CardStore.deleteCardsOfNote`
+   * writes the same value onto the cards deleted alongside the note (PRD 09
+   * section 7), so returning it here is what lets the caller undo the whole
+   * act — the note and its cards — without the renderer ever naming a card
+   * row's primary key.
+   */
+  restore(id: string, now: string): string {
     const validNow = validateDateTime(now, "now");
+    const row = this.selectDeletedAt.get(id, this.profileId) as { deleted_at: string } | undefined;
     const { changes } = this.markRestored.run(validNow, id, this.profileId);
-    if (changes === 0) {
+    if (changes === 0 || !row) {
       throw new NoteNotFoundError(`No deleted note "${id}" to restore in this profile.`);
     }
+    return row.deleted_at;
   }
 
   /**

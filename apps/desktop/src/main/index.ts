@@ -244,6 +244,7 @@ import {
   MIN_TARGET_RETENTION,
   MAX_TASK_TAG_NAME_LENGTH,
   MAX_TASK_TEMPLATE_NAME_LENGTH,
+  NOTE_CARD_DISPOSITIONS,
   NOTE_CARD_KEY_MAX_LENGTH,
   NOTE_CARDS_MAX_COUNT,
   SEARCH_PAGE_MAX_RESULTS,
@@ -267,6 +268,7 @@ import {
   type ImportApplyResult,
   type ImportPickResult,
   type ImportPreviewResult,
+  type NoteCardDisposition,
   type NoteCardSpec,
   type NoteDocPayload,
   type NoteVersionMeta,
@@ -1425,6 +1427,20 @@ function asSubjectFieldChanges(value: unknown): UpdateSubjectFields {
   }
   if (changes.archived !== undefined) patch.archived = asBoolean(changes.archived, "changes.archived");
   return patch;
+}
+
+/**
+ * What a note's delete does to the flashcards it generated (PRD 09 section 7).
+ * An ABSENT field resolves to `keep` — the disposition that destroys nothing —
+ * so an untrusted renderer can never cost the user their review history by
+ * omitting a key; anything else present but unrecognised is still a refusal.
+ */
+function asNoteCardDisposition(value: unknown, field: string): NoteCardDisposition {
+  if (value === undefined) return "keep";
+  if (typeof value === "string" && (NOTE_CARD_DISPOSITIONS as readonly string[]).includes(value)) {
+    return value as NoteCardDisposition;
+  }
+  throw new Error(`Invalid IPC payload: "${field}" is not a valid note card disposition.`);
 }
 
 function asNoteFolderColor(value: unknown, field: string): NoteFolderColor {
@@ -4148,12 +4164,40 @@ function registerIpc(): void {
     });
   });
 
+  /**
+   * Soft-deletes a note and settles what becomes of the flashcards it
+   * generated (PRD 09 section 7) — one transaction across both stores, so a
+   * crash can never leave cards detached from a note that is still there.
+   *
+   * `keep` detaches the cards AND unmaps the note from its deck. The unmap is
+   * what keeps undo coherent: the note's card blocks are still in its text, so
+   * a restore of a still-mapped note would regenerate fresh, historyless
+   * copies of the very cards the user just chose to keep. An unmapped note
+   * comes back as plain text until its author deliberately points it at a deck
+   * again. It is skipped when nothing was detached, so a note that generated
+   * no cards is deleted exactly as it always was.
+   *
+   * `delete` soft-deletes them at the note's OWN `deleted_at` stamp, which is
+   * what `notes:restore` below matches to undo precisely this act.
+   */
   ipcMain.handle(IpcChannel.notesDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const id = asNonEmptyString(body.id, "id");
-    noteStore(profileId).softDelete(id, new Date().toISOString());
+    const disposition = asNoteCardDisposition(body.cards, "cards");
+    const now = new Date().toISOString();
+    const notes = noteStore(profileId);
+    const cards = cardStore(profileId);
+
+    requireDb().raw.transaction((): void => {
+      if (disposition === "delete") {
+        cards.deleteCardsOfNote(id, now);
+      } else if (cards.detachCardsFromNote(id) > 0) {
+        notes.setCardDeck(id, null, now);
+      }
+      notes.softDelete(id, now);
+    })();
   });
 
   ipcMain.handle(IpcChannel.notesRestore, (event, payload): void => {
@@ -4161,7 +4205,23 @@ function registerIpc(): void {
     const body = asRecord(payload);
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const id = asNonEmptyString(body.id, "id");
-    noteStore(profileId).restore(id, new Date().toISOString());
+    const notes = noteStore(profileId);
+    const cards = cardStore(profileId);
+
+    // Unconditional, and free for the `keep` branch: the stamp the note was
+    // deleted at matches cards only if they were deleted in that same act.
+    requireDb().raw.transaction((): void => {
+      const deletedAt = notes.restore(id, new Date().toISOString());
+      cards.restoreCardsOfNote(id, deletedAt);
+    })();
+  });
+
+  ipcMain.handle(IpcChannel.notesCardsCount, (event, payload): number => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return cardStore(profileId).countCardsOfNote(id);
   });
 
   // NOTE-002 (organization): folders/tags/pins. `now` is always stamped here

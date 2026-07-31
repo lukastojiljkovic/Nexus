@@ -371,6 +371,10 @@ export class CardStore {
   private readonly updateScheduling: Database.Statement;
   private readonly markDeleted: Database.Statement;
   private readonly markRestored: Database.Statement;
+  private readonly countLiveBySource: Database.Statement;
+  private readonly detachBySource: Database.Statement;
+  private readonly markDeletedBySource: Database.Statement;
+  private readonly markRestoredBySource: Database.Statement;
   private readonly insertReviewLog: Database.Statement;
   private readonly selectLatestReviewLog: Database.Statement;
   private readonly selectAllReviewLog: Database.Statement;
@@ -484,6 +488,30 @@ export class CardStore {
     this.markRestored = db.prepare(
       `UPDATE cards SET deleted_at = NULL, updated_at = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NOT NULL`,
+    );
+    // The four note-disposition statements (PRD 09 section 7). All are keyed
+    // by `source_note_id` and scoped by `profile_id`, and all touch only rows
+    // in the state their operation is defined for — which is what makes each
+    // of them a single atomic UPDATE rather than a read-then-write.
+    this.countLiveBySource = db.prepare(
+      `SELECT count(*) AS n FROM cards
+        WHERE profile_id = ? AND source_note_id = ? AND deleted_at IS NULL`,
+    );
+    this.detachBySource = db.prepare(
+      `UPDATE cards SET source_note_id = NULL, source_block_key = NULL, updated_at = ?
+        WHERE profile_id = ? AND source_note_id = ? AND deleted_at IS NULL`,
+    );
+    this.markDeletedBySource = db.prepare(
+      `UPDATE cards SET deleted_at = ?, updated_at = ?
+        WHERE profile_id = ? AND source_note_id = ? AND deleted_at IS NULL`,
+    );
+    // Matched on the exact stamp, never on "is deleted": a note's cards may
+    // also have been soft-deleted earlier, one at a time, by `syncFromNote`
+    // removing their blocks. Undoing the note's delete must not resurrect
+    // those — only the rows that died in the same act.
+    this.markRestoredBySource = db.prepare(
+      `UPDATE cards SET deleted_at = NULL, updated_at = ?
+        WHERE profile_id = ? AND source_note_id = ? AND deleted_at = ?`,
     );
     this.insertReviewLog = db.prepare(
       `INSERT INTO review_log
@@ -990,6 +1018,90 @@ export class CardStore {
     if (changes === 0) {
       throw new CardNotFoundError(`No deleted card "${id}" to restore in this profile.`);
     }
+  }
+
+  /**
+   * How many LIVE cards this note currently generates — what the delete-a-note
+   * dialog counts before it decides whether to ask anything at all (PRD 09
+   * section 7). A note with none is deleted without a question.
+   *
+   * Deliberately not `resolveNote`-guarded: the caller is about to delete this
+   * note, and a note that turns out not to exist has no cards, which is the
+   * honest answer rather than an error.
+   */
+  countCardsOfNote(noteId: string): number {
+    const { n } = this.countLiveBySource.get(this.profileId, noteId) as { n: number };
+    return n;
+  }
+
+  /**
+   * „Zadrži kartice": severs this note's LIVE cards from it, leaving ordinary
+   * hand-made cards behind (PRD 09 section 7). Returns how many were detached.
+   *
+   * Both source columns are cleared together, never one of them: the pair is
+   * an all-or-nothing invariant of the schema (migration 016's partial unique
+   * index) and of the archive format (`importArchive` refuses a row that
+   * carries one without the other). Everything else about the row is
+   * untouched — deck, `front`/`back`, kind, cloze template, worked solution,
+   * and above all every FSRS column and the whole `review_log`. Review history
+   * is sacred (ADR-031/046): what changes here is only who owns the text.
+   *
+   * They stay in the deck they were already studied in — that is what makes
+   * them immediately studiable, which is all "samostalan špil" asks for.
+   * Minting a new deck for them would move a card the user has review history
+   * on into a place they never chose.
+   *
+   * The note's cards that are ALREADY soft-deleted (blocks the user removed
+   * earlier) keep their slot on purpose: `syncFromNote` restores a row by
+   * `source_block_key`, so an attached tombstone is what lets a restored note
+   * re-adopt a re-added block with its history. Detaching those would strand
+   * them as invisible, unreachable rows.
+   */
+  detachCardsFromNote(noteId: string): number {
+    const { changes } = this.detachBySource.run(
+      new Date().toISOString(),
+      this.profileId,
+      noteId,
+    );
+    return changes;
+  }
+
+  /**
+   * „Obriši i kartice": soft-deletes this note's LIVE cards, stamped with the
+   * SAME `deletedAt` the note's own soft delete uses (PRD 09 section 7).
+   * Returns how many were deleted.
+   *
+   * The shared stamp is what makes the act undoable: `restoreCardsOfNote`
+   * matches on it, so undoing the note's delete brings back exactly these
+   * rows and no other. `review_log` is untouched, as with every soft delete in
+   * this store — it is only ever removed by `undoLastReview`, or by the
+   * `ON DELETE CASCADE` of a hard card delete that no UI path performs.
+   */
+  deleteCardsOfNote(noteId: string, deletedAt: string): number {
+    const validDeletedAt = validateNow(deletedAt);
+    const { changes } = this.markDeletedBySource.run(
+      validDeletedAt,
+      validDeletedAt,
+      this.profileId,
+      noteId,
+    );
+    return changes;
+  }
+
+  /**
+   * Undo of `deleteCardsOfNote`: restores the cards this note lost at exactly
+   * `deletedAt`, and only those. A no-op when the note's cards were kept, when
+   * it had none, or when `deletedAt` names no such act.
+   */
+  restoreCardsOfNote(noteId: string, deletedAt: string): number {
+    const validDeletedAt = validateNow(deletedAt);
+    const { changes } = this.markRestoredBySource.run(
+      new Date().toISOString(),
+      this.profileId,
+      noteId,
+      validDeletedAt,
+    );
+    return changes;
   }
 
   /**

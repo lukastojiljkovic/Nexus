@@ -6185,10 +6185,11 @@ button.cal__grid-event--dragging {
   font-size: var(--nx-font-size-body-sm);
   color: var(--nx-text-muted);
 }
-/* Which record the question is about (the list being deleted) — full-strength
-   text between the title and the muted question, so the name is the one thing
-   read before the choices. */
-.tasks__dialog-name {
+/* Which record the question is about (the list being deleted, the note being
+   deleted) — full-strength text between the title and the muted question, so
+   the name is the one thing read before the choices. */
+.tasks__dialog-name,
+.recur-dialog__name {
   margin: 0;
   font-size: var(--nx-font-size-body);
   color: var(--nx-text);

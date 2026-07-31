@@ -309,6 +309,16 @@ describe("NoteStore", () => {
     expect(notes.load(note.id).updates).toEqual([bytes(4, 1)]);
   });
 
+  // PRD 09 section 7: undoing a note's delete has to undo the card decision
+  // taken with it, and the stamp the delete wrote is what names that one act.
+  it("restore returns the deleted_at stamp it cleared", () => {
+    const notes = store();
+    const note = notes.create(T0);
+    notes.softDelete(note.id, T2);
+
+    expect(notes.restore(note.id, T3)).toBe(T2);
+  });
+
   it("throws NoteNotFoundError for unknown ids and wrong-state delete/restore", () => {
     const notes = store();
     const note = notes.create(T0);

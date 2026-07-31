@@ -10,6 +10,7 @@ import {
   DeckStore,
   MAX_QUEUE_DECK_IDS,
   NexusDatabase,
+  NoteStore,
   openDatabase,
   StudySettingsStore,
   SubjectStore,
@@ -21,6 +22,8 @@ let dir: string;
 let db: NexusDatabase;
 
 const T0 = "2026-07-08T10:00:00.000Z";
+const T1 = "2026-07-08T11:00:00.000Z";
+const T2 = "2026-07-08T12:00:00.000Z";
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "nexus-cards-"));
@@ -1613,6 +1616,240 @@ describe("CardStore", () => {
       // survive every future sync unless the reconcile notices it.
       expect(result.updated).toBe(1);
       expect(cards.listByDeck(deckId)[0]?.problemSteps).toBeNull();
+    });
+  });
+
+  // PRD 09 section 7: deleting a note asks what becomes of the cards it
+  // generated. These three operations are the two answers plus the undo of the
+  // destructive one.
+  describe("countCardsOfNote", () => {
+    it("counts this note's live cards only", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+      cards.syncFromNote(noteId, deckId, [spec("b1", "Q1", "A1"), spec("b2", "Q2", "A2")], T0);
+      expect(cards.countCardsOfNote(noteId)).toBe(2);
+
+      cards.syncFromNote(noteId, deckId, [spec("b1", "Q1", "A1")], T0); // b2 vanishes
+      expect(cards.countCardsOfNote(noteId)).toBe(1);
+    });
+
+    it("counts no hand-made card, and nothing for a note that generated none", () => {
+      const { cards, deckId, profileId } = fixture();
+      cards.create({ deckId, front: "Q", back: "A" }, T0);
+      expect(cards.countCardsOfNote(insertNote(profileId))).toBe(0);
+    });
+
+    it("counts nothing for another profile's note", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+      cards.syncFromNote(noteId, deckId, [spec("b1", "Q", "A")], T0);
+
+      const other = fixture();
+      expect(other.cards.countCardsOfNote(noteId)).toBe(0);
+    });
+  });
+
+  describe("detachCardsFromNote", () => {
+    it("clears both source columns, leaving an ordinary card in the same deck", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+      cards.syncFromNote(noteId, deckId, [spec("b1", "Q", "A")], T0);
+      const generated = cards.listByDeck(deckId)[0]!;
+      const reviewed = cards.review(generated.id, 3, T0);
+
+      expect(cards.detachCardsFromNote(noteId)).toBe(1);
+
+      const detached = cards.listByDeck(deckId)[0]!;
+      expect(detached.id).toBe(generated.id);
+      expect(detached.sourceNoteId).toBeNull();
+      expect(detached.sourceBlockKey).toBeNull();
+      // Review history is sacred (ADR-031/046): nothing about scheduling moves.
+      expect(detached.due).toBe(reviewed.due);
+      expect(detached.stability).toBe(reviewed.stability);
+      expect(detached.reps).toBe(reviewed.reps);
+      expect(detached.state).toBe(reviewed.state);
+      expect(countReviewLogs(generated.id)).toBe(1);
+    });
+
+    it("leaves content, kind and steps alone", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+      cards.syncFromNote(noteId, deckId, [clozeSpec("b1", "Rim je {{prestonica}} Italije", 0)], T0);
+      const before = cards.listByDeck(deckId)[0]!;
+
+      cards.detachCardsFromNote(noteId);
+
+      const after = cards.listByDeck(deckId)[0]!;
+      expect(after.front).toBe(before.front);
+      expect(after.back).toBe(before.back);
+      expect(after.kind).toBe("cloze");
+      expect(after.clozeText).toBe(before.clozeText);
+      expect(after.clozeOrdinal).toBe(before.clozeOrdinal);
+      expect(after.deckId).toBe(deckId);
+    });
+
+    it("leaves the note's already soft-deleted cards attached", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+      cards.syncFromNote(noteId, deckId, [spec("b1", "Q1", "A1"), spec("b2", "Q2", "A2")], T0);
+      cards.syncFromNote(noteId, deckId, [spec("b1", "Q1", "A1")], T0); // b2 vanishes
+
+      expect(cards.detachCardsFromNote(noteId)).toBe(1);
+
+      // The removed block's row keeps its slot, so restoring the note and
+      // re-adding that block still finds it (syncFromNote's rule 3).
+      const rows = db.raw
+        .prepare("SELECT source_block_key FROM cards WHERE source_note_id = ?")
+        .all(noteId) as { source_block_key: string }[];
+      expect(rows.map((row) => row.source_block_key)).toEqual(["b2"]);
+    });
+
+    it("is a clean no-op for a note with no cards, and never reaches another profile", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+      cards.syncFromNote(noteId, deckId, [spec("b1", "Q", "A")], T0);
+
+      expect(cards.detachCardsFromNote(insertNote(profileId))).toBe(0);
+      expect(new CardStore(db.raw, createProfile()).detachCardsFromNote(noteId)).toBe(0);
+      expect(cards.listByDeck(deckId)[0]?.sourceNoteId).toBe(noteId);
+    });
+  });
+
+  describe("deleteCardsOfNote", () => {
+    it("soft-deletes the note's live cards at the given stamp, keeping the review_log", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+      cards.syncFromNote(noteId, deckId, [spec("b1", "Q1", "A1"), spec("b2", "Q2", "A2")], T0);
+      const [first] = cards.listByDeck(deckId);
+      cards.review(first!.id, 3, T0);
+
+      expect(cards.deleteCardsOfNote(noteId, T1)).toBe(2);
+
+      expect(cards.listByDeck(deckId)).toHaveLength(0);
+      expect(countReviewLogs(first!.id)).toBe(1);
+      const stamps = db.raw
+        .prepare("SELECT deleted_at FROM cards WHERE source_note_id = ?")
+        .all(noteId) as { deleted_at: string }[];
+      expect(stamps.map((row) => row.deleted_at)).toEqual([T1, T1]);
+    });
+
+    it("leaves hand-made cards of the same deck alone", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+      cards.syncFromNote(noteId, deckId, [spec("b1", "Q", "A")], T0);
+      const handMade = cards.create({ deckId, front: "Ručno", back: "A" }, T0);
+
+      expect(cards.deleteCardsOfNote(noteId, T1)).toBe(1);
+      expect(cards.listByDeck(deckId).map((card) => card.id)).toEqual([handMade.id]);
+    });
+
+    it("is a clean no-op for a note with no cards, and never reaches another profile", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+      cards.syncFromNote(noteId, deckId, [spec("b1", "Q", "A")], T0);
+
+      expect(cards.deleteCardsOfNote(insertNote(profileId), T1)).toBe(0);
+      expect(new CardStore(db.raw, createProfile()).deleteCardsOfNote(noteId, T1)).toBe(0);
+      expect(cards.listByDeck(deckId)).toHaveLength(1);
+    });
+
+    it("rejects a stamp that is not an ISO-8601 date-time", () => {
+      const { cards, profileId } = fixture();
+      expect(() => cards.deleteCardsOfNote(insertNote(profileId), "juče")).toThrow(
+        CardValidationError,
+      );
+    });
+  });
+
+  describe("restoreCardsOfNote", () => {
+    it("brings back exactly the cards deleted at that stamp, FSRS intact", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+      cards.syncFromNote(noteId, deckId, [spec("b1", "Q", "A")], T0);
+      const generated = cards.listByDeck(deckId)[0]!;
+      const reviewed = cards.review(generated.id, 3, T0);
+      cards.deleteCardsOfNote(noteId, T1);
+
+      expect(cards.restoreCardsOfNote(noteId, T1)).toBe(1);
+
+      const restored = cards.listByDeck(deckId)[0]!;
+      expect(restored.id).toBe(generated.id);
+      expect(restored.due).toBe(reviewed.due);
+      expect(restored.reps).toBe(reviewed.reps);
+      expect(restored.state).toBe(reviewed.state);
+    });
+
+    it("leaves cards a sync removed earlier deleted — only the same act is undone", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+      cards.syncFromNote(noteId, deckId, [spec("b1", "Q1", "A1"), spec("b2", "Q2", "A2")], T0);
+      cards.syncFromNote(noteId, deckId, [spec("b1", "Q1", "A1")], T0); // b2 vanishes
+      cards.deleteCardsOfNote(noteId, T1);
+
+      expect(cards.restoreCardsOfNote(noteId, T1)).toBe(1);
+      expect(cards.listByDeck(deckId).map((card) => card.sourceBlockKey)).toEqual(["b1"]);
+    });
+
+    it("is a clean no-op when the note's cards were kept rather than deleted", () => {
+      const { cards, deckId, profileId } = fixture();
+      const noteId = insertNote(profileId);
+      cards.syncFromNote(noteId, deckId, [spec("b1", "Q", "A")], T0);
+
+      expect(cards.restoreCardsOfNote(noteId, T1)).toBe(0);
+      expect(cards.listByDeck(deckId)).toHaveLength(1);
+    });
+  });
+
+  /**
+   * The two answers as the desktop main process composes them across both
+   * stores (PRD 09 section 7) — the contract its one transaction relies on,
+   * and the reason `NoteStore.restore` hands back the stamp it cleared.
+   */
+  describe("note delete disposition — the composed act", () => {
+    /** A note of this profile, mapped to `deckId` and generating one reviewed card. */
+    function noteWithCard(profileId: string, deckId: string, cards: CardStore) {
+      const notes = new NoteStore(db.raw, profileId);
+      const note = notes.create(T0);
+      notes.setCardDeck(note.id, deckId, T0);
+      cards.syncFromNote(note.id, deckId, [spec("b1", "Q", "A")], T0);
+      const card = cards.listByDeck(deckId)[0]!;
+      return { notes, noteId: note.id, reviewed: cards.review(card.id, 3, T0) };
+    }
+
+    it("„Obriši i kartice“: the note's restore brings the cards back with it", () => {
+      const { cards, deckId, profileId } = fixture();
+      const { notes, noteId, reviewed } = noteWithCard(profileId, deckId, cards);
+
+      cards.deleteCardsOfNote(noteId, T1);
+      notes.softDelete(noteId, T1);
+      expect(cards.listByDeck(deckId)).toHaveLength(0);
+
+      cards.restoreCardsOfNote(noteId, notes.restore(noteId, T2));
+
+      const restored = cards.listByDeck(deckId)[0]!;
+      expect(restored.id).toBe(reviewed.id);
+      expect(restored.sourceNoteId).toBe(noteId);
+      expect(restored.due).toBe(reviewed.due);
+      expect(restored.reps).toBe(reviewed.reps);
+    });
+
+    it("„Zadrži kartice“: the card outlives the note, and the restore leaves it alone", () => {
+      const { cards, deckId, profileId } = fixture();
+      const { notes, noteId, reviewed } = noteWithCard(profileId, deckId, cards);
+
+      cards.detachCardsFromNote(noteId);
+      notes.setCardDeck(noteId, null, T1); // unmapped, so a restore cannot regenerate copies
+      notes.softDelete(noteId, T1);
+
+      const kept = cards.listByDeck(deckId)[0]!;
+      expect(kept.id).toBe(reviewed.id);
+      expect(kept.sourceNoteId).toBeNull();
+      expect(kept.due).toBe(reviewed.due);
+
+      cards.restoreCardsOfNote(noteId, notes.restore(noteId, T2));
+
+      expect(cards.listByDeck(deckId).map((card) => card.id)).toEqual([reviewed.id]);
+      expect(notes.list()[0]?.cardDeckId).toBeNull();
     });
   });
 });

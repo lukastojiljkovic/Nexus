@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { JSONContent } from "@tiptap/core";
 import { Button, EmptyState } from "@nexus/ui";
-import type { NoteFolder, NoteMeta, NoteTag, NoteTagLink } from "../../shared/ipc.js";
+import type {
+  NoteCardDisposition,
+  NoteFolder,
+  NoteMeta,
+  NoteTag,
+  NoteTagLink,
+} from "../../shared/ipc.js";
+import { NoteCardsDeleteDialog } from "./NoteCardsDeleteDialog.js";
 import { NoteEditor } from "./NoteEditor.js";
 import { NoteOrganizer, type FolderSelection } from "./NoteOrganizer.js";
 import { NotePopover } from "./notePopover.js";
@@ -56,7 +63,14 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
   const [notes, setNotes] = useState<NoteMeta[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
+  // The delete that can still be taken back, and whether it took the note's
+  // generated cards with it — the undo bar names what it would bring back.
+  const [pendingUndo, setPendingUndo] = useState<{ id: string; withCards: boolean } | null>(null);
+  // The note whose generated cards need a decision before it can be deleted
+  // (PRD 09 §7); null whenever nothing is being asked.
+  const [pendingDelete, setPendingDelete] = useState<{ note: NoteMeta; cardCount: number } | null>(
+    null,
+  );
   const [tags, setTags] = useState<NoteTag[]>([]);
   const [links, setLinks] = useState<NoteTagLink[]>([]);
   const [tagFilter, setTagFilter] = useState<string[]>([]);
@@ -268,23 +282,53 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
     }
   }
 
+  /**
+   * Deleting a note asks what becomes of the flashcards it generated (PRD 09
+   * §7) — but only when there are any. A note that generated none is deleted
+   * on the spot, exactly as it always was: no dialog, no new friction.
+   *
+   * A failed count leaves the note alone rather than guessing a disposition:
+   * the two answers do different things to the user's review history, which is
+   * precisely why they are asked for.
+   */
   async function remove(note: NoteMeta): Promise<void> {
     try {
-      await window.nexus.deleteNote(profileId, note.id);
+      const cardCount = await window.nexus.countNoteCards(profileId, note.id);
+      if (cardCount === 0) {
+        await performDelete(note, "keep");
+        return;
+      }
+      setPendingDelete({ note, cardCount });
+    } catch (error) {
+      console.error("Nexus: failed to count a note's cards:", error);
+    }
+  }
+
+  async function performDelete(note: NoteMeta, cards: NoteCardDisposition): Promise<void> {
+    try {
+      await window.nexus.deleteNote(profileId, note.id, cards);
       if (selectedId === note.id) setSelectedId(null);
       // One pending undo at a time — a fresh delete replaces the previous offer.
-      setPendingUndoId(note.id);
+      setPendingUndo({ id: note.id, withCards: cards === "delete" });
       await loadNotes();
     } catch (error) {
       console.error("Nexus: failed to delete note:", error);
     }
   }
 
+  /**
+   * Undo of the whole act: main restores the note and, when the cards went
+   * with it, exactly those cards — matched on the stamp that delete wrote, so
+   * cards an earlier edit removed stay removed. Cards the user chose to KEEP
+   * are deliberately never touched here: keeping them was the point, and the
+   * note comes back unmapped from its deck so it cannot regenerate copies of
+   * them.
+   */
   async function undo(): Promise<void> {
-    if (!pendingUndoId) return;
+    if (!pendingUndo) return;
     try {
-      await window.nexus.restoreNote(profileId, pendingUndoId);
-      setPendingUndoId(null);
+      await window.nexus.restoreNote(profileId, pendingUndo.id);
+      setPendingUndo(null);
       await loadNotes();
     } catch (error) {
       console.error("Nexus: failed to restore note:", error);
@@ -332,9 +376,13 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
           {strings.notes.newNote}
         </Button>
 
-        {pendingUndoId != null && (
+        {pendingUndo != null && (
           <div className="note__undo" role="status">
-            <span className="note__undo-text">{strings.notes.deletedNotice}</span>
+            <span className="note__undo-text">
+              {pendingUndo.withCards
+                ? strings.notes.deletedWithCardsNotice
+                : strings.notes.deletedNotice}
+            </span>
             <Button size="sm" className="note__undo-action" onClick={() => void undo()}>
               {strings.notes.undo}
             </Button>
@@ -342,7 +390,7 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
               size="sm"
               className="note__undo-dismiss"
               aria-label={strings.notes.dismiss}
-              onClick={() => setPendingUndoId(null)}
+              onClick={() => setPendingUndo(null)}
             >
               ×
             </Button>
@@ -505,6 +553,23 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
           </div>
         )}
       </div>
+
+      {pendingDelete != null && (
+        <NoteCardsDeleteDialog
+          noteTitle={
+            pendingDelete.note.title.trim().length > 0
+              ? pendingDelete.note.title
+              : strings.notes.untitled
+          }
+          cardCount={pendingDelete.cardCount}
+          onChoose={(disposition) => {
+            const { note } = pendingDelete;
+            setPendingDelete(null);
+            void performDelete(note, disposition);
+          }}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
     </div>
   );
 }

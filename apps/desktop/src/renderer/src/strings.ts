@@ -820,6 +820,32 @@ export const strings = {
     cardsCancelChange: "Otkaži",
     cardsError: "Kartice nisu sačuvane. Pokušaj ponovo.",
     cardScaffold: "Pitanje :: Odgovor",
+    /**
+     * What becomes of the flashcards a note generated when the note is deleted
+     * (PRD 09 §7). The two choices lose different things — one keeps the review
+     * history in the deck, the other takes those cards out of study — so there
+     * is no default and no primary button; Otkaži is the way out that changes
+     * nothing. A note that generated no cards is never asked.
+     */
+    cardsDialog: {
+      title: "Brisanje beleške",
+      /**
+       * The counted phrase, e.g. „3 kartice nastale iz ove beleške“. Noun and
+       * participle inflect together in Serbian (1 / 2–4 / 5+), so the whole
+       * phrase goes through `countUnit` rather than the noun alone.
+       */
+      countOne: "kartica nastala iz ove beleške",
+      countFew: "kartice nastale iz ove beleške",
+      countMany: "kartica nastalih iz ove beleške",
+      question: "Šta sa njima?",
+      /** Says what „keep“ means, since the cards outlive the note that wrote them. */
+      keepNote: "Zadržane kartice ostaju u svom špilu, sa istorijom učenja.",
+      keep: "Zadrži kartice",
+      deleteCards: "Obriši i kartice",
+      cancel: "Otkaži",
+    },
+    /** The undo bar after „Obriši i kartice“ — it took more than the note, and says so. */
+    deletedWithCardsNotice: "Beleška i kartice obrisane",
   },
 
   calendar: {

@@ -178,6 +178,7 @@ export const IpcChannel = {
   notesTemplateRename: "notes:template-rename",
   notesTemplateDelete: "notes:template-delete",
   notesCardsSync: "notes:cards-sync",
+  notesCardsCount: "notes:cards-count",
   notesCardDeckSet: "notes:card-deck-set",
   noteAttachmentsList: "note-attachments:list",
   noteAttachmentsAdd: "note-attachments:add",
@@ -2041,6 +2042,25 @@ export const NOTE_CARDS_MAX_COUNT = 500;
 export const NOTE_CARD_KEY_MAX_LENGTH = 200;
 
 /**
+ * What becomes of a note's generated flashcards when the note is deleted
+ * (PRD 09 section 7). The user is asked whenever there is at least one:
+ *
+ * - `keep` — the cards are detached and live on as ordinary hand-made cards,
+ *   FSRS history intact, in the deck they were already studied in. The note
+ *   is also unmapped from that deck, so a restore cannot silently regenerate
+ *   duplicates of the very cards the user chose to keep.
+ * - `delete` — the cards are soft-deleted with the note, in the same act, and
+ *   `notes:restore` brings both back together.
+ *
+ * Omitting it on the wire means `keep`: the disposition that destroys nothing
+ * is the only safe default for a field an untrusted renderer may not send.
+ */
+export type NoteCardDisposition = "keep" | "delete";
+
+/** The two dispositions, for validators on both sides of the boundary. */
+export const NOTE_CARD_DISPOSITIONS: readonly NoteCardDisposition[] = ["keep", "delete"];
+
+/**
  * A note's metadata as seen by the renderer (mirrors the `notes` table via
  * `NoteStore`'s mapping, NOTE slice a1 / ADR-012). The document itself is
  * never carried here — that is `notes:load`'s payload. Redeclared here so the
@@ -3468,8 +3488,17 @@ export interface NexusApi {
     update: Uint8Array,
     title: string,
   ): Promise<void>;
-  deleteNote(profileId: string, noteId: string): Promise<void>;
+  /**
+   * Soft-deletes a note, together with the disposition of the flashcards it
+   * generated (PRD 09 section 7). `cards` defaults to `"keep"`, which is what
+   * a note with no generated cards sends — for it, both dispositions are a
+   * no-op and the delete is exactly what it always was.
+   */
+  deleteNote(profileId: string, noteId: string, cards?: NoteCardDisposition): Promise<void>;
+  /** Undo of `deleteNote`: restores the note, and the cards deleted in that same act (never any other). */
   restoreNote(profileId: string, noteId: string): Promise<void>;
+  /** How many live flashcards this note currently generates — what the delete dialog counts (PRD 09 section 7). */
+  countNoteCards(profileId: string, noteId: string): Promise<number>;
   listNoteFolders(profileId: string): Promise<NoteFolder[]>;
   createNoteFolder(
     profileId: string,
