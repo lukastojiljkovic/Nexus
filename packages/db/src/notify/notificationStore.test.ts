@@ -8,7 +8,9 @@ import {
   NotificationNotFoundError,
   NotificationStore,
   NotificationValidationError,
+  NOTIFICATION_SOURCES,
   openDatabase,
+  TOGGLEABLE_NOTIFICATION_SOURCES,
   uuidv7,
 } from "../index.js";
 
@@ -260,6 +262,82 @@ describe("NotificationStore", () => {
 
       notify.setSourceEnabled("task", true, NOW);
       expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day", "event", "task"]);
+    });
+
+    it("refuses the always-on security source in BOTH directions (NTF-007)", () => {
+      const { notify } = fixture();
+      // Off is the one that matters; on is refused too, because accepting it
+      // would write a preference row for something that has no preference.
+      expect(() => notify.setSourceEnabled("security", false, NOW)).toThrow(
+        NotificationValidationError,
+      );
+      expect(() => notify.setSourceEnabled("security", true, NOW)).toThrow(
+        NotificationValidationError,
+      );
+      expect(notify.getSettings().enabledSources).toEqual([
+        "document",
+        "exam",
+        "study-day",
+        "event",
+        "task",
+      ]);
+    });
+  });
+
+  describe("the always-on security source (NTF-007)", () => {
+    it("is a ledger source but never an appetite one", () => {
+      expect(NOTIFICATION_SOURCES).toContain("security");
+      expect(TOGGLEABLE_NOTIFICATION_SOURCES).not.toContain("security");
+      expect(TOGGLEABLE_NOTIFICATION_SOURCES).toEqual([
+        "document",
+        "exam",
+        "study-day",
+        "event",
+        "task",
+      ]);
+    });
+
+    it("records and reads back a security row, center and ledger alike", () => {
+      const { notify } = fixture();
+      const record = notify.recordDelivered(
+        {
+          source: "security",
+          entityId: "passcode-changed",
+          occurrenceKey: "2026-07-10T08:00:00.000Z",
+          title: "PIN je promenjen",
+          body: "Otključavanje sada traži novi PIN.",
+        },
+        NOW,
+      );
+      expect(record).toMatchObject({ source: "security", status: "delivered", deliveredAt: NOW });
+      expect(notify.listLedgerKeys()).toContainEqual({
+        source: "security",
+        entityId: "passcode-changed",
+        occurrenceKey: "2026-07-10T08:00:00.000Z",
+        status: "delivered",
+      });
+      expect(notify.listCenter().map((row) => row.source)).toContain("security");
+      expect(notify.listAll().map((row) => row.source)).toContain("security");
+    });
+
+    it("keeps two security events of the same kind apart by their instants", () => {
+      const { notify } = fixture();
+      const record = (occurrenceKey: string) =>
+        notify.recordDelivered(
+          {
+            source: "security",
+            entityId: "recovery-kit-reissued",
+            occurrenceKey,
+            title: "Izdat je novi Recovery Kit",
+            body: "Stari kod više ne važi.",
+          },
+          NOW,
+        );
+      record("2026-07-10T08:00:00.000Z");
+      expect(() => record("2026-07-10T09:30:00.000Z")).not.toThrow();
+      // ...and the same instant is still the same occurrence.
+      expect(() => record("2026-07-10T09:30:00.000Z")).toThrow(NotificationValidationError);
+      expect(notify.listAll()).toHaveLength(2);
     });
   });
 

@@ -29,7 +29,6 @@ import {
   NoteAttachmentStore,
   NoteOrgStore,
   NoteStore,
-  NOTIFICATION_SOURCES,
   NoteTemplateStore,
   NotificationStore,
   PeopleStore,
@@ -49,6 +48,7 @@ import {
   TaskStore,
   TaskTagStore,
   TaskTemplateStore,
+  TOGGLEABLE_NOTIFICATION_SOURCES,
   openDatabase,
   uuidv7,
 } from "../index.js";
@@ -1443,7 +1443,7 @@ describe("RestoreStore", () => {
     // three tasks + that Inbox + the settings rows every restore writes (the
     // `ntf_settings` row, plus one disabled row per source `emptySettings`
     // leaves out).
-    expect(written).toBe(3 + 1 + 1 + NOTIFICATION_SOURCES.length);
+    expect(written).toBe(3 + 1 + 1 + TOGGLEABLE_NOTIFICATION_SOURCES.length);
   });
 
   it("reuses the archive's OWN Inbox for list-less tasks rather than minting a second one", () => {

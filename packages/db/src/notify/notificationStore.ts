@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3-multiple-ciphers";
+import { isAlwaysOnSource } from "@nexus/core";
 import type { NotificationSource } from "@nexus/core";
 import { NotificationNotFoundError, NotificationValidationError } from "../errors.js";
 import { uuidv7 } from "../ids.js";
@@ -15,14 +16,36 @@ export const NOTIFICATION_STATUSES: readonly NotificationStatus[] = [
   "dismissed",
 ];
 
-/** The five source kinds this profile can toggle/derive from, in canonical order — each newcomer appended last (`"event"` by migration 019 / CAL-006, `"task"` by migration 021 / ADR-028), so the sources that came before keep the order every existing settings list and UI already shows. Exported like `NOTIFICATION_STATUSES` so `RestoreStore` writes `ntf_source_settings` from this list rather than a second copy of the migration's CHECK. */
+/**
+ * Every source a LEDGER row may carry (migration 037's `notifications.source`
+ * CHECK), in canonical order — each newcomer appended last (`"event"` by
+ * migration 019 / CAL-006, `"task"` by migration 021 / ADR-028, `"security"` by
+ * migration 037 / NTF-007), so the sources that came before keep the order
+ * every existing list and UI already shows.
+ */
 export const NOTIFICATION_SOURCES: readonly NotificationSource[] = [
   "document",
   "exam",
   "study-day",
   "event",
   "task",
+  "security",
 ];
+
+/**
+ * The narrower domain of `ntf_source_settings.source`, which migration 037
+ * deliberately left where migration 021 put it: the sources a profile may
+ * switch off. `"security"` is absent because a security notification cannot be
+ * silenced (`ALWAYS_ON_SOURCES` in `@nexus/core`) — so there is no preference
+ * to store, and the table's own CHECK is the last line of that enforcement.
+ *
+ * Exported like `NOTIFICATION_STATUSES` so `RestoreStore` writes
+ * `ntf_source_settings` from this list rather than a second copy of the
+ * migration's CHECK, and so main validates a toggle request against it rather
+ * than against a hand-typed respelling.
+ */
+export const TOGGLEABLE_NOTIFICATION_SOURCES: readonly NotificationSource[] =
+  NOTIFICATION_SOURCES.filter((source) => !isAlwaysOnSource(source));
 
 const DEFAULT_MORNING_HOUR = "08:00";
 const MAX_TEXT_LENGTH = 500;
@@ -65,6 +88,12 @@ export interface NotificationSettings {
   quietFrom: string | null;
   quietTo: string | null;
   morningHour: string;
+  /**
+   * The sources whose reminders this profile wants — the appetite the engine
+   * derives under. Only ever the TOGGLEABLE ones: an always-on source
+   * (`"security"`) is not an appetite, it is delivered regardless, so listing it
+   * here would suggest a switch that does not exist.
+   */
   enabledSources: NotificationSource[];
   /**
    * Whether the one-time "how much should Nexus remind you" question has been
@@ -248,7 +277,9 @@ export class NotificationStore {
     const settingsRow = this.selectSettings.get(this.profileId) as SettingsRow | undefined;
     const sourceRows = this.selectSourceSettings.all(this.profileId) as SourceSettingRow[];
     const overrides = new Map(sourceRows.map((row) => [row.source, row.enabled === 1]));
-    const enabledSources = NOTIFICATION_SOURCES.filter((source) => overrides.get(source) ?? true);
+    const enabledSources = TOGGLEABLE_NOTIFICATION_SOURCES.filter(
+      (source) => overrides.get(source) ?? true,
+    );
 
     return {
       quietFrom: settingsRow?.quiet_from ?? null,
@@ -323,10 +354,16 @@ export class NotificationStore {
     };
   }
 
-  /** Enables or disables one source for this profile (upserted; validated against the closed set). */
+  /**
+   * Enables or disables one source for this profile (upserted; validated
+   * against the toggleable set). An always-on source is refused outright rather
+   * than quietly ignored: a caller asking to silence security notifications has
+   * a wrong idea of the contract, and swallowing that would leave the settings
+   * UI showing a switch that did nothing.
+   */
   setSourceEnabled(source: NotificationSource, enabled: boolean, now: string): void {
     validateDateTime(now, "now");
-    const validSource = validateSource(source);
+    const validSource = validateToggleableSource(source);
     this.upsertSourceSetting.run(this.profileId, validSource, enabled ? 1 : 0);
   }
 
@@ -496,6 +533,15 @@ function toRecord(row: NotificationRow): NotificationRecord {
 function validateSource(value: NotificationSource): NotificationSource {
   if (!NOTIFICATION_SOURCES.includes(value)) {
     throw new NotificationValidationError(`"${value}" is not a known notification source.`);
+  }
+  return value;
+}
+
+function validateToggleableSource(value: NotificationSource): NotificationSource {
+  if (!TOGGLEABLE_NOTIFICATION_SOURCES.includes(value)) {
+    throw new NotificationValidationError(
+      `"${value}" notifications cannot be switched off (NTF-007).`,
+    );
   }
   return value;
 }

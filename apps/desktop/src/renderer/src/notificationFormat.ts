@@ -6,7 +6,7 @@
  */
 import type { NotificationSource } from "../../shared/ipc.js";
 
-/** The five NTF sources, in the fixed order every source list/loop uses. */
+/** The five toggleable NTF sources, in the fixed order every source list/loop uses. */
 export const ALL_NOTIFICATION_SOURCES: NotificationSource[] = [
   "document",
   "exam",
@@ -14,6 +14,15 @@ export const ALL_NOTIFICATION_SOURCES: NotificationSource[] = [
   "event",
   "task",
 ];
+
+/**
+ * The sources that are always on (NTF-007): recorded by the main process when a
+ * security-relevant event actually happens, and exempt from quiet hours and
+ * from the appetite alike. They never appear in `NotificationSettings.enabledSources`
+ * — there is no preference to read — so the settings list renders them from
+ * this list instead, with a locked control and a caption saying why.
+ */
+export const ALWAYS_ON_NOTIFICATION_SOURCES: NotificationSource[] = ["security"];
 
 /** Which appetite tier a preset is — the key both its Serbian label and its button identity are read from. */
 export type NotificationPresetKey = "minimal" | "normal" | "all";

@@ -70,7 +70,6 @@ import {
   MAX_TASK_REMINDER_DAYS,
   MAX_TASK_TEMPLATE_DUE_OFFSET_DAYS,
   NOTE_FOLDER_COLORS,
-  NOTIFICATION_SOURCES,
   NoteAttachmentNotFoundError,
   NoteAttachmentStore,
   NotificationStore,
@@ -104,6 +103,7 @@ import {
   TASK_LIST_VIEWS,
   TASK_PRIORITIES,
   TASK_STATUSES,
+  TOGGLEABLE_NOTIFICATION_SOURCES,
   uuidv7,
   type Card,
   type CardRating,
@@ -222,10 +222,13 @@ import {
   scheduleIdleCompaction,
 } from "./notes.js";
 import {
+  deliverSecurityNotices,
   runCheckNow,
   startNotificationScheduler,
   stopNotificationScheduler,
+  type SecurityNotificationDeps,
 } from "./notifications.js";
+import type { SecurityNotice } from "./notificationStrings.js";
 import {
   applyImport,
   applyRestore,
@@ -1695,14 +1698,24 @@ function asBlockStatus(value: unknown, field: string): StudyBlockStatus {
 const SNOOZE_PRESETS: readonly SnoozePreset[] = ["10m", "1h", "tonight", "tomorrow-morning"];
 
 /**
- * The five NTF/CAL-006/ADR-028 source kinds, checked against `@nexus/db`'s
- * exported `NOTIFICATION_SOURCES` — the very list `NotificationStore` validates
- * against and `RestoreStore` writes from — rather than another hand-typed copy
- * of the migration's CHECK. A source added by a future migration widens this
- * validator for free instead of being silently refused on the wire.
+ * The five NTF/CAL-006/ADR-028 source kinds a profile may switch on and off,
+ * checked against `@nexus/db`'s exported `TOGGLEABLE_NOTIFICATION_SOURCES` — the
+ * very list `NotificationStore` validates a toggle against and `RestoreStore`
+ * writes from — rather than another hand-typed copy of the migration's CHECK. A
+ * source added by a future migration widens this validator for free instead of
+ * being silently refused on the wire.
+ *
+ * Deliberately the TOGGLEABLE list rather than the ledger's wider one: both
+ * channels below are about preferences, and `"security"` (NTF-007) is not one.
+ * A renderer asking to silence it is refused here, before the store ever sees
+ * it — and refused again by the store, and a third time by the table's own
+ * CHECK.
  */
 function asNotificationSource(value: unknown, field: string): NotificationSource {
-  if (typeof value === "string" && (NOTIFICATION_SOURCES as readonly string[]).includes(value)) {
+  if (
+    typeof value === "string" &&
+    (TOGGLEABLE_NOTIFICATION_SOURCES as readonly string[]).includes(value)
+  ) {
     return value as NotificationSource;
   }
   throw new Error(`Invalid IPC payload: "${field}" is not a valid notification source.`);
@@ -1720,9 +1733,9 @@ function asNotificationSourceListOrNull(
   field: string,
 ): NotificationSource[] | null {
   if (value === null) return null;
-  if (!Array.isArray(value) || value.length > NOTIFICATION_SOURCES.length) {
+  if (!Array.isArray(value) || value.length > TOGGLEABLE_NOTIFICATION_SOURCES.length) {
     throw new Error(
-      `Invalid IPC payload: "${field}" must be null or an array of at most ${NOTIFICATION_SOURCES.length} notification sources.`,
+      `Invalid IPC payload: "${field}" must be null or an array of at most ${TOGGLEABLE_NOTIFICATION_SOURCES.length} notification sources.`,
     );
   }
   return value.map((entry, index) => asNotificationSource(entry, `${field}[${index}]`));
@@ -2500,6 +2513,75 @@ function startUnlockedServices(): void {
   });
 }
 
+// --- Security notifications (NTF-007) ---------------------------------------
+//
+// The four security-relevant events that actually happen locally — the unlock
+// throttle tripping, a passcode change, a Recovery Kit reissue, another
+// account's deletion — are recorded as `security` notifications, which no quiet
+// hour and no appetite setting may suppress (`ALWAYS_ON_SOURCES`,
+// `@nexus/core`).
+//
+// Two of the four happen while the database is OPEN and are delivered on the
+// spot. The other two cannot be: the throttle trips precisely because the
+// account is locked, and a deletion is normally done from the picker with
+// nothing unlocked at all. Those wait in memory for the next unlock — see
+// `pendingSecurityNotices`.
+
+/**
+ * Security notices that could not be delivered when they happened, because no
+ * database was open to record them in. Drained by the first successful unlock
+ * after the fact, whichever account that turns out to be — which is exactly
+ * right for the two events that land here: "someone tried to open a lock on
+ * this device" and "an account was deleted from this device" are facts about
+ * the DEVICE, not about one account's data.
+ *
+ * **In memory, deliberately.** Nothing here is persisted. The only durable
+ * place available while everything is locked is the plaintext registry, which
+ * is plaintext for one narrow reason (the lock screen has to list account
+ * labels before anything is unlocked) — and parking a deletion notice there
+ * would turn it into a standing record of an account this device was just asked
+ * to erase, readable by anyone with the disk. That is a worse outcome than the
+ * honest limit this accepts instead: **a notice queued here is lost if the app
+ * quits before any account is unlocked.** For the throttle that costs nothing —
+ * its guard state still says so at the next unlock, which is where the notice
+ * comes from in the first place. For a deletion it is a real gap, since the
+ * account it names is gone by then. Recorded as such rather than solved with a
+ * persistence layer this design does not want.
+ */
+let pendingSecurityNotices: SecurityNotice[] = [];
+
+/** The security path's slice of the scheduler's deps, resolved at call time exactly like every other deps literal here. */
+function securityNotificationDeps(): SecurityNotificationDeps {
+  return {
+    listProfiles: () => listProfiles(requireDb()),
+    notificationStore,
+    getMainWindow: () => mainWindow,
+  };
+}
+
+/**
+ * Queues one security event and delivers it right away when there is an open
+ * database to record it in; otherwise it waits for the next unlock.
+ *
+ * Never during the smoke run, for the same reason the notification scheduler
+ * never runs there: the rehearsal deletes an account on purpose, and a real OS
+ * toast (plus a ledger row) fired from that would make a deterministic exit
+ * flakier for no gain.
+ */
+function recordSecurityNotice(notice: SecurityNotice): void {
+  if (isSmoke) return;
+  pendingSecurityNotices.push(notice);
+  flushSecurityNotices();
+}
+
+/** Delivers everything queued, if a database is open to record it in. A no-op while locked — the queue simply keeps waiting. */
+function flushSecurityNotices(): void {
+  if (db === null || pendingSecurityNotices.length === 0) return;
+  const notices = pendingSecurityNotices;
+  pendingSecurityNotices = [];
+  deliverSecurityNotices(securityNotificationDeps(), notices);
+}
+
 /** Closes the database, stops the scheduler, and drops the data key (and the blob keys derived from it) from memory. Shared by the `auth:lock` handler and the smoke run's own lock/unlock exercise. */
 function performLock(): void {
   stopNotificationScheduler();
@@ -2604,6 +2686,12 @@ async function createLocalAccount(
     openEncrypted(dataKeyHex);
     await adoptUnlockedKey(dataKeyHex);
     startUnlockedServices();
+    // A create opens a database just as an unlock does, so anything still
+    // queued (NTF-007) is deliverable here too — which matters for the one case
+    // where it is the ONLY moment: the last account was deleted, so there is no
+    // survivor left to unlock, and this new one is the first place that fact can
+    // be recorded.
+    flushSecurityNotices();
     return { ok: true, recoveryCode };
   } catch (error) {
     return authResultFromError(error, dir);
@@ -2658,18 +2746,29 @@ function handleAuthRenameAccount(accountId: string, label: string): AuthStatus {
  * alone: `lastActiveId` can legitimately be null (a fresh install that never
  * selected anything) while accounts remain, and leaving the module pointing at
  * nothing there would strand the picker on an account it cannot open.
+ *
+ * The label is read BEFORE the delete and carried in memory into the NTF-007
+ * notice, because a moment later there is nowhere left to read it from: the
+ * registry entry is gone and the directory with it. That is also the whole
+ * reason this notice may have to wait — the picker deletes while everything is
+ * locked, so there is usually no database open to record it in (see
+ * `pendingSecurityNotices`).
  */
 function handleAuthDeleteAccount(accountId: string): AuthStatus {
   const wasActive = accountId === activeAccountId;
+  const label = readRegistry(userDataDir()).accounts.find((entry) => entry.id === accountId)?.label;
   if (wasActive) performLock();
   const registry = deleteAccount(userDataDir(), accountId);
   if (wasActive) activeAccountId = registry.lastActiveId ?? registry.accounts[0]?.id ?? null;
+  if (label !== undefined) {
+    recordSecurityNotice({ kind: "account-deleted", at: new Date().toISOString(), label });
+  }
   return computeAuthStatus();
 }
 
 async function handleAuthUnlock(passcode: string): Promise<AuthResult> {
   try {
-    const dataKeyHex = await unlockWithPasscode(activeAccountDir(), passcode);
+    const { dataKeyHex, clearedThrottle } = await unlockWithPasscode(activeAccountDir(), passcode);
     // The passcode is always fully verified above, regardless of session
     // state — only the database (re)open is idempotent: a redundant-but-
     // correct unlock while already unlocked must not call `openDatabase` a
@@ -2681,6 +2780,17 @@ async function handleAuthUnlock(passcode: string): Promise<AuthResult> {
       await adoptUnlockedKey(dataKeyHex);
       startUnlockedServices();
     }
+    // NTF-007. The throttle tripped while this account was locked, so this
+    // unlock is the first moment anything can be written about it — and the
+    // last moment the fact exists at all, since the guard was just reset.
+    if (clearedThrottle !== null) {
+      recordSecurityNotice({
+        kind: "unlock-throttle",
+        at: new Date().toISOString(),
+        ...clearedThrottle,
+      });
+    }
+    flushSecurityNotices(); // whatever piled up while nothing was open
     return { ok: true };
   } catch (error) {
     return authResultFromError(error, activeAccountDir());
@@ -2689,7 +2799,11 @@ async function handleAuthUnlock(passcode: string): Promise<AuthResult> {
 
 async function handleAuthRecover(recoveryCode: string, newPasscode: string): Promise<AuthResult> {
   try {
-    const dataKeyHex = await unlockWithRecovery(activeAccountDir(), recoveryCode, newPasscode);
+    const { dataKeyHex, clearedThrottle } = await unlockWithRecovery(
+      activeAccountDir(),
+      recoveryCode,
+      newPasscode,
+    );
     // Same idempotent-open discipline as `handleAuthUnlock` — the recovered
     // data key is unchanged from whatever is already open, so there is
     // nothing to reopen, but the recovery code and new passcode are always
@@ -2699,6 +2813,14 @@ async function handleAuthRecover(recoveryCode: string, newPasscode: string): Pro
       await adoptUnlockedKey(dataKeyHex);
       startUnlockedServices();
     }
+    if (clearedThrottle !== null) {
+      recordSecurityNotice({
+        kind: "unlock-throttle",
+        at: new Date().toISOString(),
+        ...clearedThrottle,
+      });
+    }
+    flushSecurityNotices();
     return { ok: true };
   } catch (error) {
     return authResultFromError(error, activeAccountDir());
@@ -2707,7 +2829,15 @@ async function handleAuthRecover(recoveryCode: string, newPasscode: string): Pro
 
 async function handleAuthChangePasscode(currentPasscode: string, nextPasscode: string): Promise<AuthResult> {
   try {
-    await changePasscode(activeAccountDir(), currentPasscode, nextPasscode);
+    const clearedThrottle = await changePasscode(activeAccountDir(), currentPasscode, nextPasscode);
+    // NTF-007, both facts: the change itself, and — before it — any
+    // wrong-attempt burst this very call's success just wiped off the guard.
+    // The burst first, because that is the order they happened in.
+    const at = new Date().toISOString();
+    if (clearedThrottle !== null) {
+      recordSecurityNotice({ kind: "unlock-throttle", at, ...clearedThrottle });
+    }
+    recordSecurityNotice({ kind: "passcode-changed", at });
     return { ok: true };
   } catch (error) {
     return authResultFromError(error, activeAccountDir());
@@ -2724,6 +2854,9 @@ async function handleAuthRegenerateRecovery(): Promise<AuthResult> {
   }
   try {
     const recoveryCode = await regenerateRecoveryCode(activeAccountDir(), unlockedDataKeyHex);
+    // NTF-007. Always while unlocked (the guard above), so this is recorded and
+    // shown on the spot.
+    recordSecurityNotice({ kind: "recovery-kit-reissued", at: new Date().toISOString() });
     return { ok: true, recoveryCode };
   } catch (error) {
     return authResultFromError(error, activeAccountDir());
@@ -4382,7 +4515,7 @@ function registerIpc(): void {
     const now = new Date().toISOString();
     const store = notificationStore(profileId);
     if (sources !== null) {
-      for (const source of NOTIFICATION_SOURCES) {
+      for (const source of TOGGLEABLE_NOTIFICATION_SOURCES) {
         store.setSourceEnabled(source, sources.includes(source), now);
       }
     }

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { deriveNotificationCandidates } from "./notificationEngine.js";
+import {
+  ALWAYS_ON_SOURCES,
+  deriveNotificationCandidates,
+  isAlwaysOnSource,
+  isDeliverable,
+} from "./notificationEngine.js";
 
 const ALL_SOURCES = ["document", "exam", "study-day", "event", "task"] as const;
 
@@ -463,6 +468,72 @@ describe("deriveNotificationCandidates", () => {
         { source: "exam", entityId: "exam-1", occurrenceKey: "d-1", fireDate: "2026-08-03", priority: "normal" },
         { source: "study-day", entityId: "2026-08-03", occurrenceKey: "day", fireDate: "2026-08-03", priority: "normal" },
       ]);
+    });
+  });
+
+  describe("security is never derived here", () => {
+    it("produces no security occurrence even with every source enabled — main inserts those at the event itself", () => {
+      const result = deriveNotificationCandidates({
+        documents: [],
+        exams: [],
+        events: [],
+        studyDays: [],
+        tasks: [],
+        enabledSources: [...ALL_SOURCES, "security"],
+        today: "2026-08-03",
+        nowLocalTime: "08:00",
+        morningHour: "08:00",
+      });
+
+      expect(result).toEqual([]);
+    });
+  });
+});
+
+/**
+ * The NTF-007 exemption contract, pinned here because it is the one rule the
+ * whole "a security event always reaches the user" promise rests on.
+ */
+describe("the always-on exemption", () => {
+  it("names exactly the security source", () => {
+    expect(ALWAYS_ON_SOURCES).toEqual(["security"]);
+    expect(isAlwaysOnSource("security")).toBe(true);
+    for (const source of ALL_SOURCES) expect(isAlwaysOnSource(source)).toBe(false);
+  });
+
+  describe("isDeliverable", () => {
+    const security = { source: "security", priority: "max" } as const;
+
+    it("delivers a security event inside quiet hours", () => {
+      expect(isDeliverable(security, { enabledSources: ALL_SOURCES, withinQuietHours: true })).toBe(
+        true,
+      );
+    });
+
+    it("delivers a security event that no source setting enables", () => {
+      expect(isDeliverable(security, { enabledSources: [], withinQuietHours: false })).toBe(true);
+      expect(isDeliverable(security, { enabledSources: [], withinQuietHours: true })).toBe(true);
+    });
+
+    it("still holds an ordinary reminder inside quiet hours, and lets a max one through", () => {
+      const normal = { source: "exam", priority: "normal" } as const;
+      const finalWarning = { source: "document", priority: "max" } as const;
+      expect(isDeliverable(normal, { enabledSources: ALL_SOURCES, withinQuietHours: true })).toBe(
+        false,
+      );
+      expect(isDeliverable(normal, { enabledSources: ALL_SOURCES, withinQuietHours: false })).toBe(
+        true,
+      );
+      expect(
+        isDeliverable(finalWarning, { enabledSources: ALL_SOURCES, withinQuietHours: true }),
+      ).toBe(true);
+    });
+
+    it("holds an ordinary reminder whose source the profile switched off, quiet hours or not", () => {
+      const exam = { source: "exam", priority: "max" } as const;
+      expect(isDeliverable(exam, { enabledSources: ["document"], withinQuietHours: false })).toBe(
+        false,
+      );
     });
   });
 });

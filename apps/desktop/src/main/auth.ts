@@ -54,6 +54,32 @@ export interface AuthStatus {
   requiresRecovery: boolean;
 }
 
+/**
+ * The unlock throttle as it stood immediately before a successful attempt
+ * cleared it (NTF-007) — `null` whenever no wait had ever been imposed since
+ * the last success.
+ *
+ * This is the ONLY way the trip can be reported at all: it happens while the
+ * database is locked (that is what being throttled means), so nothing can be
+ * written to the ledger at the moment it occurs. What survives is the guard
+ * blob's own persisted state, and a successful unlock resets it — so the
+ * instant before that reset is the single point where the fact still exists.
+ * Every function here that resets the guard hands it back rather than silently
+ * destroying it.
+ */
+export interface ClearedThrottle {
+  failedAttempts: number;
+  /** ISO-8601 instant the last imposed wait ran to; non-null by construction (a state with no `lockedUntil` never counts as tripped). */
+  lockedUntil: string;
+}
+
+/** The tripped throttle a success is about to clear, or `null` when the failures never reached the point of imposing a wait. */
+function clearedThrottle(state: AttemptState): ClearedThrottle | null {
+  return state.lockedUntil === null
+    ? null
+    : { failedAttempts: state.failedAttempts, lockedUntil: state.lockedUntil };
+}
+
 /** Why an auth call was refused. The renderer maps each to its own Serbian sentence — never this class's `message`, which is a debug string only. */
 export type AuthErrorReason =
   | "notInitialized"
@@ -397,13 +423,18 @@ export async function createAccount(
 
 /**
  * Verifies a passcode against the existing key chain and returns the data key
- * (hex). Throttle is checked FIRST, before any Argon2id work: a throttled
- * caller gets `throttled` immediately, with the guard file untouched. Only a
- * `KeyUnwrapError` (wrong passcode, or a tampered wrap) folds one failed
- * attempt into the guard and persists it before rethrowing as `wrongPasscode`;
- * success resets the throttle state and persists that instead.
+ * (hex), plus whatever throttle state the success just cleared (NTF-007 — see
+ * `ClearedThrottle` for why this is reported here and nowhere else). Throttle is
+ * checked FIRST, before any Argon2id work: a throttled caller gets `throttled`
+ * immediately, with the guard file untouched. Only a `KeyUnwrapError` (wrong
+ * passcode, or a tampered wrap) folds one failed attempt into the guard and
+ * persists it before rethrowing as `wrongPasscode`; success resets the throttle
+ * state and persists that instead.
  */
-export async function unlockWithPasscode(dir: string, passcode: string): Promise<string> {
+export async function unlockWithPasscode(
+  dir: string,
+  passcode: string,
+): Promise<{ dataKeyHex: string; clearedThrottle: ClearedThrottle | null }> {
   const file = readKeychainFile(dir);
   if (file === null) {
     throw new AuthError("notInitialized", "No local account exists yet.");
@@ -424,7 +455,7 @@ export async function unlockWithPasscode(dir: string, passcode: string): Promise
   try {
     const dataKey = await unwrapDataKey(file.passcodeWrap, kek);
     persistGuard(dir, file, { deviceSecret: guard.deviceSecret, ...INITIAL_ATTEMPT_STATE });
-    return dataKeyToHex(dataKey);
+    return { dataKeyHex: dataKeyToHex(dataKey), clearedThrottle: clearedThrottle(attemptState) };
   } catch (error) {
     if (!(error instanceof KeyUnwrapError)) throw error;
     const updated = registerFailedAttempt(attemptState, now);
@@ -451,7 +482,7 @@ export async function unlockWithRecovery(
   dir: string,
   recoveryCode: string,
   newPasscode: string,
-): Promise<string> {
+): Promise<{ dataKeyHex: string; clearedThrottle: ClearedThrottle | null }> {
   const canonical = normalizeRecoveryCode(recoveryCode);
   if (canonical === null) {
     throw new AuthError("wrongRecoveryCode", "The recovery code is not valid.");
@@ -518,7 +549,12 @@ export async function unlockWithRecovery(
     guard: encryptGuard({ deviceSecret: toBase64(deviceSecret), ...INITIAL_ATTEMPT_STATE }),
   });
 
-  return dataKeyToHex(dataKey);
+  // Reported for the same reason the passcode path reports it: this write is
+  // where the trip's only record stops existing. On a migrated account there
+  // was no readable guard to begin with, so `attemptState` is the initial one
+  // and this is `null` — correctly, since the failures it counted happened on
+  // a machine that is not this one.
+  return { dataKeyHex: dataKeyToHex(dataKey), clearedThrottle: clearedThrottle(attemptState) };
 }
 
 /**
@@ -527,12 +563,18 @@ export async function unlockWithRecovery(
  * nonce (`wrapDataKey` always mints one). `recoveryWrap`/`recoverySalt` are
  * left completely untouched — changing the passcode must never invalidate a
  * Recovery Kit the user has already written down.
+ *
+ * Returns whatever throttle state the successful change cleared, exactly as the
+ * two unlock paths do: this verifies the current passcode against the SAME
+ * counter, so a wrong-attempt burst inside the change dialog trips it just as
+ * one at the lock screen does — and this write is equally the moment that
+ * evidence would otherwise be destroyed.
  */
 export async function changePasscode(
   dir: string,
   currentPasscode: string,
   nextPasscode: string,
-): Promise<void> {
+): Promise<ClearedThrottle | null> {
   const problem = validatePasscode(nextPasscode);
   if (problem !== null) {
     throw new AuthError("weakPasscode", `New passcode rejected: ${problem}`);
@@ -584,6 +626,8 @@ export async function changePasscode(
     passcodeWrap: newWrap,
     guard: encryptGuard({ deviceSecret: guard.deviceSecret, ...INITIAL_ATTEMPT_STATE }),
   });
+
+  return clearedThrottle(attemptState);
 }
 
 /**

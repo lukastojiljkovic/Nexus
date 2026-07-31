@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button, Checkbox, TextField } from "@nexus/ui";
 import type { NotificationSettings, NotificationSource } from "../../shared/ipc.js";
-import { ALL_NOTIFICATION_SOURCES } from "./notificationFormat.js";
+import { ALL_NOTIFICATION_SOURCES, ALWAYS_ON_NOTIFICATION_SOURCES } from "./notificationFormat.js";
 import { strings } from "./strings.js";
 
 export interface NotificationSettingsControlsProps {
@@ -163,7 +163,20 @@ export function NotificationSettingsControls({
             {s.settings.sourceToggle[source]}
           </Checkbox>
         ))}
+        {/*
+          NTF-007: shown in the same list as the toggles it sits beside, but
+          forced on and disabled — the same way SET-007 renders a module that
+          cannot be switched off. There is no preference behind it to read (it
+          never appears in `enabledSources`) and nothing to write: main, the
+          store and the table's own CHECK all refuse a security toggle.
+        */}
+        {ALWAYS_ON_NOTIFICATION_SOURCES.map((source) => (
+          <Checkbox key={source} checked disabled readOnly>
+            {s.settings.sourceToggle[source]}
+          </Checkbox>
+        ))}
       </div>
+      <p className="ntf__settings-hint">{s.settings.alwaysOnCaption}</p>
 
       {settingsError != null && <p className="ntf__settings-error">{settingsError}</p>}
     </div>

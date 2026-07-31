@@ -266,6 +266,7 @@ export {
   NotificationStore,
   NOTIFICATION_SOURCES,
   NOTIFICATION_STATUSES,
+  TOGGLEABLE_NOTIFICATION_SOURCES,
 } from "./notify/notificationStore.js";
 export type {
   NotificationLedgerKey,

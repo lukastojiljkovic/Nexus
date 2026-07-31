@@ -41,11 +41,65 @@ const MS_PER_DAY = 86_400_000;
 const MS_PER_MINUTE = 60_000;
 const MINUTES_PER_DAY = 1_440;
 
-/** The five NTF-001..003/CAL-006/ADR-028 source kinds this engine derives from; NTF-006/007 (private notes, security) have no sources yet. */
-export type NotificationSource = "document" | "exam" | "study-day" | "event" | "task";
+/**
+ * The source kinds a notification can carry. The first five are what this
+ * engine DERIVES (NTF-001..003 / CAL-006 / ADR-028) — each has source entities
+ * to look at. `"security"` (NTF-007) is deliberately not one of them: a wrong
+ * passcode burst, a passcode change, a Recovery Kit reissue and an account
+ * deletion are EVENTS, not states, so there is nothing left on disk to
+ * re-derive them from a minute later. The desktop main process records those at
+ * the moment they happen, which is why they never appear in any input here —
+ * and why they carry the always-on exemption below instead of an appetite
+ * toggle.
+ */
+export type NotificationSource = "document" | "exam" | "study-day" | "event" | "task" | "security";
 
 /** `max` bypasses quiet hours (the PRD's "final warning" exception); everything else is `normal`. */
 export type NotificationPriority = "normal" | "max";
+
+/**
+ * Sources no user preference may silence (NTF-007). A security event is the one
+ * thing the app must be able to say when the user did not ask to hear it: it is
+ * exactly the moment where "you were not told" is the failure. So these are
+ * exempt from BOTH filtering gates — quiet hours and the appetite
+ * (`enabledSources`) — and the settings UI renders their toggle forced on and
+ * disabled rather than offering a switch that would have to be ignored.
+ */
+export const ALWAYS_ON_SOURCES: readonly NotificationSource[] = ["security"];
+
+/** Whether a source is exempt from every suppression rule (see `ALWAYS_ON_SOURCES`). */
+export function isAlwaysOnSource(source: NotificationSource): boolean {
+  return ALWAYS_ON_SOURCES.includes(source);
+}
+
+/** What the caller knows about the delivery moment: this profile's appetite, and whether quiet hours are in force right now. */
+export interface DeliveryGate {
+  enabledSources: readonly NotificationSource[];
+  withinQuietHours: boolean;
+}
+
+/**
+ * The whole suppression contract in one predicate — whether something that is
+ * due may actually be put in front of the user right now.
+ *
+ * Three rules, in order: an always-on source is delivered unconditionally; an
+ * appetite the profile switched off suppresses its source; and quiet hours
+ * suppress everything but a `max`-priority occurrence (the PRD's "final
+ * warning" exception, an expiring document's last reminder).
+ *
+ * Kept here rather than in the scheduler because it is a rule, not a mechanism:
+ * the derivation above already honours `enabledSources`, so re-checking it
+ * costs nothing and makes this total — one function that can be handed any
+ * candidate, derived or recorded, and always answers correctly.
+ */
+export function isDeliverable(
+  candidate: { source: NotificationSource; priority: NotificationPriority },
+  gate: DeliveryGate,
+): boolean {
+  if (isAlwaysOnSource(candidate.source)) return true;
+  if (!gate.enabledSources.includes(candidate.source)) return false;
+  return candidate.priority === "max" || !gate.withinQuietHours;
+}
 
 /** One due reminder occurrence, ready for `NotificationStore.recordDelivered`. */
 export interface NotificationCandidate {

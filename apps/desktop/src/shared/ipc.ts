@@ -2146,8 +2146,20 @@ export interface StudyLogRequest {
   toDay: string;
 }
 
-/** The five NTF-001..003/CAL-006/ADR-028 source kinds (mirrors `@nexus/core`'s `NotificationSource`; redeclared here so the renderer never imports core/DB code). */
-export type NotificationSource = "document" | "exam" | "study-day" | "event" | "task";
+/**
+ * The source kinds a notification row can carry (mirrors `@nexus/core`'s
+ * `NotificationSource`; redeclared here so the renderer never imports core/DB
+ * code). The first five are reminders the user can switch on and off;
+ * `"security"` (NTF-007) is recorded by main when a security-relevant event
+ * actually happens and can never be switched off.
+ */
+export type NotificationSource =
+  | "document"
+  | "exam"
+  | "study-day"
+  | "event"
+  | "task"
+  | "security";
 
 /** Closed ledger-status domain (mirrors `@nexus/db`'s `NotificationStatus`). Dismissal is terminal. */
 export type NotificationStatus = "delivered" | "snoozed" | "dismissed";
@@ -2180,6 +2192,7 @@ export interface NotificationSettings {
   quietFrom: string | null;
   quietTo: string | null;
   morningHour: string;
+  /** Only ever the toggleable sources — an always-on one (`"security"`) is not an appetite (NTF-007). */
   enabledSources: NotificationSource[];
   /** Whether the one-time "how much should Nexus remind you" question has already been put to this profile (NTF-008 / ADR-033). */
   appetiteAsked: boolean;

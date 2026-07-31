@@ -659,7 +659,20 @@ const CARD_KINDS = ["basic", "cloze"] as const;
 const MAX_CARD_TEXT_LENGTH = 10_000;
 const REVIEW_RATINGS = [1, 2, 3, 4] as const;
 const STUDY_BLOCK_STATUSES = ["planned", "done", "missed"] as const;
-const NOTIFICATION_SOURCES = ["document", "exam", "study-day", "event", "task"] as const;
+/**
+ * Mirrors the `notifications.source` CHECK as migration 037 leaves it — the
+ * LEDGER's domain, which includes `"security"` (NTF-007) because a recorded
+ * security event is history like any other row.
+ */
+const NOTIFICATION_SOURCES = ["document", "exam", "study-day", "event", "task", "security"] as const;
+
+/**
+ * Mirrors the narrower `ntf_source_settings.source` CHECK, which migration 037
+ * deliberately leaves alone: `"security"` is not a preference, so it can never
+ * appear in a settings row — or in the `enabledSources` list one is written
+ * from.
+ */
+const TOGGLEABLE_NOTIFICATION_SOURCES = ["document", "exam", "study-day", "event", "task"] as const;
 const NOTIFICATION_STATUSES = ["delivered", "snoozed", "dismissed"] as const;
 const PERSON_KINDS = ["birthday", "anniversary"] as const;
 /** Mirrors `TASK_LIST_VIEWS` in `@nexus/db`'s `tasks/taskListStore.ts` and migration 022's CHECK (copied, not imported — the `NOTE_FOLDER_COLORS` arrangement). */
@@ -2139,9 +2152,14 @@ function parseSettings(value: unknown): ExportSettings {
     // Migration 009's `ntf_source_settings.source` CHECK. Settings ride in the
     // manifest rather than an NDJSON row, which is exactly how this constraint
     // could have been overlooked — a restore writes these values into that
-    // table just the same.
+    // table just the same. Narrower than the ledger's own domain on purpose:
+    // `"security"` is a source a row may carry, never one a preference may name.
     enabledSources: sourcesRaw.map((item, index) =>
-      enumStr(item, `settings.notifications.enabledSources[${index}]`, NOTIFICATION_SOURCES),
+      enumStr(
+        item,
+        `settings.notifications.enabledSources[${index}]`,
+        TOGGLEABLE_NOTIFICATION_SOURCES,
+      ),
     ),
   };
 

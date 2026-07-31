@@ -2,6 +2,7 @@ import type { BrowserWindow } from "electron";
 import { Notification, powerMonitor } from "electron";
 import {
   deriveNotificationCandidates,
+  isDeliverable,
   isValidDayKey,
   isWithinQuietHours,
   occurrenceDatesInRange,
@@ -34,9 +35,11 @@ import {
   eventNotificationCopy,
   examNotificationCopy,
   groupedDigestCopy,
+  securityNotificationCopy,
   studyDayNotificationCopy,
   taskNotificationCopy,
   type NotificationCopy,
+  type SecurityNotice,
 } from "./notificationStrings.js";
 import { IpcChannel } from "../shared/ipc.js";
 
@@ -57,6 +60,18 @@ export interface NotificationSchedulerDeps {
   notificationStore(profileId: string): NotificationStore;
   getMainWindow(): BrowserWindow | null;
 }
+
+/**
+ * What recording a security event needs (NTF-007) — a strict subset of the
+ * scheduler's deps, because a security notice is not derived from anything: it
+ * has already happened, so there are no source stores to read. Spelled as a
+ * `Pick` rather than a second literal so `main/index.ts` can hand the very same
+ * object to both.
+ */
+export type SecurityNotificationDeps = Pick<
+  NotificationSchedulerDeps,
+  "listProfiles" | "notificationStore" | "getMainWindow"
+>;
 
 /** How often the periodic check runs, beyond the immediate on-start check and the `powerMonitor` "resume" hook. */
 const CHECK_INTERVAL_MS = 60_000;
@@ -331,7 +346,10 @@ function checkProfile(
     (candidate) =>
       !ledgerKeys.has(occurrenceKey(candidate)) &&
       // held; re-derives once quiet hours end
-      (candidate.priority === "max" || !withinQuiet),
+      isDeliverable(candidate, {
+        enabledSources: settings.enabledSources,
+        withinQuietHours: withinQuiet,
+      }),
   );
   const dueSnoozed = ntf.dueSnoozed(nowIso);
   const refiring = dueSnoozed.filter((row) => currentKeys.has(occurrenceKey(row)));
@@ -489,13 +507,90 @@ function composeCopy(candidate: NotificationCandidate, ctx: CopyContext): Notifi
 }
 
 /**
+ * Delivers the security events that have actually happened on this device
+ * (NTF-007): records each one in every profile's ledger and puts it in front of
+ * the user, with no quiet-hours or appetite gate anywhere in the path — that is
+ * the whole point of `ALWAYS_ON_SOURCES`, and it is why these never travel
+ * through `deriveNotificationCandidates`, which only knows how to re-derive
+ * standing state.
+ *
+ * **Every profile, one toast.** A wrong-passcode burst or a passcode change is a
+ * fact about the ACCOUNT, not about one profile inside it, so each profile's
+ * center gets its own row — the same reasoning the scheduler's own
+ * profile loop already runs on. The OS toast fires once per event regardless:
+ * the user is one person.
+ *
+ * **Never throws.** It is called on the unlock path, and an unlock that
+ * succeeded must not fail because a notification could not be written. A row
+ * that cannot be recorded (a ledger collision, a profile that vanished) is
+ * logged and the toast still fires — the user being told is what matters, the
+ * ledger row is the receipt.
+ */
+export function deliverSecurityNotices(
+  deps: SecurityNotificationDeps,
+  notices: readonly SecurityNotice[],
+): void {
+  if (notices.length === 0) return;
+
+  const nowIso = new Date().toISOString();
+  const items = notices.map((notice) => ({
+    source: "security" as const,
+    copy: securityNotificationCopy(notice),
+    notice,
+  }));
+
+  let profiles: ReadonlyArray<{ id: string }> = [];
+  try {
+    profiles = deps.listProfiles();
+  } catch (error) {
+    logSecurityFailure(error);
+  }
+
+  let recorded = false;
+  for (const profile of profiles) {
+    for (const item of items) {
+      try {
+        deps.notificationStore(profile.id).recordDelivered(
+          {
+            source: "security",
+            // The kind is the entity — there is no row anywhere to point at —
+            // and the instant is what tells two events of one kind apart.
+            entityId: item.notice.kind,
+            occurrenceKey: item.notice.at,
+            title: item.copy.title,
+            body: item.copy.body,
+          },
+          nowIso,
+        );
+        recorded = true;
+      } catch (error) {
+        logSecurityFailure(error);
+      }
+    }
+  }
+
+  showNotifications(deps, items);
+  if (recorded) {
+    deps.getMainWindow()?.webContents.send(IpcChannel.notificationsChanged);
+  }
+}
+
+function logSecurityFailure(error: unknown): void {
+  console.error(
+    `Security notification could not be recorded (it was still shown): ${
+      error instanceof Error ? error.message : String(error)
+    }`,
+  );
+}
+
+/**
  * Shows a batch of notifications from one check: individually when at most
  * `GROUP_THRESHOLD`, otherwise a single grouped digest (every occurrence was
  * already recorded individually in the ledger regardless of how it is
  * shown). Guards `Notification.isSupported()` once for the whole batch.
  */
 function showNotifications(
-  deps: NotificationSchedulerDeps,
+  deps: Pick<NotificationSchedulerDeps, "getMainWindow">,
   items: ReadonlyArray<{ source: NotificationSource; copy: NotificationCopy }>,
 ): void {
   if (items.length === 0 || !Notification.isSupported()) return;
@@ -510,7 +605,7 @@ function showNotifications(
   showOne(deps, groupedDigestCopy(items.length, counts));
 }
 
-function showOne(deps: NotificationSchedulerDeps, copy: NotificationCopy): void {
+function showOne(deps: Pick<NotificationSchedulerDeps, "getMainWindow">, copy: NotificationCopy): void {
   const notification = new Notification({ title: copy.title, body: copy.body });
   notification.on("click", () => {
     const win = deps.getMainWindow();

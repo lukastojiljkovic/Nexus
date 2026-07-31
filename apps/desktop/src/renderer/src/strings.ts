@@ -1442,6 +1442,7 @@ export const strings = {
       "study-day": "Učenje",
       event: "Događaj",
       task: "Zadatak",
+      security: "Bezbednost",
     },
     /** Snooze preset button labels, keyed by SnoozePreset value. */
     snoozePreset: {
@@ -1467,7 +1468,10 @@ export const strings = {
         "study-day": "Učenje",
         event: "Događaji",
         task: "Zadaci",
+        security: "Bezbednost",
       },
+      /** NTF-007: why the „Bezbednost“ toggle is on and greyed out. */
+      alwaysOnCaption: "Bezbednosna obaveštenja se ne mogu isključiti.",
       saveError: "Čuvanje podešavanja nije uspelo. Pokušaj ponovo.",
     },
     /**

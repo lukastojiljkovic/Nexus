@@ -1,17 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, Chip } from "@nexus/ui";
 import type { NotificationRecord, NotificationSource, SnoozePreset } from "../../shared/ipc.js";
-import { bellCountLabel, formatNotificationWhen } from "./notificationFormat.js";
+import {
+  ALWAYS_ON_NOTIFICATION_SOURCES,
+  bellCountLabel,
+  formatNotificationWhen,
+} from "./notificationFormat.js";
 import { NotificationSettingsControls } from "./NotificationSettingsControls.js";
 import { strings } from "./strings.js";
 
-/** Deep-link target module per source (NTF a3: exam/study-day → study, document/event → calendar, task → tasks). */
+/**
+ * Deep-link target module per source (NTF a3: exam/study-day → study,
+ * document/event → calendar, task → tasks). A security notice (NTF-007) opens
+ * Settings — the page holding the PIN, the Recovery Kit and the account list,
+ * which is where every one of those events can actually be acted on.
+ */
 const SOURCE_MODULE: Record<NotificationSource, string> = {
   document: "calendar",
   exam: "study",
   "study-day": "study",
   event: "calendar",
   task: "tasks",
+  security: "settings",
 };
 
 const SNOOZE_PRESETS: SnoozePreset[] = ["10m", "1h", "tonight", "tomorrow-morning"];
@@ -163,9 +173,20 @@ export function NotificationCenter({ profileId, onNavigate }: NotificationCenter
                     </div>
                   </button>
                   <div className="ntf__row-actions">
+                    {/*
+                      An always-on row (NTF-007) has nothing to snooze: it
+                      records something that already happened, so "remind me
+                      later" would have nothing to come back for — and the
+                      scheduler, which only ever re-fires a snoozed row while
+                      its source is still due, would quietly retire it instead.
+                      Dismiss stays: clearing it from the center is fine, and
+                      the ledger keeps it as history either way.
+                    */}
                     <div className="ntf__snooze-presets">
-                      {SNOOZE_PRESETS.filter((preset) => preset !== "tonight" || !pastEvening).map(
-                        (preset) => (
+                      {!ALWAYS_ON_NOTIFICATION_SOURCES.includes(notification.source) &&
+                        SNOOZE_PRESETS.filter(
+                          (preset) => preset !== "tonight" || !pastEvening,
+                        ).map((preset) => (
                           <Button
                             key={preset}
                             size="sm"
@@ -173,8 +194,7 @@ export function NotificationCenter({ profileId, onNavigate }: NotificationCenter
                           >
                             {s.snoozePreset[preset]}
                           </Button>
-                        ),
-                      )}
+                        ))}
                     </div>
                     <Button
                       size="sm"

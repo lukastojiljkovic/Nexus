@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ALL_NOTIFICATION_SOURCES, bellCountLabel, formatNotificationWhen } from "./notificationFormat.js";
+import {
+  ALL_NOTIFICATION_SOURCES,
+  ALWAYS_ON_NOTIFICATION_SOURCES,
+  bellCountLabel,
+  formatNotificationWhen,
+} from "./notificationFormat.js";
 
 /**
  * `formatNotificationWhen` branches on "is this instant on TODAY's local
@@ -21,9 +26,16 @@ function pinNoon(): void {
 }
 
 describe("ALL_NOTIFICATION_SOURCES", () => {
-  it("is the five NTF sources, in their fixed order and without duplicates", () => {
+  it("is the five toggleable NTF sources, in their fixed order and without duplicates", () => {
     expect(ALL_NOTIFICATION_SOURCES).toEqual(["document", "exam", "study-day", "event", "task"]);
     expect(new Set(ALL_NOTIFICATION_SOURCES).size).toBe(ALL_NOTIFICATION_SOURCES.length);
+  });
+
+  it("never overlaps the always-on sources — a source is one or the other, never both", () => {
+    expect(ALWAYS_ON_NOTIFICATION_SOURCES).toEqual(["security"]);
+    for (const source of ALWAYS_ON_NOTIFICATION_SOURCES) {
+      expect(ALL_NOTIFICATION_SOURCES).not.toContain(source);
+    }
   });
 });
 

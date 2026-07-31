@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import type { ExportSettings, ProfileData } from "@nexus/core";
 import { RestoreValidationError } from "../errors.js";
-import { NOTIFICATION_SOURCES } from "../notify/notificationStore.js";
+import { TOGGLEABLE_NOTIFICATION_SOURCES } from "../notify/notificationStore.js";
 import { TASK_ORDER_GAP, TaskListStore } from "../tasks/taskListStore.js";
 import { exdatesText, offsetsText, recurrenceText } from "./columnText.js";
 
@@ -805,8 +805,11 @@ export class RestoreStore {
       );
       written += 1;
 
+      // Only the toggleable sources have a settings row to write at all — an
+      // always-on source (`"security"`, NTF-007) has no preference, and the
+      // table's own CHECK refuses one.
       const enabledSources = new Set(input.settings.notifications.enabledSources);
-      for (const source of NOTIFICATION_SOURCES) {
+      for (const source of TOGGLEABLE_NOTIFICATION_SOURCES) {
         if (enabledSources.has(source)) continue;
         this.insertNtfSourceSetting.run(this.profileId, source);
         written += 1;

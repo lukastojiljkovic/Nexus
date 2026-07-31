@@ -45,6 +45,22 @@ function formatDate(dateKey: string): string {
 }
 
 /**
+ * An ISO-8601 instant as local wall-clock "DD.MM.YYYY. u HH:MM" — the same
+ * punctuation `formatDate` uses, extended to the minute. Assembled from the
+ * `Date`'s own local fields rather than through `Intl`, so the shape is fixed
+ * whatever the host is set to; an unparseable string is returned unchanged
+ * (mirrors the renderer's `formatNotificationWhen`), because a security notice
+ * with an odd timestamp in it is still worth showing.
+ */
+function formatInstant(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const pad = (value: number): string => String(value).padStart(2, "0");
+  const dateKey = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  return `${formatDate(dateKey)} u ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/**
  * Serbian 1 / 2-4 / 5+ numeral agreement. The renderer's `strings.ts` has a
  * simpler 2-way `dayUnit` (singular vs. "many") that happens to be correct
  * for "dan/dana" because that word's paucal and plural forms coincide; other
@@ -177,19 +193,79 @@ export function taskNotificationCopy(
   };
 }
 
+/**
+ * One security-relevant event that actually happened on this device (NTF-007),
+ * as main hands it to the notification path. `at` is the instant it happened —
+ * main's own clock, never the renderer's — and doubles as the occurrence key
+ * that keeps two events of the same kind apart in the ledger.
+ *
+ * Only the four events that genuinely occur locally are modelled: the unlock
+ * throttle tripping, a passcode change, a Recovery Kit reissue, and another
+ * account being deleted from this device. Each carries exactly the facts its
+ * copy needs and nothing else — in particular the deleted account's label is
+ * passed through in memory rather than persisted anywhere, since the account it
+ * names is being erased in the same breath.
+ */
+export type SecurityNotice = { at: string } & (
+  | {
+      kind: "unlock-throttle";
+      /** Wrong attempts accumulated before the unlock that cleared them. */
+      failedAttempts: number;
+      /** ISO-8601 instant the throttle's last wait ran to — the one time fact that survives the trip. */
+      lockedUntil: string;
+    }
+  | { kind: "passcode-changed" }
+  | { kind: "recovery-kit-reissued" }
+  | { kind: "account-deleted"; label: string }
+);
+
+/**
+ * Serbian copy for one security notice. Same tone as every other notification
+ * here — sentence case, informative, no exclamation marks — because alarm is
+ * not information: the title states what happened, the body states the one
+ * consequence that follows from it.
+ *
+ * The throttle notice is the only one that names a time, and deliberately so:
+ * it is the only one that can be DELIVERED long after it happened (the database
+ * was locked when it tripped — that is what tripping means), so "when" is not
+ * something the row's own delivery timestamp can answer.
+ */
+export function securityNotificationCopy(notice: SecurityNotice): NotificationCopy {
+  switch (notice.kind) {
+    case "unlock-throttle": {
+      const attempts = notice.failedAttempts;
+      const unit = pluralize(attempts, "pogrešan pokušaj", "pogrešna pokušaja", "pogrešnih pokušaja");
+      return {
+        title: "Više pogrešnih pokušaja otključavanja",
+        body: `${attempts} ${unit} pre ovog otključavanja · zaključavanje do ${formatInstant(notice.lockedUntil)}`,
+      };
+    }
+    case "passcode-changed":
+      return { title: "PIN je promenjen", body: "Otključavanje sada traži novi PIN." };
+    case "recovery-kit-reissued":
+      return { title: "Izdat je novi Recovery Kit", body: "Stari kod više ne važi." };
+    case "account-deleted":
+      return {
+        title: "Nalog je obrisan",
+        body: `Nalog „${notice.label}“ je obrisan sa ovog uređaja.`,
+      };
+  }
+}
+
 /** Today's study-day reminder copy: how many blocks are planned and their total length. */
 export function studyDayNotificationCopy(blockCount: number, totalMinutes: number): NotificationCopy {
   const blockPhrase = pluralize(blockCount, "blok", "bloka", "blokova");
   return { title: "Učenje danas", body: `${blockCount} ${blockPhrase} · ${totalMinutes} min` };
 }
 
-/** Per-source counts for the grouped digest, in the fixed order documents/exams/study-days/events/tasks. */
+/** Per-source counts for the grouped digest, in the fixed order documents/exams/study-days/events/tasks/security. */
 export interface DigestCounts {
   document: number;
   exam: number;
   "study-day": number;
   event: number;
   task: number;
+  security: number;
 }
 
 /**
@@ -215,10 +291,26 @@ export function groupedDigestCopy(total: number, counts: DigestCounts): Notifica
   if (counts.task > 0) {
     parts.push(`${counts.task} ${pluralize(counts.task, "zadatak", "zadatka", "zadataka")}`);
   }
+  if (counts.security > 0) {
+    parts.push(
+      `${counts.security} ${pluralize(
+        counts.security,
+        "bezbednosno obaveštenje",
+        "bezbednosna obaveštenja",
+        "bezbednosnih obaveštenja",
+      )}`,
+    );
+  }
   return { title, body: parts.join(" · ") };
 }
 
-/** An empty per-source counter, keyed the same way as `@nexus/core`'s `NotificationSource`. */
+/**
+ * An empty per-source counter, keyed the same way as `@nexus/core`'s
+ * `NotificationSource`. The security count is reachable only in the degenerate
+ * case of four or more security events surfacing in one batch (several accounts
+ * deleted before a single unlock) — one or two of them show individually, like
+ * any other small batch.
+ */
 export function emptyDigestCounts(): Record<NotificationSource, number> {
-  return { document: 0, exam: 0, "study-day": 0, event: 0, task: 0 };
+  return { document: 0, exam: 0, "study-day": 0, event: 0, task: 0, security: 0 };
 }
