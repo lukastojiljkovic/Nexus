@@ -1598,6 +1598,14 @@ export const strings = {
       tonight: "Večeras",
       "tomorrow-morning": "Sutra ujutru",
     },
+    /**
+     * NTF-009: the one-click snooze, which uses the profile's default preset.
+     * Deliberately unlabelled with a duration — main reads the default at the
+     * moment of the click, so any duration printed here could be a lie the
+     * instant the preference changes in another window. The four presets beside
+     * it still say exactly what they do.
+     */
+    snoozeDefaultAction: "Odloži",
     settings: {
       show: "Podešavanja obaveštenja",
       hide: "Sakrij podešavanja",
@@ -1608,6 +1616,9 @@ export const strings = {
       quietHint: "Podsetnici sačekaju kraj tihih sati; poslednje upozorenje ipak stiže.",
       quietPairingError: "Oba vremena moraju biti popunjena, ili oba prazna.",
       morningHourLabel: "Jutarnji podsetnik u",
+      /** NTF-009: which preset the center's plain „Odloži“ button reaches for. */
+      snoozeDefaultLabel: "Podrazumevano odlaganje",
+      snoozeDefaultHint: "Dugme „Odloži“ u obaveštenjima koristi ovaj izbor.",
       /** Source toggle checkbox labels, keyed by NotificationSource value. */
       sourceToggle: {
         document: "Dokumenta",

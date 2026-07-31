@@ -74,6 +74,19 @@ export type {
 
 export { isWithinQuietHours } from "./notify/quietHours.js";
 
+export {
+  COALESCE_WINDOW_MS,
+  DIGEST_COUNT_THRESHOLD,
+  coalesceDeliveries,
+  emptyDeliveryWindow,
+} from "./notify/deliveryWindow.js";
+export type {
+  CoalesceDeliveriesInput,
+  CoalesceResult,
+  DeliveryWindow,
+  DigestReason,
+} from "./notify/deliveryWindow.js";
+
 export { collectNoteLinkIds, mergeNoteState } from "./notes/yjsMerge.js";
 export type { MergedNoteState } from "./notes/yjsMerge.js";
 

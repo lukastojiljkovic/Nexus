@@ -165,7 +165,13 @@ function emptyProfileData(): ProfileData {
 function emptySettings(): ExportSettings {
   return {
     flags: {},
-    notifications: { quietFrom: null, quietTo: null, morningHour: "08:00", enabledSources: [] },
+    notifications: {
+      quietFrom: null,
+      quietTo: null,
+      morningHour: "08:00",
+      enabledSources: [],
+      snoozeDefault: "10m",
+    },
   };
 }
 
@@ -724,6 +730,7 @@ describe("RestoreStore", () => {
         quietTo: "07:00",
         morningHour: "08:30",
         enabledSources: ["document", "exam"],
+        snoozeDefault: "10m",
       },
     };
 
@@ -1140,6 +1147,7 @@ describe("RestoreStore", () => {
         quietTo: "06:30",
         morningHour: "07:45",
         enabledSources: ["document", "exam"], // "study-day" absent => disabled
+        snoozeDefault: "tonight",
       },
     };
 
@@ -1157,6 +1165,9 @@ describe("RestoreStore", () => {
       quietTo: "06:30",
       morningHour: "07:45",
       enabledSources: ["document", "exam"],
+      // NTF-009 (`1.19.0`): the snooze default DOES travel — a preference the
+      // user chose is theirs to get back, unlike the appetite flag below.
+      snoozeDefault: "tonight",
       // NTF-008 (ADR-033): the appetite flag deliberately does not travel in an
       // archive, so a restored profile comes back UNASKED and is asked again at
       // its next visible reminder — the harmless direction.

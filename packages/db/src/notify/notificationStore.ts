@@ -47,6 +47,30 @@ export const NOTIFICATION_SOURCES: readonly NotificationSource[] = [
 export const TOGGLEABLE_NOTIFICATION_SOURCES: readonly NotificationSource[] =
   NOTIFICATION_SOURCES.filter((source) => !isAlwaysOnSource(source));
 
+/**
+ * The four snooze presets a reminder can be put off by (migration 041's
+ * `ntf_settings.snooze_default` CHECK), in the order the notification center
+ * offers them — shortest first. Exported like `NOTIFICATION_SOURCES` so main
+ * validates a wire value against this list rather than a hand-typed respelling
+ * of the same four strings, and so the archive reader can do the same.
+ *
+ * What each one RESOLVES to is deliberately not here: an absolute `until`
+ * depends on the clock and on the profile's morning hour, and main computes it
+ * (SEC-EL-02 — a deadline is never accepted from the renderer). This is only
+ * the closed domain.
+ */
+export const SNOOZE_PRESETS = ["10m", "1h", "tonight", "tomorrow-morning"] as const;
+
+/** One of the four snooze presets (see `SNOOZE_PRESETS`). */
+export type SnoozePreset = (typeof SNOOZE_PRESETS)[number];
+
+/**
+ * What the center's plain „Odloži“ button means for a profile that has not
+ * chosen otherwise: the shortest preset, which is what that button did before
+ * the preference existed and the one whose being wrong costs the least.
+ */
+export const DEFAULT_SNOOZE_PRESET: SnoozePreset = "10m";
+
 const DEFAULT_MORNING_HOUR = "08:00";
 const MAX_TEXT_LENGTH = 500;
 
@@ -96,6 +120,12 @@ export interface NotificationSettings {
    */
   enabledSources: NotificationSource[];
   /**
+   * Which preset the notification center's plain „Odloži“ button means
+   * (NTF-009). The four presets stay offered explicitly beside it — this is the
+   * one reached for by default, not the only one available.
+   */
+  snoozeDefault: SnoozePreset;
+  /**
    * Whether the one-time "how much should Nexus remind you" question has been
    * PUT to this profile (NTF-008 / ADR-033) — not what was answered, since
    * keeping the defaults closes it just as finally as picking a preset. False
@@ -110,6 +140,7 @@ export interface UpdateNotificationSettingsInput {
   quietFrom?: string | null;
   quietTo?: string | null;
   morningHour?: string;
+  snoozeDefault?: SnoozePreset;
 }
 
 interface NotificationRow {
@@ -131,6 +162,7 @@ interface SettingsRow {
   quiet_from: string | null;
   quiet_to: string | null;
   morning_hour: string;
+  snooze_default: SnoozePreset;
   appetite_asked: number;
 }
 
@@ -230,7 +262,7 @@ export class NotificationStore {
        WHERE id = ? AND profile_id = ?`,
     );
     this.selectSettings = db.prepare(
-      `SELECT quiet_from, quiet_to, morning_hour, appetite_asked
+      `SELECT quiet_from, quiet_to, morning_hour, snooze_default, appetite_asked
        FROM ntf_settings WHERE profile_id = ?`,
     );
     // `appetite_asked` is deliberately absent from both halves: the INSERT
@@ -238,12 +270,14 @@ export class NotificationStore {
     // not an answer to the NTF-008 question), and the UPDATE branch leaves an
     // already-set flag alone — nothing but `markAppetiteAsked` ever moves it.
     this.upsertSettings = db.prepare(
-      `INSERT INTO ntf_settings (profile_id, quiet_from, quiet_to, morning_hour, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO ntf_settings
+         (profile_id, quiet_from, quiet_to, morning_hour, snooze_default, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (profile_id) DO UPDATE SET
          quiet_from = excluded.quiet_from,
          quiet_to = excluded.quiet_to,
          morning_hour = excluded.morning_hour,
+         snooze_default = excluded.snooze_default,
          updated_at = excluded.updated_at`,
     );
     // The mirror image: the INSERT branch writes the very defaults `getSettings`
@@ -252,8 +286,9 @@ export class NotificationStore {
     // branch touches nothing but the flag and the timestamp.
     this.markAppetiteAskedStatement = db.prepare(
       `INSERT INTO ntf_settings
-         (profile_id, quiet_from, quiet_to, morning_hour, appetite_asked, created_at, updated_at)
-       VALUES (?, NULL, NULL, ?, 1, ?, ?)
+         (profile_id, quiet_from, quiet_to, morning_hour, snooze_default, appetite_asked,
+          created_at, updated_at)
+       VALUES (?, NULL, NULL, ?, ?, 1, ?, ?)
        ON CONFLICT (profile_id) DO UPDATE SET
          appetite_asked = 1,
          updated_at = excluded.updated_at`,
@@ -286,6 +321,7 @@ export class NotificationStore {
       quietTo: settingsRow?.quiet_to ?? null,
       morningHour: settingsRow?.morning_hour ?? DEFAULT_MORNING_HOUR,
       enabledSources,
+      snoozeDefault: settingsRow?.snooze_default ?? DEFAULT_SNOOZE_PRESET,
       appetiteAsked: settingsRow?.appetite_asked === 1,
     };
   }
@@ -303,6 +339,7 @@ export class NotificationStore {
     this.markAppetiteAskedStatement.run(
       this.profileId,
       DEFAULT_MORNING_HOUR,
+      DEFAULT_SNOOZE_PRESET,
       validNow,
       validNow,
     );
@@ -334,6 +371,10 @@ export class NotificationStore {
       changes.morningHour !== undefined
         ? validateHHMM(changes.morningHour, "morningHour")
         : current.morningHour;
+    const snoozeDefault =
+      changes.snoozeDefault !== undefined
+        ? validateSnoozePreset(changes.snoozeDefault)
+        : current.snoozeDefault;
 
     if ((quietFrom === null) !== (quietTo === null)) {
       throw new NotificationValidationError(
@@ -341,13 +382,22 @@ export class NotificationStore {
       );
     }
 
-    this.upsertSettings.run(this.profileId, quietFrom, quietTo, morningHour, validNow, validNow);
+    this.upsertSettings.run(
+      this.profileId,
+      quietFrom,
+      quietTo,
+      morningHour,
+      snoozeDefault,
+      validNow,
+      validNow,
+    );
 
     return {
       quietFrom,
       quietTo,
       morningHour,
       enabledSources: current.enabledSources,
+      snoozeDefault,
       // Untouched by this upsert (see `upsertSettings`) — editing a setting is
       // not an answer to, nor an escape from, the one-time appetite question.
       appetiteAsked: current.appetiteAsked,
@@ -558,6 +608,13 @@ function validateText(value: string, field: string): string {
     throw new NotificationValidationError(
       `"${field}" must be between 1 and ${MAX_TEXT_LENGTH} characters.`,
     );
+  }
+  return value;
+}
+
+function validateSnoozePreset(value: SnoozePreset): SnoozePreset {
+  if (!SNOOZE_PRESETS.includes(value)) {
+    throw new NotificationValidationError(`"${value}" is not a known snooze preset.`);
   }
   return value;
 }

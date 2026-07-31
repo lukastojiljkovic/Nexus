@@ -48,7 +48,13 @@ function emptyExportInput(): ExportArchiveInput {
     createdAt: "2026-07-11T10:00:00.000Z",
     settings: {
       flags: { tasks: true, notes: false },
-      notifications: { quietFrom: null, quietTo: null, morningHour: "08:00", enabledSources: ["document", "exam"] },
+      notifications: {
+        quietFrom: null,
+        quietTo: null,
+        morningHour: "08:00",
+        enabledSources: ["document", "exam"],
+        snoozeDefault: "10m",
+      },
     },
     data: {
       tasks: [],
@@ -788,12 +794,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.19.0`: the nearest minor strictly ahead of this build's `1.18.0`.
+  // `1.20.0`: the nearest minor strictly ahead of this build's `1.19.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.19.0" });
+    const files = baseFiles({ schemaVersion: "1.20.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.19.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.20.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -2505,8 +2511,8 @@ describe("parseImportArchive — note folder preferences (the 1.7.0 era gate)", 
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.18.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.18.0");
+  it("is 1.19.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.19.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -2672,16 +2678,16 @@ describe("parseImportArchive — schema version", () => {
   });
 
   it("accepts a newer patch", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.18.7" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.19.7" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
 
-  // `1.19.0`: the nearest minor strictly ahead of this build's `1.18.0`.
+  // `1.20.0`: the nearest minor strictly ahead of this build's `1.19.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.19.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.20.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.19.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.20.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -2803,6 +2809,45 @@ describe("parseImportArchive — settings", () => {
     );
     expect(result.problems).toEqual([]);
     expect(result.manifest?.settings.notifications.quietFrom).toBe("22:00");
+  });
+
+  /**
+   * NTF-009 (`1.19.0`): optional-with-a-default, so absence is the pre-`1.19.0`
+   * shape and reads as „10 min“ — while a key that IS there is validated
+   * against migration 041's closed CHECK, in every era.
+   */
+  describe("the default snooze preset", () => {
+    const base = { quietFrom: null, quietTo: null, morningHour: "08:00", enabledSources: [] };
+
+    it("reads 10m when the key is absent — every pre-1.19.0 archive", () => {
+      const result = parseImportArchive(withSettings({ ...base }));
+      expect(result.problems).toEqual([]);
+      expect(result.manifest?.settings.notifications.snoozeDefault).toBe("10m");
+    });
+
+    it("reads each of the four presets back", () => {
+      for (const preset of ["10m", "1h", "tonight", "tomorrow-morning"]) {
+        const result = parseImportArchive(withSettings({ ...base, snoozeDefault: preset }));
+        expect(result.problems).toEqual([]);
+        expect(result.manifest?.settings.notifications.snoozeDefault).toBe(preset);
+      }
+    });
+
+    it("refuses a preset outside migration 041's CHECK", () => {
+      const result = parseImportArchive(withSettings({ ...base, snoozeDefault: "30m" }));
+      expect(result.problems).toContainEqual({
+        severity: "error", code: "invalid-manifest", path: "manifest.json",
+        detail: "settings.notifications.snoozeDefault",
+      });
+    });
+
+    it("refuses an explicit null — leniency covers absence only", () => {
+      const result = parseImportArchive(withSettings({ ...base, snoozeDefault: null }));
+      expect(result.problems).toContainEqual({
+        severity: "error", code: "invalid-manifest", path: "manifest.json",
+        detail: "settings.notifications.snoozeDefault",
+      });
+    });
   });
 });
 

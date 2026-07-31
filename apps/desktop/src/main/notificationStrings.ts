@@ -258,23 +258,24 @@ export function studyDayNotificationCopy(blockCount: number, totalMinutes: numbe
   return { title: "Učenje danas", body: `${blockCount} ${blockPhrase} · ${totalMinutes} min` };
 }
 
-/** Per-source counts for the grouped digest, in the fixed order documents/exams/study-days/events/tasks/security. */
-export interface DigestCounts {
-  document: number;
-  exam: number;
-  "study-day": number;
-  event: number;
-  task: number;
-  security: number;
-}
+/**
+ * The sources a digest can count: every one but the always-on `"security"`,
+ * which is never folded into a digest at all (NTF-009 — see
+ * `coalesceDeliveries`). Spelled as an `Exclude` rather than a hand-written
+ * list so a source added to `@nexus/core` lands here for free, and so the
+ * exemption stays a single rule rather than a convention repeated in two files.
+ */
+export type FoldableNotificationSource = Exclude<NotificationSource, "security">;
+
+/** Per-source counts for a digest, in the fixed order documents/exams/study-days/events/tasks. */
+export type DigestCounts = Record<FoldableNotificationSource, number>;
 
 /**
- * Grouped-digest copy for a batch of more than 3 simultaneous notifications
- * (the storm guard): one title with the total, one body listing each
- * contributing source's count. A source with a zero count is omitted.
+ * The shared body of every digest: each contributing source's count under its
+ * own Serbian noun, in the fixed order above, middle-dot separated. A source
+ * with no deliveries is omitted rather than printed as a zero.
  */
-export function groupedDigestCopy(total: number, counts: DigestCounts): NotificationCopy {
-  const title = `Nexus — ${total} ${pluralize(total, "podsetnik", "podsetnika", "podsetnika")}`;
+function digestBody(counts: DigestCounts): string {
   const parts: string[] = [];
   if (counts.document > 0) {
     parts.push(`${counts.document} ${pluralize(counts.document, "dokument", "dokumenta", "dokumenata")}`);
@@ -291,26 +292,58 @@ export function groupedDigestCopy(total: number, counts: DigestCounts): Notifica
   if (counts.task > 0) {
     parts.push(`${counts.task} ${pluralize(counts.task, "zadatak", "zadatka", "zadataka")}`);
   }
-  if (counts.security > 0) {
-    parts.push(
-      `${counts.security} ${pluralize(
-        counts.security,
-        "bezbednosno obaveštenje",
-        "bezbednosna obaveštenja",
-        "bezbednosnih obaveštenja",
-      )}`,
-    );
-  }
-  return { title, body: parts.join(" · ") };
+  return parts.join(" · ");
+}
+
+/**
+ * Grouped-digest copy for a batch of more than `DIGEST_COUNT_THRESHOLD`
+ * simultaneous notifications (the storm guard): one title with the total, one
+ * body listing each contributing source's count. The app names itself here
+ * because this toast replaces several that would each have said what they were
+ * about — the only place in the notification copy where „Nexus“ appears.
+ */
+export function groupedDigestCopy(total: number, counts: DigestCounts): NotificationCopy {
+  return {
+    title: `Nexus — ${total} ${pluralize(total, "podsetnik", "podsetnika", "podsetnika")}`,
+    body: digestBody(counts),
+  };
+}
+
+/**
+ * Digest copy for the rolling-window collapse (NTF-009): notifications that
+ * landed within `COALESCE_WINDOW_MS` of the previous toast, summarized as one
+ * running count of everything the live window has delivered. „Novo“ rather than
+ * „podsetnik“ because a window digest can supersede toasts the user has already
+ * seen — it states how many new things are waiting, not how many times the app
+ * is asking.
+ */
+export function windowDigestCopy(total: number, counts: DigestCounts): NotificationCopy {
+  return {
+    title: `${total} ${pluralize(total, "novo obaveštenje", "nova obaveštenja", "novih obaveštenja")}`,
+    body: digestBody(counts),
+  };
+}
+
+/**
+ * Digest copy for the first scheduler pass after unlock (PRD 05 §5): everything
+ * that came due while the app was closed surfaces at once, and saying so is
+ * what makes a pile of reminders read as a catch-up rather than as the app
+ * suddenly shouting. Same body as every other digest — what piled up is exactly
+ * the per-source breakdown.
+ */
+export function catchUpDigestCopy(total: number, counts: DigestCounts): NotificationCopy {
+  return {
+    title: `Dok te nije bilo: ${total} ${pluralize(total, "obaveštenje", "obaveštenja", "obaveštenja")}`,
+    body: digestBody(counts),
+  };
 }
 
 /**
  * An empty per-source counter, keyed the same way as `@nexus/core`'s
- * `NotificationSource`. The security count is reachable only in the degenerate
- * case of four or more security events surfacing in one batch (several accounts
- * deleted before a single unlock) — one or two of them show individually, like
- * any other small batch.
+ * `NotificationSource` minus the always-on one. There is no security count
+ * because a security notice never reaches a digest: `coalesceDeliveries` gives
+ * it its own toast, always (NTF-007 / NTF-009).
  */
-export function emptyDigestCounts(): Record<NotificationSource, number> {
-  return { document: 0, exam: 0, "study-day": 0, event: 0, task: 0, security: 0 };
+export function emptyDigestCounts(): DigestCounts {
+  return { document: 0, exam: 0, "study-day": 0, event: 0, task: 0 };
 }

@@ -4,7 +4,7 @@
  * and snoozed-until fields, and the bell's capped unread-count label. Mirrors
  * focusFormat.ts's small-pure-helper-module idiom.
  */
-import type { NotificationSource } from "../../shared/ipc.js";
+import type { NotificationSource, SnoozePreset } from "../../shared/ipc.js";
 
 /** The five toggleable NTF sources, in the fixed order every source list/loop uses. */
 export const ALL_NOTIFICATION_SOURCES: NotificationSource[] = [
@@ -23,6 +23,16 @@ export const ALL_NOTIFICATION_SOURCES: NotificationSource[] = [
  * this list instead, with a locked control and a caption saying why.
  */
 export const ALWAYS_ON_NOTIFICATION_SOURCES: NotificationSource[] = ["security"];
+
+/**
+ * The four snooze presets, shortest first — the order the center's row offers
+ * them and the settings' „Podrazumevano odlaganje“ choice lists them in.
+ * Beside `ALL_NOTIFICATION_SOURCES` for the same reason it is: two surfaces
+ * render this exact list, and a second copy is how they would drift apart.
+ * Mirrors `SNOOZE_PRESETS` in `@nexus/db` (which the renderer never imports)
+ * and migration 041's CHECK.
+ */
+export const SNOOZE_PRESETS: SnoozePreset[] = ["10m", "1h", "tonight", "tomorrow-morning"];
 
 /** Which appetite tier a preset is — the key both its Serbian label and its button identity are read from. */
 export type NotificationPresetKey = "minimal" | "normal" | "all";

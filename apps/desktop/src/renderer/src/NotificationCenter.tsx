@@ -5,6 +5,7 @@ import {
   ALWAYS_ON_NOTIFICATION_SOURCES,
   bellCountLabel,
   formatNotificationWhen,
+  SNOOZE_PRESETS,
 } from "./notificationFormat.js";
 import { NotificationSettingsControls } from "./NotificationSettingsControls.js";
 import { strings } from "./strings.js";
@@ -23,8 +24,6 @@ const SOURCE_MODULE: Record<NotificationSource, string> = {
   task: "tasks",
   security: "settings",
 };
-
-const SNOOZE_PRESETS: SnoozePreset[] = ["10m", "1h", "tonight", "tomorrow-morning"];
 
 export interface NotificationCenterProps {
   profileId: string;
@@ -107,11 +106,21 @@ export function NotificationCenter({ profileId, onNavigate }: NotificationCenter
   );
   const countLabel = bellCountLabel(deliveredCount);
   // main rejects "tonight" once 18:00 local has passed — hide it rather than
-  // offer a preset guaranteed to fail.
+  // offer a preset guaranteed to fail. (Kept in sync with main's `TONIGHT_HOUR`
+  // by hand, like every other main/renderer pair: the two never share a module.
+  // The plain „Odloži“ button needs no such filter — main falls a default of
+  // „Večeras“ forward to tomorrow morning instead, since there is no chip to
+  // hide.)
   const pastEvening = new Date().getHours() >= 18;
   const s = strings.notifications;
 
-  async function snooze(id: string, preset: SnoozePreset): Promise<void> {
+  /**
+   * `preset` omitted is the plain „Odloži“ button: main snoozes by the
+   * profile's own default (NTF-009), read at the moment of the click, so this
+   * component never has to hold — or refresh — a preference it does not
+   * otherwise need.
+   */
+  async function snooze(id: string, preset?: SnoozePreset): Promise<void> {
     try {
       await window.nexus.snoozeNotification(profileId, id, preset);
       await reload();
@@ -183,18 +192,36 @@ export function NotificationCenter({ profileId, onNavigate }: NotificationCenter
                       the ledger keeps it as history either way.
                     */}
                     <div className="ntf__snooze-presets">
-                      {!ALWAYS_ON_NOTIFICATION_SOURCES.includes(notification.source) &&
-                        SNOOZE_PRESETS.filter(
-                          (preset) => preset !== "tonight" || !pastEvening,
-                        ).map((preset) => (
+                      {!ALWAYS_ON_NOTIFICATION_SOURCES.includes(notification.source) && (
+                        <>
+                          {/*
+                            NTF-009: the one-click snooze, by the profile's own
+                            default. First and primary because it is the answer
+                            in the common case; the four explicit presets stay
+                            beside it for the times the default is not the one
+                            wanted.
+                          */}
                           <Button
-                            key={preset}
                             size="sm"
-                            onClick={() => void snooze(notification.id, preset)}
+                            variant="primary"
+                            className="ntf__snooze-default"
+                            onClick={() => void snooze(notification.id)}
                           >
-                            {s.snoozePreset[preset]}
+                            {s.snoozeDefaultAction}
                           </Button>
-                        ))}
+                          {SNOOZE_PRESETS.filter(
+                            (preset) => preset !== "tonight" || !pastEvening,
+                          ).map((preset) => (
+                            <Button
+                              key={preset}
+                              size="sm"
+                              onClick={() => void snooze(notification.id, preset)}
+                            >
+                              {s.snoozePreset[preset]}
+                            </Button>
+                          ))}
+                        </>
+                      )}
                     </div>
                     <Button
                       size="sm"

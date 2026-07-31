@@ -4529,12 +4529,15 @@ button.cal__grid-event--dragging {
   gap: var(--nx-space-1);
   flex-wrap: wrap;
 }
-.ntf__snooze-presets .nx-button {
+/* The four explicit presets are flattened to quiet chips — but not the
+   default-snooze button beside them (NTF-009), which keeps its primary weight
+   because it is the answer in the common case rather than one option of five. */
+.ntf__snooze-presets .nx-button:not(.ntf__snooze-default) {
   background: transparent;
   border-color: var(--nx-border);
   color: var(--nx-text-muted);
 }
-.ntf__snooze-presets .nx-button:hover {
+.ntf__snooze-presets .nx-button:not(.ntf__snooze-default):hover {
   background: var(--nx-surface-alt);
   color: var(--nx-text);
 }
@@ -4597,6 +4600,25 @@ button.cal__grid-event--dragging {
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-2);
+}
+/* NTF-009: „Podrazumevano odlaganje“ — a labelled choice of four, drawn as the
+   SET page's own preset row (active = primary) so the same kind of decision
+   looks the same wherever it is made. The label copies TextField's, since it
+   stands beside those inputs and must not read as a different rank of thing. */
+.ntf__settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ntf__settings-label {
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-medium);
+}
+.ntf__settings-presets {
+  display: inline-flex;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
 }
 
 /* Settings (SET page) --------------------------------------------------- */

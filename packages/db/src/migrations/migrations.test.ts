@@ -16,8 +16,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 40 (the profile picture), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(40);
+  it("is at version 41 (the default snooze), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(41);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -4526,6 +4526,102 @@ describe("migration 040 — profile picture", () => {
       picture_mime: null,
       picture_size_bytes: null,
     });
+    db.close();
+  });
+});
+
+describe("migration 041 — the default snooze preset", () => {
+  const columnNames = (db: NexusDatabase, table: string): string[] =>
+    (db.raw.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(
+      (row) => row.name,
+    );
+  const now = () => new Date().toISOString();
+
+  /**
+   * Writes `ntf_settings` raw, either naming the new column or leaving it to
+   * its default — the two shapes that matter, because a restore writes this row
+   * by naming its columns while every row a pre-041 database holds never named
+   * this one at all.
+   */
+  const insertNtfSettings = (db: NexusDatabase, profileId: string, snoozeDefault?: string) =>
+    snoozeDefault === undefined
+      ? db.raw
+          .prepare(
+            `INSERT INTO ntf_settings
+               (profile_id, quiet_from, quiet_to, morning_hour, created_at, updated_at)
+             VALUES (?, NULL, NULL, '08:00', ?, ?)`,
+          )
+          .run(profileId, now(), now())
+      : db.raw
+          .prepare(
+            `INSERT INTO ntf_settings
+               (profile_id, quiet_from, quiet_to, morning_hour, snooze_default, created_at, updated_at)
+             VALUES (?, NULL, NULL, '08:00', ?, ?, ?)`,
+          )
+          .run(profileId, snoozeDefault, now(), now());
+
+  it("adds snooze_default to ntf_settings and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    expect(columnNames(db, "ntf_settings")).toContain("snooze_default");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("defaults to 10m — the shortest preset, and what every snooze button did before it existed", () => {
+    const db = openDatabase({ path: join(dir, "default.db") });
+    insertProfile(db, "p1");
+    insertNtfSettings(db, "p1");
+    expect(
+      db.raw.prepare("SELECT snooze_default FROM ntf_settings WHERE profile_id = ?").get("p1"),
+    ).toEqual({ snooze_default: "10m" });
+    db.close();
+  });
+
+  it("accepts each of the four presets and refuses anything else with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-snooze.db") });
+    for (const [index, preset] of ["10m", "1h", "tonight", "tomorrow-morning"].entries()) {
+      const profileId = `p${index}`;
+      insertProfile(db, profileId);
+      expect(() => insertNtfSettings(db, profileId, preset)).not.toThrow();
+    }
+    insertProfile(db, "bad");
+    expect(() => insertNtfSettings(db, "bad", "30m")).toThrow();
+    expect(() => insertNtfSettings(db, "bad", "")).toThrow();
+    db.close();
+  });
+
+  it("upgrades a database written before it, leaving the settings it already held on the default", () => {
+    const path = join(dir, "upgrade-041.db");
+    const before = new Database(path);
+    before.pragma("journal_mode = WAL");
+    before.pragma("foreign_keys = ON");
+    before.function("nx_fold", { deterministic: true }, (value: unknown) =>
+      typeof value === "string" ? foldSearchText(value) : null,
+    );
+    runMigrations(
+      before,
+      MIGRATIONS.filter((migration) => migration.version < 41),
+    );
+    before
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run("p1", "personal", "Stari profil", now());
+    before
+      .prepare(
+        `INSERT INTO ntf_settings
+           (profile_id, quiet_from, quiet_to, morning_hour, created_at, updated_at)
+         VALUES (?, '22:00', '07:00', '09:00', ?, ?)`,
+      )
+      .run("p1", now(), now());
+    before.close();
+
+    const db = openDatabase({ path });
+    expect(
+      db.raw
+        .prepare(
+          "SELECT quiet_from, morning_hour, snooze_default FROM ntf_settings WHERE profile_id = ?",
+        )
+        .get("p1"),
+    ).toEqual({ quiet_from: "22:00", morning_hour: "09:00", snooze_default: "10m" });
     db.close();
   });
 });

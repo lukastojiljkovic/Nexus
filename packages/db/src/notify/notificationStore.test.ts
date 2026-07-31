@@ -4,15 +4,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { NotificationSource } from "@nexus/core";
 import {
+  DEFAULT_SNOOZE_PRESET,
   NexusDatabase,
   NotificationNotFoundError,
   NotificationStore,
   NotificationValidationError,
   NOTIFICATION_SOURCES,
   openDatabase,
+  SNOOZE_PRESETS,
   TOGGLEABLE_NOTIFICATION_SOURCES,
   uuidv7,
 } from "../index.js";
+import type { SnoozePreset } from "../index.js";
 
 let dir: string;
 let db: NexusDatabase;
@@ -60,13 +63,14 @@ function deliver(
 
 describe("NotificationStore", () => {
   describe("getSettings", () => {
-    it("returns defaults when no settings rows exist: no quiet hours, 08:00 morning hour, all sources enabled, appetite unasked", () => {
+    it("returns defaults when no settings rows exist: no quiet hours, 08:00 morning hour, all sources enabled, 10m snooze, appetite unasked", () => {
       const { notify } = fixture();
       expect(notify.getSettings()).toEqual({
         quietFrom: null,
         quietTo: null,
         morningHour: "08:00",
         enabledSources: ["document", "exam", "study-day", "event", "task"],
+        snoozeDefault: "10m",
         appetiteAsked: false,
       });
     });
@@ -90,6 +94,7 @@ describe("NotificationStore", () => {
         quietTo: "07:00",
         morningHour: "09:00",
         enabledSources: ["document", "exam", "study-day", "event", "task"],
+        snoozeDefault: "10m",
         appetiteAsked: false,
       });
       expect(notify.getSettings().quietFrom).toBe("22:00");
@@ -142,8 +147,68 @@ describe("NotificationStore", () => {
         quietTo: "07:00",
         morningHour: "09:00",
         enabledSources: ["document", "exam", "study-day", "event", "task"],
+        snoozeDefault: "10m",
         appetiteAsked: false,
       });
+    });
+  });
+
+  /**
+   * NTF-009: which preset the center's plain „Odloži“ button means. A
+   * preference like any other on this row, so it upserts and defaults exactly
+   * as quiet hours do — and it is validated against the closed preset domain,
+   * because the renderer is untrusted and the column's own CHECK is the last
+   * line, not the first.
+   */
+  describe("updateSettings — snoozeDefault", () => {
+    it("stores each of the four presets and reads it back", () => {
+      const { notify } = fixture();
+      for (const preset of SNOOZE_PRESETS) {
+        expect(notify.updateSettings({ snoozeDefault: preset }, NOW).snoozeDefault).toBe(preset);
+        expect(notify.getSettings().snoozeDefault).toBe(preset);
+      }
+    });
+
+    it("rejects a preset outside the closed set", () => {
+      const { notify } = fixture();
+      expect(() =>
+        notify.updateSettings({ snoozeDefault: "30m" as SnoozePreset }, NOW),
+      ).toThrow(NotificationValidationError);
+      expect(() => notify.updateSettings({ snoozeDefault: "" as SnoozePreset }, NOW)).toThrow(
+        NotificationValidationError,
+      );
+    });
+
+    it("survives an unrelated settings edit", () => {
+      const { notify } = fixture();
+      notify.updateSettings({ snoozeDefault: "tonight" }, NOW);
+      notify.updateSettings({ quietFrom: "22:00", quietTo: "07:00" }, NOW);
+      expect(notify.getSettings().snoozeDefault).toBe("tonight");
+    });
+
+    it("is scoped to its own profile", () => {
+      const first = fixture();
+      const second = fixture();
+      first.notify.updateSettings({ snoozeDefault: "1h" }, NOW);
+      expect(first.notify.getSettings().snoozeDefault).toBe("1h");
+      expect(second.notify.getSettings().snoozeDefault).toBe("10m");
+    });
+
+    it("is left alone by markAppetiteAsked, which only closes the question", () => {
+      const { notify } = fixture();
+      notify.updateSettings({ snoozeDefault: "tomorrow-morning" }, NOW);
+      notify.markAppetiteAsked(NOW);
+      expect(notify.getSettings().snoozeDefault).toBe("tomorrow-morning");
+    });
+  });
+
+  describe("SNOOZE_PRESETS", () => {
+    it("is the closed preset domain, in the order the center offers them", () => {
+      expect(SNOOZE_PRESETS).toEqual(["10m", "1h", "tonight", "tomorrow-morning"]);
+    });
+
+    it("starts at the default the shortest preset gives", () => {
+      expect(DEFAULT_SNOOZE_PRESET).toBe("10m");
     });
   });
 
@@ -168,6 +233,7 @@ describe("NotificationStore", () => {
         quietTo: null,
         morningHour: "08:00",
         enabledSources: ["document", "exam", "study-day", "event", "task"],
+        snoozeDefault: "10m",
         appetiteAsked: true,
       });
     });
@@ -181,6 +247,7 @@ describe("NotificationStore", () => {
         quietTo: "07:00",
         morningHour: "09:00",
         enabledSources: ["document", "exam", "study-day", "event", "task"],
+        snoozeDefault: "10m",
         appetiteAsked: true,
       });
     });

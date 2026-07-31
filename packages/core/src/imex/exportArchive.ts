@@ -44,6 +44,16 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
  *
+ * `1.19.0` adds the profile's default snooze preset (NTF-009, migration 041):
+ * one field in the manifest's `settings.notifications` object, beside the quiet
+ * hours it is a sibling preference of. Optional-with-a-default on the way in
+ * (absence means „10 min“, which is what every earlier build's snooze button
+ * did), and a MINOR bump all the same, by the honesty every entry below made:
+ * an older reader handed this archive would restore the profile with a snooze
+ * default it silently reset, and refusing is the truthful answer to a file it
+ * cannot fully read. The same reasoning `1.17.0` made for a folder's default
+ * view — a small preference is still the user's choice.
+ *
  * `1.18.0` adds a profile's picture (SET-001, migration 040): three fields on
  * the manifest's own `profile` object, declaring a blob that travels in the
  * `blobs/` union like any other. The manifest rather than a record, because the
@@ -94,7 +104,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.18.0";
+const SCHEMA_VERSION = "1.19.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -780,6 +790,13 @@ export interface ExportSettings {
     quietTo: string | null;
     morningHour: string;
     enabledSources: readonly string[];
+    /**
+     * Which snooze preset the notification center's plain „Odloži“ button means
+     * (NTF-009, migration 041). Always WRITTEN, and OPTIONAL on the way back in
+     * — an archive from before `1.19.0` simply has no key here and reads as
+     * `"10m"`, which is what that button did in every one of those builds.
+     */
+    snoozeDefault: string;
   };
 }
 

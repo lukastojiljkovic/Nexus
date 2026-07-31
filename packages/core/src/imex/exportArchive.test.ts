@@ -29,7 +29,13 @@ function emptyInput(): ExportArchiveInput {
     createdAt: "2026-07-11T10:00:00.000Z",
     settings: {
       flags: { tasks: true, notes: false },
-      notifications: { quietFrom: null, quietTo: null, morningHour: "08:00", enabledSources: ["document", "exam"] },
+      notifications: {
+        quietFrom: null,
+        quietTo: null,
+        morningHour: "08:00",
+        enabledSources: ["document", "exam"],
+        snoozeDefault: "1h",
+      },
     },
     data: {
       tasks: [],
@@ -243,16 +249,24 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.18.0");
+      expect(manifest.schemaVersion).toBe("1.19.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       // `picture: null` is written out loud rather than omitted: the manifest is
       // the archive's own statement of what the profile IS, and "this profile
       // has no picture" is a fact worth stating (SET-001, `1.18.0`).
       expect(manifest.profile).toEqual({ id: "profile1", name: "Luka", picture: null });
+      // `snoozeDefault` (NTF-009, `1.19.0`) rides here beside the quiet hours,
+      // written out loud like every other resolved preference in this object.
       expect(manifest.settings).toEqual({
         flags: { tasks: true, notes: false },
-        notifications: { quietFrom: null, quietTo: null, morningHour: "08:00", enabledSources: ["document", "exam"] },
+        notifications: {
+          quietFrom: null,
+          quietTo: null,
+          morningHour: "08:00",
+          enabledSources: ["document", "exam"],
+          snoozeDefault: "1h",
+        },
       });
       expect(manifest.modules).toEqual([
         { id: "tasks", records: 0 },

@@ -280,6 +280,11 @@ export async function gatherProfileSettings(
       quietTo: notificationSettings.quietTo,
       morningHour: notificationSettings.morningHour,
       enabledSources: notificationSettings.enabledSources,
+      // NTF-009 (`1.19.0`): the resolved value, never an omission — the same
+      // choice `studySettings`/`dashboardSettings` make just above. A profile
+      // that never chose one exports „10 min“, which is what its snooze button
+      // means, so a restore puts back a fact rather than a silence.
+      snoozeDefault: notificationSettings.snoozeDefault,
     },
   };
 }

@@ -2290,6 +2290,8 @@ export interface NotificationSettings {
   morningHour: string;
   /** Only ever the toggleable sources — an always-on one (`"security"`) is not an appetite (NTF-007). */
   enabledSources: NotificationSource[];
+  /** Which preset the center's plain „Odloži“ button means (NTF-009); the four stay offered explicitly beside it. */
+  snoozeDefault: SnoozePreset;
   /** Whether the one-time "how much should Nexus remind you" question has already been put to this profile (NTF-008 / ADR-033). */
   appetiteAsked: boolean;
 }
@@ -2299,17 +2301,24 @@ export interface NotificationSettingsChanges {
   quietFrom?: string | null;
   quietTo?: string | null;
   morningHour?: string;
+  snoozeDefault?: SnoozePreset;
 }
 
 export interface NotificationsCenterListRequest {
   profileId: string;
 }
 
-/** Snoozes a notification until an absolute time main resolves from `preset` and its own clock — never accepted from the renderer. */
+/**
+ * Snoozes a notification until an absolute time main resolves from `preset` and
+ * its own clock — never accepted from the renderer. `preset` is OPTIONAL: an
+ * omitted one means the profile's own `snoozeDefault` (NTF-009), which main
+ * reads from the store it is already holding, so the plain „Odloži“ button
+ * never has to know what the default currently is.
+ */
 export interface NotificationsSnoozeRequest {
   profileId: string;
   id: string;
-  preset: SnoozePreset;
+  preset?: SnoozePreset;
 }
 
 export interface NotificationsDismissRequest {
@@ -3962,10 +3971,11 @@ export interface NexusApi {
     toDay: string,
   ): Promise<SubjectStudyLog>;
   listCenterNotifications(profileId: string): Promise<NotificationRecord[]>;
+  /** Omitting `preset` snoozes by the profile's own default (NTF-009) — main reads it, the renderer never needs to know it. */
   snoozeNotification(
     profileId: string,
     id: string,
-    preset: SnoozePreset,
+    preset?: SnoozePreset,
   ): Promise<NotificationRecord>;
   dismissNotification(profileId: string, id: string): Promise<void>;
   getNotificationSettings(profileId: string): Promise<NotificationSettings>;

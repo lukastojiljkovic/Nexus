@@ -395,9 +395,15 @@ export class RestoreStore {
     this.insertFlag = db.prepare(
       `INSERT INTO feature_flags (profile_id, module_id, enabled, updated_at) VALUES (?, ?, ?, ?)`,
     );
+    // `appetite_asked` is deliberately absent (ADR-033 section 6): the flag does
+    // not travel, so a restored profile is asked again. `snooze_default` DOES —
+    // it is a preference the user chose, and dropping it would reset a setting
+    // rather than restore one; an archive from before `1.19.0` carries the
+    // default, which is what its snooze button meant.
     this.insertNtfSettings = db.prepare(
-      `INSERT INTO ntf_settings (profile_id, quiet_from, quiet_to, morning_hour, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO ntf_settings
+         (profile_id, quiet_from, quiet_to, morning_hour, snooze_default, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     );
     this.insertNtfSourceSetting = db.prepare(
       `INSERT INTO ntf_source_settings (profile_id, source, enabled) VALUES (?, ?, 0)`,
@@ -848,6 +854,7 @@ export class RestoreStore {
         input.settings.notifications.quietFrom,
         input.settings.notifications.quietTo,
         input.settings.notifications.morningHour,
+        input.settings.notifications.snoozeDefault,
         now,
         now,
       );

@@ -273,8 +273,15 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.studyLog, { profileId, subjectId, fromDay, toDay }),
   listCenterNotifications: (profileId) =>
     ipcRenderer.invoke(IpcChannel.notificationsCenterList, { profileId }),
+  // `preset` may be omitted — main then snoozes by the profile's own default
+  // (NTF-009). Spelled with a conditional rather than always sending the key,
+  // so an absent preset arrives as an absent key rather than as an explicit
+  // `undefined` the validator would have to read as "use the default" too.
   snoozeNotification: (profileId, id, preset) =>
-    ipcRenderer.invoke(IpcChannel.notificationsSnooze, { profileId, id, preset }),
+    ipcRenderer.invoke(
+      IpcChannel.notificationsSnooze,
+      preset === undefined ? { profileId, id } : { profileId, id, preset },
+    ),
   dismissNotification: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.notificationsDismiss, { profileId, id }),
   getNotificationSettings: (profileId) =>

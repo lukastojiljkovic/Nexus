@@ -1,7 +1,9 @@
 import type { BrowserWindow } from "electron";
 import { Notification, powerMonitor } from "electron";
 import {
+  coalesceDeliveries,
   deriveNotificationCandidates,
+  emptyDeliveryWindow,
   isDeliverable,
   isValidDayKey,
   isWithinQuietHours,
@@ -9,6 +11,7 @@ import {
   shiftDayKey,
 } from "@nexus/core";
 import type {
+  DeliveryWindow,
   EventReminderInput,
   NotificationCandidate,
   NotificationSource,
@@ -30,6 +33,7 @@ import type {
 } from "@nexus/db";
 import { localToday, localTime } from "./clock.js";
 import {
+  catchUpDigestCopy,
   documentNotificationCopy,
   emptyDigestCounts,
   eventNotificationCopy,
@@ -38,6 +42,7 @@ import {
   securityNotificationCopy,
   studyDayNotificationCopy,
   taskNotificationCopy,
+  windowDigestCopy,
   type NotificationCopy,
   type SecurityNotice,
 } from "./notificationStrings.js";
@@ -78,11 +83,35 @@ const CHECK_INTERVAL_MS = 60_000;
 
 const MINUTES_PER_DAY = 1_440;
 
-/** At most this many notifications show individually; more than this collapses into one grouped digest (the storm guard). */
-const GROUP_THRESHOLD = 3;
+/** One notification as the toast path handles it: what it is about, and the exact text that was recorded for it. */
+interface ToastItem {
+  source: NotificationSource;
+  copy: NotificationCopy;
+}
 
 let intervalHandle: ReturnType<typeof setInterval> | null = null;
 let resumeListener: (() => void) | null = null;
+/**
+ * The rolling coalescing window (NTF-009), carried between passes. Module-level
+ * rather than per profile because it is about the OS toast stream, and there is
+ * exactly one of those: the user is one person however many profiles they keep,
+ * so two profiles delivering within the same 90 seconds should interrupt them
+ * once, not twice. (`deliverSecurityNotices` already reasons the same way.)
+ * Reset whenever a scheduler starts or stops — a session that has just been
+ * unlocked has interrupted nobody yet.
+ */
+let deliveryWindow: DeliveryWindow<ToastItem> = emptyDeliveryWindow();
+/**
+ * Whether the next delivering pass is the FIRST one of this session (PRD 05
+ * §5). Set when the scheduler starts — that is, at unlock — and consumed by the
+ * first pass that actually reaches the delivery stage, which is what makes the
+ * catch-up wording honest: everything it shows came due while the app was
+ * closed. A pass held back for the NTF-008 appetite ask returns before that
+ * point and so does not consume it; a pass that reaches delivery with nothing
+ * to show consumes it anyway, because a reminder arriving a minute later is not
+ * a catch-up.
+ */
+let launchPassPending = false;
 /**
  * The deps of the currently RUNNING scheduler, so a check can be triggered from
  * outside without every caller rebuilding the whole store bundle (NTF-008: the
@@ -104,6 +133,7 @@ let activeDeps: NotificationSchedulerDeps | null = null;
 export function startNotificationScheduler(deps: NotificationSchedulerDeps): void {
   stopNotificationScheduler();
   activeDeps = deps;
+  launchPassPending = true;
   runNotificationCheck(deps);
   intervalHandle = setInterval(() => runNotificationCheck(deps), CHECK_INTERVAL_MS);
   resumeListener = () => runNotificationCheck(deps);
@@ -121,6 +151,20 @@ export function stopNotificationScheduler(): void {
     resumeListener = null;
   }
   activeDeps = null;
+  deliveryWindow = emptyDeliveryWindow();
+  launchPassPending = false;
+}
+
+/**
+ * Whether this is the session's first delivering pass, clearing the flag as it
+ * answers — so the catch-up wording is used once, ever, per unlock. Called at
+ * the delivery stage rather than at the top of a check, deliberately: see
+ * `launchPassPending`.
+ */
+function consumeLaunchPass(): boolean {
+  const launch = launchPassPending;
+  launchPassPending = false;
+  return launch;
 }
 
 /**
@@ -150,7 +194,11 @@ export function runNotificationCheck(deps: NotificationSchedulerDeps): void {
     return;
   }
 
-  const nowIso = new Date().toISOString();
+  // One clock read for the whole pass: the ISO stamp the ledger records under
+  // and the epoch ms the coalescing window measures against are the same
+  // instant, so a batch can never look like it straddled two.
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
   const today = localToday();
   const nowTime = localTime();
 
@@ -163,7 +211,7 @@ export function runNotificationCheck(deps: NotificationSchedulerDeps): void {
   // profile(s) actually fire OS notifications on a given check.
   for (const profile of profiles) {
     try {
-      checkProfile(deps, profile.id, nowIso, today, nowTime);
+      checkProfile(deps, profile.id, nowIso, nowMs, today, nowTime);
     } catch (error) {
       logCheckFailure(error);
     }
@@ -288,6 +336,7 @@ function checkProfile(
   deps: NotificationSchedulerDeps,
   profileId: string,
   nowIso: string,
+  nowMs: number,
   today: string,
   nowTime: string,
 ): void {
@@ -385,7 +434,7 @@ function checkProfile(
   const subjectNameById = new Map(subjects.map((subject) => [subject.id, subject.name]));
   const studyDaysByDate = new Map(studyDays.map((day) => [day.date, day]));
 
-  const toShow: Array<{ source: NotificationSource; copy: NotificationCopy }> = [];
+  const toShow: ToastItem[] = [];
   let ledgerChanged = false;
 
   for (const candidate of fresh) {
@@ -424,7 +473,7 @@ function checkProfile(
     ledgerChanged = true;
   }
 
-  showNotifications(deps, toShow);
+  showNotifications(deps, toShow, { now: nowMs, launch: consumeLaunchPass() });
 
   if (ledgerChanged) {
     deps.getMainWindow()?.webContents.send(IpcChannel.notificationsChanged);
@@ -532,7 +581,8 @@ export function deliverSecurityNotices(
 ): void {
   if (notices.length === 0) return;
 
-  const nowIso = new Date().toISOString();
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
   const items = notices.map((notice) => ({
     source: "security" as const,
     copy: securityNotificationCopy(notice),
@@ -569,7 +619,11 @@ export function deliverSecurityNotices(
     }
   }
 
-  showNotifications(deps, items);
+  // Each notice gets its own toast, always: `coalesceDeliveries` exempts an
+  // always-on source from the digest and from the window entirely, so a
+  // security notice is never folded into a count of other things and never
+  // silences the reminder stream around it (NTF-007 / NTF-009).
+  showNotifications(deps, items, { now: nowMs, launch: false });
   if (recorded) {
     deps.getMainWindow()?.webContents.send(IpcChannel.notificationsChanged);
   }
@@ -584,25 +638,49 @@ function logSecurityFailure(error: unknown): void {
 }
 
 /**
- * Shows a batch of notifications from one check: individually when at most
- * `GROUP_THRESHOLD`, otherwise a single grouped digest (every occurrence was
- * already recorded individually in the ledger regardless of how it is
- * shown). Guards `Notification.isSupported()` once for the whole batch.
+ * Puts one check's batch in front of the user, under `coalesceDeliveries`'s
+ * rules (NTF-009): individually while the batch is small and nothing else has
+ * interrupted recently, otherwise as one digest — the count guard for an
+ * oversized single pass, the rolling window for several arriving back to back,
+ * and the catch-up wording for the first pass after unlock, which is the one
+ * pass whose pile is all things that came due while the app was closed.
+ *
+ * **The ledger is untouched by any of this.** Every occurrence here was already
+ * recorded individually before this function was called, so the notification
+ * center shows all of them whatever the OS was asked to display: the ledger is
+ * truth, the toast is politeness. Guards `Notification.isSupported()` once for
+ * the whole batch.
  */
 function showNotifications(
   deps: Pick<NotificationSchedulerDeps, "getMainWindow">,
-  items: ReadonlyArray<{ source: NotificationSource; copy: NotificationCopy }>,
+  items: readonly ToastItem[],
+  moment: { now: number; launch: boolean },
 ): void {
   if (items.length === 0 || !Notification.isSupported()) return;
 
-  if (items.length <= GROUP_THRESHOLD) {
-    for (const item of items) showOne(deps, item.copy);
-    return;
-  }
+  const result = coalesceDeliveries({ arrivals: items, now: moment.now, window: deliveryWindow });
+  deliveryWindow = result.window;
+
+  for (const item of result.individual) showOne(deps, item.copy);
+  if (result.digest === null) return;
 
   const counts = emptyDigestCounts();
-  for (const item of items) counts[item.source] += 1;
-  showOne(deps, groupedDigestCopy(items.length, counts));
+  for (const item of result.digest) {
+    // Unreachable — `coalesceDeliveries` never folds an always-on source — and
+    // spelled out anyway, because it is the one line that makes the counter's
+    // narrower domain (`DigestCounts`) provable rather than merely intended.
+    if (item.source === "security") continue;
+    counts[item.source] += 1;
+  }
+  const total = result.digest.length;
+  showOne(
+    deps,
+    moment.launch
+      ? catchUpDigestCopy(total, counts)
+      : result.reason === "window"
+        ? windowDigestCopy(total, counts)
+        : groupedDigestCopy(total, counts),
+  );
 }
 
 function showOne(deps: Pick<NotificationSchedulerDeps, "getMainWindow">, copy: NotificationCopy): void {

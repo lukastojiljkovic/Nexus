@@ -108,6 +108,7 @@ import {
   TaskStore,
   TaskTagStore,
   TaskTemplateStore,
+  SNOOZE_PRESETS,
   TASK_LIST_VIEWS,
   TASK_PRIORITIES,
   TASK_STATUSES,
@@ -240,6 +241,7 @@ import {
   type SecurityNotificationDeps,
 } from "./notifications.js";
 import type { SecurityNotice } from "./notificationStrings.js";
+import { computeSnoozeUntil, resolveDefaultSnoozePreset } from "./snooze.js";
 import { pickProfilePicture } from "./profilePicture.js";
 import {
   applyImport,
@@ -1807,8 +1809,19 @@ function asBlockStatus(value: unknown, field: string): StudyBlockStatus {
   throw new Error(`Invalid IPC payload: "${field}" is not a valid block status.`);
 }
 
-/** The four snooze presets `notifications:snooze` accepts; main resolves each to an absolute `until` from its own clock. */
-const SNOOZE_PRESETS: readonly SnoozePreset[] = ["10m", "1h", "tonight", "tomorrow-morning"];
+/**
+ * The four snooze presets `notifications:snooze` accepts, checked against
+ * `@nexus/db`'s exported `SNOOZE_PRESETS` — the very list `NotificationStore`
+ * validates a stored default against and migration 041's CHECK is written from
+ * — rather than another hand-typed copy of the same four strings. Main still
+ * resolves each to an absolute `until` from its own clock (SEC-EL-02).
+ */
+function asSnoozePreset(value: unknown, field: string): SnoozePreset {
+  if (typeof value === "string" && (SNOOZE_PRESETS as readonly string[]).includes(value)) {
+    return value as SnoozePreset;
+  }
+  throw new Error(`Invalid IPC payload: "${field}" is not a valid snooze preset.`);
+}
 
 /**
  * The five NTF/CAL-006/ADR-028 source kinds a profile may switch on and off,
@@ -1854,13 +1867,6 @@ function asNotificationSourceListOrNull(
   return value.map((entry, index) => asNotificationSource(entry, `${field}[${index}]`));
 }
 
-function asSnoozePreset(value: unknown, field: string): SnoozePreset {
-  if (typeof value === "string" && (SNOOZE_PRESETS as readonly string[]).includes(value)) {
-    return value as SnoozePreset;
-  }
-  throw new Error(`Invalid IPC payload: "${field}" is not a valid snooze preset.`);
-}
-
 /** Validates a `notifications:settings-update` payload's `changes`; an omitted key stays omitted. Structural checks only — the store owns "HH:MM"/coherence validation. */
 function asNotificationSettingsChanges(value: unknown): UpdateNotificationSettingsInput {
   const changes = asRecord(value);
@@ -1874,38 +1880,10 @@ function asNotificationSettingsChanges(value: unknown): UpdateNotificationSettin
   if (changes.morningHour !== undefined) {
     patch.morningHour = asNonEmptyString(changes.morningHour, "changes.morningHour");
   }
-  return patch;
-}
-
-/**
- * Resolves a snooze preset to an absolute ISO-8601 `until`, entirely from
- * main's own clock (SEC-EL-02: the renderer never supplies a snooze
- * deadline). `10m`/`1h` are fixed offsets; `tonight` is today at 18:00 local
- * (the store's own "`until` must be strictly after `now`" check rejects it
- * once evening has already passed — the UI disables the preset then);
- * `tomorrow-morning` is tomorrow at the profile's configured morning hour.
- */
-function computeSnoozeUntil(preset: SnoozePreset, now: Date, morningHour: string): string {
-  switch (preset) {
-    case "10m":
-      return new Date(now.getTime() + 10 * 60_000).toISOString();
-    case "1h":
-      return new Date(now.getTime() + 60 * 60_000).toISOString();
-    case "tonight":
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18, 0, 0, 0).toISOString();
-    case "tomorrow-morning": {
-      const [hour, minute] = morningHour.split(":").map(Number);
-      return new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate() + 1,
-        hour,
-        minute,
-        0,
-        0,
-      ).toISOString();
-    }
+  if (changes.snoozeDefault !== undefined) {
+    patch.snoozeDefault = asSnoozePreset(changes.snoozeDefault, "changes.snoozeDefault");
   }
+  return patch;
 }
 
 function requireDb(): NexusDatabase {
@@ -4665,10 +4643,19 @@ function registerIpc(): void {
     const body = asRecord(payload);
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const id = asNonEmptyString(body.id, "id");
-    const preset = asSnoozePreset(body.preset, "preset");
     const store = notificationStore(profileId);
+    const settings = store.getSettings();
     const now = new Date();
-    const until = computeSnoozeUntil(preset, now, store.getSettings().morningHour);
+    // An omitted preset is the center's plain „Odloži“ button (NTF-009): the
+    // profile's own default, read here rather than sent by the renderer, so the
+    // button cannot go stale against a preference changed in another window —
+    // and resolved through `resolveDefaultSnoozePreset`, so a default of
+    // „Večeras“ still works after 18:00 rather than failing every evening.
+    const preset =
+      body.preset === undefined
+        ? resolveDefaultSnoozePreset(settings.snoozeDefault, now)
+        : asSnoozePreset(body.preset, "preset");
+    const until = computeSnoozeUntil(preset, now, settings.morningHour);
     const record = store.snooze(id, until, now.toISOString());
     mainWindow?.webContents.send(IpcChannel.notificationsChanged);
     return record;

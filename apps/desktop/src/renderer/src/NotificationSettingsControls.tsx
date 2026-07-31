@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { Button, Checkbox, TextField } from "@nexus/ui";
-import type { NotificationSettings, NotificationSource } from "../../shared/ipc.js";
-import { ALL_NOTIFICATION_SOURCES, ALWAYS_ON_NOTIFICATION_SOURCES } from "./notificationFormat.js";
+import type { NotificationSettings, NotificationSource, SnoozePreset } from "../../shared/ipc.js";
+import {
+  ALL_NOTIFICATION_SOURCES,
+  ALWAYS_ON_NOTIFICATION_SOURCES,
+  SNOOZE_PRESETS,
+} from "./notificationFormat.js";
 import { strings } from "./strings.js";
 
 export interface NotificationSettingsControlsProps {
@@ -105,6 +109,18 @@ export function NotificationSettingsControls({
     }
   }
 
+  async function saveSnoozeDefault(preset: SnoozePreset): Promise<void> {
+    setSettingsError(null);
+    try {
+      setSettings(
+        await window.nexus.updateNotificationSettings(profileId, { snoozeDefault: preset }),
+      );
+    } catch (error) {
+      setSettingsError(s.settings.saveError);
+      console.error("Nexus: failed to update the default snooze preset:", error);
+    }
+  }
+
   async function toggleSource(source: NotificationSource, enabled: boolean): Promise<void> {
     setSettingsError(null);
     try {
@@ -152,6 +168,31 @@ export function NotificationSettingsControls({
         value={settings.morningHour}
         onChange={(event) => void saveMorningHour(event.target.value)}
       />
+
+      {/*
+        NTF-009: which preset the center's plain „Odloži“ button reaches for.
+        Drawn as the Settings page's own preset row — active = primary, the
+        rest ghost — so a choice-of-four looks the same wherever it is made,
+        and rendered right after the morning hour because both answer "when
+        does Nexus come back to me".
+      */}
+      <div className="ntf__settings-field">
+        <span className="ntf__settings-label">{s.settings.snoozeDefaultLabel}</span>
+        <div className="ntf__settings-presets">
+          {SNOOZE_PRESETS.map((preset) => (
+            <Button
+              key={preset}
+              size="sm"
+              variant={settings.snoozeDefault === preset ? "primary" : "ghost"}
+              aria-pressed={settings.snoozeDefault === preset}
+              onClick={() => void saveSnoozeDefault(preset)}
+            >
+              {s.snoozePreset[preset]}
+            </Button>
+          ))}
+        </div>
+        <p className="ntf__settings-hint">{s.settings.snoozeDefaultHint}</p>
+      </div>
 
       <div className="ntf__settings-sources">
         {ALL_NOTIFICATION_SOURCES.map((source) => (

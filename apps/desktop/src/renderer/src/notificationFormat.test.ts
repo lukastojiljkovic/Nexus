@@ -5,7 +5,9 @@ import {
   ALWAYS_ON_NOTIFICATION_SOURCES,
   bellCountLabel,
   formatNotificationWhen,
+  SNOOZE_PRESETS,
 } from "./notificationFormat.js";
+import { strings } from "./strings.js";
 
 /**
  * `formatNotificationWhen` branches on "is this instant on TODAY's local
@@ -35,6 +37,19 @@ describe("ALL_NOTIFICATION_SOURCES", () => {
     expect(ALWAYS_ON_NOTIFICATION_SOURCES).toEqual(["security"]);
     for (const source of ALWAYS_ON_NOTIFICATION_SOURCES) {
       expect(ALL_NOTIFICATION_SOURCES).not.toContain(source);
+    }
+  });
+});
+
+describe("SNOOZE_PRESETS", () => {
+  it("is the four presets, shortest first — mirroring migration 041's CHECK", () => {
+    expect(SNOOZE_PRESETS).toEqual(["10m", "1h", "tonight", "tomorrow-morning"]);
+    expect(new Set(SNOOZE_PRESETS).size).toBe(SNOOZE_PRESETS.length);
+  });
+
+  it("has a Serbian label for every one of them", () => {
+    for (const preset of SNOOZE_PRESETS) {
+      expect(strings.notifications.snoozePreset[preset]).toBeTruthy();
     }
   });
 });

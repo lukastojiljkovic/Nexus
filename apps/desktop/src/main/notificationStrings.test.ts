@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  catchUpDigestCopy,
   emptyDigestCounts,
   groupedDigestCopy,
   securityNotificationCopy,
+  windowDigestCopy,
   type SecurityNotice,
 } from "./notificationStrings.js";
 
@@ -76,14 +78,64 @@ describe("securityNotificationCopy", () => {
   });
 });
 
-describe("groupedDigestCopy with security events", () => {
-  it("counts them under their own Serbian noun", () => {
-    const counts = { ...emptyDigestCounts(), task: 1, security: 2 };
-    expect(groupedDigestCopy(3, counts).body).toBe("1 zadatak · 2 bezbednosna obaveštenja");
+describe("digest counts", () => {
+  it("has no security key at all — an always-on notice is never folded (NTF-009)", () => {
+    expect(Object.keys(emptyDigestCounts())).toEqual([
+      "document",
+      "exam",
+      "study-day",
+      "event",
+      "task",
+    ]);
   });
 
-  it("omits them when there are none, exactly like every other source", () => {
+  it("omits a source with no deliveries in it", () => {
     const counts = { ...emptyDigestCounts(), document: 4 };
     expect(groupedDigestCopy(4, counts).body).toBe("4 dokumenta");
+  });
+
+  it("lists every contributing source in the fixed order, separated by a middle dot", () => {
+    const counts = { ...emptyDigestCounts(), document: 1, "study-day": 1, task: 2 };
+    expect(groupedDigestCopy(4, counts).body).toBe("1 dokument · 1 učenje · 2 zadatka");
+  });
+});
+
+describe("groupedDigestCopy (one oversized pass)", () => {
+  it("names the app and agrees the reminder count in Serbian (1 / 2-4 / 5+)", () => {
+    const counts = emptyDigestCounts();
+    expect(groupedDigestCopy(1, counts).title).toBe("Nexus — 1 podsetnik");
+    expect(groupedDigestCopy(4, counts).title).toBe("Nexus — 4 podsetnika");
+    expect(groupedDigestCopy(9, counts).title).toBe("Nexus — 9 podsetnika");
+  });
+});
+
+describe("windowDigestCopy (several arriving inside the rolling window)", () => {
+  it("says how many new notifications there are, agreed in Serbian", () => {
+    const counts = emptyDigestCounts();
+    expect(windowDigestCopy(1, counts).title).toBe("1 novo obaveštenje");
+    expect(windowDigestCopy(3, counts).title).toBe("3 nova obaveštenja");
+    expect(windowDigestCopy(7, counts).title).toBe("7 novih obaveštenja");
+    expect(windowDigestCopy(11, counts).title).toBe("11 novih obaveštenja");
+    expect(windowDigestCopy(21, counts).title).toBe("21 novo obaveštenje");
+  });
+
+  it("breaks the count down by source in the body, like every other digest", () => {
+    const counts = { ...emptyDigestCounts(), event: 2, task: 1 };
+    expect(windowDigestCopy(3, counts).body).toBe("2 događaja · 1 zadatak");
+  });
+});
+
+describe("catchUpDigestCopy (the first pass after unlock)", () => {
+  it("says what piled up while the app was closed, agreed in Serbian", () => {
+    const counts = emptyDigestCounts();
+    expect(catchUpDigestCopy(1, counts).title).toBe("Dok te nije bilo: 1 obaveštenje");
+    expect(catchUpDigestCopy(4, counts).title).toBe("Dok te nije bilo: 4 obaveštenja");
+    expect(catchUpDigestCopy(6, counts).title).toBe("Dok te nije bilo: 6 obaveštenja");
+    expect(catchUpDigestCopy(21, counts).title).toBe("Dok te nije bilo: 21 obaveštenje");
+  });
+
+  it("breaks the count down by source in the body, like every other digest", () => {
+    const counts = { ...emptyDigestCounts(), document: 2, exam: 1, task: 3 };
+    expect(catchUpDigestCopy(6, counts).body).toBe("2 dokumenta · 1 ispit · 3 zadatka");
   });
 });

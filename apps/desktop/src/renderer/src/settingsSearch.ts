@@ -193,7 +193,7 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
     id: "notifications-presets",
     section: "notifications",
     label: s.sectionTitle.notifications,
-    keywords: ["podsetnik", "tiho", "izvori"],
+    keywords: ["podsetnik", "tiho", "izvori", "odlaganje"],
   },
   {
     id: "backup-export",

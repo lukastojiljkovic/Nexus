@@ -559,7 +559,13 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
 
   const settings: ExportSettings = {
     flags: { notes: true },
-    notifications: { quietFrom: null, quietTo: null, morningHour: "08:00", enabledSources: ["exam"] },
+    notifications: {
+      quietFrom: null,
+      quietTo: null,
+      morningHour: "08:00",
+      enabledSources: ["exam"],
+      snoozeDefault: "10m",
+    },
   };
 
   const blobBytes = new Map<string, Uint8Array>([

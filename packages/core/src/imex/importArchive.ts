@@ -188,7 +188,10 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.18.0` added a
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.19.0` added the
+ * profile's default snooze preset (NTF-009, migration 041) — one field in the
+ * manifest's `settings.notifications` object, beside the quiet hours it is a
+ * sibling preference of — after `1.18.0` added a
  * profile's picture (SET-001, migration 040) — three fields on the manifest's
  * own `profile` object, declaring a blob in the same `blobs/` union every
  * attachment travels in. A MANIFEST field rather than a record type, because a
@@ -250,14 +253,16 @@ export interface ImportArchiveResult {
  * `defaultView` absence means `"list"`, because that is the only shape a folder
  * written before NOTE-002's toggle was ever drawn in, and `profile.picture`'s
  * absence means "no picture", because no profile written before `1.18.0` could
- * have had one.
+ * have had one, and `settings.notifications.snoozeDefault`'s absence means
+ * „10 min“, because that is what the snooze button did in every build before
+ * `1.19.0` gave it a preference to read.
  *
  * Major is still 1 throughout, so there is nothing yet to migrate an older
  * major forward from — a migration framework for a major that has never
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.18.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.19.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -698,6 +703,15 @@ const NOTIFICATION_SOURCES = ["document", "exam", "study-day", "event", "task", 
  * from.
  */
 const TOGGLEABLE_NOTIFICATION_SOURCES = ["document", "exam", "study-day", "event", "task"] as const;
+
+/**
+ * Mirrors `SNOOZE_PRESETS` in `@nexus/db`'s `notify/notificationStore.ts` and
+ * migration 041's CHECK (copied, not imported — the `NOTE_FOLDER_COLORS`
+ * arrangement). `DEFAULT_SNOOZE_PRESET` beside it is what an archive written
+ * before `1.19.0` means by saying nothing.
+ */
+const SNOOZE_PRESETS = ["10m", "1h", "tonight", "tomorrow-morning"] as const;
+const DEFAULT_SNOOZE_PRESET = "10m";
 const NOTIFICATION_STATUSES = ["delivered", "snoozed", "dismissed"] as const;
 const PERSON_KINDS = ["birthday", "anniversary"] as const;
 /** Mirrors `TASK_LIST_VIEWS` in `@nexus/db`'s `tasks/taskListStore.ts` and migration 038's CHECK (copied, not imported — the `NOTE_FOLDER_COLORS` arrangement). */
@@ -2217,6 +2231,14 @@ function parseSettings(value: unknown): ExportSettings {
         TOGGLEABLE_NOTIFICATION_SOURCES,
       ),
     ),
+    // Migration 041's CHECK. Optional-with-a-default, so no `ArchiveEra` flag:
+    // an archive written before `1.19.0` carries no key at all, and „10 min“ is
+    // what its profile's snooze button meant. Absence only — a key that IS
+    // there is validated strictly, in every era, like every other field here.
+    snoozeDefault:
+      notifRoot.snoozeDefault === undefined
+        ? DEFAULT_SNOOZE_PRESET
+        : enumStr(notifRoot.snoozeDefault, "settings.notifications.snoozeDefault", SNOOZE_PRESETS),
   };
 
   return { flags, notifications };
