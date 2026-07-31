@@ -224,6 +224,7 @@ import { localToday } from "./clock.js";
 import { releaseGlobalCapture, setGlobalCaptureAccelerator } from "./globalCapture.js";
 import { handleExport, handleIcsExport } from "./imex.js";
 import { handleMarkdownImport } from "./markdownImport.js";
+import { checklistToTasks, countNoteChecklistItems } from "./noteChecklistTasks.js";
 import { duplicateNote } from "./noteDuplicate.js";
 import {
   cancelIdleCompactions,
@@ -304,6 +305,7 @@ import {
   type MarkdownImportSource,
   type NoteCardDisposition,
   type NoteCardSpec,
+  type NoteChecklistTasksResult,
   type NoteDocPayload,
   type NoteDuplicateResult,
   type NoteVersionMeta,
@@ -4888,6 +4890,44 @@ function registerIpc(): void {
     const id = asNonEmptyString(body.id, "id");
     return cardStore(profileId).countCardsOfNote(id);
   });
+
+  /**
+   * „Pretvori u zadatke" (NOTE §6), and the probe the action is offered on.
+   * Nothing about the note's CONTENT crosses the boundary — unlike
+   * `notes:cards-sync`, main reads the note's own merged document — so the
+   * payload is two ids and a list id, each re-checked against this profile by
+   * the stores themselves. The whole operation lives in `noteChecklistTasks.ts`,
+   * which also documents what deliberately does not carry across (and why the
+   * note is never modified).
+   */
+  ipcMain.handle(IpcChannel.notesChecklistCount, (event, payload): number => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return countNoteChecklistItems(noteStore(profileId), id);
+  });
+
+  ipcMain.handle(
+    IpcChannel.notesChecklistToTasks,
+    (event, payload): NoteChecklistTasksResult => {
+      assertTrustedSender(event);
+      const body = asRecord(payload);
+      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const id = asNonEmptyString(body.id, "id");
+      const listId = asNonEmptyString(body.listId, "listId");
+      return checklistToTasks(
+        {
+          notes: noteStore(profileId),
+          tasks: taskStore(profileId),
+          lists: taskListStore(profileId),
+          runInTransaction: (write) => requireDb().raw.transaction(write)(),
+        },
+        id,
+        listId,
+      );
+    },
+  );
 
   // NOTE-002 (organization): folders/tags/pins. `now` is always stamped here
   // from main's own clock, never accepted from the renderer (SEC-EL-02).

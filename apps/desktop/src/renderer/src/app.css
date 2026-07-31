@@ -5550,6 +5550,14 @@ button.cal__grid-event--dragging {
   font-size: var(--nx-font-size-body-sm);
   color: var(--nx-danger);
 }
+/* The neutral twin of the line above: a result that is not a failure — how many
+   tasks „Pretvori u zadatke“ made, or that there was no checklist to make them
+   from. Same place, same size, quiet text instead of danger. */
+.note__list-notice {
+  margin: var(--nx-space-2) 0 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
 
 /* Delete + undo: the inline, token-styled undo bar (mirrors the tasks pattern). */
 .note__undo {
@@ -7498,6 +7506,11 @@ button.cal__grid-event--dragging {
   border-top: 1px solid var(--nx-border);
 }
 .study-practice__actions.recur-dialog__actions {
+  gap: var(--nx-space-2);
+}
+/* „Pretvori u zadatke“ — the recur-dialog recipe outright; two actions rather
+   than one, which is the only thing it needs of its own. */
+.note__checklist-actions.recur-dialog__actions {
   gap: var(--nx-space-2);
 }
 

@@ -206,6 +206,8 @@ export const IpcChannel = {
   notesCardsSync: "notes:cards-sync",
   notesCardsCount: "notes:cards-count",
   notesCardDeckSet: "notes:card-deck-set",
+  notesChecklistCount: "notes:checklist-count",
+  notesChecklistToTasks: "notes:checklist-to-tasks",
   noteAttachmentsList: "note-attachments:list",
   noteAttachmentsAdd: "note-attachments:add",
   noteAttachmentsRemove: "note-attachments:remove",
@@ -2813,6 +2815,36 @@ export interface NotesCardDeckSetRequest {
   deckId: string | null;
 }
 
+/** How many tasks „Pretvori u zadatke" would make out of this note — the probe the action is offered on. */
+export interface NotesChecklistCountRequest {
+  profileId: string;
+  id: string;
+}
+
+/**
+ * „Pretvori u zadatke" (NOTE §6): copies this note's checklist out into real
+ * TASK rows in `listId`. Unlike `notes:cards-sync`, nothing about the content is
+ * renderer-declared — main reads the note's own merged document, so the payload
+ * is only the two ids, both re-checked against this profile (the note through
+ * `NoteStore`, the list through `TaskListStore`).
+ */
+export interface NotesChecklistToTasksRequest {
+  profileId: string;
+  id: string;
+  listId: string;
+}
+
+/**
+ * What „Pretvori u zadatke" made. `created` counts every task written,
+ * `completed` how many of those were written already done (a ticked box carried
+ * across), and `skipped` the checklist rows that had no text to be a title.
+ */
+export interface NoteChecklistTasksResult {
+  created: number;
+  completed: number;
+  skipped: number;
+}
+
 /**
  * Maximum size, in bytes, of one note attachment `note-attachments:add`
  * accepts. MUST equal `MAX_NOTE_ATTACHMENT_BYTES` in `@nexus/db`: the same
@@ -4099,6 +4131,23 @@ export interface NexusApi {
   restoreNote(profileId: string, noteId: string): Promise<void>;
   /** How many live flashcards this note currently generates — what the delete dialog counts (PRD 09 section 7). */
   countNoteCards(profileId: string, noteId: string): Promise<number>;
+  /**
+   * How many tasks „Pretvori u zadatke" would make out of this note's checklist
+   * — rows with no text are not counted, because they would be skipped. Probed
+   * before the action is offered, exactly as `countNoteCards` is probed before
+   * the delete dialog: an action that can only report doing nothing is not
+   * offered at all.
+   */
+  countNoteChecklistItems(profileId: string, noteId: string): Promise<number>;
+  /**
+   * Copies this note's checklist out into real tasks in `listId` (NOTE section 6).
+   * The note is NOT changed — the checklist stays where it is.
+   */
+  convertNoteChecklistToTasks(
+    profileId: string,
+    noteId: string,
+    listId: string,
+  ): Promise<NoteChecklistTasksResult>;
   listNoteFolders(profileId: string): Promise<NoteFolder[]>;
   createNoteFolder(
     profileId: string,

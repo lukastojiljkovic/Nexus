@@ -4,6 +4,7 @@ import type { CardsViewConfig, CollectionSchema } from "@nexus/core";
 import { Button, CardsView, EmptyState } from "@nexus/ui";
 import type {
   NoteCardDisposition,
+  NoteChecklistTasksResult,
   NoteFolder,
   NoteFolderView,
   NoteMeta,
@@ -11,16 +12,52 @@ import type {
   NoteTagLink,
 } from "../../shared/ipc.js";
 import { NoteCardsDeleteDialog } from "./NoteCardsDeleteDialog.js";
+import { NoteChecklistTasksDialog } from "./NoteChecklistTasksDialog.js";
 import { NoteEditor } from "./NoteEditor.js";
 import { NoteOrganizer, type FolderSelection } from "./NoteOrganizer.js";
 import { formatNotificationWhen } from "./notificationFormat.js";
 import { NotePopover } from "./notePopover.js";
 import { persistRootNoteView, readStoredRootNoteView } from "./notePrefs.js";
 import { mergeTemplateEntries } from "./noteTemplates.js";
-import { strings } from "./strings.js";
+import { countUnit, strings } from "./strings.js";
 
 /** sr-Latn collation for the move-to-folder menu — plain "sr" mis-tailors š/č/ć. */
 const collator = new Intl.Collator(["sr-Latn", "sr"]);
+
+/**
+ * What „Pretvori u zadatke" made, as one Serbian line: „Napravljeno 3 zadatka,
+ * od toga 1 već završen. Preskočeno 2 prazna reda." Every counted noun goes
+ * through `countUnit` (1 / 2–4 / 5+), and a clause whose count is zero is left
+ * out entirely — a run that skipped nothing must not say so.
+ */
+function formatChecklistResult(result: NoteChecklistTasksResult): string {
+  const s = strings.notes.checklistTasks;
+  const created = `${s.createdPrefix} ${result.created} ${countUnit(
+    result.created,
+    s.createdUnitOne,
+    s.createdUnitFew,
+    s.createdUnitMany,
+  )}`;
+  const completed =
+    result.completed === 0
+      ? ""
+      : `, ${s.completedPrefix} ${result.completed} ${countUnit(
+          result.completed,
+          s.completedUnitOne,
+          s.completedUnitFew,
+          s.completedUnitMany,
+        )}`;
+  const skipped =
+    result.skipped === 0
+      ? ""
+      : ` ${s.skippedPrefix} ${result.skipped} ${countUnit(
+          result.skipped,
+          s.skippedUnitOne,
+          s.skippedUnitFew,
+          s.skippedUnitMany,
+        )}.`;
+  return `${created}${completed}.${skipped}`;
+}
 
 /** Note-list date: compact sr-Latn day + month, degrading to the raw value. */
 function formatNoteDate(iso: string): string {
@@ -122,6 +159,17 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
   // Why the last „Dupliraj" did not produce a copy, or null when nothing is
   // wrong — the transient error line the folder/tag panes already use.
   const [duplicateError, setDuplicateError] = useState<"generic" | "tooLarge" | null>(null);
+  // The note whose checklist is being converted (NOTE §6), with the row count
+  // the probe returned; null whenever nothing is being asked.
+  const [pendingChecklist, setPendingChecklist] = useState<
+    { note: NoteMeta; itemCount: number } | null
+  >(null);
+  // What the last „Pretvori u zadatke" has to say — the counts it made, that the
+  // note had no checklist at all, or that it failed. One slot, because the three
+  // are the same line in the same place.
+  const [checklistNotice, setChecklistNotice] = useState<
+    { kind: "done"; result: NoteChecklistTasksResult } | { kind: "empty" } | { kind: "error" } | null
+  >(null);
   const [tags, setTags] = useState<NoteTag[]>([]);
   const [links, setLinks] = useState<NoteTagLink[]>([]);
   const [tagFilter, setTagFilter] = useState<string[]>([]);
@@ -155,8 +203,10 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
       setFailed(false);
       // A refused „Dupliraj" changes nothing and therefore never refetches, so
       // its line survives until the pane genuinely moves on — any other note
-      // action, or a change of folder.
+      // action, or a change of folder. „Pretvori u zadatke" writes only TASK
+      // rows, so its line lives by exactly the same rule.
       setDuplicateError(null);
+      setChecklistNotice(null);
     } catch (error) {
       setFailed(true);
       console.error("Nexus: failed to load notes:", error);
@@ -418,6 +468,47 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
     }
   }
 
+  /**
+   * „Pretvori u zadatke" (NOTE §6), asked from the ROW menu rather than from
+   * inside the editor: main reads the note's own stored document, so the action
+   * needs no open editor to work from, and putting it beside Dupliraj/Obriši
+   * keeps every note-level action in one place instead of splitting them across
+   * two surfaces.
+   *
+   * Probed first, exactly as „Obriši" probes the note's card count: a note with
+   * no checklist is told so on the spot rather than being handed a list picker
+   * whose only possible outcome is „Napravljeno 0 zadataka".
+   */
+  async function convertChecklist(note: NoteMeta): Promise<void> {
+    try {
+      const itemCount = await window.nexus.countNoteChecklistItems(profileId, note.id);
+      if (itemCount === 0) {
+        setChecklistNotice({ kind: "empty" });
+        return;
+      }
+      setChecklistNotice(null);
+      setPendingChecklist({ note, itemCount });
+    } catch (error) {
+      setChecklistNotice({ kind: "error" });
+      console.error("Nexus: failed to count a note's checklist:", error);
+    }
+  }
+
+  /**
+   * The write itself. Nothing on this page changes — the note is untouched and
+   * the tasks live in the TASK module — so there is no refetch, and the result
+   * line is the whole feedback.
+   */
+  async function performChecklistConversion(note: NoteMeta, listId: string): Promise<void> {
+    try {
+      const result = await window.nexus.convertNoteChecklistToTasks(profileId, note.id, listId);
+      setChecklistNotice({ kind: "done", result });
+    } catch (error) {
+      setChecklistNotice({ kind: "error" });
+      console.error("Nexus: failed to convert a note's checklist:", error);
+    }
+  }
+
   async function togglePin(note: NoteMeta): Promise<void> {
     try {
       await window.nexus.setNotePinned(profileId, note.id, !note.pinned);
@@ -598,6 +689,17 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
                 {strings.notes.duplicate}
               </button>
               <button
+                className="note__menu-item"
+                role="menuitem"
+                type="button"
+                onClick={() => {
+                  void convertChecklist(note);
+                  close();
+                }}
+              >
+                {strings.notes.checklistTasks.action}
+              </button>
+              <button
                 className="note__menu-item note__menu-item--danger"
                 role="menuitem"
                 type="button"
@@ -683,6 +785,19 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
           </p>
         )}
 
+        {checklistNotice !== null &&
+          (checklistNotice.kind === "error" ? (
+            <p className="note__list-error" role="status">
+              {strings.notes.checklistTasks.error}
+            </p>
+          ) : (
+            <p className="note__list-notice" role="status">
+              {checklistNotice.kind === "empty"
+                ? strings.notes.checklistTasks.empty
+                : formatChecklistResult(checklistNotice.result)}
+            </p>
+          ))}
+
         {failed ? (
           <EmptyState title={strings.notes.listEmptyTitle} description={strings.notes.loadError} />
         ) : notes === null ? (
@@ -766,6 +881,24 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
             void performDelete(note, disposition);
           }}
           onCancel={() => setPendingDelete(null)}
+        />
+      )}
+
+      {pendingChecklist != null && (
+        <NoteChecklistTasksDialog
+          profileId={profileId}
+          noteTitle={
+            pendingChecklist.note.title.trim().length > 0
+              ? pendingChecklist.note.title
+              : strings.notes.untitled
+          }
+          itemCount={pendingChecklist.itemCount}
+          onConvert={(listId) => {
+            const { note } = pendingChecklist;
+            setPendingChecklist(null);
+            void performChecklistConversion(note, listId);
+          }}
+          onCancel={() => setPendingChecklist(null)}
         />
       )}
     </div>

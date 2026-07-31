@@ -985,6 +985,48 @@ export const strings = {
     /** The undo bar after „Obriši i kartice“ — it took more than the note, and says so. */
     deletedWithCardsNotice: "Beleška i kartice obrisane",
     /**
+     * „Pretvori u zadatke“ (NOTE §6). The editor's checkboxes are a mark on the
+     * page and nothing more; this is the one action that promotes them into real
+     * TASK rows. Offered only when the note actually has rows to convert (the
+     * `cards-count` probe's own rule), so `empty` is what a note WITHOUT them
+     * hears instead of a dialog that could only report doing nothing.
+     */
+    checklistTasks: {
+      /** The row „⋯“ entry. A verb: it says what pressing it does, not what the note contains. */
+      action: "Pretvori u zadatke",
+      title: "Pretvori u zadatke",
+      /** The counted phrase, e.g. „3 stavke iz liste u ovoj belešci“ — noun and preposition inflect together, hence `countUnit`. */
+      countOne: "stavka iz liste u ovoj belešci",
+      countFew: "stavke iz liste u ovoj belešci",
+      countMany: "stavki iz liste u ovoj belešci",
+      question: "Izaberi listu zadataka u koju idu.",
+      /** The non-destructive rule, said before the action rather than discovered after it. */
+      keepNote: "Beleška ostaje nepromenjena — lista se prepisuje, ne seli.",
+      listLabel: "Lista zadataka",
+      convert: "Pretvori",
+      cancel: "Otkaži",
+      /** „Napravljeno 3 zadatka“ — the `markdownImport` result recipe: an invariant participle + `countUnit`. */
+      createdPrefix: "Napravljeno",
+      createdUnitOne: "zadatak",
+      createdUnitFew: "zadatka",
+      createdUnitMany: "zadataka",
+      /** Appended only when a ticked box carried across: „, od toga 2 već završena“. */
+      completedPrefix: "od toga",
+      completedUnitOne: "već završen",
+      completedUnitFew: "već završena",
+      completedUnitMany: "već završenih",
+      /** Appended only when a row had no text to be a title: „Preskočeno 2 prazna reda.“ */
+      skippedPrefix: "Preskočeno",
+      skippedUnitOne: "prazan red",
+      skippedUnitFew: "prazna reda",
+      skippedUnitMany: "praznih redova",
+      /** What a note with no checklist hears — a statement, not a failure. */
+      empty: "Ova beleška nema listu sa kvačicama.",
+      error: "Zadaci nisu napravljeni. Pokušaj ponovo.",
+      /** The picker has nothing to offer only if the profile has no lists at all, which the Inbox makes impossible — said anyway rather than showing an empty select. */
+      noLists: "Napravi listu u modulu Zadaci da bi stavke imale gde da odu.",
+    },
+    /**
      * „Pronađi u belešci“ (NOTE-005): the Ctrl+F bar docked above the open
      * note. Its own copy, deliberately not borrowed from the global search
      * palette — that one searches everything the profile holds, this one

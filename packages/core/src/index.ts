@@ -98,6 +98,9 @@ export type { DuplicatedNoteState, DuplicateNoteStateInput } from "./notes/noteD
 export { collectNoteCards, NOTE_CARD_MAX_TEXT_LENGTH, parseCardBlock } from "./notes/noteCards.js";
 export type { CardKind, CardSyntaxSpan, NoteCardSpec, ParsedBlock, ParsedCard } from "./notes/noteCards.js";
 
+export { collectChecklistItems } from "./notes/noteChecklist.js";
+export type { ChecklistItem } from "./notes/noteChecklist.js";
+
 export {
   CALLOUT_VARIANTS,
   DEFAULT_CALLOUT_VARIANT,

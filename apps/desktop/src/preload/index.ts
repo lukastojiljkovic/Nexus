@@ -320,6 +320,10 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.notesRestore, { profileId, id: noteId }),
   countNoteCards: (profileId, noteId) =>
     ipcRenderer.invoke(IpcChannel.notesCardsCount, { profileId, id: noteId }),
+  countNoteChecklistItems: (profileId, noteId) =>
+    ipcRenderer.invoke(IpcChannel.notesChecklistCount, { profileId, id: noteId }),
+  convertNoteChecklistToTasks: (profileId, noteId, listId) =>
+    ipcRenderer.invoke(IpcChannel.notesChecklistToTasks, { profileId, id: noteId, listId }),
   listNoteFolders: (profileId) => ipcRenderer.invoke(IpcChannel.noteFoldersList, { profileId }),
   createNoteFolder: (profileId, input) =>
     ipcRenderer.invoke(IpcChannel.noteFoldersCreate, { profileId, input }),
