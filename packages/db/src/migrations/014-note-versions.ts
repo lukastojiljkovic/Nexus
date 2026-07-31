@@ -22,9 +22,12 @@ import type { Migration } from "./migrations.js";
  * `profile_id` of their own; `ON DELETE CASCADE` clears a note's history when
  * the note itself is hard-deleted.
  *
- * Retention (`MAX_NOTE_VERSIONS = 50` per note) is enforced by `NoteStore`,
- * not by this schema — the same division of labour as compaction's
- * threshold living in `main/notes.ts` rather than in SQL.
+ * Retention is enforced by `NoteStore`, not by this schema — the same division
+ * of labour as compaction's threshold living in `main/notes.ts` rather than in
+ * SQL. It is a tiered age schedule (`thinNoteVersions`, `@nexus/core`): every
+ * checkpoint from the last day, one per hour for a week, one per day for a
+ * month, one per week beyond, never the note's oldest, and never more than
+ * `MAX_NOTE_VERSIONS` in total.
  */
 export const migration014: Migration = {
   version: 14,

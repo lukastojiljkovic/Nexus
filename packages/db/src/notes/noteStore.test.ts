@@ -45,6 +45,18 @@ const T1 = "2026-07-12T10:01:00.000Z";
 const T2 = "2026-07-12T10:02:00.000Z";
 const T3 = "2026-07-12T10:03:00.000Z";
 
+const MINUTE = 60_000;
+const HOUR = 3_600_000;
+const DAY = 86_400_000;
+
+/** The "present" the version-history suite thins against — comfortably after T0..T3 so the two sets never interleave. */
+const NOW = "2026-07-31T12:00:00.000Z";
+
+/** An ISO stamp `ms` before `NOW`, so a checkpoint's age can be written in the units the schedule is stated in. */
+function ago(ms: number): string {
+  return new Date(Date.parse(NOW) - ms).toISOString();
+}
+
 /** A deterministic non-empty binary blob of `length` bytes. */
 function bytes(length: number, offset = 0): Uint8Array {
   const out = new Uint8Array(length);
@@ -776,21 +788,89 @@ describe("NoteStore — version history (note_versions, ADR-015)", () => {
     expect(notes.loadVersion(note.id, 1)).toEqual(bytes(16, 1));
   });
 
-  it("prunes to MAX_NOTE_VERSIONS in the same transaction, keeping the highest coveredSeqs", () => {
+  it("thins by the tiered age schedule: everything from the last day, one per hour behind it", () => {
     const notes = store();
     const note = notes.create(T0);
 
-    for (let seq = 1; seq <= MAX_NOTE_VERSIONS + 5; seq += 1) {
-      notes.captureVersion(note.id, bytes(8, seq), seq, T1);
+    // Three checkpoints inside one hour, roughly a day back, then one now.
+    notes.captureVersion(note.id, bytes(8, 1), 1, ago(26 * HOUR));
+    notes.captureVersion(note.id, bytes(8, 2), 2, ago(26 * HOUR - 20 * MINUTE));
+    notes.captureVersion(note.id, bytes(8, 3), 3, ago(26 * HOUR - 40 * MINUTE));
+    notes.captureVersion(note.id, bytes(8, 4), 4, NOW);
+
+    // seq 2 and 3 shared an hour bucket once they aged past 24h; the newer of
+    // the two (3) held it. seq 1 sits in its own hour bucket AND is the anchor.
+    expect(notes.listVersions(note.id).map((v) => v.coveredSeq)).toEqual([4, 3, 1]);
+  });
+
+  it("never drops the note's oldest checkpoint, however much is captured after it", () => {
+    const notes = store();
+    const note = notes.create(T0);
+
+    notes.captureVersion(note.id, bytes(8, 1), 1, ago(200 * DAY));
+    // A burst that the old flat window would have used to evict everything older.
+    for (let seq = 2; seq <= 61; seq += 1) {
+      notes.captureVersion(note.id, bytes(8, seq), seq, ago((61 - seq) * 10 * MINUTE));
     }
 
-    const versions = notes.listVersions(note.id);
-    expect(versions).toHaveLength(MAX_NOTE_VERSIONS);
-    expect(versions.map((v) => v.coveredSeq)).toEqual(
-      Array.from({ length: MAX_NOTE_VERSIONS }, (_, i) => MAX_NOTE_VERSIONS + 5 - i),
-    );
-    // The lowest 5 (seq 1..5) fell off the retention window.
-    expect(versions.some((v) => v.coveredSeq <= 5)).toBe(false);
+    const seqs = notes.listVersions(note.id).map((v) => v.coveredSeq);
+    expect(seqs).toContain(1); // "where this note started" survived the afternoon
+    expect(seqs[0]).toBe(61); // and so did the newest state
+    expect(seqs.length).toBeLessThanOrEqual(MAX_NOTE_VERSIONS);
+  });
+
+  it("holds MAX_NOTE_VERSIONS as the backstop, never letting the table pass it", () => {
+    const notes = store();
+    const note = notes.create(T0);
+    const total = MAX_NOTE_VERSIONS + 5;
+
+    // Every capture stamped at the same instant, so nothing distinguishes these
+    // rows on the age axis at all.
+    for (let seq = 1; seq <= total; seq += 1) {
+      notes.captureVersion(note.id, bytes(8, seq), seq, T1);
+      expect(notes.listVersions(note.id).length).toBeLessThanOrEqual(MAX_NOTE_VERSIONS);
+    }
+
+    // The capture that crossed the cap coarsened the pile down to the two
+    // unconditional rows — the newest state and where the note started — and
+    // the four after it simply landed on top.
+    expect(notes.listVersions(note.id).map((v) => v.coveredSeq)).toEqual([
+      total,
+      total - 1,
+      total - 2,
+      total - 3,
+      MAX_NOTE_VERSIONS + 1,
+      1,
+    ]);
+  });
+
+  it("thins idempotently: a repeat capture at the same clock changes nothing", () => {
+    const notes = store();
+    const note = notes.create(T0);
+
+    for (let seq = 1; seq <= 40; seq += 1) {
+      notes.captureVersion(note.id, bytes(8, seq), seq, ago((40 - seq) * 3 * HOUR));
+    }
+    const before = notes.listVersions(note.id);
+
+    notes.captureVersion(note.id, bytes(8, 40), 40, NOW);
+
+    expect(notes.listVersions(note.id)).toEqual(before);
+  });
+
+  it("leaves a checkpoint whose created_at will not parse alone rather than deleting undatable history", () => {
+    const notes = store();
+    const note = notes.create(T0);
+    notes.captureVersion(note.id, bytes(8, 1), 1, NOW);
+    db.raw
+      .prepare("UPDATE note_versions SET created_at = ? WHERE note_id = ? AND covered_seq = ?")
+      .run("not-a-date", note.id, 1);
+
+    for (let seq = 2; seq <= 60; seq += 1) {
+      notes.captureVersion(note.id, bytes(8, seq), seq, NOW);
+    }
+
+    expect(notes.listVersions(note.id).map((v) => v.coveredSeq)).toContain(1);
   });
 
   it("rejects a non-positive or non-integer coveredSeq, an empty snapshot, and a malformed now", () => {

@@ -138,6 +138,14 @@ export type { CardKind, CardSyntaxSpan, NoteCardSpec, ParsedBlock, ParsedCard } 
 export { collectChecklistItems } from "./notes/noteChecklist.js";
 export type { ChecklistItem } from "./notes/noteChecklist.js";
 
+export { NOTE_VERSION_RETENTION_TIERS, thinNoteVersions } from "./notes/noteRetention.js";
+export type {
+  NoteVersionCheckpoint,
+  NoteVersionRetentionTier,
+  ThinNoteVersionsInput,
+  ThinNoteVersionsResult,
+} from "./notes/noteRetention.js";
+
 export {
   CALLOUT_VARIANTS,
   DEFAULT_CALLOUT_VARIANT,

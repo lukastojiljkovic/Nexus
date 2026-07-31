@@ -1,4 +1,6 @@
 import type Database from "better-sqlite3-multiple-ciphers";
+import { thinNoteVersions } from "@nexus/core";
+import type { NoteVersionCheckpoint } from "@nexus/core";
 import {
   NoteFolderNotFoundError,
   NoteNotFoundError,
@@ -71,6 +73,12 @@ interface VersionMetaRow {
   created_at: string;
 }
 
+/** The two columns retention weighs — deliberately without the snapshot blob. */
+interface VersionTimeRow {
+  covered_seq: number;
+  created_at: string;
+}
+
 const COLUMNS = "id, profile_id, title, folder_id, pinned, card_deck_id, created_at, updated_at";
 
 /** The renderer batches updates below this; the store re-checks it because renderer input is untrusted (SEC-EL-02). */
@@ -79,7 +87,19 @@ export const MAX_NOTE_UPDATE_BYTES = 262_144;
 /** The most outbound wiki-links `setOutboundLinks` accepts in one call (NOTE-004). */
 export const MAX_NOTE_LINKS = 500;
 
-/** Checkpoints kept per note; `captureVersion` prunes the oldest beyond this in the same transaction (ADR-015). */
+/**
+ * The hard backstop on checkpoints per note (ADR-015). It bounds HOW MANY rows
+ * survive; `thinNoteVersions` (`@nexus/core`) decides WHICH — every checkpoint
+ * from the last day, one per hour for a week, one per day for a month, one per
+ * week beyond, and never the note's oldest.
+ *
+ * **The schedule is what binds in practice.** At main's ~10-minute capture
+ * cadence (`VERSION_MIN_AGE_MS`) a note's tier survivors stay well under 50
+ * until its history is both long and dense; this cap only re-enters for the
+ * pathological ones, and when it does it coarsens the schedule rather than
+ * truncating its tail — a busy afternoon can never cost a note the months
+ * behind it.
+ */
 export const MAX_NOTE_VERSIONS = 50;
 
 const MAX_TITLE_LENGTH = 200;
@@ -114,11 +134,13 @@ const ISO_8601_DATETIME =
  * new organizational entity, so it lives here rather than in `NoteOrgStore`.
  *
  * `captureVersion`/`listVersions`/`loadVersion`/`latestVersion` (NOTE-008,
- * migration 014, ADR-015) manage `note_versions` — immutable, pruned
+ * migration 014, ADR-015) manage `note_versions` — immutable, thinned
  * checkpoints, a sibling of the mutable `note_snapshots` cache. The store
- * owns mechanism only (dedupe-by-PK insert, retention prune, scoped reads);
- * *when* to capture a checkpoint is `main/notes.ts`'s policy, the same
- * division of labour compaction already uses.
+ * owns mechanism only (dedupe-by-PK insert, retention, scoped reads); *when*
+ * to capture a checkpoint is `main/notes.ts`'s policy, the same division of
+ * labour compaction already uses, and *which* checkpoints retention keeps is
+ * `thinNoteVersions` (`@nexus/core`) — a pure, clock-parameterized schedule,
+ * the same pure-logic/storage seam `mergeNoteState` sits on.
  */
 export class NoteStore {
   private readonly insert: Database.Statement;
@@ -148,7 +170,8 @@ export class NoteStore {
   private readonly insertLink: Database.Statement;
   private readonly selectBacklinks: Database.Statement;
   private readonly insertVersion: Database.Statement;
-  private readonly pruneVersions: Database.Statement;
+  private readonly selectVersionTimes: Database.Statement;
+  private readonly deleteVersion: Database.Statement;
   private readonly selectVersions: Database.Statement;
   private readonly selectVersionSnapshot: Database.Statement;
   private readonly selectLatestVersion: Database.Statement;
@@ -286,10 +309,14 @@ export class NoteStore {
       `INSERT OR IGNORE INTO note_versions (note_id, covered_seq, snapshot, title, created_at)
        VALUES (?, ?, ?, ?, ?)`,
     );
-    this.pruneVersions = db.prepare(
-      `DELETE FROM note_versions WHERE note_id = ? AND covered_seq NOT IN (
-         SELECT covered_seq FROM note_versions WHERE note_id = ? ORDER BY covered_seq DESC LIMIT ?
-       )`,
+    // Deliberately not the blob: thinning weighs checkpoints by AGE alone, so
+    // it reads two small columns rather than dragging every stored snapshot of
+    // the note through memory on each capture.
+    this.selectVersionTimes = db.prepare(
+      `SELECT covered_seq, created_at FROM note_versions WHERE note_id = ?`,
+    );
+    this.deleteVersion = db.prepare(
+      `DELETE FROM note_versions WHERE note_id = ? AND covered_seq = ?`,
     );
     this.selectVersions = db.prepare(
       `SELECT covered_seq, title, created_at FROM note_versions
@@ -578,11 +605,12 @@ export class NoteStore {
    * Checkpoints `snapshot` at `coveredSeq` (ADR-015 / NOTE-008): the note's
    * *current* title is captured with it (never a caller-supplied one — the
    * list label always matches what the note was called at that moment), the
-   * PK dedupes a repeat capture of the same `coveredSeq` to a no-op, and the
-   * retention window is enforced in the same transaction so the table never
-   * drifts past `MAX_NOTE_VERSIONS` rows for this note. `snapshot` has no
-   * upper size cap — a merged full state legitimately exceeds the 256 KB
-   * per-update cap `appendUpdate` enforces.
+   * PK dedupes a repeat capture of the same `coveredSeq` to a no-op, and
+   * retention is applied in the SAME transaction as the insert — a thinning
+   * that could land without its insert, or the reverse, is a history that can
+   * lose a row to a crash (the `PrivateNoteStore.writeVersion` shape).
+   * `snapshot` has no upper size cap — a merged full state legitimately
+   * exceeds the 256 KB per-update cap `appendUpdate` enforces.
    */
   captureVersion(id: string, snapshot: Uint8Array, coveredSeq: number, now: string): void {
     const validNow = validateDateTime(now, "now");
@@ -594,7 +622,7 @@ export class NoteStore {
 
     this.db.transaction(() => {
       this.insertVersion.run(id, coveredSeq, Buffer.from(validSnapshot), note.title, validNow);
-      this.pruneVersions.run(id, id, MAX_NOTE_VERSIONS);
+      this.thinVersions(id, Date.parse(validNow));
     })();
   }
 
@@ -605,7 +633,7 @@ export class NoteStore {
     return rows.map(toNoteVersionMeta);
   }
 
-  /** One checkpoint's full snapshot bytes, or throws `NoteVersionNotFoundError` if `coveredSeq` was never captured (or has since been pruned). */
+  /** One checkpoint's full snapshot bytes, or throws `NoteVersionNotFoundError` if `coveredSeq` was never captured (or has since been thinned out). */
   loadVersion(id: string, coveredSeq: number): Uint8Array {
     this.requireActive(id);
     const row = this.selectVersionSnapshot.get(id, coveredSeq) as { snapshot: Buffer } | undefined;
@@ -622,6 +650,33 @@ export class NoteStore {
     this.requireActive(id);
     const row = this.selectLatestVersion.get(id) as VersionMetaRow | undefined;
     return row ? toNoteVersionMeta(row) : null;
+  }
+
+  /**
+   * Applies `thinNoteVersions`' tiered age schedule to one note's checkpoints.
+   * Called only from inside `captureVersion`'s transaction — retention is a
+   * consequence of capturing, never a background sweep, which is also why an
+   * archive restore (which writes `note_versions` rows directly, never through
+   * `captureVersion`) hands back a history in exactly the shape it was exported
+   * in.
+   */
+  private thinVersions(noteId: string, now: number): void {
+    const rows = this.selectVersionTimes.all(noteId) as VersionTimeRow[];
+    const checkpoints: NoteVersionCheckpoint[] = [];
+    for (const row of rows) {
+      const capturedAt = Date.parse(row.created_at);
+      // A row whose stamp will not parse is never offered to the schedule: it
+      // cannot be placed on the age axis, and silently deleting history we
+      // cannot date is the one mistake this whole rule exists to prevent.
+      if (Number.isFinite(capturedAt)) {
+        checkpoints.push({ coveredSeq: row.covered_seq, capturedAt });
+      }
+    }
+
+    const { drop } = thinNoteVersions({ checkpoints, now, maxKept: MAX_NOTE_VERSIONS });
+    for (const coveredSeq of drop) {
+      this.deleteVersion.run(noteId, coveredSeq);
+    }
   }
 
   /** Reads an active note in this profile or throws — the gate every update/snapshot access goes through. */

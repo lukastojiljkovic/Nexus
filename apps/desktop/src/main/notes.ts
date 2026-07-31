@@ -151,10 +151,10 @@ export function cancelIdleCompactions(): void {
  * age gate — a user action (about to restore an old version), not a cadence
  * — but the PK dedupe still makes a repeat call idempotent. Merges only
  * *stored* state (snapshot + pending updates already in the DB); no renderer
- * bytes are involved, so spamming this channel churns at most the
- * `MAX_NOTE_VERSIONS` retention window and requires real appends between
- * calls to produce a new row — the same bounded-harm shape as
- * `notes:append-update` itself.
+ * bytes are involved, so spamming this channel churns at most what the tiered
+ * retention schedule keeps (`MAX_NOTE_VERSIONS` rows at the very most) and
+ * requires real appends between calls to produce a new row — the same
+ * bounded-harm shape as `notes:append-update` itself.
  *
  * A note with no persisted state yet (`coveredSeq` would be 0) is a no-op:
  * there is nothing to checkpoint before the first content ever lands.

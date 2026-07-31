@@ -1320,6 +1320,50 @@ describe("RestoreStore", () => {
     expect(pending.map((u) => u.seq)).toEqual([8]);
   });
 
+  it("T8b: a restored history keeps the exact shape it was exported in — restoring never thins", () => {
+    const profileB = createProfile(db, "T8b");
+    const note = makeNote({ id: uuidv7(), title: "Long history", snapshot: bytes(4) });
+
+    // Three years of weekly checkpoints plus a same-hour cluster at the end —
+    // a history `NoteStore.captureVersion`'s tiered schedule would thin hard
+    // (`MAX_NOTE_VERSIONS` alone would cut it to 50). Restoring is not
+    // capturing: it reproduces what the archive holds, row for row.
+    const start = Date.parse("2023-01-01T00:00:00.000Z");
+    const noteVersions = Array.from({ length: 160 }, (_, i) => ({
+      noteId: note.id,
+      coveredSeq: i + 1,
+      title: `v${i + 1}`,
+      createdAt: new Date(start + i * 7 * 86_400_000).toISOString(),
+      snapshot: bytes(4, i),
+    }));
+    // Four inside one hour, so a schedule applied here would collapse them.
+    for (let i = 0; i < 4; i += 1) {
+      noteVersions.push({
+        noteId: note.id,
+        coveredSeq: 200 + i,
+        title: `cluster${i}`,
+        createdAt: new Date(start + 160 * 7 * 86_400_000 + i * 10 * 60_000).toISOString(),
+        snapshot: bytes(4, 200 + i),
+      });
+    }
+
+    const data: ProfileData = { ...emptyProfileData(), notes: [note], noteVersions };
+    const derived = new Map<string, RestoredNoteDerived>([
+      [note.id, { plaintext: "long history", linkTargets: [] }],
+    ]);
+
+    new RestoreStore(db.raw, profileB).replaceProfileData(
+      { profileName: "T8b", profilePicture: null, settings: emptySettings(), data, derived },
+      NOW,
+    );
+
+    const restored = new NoteStore(db.raw, profileB).listVersions(note.id);
+    expect(restored.map((v) => v.coveredSeq)).toEqual(
+      noteVersions.map((v) => v.coveredSeq).sort((a, b) => b - a),
+    );
+    expect(restored).toHaveLength(noteVersions.length);
+  });
+
   it("T9: settings round trip — flags, notification prefs (incl. a disabled source), and the profile rename", async () => {
     const profileB = createProfile(db, "Before rename");
 

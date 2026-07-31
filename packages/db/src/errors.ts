@@ -485,8 +485,8 @@ export class NoteAttachmentNotFoundError extends DatabaseError {}
 
 /**
  * Thrown when `loadVersion` targets a `covered_seq` that has no checkpoint
- * row for that note — never captured, or pruned past the `MAX_NOTE_VERSIONS`
- * retention window (ADR-015 / NOTE-008). The note itself being missing,
+ * row for that note — never captured, or since thinned out by the tiered
+ * retention schedule (ADR-015 / NOTE-008). The note itself being missing,
  * soft-deleted, or owned by another profile surfaces as `NoteNotFoundError`
  * instead, the same gate every other note child table uses.
  */
