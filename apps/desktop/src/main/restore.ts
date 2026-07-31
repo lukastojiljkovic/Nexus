@@ -5,9 +5,11 @@ import {
   documentDuplicateKey,
   eventDuplicateKey,
   parseImportArchive,
+  parseLlmAnswer,
   personDuplicateKey,
   planForeignImport,
   translateApkg,
+  translateLlmRecords,
   type ApkgSkip as CoreApkgSkip,
   type ApkgSubjectChoice,
   type ArchiveProfilePicture,
@@ -19,6 +21,7 @@ import {
   type ImportPlanReport as CoreImportPlanReport,
   type ImportSkipReason as CoreImportSkipReason,
   type ImportProblem,
+  type LlmSkippedRecord,
   type ParsedApkg,
   type ProfileData,
 } from "@nexus/core";
@@ -54,6 +57,13 @@ import type {
   ImportRecordType,
   ImportSkipCode,
   ImportSkipReason,
+  LlmImportAnswerProblem,
+  LlmImportApplyResult,
+  LlmImportKind,
+  LlmImportPreview,
+  LlmImportPreviewResult,
+  LlmImportSkip,
+  LlmImportSkipReason,
   RestoreApplyResult,
   RestorePickResult,
   RestorePreview,
@@ -191,7 +201,7 @@ interface ReadyImport {
  */
 interface RestoreUndo {
   /** Which operation this snapshot was taken for — carried onto the wire so the banner can name what it is offering to undo. */
-  kind: "restore" | "import" | "apkg";
+  kind: "restore" | "import" | "apkg" | "llm";
   profileId: string;
   snapshot: {
     profileName: string;
@@ -262,6 +272,8 @@ let pending: PendingRestore | null = null;
 let pendingImport: PendingImport | null = null;
 /** The Anki `.apkg` the user picked, its collection once read, and the plan once a preview has succeeded. A third variable, on the same terms the second is: the three picks never touch. */
 let pendingApkg: PendingApkg | null = null;
+/** The plan a pasted LLM answer produced (IMEX-005). A fourth variable, on the same terms: no surface here can reach another's source. */
+let pendingLlm: ReadyLlm | null = null;
 /** The pre-operation snapshot of the last applied restore OR import — one slot, whichever ran last. */
 let undo: RestoreUndo | null = null;
 
@@ -798,6 +810,9 @@ export function clearRestoreState(): void {
   // returns) but it DOES hold somebody's whole collection in memory, which must
   // no more outlive a lock than a decrypted archive does.
   pendingApkg = null;
+  // Nor does the LLM plan, and it holds what the user pasted out of their own
+  // chat — their content, in plaintext, in main's heap. Same rule.
+  pendingLlm = null;
 }
 
 // --- Foreign import (ADR-043) -----------------------------------------------
@@ -1494,4 +1509,200 @@ export async function applyApkgImport(
  */
 export function cancelApkgImport(): void {
   pendingApkg = null;
+}
+
+// --- LLM-assisted import (IMEX-005) -----------------------------------------
+
+/**
+ * One successful LLM preview, held exactly as `applyLlmImport` needs it: the
+ * plan — already translated, remapped, stamped and counted, so applying writes
+ * precisely what the user was shown — the parse's own report, and the token
+ * proving an apply is confirming THIS plan.
+ *
+ * The shortest of the four pending shapes, because this flow has the least
+ * state: there is no file to hold open, no bytes to keep resident and nothing
+ * to re-plan. The user's pasted TEXT is deliberately not kept either — it has
+ * already become a plan, and holding their content in main's heap for no reason
+ * is exactly what `clearRestoreState` exists to prevent.
+ */
+interface ReadyLlm {
+  token: string;
+  /** The profile this plan was computed against — the apply refuses any other, mirroring the token check. */
+  profileId: string;
+  plan: ForeignImportPlan;
+  preview: LlmImportPreview;
+}
+
+/** Maps one core `LlmSkippedRecord` onto the wire. The annotated `reason` assignment is the drift check every other core→wire hand-off in this file makes. */
+function toLlmSkip(skip: LlmSkippedRecord): LlmImportSkip {
+  const reason: LlmImportSkipReason = skip.reason;
+  return { index: skip.index, reason, field: skip.field };
+}
+
+/**
+ * Parses one pasted chat answer and really plans it against this profile —
+ * which is what makes the preview a dry run rather than an estimate, exactly as
+ * it is for the three file-shaped imports.
+ *
+ * `kind` is the screen's own picker, and an answer that declares a DIFFERENT one
+ * is refused rather than imported: a user who asked for zadaci and pasted an
+ * answer full of events is one click from writing rows into a module they were
+ * not looking at. The refusal names what the answer actually was, so the fix is
+ * obvious.
+ *
+ * `deckId` is checked here, not at the IPC edge, for `resolveApkgSubject`'s
+ * reason: whether a deck EXISTS in this profile is a semantic question only the
+ * live stores can answer.
+ */
+export function previewLlmImport(
+  deps: ImportDeps,
+  profileId: string,
+  kind: LlmImportKind,
+  text: string,
+  deckId: string | null,
+): LlmImportPreviewResult {
+  pendingLlm = null;
+
+  const answer = parseLlmAnswer(text);
+  if (answer.status === "failed") {
+    const code: LlmImportAnswerProblem = answer.code;
+    return { status: "unreadable", code };
+  }
+  if (answer.parsed.kind !== kind) {
+    const answered: LlmImportKind = answer.parsed.kind;
+    return { status: "kind-mismatch", answered };
+  }
+
+  const translation = translateLlmRecords(answer.parsed, {
+    profileId,
+    now: new Date().toISOString(),
+    deckId: kind === "cards" ? resolveLlmDeck(deps, profileId, deckId) : null,
+  });
+
+  // The target is read as late as possible — immediately before planning
+  // against it — for `previewImport`'s reason: every identity question the
+  // planner answers is answered about the profile as it is NOW. `seededIds` is
+  // the one thing added to it (ADR-052's seam): a card import resolves its
+  // single `llm:deck` name onto the deck the user picked, so no deck row is
+  // ever created.
+  const plan = planForeignImport(
+    { data: translation.data, dropped: [], profilePicture: null },
+    { ...importTargetFor(deps, profileId), seededIds: translation.seededIds },
+    uuidv7,
+  );
+
+  // Counted off the PLAN rather than off the translation, so the number on
+  // screen is what will actually be inserted: the planner's duplicate rule
+  // (ADR-051) takes events this profile already has out of it, and `duplicates`
+  // below says how many. One kind touches one module, so summing the three this
+  // import can reach is exactly the row count.
+  const planned = countProfileModules(plan.data);
+
+  const token = randomBytes(16).toString("hex");
+  const preview: LlmImportPreview = {
+    token,
+    kind,
+    records: answer.report.total,
+    accepted: answer.report.accepted,
+    planned: planned.tasks + planned.calendar + planned.study,
+    duplicates: plan.report.duplicates.reduce((total, group) => total + group.count, 0),
+    skipped: answer.report.skipped.map(toLlmSkip),
+    droppedFields: answer.report.droppedFields,
+  };
+
+  pendingLlm = { token, profileId, plan, preview };
+  return { status: "ready", preview };
+}
+
+/**
+ * The renderer's deck choice, resolved against the profile as it is NOW —
+ * `resolveApkgSubject`'s twin, and split from the IPC edge for the same reason:
+ * `main/index.ts` proves the payload is a string or null, and this proves the
+ * deck it names is a live deck of THIS profile. A renderer naming another
+ * profile's deck — or a soft-deleted one — must be refused, not planned around.
+ */
+function resolveLlmDeck(deps: ImportDeps, profileId: string, deckId: string | null): string {
+  if (deckId === null) {
+    throw new Error("An LLM card import needs a deck for the cards to land in.");
+  }
+  const deck = deps
+    .deckStore(profileId)
+    .listActive()
+    .find((row) => row.id === deckId);
+  if (deck === undefined) {
+    throw new Error(`No active deck "${deckId}" in this profile.`);
+  }
+  return deck.id;
+}
+
+/**
+ * Applies the ready plan identified by `token`. The import half of
+ * `applyApkgImport`, minus nothing at all: an LLM answer names no attachment, so
+ * `blobNames` is empty by construction and there is no pre-transaction copy
+ * loop — the same shape, for the same reason.
+ *
+ * Everything else is identical, deliberately: the undo snapshot is taken before
+ * a single row is added, the insert is one transaction, the snapshot lands in
+ * the SAME one slot every archive operation shares, and the renderer reload is
+ * scheduled on `setTimeout(…, 0)` so this call's reply reaches it first.
+ */
+export async function applyLlmImport(
+  deps: ImportDeps,
+  profileId: string,
+  token: string,
+): Promise<LlmImportApplyResult> {
+  const ready = pendingLlm;
+  if (ready === null) throw new Error("No LLM import preview is ready to apply.");
+  if (ready.token !== token) {
+    throw new Error("This LLM import preview is stale; re-run the preview before applying.");
+  }
+  if (ready.profileId !== profileId) {
+    throw new Error("This LLM import preview was computed for a different profile.");
+  }
+
+  const currentProfile = deps.getProfile(profileId);
+  const undoSettings = await gatherProfileSettings(deps, profileId);
+  const undoData = gatherProfileData(deps, profileId);
+  const undoDerived = deriveRestoredNotes(undoData.notes);
+
+  const now = new Date().toISOString();
+  const derived = deriveRestoredNotes(ready.plan.data.notes);
+  const rowsWritten = deps
+    .foreignImportStore(profileId)
+    .insertPlanned(ready.plan.data, derived, now);
+
+  const summary: LlmImportApplyResult = {
+    restored: countProfileModules(ready.plan.data),
+    rowsWritten,
+    blobsAdded: 0,
+    // An LLM answer names no attachment row at all, so there is no blob that
+    // could be missing.
+    missingBlobs: 0,
+  };
+
+  undo = {
+    kind: "llm",
+    profileId,
+    snapshot: {
+      profileName: currentProfile.name,
+      profilePicture: currentProfile.picture,
+      settings: undoSettings,
+      data: undoData,
+      derived: undoDerived,
+    },
+    addedBlobs: [],
+    appliedAt: now,
+    summary,
+  };
+
+  pendingLlm = null;
+
+  setTimeout(() => deps.reloadRenderer(), 0);
+
+  return summary;
+}
+
+/** Drops the parsed answer — what the UI calls when the user backs out before applying. What it releases is the plan, which carries the user's own pasted content. */
+export function cancelLlmImport(): void {
+  pendingLlm = null;
 }

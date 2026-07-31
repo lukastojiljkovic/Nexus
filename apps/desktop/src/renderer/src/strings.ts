@@ -11,6 +11,10 @@ import type {
   DashboardPickErrorCode,
   ImportDuplicateType,
   ImportSkipCode,
+  LlmImportAnswerProblem,
+  LlmImportKind,
+  LlmImportSkipReason,
+  LlmPromptLanguage,
   MarkdownImportSkipCode,
   ProfilePicturePickErrorCode,
   RestoreModuleCounts,
@@ -2411,6 +2415,140 @@ export const strings = {
       nothingToImport: "Iz ovog špila nema šta da se uvede — razlozi su izlistani iznad.",
       /** The post-reload banner (App.tsx) when the undo slot holds an Anki import. */
       undoBanner: "Kartice su uvezene iz Anki špila.",
+    },
+    /**
+     * Uvoz preko AI asistenta (IMEX-005) — the one block in this card whose
+     * „reader" is a person and a chat window.
+     *
+     * The copy's whole job is to be unambiguous about what Nexus does and does
+     * not do: it WRITES an instruction and READS an answer, and it never talks
+     * to a model. `description` says that in the first two sentences, because a
+     * user who assumed otherwise would be assuming their content leaves the
+     * device — the single most important thing this app promises it does not do.
+     *
+     * The flow is the import block's, one step shorter: choose what → copy the
+     * instruction → paste the answer → preview → confirm, with the same shared
+     * undo banner afterwards. Everything the three flows have in common — the
+     * „Otkaži" button, the undo copy — is read straight off
+     * `strings.settings.restore` by the component.
+     *
+     * `unreadable`, `skips` and `kinds` are typed against the wire's own closed
+     * domains, so a code added in `shared/ipc.ts` is a compile error here rather
+     * than a silently missing sentence.
+     */
+    llmImport: {
+      title: "Uvoz preko AI asistenta",
+      description:
+        "Nexus ti napiše uputstvo, ti ga zajedno sa svojim tekstom nalepiš u razgovor sa svojim AI asistentom (ChatGPT, Claude, Gemini…), a odgovor koji dobiješ vratiš ovde. Nexus ni sa jednim modelom ne razgovara: ništa sa ovog uređaja ne odlazi nigde samo od sebe — ti biraš šta ćeš i gde nalepiti. Uvoz ništa ne briše i možeš ga opozvati jednim klikom, ali samo dok ne zaključaš ili ne zatvoriš aplikaciju.",
+      /** Step 1 — what is being imported. The three kinds the app can build a row from with no further decision. */
+      kindLabel: "Šta uvoziš",
+      kinds: {
+        tasks: "Zadatke",
+        events: "Događaje",
+        cards: "Kartice",
+      } satisfies Record<LlmImportKind, string>,
+      /** The same three, lowercase, for the middle of a sentence — `kinds` is written for a picker option, which is a different place in a different case. */
+      kindsInline: {
+        tasks: "zadatke",
+        events: "događaje",
+        cards: "kartice za učenje",
+      } satisfies Record<LlmImportKind, string>,
+      /** The prompt's own language — not the content's; the instruction tells the assistant to keep that. */
+      languageLabel: "Jezik uputstva",
+      languages: {
+        sr: "Srpski",
+        en: "Engleski",
+      } satisfies Record<LlmPromptLanguage, string>,
+      /** Step 2 — the clipboard button and the sentence that says what to do with what it copied. */
+      copyButton: "Kopiraj uputstvo",
+      copied: "Uputstvo je kopirano",
+      copyError: "Kopiranje nije uspelo. Uputstvo možeš označiti i kopirati ručno iz polja ispod.",
+      copyHint:
+        "Nalepi uputstvo u razgovor sa asistentom, a ispod njega svoj tekst. Odgovor koji dobiješ vrati u polje ispod.",
+      /** The prompt itself, shown so „Kopiraj" is never a black box — and so a failed clipboard write still leaves a way through. */
+      promptLabel: "Uputstvo",
+      promptShow: "Prikaži uputstvo",
+      promptHide: "Sakrij uputstvo",
+      /** Step 3 — the answer. */
+      answerLabel: "Odgovor asistenta",
+      answerPlaceholder: "Nalepi ovde ono što ti je asistent odgovorio…",
+      /** The deck picker, shown only for cards: an odgovor iz ćaskanja names no deck, and a Nexus card lives in one. */
+      deckLabel: "Špil za uvezene kartice",
+      deckPlaceholder: "Izaberi špil",
+      /** Shown instead of the picker when the profile has no deck at all — an honest dead end with the way out named. */
+      noDecks:
+        "Još nemaš nijedan špil. Napravi ga na stranici Učenje, pa se vrati ovde — kartice moraju negde da uđu.",
+      previewButton: "Pregledaj",
+      previewRunning: "Čitanje odgovora…",
+      /** The preview's three numbers, which answer three different questions. */
+      rowRecords: "Zapisa u odgovoru",
+      rowAccepted: "Pročitano",
+      rowPlanned: "Uvozi se",
+      /** Said under the table, because „Uvozi se" being larger than „Pročitano" surprises anyone who has not met cloze cards. */
+      cardsCaption:
+        "Jedna rečenica sa više praznina postaje više kartica — po jedna za svaku prazninu.",
+      /** Shown only when the planner recognised events this profile already has. There is no choice to make here, so the sentence says which way it went. */
+      duplicatesPrefix: "Već imaš",
+      duplicatesUnitOne: "događaj",
+      duplicatesUnitFew: "događaja",
+      duplicatesUnitMany: "događaja",
+      duplicatesSuffix: "iz ovog odgovora — oni se ne uvoze ponovo.",
+      /** Shown only when unknown keys were dropped, so „uvezeno je manje polja nego što sam video" is never a surprise. */
+      droppedPrefix: "Odbačeno je",
+      droppedUnitOne: "polje",
+      droppedUnitFew: "polja",
+      droppedUnitMany: "polja",
+      droppedSuffix: "koje Nexus ne poznaje.",
+      skipsTitle: "Šta se ne uvozi",
+      /** How a skipped record names itself: „Zapis 3" — the answer's own position, so the user can find it in their chat. */
+      skipRecordPrefix: "Zapis",
+      /**
+       * One sentence per `LlmImportSkipReason`. Each says what was wrong with
+       * that one record and — where it helps — what to ask for instead. The
+       * wording never blames the user for what a model wrote.
+       */
+      skips: {
+        "not-an-object": "Nije zapis — na tom mestu u odgovoru stoji nešto drugo.",
+        "missing-field": "Nedostaje obavezno polje.",
+        "invalid-field": "Polje nije u traženom obliku (pogrešan datum, vreme ili vrednost van spiska).",
+        "text-too-long": "Tekst polja je predugačak.",
+        "unknown-card-shape":
+          "Kartica nije ni par pitanje/odgovor ni rečenica sa prazninama — mora biti tačno jedno od to dvoje.",
+        "no-cloze-deletion": "Rečenica nema nijednu prazninu u {{dvostrukim vitičastim zagradama}}.",
+        "over-record-cap": "Preko granice od 500 zapisa po odgovoru.",
+      } satisfies Record<LlmImportSkipReason, string>,
+      /**
+       * One sentence per `LlmImportAnswerProblem`: the paste could not be read
+       * at all. Each ends with what to do next, because every one of these is
+       * fixed in the chat window rather than here.
+       */
+      unreadable: {
+        empty: "Nisi nalepio nikakav odgovor.",
+        "too-long": "Odgovor je prevelik. Podeli tekst na manje delove i uvezi ih redom.",
+        "no-json":
+          "U odgovoru nema JSON-a. Asistent je verovatno odgovorio rečenicom — zamoli ga da odgovori isključivo JSON-om, tačno kao u uputstvu.",
+        "not-json":
+          "Ono što je asistent poslao nije ispravan JSON (najčešće zarez posle poslednjeg elementa). Zamoli ga da pošalje isti odgovor kao ispravan JSON.",
+        "not-an-envelope":
+          "Ovo nije odgovor u obliku koji uputstvo traži. Proveri da si nalepio ceo odgovor, sa „nexus-llm“ na početku.",
+        "unsupported-version":
+          "Odgovor je u obliku koji ova verzija Nexusa ne čita. Kopiraj uputstvo ponovo i pitaj iznova.",
+        "unknown-kind": "Odgovor navodi vrstu zapisa koju Nexus ne poznaje.",
+      } satisfies Record<LlmImportAnswerProblem, string>,
+      /** The answer was readable, but for a different kind than the picker says — fixed by changing the picker, not the chat. */
+      kindMismatchPrefix: "Ovaj odgovor sadrži",
+      kindMismatchSuffix: "— a ti si izabrao drugu vrstu. Promeni izbor iznad ili pitaj ponovo.",
+      applyButton: "Uvezi",
+      applying: "Uvoz u toku…",
+      applied: "Podaci su uvezeni. Aplikacija se osvežava…",
+      /** Shown when nothing at all survived the read — the „Uvezi" button is hidden, because there is nothing to confirm. */
+      nothingToImport: "Iz ovog odgovora nema šta da se uvede — razlozi su izlistani iznad.",
+      /** A rejected preview call (not one of the typed statuses above). */
+      readError: "Čitanje odgovora nije uspelo. Pokušaj ponovo.",
+      /** A rejected apply call; the preview itself stays valid, so this invites a retry. */
+      error: "Uvoz nije uspeo. Pokušaj ponovo.",
+      /** The post-reload banner (App.tsx) when the undo slot holds an LLM import. */
+      undoBanner: "Podaci su uvezeni preko AI asistenta.",
     },
     /**
      * Uvoz beležaka (.md) — IMEX-007's markdown slice, the quiet fourth block

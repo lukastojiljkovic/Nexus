@@ -5160,6 +5160,40 @@ button.cal__grid-event--dragging {
   gap: var(--nx-space-2);
   max-width: 320px;
 }
+/* Uvoz preko AI asistenta (IMEX-005): the generated instruction, shown so
+   „Kopiraj" is never a black box. Monospace and scrollable, exactly as the
+   Recovery Kit code block is — it is text meant to be read, selected and taken
+   somewhere else, not prose. Capped in height so it cannot push the answer
+   field and the buttons below it off the card. */
+.set__llm-prompt {
+  margin: 0;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  max-height: 260px;
+  overflow: auto;
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  color: var(--nx-text-muted);
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-caption);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.set__llm-prompt:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+/* The pasted answer. Taller than the study card's textarea because what lands
+   here is a whole JSON reply, and a three-line window would make it impossible
+   to see whether the paste arrived whole. */
+.set__llm-answer {
+  min-height: 132px;
+  resize: vertical;
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-caption);
+  line-height: 1.5;
+}
 /* Native select matched to the textfield input (tokens only, no custom arrow; mirrors .study__select). */
 .set__select {
   font: inherit;

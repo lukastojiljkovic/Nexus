@@ -231,6 +231,7 @@ export {
   APKG_SKIP_CODES,
   APKG_SUBJECT_SOURCE_ID,
   canonicalizeCloze,
+  freshCardScheduling,
   stripAnkiHtml,
   translateApkg,
 } from "./imex/ankiTranslate.js";
@@ -250,6 +251,35 @@ export type {
   ClozeCanonicalRefusal,
   ParsedApkg,
 } from "./imex/ankiTranslate.js";
+
+export {
+  buildLlmPrompt,
+  LLM_DECK_SOURCE_ID,
+  LLM_ENVELOPE_KEY,
+  LLM_ENVELOPE_VERSION,
+  LLM_IMPORT_KINDS,
+  LLM_MAX_ANSWER_LENGTH,
+  LLM_MAX_RECORDS,
+  LLM_MAX_TEXT_LENGTH,
+  LLM_PROMPT_LANGUAGES,
+  parseLlmAnswer,
+  translateLlmRecords,
+} from "./imex/llmPrompts.js";
+export type {
+  LlmAnswer,
+  LlmAnswerProblem,
+  LlmAnswerReport,
+  LlmCardRecord,
+  LlmEventRecord,
+  LlmImportKind,
+  LlmPromptLanguage,
+  LlmRecords,
+  LlmSkipReason,
+  LlmSkippedRecord,
+  LlmTaskRecord,
+  LlmTranslateTarget,
+  LlmTranslation,
+} from "./imex/llmPrompts.js";
 
 export { renderNoteMarkdown } from "./imex/noteMarkdown.js";
 export type { NoteMarkdownAttachment, NoteMarkdownContext } from "./imex/noteMarkdown.js";

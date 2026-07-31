@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import { Button, Card, Checkbox, Chip, TextField } from "@nexus/ui";
 import {
+  buildLlmPrompt,
   chordAccelerator,
   chordFromEvent,
   findChordConflict,
@@ -14,6 +15,9 @@ import {
 import { ACCENT_IDS, type AccentId } from "@nexus/tokens";
 import {
   DEFAULT_TARGET_RETENTION,
+  LLM_IMPORT_KINDS,
+  LLM_IMPORT_MAX_ANSWER_LENGTH,
+  LLM_PROMPT_LANGUAGES,
   MAX_BACKGROUND_DIM,
   MAX_NEW_PER_DAY,
   MAX_REVIEWS_PER_DAY,
@@ -32,6 +36,10 @@ import type {
   ImportDuplicateType,
   ImportPreview,
   ImportSkipReason,
+  LlmImportKind,
+  LlmImportPreview,
+  LlmImportSkip,
+  LlmPromptLanguage,
   MarkdownImportResult,
   MarkdownImportSource,
   NoteFolder,
@@ -1865,6 +1873,425 @@ function folderOptions(folders: readonly NoteFolder[]): { id: string; label: str
 /** The half of a finished import worth rendering — the canceled arm carries nothing to show. */
 type MarkdownImportReport = Extract<MarkdownImportResult, { canceled: false }>;
 
+/**
+ * The LLM import's state. The import block's machine minus the two phases this
+ * flow cannot reach: there is no pick (the source is a textarea) and no
+ * passphrase, so „idle" and „picked" collapse into one editing state.
+ */
+type LlmState =
+  | { phase: "editing"; busy: boolean; error: string | null }
+  | { phase: "ready"; preview: LlmImportPreview; busy: boolean; error: string | null }
+  | { phase: "applying"; preview: LlmImportPreview }
+  | { phase: "applied" };
+
+/** One skipped entry of the answer: which position it was at, then why. */
+function LlmSkipRow({ skip }: { skip: LlmImportSkip }) {
+  const s = strings.settings.llmImport;
+  return (
+    <li className="set__import-skip">
+      <span className="set__import-skip-meta">
+        {s.skipRecordPrefix} {skip.index + 1}
+      </span>{" "}
+      {s.skips[skip.reason]}
+    </li>
+  );
+}
+
+interface LlmImportSectionProps {
+  profileId: string;
+  /** SET-014 search hits; the section reads only its own entry id out of it. */
+  hits: ReadonlySet<string>;
+}
+
+/**
+ * Uvoz preko AI asistenta — IMEX-005.
+ *
+ * The only block in this card whose source is neither a file nor a dialog: the
+ * user takes a generated instruction to their OWN assistant and brings the
+ * answer back. Nexus calls no model — `buildLlmPrompt` is a pure function of
+ * `@nexus/core`, so the prompt is composed right here and main never sees it —
+ * and that is stated in the block's own description rather than left to be
+ * inferred.
+ *
+ * Read top to bottom it is the four steps in order: what → the instruction →
+ * the answer → the preview. The deck picker appears only for kartice, because
+ * it is the one decision an answer cannot make for itself, and it is a
+ * PRECONDITION rather than a refinement — nothing can be planned without it,
+ * exactly as the `.apkg` block's subject cannot.
+ *
+ * The prompt is shown as well as copied. A clipboard write can fail, and a
+ * „Kopiraj" that silently did nothing would leave the user with no way through
+ * at all; the disclosure is also the only honest way to let somebody read what
+ * they are about to paste into a chat.
+ */
+function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
+  const s = strings.settings.llmImport;
+  const shared = strings.settings.restore;
+
+  const [kind, setKind] = useState<LlmImportKind>("tasks");
+  const [language, setLanguage] = useState<LlmPromptLanguage>("sr");
+  const [showPrompt, setShowPrompt] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
+  const [answer, setAnswer] = useState("");
+  const [decks, setDecks] = useState<{ id: string; label: string }[]>([]);
+  const [deckId, setDeckId] = useState<string>("");
+  const [state, setState] = useState<LlmState>({ phase: "editing", busy: false, error: null });
+  // Read by the unmount cleanup only. An apply in flight must never be cancelled
+  // from here: main is writing the very plan `cancelLlmImport` would drop.
+  const applying = useRef(false);
+
+  const prompt = useMemo(() => buildLlmPrompt(kind, language), [kind, language]);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const [deckList, subjectList] = await Promise.all([
+          window.nexus.listDecks(profileId),
+          window.nexus.listSubjects(profileId),
+        ]);
+        if (!active) return;
+        // „Oblast / Špil", because two subjects may each hold a „Kolokvijum"
+        // and the deck name alone would not tell them apart.
+        const subjectNames = new Map(subjectList.map((subject) => [subject.id, subject.name]));
+        setDecks(
+          deckList.map((deck) => ({
+            id: deck.id,
+            label: `${subjectNames.get(deck.subjectId) ?? ""} / ${deck.name}`,
+          })),
+        );
+      } catch (loadError) {
+        // Only the cards branch needs this, and it says so out loud when the
+        // list is empty — so a failure here must not take the whole block down.
+        console.error("Nexus: failed to load decks:", loadError);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profileId]);
+
+  // Releasing the plan on unmount matters for the reason the three file blocks'
+  // does, and for one more: the plan main is holding was built out of the user's
+  // own pasted content.
+  useEffect(() => {
+    return () => {
+      if (applying.current) return;
+      void window.nexus.cancelLlmImport().catch((error: unknown) => {
+        console.error("Nexus: failed to release the parsed LLM answer:", error);
+      });
+    };
+  }, []);
+
+  /** The plan on screen was made for the previous choice; it stops describing what „Uvezi" would do the moment any input changes. */
+  function invalidatePreview(): void {
+    setState((current) =>
+      current.phase === "ready" ? { phase: "editing", busy: false, error: null } : current,
+    );
+  }
+
+  async function copy(): Promise<void> {
+    setCopyError(false);
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setCopied(true);
+    } catch (error) {
+      setCopyError(true);
+      // The prompt is revealed rather than left inaccessible: the user can
+      // still select it by hand, which is the whole reason it is on screen.
+      setShowPrompt(true);
+      console.error("Nexus: failed to copy the LLM prompt:", error);
+    }
+  }
+
+  const needsDeck = kind === "cards";
+  const deckReady = !needsDeck || deckId.length > 0;
+
+  async function runPreview(): Promise<void> {
+    setState({ phase: "editing", busy: true, error: null });
+    try {
+      const result = await window.nexus.previewLlmImport(
+        profileId,
+        kind,
+        answer,
+        needsDeck ? deckId : null,
+      );
+      switch (result.status) {
+        case "ready":
+          setState({ phase: "ready", preview: result.preview, busy: false, error: null });
+          return;
+        case "unreadable":
+          setState({ phase: "editing", busy: false, error: s.unreadable[result.code] });
+          return;
+        case "kind-mismatch":
+          setState({
+            phase: "editing",
+            busy: false,
+            error: `${s.kindMismatchPrefix} ${s.kindsInline[result.answered]} ${s.kindMismatchSuffix}`,
+          });
+          return;
+      }
+    } catch (previewError) {
+      setState({ phase: "editing", busy: false, error: s.readError });
+      console.error("Nexus: failed to preview an LLM answer:", previewError);
+    }
+  }
+
+  async function apply(preview: LlmImportPreview): Promise<void> {
+    applying.current = true;
+    setState({ phase: "applying", preview });
+    try {
+      await window.nexus.applyLlmImport(profileId, preview.token);
+      // Main reloads this renderer moments after the reply lands, so the success
+      // line simply stands until the whole screen is replaced.
+      setState({ phase: "applied" });
+    } catch (applyError) {
+      // A failed apply leaves the plan — and the token main accepts — untouched,
+      // so the screen goes back to it rather than to editing.
+      setState({ phase: "ready", preview, busy: false, error: s.error });
+      console.error("Nexus: failed to apply an LLM import:", applyError);
+    } finally {
+      applying.current = false;
+    }
+  }
+
+  async function cancel(): Promise<void> {
+    setState({ phase: "editing", busy: false, error: null });
+    try {
+      await window.nexus.cancelLlmImport();
+    } catch (cancelError) {
+      console.error("Nexus: failed to release the parsed LLM answer:", cancelError);
+    }
+  }
+
+  const previewing = state.phase === "ready" || state.phase === "applying";
+  const busy = (state.phase === "editing" || state.phase === "ready") && state.busy;
+  const frozen = busy || state.phase === "applying";
+
+  if (state.phase === "applied") {
+    return (
+      <div className="set__import-block">
+        <h3 className={labelClass("set__module-group-title", hits.has("backup-llm"))}>{s.title}</h3>
+        <p className="set__section-caption">{s.applied}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="set__import-block">
+      <h3 className={labelClass("set__module-group-title", hits.has("backup-llm"))}>{s.title}</h3>
+      <p className="app__muted">{s.description}</p>
+
+      <p className="set__section-caption">{s.kindLabel}</p>
+      <div className="set__segmented" role="group" aria-label={s.kindLabel}>
+        {LLM_IMPORT_KINDS.map((option) => (
+          <Button
+            key={option}
+            size="sm"
+            variant={kind === option ? "primary" : "ghost"}
+            aria-pressed={kind === option}
+            disabled={frozen}
+            onClick={() => {
+              setKind(option);
+              setCopied(false);
+              invalidatePreview();
+            }}
+          >
+            {s.kinds[option]}
+          </Button>
+        ))}
+      </div>
+
+      <p className="set__section-caption">{s.languageLabel}</p>
+      <div className="set__segmented" role="group" aria-label={s.languageLabel}>
+        {LLM_PROMPT_LANGUAGES.map((option) => (
+          <Button
+            key={option}
+            size="sm"
+            variant={language === option ? "primary" : "ghost"}
+            aria-pressed={language === option}
+            disabled={frozen}
+            onClick={() => {
+              setLanguage(option);
+              setCopied(false);
+            }}
+          >
+            {s.languages[option]}
+          </Button>
+        ))}
+      </div>
+
+      <div className="set__restore-actions">
+        <Button size="sm" variant="primary" disabled={frozen} onClick={() => void copy()}>
+          {copied ? s.copied : s.copyButton}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setShowPrompt((open) => !open)}>
+          {showPrompt ? s.promptHide : s.promptShow}
+        </Button>
+      </div>
+      <p className="set__section-caption">{s.copyHint}</p>
+      {copyError && <p className="set__error">{s.copyError}</p>}
+
+      {showPrompt && (
+        // A named, focusable region: the block scrolls, and a scroll container
+        // nothing can put focus into is one a keyboard cannot read.
+        <pre className="set__llm-prompt" role="region" aria-label={s.promptLabel} tabIndex={0}>
+          {prompt}
+        </pre>
+      )}
+
+      {needsDeck &&
+        (decks.length === 0 ? (
+          <p className="set__section-caption">{s.noDecks}</p>
+        ) : (
+          <>
+            <p className="set__section-caption">{s.deckLabel}</p>
+            <select
+              className="set__select"
+              value={deckId}
+              aria-label={s.deckLabel}
+              disabled={frozen}
+              onChange={(event) => {
+                setDeckId(event.target.value);
+                invalidatePreview();
+              }}
+            >
+              <option value="">{s.deckPlaceholder}</option>
+              {decks.map((deck) => (
+                <option key={deck.id} value={deck.id}>
+                  {deck.label}
+                </option>
+              ))}
+            </select>
+          </>
+        ))}
+
+      <p className="set__section-caption">{s.answerLabel}</p>
+      <textarea
+        className="nx-textfield__input set__llm-answer"
+        value={answer}
+        placeholder={s.answerPlaceholder}
+        aria-label={s.answerLabel}
+        maxLength={LLM_IMPORT_MAX_ANSWER_LENGTH}
+        disabled={frozen}
+        onChange={(event: ChangeEvent<HTMLTextAreaElement>) => {
+          setAnswer(event.target.value);
+          invalidatePreview();
+        }}
+      />
+
+      {!previewing && (
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={busy || answer.trim().length === 0 || !deckReady}
+          onClick={() => void runPreview()}
+        >
+          {s.previewButton}
+        </Button>
+      )}
+
+      {state.phase === "editing" && state.busy && <p className="app__muted">{s.previewRunning}</p>}
+      {state.phase === "editing" && state.error != null && (
+        <p className="set__error">{state.error}</p>
+      )}
+
+      {previewing && (
+        <>
+          <table className="set__restore-table">
+            <tbody>
+              <tr>
+                <th scope="row">{s.rowRecords}</th>
+                <td>{state.preview.records}</td>
+              </tr>
+              <tr>
+                <th scope="row">{s.rowAccepted}</th>
+                <td>{state.preview.accepted}</td>
+              </tr>
+              <tr>
+                <th scope="row">{s.rowPlanned}</th>
+                <td>{state.preview.planned}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {state.preview.kind === "cards" && (
+            <p className="set__section-caption">{s.cardsCaption}</p>
+          )}
+
+          {state.preview.duplicates > 0 && (
+            <p className="set__section-caption">
+              {s.duplicatesPrefix} {state.preview.duplicates}{" "}
+              {countUnit(
+                state.preview.duplicates,
+                s.duplicatesUnitOne,
+                s.duplicatesUnitFew,
+                s.duplicatesUnitMany,
+              )}{" "}
+              {s.duplicatesSuffix}
+            </p>
+          )}
+
+          {state.preview.droppedFields > 0 && (
+            <p className="set__section-caption">
+              {s.droppedPrefix} {state.preview.droppedFields}{" "}
+              {countUnit(
+                state.preview.droppedFields,
+                s.droppedUnitOne,
+                s.droppedUnitFew,
+                s.droppedUnitMany,
+              )}{" "}
+              {s.droppedSuffix}
+            </p>
+          )}
+
+          {state.preview.skipped.length > 0 && (
+            <>
+              <h4 className="set__module-group-title">{s.skipsTitle}</h4>
+              <ul className="set__restore-problems">
+                {state.preview.skipped.map((skip) => (
+                  <LlmSkipRow key={skip.index} skip={skip} />
+                ))}
+              </ul>
+            </>
+          )}
+
+          {state.preview.planned === 0 && (
+            <p className="set__section-caption">{s.nothingToImport}</p>
+          )}
+
+          <div className="set__restore-actions">
+            {state.preview.planned > 0 && (
+              <Button
+                size="sm"
+                variant="primary"
+                disabled={state.phase === "applying"}
+                onClick={() => void apply(state.preview)}
+              >
+                {s.applyButton}
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={state.phase === "applying"}
+              onClick={() => void cancel()}
+            >
+              {shared.cancelButton}
+            </Button>
+          </div>
+
+          {state.phase === "applying" && <p className="app__muted">{s.applying}</p>}
+          {state.phase === "ready" && state.error != null && (
+            <p className="set__error">{state.error}</p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 interface MarkdownImportSectionProps {
   profileId: string;
   /** SET-014 search hits; the section reads only its own entry id out of it. */
@@ -3127,6 +3554,7 @@ export function SettingsPage({
         <RestoreSection profileId={profileId} hits={hits} />
         <ImportSection profileId={profileId} hits={hits} />
         <ApkgImportSection profileId={profileId} hits={hits} />
+        <LlmImportSection profileId={profileId} hits={hits} />
         <MarkdownImportSection profileId={profileId} hits={hits} />
       </Card>
 

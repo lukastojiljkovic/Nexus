@@ -268,6 +268,15 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
     keywords: ["anki", "apkg", "kartice", "spil", "flashcards", "uvoz"],
   },
   {
+    // IMEX-005. The words are the TOOL's, not the flow's — somebody looking for
+    // this types „chatgpt“ or „ai“, never „uvoz iz arhive“ — so „arhiva“ is
+    // deliberately absent, exactly as it is from the two entries around it.
+    id: "backup-llm",
+    section: "backup",
+    label: s.llmImport.title,
+    keywords: ["ai", "chatgpt", "claude", "gemini", "asistent", "vestacka", "uputstvo", "uvoz"],
+  },
+  {
     // The words someone looking for THIS types are the format's, not the
     // flow's: „arhiva“ belongs to the two entries above, which is why it is
     // deliberately absent here.

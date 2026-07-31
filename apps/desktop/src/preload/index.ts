@@ -443,6 +443,11 @@ const api: NexusApi = {
   applyApkgImport: (profileId, token) =>
     ipcRenderer.invoke(IpcChannel.imexImportApkgApply, { profileId, token }),
   cancelApkgImport: () => ipcRenderer.invoke(IpcChannel.imexImportApkgCancel),
+  previewLlmImport: (profileId, kind, text, deckId) =>
+    ipcRenderer.invoke(IpcChannel.imexImportLlmPreview, { profileId, kind, text, deckId }),
+  applyLlmImport: (profileId, token) =>
+    ipcRenderer.invoke(IpcChannel.imexImportLlmApply, { profileId, token }),
+  cancelLlmImport: () => ipcRenderer.invoke(IpcChannel.imexImportLlmCancel),
   importMarkdownNotes: (profileId, folderId, source) =>
     ipcRenderer.invoke(IpcChannel.imexImportMarkdown, { profileId, folderId, source }),
   setGlobalShortcut: (chord) => ipcRenderer.invoke(IpcChannel.shortcutsSetGlobal, { chord }),

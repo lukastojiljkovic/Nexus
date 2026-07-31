@@ -463,8 +463,12 @@ const DECK_PATH_SEPARATOR = " / ";
  * `@nexus/core` has no `ts-fsrs` dependency and must not grow one for eleven
  * constants. `due` is `now`: a new card is due immediately, which is what makes
  * an imported deck studiable the moment it lands.
+ *
+ * Exported because it is not Anki's: EVERY importer that creates a card creates
+ * a NEW one (`llmPrompts.ts` is the second), and two copies of these eleven
+ * constants could only ever drift apart.
  */
-function freshScheduling(now: string): Pick<
+export function freshCardScheduling(now: string): Pick<
   ExportCard,
   | "due"
   | "stability"
@@ -547,7 +551,7 @@ export function translateApkg(parsed: ParsedApkg, target: ApkgTranslateTarget): 
   }
   for (const bucket of cardsByNote.values()) bucket.sort((a, b) => a.ord - b.ord);
 
-  const scheduling = freshScheduling(target.now);
+  const scheduling = freshCardScheduling(target.now);
   const cards: ExportCard[] = [];
   const usedDeckIds = new Set<number>();
   let notesWithCards = 0;
@@ -723,7 +727,7 @@ function translateBasicNote(
   notetype: ApkgNotetype,
   deckNames: ReadonlyMap<number, string>,
   skips: SkipLedger,
-  scheduling: ReturnType<typeof freshScheduling>,
+  scheduling: ReturnType<typeof freshCardScheduling>,
   out: ExportCard[],
   ctx: EmitContext,
 ): void {
@@ -779,7 +783,7 @@ function translateClozeNote(
   noteCards: readonly ApkgCard[],
   deckNames: ReadonlyMap<number, string>,
   skips: SkipLedger,
-  scheduling: ReturnType<typeof freshScheduling>,
+  scheduling: ReturnType<typeof freshCardScheduling>,
   out: ExportCard[],
   ctx: EmitContext,
 ): void {

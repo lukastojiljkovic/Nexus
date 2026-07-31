@@ -247,9 +247,11 @@ import { pickProfilePicture } from "./profilePicture.js";
 import {
   applyApkgImport,
   applyImport,
+  applyLlmImport,
   applyRestore,
   cancelApkgImport,
   cancelImport,
+  cancelLlmImport,
   cancelRestore,
   clearRestoreState,
   pickApkgFile,
@@ -257,6 +259,7 @@ import {
   pickRestoreFile,
   previewApkgImport,
   previewImport,
+  previewLlmImport,
   previewRestore,
   replanImport,
   restoreStatus,
@@ -269,6 +272,8 @@ import {
   CARD_TEXT_MAX_LENGTH,
   IMPORT_DUPLICATE_TYPES,
   IpcChannel,
+  LLM_IMPORT_KINDS,
+  LLM_IMPORT_MAX_ANSWER_LENGTH,
   MAX_BACKGROUND_BYTES,
   MAX_BACKGROUND_DIM,
   MAX_PROFILE_PICTURE_BYTES,
@@ -310,6 +315,9 @@ import {
   type ImportDuplicateType,
   type ImportPickResult,
   type ImportPreviewResult,
+  type LlmImportApplyResult,
+  type LlmImportKind,
+  type LlmImportPreviewResult,
   type MarkdownImportResult,
   type MarkdownImportSource,
   type NoteCardDisposition,
@@ -1056,6 +1064,37 @@ function asApkgSubjectChoice(value: unknown, field: string): ApkgImportSubjectCh
     }
   }
   return { existingSubjectId, newSubjectName };
+}
+
+/**
+ * `imex:import-llm-preview`'s kind (IMEX-005) — the closed domain the renderer's
+ * own picker offers, checked here so nothing but one of three values ever
+ * reaches the parser.
+ */
+function asLlmImportKind(value: unknown, field: string): LlmImportKind {
+  const kind = LLM_IMPORT_KINDS.find((candidate) => candidate === value);
+  if (kind === undefined) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be one of ${LLM_IMPORT_KINDS.join(", ")}.`,
+    );
+  }
+  return kind;
+}
+
+/**
+ * The pasted chat answer. Bounded at the EDGE rather than only inside the
+ * parser: the renderer is untrusted (SEC-EL-02), and refusing a megabyte before
+ * it is scanned for braces costs nothing. Emptiness is deliberately NOT refused
+ * here — `parseLlmAnswer` answers that with a named status the screen has copy
+ * for, and a thrown error would be a worse sentence for the same fact.
+ */
+function asLlmAnswerText(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.length > LLM_IMPORT_MAX_ANSWER_LENGTH) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be a string of at most ${LLM_IMPORT_MAX_ANSWER_LENGTH} characters.`,
+    );
+  }
+  return value;
 }
 
 function asRestoreToken(value: unknown, field: string): string {
@@ -5684,6 +5723,36 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.imexImportApkgCancel, (event): void => {
     assertTrustedSender(event);
     cancelApkgImport();
+  });
+
+  // The LLM-assisted import (IMEX-005): no pick, because there is no file — the
+  // source is text the user pasted out of their own chat, and it rides on the
+  // preview request. The DECK rides here too, for the reason the `.apkg`
+  // subject does: the plan depends on it, and re-previewing under a different
+  // one re-parses the same paste rather than asking for it again.
+  ipcMain.handle(IpcChannel.imexImportLlmPreview, (event, payload): LlmImportPreviewResult => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const kind = asLlmImportKind(body.kind, "kind");
+    const text = asLlmAnswerText(body.text, "text");
+    // Structurally validated here, semantically in `restore.ts` against the
+    // profile's own live decks — the same division `asApkgSubjectChoice` follows.
+    const deckId = asNullableId(body.deckId, "deckId");
+    return previewLlmImport(restoreDeps(), profileId, kind, text, deckId);
+  });
+
+  ipcMain.handle(IpcChannel.imexImportLlmApply, (event, payload): Promise<LlmImportApplyResult> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const token = asRestoreToken(body.token, "token");
+    return applyLlmImport(restoreDeps(), profileId, token);
+  });
+
+  ipcMain.handle(IpcChannel.imexImportLlmCancel, (event): void => {
+    assertTrustedSender(event);
+    cancelLlmImport();
   });
 
   // IMEX-007's markdown slice: plain `.md` files into real notes. One call does

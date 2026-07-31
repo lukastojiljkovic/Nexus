@@ -2,7 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatChord, matchesChord, moduleNavPosition, resolveEnabled } from "@nexus/core";
 import { Button, EmptyState, NavItem } from "@nexus/ui";
 import type { ThemeName } from "@nexus/tokens";
-import type { AppInfo, AuthStatus, FlagState, Profile, SearchResult } from "../../shared/ipc.js";
+import type {
+  AppInfo,
+  AuthStatus,
+  FlagState,
+  Profile,
+  RestoreUndoKind,
+  SearchResult,
+} from "../../shared/ipc.js";
 import { AuthGate } from "./AuthGate.js";
 import { Onboarding } from "./Onboarding.js";
 import { DashboardPage } from "./DashboardPage.js";
@@ -58,6 +65,20 @@ type PendingIntent =
  * therefore has to exempt this one — `effectiveId` and the route guard below.
  */
 const SEARCH_PAGE_ID = "search";
+
+/**
+ * What the one undo banner says it is offering to undo. A closed map over the
+ * wire's own `RestoreUndoKind`, so an operation added to that slot in
+ * `shared/ipc.ts` is a compile error here rather than a banner that silently
+ * names the wrong thing — which for a button that REPLACES a whole profile is
+ * the worst possible gap.
+ */
+const RESTORE_UNDO_BANNERS: Record<RestoreUndoKind, string> = {
+  restore: strings.settings.restore.undoBanner,
+  import: strings.settings.import.undoBanner,
+  apkg: strings.settings.apkgImport.undoBanner,
+  llm: strings.settings.llmImport.undoBanner,
+};
 
 /** Idle events that count as activity for the auto-lock timer (AUTH-005). */
 const IDLE_ACTIVITY_EVENTS = ["mousemove", "keydown", "mousedown", "wheel"] as const;
@@ -117,14 +138,14 @@ export function App() {
   // and clears it through `onSeedConsumed`.
   const [searchSeed, setSearchSeed] = useState<string | null>(null);
   // The post-reload archive banner (IMEX slice 3d, ADR-023; ADR-043 §4;
-  // ADR-052). Applying a restore, an archive import OR an Anki import reloads
+  // ADR-052; IMEX-005). Applying a restore or any of the three imports reloads
   // this renderer, so the screen that ran it is gone by the time there is
   // anything to say — `restoreStatus` below is how the fresh renderer learns an
   // undo is still available. One slot, one banner: `kind` is what the offer is
-  // worded from, since "vraćanje", "uvoz iz arhive" and "uvoz iz Ankija" undo
-  // very different things through the same mechanism.
+  // worded from, since "vraćanje", "uvoz iz arhive", "uvoz iz Ankija" and "uvoz
+  // preko AI asistenta" undo very different things through the same mechanism.
   const [restoreUndo, setRestoreUndo] = useState<{
-    kind: "restore" | "import" | "apkg";
+    kind: RestoreUndoKind;
     appliedAt: string;
   } | null>(null);
   // Dismissal is presentational and session-only: it hides the banner, it does
@@ -878,11 +899,7 @@ export function App() {
           {restoreUndo != null && !restoreBannerHidden && (
             <div className="app__restore-banner" role="status">
               <span className="app__restore-banner-text">
-                {restoreUndo.kind === "apkg"
-                  ? strings.settings.apkgImport.undoBanner
-                  : restoreUndo.kind === "import"
-                    ? strings.settings.import.undoBanner
-                    : strings.settings.restore.undoBanner}{" "}
+                {RESTORE_UNDO_BANNERS[restoreUndo.kind]}{" "}
                 <span className="app__restore-banner-when">
                   {formatArchiveInstant(restoreUndo.appliedAt)}
                 </span>

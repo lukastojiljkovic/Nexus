@@ -272,6 +272,19 @@ export const IpcChannel = {
   imexImportApkgPreview: "imex:import-apkg-preview",
   imexImportApkgApply: "imex:import-apkg-apply",
   imexImportApkgCancel: "imex:import-apkg-cancel",
+  // The LLM-assisted import (IMEX-005). Three channels, not four: there is no
+  // FILE to pick — the "source" is text the user pasted out of their own chat,
+  // which travels with the preview request. The prompt itself needs no channel
+  // at all: `buildLlmPrompt` is pure, so the renderer builds it in place and
+  // main never sees it.
+  //
+  // Its own channels for the same reason every other import has its own: a
+  // shared one would be a validated field away from letting a paste trigger a
+  // restore. The preview/apply/cancel shape is deliberately identical, though —
+  // same one-slot undo, same token — because the user is doing the same thing.
+  imexImportLlmPreview: "imex:import-llm-preview",
+  imexImportLlmApply: "imex:import-llm-apply",
+  imexImportLlmCancel: "imex:import-llm-cancel",
   // Plain `.md` files into notes (IMEX-007). Deliberately NOT a mode on the
   // archive channels above: there is no manifest to read, nothing to preview
   // and nothing to undo — main picks, parses and writes in one call, exactly
@@ -3415,11 +3428,14 @@ export interface RestoreUndoResult {
  * vraćanje" and "poništi uvoz" undo very different things even though the
  * mechanism putting them back is identical. `"apkg"` is its own value rather
  * than a second `"import"` for exactly that reason: the sentence that names it
- * is about an Anki deck, not about a Nexus archive.
+ * is about an Anki deck, not about a Nexus archive — and `"llm"` (IMEX-005) is
+ * its own for the same one, since what it undoes came out of a chat window.
  */
+export type RestoreUndoKind = "restore" | "import" | "apkg" | "llm";
+
 export interface RestoreStatus {
   undo: {
-    kind: "restore" | "import" | "apkg";
+    kind: RestoreUndoKind;
     appliedAt: string;
     summary: RestoreApplyResult;
   } | null;
@@ -3894,6 +3910,143 @@ export interface ImexImportApkgPreviewRequest {
 
 /** `token` names the exact plan being confirmed — main refuses any other value. */
 export interface ImexImportApkgApplyRequest {
+  profileId: string;
+  token: string;
+}
+
+// --- LLM-assisted import (IMEX-005) ------------------------------------------
+
+/**
+ * What one prompt — and the answer it produces — is about. Mirrors
+ * `@nexus/core`'s `LlmImportKind`, redeclared here like every other closed
+ * domain in this file so main's assignment of a core value to this type turns a
+ * kind added in core into a compile error rather than a value the screen cannot
+ * label.
+ */
+export type LlmImportKind = "tasks" | "events" | "cards";
+
+/** Every kind, in the order the picker offers them — and what main validates an incoming one against. */
+export const LLM_IMPORT_KINDS: readonly LlmImportKind[] = ["tasks", "events", "cards"];
+
+/** Which language the generated prompt is written in. Mirrors `@nexus/core`'s `LlmPromptLanguage`. */
+export type LlmPromptLanguage = "sr" | "en";
+
+/** Both languages, in the order the toggle offers them. */
+export const LLM_PROMPT_LANGUAGES: readonly LlmPromptLanguage[] = ["sr", "en"];
+
+/**
+ * Longest pasted answer main will look at, in characters. Mirrors
+ * `@nexus/core`'s `LLM_MAX_ANSWER_LENGTH`, and enforced at the IPC edge as
+ * well as inside the parser: the renderer is untrusted (SEC-EL-02), and a
+ * refusal that happens before a megabyte is scanned costs nothing.
+ */
+export const LLM_IMPORT_MAX_ANSWER_LENGTH = 1_048_576;
+
+/**
+ * Why one entry of the answer's `records` array is not in the plan. Mirrors
+ * `@nexus/core`'s `LlmSkipReason` exactly, for `ApkgImportSkipCode`'s reason.
+ */
+export type LlmImportSkipReason =
+  | "not-an-object"
+  | "missing-field"
+  | "invalid-field"
+  | "text-too-long"
+  | "unknown-card-shape"
+  | "no-cloze-deletion"
+  | "over-record-cap";
+
+/** One skipped entry, named by its position in the answer so the user can find it in their own chat. */
+export interface LlmImportSkip {
+  index: number;
+  reason: LlmImportSkipReason;
+  /** The field the reason is about, or null when it is about the whole record. */
+  field: string | null;
+}
+
+/**
+ * Why a pasted answer could not be read at all — a fact about the whole paste
+ * rather than about one record. Mirrors `@nexus/core`'s `LlmAnswerProblem`
+ * whole, `"too-long"` included: the IPC edge refuses an oversized paste first, so
+ * that code should never arrive here — but the copy map over this domain must
+ * stay total, and dropping the member would leave the one path that DOES reach
+ * it (a future caller inside main) a sentence short.
+ */
+export type LlmImportAnswerProblem =
+  | "empty"
+  | "too-long"
+  | "no-json"
+  | "not-json"
+  | "not-an-envelope"
+  | "unsupported-version"
+  | "unknown-kind";
+
+/**
+ * A dry run of a real LLM import: the pasted answer really parsed and really
+ * planned against this profile — never an estimate.
+ *
+ * `records`/`accepted`/`planned` are three different numbers on purpose. The
+ * first is what the answer carried, the second how many of those this build
+ * could read, and the third how many ROWS they become — which for cards is
+ * larger, since one cloze template makes one card per blank.
+ */
+export interface LlmImportPreview {
+  /** Identifies this exact parse-and-plan. The apply refuses any other value, so a stale screen can never write a plan the user did not see. */
+  token: string;
+  /** The kind the ANSWER declared. Main refuses one that disagrees with the request, so this is always what was asked for. */
+  kind: LlmImportKind;
+  /** Entries the answer's `records` array carried. */
+  records: number;
+  /** Entries this build could read. */
+  accepted: number;
+  /** Rows the plan will insert. */
+  planned: number;
+  /**
+   * Rows the PLANNER will skip because this profile already holds them
+   * (ADR-051 — an event's identity is its title, start and all-day flag).
+   * Only ever non-zero for `"events"`; there is no choice to answer here, and
+   * the copy says which way it goes.
+   */
+  duplicates: number;
+  skipped: LlmImportSkip[];
+  /** Keys the answer carried that this build has no field for. Dropped, counted, never guessed at. */
+  droppedFields: number;
+}
+
+/**
+ * `"unreadable"` when the paste is not an answer this build can read at all;
+ * `"kind-mismatch"` when it IS one but for another kind than the screen asked
+ * for — its own status rather than an `"unreadable"` code, because it is the
+ * one failure the user fixes by changing a picker rather than by re-asking the
+ * assistant.
+ */
+export type LlmImportPreviewResult =
+  | { status: "unreadable"; code: LlmImportAnswerProblem }
+  | { status: "kind-mismatch"; answered: LlmImportKind }
+  | { status: "ready"; preview: LlmImportPreview };
+
+/** What a completed LLM import wrote. The same shape every other archive operation reports, because it is undone through the same one slot and shown through the same one banner. */
+export type LlmImportApplyResult = RestoreApplyResult;
+
+/**
+ * The whole source of an LLM import: the kind being imported, the text the user
+ * pasted, and — for `"cards"` only — the deck the cards land in.
+ *
+ * `deckId` is null for the other two kinds, and required for cards: an answer
+ * out of a chat names no deck, and a Nexus card lives in one, so it is the one
+ * decision only the user can make. Tasks need no such choice — they land in
+ * this profile's own default list, exactly as an imported archive's do — and
+ * events need none at all.
+ */
+export interface ImexImportLlmPreviewRequest {
+  profileId: string;
+  kind: LlmImportKind;
+  /** The pasted answer, capped at `LLM_IMPORT_MAX_ANSWER_LENGTH`. */
+  text: string;
+  deckId: string | null;
+}
+
+/** `token` names the exact plan being confirmed — main refuses any other value. */
+export interface ImexImportLlmApplyRequest {
   profileId: string;
   token: string;
 }
@@ -4572,6 +4725,27 @@ export interface NexusApi {
   applyApkgImport(profileId: string, token: string): Promise<ApkgImportApplyResult>;
   /** Drops the picked `.apkg` without applying it, releasing the OS file lock an opened one holds. */
   cancelApkgImport(): Promise<void>;
+  /**
+   * Dry-runs the LLM import (IMEX-005) by really parsing the pasted answer and
+   * really planning it against this profile. No file and no dialog: the source
+   * is `text`, which the user pasted out of their own chat, and the prompt that
+   * produced it was built in the renderer by `@nexus/core`'s pure
+   * `buildLlmPrompt` — Nexus talks to no model, here or anywhere.
+   */
+  previewLlmImport(
+    profileId: string,
+    kind: LlmImportKind,
+    text: string,
+    deckId: string | null,
+  ): Promise<LlmImportPreviewResult>;
+  /**
+   * Confirms the plan `token` names, ADDING its rows to this profile. Undoable
+   * through `undoRestore`, which every import shares. The renderer is reloaded
+   * shortly AFTER this resolves.
+   */
+  applyLlmImport(profileId: string, token: string): Promise<LlmImportApplyResult>;
+  /** Drops the parsed answer without applying it. No file handle is involved — what it releases is the plan main is holding. */
+  cancelLlmImport(): Promise<void>;
   /**
    * Opens the native `.md` picker in MAIN (files or a folder, per `source`),
    * reads and parses every file there, and writes each one as a real note in

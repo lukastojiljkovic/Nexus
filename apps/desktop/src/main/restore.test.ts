@@ -81,9 +81,11 @@ import type { ProfileDataDeps } from "./profileData.js";
 import {
   applyApkgImport,
   applyImport,
+  applyLlmImport,
   applyRestore,
   cancelApkgImport,
   cancelImport,
+  cancelLlmImport,
   cancelRestore,
   clearRestoreState,
   pickApkgFile,
@@ -91,6 +93,7 @@ import {
   pickRestoreFile,
   previewApkgImport,
   previewImport,
+  previewLlmImport,
   previewRestore,
   replanImport,
   restoreStatus,
@@ -2238,5 +2241,221 @@ describe("Anki .apkg import", () => {
     await expect(
       previewApkgImport(deps, profileB, { existingSubjectId: null, newSubjectName: "S" }),
     ).resolves.toEqual({ status: "no-file" });
+  });
+});
+
+// --- LLM-assisted import (IMEX-005) ------------------------------------------
+
+/** One pasted answer, wrapped the way an assistant actually wraps one: a fence and a sentence on either side. */
+function llmAnswer(kind: "tasks" | "events" | "cards", records: unknown[]): string {
+  const envelope = JSON.stringify({ "nexus-llm": "1", kind, records }, null, 2);
+  return `Naravno, evo:\n\n\`\`\`json\n${envelope}\n\`\`\`\n\nJavi ako treba još nešto.`;
+}
+
+describe("LLM-assisted import", () => {
+  it("imports pasted tasks into this profile's own default list, and undoes them away completely", async () => {
+    const profileB = createProfile(dbB, "B");
+    const { deps, getReloadCount } = makeTestDeps(dbB, null);
+
+    const previewed = previewLlmImport(
+      deps,
+      profileB,
+      "tasks",
+      llmAnswer("tasks", [
+        { title: "Prijaviti ispit", dueDate: "2026-09-01", priority: "high" },
+        { title: "Kupiti svesku" },
+        // Skipped by index, and the two above still arrive.
+        { title: "Loš prioritet", priority: "urgent" },
+      ]),
+      null,
+    );
+    if (previewed.status !== "ready") unreachable();
+    expect(previewed.preview).toMatchObject({
+      kind: "tasks",
+      records: 3,
+      accepted: 2,
+      planned: 2,
+      duplicates: 0,
+      droppedFields: 0,
+      skipped: [{ index: 2, reason: "invalid-field", field: "priority" }],
+    });
+
+    // Nothing has been written yet: a preview is a dry run.
+    expect(new TaskStore(dbB.raw, profileB).listActive()).toHaveLength(0);
+
+    const applied = await applyLlmImport(deps, profileB, previewed.preview.token);
+    expect(applied.rowsWritten).toBe(2);
+    expect(applied.blobsAdded).toBe(0);
+
+    const tasks = new TaskStore(dbB.raw, profileB).listActive();
+    const inbox = new TaskListStore(dbB.raw, profileB)
+      .listActive()
+      .find((list) => list.isInbox);
+    expect(tasks.map((task) => task.title).sort()).toEqual(["Kupiti svesku", "Prijaviti ispit"]);
+    // `listId: null` in the plan means "this profile's own default list".
+    expect(tasks.every((task) => task.listId === inbox?.id)).toBe(true);
+    const exam = tasks.find((task) => task.title === "Prijaviti ispit");
+    expect(exam).toMatchObject({ dueDate: "2026-09-01", priority: "high", done: false });
+
+    // The shared banner, naming this operation as its own kind.
+    expect(restoreStatus(profileB).undo?.kind).toBe("llm");
+    await flushSetTimeout();
+    expect(getReloadCount()).toBe(1);
+
+    await undoRestore(deps, profileB);
+    expect(new TaskStore(dbB.raw, profileB).listActive()).toHaveLength(0);
+    expect(restoreStatus(profileB).undo).toBeNull();
+  });
+
+  it("skips an event this profile already has, and says how many (ADR-051)", async () => {
+    const profileB = createProfile(dbB, "B");
+    const events = new EventStore(dbB.raw, profileB);
+    events.create({ title: "Sastanak", startAt: "2026-08-12T10:00", allDay: false });
+    const { deps } = makeTestDeps(dbB, null);
+
+    const previewed = previewLlmImport(
+      deps,
+      profileB,
+      "events",
+      llmAnswer("events", [
+        { title: "Sastanak", startAt: "2026-08-12T10:00" },
+        { title: "Koncert", startAt: "2026-08-12T20:00", location: "Dom omladine" },
+      ]),
+      null,
+    );
+    if (previewed.status !== "ready") unreachable();
+    expect(previewed.preview).toMatchObject({ records: 2, accepted: 2, planned: 1, duplicates: 1 });
+
+    await applyLlmImport(deps, profileB, previewed.preview.token);
+    const titles = events.listActive().map((event) => event.title).sort();
+    expect(titles).toEqual(["Koncert", "Sastanak"]);
+    expect(events.listActive().find((event) => event.title === "Koncert")?.location).toBe(
+      "Dom omladine",
+    );
+  });
+
+  it("hangs cards off the chosen deck without creating one, expanding a cloze per blank", async () => {
+    const profileB = createProfile(dbB, "B");
+    const subject = new SubjectStore(dbB.raw, profileB).create({ name: "Biologija" });
+    const decks = new DeckStore(dbB.raw, profileB);
+    const deck = decks.create({ subjectId: subject.id, name: "Ćelija" });
+    const { deps } = makeTestDeps(dbB, null);
+
+    const previewed = previewLlmImport(
+      deps,
+      profileB,
+      "cards",
+      llmAnswer("cards", [
+        { front: "Šta je ćelija?", back: "Osnovna jedinica" },
+        { clozeText: "Reka je {{Sava}}, grad je {{Beograd}}." },
+      ]),
+      deck.id,
+    );
+    if (previewed.status !== "ready") unreachable();
+    // Two records, three rows: the cloze template has two blanks.
+    expect(previewed.preview).toMatchObject({ records: 2, accepted: 2, planned: 3 });
+
+    await applyLlmImport(deps, profileB, previewed.preview.token);
+
+    // No deck and no subject were created — the id map resolved onto the picked one.
+    expect(decks.listActive().map((row) => row.id)).toEqual([deck.id]);
+    expect(new SubjectStore(dbB.raw, profileB).listActive()).toHaveLength(1);
+
+    const cards = new CardStore(dbB.raw, profileB).listByDeck(deck.id);
+    expect(cards).toHaveLength(3);
+    const clozes = cards
+      .filter((card) => card.kind === "cloze")
+      .sort((a, b) => (a.clozeOrdinal ?? 0) - (b.clozeOrdinal ?? 0));
+    expect(clozes[0]).toMatchObject({ front: "Reka je […], grad je Beograd.", clozeOrdinal: 0 });
+    expect(clozes[1]).toMatchObject({ front: "Reka je Sava, grad je […].", clozeOrdinal: 1 });
+    // Fresh FSRS, exactly as every other importer creates a card.
+    expect(cards.every((card) => card.reps === 0 && card.lastReview === null)).toBe(true);
+  });
+
+  it("refuses an answer whose kind is not the one the screen asked for", () => {
+    const profileB = createProfile(dbB, "B");
+    const { deps } = makeTestDeps(dbB, null);
+
+    expect(
+      previewLlmImport(deps, profileB, "tasks", llmAnswer("events", []), null),
+    ).toEqual({ status: "kind-mismatch", answered: "events" });
+  });
+
+  it("reports an unreadable paste by code rather than rejecting", () => {
+    const profileB = createProfile(dbB, "B");
+    const { deps } = makeTestDeps(dbB, null);
+
+    expect(previewLlmImport(deps, profileB, "tasks", "   ", null)).toEqual({
+      status: "unreadable",
+      code: "empty",
+    });
+    expect(
+      previewLlmImport(deps, profileB, "tasks", "Izvini, ne mogu to da uradim.", null),
+    ).toEqual({ status: "unreadable", code: "no-json" });
+    // A trailing comma is refused, never repaired.
+    expect(
+      previewLlmImport(
+        deps,
+        profileB,
+        "tasks",
+        '{"nexus-llm":"1","kind":"tasks","records":[{"title":"A"},]}',
+        null,
+      ),
+    ).toEqual({ status: "unreadable", code: "not-json" });
+  });
+
+  it("refuses a deck that is not a live deck of this profile", () => {
+    const profileB = createProfile(dbB, "B");
+    const { deps } = makeTestDeps(dbB, null);
+    const answer = llmAnswer("cards", [{ front: "a", back: "b" }]);
+
+    expect(() => previewLlmImport(deps, profileB, "cards", answer, null)).toThrow(/deck/i);
+    expect(() => previewLlmImport(deps, profileB, "cards", answer, "not-a-deck")).toThrow(
+      /No active deck/,
+    );
+  });
+
+  it("keeps its plan apart from the other surfaces and refuses a token across them", async () => {
+    const profileA = createProfile(dbA, "A");
+    const fixtureA = seedProfile(dbA, profileA, "A");
+    const archive = buildArchiveFor(fixtureA, profileA, "A");
+    const archivePath = fixturePath("llm-apart.nexus.zip");
+    await writeFile(archivePath, await buildArchiveZip(archive, fixtureA.blobBytes));
+
+    const profileB = createProfile(dbB, "B");
+    const { deps } = makeTestDeps(dbB, archivePath);
+
+    await pickImportFile(deps);
+    const archivePreview = await previewImport(deps, profileB, null);
+    if (archivePreview.status !== "ready") unreachable();
+    const llmPreview = previewLlmImport(
+      deps,
+      profileB,
+      "tasks",
+      llmAnswer("tasks", [{ title: "A" }]),
+      null,
+    );
+    if (llmPreview.status !== "ready") unreachable();
+
+    await expect(applyImport(deps, profileB, llmPreview.preview.token)).rejects.toThrow(/stale/);
+    await expect(applyLlmImport(deps, profileB, archivePreview.preview.token)).rejects.toThrow(
+      /stale/,
+    );
+  });
+
+  it("drops the plan on cancel and on lock", async () => {
+    const profileB = createProfile(dbB, "B");
+    const { deps } = makeTestDeps(dbB, null);
+    const answer = llmAnswer("tasks", [{ title: "A" }]);
+
+    const first = previewLlmImport(deps, profileB, "tasks", answer, null);
+    if (first.status !== "ready") unreachable();
+    cancelLlmImport();
+    await expect(applyLlmImport(deps, profileB, first.preview.token)).rejects.toThrow(/No LLM/);
+
+    const second = previewLlmImport(deps, profileB, "tasks", answer, null);
+    if (second.status !== "ready") unreachable();
+    clearRestoreState();
+    await expect(applyLlmImport(deps, profileB, second.preview.token)).rejects.toThrow(/No LLM/);
   });
 });
