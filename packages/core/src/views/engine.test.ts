@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import type { CollectionSchema } from "./fields.js";
-import type { KanbanViewConfig } from "./viewConfig.js";
+import type {
+  CalendarViewConfig,
+  CardsViewConfig,
+  KanbanViewConfig,
+} from "./viewConfig.js";
 import {
   applyFilters,
   applySort,
@@ -207,6 +211,24 @@ describe("groupForKanban", () => {
     ]);
   });
 
+  it("emits the ungrouped bucket whatever ungroupedAlwaysShown says — the flag is a rendering rule", () => {
+    const items = [{ naslov: "Grafovi", status: "Za učenje" }];
+    for (const ungroupedAlwaysShown of [undefined, false, true]) {
+      const config: KanbanViewConfig =
+        ungroupedAlwaysShown === undefined
+          ? { type: "kanban", groupBy: "status" }
+          : { type: "kanban", groupBy: "status", ungroupedAlwaysShown };
+      const groups = groupForKanban(items, config, schema);
+      expect(groups.map((g) => g.value)).toEqual([
+        "Za učenje",
+        "U toku",
+        "Naučeno",
+        null,
+      ]);
+      expect(groups[3]?.items).toEqual([]);
+    }
+  });
+
   it("throws ViewConfigError when groupBy is not a select field", () => {
     expect(() =>
       groupForKanban([], { type: "kanban", groupBy: "naslov" }, schema),
@@ -214,6 +236,33 @@ describe("groupForKanban", () => {
     expect(() =>
       groupForKanban([], { type: "kanban", groupBy: "kolona" }, schema),
     ).toThrow(ViewConfigError);
+  });
+});
+
+describe("the cards and calendar configs", () => {
+  const items = [
+    { naslov: "Grafovi", status: "Za učenje", rok: "2026-07-18" },
+    { naslov: "Analiza", status: "U toku", rok: "2026-07-08" },
+    { naslov: "Grupe", status: "Za učenje", rok: "2026-07-09" },
+  ];
+
+  it("drives the same filter+sort pipeline the list config does", () => {
+    const cards: CardsViewConfig = {
+      type: "cards",
+      sort: { field: "rok", direction: "asc" },
+      filters: [{ field: "status", equals: "Za učenje" }],
+    };
+    expect(
+      naslovi(applySort(applyFilters(items, cards.filters), cards.sort, schema)),
+    ).toEqual(["Grupe", "Grafovi"]);
+  });
+
+  it("filters for the calendar, whose order is the calendar's own — there is no sort to apply", () => {
+    const calendar: CalendarViewConfig = {
+      type: "calendar",
+      filters: [{ field: "status", equals: "U toku" }],
+    };
+    expect(naslovi(applyFilters(items, calendar.filters))).toEqual(["Analiza"]);
   });
 });
 

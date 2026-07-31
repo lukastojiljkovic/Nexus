@@ -49,6 +49,8 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.taskListsRename, { profileId, id, name }),
   setTaskListView: (profileId, id, view) =>
     ipcRenderer.invoke(IpcChannel.taskListsSetView, { profileId, id, view }),
+  setTaskListViewConfig: (profileId, id, config) =>
+    ipcRenderer.invoke(IpcChannel.taskListsSetViewConfig, { profileId, id, config }),
   moveTaskList: (profileId, id, parentId, beforeId, afterId) =>
     ipcRenderer.invoke(IpcChannel.taskListsMove, { profileId, id, parentId, beforeId, afterId }),
   deleteTaskList: (profileId, id, mode) =>

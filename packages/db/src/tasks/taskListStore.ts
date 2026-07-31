@@ -1,5 +1,11 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import {
+  parseStoredTaskViewConfig,
+  serializeTaskViewConfig,
+  validateTaskViewConfig,
+} from "@nexus/core";
+import type { TaskViewConfig } from "@nexus/core";
+import {
   TaskListNotFoundError,
   TaskListValidationError,
   TaskSectionNotFoundError,
@@ -8,8 +14,8 @@ import { uuidv7 } from "../ids.js";
 
 type DatabaseHandle = Database.Database;
 
-/** Closed per-list view domain (migration 022 CHECK) — TASK-005's two shapes. */
-export const TASK_LIST_VIEWS = ["list", "kanban"] as const;
+/** Closed per-list view domain (migration 038 CHECK) — TASK-005's two shapes plus ADR-050's two. */
+export const TASK_LIST_VIEWS = ["list", "kanban", "cards", "calendar"] as const;
 export type TaskListView = (typeof TASK_LIST_VIEWS)[number];
 
 /** Longest list/section name after trimming — the `note_folders` bound, for the same reason: a name is a label, not a body. */
@@ -86,6 +92,17 @@ export interface TaskList {
   /** The one list per profile a task lands in when the user names none. Undeletable and unmovable; renamable. */
   isInbox: boolean;
   defaultView: TaskListView;
+  /**
+   * What this list remembers about each of its four views (ADR-050) — grouping,
+   * sort and filters — or null when it has expressed no preference. Read
+   * LENIENTLY (`parseStoredTaskViewConfig`): a config that no longer parses, or
+   * that names a knob this build does not have, costs the user a fallback to the
+   * defaults and never an unopenable list. That is deliberately the opposite of
+   * `TaskStore.parseStoredRecurrence`, which throws on a damaged column — a
+   * recurrence rule is the user's DATA, while a view config is how they last
+   * looked at it.
+   */
+  viewConfig: TaskViewConfig | null;
   position: number;
   createdAt: string;
   updatedAt: string;
@@ -117,6 +134,7 @@ interface TaskListRow {
   name: string;
   is_inbox: number;
   default_view: TaskListView;
+  view_config: string | null;
   position: number;
   created_at: string;
   updated_at: string;
@@ -133,7 +151,8 @@ interface TaskSectionRow {
 }
 
 const LIST_COLUMNS =
-  "id, profile_id, parent_id, name, is_inbox, default_view, position, created_at, updated_at, deleted_at";
+  "id, profile_id, parent_id, name, is_inbox, default_view, view_config, position, " +
+  "created_at, updated_at, deleted_at";
 const SECTION_COLUMNS = "id, list_id, name, position, created_at, updated_at";
 
 /** Accepts a full ISO-8601 date-time (the `now` every mutating method takes) — mirrors noteOrgStore.ts. */
@@ -182,6 +201,7 @@ export class TaskListStore {
   private readonly selectChildListIds: Database.Statement;
   private readonly updateListName: Database.Statement;
   private readonly updateListView: Database.Statement;
+  private readonly updateListViewConfig: Database.Statement;
   private readonly updateListPlacement: Database.Statement;
   private readonly updateListPosition: Database.Statement;
   private readonly markListDeleted: Database.Statement;
@@ -210,11 +230,13 @@ export class TaskListStore {
     private readonly db: DatabaseHandle,
     private readonly profileId: string,
   ) {
+    // A fresh list has no view preferences yet — `view_config` NULL is exactly
+    // that, and the first toggle or select the user touches writes one.
     this.insertList = db.prepare(
       `INSERT INTO task_lists
-         (id, profile_id, parent_id, name, is_inbox, default_view, position,
+         (id, profile_id, parent_id, name, is_inbox, default_view, view_config, position,
           created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, 'list', ?, ?, ?, NULL)`,
+       VALUES (?, ?, ?, ?, ?, 'list', NULL, ?, ?, ?, NULL)`,
     );
     // NULL parents sort first in SQLite's default ASC order, so root lists lead
     // and every other scope follows grouped by its parent — one flat array the
@@ -272,6 +294,9 @@ export class TaskListStore {
     );
     this.updateListView = db.prepare(
       `UPDATE task_lists SET default_view = ?, updated_at = ? WHERE id = ? AND profile_id = ?`,
+    );
+    this.updateListViewConfig = db.prepare(
+      `UPDATE task_lists SET view_config = ?, updated_at = ? WHERE id = ? AND profile_id = ?`,
     );
     this.updateListPlacement = db.prepare(
       `UPDATE task_lists SET parent_id = ?, position = ?, updated_at = ?
@@ -413,12 +438,40 @@ export class TaskListStore {
     this.updateListName.run(trimmed, validNow, id, this.profileId);
   }
 
-  /** Sets the view this list opens in (TASK-005). */
+  /** Sets the view this list opens in — one of the four shapes (TASK-005 / ADR-050). */
   setDefaultView(id: string, view: TaskListView, now: string): void {
     const validNow = validateDateTime(now);
     const validView = validateView(view);
     this.requireActiveList(id);
     this.updateListView.run(validView, validNow, id, this.profileId);
+  }
+
+  /**
+   * Replaces what this list remembers about its views (ADR-050) — the whole
+   * config at once, not one knob, because the renderer holds the config it is
+   * editing and a merge here would be this store guessing which half is stale.
+   *
+   * The shape is revalidated STRICTLY (SEC-EL-02: the renderer is untrusted, and
+   * a config also arrives from an archive) and a value that is not a config is
+   * refused rather than silently trimmed — the write is where a mistake is still
+   * the caller's to fix. `null`, and any config that asks for nothing, store as
+   * NULL: there is exactly one representation of "no preferences", so a list
+   * never carries a `{}` that reads differently from a list that carries
+   * nothing.
+   */
+  setViewConfig(id: string, config: TaskViewConfig | null, now: string): void {
+    const validNow = validateDateTime(now);
+    const valid = validateTaskViewConfig(config);
+    if (valid === null) {
+      throw new TaskListValidationError('"config" is not a valid task view configuration.');
+    }
+    this.requireActiveList(id);
+    this.updateListViewConfig.run(
+      serializeTaskViewConfig(valid),
+      validNow,
+      id,
+      this.profileId,
+    );
   }
 
   /**
@@ -676,6 +729,7 @@ export class TaskListStore {
       name,
       isInbox,
       defaultView: "list",
+      viewConfig: null,
       position,
       createdAt: now,
       updatedAt: now,
@@ -812,6 +866,7 @@ function toTaskList(row: TaskListRow): TaskList {
     name: row.name,
     isInbox: row.is_inbox === 1,
     defaultView: row.default_view,
+    viewConfig: parseStoredTaskViewConfig(row.view_config),
     position: row.position,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

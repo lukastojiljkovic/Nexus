@@ -7,6 +7,7 @@ import {
   Checkbox,
   Chip,
   EmptyState,
+  CardsView,
   KanbanCard,
   KanbanColumn,
   KanbanView,
@@ -16,6 +17,7 @@ import {
   TextField,
 } from "@nexus/ui";
 import type {
+  CardsViewConfig,
   CollectionSchema,
   KanbanViewConfig,
   ListViewConfig,
@@ -75,12 +77,18 @@ const tablaConfig: KanbanViewConfig = {
   sort: { field: "rok", direction: "asc" },
 };
 
+const karticeConfig: CardsViewConfig = {
+  type: "cards",
+  sort: { field: "naslov", direction: "asc" },
+};
+
 const fmtRok = (rok: string) => `${rok.slice(8, 10)}.${rok.slice(5, 7)}.`;
 
 /**
- * One dataset, two engine views: the list is filtered + sorted, the kanban is
- * grouped by status. Dragging a card applies the engine's patch to local
- * state, so the board and the list row chips update together.
+ * One dataset, three engine views: the list is filtered + sorted, the kanban is
+ * grouped by status, the cards grid is the same pipeline laid out as a grid.
+ * Dragging a card applies the engine's patch to local state, so the board, the
+ * grid and the list row chips update together.
  */
 function ViewsEngineDemo() {
   const [zadaci, setZadaci] = useState(pocetniZadaci);
@@ -136,6 +144,29 @@ function ViewsEngineDemo() {
                 prev.map((z) => (z.id === zadatak.id ? { ...z, ...patch } : z)),
               )
             }
+          />
+        </Card>
+      </Section>
+
+      <Section title="CardsView (views engine — ista lista kao mreža)">
+        <Card title="Sve obaveze — kartice">
+          <div className="gallery__view-config">
+            <Chip variant="accent">sort: naslov ↑</Chip>
+          </div>
+          <CardsView
+            items={zadaci}
+            schema={zadaciSchema}
+            config={karticeConfig}
+            itemKey={(z) => z.id}
+            renderItem={(z) => (
+              <>
+                <Checkbox>{z.naslov}</Checkbox>
+                <span className="gallery__chips">
+                  <Chip variant="data">{z.predmet}</Chip>
+                  {z.rok ? <Chip variant="accent">{fmtRok(z.rok)}</Chip> : <Chip>bez roka</Chip>}
+                </span>
+              </>
+            )}
           />
         </Card>
       </Section>

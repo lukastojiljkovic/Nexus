@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import type { CSSProperties, ChangeEvent, DragEvent, FormEvent, ReactNode } from "react";
 import {
   Button,
+  CardsView,
   Checkbox,
   Chip,
   EmptyState,
@@ -13,20 +14,40 @@ import {
   TextField,
 } from "@nexus/ui";
 import {
+  applyFilters,
   foldSearchText,
+  isEmptyTaskViewConfig,
   isInlineImageMime,
   isValidDayKey,
   matchesSmartList,
+  moveBetweenGroups,
+  normalizeTaskViewConfig,
   parseQuickAddDate,
   selectSmartList,
   SMART_LIST_IDS,
+  TASK_VIEW_FILTER_PRIORITIES,
+  TASK_VIEW_FILTER_STATUSES,
+  TASK_VIEW_KANBAN_GROUPS,
+  taskViewFilterSpecs,
 } from "@nexus/core";
 import type {
+  CardsViewConfig,
   CollectionSchema,
+  FieldDef,
+  FilterSpec,
   KanbanViewConfig,
   ListViewConfig,
   SmartListContext,
   SmartListId,
+  TaskKanbanViewSettings,
+  TaskSortedViewSettings,
+  TaskViewConfig,
+  TaskViewFilterPriority,
+  TaskViewFilters,
+  TaskViewFilterStatus,
+  TaskViewKanbanGroup,
+  TaskViewSort,
+  TaskViewSortDirection,
 } from "@nexus/core";
 import {
   MAX_TASK_LIST_NAME_LENGTH,
@@ -53,6 +74,8 @@ import type {
 import { localTodayKey } from "./examDates.js";
 import { NotePopover } from "./notePopover.js";
 import { RecurrenceMark, RecurrencePicker } from "./RecurrencePicker.js";
+import { TaskMonthGrid } from "./TaskMonthGrid.js";
+import type { TaskMonthItem } from "./TaskMonthGrid.js";
 import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
 import { dayUnit, strings } from "./strings.js";
 import { readStoredBlockedInToday, toIncludeBlocked } from "./taskPrefs.js";
@@ -74,28 +97,68 @@ const TASK_PRIORITIES: readonly TaskPriority[] = ["none", "low", "medium", "high
  */
 type TaskFields = { [K in keyof Task]: Task[K] };
 
-/** Maps the `Task` type onto engine fields (title/status/priority/dueDate/done). */
+/**
+ * Maps the `Task` type onto engine fields. `startDate` and `completedAt` join
+ * the original five with ADR-050: they are what the calendar spans a bar
+ * between, and what „Počinje“/„Završen“ sort by.
+ */
 const TASK_SCHEMA: CollectionSchema = {
   fields: [
     { key: "title", type: "text", titleKey: "tasks.field.title" },
     { key: "status", type: "select", titleKey: "tasks.field.status", options: TASK_STATUSES },
     { key: "priority", type: "select", titleKey: "tasks.field.priority", options: TASK_PRIORITIES },
     { key: "dueDate", type: "date", titleKey: "tasks.field.dueDate" },
+    { key: "startDate", type: "date", titleKey: "tasks.field.startDate" },
+    { key: "completedAt", type: "date", titleKey: "tasks.field.completedAt" },
     { key: "done", type: "boolean", titleKey: "tasks.field.done" },
   ],
 };
 
 /**
- * The list view carries NO sort spec on purpose, and that absence is the
- * ordering seam (TASK-004): `applySort` returns its input untouched without one,
- * so the rows render in exactly the order `listTasks` handed over — which is the
- * store's own total order (list, body before sections, then each scope by its
- * sparse `position`). Manual order is therefore the display order, and a drag
- * only has to write a new `position` for the list to redraw in it. Adding a sort
- * here would silently make the drag a no-op on screen.
+ * The fields the sort select offers, in menu order. A SUBSET of what the config
+ * grammar accepts (`TASK_VIEW_SORT_FIELDS` also has status and priority), and
+ * deliberately so: the engine collates a select field by its stored VALUE, so
+ * "sort by prioritet" would order high–low–medium–none. A control that looks
+ * like a feature and behaves like an accident is exactly what this house does
+ * not draw — grouping a board by prioritet is the honest answer to that
+ * question. A config written by another build that DOES sort by them still
+ * opens; the select simply shows „Ručni redosled“ for a field it cannot name.
+ */
+const SORT_FIELDS = ["title", "dueDate", "startDate", "completedAt", "done"] as const;
+type SortField = (typeof SORT_FIELDS)[number];
+
+function isSortField(value: string): value is SortField {
+  return (SORT_FIELDS as readonly string[]).includes(value);
+}
+
+/**
+ * A board grouped by priority puts the urgent column on the LEFT: a board is
+ * read left to right, and „Bez prioriteta“ leading it would bury the work that
+ * matters under the work that does not. The chips' and the store's own
+ * ascending order (`TASK_PRIORITIES`) is untouched — this is a column order,
+ * not a domain order, so it lives in the schema this one view is handed.
+ */
+const KANBAN_PRIORITY_COLUMNS: readonly TaskPriority[] = ["high", "medium", "low", "none"];
+
+/** The four shapes a list can open in, in toggle order (ADR-050). */
+const VIEW_OPTIONS: readonly { value: TaskListView; label: string }[] = [
+  { value: "list", label: strings.tasks.viewList },
+  { value: "kanban", label: strings.tasks.viewKanban },
+  { value: "cards", label: strings.tasks.viewCards },
+  { value: "calendar", label: strings.tasks.viewCalendar },
+];
+
+/**
+ * The list view carries NO sort spec UNLESS the user has picked one, and that
+ * absence is the ordering seam (TASK-004): `applySort` returns its input
+ * untouched without one, so the rows render in exactly the order `listTasks`
+ * handed over — the store's own total order (list, body before sections, then
+ * each scope by its sparse `position`). Manual order is therefore the display
+ * order, and a drag only has to write a new `position` for the list to redraw in
+ * it. That is also why a real sort HIDES the grips and the drop gaps (ADR-050):
+ * a drag under a sort would write a `position` nothing on screen reads.
  */
 const LIST_CONFIG: ListViewConfig = { type: "list" };
-const KANBAN_CONFIG: KanbanViewConfig = { type: "kanban", groupBy: "status" };
 
 const STATUS_TITLES: Record<TaskStatus, string> = strings.tasks.status;
 
@@ -115,6 +178,48 @@ function asPriority(value: string): TaskPriority {
 /** Kanban column title for a status value; falls back to the raw value. */
 function statusTitle(value: string): string {
   return isTaskStatus(value) ? STATUS_TITLES[value] : value;
+}
+
+/** The same for a priority column — the labels are presentation, the engine groups by value. */
+function priorityTitle(value: string): string {
+  return (TASK_PRIORITIES as readonly string[]).includes(value)
+    ? strings.tasks.priority[value as TaskPriority]
+    : value;
+}
+
+/**
+ * The sort select's option value: `""` for manual order, `"<field>:<direction>"`
+ * otherwise. One control rather than a field select beside a direction select —
+ * the two are never meaningful apart, and a pair of them would be two things to
+ * set for one decision.
+ */
+function sortValue(sort: TaskViewSort | undefined): string {
+  return sort === undefined || !isSortField(sort.field) ? "" : `${sort.field}:${sort.direction}`;
+}
+
+/** The inverse; anything unrecognized reads as manual order, never as a guess. */
+function parseSortValue(value: string): TaskViewSort | undefined {
+  const [field, direction] = value.split(":");
+  if (field === undefined || !isSortField(field)) return undefined;
+  if (direction !== "asc" && direction !== "desc") return undefined;
+  return { field, direction };
+}
+
+/** Membership against the closed set, narrowing a `<select>`'s raw string without an assertion. */
+function asKanbanGroup(value: string): TaskViewKanbanGroup {
+  for (const group of TASK_VIEW_KANBAN_GROUPS) if (group === value) return group;
+  return "status";
+}
+
+/** The same for the two filter selects; the "Svi…" option is the empty string, which belongs to neither set and so clears the filter. */
+function asFilterStatus(value: string): TaskViewFilterStatus | undefined {
+  for (const option of TASK_VIEW_FILTER_STATUSES) if (option === value) return option;
+  return undefined;
+}
+
+function asFilterPriority(value: string): TaskViewFilterPriority | undefined {
+  for (const option of TASK_VIEW_FILTER_PRIORITIES) if (option === value) return option;
+  return undefined;
 }
 
 /**
@@ -718,6 +823,64 @@ function MoveMenu({ label, triggerClassName, up, down, onMove }: MoveMenuProps) 
   );
 }
 
+interface ColumnMoveMenuProps {
+  /** The columns as the board draws them, and the one this card sits in. */
+  columnValues: readonly (string | null)[];
+  groupValue: string | null;
+  onMove: (toGroupValue: string | null) => void;
+}
+
+/**
+ * The kanban card's own „⋯“ menu: one column left, one column right (ADR-050).
+ *
+ * This is the a11y note TASK-005 deferred, finally paid: the board's drag is
+ * mouse-only, and until now a keyboard had no way to move a card at all. It is
+ * `MoveMenu`'s recipe one axis over — a plain focusable menu item, always BOTH
+ * items, the one at the end of the board merely disabled, because a menu whose
+ * items come and go is one the user has to re-read on every open.
+ *
+ * It reports the target COLUMN rather than a patch: the board's `onMove` already
+ * knows how to turn one into a write (it is the same `moveBetweenGroups` the
+ * drop goes through), so the keyboard path and the mouse path cannot drift.
+ */
+function ColumnMoveMenu({ columnValues, groupValue, onMove }: ColumnMoveMenuProps) {
+  const s = strings.tasks.controls;
+  const index = columnValues.indexOf(groupValue);
+  const target = (step: -1 | 1): { value: string | null } | null => {
+    const at = index + step;
+    if (index < 0 || at < 0 || at >= columnValues.length) return null;
+    return { value: columnValues[at] ?? null };
+  };
+  const item = (text: string, step: -1 | 1, close: () => void): ReactNode => {
+    const to = target(step);
+    return (
+      <button
+        className="note__menu-item"
+        role="menuitem"
+        type="button"
+        disabled={to === null}
+        onClick={() => {
+          if (to !== null) onMove(to.value);
+          close();
+        }}
+      >
+        {text}
+      </button>
+    );
+  };
+
+  return (
+    <NotePopover label={s.cardMenuLabel} triggerClassName="tasks__card-menu">
+      {(close) => (
+        <>
+          {item(s.moveLeft, -1, close)}
+          {item(s.moveRight, 1, close)}
+        </>
+      )}
+    </NotePopover>
+  );
+}
+
 interface TaskListDeleteDialogProps {
   list: TaskList;
   /** The stored Inbox name, so the "move them there" choice says where — the Inbox is renamable. */
@@ -1031,6 +1194,43 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
    */
   const view: TaskListView = smartListId !== null ? "list" : (selectedList?.defaultView ?? "list");
 
+  // --- What this list remembers about its views (ADR-050) -------------------
+  //
+  // One config per list, one section per view, so a board grouped by sekcija and
+  // a list sorted by rok are both true of the same list at once. A VIEW has no
+  // config at all (and no controls): its rows come from a query across every
+  // list, so there is no row to remember one in — the same reason its shape is
+  // forced to the list and its toggle is not drawn.
+  const viewConfig: TaskViewConfig =
+    (smartListId === null ? selectedList?.viewConfig : null) ?? {};
+  const listSettings: TaskSortedViewSettings = viewConfig.list ?? {};
+  const kanbanSettings: TaskKanbanViewSettings = viewConfig.kanban ?? {};
+  const cardsSettings: TaskSortedViewSettings = viewConfig.cards ?? {};
+  const calendarSettings = viewConfig.calendar ?? {};
+  const kanbanGroupBy: TaskViewKanbanGroup = kanbanSettings.groupBy ?? "status";
+
+  /** The active view's filters — every one of the four has them. */
+  const activeFilters: TaskViewFilters =
+    view === "kanban"
+      ? (kanbanSettings.filters ?? {})
+      : view === "cards"
+        ? (cardsSettings.filters ?? {})
+        : view === "calendar"
+          ? (calendarSettings.filters ?? {})
+          : (listSettings.filters ?? {});
+  /** The active view's sort; the calendar has none — its order IS the calendar. */
+  const activeSort: TaskViewSort | undefined =
+    view === "cards" ? cardsSettings.sort : view === "kanban" ? kanbanSettings.sort : listSettings.sort;
+  /**
+   * Whether the rows are still in the order the user put them in. Everything
+   * that lets a user CHANGE that order — the grips, the drop gaps, the batch
+   * mode's premise — is conditioned on this: under a real sort a drag would
+   * write a `position` nothing on screen reads, which is the definition of a
+   * dead affordance.
+   */
+  const manualOrder = activeSort === undefined;
+  const activeFilterSpecs: FilterSpec[] = taskViewFilterSpecs(activeFilters);
+
   /** What the five views ask about this render — the day, the derived blocked-ness, and the device preference over it. */
   const smartContext: SmartListContext = {
     today: todayKey,
@@ -1086,10 +1286,23 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
    * filter — the rows on screen are exactly the tasks carrying the tags — and it
    * is why the filter never touches what a task's subtasks ARE (see below).
    */
-  const matchedTasks =
+  //
+  // The VIEW's own status/prioritet filters (ADR-050) narrow the same set,
+  // composing with the tag filter rather than replacing it: they answer
+  // different questions ("what state is it in" vs "what did I label it"), and
+  // the engine's own `applyFilters` is what applies them — here rather than
+  // inside each view, because the grouping, the „Završeno“ bound and the
+  // batch selection below all reason about the rows that are actually drawn.
+  // Each view is still handed its filters too, where re-applying an already
+  // satisfied equality is a no-op — so a view stays a faithful
+  // `applySort(applyFilters(...))` rather than something that only works from
+  // this one page.
+  const matchedTasks = applyFilters<TaskFields>(
     tagFilter.length === 0
       ? listTasks
-      : listTasks.filter((task) => tagFilter.every((id) => tagIdsByTask.get(task.id)?.has(id)));
+      : listTasks.filter((task) => tagFilter.every((id) => tagIdsByTask.get(task.id)?.has(id))),
+    activeFilterSpecs,
+  );
   /**
    * „Završeno“ is BOUNDED (ADR-039 §4): a profile accumulates finished tasks
    * without limit, and every one of them would otherwise be a DOM row. The
@@ -1100,8 +1313,18 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     smartListId === "zavrseno" && matchedTasks.length > completedShown;
   /** Everything on screen — and nothing that is not, which is what makes the derived batch selection below honest. */
   const visibleTasks = completedTruncated ? matchedTasks.slice(0, completedShown) : matchedTasks;
-  /** True when the scope holds rows but the filter shows none of them — its own empty state, not "the list is empty". */
-  const filterHidesEverything = tagFilter.length > 0 && visibleTasks.length === 0;
+  /** True when the scope holds rows but a filter — oznake or the view's own — shows none of them; its own empty state, not "the list is empty". */
+  const filterHidesEverything =
+    (tagFilter.length > 0 || activeFilterSpecs.length > 0) && visibleTasks.length === 0;
+  /**
+   * WHICH filter is holding the rows back, so the empty state sends the user to
+   * the control that is actually doing it. Oznake first: it is the rail-level
+   * one, and clearing it is what widens the scope again.
+   */
+  const filterEmptyDescription =
+    tagFilter.length > 0
+      ? strings.tasks.tags.filterEmptyDescription
+      : strings.tasks.controls.filterEmptyDescription;
 
   // Rebuilt from the flat list on every render: it is one pass over an array
   // the page already holds, so there is nothing worth memoising.
@@ -1333,6 +1556,58 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     } catch (error) {
       console.error("Nexus: failed to remember the list view:", error);
     }
+  }
+
+  /**
+   * Persists a draft view config for the selected list. The draft is whatever
+   * the selects just produced, so it is NORMALIZED first — the same function
+   * the store reads through, which prunes a section that asks for nothing and
+   * turns an empty config into no config at all. That is what keeps one
+   * arrangement from having two stored forms, and it is why this takes
+   * `unknown`: a draft with a knob set to `undefined` is exactly how a select
+   * says "clear it".
+   */
+  function saveViewConfig(draft: unknown): void {
+    const list = selectedList;
+    if (list === null) return;
+    const next = normalizeTaskViewConfig(draft);
+    const stored = isEmptyTaskViewConfig(next) ? null : next;
+    void (async () => {
+      try {
+        await window.nexus.setTaskListViewConfig(profileId, list.id, stored);
+        setLists(
+          (prev) => prev && prev.map((row) => (row.id === list.id ? { ...row, viewConfig: stored } : row)),
+        );
+      } catch (error) {
+        console.error("Nexus: failed to remember the view configuration:", error);
+      }
+    })();
+  }
+
+  /** Replaces the ACTIVE view's filters — one function, because every view has them and only the section they live in differs. */
+  function setActiveFilters(filters: TaskViewFilters): void {
+    saveViewConfig(
+      view === "kanban"
+        ? { ...viewConfig, kanban: { ...kanbanSettings, filters } }
+        : view === "cards"
+          ? { ...viewConfig, cards: { ...cardsSettings, filters } }
+          : view === "calendar"
+            ? { ...viewConfig, calendar: { filters } }
+            : { ...viewConfig, list: { ...listSettings, filters } },
+    );
+  }
+
+  /** The same for the sort. Never reached from the calendar — that view draws no sort select at all. */
+  function setActiveSort(sort: TaskViewSort | undefined): void {
+    saveViewConfig(
+      view === "cards"
+        ? { ...viewConfig, cards: { ...cardsSettings, sort } }
+        : { ...viewConfig, list: { ...listSettings, sort } },
+    );
+  }
+
+  function setKanbanGroupBy(groupBy: TaskViewKanbanGroup): void {
+    saveViewConfig({ ...viewConfig, kanban: { ...kanbanSettings, groupBy } });
   }
 
   /** Switches the page to another list, closing everything that was bound to the one being left. */
@@ -2221,6 +2496,61 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     }
   }
 
+  /**
+   * What a drop (or the card menu's keyboard move) between board columns means,
+   * dispatched on the PATCH KEY the engine produced — which is the config's own
+   * `groupBy`, so the three groupings cannot be told apart anywhere else.
+   *
+   * The three land in three different places on purpose: a status is a FIELD
+   * (and „Završeno“ is a completion, so it takes `requestComplete`'s single
+   * path, subtask question and all), a priority is a plain field write, and a
+   * section is a PLACEMENT — the store keeps it out of the field patch and
+   * appends the task at the end of the heading it lands in, which is a new order
+   * and hence a refetch.
+   */
+  function applyKanbanMove(task: TaskFields, patch: Record<string, string | null>): void {
+    if ("sectionId" in patch) {
+      const sectionId = patch["sectionId"] ?? null;
+      if (sectionId === groupKeyOf(task)) return; // already there; the store would only re-append
+      void (async () => {
+        try {
+          await window.nexus.moveTaskToSection(profileId, task.id, sectionId);
+          await reload();
+        } catch (error) {
+          console.error("Nexus: failed to move task:", error);
+        }
+      })();
+      return;
+    }
+    if ("priority" in patch) {
+      const next = patch["priority"];
+      if (next == null) return; // every task has a priority, so the null bucket never fills
+      void updatePriority(task, asPriority(next));
+      return;
+    }
+    const next = patch["status"];
+    // Ungrouped drops never occur — every task has a valid status — so the patch
+    // is always a real status; main revalidates regardless.
+    if (next != null && isTaskStatus(next)) void moveToStatus(task, next);
+  }
+
+  async function updatePriority(task: TaskFields, priority: TaskPriority): Promise<void> {
+    try {
+      replaceTask(await window.nexus.updateTask(profileId, task.id, { priority }));
+    } catch (error) {
+      console.error("Nexus: failed to move task:", error);
+    }
+  }
+
+  /** A drop on a day cell of the month grid: that day becomes the task's rok. */
+  async function moveTaskToDay(taskId: string, dayKey: string): Promise<void> {
+    try {
+      replaceTask(await window.nexus.updateTask(profileId, taskId, { dueDate: dayKey }));
+    } catch (error) {
+      console.error("Nexus: failed to move task:", error);
+    }
+  }
+
   async function remove(task: TaskFields): Promise<void> {
     try {
       await window.nexus.deleteTask(profileId, task.id);
@@ -2399,8 +2729,10 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     if (depth > 0) return leadSpacer(depth);
     // A VIEW has no manual order to grab hold of — its rows are ordered by the
     // query (ADR-049) — so there is no grip and no lead column at all, rather
-    // than a grip that would start a drag with nowhere honest to drop.
-    if (smartListId !== null) return null;
+    // than a grip that would start a drag with nowhere honest to drop. A list
+    // under a real SORT is in exactly that position (ADR-050): the drag would
+    // write a `position` the sort then overrules on screen.
+    if (smartListId !== null || !manualOrder) return null;
     return (
       <span
         className="tasks__grip"
@@ -2751,7 +3083,9 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
    * already is, and the store refuses to order a task against itself.
    */
   function renderDropGap(beforeId: string | null, afterId: string | null): ReactNode {
-    if (draggedTaskId === null) return null;
+    // No gaps under a sort, for the same reason there is no grip: a reorder the
+    // view would immediately overrule is not a place a row can land (ADR-050).
+    if (draggedTaskId === null || !manualOrder) return null;
     if (beforeId === draggedTaskId || afterId === draggedTaskId) return null;
     const target: DropTarget = { kind: "gap", beforeId, afterId };
     const active = sameTarget(dropTarget, target);
@@ -2866,7 +3200,9 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         <ListView<TaskFields>
           items={group.roots}
           schema={TASK_SCHEMA}
-          config={LIST_CONFIG}
+          // A VIEW is always the bare config (ADR-049): its order is the query's,
+          // and it has no list row to remember a sort in.
+          config={smartListId === null ? listConfig : LIST_CONFIG}
           itemKey={(task) => task.id}
           renderItem={(task) => [
             dragInGroup ? renderDropGap(previousOf.get(task.id) ?? null, task.id) : null,
@@ -3148,6 +3484,106 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     danas: countSmart("danas"),
     kasni: countSmart("kasni"),
   };
+
+  // --- The four engine configs this render hands its view (ADR-050) ---------
+  //
+  // Built here rather than at each call site so the sort/filter selects above
+  // and the view below can never disagree about what is being shown.
+
+  const listConfig: ListViewConfig =
+    activeSort === undefined
+      ? { type: "list", filters: activeFilterSpecs }
+      : { type: "list", sort: activeSort, filters: activeFilterSpecs };
+
+  const cardsConfig: CardsViewConfig =
+    activeSort === undefined
+      ? { type: "cards", filters: activeFilterSpecs }
+      : { type: "cards", sort: activeSort, filters: activeFilterSpecs };
+
+  /**
+   * The board groups by a SELECT FIELD, always — which is what makes „Sekcija“
+   * work without the engine learning what a section is: the field is
+   * `sectionId`, and its options are this list's headings in their own order,
+   * declared per render because that is when they are known.
+   *
+   * Status keeps the schema as it is. Priority gets a schema whose priority
+   * field lists its options urgent-first (see `KANBAN_PRIORITY_COLUMNS`) — a
+   * column order, not a domain order, so it is scoped to the schema this one
+   * view is handed and the chips are untouched.
+   */
+  const kanbanSchema: CollectionSchema =
+    kanbanGroupBy === "status"
+      ? TASK_SCHEMA
+      : kanbanGroupBy === "priority"
+        ? {
+            fields: TASK_SCHEMA.fields.map((field): FieldDef =>
+              field.key === "priority"
+                ? {
+                    key: "priority",
+                    type: "select",
+                    titleKey: field.titleKey,
+                    options: KANBAN_PRIORITY_COLUMNS,
+                  }
+                : field,
+            ),
+          }
+        : {
+            fields: [
+              ...TASK_SCHEMA.fields,
+              {
+                key: "sectionId",
+                type: "select",
+                titleKey: "tasks.field.section",
+                options: listSections.map((section) => section.id),
+              },
+            ],
+          };
+
+  const kanbanConfig: KanbanViewConfig = {
+    type: "kanban",
+    groupBy: kanbanGroupBy === "section" ? "sectionId" : kanbanGroupBy,
+    filters: activeFilterSpecs,
+    // Under „Sekcija“ the null bucket is the list BODY — a real, permanent place
+    // a task is dragged back into — so it is drawn even while empty. Under
+    // status or priority it is a genuine leftovers column, and nothing can land
+    // in it: every task carries both.
+    ungroupedAlwaysShown: kanbanGroupBy === "section",
+    ...(activeSort === undefined ? {} : { sort: activeSort }),
+  };
+
+  const sectionNameById = new Map(listSections.map((section) => [section.id, section.name]));
+  const kanbanColumnTitle = (value: string): string =>
+    kanbanGroupBy === "status"
+      ? statusTitle(value)
+      : kanbanGroupBy === "priority"
+        ? priorityTitle(value)
+        : (sectionNameById.get(value) ?? value);
+  const kanbanUngroupedTitle =
+    kanbanGroupBy === "section" ? strings.tasks.controls.bodyColumn : "—";
+
+  // --- The month grid's bars (ADR-050) --------------------------------------
+  //
+  // A task with a rok spans „Počinje“ → „Rok“ when it has both, and sits on its
+  // rok alone otherwise. A task with NO rok has no day to sit on, so it goes to
+  // the strip under the grid rather than being invented onto today. Both dates
+  // are checked as real calendar days first: the store accepts a date-TIME rok
+  // too, and the layout engine throws on anything that is not a bare day.
+  const calendarBars: TaskMonthItem[] = [];
+  const calendarUndated: { id: string; title: string; done: boolean }[] = [];
+  if (view === "calendar") {
+    for (const task of visibleTasks) {
+      const due = task.dueDate === null ? null : task.dueDate.slice(0, 10);
+      if (due === null || !isValidDayKey(due)) {
+        calendarUndated.push({ id: task.id, title: task.title, done: task.done });
+        continue;
+      }
+      const start = task.startDate === null ? null : task.startDate.slice(0, 10);
+      // A start after the rok is a shape the form allows; the bar takes the
+      // earlier of the two rather than collapsing to nothing.
+      const startKey = start !== null && isValidDayKey(start) && start < due ? start : due;
+      calendarBars.push({ id: task.id, title: task.title, startKey, endKey: due, done: task.done });
+    }
+  }
 
   return (
     <div className="tasks">
@@ -3527,20 +3963,20 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
 
             {/* The shape toggle is a per-LIST memory (TASK-005); a view has no
                 row to remember one in and is always a list, so the group is not
-                drawn rather than drawn disabled. */}
+                drawn rather than drawn disabled. Four shapes since ADR-050. */}
             {smartListId === null && (
               <div className="tasks__views" role="group" aria-label={strings.tasks.viewLabel}>
-                {(["list", "kanban"] as const).map((option) => (
+                {VIEW_OPTIONS.map(({ value, label }) => (
                   <Button
-                    key={option}
+                    key={value}
                     size="sm"
                     className={
-                      view === option ? "tasks__view tasks__view--active" : "tasks__view"
+                      view === value ? "tasks__view tasks__view--active" : "tasks__view"
                     }
-                    aria-pressed={view === option}
-                    onClick={() => void selectView(option)}
+                    aria-pressed={view === value}
+                    onClick={() => void selectView(value)}
                   >
-                    {option === "list" ? strings.tasks.viewList : strings.tasks.viewKanban}
+                    {label}
                   </Button>
                 ))}
               </div>
@@ -3561,6 +3997,96 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
             </Button>
           )}
         </div>
+
+        {/* The view's own controls (ADR-050), above the rows they order and
+            narrow: what the shown scope is sorted by, what a board's columns
+            come from, and what is filtered out. Each is remembered per LIST and
+            per VIEW, so switching shapes brings its own arrangement back.
+
+            Not drawn inside a VIEW at all: there is no list row to remember a
+            choice in, and its order is the query's own (ADR-049). */}
+        {smartListId === null && selectedList !== null && (
+          <div
+            className="tasks__view-controls"
+            role="group"
+            aria-label={strings.tasks.controls.regionLabel}
+          >
+            {/* The calendar's order IS the calendar, so it is the one view with
+                no sort to offer — and an inert select would be worse than none. */}
+            {view !== "calendar" && (
+              <select
+                className="tasks__select"
+                value={sortValue(activeSort)}
+                aria-label={strings.tasks.controls.sortLabel}
+                onChange={(event) => setActiveSort(parseSortValue(event.target.value))}
+              >
+                <option value="">{strings.tasks.controls.sortManual}</option>
+                {SORT_FIELDS.map((field) =>
+                  (["asc", "desc"] as const).map((direction: TaskViewSortDirection) => (
+                    <option key={`${field}:${direction}`} value={`${field}:${direction}`}>
+                      {strings.tasks.controls.sortField[field]} {direction === "asc" ? "↑" : "↓"}
+                    </option>
+                  )),
+                )}
+              </select>
+            )}
+
+            {view === "kanban" && (
+              <select
+                className="tasks__select"
+                value={kanbanGroupBy}
+                aria-label={strings.tasks.controls.groupLabel}
+                onChange={(event) => setKanbanGroupBy(asKanbanGroup(event.target.value))}
+              >
+                {TASK_VIEW_KANBAN_GROUPS.map((option) => (
+                  <option key={option} value={option}>
+                    {strings.tasks.controls.group[option]}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            <select
+              className="tasks__select"
+              value={activeFilters.status ?? ""}
+              aria-label={strings.tasks.controls.statusLabel}
+              onChange={(event) => {
+                const next: TaskViewFilters = { ...activeFilters };
+                const status = asFilterStatus(event.target.value);
+                if (status === undefined) delete next.status;
+                else next.status = status;
+                setActiveFilters(next);
+              }}
+            >
+              <option value="">{strings.tasks.controls.statusAll}</option>
+              {TASK_VIEW_FILTER_STATUSES.map((option) => (
+                <option key={option} value={option}>
+                  {strings.tasks.status[option]}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="tasks__select"
+              value={activeFilters.priority ?? ""}
+              aria-label={strings.tasks.controls.priorityLabel}
+              onChange={(event) => {
+                const next: TaskViewFilters = { ...activeFilters };
+                const priority = asFilterPriority(event.target.value);
+                if (priority === undefined) delete next.priority;
+                else next.priority = priority;
+                setActiveFilters(next);
+              }}
+            >
+              <option value="">{strings.tasks.controls.priorityAll}</option>
+              {TASK_VIEW_FILTER_PRIORITIES.map((option) => (
+                <option key={option} value={option}>
+                  {strings.tasks.priority[option]}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {selecting && pickedTasks.length > 0 && (
           <div
@@ -3751,10 +4277,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                 including where the list does have headings, since empty ones
                 would only be noise under an answer of "no rows". */}
             {filterHidesEverything ? (
-              <EmptyState
-                title={strings.tasks.emptyTitle}
-                description={strings.tasks.tags.filterEmptyDescription}
-              />
+              <EmptyState title={strings.tasks.emptyTitle} description={filterEmptyDescription} />
             ) : smartListId !== null && visibleTasks.length === 0 ? (
               // A view's own calm statement of fact, never the list's „zapiši
               // prvi zadatak“ invitation: there is no field to type into here.
@@ -3806,31 +4329,32 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
               ))}
           </>
         ) : visibleTasks.length === 0 ? (
-          // The board has nothing to hold headings or an "add" affordance for, so
-          // an empty list is the empty state here, as it was before TASK-004 —
-          // and a filter that hides every card says which of the two it is.
+          // The other three shapes have nothing to hold headings or an "add"
+          // affordance for, so an empty list is the empty state there, as it was
+          // for the board before TASK-004 — and a filter that hides everything
+          // says which of the two it is.
           <EmptyState
             title={strings.tasks.emptyTitle}
             description={
-              filterHidesEverything
-                ? strings.tasks.tags.filterEmptyDescription
-                : strings.tasks.emptyDescription
+              filterHidesEverything ? filterEmptyDescription : strings.tasks.emptyDescription
             }
           />
-        ) : (
+        ) : view === "kanban" ? (
           // The board stays flat: a subtask is a real task with a status of its
           // own, and a card in Za rad whose parent sits in U toku belongs in Za
           // rad. Only the roll-up chip travels here, so a parent card still says
-          // how much of it is actually finished. Ordering stays the engine's:
-          // columns are the status field's options, and a card's place within one
-          // is not something the board lets the user set.
+          // how much of it is actually finished. What the columns ARE is now the
+          // list's own choice (ADR-050) — status, prioritet or sekcija — while a
+          // card's place WITHIN one is still not something the board lets the
+          // user set.
           <KanbanView<TaskFields>
             items={visibleTasks}
-            schema={TASK_SCHEMA}
-            config={KANBAN_CONFIG}
-            columnTitle={statusTitle}
+            schema={kanbanSchema}
+            config={kanbanConfig}
+            columnTitle={kanbanColumnTitle}
+            ungroupedTitle={kanbanUngroupedTitle}
             itemKey={(task) => task.id}
-            renderCard={(task) => (
+            renderCard={(task, { groupValue, columnValues }) => (
               <KanbanCard
                 tag={taskChips({
                   task,
@@ -3844,20 +4368,73 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                   listName: null,
                 })}
               >
-                <span
-                  id={taskRowDomId(task.id)}
-                  className={revealedId === task.id ? "nx-revealed" : undefined}
-                >
-                  {task.title}
+                <span className="tasks__card-title">
+                  <span
+                    id={taskRowDomId(task.id)}
+                    className={revealedId === task.id ? "nx-revealed" : undefined}
+                  >
+                    {task.title}
+                  </span>
+                  {/* The keyboard way to do what the drag does (ADR-050) — the
+                      board's own a11y gap, deferred from TASK-005 and closed
+                      here, where the card is actually rendered. */}
+                  <ColumnMoveMenu
+                    columnValues={columnValues}
+                    groupValue={groupValue}
+                    onMove={(toGroupValue) =>
+                      applyKanbanMove(task, moveBetweenGroups(task, toGroupValue, kanbanConfig))
+                    }
+                  />
                 </span>
               </KanbanCard>
             )}
-            onMove={(task, patch) => {
-              const next = patch.status;
-              // Ungrouped drops never occur — every task has a valid status — so
-              // the patch is always a real status; main revalidates regardless.
-              if (next != null && isTaskStatus(next)) void moveToStatus(task, next);
+            onMove={applyKanbanMove}
+          />
+        ) : view === "cards" ? (
+          // The same rows as the list, one card each: the checkbox (the primary
+          // action belongs on every rendering of a task), the title, and the
+          // chip cluster verbatim. Deliberately no description excerpt — a card
+          // that quotes half a body is a card the eye stops reading.
+          <CardsView<TaskFields>
+            items={visibleTasks}
+            schema={TASK_SCHEMA}
+            config={cardsConfig}
+            itemKey={(task) => task.id}
+            renderItem={(task) => (
+              <>
+                <Checkbox
+                  checked={task.done}
+                  done={task.done}
+                  onChange={(event) => void toggleDone(task, event.target.checked)}
+                >
+                  <span
+                    id={taskRowDomId(task.id)}
+                    className={revealedId === task.id ? "nx-revealed" : undefined}
+                  >
+                    {task.title}
+                  </span>
+                </Checkbox>
+                {taskChips({
+                  task,
+                  children: childrenOf(task.id),
+                  tags: tagsOf(task.id),
+                  attachmentCount: attachmentCountOf(task.id),
+                  blocked: isBlocked(task.id),
+                  today: todayKey,
+                  listName: null,
+                })}
+              </>
+            )}
+          />
+        ) : (
+          <TaskMonthGrid
+            items={calendarBars}
+            undated={calendarUndated}
+            onOpen={(taskId) => {
+              const task = visibleTasks.find((row) => row.id === taskId);
+              if (task !== undefined) startEdit(task);
             }}
+            onMoveToDay={(taskId, dayKey) => void moveTaskToDay(taskId, dayKey)}
           />
         )}
       </div>

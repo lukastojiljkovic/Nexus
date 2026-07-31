@@ -16,8 +16,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 37 (security notifications), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(37);
+  it("is at version 38 (the four task views), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(38);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -4063,6 +4063,218 @@ describe("migration 037 — security notifications", () => {
     expect(
       (db.raw.prepare("SELECT count(*) AS n FROM notifications").get() as { n: number }).n,
     ).toBe(0);
+    db.close();
+  });
+});
+
+describe("migration 038 — the four task views", () => {
+  type Handle = Database.Database;
+
+  const now = () => new Date().toISOString();
+
+  const columnNames = (raw: Handle, table: string): string[] =>
+    (raw.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((row) => row.name);
+
+  const tableNamesOf = (raw: Handle): string[] =>
+    (raw.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as {
+      name: string;
+    }[]).map((row) => row.name);
+
+  const seedProfile = (raw: Handle, id: string) =>
+    raw
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run(id, "personal", "P", now());
+
+  const seedList = (
+    raw: Handle,
+    id: string,
+    profileId: string,
+    parentId: string | null,
+    defaultView = "list",
+    position = 1024,
+  ) =>
+    raw
+      .prepare(
+        `INSERT INTO task_lists
+           (id, profile_id, parent_id, name, is_inbox, default_view, position, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+      )
+      .run(id, profileId, parentId, `Lista ${id}`, defaultView, position, now(), now());
+
+  const seedSection = (raw: Handle, id: string, listId: string, position = 1024) =>
+    raw
+      .prepare(
+        `INSERT INTO task_sections (id, list_id, name, position, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, listId, `Sekcija ${id}`, position, now(), now());
+
+  const seedTask = (
+    raw: Handle,
+    id: string,
+    profileId: string,
+    listId: string,
+    sectionId: string | null,
+  ) => {
+    raw
+      .prepare(
+        `INSERT INTO tasks (id, profile_id, title, status, created_at, updated_at)
+         VALUES (?, ?, ?, 'todo', ?, ?)`,
+      )
+      .run(id, profileId, `Zadatak ${id}`, now(), now());
+    raw
+      .prepare("UPDATE tasks SET list_id = ?, section_id = ? WHERE id = ?")
+      .run(listId, sectionId, id);
+  };
+
+  /** As every rebuild migration's own helper: a connection held at exactly `version`, set up the way `openDatabase` sets one up. */
+  function openAtVersion(path: string, version: number): Handle {
+    const raw = new Database(path);
+    raw.pragma("journal_mode = WAL");
+    raw.pragma("foreign_keys = ON");
+    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
+      typeof value === "string" ? foldSearchText(value) : null,
+    );
+    runMigrations(
+      raw,
+      MIGRATIONS.filter((migration) => migration.version <= version),
+    );
+    return raw;
+  }
+
+  /** A 037 database holding the whole shape the rebuild has to carry: nested lists, headings, and tasks filed into both. */
+  function seedTaskWorld(raw: Handle): void {
+    seedProfile(raw, "p1");
+    seedList(raw, "tl1", "p1", null, "kanban", 1024);
+    seedList(raw, "tl2", "p1", "tl1", "list", 2048);
+    seedSection(raw, "ts1", "tl1", 1024);
+    seedSection(raw, "ts2", "tl1", 2048);
+    seedSection(raw, "ts3", "tl2", 1024);
+    seedTask(raw, "t1", "p1", "tl1", "ts1");
+    seedTask(raw, "t2", "p1", "tl1", null);
+    seedTask(raw, "t3", "p1", "tl2", "ts3");
+  }
+
+  it("widens default_view to the four-shape set and adds a nullable view_config", () => {
+    const db = openDatabase({ path: join(dir, "views-038.db") });
+    expect(columnNames(db.raw, "task_lists")).toEqual(
+      expect.arrayContaining(["default_view", "view_config"]),
+    );
+    insertProfile(db, "p1");
+    for (const view of ["list", "kanban", "cards", "calendar"]) {
+      expect(() => seedList(db.raw, `tl-${view}`, "p1", null, view)).not.toThrow();
+    }
+    expect(() => seedList(db.raw, "tl-gantt", "p1", null, "gantt")).toThrow();
+    expect(
+      db.raw.prepare("SELECT view_config FROM task_lists WHERE id = ?").get("tl-list"),
+    ).toEqual({ view_config: null });
+    db.close();
+  });
+
+  it("leaves view_config free of any CHECK — the store is the gate for a JSON column", () => {
+    const db = openDatabase({ path: join(dir, "view-config-038.db") });
+    insertProfile(db, "p1");
+    seedList(db.raw, "tl1", "p1", null);
+    expect(() =>
+      db.raw
+        .prepare("UPDATE task_lists SET view_config = ? WHERE id = ?")
+        .run('{"kanban":{"groupBy":"section"}}', "tl1"),
+    ).not.toThrow();
+    db.close();
+  });
+
+  it("leaves no rebuild scaffolding behind", () => {
+    const db = openDatabase({ path: join(dir, "scaffolding-038.db") });
+    const tables = tableNamesOf(db.raw);
+    for (const name of ["task_lists_new", "task_lists_hold", "task_sections_hold"]) {
+      expect({ name, present: tables.includes(name) }).toEqual({ name, present: false });
+    }
+    db.close();
+  });
+
+  it("carries every list, heading and placement of a seeded 037 database through the parent rebuild", () => {
+    const path = join(dir, "upgrade-038.db");
+    const before = openAtVersion(path, 37);
+    seedTaskWorld(before);
+    expect(before.pragma("user_version", { simple: true })).toBe(37);
+    before.close();
+
+    const db = openDatabase({ path });
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+
+    expect(
+      db.raw
+        .prepare(
+          "SELECT id, parent_id, default_view, view_config, position FROM task_lists ORDER BY id",
+        )
+        .all(),
+    ).toEqual([
+      { id: "tl1", parent_id: null, default_view: "kanban", view_config: null, position: 1024 },
+      { id: "tl2", parent_id: "tl1", default_view: "list", view_config: null, position: 2048 },
+    ]);
+    // The cascade the drop fires would have emptied this table outright.
+    expect(db.raw.prepare("SELECT id, list_id FROM task_sections ORDER BY id").all()).toEqual([
+      { id: "ts1", list_id: "tl1" },
+      { id: "ts2", list_id: "tl1" },
+      { id: "ts3", list_id: "tl2" },
+    ]);
+    expect(
+      db.raw.prepare("SELECT id, list_id, section_id FROM tasks ORDER BY id").all(),
+    ).toEqual([
+      { id: "t1", list_id: "tl1", section_id: "ts1" },
+      { id: "t2", list_id: "tl1", section_id: null },
+      { id: "t3", list_id: "tl2", section_id: "ts3" },
+    ]);
+    expect(db.raw.pragma("foreign_key_check")).toEqual([]);
+    db.close();
+  });
+
+  it("leaves every child foreign key pointing at the REBUILT table", () => {
+    const path = join(dir, "fk-038.db");
+    const before = openAtVersion(path, 37);
+    seedTaskWorld(before);
+    before.close();
+
+    const db = openDatabase({ path });
+    // A reference to a list/section that does not exist is still refused, which
+    // it could not be if the clauses still named the dropped table.
+    expect(() =>
+      db.raw.prepare("UPDATE tasks SET list_id = ? WHERE id = ?").run("ghost", "t1"),
+    ).toThrow();
+    expect(() =>
+      db.raw.prepare("UPDATE tasks SET section_id = ? WHERE id = ?").run("ghost", "t1"),
+    ).toThrow();
+    expect(() =>
+      db.raw.prepare("UPDATE task_sections SET list_id = ? WHERE id = ?").run("ghost", "ts1"),
+    ).toThrow();
+    // The self-reference survived its own rename too.
+    expect(() => seedList(db.raw, "tlx", "p1", "ghost")).toThrow();
+    db.close();
+  });
+
+  it("still cascades a list's headings away with it, and the whole tree away with its profile", () => {
+    const path = join(dir, "cascade-038.db");
+    const before = openAtVersion(path, 37);
+    seedTaskWorld(before);
+    before.close();
+
+    const db = openDatabase({ path });
+    // Deleting one list takes its headings — the ON DELETE CASCADE the rebuild
+    // had to survive. Its tasks go first: `tasks.list_id` is NO ACTION, exactly
+    // as it was before.
+    db.raw.prepare("DELETE FROM tasks WHERE list_id = 'tl2'").run();
+    db.raw.prepare("DELETE FROM task_lists WHERE id = 'tl2'").run();
+    expect(db.raw.prepare("SELECT id FROM task_sections ORDER BY id").all()).toEqual([
+      { id: "ts1" },
+      { id: "ts2" },
+    ]);
+
+    db.raw.prepare("DELETE FROM tasks WHERE profile_id = 'p1'").run();
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    for (const table of ["task_lists", "task_sections"]) {
+      const { n } = db.raw.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number };
+      expect({ table, n }).toEqual({ table, n: 0 });
+    }
     db.close();
   });
 });

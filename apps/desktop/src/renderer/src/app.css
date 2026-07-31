@@ -877,6 +877,134 @@ body {
   font-weight: var(--nx-font-weight-semibold);
 }
 
+/* The view's own controls (ADR-050): sort, grouping and the two filters, on one
+   quiet row above the rows they act on. Plain selects rather than a bar with a
+   surface of its own — they are the same control the form already uses
+   (.tasks__select), and a panel around them would read as a second toolbar. */
+.tasks__view-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+
+/* --- Kartice (ADR-050) --------------------------------------------------
+   The grid, the card and its padding are the UI package's (.nx-cards-view);
+   what belongs to TASK is the card's own line: title on the left, the move
+   menu — on a BOARD card — on the right, with the chip cluster wrapping under
+   both. */
+.tasks__card-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nx-space-1);
+  min-width: 0;
+}
+/* The board card's "⋯" trigger. Always drawn, never hover-revealed: it is the
+   only way to move a card without a mouse, and an affordance that appears under
+   the pointer is one a keyboard never finds. The row menu's own hover treatment
+   (.tasks__row-menu), one surface over. */
+.tasks__card-menu.note__menu-trigger {
+  flex: none;
+  cursor: pointer;
+}
+.tasks__card-menu:hover {
+  background: var(--nx-surface-alt);
+}
+/* A card's chips sit under its title rather than beside it: a card is a column,
+   not a row, and a cluster on the same line would push the title into an
+   ellipsis on the narrowest track the grid can produce. */
+.nx-cards-view__card > .tasks__chips {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: var(--nx-space-1);
+}
+
+/* --- Kalendar (ADR-050) -------------------------------------------------
+   The grid itself reuses the CAL module's .cal__month-* classes outright (see
+   TaskMonthGrid): two month grids in one app that differ visually would read as
+   an accident. Only what a TASK bar does differently lives here. */
+
+/* Draggable AND clickable, unlike CAL's read-only task bar: here a bar opens
+   the task's own edit form. The quiet surface is that bar's, the pointer
+   affordances are the event bar's. */
+button.tasks__cal-bar {
+  pointer-events: auto;
+  cursor: grab;
+  text-align: left;
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  color: var(--nx-text);
+}
+button.tasks__cal-bar:active {
+  cursor: grabbing;
+}
+.tasks__cal-bar:hover {
+  text-decoration: underline;
+}
+.tasks__cal-bar:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 1px;
+}
+
+/* A statement of fact, not a door: this grid has no week expansion and no day
+   view, so the overflow count is muted TEXT rather than CAL's button. */
+.tasks__cal-more {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+  padding: 1px 4px;
+}
+
+/* The strip under the grid: the tasks a calendar cannot place, still draggable
+   onto a day — which is exactly what gives them a rok. */
+.tasks__cal-undated {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+  padding-top: var(--nx-space-1);
+}
+.tasks__cal-undated-label {
+  font-size: var(--nx-font-size-label);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+  flex: none;
+}
+.tasks__cal-undated-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1);
+  min-width: 0;
+}
+button.tasks__cal-chip {
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+  cursor: grab;
+  padding: 2px 8px;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-sm);
+  background: var(--nx-surface);
+  color: var(--nx-text);
+}
+button.tasks__cal-chip:active {
+  cursor: grabbing;
+}
+.tasks__cal-chip:hover {
+  text-decoration: underline;
+}
+.tasks__cal-chip:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 1px;
+}
+/* Finished work stays visible and goes quiet — the bar's own --muted opacity. */
+.tasks__cal-chip--done {
+  opacity: 0.5;
+}
+
 /* Delete + undo (TASK-011): an inline, token-styled undo bar above the list. */
 .tasks__undo {
   display: flex;

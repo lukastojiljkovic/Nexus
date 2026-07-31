@@ -530,7 +530,7 @@ function freshArchiveData(): ProfileData {
     taskLists: [
       {
         id: listId, profileId: "ignored", parentId: null, name: "Inbox", isInbox: true,
-        defaultView: "list", position: 1024, ...timestamps,
+        defaultView: "list", viewConfig: null, position: 1024, ...timestamps,
       },
     ],
     tasks: [
@@ -1213,7 +1213,7 @@ describe("RestoreStore", () => {
     const listId = uuidv7();
     const list: TaskList = {
       id: listId, profileId: "ignored", parentId: null, name: "Inbox", isInbox: true,
-      defaultView: "list", position: 1024, ...timestamps,
+      defaultView: "list", viewConfig: null, position: 1024, ...timestamps,
     };
     const task: ExportTask = {
       id: uuidv7(), profileId: "ignored", parentId: null, title: "Prvog u mesecu", description: null,
@@ -1268,11 +1268,18 @@ describe("RestoreStore", () => {
     const taskLists: TaskList[] = [
       {
         id: inboxId, profileId: "ignored", parentId: null, name: "Inbox", isInbox: true,
-        defaultView: "list", position: 1024, ...timestamps,
+        defaultView: "list", viewConfig: null, position: 1024, ...timestamps,
       },
+      // Carrying what it remembers about its views (ADR-050): a restore that
+      // dropped it would put the list back opening on the wrong shape.
       {
         id: workId, profileId: "ignored", parentId: inboxId, name: "Posao", isInbox: false,
-        defaultView: "kanban", position: 2048, ...timestamps,
+        defaultView: "kanban",
+        viewConfig: {
+          kanban: { groupBy: "section" },
+          cards: { sort: { field: "title", direction: "desc" } },
+        },
+        position: 2048, ...timestamps,
       },
     ];
     const taskSections: TaskSection[] = [
@@ -1305,7 +1312,7 @@ describe("RestoreStore", () => {
     const taskLists: TaskList[] = [
       {
         id: listId, profileId: "ignored", parentId: null, name: "Inbox", isInbox: true,
-        defaultView: "list", position: 1024, ...timestamps,
+        defaultView: "list", viewConfig: null, position: 1024, ...timestamps,
       },
     ];
     const taskTags: TaskTag[] = [
@@ -1376,7 +1383,7 @@ describe("RestoreStore", () => {
     const taskLists: TaskList[] = [
       {
         id: listId, profileId: "ignored", parentId: null, name: "Inbox", isInbox: true,
-        defaultView: "list", position: 1024, ...timestamps,
+        defaultView: "list", viewConfig: null, position: 1024, ...timestamps,
       },
     ];
     const task = (title: string): ExportTask => ({
@@ -1480,7 +1487,7 @@ describe("RestoreStore", () => {
     const taskLists: TaskList[] = [
       {
         id: inboxId, profileId: "ignored", parentId: null, name: "Prijemno", isInbox: true,
-        defaultView: "list", position: 1024, ...timestamps,
+        defaultView: "list", viewConfig: null, position: 1024, ...timestamps,
       },
     ];
     const task: ExportTask = {

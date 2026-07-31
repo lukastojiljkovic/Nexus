@@ -4,6 +4,7 @@ import { TIME_GRID_MAX_END_MINUTES, TIME_GRID_MIN_EVENT_MINUTES } from "../calen
 import { validateRecurrenceRule } from "../recurrence/recurrence.js";
 import type { RecurrenceRule } from "../recurrence/recurrence.js";
 import { renderClozeCard } from "../study/clozeText.js";
+import { isEmptyTaskViewConfig, validateTaskViewConfig } from "../tasks/taskViewConfig.js";
 import { DATA_FILES } from "./exportArchive.js";
 import type {
   ArchiveModuleId,
@@ -179,7 +180,9 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.15.0` added the
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.16.0` added a task
+ * list's `viewConfig` — what it remembers about each of its four views (ADR-050,
+ * migration 038) — after `1.15.0` added the
  * `event-template` record type — a saved SHAPE of one event (CAL-009, migration
  * 036), riding in the data file the CAL module already had — after `1.14.0`
  * added the `subject-attachment` and `subject-note-link` record types — a
@@ -223,16 +226,18 @@ export interface ImportArchiveResult {
  * exist only for the "this row is missing a field it now must have" question,
  * which a whole absent type never asks — and which an OPTIONAL-with-a-default
  * field never asks either: `kind`'s absence means `"basic"` in every era,
- * because that is what every pre-ADR-042 archive's cards actually were, and
+ * because that is what every pre-ADR-042 archive's cards actually were,
  * `problemSteps`'s absence means "no worked solution", because that is what
- * every pre-ADR-046 archive's cards actually had.
+ * every pre-ADR-046 archive's cards actually had, and a task list's
+ * `viewConfig` absence means "no view preferences", because a list written
+ * before ADR-050 had no views to have preferences about.
  *
  * Major is still 1 throughout, so there is nothing yet to migrate an older
  * major forward from — a migration framework for a major that has never
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.15.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.16.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -675,8 +680,8 @@ const NOTIFICATION_SOURCES = ["document", "exam", "study-day", "event", "task", 
 const TOGGLEABLE_NOTIFICATION_SOURCES = ["document", "exam", "study-day", "event", "task"] as const;
 const NOTIFICATION_STATUSES = ["delivered", "snoozed", "dismissed"] as const;
 const PERSON_KINDS = ["birthday", "anniversary"] as const;
-/** Mirrors `TASK_LIST_VIEWS` in `@nexus/db`'s `tasks/taskListStore.ts` and migration 022's CHECK (copied, not imported — the `NOTE_FOLDER_COLORS` arrangement). */
-const TASK_LIST_VIEWS = ["list", "kanban"] as const;
+/** Mirrors `TASK_LIST_VIEWS` in `@nexus/db`'s `tasks/taskListStore.ts` and migration 038's CHECK (copied, not imported — the `NOTE_FOLDER_COLORS` arrangement). */
+const TASK_LIST_VIEWS = ["list", "kanban", "cards", "calendar"] as const;
 
 /**
  * Mirrors `MAX_BACKGROUND_DIM` in `@nexus/db`'s
@@ -1002,10 +1007,26 @@ function parseTaskList(raw: Record<string, unknown>): ExportTaskList {
   const name = nonEmptyStr(raw.name, "name");
   const isInbox = bool(raw.isInbox, "isInbox");
   const defaultView = enumStr(raw.defaultView, "defaultView", TASK_LIST_VIEWS);
+  // Optional with a default (absent or null = no preferences), so no era flag —
+  // see the `problemSteps` reasoning at INTERCHANGE_SCHEMA_VERSION. A PRESENT
+  // value is validated by the very function the store writes through, strictly:
+  // an archive is a file a person can edit, and a shape this build cannot read
+  // must not be smuggled into a column that has no CHECK to catch it.
+  const viewConfig =
+    raw.viewConfig === undefined || raw.viewConfig === null
+      ? null
+      : validateTaskViewConfig(raw.viewConfig);
+  if (viewConfig === null && raw.viewConfig !== undefined && raw.viewConfig !== null) {
+    throw new InvalidFieldError("viewConfig");
+  }
   const position = int(raw.position, "position");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
-  return { id, profileId, parentId, name, isInbox, defaultView, position, createdAt, updatedAt };
+  return {
+    id, profileId, parentId, name, isInbox, defaultView,
+    viewConfig: viewConfig === null || isEmptyTaskViewConfig(viewConfig) ? null : viewConfig,
+    position, createdAt, updatedAt,
+  };
 }
 
 function parseTaskSection(raw: Record<string, unknown>): ExportTaskSection {

@@ -26,7 +26,9 @@ import {
   toFtsMatchExpression,
   validateArchivePassphrase,
   validateRecurrenceRule,
+  validateTaskViewConfig,
 } from "@nexus/core";
+import type { TaskViewConfig } from "@nexus/core";
 import type {
   ArchiveModuleId,
   NotificationSource,
@@ -1148,6 +1150,22 @@ function asTaskListView(value: unknown, field: string): TaskListView {
     return value as TaskListView;
   }
   throw new Error(`Invalid IPC payload: "${field}" is not a valid task list view.`);
+}
+
+/**
+ * What a list remembers about its views (ADR-050), checked against the very
+ * grammar the store writes through — `validateTaskViewConfig` returns null for
+ * anything that is not a config, and `null`/absent is the honest "clear it".
+ * Rejected HERE as well as in the store, so a hostile renderer's shape never
+ * reaches a JSON column that has no CHECK behind it.
+ */
+function asTaskViewConfig(value: unknown, field: string): TaskViewConfig | null {
+  if (value === undefined || value === null) return null;
+  const config = validateTaskViewConfig(value);
+  if (config === null) {
+    throw new Error(`Invalid IPC payload: "${field}" is not a valid task view configuration.`);
+  }
+  return config;
 }
 
 /**
@@ -3278,6 +3296,15 @@ function registerIpc(): void {
     const id = asNonEmptyString(body.id, "id");
     const view = asTaskListView(body.view, "view");
     taskListStore(profileId).setDefaultView(id, view, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.taskListsSetViewConfig, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const config = asTaskViewConfig(body.config, "config");
+    taskListStore(profileId).setViewConfig(id, config, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.taskListsMove, (event, payload): void => {

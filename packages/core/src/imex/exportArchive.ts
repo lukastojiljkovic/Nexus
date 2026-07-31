@@ -26,6 +26,7 @@
  */
 
 import type { RecurrenceRule } from "../recurrence/recurrence.js";
+import type { TaskViewConfig } from "../tasks/taskViewConfig.js";
 import { claimUniqueName, sanitizePathSegment, UNTITLED_NOTE_NAME } from "./archivePaths.js";
 import { toCsv } from "./csv.js";
 import { buildIcsCalendar } from "./icsExport.js";
@@ -43,7 +44,9 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
  *
- * `1.15.0` adds the `event-template` record type — a saved SHAPE of one event
+ * `1.16.0` adds a task list's `viewConfig` — what it remembers about each of its
+ * four views (ADR-050, migration 038) — after
+ * `1.15.0` added the `event-template` record type — a saved SHAPE of one event
  * (CAL-009, migration 036), riding in the data file the CAL module already had —
  * after `1.14.0` added the `subject-attachment` and `subject-note-link` record
  * types — a subject's materials and the notes filed under it (STUDY-001,
@@ -64,7 +67,8 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * `reminderOffsets` (ADR-028) and `1.1.0` the `person` record type (CAL-007 /
  * ADR-026). Additive, so a MINOR bump by the same honesty each of those made
  * one: an archive this build writes is refused by an older reader, which would
- * otherwise restore a profile with every event template simply gone and every
+ * otherwise restore a profile with every list opening on the wrong shape, every
+ * event template simply gone and every
  * course material missing — shapes their owner built by hand and files nothing
  * else in the archive can reconstruct; the same honesty `1.14.0` owed the
  * subject materials, `1.13.0` owed the study preferences, `1.12.0` owed every
@@ -76,7 +80,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.15.0";
+const SCHEMA_VERSION = "1.16.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -92,6 +96,16 @@ export interface ExportTaskList {
   name: string;
   isInbox: boolean;
   defaultView: string;
+  /**
+   * What this list remembers about each of its four views — grouping, sort and
+   * filters (ADR-050, migration 038). OPTIONAL with a default, like a card's
+   * `problemSteps`: absent or null means "no preferences", which is exactly what
+   * every list in every archive written before this field had, so no
+   * `ArchiveEra` flag is involved. A nested object rather than a JSON STRING,
+   * for the reason a task's `recurrence` is one: the interchange is JSON, and a
+   * string here would be a second encoding nobody can read in the file.
+   */
+  viewConfig?: TaskViewConfig | null;
   position: number;
   createdAt: string;
   updatedAt: string;

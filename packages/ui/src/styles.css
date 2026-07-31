@@ -376,6 +376,29 @@
   margin-top: 6px;
 }
 
+/* --- CardsView (views engine; the list pipeline laid out as a grid) ------
+   `auto-fill` rather than a breakpoint list: the column count follows the
+   available width with no measurement and no container query, and the last
+   row keeps card-width tracks instead of stretching one card across the
+   board. 240px is the narrowest a card can be and still hold a title line
+   plus its chip cluster on one row. */
+.nx-cards-view {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--nx-space-2);
+  align-items: start;
+}
+.nx-cards-view__card {
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  padding: var(--nx-space-2);
+  min-width: 0;
+}
+.nx-cards-view__card--clickable {
+  cursor: pointer;
+}
+
 /* --- BarChart (widget-scale mini chart; jade→gold bars, no axes) -------- */
 .nx-barchart__svg {
   display: block;

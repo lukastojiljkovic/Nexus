@@ -1,8 +1,8 @@
-import { serializeRecurrenceRule } from "@nexus/core";
-import type { RecurrenceRule } from "@nexus/core";
+import { serializeRecurrenceRule, serializeTaskViewConfig } from "@nexus/core";
+import type { RecurrenceRule, TaskViewConfig } from "@nexus/core";
 
 /**
- * The three value-to-column conversions both archive-apply paths share —
+ * The four value-to-column conversions both archive-apply paths share —
  * `RestoreStore.replaceProfileData` (ADR-023) and
  * `ForeignImportStore.insertPlanned` (ADR-043). They live here rather than in
  * either store because a difference between them would be invisible: two
@@ -43,4 +43,16 @@ export function exdatesText(exdates: readonly string[]): string {
  */
 export function offsetsText(offsets: readonly number[]): string {
   return JSON.stringify([...offsets].sort((a, b) => a - b));
+}
+
+/**
+ * A task list's view preferences as the column stores them (ADR-050, migration
+ * 038) — the same `serializeTaskViewConfig` the store itself writes through, so
+ * a restored list is indistinguishable from one the user configured here, and a
+ * config that asks for nothing lands as NULL rather than as an empty object.
+ * The parser has already validated the shape; an absent one is `null`, exactly
+ * as an archive written before ADR-050 leaves it.
+ */
+export function viewConfigText(config: TaskViewConfig | null | undefined): string | null {
+  return serializeTaskViewConfig(config ?? null);
 }

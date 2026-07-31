@@ -9,6 +9,14 @@
  * revalidated in the main process (renderer input is untrusted).
  */
 
+// The one import this contract makes, and it is type-only (erased at build
+// time, so preload and main gain no runtime dependency): a task list's view
+// config is a nested grammar shared by the store, the archive reader and this
+// wire, and the three of them must not each carry their own copy of it. Every
+// other shape here stays redeclared — those are string unions and flat records,
+// where a copy costs nothing and cannot drift silently.
+import type { TaskViewConfig } from "@nexus/core";
+
 /** The only channels the preload bridge and the main handlers agree on. */
 export const IpcChannel = {
   authStatus: "auth:status",
@@ -36,6 +44,7 @@ export const IpcChannel = {
   taskListsCreate: "task-lists:create",
   taskListsRename: "task-lists:rename",
   taskListsSetView: "task-lists:set-view",
+  taskListsSetViewConfig: "task-lists:set-view-config",
   taskListsMove: "task-lists:move",
   taskListsDelete: "task-lists:delete",
   taskListsRestore: "task-lists:restore",
@@ -593,8 +602,8 @@ export interface TasksCompleteOccurrenceRequest {
   id: string;
 }
 
-/** Which shape a list opens in (TASK-004/005). Mirrors `@nexus/db`'s `TASK_LIST_VIEWS`; redeclared so the renderer never imports DB code. */
-export type TaskListView = "list" | "kanban";
+/** Which shape a list opens in (TASK-004/005, ADR-050). Mirrors `@nexus/db`'s `TASK_LIST_VIEWS`; redeclared so the renderer never imports DB code. */
+export type TaskListView = "list" | "kanban" | "cards" | "calendar";
 
 /**
  * Longest list/section name after trimming. Mirrors `@nexus/db`'s
@@ -617,6 +626,16 @@ export interface TaskList {
   name: string;
   isInbox: boolean;
   defaultView: TaskListView;
+  /**
+   * What this list remembers about each of its four views (ADR-050), or null
+   * when it has expressed no preference. The one type on this wire imported
+   * rather than redeclared: `@nexus/core` is renderer-safe (the page already
+   * imports the views engine from it), the shape is a nested grammar rather
+   * than a string union, and a hand-copied third version of it is exactly the
+   * drift the store, the archive reader and this contract cannot afford. The
+   * import is type-only, so preload and main link nothing new.
+   */
+  viewConfig: TaskViewConfig | null;
   position: number;
   createdAt: string;
   updatedAt: string;
@@ -669,6 +688,17 @@ export interface TaskListsSetViewRequest {
   profileId: string;
   id: string;
   view: TaskListView;
+}
+
+/**
+ * What this list remembers about its views (ADR-050) — the WHOLE config, never
+ * one knob: the page holds the config it is editing, and a per-knob channel
+ * would ask main to merge two halves it cannot tell apart. `null` clears it.
+ */
+export interface TaskListsSetViewConfigRequest {
+  profileId: string;
+  id: string;
+  config: TaskViewConfig | null;
 }
 
 /** Re-parents and re-orders in one call: `parentId` names the scope, `beforeId`/`afterId` the live siblings it lands between there (either null at an end). */
@@ -3590,6 +3620,12 @@ export interface NexusApi {
   renameTaskList(profileId: string, id: string, name: string): Promise<void>;
   /** Remembers which shape this list opens in (TASK-005): the per-list view memory the view toggle writes. */
   setTaskListView(profileId: string, id: string, view: TaskListView): Promise<void>;
+  /** Remembers what this list's views are set to (ADR-050) — the whole config, `null` to clear it. */
+  setTaskListViewConfig(
+    profileId: string,
+    id: string,
+    config: TaskViewConfig | null,
+  ): Promise<void>;
   /** Re-parents and re-orders in one call; refuses a cycle, and refuses to move the Inbox at all. */
   moveTaskList(
     profileId: string,

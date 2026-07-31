@@ -121,12 +121,22 @@ function richProfileData(): ProfileData {
     taskLists: [
       {
         id: "list-inbox", profileId: "profile1", parentId: null, name: "Inbox", isInbox: true,
-        defaultView: "list", position: 1024, createdAt: "2026-07-01T00:00:00.000Z",
+        defaultView: "list", viewConfig: null, position: 1024, createdAt: "2026-07-01T00:00:00.000Z",
         updatedAt: "2026-07-01T00:00:00.000Z",
       },
+      // And carrying what it remembers about its views (ADR-050): every one of
+      // the four, so the round trip proves the whole shape survives rather than
+      // its simplest corner.
       {
         id: "list-work", profileId: "profile1", parentId: "list-inbox", name: "Posao", isInbox: false,
-        defaultView: "kanban", position: 2048, createdAt: "2026-07-01T00:00:00.000Z",
+        defaultView: "kanban",
+        viewConfig: {
+          list: { sort: { field: "dueDate", direction: "asc" }, filters: { status: "todo" } },
+          kanban: { groupBy: "section" },
+          cards: { sort: { field: "title", direction: "desc" } },
+          calendar: { filters: { priority: "high" } },
+        },
+        position: 2048, createdAt: "2026-07-01T00:00:00.000Z",
         updatedAt: "2026-07-01T00:00:00.000Z",
       },
     ],
@@ -654,12 +664,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.16.0`: the nearest minor strictly ahead of this build's `1.15.0`.
+  // `1.17.0`: the nearest minor strictly ahead of this build's `1.16.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.16.0" });
+    const files = baseFiles({ schemaVersion: "1.17.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.16.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.17.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -859,12 +869,12 @@ describe("parseImportArchive — task lists and sections (TASK-004 / ADR-029)", 
     expect(result.data?.taskLists).toEqual([
       {
         id: "tl1", profileId: "profile1", parentId: null, name: "Inbox", isInbox: true,
-        defaultView: "list", position: 1024, createdAt: "2026-07-01T00:00:00.000Z",
+        defaultView: "list", viewConfig: null, position: 1024, createdAt: "2026-07-01T00:00:00.000Z",
         updatedAt: "2026-07-01T00:00:00.000Z",
       },
       {
         id: "tl2", profileId: "profile1", parentId: "tl1", name: "Posao", isInbox: false,
-        defaultView: "kanban", position: 2048, createdAt: "2026-07-01T00:00:00.000Z",
+        defaultView: "kanban", viewConfig: null, position: 2048, createdAt: "2026-07-01T00:00:00.000Z",
         updatedAt: "2026-07-01T00:00:00.000Z",
       },
     ]);
@@ -879,9 +889,40 @@ describe("parseImportArchive — task lists and sections (TASK-004 / ADR-029)", 
     expect(result.data?.tasks[0]).toMatchObject({ listId: "tl2", sectionId: "ts1", position: -1024 });
   });
 
+  it("round-trips a list's view config, and reads its absence as no preferences", () => {
+    const viewConfig = {
+      list: { sort: { field: "dueDate", direction: "asc" }, filters: { status: "todo" } },
+      kanban: { groupBy: "section" },
+      cards: { sort: { field: "title", direction: "desc" } },
+      calendar: { filters: { priority: "high" } },
+    };
+    const configured = { ...VALID_TASK_LIST, id: "tl2", isInbox: false, viewConfig };
+
+    const result = parseTasksFile([VALID_TASK_LIST, configured]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.taskLists.map((list) => list.viewConfig)).toEqual([null, viewConfig]);
+  });
+
+  it("reads an explicit null and an empty view config as no preferences, never as a stored one", () => {
+    const result = parseTasksFile([
+      { ...VALID_TASK_LIST, viewConfig: null },
+      { ...VALID_TASK_LIST, id: "tl2", isInbox: false, viewConfig: {} },
+      { ...VALID_TASK_LIST, id: "tl3", isInbox: false, viewConfig: { cards: {} } },
+    ]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.taskLists.map((list) => list.viewConfig)).toEqual([null, null, null]);
+  });
+
   const BAD_LISTS: { name: string; row: Record<string, unknown>; detail: string }[] = [
     { name: "an empty name", row: { name: "" }, detail: "name" },
-    { name: "a view outside migration 022's CHECK", row: { defaultView: "gantt" }, detail: "defaultView" },
+    { name: "a view outside migration 038's CHECK", row: { defaultView: "gantt" }, detail: "defaultView" },
+    // A PRESENT view config is validated strictly, the `problemSteps` posture:
+    // a hand-edited archive must not smuggle a shape into a column with no CHECK.
+    { name: "a view config that is not an object", row: { viewConfig: "{}" }, detail: "viewConfig" },
+    { name: "a view config naming a view that does not exist", row: { viewConfig: { gantt: {} } }, detail: "viewConfig" },
+    { name: "a view config grouping by something outside the set", row: { viewConfig: { kanban: { groupBy: "tag" } } }, detail: "viewConfig" },
+    { name: "a view config sorting by a field the schema has not got", row: { viewConfig: { list: { sort: { field: "listId", direction: "asc" } } } }, detail: "viewConfig" },
+    { name: "a view config filtering on a status outside the domain", row: { viewConfig: { cards: { filters: { status: "arhiva" } } } }, detail: "viewConfig" },
     { name: "a non-boolean isInbox", row: { isInbox: 1 }, detail: "isInbox" },
     { name: "a fractional position", row: { position: 1.5 }, detail: "position" },
     { name: "no position at all", row: { position: undefined }, detail: "position" },
@@ -2286,8 +2327,8 @@ describe("parseImportArchive — note folder preferences (the 1.7.0 era gate)", 
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.15.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.15.0");
+  it("is 1.16.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.16.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -2432,17 +2473,27 @@ describe("parseImportArchive — schema version", () => {
     expect(result.data).toMatchObject({ eventTemplates: [] });
   });
 
-  it("accepts a newer patch", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.15.7" })));
+  // And for the one ADR-050's four views have just superseded: a 1.15 archive
+  // carries no `viewConfig` on any task list, which is exactly what a profile
+  // whose lists had no fourth view to configure looks like — an
+  // optional-with-a-default, so again no era flag.
+  it("accepts an older minor — a 1.15 archive still parses here", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.15.0" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
 
-  // `1.16.0`: the nearest minor strictly ahead of this build's `1.15.0`.
+  it("accepts a newer patch", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.16.7" })));
+    expect(result.problems).toEqual([]);
+    expect(result.data).not.toBeNull();
+  });
+
+  // `1.17.0`: the nearest minor strictly ahead of this build's `1.16.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.16.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.17.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.16.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.17.0" },
     ]);
     expect(result.data).toBeNull();
   });

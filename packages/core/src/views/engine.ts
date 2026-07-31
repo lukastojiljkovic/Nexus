@@ -91,6 +91,10 @@ export interface KanbanGroup<T> {
  * value is missing or not a known option. Input order is preserved within
  * groups; sort before grouping. Throws ViewConfigError if groupBy is not a
  * select field in the schema.
+ *
+ * The ungrouped bucket is ALWAYS emitted, empty or not: whether an empty one
+ * earns a column on screen is a rendering question, answered by the config's
+ * `ungroupedAlwaysShown` where the columns are drawn (see `KanbanViewConfig`).
  */
 export function groupForKanban<T extends Record<string, unknown>>(
   items: readonly T[],

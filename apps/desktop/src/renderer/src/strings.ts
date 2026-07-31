@@ -292,6 +292,77 @@ export const strings = {
     viewLabel: "Prikaz",
     viewList: "Lista",
     viewKanban: "Tabla",
+    viewCards: "Kartice",
+    viewCalendar: "Kalendar",
+    /**
+     * The per-view controls above the rows (ADR-050): what the shown scope is
+     * ordered by, what a board's columns come from, and what is filtered out.
+     * Each is remembered per LIST and per VIEW, so a board grouped by sekcija
+     * and a list sorted by rok can both be true of the same list at once.
+     */
+    controls: {
+      /** Names the row of selects for a screen reader — „Prikaz“ alone is the toggle beside it. */
+      regionLabel: "Podešavanja prikaza",
+      sortLabel: "Redosled",
+      /**
+       * The first option, and the one a list opens on: no sort at all, so the
+       * rows stay in the order the user dragged them into. It is a real choice,
+       * not an absence — which is why it is worded rather than left blank.
+       */
+      sortManual: "Ručni redosled",
+      /**
+       * The sortable fields. Deliberately NOT status/prioritet: the views
+       * engine collates a select field by its stored VALUE, which would order
+       * prioritet as high–low–medium–none — a sort that looks like a feature
+       * and behaves like an accident. Grouping a board by them is what answers
+       * that question honestly.
+       */
+      sortField: {
+        title: "Naslov",
+        dueDate: "Rok",
+        startDate: "Počinje",
+        completedAt: "Završen",
+        done: "Urađeno",
+      },
+      groupLabel: "Grupisanje",
+      group: {
+        status: "Status",
+        priority: "Prioritet",
+        section: "Sekcija",
+      },
+      statusLabel: "Status",
+      statusAll: "Svi statusi",
+      priorityLabel: "Prioritet",
+      priorityAll: "Svi prioriteti",
+      /**
+       * The board's null column when it is grouped by sekcija: the list itself,
+       * where a task with no heading lives. Always drawn, empty or not — it is a
+       * real place to drop something back into, not a leftovers pile.
+       */
+      bodyColumn: "Telo liste",
+      /** The card's own „⋯“ menu — the keyboard way to do what the drag does. */
+      cardMenuLabel: "Premesti karticu",
+      moveLeft: "Pomeri levo",
+      moveRight: "Pomeri desno",
+      /**
+       * Shown in place of the rows when the view's own filter matches nothing.
+       * Its own sentence rather than the oznake one: the two hide rows for
+       * different reasons, and an answer that named the wrong filter would send
+       * the user to clear a control that is not the one holding the rows back.
+       */
+      filterEmptyDescription: "Nijedan zadatak ne odgovara izabranom filteru.",
+    },
+    /** The month grid over the selected list (ADR-050) — one bar per task, between „Počinje“ and „Rok“. */
+    calendar: {
+      regionLabel: "Kalendar zadataka",
+      prevMonth: "Prethodni mesec",
+      nextMonth: "Sledeći mesec",
+      today: "Danas",
+      /** Heading of the strip under the grid: a task with no rok has no day to sit on, and dragging it onto one is what gives it a rok. */
+      undatedLabel: "Bez roka",
+      /** Trailing word of the muted „+3 još“ a day shows when its bars outrun the lanes. */
+      moreSuffix: "još",
+    },
     emptyTitle: "Nema zadataka",
     emptyDescription:
       "Zapiši prvi zadatak u polje iznad — dovoljno je ime i Enter.",

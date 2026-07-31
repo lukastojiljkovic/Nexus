@@ -30,6 +30,8 @@ export type {
   SelectFieldDef,
 } from "./views/fields.js";
 export type {
+  CalendarViewConfig,
+  CardsViewConfig,
   FilterSpec,
   KanbanViewConfig,
   ListViewConfig,
@@ -377,6 +379,33 @@ export {
   SMART_LIST_IDS,
 } from "./tasks/taskSmartLists.js";
 export type { SmartListContext, SmartListId, SmartListTask } from "./tasks/taskSmartLists.js";
+
+export {
+  isEmptyTaskViewConfig,
+  normalizeTaskViewConfig,
+  parseStoredTaskViewConfig,
+  serializeTaskViewConfig,
+  TASK_VIEW_FILTER_PRIORITIES,
+  TASK_VIEW_FILTER_STATUSES,
+  TASK_VIEW_KANBAN_GROUPS,
+  TASK_VIEW_SORT_DIRECTIONS,
+  TASK_VIEW_SORT_FIELDS,
+  taskViewFilterSpecs,
+  validateTaskViewConfig,
+} from "./tasks/taskViewConfig.js";
+export type {
+  TaskCalendarViewSettings,
+  TaskKanbanViewSettings,
+  TaskSortedViewSettings,
+  TaskViewConfig,
+  TaskViewFilterPriority,
+  TaskViewFilterStatus,
+  TaskViewFilters,
+  TaskViewKanbanGroup,
+  TaskViewSort,
+  TaskViewSortDirection,
+  TaskViewSortField,
+} from "./tasks/taskViewConfig.js";
 
 export {
   chordAccelerator,

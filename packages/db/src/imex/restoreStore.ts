@@ -3,7 +3,7 @@ import type { ExportSettings, ProfileData } from "@nexus/core";
 import { RestoreValidationError } from "../errors.js";
 import { TOGGLEABLE_NOTIFICATION_SOURCES } from "../notify/notificationStore.js";
 import { TASK_ORDER_GAP, TaskListStore } from "../tasks/taskListStore.js";
-import { exdatesText, offsetsText, recurrenceText } from "./columnText.js";
+import { exdatesText, offsetsText, recurrenceText, viewConfigText } from "./columnText.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -219,9 +219,9 @@ export class RestoreStore {
 
     this.insertTaskList = db.prepare(
       `INSERT INTO task_lists
-         (id, profile_id, parent_id, name, is_inbox, default_view, position,
+         (id, profile_id, parent_id, name, is_inbox, default_view, view_config, position,
           created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertTaskSection = db.prepare(
       `INSERT INTO task_sections (id, list_id, name, position, created_at, updated_at)
@@ -433,7 +433,8 @@ export class RestoreStore {
       for (const list of input.data.taskLists) {
         this.insertTaskList.run(
           list.id, this.profileId, list.parentId, list.name, list.isInbox ? 1 : 0,
-          list.defaultView, list.position, list.createdAt, list.updatedAt,
+          list.defaultView, viewConfigText(list.viewConfig),
+          list.position, list.createdAt, list.updatedAt,
         );
         written += 1;
       }

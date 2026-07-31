@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { TaskViewConfig } from "@nexus/core";
 import {
   MAX_TASK_LIST_NAME_LENGTH,
   NexusDatabase,
@@ -50,6 +51,14 @@ function scope(): { profileId: string; lists: TaskListStore; inboxId: string } {
 
 function names(lists: TaskListStore): string[] {
   return lists.listActive().map((list) => list.name);
+}
+
+/** The raw column, so a test can tell "stored `{}`" from "stored nothing". */
+function storedViewConfig(listId: string): string | null {
+  const row = db.raw.prepare("SELECT view_config FROM task_lists WHERE id = ?").get(listId) as
+    | { view_config: string | null }
+    | undefined;
+  return row?.view_config ?? null;
 }
 
 describe("positionBetween", () => {
@@ -201,14 +210,91 @@ describe("TaskListStore — lists", () => {
     );
   });
 
-  it("switches a list's default view and refuses one outside the closed set", () => {
+  it("switches a list's default view to any of the four shapes and refuses one outside the closed set", () => {
     const { lists, inboxId } = scope();
-    lists.setDefaultView(inboxId, "kanban", LATER);
-    expect(lists.listActive()[0]).toMatchObject({ defaultView: "kanban", updatedAt: LATER });
+    for (const view of ["kanban", "cards", "calendar", "list"] as const) {
+      lists.setDefaultView(inboxId, view, LATER);
+      expect(lists.listActive()[0]).toMatchObject({ defaultView: view, updatedAt: LATER });
+    }
     // The renderer is untrusted, so the store re-checks what the type already says.
     expect(() =>
       lists.setDefaultView(inboxId, "gantt" as unknown as "kanban", LATER),
     ).toThrow(TaskListValidationError);
+  });
+
+  describe("setViewConfig", () => {
+    it("stores what a list remembers about its views and reads it back whole", () => {
+      const { lists, inboxId } = scope();
+      expect(lists.listActive()[0]).toMatchObject({ viewConfig: null });
+
+      const config: TaskViewConfig = {
+        list: { sort: { field: "dueDate", direction: "asc" }, filters: { status: "todo" } },
+        kanban: { groupBy: "section" },
+        cards: { sort: { field: "title", direction: "desc" } },
+        calendar: { filters: { priority: "high" } },
+      };
+      lists.setViewConfig(inboxId, config, LATER);
+      expect(lists.listActive()[0]).toMatchObject({ viewConfig: config, updatedAt: LATER });
+    });
+
+    it("stores nothing at all for null and for a config that asks for nothing", () => {
+      const { lists, inboxId } = scope();
+      lists.setViewConfig(inboxId, { kanban: { groupBy: "priority" } }, LATER);
+      expect(lists.listActive()[0]?.viewConfig).toEqual({ kanban: { groupBy: "priority" } });
+
+      lists.setViewConfig(inboxId, {}, LATER);
+      expect(lists.listActive()[0]?.viewConfig).toBeNull();
+      expect(storedViewConfig(inboxId)).toBeNull();
+
+      lists.setViewConfig(inboxId, { cards: {} }, LATER);
+      expect(storedViewConfig(inboxId)).toBeNull();
+
+      lists.setViewConfig(inboxId, null, LATER);
+      expect(lists.listActive()[0]?.viewConfig).toBeNull();
+    });
+
+    it("refuses a shape that is not a config — the write is where a mistake is still fixable", () => {
+      const { lists, inboxId } = scope();
+      const refused: unknown[] = [
+        "{}",
+        { gantt: {} },
+        { kanban: { groupBy: "tag" } },
+        { list: { sort: { field: "listId", direction: "asc" } } },
+        { list: { filters: { status: "arhiva" } } },
+        { calendar: { sort: { field: "dueDate", direction: "asc" } } },
+      ];
+      for (const value of refused) {
+        expect(() =>
+          lists.setViewConfig(inboxId, value as TaskViewConfig, LATER),
+        ).toThrow(TaskListValidationError);
+      }
+      expect(storedViewConfig(inboxId)).toBeNull();
+    });
+
+    it("refuses an unknown or deleted list, and a malformed now", () => {
+      const { lists, inboxId } = scope();
+      expect(() => lists.setViewConfig(uuidv7(), {}, LATER)).toThrow(TaskListNotFoundError);
+      expect(() => lists.setViewConfig(inboxId, {}, "danas")).toThrow(TaskListValidationError);
+    });
+
+    it("reads a damaged column leniently — a config can cost a fallback, never the list", () => {
+      const { lists, inboxId } = scope();
+      const write = (text: string) =>
+        db.raw.prepare("UPDATE task_lists SET view_config = ? WHERE id = ?").run(text, inboxId);
+
+      write("{not json");
+      expect(lists.listActive()[0]?.viewConfig).toBeNull();
+
+      write('{"kanban":{"groupBy":"gantt"}}');
+      expect(lists.listActive()[0]?.viewConfig).toBeNull();
+
+      // Whatever a future build (or a hand-edited archive) put there, the half
+      // this build understands still opens.
+      write('{"gantt":{},"cards":{"sort":{"field":"title","direction":"desc"}}}');
+      expect(lists.listActive()[0]?.viewConfig).toEqual({
+        cards: { sort: { field: "title", direction: "desc" } },
+      });
+    });
   });
 
   describe("moveList", () => {

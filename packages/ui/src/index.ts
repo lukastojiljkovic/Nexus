@@ -18,4 +18,9 @@ export {
   type BarChartDatum,
 } from "./components/BarChart.js";
 export { ListView, type ListViewProps } from "./views/ListView.js";
-export { KanbanView, type KanbanViewProps } from "./views/KanbanView.js";
+export {
+  KanbanView,
+  type KanbanCardContext,
+  type KanbanViewProps,
+} from "./views/KanbanView.js";
+export { CardsView, type CardsViewProps } from "./views/CardsView.js";
