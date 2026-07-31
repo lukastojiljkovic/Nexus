@@ -17,6 +17,7 @@ import { ACCENT_IDS, type AccentId } from "@nexus/tokens";
 import {
   BACKUP_CADENCES,
   BACKUP_KEEP_LAST_CHOICES,
+  CSV_IMPORT_COLUMN_ROLES,
   DEFAULT_TARGET_RETENTION,
   LLM_IMPORT_KINDS,
   LLM_IMPORT_MAX_ANSWER_LENGTH,
@@ -33,6 +34,11 @@ import type {
   AppInfo,
   BackupSettingsView,
   CalendarSettings,
+  CsvImportColumnRole,
+  CsvImportDelimiter,
+  CsvImportListChoice,
+  CsvImportPlanPreview,
+  CsvImportPreview,
   DashboardSettings,
   FlagState,
   ImportDuplicateChoice,
@@ -59,6 +65,7 @@ import type {
   RestoreProblem,
   StudySettings,
   Subject,
+  TaskList,
 } from "../../shared/ipc.js";
 import { authErrorMessage, passcodeMeetsPolicy, RecoveryKitPanel } from "./AuthGate.js";
 import { ALL_NOTIFICATION_SOURCES, NOTIFICATION_PRESETS } from "./notificationFormat.js";
@@ -2337,6 +2344,611 @@ function ApkgImportSection({ profileId, hits }: ApkgImportSectionProps) {
   );
 }
 
+/** „Nova lista…" as a `<select>` value — an empty option value, exactly as `NEW_SUBJECT_VALUE` is, so no sentinel can collide with a real list id. */
+const NEW_LIST_VALUE = "";
+
+/**
+ * The CSV flow's state (ADR-062). The `.apkg` machine plus the one phase a
+ * schemaless file needs: `mapping`, where the house dialog is open and the
+ * user says which column is which. `planned` keeps the confirmed roles so
+ * „Izmeni mapiranje" reopens the dialog exactly as it was left.
+ */
+type CsvState =
+  | { phase: "idle"; error: string | null }
+  | { phase: "picked"; fileName: string; busy: boolean; error: string | null }
+  | {
+      phase: "mapping";
+      preview: CsvImportPreview;
+      roles: CsvImportColumnRole[];
+      busy: boolean;
+      error: string | null;
+    }
+  | {
+      phase: "planned";
+      preview: CsvImportPreview;
+      roles: CsvImportColumnRole[];
+      plan: CsvImportPlanPreview;
+      error: string | null;
+    }
+  | { phase: "applying"; plan: CsvImportPlanPreview }
+  | { phase: "applied" };
+
+interface CsvMappingDialogProps {
+  preview: CsvImportPreview;
+  roles: CsvImportColumnRole[];
+  /** The destination-list choice, lifted to the section so it survives a re-parse (the roles do not — they belong to the parse). */
+  lists: TaskList[];
+  listId: string;
+  newListName: string;
+  busy: boolean;
+  error: string | null;
+  onRoleChange: (column: number, role: CsvImportColumnRole) => void;
+  /** A toggle re-parses in MAIN under the override; the fresh columns (and fresh suggestions) replace these. */
+  onDelimiterChange: (delimiter: CsvImportDelimiter) => void;
+  onHeaderChange: (hasHeader: boolean) => void;
+  onListIdChange: (listId: string) => void;
+  onNewListNameChange: (name: string) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+/**
+ * The mapping step (ADR-062), on the house dialog recipe — the recur-dialog
+ * classes outright, widened for a column list and scrolling in its body, the
+ * shortcuts reference's own treatment. One row per detected column: what the
+ * file calls it, its first values, and a role select pre-filled with the
+ * header table's SUGGESTION — confirmed here, never silently committed.
+ *
+ * The delimiter and header toggles re-parse in main and REPLACE the columns
+ * (and their suggestions): a role chosen against one parse must not survive
+ * into a parse whose columns may no longer line up.
+ *
+ * Escape and the backdrop cancel the whole flow, dropping main's pick — the
+ * dialog IS the flow's middle, so backing out of it is backing out of the
+ * import.
+ */
+function CsvMappingDialog({
+  preview,
+  roles,
+  lists,
+  listId,
+  newListName,
+  busy,
+  error,
+  onRoleChange,
+  onDelimiterChange,
+  onHeaderChange,
+  onListIdChange,
+  onNewListNameChange,
+  onConfirm,
+  onCancel,
+}: CsvMappingDialogProps) {
+  const s = strings.settings.csvImport;
+  const shared = strings.settings.restore;
+  const titleId = useId();
+  const questionId = useId();
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  // Focus lands on the first role select: the dialog exists to be answered,
+  // and the first answer is the first column's.
+  useEffect(() => {
+    bodyRef.current?.querySelector("select")?.focus();
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCancel();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onCancel]);
+
+  const choosingNew = listId === NEW_LIST_VALUE;
+  const titleMapped = roles.filter((role) => role === "title").length === 1;
+  const listReady = choosingNew ? newListName.trim().length > 0 : true;
+
+  return createPortal(
+    <div className="recur-dialog__overlay">
+      <div className="recur-dialog__backdrop" onClick={onCancel} />
+      <div
+        className="csv-map__panel recur-dialog__panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={questionId}
+      >
+        <h2 id={titleId} className="recur-dialog__title">
+          {s.mapTitle}
+        </h2>
+        <p className="recur-dialog__name app__path">{preview.fileName}</p>
+        <p id={questionId} className="recur-dialog__question">
+          {s.mapQuestion}
+        </p>
+
+        <div className="csv-map__body" ref={bodyRef}>
+          <div className="csv-map__toggles">
+            <label className="csv-map__toggle">
+              <span className="set__section-caption">{s.delimiterLabel}</span>
+              <select
+                className="set__select"
+                value={preview.delimiter}
+                aria-label={s.delimiterLabel}
+                disabled={busy}
+                onChange={(event) => onDelimiterChange(event.target.value === ";" ? ";" : ",")}
+              >
+                <option value=",">{s.delimiterComma}</option>
+                <option value=";">{s.delimiterSemicolon}</option>
+              </select>
+            </label>
+            <Checkbox
+              checked={preview.hasHeader}
+              disabled={busy}
+              onChange={(event) => onHeaderChange(event.target.checked)}
+            >
+              {s.headerLabel}
+            </Checkbox>
+          </div>
+
+          {preview.columns.map((column, index) => {
+            const name =
+              column.header !== null && column.header.trim().length > 0
+                ? column.header
+                : `${s.columnFallbackPrefix} ${index + 1}`;
+            const samples = column.samples.filter((sample) => sample.trim().length > 0);
+            return (
+              <div className="csv-map__column" key={index}>
+                <div className="csv-map__column-facts">
+                  <span className="csv-map__column-name">{name}</span>
+                  <span className="csv-map__samples">
+                    {s.samplesLabel} {samples.length > 0 ? samples.join(" · ") : "—"}
+                  </span>
+                </div>
+                <select
+                  className="set__select"
+                  value={roles[index] ?? "ignore"}
+                  aria-label={`${s.roleLabel}: ${name}`}
+                  disabled={busy}
+                  onChange={(event) => {
+                    const role = CSV_IMPORT_COLUMN_ROLES.find(
+                      (candidate) => candidate === event.target.value,
+                    );
+                    onRoleChange(index, role ?? "ignore");
+                  }}
+                >
+                  {CSV_IMPORT_COLUMN_ROLES.map((role) => (
+                    <option key={role} value={role}>
+                      {s.roles[role]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            );
+          })}
+          {!titleMapped && <p className="set__section-caption">{s.titleRequired}</p>}
+
+          <div className="csv-map__list">
+            <p className="set__section-caption">{s.listLabel}</p>
+            <select
+              className="set__select"
+              value={listId}
+              aria-label={s.listLabel}
+              disabled={busy}
+              onChange={(event) => onListIdChange(event.target.value)}
+            >
+              <option value={NEW_LIST_VALUE}>{s.newListOption}</option>
+              {lists.map((list) => (
+                <option key={list.id} value={list.id}>
+                  {list.name}
+                </option>
+              ))}
+            </select>
+            {choosingNew && (
+              <TextField
+                label={s.newListLabel}
+                placeholder={s.newListPlaceholder}
+                value={newListName}
+                disabled={busy}
+                onChange={(event) => onNewListNameChange(event.target.value)}
+              />
+            )}
+          </div>
+
+          {error != null && <p className="set__error">{error}</p>}
+        </div>
+
+        <div className="recur-dialog__actions csv-map__actions">
+          <Button size="sm" variant="primary" disabled={busy || !titleMapped || !listReady} onClick={onConfirm}>
+            {s.confirmButton}
+          </Button>
+          <Button className="recur-dialog__cancel" onClick={onCancel}>
+            {shared.cancelButton}
+          </Button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+interface CsvImportSectionProps {
+  profileId: string;
+  /** SET-014 search hits; the section reads only its own entry id out of it. */
+  hits: ReadonlySet<string>;
+}
+
+/**
+ * Uvoz zadataka (.csv) — ADR-062.
+ *
+ * Deliberately the `.apkg` section's twin, one step longer: pick → MAP →
+ * preview → confirm, the same busy and error states, the same `set__` recipes,
+ * the same shared undo banner afterwards. The extra step is the one thing a
+ * CSV cannot answer for itself — it has no fixed schema — so the mapping
+ * dialog asks, with the header table's suggestion pre-filled.
+ *
+ * The destination-list choice lives in the SECTION's state rather than the
+ * dialog's, exactly as the `.apkg` subject does: it survives the re-parses a
+ * delimiter toggle causes, and resets where a new pick starts. The ROLES live
+ * with the parse they were suggested against — a re-parse replaces both.
+ *
+ * The plan preview shows the planner's own per-module arithmetic (the same
+ * table every import shows, narrowed to the modules that carry anything — for
+ * a CSV only Zadaci) above the translator's row-by-row drops, each named with
+ * the row number the user's spreadsheet shows.
+ */
+function CsvImportSection({ profileId, hits }: CsvImportSectionProps) {
+  const s = strings.settings.csvImport;
+  // The half of the flow that is identical to its siblings', read from where
+  // it is already spelled rather than spelled a second time.
+  const shared = strings.settings.restore;
+
+  const [state, setState] = useState<CsvState>({ phase: "idle", error: null });
+  const [lists, setLists] = useState<TaskList[]>([]);
+  // Outside the state machine for the reason the `.apkg` subject is: the
+  // choice survives the phase changes around it, and resets where a new pick
+  // starts.
+  const [listId, setListId] = useState<string>(NEW_LIST_VALUE);
+  const [newListName, setNewListName] = useState("");
+  // Read by the unmount cleanup only. An apply in flight must never be
+  // cancelled from here: main is writing the very plan `cancelCsvImport`
+  // would drop.
+  const applying = useRef(false);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const snapshot = await window.nexus.listTaskLists(profileId);
+        if (active) setLists(snapshot.lists);
+      } catch (loadError) {
+        // The list is a convenience: „Nova lista" still works without it, so
+        // this must not take the whole block down.
+        console.error("Nexus: failed to load task lists:", loadError);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profileId]);
+
+  // Releasing the pick on unmount matters for the `.apkg` section's reason:
+  // main is holding the file's text and parsed cells until it is told to let go.
+  useEffect(() => {
+    return () => {
+      if (applying.current) return;
+      void window.nexus.cancelCsvImport().catch((error: unknown) => {
+        console.error("Nexus: failed to release the picked CSV:", error);
+      });
+    };
+  }, []);
+
+  function listChoice(): CsvImportListChoice {
+    return listId === NEW_LIST_VALUE
+      ? { existingListId: null, newListName: newListName.trim() }
+      : { existingListId: listId, newListName: null };
+  }
+
+  /**
+   * Parses (or re-parses) in main and opens the mapping dialog on the result.
+   * The roles are RESET to the fresh parse's suggestions on purpose: a role
+   * chosen against one parse must not survive into a parse whose columns may
+   * no longer line up.
+   */
+  async function runPreview(
+    fileName: string,
+    delimiter: CsvImportDelimiter | null,
+    hasHeader: boolean | null,
+  ): Promise<void> {
+    setState((previous) =>
+      previous.phase === "mapping"
+        ? { ...previous, busy: true, error: null }
+        : { phase: "picked", fileName, busy: true, error: null },
+    );
+    try {
+      const result = await window.nexus.previewCsvImport(profileId, delimiter, hasHeader);
+      switch (result.status) {
+        case "ready":
+          setState({
+            phase: "mapping",
+            preview: result.preview,
+            roles: result.preview.columns.map((column) => column.suggestedRole),
+            busy: false,
+            error: null,
+          });
+          return;
+        case "unreadable":
+          setState({ phase: "picked", fileName, busy: false, error: s.unreadable[result.code] });
+          return;
+        case "no-file":
+          setState({ phase: "idle", error: s.noFileError });
+          return;
+      }
+    } catch (previewError) {
+      setState({ phase: "picked", fileName, busy: false, error: s.readError });
+      console.error("Nexus: failed to preview a CSV:", previewError);
+    }
+  }
+
+  /** Picking from any phase starts over — main drops the superseded pick itself. */
+  async function choose(): Promise<void> {
+    setState({ phase: "idle", error: null });
+    try {
+      const picked = await window.nexus.pickCsvFile();
+      if (picked.canceled) return;
+      await runPreview(picked.fileName, null, null);
+    } catch (pickError) {
+      setState({ phase: "idle", error: s.readError });
+      console.error("Nexus: failed to pick a CSV:", pickError);
+    }
+  }
+
+  /** Confirms the mapping: main translates and plans the rows it already holds, and the dialog gives way to the plan. */
+  async function confirmMapping(): Promise<void> {
+    if (state.phase !== "mapping" || state.busy) return;
+    const { preview, roles } = state;
+    setState({ ...state, busy: true, error: null });
+    try {
+      const result = await window.nexus.mapCsvImport(profileId, roles, listChoice());
+      if (result.status === "no-file") {
+        setState({ phase: "idle", error: s.noFileError });
+        return;
+      }
+      setState({ phase: "planned", preview, roles, plan: result.preview, error: null });
+    } catch (mapError) {
+      setState({ ...state, busy: false, error: s.mapError });
+      console.error("Nexus: failed to map a CSV import:", mapError);
+    }
+  }
+
+  async function apply(plan: CsvImportPlanPreview): Promise<void> {
+    if (state.phase !== "planned") return;
+    const { preview, roles } = state;
+    applying.current = true;
+    setState({ phase: "applying", plan });
+    try {
+      await window.nexus.applyCsvImport(profileId, plan.token);
+      // Main reloads this renderer moments after the reply lands, so the
+      // success line simply stands until the whole screen is replaced.
+      setState({ phase: "applied" });
+    } catch (applyError) {
+      // A failed apply leaves the plan — and the token main accepts —
+      // untouched, so the screen goes back to it rather than to idle.
+      setState({ phase: "planned", preview, roles, plan, error: s.error });
+      console.error("Nexus: failed to apply a CSV import:", applyError);
+    } finally {
+      applying.current = false;
+    }
+  }
+
+  async function cancel(): Promise<void> {
+    setState({ phase: "idle", error: null });
+    try {
+      await window.nexus.cancelCsvImport();
+    } catch (cancelError) {
+      console.error("Nexus: failed to release the picked CSV:", cancelError);
+    }
+  }
+
+  const planned = state.phase === "planned" || state.phase === "applying";
+
+  return (
+    <div className="set__import-block">
+      <h3 className={labelClass("set__module-group-title", hits.has("backup-csv"))}>{s.title}</h3>
+      <p className="app__muted">{s.description}</p>
+
+      {!planned && state.phase !== "applied" && (
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={state.phase === "picked" && state.busy}
+          onClick={() => void choose()}
+        >
+          {s.pickButton}
+        </Button>
+      )}
+
+      {state.phase === "idle" && state.error != null && <p className="set__error">{state.error}</p>}
+
+      {state.phase === "picked" && (
+        <>
+          <p className="set__section-caption">
+            {shared.pickedPrefix} <span className="app__path">{state.fileName}</span>
+          </p>
+          {state.busy && <p className="app__muted">{s.reading}</p>}
+          {state.error != null && <p className="set__error">{state.error}</p>}
+        </>
+      )}
+
+      {state.phase === "mapping" && (
+        <CsvMappingDialog
+          preview={state.preview}
+          roles={state.roles}
+          lists={lists}
+          listId={listId}
+          newListName={newListName}
+          busy={state.busy}
+          error={state.error}
+          onRoleChange={(column, role) => {
+            setState((previous) => {
+              if (previous.phase !== "mapping") return previous;
+              const roles = [...previous.roles];
+              // A role means ONE column (the wire refuses a repeat), so
+              // claiming it takes it away from whichever column held it.
+              if (role !== "ignore") {
+                for (let index = 0; index < roles.length; index += 1) {
+                  if (index !== column && roles[index] === role) roles[index] = "ignore";
+                }
+              }
+              roles[column] = role;
+              return { ...previous, roles };
+            });
+          }}
+          onDelimiterChange={(delimiter) =>
+            void runPreview(state.preview.fileName, delimiter, state.preview.hasHeader)
+          }
+          onHeaderChange={(hasHeader) =>
+            void runPreview(state.preview.fileName, state.preview.delimiter, hasHeader)
+          }
+          onListIdChange={setListId}
+          onNewListNameChange={setNewListName}
+          onConfirm={() => void confirmMapping()}
+          onCancel={() => void cancel()}
+        />
+      )}
+
+      {planned && (
+        <>
+          <div className="set__restore-head">
+            <span className="app__path">{state.plan.fileName}</span>
+            <span className="set__restore-meta">
+              {s.listPrefix} {state.plan.listName}
+              {state.plan.listIsNew ? ` ${s.listNewSuffix}` : ""}
+            </span>
+          </div>
+
+          <table className="set__restore-table">
+            <tbody>
+              <tr>
+                <th scope="row">{s.rowRows}</th>
+                <td>{state.plan.rows}</td>
+              </tr>
+              <tr>
+                <th scope="row">{s.rowTasks}</th>
+                <td>{state.plan.tasks}</td>
+              </tr>
+            </tbody>
+          </table>
+          {state.plan.blankRows > 0 && (
+            <p className="set__section-caption">
+              {s.blankRowsPrefix} {state.plan.blankRows}
+            </p>
+          )}
+
+          {/* The plan's OWN arithmetic, from the same planner every import
+              uses, narrowed to the modules that carry anything — a CSV
+              touches only Zadaci, and five rows of zeros would say nothing. */}
+          <table className="set__restore-table set__import-table">
+            <thead>
+              <tr>
+                <td />
+                <th scope="col">{strings.settings.import.columnParsed}</th>
+                <th scope="col">{strings.settings.import.columnImported}</th>
+                <th scope="col">{strings.settings.import.columnMerged}</th>
+                <th scope="col">{strings.settings.import.columnSkipped}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ARCHIVE_MODULES.filter((key) => state.plan.modules[key].parsed > 0).map((key) => {
+                const counts = state.plan.modules[key];
+                return (
+                  <tr key={key}>
+                    <th scope="row">{shared.modules[key]}</th>
+                    <td>{counts.parsed}</td>
+                    <td>{counts.imported}</td>
+                    <td>{counts.merged}</td>
+                    <td>{counts.skipped}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {(state.plan.drops.length > 0 || state.plan.listCellsDropped > 0) && (
+            <>
+              <h4 className="set__module-group-title">{s.dropsTitle}</h4>
+              <ul className="set__restore-problems">
+                {state.plan.drops.map((drop, index) => (
+                  <li className="set__import-skip" key={`${drop.row}-${drop.code}-${index}`}>
+                    <span className="set__import-skip-meta">
+                      {s.dropRowPrefix} {drop.row}
+                    </span>{" "}
+                    {s.drops[drop.code]}
+                  </li>
+                ))}
+                {state.plan.listCellsDropped > 0 && (
+                  <li className="set__import-skip">
+                    {s.listCellsDroppedPrefix}{" "}
+                    <span className="set__import-skip-meta">{state.plan.listCellsDropped}</span>{" "}
+                    {s.listCellsDroppedSuffix}
+                  </li>
+                )}
+              </ul>
+            </>
+          )}
+
+          {state.plan.tasks === 0 && <p className="set__section-caption">{s.nothingToImport}</p>}
+
+          <div className="set__restore-actions">
+            {state.plan.tasks > 0 && (
+              <Button
+                size="sm"
+                variant="primary"
+                disabled={state.phase === "applying"}
+                onClick={() => state.phase === "planned" && void apply(state.plan)}
+              >
+                {s.applyButton}
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={state.phase === "applying"}
+              onClick={() => {
+                // Back to the dialog with everything as it was left: the rows
+                // are still in main, so confirming again is a re-plan.
+                if (state.phase !== "planned") return;
+                setState({
+                  phase: "mapping",
+                  preview: state.preview,
+                  roles: state.roles,
+                  busy: false,
+                  error: null,
+                });
+              }}
+            >
+              {s.remapButton}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={state.phase === "applying"}
+              onClick={() => void cancel()}
+            >
+              {shared.cancelButton}
+            </Button>
+          </div>
+
+          {state.phase === "applying" && <p className="app__muted">{s.applying}</p>}
+          {state.phase === "planned" && state.error != null && (
+            <p className="set__error">{state.error}</p>
+          )}
+        </>
+      )}
+
+      {state.phase === "applied" && <p className="set__section-caption">{s.applied}</p>}
+    </div>
+  );
+}
+
 /** sr-Latn collation for the destination list — plain "sr" mis-tailors Latin š/č/ć. */
 const FOLDER_COLLATOR = new Intl.Collator(["sr-Latn", "sr"]);
 
@@ -4495,6 +5107,7 @@ export function SettingsPage({
         <RestoreSection profileId={profileId} hits={hits} />
         <ImportSection profileId={profileId} hits={hits} />
         <ApkgImportSection profileId={profileId} hits={hits} />
+        <CsvImportSection profileId={profileId} hits={hits} />
         <LlmImportSection profileId={profileId} hits={hits} />
         <MarkdownImportSection profileId={profileId} hits={hits} />
       </Card>

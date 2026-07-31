@@ -310,18 +310,23 @@ import { computeSnoozeUntil, resolveDefaultSnoozePreset } from "./snooze.js";
 import { pickProfilePicture } from "./profilePicture.js";
 import {
   applyApkgImport,
+  applyCsvImport,
   applyImport,
   applyLlmImport,
   applyRestore,
   cancelApkgImport,
+  cancelCsvImport,
   cancelImport,
   cancelLlmImport,
   cancelRestore,
   clearRestoreState,
+  mapCsvImport,
   pickApkgFile,
+  pickCsvFile,
   pickImportFile,
   pickRestoreFile,
   previewApkgImport,
+  previewCsvImport,
   previewImport,
   previewLlmImport,
   previewRestore,
@@ -336,6 +341,9 @@ import {
   BACKUP_CADENCES,
   CARD_KINDS,
   CARD_TEXT_MAX_LENGTH,
+  CSV_IMPORT_COLUMN_ROLES,
+  CSV_IMPORT_MAX_COLUMNS,
+  CSV_IMPORT_MAX_LIST_NAME_LENGTH,
   DASHBOARD_SET_NAME_MAX_LENGTH,
   IMPORT_DUPLICATE_TYPES,
   IpcChannel,
@@ -376,6 +384,13 @@ import {
   type BackupSettingsView,
   type CalendarOverlayEvent,
   type CalendarSettings,
+  type CsvImportApplyResult,
+  type CsvImportColumnRole,
+  type CsvImportDelimiter,
+  type CsvImportListChoice,
+  type CsvImportMapResult,
+  type CsvImportPickResult,
+  type CsvImportPreviewResult,
   type DashboardPickResult,
   type DashboardSettings,
   type DashboardSetsCreated,
@@ -1399,6 +1414,79 @@ function asApkgSubjectChoice(value: unknown, field: string): ApkgImportSubjectCh
     }
   }
   return { existingSubjectId, newSubjectName };
+}
+
+/** `imex:import-csv-preview`'s delimiter override (ADR-062): null lets the sniff decide; anything else must be one of the two delimiters the reader knows. */
+function asCsvImportDelimiter(value: unknown, field: string): CsvImportDelimiter | null {
+  if (value === null || value === "," || value === ";") return value;
+  throw new Error(`Invalid IPC payload: "${field}" must be ",", ";" or null.`);
+}
+
+/** The header override, on the same terms: null lets the sniff decide. */
+function asCsvImportHeaderFlag(value: unknown, field: string): boolean | null {
+  if (value === null || typeof value === "boolean") return value;
+  throw new Error(`Invalid IPC payload: "${field}" must be a boolean or null.`);
+}
+
+/**
+ * `imex:import-csv-map`'s role array (ADR-062): one role per column, each from
+ * the closed vocabulary, exactly one of them `"title"`, and no other non-ignore
+ * role repeated — a mapping that named a role twice would leave the decision to
+ * whichever column happened to be read first, which is not a decision anybody
+ * made. Length is bounded here by the same cap the preview refuses files over;
+ * whether it matches the SESSION's column count is `restore.ts`'s check, since
+ * only the session knows the parse.
+ */
+function asCsvImportRoles(value: unknown, field: string): CsvImportColumnRole[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > CSV_IMPORT_MAX_COLUMNS) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be an array of 1..${CSV_IMPORT_MAX_COLUMNS} roles.`,
+    );
+  }
+  const seen = new Set<CsvImportColumnRole>();
+  const roles = value.map((entry, index) => {
+    const role = CSV_IMPORT_COLUMN_ROLES.find((candidate) => candidate === entry);
+    if (role === undefined) {
+      throw new Error(`Invalid IPC payload: "${field}[${index}]" is not a column role.`);
+    }
+    if (role !== "ignore") {
+      if (seen.has(role)) {
+        throw new Error(`Invalid IPC payload: "${field}" names the role "${role}" twice.`);
+      }
+      seen.add(role);
+    }
+    return role;
+  });
+  if (!seen.has("title")) {
+    throw new Error(`Invalid IPC payload: "${field}" must map exactly one column to "title".`);
+  }
+  return roles;
+}
+
+/**
+ * `imex:import-csv-map`'s destination list (ADR-062) — `asApkgSubjectChoice`'s
+ * twin, one module over: EXACTLY one of the two fields non-null, and a new name
+ * within the ceiling the list form itself is held to. Whether the named list
+ * actually exists is `restore.ts`'s to prove against the live stores.
+ */
+function asCsvImportListChoice(value: unknown, field: string): CsvImportListChoice {
+  const body = asRecord(value);
+  const existingListId = asNullableId(body.existingListId, `${field}.existingListId`);
+  const newListName = asNullableString(body.newListName, `${field}.newListName`);
+  if ((existingListId === null) === (newListName === null)) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must name exactly one of an existing list or a new list name.`,
+    );
+  }
+  if (newListName !== null) {
+    const trimmed = newListName.trim();
+    if (trimmed.length === 0 || trimmed.length > CSV_IMPORT_MAX_LIST_NAME_LENGTH) {
+      throw new Error(
+        `Invalid IPC payload: "${field}.newListName" must be 1..${CSV_IMPORT_MAX_LIST_NAME_LENGTH} characters.`,
+      );
+    }
+  }
+  return { existingListId, newListName };
 }
 
 /**
@@ -3658,6 +3746,20 @@ function restoreDeps(): ImportDeps {
       const options: OpenDialogOptions = {
         properties: ["openFile"],
         filters: [{ name: "Anki špil", extensions: ["apkg"] }],
+      };
+      const { canceled, filePaths } = mainWindow
+        ? await dialog.showOpenDialog(mainWindow, options)
+        : await dialog.showOpenDialog(options);
+      return canceled ? null : (filePaths[0] ?? null);
+    },
+    // ADR-062's picker, on the `.apkg` picker's exact terms: its own injection,
+    // so no surface can open another's dialog. `.txt` rides beside `.csv`
+    // because a hand-kept table is often saved as one; the filter is a
+    // convenience, not a check — the parse decides what the file is.
+    pickCsvFile: async () => {
+      const options: OpenDialogOptions = {
+        properties: ["openFile"],
+        filters: [{ name: "CSV tabela", extensions: ["csv", "txt"] }],
       };
       const { canceled, filePaths } = mainWindow
         ? await dialog.showOpenDialog(mainWindow, options)
@@ -6689,6 +6791,58 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.imexImportApkgCancel, (event): void => {
     assertTrustedSender(event);
     cancelApkgImport();
+  });
+
+  // The CSV task import (ADR-062): its own pick, preview, MAP and apply, on
+  // the `.apkg` session shape plus the one step a schemaless format needs —
+  // the confirmed mapping. The renderer never supplies a filesystem path
+  // (`imex:import-csv-pick` is the sole source of one, SEC-EL) and never sends
+  // cell data back: the parsed rows stay in main's pending session, and
+  // `imex:import-csv-map` carries role assignments and choices only.
+  ipcMain.handle(IpcChannel.imexImportCsvPick, (event): Promise<CsvImportPickResult> => {
+    assertTrustedSender(event);
+    return pickCsvFile(restoreDeps());
+  });
+
+  // The delimiter/header overrides ride here: null lets the sniff decide, a
+  // value re-parses the text main already read under that choice. `profileId`
+  // is validated only to keep the request shape uniform with its siblings —
+  // the columns step reads nothing of the profile.
+  ipcMain.handle(
+    IpcChannel.imexImportCsvPreview,
+    (event, payload): Promise<CsvImportPreviewResult> => {
+      assertTrustedSender(event);
+      const body = asRecord(payload);
+      asNonEmptyString(body.profileId, "profileId");
+      const delimiter = asCsvImportDelimiter(body.delimiter, "delimiter");
+      const hasHeader = asCsvImportHeaderFlag(body.hasHeader, "hasHeader");
+      return previewCsvImport(restoreDeps(), delimiter, hasHeader);
+    },
+  );
+
+  // Structurally validated below (closed roles, one title, exactly-one list
+  // arm), semantically in `restore.ts` — the session's column count and the
+  // profile's live lists are facts only that side knows.
+  ipcMain.handle(IpcChannel.imexImportCsvMap, (event, payload): CsvImportMapResult => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const roles = asCsvImportRoles(body.roles, "roles");
+    const list = asCsvImportListChoice(body.list, "list");
+    return mapCsvImport(restoreDeps(), profileId, roles, list);
+  });
+
+  ipcMain.handle(IpcChannel.imexImportCsvApply, (event, payload): Promise<CsvImportApplyResult> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const token = asRestoreToken(body.token, "token");
+    return applyCsvImport(restoreDeps(), profileId, token);
+  });
+
+  ipcMain.handle(IpcChannel.imexImportCsvCancel, (event): void => {
+    assertTrustedSender(event);
+    cancelCsvImport();
   });
 
   // The LLM-assisted import (IMEX-005): no pick, because there is no file — the

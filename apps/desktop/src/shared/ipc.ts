@@ -302,6 +302,25 @@ export const IpcChannel = {
   imexImportApkgPreview: "imex:import-apkg-preview",
   imexImportApkgApply: "imex:import-apkg-apply",
   imexImportApkgCancel: "imex:import-apkg-cancel",
+  // A CSV of tasks (ADR-062). Its OWN five channels, on the reasoning that gave
+  // the `.apkg` its four — a different reader under different caps, and a shared
+  // channel would be one validated field away from letting a request for one
+  // produce the other. FIVE rather than four because a CSV has no fixed schema:
+  // between the preview (columns, samples, a SUGGESTED mapping) and the apply
+  // sits the MAPPING step, where the user says which column is which and where
+  // the imported tasks land. The parsed cells stay in MAIN's pending session;
+  // `imex:import-csv-map` sends role assignments and choices, never data.
+  //
+  // No replan channel, deliberately: re-mapping IS the re-plan. Calling
+  // `imex:import-csv-map` again re-translates and re-plans the rows main
+  // already holds — `imex:import-replan`'s precedent, in the form this flow
+  // takes — and re-calling the preview with a delimiter/header override
+  // re-parses the TEXT main already read, never the file.
+  imexImportCsvPick: "imex:import-csv-pick",
+  imexImportCsvPreview: "imex:import-csv-preview",
+  imexImportCsvMap: "imex:import-csv-map",
+  imexImportCsvApply: "imex:import-csv-apply",
+  imexImportCsvCancel: "imex:import-csv-cancel",
   // The LLM-assisted import (IMEX-005). Four channels, not five: there is no
   // FILE to pick — the "source" is text the user pasted out of their own chat,
   // which travels with the preview request. The prompt itself needs no channel
@@ -3907,8 +3926,10 @@ export interface RestoreUndoResult {
  * than a second `"import"` for exactly that reason: the sentence that names it
  * is about an Anki deck, not about a Nexus archive — and `"llm"` (IMEX-005) is
  * its own for the same one, since what it undoes came out of a chat window.
+ * `"csv"` (ADR-062) joins on identical terms: the sentence that names it is
+ * about somebody's spreadsheet.
  */
-export type RestoreUndoKind = "restore" | "import" | "apkg" | "llm";
+export type RestoreUndoKind = "restore" | "import" | "apkg" | "llm" | "csv";
 
 export interface RestoreStatus {
   undo: {
@@ -4397,6 +4418,202 @@ export interface ImexImportApkgPreviewRequest {
 
 /** `token` names the exact plan being confirmed — main refuses any other value. */
 export interface ImexImportApkgApplyRequest {
+  profileId: string;
+  token: string;
+}
+
+// --- CSV task import (ADR-062) -----------------------------------------------
+
+/**
+ * The CSV file itself, on disk — checked by a stat BEFORE the read, so an
+ * oversized file is refused without a byte of it entering main's heap. A CSV
+ * this import reads is a hand-kept table; past five megabytes it is not one.
+ */
+export const CSV_IMPORT_MAX_FILE_BYTES = 5_242_880; // 5 MiB
+
+/**
+ * Columns one file may carry. A hand-kept table has tens; past this the file
+ * is a matrix, not a task list — and every column costs the wire a header, a
+ * role select and three samples, so the bound protects the mapping step
+ * itself. A NAMED refusal, like every cap on this wire, never a truncation.
+ */
+export const CSV_IMPORT_MAX_COLUMNS = 128;
+
+/** Longest name the mapping step's new-list input accepts — `MAX_TASK_LIST_NAME_LENGTH`, the ceiling the list form itself is held to. */
+export const CSV_IMPORT_MAX_LIST_NAME_LENGTH = MAX_TASK_LIST_NAME_LENGTH;
+
+/**
+ * Why a picked CSV could not be turned into columns at all. `empty` covers a
+ * file with no rows AND one whose header is its only row — either way there is
+ * no data row to map. No `not-a-csv`: the format has no magic bytes, so any
+ * text IS one — what varies is only how it reads.
+ */
+export type CsvImportReadErrorCode = "too-large" | "empty" | "too-many-columns" | "unreadable";
+
+/**
+ * Mirrors `@nexus/core`'s `CsvColumnRole` exactly — redeclared here like every
+ * other closed domain in this file, so `main`'s assignment of a core value to
+ * this type turns a role added in core into a compile error rather than an
+ * option the screen cannot label.
+ */
+export type CsvImportColumnRole =
+  | "title"
+  | "description"
+  | "dueDate"
+  | "priority"
+  | "status"
+  | "list"
+  | "section"
+  | "tags"
+  | "ignore";
+
+/** Every role, in the order the mapping dialog's selects offer them — and what main validates an incoming one against. */
+export const CSV_IMPORT_COLUMN_ROLES: readonly CsvImportColumnRole[] = [
+  "title",
+  "description",
+  "dueDate",
+  "priority",
+  "status",
+  "list",
+  "section",
+  "tags",
+  "ignore",
+];
+
+/** The two delimiters the reader sniffs between — RFC 4180's comma, and the semicolon Serbian-locale Excel writes. Mirrors core's `CsvDelimiter`. */
+export type CsvImportDelimiter = "," | ";";
+
+/** Both delimiters, in the order the mapping dialog's toggle offers them. */
+export const CSV_IMPORT_DELIMITERS: readonly CsvImportDelimiter[] = [",", ";"];
+
+/** How many sample values each column of the mapping step shows — enough to recognise a column, few enough that the dialog stays a dialog. */
+export const CSV_IMPORT_SAMPLE_ROWS = 3;
+
+/** One detected column of the mapping step: what it calls itself, what its first rows hold, and the role the header table suggests. */
+export interface CsvImportColumn {
+  /** The header cell, or null when the file has no header row — the screen then names the column by position. */
+  header: string | null;
+  /** The column's first `CSV_IMPORT_SAMPLE_ROWS` data values, empty cells included. */
+  samples: string[];
+  /** The bilingual header table's suggestion (ADR-062) — a suggestion the user confirms in the mapping step, never a silent guess. */
+  suggestedRole: CsvImportColumnRole;
+}
+
+/**
+ * The columns step: the file really read and really parsed under the delimiter
+ * and header choice the request named (or the sniff's own answer, when it
+ * named none). What it deliberately is NOT is a plan — no counts, no drops:
+ * those need a confirmed mapping, which is `imex:import-csv-map`'s answer.
+ */
+export interface CsvImportPreview {
+  fileName: string;
+  /** The delimiter this parse used — the sniff's answer, or the override that replaced it. What the dialog's toggle shows. */
+  delimiter: CsvImportDelimiter;
+  /** Whether the first row was read as a header — the sniff's answer, or the override. */
+  hasHeader: boolean;
+  columns: CsvImportColumn[];
+  /** Data rows under this parse, header excluded, blank lines included. */
+  rows: number;
+}
+
+export type CsvImportPreviewResult =
+  | { status: "no-file" }
+  | { status: "unreadable"; code: CsvImportReadErrorCode }
+  | { status: "ready"; preview: CsvImportPreview };
+
+/**
+ * Where the imported tasks land — ALL of them: a CSV import targets ONE list
+ * (ADR-062). Exactly one of the two fields is non-null, which main validates
+ * structurally (`ApkgImportSubjectChoice`'s rule) and `restore.ts` semantically
+ * against the profile's live lists.
+ */
+export interface CsvImportListChoice {
+  /** An existing list of this profile — the Inbox included; it is a list like any other here. */
+  existingListId: string | null;
+  /** A list this import creates. A name an active list already carries means THAT list — the same get-or-create reading a new deck's name gets (IMEX-005). */
+  newListName: string | null;
+}
+
+/**
+ * Why one data row lost something. Mirrors `@nexus/core`'s `CsvRowDropCode`
+ * exactly, on the same drift-check terms as every closed domain here.
+ */
+export type CsvImportRowDropCode = "empty-title" | "bad-due-date";
+
+/** One named loss, with the 1-based data-row number (header excluded) so the user can find the cell in their spreadsheet. */
+export interface CsvImportRowDrop {
+  row: number;
+  code: CsvImportRowDropCode;
+}
+
+/**
+ * The confirmed mapping's dry run: the session's rows really translated and
+ * really planned against this profile — never an estimate. Two reports, as on
+ * an `.apkg` preview: `modules` is `planForeignImport`'s own arithmetic (the
+ * merged column is real — a tag the profile already has merges onto it), and
+ * the drop fields are the TRANSLATOR's account of what the spreadsheet loses.
+ */
+export interface CsvImportPlanPreview {
+  /** Identifies this exact mapping-and-plan. The apply refuses any other value, so a stale screen can never write a plan the user did not see. */
+  token: string;
+  fileName: string;
+  /** The destination list, by name — the existing one chosen, or the one this import will create. */
+  listName: string;
+  /** True when that list does not exist yet, so the screen can say the import will create it. */
+  listIsNew: boolean;
+  /** Data rows read, blank lines included. */
+  rows: number;
+  /** Task rows the plan will insert. */
+  tasks: number;
+  /** Rows whose every cell was empty — skipped silently, counted so the arithmetic balances. */
+  blankRows: number;
+  /** `planForeignImport`'s own arithmetic, per archive module — only TASKS is ever non-zero for a CSV. */
+  modules: Record<ArchiveModuleName, ImportModuleCounts>;
+  drops: CsvImportRowDrop[];
+  /** Non-empty cells of a column mapped `"list"` — counted, never honoured, since the import targets ONE list (ADR-062). */
+  listCellsDropped: number;
+}
+
+/**
+ * `roles` names one role per detected column, in column order — its length
+ * must equal the preview's column count, exactly one entry must be `"title"`,
+ * and no other role may repeat (main checks the shape, `restore.ts` the
+ * session). The mapping travels; the DATA never does — the parsed cells live
+ * in main's pending session (SEC-EL).
+ */
+export interface ImexImportCsvMapRequest {
+  profileId: string;
+  roles: CsvImportColumnRole[];
+  list: CsvImportListChoice;
+}
+
+export type CsvImportMapResult =
+  | { status: "no-file" }
+  | { status: "ready"; preview: CsvImportPlanPreview };
+
+/** What a completed CSV import wrote. The same shape every archive operation reports, because it is undone through the same one slot and shown through the same one banner. */
+export type CsvImportApplyResult = RestoreApplyResult;
+
+/** The outcome of the native "pick a CSV" dialog — `ApkgImportPickResult`'s shape, for the same file-with-no-encryption reason. */
+export type CsvImportPickResult =
+  | { canceled: true }
+  | { canceled: false; path: string; fileName: string };
+
+/**
+ * Picking (`imex:import-csv-pick`) and dropping the pick
+ * (`imex:import-csv-cancel`) carry no payload — main holds the pick. The
+ * delimiter/header OVERRIDES ride on the preview request: null means "the
+ * sniff decides", a value re-parses the text main already read under that
+ * choice (the sniff is overridable, never a silent commitment — ADR-062).
+ */
+export interface ImexImportCsvPreviewRequest {
+  profileId: string;
+  delimiter: CsvImportDelimiter | null;
+  hasHeader: boolean | null;
+}
+
+/** `token` names the exact plan being confirmed — main refuses any other value. */
+export interface ImexImportCsvApplyRequest {
   profileId: string;
   token: string;
 }
@@ -5297,6 +5514,42 @@ export interface NexusApi {
   applyApkgImport(profileId: string, token: string): Promise<ApkgImportApplyResult>;
   /** Drops the picked `.apkg` without applying it, releasing the OS file lock an opened one holds. */
   cancelApkgImport(): Promise<void>;
+  /**
+   * Opens the native "pick a CSV" dialog (ADR-062). Its own pick, held apart
+   * from every other import's for the reason theirs are held apart: nothing on
+   * one surface may ever reach another's file.
+   */
+  pickCsvFile(): Promise<CsvImportPickResult>;
+  /**
+   * Reads and parses the picked CSV into columns with headers, samples and a
+   * SUGGESTED mapping — the step before the user confirms which column is
+   * which. `null` overrides mean "the sniff decides"; a value re-parses the
+   * text main already read under that choice, never the file again.
+   */
+  previewCsvImport(
+    profileId: string,
+    delimiter: CsvImportDelimiter | null,
+    hasHeader: boolean | null,
+  ): Promise<CsvImportPreviewResult>;
+  /**
+   * Applies the confirmed mapping in MAIN against the session's parsed rows —
+   * the renderer sends role assignments and the target-list choice, never data
+   * — and answers the real plan: counts, and every named drop with its row
+   * number. Calling it again with different choices re-plans the same rows.
+   */
+  mapCsvImport(
+    profileId: string,
+    roles: readonly CsvImportColumnRole[],
+    list: CsvImportListChoice,
+  ): Promise<CsvImportMapResult>;
+  /**
+   * Confirms the plan `token` names, ADDING its tasks to this profile through
+   * the planner's same apply path. Undoable through `undoRestore`, which every
+   * import shares. The renderer is reloaded shortly AFTER this resolves.
+   */
+  applyCsvImport(profileId: string, token: string): Promise<CsvImportApplyResult>;
+  /** Drops the picked CSV without applying it — what it releases is the file's text and parsed cells in main's memory. */
+  cancelCsvImport(): Promise<void>;
   /**
    * Dry-runs the LLM import (IMEX-005) by really parsing the pasted answer and
    * really planning it against this profile. No file and no dialog: the source

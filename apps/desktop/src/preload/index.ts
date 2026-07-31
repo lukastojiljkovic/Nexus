@@ -474,6 +474,14 @@ const api: NexusApi = {
   applyApkgImport: (profileId, token) =>
     ipcRenderer.invoke(IpcChannel.imexImportApkgApply, { profileId, token }),
   cancelApkgImport: () => ipcRenderer.invoke(IpcChannel.imexImportApkgCancel),
+  pickCsvFile: () => ipcRenderer.invoke(IpcChannel.imexImportCsvPick),
+  previewCsvImport: (profileId, delimiter, hasHeader) =>
+    ipcRenderer.invoke(IpcChannel.imexImportCsvPreview, { profileId, delimiter, hasHeader }),
+  mapCsvImport: (profileId, roles, list) =>
+    ipcRenderer.invoke(IpcChannel.imexImportCsvMap, { profileId, roles, list }),
+  applyCsvImport: (profileId, token) =>
+    ipcRenderer.invoke(IpcChannel.imexImportCsvApply, { profileId, token }),
+  cancelCsvImport: () => ipcRenderer.invoke(IpcChannel.imexImportCsvCancel),
   previewLlmImport: (profileId, kind, text, deck) =>
     ipcRenderer.invoke(IpcChannel.imexImportLlmPreview, { profileId, kind, text, deck }),
   replanLlmImport: (profileId, token, importDuplicates) =>

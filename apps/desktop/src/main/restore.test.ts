@@ -80,22 +80,28 @@ import type {
 
 import * as apkgReaderModule from "./apkgReader.js";
 import * as archiveReaderModule from "./archiveReader.js";
+import * as csvReaderModule from "./csvReader.js";
 import { deriveRestoredNotes, gatherProfileData } from "./profileData.js";
 import type { ProfileDataDeps } from "./profileData.js";
 import {
   applyApkgImport,
+  applyCsvImport,
   applyImport,
   applyLlmImport,
   applyRestore,
   cancelApkgImport,
+  cancelCsvImport,
   cancelImport,
   cancelLlmImport,
   cancelRestore,
   clearRestoreState,
+  mapCsvImport,
   pickApkgFile,
+  pickCsvFile,
   pickImportFile,
   pickRestoreFile,
   previewApkgImport,
+  previewCsvImport,
   previewImport,
   previewLlmImport,
   previewRestore,
@@ -231,6 +237,7 @@ function makeTestDeps(
   handle: NexusDatabase,
   filePath: string | null,
   apkgPath: string | null = null,
+  csvPath: string | null = null,
 ): TestDepsHandle {
   const blobs = new Map<string, Uint8Array>();
   const cancelFocusCalls: string[] = [];
@@ -262,6 +269,8 @@ function makeTestDeps(
     // ADR-052's own picker, injected separately for the reason main injects it
     // separately: nothing on the archive surface may ever open this dialog.
     pickApkgFile: async () => apkgPath,
+    // ADR-062's picker, on the same terms again.
+    pickCsvFile: async () => csvPath,
     reloadRenderer: () => {
       reloadCount += 1;
     },
@@ -2928,5 +2937,399 @@ describe("LLM-assisted import", () => {
     if (second.status !== "ready") unreachable();
     clearRestoreState();
     await expect(applyLlmImport(deps, profileB, second.preview.token)).rejects.toThrow(/No LLM/);
+  });
+});
+
+// --- CSV task import (ADR-062) -----------------------------------------------
+
+/** One hand-kept table, comma-separated with a header — a quoted tags cell, a done row with a Serbian date, an empty-title row and an unreadable date. */
+const CSV_FIXTURE = [
+  "naziv,rok,prioritet,status,oznake,sekcija",
+  'Prijaviti ispit,2026-09-01,visok,,"faks, hitno",Avgust',
+  "Kupiti sveske,31.8.2026.,,done,faks,",
+  ",2026-09-02,,,,",
+  "Bez roka,kad stignem,srednji,,,Avgust",
+  "",
+].join("\r\n");
+
+async function writeCsvFixture(fileName: string, content: string): Promise<string> {
+  const filePath = fixturePath(fileName);
+  await writeFile(filePath, content, "utf8");
+  return filePath;
+}
+
+describe("CSV task import", () => {
+  it("imports a mapped table into a NEW list, merges a known tag, and undoes it all away", async () => {
+    const filePath = await writeCsvFixture("zadaci.csv", CSV_FIXTURE);
+    const profileB = createProfile(dbB, "B");
+    // The target already has one of the file's two tags: the planner must
+    // MERGE it by name rather than create a twin.
+    const existingTag = new TaskTagStore(dbB.raw, profileB).createTag(
+      "faks",
+      new Date().toISOString(),
+    );
+    const { deps, getReloadCount } = makeTestDeps(dbB, null, null, filePath);
+
+    const picked = await pickCsvFile(deps);
+    expect(picked).toEqual({ canceled: false, path: filePath, fileName: "zadaci.csv" });
+
+    const previewed = await previewCsvImport(deps, null, null);
+    if (previewed.status !== "ready") unreachable();
+    expect(previewed.preview).toMatchObject({
+      fileName: "zadaci.csv",
+      delimiter: ",",
+      hasHeader: true,
+      rows: 4,
+    });
+    // Columns with their headers, first samples and the SUGGESTED mapping —
+    // the quoted tags cell already unquoted.
+    expect(previewed.preview.columns.map((column) => column.header)).toEqual([
+      "naziv",
+      "rok",
+      "prioritet",
+      "status",
+      "oznake",
+      "sekcija",
+    ]);
+    expect(previewed.preview.columns.map((column) => column.suggestedRole)).toEqual([
+      "title",
+      "dueDate",
+      "priority",
+      "status",
+      "tags",
+      "section",
+    ]);
+    expect(previewed.preview.columns[4]?.samples).toEqual(["faks, hitno", "faks", ""]);
+
+    const mapped = mapCsvImport(
+      deps,
+      profileB,
+      ["title", "dueDate", "priority", "status", "tags", "section"],
+      { existingListId: null, newListName: "Uvoz" },
+    );
+    if (mapped.status !== "ready") unreachable();
+    const plan = mapped.preview;
+    expect(plan).toMatchObject({ listName: "Uvoz", listIsNew: true, rows: 4, tasks: 3, blankRows: 0 });
+    // Every named loss, with the row number the user's spreadsheet shows.
+    expect(plan.drops).toEqual([
+      { row: 3, code: "empty-title" },
+      { row: 4, code: "bad-due-date" },
+    ]);
+    // The planner's own arithmetic: the one shared tag merged, nothing skipped.
+    expect(plan.modules.tasks.merged).toBe(1);
+    expect(plan.modules.tasks.skipped).toBe(0);
+    expect(plan.modules.tasks.imported).toBe(plan.modules.tasks.parsed - 1);
+    // Nothing has been written yet: a preview is a dry run.
+    expect(new TaskStore(dbB.raw, profileB).listActive()).toHaveLength(0);
+
+    const applied = await applyCsvImport(deps, profileB, plan.token);
+    expect(applied.blobsAdded).toBe(0);
+    expect(applied.missingBlobs).toBe(0);
+
+    const lists = new TaskListStore(dbB.raw, profileB).listActive();
+    const uvoz = lists.find((list) => list.name === "Uvoz");
+    expect(uvoz).toBeDefined();
+    const tasks = new TaskStore(dbB.raw, profileB).listActive();
+    expect(tasks.map((task) => task.title).sort()).toEqual([
+      "Bez roka",
+      "Kupiti sveske",
+      "Prijaviti ispit",
+    ]);
+    expect(tasks.every((task) => task.listId === uvoz?.id)).toBe(true);
+    expect(tasks.find((task) => task.title === "Prijaviti ispit")).toMatchObject({
+      dueDate: "2026-09-01",
+      priority: "high",
+      done: false,
+    });
+    // The Serbian date normalized; the done row completed, per migration 002's CHECK.
+    expect(tasks.find((task) => task.title === "Kupiti sveske")).toMatchObject({
+      dueDate: "2026-08-31",
+      done: true,
+    });
+    // The unreadable date cost the DATE, never the task.
+    expect(tasks.find((task) => task.title === "Bez roka")).toMatchObject({
+      dueDate: null,
+      priority: "medium",
+    });
+
+    // One section inside the new list, holding the two rows that named it.
+    const sections = new TaskListStore(dbB.raw, profileB).listSections(uvoz?.id ?? "");
+    expect(sections.map((section) => section.name)).toEqual(["Avgust"]);
+    const inSection = tasks.filter((task) => task.sectionId === sections[0]?.id);
+    expect(inSection.map((task) => task.title).sort()).toEqual(["Bez roka", "Prijaviti ispit"]);
+
+    // „faks" merged onto the pre-existing tag; only „hitno" is new.
+    const tags = new TaskTagStore(dbB.raw, profileB).listTags();
+    expect(tags.map((tag) => tag.name).sort()).toEqual(["faks", "hitno"]);
+    expect(tags.find((tag) => tag.name === "faks")?.id).toBe(existingTag.id);
+
+    // The shared banner, naming this operation as its own kind.
+    expect(restoreStatus(profileB).undo?.kind).toBe("csv");
+    await flushSetTimeout();
+    expect(getReloadCount()).toBe(1);
+
+    await undoRestore(deps, profileB);
+    expect(new TaskStore(dbB.raw, profileB).listActive()).toHaveLength(0);
+    expect(
+      new TaskListStore(dbB.raw, profileB).listActive().find((list) => list.name === "Uvoz"),
+    ).toBeUndefined();
+    // The pre-existing tag survives the undo; the imported one is gone.
+    expect(new TaskTagStore(dbB.raw, profileB).listTags().map((tag) => tag.name)).toEqual(["faks"]);
+    expect(restoreStatus(profileB).undo).toBeNull();
+  });
+
+  it("files the tasks into an EXISTING list without creating one (the seeded-id seam)", async () => {
+    const filePath = await writeCsvFixture("postojeca.csv", CSV_FIXTURE);
+    const profileB = createProfile(dbB, "B");
+    const inbox = new TaskListStore(dbB.raw, profileB).listActive().find((list) => list.isInbox);
+    if (inbox === undefined) unreachable();
+    const { deps } = makeTestDeps(dbB, null, null, filePath);
+
+    await pickCsvFile(deps);
+    await previewCsvImport(deps, null, null);
+    const mapped = mapCsvImport(
+      deps,
+      profileB,
+      ["title", "dueDate", "priority", "status", "tags", "section"],
+      { existingListId: inbox.id, newListName: null },
+    );
+    if (mapped.status !== "ready") unreachable();
+    expect(mapped.preview.listName).toBe(inbox.name);
+    expect(mapped.preview.listIsNew).toBe(false);
+
+    await applyCsvImport(deps, profileB, mapped.preview.token);
+    const lists = new TaskListStore(dbB.raw, profileB).listActive();
+    // No list row was created: the Inbox is still the only list.
+    expect(lists).toHaveLength(1);
+    expect(new TaskStore(dbB.raw, profileB).listActive().every((task) => task.listId === inbox.id)).toBe(
+      true,
+    );
+  });
+
+  it("reads a new-list name an active list already carries as THAT list (get-or-create)", async () => {
+    const filePath = await writeCsvFixture("imenjak.csv", "naziv\r\nZadatak\r\n");
+    const profileB = createProfile(dbB, "B");
+    const listStore = new TaskListStore(dbB.raw, profileB);
+    const posao = listStore.createList({ name: "Posao" }, new Date().toISOString());
+    const { deps } = makeTestDeps(dbB, null, null, filePath);
+
+    await pickCsvFile(deps);
+    await previewCsvImport(deps, null, null);
+    const mapped = mapCsvImport(deps, profileB, ["title"], {
+      existingListId: null,
+      newListName: "Posao",
+    });
+    if (mapped.status !== "ready") unreachable();
+    expect(mapped.preview.listIsNew).toBe(false);
+
+    await applyCsvImport(deps, profileB, mapped.preview.token);
+    expect(listStore.listActive().filter((list) => list.name === "Posao")).toHaveLength(1);
+    expect(new TaskStore(dbB.raw, profileB).listActive()[0]?.listId).toBe(posao.id);
+  });
+
+  it("re-previews under a delimiter/header override without reading the file again", async () => {
+    const filePath = await writeCsvFixture(
+      "tacka-zapeta.csv",
+      "naziv;rok\r\nZadatak;2026-09-01\r\n",
+    );
+    const profileB = createProfile(dbB, "B");
+    const { deps } = makeTestDeps(dbB, null, null, filePath);
+
+    await pickCsvFile(deps);
+    const readSpy = vi.spyOn(csvReaderModule, "readCsvText");
+
+    const first = await previewCsvImport(deps, null, null);
+    if (first.status !== "ready") unreachable();
+    expect(first.preview.delimiter).toBe(";");
+    expect(first.preview.columns).toHaveLength(2);
+    expect(readSpy).toHaveBeenCalledTimes(1);
+
+    // Forcing the comma re-parses the TEXT: one column now, and no second read.
+    const second = await previewCsvImport(deps, ",", false);
+    if (second.status !== "ready") unreachable();
+    expect(second.preview.delimiter).toBe(",");
+    expect(second.preview.hasHeader).toBe(false);
+    expect(second.preview.columns).toHaveLength(1);
+    expect(second.preview.rows).toBe(2);
+    expect(readSpy).toHaveBeenCalledTimes(1);
+    void profileB;
+  });
+
+  it("invalidates a confirmed plan when a re-preview re-parses the table", async () => {
+    const filePath = await writeCsvFixture("ponisti.csv", "naziv\r\nZadatak\r\n");
+    const profileB = createProfile(dbB, "B");
+    const { deps } = makeTestDeps(dbB, null, null, filePath);
+
+    await pickCsvFile(deps);
+    await previewCsvImport(deps, null, null);
+    const mapped = mapCsvImport(deps, profileB, ["title"], {
+      existingListId: null,
+      newListName: "Uvoz",
+    });
+    if (mapped.status !== "ready") unreachable();
+
+    await previewCsvImport(deps, null, false);
+    await expect(applyCsvImport(deps, profileB, mapped.preview.token)).rejects.toThrow(
+      /No CSV mapping/,
+    );
+  });
+
+  it("re-maps the same rows under a fresh token, and refuses the stale one", async () => {
+    const filePath = await writeCsvFixture("remap.csv", CSV_FIXTURE);
+    const profileB = createProfile(dbB, "B");
+    const { deps } = makeTestDeps(dbB, null, null, filePath);
+
+    await pickCsvFile(deps);
+    await previewCsvImport(deps, null, null);
+    const roles: Parameters<typeof mapCsvImport>[2] = [
+      "title",
+      "dueDate",
+      "priority",
+      "status",
+      "tags",
+      "section",
+    ];
+    const first = mapCsvImport(deps, profileB, roles, { existingListId: null, newListName: "A" });
+    if (first.status !== "ready") unreachable();
+    const second = mapCsvImport(deps, profileB, roles, { existingListId: null, newListName: "B" });
+    if (second.status !== "ready") unreachable();
+    expect(second.preview.token).not.toBe(first.preview.token);
+    await expect(applyCsvImport(deps, profileB, first.preview.token)).rejects.toThrow(/stale/);
+  });
+
+  it("counts a mapped list column's cells as dropped — every task still lands in the one chosen list", async () => {
+    const filePath = await writeCsvFixture(
+      "kolona-lista.csv",
+      "naziv,lista\r\nPrvi,Posao\r\nDrugi,\r\nTreći,Kuća\r\n",
+    );
+    const profileB = createProfile(dbB, "B");
+    const { deps } = makeTestDeps(dbB, null, null, filePath);
+
+    await pickCsvFile(deps);
+    const previewed = await previewCsvImport(deps, null, null);
+    if (previewed.status !== "ready") unreachable();
+    expect(previewed.preview.columns.map((column) => column.suggestedRole)).toEqual([
+      "title",
+      "list",
+    ]);
+
+    const mapped = mapCsvImport(deps, profileB, ["title", "list"], {
+      existingListId: null,
+      newListName: "Uvoz",
+    });
+    if (mapped.status !== "ready") unreachable();
+    expect(mapped.preview.tasks).toBe(3);
+    expect(mapped.preview.listCellsDropped).toBe(2);
+
+    await applyCsvImport(deps, profileB, mapped.preview.token);
+    const lists = new TaskListStore(dbB.raw, profileB).listActive();
+    expect(lists.map((list) => list.name).sort()).toEqual([
+      lists.find((list) => list.isInbox)?.name ?? "",
+      "Uvoz",
+    ].sort());
+  });
+
+  it("refuses a stale token, a foreign profile, a second apply and a foreign list", async () => {
+    const filePath = await writeCsvFixture("cuvari.csv", "naziv\r\nZadatak\r\n");
+    const profileB = createProfile(dbB, "B");
+    const otherProfile = createProfile(dbB, "Drugi");
+    const foreignList = new TaskListStore(dbB.raw, otherProfile).createList(
+      { name: "Tuđa" },
+      new Date().toISOString(),
+    );
+    const { deps } = makeTestDeps(dbB, null, null, filePath);
+
+    await pickCsvFile(deps);
+    await previewCsvImport(deps, null, null);
+    expect(() =>
+      mapCsvImport(deps, profileB, ["title"], { existingListId: foreignList.id, newListName: null }),
+    ).toThrow(/No active list/);
+
+    const mapped = mapCsvImport(deps, profileB, ["title"], {
+      existingListId: null,
+      newListName: "Uvoz",
+    });
+    if (mapped.status !== "ready") unreachable();
+    const token = mapped.preview.token;
+
+    await expect(applyCsvImport(deps, profileB, "not-the-token")).rejects.toThrow(/stale/);
+    await expect(applyCsvImport(deps, otherProfile, token)).rejects.toThrow(/different profile/);
+
+    await applyCsvImport(deps, profileB, token);
+    await expect(applyCsvImport(deps, profileB, token)).rejects.toThrow(/No CSV mapping/);
+  });
+
+  it("refuses a mapping whose length is not the parsed table's column count", async () => {
+    const filePath = await writeCsvFixture("duzina.csv", "naziv,rok\r\nZadatak,2026-09-01\r\n");
+    const profileB = createProfile(dbB, "B");
+    const { deps } = makeTestDeps(dbB, null, null, filePath);
+
+    await pickCsvFile(deps);
+    await previewCsvImport(deps, null, null);
+    expect(() =>
+      mapCsvImport(deps, profileB, ["title"], { existingListId: null, newListName: "Uvoz" }),
+    ).toThrow(/columns/);
+  });
+
+  it("reports an empty file — and a header-only file — by code rather than rejecting", async () => {
+    const emptyPath = await writeCsvFixture("prazan.csv", "");
+    const profileB = createProfile(dbB, "B");
+    const { deps } = makeTestDeps(dbB, null, null, emptyPath);
+
+    await pickCsvFile(deps);
+    await expect(previewCsvImport(deps, null, null)).resolves.toEqual({
+      status: "unreadable",
+      code: "empty",
+    });
+
+    const headerOnly = await writeCsvFixture("samo-zaglavlje.csv", "naziv,rok\r\n");
+    const { deps: deps2 } = makeTestDeps(dbB, null, null, headerOnly);
+    await pickCsvFile(deps2);
+    await expect(previewCsvImport(deps2, null, null)).resolves.toEqual({
+      status: "unreadable",
+      code: "empty",
+    });
+    void profileB;
+  });
+
+  it("keeps its pick apart from the other surfaces and refuses a token across them", async () => {
+    const csvPath = await writeCsvFixture("odvojen.csv", "naziv\r\nZadatak\r\n");
+    const apkgPath = await writeApkgFixture("odvojen.apkg");
+    const profileB = createProfile(dbB, "B");
+    const { deps } = makeTestDeps(dbB, null, apkgPath, csvPath);
+
+    await pickApkgFile(deps);
+    await pickCsvFile(deps);
+    // Picking a CSV did not disturb the .apkg pick, and vice versa.
+    const apkgPreview = await previewApkgImport(deps, profileB, {
+      existingSubjectId: null,
+      newSubjectName: "S",
+    });
+    if (apkgPreview.status !== "ready") unreachable();
+    await previewCsvImport(deps, null, null);
+    const mapped = mapCsvImport(deps, profileB, ["title"], {
+      existingListId: null,
+      newListName: "Uvoz",
+    });
+    if (mapped.status !== "ready") unreachable();
+
+    // Neither surface will honour the other's token.
+    await expect(applyApkgImport(deps, profileB, mapped.preview.token)).rejects.toThrow(/stale/);
+    await expect(applyCsvImport(deps, profileB, apkgPreview.preview.token)).rejects.toThrow(/stale/);
+  });
+
+  it("drops the pick on cancel and on lock", async () => {
+    const filePath = await writeCsvFixture("otkaz.csv", "naziv\r\nZadatak\r\n");
+    const profileB = createProfile(dbB, "B");
+    const { deps } = makeTestDeps(dbB, null, null, filePath);
+
+    await pickCsvFile(deps);
+    cancelCsvImport();
+    await expect(previewCsvImport(deps, null, null)).resolves.toEqual({ status: "no-file" });
+
+    await pickCsvFile(deps);
+    clearRestoreState();
+    await expect(previewCsvImport(deps, null, null)).resolves.toEqual({ status: "no-file" });
+    void profileB;
   });
 });

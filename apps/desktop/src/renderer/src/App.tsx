@@ -87,6 +87,7 @@ const RESTORE_UNDO_BANNERS: Record<RestoreUndoKind, string> = {
   import: strings.settings.import.undoBanner,
   apkg: strings.settings.apkgImport.undoBanner,
   llm: strings.settings.llmImport.undoBanner,
+  csv: strings.settings.csvImport.undoBanner,
 };
 
 /** Idle events that count as activity for the auto-lock timer (AUTH-005). */

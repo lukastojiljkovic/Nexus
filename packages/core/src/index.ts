@@ -166,6 +166,31 @@ export { claimUniqueName, sanitizePathSegment, UNTITLED_NOTE_NAME } from "./imex
 export { toCsv } from "./imex/csv.js";
 export type { CsvValue } from "./imex/csv.js";
 
+export {
+  CSV_COLUMN_ROLES,
+  CSV_LIST_SOURCE_ID,
+  parseCsv,
+  readCsvDueDate,
+  readCsvPriority,
+  readCsvStatus,
+  sniffCsvDelimiter,
+  sniffCsvHeader,
+  splitCsvTags,
+  suggestCsvMapping,
+  translateCsvTasks,
+} from "./imex/csvImport.js";
+export type {
+  CsvColumnRole,
+  CsvDelimiter,
+  CsvDueDateReading,
+  CsvListChoice,
+  CsvRowDrop,
+  CsvRowDropCode,
+  CsvTranslateReport,
+  CsvTranslateTarget,
+  CsvTranslation,
+} from "./imex/csvImport.js";
+
 export { isInlineImageMime, sniffMime } from "./files/sniff.js";
 export { centerSquareCrop, PROFILE_PICTURE_SIZE } from "./files/squareCrop.js";
 export type { CropRect } from "./files/squareCrop.js";

@@ -317,6 +317,15 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
     keywords: ["anki", "apkg", "kartice", "spil", "flashcards", "uvoz"],
   },
   {
+    // ADR-062. The words are the FORMAT's and the tool's — somebody looking for
+    // this types „csv“, „excel“ or „tabela“ — so „arhiva“ is deliberately
+    // absent, exactly as it is from its neighbours.
+    id: "backup-csv",
+    section: "backup",
+    label: s.csvImport.title,
+    keywords: ["csv", "tabela", "excel", "zadaci", "kolone", "todoist", "uvoz"],
+  },
+  {
     // IMEX-005. The words are the TOOL's, not the flow's — somebody looking for
     // this types „chatgpt“ or „ai“, never „uvoz iz arhive“ — so „arhiva“ is
     // deliberately absent, exactly as it is from the two entries around it.

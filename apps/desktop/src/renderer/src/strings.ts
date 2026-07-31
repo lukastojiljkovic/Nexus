@@ -8,6 +8,9 @@ import type {
   ApkgImportSkipCode,
   ApkgReadErrorCode,
   ArchiveReadErrorCode,
+  CsvImportColumnRole,
+  CsvImportReadErrorCode,
+  CsvImportRowDropCode,
   DashboardPickErrorCode,
   ImportDuplicateType,
   ImportSkipCode,
@@ -2906,6 +2909,116 @@ export const strings = {
       nothingToImport: "Iz ovog špila nema šta da se uvede — razlozi su izlistani iznad.",
       /** The post-reload banner (App.tsx) when the undo slot holds an Anki import. */
       undoBanner: "Kartice su uvezene iz Anki špila.",
+    },
+    /**
+     * Uvoz zadataka (.csv) — ADR-062, the block beside „Uvoz iz Anki" and its
+     * sibling in shape, one step longer: pick → MAP → preview → confirm, the
+     * same undo banner afterwards. The extra step is the one thing a CSV
+     * cannot answer for itself — it has no fixed schema — so the mapping
+     * dialog asks the user which column is which, with the header table's own
+     * SUGGESTION pre-filled, never silently committed.
+     *
+     * The copy's whole job is the honesty the flow promises: every loss is
+     * named per row („Red 12"), the destination is ONE list said out loud, and
+     * a mapped „Lista" column's cells are counted as not-carried rather than
+     * quietly flattened.
+     *
+     * Everything shared with the sibling flows — „Izabrano:", „Otkaži" — is
+     * read off `strings.settings.restore` by the component, exactly as the
+     * `.apkg` block reads it. `roles`, `unreadable` and `drops` are typed
+     * against the wire's own closed domains, so a value added in
+     * `shared/ipc.ts` is a compile error here rather than a silently missing
+     * sentence.
+     */
+    csvImport: {
+      title: "Uvoz zadataka (.csv)",
+      description:
+        "Uvezi zadatke iz CSV tabele — izvoza iz drugog alata ili ručno vođenog spiska. Ti kažeš koja kolona je šta, svi zadaci ulaze u jednu listu koju izabereš, a ništa što već imaš se ne menja. Sve što ne može da se pročita piše, red po red, u pregledu pre uvoza. Uvoz možeš opozvati jednim klikom, ali samo dok ne zaključaš ili ne zatvoriš aplikaciju.",
+      pickButton: "Izaberi .csv fajl…",
+      reading: "Čitanje tabele…",
+      /** The mapping dialog (SET §, ADR-062): a row per detected column, the two parse toggles, and the destination list. */
+      mapTitle: "Mapiranje kolona",
+      mapQuestion: "Reci koja kolona je šta — predloženo je već upisano, potvrdi ili promeni.",
+      /** How an unnamed column introduces itself when the file has no header row: „Kolona 3". */
+      columnFallbackPrefix: "Kolona",
+      /** The muted sample line under each header, prefixed so three values do not read as a sentence. */
+      samplesLabel: "Primeri:",
+      roleLabel: "Uloga kolone",
+      /**
+       * One option label per `CsvImportColumnRole`. „Lista (ne uvozi se)" says
+       * the role's own truth in the select itself: the import cilja jednu
+       * listu, so a list column is recognised but its cells are not carried.
+       */
+      roles: {
+        title: "Naziv zadatka",
+        description: "Opis",
+        dueDate: "Rok",
+        priority: "Prioritet",
+        status: "Status",
+        list: "Lista (ne uvozi se)",
+        section: "Sekcija",
+        tags: "Oznake",
+        ignore: "Ne uvozi se",
+      } satisfies Record<CsvImportColumnRole, string>,
+      /** Under the column rows: why the confirm button is asleep until exactly one column is the title. */
+      titleRequired: "Tačno jedna kolona mora biti Naziv zadatka.",
+      delimiterLabel: "Razdvajanje kolona",
+      delimiterComma: "Zapeta (,)",
+      delimiterSemicolon: "Tačka-zapeta (;)",
+      headerLabel: "Prvi red je zaglavlje",
+      /** The destination — ONE list for the whole file (ADR-062), existing or named into being. */
+      listLabel: "Lista za uvezene zadatke",
+      newListOption: "Nova lista…",
+      newListLabel: "Naziv nove liste",
+      newListPlaceholder: "npr. Uvoz",
+      confirmButton: "Prikaži pregled",
+      /** A rejected map call; the dialog stays open, so this invites a retry. */
+      mapError: "Mapiranje nije moglo da se primeni. Pokušaj ponovo.",
+      /** The plan preview under the dialog: where it goes, what arrives, what does not. */
+      listPrefix: "Lista:",
+      listNewSuffix: "— biće napravljena",
+      rowRows: "Redova u tabeli",
+      rowTasks: "Uvozi se zadataka",
+      /** Rendered only when non-zero: blank spreadsheet lines are not losses, but the arithmetic still says where they went. */
+      blankRowsPrefix: "Praznih redova:",
+      /** Back to the mapping dialog — the same rows, the same suggestions, a fresh plan on confirm. */
+      remapButton: "Izmeni mapiranje",
+      dropsTitle: "Šta se ne uvozi",
+      /** How a dropped row names itself: „Red 12" — the data row's own number, header excluded, as the spreadsheet shows it. */
+      dropRowPrefix: "Red",
+      /**
+       * One sentence per `CsvImportRowDropCode`. The due-date sentence says the
+       * task still arrives — losing the date must never read as losing the row.
+       */
+      drops: {
+        "empty-title": "Nema naziva zadatka — red se preskače.",
+        "bad-due-date":
+          "Rok nije mogao da se pročita (dvocifrena godina se odbija, ne pogađa se vek) — zadatak se uvozi bez roka.",
+      } satisfies Record<CsvImportRowDropCode, string>,
+      /** The mapped-„Lista" count line: prefix, then the number, then this suffix. */
+      listCellsDroppedPrefix: "Vrednosti kolone „Lista“:",
+      listCellsDroppedSuffix:
+        "— ne prenose se; svi zadaci ulaze u listu koju si izabrao iznad.",
+      /** One sentence per `CsvImportReadErrorCode`: the file could not be turned into columns at all. */
+      unreadable: {
+        "too-large": "Tabela prelazi bezbednosna ograničenja (5 MB) i zato je odbijena.",
+        empty: "U ovom fajlu nema redova sa podacima.",
+        "too-many-columns": "Tabela ima previše kolona za mapiranje.",
+        unreadable: "Fajl nije mogao da se pročita. Pokušaj ponovo.",
+      } satisfies Record<CsvImportReadErrorCode, string>,
+      applyButton: "Uvezi",
+      applying: "Uvoz u toku…",
+      applied: "Zadaci su uvezeni. Aplikacija se osvežava…",
+      /** A rejected pick/preview call (not one of the typed statuses above). */
+      readError: "Čitanje tabele nije uspelo. Pokušaj ponovo.",
+      /** A rejected apply call; the plan itself stays valid, so this invites a retry. */
+      error: "Uvoz nije uspeo. Pokušaj ponovo.",
+      /** `{ status: "no-file" }`: main no longer holds the pick this screen was showing. */
+      noFileError: "Fajl više nije izabran. Izaberi ga ponovo.",
+      /** Shown when the mapping translates to nothing at all — the „Uvezi" button is hidden, because there is nothing to confirm. */
+      nothingToImport: "Iz ove tabele nema šta da se uveze — razlozi su izlistani iznad.",
+      /** The post-reload banner (App.tsx) when the undo slot holds a CSV import. */
+      undoBanner: "Zadaci su uvezeni iz CSV tabele.",
     },
     /**
      * Uvoz preko AI asistenta (IMEX-005) — the one block in this card whose
