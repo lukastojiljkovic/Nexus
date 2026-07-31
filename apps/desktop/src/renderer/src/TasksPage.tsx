@@ -73,6 +73,8 @@ import type {
   TaskTagLink,
   TaskTemplate,
 } from "../../shared/ipc.js";
+import { AttachmentPreviewDialog } from "./attachmentPreview.js";
+import { attachmentPreviewKind, type AttachmentPreviewKind } from "./attachmentPreviewKind.js";
 import { localTodayKey } from "./examDates.js";
 import {
   hiddenKanbanColumnCount,
@@ -1072,6 +1074,14 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const [attachmentError, setAttachmentError] = useState<"generic" | "tooLarge" | null>(null);
   /** True while the native picker is open — the button is disabled so a second dialog cannot be asked for. */
   const [attaching, setAttaching] = useState(false);
+  // „Pregledaj" (DOC / ADR-064): which attachment the in-app dialog is showing,
+  // and as what. PDF rows never land here — their menu item opens the dedicated
+  // window over IPC instead.
+  const [attachmentPreview, setAttachmentPreview] = useState<{
+    taskId: string;
+    attachment: TaskAttachment;
+    kind: Exclude<AttachmentPreviewKind, "pdf">;
+  } | null>(null);
   /** Šabloni (ADR-035): the profile's saved task shapes, the row whose save prompt is open, and what has been typed into it. */
   const [templates, setTemplates] = useState<TaskTemplate[]>([]);
   const [templateFor, setTemplateFor] = useState<string | null>(null);
@@ -2170,6 +2180,16 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     } catch (error) {
       setAttachmentError("generic");
       console.error("Nexus: failed to open task attachment:", error);
+    }
+  }
+
+  /** The PDF half of „Pregledaj" (ADR-064): asks main to open the dedicated preview window — the renderer names ids only. */
+  async function previewPdfAttachment(taskId: string, attachmentId: string): Promise<void> {
+    try {
+      await window.nexus.previewAttachment(profileId, "task", taskId, attachmentId);
+    } catch (error) {
+      setAttachmentError("generic");
+      console.error("Nexus: failed to preview task attachment:", error);
     }
   }
 
@@ -3348,59 +3368,86 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
             {attachmentError === "tooLarge" ? s.tooLarge : s.actionError}
           </p>
         )}
-        {attachments.map((attachment) => (
-          <div key={attachment.id} className="tasks__attachment">
-            {isInlineImageMime(attachment.mime) && (
-              <img
-                className="tasks__attachment-thumb"
-                src={`nx-blob://${attachment.sha256}`}
-                alt={attachment.fileName}
-              />
-            )}
-            <span className="tasks__attachment-name">{attachment.fileName}</span>
-            <span className="tasks__attachment-size">{formatBytes(attachment.sizeBytes)}</span>
-            <NotePopover label={s.menuLabel} triggerClassName="tasks__attachment-menu">
-              {(close) => (
-                <>
-                  <button
-                    type="button"
-                    className="note__menu-item"
-                    role="menuitem"
-                    onClick={() => {
-                      void openAttachment(taskId, attachment.id);
-                      close();
-                    }}
-                  >
-                    {s.open}
-                  </button>
-                  <button
-                    type="button"
-                    className="note__menu-item"
-                    role="menuitem"
-                    onClick={() => {
-                      void saveAttachmentAs(taskId, attachment.id);
-                      close();
-                    }}
-                  >
-                    {s.saveAs}
-                  </button>
-                  <div className="note__menu-sep" role="separator" />
-                  <button
-                    type="button"
-                    className="note__menu-item note__menu-item--danger"
-                    role="menuitem"
-                    onClick={() => {
-                      void removeAttachment(taskId, attachment.id);
-                      close();
-                    }}
-                  >
-                    {s.remove}
-                  </button>
-                </>
+        {attachments.map((attachment) => {
+          // „Pregledaj" is offered only where the stored mime (plus the ADR-064
+          // extension reading for pre-sniff text rows) says the app can render
+          // the file itself.
+          const previewKind = attachmentPreviewKind(
+            attachment.mime,
+            attachment.fileName,
+            attachment.sizeBytes,
+          );
+          return (
+            <div key={attachment.id} className="tasks__attachment">
+              {isInlineImageMime(attachment.mime) && (
+                <img
+                  className="tasks__attachment-thumb"
+                  src={`nx-blob://${attachment.sha256}`}
+                  alt={attachment.fileName}
+                />
               )}
-            </NotePopover>
-          </div>
-        ))}
+              <span className="tasks__attachment-name">{attachment.fileName}</span>
+              <span className="tasks__attachment-size">{formatBytes(attachment.sizeBytes)}</span>
+              <NotePopover label={s.menuLabel} triggerClassName="tasks__attachment-menu">
+                {(close) => (
+                  <>
+                    {previewKind !== null && (
+                      <button
+                        type="button"
+                        className="note__menu-item"
+                        role="menuitem"
+                        onClick={() => {
+                          if (previewKind === "pdf") {
+                            void previewPdfAttachment(taskId, attachment.id);
+                          } else {
+                            setAttachmentPreview({ taskId, attachment, kind: previewKind });
+                          }
+                          close();
+                        }}
+                      >
+                        {s.preview}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="note__menu-item"
+                      role="menuitem"
+                      onClick={() => {
+                        void openAttachment(taskId, attachment.id);
+                        close();
+                      }}
+                    >
+                      {s.open}
+                    </button>
+                    <button
+                      type="button"
+                      className="note__menu-item"
+                      role="menuitem"
+                      onClick={() => {
+                        void saveAttachmentAs(taskId, attachment.id);
+                        close();
+                      }}
+                    >
+                      {s.saveAs}
+                    </button>
+                    <div className="note__menu-sep" role="separator" />
+                    <button
+                      type="button"
+                      className="note__menu-item note__menu-item--danger"
+                      role="menuitem"
+                      onClick={() => {
+                        void removeAttachment(taskId, attachment.id);
+                        close();
+                      }}
+                    >
+                      {s.remove}
+                    </button>
+                  </>
+                )}
+              </NotePopover>
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -4719,6 +4766,17 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
             deleteList(list, mode);
           }}
           onCancel={() => setDeletePrompt(null)}
+        />
+      )}
+
+      {attachmentPreview !== null && (
+        <AttachmentPreviewDialog
+          profileId={profileId}
+          module="task"
+          ownerId={attachmentPreview.taskId}
+          attachment={attachmentPreview.attachment}
+          kind={attachmentPreview.kind}
+          onClose={() => setAttachmentPreview(null)}
         />
       )}
     </div>

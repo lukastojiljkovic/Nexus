@@ -8157,6 +8157,54 @@ button.cal__grid-event--dragging {
   gap: var(--nx-space-2);
 }
 
+/* „Pregledaj" — the in-app attachment preview (DOC tier 0, ADR-064): the house
+   dialog recipe again, the shortcuts reference's own treatment — the
+   recur-dialog classes outright, widened for a document and scrolling in its
+   body. One panel for its three shapes: an image lightbox, an escaped text
+   pane, a read-only markdown render (the note editor's own .note__prosemirror
+   classes, so a previewed .md and an open note can never drift apart). */
+.doc-preview__panel.recur-dialog__panel {
+  width: min(760px, 94vw);
+  max-height: min(760px, 90vh);
+}
+/* The title is a file name the user chose — it wraps rather than dictating the panel's width. */
+.doc-preview__title {
+  overflow-wrap: anywhere;
+}
+.doc-preview__body {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  /* Without this a flex item refuses to shrink below its content, and the
+     panel grows past its max-height instead of the body scrolling. */
+  min-height: 0;
+  /* The scroll edge needs breathing room, or a clipped line reads as the end. */
+  padding-right: var(--nx-space-2);
+}
+/* The lightbox: the image at its natural size up to the body, never cropped
+   and never glowing — the panel's own border is all the framing it gets. */
+.doc-preview__image {
+  align-self: center;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--nx-radius-md);
+}
+/* The .txt pane: the app's one mono recipe, wrapped — a preview scrolls down,
+   never sideways. */
+.doc-preview__text {
+  margin: 0;
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.doc-preview__error {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+
 /* The app's single <kbd> recipe, shared by the reference and the Settings card:
    a quiet key cap on the alternate surface — a printed key, never a control. */
 .shortcut-kbd {

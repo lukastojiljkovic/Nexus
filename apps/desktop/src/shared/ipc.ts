@@ -418,6 +418,22 @@ export const IpcChannel = {
   // through the NORMAL note-creation path, so triggers index the result.
   privMoveIn: "priv:move-in",
   privMoveOut: "priv:move-out",
+  // In-app file preview (DOC / ADR-064). ONE pair of channels across the three
+  // public attachment surfaces (notes, tasks, subject materials) rather than a
+  // per-module trio, because the request is the same everywhere: the module
+  // names WHICH store resolves it, and main re-resolves the row through that
+  // store's own profile/record gate — the renderer never names a hash or a
+  // path on either channel, exactly as on `*-attachments:open`.
+  //
+  // `doc:preview` opens the dedicated hardened PDF window (application/pdf
+  // only, refused by name for anything else); `doc:read-text` answers a
+  // text/markdown attachment's decoded content for the in-app dialog. Text
+  // crosses as a structured reply, deliberately not as a fetchable URL: the
+  // packaged CSP's `connect-src 'self'` blocks a renderer fetch of `nx-blob:`,
+  // and the house posture — the attachment's bytes never cross this boundary
+  // as bytes — stays exactly as it was.
+  docPreview: "doc:preview",
+  docReadText: "doc:read-text",
   // ADR-040's OS-level half (TASK-002). The chord lives in the renderer's
   // `localStorage` (a device preference, never profile data), so the renderer
   // is the only side that knows it — it tells main at boot and on every remap,
@@ -3333,6 +3349,49 @@ export interface NoteAttachmentsSaveAsRequest {
 export type SaveAttachmentResult = { canceled: true } | { canceled: false; path: string };
 
 /**
+ * Which attachment table a `doc:*` request resolves against (ADR-064). A
+ * closed union of the three PUBLIC attachment surfaces, deliberately not a
+ * module id: PRIV attachments are excluded in v1 (ADR-057's recorded limit),
+ * and a table that gains previewable files joins by widening this union, not
+ * by satisfying a looser check.
+ */
+export type DocAttachmentModule = "note" | "task" | "subject";
+
+/**
+ * `doc:preview` and `doc:read-text` (ADR-064): the same
+ * `{ profileId, id, attachmentId }` triple the per-module open/save-as
+ * channels carry — `id` is the owning note/task/subject, exactly as on
+ * `*-attachments:open` — plus the module that names the store to resolve it
+ * through. The renderer never names a hash; main re-resolves the row and
+ * refuses non-previewable mimes by name.
+ */
+export interface DocPreviewRequest {
+  profileId: string;
+  module: DocAttachmentModule;
+  /** The owning record — a note, task or subject id. */
+  id: string;
+  attachmentId: string;
+}
+
+export type DocReadTextRequest = DocPreviewRequest;
+
+/**
+ * Maximum size, in bytes, of a text attachment `doc:read-text` reads (1 MiB,
+ * ADR-064). A bigger "text file" is not for reading in a pane: the row keeps
+ * „Otvori"/„Sačuvaj kao" and the preview simply is not offered — the renderer
+ * pre-checks against the row's `sizeBytes`, and main re-checks both the row
+ * and the bytes actually read (the cap is the wire contract, not a UI
+ * courtesy).
+ */
+export const DOC_TEXT_PREVIEW_MAX_BYTES = 1_048_576;
+
+/** What `doc:read-text` answers: the stored display name and the whole decoded text (UTF-8, BOM stripped in main). */
+export interface DocTextContent {
+  name: string;
+  text: string;
+}
+
+/**
  * The dashboard's custom background and dim (SET-006 / ADR-041). Four channels,
  * and deliberately none of them carries a path or a byte: main owns the native
  * image picker, reads the file, sniffs its type and writes it into the
@@ -5669,6 +5728,26 @@ export interface NexusApi {
     noteId: string,
     attachmentId: string,
   ): Promise<SaveAttachmentResult>;
+  /**
+   * Opens the dedicated, hardened preview window over a PDF attachment
+   * (DOC tier 1, ADR-064) — `application/pdf` only, refused by the STORED
+   * mime for anything else. Main re-resolves the row through the module's own
+   * store; the renderer names ids, never a hash. Resolves once the window is
+   * opened, not when it loads.
+   */
+  previewAttachment(
+    profileId: string,
+    module: DocAttachmentModule,
+    id: string,
+    attachmentId: string,
+  ): Promise<void>;
+  /** A text/markdown attachment's decoded content for the in-app preview dialog (DOC tier 0, ADR-064): ≤ `DOC_TEXT_PREVIEW_MAX_BYTES`, UTF-8, BOM stripped in main. */
+  readAttachmentText(
+    profileId: string,
+    module: DocAttachmentModule,
+    id: string,
+    attachmentId: string,
+  ): Promise<DocTextContent>;
   /** This profile's dashboard background and dim, defaults already applied (SET-006 / ADR-041). Never writes. */
   dashboardSettings(profileId: string): Promise<DashboardSettings>;
   /**

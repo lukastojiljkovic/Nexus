@@ -49,6 +49,8 @@ import type {
   SubjectFieldChanges,
 } from "../../shared/ipc.js";
 import { CARD_TEXT_MAX_LENGTH } from "../../shared/ipc.js";
+import { AttachmentPreviewDialog } from "./attachmentPreview.js";
+import { attachmentPreviewKind, type AttachmentPreviewKind } from "./attachmentPreviewKind.js";
 import {
   daysUntilExam,
   examCountdownLabel,
@@ -520,6 +522,14 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   const [materialError, setMaterialError] = useState<"generic" | "tooLarge" | null>(null);
   const [linkedNoteError, setLinkedNoteError] = useState(false);
   const [attaching, setAttaching] = useState(false);
+  // „Pregledaj" (DOC / ADR-064): which material the in-app dialog is showing,
+  // and as what. PDF rows never land here — their menu item opens the dedicated
+  // window over IPC instead.
+  const [materialPreview, setMaterialPreview] = useState<{
+    subjectId: string;
+    attachment: SubjectAttachment;
+    kind: Exclude<AttachmentPreviewKind, "pdf">;
+  } | null>(null);
 
   // „Dnevnik učenja" (STUDY-014). Unlike the two sections above it, this one is
   // NOT kept loaded for every subject: it is collapsed until asked for, and
@@ -1132,6 +1142,16 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
       console.error("Nexus: failed to attach subject materials:", error);
     } finally {
       setAttaching(false);
+    }
+  }
+
+  /** The PDF half of „Pregledaj" (ADR-064): asks main to open the dedicated preview window — the renderer names ids only. */
+  async function previewPdfMaterial(subjectId: string, attachmentId: string): Promise<void> {
+    try {
+      await window.nexus.previewAttachment(profileId, "subject", subjectId, attachmentId);
+    } catch (error) {
+      setMaterialError("generic");
+      console.error("Nexus: failed to preview subject material:", error);
     }
   }
 
@@ -2452,52 +2472,79 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
         {rows.length === 0 ? (
           <p className="study__materials-empty">{copy.empty}</p>
         ) : (
-          rows.map((material) => (
-            <div key={material.id} className="study__material">
-              <span className="study__material-name">{material.fileName}</span>
-              <span className="study__material-size">{formatBytes(material.sizeBytes)}</span>
-              <NotePopover label={copy.menuLabel} triggerClassName="study__material-menu">
-                {(close) => (
-                  <>
-                    <button
-                      type="button"
-                      className="note__menu-item"
-                      role="menuitem"
-                      onClick={() => {
-                        void openMaterial(subjectId, material.id);
-                        close();
-                      }}
-                    >
-                      {copy.open}
-                    </button>
-                    <button
-                      type="button"
-                      className="note__menu-item"
-                      role="menuitem"
-                      onClick={() => {
-                        void saveMaterialAs(subjectId, material.id);
-                        close();
-                      }}
-                    >
-                      {copy.saveAs}
-                    </button>
-                    <div className="note__menu-sep" role="separator" />
-                    <button
-                      type="button"
-                      className="note__menu-item note__menu-item--danger"
-                      role="menuitem"
-                      onClick={() => {
-                        void removeMaterial(subjectId, material.id);
-                        close();
-                      }}
-                    >
-                      {copy.remove}
-                    </button>
-                  </>
-                )}
-              </NotePopover>
-            </div>
-          ))
+          rows.map((material) => {
+            // „Pregledaj" is offered only where the stored mime (plus the
+            // ADR-064 extension reading for pre-sniff text rows) says the app
+            // can render the file itself.
+            const previewKind = attachmentPreviewKind(
+              material.mime,
+              material.fileName,
+              material.sizeBytes,
+            );
+            return (
+              <div key={material.id} className="study__material">
+                <span className="study__material-name">{material.fileName}</span>
+                <span className="study__material-size">{formatBytes(material.sizeBytes)}</span>
+                <NotePopover label={copy.menuLabel} triggerClassName="study__material-menu">
+                  {(close) => (
+                    <>
+                      {previewKind !== null && (
+                        <button
+                          type="button"
+                          className="note__menu-item"
+                          role="menuitem"
+                          onClick={() => {
+                            if (previewKind === "pdf") {
+                              void previewPdfMaterial(subjectId, material.id);
+                            } else {
+                              setMaterialPreview({ subjectId, attachment: material, kind: previewKind });
+                            }
+                            close();
+                          }}
+                        >
+                          {copy.preview}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="note__menu-item"
+                        role="menuitem"
+                        onClick={() => {
+                          void openMaterial(subjectId, material.id);
+                          close();
+                        }}
+                      >
+                        {copy.open}
+                      </button>
+                      <button
+                        type="button"
+                        className="note__menu-item"
+                        role="menuitem"
+                        onClick={() => {
+                          void saveMaterialAs(subjectId, material.id);
+                          close();
+                        }}
+                      >
+                        {copy.saveAs}
+                      </button>
+                      <div className="note__menu-sep" role="separator" />
+                      <button
+                        type="button"
+                        className="note__menu-item note__menu-item--danger"
+                        role="menuitem"
+                        onClick={() => {
+                          void removeMaterial(subjectId, material.id);
+                          close();
+                        }}
+                      >
+                        {copy.remove}
+                      </button>
+                    </>
+                  )}
+                </NotePopover>
+              </div>
+            );
+          })
         )}
       </div>
     );
@@ -3851,6 +3898,17 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
           failed={scopeCut.failed}
           onAccept={() => void confirmScopeCut()}
           onClose={() => setScopeCut(null)}
+        />
+      )}
+
+      {materialPreview !== null && (
+        <AttachmentPreviewDialog
+          profileId={profileId}
+          module="subject"
+          ownerId={materialPreview.subjectId}
+          attachment={materialPreview.attachment}
+          kind={materialPreview.kind}
+          onClose={() => setMaterialPreview(null)}
         />
       )}
     </div>

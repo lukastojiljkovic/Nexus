@@ -420,6 +420,10 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.noteAttachmentsOpen, { profileId, id: noteId, attachmentId }),
   saveNoteAttachmentAs: (profileId, noteId, attachmentId) =>
     ipcRenderer.invoke(IpcChannel.noteAttachmentsSaveAs, { profileId, id: noteId, attachmentId }),
+  previewAttachment: (profileId, module, id, attachmentId) =>
+    ipcRenderer.invoke(IpcChannel.docPreview, { profileId, module, id, attachmentId }),
+  readAttachmentText: (profileId, module, id, attachmentId) =>
+    ipcRenderer.invoke(IpcChannel.docReadText, { profileId, module, id, attachmentId }),
   dashboardSettings: (profileId) =>
     ipcRenderer.invoke(IpcChannel.dashboardGetSettings, { profileId }),
   pickDashboardBackground: (profileId) =>

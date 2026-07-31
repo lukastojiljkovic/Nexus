@@ -735,6 +735,8 @@ export const strings = {
     attachments: {
       title: "Prilozi",
       attach: "Priloži datoteku",
+      /** „Pregledaj" (DOC / ADR-064) — the NOTE panel's word, offered only on rows the app can render itself. */
+      preview: "Pregledaj",
       open: "Otvori",
       saveAs: "Sačuvaj kao…",
       remove: "Ukloni prilog",
@@ -1026,6 +1028,8 @@ export const strings = {
     /** Attachments (NOTE-003b): the Prilozi panel + in-document image blocks. */
     attachmentsTitle: "Prilozi",
     attach: "Priloži datoteku",
+    /** „Pregledaj" (DOC / ADR-064) — offered only on rows the app can render itself; the dialog's own copy lives in `attachmentPreview` below. */
+    attachmentPreview: "Pregledaj",
     attachmentOpen: "Otvori",
     attachmentSaveAs: "Sačuvaj kao…",
     attachmentRemove: "Ukloni prilog",
@@ -1688,6 +1692,8 @@ export const strings = {
       title: "Materijali",
       add: "Dodaj materijal",
       empty: "Nema materijala za ovaj predmet.",
+      /** „Pregledaj" (DOC / ADR-064) — the attachment panels' word, offered only on rows the app can render itself. */
+      preview: "Pregledaj",
       open: "Otvori",
       saveAs: "Sačuvaj kao…",
       remove: "Ukloni materijal",
@@ -3534,6 +3540,18 @@ export const strings = {
       emptyTitle: "Nema rezultata",
       emptyDescription: "Probajte drugu reč ili uklonite neki filter.",
     },
+  },
+
+  /**
+   * „Pregledaj" — the in-app attachment preview dialog (DOC / ADR-064), one
+   * component shared by the three attachment surfaces: an image lightbox, an
+   * escaped text pane, or a read-only markdown render. The menu item's word
+   * lives with each surface's own strings; the PDF window needs no copy at all
+   * (its title is the stored file name and its chrome is Chromium's own).
+   */
+  attachmentPreview: {
+    close: "Zatvori",
+    error: "Pregled priloga nije uspeo. Pokušaj ponovo.",
   },
 
   /**

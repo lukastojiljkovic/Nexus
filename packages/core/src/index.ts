@@ -203,7 +203,7 @@ export type {
   CsvTranslation,
 } from "./imex/csvImport.js";
 
-export { isInlineImageMime, sniffMime } from "./files/sniff.js";
+export { isInlineImageMime, isPreviewableMime, sniffMime } from "./files/sniff.js";
 export { centerSquareCrop, PROFILE_PICTURE_SIZE } from "./files/squareCrop.js";
 export type { CropRect } from "./files/squareCrop.js";
 

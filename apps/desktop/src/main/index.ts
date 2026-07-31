@@ -9,7 +9,7 @@ import {
   writeFile as writeFileAsync,
 } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { app, BrowserWindow, dialog, ipcMain, protocol } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, protocol, session } from "electron";
 import type { IpcMainInvokeEvent, OpenDialogOptions } from "electron";
 import { autoUpdater } from "electron-updater";
 import {
@@ -286,6 +286,12 @@ import {
   type BackupRunnerDeps,
 } from "./backup.js";
 import { localToday } from "./clock.js";
+import {
+  decodePreviewText,
+  isAllowedPreviewNavigation,
+  isTextPreviewAttachment,
+  minimalPdfBytes,
+} from "./docPreview.js";
 import { releaseGlobalCapture, setGlobalCaptureAccelerator } from "./globalCapture.js";
 import { handleExport, handleIcsExport, writeProfileArchive, type ImexArchiveDeps } from "./imex.js";
 import { handleMarkdownImport } from "./markdownImport.js";
@@ -353,6 +359,7 @@ import {
   CSV_IMPORT_MAX_COLUMNS,
   CSV_IMPORT_MAX_LIST_NAME_LENGTH,
   DASHBOARD_SET_NAME_MAX_LENGTH,
+  DOC_TEXT_PREVIEW_MAX_BYTES,
   IMPORT_DUPLICATE_TYPES,
   IpcChannel,
   LLM_IMPORT_KINDS,
@@ -404,6 +411,8 @@ import {
   type CsvImportPreviewResult,
   type DashboardPickResult,
   type DashboardSettings,
+  type DocAttachmentModule,
+  type DocTextContent,
   type DashboardSetsCreated,
   type DashboardSetsState,
   type ReviewQueue,
@@ -1812,6 +1821,12 @@ function asDeleteListMode(value: unknown, field: string): DeleteListMode {
   );
 }
 
+/** Which attachment table a `doc:*` request resolves against (ADR-064) — the closed three-member union; PRIV attachments are deliberately not a member (the recorded v1 limit). */
+function asDocAttachmentModule(value: unknown, field: string): DocAttachmentModule {
+  if (value === "note" || value === "task" || value === "subject") return value;
+  throw new Error(`Invalid IPC payload: "${field}" must be "note", "task" or "subject".`);
+}
+
 /** Validates a `TaskFieldChanges` payload into a store patch; an omitted key stays omitted. */
 function asTaskFieldChanges(value: unknown): UpdateTaskFields {
   const changes = asRecord(value);
@@ -2825,6 +2840,29 @@ function requireSubjectAttachment(
   return found;
 }
 
+/**
+ * The `doc:*` channels' one resolution path (ADR-064):
+ * `requireNoteAttachment` / `requireTaskAttachment` / `requireSubjectAttachment`,
+ * selected by the request's module — the SAME stores the per-module
+ * open/save-as handlers resolve through, so their profile/record gates hold
+ * here verbatim, and a hash only ever comes out of a row main resolved itself.
+ */
+function requireDocAttachment(
+  module: DocAttachmentModule,
+  profileId: string,
+  id: string,
+  attachmentId: string,
+): NoteAttachment | TaskAttachment | SubjectAttachment {
+  switch (module) {
+    case "note":
+      return requireNoteAttachment(profileId, id, attachmentId);
+    case "task":
+      return requireTaskAttachment(profileId, id, attachmentId);
+    case "subject":
+      return requireSubjectAttachment(profileId, id, attachmentId);
+  }
+}
+
 // --- Blob reference counting (ADR-014/ADR-019 + migrations 024/030/035/040) --
 //
 // THE place that enumerates every table naming a blob. One on-disk store is
@@ -3484,6 +3522,10 @@ function performLock(): void {
   // more at startup (`app.whenReady`) in case the process died before a lock
   // ever ran.
   wipeTmpOpenDir();
+  // The same discipline for the PDF preview windows (ADR-064): each one is
+  // decrypted attachment bytes on screen, and an open preview must not outlive
+  // the session that could read it. Closed on EVERY lock, unconditionally.
+  closeDocPreviewWindows();
 }
 
 /**
@@ -7369,6 +7411,67 @@ function registerIpc(): void {
     return privSetLockPrefs(privDeps(), profileId, { autoLockMinutes, lockOnMinimize });
   });
 
+  // --- In-app file preview (DOC / ADR-064) ---------------------------------
+  //
+  // One pair of channels across the three public attachment surfaces. Both
+  // resolve the row through the module's own store (`requireDocAttachment`),
+  // so the profile/record gates of `*-attachments:open` hold here verbatim,
+  // and both refuse by the STORED mime — what the renderer read off a row is
+  // an offer, never an instruction.
+
+  ipcMain.handle(IpcChannel.docPreview, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const module = asDocAttachmentModule(body.module, "module");
+    const id = asNonEmptyString(body.id, "id");
+    const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
+
+    const attachment = requireDocAttachment(module, profileId, id, attachmentId);
+    // The dedicated window exists for exactly one mime: the one Chromium
+    // renders with its own viewer. Every other previewable kind is the
+    // renderer's dialog (images by `nx-blob:` URL, text over `doc:read-text`),
+    // and everything else keeps „Otvori" — refused here BY NAME so a
+    // repurposed call can never turn the plugins-enabled window into a
+    // generic browser over the blob store.
+    if (attachment.mime !== "application/pdf") {
+      throw new Error(`Attachment "${attachmentId}" is not a PDF.`);
+    }
+    openDocPreviewWindow(attachment);
+  });
+
+  ipcMain.handle(IpcChannel.docReadText, async (event, payload): Promise<DocTextContent> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const module = asDocAttachmentModule(body.module, "module");
+    const id = asNonEmptyString(body.id, "id");
+    const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
+
+    const attachment = requireDocAttachment(module, profileId, id, attachmentId);
+    // Refused by the stored mime, with the one recorded widening: an
+    // octet-stream row whose NAME says `.txt`/`.md` predates the text sniff
+    // and may be read — the display-only extension reading ADR-064 allows for
+    // OFFERING a preview. The stored mime itself stays untouched.
+    if (!isTextPreviewAttachment(attachment.mime, attachment.fileName)) {
+      throw new Error(`Attachment "${attachmentId}" is not previewable as text.`);
+    }
+    // The row's size first (no read at all for an oversize file), the bytes
+    // actually read second — the cap is the wire contract, and an index row,
+    // however validated at add time, is not the bytes.
+    if (attachment.sizeBytes > DOC_TEXT_PREVIEW_MAX_BYTES) {
+      throw new Error(`Attachment "${attachmentId}" exceeds the text-preview cap.`);
+    }
+    const bytes = await readBlob(blobStorePathsFor(), requireBlobKeys(), attachment.sha256);
+    if (bytes === null) {
+      throw new Error(`Attachment "${attachment.fileName}" was not found in the blob store.`);
+    }
+    if (bytes.byteLength > DOC_TEXT_PREVIEW_MAX_BYTES) {
+      throw new Error(`Attachment "${attachmentId}" exceeds the text-preview cap.`);
+    }
+    return { name: attachment.fileName, text: decodePreviewText(bytes) };
+  });
+
   // ADR-040 / TASK-002. The renderer owns the chord (it lives in this device's
   // `localStorage`) and main owns the registration, so this is the one channel
   // where the renderer asks for something OUTSIDE the app's own window. It is
@@ -7463,6 +7566,81 @@ function createWindow(): BrowserWindow {
     void win.loadFile(join(__dirname, "../renderer/index.html"));
   }
 
+  return win;
+}
+
+/**
+ * Every open PDF preview window (ADR-064), tracked for exactly one reason:
+ * `performLock` must close them all — an open preview is decrypted attachment
+ * bytes on screen, the same residue class as `openExternally`'s temp copies,
+ * and it must never outlive the session that could read it.
+ */
+const docPreviewWindows = new Set<BrowserWindow>();
+
+/** Closes every open preview window. `destroy` rather than `close`: a lock must not wait on (or be argued with by) a renderer. */
+function closeDocPreviewWindows(): void {
+  for (const win of docPreviewWindows) {
+    if (!win.isDestroyed()) win.destroy();
+  }
+  docPreviewWindows.clear();
+}
+
+/**
+ * The dedicated PDF preview window (DOC tier 1, ADR-064). A SEPARATE window,
+ * never a flag on the shell: `plugins: true` — what turns Chromium's built-in
+ * PDFium viewer on — goes here and nowhere else, and the window is otherwise
+ * locked down harder than the shell itself: sandboxed, context-isolated, no
+ * node integration, and NO preload at all, so a PDFium compromise lands in a
+ * renderer with no IPC surface to speak to. It loads the `nx-blob:` URL as its
+ * MAIN FRAME document — no iframe — so the shell's CSP is not in play and
+ * needs no widening.
+ *
+ * The viewer's own toolbar is deliberately left UNINTERCEPTED in v1: its
+ * download button triggers Electron's default save dialog — functionally the
+ * „Sačuvaj kao" the attachment row already offers — and print opens the OS
+ * print dialog; neither is wired to anything of ours.
+ *
+ * Memory note, acknowledged rather than "fixed": `readBlob` buffers a whole
+ * container per request, and the viewer may re-fetch the URL while rendering —
+ * each fetch is a fresh full decrypt. The attachment size caps bound the worst
+ * case.
+ */
+function openDocPreviewWindow(attachment: { fileName: string; sha256: string }): BrowserWindow {
+  const blobUrl = `nx-blob://${attachment.sha256}`;
+  const win = new BrowserWindow({
+    width: 960,
+    height: 720,
+    title: attachment.fileName,
+    icon: iconPath,
+    webPreferences: {
+      // createWindow's hardening ritual (SEC-EL-01) minus the preload, plus
+      // the one addition this window exists for.
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      plugins: true,
+      // webSecurity is left at its secure default and never touched (SEC-EL-01).
+    },
+  });
+
+  // SEC-EL-03, createWindow's ritual adapted: no child windows ever, and
+  // navigation locked to exactly the one blob URL this window was opened with
+  // (Chromium may normalize a standard-scheme URL with a trailing slash;
+  // nothing else passes).
+  win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  win.webContents.on("will-navigate", (event, url) => {
+    if (!isAllowedPreviewNavigation(blobUrl, url)) event.preventDefault();
+  });
+
+  // The title is the STORED file name. Chromium would replace it with the
+  // document's own metadata title on load — a PDF's claim about itself, which
+  // is exactly the kind of file-authored value the UI must not echo.
+  win.on("page-title-updated", (event) => event.preventDefault());
+
+  docPreviewWindows.add(win);
+  win.on("closed", () => docPreviewWindows.delete(win));
+
+  void win.loadURL(blobUrl);
   return win;
 }
 
@@ -7818,6 +7996,104 @@ async function runSmokeMultiAccountRehearsal(): Promise<void> {
   }
 }
 
+/**
+ * Rehearses the ADR-064 PDF preview end to end — THE spike the ADR calls for:
+ * custom-protocol PDF hosting has version-specific history in Electron, so the
+ * one thing worth proving against the real, built app is that a
+ * `plugins: true` window pointed at an `nx-blob:` URL actually RENDERS the
+ * document instead of downloading it or crashing.
+ *
+ * The fixture PDF (`minimalPdfBytes`) is stored through the real attachment
+ * path — sniffed, blob-written, index row on a throwaway note — and the window
+ * is opened through the same resolve-then-open pair the `doc:preview` handler
+ * runs. Proves, in order: (1) the window reaches `did-finish-load`; (2) no
+ * download started and the renderer did not crash getting there; (3)
+ * `performLock` closes the window — ADR-064's closed-on-every-lock rule — and
+ * the account re-unlocks afterwards. Runs LAST, after the multi-account
+ * rehearsal has settled which account (and passcode) is open.
+ */
+async function runSmokeDocPreviewRehearsal(): Promise<void> {
+  const [profile] = listProfiles(requireDb());
+  if (!profile) throw new Error("expected at least one profile for the doc-preview rehearsal");
+
+  const pdfBytes = minimalPdfBytes();
+  if (sniffMime(pdfBytes) !== "application/pdf") {
+    throw new Error("expected the fixture PDF to sniff as application/pdf");
+  }
+
+  const note = noteStore(profile.id).create(new Date().toISOString());
+  const { sha256 } = await saveBlob(blobStorePathsFor(), requireBlobKeys(), pdfBytes);
+  const attachment = noteAttachmentStore(profile.id).add(
+    note.id,
+    { fileName: "smoke.pdf", mime: "application/pdf", sizeBytes: pdfBytes.byteLength, sha256 },
+    new Date().toISOString(),
+  );
+
+  // A download instead of a render is exactly the failure mode this spike
+  // exists to catch (a viewer that will not host the scheme falls back to
+  // downloading the document) — watched on the session, where it would fire.
+  let downloadStarted = false;
+  const onWillDownload = (): void => {
+    downloadStarted = true;
+  };
+  session.defaultSession.on("will-download", onWillDownload);
+  try {
+    const resolved = requireDocAttachment("note", profile.id, note.id, attachment.id);
+    if (resolved.mime !== "application/pdf") {
+      throw new Error(`expected the stored fixture row to keep application/pdf, got "${resolved.mime}"`);
+    }
+    const win = openDocPreviewWindow(resolved);
+    let renderProcessGone: string | null = null;
+    win.webContents.on("render-process-gone", (_event, details) => {
+      renderProcessGone = details.reason;
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error("the preview window did not reach did-finish-load within 15s")),
+        15_000,
+      );
+      win.webContents.once("did-finish-load", () => {
+        clearTimeout(timer);
+        resolve();
+      });
+      win.webContents.on(
+        "did-fail-load",
+        (_event, errorCode, errorDescription, _validatedUrl, isMainFrame) => {
+          if (!isMainFrame) return;
+          clearTimeout(timer);
+          reject(new Error(`the preview window failed to load: ${errorCode} ${errorDescription}`));
+        },
+      );
+    });
+    // A download or a renderer crash is emitted AROUND the load rather than
+    // strictly before did-finish-load — give either a beat to surface.
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    if (downloadStarted) {
+      throw new Error("expected the PDF to render inline, but a download started");
+    }
+    if (renderProcessGone !== null) {
+      throw new Error(`expected the preview renderer to survive, but it went: ${renderProcessGone}`);
+    }
+    if (win.isDestroyed()) {
+      throw new Error("expected the preview window to stay open until the lock");
+    }
+
+    performLock();
+    if (!win.isDestroyed()) {
+      throw new Error("expected performLock to close the preview window (ADR-064)");
+    }
+  } finally {
+    session.defaultSession.removeListener("will-download", onWillDownload);
+  }
+
+  const reopened = await handleAuthUnlock(SMOKE_MIGRATED_PASSCODE);
+  if (!reopened.ok) {
+    throw new Error(`expected the account to unlock after the preview lock, got reason "${reopened.reason}"`);
+  }
+  noteStore(profile.id).softDelete(note.id, new Date().toISOString());
+}
+
 async function runSmoke(win: BrowserWindow): Promise<void> {
   const profiles = listProfiles(requireDb());
   if (profiles.length < 1) {
@@ -7872,6 +8148,7 @@ async function runSmoke(win: BrowserWindow): Promise<void> {
   await runSmokeBlobMigrationRehearsal();
   await runSmokeSearchRehearsal();
   await runSmokeMultiAccountRehearsal();
+  await runSmokeDocPreviewRehearsal();
 }
 
 // --- Auto-update (SEC-EL-07) -------------------------------------------------

@@ -33,6 +33,8 @@ import {
   type Subject,
 } from "../../shared/ipc.js";
 import { AttachmentImage, NoteAttachmentProvider } from "./noteAttachmentImage.js";
+import { AttachmentPreviewDialog } from "./attachmentPreview.js";
+import { attachmentPreviewKind, type AttachmentPreviewKind } from "./attachmentPreviewKind.js";
 import { Callout } from "./noteCallout.js";
 import { createNoteFindExtension, NoteFindBar } from "./noteFindBar.js";
 import { countEditorCards, NoteFlashcard } from "./noteFlashcard.js";
@@ -205,6 +207,13 @@ export function NoteEditor({
   const [backlinks, setBacklinks] = useState<NoteMeta[]>([]);
   const [attachments, setAttachments] = useState<NoteAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState<"generic" | "tooLarge" | null>(null);
+  // „Pregledaj" (DOC / ADR-064): which attachment the in-app dialog is showing,
+  // and as what. PDF rows never land here — their menu item opens the dedicated
+  // window over IPC instead.
+  const [preview, setPreview] = useState<{
+    attachment: NoteAttachment;
+    kind: Exclude<AttachmentPreviewKind, "pdf">;
+  } | null>(null);
   const [dropActive, setDropActive] = useState(false);
   // Inline flashcards (NOTE-006c / ADR-017): this note's deck mapping, the
   // profile's decks/subjects for the picker, the live card count, and a
@@ -441,6 +450,21 @@ export function NoteEditor({
       } catch (error) {
         setAttachmentError("generic");
         console.error("Nexus: failed to open attachment:", error);
+      }
+    },
+    [profileId, noteId],
+  );
+
+  // The PDF half of „Pregledaj" (ADR-064): asks main to open the dedicated
+  // preview window — the renderer names ids only, and the dialog above never
+  // sees a PDF row.
+  const previewPdfAttachment = useCallback(
+    async (attachmentId: string) => {
+      try {
+        await window.nexus.previewAttachment(profileId, "note", noteId, attachmentId);
+      } catch (error) {
+        setAttachmentError("generic");
+        console.error("Nexus: failed to preview attachment:", error);
       }
     },
     [profileId, noteId],
@@ -885,61 +909,85 @@ export function NoteEditor({
                     : strings.notes.attachmentError}
                 </div>
               )}
-              {attachments.map((attachment) => (
-                <div key={attachment.id} className="note__attachment">
-                  {isInlineImageMime(attachment.mime) && (
-                    <img
-                      className="note__attachment-thumb"
-                      src={`nx-blob://${attachment.sha256}`}
-                      alt={attachment.fileName}
-                    />
-                  )}
-                  <span className="note__attachment-name">{attachment.fileName}</span>
-                  <span className="note__attachment-size">
-                    {formatBytes(attachment.sizeBytes)}
-                  </span>
-                  <NotePopover label={strings.notes.attachmentMenuLabel}>
-                    {(close) => (
-                      <>
-                        <button
-                          type="button"
-                          className="note__menu-item"
-                          role="menuitem"
-                          onClick={() => {
-                            void openAttachment(attachment.id);
-                            close();
-                          }}
-                        >
-                          {strings.notes.attachmentOpen}
-                        </button>
-                        <button
-                          type="button"
-                          className="note__menu-item"
-                          role="menuitem"
-                          onClick={() => {
-                            void saveAttachmentAs(attachment.id);
-                            close();
-                          }}
-                        >
-                          {strings.notes.attachmentSaveAs}
-                        </button>
-                        <div className="note__menu-sep" role="separator" />
-                        <button
-                          type="button"
-                          className="note__menu-item note__menu-item--danger"
-                          role="menuitem"
-                          onClick={() => {
-                            void removeAttachment(attachment.id);
-                            close();
-                          }}
-                        >
-                          {strings.notes.attachmentRemove}
-                        </button>
-                      </>
+              {attachments.map((attachment) => {
+                // „Pregledaj" is offered only where the stored mime (plus the
+                // ADR-064 extension reading for pre-sniff text rows) says the
+                // app can render the file itself.
+                const previewKind = attachmentPreviewKind(
+                  attachment.mime,
+                  attachment.fileName,
+                  attachment.sizeBytes,
+                );
+                return (
+                  <div key={attachment.id} className="note__attachment">
+                    {isInlineImageMime(attachment.mime) && (
+                      <img
+                        className="note__attachment-thumb"
+                        src={`nx-blob://${attachment.sha256}`}
+                        alt={attachment.fileName}
+                      />
                     )}
-                  </NotePopover>
-                </div>
-              ))}
+                    <span className="note__attachment-name">{attachment.fileName}</span>
+                    <span className="note__attachment-size">
+                      {formatBytes(attachment.sizeBytes)}
+                    </span>
+                    <NotePopover label={strings.notes.attachmentMenuLabel}>
+                      {(close) => (
+                        <>
+                          {previewKind !== null && (
+                            <button
+                              type="button"
+                              className="note__menu-item"
+                              role="menuitem"
+                              onClick={() => {
+                                if (previewKind === "pdf") void previewPdfAttachment(attachment.id);
+                                else setPreview({ attachment, kind: previewKind });
+                                close();
+                              }}
+                            >
+                              {strings.notes.attachmentPreview}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="note__menu-item"
+                            role="menuitem"
+                            onClick={() => {
+                              void openAttachment(attachment.id);
+                              close();
+                            }}
+                          >
+                            {strings.notes.attachmentOpen}
+                          </button>
+                          <button
+                            type="button"
+                            className="note__menu-item"
+                            role="menuitem"
+                            onClick={() => {
+                              void saveAttachmentAs(attachment.id);
+                              close();
+                            }}
+                          >
+                            {strings.notes.attachmentSaveAs}
+                          </button>
+                          <div className="note__menu-sep" role="separator" />
+                          <button
+                            type="button"
+                            className="note__menu-item note__menu-item--danger"
+                            role="menuitem"
+                            onClick={() => {
+                              void removeAttachment(attachment.id);
+                              close();
+                            }}
+                          >
+                            {strings.notes.attachmentRemove}
+                          </button>
+                        </>
+                      )}
+                    </NotePopover>
+                  </div>
+                );
+              })}
             </section>
             {backlinks.length > 0 && (
               <section className="note__backlinks" aria-label={strings.notes.backlinksTitle}>
@@ -961,6 +1009,16 @@ export function NoteEditor({
           </>
         )}
       </div>
+      {preview !== null && (
+        <AttachmentPreviewDialog
+          profileId={profileId}
+          module="note"
+          ownerId={noteId}
+          attachment={preview.attachment}
+          kind={preview.kind}
+          onClose={() => setPreview(null)}
+        />
+      )}
     </>
   );
 }
