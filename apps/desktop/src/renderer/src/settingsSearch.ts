@@ -220,6 +220,15 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
     keywords: ["uvoz", "uvezi", "spajanje", "dodaj", "arhiva"],
   },
   {
+    // The words someone looking for THIS types are the format's, not the
+    // flow's: „arhiva“ belongs to the two entries above, which is why it is
+    // deliberately absent here.
+    id: "backup-markdown",
+    section: "backup",
+    label: s.markdownImport.title,
+    keywords: ["markdown", "md", "beleske", "fajlovi", "obsidian", "uvoz"],
+  },
+  {
     // The panel is one read-only block of facts, so it is one entry: splitting
     // it per row would highlight "Verzija" for a user who typed "chromium".
     id: "about-facts",

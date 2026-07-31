@@ -213,6 +213,7 @@ import {
 import { localToday } from "./clock.js";
 import { releaseGlobalCapture, setGlobalCaptureAccelerator } from "./globalCapture.js";
 import { handleExport, handleIcsExport } from "./imex.js";
+import { handleMarkdownImport } from "./markdownImport.js";
 import {
   cancelIdleCompactions,
   captureNoteVersion,
@@ -281,6 +282,8 @@ import {
   type ImportApplyResult,
   type ImportPickResult,
   type ImportPreviewResult,
+  type MarkdownImportResult,
+  type MarkdownImportSource,
   type NoteCardDisposition,
   type NoteCardSpec,
   type NoteDocPayload,
@@ -1479,6 +1482,12 @@ function asNoteCardDisposition(value: unknown, field: string): NoteCardDispositi
     return value as NoteCardDisposition;
   }
   throw new Error(`Invalid IPC payload: "${field}" is not a valid note card disposition.`);
+}
+
+/** Which markdown picker `imex:import-markdown` opens — a closed two-value domain, so nothing else can reach the dialog code. */
+function asMarkdownImportSource(value: unknown, field: string): MarkdownImportSource {
+  if (value === "files" || value === "folder") return value;
+  throw new Error(`Invalid IPC payload: "${field}" must be "files" or "folder".`);
 }
 
 function asNoteFolderColor(value: unknown, field: string): NoteFolderColor {
@@ -5267,6 +5276,30 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.imexImportCancel, (event): Promise<void> => {
     assertTrustedSender(event);
     return cancelImport();
+  });
+
+  // IMEX-007's markdown slice: plain `.md` files into real notes. One call does
+  // the whole thing — pick, read, parse, write — because there is nothing to
+  // preview and nothing to undo (an import that only ADDS notes is undone by
+  // deleting them). The renderer names a target folder and which dialog to
+  // open, and main validates both before a single file is touched.
+  ipcMain.handle(IpcChannel.imexImportMarkdown, (event, payload): Promise<MarkdownImportResult> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const folderId = asNullableString(body.folderId, "folderId");
+    const source = asMarkdownImportSource(body.source, "source");
+    return handleMarkdownImport(
+      {
+        noteStore,
+        noteOrgStore,
+        getMainWindow: () => mainWindow,
+        runInTransaction: (write) => requireDb().raw.transaction(write)(),
+      },
+      profileId,
+      folderId,
+      source,
+    );
   });
 
   // ADR-040 / TASK-002. The renderer owns the chord (it lives in this device's

@@ -414,6 +414,8 @@ const api: NexusApi = {
   applyImport: (profileId, token) =>
     ipcRenderer.invoke(IpcChannel.imexImportApply, { profileId, token }),
   cancelImport: () => ipcRenderer.invoke(IpcChannel.imexImportCancel),
+  importMarkdownNotes: (profileId, folderId, source) =>
+    ipcRenderer.invoke(IpcChannel.imexImportMarkdown, { profileId, folderId, source }),
   setGlobalShortcut: (chord) => ipcRenderer.invoke(IpcChannel.shortcutsSetGlobal, { chord }),
   onGlobalCapture: (listener) => {
     const handler = (): void => listener();

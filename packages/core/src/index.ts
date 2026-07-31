@@ -194,6 +194,15 @@ export type {
 export { renderNoteMarkdown } from "./imex/noteMarkdown.js";
 export type { NoteMarkdownAttachment, NoteMarkdownContext } from "./imex/noteMarkdown.js";
 
+export { buildNoteUpdate, parseMarkdownNote } from "./imex/markdownImport.js";
+export type {
+  MarkdownBlock,
+  MarkdownInline,
+  MarkdownInlineMarks,
+  MarkdownTaskItem,
+  ParsedMarkdownNote,
+} from "./imex/markdownImport.js";
+
 export { buildIcsCalendar } from "./imex/icsExport.js";
 export type {
   IcsCalendar,

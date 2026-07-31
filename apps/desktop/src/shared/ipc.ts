@@ -234,6 +234,11 @@ export const IpcChannel = {
   imexImportPreview: "imex:import-preview",
   imexImportApply: "imex:import-apply",
   imexImportCancel: "imex:import-cancel",
+  // Plain `.md` files into notes (IMEX-007). Deliberately NOT a mode on the
+  // archive channels above: there is no manifest to read, nothing to preview
+  // and nothing to undo — main picks, parses and writes in one call, exactly
+  // the shape `dashboard:background-pick` already has.
+  imexImportMarkdown: "imex:import-markdown",
   // ADR-040's OS-level half (TASK-002). The chord lives in the renderer's
   // `localStorage` (a device preference, never profile data), so the renderer
   // is the only side that knows it — it tells main at boot and on every remap,
@@ -3416,6 +3421,70 @@ export interface ImexImportApplyRequest {
   token: string;
 }
 
+// --- Markdown import (IMEX-007) ---------------------------------------------
+
+/**
+ * Which dialog `imex:import-markdown` opens. Two values rather than one
+ * everything-picker because Electron's `showOpenDialog` cannot be both on
+ * Windows and Linux: `["openFile", "openDirectory"]` silently degrades to a
+ * DIRECTORY picker there, which would take the "choose files" button's meaning
+ * away on the platform this app ships on first.
+ */
+export type MarkdownImportSource = "files" | "folder";
+
+/** Maximum size of one `.md` file, checked by `stat` before it is ever read. */
+export const MARKDOWN_IMPORT_MAX_BYTES = 1_048_576;
+
+/** Maximum number of files one pick may turn into notes; the rest are reported, never silently dropped. */
+export const MARKDOWN_IMPORT_MAX_FILES = 200;
+
+/**
+ * Why one file of a pick did not become a note. Every one of these is REPORTED
+ * by name beside the file it happened to — a batch never aborts on a single
+ * bad file, and never quietly loses one either.
+ *
+ * `too-long` is not `too-large`: the file passed the size gate, but the note
+ * it parses to exceeds `NOTE_UPDATE_MAX_BYTES`, the per-update wire limit
+ * every note write in the app is held to.
+ */
+export type MarkdownImportSkipCode =
+  | "too-large"
+  | "too-long"
+  | "unreadable"
+  | "empty"
+  | "too-many"
+  | "not-markdown";
+
+export interface MarkdownImportSkip {
+  /** The file's own name, as it was on disk — the only way the user can tell which one this was. */
+  name: string;
+  reason: MarkdownImportSkipCode;
+}
+
+/**
+ * The outcome of one markdown import: canceled at the dialog, or a count of
+ * the notes written plus every file that did not become one.
+ *
+ * `imagesAsText` is the honesty clause: this slice imports no blobs, so every
+ * image in every file arrived as plain text carrying its alt and URL, and the
+ * screen says how many rather than letting the user find out later.
+ */
+export type MarkdownImportResult =
+  | { canceled: true }
+  | {
+      canceled: false;
+      created: number;
+      skipped: MarkdownImportSkip[];
+      imagesAsText: number;
+    };
+
+/** `folderId` is an existing note folder of this profile, or null for the unfiled root; main validates it before a single file is read. */
+export interface ImexImportMarkdownRequest {
+  profileId: string;
+  folderId: string | null;
+  source: MarkdownImportSource;
+}
+
 /**
  * A key combination on the wire (ADR-040 / TASK-002). Mirrors `@nexus/core`'s
  * `Chord` exactly — redeclared here, like every other shared shape in this
@@ -3962,6 +4031,18 @@ export interface NexusApi {
   applyImport(profileId: string, token: string): Promise<ImportApplyResult>;
   /** Drops the picked import archive without applying it, releasing the OS file lock an opened one holds. */
   cancelImport(): Promise<void>;
+  /**
+   * Opens the native `.md` picker in MAIN (files or a folder, per `source`),
+   * reads and parses every file there, and writes each one as a real note in
+   * `folderId` — the renderer sends no path and no bytes, exactly as with the
+   * dashboard background. Resolves once every file has been settled: nothing
+   * is previewed and nothing is undone, so the reply IS the report.
+   */
+  importMarkdownNotes(
+    profileId: string,
+    folderId: string | null,
+    source: MarkdownImportSource,
+  ): Promise<MarkdownImportResult>;
   /**
    * Asks main to hold `chord` as an OS-wide hotkey (TASK-002), replacing
    * whatever it held before. Called once at boot — after the renderer has read

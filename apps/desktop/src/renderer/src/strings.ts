@@ -8,6 +8,7 @@ import type {
   ArchiveReadErrorCode,
   DashboardPickErrorCode,
   ImportSkipCode,
+  MarkdownImportSkipCode,
   RestoreModuleCounts,
   RestoreProblemCode,
 } from "../../shared/ipc.js";
@@ -1935,6 +1936,56 @@ export const strings = {
       error: "Uvoz nije uspeo. Pokušaj ponovo.",
       /** The post-reload banner (App.tsx) when the undo slot holds an IMPORT — the button, the dismiss label and the error line are the restore's, since undoing is one mechanism. */
       undoBanner: "Podaci su uvezeni iz arhive.",
+    },
+    /**
+     * Uvoz beležaka (.md) — IMEX-007's markdown slice, the quiet fourth block
+     * of the „Rezervna kopija" card. Not an archive flow and worded so nobody
+     * mistakes it for one: no preview, no undo banner, no passphrase — files
+     * in, notes out, and the result line says exactly what landed.
+     *
+     * Two buttons rather than one because the native dialog cannot be both a
+     * file picker and a folder picker on Windows (see `markdownImport.ts`), and
+     * the copy names that plainly instead of hiding it behind one word.
+     *
+     * `skips` is typed against the wire's own closed `MarkdownImportSkipCode`
+     * domain, so a code added in `shared/ipc.ts` is a compile error here rather
+     * than a file that silently did not arrive.
+     */
+    markdownImport: {
+      title: "Uvoz beležaka (.md)",
+      description:
+        "Uvezi Markdown fajlove kao beleške — svaki fajl postaje jedna beleška u izabranoj fascikli. Naslov je prvi „# “ iz fajla, a ako ga nema, ime samog fajla. Slike se ne prenose: ostaju kao tekst sa svojom putanjom.",
+      folderLabel: "Fascikla za uvezene beleške",
+      /** The unfiled root — the same place a note created from the notes page lands. */
+      rootOption: "Bez fascikle",
+      filesButton: "Izaberi .md fajlove…",
+      folderButton: "Izaberi fasciklu…",
+      /** Said beside the folder button, because a folder pick reaches into subfolders and that must not be a surprise. */
+      folderHint: "Fascikla se čita zajedno sa podfasciklama; sve beleške ulaze u izabranu fasciklu.",
+      running: "Uvoz u toku…",
+      /** „Uvezeno 3 beleške" — full Serbian numeral agreement via `countUnit`. */
+      createdPrefix: "Uvezeno",
+      createdUnitOne: "beleška",
+      createdUnitFew: "beleške",
+      createdUnitMany: "beležaka",
+      /** Shown when the pick produced nothing at all — no file in it could become a note. */
+      createdNone: "Nijedna beleška nije uvezena.",
+      /** Shown only when `imagesAsText > 0`: the slice imports no files, and the user hears it here rather than discovering it in a note. */
+      imagesPrefix: "Slike nisu prenete:",
+      imagesUnitOne: "slika je ostala",
+      imagesUnitFew: "slike su ostale",
+      imagesUnitMany: "slika je ostalo",
+      imagesSuffix: "kao tekst sa putanjom.",
+      skipsTitle: "Šta nije uvezeno",
+      skips: {
+        "too-large": "Fajl je veći od 1 MB.",
+        "too-long": "Sadržaj fajla je preveliki za jednu belešku.",
+        unreadable: "Fajl se ne može pročitati.",
+        empty: "Fajl je prazan.",
+        "too-many": "Uvozi se najviše 200 fajlova odjednom — ovaj i svi posle njega su preskočeni.",
+        "not-markdown": "Nije Markdown fajl (.md ili .markdown).",
+      } satisfies Record<MarkdownImportSkipCode, string>,
+      error: "Uvoz beležaka nije uspeo. Pokušaj ponovo.",
     },
     about: {
       version: "Verzija",

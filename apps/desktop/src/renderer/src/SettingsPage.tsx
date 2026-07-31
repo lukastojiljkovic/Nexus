@@ -25,6 +25,9 @@ import type {
   FlagState,
   ImportPreview,
   ImportSkipReason,
+  MarkdownImportResult,
+  MarkdownImportSource,
+  NoteFolder,
   NotificationSource,
   RestoreModuleCounts,
   RestorePreview,
@@ -68,7 +71,7 @@ import {
   readStoredBlockedInToday,
   type BlockedInToday,
 } from "./taskPrefs.js";
-import { dayUnit, strings } from "./strings.js";
+import { countUnit, dayUnit, strings } from "./strings.js";
 
 /** Sidebar/page display name for a module id; mirrors App.tsx's private helper (kept local — App renders this page, so importing it back would be circular). */
 function moduleName(id: string): string {
@@ -1085,6 +1088,172 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
       )}
 
       {state.phase === "applied" && <p className="set__section-caption">{s.applied}</p>}
+    </div>
+  );
+}
+
+/** The unfiled root, as a `<select>` value — an empty option value, so no sentinel id can ever collide with a real folder's. */
+const UNFILED_VALUE = "";
+
+/** sr-Latn collation for the destination list — plain "sr" mis-tailors Latin š/č/ć. */
+const FOLDER_COLLATOR = new Intl.Collator(["sr-Latn", "sr"]);
+
+/**
+ * The note folders as flat, full-path options („Fakultet / Beleške"), so two
+ * folders that share a name under different parents are told apart without
+ * drawing a tree inside a `<select>`. Cycle-safe by construction: the walk up
+ * stops the moment it revisits an id.
+ */
+function folderOptions(folders: readonly NoteFolder[]): { id: string; label: string }[] {
+  const byId = new Map(folders.map((folder) => [folder.id, folder]));
+  const pathOf = (folder: NoteFolder): string => {
+    const parts: string[] = [];
+    const seen = new Set<string>();
+    let current: NoteFolder | undefined = folder;
+    while (current !== undefined && !seen.has(current.id)) {
+      seen.add(current.id);
+      parts.unshift(current.name);
+      current = current.parentId === null ? undefined : byId.get(current.parentId);
+    }
+    return parts.join(" / ");
+  };
+  return folders
+    .map((folder) => ({ id: folder.id, label: pathOf(folder) }))
+    .sort((a, b) => FOLDER_COLLATOR.compare(a.label, b.label));
+}
+
+/** The half of a finished import worth rendering — the canceled arm carries nothing to show. */
+type MarkdownImportReport = Extract<MarkdownImportResult, { canceled: false }>;
+
+interface MarkdownImportSectionProps {
+  profileId: string;
+  /** SET-014 search hits; the section reads only its own entry id out of it. */
+  hits: ReadonlySet<string>;
+}
+
+/**
+ * Uvoz beležaka (.md) — IMEX-007's markdown slice, and deliberately the
+ * QUIETEST block in this card. Its two archive siblings above it are
+ * multi-step, consequential flows with a preview and an undo; this one is a
+ * destination, a button and a result line, because that is all it is: files
+ * arrive as notes, nothing already here is touched, and anything that lands
+ * wrong is deleted like any other note.
+ *
+ * There is therefore no state machine — no pick to hold, no token to confirm.
+ * Main owns the dialog, the size gate and the parse (SEC-EL: the renderer sends
+ * no path and no bytes), and what comes back is the whole report: how many
+ * notes, how many images arrived as text, and every file that did not make it,
+ * NAMED, with the reason beside it.
+ */
+function MarkdownImportSection({ profileId, hits }: MarkdownImportSectionProps) {
+  const s = strings.settings.markdownImport;
+  const [folders, setFolders] = useState<{ id: string; label: string }[]>([]);
+  const [folderId, setFolderId] = useState<string>(UNFILED_VALUE);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [report, setReport] = useState<MarkdownImportReport | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const list = await window.nexus.listNoteFolders(profileId);
+        if (active) setFolders(folderOptions(list));
+      } catch (loadError) {
+        // The destination list is a convenience: without it the root option
+        // still works, so this must not take the whole block down.
+        console.error("Nexus: failed to load note folders:", loadError);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profileId]);
+
+  async function run(source: MarkdownImportSource): Promise<void> {
+    setBusy(true);
+    setError(null);
+    setReport(null);
+    try {
+      const outcome = await window.nexus.importMarkdownNotes(
+        profileId,
+        folderId === UNFILED_VALUE ? null : folderId,
+        source,
+      );
+      if (!outcome.canceled) setReport(outcome);
+    } catch (importError) {
+      setError(s.error);
+      console.error("Nexus: failed to import markdown notes:", importError);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="set__import-block">
+      <h3 className={labelClass("set__module-group-title", hits.has("backup-markdown"))}>
+        {s.title}
+      </h3>
+      <p className="app__muted">{s.description}</p>
+
+      <p className="set__section-caption">{s.folderLabel}</p>
+      <select
+        className="set__select"
+        value={folderId}
+        aria-label={s.folderLabel}
+        disabled={busy}
+        onChange={(event) => setFolderId(event.target.value)}
+      >
+        <option value={UNFILED_VALUE}>{s.rootOption}</option>
+        {folders.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+
+      <div className="set__restore-actions">
+        <Button size="sm" variant="primary" disabled={busy} onClick={() => void run("files")}>
+          {s.filesButton}
+        </Button>
+        <Button size="sm" variant="ghost" disabled={busy} onClick={() => void run("folder")}>
+          {s.folderButton}
+        </Button>
+      </div>
+      <p className="set__section-caption">{s.folderHint}</p>
+
+      {busy && <p className="app__muted">{s.running}</p>}
+      {error != null && <p className="set__error">{error}</p>}
+
+      {report !== null && (
+        <>
+          <p className="set__section-caption">
+            {report.created > 0
+              ? `${s.createdPrefix} ${report.created} ${countUnit(report.created, s.createdUnitOne, s.createdUnitFew, s.createdUnitMany)}.`
+              : s.createdNone}
+          </p>
+          {report.imagesAsText > 0 && (
+            <p className="set__section-caption">
+              {s.imagesPrefix} {report.imagesAsText}{" "}
+              {countUnit(report.imagesAsText, s.imagesUnitOne, s.imagesUnitFew, s.imagesUnitMany)}{" "}
+              {s.imagesSuffix}
+            </p>
+          )}
+          {report.skipped.length > 0 && (
+            <>
+              <h4 className="set__module-group-title">{s.skipsTitle}</h4>
+              <ul className="set__restore-problems">
+                {report.skipped.map((skip, index) => (
+                  <li key={`${skip.name}-${skip.reason}-${index}`} className="set__import-skip">
+                    {s.skips[skip.reason]}{" "}
+                    <span className="set__import-skip-meta">{skip.name}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -2124,6 +2293,7 @@ export function SettingsPage({
         <CalendarExportSection profileId={profileId} hits={hits} />
         <RestoreSection profileId={profileId} hits={hits} />
         <ImportSection profileId={profileId} hits={hits} />
+        <MarkdownImportSection profileId={profileId} hits={hits} />
       </Card>
 
       <Card title={strings.settings.sectionTitle.about} className={sectionClass(sections.has("about"))}>
