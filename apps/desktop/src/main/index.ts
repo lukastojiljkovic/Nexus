@@ -114,6 +114,7 @@ import {
   PeopleStore,
   PERSON_KINDS,
   PlanStore,
+  TopicStore,
   PrivateNoteStore,
   PrivateSettingsStore,
   PROFILE_KINDS,
@@ -2680,6 +2681,10 @@ function planStore(profileId: string): PlanStore {
   return new PlanStore(requireDb().raw, profileId);
 }
 
+function topicStore(profileId: string): TopicStore {
+  return new TopicStore(requireDb().raw, profileId);
+}
+
 function studySettingsStore(profileId: string): StudySettingsStore {
   return new StudySettingsStore(requireDb().raw, profileId);
 }
@@ -3709,6 +3714,7 @@ function restoreDeps(): ImportDeps {
     examStore,
     deckStore,
     cardStore,
+    topicStore,
     planStore,
     studySettingsStore,
     focusStore,
@@ -3849,6 +3855,7 @@ function imexArchiveDeps(): ImexArchiveDeps {
     examStore,
     deckStore,
     cardStore,
+    topicStore,
     planStore,
     studySettingsStore,
     focusStore,
@@ -5596,7 +5603,10 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.plansSyncAll, (event, payload): number => {
     assertTrustedSender(event);
     const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
-    return planStore(profileId).syncAll(new Date().toISOString(), localToday());
+    // The store now answers one PlanHealth per plan (ADR-063); this channel's
+    // wire contract stays the synced COUNT — surfacing the health list over
+    // IPC is slice b's, beside the UI that renders it.
+    return planStore(profileId).syncAll(new Date().toISOString(), localToday()).length;
   });
 
   ipcMain.handle(IpcChannel.blocksListByPlan, (event, payload): StudyBlock[] => {

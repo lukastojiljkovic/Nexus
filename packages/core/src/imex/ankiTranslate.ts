@@ -699,6 +699,8 @@ export function translateApkg(parsed: ParsedApkg, target: ApkgTranslateTarget): 
     cards,
     // No history crosses (see the module header), so there is nothing to log.
     reviewLog: [],
+    // An .apkg carries decks and cards, never an exam's curriculum (ADR-063).
+    examTopics: [],
     plans: [],
     blocks: [],
     focusSessions: [],

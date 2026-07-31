@@ -4035,6 +4035,7 @@ export type ImportRecordType =
   | "deck"
   | "card"
   | "review"
+  | "exam-topic"
   | "plan"
   | "block"
   | "focus-session"

@@ -63,6 +63,7 @@ import type {
   TaskStore,
   TaskTagStore,
   TaskTemplateStore,
+  TopicStore,
 } from "@nexus/db";
 
 /**
@@ -89,6 +90,7 @@ export interface ProfileDataDeps {
   examStore(profileId: string): ExamStore;
   deckStore(profileId: string): DeckStore;
   cardStore(profileId: string): CardStore;
+  topicStore(profileId: string): TopicStore;
   planStore(profileId: string): PlanStore;
   studySettingsStore(profileId: string): StudySettingsStore;
   focusStore(profileId: string): FocusStore;
@@ -248,6 +250,13 @@ export function gatherProfileData(deps: ProfileDataDeps, profileId: string): Pro
     decks,
     cards: decks.flatMap((deck) => cardsStore.listByDeck(deck.id)),
     reviewLog: cardsStore.listReviewLog(),
+    // A profile-wide read (migration 046 / ADR-063), grouped by exam in rank
+    // order by the store itself — the ranked curriculum, cuts included. The
+    // store speaks `rank`, the interchange spells the column (`sortOrder`).
+    examTopics: deps
+      .topicStore(profileId)
+      .listAll()
+      .map(({ rank, ...topic }) => ({ ...topic, sortOrder: rank })),
     plans,
     blocks: plans.flatMap((plan) => plansStore.listBlocks(plan.id)),
     focusSessions: deps.focusStore(profileId).listActive(),

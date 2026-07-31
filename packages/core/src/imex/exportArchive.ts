@@ -44,6 +44,20 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
  *
+ * `1.25.0` adds exam topics and the honest planner (ADR-063, STUDY-003/004/005,
+ * migration 046): the `exam-topic` record type — one row per entry of an exam's
+ * ranked curriculum, riding in `data/study.ndjson` AHEAD of the plans whose
+ * blocks name it — plus an OPTIONAL `weekdayMinutes` on `plan` (absent or null
+ * = "every day = dailyMinutes", which is every earlier archive's plan exactly)
+ * and three OPTIONAL members on `block`: `topicId`, `kind` and `pinned`
+ * (absent = NULL / `"coverage"` / unpinned — what every block in every earlier
+ * archive was, so no `ArchiveEra` flag for any of them; the ADR-028 rule). A
+ * MINOR bump by the same honesty every entry below made: an older reader
+ * handed this archive would restore a profile whose curriculum — the ranked
+ * topic list its owner built by hand, the confidences they assessed, the
+ * scope cuts they accepted — is simply gone, and every block's topic
+ * assignment with it.
+ *
  * `1.24.0` adds a task list's kanban column arrangement (ADR-060): two OPTIONAL
  * members INSIDE the `task-list` row's existing `viewConfig` object —
  * `kanban.hiddenColumns` and `kanban.columnOrder`, both absent meaning "every
@@ -176,7 +190,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.24.0";
+const SCHEMA_VERSION = "1.25.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -657,6 +671,31 @@ export interface ExportReviewLogEntry {
   createdAt: string;
 }
 
+/**
+ * One entry of an exam's ranked curriculum (ADR-063, migration 046). Rides in
+ * `data/study.ndjson` after the decks it may link (`deckId`) and AHEAD of the
+ * plans — a plan's blocks name topics, so the file keeps its "everything a row
+ * points at came before it" reading. `sortOrder` is the user's RANK: 0 = the
+ * list's top = most important, contiguous per exam (`TopicStore`'s invariant).
+ * `cut` travels because it is a decision the user made (STUDY-004's accepted
+ * scope cut), and a restore that forgot it would quietly put dropped topics
+ * back on the schedule.
+ */
+export interface ExportExamTopic {
+  id: string;
+  profileId: string;
+  examId: string;
+  name: string;
+  sortOrder: number;
+  /** The user's own 0-100 self-assessment, or null for unknown (the planner then derives one from the deck). */
+  confidence: number | null;
+  /** The flashcard deck this topic is drilled from, or null. Detached when the deck is not in the archive — decoration, not substance. */
+  deckId: string | null;
+  cut: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ExportStudyPlan {
   id: string;
   profileId: string;
@@ -664,6 +703,15 @@ export interface ExportStudyPlan {
   dailyMinutes: number;
   startDate: string;
   examWeekBoost: boolean;
+  /**
+   * The Mon..Sun capacity vector (ADR-063, migration 046). OPTIONAL with a
+   * default, like a card's `kind`: absent or null means "every day =
+   * dailyMinutes", which is exactly what every plan in every archive written
+   * before this field existed was, so no `ArchiveEra` flag is involved. A
+   * PRESENT vector is validated strictly (7 integers 0-480, at least one
+   * positive) — the store's own rule, re-checked on the way in.
+   */
+  weekdayMinutes?: readonly number[] | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -675,6 +723,19 @@ export interface ExportStudyBlock {
   blockDate: string;
   minutes: number;
   status: string;
+  /**
+   * The topic this block serves (ADR-063), naming an `exam-topic` row of this
+   * archive, or null on an undifferentiated block. OPTIONAL with a default —
+   * absent means null, which is what every block in every pre-`1.25.0`
+   * archive was — so no `ArchiveEra` flag (the ADR-028 rule). A dangling id
+   * detaches TO NULL rather than costing the block: the row is real study
+   * time either way.
+   */
+  topicId?: string | null;
+  /** What the block is for: `coverage`, `revision` or `recall` (migration 046's CHECK). OPTIONAL — absent means `"coverage"`, every earlier block's only kind. */
+  kind?: string;
+  /** Whether the user pinned this block against regeneration. OPTIONAL — absent means unpinned, which every earlier block was. */
+  pinned?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -996,6 +1057,11 @@ export interface ProfileData {
   decks: readonly ExportDeck[];
   cards: readonly ExportCard[];
   reviewLog: readonly ExportReviewLogEntry[];
+  // Required like every field around it (ADR-063): a topic list is the ranked
+  // curriculum its owner built by hand — the order, the confidences, the
+  // accepted cuts — and nothing else in the archive can reconstruct it. An
+  // export that quietly omitted them would restore a planner gone blind.
+  examTopics: readonly ExportExamTopic[];
   plans: readonly ExportStudyPlan[];
   blocks: readonly ExportStudyBlock[];
   focusSessions: readonly ExportFocusSession[];
@@ -1320,6 +1386,7 @@ export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, 
       data.decks.length +
       data.cards.length +
       data.reviewLog.length +
+      data.examTopics.length +
       data.plans.length +
       data.blocks.length +
       data.focusSessions.length +
@@ -1440,6 +1507,9 @@ export function filterProfileData(
         : { ...card, sourceNoteId: null, sourceBlockKey: null },
     ),
     reviewLog: only("study", data.reviewLog),
+    // Topic, exam, deck, plan and block all live in ONE module, so a topic's
+    // two references never cross the filter — no repair rule, like a plan's.
+    examTopics: only("study", data.examTopics),
     plans: only("study", data.plans),
     blocks: only("study", data.blocks),
     focusSessions: only("study", data.focusSessions),
@@ -1525,6 +1595,9 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     ...data.decks.map((row) => ({ type: "deck", ...row })),
     ...data.cards.map((row) => ({ type: "card", ...row })),
     ...data.reviewLog.map((row) => ({ type: "review", ...row })),
+    // AHEAD of the plans (ADR-063): a plan's blocks name topics, and a topic
+    // names the exam and (optionally) the deck already written above.
+    ...data.examTopics.map((row) => ({ type: "exam-topic", ...row })),
     ...data.plans.map((row) => ({ type: "plan", ...row })),
     ...data.blocks.map((row) => ({ type: "block", ...row })),
     ...data.focusSessions.map((row) => ({ type: "focus-session", ...row })),
@@ -1704,6 +1777,7 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   files.set("tables/documents.csv", documentsCsv(data.documents));
   files.set("tables/subjects.csv", subjectsCsv(data.subjects));
   files.set("tables/exams.csv", examsCsv(data.exams));
+  files.set("tables/exam-topics.csv", examTopicsCsv(data.examTopics));
   files.set("tables/cards.csv", cardsCsv(data.cards));
   files.set("tables/study-plans.csv", plansCsv(data.plans));
   files.set("tables/study-blocks.csv", blocksCsv(data.blocks));
@@ -1884,6 +1958,16 @@ function examsCsv(rows: readonly ExportExam[]): string {
   return toCsv(
     ["id", "subjectId", "examType", "examDate", "scope", "createdAt", "updatedAt"],
     rows.map((row) => [row.id, row.subjectId, row.examType, row.examDate, row.scope, row.createdAt, row.updatedAt]),
+  );
+}
+
+function examTopicsCsv(rows: readonly ExportExamTopic[]): string {
+  return toCsv(
+    ["id", "examId", "name", "sortOrder", "confidence", "deckId", "cut", "createdAt", "updatedAt"],
+    rows.map((row) => [
+      row.id, row.examId, row.name, row.sortOrder, row.confidence, row.deckId, row.cut,
+      row.createdAt, row.updatedAt,
+    ]),
   );
 }
 

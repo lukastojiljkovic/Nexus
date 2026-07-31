@@ -25,6 +25,7 @@ import type {
   ExportEventTemplate,
   ExportEventTemplatePayload,
   ExportExam,
+  ExportExamTopic,
   ExportFocusSession,
   ExportNote,
   ExportNoteAttachment,
@@ -226,7 +227,18 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.24.0` added a task
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.25.0` added exam
+ * topics and the honest planner (ADR-063, STUDY-003/004/005, migration 046):
+ * the `exam-topic` record type riding in `data/study.ndjson` ahead of the
+ * plans, an OPTIONAL `weekdayMinutes` on `plan` (absent or null = "every day =
+ * dailyMinutes", every earlier plan's exact meaning) and three OPTIONAL
+ * members on `block` — `topicId`, `kind`, `pinned` (absent = NULL /
+ * `"coverage"` / unpinned, what every earlier block was) — so none of the four
+ * needs an `ArchiveEra` flag (the ADR-028 rule), while a PRESENT value is
+ * validated strictly in every era. Reference rules: a topic's `examId` drops
+ * the topic when dangling exactly as a plan's does; a topic's `deckId` and a
+ * block's `topicId` DETACH to null instead (decoration and assignment, not
+ * substance — the row is real either way) — after `1.24.0` added a task
  * list's kanban column arrangement (ADR-060): `hiddenColumns`/`columnOrder`
  * INSIDE the `task-list` row's existing `viewConfig` object, both optional and
  * absent meaning "every column drawn, in natural order" — which is what every
@@ -334,7 +346,7 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.24.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.25.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -761,6 +773,13 @@ const CARD_KINDS = ["basic", "cloze"] as const;
 const MAX_CARD_TEXT_LENGTH = 10_000;
 const REVIEW_RATINGS = [1, 2, 3, 4] as const;
 const STUDY_BLOCK_STATUSES = ["planned", "done", "missed"] as const;
+/** Mirrors the `study_blocks.kind` CHECK of migration 046 (ADR-063) — the `NOTE_FOLDER_COLORS` arrangement. */
+const STUDY_BLOCK_KINDS = ["coverage", "revision", "recall"] as const;
+/** Mirrors `MAX_NAME_LENGTH` in `@nexus/db`'s `study/topicStore.ts` (copied, not imported — `@nexus/core` must not depend on `@nexus/db`). */
+const MAX_EXAM_TOPIC_NAME_LENGTH = 200;
+/** Mirrors the weekday vector's bounds in `@nexus/db`'s `study/planStore.ts` (ADR-063): 7 entries Mon..Sun, each 0..480, at least one positive. */
+const WEEKDAY_VECTOR_LENGTH = 7;
+const MAX_WEEKDAY_MINUTES = 480;
 /**
  * Mirrors the `notifications.source` CHECK as migration 037 leaves it — the
  * LEDGER's domain, which includes `"security"` (NTF-007) because a recorded
@@ -928,6 +947,7 @@ export type ArchiveRecordType =
   | "deck"
   | "card"
   | "review"
+  | "exam-topic"
   | "plan"
   | "block"
   | "focus-session"
@@ -968,6 +988,7 @@ const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "deck",
   "card",
   "review",
+  "exam-topic",
   "plan",
   "block",
   "focus-session",
@@ -1018,6 +1039,7 @@ const FILE_RECORD_TYPES: Record<DataFilePath, readonly ArchiveRecordType[]> = {
     "deck",
     "card",
     "review",
+    "exam-topic",
     "plan",
     "block",
     "focus-session",
@@ -1656,6 +1678,47 @@ function parseReview(raw: Record<string, unknown>): ExportReviewLogEntry {
   };
 }
 
+/**
+ * One exam topic (ADR-063, migration 046). `confidence` is nullable inside its
+ * 0-100 CHECK; `sortOrder` is only required non-negative here — contiguity is
+ * `TopicStore`'s live invariant, and a restore reproduces rows, not
+ * re-derives them. Both references (`examId`, and the nullable `deckId`) are
+ * checked in the cross-reference pass.
+ */
+function parseExamTopic(raw: Record<string, unknown>): ExportExamTopic {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const examId = nonEmptyStr(raw.examId, "examId");
+  const name = trimmedNonEmptyStr(raw.name, "name", MAX_EXAM_TOPIC_NAME_LENGTH);
+  const sortOrder = nonNegativeInt(raw.sortOrder, "sortOrder");
+  const confidence = raw.confidence === null ? null : intInRange(raw.confidence, "confidence", 0, 100);
+  const deckId = nullableNonEmptyStr(raw.deckId, "deckId");
+  const cut = bool(raw.cut, "cut");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, profileId, examId, name, sortOrder, confidence, deckId, cut, createdAt, updatedAt };
+}
+
+/**
+ * The plan's OPTIONAL weekday vector (ADR-063): absent or null means "every
+ * day = dailyMinutes" in every era (the ADR-028 optional-with-a-default rule),
+ * while a present vector is validated strictly against the store's own rule —
+ * exactly 7 integers 0..480, at least one positive. Migration 046's column is
+ * plain TEXT, so this parser is the one gate between an archive and a vector
+ * the scheduler cannot schedule under.
+ */
+function optionalWeekdayMinutes(value: unknown, field: string): number[] | null {
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value)) throw new InvalidFieldError(field);
+  const entries: readonly unknown[] = value;
+  if (entries.length !== WEEKDAY_VECTOR_LENGTH) throw new InvalidFieldError(field);
+  const vector = entries.map((item, index) =>
+    intInRange(item, `${field}[${index}]`, 0, MAX_WEEKDAY_MINUTES),
+  );
+  if (!vector.some((entry) => entry > 0)) throw new InvalidFieldError(field);
+  return vector;
+}
+
 function parsePlan(raw: Record<string, unknown>): ExportStudyPlan {
   const id = nonEmptyStr(raw.id, "id");
   const profileId = nonEmptyStr(raw.profileId, "profileId");
@@ -1663,9 +1726,13 @@ function parsePlan(raw: Record<string, unknown>): ExportStudyPlan {
   const dailyMinutes = intInRange(raw.dailyMinutes, "dailyMinutes", 15, 480);
   const startDate = bareDate(raw.startDate, "startDate");
   const examWeekBoost = bool(raw.examWeekBoost, "examWeekBoost");
+  const weekdayMinutes = optionalWeekdayMinutes(raw.weekdayMinutes, "weekdayMinutes");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
-  return { id, profileId, examId, dailyMinutes, startDate, examWeekBoost, createdAt, updatedAt };
+  return {
+    id, profileId, examId, dailyMinutes, startDate, examWeekBoost, weekdayMinutes,
+    createdAt, updatedAt,
+  };
 }
 
 function parseBlock(raw: Record<string, unknown>): ExportStudyBlock {
@@ -1675,9 +1742,18 @@ function parseBlock(raw: Record<string, unknown>): ExportStudyBlock {
   const blockDate = bareDate(raw.blockDate, "blockDate");
   const minutes = positiveInt(raw.minutes, "minutes");
   const status = enumStr(raw.status, "status", STUDY_BLOCK_STATUSES);
+  // All three optional-with-a-default (ADR-063): absent means what every
+  // pre-1.25.0 block was — no topic, plain coverage, unpinned — so no
+  // `ArchiveEra` flag; a PRESENT key is validated strictly in every era.
+  const topicId = raw.topicId === undefined ? null : nullableNonEmptyStr(raw.topicId, "topicId");
+  const kind = raw.kind === undefined ? "coverage" : enumStr(raw.kind, "kind", STUDY_BLOCK_KINDS);
+  const pinned = raw.pinned === undefined ? false : bool(raw.pinned, "pinned");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
-  return { id, planId, profileId, blockDate, minutes, status, createdAt, updatedAt };
+  return {
+    id, planId, profileId, blockDate, minutes, status, topicId, kind, pinned,
+    createdAt, updatedAt,
+  };
 }
 
 function parseFocusSession(raw: Record<string, unknown>): ExportFocusSession {
@@ -2171,6 +2247,7 @@ interface Collections {
   decks: Bucket<ExportDeck>;
   cards: Bucket<ExportCard>;
   reviewLog: Bucket<ExportReviewLogEntry>;
+  examTopics: Bucket<ExportExamTopic>;
   plans: Bucket<ExportStudyPlan>;
   blocks: Bucket<ExportStudyBlock>;
   focusSessions: Bucket<ExportFocusSession>;
@@ -2200,7 +2277,8 @@ function newCollections(): Collections {
     people: newBucket(), calendarSettings: newBucket(), subjects: newBucket(),
     subjectAttachments: newBucket(), subjectNoteLinks: newBucket(),
     exams: newBucket(), decks: newBucket(), cards: newBucket(),
-    reviewLog: newBucket(), plans: newBucket(), blocks: newBucket(), focusSessions: newBucket(),
+    reviewLog: newBucket(), examTopics: newBucket(),
+    plans: newBucket(), blocks: newBucket(), focusSessions: newBucket(),
     studySettings: newBucket(),
     notifications: newBucket(), noteFolders: newBucket(), noteTags: newBucket(), notes: newBucket(),
     noteTagLinks: newBucket(), noteAttachments: newBucket(), noteVersions: newBucket(),
@@ -2349,6 +2427,11 @@ function dispatchRecord(
     case "review": {
       const row = parseReview(raw);
       pushRow(collections.reviewLog, row.id, row, type, path, line, ctx);
+      return;
+    }
+    case "exam-topic": {
+      const row = parseExamTopic(raw);
+      pushRow(collections.examTopics, row.id, row, type, path, line, ctx);
       return;
     }
     case "plan": {
@@ -3135,6 +3218,32 @@ function referenceRules(collections: Collections): ReferenceRule[] {
       },
       onDangling: "drop",
     }),
+    // A topic without its exam is a curriculum entry of nothing — dropped
+    // exactly as a plan without its exam is (ADR-063).
+    referenceRule({
+      bucket: collections.examTopics,
+      type: "exam-topic",
+      field: "examId",
+      ref: (row) => row.examId,
+      resolver: () => {
+        const ids = examIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    // The topic ↔ deck link is decoration on the topic (migration 046 says so
+    // with ON DELETE SET NULL) — detached, never a reason to lose the entry.
+    referenceRule({
+      bucket: collections.examTopics,
+      type: "exam-topic",
+      field: "deckId",
+      ref: (row) => row.deckId,
+      resolver: () => {
+        const ids = deckIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: { detach: (row) => ({ ...row, deckId: null }) },
+    }),
     referenceRule({
       bucket: collections.plans,
       type: "plan",
@@ -3156,6 +3265,20 @@ function referenceRules(collections: Collections): ReferenceRule[] {
         return (ref) => ids.has(ref);
       },
       onDangling: "drop",
+    }),
+    // A block whose topic is gone DETACHES to null (ADR-063): the row is real
+    // study time either way, and null is exactly what every pre-1.25.0 block
+    // carried — the same posture a task's `listId` takes, one module over.
+    referenceRule({
+      bucket: collections.blocks,
+      type: "block",
+      field: "topicId",
+      ref: (row) => row.topicId ?? null,
+      resolver: () => {
+        const ids = idsOf(collections.examTopics);
+        return (ref) => ids.has(ref);
+      },
+      onDangling: { detach: (row) => ({ ...row, topicId: null }) },
     }),
     referenceRule({
       bucket: collections.focusSessions,
@@ -3783,6 +3906,10 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         decks: rowsOf(collections.decks),
         cards: rowsOf(collections.cards),
         reviewLog: rowsOf(collections.reviewLog),
+        // Empty for every pre-1.25.0 archive, which carries no such row at all
+        // — and a restore reads that emptiness as "this exam has no topics",
+        // which is exactly the undifferentiated planner it had.
+        examTopics: rowsOf(collections.examTopics),
         plans: rowsOf(collections.plans),
         blocks: rowsOf(collections.blocks),
         focusSessions: rowsOf(collections.focusSessions),

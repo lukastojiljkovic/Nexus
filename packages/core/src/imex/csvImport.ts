@@ -679,6 +679,7 @@ export function translateCsvTasks(
     decks: [],
     cards: [],
     reviewLog: [],
+    examTopics: [],
     plans: [],
     blocks: [],
     focusSessions: [],

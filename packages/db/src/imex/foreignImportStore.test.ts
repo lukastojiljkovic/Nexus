@@ -36,6 +36,7 @@ import {
   NotificationStore,
   PeopleStore,
   PlanStore,
+  TopicStore,
   RestoreValidationError,
   StudySettingsStore,
   SubjectStore,
@@ -114,6 +115,7 @@ function emptyProfileData(): ProfileData {
     decks: [],
     cards: [],
     reviewLog: [],
+    examTopics: [],
     plans: [],
     blocks: [],
     focusSessions: [],
@@ -220,6 +222,12 @@ function seedProfile(profileId: string, label: string): void {
   // A cloze card (ADR-042), so the plan carries the three `kind` columns and the
   // CHECKs that tie them together.
   cards.createCloze(deck.id, `${label}: glavni grad je {{Beograd}}.`, t0);
+  // A deck-linked topic BEFORE the plan (ADR-063), so the generated blocks
+  // carry topic/kind columns and the merge exercises the whole reference chain.
+  new TopicStore(db.raw, profileId).create(
+    { examId: exam.id, name: `${label} topic`, confidence: 35, deckId: deck.id },
+    t0,
+  );
   plans.createPlan(
     { examId: exam.id, dailyMinutes: 30, startDate: "2026-06-01", examWeekBoost: true },
     t0,
@@ -285,6 +293,10 @@ function gather(profileId: string): ProfileData {
     decks: activeDecks,
     cards: activeDecks.flatMap((deck) => cards.listByDeck(deck.id)),
     reviewLog: cards.listReviewLog(),
+    // The store speaks `rank`; the interchange spells the column (`sortOrder`).
+    examTopics: new TopicStore(db.raw, profileId)
+      .listAll()
+      .map(({ rank, ...topic }) => ({ ...topic, sortOrder: rank })),
     plans: activePlans,
     blocks: activePlans.flatMap((plan) => plans.listBlocks(plan.id)),
     focusSessions: new FocusStore(db.raw, profileId).listActive(),

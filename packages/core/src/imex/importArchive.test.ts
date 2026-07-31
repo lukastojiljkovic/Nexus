@@ -80,6 +80,7 @@ function emptyExportInput(): ExportArchiveInput {
       decks: [],
       cards: [],
       reviewLog: [],
+      examTopics: [],
       plans: [],
       blocks: [],
       focusSessions: [],
@@ -371,17 +372,39 @@ function richProfileData(): ProfileData {
         createdAt: "2026-01-02T00:00:00.000Z",
       },
     ],
+    // Two topics (ADR-063): one deck-linked with a confidence, one CUT and
+    // unknown — a round trip where every topic looked the same would pass even
+    // if a field were dropped on the way out.
+    examTopics: [
+      {
+        id: "topic-1", profileId: "profile1", examId: "exam-1", name: "Grafovi", sortOrder: 0,
+        confidence: 40, deckId: "deck-1", cut: false, createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+      {
+        id: "topic-2", profileId: "profile1", examId: "exam-1", name: "Stabla", sortOrder: 1,
+        confidence: null, deckId: null, cut: true, createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ],
     plans: [
       {
         id: "plan-1", profileId: "profile1", examId: "exam-1", dailyMinutes: 60,
-        startDate: "2026-07-01", examWeekBoost: true, createdAt: "2026-01-01T00:00:00.000Z",
+        startDate: "2026-07-01", examWeekBoost: true,
+        // Deliberately NON-null (ADR-063): a round trip on the default would
+        // pass even if the vector were dropped on the way out.
+        weekdayMinutes: [60, 60, 0, 60, 0, 0, 90],
+        createdAt: "2026-01-01T00:00:00.000Z",
         updatedAt: "2026-01-01T00:00:00.000Z",
       },
     ],
     blocks: [
       {
         id: "block-1", planId: "plan-1", profileId: "profile1", blockDate: "2026-07-02",
-        minutes: 60, status: "planned", createdAt: "2026-01-01T00:00:00.000Z",
+        minutes: 60, status: "planned",
+        // NON-default on all three (ADR-063), for the vector's reason above.
+        topicId: "topic-1", kind: "revision", pinned: true,
+        createdAt: "2026-01-01T00:00:00.000Z",
         updatedAt: "2026-01-01T00:00:00.000Z",
       },
     ],
@@ -866,12 +889,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.25.0`: the nearest minor strictly ahead of this build's `1.24.0`.
+  // `1.26.0`: the nearest minor strictly ahead of this build's `1.25.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.25.0" });
+    const files = baseFiles({ schemaVersion: "1.26.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.25.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.26.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -2849,8 +2872,8 @@ describe("parseImportArchive — note folder preferences (the 1.7.0 era gate)", 
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.24.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.24.0");
+  it("is 1.25.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.25.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -3040,11 +3063,11 @@ describe("parseImportArchive — schema version", () => {
     expect(result.manifest?.profile.kind).toBe("personal");
   });
 
-  // `1.25.0`: the nearest minor strictly ahead of this build's `1.24.0`.
+  // `1.26.0`: the nearest minor strictly ahead of this build's `1.25.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.25.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.26.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.25.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.26.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -4142,5 +4165,190 @@ describe("parseImportArchive — private notes (PRIV v1, ADR-057 §6)", () => {
     expect(result.problems).toEqual([
       { severity: "error", code: "invalid-manifest", path: "manifest.json", detail: "privateBlobs[0].id" },
     ]);
+  });
+});
+
+// --- ADR-063: exam topics, the weekday vector, and the block anatomy ---------
+
+const VALID_EXAM_TOPIC = {
+  type: "exam-topic", id: "top1", profileId: "profile1", examId: "ex1", name: "Grafovi",
+  sortOrder: 0, confidence: 40, deckId: "dk1", cut: false,
+  createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z",
+};
+
+/** `data/study.ndjson` holding the topic's whole dependency chain plus `rows`. */
+function topicStudyFile(rows: readonly Record<string, unknown>[]): Map<string, string> {
+  return baseFiles({
+    fileContents: {
+      "data/study.ndjson": ndjson([VALID_SUBJECT, VALID_EXAM, VALID_DECK, ...rows]),
+    },
+  });
+}
+
+describe("parseImportArchive — exam-topic records (ADR-063)", () => {
+  it("parses a full topic row, nullables included", () => {
+    const unknownTopic = {
+      ...VALID_EXAM_TOPIC, id: "top2", sortOrder: 1, confidence: null, deckId: null, cut: true,
+    };
+    const result = parseImportArchive(emptyInputWith(topicStudyFile([VALID_EXAM_TOPIC, unknownTopic])));
+    expect(result.problems).toEqual([]);
+    expect(result.data?.examTopics).toEqual([
+      {
+        id: "top1", profileId: "profile1", examId: "ex1", name: "Grafovi", sortOrder: 0,
+        confidence: 40, deckId: "dk1", cut: false,
+        createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+      {
+        id: "top2", profileId: "profile1", examId: "ex1", name: "Grafovi", sortOrder: 1,
+        confidence: null, deckId: null, cut: true,
+        createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("refuses a malformed topic field by name", () => {
+    for (const [detail, patch] of [
+      ["name", { name: "" }],
+      ["name", { name: "  Grafovi " }],
+      ["name", { name: "x".repeat(201) }],
+      ["sortOrder", { sortOrder: -1 }],
+      ["confidence", { confidence: 101 }],
+      ["confidence", { confidence: 40.5 }],
+      ["deckId", { deckId: "" }],
+      ["cut", { cut: "yes" }],
+    ] as const) {
+      const result = parseImportArchive(
+        emptyInputWith(topicStudyFile([{ ...VALID_EXAM_TOPIC, ...patch }])),
+      );
+      expect(result.problems, JSON.stringify(patch)).toContainEqual({
+        severity: "error", code: "invalid-record", path: "data/study.ndjson", line: 4, detail,
+      });
+      expect(result.data).toBeNull();
+    }
+  });
+
+  it("refuses an exam-topic record filed outside data/study.ndjson", () => {
+    const files = baseFiles({ fileContents: { "data/notes.ndjson": ndjson([VALID_EXAM_TOPIC]) } });
+    const result = parseImportArchive(emptyInputWith(files));
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "invalid-record", path: "data/notes.ndjson", line: 1, detail: "type",
+    });
+  });
+
+  it("restore mode: a dangling examId, deckId or block topicId is a named unknown-reference error", () => {
+    const cases: readonly [Record<string, unknown>, string][] = [
+      [{ ...VALID_EXAM_TOPIC, examId: "missing" }, "examId=missing"],
+      [{ ...VALID_EXAM_TOPIC, deckId: "missing" }, "deckId=missing"],
+    ];
+    for (const [row, detail] of cases) {
+      const result = parseImportArchive(emptyInputWith(topicStudyFile([row])));
+      expect(result.problems, detail).toContainEqual({
+        severity: "error", code: "unknown-reference", path: "data/study.ndjson", line: 4, detail,
+      });
+      expect(result.data).toBeNull();
+    }
+
+    const blockResult = parseImportArchive(
+      emptyInputWith(
+        topicStudyFile([VALID_PLAN, { ...VALID_BLOCK, topicId: "missing" }]),
+      ),
+    );
+    expect(blockResult.problems).toContainEqual({
+      severity: "error", code: "unknown-reference", path: "data/study.ndjson", line: 5, detail: "topicId=missing",
+    });
+    expect(blockResult.data).toBeNull();
+  });
+
+  it("import mode: a dropped exam takes its topics; a dangling deck link detaches; a block's lost topic detaches to null", () => {
+    // The exam's subject is invalid, so the exam drops, the topic cascades
+    // with it — and the plan and block fall along the same chain.
+    const badSubject = { ...VALID_SUBJECT, color: "neon" };
+    const files = baseFiles({
+      fileContents: {
+        "data/study.ndjson": ndjson([
+          badSubject, VALID_EXAM, VALID_DECK, VALID_EXAM_TOPIC, VALID_PLAN,
+          { ...VALID_BLOCK, topicId: "top1", kind: "revision", pinned: true },
+        ]),
+      },
+    });
+
+    const result = parseImportArchive(importInputWith(files));
+    expect(result.data?.examTopics).toEqual([]);
+    expect(result.data?.blocks).toEqual([]); // the plan fell with the exam, and the block with the plan
+    expect(new Set(result.dropped.map((drop) => drop.type))).toEqual(
+      new Set(["subject", "exam", "deck", "exam-topic", "plan", "block"]),
+    );
+
+    // A topic whose DECK alone is damaged keeps its row, deck link detached.
+    const detachFiles = baseFiles({
+      fileContents: {
+        "data/study.ndjson": ndjson([
+          VALID_SUBJECT, VALID_EXAM, { ...VALID_DECK, name: "" }, VALID_EXAM_TOPIC,
+        ]),
+      },
+    });
+    const detached = parseImportArchive(importInputWith(detachFiles));
+    expect(detached.data?.examTopics).toHaveLength(1);
+    expect(detached.data?.examTopics[0]?.deckId).toBeNull();
+    expect(detached.problems).toContainEqual({
+      severity: "warning", code: "unknown-reference", path: "data/study.ndjson", line: 4, detail: "deckId=dk1",
+    });
+  });
+});
+
+describe("parseImportArchive — the plan's weekday vector and the block's trio (ADR-063)", () => {
+  it("defaults an absent weekdayMinutes to null and reads a present one strictly", () => {
+    const withVector = { ...VALID_PLAN, weekdayMinutes: [60, 30, 0, 30, 0, 0, 90] };
+    const result = parseImportArchive(
+      emptyInputWith(topicStudyFile([VALID_PLAN, { ...withVector, id: "pl2" }])),
+    );
+    expect(result.problems).toEqual([]);
+    expect(result.data?.plans.map((row) => row.weekdayMinutes)).toEqual([
+      null,
+      [60, 30, 0, 30, 0, 0, 90],
+    ]);
+  });
+
+  it("refuses a malformed vector: wrong length, out-of-range entries, or all-zero", () => {
+    for (const weekdayMinutes of [
+      [30, 30, 30],
+      [30, 30, 30, 30, 30, 30, 481],
+      [30, 30, 30, 30, 30, 30, 30.5],
+      [0, 0, 0, 0, 0, 0, 0],
+      "svaki dan",
+    ]) {
+      const result = parseImportArchive(
+        emptyInputWith(topicStudyFile([{ ...VALID_PLAN, weekdayMinutes }])),
+      );
+      expect(result.problems, JSON.stringify(weekdayMinutes)).toContainEqual(
+        expect.objectContaining({ severity: "error", code: "invalid-record", line: 4 }),
+      );
+      expect(result.data).toBeNull();
+    }
+  });
+
+  it("defaults an absent topicId/kind/pinned to null/'coverage'/false — every pre-1.25.0 block", () => {
+    const result = parseImportArchive(emptyInputWith(topicStudyFile([VALID_PLAN, VALID_BLOCK])));
+    expect(result.problems).toEqual([]);
+    expect(result.data?.blocks[0]).toMatchObject({
+      topicId: null,
+      kind: "coverage",
+      pinned: false,
+    });
+  });
+
+  it("refuses a present-but-bad kind, pinned, or topicId strictly, in every era", () => {
+    for (const [detail, patch] of [
+      ["kind", { kind: "cram" }],
+      ["pinned", { pinned: 1 }],
+      ["topicId", { topicId: "" }],
+    ] as const) {
+      const result = parseImportArchive(
+        emptyInputWith(topicStudyFile([VALID_PLAN, { ...VALID_BLOCK, ...patch }])),
+      );
+      expect(result.problems, detail).toContainEqual({
+        severity: "error", code: "invalid-record", path: "data/study.ndjson", line: 5, detail,
+      });
+    }
   });
 });

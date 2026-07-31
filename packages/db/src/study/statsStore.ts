@@ -86,9 +86,11 @@ const MINUTE_MS = 60_000;
  * three weeks is simply the point at which a card has outlived the stretch where
  * most forgetting happens and stops being something you are still learning. If
  * the founder ever wants a different line, this constant is the only place it
- * lives.
+ * lives. Exported since ADR-063: `TopicStore`'s deck-derived confidence reads
+ * maturity through the SAME line, so the stats page and the planner can never
+ * disagree about what a mature card is.
  */
-const MATURE_THRESHOLD_DAYS = 21;
+export const MATURE_THRESHOLD_DAYS = 21;
 
 function validateBareDate(value: string, field: string): string {
   if (!BARE_DATE.test(value)) {

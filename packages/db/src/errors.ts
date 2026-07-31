@@ -293,6 +293,25 @@ export class ExamValidationError extends DatabaseError {}
 export class ExamNotFoundError extends DatabaseError {}
 
 /**
+ * Thrown when an exam-topic write is rejected at the store boundary because
+ * its input breaks a domain rule the UI is expected to have caught already —
+ * an empty or over-long name after trimming, a confidence outside 0..100, a
+ * rank outside the exam's contiguous 0..n-1 range, a `deckId` or `examId`
+ * that does not resolve to an active row in this profile, or a malformed
+ * `now` (ADR-063). The store revalidates because renderer input is untrusted
+ * (SEC-EL-02).
+ */
+export class ExamTopicValidationError extends DatabaseError {}
+
+/**
+ * Thrown when an exam-topic operation targets an id that is not an active row
+ * in the store's own profile — unknown, soft-deleted (for a mutation), or
+ * owned by another profile. Surfacing this uniformly keeps one profile's
+ * topics invisible to a store scoped to another.
+ */
+export class ExamTopicNotFoundError extends DatabaseError {}
+
+/**
  * Thrown when a deck write is rejected at the store boundary because its input
  * breaks a domain rule the UI is expected to have caught already — an empty or
  * too-long name, or a `subjectId` that does not resolve to a subject in this

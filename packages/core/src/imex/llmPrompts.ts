@@ -1264,6 +1264,8 @@ export function translateLlmRecords(
     cards,
     // No history crosses: an imported card is a new card (see `freshCardScheduling`).
     reviewLog: [],
+    // An LLM paste carries content rows, never an exam's curriculum (ADR-063).
+    examTopics: [],
     plans: [],
     blocks: [],
     focusSessions: [],

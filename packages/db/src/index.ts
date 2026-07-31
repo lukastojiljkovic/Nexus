@@ -32,6 +32,8 @@ export {
   EventTemplateValidationError,
   EventValidationError,
   ExamNotFoundError,
+  ExamTopicNotFoundError,
+  ExamTopicValidationError,
   ExamValidationError,
   FocusNotFoundError,
   FocusValidationError,
@@ -288,10 +290,20 @@ export {
 } from "./study/studySettingsStore.js";
 export type { StudySettings } from "./study/studySettingsStore.js";
 
-export { PlanStore, STUDY_BLOCK_STATUSES } from "./study/planStore.js";
+export { TopicStore } from "./study/topicStore.js";
+export type {
+  CreateExamTopicInput,
+  EffectiveExamTopic,
+  ExamTopicRecord,
+} from "./study/topicStore.js";
+
+export { PlanStore, STUDY_BLOCK_KINDS, STUDY_BLOCK_STATUSES } from "./study/planStore.js";
 export type {
   CreatePlanInput,
+  PlanHealth,
+  ScopeCutProposal,
   StudyBlock,
+  StudyBlockKind,
   StudyBlockStatus,
   StudyBlockWithExam,
   StudyPlan,

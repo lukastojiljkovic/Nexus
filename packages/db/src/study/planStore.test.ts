@@ -4,12 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   ExamStore,
+  ExamTopicNotFoundError,
   NexusDatabase,
   openDatabase,
   PlanNotFoundError,
   PlanStore,
   PlanValidationError,
   SubjectStore,
+  TopicStore,
   uuidv7,
   type StudyBlockStatus,
 } from "../index.js";
@@ -44,6 +46,7 @@ function fixture(): {
   plans: PlanStore;
   exams: ExamStore;
   subjects: SubjectStore;
+  topics: TopicStore;
   examId: string;
   subjectId: string;
 } {
@@ -52,7 +55,14 @@ function fixture(): {
   const subjectId = subjects.create({ name: "Analiza 1" }).id;
   const exams = new ExamStore(db.raw, profileId);
   const examId = exams.create({ subjectId, examType: "pismeni", examDate: "2026-08-10" }).id;
-  return { plans: new PlanStore(db.raw, profileId), exams, subjects, examId, subjectId };
+  return {
+    plans: new PlanStore(db.raw, profileId),
+    exams,
+    subjects,
+    topics: new TopicStore(db.raw, profileId),
+    examId,
+    subjectId,
+  };
 }
 
 describe("PlanStore", () => {
@@ -771,11 +781,11 @@ describe("PlanStore", () => {
   });
 
   describe("syncAll", () => {
-    it("syncs every active plan whose exam is still active and returns the count", () => {
+    it("syncs every active plan whose exam is still active and returns one PlanHealth per plan", () => {
       const { plans, exams, subjectId } = fixture();
       const examA = exams.create({ subjectId, examType: "pismeni", examDate: "2026-08-10" }).id;
       const examB = exams.create({ subjectId, examType: "usmeni", examDate: "2026-08-20" }).id;
-      plans.createPlan(
+      const planA = plans.createPlan(
         { examId: examA, dailyMinutes: 30, startDate: "2026-08-05", examWeekBoost: false },
         T0,
         TODAY,
@@ -787,8 +797,10 @@ describe("PlanStore", () => {
       );
       exams.softDelete(examB);
 
-      const count = plans.syncAll("2026-07-15T10:00:00.000Z", "2026-07-15");
-      expect(count).toBe(1); // only examA's plan is synced
+      const health = plans.syncAll("2026-07-15T10:00:00.000Z", "2026-07-15");
+      expect(health).toEqual([
+        { planId: planA.id, overflowMinutes: 0, examPassedBacklogMinutes: 0 },
+      ]); // only examA's plan is synced
     });
 
     it("isolates syncAll between profiles", () => {
@@ -799,7 +811,7 @@ describe("PlanStore", () => {
         T0,
         TODAY,
       );
-      expect(b.plans.syncAll(T0, TODAY)).toBe(0);
+      expect(b.plans.syncAll(T0, TODAY)).toEqual([]);
     });
   });
 
@@ -818,6 +830,317 @@ describe("PlanStore", () => {
       );
       expect(() => b.plans.softDelete(owned.id, T0)).toThrow(PlanNotFoundError);
       expect(a.plans.listActive().map((p) => p.id)).toEqual([owned.id]);
+    });
+  });
+
+  // --- ADR-063: the weekday vector -----------------------------------------
+
+  describe("weekdayMinutes (the capacity vector)", () => {
+    it("stores, returns and applies a Mon..Sun vector; null stays 'every day = dailyMinutes'", () => {
+      const { plans, examId } = fixture();
+      const plain = plans.createPlan(
+        { examId, dailyMinutes: 30, startDate: "2026-08-05", examWeekBoost: false },
+        T0,
+        TODAY,
+      );
+      expect(plain.weekdayMinutes).toBeNull();
+
+      // 2026-08-03 is a Monday; Wednesdays and the weekend are free.
+      const updated = plans.updatePlan(
+        plain.id,
+        { startDate: "2026-08-03", weekdayMinutes: [60, 30, 0, 30, 0, 0, 0] },
+        T0,
+        TODAY,
+      );
+      expect(updated.weekdayMinutes).toEqual([60, 30, 0, 30, 0, 0, 0]);
+      expect(plans.listActive()[0]?.weekdayMinutes).toEqual([60, 30, 0, 30, 0, 0, 0]);
+
+      const blocks = plans.listBlocks(plain.id);
+      expect(blocks.map((b) => [b.blockDate, b.minutes])).toEqual([
+        ["2026-08-03", 60],
+        ["2026-08-04", 30],
+        ["2026-08-06", 30],
+      ]);
+
+      // null clears the vector back to the scalar.
+      const cleared = plans.updatePlan(plain.id, { weekdayMinutes: null }, T0, TODAY);
+      expect(cleared.weekdayMinutes).toBeNull();
+      expect(plans.listBlocks(plain.id)).toHaveLength(7);
+    });
+
+    it("rejects a malformed vector: wrong length, non-integers, out of range, or all-zero", () => {
+      const { plans, examId } = fixture();
+      const bad = (weekdayMinutes: number[]) => () =>
+        plans.createPlan(
+          { examId, dailyMinutes: 30, startDate: "2026-08-01", examWeekBoost: false, weekdayMinutes },
+          T0,
+          TODAY,
+        );
+      expect(bad([30, 30, 30])).toThrow(PlanValidationError);
+      expect(bad([30, 30, 30, 30, 30, 30, 30, 30])).toThrow(PlanValidationError);
+      expect(bad([30, 30, 30, 30, 30, 30, 30.5])).toThrow(PlanValidationError);
+      expect(bad([30, 30, 30, 30, 30, 30, -1])).toThrow(PlanValidationError);
+      expect(bad([30, 30, 30, 30, 30, 30, 481])).toThrow(PlanValidationError);
+      expect(bad([0, 0, 0, 0, 0, 0, 0])).toThrow(PlanValidationError);
+    });
+  });
+
+  // --- ADR-063: topic-aware generation, health, pins and the scope cut ------
+
+  describe("topic-aware generation", () => {
+    it("creates topic blocks in rank order under the vector, revisions and recall included", () => {
+      const { plans, topics, examId } = fixture(); // exam 2026-08-10
+      topics.create({ examId, name: "A" }, T0); // confidence unknown
+      const b = topics.create({ examId, name: "B", confidence: 50 }, T0);
+      expect(b.rank).toBe(1);
+
+      const created = plans.createPlan(
+        {
+          examId,
+          dailyMinutes: 60,
+          startDate: "2026-08-03",
+          examWeekBoost: false,
+          weekdayMinutes: [60, 30, 0, 30, 0, 0, 0],
+        },
+        T0,
+        TODAY,
+      );
+
+      const [a] = topics.listByExam(examId);
+      // Sorted in the TEST (date, kind, topic): within one date the store
+      // orders by id, and same-millisecond UUIDv7s carry no order.
+      const rows = plans
+        .listBlocks(created.id)
+        .map((row) => [row.blockDate, row.minutes, row.topicId === a!.id ? "A" : "B", row.kind] as const)
+        .sort((x, y) => x[0].localeCompare(y[0]) || x[3].localeCompare(y[3]) || x[2].localeCompare(y[2]));
+      // The engine's own pinned scenario, written through the store: budgets
+      // A 72 (pass 15, coverage 27) and B 48 (pure coverage).
+      expect(rows).toEqual([
+        ["2026-08-03", 27, "A", "coverage"],
+        ["2026-08-03", 33, "B", "coverage"],
+        ["2026-08-04", 15, "B", "coverage"],
+        ["2026-08-04", 15, "A", "revision"],
+        ["2026-08-06", 15, "A", "recall"],
+        ["2026-08-06", 15, "A", "revision"],
+      ]);
+      expect(plans.listBlocks(created.id).every((row) => !row.pinned && row.status === "planned")).toBe(
+        true,
+      );
+    });
+
+    it("sync is idempotent for the same today on a topic-aware plan", () => {
+      const { plans, topics, exams, subjectId } = fixture();
+      const examId = exams.create({ subjectId, examType: "pismeni", examDate: "2026-07-14" }).id;
+      topics.create({ examId, name: "T", confidence: 0 }, T0);
+      const created = plans.createPlan(
+        { examId, dailyMinutes: 30, startDate: "2026-07-08", examWeekBoost: false },
+        T0,
+        TODAY,
+      );
+
+      // Sorted in the TEST: within one date the store orders by id, and two
+      // passes mint fresh ids — the pinned fact is the SET of slots.
+      const snapshot = () =>
+        plans
+          .listBlocks(created.id)
+          .map((b) => ({ date: b.blockDate, minutes: b.minutes, status: b.status, topicId: b.topicId, kind: b.kind }))
+          .sort((x, y) => x.date.localeCompare(y.date) || x.kind.localeCompare(y.kind));
+
+      plans.sync(created.id, "2026-07-10T10:00:00.000Z", "2026-07-10");
+      const first = snapshot();
+
+      plans.sync(created.id, "2026-07-10T10:00:00.000Z", "2026-07-10");
+      const second = snapshot();
+
+      expect(second).toEqual(first);
+    });
+  });
+
+  describe("PlanHealth (overflow is a return value, never a silent stretch)", () => {
+    it("reports zero overflow while the backlog still fits", () => {
+      const { plans, examId } = fixture();
+      const created = plans.createPlan(
+        { examId, dailyMinutes: 30, startDate: "2026-08-05", examWeekBoost: false },
+        T0,
+        TODAY,
+      );
+      expect(plans.sync(created.id, T0, TODAY)).toEqual({
+        planId: created.id,
+        overflowMinutes: 0,
+        examPassedBacklogMinutes: 0,
+      });
+    });
+
+    it("reports the capped distributor's overflow on a topic-aware plan whose days are full", () => {
+      const { plans, topics, exams, subjectId } = fixture();
+      const examId = exams.create({ subjectId, examType: "pismeni", examDate: "2026-07-14" }).id;
+      topics.create({ examId, name: "T", confidence: 0 }, T0);
+      const created = plans.createPlan(
+        { examId, dailyMinutes: 30, startDate: "2026-07-08", examWeekBoost: false },
+        T0,
+        TODAY,
+      );
+
+      // Two missed days (60 min) and every remaining day already at capacity:
+      // nothing absorbs the backlog, so ALL of it is overflow.
+      const health = plans.sync(created.id, "2026-07-10T10:00:00.000Z", "2026-07-10");
+      expect(health).toEqual({
+        planId: created.id,
+        overflowMinutes: 60,
+        examPassedBacklogMinutes: 0,
+      });
+      // And capacity stayed law: no day exceeds 30 minutes.
+      const byDate = new Map<string, number>();
+      for (const b of plans.listBlocks(created.id).filter((b) => b.status === "planned")) {
+        byDate.set(b.blockDate, (byDate.get(b.blockDate) ?? 0) + b.minutes);
+      }
+      for (const minutes of byDate.values()) expect(minutes).toBeLessThanOrEqual(30);
+    });
+
+    it("still reports overflow past the plan's own capacity on the zero-topic no-cap path", () => {
+      const { plans, exams, subjectId } = fixture();
+      const examId = exams.create({ subjectId, examType: "pismeni", examDate: "2026-07-14" }).id;
+      const created = plans.createPlan(
+        { examId, dailyMinutes: 30, startDate: "2026-07-08", examWeekBoost: false },
+        T0,
+        TODAY,
+      );
+
+      // 60 missed minutes spread over 4 future days of 30: each becomes 45 —
+      // the old no-cap stretch survives, and the 15-over-capacity on each of
+      // the 4 days is REPORTED.
+      const health = plans.sync(created.id, "2026-07-10T10:00:00.000Z", "2026-07-10");
+      expect(health.overflowMinutes).toBe(60);
+      expect(health.examPassedBacklogMinutes).toBe(0);
+      const future = plans
+        .listBlocks(created.id)
+        .filter((b) => b.status === "planned")
+        .map((b) => b.minutes);
+      expect(future).toEqual([45, 45, 45, 45]);
+    });
+
+    it("reports a passed exam's unabsorbed backlog as examPassedBacklogMinutes", () => {
+      const { plans, examId } = fixture(); // exam 2026-08-10
+      const created = plans.createPlan(
+        { examId, dailyMinutes: 30, startDate: "2026-08-05", examWeekBoost: false },
+        T0,
+        TODAY,
+      );
+      const health = plans.sync(created.id, "2026-08-10T10:00:00.000Z", "2026-08-10");
+      expect(health).toEqual({
+        planId: created.id,
+        overflowMinutes: 0,
+        examPassedBacklogMinutes: 150, // all five 30-minute blocks went missed
+      });
+    });
+  });
+
+  describe("pinned blocks", () => {
+    it("marks a block pinned and back, and refuses an unknown or cross-profile block", () => {
+      const { plans, examId } = fixture();
+      const created = plans.createPlan(
+        { examId, dailyMinutes: 30, startDate: "2026-08-05", examWeekBoost: false },
+        T0,
+        TODAY,
+      );
+      const block = plans.listBlocks(created.id)[0]!;
+      expect(block.pinned).toBe(false);
+
+      expect(plans.setBlockPinned(block.id, true, T0).pinned).toBe(true);
+      expect(plans.setBlockPinned(block.id, false, T0).pinned).toBe(false);
+      expect(() => plans.setBlockPinned("missing", true, T0)).toThrow(PlanNotFoundError);
+
+      const other = fixture();
+      expect(() => other.plans.setBlockPinned(block.id, true, T0)).toThrow(PlanNotFoundError);
+    });
+
+    it("regeneration keeps a pinned future block exactly as it keeps done rows, without duplicating its slot", () => {
+      const { plans, examId } = fixture();
+      const created = plans.createPlan(
+        { examId, dailyMinutes: 30, startDate: "2026-08-05", examWeekBoost: false },
+        T0,
+        TODAY,
+      );
+      const pinnedBlock = plans.listBlocks(created.id)[0]!; // 2026-08-05
+      plans.setBlockPinned(pinnedBlock.id, true, T0);
+
+      plans.updatePlan(created.id, { dailyMinutes: 50 }, T0, TODAY);
+
+      const blocks = plans.listBlocks(created.id);
+      const survived = blocks.find((b) => b.id === pinnedBlock.id);
+      expect(survived?.minutes).toBe(30); // untouched, not regenerated to 50
+      expect(survived?.pinned).toBe(true);
+      expect(blocks.filter((b) => b.blockDate === "2026-08-05")).toHaveLength(1);
+      expect(blocks.filter((b) => b.id !== pinnedBlock.id).every((b) => b.minutes === 50)).toBe(true);
+    });
+  });
+
+  describe("scope cut (STUDY-004)", () => {
+    it("proposes nothing while the load fits the capacity", () => {
+      const { plans, topics, examId } = fixture();
+      topics.create({ examId, name: "T", confidence: 0 }, T0);
+      const created = plans.createPlan(
+        { examId, dailyMinutes: 30, startDate: "2026-08-05", examWeekBoost: false },
+        T0,
+        TODAY,
+      );
+      const proposal = plans.scopeCutProposal(created.id, TODAY);
+      expect(proposal.planId).toBe(created.id);
+      expect(proposal.topicIds).toEqual([]);
+      expect(proposal.freedMinutes).toBe(0);
+      expect(proposal.loadMinutes).toBeLessThanOrEqual(proposal.capacityMinutes);
+    });
+
+    it("walks topics from the bottom of the rank list, dropping remaining non-done minutes until the load fits — without writing", () => {
+      const { plans, topics, exams, subjectId } = fixture();
+      const examId = exams.create({ subjectId, examType: "pismeni", examDate: "2026-07-14" }).id;
+      const t = topics.create({ examId, name: "T", confidence: 0 }, T0);
+      const created = plans.createPlan(
+        { examId, dailyMinutes: 30, startDate: "2026-07-08", examWeekBoost: false },
+        T0,
+        TODAY,
+      );
+      plans.sync(created.id, "2026-07-10T10:00:00.000Z", "2026-07-10"); // 60 min missed, days full
+
+      const before = plans.listBlocks(created.id);
+      const proposal = plans.scopeCutProposal(created.id, "2026-07-10");
+      expect(proposal).toEqual({
+        planId: created.id,
+        capacityMinutes: 120, // 4 remaining days x 30
+        loadMinutes: 180, // 120 planned + 60 missed
+        topicIds: [t.id],
+        freedMinutes: 180, // every non-done minute belongs to T
+      });
+      // Pure computation: nothing was written.
+      expect(plans.listBlocks(created.id)).toEqual(before);
+      expect(topics.listByExam(examId)[0]?.cut).toBe(false);
+    });
+
+    it("acceptScopeCut is the one path that sets cut, and the next sync excludes the topic", () => {
+      const { plans, topics, exams, subjectId } = fixture();
+      const examId = exams.create({ subjectId, examType: "pismeni", examDate: "2026-07-14" }).id;
+      const t = topics.create({ examId, name: "T", confidence: 0 }, T0);
+      const created = plans.createPlan(
+        { examId, dailyMinutes: 30, startDate: "2026-07-08", examWeekBoost: false },
+        T0,
+        TODAY,
+      );
+
+      plans.acceptScopeCut([t.id], T0);
+      expect(topics.listByExam(examId)[0]?.cut).toBe(true);
+
+      plans.sync(created.id, T0, TODAY);
+      // With its only topic cut, the plan regenerates undifferentiated blocks.
+      const future = plans.listBlocks(created.id).filter((b) => b.status === "planned");
+      expect(future.every((b) => b.topicId === null && b.kind === "coverage")).toBe(true);
+    });
+
+    it("acceptScopeCut refuses an unknown or cross-profile topic id", () => {
+      const { plans } = fixture();
+      const other = fixture();
+      const foreign = other.topics.create({ examId: other.examId, name: "X" }, T0);
+      expect(() => plans.acceptScopeCut(["missing"], T0)).toThrow(ExamTopicNotFoundError);
+      expect(() => plans.acceptScopeCut([foreign.id], T0)).toThrow(ExamTopicNotFoundError);
     });
   });
 });

@@ -975,6 +975,7 @@ export function translateIcsEvents(
     decks: [],
     cards: [],
     reviewLog: [],
+    examTopics: [],
     plans: [],
     blocks: [],
     focusSessions: [],

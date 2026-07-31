@@ -65,7 +65,7 @@ function emptyProfileData(): ProfileData {
     events: [], eventTemplates: [], documents: [], renewals: [], people: [],
     calendarSettings: [],
     subjects: [], subjectAttachments: [], subjectNoteLinks: [],
-    exams: [], decks: [], cards: [], reviewLog: [], plans: [], blocks: [],
+    exams: [], decks: [], cards: [], reviewLog: [], examTopics: [], plans: [], blocks: [],
     focusSessions: [], studySettings: [], notifications: [],
     notes: [], noteFolders: [], noteTags: [], noteTagLinks: [], noteTemplates: [],
     noteAttachments: [], noteVersions: [],
@@ -136,11 +136,15 @@ function foreignProfileData(): ProfileData {
     reviewLog: [
       { id: "src-rv1", profileId: "src", cardId: "src-c1", rating: 3, state: 1, due: "2026-01-03T00:00:00.000Z", stability: 1, difficulty: 2, elapsedDays: 0, lastElapsedDays: 0, scheduledDays: 1, learningSteps: 0, review: "2026-01-02T00:00:00.000Z", createdAt: T0 },
     ],
+    examTopics: [
+      { id: "src-top1", profileId: "src", examId: "src-ex1", name: "Grafovi", sortOrder: 0, confidence: 40, deckId: "src-dk1", cut: false, createdAt: T0, updatedAt: T0 },
+      { id: "src-top2", profileId: "src", examId: "src-ex1", name: "Stabla", sortOrder: 1, confidence: null, deckId: null, cut: true, createdAt: T0, updatedAt: T0 },
+    ],
     plans: [
-      { id: "src-pl1", profileId: "src", examId: "src-ex1", dailyMinutes: 60, startDate: "2026-08-01", examWeekBoost: false, createdAt: T0, updatedAt: T0 },
+      { id: "src-pl1", profileId: "src", examId: "src-ex1", dailyMinutes: 60, startDate: "2026-08-01", examWeekBoost: false, weekdayMinutes: [60, 60, 0, 60, 0, 0, 90], createdAt: T0, updatedAt: T0 },
     ],
     blocks: [
-      { id: "src-bl1", planId: "src-pl1", profileId: "src", blockDate: "2026-08-02", minutes: 60, status: "planned", createdAt: T0, updatedAt: T0 },
+      { id: "src-bl1", planId: "src-pl1", profileId: "src", blockDate: "2026-08-02", minutes: 60, status: "planned", topicId: "src-top1", kind: "revision", pinned: true, createdAt: T0, updatedAt: T0 },
     ],
     focusSessions: [
       { id: "src-fs1", profileId: "src", subjectId: "src-s1", startedAt: "2026-01-02T09:00:00.000Z", endedAt: "2026-01-02T10:00:00.000Z", createdAt: T0, updatedAt: T0 },
@@ -293,6 +297,25 @@ describe("planForeignImport — references remap through the id map", () => {
     expect(data.reviewLog[0]?.cardId).toBe(data.cards[0]?.id);
     expect(data.plans[0]?.examId).toBe(data.exams[0]?.id);
     expect(data.blocks[0]?.planId).toBe(data.plans[0]?.id);
+  });
+
+  it("imports topics additively with remapped exam/deck refs, and remaps a block's topic (ADR-063)", () => {
+    const { data } = plan(foreignProfileData());
+
+    expect(data.examTopics).toHaveLength(2);
+    expect(data.examTopics[0]?.examId).toBe(data.exams[0]?.id);
+    expect(data.examTopics[0]?.deckId).toBe(data.decks[0]?.id);
+    // Everything that is not a reference crosses verbatim — the rank, the
+    // confidence, and the accepted cut alike.
+    expect(data.examTopics.map((row) => [row.sortOrder, row.confidence, row.cut])).toEqual([
+      [0, 40, false],
+      [1, null, true],
+    ]);
+    expect(data.examTopics[1]?.deckId).toBeNull();
+    expect(data.blocks[0]?.topicId).toBe(data.examTopics[0]?.id);
+    expect(data.blocks[0]?.kind).toBe("revision");
+    expect(data.blocks[0]?.pinned).toBe(true);
+    expect(data.plans[0]?.weekdayMinutes).toEqual([60, 60, 0, 60, 0, 0, 90]);
   });
 
   it("remaps a card's source note, keeping its block key", () => {
@@ -666,10 +689,11 @@ describe("planForeignImport — the report adds up", () => {
 
   it("counts an all-imported module honestly", () => {
     const { report } = plan(foreignProfileData());
-    // 1 subject + 1 exam + 1 deck + 1 card + 1 review + 1 plan + 1 block +
-    // 1 session imported; the scheduling-preferences row (STUDY-007) is the
-    // module's one by-design skip — the target's own workload choices stay.
-    expect(report.modules.study).toEqual({ parsed: 9, imported: 8, merged: 0, skipped: 1 });
+    // 1 subject + 1 exam + 1 deck + 1 card + 1 review + 2 topics + 1 plan +
+    // 1 block + 1 session imported; the scheduling-preferences row (STUDY-007)
+    // is the module's one by-design skip — the target's own workload choices
+    // stay.
+    expect(report.modules.study).toEqual({ parsed: 11, imported: 10, merged: 0, skipped: 1 });
   });
 
   it("never imports the study preferences — the skip is named, the target's choices stay", () => {

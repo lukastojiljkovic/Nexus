@@ -89,6 +89,10 @@ export const RESTORE_WIPE_TABLES = [
   "decks",
   "exams",
   "study_blocks",
+  // After the blocks whose `topic_id` names them (children before parents —
+  // migration 046's SET NULL is never leaned on), before the plans beside
+  // which their exam cascade would otherwise be the only reach.
+  "exam_topics",
   "study_plans",
   "focus_sessions",
   "tracked_documents",
@@ -253,6 +257,7 @@ export class RestoreStore {
   private readonly insertEventTemplate: Database.Statement;
   private readonly insertPerson: Database.Statement;
   private readonly insertNotification: Database.Statement;
+  private readonly insertExamTopic: Database.Statement;
   private readonly insertPlan: Database.Statement;
   private readonly insertBlock: Database.Statement;
   private readonly insertFocusSession: Database.Statement;
@@ -400,16 +405,23 @@ export class RestoreStore {
           snoozed_until, delivered_at, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
+    this.insertExamTopic = db.prepare(
+      `INSERT INTO exam_topics
+         (id, profile_id, exam_id, name, sort_order, confidence, deck_id, cut,
+          created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
     this.insertPlan = db.prepare(
       `INSERT INTO study_plans
-         (id, profile_id, exam_id, daily_minutes, start_date, exam_week_boost,
+         (id, profile_id, exam_id, daily_minutes, start_date, exam_week_boost, weekday_minutes,
           created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertBlock = db.prepare(
       `INSERT INTO study_blocks
-         (id, plan_id, profile_id, block_date, minutes, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, plan_id, profile_id, block_date, minutes, status, topic_id, kind, pinned,
+          created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     this.insertFocusSession = db.prepare(
       `INSERT INTO focus_sessions
@@ -840,18 +852,41 @@ export class RestoreStore {
         written += 1;
       }
 
-      for (const plan of input.data.plans) {
-        this.insertPlan.run(
-          plan.id, this.profileId, plan.examId, plan.dailyMinutes, plan.startDate,
-          plan.examWeekBoost ? 1 : 0, plan.createdAt, plan.updatedAt,
+      // ADR-063: the ranked curriculum, reproduced verbatim — rank, confidence,
+      // deck link and the accepted cuts alike. Before the plans whose blocks
+      // name these rows, mirroring the archive's own file order.
+      for (const topic of input.data.examTopics) {
+        this.insertExamTopic.run(
+          topic.id, this.profileId, topic.examId, topic.name, topic.sortOrder,
+          topic.confidence, topic.deckId, topic.cut ? 1 : 0, topic.createdAt, topic.updatedAt,
         );
         written += 1;
       }
 
+      // `weekdayMinutes` is optional in the interchange (ADR-063): an archive
+      // from before 1.25.0 carries none, and null IS "every day =
+      // dailyMinutes" — the column's own meaning, written as NULL.
+      for (const plan of input.data.plans) {
+        this.insertPlan.run(
+          plan.id, this.profileId, plan.examId, plan.dailyMinutes, plan.startDate,
+          plan.examWeekBoost ? 1 : 0,
+          plan.weekdayMinutes === undefined || plan.weekdayMinutes === null
+            ? null
+            : JSON.stringify(plan.weekdayMinutes),
+          plan.createdAt, plan.updatedAt,
+        );
+        written += 1;
+      }
+
+      // The three ADR-063 members ride the existing insert with nothing but a
+      // `??` between them and the row, exactly as a card's `kind` does: absent
+      // means what every pre-1.25.0 block was.
       for (const block of input.data.blocks) {
         this.insertBlock.run(
           block.id, block.planId, this.profileId, block.blockDate, block.minutes,
-          block.status, block.createdAt, block.updatedAt,
+          block.status, block.topicId ?? null, block.kind ?? "coverage",
+          (block.pinned ?? false) ? 1 : 0,
+          block.createdAt, block.updatedAt,
         );
         written += 1;
       }

@@ -35,6 +35,7 @@ import {
   NotificationStore,
   PeopleStore,
   PlanStore,
+  TopicStore,
   PrivateNoteStore,
   ProfileStore,
   RestoreStore,
@@ -149,6 +150,7 @@ function emptyProfileData(): ProfileData {
     decks: [],
     cards: [],
     reviewLog: [],
+    examTopics: [],
     plans: [],
     blocks: [],
     focusSessions: [],
@@ -254,6 +256,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   const examStore = new ExamStore(handle.raw, profileId);
   const deckStore = new DeckStore(handle.raw, profileId);
   const cardStore = new CardStore(handle.raw, profileId);
+  const topicStore = new TopicStore(handle.raw, profileId);
   const planStore = new PlanStore(handle.raw, profileId);
   const focusStore = new FocusStore(handle.raw, profileId);
   const notificationStore = new NotificationStore(handle.raw, profileId);
@@ -377,8 +380,18 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   // gathered" assertion covers them.
   cardStore.createCloze(deck.id, "Glavni grad je {{Beograd}}, a reka je {{Sava}}.", t0);
 
+  // A deck-linked, confidence-carrying topic (ADR-063) BEFORE the plan, so the
+  // plan's generated blocks carry topic/kind columns and the round-trip
+  // assertions below cover them.
+  topicStore.create({ examId: exam.id, name: `${name} topic`, confidence: 40, deckId: deck.id }, t0);
   const plan = planStore.createPlan(
-    { examId: exam.id, dailyMinutes: 30, startDate: "2026-06-01", examWeekBoost: true },
+    {
+      examId: exam.id,
+      dailyMinutes: 30,
+      startDate: "2026-06-01",
+      examWeekBoost: true,
+      weekdayMinutes: [30, 30, 30, 30, 30, 0, 60],
+    },
     t0,
     "2026-01-01",
   );
@@ -473,6 +486,9 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     decks: deckStore.listActive(),
     cards: cardStore.listByDeck(deck.id),
     reviewLog: cardStore.listReviewLog(),
+    // The store speaks `rank`; the interchange spells the column (`sortOrder`)
+    // — the same mapping `gatherProfileData` makes.
+    examTopics: topicStore.listAll().map(({ rank, ...topic }) => ({ ...topic, sortOrder: rank })),
     plans: planStore.listActive(),
     blocks: planStore.listBlocks(plan.id),
     focusSessions: focusStore.listActive(),
@@ -668,6 +684,11 @@ function assertModulesMatch(
     remap(fixture.data.cards),
   );
   expect(new CardStore(handle.raw, readProfileId).listReviewLog()).toEqual(remap(fixture.data.reviewLog));
+  expect(
+    new TopicStore(handle.raw, readProfileId)
+      .listAll()
+      .map(({ rank, ...topic }) => ({ ...topic, sortOrder: rank })),
+  ).toEqual(remap(fixture.data.examTopics));
   expect(new PlanStore(handle.raw, readProfileId).listActive()).toEqual(remap(fixture.data.plans));
   expect(new PlanStore(handle.raw, readProfileId).listBlocks(fixture.ids.plan.id)).toEqual(
     remap(fixture.data.blocks),
@@ -861,6 +882,8 @@ describe("RestoreStore", () => {
     expect(new NoteOrgStore(db.raw, profileB).listFolders()).toEqual([]);
     expect(new NoteOrgStore(db.raw, profileB).listTags()).toEqual([]);
     expect(new TaskTagStore(db.raw, profileB).listTags()).toEqual([]);
+    // The ranked curriculum goes with the rest of the STUDY module (ADR-063).
+    expect(new TopicStore(db.raw, profileB).listAll()).toEqual([]);
     // An archive carrying no study-settings row puts the profile back on the
     // scheduler's own defaults (STUDY-007) — B's chosen retention and caps are
     // gone, not merely unreferenced.

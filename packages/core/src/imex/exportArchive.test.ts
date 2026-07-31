@@ -59,6 +59,7 @@ function emptyInput(): ExportArchiveInput {
       decks: [],
       cards: [],
       reviewLog: [],
+      examTopics: [],
       plans: [],
       blocks: [],
       focusSessions: [],
@@ -218,6 +219,7 @@ describe("buildExportArchive", () => {
           "tables/documents.csv",
           "tables/subjects.csv",
           "tables/exams.csv",
+          "tables/exam-topics.csv",
           "tables/cards.csv",
           "tables/study-plans.csv",
           "tables/study-blocks.csv",
@@ -255,7 +257,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.24.0");
+      expect(manifest.schemaVersion).toBe("1.25.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       // `picture: null` is written out loud rather than omitted: the manifest is
@@ -1082,11 +1084,14 @@ describe("buildExportArchive", () => {
             elapsedDays: 1, lastElapsedDays: 0, scheduledDays: 1, learningSteps: 0, review: t, createdAt: t,
           },
         ],
+        examTopics: [
+          { id: "top1", profileId: "p1", examId: "ex1", name: "Grafovi", sortOrder: 0, confidence: 40, deckId: "dk1", cut: false, createdAt: t, updatedAt: t },
+        ],
         plans: [
-          { id: "pl1", profileId: "p1", examId: "ex1", dailyMinutes: 30, startDate: "2026-01-01", examWeekBoost: false, createdAt: t, updatedAt: t },
+          { id: "pl1", profileId: "p1", examId: "ex1", dailyMinutes: 30, startDate: "2026-01-01", examWeekBoost: false, weekdayMinutes: [30, 30, 30, 30, 30, 0, 60], createdAt: t, updatedAt: t },
         ],
         blocks: [
-          { id: "b1", planId: "pl1", profileId: "p1", blockDate: "2026-01-02", minutes: 30, status: "planned", createdAt: t, updatedAt: t },
+          { id: "b1", planId: "pl1", profileId: "p1", blockDate: "2026-01-02", minutes: 30, status: "planned", topicId: "top1", kind: "coverage", pinned: true, createdAt: t, updatedAt: t },
         ],
         focusSessions: [
           { id: "f1", profileId: "p1", subjectId: "s1", startedAt: t, endedAt: t, createdAt: t, updatedAt: t },
@@ -1134,7 +1139,7 @@ describe("buildExportArchive", () => {
       expect(countProfileModules(data)).toEqual({
         tasks: 9, // 2 tasks + 1 list + 1 section + 1 tag + 1 tag link + 1 attachment + 1 template + 1 dependency
         calendar: 6, // 1 event + 1 event template + 1 document + 1 renewal + 1 person + the settings row
-        study: 11, // 1 each of subject/material/note-link/exam/deck/card/review/plan/block/focus-session + the settings row
+        study: 12, // 1 each of subject/material/note-link/exam/deck/card/review/topic/plan/block/focus-session + the settings row
         notifications: 1,
         notes: 7, // 1 each of note/folder/tag/tag-link/template/attachment/version
         dashboard: 3, // the one settings row a profile can ever have + 1 named board + 1 placed widget
@@ -1152,6 +1157,58 @@ describe("buildExportArchive", () => {
       expect(countProfileModules(emptyInput().data)).toEqual({
         tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0, dashboard: 0,
       });
+    });
+  });
+
+  describe("data/study.ndjson — exam topics (ADR-063)", () => {
+    const t = "2026-01-01T00:00:00.000Z";
+
+    function studyInput(): ExportArchiveInput {
+      const input = emptyInput();
+      input.data.subjects = [
+        { id: "s1", profileId: "profile1", name: "S", color: "jade", semester: null, archived: false, createdAt: t, updatedAt: t },
+      ];
+      input.data.exams = [
+        { id: "ex1", profileId: "profile1", subjectId: "s1", examType: "pismeni", examDate: "2030-01-01", scope: null, createdAt: t, updatedAt: t },
+      ];
+      input.data.decks = [
+        { id: "dk1", profileId: "profile1", subjectId: "s1", name: "Dk", createdAt: t, updatedAt: t },
+      ];
+      input.data.examTopics = [
+        { id: "top1", profileId: "profile1", examId: "ex1", name: "Grafovi", sortOrder: 0, confidence: null, deckId: "dk1", cut: false, createdAt: t, updatedAt: t },
+      ];
+      input.data.plans = [
+        { id: "pl1", profileId: "profile1", examId: "ex1", dailyMinutes: 30, startDate: "2026-01-01", examWeekBoost: false, weekdayMinutes: null, createdAt: t, updatedAt: t },
+      ];
+      input.data.blocks = [
+        { id: "b1", planId: "pl1", profileId: "profile1", blockDate: "2026-01-02", minutes: 30, status: "planned", topicId: "top1", kind: "recall", pinned: false, createdAt: t, updatedAt: t },
+      ];
+      return input;
+    }
+
+    it("writes exam-topic rows AHEAD of the plans, after the decks they may link", () => {
+      const archive = buildExportArchive(studyInput());
+      const types = parseNdjson(archive.files.get("data/study.ndjson") ?? "").map(
+        (row) => (row as { type: string }).type,
+      );
+      expect(types.indexOf("deck")).toBeLessThan(types.indexOf("exam-topic"));
+      expect(types.indexOf("exam-topic")).toBeLessThan(types.indexOf("plan"));
+      expect(types.indexOf("plan")).toBeLessThan(types.indexOf("block"));
+    });
+
+    it("mirrors the topics into tables/exam-topics.csv beside the other study tables", () => {
+      const archive = buildExportArchive(studyInput());
+      const csv = archive.files.get("tables/exam-topics.csv") ?? "";
+      expect(csv).toMatch(/^id,examId,name,sortOrder,confidence,deckId,cut,createdAt,updatedAt/);
+      expect(csv).toContain("Grafovi");
+    });
+
+    it("drops the topics with the rest of the STUDY module under a subset export (IMEX-003)", () => {
+      const input = studyInput();
+      input.modules = new Set<ArchiveModuleId>(["tasks"]);
+      const archive = buildExportArchive(input);
+      expect(archive.files.get("data/study.ndjson")).toBe("");
+      expect(archive.byModule.study).toBe(0);
     });
   });
 

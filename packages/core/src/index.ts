@@ -72,8 +72,20 @@ export {
 } from "./views/engine.js";
 export type { KanbanGroup } from "./views/engine.js";
 
-export { distributeBacklog, planBlockDates } from "./study/planEngine.js";
-export type { PlanBlockDate, PlanBlockDatesInput } from "./study/planEngine.js";
+export {
+  distributeBacklog,
+  distributeBacklogCapped,
+  planBlockDates,
+  planDayCapacity,
+} from "./study/planEngine.js";
+export type {
+  DistributedBacklog,
+  PlanBlockDate,
+  PlanBlockDatesInput,
+  PlanBlockKind,
+  PlanCapacitySpec,
+  PlanTopic,
+} from "./study/planEngine.js";
 
 export { computeStreak } from "./study/studyStats.js";
 export type { StreakResult } from "./study/studyStats.js";
@@ -221,6 +233,7 @@ export type {
   ExportEventTemplate,
   ExportEventTemplatePayload,
   ExportExam,
+  ExportExamTopic,
   ExportFocusSession,
   ExportNote,
   ExportNoteAttachment,

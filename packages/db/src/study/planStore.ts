@@ -1,7 +1,14 @@
 import type Database from "better-sqlite3-multiple-ciphers";
-import { distributeBacklog, planBlockDates } from "@nexus/core";
-import { PlanNotFoundError, PlanValidationError } from "../errors.js";
+import {
+  distributeBacklog,
+  distributeBacklogCapped,
+  planBlockDates,
+  planDayCapacity,
+} from "@nexus/core";
+import type { PlanBlockDate, PlanCapacitySpec, PlanTopic } from "@nexus/core";
+import { ExamTopicNotFoundError, PlanNotFoundError, PlanValidationError } from "../errors.js";
 import { uuidv7 } from "../ids.js";
+import { TopicStore } from "./topicStore.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -13,23 +20,27 @@ export interface StudyPlan {
   dailyMinutes: number;
   startDate: string;
   examWeekBoost: boolean;
+  /** Mon..Sun capacity vector (ADR-063), or null for "every day = dailyMinutes". */
+  weekdayMinutes: readonly number[] | null;
   createdAt: string;
   updatedAt: string;
 }
 
-/** Fields accepted when creating a plan; all four are required (STUDY exam planner). */
+/** Fields accepted when creating a plan (STUDY exam planner); `weekdayMinutes` is optional — absent or null means the scalar. */
 export interface CreatePlanInput {
   examId: string;
   dailyMinutes: number;
   startDate: string;
   examWeekBoost: boolean;
+  weekdayMinutes?: readonly number[] | null;
 }
 
-/** A partial patch of a plan's own fields; an omitted key is left untouched. */
+/** A partial patch of a plan's own fields; an omitted key is left untouched, and `weekdayMinutes: null` clears the vector. */
 export interface UpdatePlanFields {
   dailyMinutes?: number;
   startDate?: string;
   examWeekBoost?: boolean;
+  weekdayMinutes?: readonly number[] | null;
 }
 
 /** Closed study-block status domain (migration 007 CHECK). `missed` is only ever set by `sync`. */
@@ -37,6 +48,12 @@ export type StudyBlockStatus = "planned" | "done" | "missed";
 
 /** Study-block statuses in wire order; the UI maps each onto a status chip. `missed` cannot be set by hand — see `setBlockStatus`. */
 export const STUDY_BLOCK_STATUSES: readonly StudyBlockStatus[] = ["planned", "done", "missed"];
+
+/** Closed study-block kind domain (migration 046 CHECK; ADR-063). */
+export type StudyBlockKind = "coverage" | "revision" | "recall";
+
+/** Study-block kinds in wire order; the UI maps each onto its chip. */
+export const STUDY_BLOCK_KINDS: readonly StudyBlockKind[] = ["coverage", "revision", "recall"];
 
 /** A single generated study session, as the store returns it. */
 export interface StudyBlock {
@@ -46,6 +63,11 @@ export interface StudyBlock {
   blockDate: string;
   minutes: number;
   status: StudyBlockStatus;
+  /** The topic this block serves (ADR-063), or null on an undifferentiated block. */
+  topicId: string | null;
+  kind: StudyBlockKind;
+  /** A pinned block survives regeneration exactly as done/missed rows do — the user's own hold on a slot. */
+  pinned: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -55,6 +77,38 @@ export interface StudyBlockWithExam extends StudyBlock {
   examId: string;
 }
 
+/**
+ * One plan's honesty report (ADR-063 invariant 5), returned by every `sync`:
+ * `overflowMinutes` is the backlog no remaining day could absorb (the
+ * scope-cut conversation's trigger, STUDY-004), and
+ * `examPassedBacklogMinutes` is the missed time a plan whose exam already
+ * passed will never absorb at all. Never both non-zero: a passed exam
+ * regenerates nothing, so it has no distributor to overflow.
+ */
+export interface PlanHealth {
+  planId: string;
+  overflowMinutes: number;
+  examPassedBacklogMinutes: number;
+}
+
+/**
+ * One plan's scope-cut proposal (STUDY-004): the lowest-ranked topics whose
+ * removal brings the remaining load inside the remaining capacity. A pure
+ * COMPUTATION — nothing is written until the user explicitly accepts it
+ * through `acceptScopeCut`, which is the only path that ever sets `cut`.
+ */
+export interface ScopeCutProposal {
+  planId: string;
+  /** Σ `planDayCapacity` over the remaining days (effective start .. exam-eve). */
+  capacityMinutes: number;
+  /** Remaining non-done minutes: future planned blocks plus the missed backlog. */
+  loadMinutes: number;
+  /** Topic ids to cut, walking the rank list from the bottom; empty when the load already fits. */
+  topicIds: readonly string[];
+  /** The non-done minutes those cuts would free. */
+  freedMinutes: number;
+}
+
 interface StudyPlanRow {
   id: string;
   profile_id: string;
@@ -62,6 +116,7 @@ interface StudyPlanRow {
   daily_minutes: number;
   start_date: string;
   exam_week_boost: number;
+  weekday_minutes: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -73,6 +128,9 @@ interface StudyBlockRow {
   block_date: string;
   minutes: number;
   status: StudyBlockStatus;
+  topic_id: string | null;
+  kind: StudyBlockKind;
+  pinned: number;
   created_at: string;
   updated_at: string;
 }
@@ -82,13 +140,17 @@ interface StudyBlockWithExamRow extends StudyBlockRow {
 }
 
 const PLAN_COLUMNS =
-  "id, profile_id, exam_id, daily_minutes, start_date, exam_week_boost, created_at, updated_at";
+  "id, profile_id, exam_id, daily_minutes, start_date, exam_week_boost, weekday_minutes, created_at, updated_at";
 
 const BLOCK_COLUMNS =
-  "id, plan_id, profile_id, block_date, minutes, status, created_at, updated_at";
+  "id, plan_id, profile_id, block_date, minutes, status, topic_id, kind, pinned, created_at, updated_at";
 
 const MIN_DAILY_MINUTES = 15;
 const MAX_DAILY_MINUTES = 480;
+
+/** The vector's own bounds (ADR-063): a day may be free (0) but never longer than the scalar's cap. */
+const MAX_WEEKDAY_MINUTES = 480;
+const WEEKDAY_VECTOR_LENGTH = 7;
 
 const BARE_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -98,6 +160,8 @@ const ISO_8601_DATETIME =
 
 /** The only statuses `setBlockStatus` accepts; `missed` is set exclusively by `sync`. */
 const SETTABLE_BLOCK_STATUSES: readonly StudyBlockStatus[] = ["planned", "done"];
+
+const MS_PER_DAY = 86_400_000;
 
 /**
  * Study-plan + study-block persistence for a single profile, over prepared,
@@ -113,6 +177,14 @@ const SETTABLE_BLOCK_STATUSES: readonly StudyBlockStatus[] = ["planned", "done"]
  * (bare "YYYY-MM-DD") — the store never reads the clock itself, so block
  * generation stays fully deterministic and testable (mirrors `planBlockDates`,
  * the pure engine this store calls into from `@nexus/core`).
+ *
+ * Since ADR-063 generation is TOPIC-AWARE: the store reads the exam's live
+ * topics through its own `TopicStore` (the `RestoreStore`→`TaskListStore`
+ * composition idiom), resolves each topic's effective confidence, and feeds
+ * the engine `{id, rank, confidence, cut}` — the engine stays pure and takes
+ * numbers. A plan whose exam has no live, uncut topics keeps the pre-ADR-063
+ * undifferentiated schedule byte for byte, including the no-cap backlog
+ * stretch (the compatibility contract this store's own tests pin).
  */
 export class PlanStore {
   private readonly insertPlan: Database.Statement;
@@ -127,12 +199,16 @@ export class PlanStore {
   private readonly selectBlocksByPlan: Database.Statement;
   private readonly selectBlockById: Database.Statement;
   private readonly selectBlocksInRange: Database.Statement;
-  private readonly selectBlockDatesForPlan: Database.Statement;
   private readonly selectMissedMinutesForPlan: Database.Statement;
-  private readonly deleteFuturePlannedBlocks: Database.Statement;
+  private readonly deleteFutureUnpinnedPlanned: Database.Statement;
   private readonly markPastPlannedMissed: Database.Statement;
   private readonly updateBlockStatus: Database.Statement;
+  private readonly updateBlockPinned: Database.Statement;
   private readonly selectActivePlanIdsWithActiveExam: Database.Statement;
+  private readonly selectRemainingMinutesByTopic: Database.Statement;
+  private readonly markTopicCut: Database.Statement;
+  /** The exam's topic list and effective confidences — one owner (`TopicStore`), composed here. */
+  private readonly topics: TopicStore;
 
   constructor(
     private readonly db: DatabaseHandle,
@@ -140,9 +216,9 @@ export class PlanStore {
   ) {
     this.insertPlan = db.prepare(
       `INSERT INTO study_plans
-         (id, profile_id, exam_id, daily_minutes, start_date, exam_week_boost,
+         (id, profile_id, exam_id, daily_minutes, start_date, exam_week_boost, weekday_minutes,
           created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.selectActivePlans = db.prepare(
       `SELECT ${PLAN_COLUMNS} FROM study_plans
@@ -163,7 +239,7 @@ export class PlanStore {
     );
     this.updatePlanFields = db.prepare(
       `UPDATE study_plans
-         SET daily_minutes = ?, start_date = ?, exam_week_boost = ?, updated_at = ?
+         SET daily_minutes = ?, start_date = ?, exam_week_boost = ?, weekday_minutes = ?, updated_at = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
     );
     this.markPlanDeleted = db.prepare(
@@ -176,8 +252,9 @@ export class PlanStore {
     );
     this.insertBlock = db.prepare(
       `INSERT INTO study_blocks
-         (id, plan_id, profile_id, block_date, minutes, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, plan_id, profile_id, block_date, minutes, status, topic_id, kind, pinned,
+          created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     this.selectBlocksByPlan = db.prepare(
       `SELECT ${BLOCK_COLUMNS} FROM study_blocks
@@ -189,6 +266,7 @@ export class PlanStore {
     );
     this.selectBlocksInRange = db.prepare(
       `SELECT b.id, b.plan_id, b.profile_id, b.block_date, b.minutes, b.status,
+              b.topic_id, b.kind, b.pinned,
               b.created_at, b.updated_at, p.exam_id AS exam_id
          FROM study_blocks b
          JOIN study_plans p
@@ -198,16 +276,15 @@ export class PlanStore {
         WHERE b.profile_id = ? AND b.block_date >= ? AND b.block_date <= ?
         ORDER BY b.block_date, b.id`,
     );
-    this.selectBlockDatesForPlan = db.prepare(
-      `SELECT block_date FROM study_blocks WHERE plan_id = ? AND profile_id = ?`,
-    );
     this.selectMissedMinutesForPlan = db.prepare(
       `SELECT COALESCE(SUM(minutes), 0) AS backlog FROM study_blocks
        WHERE plan_id = ? AND profile_id = ? AND status = 'missed'`,
     );
-    this.deleteFuturePlannedBlocks = db.prepare(
+    // A pinned block survives regeneration exactly as done/missed rows do
+    // (ADR-063) — the delete leaves it standing beside them.
+    this.deleteFutureUnpinnedPlanned = db.prepare(
       `DELETE FROM study_blocks
-       WHERE plan_id = ? AND profile_id = ? AND block_date >= ? AND status = 'planned'`,
+       WHERE plan_id = ? AND profile_id = ? AND block_date >= ? AND status = 'planned' AND pinned = 0`,
     );
     this.markPastPlannedMissed = db.prepare(
       `UPDATE study_blocks SET status = 'missed', updated_at = ?
@@ -217,12 +294,33 @@ export class PlanStore {
       `UPDATE study_blocks SET status = ?, updated_at = ?
        WHERE id = ? AND profile_id = ?`,
     );
+    this.updateBlockPinned = db.prepare(
+      `UPDATE study_blocks SET pinned = ?, updated_at = ?
+       WHERE id = ? AND profile_id = ?`,
+    );
     this.selectActivePlanIdsWithActiveExam = db.prepare(
       `SELECT p.id AS id
          FROM study_plans p
          JOIN exams e ON e.id = p.exam_id AND e.profile_id = p.profile_id AND e.deleted_at IS NULL
         WHERE p.profile_id = ? AND p.deleted_at IS NULL`,
     );
+    // The scope-cut proposal's one read: remaining non-done minutes per topic
+    // (missed rows are backlog wherever they sit; planned rows count from
+    // `today` on). Grouped by topic_id with NULL as its own row.
+    this.selectRemainingMinutesByTopic = db.prepare(
+      `SELECT topic_id, COALESCE(SUM(minutes), 0) AS minutes
+         FROM study_blocks
+        WHERE plan_id = ? AND profile_id = ?
+          AND (status = 'missed' OR (status = 'planned' AND block_date >= ?))
+        GROUP BY topic_id`,
+    );
+    // The ONLY statement anywhere that sets `cut` (ADR-063: explicit user
+    // acceptance, never the machine) — `TopicStore` deliberately has no setter.
+    this.markTopicCut = db.prepare(
+      `UPDATE exam_topics SET cut = 1, updated_at = ?
+       WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
+    );
+    this.topics = new TopicStore(db, profileId);
   }
 
   /** Active plans for this profile ordered by start date (soft-deleted excluded). */
@@ -233,9 +331,10 @@ export class PlanStore {
 
   /**
    * Creates a plan against an active exam of this profile and generates its
-   * blocks in one transaction. Rejects an exam that is not strictly in the
-   * future, a start date on/after the exam date, an out-of-range
-   * `dailyMinutes`, or a second active plan for the same exam.
+   * blocks in one transaction — topic-aware when the exam has live, uncut
+   * topics. Rejects an exam that is not strictly in the future, a start date
+   * on/after the exam date, an out-of-range `dailyMinutes`, a malformed
+   * weekday vector, or a second active plan for the same exam.
    */
   createPlan(input: CreatePlanInput, now: string, today: string): StudyPlan {
     const validNow = validateNow(now);
@@ -243,6 +342,7 @@ export class PlanStore {
     const dailyMinutes = validateDailyMinutes(input.dailyMinutes);
     const startDate = validateBareDate(input.startDate, "startDate");
     const examWeekBoost = input.examWeekBoost;
+    const weekdayMinutes = validateWeekdayMinutes(input.weekdayMinutes ?? null);
     const exam = this.resolveActiveExam(input.examId);
 
     this.assertPlannable(exam.examDate, startDate, validToday);
@@ -264,6 +364,7 @@ export class PlanStore {
         dailyMinutes,
         startDate,
         examWeekBoost ? 1 : 0,
+        weekdayMinutesText(weekdayMinutes),
         validNow,
         validNow,
       );
@@ -274,18 +375,11 @@ export class PlanStore {
         dailyMinutes,
         examWeekBoost,
         today: validToday,
+        weekdayMinutes,
+        topics: this.engineTopics(exam.id, validToday),
       });
       for (const block of blocks) {
-        this.insertBlock.run(
-          uuidv7(),
-          id,
-          this.profileId,
-          block.date,
-          block.minutes,
-          "planned",
-          validNow,
-          validNow,
-        );
+        this.insertGeneratedBlock(id, block, validNow);
       }
 
       return {
@@ -295,6 +389,7 @@ export class PlanStore {
         dailyMinutes,
         startDate,
         examWeekBoost,
+        weekdayMinutes,
         createdAt: validNow,
         updatedAt: validNow,
       };
@@ -303,11 +398,10 @@ export class PlanStore {
 
   /**
    * Applies a partial field patch to an active plan, then regenerates its
-   * future blocks: existing `planned` blocks on/after `today` are dropped and
-   * recomputed from the engine with the updated parameters, skipping any date
-   * that still has a row (a `done`/`missed` block, or a past block), with the
-   * plan's current missed-minutes backlog (if any) redistributed across them
-   * — all in one transaction.
+   * future blocks: existing unpinned `planned` blocks on/after `today` are
+   * dropped and recomputed from the engine with the updated parameters and
+   * the exam's current topics, keeping done/missed/past/pinned rows — all in
+   * one transaction (see `regenerateBlocks`).
    */
   updatePlan(id: string, changes: UpdatePlanFields, now: string, today: string): StudyPlan {
     const validNow = validateNow(now);
@@ -325,6 +419,10 @@ export class PlanStore {
         : current.startDate;
     const examWeekBoost =
       changes.examWeekBoost !== undefined ? changes.examWeekBoost : current.examWeekBoost;
+    const weekdayMinutes =
+      changes.weekdayMinutes !== undefined
+        ? validateWeekdayMinutes(changes.weekdayMinutes)
+        : current.weekdayMinutes;
 
     this.assertPlannable(exam.examDate, startDate, validToday);
 
@@ -333,22 +431,22 @@ export class PlanStore {
         dailyMinutes,
         startDate,
         examWeekBoost ? 1 : 0,
+        weekdayMinutesText(weekdayMinutes),
         validNow,
         current.id,
         this.profileId,
       );
 
-      this.regenerateBlocks(
-        current.id,
-        exam.examDate,
+      const updated: StudyPlan = {
+        ...current,
         dailyMinutes,
         startDate,
         examWeekBoost,
-        validToday,
-        validNow,
-      );
-
-      return { ...current, dailyMinutes, startDate, examWeekBoost, updatedAt: validNow };
+        weekdayMinutes,
+        updatedAt: validNow,
+      };
+      this.regenerateBlocks(updated, exam.examDate, validToday, validNow);
+      return updated;
     })();
   }
 
@@ -424,100 +522,236 @@ export class PlanStore {
     return this.requireBlock(blockId);
   }
 
+  /** Pins or unpins a block (ADR-063): a pinned block survives regeneration exactly as done/missed rows do. */
+  setBlockPinned(blockId: string, pinned: boolean, now: string): StudyBlock {
+    const validNow = validateNow(now);
+    const { changes } = this.updateBlockPinned.run(pinned ? 1 : 0, validNow, blockId, this.profileId);
+    if (changes === 0) {
+      throw new PlanNotFoundError(`No block "${blockId}" in this profile.`);
+    }
+    return this.requireBlock(blockId);
+  }
+
   /**
    * Idempotent per-plan sync, in one transaction: (1) past `planned` blocks
-   * become `missed`; (2) future `planned` blocks are dropped; (3) unless the
-   * exam date is on/before `today`, they are regenerated from the engine,
-   * skipping any date that already has a row. The catch-up replan: the plan's
-   * missed minutes (the `SUM(minutes)` of its `missed` blocks, including any
-   * freshly missed in step 1) are spread evenly across the regenerated future
-   * blocks with no daily cap — earlier days absorb any remainder first, so a
-   * missed block later completed late shrinks the backlog on the next sync.
-   * Running this twice with the same `today` leaves the block set unchanged.
+   * become `missed`; (2) future unpinned `planned` blocks are dropped; (3)
+   * unless the exam date is on/before `today`, they are regenerated from the
+   * engine with the exam's current topics and the plan's weekday vector,
+   * keeping done/missed/past/pinned rows (see `regenerateBlocks`). Running
+   * this twice with the same `today` leaves the block set unchanged — it runs
+   * before every page read, and that idempotence is what makes it safe to.
+   *
+   * RETURNS the plan's health (ADR-063 invariant 5): the backlog minutes the
+   * capped replan could not fit anywhere (`overflowMinutes`), or — once the
+   * exam has passed — the whole missed backlog nothing will ever absorb
+   * (`examPassedBacklogMinutes`).
    */
-  sync(planId: string, now: string, today: string): void {
+  sync(planId: string, now: string, today: string): PlanHealth {
     const validNow = validateNow(now);
     const validToday = validateBareDate(today, "today");
     const current = this.requireActivePlan(planId);
     const exam = this.resolveActiveExam(current.examId);
 
-    this.db.transaction((): void => {
+    return this.db.transaction((): PlanHealth => {
       this.markPastPlannedMissed.run(validNow, current.id, this.profileId, validToday);
-      this.regenerateBlocks(
-        current.id,
-        exam.examDate,
-        current.dailyMinutes,
-        current.startDate,
-        current.examWeekBoost,
-        validToday,
-        validNow,
-      );
+      const overflowMinutes = this.regenerateBlocks(current, exam.examDate, validToday, validNow);
+      const examPassed = dateKey(exam.examDate) <= validToday;
+      return {
+        planId: current.id,
+        overflowMinutes: examPassed ? 0 : overflowMinutes,
+        examPassedBacklogMinutes: examPassed ? this.missedMinutes(current.id) : 0,
+      };
     })();
   }
 
-  /** Syncs every active plan of this profile whose exam is still active; returns how many were synced. */
-  syncAll(now: string, today: string): number {
+  /** Syncs every active plan of this profile whose exam is still active; returns one `PlanHealth` per synced plan. */
+  syncAll(now: string, today: string): PlanHealth[] {
     const validNow = validateNow(now);
     const validToday = validateBareDate(today, "today");
     const ids = (
       this.selectActivePlanIdsWithActiveExam.all(this.profileId) as { id: string }[]
     ).map((row) => row.id);
-    for (const id of ids) {
-      this.sync(id, validNow, validToday);
-    }
-    return ids.length;
+    return ids.map((id) => this.sync(id, validNow, validToday));
   }
 
   /**
-   * Shared "drop future planned blocks, regenerate from the engine, skip dates
-   * that already have a row" step used by both `updatePlan` and `sync`. The
-   * plan's current missed-minutes backlog (`SUM(minutes)` over its `missed`
-   * blocks) is then spread evenly across the surviving future blocks via
-   * `distributeBacklog` — no daily cap; earlier days absorb any remainder
-   * first — before they are inserted. Regeneration is skipped entirely once
-   * the exam date is on/before `today` (the caller's future-block drop still
-   * runs beforehand), in which case the backlog is left untouched: nothing
-   * absorbs it, and its missed blocks simply stay missed.
+   * The scope-cut proposal (STUDY-004), computed and never written: remaining
+   * capacity is `planDayCapacity` summed over the days still ahead, the load
+   * is every non-done minute (future planned blocks plus the missed backlog),
+   * and topics are walked FROM THE BOTTOM of the rank list — the user's own
+   * scope-cut priority — dropping each one's remaining non-done minutes until
+   * the load fits. A topic with nothing left to drop is skipped, not named.
+   */
+  scopeCutProposal(planId: string, today: string): ScopeCutProposal {
+    const validToday = validateBareDate(today, "today");
+    const current = this.requireActivePlan(planId);
+    const exam = this.resolveActiveExam(current.examId);
+
+    const spec = capacitySpec(current, exam.examDate);
+    let capacityMinutes = 0;
+    const examMs = utcDayMs(exam.examDate);
+    const startMs = Math.max(utcDayMs(current.startDate), utcDayMs(validToday));
+    for (let ms = startMs; ms < examMs; ms += MS_PER_DAY) {
+      capacityMinutes += planDayCapacity(spec, utcDateKey(ms));
+    }
+
+    const remaining = this.selectRemainingMinutesByTopic.all(
+      current.id,
+      this.profileId,
+      validToday,
+    ) as { topic_id: string | null; minutes: number }[];
+    const minutesByTopic = new Map(remaining.map((row) => [row.topic_id, row.minutes]));
+    const loadMinutes = remaining.reduce((acc, row) => acc + row.minutes, 0);
+
+    const liveTopics = this.topics.listByExam(current.examId).filter((t) => !t.cut);
+    const topicIds: string[] = [];
+    let freedMinutes = 0;
+    let running = loadMinutes;
+    for (const candidate of [...liveTopics].reverse()) {
+      if (running <= capacityMinutes) break;
+      const candidateMinutes = minutesByTopic.get(candidate.id) ?? 0;
+      if (candidateMinutes === 0) continue;
+      topicIds.push(candidate.id);
+      freedMinutes += candidateMinutes;
+      running -= candidateMinutes;
+    }
+
+    return { planId: current.id, capacityMinutes, loadMinutes, topicIds, freedMinutes };
+  }
+
+  /**
+   * Marks the given topics cut — the ONLY path anywhere that ever sets `cut`
+   * (ADR-063: explicit user acceptance, never the machine). One transaction;
+   * an id that is not an active topic of this profile refuses the whole
+   * acceptance. The caller re-syncs afterwards; a cut topic is then excluded
+   * from generation entirely.
+   */
+  acceptScopeCut(topicIds: readonly string[], now: string): void {
+    const validNow = validateNow(now);
+    this.db.transaction((): void => {
+      for (const topicId of topicIds) {
+        const { changes } = this.markTopicCut.run(validNow, topicId, this.profileId);
+        if (changes === 0) {
+          throw new ExamTopicNotFoundError(`No active exam topic "${topicId}" in this profile.`);
+        }
+      }
+    })();
+  }
+
+  /**
+   * Shared regeneration step of `updatePlan` and `sync` (ADR-063): drop the
+   * future unpinned planned blocks, re-run the engine with the plan's weekday
+   * vector and the exam's current topics (effective confidences resolved by
+   * `TopicStore`), keep every row still standing — done, missed, past,
+   * pinned — by skipping what would collide with one, and spread the missed
+   * backlog over the fresh future blocks. Returns the overflow.
+   *
+   * Two backlog regimes, deliberately:
+   * - TOPIC-AWARE plans go through `distributeBacklogCapped` against each
+   *   day's remaining capacity (`planDayCapacity` minus the kept future rows
+   *   already occupying it) — capacity is law, and what does not fit comes
+   *   back as the overflow number instead of a stretched day.
+   * - ZERO-TOPIC plans keep the pre-ADR-063 no-cap `distributeBacklog`
+   *   byte for byte (the compatibility pin), and the overflow REPORTED is how
+   *   far past the plan's own capacity that stretch went.
+   *
+   * Regeneration is skipped entirely once the exam date is on/before `today`
+   * (the future-block drop still runs), in which case the backlog is left
+   * untouched: nothing absorbs it, and `sync` reports it as
+   * `examPassedBacklogMinutes`.
    */
   private regenerateBlocks(
-    planId: string,
+    plan: StudyPlan,
     examDate: string,
-    dailyMinutes: number,
-    startDate: string,
-    examWeekBoost: boolean,
     today: string,
     now: string,
-  ): void {
-    this.deleteFuturePlannedBlocks.run(planId, this.profileId, today);
+  ): number {
+    this.deleteFutureUnpinnedPlanned.run(plan.id, this.profileId, today);
 
-    if (dateKey(examDate) <= today) return; // exam passed/today: nothing to regenerate
+    if (dateKey(examDate) <= today) return 0; // exam passed/today: nothing to regenerate
 
-    const existingDates = new Set(
-      (this.selectBlockDatesForPlan.all(planId, this.profileId) as { block_date: string }[]).map(
-        (row) => row.block_date,
-      ),
+    const engineTopics = this.engineTopics(plan.examId, today);
+    const generated = planBlockDates({
+      examDate,
+      startDate: plan.startDate,
+      dailyMinutes: plan.dailyMinutes,
+      examWeekBoost: plan.examWeekBoost,
+      today,
+      weekdayMinutes: plan.weekdayMinutes,
+      topics: engineTopics,
+    });
+
+    const kept = this.selectBlocksByPlan.all(plan.id, this.profileId) as StudyBlockRow[];
+    const backlog = this.missedMinutes(plan.id);
+    const spec = capacitySpec(plan, examDate);
+
+    let blocks: PlanBlockDate[];
+    let overflow: number;
+    if (engineTopics.some((t) => !t.cut)) {
+      const keptKeys = new Set(kept.map((row) => slotKey(row.block_date, row.topic_id, row.kind)));
+      const surviving = generated.filter(
+        (block) => !keptKeys.has(slotKey(block.date, block.topicId, block.kind)),
+      );
+      // Kept rows still ahead of today (pinned, or done early) occupy their
+      // day's capacity; the backlog may only fill what they leave.
+      const keptFutureByDate = new Map<string, number>();
+      for (const row of kept) {
+        if (row.block_date < today) continue;
+        keptFutureByDate.set(row.block_date, (keptFutureByDate.get(row.block_date) ?? 0) + row.minutes);
+      }
+      const capped = distributeBacklogCapped(surviving, backlog, (date) =>
+        Math.max(0, planDayCapacity(spec, date) - (keptFutureByDate.get(date) ?? 0)),
+      );
+      blocks = capped.blocks;
+      overflow = capped.overflowMinutes;
+    } else {
+      const existingDates = new Set(kept.map((row) => row.block_date));
+      const surviving = generated.filter((block) => !existingDates.has(block.date));
+      blocks = distributeBacklog(surviving, backlog);
+      overflow = blocks.reduce(
+        (acc, block) => acc + Math.max(0, block.minutes - planDayCapacity(spec, block.date)),
+        0,
+      );
+    }
+
+    for (const block of blocks) {
+      this.insertGeneratedBlock(plan.id, block, now);
+    }
+    return overflow;
+  }
+
+  /** One engine-shaped topic list for an exam: live topics with their effective confidences resolved. */
+  private engineTopics(examId: string, today: string): PlanTopic[] {
+    return this.topics.listEffectiveByExam(examId, today).map((topicRecord) => ({
+      id: topicRecord.id,
+      rank: topicRecord.rank,
+      confidence: topicRecord.effectiveConfidence,
+      cut: topicRecord.cut,
+    }));
+  }
+
+  private insertGeneratedBlock(planId: string, block: PlanBlockDate, now: string): void {
+    this.insertBlock.run(
+      uuidv7(),
+      planId,
+      this.profileId,
+      block.date,
+      block.minutes,
+      "planned",
+      block.topicId,
+      block.kind,
+      0,
+      now,
+      now,
     );
+  }
 
-    const generated = planBlockDates({ examDate, startDate, dailyMinutes, examWeekBoost, today });
-    const surviving = generated.filter((block) => !existingDates.has(block.date));
-
+  /** The plan's current missed-minutes backlog (`SUM(minutes)` over its `missed` blocks). */
+  private missedMinutes(planId: string): number {
     const { backlog } = this.selectMissedMinutesForPlan.get(planId, this.profileId) as {
       backlog: number;
     };
-    const blocks = distributeBacklog(surviving, backlog);
-
-    for (const block of blocks) {
-      this.insertBlock.run(
-        uuidv7(),
-        planId,
-        this.profileId,
-        block.date,
-        block.minutes,
-        "planned",
-        now,
-        now,
-      );
-    }
+    return backlog;
   }
 
   /** Exam date strictly after `today`, and `startDate` strictly before the exam date — else `PlanValidationError`. */
@@ -575,6 +809,7 @@ function toPlan(row: StudyPlanRow): StudyPlan {
     dailyMinutes: row.daily_minutes,
     startDate: row.start_date,
     examWeekBoost: row.exam_week_boost === 1,
+    weekdayMinutes: row.weekday_minutes === null ? null : (JSON.parse(row.weekday_minutes) as number[]),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -588,6 +823,9 @@ function toBlock(row: StudyBlockRow): StudyBlock {
     blockDate: row.block_date,
     minutes: row.minutes,
     status: row.status,
+    topicId: row.topic_id,
+    kind: row.kind,
+    pinned: row.pinned === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -597,9 +835,38 @@ function toBlockWithExam(row: StudyBlockWithExamRow): StudyBlockWithExam {
   return { ...toBlock(row), examId: row.exam_id };
 }
 
+/** The plan's capacity spec, the shape `planDayCapacity` reads — one construction, used by both backlog regimes. */
+function capacitySpec(plan: StudyPlan, examDate: string): PlanCapacitySpec {
+  return {
+    examDate,
+    dailyMinutes: plan.dailyMinutes,
+    examWeekBoost: plan.examWeekBoost,
+    weekdayMinutes: plan.weekdayMinutes,
+  };
+}
+
+/** A kept/generated block's slot under migration 046's uniqueness: (date, topic, kind). */
+function slotKey(date: string, topicId: string | null, kind: string): string {
+  return `${date}\0${topicId ?? ""}\0${kind}`;
+}
+
 /** The bare "YYYY-MM-DD" prefix of a date-like string (exam dates may carry a time part). */
 function dateKey(value: string): string {
   return value.slice(0, 10);
+}
+
+/** UTC-midnight ms for a bare "YYYY-MM-DD" (the engine's own day-arithmetic idiom). */
+function utcDayMs(value: string): number {
+  const [year, month, day] = value.slice(0, 10).split("-");
+  return Date.UTC(Number(year), Number(month) - 1, Number(day));
+}
+
+/** Formats UTC-midnight ms back into a bare "YYYY-MM-DD" string. */
+function utcDateKey(ms: number): string {
+  const d = new Date(ms);
+  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${month}-${day}`;
 }
 
 function validateDailyMinutes(value: number): number {
@@ -609,6 +876,34 @@ function validateDailyMinutes(value: number): number {
     );
   }
   return value;
+}
+
+/**
+ * The weekday vector's rule (ADR-063, migration 046's doc): exactly 7 entries
+ * Mon..Sun, each an integer 0..480, at least one positive — a week of nothing
+ * is not a plan. Null passes through: it means "every day = dailyMinutes".
+ */
+function validateWeekdayMinutes(value: readonly number[] | null): readonly number[] | null {
+  if (value === null) return null;
+  if (value.length !== WEEKDAY_VECTOR_LENGTH) {
+    throw new PlanValidationError('"weekdayMinutes" must have exactly 7 entries (Mon..Sun).');
+  }
+  for (const entry of value) {
+    if (!Number.isInteger(entry) || entry < 0 || entry > MAX_WEEKDAY_MINUTES) {
+      throw new PlanValidationError(
+        `"weekdayMinutes" entries must be integers between 0 and ${MAX_WEEKDAY_MINUTES}.`,
+      );
+    }
+  }
+  if (!value.some((entry) => entry > 0)) {
+    throw new PlanValidationError('"weekdayMinutes" must have at least one positive entry.');
+  }
+  return value;
+}
+
+/** The vector as its column stores it: canonical JSON text, or NULL. */
+function weekdayMinutesText(value: readonly number[] | null): string | null {
+  return value === null ? null : JSON.stringify(value);
 }
 
 function validateBareDate(value: string, field: string): string {

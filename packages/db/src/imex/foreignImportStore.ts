@@ -62,6 +62,7 @@ export class ForeignImportStore {
   private readonly insertSubjectNoteLink: Database.Statement;
   private readonly insertExam: Database.Statement;
   private readonly insertDeck: Database.Statement;
+  private readonly insertExamTopic: Database.Statement;
   private readonly insertPlan: Database.Statement;
   private readonly insertBlock: Database.Statement;
   private readonly insertFocusSession: Database.Statement;
@@ -164,16 +165,23 @@ export class ForeignImportStore {
       `INSERT INTO decks (id, profile_id, subject_id, name, created_at, updated_at, deleted_at)
        VALUES (?, ?, ?, ?, ?, ?, NULL)`,
     );
+    this.insertExamTopic = db.prepare(
+      `INSERT INTO exam_topics
+         (id, profile_id, exam_id, name, sort_order, confidence, deck_id, cut,
+          created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
     this.insertPlan = db.prepare(
       `INSERT INTO study_plans
-         (id, profile_id, exam_id, daily_minutes, start_date, exam_week_boost,
+         (id, profile_id, exam_id, daily_minutes, start_date, exam_week_boost, weekday_minutes,
           created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertBlock = db.prepare(
       `INSERT INTO study_blocks
-         (id, plan_id, profile_id, block_date, minutes, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, plan_id, profile_id, block_date, minutes, status, topic_id, kind, pinned,
+          created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     this.insertFocusSession = db.prepare(
       `INSERT INTO focus_sessions
@@ -446,10 +454,24 @@ export class ForeignImportStore {
         written += 1;
       }
 
+      // ADR-063: topics AFTER the exams and decks they reference — foreign
+      // keys stay enforced here — and before the plans whose blocks name them.
+      for (const topic of planned.examTopics) {
+        this.insertExamTopic.run(
+          topic.id, this.profileId, topic.examId, topic.name, topic.sortOrder,
+          topic.confidence, topic.deckId, topic.cut ? 1 : 0, topic.createdAt, topic.updatedAt,
+        );
+        written += 1;
+      }
+
       for (const plan of planned.plans) {
         this.insertPlan.run(
           plan.id, this.profileId, plan.examId, plan.dailyMinutes, plan.startDate,
-          plan.examWeekBoost ? 1 : 0, plan.createdAt, plan.updatedAt,
+          plan.examWeekBoost ? 1 : 0,
+          plan.weekdayMinutes === undefined || plan.weekdayMinutes === null
+            ? null
+            : JSON.stringify(plan.weekdayMinutes),
+          plan.createdAt, plan.updatedAt,
         );
         written += 1;
       }
@@ -457,7 +479,9 @@ export class ForeignImportStore {
       for (const block of planned.blocks) {
         this.insertBlock.run(
           block.id, block.planId, this.profileId, block.blockDate, block.minutes,
-          block.status, block.createdAt, block.updatedAt,
+          block.status, block.topicId ?? null, block.kind ?? "coverage",
+          (block.pinned ?? false) ? 1 : 0,
+          block.createdAt, block.updatedAt,
         );
         written += 1;
       }

@@ -564,6 +564,9 @@ const ID_MINTERS: Record<keyof ProfileData, (data: ProfileData, ctx: PlanContext
   decks: (data, ctx) => mintAll(data.decks, ctx),
   cards: (data, ctx) => mintAll(data.cards, ctx),
   reviewLog: (data, ctx) => mintAll(data.reviewLog, ctx),
+  // A topic is the user's own curriculum work (ADR-063) — it imports
+  // additively like a plan, its exam/deck references remapped in pass 2.
+  examTopics: (data, ctx) => mintAll(data.examTopics, ctx),
   plans: (data, ctx) => mintAll(data.plans, ctx),
   blocks: (data, ctx) => mintAll(data.blocks, ctx),
   focusSessions: (data, ctx) => mintAll(data.focusSessions, ctx),
@@ -928,6 +931,13 @@ export function planForeignImport(
       profileId: target.profileId,
       cardId: mapped(row.cardId, ctx),
     })),
+    examTopics: source.examTopics.map((row) => ({
+      ...row,
+      id: mapped(row.id, ctx),
+      profileId: target.profileId,
+      examId: mapped(row.examId, ctx),
+      deckId: mappedOrNull(row.deckId, ctx),
+    })),
     plans: source.plans.map((row) => ({
       ...row,
       id: mapped(row.id, ctx),
@@ -939,6 +949,9 @@ export function planForeignImport(
       id: mapped(row.id, ctx),
       profileId: target.profileId,
       planId: mapped(row.planId, ctx),
+      // Optional in the interchange; always spelled here so a topic-carrying
+      // block never crosses with the SOURCE profile's topic id in it.
+      topicId: mappedOrNull(row.topicId ?? null, ctx),
     })),
     focusSessions: source.focusSessions.map((row) => ({
       ...row,

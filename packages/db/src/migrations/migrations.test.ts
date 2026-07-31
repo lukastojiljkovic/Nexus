@@ -16,8 +16,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 45 (private notes), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(45);
+  it("is at version 46 (exam topics), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(46);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -5110,5 +5110,290 @@ describe("migration 045 — private notes", () => {
     expect(() => insertSettings(db, "bad", { kitSalt: "a2l0" })).toThrow();
     expect(() => insertSettings(db, "bad", { kitWrap: '{"v":1}' })).toThrow();
     db.close();
+  });
+});
+
+describe("migration 046 — exam topics (ADR-063)", () => {
+  const now = () => new Date().toISOString();
+
+  const insertSubject = (db: NexusDatabase, id: string, profileId: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO subjects (id, profile_id, name, color, created_at, updated_at)
+         VALUES (?, ?, 'x', 'jade', ?, ?)`,
+      )
+      .run(id, profileId, now(), now());
+
+  const insertExam = (db: NexusDatabase, id: string, profileId: string, subjectId: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO exams (id, profile_id, subject_id, exam_type, exam_date, created_at, updated_at)
+         VALUES (?, ?, ?, 'pismeni', '2026-09-01', ?, ?)`,
+      )
+      .run(id, profileId, subjectId, now(), now());
+
+  const insertDeck = (db: NexusDatabase, id: string, profileId: string, subjectId: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO decks (id, profile_id, subject_id, name, created_at, updated_at)
+         VALUES (?, ?, ?, 'x', ?, ?)`,
+      )
+      .run(id, profileId, subjectId, now(), now());
+
+  const insertPlan = (db: NexusDatabase, id: string, profileId: string, examId: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO study_plans
+           (id, profile_id, exam_id, daily_minutes, start_date, exam_week_boost, created_at, updated_at)
+         VALUES (?, ?, ?, 30, '2026-08-01', 1, ?, ?)`,
+      )
+      .run(id, profileId, examId, now(), now());
+
+  const insertTopic = (
+    db: NexusDatabase,
+    id: string,
+    profileId: string,
+    examId: string,
+    overrides: Partial<{
+      name: string;
+      sortOrder: number;
+      confidence: number | null;
+      deckId: string | null;
+      cut: number;
+    }> = {},
+  ) => {
+    const row = {
+      name: "Grafovi",
+      sortOrder: 0,
+      confidence: null as number | null,
+      deckId: null as string | null,
+      cut: 0,
+      ...overrides,
+    };
+    return db.raw
+      .prepare(
+        `INSERT INTO exam_topics
+           (id, profile_id, exam_id, name, sort_order, confidence, deck_id, cut, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, profileId, examId, row.name, row.sortOrder, row.confidence, row.deckId, row.cut, now(), now());
+  };
+
+  const insertBlock = (
+    db: NexusDatabase,
+    id: string,
+    planId: string,
+    profileId: string,
+    blockDate: string,
+    overrides: Partial<{ topicId: string | null; kind: string; pinned: number }> = {},
+  ) => {
+    const row = { topicId: null as string | null, kind: "coverage", pinned: 0, ...overrides };
+    return db.raw
+      .prepare(
+        `INSERT INTO study_blocks
+           (id, plan_id, profile_id, block_date, minutes, status, topic_id, kind, pinned, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 30, 'planned', ?, ?, ?, ?, ?)`,
+      )
+      .run(id, planId, profileId, blockDate, row.topicId, row.kind, row.pinned, now(), now());
+  };
+
+  /** A profile with one subject, exam, deck and plan — everything a topic or block can point at. */
+  function studyFixture(db: NexusDatabase): void {
+    insertProfile(db, "p1");
+    insertSubject(db, "s1", "p1");
+    insertExam(db, "e1", "p1", "s1");
+    insertDeck(db, "dk1", "p1", "s1");
+    insertPlan(db, "pl1", "p1", "e1");
+  }
+
+  it("creates exam_topics, its index, and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    expect(tableNames(db)).toContain("exam_topics");
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("exam_topics_profile_exam_active");
+    expect(indexes).toContain("study_blocks_plan_date_topic_kind");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("rejects an empty topic name with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-name.db") });
+    studyFixture(db);
+    expect(() => insertTopic(db, "t1", "p1", "e1", { name: "" })).toThrow();
+    expect(() => insertTopic(db, "t2", "p1", "e1", { name: "Stabla" })).not.toThrow();
+    db.close();
+  });
+
+  it("holds confidence inside 0..100 (or NULL) with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-confidence.db") });
+    studyFixture(db);
+    expect(() => insertTopic(db, "t1", "p1", "e1", { confidence: -1 })).toThrow();
+    expect(() => insertTopic(db, "t2", "p1", "e1", { confidence: 101 })).toThrow();
+    expect(() => insertTopic(db, "t3", "p1", "e1", { confidence: 0 })).not.toThrow();
+    expect(() => insertTopic(db, "t4", "p1", "e1", { confidence: 100, sortOrder: 1 })).not.toThrow();
+    expect(() => insertTopic(db, "t5", "p1", "e1", { confidence: null, sortOrder: 2 })).not.toThrow();
+    db.close();
+  });
+
+  it("holds cut to {0, 1} with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-cut.db") });
+    studyFixture(db);
+    expect(() => insertTopic(db, "t1", "p1", "e1", { cut: 2 })).toThrow();
+    expect(() => insertTopic(db, "t2", "p1", "e1", { cut: 1 })).not.toThrow();
+    db.close();
+  });
+
+  it("cascades topic deletion from the exam and SET-NULLs a topic's deck link when the deck row goes", () => {
+    const db = openDatabase({ path: join(dir, "topic-fks.db") });
+    studyFixture(db);
+    insertTopic(db, "t1", "p1", "e1", { deckId: "dk1" });
+
+    db.raw.prepare("DELETE FROM decks WHERE id = ?").run("dk1");
+    const row = db.raw
+      .prepare("SELECT deck_id FROM exam_topics WHERE id = ?")
+      .get("t1") as { deck_id: string | null };
+    expect(row.deck_id).toBeNull();
+
+    db.raw.prepare("DELETE FROM exams WHERE id = ?").run("e1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM exam_topics").get() as { n: number }).n,
+    ).toBe(0);
+    db.close();
+  });
+
+  it("gives study_blocks the three new columns with their defaults, and SET-NULLs topic_id when the topic row goes", () => {
+    const db = openDatabase({ path: join(dir, "block-columns.db") });
+    studyFixture(db);
+    insertTopic(db, "t1", "p1", "e1");
+    db.raw
+      .prepare(
+        `INSERT INTO study_blocks (id, plan_id, profile_id, block_date, minutes, status, created_at, updated_at)
+         VALUES ('b1', 'pl1', 'p1', '2026-08-01', 30, 'planned', ?, ?)`,
+      )
+      .run(now(), now());
+    const defaults = db.raw
+      .prepare("SELECT topic_id, kind, pinned FROM study_blocks WHERE id = 'b1'")
+      .get() as { topic_id: string | null; kind: string; pinned: number };
+    expect(defaults).toEqual({ topic_id: null, kind: "coverage", pinned: 0 });
+
+    insertBlock(db, "b2", "pl1", "p1", "2026-08-02", { topicId: "t1", kind: "revision", pinned: 1 });
+    db.raw.prepare("DELETE FROM exam_topics WHERE id = 't1'").run();
+    const orphan = db.raw
+      .prepare("SELECT topic_id FROM study_blocks WHERE id = 'b2'")
+      .get() as { topic_id: string | null };
+    expect(orphan.topic_id).toBeNull();
+    db.close();
+  });
+
+  it("rejects a block kind outside the closed set and a pinned outside {0, 1} with CHECKs", () => {
+    const db = openDatabase({ path: join(dir, "check-block.db") });
+    studyFixture(db);
+    expect(() => insertBlock(db, "b1", "pl1", "p1", "2026-08-01", { kind: "cram" })).toThrow();
+    expect(() => insertBlock(db, "b2", "pl1", "p1", "2026-08-01", { pinned: 2 })).toThrow();
+    expect(() => insertBlock(db, "b3", "pl1", "p1", "2026-08-01", { kind: "recall" })).not.toThrow();
+    db.close();
+  });
+
+  it("replaces UNIQUE(plan_id, block_date) with (plan_id, block_date, topic_id, kind) — NULL topics included", () => {
+    const db = openDatabase({ path: join(dir, "unique-block.db") });
+    studyFixture(db);
+    insertTopic(db, "t1", "p1", "e1");
+    insertBlock(db, "b1", "pl1", "p1", "2026-08-01");
+    // The same (plan, date, NULL topic, kind) still collides — SQLite treats
+    // UNIQUE NULLs as distinct, which is why the index goes through COALESCE.
+    expect(() => insertBlock(db, "b2", "pl1", "p1", "2026-08-01")).toThrow();
+    // A different kind, or a topic, on the same date is a different row now.
+    expect(() => insertBlock(db, "b3", "pl1", "p1", "2026-08-01", { kind: "recall" })).not.toThrow();
+    expect(() => insertBlock(db, "b4", "pl1", "p1", "2026-08-01", { topicId: "t1" })).not.toThrow();
+    expect(() =>
+      insertBlock(db, "b5", "pl1", "p1", "2026-08-01", { topicId: "t1", kind: "revision" }),
+    ).not.toThrow();
+    // But the exact same (plan, date, topic, kind) collides.
+    expect(() => insertBlock(db, "b6", "pl1", "p1", "2026-08-01", { topicId: "t1" })).toThrow();
+    db.close();
+  });
+
+  it("adds the nullable weekday_minutes column to study_plans", () => {
+    const db = openDatabase({ path: join(dir, "plan-column.db") });
+    studyFixture(db);
+    const row = db.raw
+      .prepare("SELECT weekday_minutes FROM study_plans WHERE id = 'pl1'")
+      .get() as { weekday_minutes: string | null };
+    expect(row.weekday_minutes).toBeNull();
+    db.raw
+      .prepare("UPDATE study_plans SET weekday_minutes = ? WHERE id = 'pl1'")
+      .run("[30,30,30,30,30,0,60]");
+    db.close();
+  });
+
+  it("carries every pre-046 block through the rebuild byte for byte, with the new columns defaulted", () => {
+    const path = join(dir, "rebuild.db");
+    const raw = new Database(path);
+    try {
+      raw.pragma("journal_mode = WAL");
+      raw.pragma("foreign_keys = ON");
+      // Migration 017's backfill calls `nx_fold`; `openDatabase` registers it
+      // before migrating, and this two-stage open has to do the same.
+      raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
+        typeof value === "string" ? foldSearchText(value) : null,
+      );
+      runMigrations(raw, MIGRATIONS.slice(0, 45));
+      const t = "2026-01-01T00:00:00.000Z";
+      raw
+        .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES ('p1', 'personal', 'P', ?)")
+        .run(t);
+      raw
+        .prepare(
+          `INSERT INTO subjects (id, profile_id, name, color, created_at, updated_at)
+           VALUES ('s1', 'p1', 'x', 'jade', ?, ?)`,
+        )
+        .run(t, t);
+      raw
+        .prepare(
+          `INSERT INTO exams (id, profile_id, subject_id, exam_type, exam_date, created_at, updated_at)
+           VALUES ('e1', 'p1', 's1', 'pismeni', '2026-09-01', ?, ?)`,
+        )
+        .run(t, t);
+      raw
+        .prepare(
+          `INSERT INTO study_plans
+             (id, profile_id, exam_id, daily_minutes, start_date, exam_week_boost, created_at, updated_at)
+           VALUES ('pl1', 'p1', 'e1', 30, '2026-08-01', 1, ?, ?)`,
+        )
+        .run(t, t);
+      raw
+        .prepare(
+          `INSERT INTO study_blocks
+             (id, plan_id, profile_id, block_date, minutes, status, created_at, updated_at)
+           VALUES ('b1', 'pl1', 'p1', '2026-08-05', 45, 'done', ?, ?)`,
+        )
+        .run(t, t);
+
+      runMigrations(raw, MIGRATIONS);
+
+      const row = raw.prepare("SELECT * FROM study_blocks WHERE id = 'b1'").get() as Record<
+        string,
+        unknown
+      >;
+      expect(row).toEqual({
+        id: "b1",
+        plan_id: "pl1",
+        profile_id: "p1",
+        block_date: "2026-08-05",
+        minutes: 45,
+        status: "done",
+        topic_id: null,
+        kind: "coverage",
+        pinned: 0,
+        created_at: t,
+        updated_at: t,
+      });
+    } finally {
+      raw.close();
+    }
   });
 });
