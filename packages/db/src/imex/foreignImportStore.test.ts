@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   documentDuplicateKey,
   eventDuplicateKey,
+  finBudgetKey,
   personDuplicateKey,
   planForeignImport,
 } from "@nexus/core";
@@ -26,6 +27,9 @@ import {
   EventStore,
   EventTemplateStore,
   ExamStore,
+  FinAccountStore,
+  FinCategoryStore,
+  FinTransactionStore,
   FocusStore,
   ForeignImportStore,
   NexusDatabase,
@@ -132,6 +136,10 @@ function emptyProfileData(): ProfileData {
     dashboardSettings: [],
     dashboardSets: [],
     dashboardWidgets: [],
+    finAccounts: [],
+    finCategories: [],
+    finTransactions: [],
+    finBudgets: [],
   };
 }
 
@@ -253,6 +261,34 @@ function seedProfile(profileId: string, label: string): void {
   );
   const template = noteTemplates.save(`${label} template`, JSON.stringify({ type: "doc", content: [] }), t0);
   org.setDefaultTemplate(folder.id, template.id, t1);
+
+  // A real ledger (migration 051). „Hrana" is spelled the SAME in both seeded
+  // profiles on purpose: an expense category by that name is what the planner's
+  // `(kind, name)` absorb rule has to fold, while „<label> plata" differs per
+  // profile and must import as its own row. Two same-currency accounts so a
+  // TRANSFER rides as the one row it is.
+  const finAccounts = new FinAccountStore(db.raw, profileId);
+  const finCategories = new FinCategoryStore(db.raw, profileId);
+  const finTransactions = new FinTransactionStore(db.raw, profileId);
+  const current = finAccounts.create(
+    { name: `${label} tekući`, kind: "current", currency: "RSD", openingBalance: 1000_00 },
+    t0,
+  );
+  const savings = finAccounts.create(
+    { name: `${label} štednja`, kind: "savings", currency: "RSD" },
+    t0,
+  );
+  const hrana = finCategories.create({ name: "Hrana", kind: "expense" }, t0);
+  finCategories.create({ name: `${label} plata`, kind: "income" }, t0);
+  finCategories.setBudget({ categoryId: hrana.id, currency: "RSD", amount: 300_00 }, t0);
+  finTransactions.create(
+    { accountId: current.id, categoryId: hrana.id, date: "2026-02-02", amount: -12_50, payee: "Maxi" },
+    t0,
+  );
+  finTransactions.create(
+    { accountId: current.id, counterAccountId: savings.id, date: "2026-02-04", amount: -300_00 },
+    t0,
+  );
 }
 
 /** One profile's rows in interchange shape — the same read `main`'s `gatherProfileData` performs, minus the Electron-side plumbing. */
@@ -273,6 +309,7 @@ function gather(profileId: string): ProfileData {
   const org = new NoteOrgStore(db.raw, profileId);
   const noteAttachments = new NoteAttachmentStore(db.raw, profileId);
   const taskTags = new TaskTagStore(db.raw, profileId);
+  const finCategories = new FinCategoryStore(db.raw, profileId);
 
   return {
     ...emptyProfileData(),
@@ -310,12 +347,17 @@ function gather(profileId: string): ProfileData {
     noteTagLinks: org.listTagLinks(),
     noteTemplates: new NoteTemplateStore(db.raw, profileId).list(),
     noteAttachments: notes.list().flatMap((meta) => noteAttachments.list(meta.id)),
+    finAccounts: new FinAccountStore(db.raw, profileId).listActive(),
+    finCategories: finCategories.list(),
+    finTransactions: new FinTransactionStore(db.raw, profileId).listActive(),
+    finBudgets: finCategories.listBudgets(),
   };
 }
 
 /** The target descriptor `planForeignImport` needs, read off the real stores exactly as `main` reads it. */
 function targetFor(profileId: string): ForeignImportTarget {
   const org = new NoteOrgStore(db.raw, profileId);
+  const finCategories = new FinCategoryStore(db.raw, profileId);
   const inbox = new TaskListStore(db.raw, profileId).listActive().find((list) => list.isInbox);
   if (inbox === undefined) throw new Error("Test setup: the target profile has no Inbox.");
   return {
@@ -346,6 +388,12 @@ function targetFor(profileId: string): ForeignImportTarget {
       new DocumentStore(db.raw, profileId).listActive().map(documentDuplicateKey),
     ),
     claimsCaptureDefault: org.listFolders().some((folder) => folder.isCaptureDefault),
+    // FIN (migration 051): the categories absorb by the `(kind, name)` PAIR, so
+    // the target index carries the kind — and the budget slots are read off the
+    // same store, so a target that already limits a (category, currency) is
+    // answered honestly.
+    finCategories: finCategories.list(),
+    finBudgetKeys: new Set(finCategories.listBudgets().map(finBudgetKey)),
   };
 }
 
@@ -472,6 +520,63 @@ describe("ForeignImportStore", () => {
       expect(after.taskDependencies).toHaveLength(
         before.taskDependencies.length + plan.data.taskDependencies.length,
       );
+      expect(after.finAccounts).toHaveLength(
+        before.finAccounts.length + plan.data.finAccounts.length,
+      );
+      expect(after.finTransactions).toHaveLength(
+        before.finTransactions.length + plan.data.finTransactions.length,
+      );
+    });
+
+    it("merges a ledger: accounts import whole, the shared category absorbs, its budget slot loses", () => {
+      const source = createProfile("Izvor");
+      seedProfile(source, "S");
+      const target = createProfile("Odredište");
+      seedProfile(target, "T");
+
+      const before = gather(target);
+      const plan = planForeignImport(
+        { data: gather(source), dropped: [], profilePicture: null, privateNotes: { notes: 0, versions: 0 } },
+        targetFor(target),
+        uuidv7,
+      );
+      new ForeignImportStore(db.raw, target).insertPlanned(plan.data, new Map(), NOW);
+      const after = gather(target);
+
+      // BOTH accounts import as their own rows: two accounts called the same
+      // thing in two profiles are two different accounts at two different banks,
+      // and merging them would be the worst guess this planner could make.
+      expect(after.finAccounts).toHaveLength(before.finAccounts.length + 2);
+
+      // „Hrana" (expense) exists in both profiles, so it ABSORBS — one row
+      // survives, and the source's transaction now points at the TARGET's.
+      const hrana = after.finCategories.filter(
+        (row) => row.name === "Hrana" && row.kind === "expense",
+      );
+      expect(hrana).toHaveLength(1);
+      expect(hrana[0]?.id).toBe(
+        before.finCategories.find((row) => row.name === "Hrana")?.id,
+      );
+      // „S plata" / „T plata" differ, so the income category imports as its own.
+      expect(after.finCategories.filter((row) => row.kind === "income")).toHaveLength(2);
+
+      // The target already limits (Hrana, RSD), so the source's allowance is
+      // skipped and the target's own limit stands — a foreign import never
+      // updates a pre-existing row.
+      expect(after.finBudgets).toHaveLength(before.finBudgets.length);
+      expect(after.finBudgets).toEqual(before.finBudgets);
+      expect(
+        plan.report.skips.find((reason) => reason.code === "budget-slot-taken"),
+      ).toMatchObject({ module: "finance", type: "fin-budget", count: 1 });
+
+      // The transfer arrived as ONE row naming two accounts of THIS profile.
+      const transfers = after.finTransactions.filter((row) => row.counterAccountId !== null);
+      expect(transfers).toHaveLength(2); // the target's own, plus the imported one
+      const accountIds = new Set(after.finAccounts.map((row) => row.id));
+      for (const transfer of transfers) {
+        expect(accountIds.has(transfer.accountId)).toBe(true);
+        expect(accountIds.has(transfer.counterAccountId ?? "")).toBe(true);
+      }
     });
 
     it("carries a cloze card's deletion NUMBER through the merge untouched (ADR-068)", () => {

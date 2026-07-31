@@ -97,6 +97,10 @@ function emptyExportInput(): ExportArchiveInput {
       dashboardSettings: [],
       dashboardSets: [],
       dashboardWidgets: [],
+      finAccounts: [],
+      finCategories: [],
+      finTransactions: [],
+      finBudgets: [],
     },
     hash: sha256,
   };
@@ -541,6 +545,85 @@ function richProfileData(): ProfileData {
         setId: "dset-1",
       },
     ],
+    // FIN (migration 051): two accounts in one currency plus a third in
+    // another, so the round trip carries both an ordinary flow and a TRANSFER —
+    // one row, both sides, no category — and proves nothing sums across
+    // currencies on the way through.
+    finAccounts: [
+      {
+        id: "fin-acc-1", profileId: "profile1", name: "Tekući", kind: "current",
+        currency: "RSD", openingBalance: 1000_00, archived: false,
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+      {
+        id: "fin-acc-2", profileId: "profile1", name: "Štednja", kind: "savings",
+        currency: "RSD", openingBalance: 0, archived: false,
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+      // Archived and in another currency — both facts have to survive.
+      {
+        id: "fin-acc-3", profileId: "profile1", name: "Stari devizni", kind: "card",
+        currency: "EUR", openingBalance: -250_00, archived: true,
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-02T00:00:00.000Z",
+      },
+    ],
+    finCategories: [
+      {
+        id: "fin-cat-1", profileId: "profile1", name: "Hrana", kind: "expense",
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+      // The same NAME under the other kind: two rows, and the round trip must
+      // keep them two.
+      {
+        id: "fin-cat-2", profileId: "profile1", name: "Pokloni", kind: "expense",
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+      {
+        id: "fin-cat-3", profileId: "profile1", name: "Pokloni", kind: "income",
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+    ],
+    finTransactions: [
+      {
+        id: "fin-tx-1", profileId: "profile1", accountId: "fin-acc-1", counterAccountId: null,
+        categoryId: "fin-cat-1", date: "2026-07-02", amount: -1250, payee: "Maxi",
+        note: "nedeljna kupovina",
+        createdAt: "2026-07-02T09:00:00.000Z", updatedAt: "2026-07-02T09:00:00.000Z",
+      },
+      // Uncategorized income, and a refund back onto an expense category: both
+      // legitimate, both preserved sign for sign.
+      {
+        id: "fin-tx-2", profileId: "profile1", accountId: "fin-acc-1", counterAccountId: null,
+        categoryId: null, date: "2026-07-03", amount: 50_00, payee: null, note: null,
+        createdAt: "2026-07-03T09:00:00.000Z", updatedAt: "2026-07-03T09:00:00.000Z",
+      },
+      {
+        id: "fin-tx-3", profileId: "profile1", accountId: "fin-acc-1", counterAccountId: null,
+        categoryId: "fin-cat-1", date: "2026-07-04", amount: 300, payee: "Maxi", note: null,
+        createdAt: "2026-07-04T09:00:00.000Z", updatedAt: "2026-07-04T09:00:00.000Z",
+      },
+      // The transfer: ONE row, both sides named, no category, same currency.
+      {
+        id: "fin-tx-4", profileId: "profile1", accountId: "fin-acc-1",
+        counterAccountId: "fin-acc-2", categoryId: null, date: "2026-07-05", amount: -300_00,
+        payee: null, note: null,
+        createdAt: "2026-07-05T09:00:00.000Z", updatedAt: "2026-07-05T09:00:00.000Z",
+      },
+    ],
+    finBudgets: [
+      {
+        id: "fin-bud-1", profileId: "profile1", categoryId: "fin-cat-1", currency: "RSD",
+        amount: 300_00,
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+      // The same category, a second currency: a second allowance, because there
+      // is no rate that could fold them into one.
+      {
+        id: "fin-bud-2", profileId: "profile1", categoryId: "fin-cat-1", currency: "EUR",
+        amount: 200_00,
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+    ],
   };
 }
 
@@ -616,6 +699,9 @@ const EMPTY_DATA_FILE_NAMES = [
   // The 1.22-era test below strips it (and its checksum) back off, because a
   // 1.22 writer never produced it.
   "data/private-notes.ndjson",
+  // FIN (migration 051, `1.28.0`) — always written, empty for a profile that
+  // keeps no ledger.
+  "data/finance.ndjson",
 ] as const;
 
 /** A minimal, fully valid manifest+data-files set (5 empty NDJSON files, checksums matching), so an individual test can override exactly one thing and stay isolated from every other rule. */
@@ -905,12 +991,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.28.0`: the nearest minor strictly ahead of this build's `1.27.0`.
+  // `1.29.0`: the nearest minor strictly ahead of this build's `1.28.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.28.0" });
+    const files = baseFiles({ schemaVersion: "1.29.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.28.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.29.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -2964,6 +3050,277 @@ describe("parseImportArchive — note folder preferences (the 1.7.0 era gate)", 
  * because that is what every note in every earlier archive actually was, and a
  * PRESENT value is checked strictly in every era.
  */
+describe("parseImportArchive — the finance ledger (FIN slice a / 1.28.0)", () => {
+  const T = "2026-07-01T00:00:00.000Z";
+  const VALID_FIN_ACCOUNT = {
+    type: "fin-account", id: "fa1", profileId: "profile1", name: "Tekući", kind: "current",
+    currency: "RSD", openingBalance: 100_00, archived: false, createdAt: T, updatedAt: T,
+  };
+  const SECOND_ACCOUNT = {
+    ...VALID_FIN_ACCOUNT, id: "fa2", name: "Štednja", kind: "savings", openingBalance: 0,
+  };
+  const EUR_ACCOUNT = { ...VALID_FIN_ACCOUNT, id: "fa3", name: "Devizni", currency: "EUR" };
+  const VALID_FIN_CATEGORY = {
+    type: "fin-category", id: "fc1", profileId: "profile1", name: "Hrana", kind: "expense",
+    createdAt: T, updatedAt: T,
+  };
+  const VALID_FIN_TRANSACTION = {
+    type: "fin-transaction", id: "ftx1", profileId: "profile1", accountId: "fa1",
+    counterAccountId: null, categoryId: null, date: "2026-07-02", amount: -1250,
+    payee: "Maxi", note: null, createdAt: T, updatedAt: T,
+  };
+  const VALID_FIN_BUDGET = {
+    type: "fin-budget", id: "fb1", profileId: "profile1", categoryId: "fc1", currency: "RSD",
+    amount: 300_00, createdAt: T, updatedAt: T,
+  };
+
+  function parseFinanceFile(rows: readonly Record<string, unknown>[]) {
+    return parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/finance.ndjson": ndjson(rows) } })),
+    );
+  }
+
+  const invalidDetails = (result: ReturnType<typeof parseFinanceFile>): (string | undefined)[] =>
+    result.problems.filter((problem) => problem.code === "invalid-record").map((p) => p.detail);
+
+  it("carries the four types through field for field", () => {
+    const result = parseFinanceFile([
+      VALID_FIN_ACCOUNT,
+      VALID_FIN_CATEGORY,
+      { ...VALID_FIN_TRANSACTION, categoryId: "fc1" },
+      VALID_FIN_BUDGET,
+    ]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.finAccounts).toEqual([
+      {
+        id: "fa1", profileId: "profile1", name: "Tekući", kind: "current", currency: "RSD",
+        openingBalance: 10000, archived: false, createdAt: T, updatedAt: T,
+      },
+    ]);
+    expect(result.data?.finCategories).toEqual([
+      { id: "fc1", profileId: "profile1", name: "Hrana", kind: "expense", createdAt: T, updatedAt: T },
+    ]);
+    expect(result.data?.finTransactions).toEqual([
+      {
+        id: "ftx1", profileId: "profile1", accountId: "fa1", counterAccountId: null,
+        categoryId: "fc1", date: "2026-07-02", amount: -1250, payee: "Maxi", note: null,
+        createdAt: T, updatedAt: T,
+      },
+    ]);
+    expect(result.data?.finBudgets).toEqual([
+      {
+        id: "fb1", profileId: "profile1", categoryId: "fc1", currency: "RSD", amount: 30000,
+        createdAt: T, updatedAt: T,
+      },
+    ]);
+  });
+
+  it("REFUSES a non-integer amount rather than rounding somebody's money", () => {
+    // The contract, not a convention: an archive whose money is a float is not
+    // one this writer produced, and rounding it silently is the one thing an
+    // importer of a ledger must never do.
+    expect(invalidDetails(parseFinanceFile([{ ...VALID_FIN_ACCOUNT, openingBalance: 12.5 }])))
+      .toEqual(["openingBalance"]);
+    expect(
+      invalidDetails(parseFinanceFile([VALID_FIN_ACCOUNT, { ...VALID_FIN_TRANSACTION, amount: -12.5 }])),
+    ).toEqual(["amount"]);
+    expect(
+      invalidDetails(parseFinanceFile([VALID_FIN_CATEGORY, { ...VALID_FIN_BUDGET, amount: 99.5 }])),
+    ).toEqual(["amount"]);
+  });
+
+  it("refuses a zero transaction amount and a non-positive budget", () => {
+    expect(
+      invalidDetails(parseFinanceFile([VALID_FIN_ACCOUNT, { ...VALID_FIN_TRANSACTION, amount: 0 }])),
+    ).toEqual(["amount"]);
+    for (const amount of [0, -1]) {
+      expect(
+        invalidDetails(parseFinanceFile([VALID_FIN_CATEGORY, { ...VALID_FIN_BUDGET, amount }])),
+        String(amount),
+      ).toEqual(["amount"]);
+    }
+  });
+
+  it("refuses a currency that is not a three-letter upper-case ISO-4217 code", () => {
+    for (const currency of ["rsd", "EURO", "R1D", "", 1]) {
+      expect(
+        invalidDetails(parseFinanceFile([{ ...VALID_FIN_ACCOUNT, currency }])),
+        String(currency),
+      ).toEqual(["currency"]);
+    }
+  });
+
+  it("refuses an unknown account kind and an unknown category kind", () => {
+    expect(invalidDetails(parseFinanceFile([{ ...VALID_FIN_ACCOUNT, kind: "kripto" }]))).toEqual([
+      "kind",
+    ]);
+    expect(invalidDetails(parseFinanceFile([{ ...VALID_FIN_CATEGORY, kind: "stednja" }]))).toEqual([
+      "kind",
+    ]);
+  });
+
+  it("refuses a date that is not a real bare calendar day", () => {
+    for (const date of ["2026-02-30", "2026-7-2", "2026-07-02T09:00:00Z", ""]) {
+      expect(
+        invalidDetails(parseFinanceFile([VALID_FIN_ACCOUNT, { ...VALID_FIN_TRANSACTION, date }])),
+        String(date),
+      ).toEqual(["date"]);
+    }
+  });
+
+  it("carries a transfer as one row, and refuses the two shapes a transfer may not have", () => {
+    const good = parseFinanceFile([
+      VALID_FIN_ACCOUNT,
+      SECOND_ACCOUNT,
+      { ...VALID_FIN_TRANSACTION, counterAccountId: "fa2" },
+    ]);
+    expect(good.problems).toEqual([]);
+    expect(good.data?.finTransactions).toHaveLength(1);
+    expect(good.data?.finTransactions[0]?.counterAccountId).toBe("fa2");
+
+    // Both sides the same account.
+    expect(
+      invalidDetails(
+        parseFinanceFile([VALID_FIN_ACCOUNT, { ...VALID_FIN_TRANSACTION, counterAccountId: "fa1" }]),
+      ),
+    ).toEqual(["counterAccountId"]);
+    // A transfer carrying a category: neither income nor expense.
+    expect(
+      invalidDetails(
+        parseFinanceFile([
+          VALID_FIN_ACCOUNT,
+          SECOND_ACCOUNT,
+          VALID_FIN_CATEGORY,
+          { ...VALID_FIN_TRANSACTION, counterAccountId: "fa2", categoryId: "fc1" },
+        ]),
+      ),
+    ).toEqual(["categoryId"]);
+  });
+
+  it("refuses a transfer whose two sides are in different currencies, naming its line", () => {
+    // The one transfer rule the row alone cannot show: it needs both accounts,
+    // so it is the reference pass's, and there is no rate anywhere in this app
+    // that could reconcile the two sides.
+    const result = parseFinanceFile([
+      VALID_FIN_ACCOUNT,
+      EUR_ACCOUNT,
+      { ...VALID_FIN_TRANSACTION, counterAccountId: "fa3" },
+    ]);
+    expect(result.problems).toEqual([
+      {
+        severity: "error",
+        code: "unknown-reference",
+        path: "data/finance.ndjson",
+        line: 3,
+        detail: "counterAccountId=fa3",
+      },
+    ]);
+    expect(result.data).toBeNull();
+  });
+
+  it("reports a dangling account, counter account, category and budget category with their lines", () => {
+    const result = parseFinanceFile([
+      { ...VALID_FIN_TRANSACTION, accountId: "nema" },
+      { ...VALID_FIN_BUDGET, categoryId: "nema" },
+    ]);
+    expect(result.problems).toEqual([
+      {
+        severity: "error", code: "unknown-reference", path: "data/finance.ndjson", line: 1,
+        detail: "accountId=nema",
+      },
+      {
+        severity: "error", code: "unknown-reference", path: "data/finance.ndjson", line: 2,
+        detail: "categoryId=nema",
+      },
+    ]);
+  });
+
+  it("in salvage mode drops a transaction whose account is gone but only DETACHES its category", () => {
+    const result = parseImportArchive(
+      emptyInputWith(
+        baseFiles({
+          fileContents: {
+            "data/finance.ndjson": ndjson([
+              VALID_FIN_ACCOUNT,
+              { ...VALID_FIN_TRANSACTION, categoryId: "nema" },
+              { ...VALID_FIN_TRANSACTION, id: "ftx2", accountId: "nema" },
+            ]),
+          },
+        }),
+        { mode: "import" },
+      ),
+    );
+    // The label was lost; the money still moved.
+    expect(result.data?.finTransactions.map((row) => [row.id, row.categoryId])).toEqual([
+      ["ftx1", null],
+    ]);
+    // Both dangling references are named in the salvage report — the detached
+    // one as much as the dropped one, exactly as a note's detached folder is:
+    // the report says what was WRONG, and the data says what survived.
+    expect(result.dropped.map((drop) => [drop.type, drop.reason])).toEqual([
+      ["fin-transaction", "unknown-reference"],
+      ["fin-transaction", "unknown-reference"],
+    ]);
+  });
+
+  it("in salvage mode DROPS half a transfer rather than turning it into an expense", () => {
+    const result = parseImportArchive(
+      emptyInputWith(
+        baseFiles({
+          fileContents: {
+            "data/finance.ndjson": ndjson([
+              VALID_FIN_ACCOUNT,
+              { ...VALID_FIN_TRANSACTION, counterAccountId: "nema" },
+            ]),
+          },
+        }),
+        { mode: "import" },
+      ),
+    );
+    // Detaching would have left a -12,50 expense the user never made.
+    expect(result.data?.finTransactions).toEqual([]);
+    expect(result.dropped.map((drop) => [drop.type, drop.module])).toEqual([
+      ["fin-transaction", "finance"],
+    ]);
+  });
+
+  it("refuses a second row with the same id", () => {
+    const result = parseFinanceFile([VALID_FIN_ACCOUNT, { ...VALID_FIN_ACCOUNT, name: "Drugi" }]);
+    expect(result.problems).toEqual([
+      { severity: "error", code: "duplicate-id", path: "data/finance.ndjson", line: 2, detail: "fa1" },
+    ]);
+  });
+
+  it("refuses a finance row outside data/finance.ndjson", () => {
+    const result = parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/notes.ndjson": ndjson([VALID_FIN_ACCOUNT]) } })),
+    );
+    expect(result.problems).toEqual([
+      { severity: "error", code: "invalid-record", path: "data/notes.ndjson", line: 1, detail: "type" },
+    ]);
+  });
+
+  it("reads a pre-1.28.0 archive, which carries no ledger at all, as an empty one", () => {
+    const files = baseFiles({ schemaVersion: "1.27.0" });
+    const manifest = JSON.parse(files.get("manifest.json") ?? "{}") as {
+      checksums: Record<string, string>;
+    };
+    // A 1.27 writer produced neither the file nor its checksum.
+    delete manifest.checksums["data/finance.ndjson"];
+    files.delete("data/finance.ndjson");
+    files.set("manifest.json", JSON.stringify(manifest));
+
+    const result = parseImportArchive(emptyInputWith(files));
+    expect(result.problems).toEqual([]);
+    expect(result.data).toMatchObject({
+      finAccounts: [],
+      finCategories: [],
+      finTransactions: [],
+      finBudgets: [],
+    });
+  });
+});
+
 describe("parseImportArchive — note categories (NOTE-002 / 1.27.0)", () => {
   const VALID_NOTE_CATEGORY = {
     type: "note-category", id: "nc1", profileId: "profile1", name: "sastanak", color: "zlato",
@@ -3098,8 +3455,8 @@ describe("parseImportArchive — note categories (NOTE-002 / 1.27.0)", () => {
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.27.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.27.0");
+  it("is 1.28.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.28.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -3289,11 +3646,11 @@ describe("parseImportArchive — schema version", () => {
     expect(result.manifest?.profile.kind).toBe("personal");
   });
 
-  // `1.28.0`: the nearest minor strictly ahead of this build's `1.27.0`.
+  // `1.29.0`: the nearest minor strictly ahead of this build's `1.28.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.28.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.29.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.28.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.29.0" },
     ]);
     expect(result.data).toBeNull();
   });

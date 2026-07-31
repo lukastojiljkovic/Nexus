@@ -27,6 +27,9 @@ import {
   EventStore,
   EventTemplateStore,
   ExamStore,
+  FinAccountStore,
+  FinCategoryStore,
+  FinTransactionStore,
   FocusStore,
   NexusDatabase,
   NoteAttachmentStore,
@@ -170,6 +173,10 @@ function emptyProfileData(): ProfileData {
     dashboardSettings: [],
     dashboardSets: [],
     dashboardWidgets: [],
+    finAccounts: [],
+    finCategories: [],
+    finTransactions: [],
+    finBudgets: [],
   };
 }
 
@@ -275,6 +282,9 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   const dashboardSetStore = new DashboardSetStore(handle.raw, profileId);
   const studySettingsStore = new StudySettingsStore(handle.raw, profileId);
   const calendarSettingsStore = new CalendarSettingsStore(handle.raw, profileId);
+  const finAccountStore = new FinAccountStore(handle.raw, profileId);
+  const finCategoryStore = new FinCategoryStore(handle.raw, profileId);
+  const finTransactionStore = new FinTransactionStore(handle.raw, profileId);
 
   // The merged Yjs state and derived body an export would carry for the edited
   // note — stand-ins for real Yjs bytes (see `bytes()`), but genuinely stored
@@ -400,6 +410,45 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     "2026-01-01",
   );
 
+  // A real ledger (migration 051): two same-currency accounts so a TRANSFER can
+  // ride as the one row it is, an expense category with a budget, an income
+  // category, and an ordinary categorized expense. A restore that reproduced
+  // the transfer as anything but this single row would fail the round trip
+  // below — and so would one that turned any amount into a float.
+  const finAccount = finAccountStore.create(
+    { name: `${name} tekući`, kind: "current", currency: "RSD", openingBalance: 1000_00 },
+    t0,
+  );
+  const finSavings = finAccountStore.create(
+    { name: `${name} štednja`, kind: "savings", currency: "RSD" },
+    t0,
+  );
+  const finCategory = finCategoryStore.create({ name: `${name} hrana`, kind: "expense" }, t0);
+  finCategoryStore.create({ name: `${name} plata`, kind: "income" }, t0);
+  finCategoryStore.setBudget(
+    { categoryId: finCategory.id, currency: "RSD", amount: 300_00 },
+    t0,
+  );
+  finTransactionStore.create(
+    {
+      accountId: finAccount.id,
+      categoryId: finCategory.id,
+      date: "2026-02-02",
+      amount: -12_50,
+      payee: "Maxi",
+    },
+    t0,
+  );
+  finTransactionStore.create(
+    {
+      accountId: finAccount.id,
+      counterAccountId: finSavings.id,
+      date: "2026-02-04",
+      amount: -300_00,
+    },
+    t0,
+  );
+
   const session = focusStore.create(
     { subjectId: subject.id, startedAt: "2026-01-01T09:00:00.000Z", endedAt: "2026-01-01T09:30:00.000Z" },
     "2026-01-01T09:31:00.000Z",
@@ -523,6 +572,10 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     dashboardSettings: [{ profileId, ...dashboardStore.get() }],
     dashboardSets: dashboardSetStore.list(),
     dashboardWidgets: dashboardWidgetStore.listAll(),
+    finAccounts: finAccountStore.listActive(),
+    finCategories: finCategoryStore.list(),
+    finTransactions: finTransactionStore.listActive(),
+    finBudgets: finCategoryStore.listBudgets(),
   };
 
   const derived = new Map<string, RestoredNoteDerived>([
@@ -774,6 +827,22 @@ function assertModulesMatch(
   expect(new DashboardSetStore(handle.raw, readProfileId).list()).toEqual(
     remap(fixture.data.dashboardSets),
   );
+
+  // FIN (migration 051): the whole ledger, ids, currencies and INTEGER minor
+  // units alike. The transfer among the transactions is the sharp assertion —
+  // it comes back as the ONE row it left as, naming both accounts.
+  const finAccountsRead = new FinAccountStore(handle.raw, readProfileId);
+  expect(finAccountsRead.listActive()).toEqual(remap(fixture.data.finAccounts));
+  const finCategoriesRead = new FinCategoryStore(handle.raw, readProfileId);
+  expect(finCategoriesRead.list()).toEqual(remap(fixture.data.finCategories));
+  expect(finCategoriesRead.listBudgets()).toEqual(remap(fixture.data.finBudgets));
+  const finTransactionsRead = new FinTransactionStore(handle.raw, readProfileId).listActive();
+  expect(finTransactionsRead).toEqual(remap(fixture.data.finTransactions));
+  expect(finTransactionsRead.filter((row) => row.counterAccountId !== null)).toHaveLength(1);
+  // And the DERIVED balances agree with the reproduced rows — the strongest
+  // statement available that nothing about the money was lost or rounded, since
+  // no column stores them.
+  expect(finAccountsRead.totalsByCurrency()).toEqual([{ currency: "RSD", minorUnits: 987_50 }]);
 }
 
 describe("RestoreStore", () => {

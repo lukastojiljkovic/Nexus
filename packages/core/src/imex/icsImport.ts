@@ -992,5 +992,11 @@ export function translateIcsEvents(
     dashboardSettings: [],
     dashboardSets: [],
     dashboardWidgets: [],
+    // An .ics calendar carries no ledger (migration 051): empty, like every
+    // other module this importer does not read.
+    finAccounts: [],
+    finCategories: [],
+    finTransactions: [],
+    finBudgets: [],
   };
 }

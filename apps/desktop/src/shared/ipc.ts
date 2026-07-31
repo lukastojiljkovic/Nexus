@@ -4255,6 +4255,8 @@ export interface RestoreModuleCounts {
   notes: number;
   /** Zero or one — the profile's dashboard background row (SET-006 / ADR-041). */
   dashboard: number;
+  /** The whole ledger — accounts, categories, transactions (transfers included, since a transfer IS a row) and budgets (FIN, migration 051). */
+  finance: number;
 }
 
 /** The outcome of the native "pick a restore archive" dialog (IMEX slice 3c). Mirrors `SaveAttachmentResult`'s shape, plus what a restore preview needs before it can even ask for a passphrase: the file's display name and whether it is an `NXA1` container. */
@@ -4453,7 +4455,11 @@ export type ImportRecordType =
   | "dashboard-set"
   | "dashboard-widget"
   | "private-note"
-  | "private-note-version";
+  | "private-note-version"
+  | "fin-account"
+  | "fin-category"
+  | "fin-transaction"
+  | "fin-budget";
 
 /**
  * Why rows the archive carried are not in the plan. Mirrors `@nexus/core`'s
@@ -4480,7 +4486,9 @@ export type ImportSkipCode =
   | "private-notes-not-imported"
   | "template-name-taken"
   | "source-inbox-collapsed"
-  | "duplicate-of-existing";
+  | "duplicate-of-existing"
+  /** A FIN budget whose (category, currency) the target already limits (migration 051) — its own code, because the sentence a user needs is about a slot rather than a name. */
+  | "budget-slot-taken";
 
 /** One named, counted group of skipped rows, grouped by `(code, module, type)` in first-seen order. `module`/`type` are null for a skip that belongs to neither (the manifest's settings). */
 export interface ImportSkipReason {

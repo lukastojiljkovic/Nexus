@@ -4,6 +4,7 @@ import {
   countProfileModules,
   documentDuplicateKey,
   eventDuplicateKey,
+  finBudgetKey,
   parseCsv,
   parseIcsCalendar,
   parseImportArchive,
@@ -1158,6 +1159,14 @@ function importTargetFor(deps: ProfileDataDeps, profileId: string): ForeignImpor
     personKeys: new Set(deps.peopleStore(profileId).listActive().map(personDuplicateKey)),
     documentKeys: new Set(deps.documentStore(profileId).listActive().map(documentDuplicateKey)),
     claimsCaptureDefault: org.listFolders().some((folder) => folder.isCaptureDefault),
+    // FIN / migration 051: a category absorbs by the `(kind, name)` PAIR rather
+    // than by name alone, because that is the table's actual UNIQUE index — and
+    // because „Pokloni" the expense and „Pokloni" the income are two real
+    // categories that folding would silently merge.
+    finCategories: deps.finCategoryStore(profileId).list(),
+    // Composed with core's own key function for the reason the three above are:
+    // one spelling of the key, or the rule quietly stops matching.
+    finBudgetKeys: new Set(deps.finCategoryStore(profileId).listBudgets().map(finBudgetKey)),
   };
 }
 

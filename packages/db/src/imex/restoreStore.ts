@@ -165,6 +165,15 @@ export const RESTORE_WIPE_TABLES = [
   // Zero rows in the archive likewise restores a profile with only „Početna“,
   // which is not a row and so needs nothing written to exist.
   "dashboard_sets",
+  // FIN (migration 051), children before parents like everything above: the
+  // budgets, then the transactions (whose two account references and one
+  // category reference all point at rows below), then the categories, then the
+  // accounts. Migration 051's CASCADEs and its `ON DELETE SET NULL` are never
+  // leaned on to reach a row — the same rule the note group keeps.
+  "fin_budgets",
+  "fin_transactions",
+  "fin_categories",
+  "fin_accounts",
 ] as const;
 
 type WipeTable = (typeof RESTORE_WIPE_TABLES)[number];
@@ -247,6 +256,10 @@ export class RestoreStore {
   private readonly insertNoteFolder: Database.Statement;
   private readonly insertNoteTag: Database.Statement;
   private readonly insertNoteCategory: Database.Statement;
+  private readonly insertFinAccount: Database.Statement;
+  private readonly insertFinCategory: Database.Statement;
+  private readonly insertFinTransaction: Database.Statement;
+  private readonly insertFinBudget: Database.Statement;
   private readonly insertSubject: Database.Statement;
   private readonly insertSubjectAttachment: Database.Statement;
   private readonly insertSubjectNoteLink: Database.Statement;
@@ -336,6 +349,27 @@ export class RestoreStore {
     this.insertNoteCategory = db.prepare(
       `INSERT INTO note_categories (id, profile_id, name, color, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    this.insertFinAccount = db.prepare(
+      `INSERT INTO fin_accounts
+         (id, profile_id, name, kind, currency, opening_balance, archived,
+          created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    this.insertFinCategory = db.prepare(
+      `INSERT INTO fin_categories (id, profile_id, name, kind, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    this.insertFinTransaction = db.prepare(
+      `INSERT INTO fin_transactions
+         (id, profile_id, account_id, counter_account_id, category_id, tx_date, amount,
+          payee, note, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    this.insertFinBudget = db.prepare(
+      `INSERT INTO fin_budgets
+         (id, profile_id, category_id, currency, amount, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     );
     this.insertSubject = db.prepare(
       `INSERT INTO subjects
@@ -1083,6 +1117,53 @@ export class RestoreStore {
           widget.config,
           widget.createdAt,
           widget.updatedAt,
+        );
+        written += 1;
+      }
+
+      // FIN (migration 051), in the archive's own dependency order: the
+      // accounts and the flat categories a transaction points at, then the
+      // transactions — the transfer among them carrying BOTH its sides in one
+      // row, so there is no pair to reproduce and no way for the halves to come
+      // apart — then the budgets. Nothing here is reconciled against the
+      // profile's own rows: the wipe above removed them all, so
+      // `(profile_id, kind, name)` and `(profile_id, category_id, currency)` are
+      // free for every row the archive carries, and the parser already refused a
+      // duplicate id. EMPTY for every pre-1.28.0 archive, which restores a
+      // profile with no ledger, exactly as it had none.
+      //
+      // Money is written as the INTEGER minor units the archive carried and the
+      // column demands — the parser refused a REAL, so nothing here rounds.
+      for (const account of input.data.finAccounts) {
+        this.insertFinAccount.run(
+          account.id, this.profileId, account.name, account.kind, account.currency,
+          account.openingBalance, account.archived ? 1 : 0,
+          account.createdAt, account.updatedAt,
+        );
+        written += 1;
+      }
+
+      for (const category of input.data.finCategories) {
+        this.insertFinCategory.run(
+          category.id, this.profileId, category.name, category.kind,
+          category.createdAt, category.updatedAt,
+        );
+        written += 1;
+      }
+
+      for (const transaction of input.data.finTransactions) {
+        this.insertFinTransaction.run(
+          transaction.id, this.profileId, transaction.accountId, transaction.counterAccountId,
+          transaction.categoryId, transaction.date, transaction.amount,
+          transaction.payee, transaction.note, transaction.createdAt, transaction.updatedAt,
+        );
+        written += 1;
+      }
+
+      for (const budget of input.data.finBudgets) {
+        this.insertFinBudget.run(
+          budget.id, this.profileId, budget.categoryId, budget.currency, budget.amount,
+          budget.createdAt, budget.updatedAt,
         );
         written += 1;
       }

@@ -41,6 +41,14 @@ export {
   ExamTopicNotFoundError,
   ExamTopicValidationError,
   ExamValidationError,
+  FinAccountNotFoundError,
+  FinAccountValidationError,
+  FinBudgetNotFoundError,
+  FinBudgetValidationError,
+  FinCategoryNotFoundError,
+  FinCategoryValidationError,
+  FinTransactionNotFoundError,
+  FinTransactionValidationError,
   FocusNotFoundError,
   FocusValidationError,
   NoteAttachmentNotFoundError,
@@ -373,6 +381,54 @@ export type { AddNoteAttachmentInput, NoteAttachment } from "./notes/noteAttachm
 
 export { NoteTemplateStore, MAX_NOTE_TEMPLATE_BYTES } from "./notes/noteTemplateStore.js";
 export type { NoteTemplate } from "./notes/noteTemplateStore.js";
+
+// --- FIN (migration 051) ----------------------------------------------------
+//
+// The three predicates are exported deliberately, ahead of a caller: main's IPC
+// validators (SEC-EL-02) must check a currency code, an amount of minor units
+// and a bare date on the way in from the renderer, and they have to check them
+// by the SAME rule the stores refuse by. One definition, or the wire and the
+// store quietly disagree about what money is.
+export { isBareDate, isCurrencyCode, isMinorUnits } from "./finance/money.js";
+export type { FinCurrencyTotal } from "./finance/money.js";
+
+export {
+  FinAccountStore,
+  FIN_ACCOUNT_KINDS,
+  MAX_FIN_ACCOUNT_NAME_LENGTH,
+} from "./finance/accountStore.js";
+export type {
+  CreateFinAccountInput,
+  FinAccount,
+  FinAccountBalance,
+  FinAccountKind,
+  UpdateFinAccountFields,
+} from "./finance/accountStore.js";
+
+export {
+  FinCategoryStore,
+  FIN_CATEGORY_KINDS,
+  MAX_FIN_CATEGORY_NAME_LENGTH,
+} from "./finance/categoryStore.js";
+export type {
+  FinBudget,
+  FinCategory,
+  FinCategoryKind,
+  SetFinBudgetInput,
+} from "./finance/categoryStore.js";
+
+export {
+  FinTransactionStore,
+  MAX_FIN_NOTE_LENGTH,
+  MAX_FIN_PAYEE_LENGTH,
+} from "./finance/transactionStore.js";
+export type {
+  CreateFinTransactionInput,
+  FinCategorySpend,
+  FinPeriod,
+  FinTransaction,
+  UpdateFinTransactionFields,
+} from "./finance/transactionStore.js";
 
 export {
   SearchStore,

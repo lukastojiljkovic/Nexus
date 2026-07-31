@@ -70,6 +70,10 @@ export class ForeignImportStore {
   private readonly insertNoteFolder: Database.Statement;
   private readonly insertNoteTag: Database.Statement;
   private readonly insertNoteCategory: Database.Statement;
+  private readonly insertFinAccount: Database.Statement;
+  private readonly insertFinCategory: Database.Statement;
+  private readonly insertFinTransaction: Database.Statement;
+  private readonly insertFinBudget: Database.Statement;
   private readonly insertNote: Database.Statement;
   private readonly insertNoteSnapshot: Database.Statement;
   private readonly insertNoteAttachment: Database.Statement;
@@ -205,6 +209,27 @@ export class ForeignImportStore {
     this.insertNoteCategory = db.prepare(
       `INSERT INTO note_categories (id, profile_id, name, color, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    this.insertFinAccount = db.prepare(
+      `INSERT INTO fin_accounts
+         (id, profile_id, name, kind, currency, opening_balance, archived,
+          created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    this.insertFinCategory = db.prepare(
+      `INSERT INTO fin_categories (id, profile_id, name, kind, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    this.insertFinTransaction = db.prepare(
+      `INSERT INTO fin_transactions
+         (id, profile_id, account_id, counter_account_id, category_id, tx_date, amount,
+          payee, note, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    this.insertFinBudget = db.prepare(
+      `INSERT INTO fin_budgets
+         (id, profile_id, category_id, currency, amount, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     );
     this.insertNote = db.prepare(
       `INSERT INTO notes
@@ -672,6 +697,54 @@ export class ForeignImportStore {
           this.profileId, widget.instanceId, widget.widgetId, widget.size,
           widget.setId ?? null, widget.position, widget.config,
           widget.createdAt, widget.updatedAt,
+        );
+        written += 1;
+      }
+
+      // FIN (migration 051), in the topological order foreign keys demand here
+      // (they stay ENFORCED throughout this store): accounts and categories,
+      // then the transactions whose two account references and one category
+      // reference now all resolve, then the budgets.
+      //
+      // A transfer needs no special handling at all, which is exactly the payoff
+      // of one row per transfer: the planner remapped both sides through the
+      // same map, so the row that lands here already names two accounts of THIS
+      // profile. A two-row model would have to keep a pair in step across a
+      // remap and an insert, and this store cannot even express the failure.
+      //
+      // A category the planner ABSORBED is not in `planned.finCategories` at all
+      // — it resolved onto the target's own row — so nothing here can collide
+      // with `(profile_id, kind, name)`, and nothing pre-existing is modified:
+      // the insert-only contract is kept as literally as it is for tags.
+      for (const account of planned.finAccounts) {
+        this.insertFinAccount.run(
+          account.id, this.profileId, account.name, account.kind, account.currency,
+          account.openingBalance, account.archived ? 1 : 0,
+          account.createdAt, account.updatedAt,
+        );
+        written += 1;
+      }
+      for (const category of planned.finCategories) {
+        this.insertFinCategory.run(
+          category.id, this.profileId, category.name, category.kind,
+          category.createdAt, category.updatedAt,
+        );
+        written += 1;
+      }
+      for (const transaction of planned.finTransactions) {
+        this.insertFinTransaction.run(
+          transaction.id, this.profileId, transaction.accountId, transaction.counterAccountId,
+          transaction.categoryId, transaction.date, transaction.amount,
+          transaction.payee, transaction.note, transaction.createdAt, transaction.updatedAt,
+        );
+        written += 1;
+      }
+      // Already filtered by the planner to the slots the target does not
+      // occupy (`budget-slot-taken`), so this insert can never collide either.
+      for (const budget of planned.finBudgets) {
+        this.insertFinBudget.run(
+          budget.id, this.profileId, budget.categoryId, budget.currency, budget.amount,
+          budget.createdAt, budget.updatedAt,
         );
         written += 1;
       }

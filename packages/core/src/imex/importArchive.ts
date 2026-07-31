@@ -26,6 +26,10 @@ import type {
   ExportEventTemplatePayload,
   ExportExam,
   ExportExamTopic,
+  ExportFinAccount,
+  ExportFinBudget,
+  ExportFinCategory,
+  ExportFinTransaction,
   ExportFocusSession,
   ExportNote,
   ExportNoteAttachment,
@@ -228,7 +232,41 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.27.0` adds note
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.28.0` adds the
+ * FINANCE module (FIN slice a, migration 051): the record types `fin-account`,
+ * `fin-category`, `fin-transaction` and `fin-budget`, riding in their own
+ * `data/finance.ndjson` (a new `DATA_FILES` entry the checksum walk's union
+ * absorbs unchanged), plus a new `finance` archive module. None of the four
+ * needs an `ArchiveEra` flag — the whole-absent-type rule below covers them, and
+ * a pre-`1.28.0` archive simply carries zero ledger rows, exactly as a profile
+ * that keeps no ledger does.
+ *
+ * The two money facts are re-validated STRICTLY here, in every era, because
+ * they are the contract rather than a convention: every amount must be an
+ * INTEGER (`openingBalance`, a transaction's `amount`, a budget's `amount`) —
+ * a REAL in any of them is `invalid-record`, never rounded — and a currency must
+ * be a three-letter upper-case ISO-4217 code. A transaction's amount must also
+ * be non-zero, and a TRANSFER (a row with `counterAccountId`) must name two
+ * DIFFERENT accounts and carry no category, which is migration 051's own pair of
+ * CHECKs re-stated: a bad archive must be a precise `invalid-record` with its
+ * line, not a raw SQLite failure three layers inside a restore transaction.
+ * There is deliberately no cross-currency check here — that one needs the two
+ * accounts' rows, so it is the reference pass's business (see the transfer rule
+ * in `referenceRules`).
+ *
+ * Reference rules: a transaction's `accountId` DROPS the row when dangling (a
+ * movement with no account is not a movement), its `counterAccountId` drops it
+ * too (half a transfer is worse than none — it would silently become an
+ * ordinary expense of the same amount), and its `categoryId` DETACHES to null,
+ * exactly as a note's does: uncategorized is a first-class state, and losing the
+ * money over its label would be the opposite of salvage. A budget's
+ * `categoryId` DROPS the budget — an allowance for a category that is not here
+ * is nothing at all.
+ *
+ * The bump is owed for the reason every one below was: an older reader handed
+ * this archive would refuse `fin-account` as an unrecognised type, and the gate
+ * turns that into one sentence about the build rather than one baffling
+ * line-error per row of somebody's ledger. `1.27.0` adds note
  * CATEGORIES (NOTE-002, migration 049): the `note-category` record type in
  * `data/notes.ndjson` — a flat, per-profile row naming what KIND a note is,
  * beside the folder that says where it lives and the tags that say what it is
@@ -373,7 +411,7 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.27.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.28.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -1006,7 +1044,11 @@ export type ArchiveRecordType =
   | "dashboard-set"
   | "dashboard-widget"
   | "private-note"
-  | "private-note-version";
+  | "private-note-version"
+  | "fin-account"
+  | "fin-category"
+  | "fin-transaction"
+  | "fin-budget";
 
 const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "task",
@@ -1049,6 +1091,10 @@ const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "dashboard-widget",
   "private-note",
   "private-note-version",
+  "fin-account",
+  "fin-category",
+  "fin-transaction",
+  "fin-budget",
 ];
 
 type DataFilePath = (typeof DATA_FILES)[number];
@@ -1100,6 +1146,7 @@ const FILE_RECORD_TYPES: Record<DataFilePath, readonly ArchiveRecordType[]> = {
   ],
   "data/dashboard.ndjson": ["dashboard-settings", "dashboard-set", "dashboard-widget"],
   "data/private-notes.ndjson": ["private-note", "private-note-version"],
+  "data/finance.ndjson": ["fin-account", "fin-category", "fin-transaction", "fin-budget"],
 };
 
 /**
@@ -1122,6 +1169,7 @@ const MODULE_OF_DATA_FILE: Record<DataFilePath, ArchiveModuleId | null> = {
   "data/notes.ndjson": "notes",
   "data/dashboard.ndjson": "dashboard",
   "data/private-notes.ndjson": null,
+  "data/finance.ndjson": "finance",
 };
 
 // --- Per-record parsers, one field validator call per interface field, in --
@@ -2143,6 +2191,124 @@ function parseNoteVersionMeta(raw: Record<string, unknown>): Omit<ExportNoteVers
   return { noteId, coveredSeq, title, createdAt };
 }
 
+// --- FIN (the finance module, migration 051) ---------------------------------
+//
+// Copied, not imported, on `NOTE_FOLDER_COLORS`' terms: `@nexus/core` never
+// depends on `@nexus/db`, so the domains migration 051's CHECKs enforce are
+// restated here — which is also what makes a bad archive a named
+// `invalid-record` with a line number instead of a raw SQLite error three
+// layers inside a restore transaction.
+const FIN_ACCOUNT_KINDS = ["cash", "current", "card", "savings"] as const;
+const FIN_CATEGORY_KINDS = ["income", "expense"] as const;
+const MAX_FIN_NAME_LENGTH = 60;
+const MAX_FIN_PAYEE_LENGTH = 120;
+const MAX_FIN_NOTE_LENGTH = 500;
+
+/** ISO-4217 as migration 051 stores it: exactly three upper-case ASCII letters. */
+const ISO_4217 = /^[A-Z]{3}$/;
+
+function currencyCode(value: unknown, field: string): string {
+  const s = nonEmptyStr(value, field);
+  if (!ISO_4217.test(s)) throw new InvalidFieldError(field);
+  return s;
+}
+
+/**
+ * An amount of money, in MINOR UNITS. `int` and not `finiteNumber`, deliberately
+ * and load-bearingly: money is an integer everywhere in this app, so a REAL here
+ * is a row this archive's writer could not have produced — refused outright
+ * rather than rounded, because rounding somebody's money silently is the one
+ * thing an importer must never do. The safe-integer bound is `int`'s own
+ * (`Number.isInteger` over a value that already survived JSON), plus the range
+ * check below, which is what keeps a value that would not survive the round trip
+ * through SQLite and back out of the ledger.
+ */
+function minorUnits(value: unknown, field: string): number {
+  return intInRange(value, field, Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER);
+}
+
+function parseFinAccount(raw: Record<string, unknown>): ExportFinAccount {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const name = trimmedNonEmptyStr(raw.name, "name", MAX_FIN_NAME_LENGTH);
+  const kind = enumStr(raw.kind, "kind", FIN_ACCOUNT_KINDS);
+  const currency = currencyCode(raw.currency, "currency");
+  const openingBalance = minorUnits(raw.openingBalance, "openingBalance");
+  const archived = bool(raw.archived, "archived");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, profileId, name, kind, currency, openingBalance, archived, createdAt, updatedAt };
+}
+
+/**
+ * A finance category (migration 051). FLAT by construction — there is no
+ * `parentId` to read, so this row can never join the cycle rules below, and a
+ * writer that invented one would simply have it ignored (`parseNoteCategory`'s
+ * own posture, one module over).
+ */
+function parseFinCategory(raw: Record<string, unknown>): ExportFinCategory {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const name = trimmedNonEmptyStr(raw.name, "name", MAX_FIN_NAME_LENGTH);
+  const kind = enumStr(raw.kind, "kind", FIN_CATEGORY_KINDS);
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, profileId, name, kind, createdAt, updatedAt };
+}
+
+/**
+ * One movement of money, and — when `counterAccountId` is present — one whole
+ * TRANSFER in a single row. Migration 051's two transfer CHECKs are restated
+ * here because both are visible from the row alone: the two sides must differ,
+ * and a transfer carries no category. The THIRD transfer rule — that both sides
+ * share a currency — is not, because it needs the two account rows; it lives in
+ * the reference pass, where those rows exist.
+ *
+ * `amount` is a non-zero integer of minor units: zero is refused by the column's
+ * own CHECK and therefore by this parser, so a restore can never abort halfway
+ * through on a row this reader called fine.
+ */
+function parseFinTransaction(raw: Record<string, unknown>): ExportFinTransaction {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const accountId = nonEmptyStr(raw.accountId, "accountId");
+  const counterAccountId = nullableNonEmptyStr(raw.counterAccountId, "counterAccountId");
+  const categoryId = nullableNonEmptyStr(raw.categoryId, "categoryId");
+  const date = bareDate(raw.date, "date");
+  const amount = minorUnits(raw.amount, "amount");
+  if (amount === 0) throw new InvalidFieldError("amount");
+  const payee = nullableTrimmedStr(raw.payee, "payee", MAX_FIN_PAYEE_LENGTH);
+  const note = nullableTrimmedStr(raw.note, "note", MAX_FIN_NOTE_LENGTH);
+  if (counterAccountId !== null) {
+    if (counterAccountId === accountId) throw new InvalidFieldError("counterAccountId");
+    if (categoryId !== null) throw new InvalidFieldError("categoryId");
+  }
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return {
+    id, profileId, accountId, counterAccountId, categoryId, date, amount, payee, note,
+    createdAt, updatedAt,
+  };
+}
+
+/** One category's allowance in one currency (migration 051). `amount` is a POSITIVE integer of minor units — a limit of nothing is no row, never a zero. */
+function parseFinBudget(raw: Record<string, unknown>): ExportFinBudget {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const categoryId = nonEmptyStr(raw.categoryId, "categoryId");
+  const currency = currencyCode(raw.currency, "currency");
+  const amount = minorUnits(raw.amount, "amount");
+  if (amount <= 0) throw new InvalidFieldError("amount");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, profileId, categoryId, currency, amount, createdAt, updatedAt };
+}
+
+/** An optional free-text field the writing store keeps trimmed: null stays null, and a value carrying outer whitespace or exceeding the cap is refused rather than silently fixed (`trimmedNonEmptyStr`'s rule, made nullable). */
+function nullableTrimmedStr(value: unknown, field: string, maxLength: number): string | null {
+  return value === null ? null : trimmedNonEmptyStr(value, field, maxLength);
+}
+
 // --- Private notes (PRIV v1, ADR-057 §6) -------------------------------------
 
 /** Mirrors `PRIV_ATTACHMENTS_MAX_COUNT` (`apps/desktop`'s wire cap) — copied, not imported, on `NOTE_FOLDER_COLORS`' terms: this package cannot depend on the app's shared wire file. */
@@ -2350,6 +2516,10 @@ interface Collections {
   dashboardWidgets: Bucket<ExportDashboardWidget>;
   privateNotes: Bucket<ExportPrivateNote>;
   privateNoteVersions: Bucket<ExportPrivateNoteVersion>;
+  finAccounts: Bucket<ExportFinAccount>;
+  finCategories: Bucket<ExportFinCategory>;
+  finTransactions: Bucket<ExportFinTransaction>;
+  finBudgets: Bucket<ExportFinBudget>;
 }
 
 function newCollections(): Collections {
@@ -2370,6 +2540,8 @@ function newCollections(): Collections {
     noteTagLinks: newBucket(), noteAttachments: newBucket(), noteVersions: newBucket(),
     noteTemplates: newBucket(), dashboardSettings: newBucket(), dashboardSets: newBucket(),
     dashboardWidgets: newBucket(), privateNotes: newBucket(), privateNoteVersions: newBucket(),
+    finAccounts: newBucket(), finCategories: newBucket(),
+    finTransactions: newBucket(), finBudgets: newBucket(),
   };
 }
 
@@ -2635,6 +2807,26 @@ function dispatchRecord(
         line,
         ctx,
       );
+      return;
+    }
+    case "fin-account": {
+      const row = parseFinAccount(raw);
+      pushRow(collections.finAccounts, row.id, row, type, path, line, ctx);
+      return;
+    }
+    case "fin-category": {
+      const row = parseFinCategory(raw);
+      pushRow(collections.finCategories, row.id, row, type, path, line, ctx);
+      return;
+    }
+    case "fin-transaction": {
+      const row = parseFinTransaction(raw);
+      pushRow(collections.finTransactions, row.id, row, type, path, line, ctx);
+      return;
+    }
+    case "fin-budget": {
+      const row = parseFinBudget(raw);
+      pushRow(collections.finBudgets, row.id, row, type, path, line, ctx);
       return;
     }
   }
@@ -3090,6 +3282,11 @@ function referenceRules(collections: Collections): ReferenceRule[] {
   const folderIds = () => idsOf(collections.noteFolders);
   const noteTagIds = () => idsOf(collections.noteTags);
   const noteCategoryIds = () => idsOf(collections.noteCategories);
+  const finAccountIds = () => idsOf(collections.finAccounts);
+  const finCategoryIds = () => idsOf(collections.finCategories);
+  /** Which currency each surviving account is in — a transfer's two sides must agree, which a plain id set cannot say. */
+  const finAccountCurrencies = () =>
+    new Map(collections.finAccounts.entries.map((entry) => [entry.row.id, entry.row.currency]));
   /** Which list each section belongs to — a task's `sectionId` must resolve to a section of the task's OWN list, which a plain id set cannot say. */
   const listOfSection = () =>
     new Map(collections.taskSections.entries.map((entry) => [entry.row.id, entry.row.listId]));
@@ -3561,6 +3758,76 @@ function referenceRules(collections: Collections): ReferenceRule[] {
       ref: (row) => row.noteId,
       resolver: () => {
         const ids = idsOf(collections.privateNotes);
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    // --- FIN (migration 051) ------------------------------------------------
+    // The account money moved out of or into. DROPPED when dangling: a movement
+    // with no account is not a movement — there is nothing left of the row, and
+    // nothing a balance could be derived against.
+    referenceRule({
+      bucket: collections.finTransactions,
+      type: "fin-transaction",
+      field: "accountId",
+      ref: (row) => row.accountId,
+      resolver: () => {
+        const ids = finAccountIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    // A transfer's OTHER side, and the one FIN reference a plain id set cannot
+    // express: the counter account must exist AND share the first account's
+    // currency — `task.sectionId`'s shape, for the same kind of reason. There is
+    // no exchange rate anywhere in this app, so a transfer between two
+    // currencies is a row no build of Nexus could have written; the store
+    // refuses it outright, and an archive carrying one is damaged or foreign.
+    //
+    // DROPPED rather than detached, unlike every other nullable reference here,
+    // and this is the sharp end of "a transfer is ONE row": detaching would
+    // clear `counterAccountId` and leave the amount behind — silently turning
+    // half a transfer into a genuine expense the user never made, in a module
+    // whose whole job is to add up. Losing the row is honest; keeping a lie is
+    // not.
+    referenceRule({
+      bucket: collections.finTransactions,
+      type: "fin-transaction",
+      field: "counterAccountId",
+      ref: (row) => row.counterAccountId,
+      resolver: () => {
+        const currencyOf = finAccountCurrencies();
+        return (ref, row) => {
+          const counter = currencyOf.get(ref);
+          return counter !== undefined && counter === currencyOf.get(row.accountId);
+        };
+      },
+      onDangling: "drop",
+    }),
+    // What the money was FOR — optional by construction, and uncategorized is a
+    // first-class state rather than a damaged one. So it DETACHES like a note's
+    // category: a transaction whose label was lost is still money that moved,
+    // and dropping it would make every total wrong.
+    referenceRule({
+      bucket: collections.finTransactions,
+      type: "fin-transaction",
+      field: "categoryId",
+      ref: (row) => row.categoryId,
+      resolver: () => {
+        const ids = finCategoryIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: { detach: (row) => ({ ...row, categoryId: null }) },
+    }),
+    // An allowance for a category that is not here is nothing at all — the row
+    // IS the pairing, exactly as a `subject-note-link` is, so it drops.
+    referenceRule({
+      bucket: collections.finBudgets,
+      type: "fin-budget",
+      field: "categoryId",
+      ref: (row) => row.categoryId,
+      resolver: () => {
+        const ids = finCategoryIds();
         return (ref) => ids.has(ref);
       },
       onDangling: "drop",
@@ -4049,6 +4316,13 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         // mean the same thing: the default arrangement (`DashboardWidgetStore`
         // is get-or-default, so "no rows" IS that arrangement).
         dashboardWidgets: rowsOf(collections.dashboardWidgets),
+        // Empty for every pre-1.28.0 archive, which carries no such file at all
+        // — and a restore reads that emptiness as "this profile keeps no
+        // ledger", which is exactly what it kept.
+        finAccounts: rowsOf(collections.finAccounts),
+        finCategories: rowsOf(collections.finCategories),
+        finTransactions: rowsOf(collections.finTransactions),
+        finBudgets: rowsOf(collections.finBudgets),
       };
 
   // Beside `data` and gated identically (ADR-057 §6): empty both for a

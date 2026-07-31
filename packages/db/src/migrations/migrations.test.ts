@@ -22,8 +22,8 @@ import { CardStore, MIGRATIONS, NexusDatabase, openDatabase, runMigrations } fro
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 50 (search history), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(50);
+  it("is at version 51 (finance ledger), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(51);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -6126,6 +6126,356 @@ describe("migration 050 — search history (SRCH-009)", () => {
       expect(
         (raw.prepare("SELECT count(*) AS n FROM search_history").get() as { n: number }).n,
       ).toBe(0);
+    } finally {
+      raw.close();
+    }
+  });
+});
+
+
+describe("migration 051 — the finance module's ledger (FIN slice a)", () => {
+  const T = "2026-01-01T00:00:00.000Z";
+
+  const columnNames = (db: NexusDatabase, table: string): string[] =>
+    (db.raw.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(
+      (row) => row.name,
+    );
+
+  const insertAccount = (
+    db: NexusDatabase,
+    id: string,
+    profileId: string,
+    overrides: Partial<{ name: string; kind: string; currency: string; opening: number }> = {},
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO fin_accounts
+           (id, profile_id, name, kind, currency, opening_balance, archived,
+            created_at, updated_at, deleted_at)
+         VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, NULL)`,
+      )
+      .run(
+        id,
+        profileId,
+        overrides.name ?? "Tekući",
+        overrides.kind ?? "current",
+        overrides.currency ?? "RSD",
+        overrides.opening ?? 0,
+        T,
+        T,
+      );
+
+  const insertCategory = (
+    db: NexusDatabase,
+    id: string,
+    profileId: string,
+    name: string,
+    kind = "expense",
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO fin_categories (id, profile_id, name, kind, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, profileId, name, kind, T, T);
+
+  const insertTransaction = (
+    db: NexusDatabase,
+    id: string,
+    profileId: string,
+    accountId: string,
+    amount: number,
+    overrides: Partial<{
+      counterAccountId: string | null;
+      categoryId: string | null;
+      date: string;
+    }> = {},
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO fin_transactions
+           (id, profile_id, account_id, counter_account_id, category_id, tx_date, amount,
+            payee, note, created_at, updated_at, deleted_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL)`,
+      )
+      .run(
+        id,
+        profileId,
+        accountId,
+        overrides.counterAccountId ?? null,
+        overrides.categoryId ?? null,
+        overrides.date ?? "2026-01-15",
+        amount,
+        T,
+        T,
+      );
+
+  const insertBudget = (
+    db: NexusDatabase,
+    id: string,
+    profileId: string,
+    categoryId: string,
+    currency: string,
+    amount: number,
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO fin_budgets
+           (id, profile_id, category_id, currency, amount, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, profileId, categoryId, currency, amount, T, T);
+
+  it("creates the four finance tables and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fin-fresh.db") });
+    for (const table of ["fin_accounts", "fin_categories", "fin_transactions", "fin_budgets"]) {
+      expect(tableNames(db)).toContain(table);
+    }
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("gives an account a closed kind vocabulary and an archived flag beside its soft delete", () => {
+    const db = openDatabase({ path: join(dir, "fin-account-shape.db") });
+    expect(columnNames(db, "fin_accounts")).toEqual([
+      "id",
+      "profile_id",
+      "name",
+      "kind",
+      "currency",
+      "opening_balance",
+      "archived",
+      "created_at",
+      "updated_at",
+      "deleted_at",
+    ]);
+
+    insertProfile(db, "p1");
+    for (const kind of ["cash", "current", "card", "savings"]) {
+      expect(() => insertAccount(db, `a-${kind}`, "p1", { kind })).not.toThrow();
+    }
+    expect(() => insertAccount(db, "a-bad", "p1", { kind: "kripto" })).toThrow();
+    db.close();
+  });
+
+  it("refuses a currency that is not a three-letter upper-case ISO-4217 code", () => {
+    const db = openDatabase({ path: join(dir, "fin-currency.db") });
+    insertProfile(db, "p1");
+    expect(() => insertAccount(db, "a1", "p1", { currency: "RSD" })).not.toThrow();
+    expect(() => insertAccount(db, "a2", "p1", { currency: "rsd" })).toThrow();
+    expect(() => insertAccount(db, "a3", "p1", { currency: "EURO" })).toThrow();
+    expect(() => insertAccount(db, "a4", "p1", { currency: "E" })).toThrow();
+    db.close();
+  });
+
+  it("refuses a non-integer amount in every money column — minor units, never a float", () => {
+    const db = openDatabase({ path: join(dir, "fin-integer.db") });
+    insertProfile(db, "p1");
+    expect(() => insertAccount(db, "a1", "p1", { opening: 12.5 })).toThrow();
+    insertAccount(db, "a2", "p1");
+    expect(() => insertTransaction(db, "t1", "p1", "a2", 12.5)).toThrow();
+    insertCategory(db, "c1", "p1", "Hrana");
+    expect(() => insertBudget(db, "b1", "p1", "c1", "RSD", 99.5)).toThrow();
+    db.close();
+  });
+
+  it("keeps categories flat with an income/expense kind, unique per (profile, kind, name)", () => {
+    const db = openDatabase({ path: join(dir, "fin-categories.db") });
+    expect(columnNames(db, "fin_categories")).toEqual([
+      "id",
+      "profile_id",
+      "name",
+      "kind",
+      "created_at",
+      "updated_at",
+    ]);
+
+    insertProfile(db, "p1");
+    insertProfile(db, "p2");
+    insertCategory(db, "c1", "p1", "Pokloni", "expense");
+    // The same name under the OTHER kind is a different category: gifts given
+    // and gifts received are two rows in every honest ledger.
+    expect(() => insertCategory(db, "c2", "p1", "Pokloni", "income")).not.toThrow();
+    expect(() => insertCategory(db, "c3", "p1", "Pokloni", "expense")).toThrow();
+    // Another profile's own „Pokloni" is a different row.
+    expect(() => insertCategory(db, "c4", "p2", "Pokloni", "expense")).not.toThrow();
+    expect(() => insertCategory(db, "c5", "p1", "Ostalo", "stednja")).toThrow();
+    db.close();
+  });
+
+  it("models a transfer as ONE row naming both sides, never as a pair", () => {
+    const db = openDatabase({ path: join(dir, "fin-transfer.db") });
+    insertProfile(db, "p1");
+    insertAccount(db, "a1", "p1");
+    insertAccount(db, "a2", "p1", { name: "Štednja", kind: "savings" });
+
+    expect(() =>
+      insertTransaction(db, "t1", "p1", "a1", -5000, { counterAccountId: "a2" }),
+    ).not.toThrow();
+    // A transfer to itself is not a transfer.
+    expect(() =>
+      insertTransaction(db, "t2", "p1", "a1", -5000, { counterAccountId: "a1" }),
+    ).toThrow();
+    db.close();
+  });
+
+  it("refuses a category on a transfer — a transfer is neither income nor expense", () => {
+    const db = openDatabase({ path: join(dir, "fin-transfer-category.db") });
+    insertProfile(db, "p1");
+    insertAccount(db, "a1", "p1");
+    insertAccount(db, "a2", "p1", { name: "Štednja", kind: "savings" });
+    insertCategory(db, "c1", "p1", "Hrana");
+
+    expect(() =>
+      insertTransaction(db, "t1", "p1", "a1", -5000, {
+        counterAccountId: "a2",
+        categoryId: "c1",
+      }),
+    ).toThrow();
+    db.close();
+  });
+
+  it("refuses a zero-amount transaction", () => {
+    const db = openDatabase({ path: join(dir, "fin-zero.db") });
+    insertProfile(db, "p1");
+    insertAccount(db, "a1", "p1");
+    expect(() => insertTransaction(db, "t1", "p1", "a1", 0)).toThrow();
+    db.close();
+  });
+
+  it("exposes fin_flows — the transfer-free view every income/expense aggregate reads", () => {
+    const db = openDatabase({ path: join(dir, "fin-flows.db") });
+    insertProfile(db, "p1");
+    insertAccount(db, "a1", "p1");
+    insertAccount(db, "a2", "p1", { name: "Štednja", kind: "savings" });
+    insertCategory(db, "c1", "p1", "Hrana");
+
+    insertTransaction(db, "t1", "p1", "a1", -1200, { categoryId: "c1" });
+    insertTransaction(db, "t2", "p1", "a1", -5000, { counterAccountId: "a2" });
+    db.raw.prepare("UPDATE fin_transactions SET deleted_at = ? WHERE id = 't1'").run(T);
+    insertTransaction(db, "t3", "p1", "a1", -800, { categoryId: "c1" });
+
+    const rows = (
+      db.raw.prepare("SELECT id FROM fin_flows ORDER BY id").all() as { id: string }[]
+    ).map((row) => row.id);
+    // The transfer and the trashed row are both invisible here, by construction.
+    expect(rows).toEqual(["t3"]);
+    // And the view carries no `counter_account_id` at all, so nothing reading it
+    // can even ask about a transfer.
+    expect(columnNames(db, "fin_flows")).not.toContain("counter_account_id");
+    db.close();
+  });
+
+  it("SET-NULLs a transaction's category when the category row is deleted", () => {
+    const db = openDatabase({ path: join(dir, "fin-category-set-null.db") });
+    insertProfile(db, "p1");
+    insertAccount(db, "a1", "p1");
+    insertCategory(db, "c1", "p1", "Hrana");
+    insertTransaction(db, "t1", "p1", "a1", -1200, { categoryId: "c1" });
+
+    db.raw.prepare("DELETE FROM fin_categories WHERE id = 'c1'").run();
+    const row = db.raw.prepare("SELECT category_id FROM fin_transactions WHERE id = 't1'").get() as {
+      category_id: string | null;
+    };
+    expect(row.category_id).toBeNull();
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM fin_transactions").get() as { n: number }).n,
+    ).toBe(1);
+    db.close();
+  });
+
+  it("cascades a budget when its category goes, and every finance row when the profile goes", () => {
+    const db = openDatabase({ path: join(dir, "fin-cascade.db") });
+    insertProfile(db, "p1");
+    insertAccount(db, "a1", "p1");
+    insertCategory(db, "c1", "p1", "Hrana");
+    insertTransaction(db, "t1", "p1", "a1", -1200, { categoryId: "c1" });
+    insertBudget(db, "b1", "p1", "c1", "RSD", 30000);
+
+    db.raw.prepare("DELETE FROM fin_categories WHERE id = 'c1'").run();
+    expect((db.raw.prepare("SELECT count(*) AS n FROM fin_budgets").get() as { n: number }).n).toBe(
+      0,
+    );
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = 'p1'").run();
+    for (const table of ["fin_accounts", "fin_categories", "fin_transactions", "fin_budgets"]) {
+      const { n } = db.raw.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number };
+      expect({ table, n }).toEqual({ table, n: 0 });
+    }
+    db.close();
+  });
+
+  it("takes a transfer's row with either side, so no half-transfer can survive", () => {
+    const db = openDatabase({ path: join(dir, "fin-transfer-cascade.db") });
+    insertProfile(db, "p1");
+    insertAccount(db, "a1", "p1");
+    insertAccount(db, "a2", "p1", { name: "Štednja", kind: "savings" });
+    insertTransaction(db, "t1", "p1", "a1", -5000, { counterAccountId: "a2" });
+
+    db.raw.prepare("DELETE FROM fin_accounts WHERE id = 'a2'").run();
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM fin_transactions").get() as { n: number }).n,
+    ).toBe(0);
+    db.close();
+  });
+
+  it("holds at most one budget per (profile, category, currency)", () => {
+    const db = openDatabase({ path: join(dir, "fin-budget-unique.db") });
+    insertProfile(db, "p1");
+    insertCategory(db, "c1", "p1", "Hrana");
+
+    expect(() => insertBudget(db, "b1", "p1", "c1", "RSD", 30000)).not.toThrow();
+    // A second currency is a second allowance, never a second row for the same one.
+    expect(() => insertBudget(db, "b2", "p1", "c1", "EUR", 200_00)).not.toThrow();
+    expect(() => insertBudget(db, "b3", "p1", "c1", "RSD", 40000)).toThrow();
+    db.close();
+  });
+
+  it("creates the finance read indexes", () => {
+    const db = openDatabase({ path: join(dir, "fin-indexes.db") });
+    const indexes = (
+      db.raw.prepare("SELECT name FROM sqlite_master WHERE type = 'index'").all() as {
+        name: string;
+      }[]
+    ).map((row) => row.name);
+    for (const index of [
+      "fin_accounts_profile_active",
+      "fin_categories_profile_kind_name",
+      "fin_transactions_profile_date",
+      "fin_transactions_account_active",
+      "fin_transactions_counter_active",
+      "fin_budgets_profile_category_currency",
+    ]) {
+      expect(indexes).toContain(index);
+    }
+    db.close();
+  });
+
+  it("leaves an older database untouched apart from gaining the four empty tables", () => {
+    const raw = new Database(join(dir, "fin-upgrade.db"));
+    try {
+      raw.pragma("journal_mode = WAL");
+      raw.pragma("foreign_keys = ON");
+      raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
+        typeof value === "string" ? foldSearchText(value) : null,
+      );
+      runMigrations(
+        raw,
+        MIGRATIONS.filter((migration) => migration.version < 51),
+      );
+      raw
+        .prepare(
+          "INSERT INTO profiles (id, kind, name, created_at) VALUES ('p1', 'personal', 'P', ?)",
+        )
+        .run(T);
+
+      runMigrations(raw, MIGRATIONS);
+
+      expect(raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+      expect((raw.prepare("SELECT count(*) AS n FROM fin_accounts").get() as { n: number }).n).toBe(
+        0,
+      );
+      expect((raw.prepare("SELECT count(*) AS n FROM profiles").get() as { n: number }).n).toBe(1);
     } finally {
       raw.close();
     }

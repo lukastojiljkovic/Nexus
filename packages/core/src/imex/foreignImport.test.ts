@@ -70,6 +70,7 @@ function emptyProfileData(): ProfileData {
     notes: [], noteFolders: [], noteTags: [], noteCategories: [], noteTagLinks: [], noteTemplates: [],
     noteAttachments: [], noteVersions: [],
     dashboardSettings: [], dashboardSets: [], dashboardWidgets: [],
+    finAccounts: [], finCategories: [], finTransactions: [], finBudgets: [],
   };
 }
 
@@ -185,6 +186,23 @@ function foreignProfileData(): ProfileData {
     noteVersions: [
       { noteId: "src-n1", coveredSeq: 3, title: "Prva", createdAt: T0, snapshot: linkedSnapshot("src-n2", "src-att1") },
     ],
+    // FIN (migration 051): two same-currency accounts so a TRANSFER can ride,
+    // both category kinds, and a budget on the expense one.
+    finAccounts: [
+      { id: "src-fa1", profileId: "src", name: "Tekući", kind: "current", currency: "RSD", openingBalance: 1000_00, archived: false, createdAt: T0, updatedAt: T0 },
+      { id: "src-fa2", profileId: "src", name: "Štednja", kind: "savings", currency: "RSD", openingBalance: 0, archived: false, createdAt: T0, updatedAt: T0 },
+    ],
+    finCategories: [
+      { id: "src-fc1", profileId: "src", name: "Hrana", kind: "expense", createdAt: T0, updatedAt: T0 },
+      { id: "src-fc2", profileId: "src", name: "Plata", kind: "income", createdAt: T0, updatedAt: T0 },
+    ],
+    finTransactions: [
+      { id: "src-ftx1", profileId: "src", accountId: "src-fa1", counterAccountId: null, categoryId: "src-fc1", date: "2026-07-02", amount: -1250, payee: "Maxi", note: null, createdAt: T0, updatedAt: T0 },
+      { id: "src-ftx2", profileId: "src", accountId: "src-fa1", counterAccountId: "src-fa2", categoryId: null, date: "2026-07-03", amount: -300_00, payee: null, note: null, createdAt: T0, updatedAt: T0 },
+    ],
+    finBudgets: [
+      { id: "src-fb1", profileId: "src", categoryId: "src-fc1", currency: "RSD", amount: 300_00, createdAt: T0, updatedAt: T0 },
+    ],
   };
 }
 
@@ -195,6 +213,8 @@ function emptyTarget(overrides: Partial<ForeignImportTarget> = {}): ForeignImpor
     noteTags: [],
     taskTags: [],
     noteCategories: [],
+    finCategories: [],
+    finBudgetKeys: new Set(),
     taskTemplateNames: [],
     eventTemplateNames: [],
     noteTemplateNames: new Set(),

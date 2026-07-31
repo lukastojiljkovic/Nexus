@@ -559,6 +559,7 @@ const ARCHIVE_MODULES: (keyof RestoreModuleCounts)[] = [
   "notifications",
   "notes",
   "dashboard",
+  "finance",
 ];
 
 interface BackupSectionProps {

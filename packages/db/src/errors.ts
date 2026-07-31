@@ -718,3 +718,86 @@ export class PrivateNoteNotFoundError extends DatabaseError {}
  * never set PRIV up land here too — there is no row for them to mean.
  */
 export class PrivateSettingsValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a finance-account write is rejected at the store boundary because
+ * its input breaks a domain rule the caller is expected to have caught already
+ * (FIN, migration 051): an empty or over-60-character name, a `kind` outside the
+ * closed cash/current/card/savings vocabulary, a `currency` that is not a
+ * three-letter upper-case ISO-4217 code, an `openingBalance` that is not a safe
+ * INTEGER of minor units, or a malformed `now`. The store revalidates because
+ * renderer input is untrusted (SEC-EL-02).
+ */
+export class FinAccountValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a finance operation targets an id that is not an active account in
+ * the store's own profile — unknown, soft-deleted, or owned by another profile —
+ * including a transaction's `accountId` or `counterAccountId` reference that does
+ * not resolve there. Surfacing this uniformly keeps one profile's accounts
+ * invisible to a store scoped to another.
+ */
+export class FinAccountNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a finance-category write is rejected at the store boundary because
+ * its input breaks a domain rule (FIN, migration 051): an empty or
+ * over-60-character name, a `kind` outside income/expense, a malformed `now`, or
+ * a create/rename colliding with another category of the SAME kind in this
+ * profile (migration 051's `UNIQUE (profile_id, kind, name)`, surfaced as a
+ * domain error rather than a raw driver error).
+ */
+export class FinCategoryValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a finance operation targets an id that is not a category in the
+ * store's own profile — unknown or owned by another profile — including a
+ * transaction's or a budget's `categoryId` reference that does not resolve
+ * there. Surfacing this uniformly keeps one profile's categories invisible to a
+ * store scoped to another.
+ */
+export class FinCategoryNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a transaction write is rejected at the store boundary (FIN,
+ * migration 051): a `date` that is not a real bare `YYYY-MM-DD` local day, an
+ * `amount` that is not a non-zero safe INTEGER of minor units, an over-length
+ * `payee`/`note`, a malformed `now`, a backwards or malformed reporting period,
+ * or any of the three transfer refusals — a transfer whose two sides are the
+ * same account, a transfer across two different currencies (there is no FX in
+ * this app and a stale invented rate is worse than no total), and a transfer
+ * carrying a category (it is neither income nor expense, so no category could
+ * honestly describe it).
+ *
+ * Deliberately NOT among them: a category whose kind seems to contradict the
+ * amount's sign. A refund is money coming back under the very expense category
+ * it went out of, and refusing it would force the user to either lose the label
+ * or invent „Povraćaj". The kind classifies (which picker, which report); the
+ * sign carries the direction.
+ */
+export class FinTransactionValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a transaction operation targets an id that is not an active
+ * transaction in the store's own profile — unknown, soft-deleted, or owned by
+ * another profile.
+ */
+export class FinTransactionNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a budget write is rejected at the store boundary (FIN, migration
+ * 051): an `amount` that is not a positive safe INTEGER of minor units, a
+ * `currency` that is not a three-letter upper-case ISO-4217 code, a malformed
+ * `now`, or a budget set on an INCOME category. That last one is a deliberate
+ * refusal rather than an oversight: a budget is a spending LIMIT, and an income
+ * category would need a target — which compares in the opposite direction (under
+ * is bad, not good), so one row meaning both would make every reader ask which
+ * way is good and answer it with a join.
+ */
+export class FinBudgetValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a budget operation targets an id that is not a budget in the
+ * store's own profile — unknown or owned by another profile.
+ */
+export class FinBudgetNotFoundError extends DatabaseError {}

@@ -2811,7 +2811,13 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
        * `strings.modules`, whose key set is the module registry's, not this one.
        *
        * Also what the export's „Šta se izvozi“ picker labels its checkboxes with
-       * (IMEX-003): the same six archive modules, named once.
+       * (IMEX-003): the same seven archive modules, named once.
+       *
+       * „Finansije“ appears here from FIN slice a onward — before the module has
+       * a page — and deliberately: the archive vocabulary is the interchange's,
+       * not the registry's (see the note above), and a backup that silently
+       * omitted a row it actually carries would be the far worse lie. Until the
+       * ledger has a screen the row simply reads 0 on both sides, which is true.
        */
       modules: {
         tasks: "Zadaci",
@@ -2820,6 +2826,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         notifications: "Obaveštenja",
         notes: "Beleške",
         dashboard: "Kontrolna tabla",
+        finance: "Finansije",
       } satisfies Record<keyof RestoreModuleCounts, string>,
       columnCurrent: "Sada",
       columnIncoming: "Iz arhive",
@@ -2988,6 +2995,10 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         "source-inbox-collapsed":
           "Podrazumevana lista iz arhive se ne pravi ponovo — njeni zadaci ulaze u tvoju podrazumevanu listu.",
         "duplicate-of-existing": "Već postoji kod tebe — preskočeno po tvom izboru.",
+        // Migration 051: sudar je oko MESTA (kategorija + valuta), ne oko
+        // imena, pa mu treba sopstvena rečenica.
+        "budget-slot-taken":
+          "Za tu kategoriju već imaš budžet u toj valuti — tvoj iznos ostaje.",
       } satisfies Record<ImportSkipCode, string>,
       /**
        * „Već postoji kod tebe“ (ADR-051 / IMEX-008) — the choice rows above the

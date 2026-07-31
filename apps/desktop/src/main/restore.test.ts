@@ -32,6 +32,9 @@ import {
   EventStore,
   EventTemplateStore,
   ExamStore,
+  FinAccountStore,
+  FinCategoryStore,
+  FinTransactionStore,
   FocusStore,
   ForeignImportStore,
   NexusDatabase,
@@ -206,6 +209,9 @@ function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
     dashboardSettingsStore: (profileId) => new DashboardSettingsStore(handle.raw, profileId),
     dashboardWidgetStore: (profileId) => new DashboardWidgetStore(handle.raw, profileId),
     dashboardSetStore: (profileId) => new DashboardSetStore(handle.raw, profileId),
+    finAccountStore: (profileId) => new FinAccountStore(handle.raw, profileId),
+    finCategoryStore: (profileId) => new FinCategoryStore(handle.raw, profileId),
+    finTransactionStore: (profileId) => new FinTransactionStore(handle.raw, profileId),
   };
 }
 
@@ -502,6 +508,42 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   const dashboardStore = new DashboardSettingsStore(handle.raw, profileId);
   const dashboardWidgetStore = new DashboardWidgetStore(handle.raw, profileId);
   const dashboardSetStore = new DashboardSetStore(handle.raw, profileId);
+  const finAccountStore = new FinAccountStore(handle.raw, profileId);
+  const finCategoryStore = new FinCategoryStore(handle.raw, profileId);
+  const finTransactionStore = new FinTransactionStore(handle.raw, profileId);
+
+  // A real ledger (migration 051): two same-currency accounts so a TRANSFER
+  // rides through the whole zip round trip as the one row it is, a budgeted
+  // expense category, and a categorized expense.
+  const finCurrent = finAccountStore.create(
+    { name: `${label} tekući`, kind: "current", currency: "RSD", openingBalance: 1000_00 },
+    t0,
+  );
+  const finSavings = finAccountStore.create(
+    { name: `${label} štednja`, kind: "savings", currency: "RSD" },
+    t0,
+  );
+  const finCategory = finCategoryStore.create({ name: `${label} hrana`, kind: "expense" }, t0);
+  finCategoryStore.setBudget({ categoryId: finCategory.id, currency: "RSD", amount: 300_00 }, t0);
+  finTransactionStore.create(
+    {
+      accountId: finCurrent.id,
+      categoryId: finCategory.id,
+      date: "2026-02-02",
+      amount: -12_50,
+      payee: "Maxi",
+    },
+    t0,
+  );
+  finTransactionStore.create(
+    {
+      accountId: finCurrent.id,
+      counterAccountId: finSavings.id,
+      date: "2026-02-04",
+      amount: -300_00,
+    },
+    t0,
+  );
 
   // A real list with a section, and the task filed inside it (TASK-004), so the
   // zip round trip carries a task's placement and not just the Inbox default.
@@ -715,6 +757,12 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     dashboardSettings: [{ profileId, ...dashboardStore.get() }],
     dashboardSets: dashboardSetStore.list(),
     dashboardWidgets: dashboardWidgetStore.listAll(),
+    // FIN (migration 051): read off the live stores, exactly as
+    // `gatherProfileData` reads them.
+    finAccounts: finAccountStore.listActive(),
+    finCategories: finCategoryStore.list(),
+    finTransactions: finTransactionStore.listActive(),
+    finBudgets: finCategoryStore.listBudgets(),
   };
 
   const derived = deriveRestoredNotes(data.notes);
@@ -956,6 +1004,32 @@ describe("restore", () => {
       );
       expect(blobs.has(fixtureA.ids.attachmentSha)).toBe(true);
 
+      // FIN (migration 051): the whole ledger came through the real zip, and
+      // the TRANSFER came through as the ONE row it left as — naming two
+      // accounts that both exist in the restored profile.
+      const finAccountsB = new FinAccountStore(dbB.raw, profileB);
+      expect(finAccountsB.listActive()).toEqual(
+        fixtureA.data.finAccounts.map((row) => ({ ...row, profileId: profileB })),
+      );
+      const finCategoriesB = new FinCategoryStore(dbB.raw, profileB);
+      expect(finCategoriesB.list()).toEqual(
+        fixtureA.data.finCategories.map((row) => ({ ...row, profileId: profileB })),
+      );
+      expect(finCategoriesB.listBudgets()).toEqual(
+        fixtureA.data.finBudgets.map((row) => ({ ...row, profileId: profileB })),
+      );
+      const finTransactionsB = new FinTransactionStore(dbB.raw, profileB).listActive();
+      expect(finTransactionsB).toEqual(
+        fixtureA.data.finTransactions.map((row) => ({ ...row, profileId: profileB })),
+      );
+      expect(finTransactionsB.filter((row) => row.counterAccountId !== null)).toHaveLength(1);
+      // And the DERIVED balances agree with the restored rows — nothing about
+      // the money was lost, rounded, or double-counted across the transfer.
+      // 1000,00 − 12,50 − 300,00 (out) + 300,00 (in) = 987,50, in minor units.
+      expect(finAccountsB.totalsByCurrency()).toEqual([
+        { currency: "RSD", minorUnits: 987_50 },
+      ]);
+
       expect(cancelFocusCalls).toEqual([profileB]);
       expect(getReloadCount()).toBe(0); // scheduled, not yet fired
       await flushSetTimeout();
@@ -982,6 +1056,36 @@ describe("restore", () => {
 
       expect(preview.preview.current).toEqual(countProfileModules(fixtureBOld.data));
       expect(preview.preview.incoming).toEqual(countProfileModules(fixtureA.data));
+    });
+
+    it("counts the FIN module on both sides of the comparison table (migration 051)", async () => {
+      const profileA = createProfile(dbA, "A");
+      const fixtureA = seedProfile(dbA, profileA, "A");
+      const archive = buildArchiveFor(fixtureA, profileA, "A");
+      const zipBytes = await buildArchiveZip(archive, fixtureA.blobBytes);
+      const filePath = fixturePath("finance-counts.nexus.zip");
+      await writeFile(filePath, zipBytes);
+
+      const profileB = createProfile(dbB, "B");
+      seedProfile(dbB, profileB, "B-old");
+
+      const { deps } = makeTestDeps(dbB, filePath);
+      await pickRestoreFile(deps);
+      const preview = await previewRestore(deps, profileB, null);
+      if (preview.status !== "ready") unreachable();
+
+      // 2 accounts + 1 category + 1 budget + 2 transactions (the transfer among
+      // them, counted ONCE, because it is one row).
+      expect(preview.preview.incoming.finance).toBe(6);
+      expect(preview.preview.current.finance).toBe(6);
+      // And the module really rides as its own manifest entry and its own file.
+      expect(archive.files.has("data/finance.ndjson")).toBe(true);
+      const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as {
+        modules: { id: string; records: number }[];
+        checksums: Record<string, string>;
+      };
+      expect(manifest.modules).toContainEqual({ id: "finance", records: 6 });
+      expect(manifest.checksums["data/finance.ndjson"]).toBeDefined();
     });
   });
 

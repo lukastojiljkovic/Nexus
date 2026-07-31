@@ -19,6 +19,10 @@ import type {
   ExportNote,
   ExportNoteAttachment,
   ExportNoteCategory,
+  ExportFinAccount,
+  ExportFinBudget,
+  ExportFinCategory,
+  ExportFinTransaction,
   ExportNoteFolder,
   ExportNoteTag,
   ExportNoteTagLink,
@@ -45,6 +49,9 @@ import type {
   EventStore,
   EventTemplateStore,
   ExamStore,
+  FinAccountStore,
+  FinCategoryStore,
+  FinTransactionStore,
   FocusStore,
   NoteAttachmentStore,
   NoteOrgStore,
@@ -104,6 +111,9 @@ export interface ProfileDataDeps {
   dashboardSettingsStore(profileId: string): DashboardSettingsStore;
   dashboardWidgetStore(profileId: string): DashboardWidgetStore;
   dashboardSetStore(profileId: string): DashboardSetStore;
+  finAccountStore(profileId: string): FinAccountStore;
+  finCategoryStore(profileId: string): FinCategoryStore;
+  finTransactionStore(profileId: string): FinTransactionStore;
 }
 
 /** Every NOTE-module row `ProfileData` requires (ADR-022 section 3) — `gatherNotes`'s return shape. */
@@ -289,6 +299,40 @@ export function gatherProfileData(deps: ProfileDataDeps, profileId: string): Pro
     // reaches it. Writing out the resolved five instead would silently freeze
     // every board onto today's default the first time it was backed up.
     dashboardWidgets: deps.dashboardWidgetStore(profileId).listAll(),
+    ...gatherFinance(deps, profileId),
+  };
+}
+
+/** Every FIN-module row `ProfileData` requires (migration 051) — `gatherFinance`'s return shape. */
+interface GatheredFinanceData {
+  finAccounts: ExportFinAccount[];
+  finCategories: ExportFinCategory[];
+  finTransactions: ExportFinTransaction[];
+  finBudgets: ExportFinBudget[];
+}
+
+/**
+ * Gathers every FIN-module row for one profile. Four plain profile-wide reads,
+ * with no fan-out at all: a transaction hangs off its account but the store is
+ * scoped by profile rather than by account (unlike the note/task/subject
+ * attachment stores), and a budget is read with its categories.
+ *
+ * Every store here already excludes soft-deleted rows — `listActive` on the
+ * accounts and the transactions, and the categories have no soft delete —
+ * so nothing extra is needed for ADR-022's "live rows only" rule. And nothing
+ * DERIVED travels: an account's balance is computed from these rows on every
+ * read, so an archive carrying one could only ever contradict them.
+ */
+function gatherFinance(
+  deps: Pick<ProfileDataDeps, "finAccountStore" | "finCategoryStore" | "finTransactionStore">,
+  profileId: string,
+): GatheredFinanceData {
+  const categories = deps.finCategoryStore(profileId);
+  return {
+    finAccounts: deps.finAccountStore(profileId).listActive(),
+    finCategories: categories.list(),
+    finTransactions: deps.finTransactionStore(profileId).listActive(),
+    finBudgets: categories.listBudgets(),
   };
 }
 

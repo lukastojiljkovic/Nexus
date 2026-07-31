@@ -696,6 +696,12 @@ export function translateCsvTasks(
     dashboardSettings: [],
     dashboardSets: [],
     dashboardWidgets: [],
+    // A CSV of tasks or events carries no ledger (migration 051): empty, like
+    // every other module this importer does not read.
+    finAccounts: [],
+    finCategories: [],
+    finTransactions: [],
+    finBudgets: [],
   };
 
   return {

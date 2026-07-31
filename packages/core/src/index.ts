@@ -251,6 +251,10 @@ export type {
   ExportEventTemplatePayload,
   ExportExam,
   ExportExamTopic,
+  ExportFinAccount,
+  ExportFinBudget,
+  ExportFinCategory,
+  ExportFinTransaction,
   ExportFocusSession,
   ExportNote,
   ExportNoteAttachment,
@@ -303,6 +307,7 @@ export type {
 export {
   documentDuplicateKey,
   eventDuplicateKey,
+  finBudgetKey,
   personDuplicateKey,
   planForeignImport,
   IMPORT_DUPLICATE_TYPES,

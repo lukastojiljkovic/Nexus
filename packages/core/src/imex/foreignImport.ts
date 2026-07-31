@@ -113,6 +113,20 @@ export function documentDuplicateKey(document: { docType: string; label: string 
   return JSON.stringify([document.docType, document.label]);
 }
 
+/**
+ * A budget's slot in the target: which category, in which currency (migration
+ * 051's UNIQUE index, minus the profile every row here already shares). Composed
+ * as a JSON array for the separator reason the three keys above give — a
+ * category id cannot contain a separator today, but the rule is one rule.
+ *
+ * Exported for the same reason `eventDuplicateKey` is: the TARGET's index is
+ * built by main off the live store while the SOURCE's key is composed here, and
+ * two spellings of one key would be a rule that quietly stopped matching.
+ */
+export function finBudgetKey(budget: { categoryId: string; currency: string }): string {
+  return JSON.stringify([budget.categoryId, budget.currency]);
+}
+
 /** Everything the planner needs to know about the profile being merged INTO. */
 export interface ForeignImportTarget {
   /** The target profile's id — every imported row is stamped with it, never with the archive's. */
@@ -129,6 +143,22 @@ export interface ForeignImportTarget {
    * like a tag rather than being skipped like a template.
    */
   noteCategories: readonly ForeignImportTargetTag[];
+  /**
+   * The target's existing FINANCE categories (migration 051). Absorbed by the
+   * exact `(kind, name)` PAIR rather than by name alone — see
+   * `ID_MINTERS.finCategories` for why the pair is what stops „Pokloni" the
+   * expense from swallowing „Pokloni" the income. Carries `kind` for exactly
+   * that reason, which is why it is not a `ForeignImportTargetTag`.
+   */
+  finCategories: readonly { id: string; name: string; kind: string }[];
+  /**
+   * The `(categoryId, currency)` pairs the target already budgets — composed by
+   * `finBudgetKey` — so a source allowance for a category the import absorbs
+   * onto an already-budgeted one is dropped rather than colliding on migration
+   * 051's UNIQUE index. The target's own limit wins, on `taskTemplateNames`'
+   * terms: a foreign import never updates a pre-existing row.
+   */
+  finBudgetKeys: ReadonlySet<string>;
   /**
    * The target's existing task template names. A task template's NAME is its
    * user-facing identity (migration 027's UNIQUE, ADR-035's "naming IS
@@ -245,7 +275,9 @@ export type ImportSkipCode =
   | "private-notes-not-imported"
   | "template-name-taken"
   | "source-inbox-collapsed"
-  | "duplicate-of-existing";
+  | "duplicate-of-existing"
+  /** A FIN budget whose (category, currency) the target already limits — its own code rather than `template-name-taken`, because the collision is over a slot rather than a name and the sentence a user needs is a different one (migration 051). */
+  | "budget-slot-taken";
 
 /** One named, counted group of skipped rows. Grouped by `(code, module, type)`, in first-seen order. */
 export interface ImportSkipReason {
@@ -322,6 +354,8 @@ interface PlanContext {
   skippedEventTemplateIds: Set<string>;
   /** Note templates skipped for the same reason, against the NOTE module's own name space (migration 015). */
   skippedNoteTemplateIds: Set<string>;
+  /** Budgets skipped because the target already has a limit on that (category, currency) — see the `skippedFinBudgetIds` loop in `planForeignImport`. */
+  skippedFinBudgetIds: Set<string>;
   /** The choices, with every unanswered group resolved to `"skip"` — see `resolveChoices`. */
   choices: Record<ImportDuplicateType, ImportDuplicateChoice>;
   /** How many rows each group DETECTED, whether or not the choice skipped them. */
@@ -617,6 +651,60 @@ const ID_MINTERS: Record<keyof ProfileData, (data: ProfileData, ctx: PlanContext
    */
   noteCategories: (data, ctx) =>
     mintTags(data.noteCategories, ctx.target.noteCategories, "notes", ctx),
+  /**
+   * An ACCOUNT is minted, always — never absorbed by name, and never skipped.
+   *
+   * The three precedents each answer a different question, and this table's
+   * answer is the one they were narrowing towards. A tag absorbs because a tag
+   * IS its name and a `(profile_id, name)` index makes a second copy impossible.
+   * A template is skipped because its name is its identity AND it carries a
+   * payload, so absorbing would mean overwriting. An account is neither: two
+   * accounts called „Tekući" in two different profiles are routinely two
+   * different accounts at two different banks — exactly the „Kupovina"/„Ideje"
+   * case `ImportDuplicateType`'s own comment refuses to guess about — and
+   * migration 051 puts no uniqueness on an account's name at all, so nothing
+   * even forces the question. Merging two people's bank accounts because they
+   * chose the same word would be the single most damaging guess this planner
+   * could make, and it is not available: every account imports as its own row,
+   * carrying its own opening balance and its own currency.
+   */
+  finAccounts: (data, ctx) => mintAll(data.finAccounts, ctx),
+  /**
+   * A CATEGORY absorbs by the exact `(kind, name)` PAIR — the tag rule, applied
+   * to this table's actual identity (migration 051's
+   * `UNIQUE (profile_id, kind, name)`), and deliberately NOT the template rule.
+   *
+   * ADR-072's argument for note categories transfers whole: a category carries
+   * no content to overwrite (a name and a kind), and things DO point at it —
+   * every transaction filed under it, and its budget. Skipping would strand
+   * them uncategorized in a profile that has that very category on screen.
+   * Minting a fresh row is not even available: the UNIQUE index would refuse the
+   * insert. What differs from note categories is only the KEY, and the pair is
+   * what stops a genuine hazard: „Pokloni" as an EXPENSE in the source and as
+   * INCOME in the target are two different categories, and folding them would
+   * silently re-file money under a label that means the opposite. Exact string
+   * equality, like the tags: „Hrana" and „hrana" ARE two categories in the
+   * store, and folding them here would merge rows the app considers distinct.
+   */
+  finCategories: (data, ctx) =>
+    mintPairedTags(
+      data.finCategories,
+      ctx.target.finCategories,
+      (row) => `${row.kind} ${row.name}`,
+      "finance",
+      ctx,
+    ),
+  // Minted like any other content row: a transaction is an event that happened,
+  // never a duplicate of somebody else's (ADR-051's certainty gate — no tuple of
+  // date, payee and amount is a fact the user could check at a glance and be
+  // right about, since two identical coffees on one day are two coffees).
+  finTransactions: (data, ctx) => mintAll(data.finTransactions, ctx),
+  // A budget is minted too, but its ROW may still not survive: an allowance for
+  // a category the target already had would collide on migration 051's
+  // `UNIQUE (profile_id, category_id, currency)`, so the remap below drops it —
+  // the target's own limit wins, which is `taskTemplateNames`' rule applied to
+  // the one FIN table where a merge could overwrite something.
+  finBudgets: (data, ctx) => mintAll(data.finBudgets, ctx),
   noteTagLinks: NO_IDS,
   // The same name-is-identity rule as the two template tables above, against the
   // NOTE module's own name space (migration 015's `UNIQUE (profile_id, name)`).
@@ -686,6 +774,40 @@ function mintTags(
       continue;
     }
     byName.set(tag.name, mint(tag.id, ctx));
+  }
+}
+
+/**
+ * `mintTags` for a table whose identity is a COMPOSITE, not a bare name — today
+ * only FIN categories, whose uniqueness is `(profile_id, kind, name)`. Same
+ * absorb-or-mint rule, same exact-string comparison, keyed by whatever `keyOf`
+ * composes; the two functions are separate rather than one generic over an
+ * optional key because `ForeignImportTargetTag`'s `{id, name}` shape IS the
+ * contract three callers already speak, and widening it would make every one of
+ * them carry a field they have no value for.
+ */
+function mintPairedTags<T extends { id: string }>(
+  sourceRows: readonly T[],
+  targetRows: readonly T[],
+  keyOf: (row: T) => string,
+  module: ArchiveModuleId,
+  ctx: PlanContext,
+): void {
+  const byKey = new Map<string, string>();
+  for (const row of targetRows) {
+    const key = keyOf(row);
+    if (!byKey.has(key)) byKey.set(key, row.id);
+  }
+  for (const row of sourceRows) {
+    const key = keyOf(row);
+    const existing = byKey.get(key);
+    if (existing !== undefined) {
+      ctx.ids.set(row.id, existing);
+      ctx.absorbed.add(row.id);
+      ctx.merged[module] += 1;
+      continue;
+    }
+    byKey.set(key, mint(row.id, ctx));
   }
 }
 
@@ -796,6 +918,7 @@ export function planForeignImport(
     skippedTaskTemplateIds: new Set(),
     skippedEventTemplateIds: new Set(),
     skippedNoteTemplateIds: new Set(),
+    skippedFinBudgetIds: new Set(),
     choices: resolveChoices(choices),
     duplicates: zeroPerDuplicateType(),
     duplicateSkipped: new Set(),
@@ -836,6 +959,25 @@ export function planForeignImport(
     (link) => `${link.noteId}\0${link.tagId}`,
   );
   ctx.merged.notes += noteTagLinks.collapsed;
+
+  // A source allowance whose category was ABSORBED onto a target category that
+  // already budgets that currency has nowhere to go: migration 051's
+  // `UNIQUE (profile_id, category_id, currency)` would refuse the insert, and a
+  // foreign import never updates a pre-existing row (ADR-043 §4). So the
+  // target's own limit wins and the source's is skipped, named in the report —
+  // `taskTemplateNames`' rule, applied to the one FIN table where a merge could
+  // overwrite something the target chose.
+  //
+  // Computed here rather than in `ID_MINTERS` because it needs the MINTED
+  // category id, which pass 1 is only just finishing; the budget's own id was
+  // minted there and simply goes unused, exactly as a skipped template's does.
+  for (const budget of source.finBudgets) {
+    const key = finBudgetKey({
+      categoryId: mapped(budget.categoryId, ctx),
+      currency: budget.currency,
+    });
+    if (target.finBudgetKeys.has(key)) ctx.skippedFinBudgetIds.add(budget.id);
+  }
 
   const data: ProfileData = {
     tasks: source.tasks.map((row) => ({
@@ -1075,6 +1217,48 @@ export function planForeignImport(
     // own, so the archive's placements are skipped by design — named below,
     // like every other by-design skip.
     dashboardWidgets: [],
+    // --- FIN (migration 051) ----------------------------------------------
+    // Every account imports as its own row: nothing here absorbs one, so there
+    // is nothing to filter (see `ID_MINTERS.finAccounts`).
+    finAccounts: source.finAccounts.map((row) => ({
+      ...row,
+      id: mapped(row.id, ctx),
+      profileId: target.profileId,
+    })),
+    // The tags' own treatment, keyed by the (kind, name) pair: an absorbed
+    // category is a reference now, not a row, so it is dropped from the plan and
+    // every transaction that named it points at the target's.
+    finCategories: notAbsorbed(source.finCategories, ctx).map((row) => ({
+      ...row,
+      id: mapped(row.id, ctx),
+      profileId: target.profileId,
+    })),
+    finTransactions: source.finTransactions.map((row) => ({
+      ...row,
+      id: mapped(row.id, ctx),
+      profileId: target.profileId,
+      accountId: mapped(row.accountId, ctx),
+      // A transfer's other side, remapped exactly as the first side is — which
+      // is the whole payoff of one row: there is no second row that could be
+      // remapped differently, so the two halves cannot come apart in transit.
+      counterAccountId: mappedOrNull(row.counterAccountId, ctx),
+      // Remapped like a note's category, and when the category was absorbed by
+      // its (kind, name) pair this is what lands the transaction on the TARGET's
+      // own row rather than on a second copy of it.
+      categoryId: mappedOrNull(row.categoryId, ctx),
+    })),
+    // Dropped when the target already budgets that (category, currency) slot:
+    // the category was absorbed onto a row that has its own limit, and a foreign
+    // import never updates a pre-existing row (ADR-043 §4). Named in the report
+    // below like every other by-design skip.
+    finBudgets: source.finBudgets
+      .filter((row) => !ctx.skippedFinBudgetIds.has(row.id))
+      .map((row) => ({
+        ...row,
+        id: mapped(row.id, ctx),
+        profileId: target.profileId,
+        categoryId: mapped(row.categoryId, ctx),
+      })),
   };
 
   return {
@@ -1094,7 +1278,7 @@ export function planForeignImport(
 }
 
 function zeroPerModule(): Record<ArchiveModuleId, number> {
-  return { tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0, dashboard: 0 };
+  return { tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0, dashboard: 0, finance: 0 };
 }
 
 /**
@@ -1148,6 +1332,9 @@ function buildReport(
   // And the NOTE module's own name space (migration 015) — a third separately
   // counted line, for the reason the calendar one is a second.
   note("template-name-taken", "notes", "note-template", ctx.skippedNoteTemplateIds.size);
+  // The FIN equivalent, under its own code: the target already limits that
+  // (category, currency), and a foreign import never updates a pre-existing row.
+  note("budget-slot-taken", "finance", "fin-budget", ctx.skippedFinBudgetIds.size);
   // ADR-051: one entry per skipped duplicate ROW, grouped by `note` into a line
   // per (module, record type) — the parser's drops are folded in exactly this
   // way just above, and for the same reason: the arithmetic is per module, so

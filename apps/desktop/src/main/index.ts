@@ -80,6 +80,9 @@ import {
   EventTemplateStore,
   EXAM_TYPES,
   ExamStore,
+  FinAccountStore,
+  FinCategoryStore,
+  FinTransactionStore,
   FocusStore,
   ForeignImportStore,
   isPlaintextDatabase,
@@ -2988,6 +2991,22 @@ function dashboardSetStore(profileId: string): DashboardSetStore {
   return new DashboardSetStore(requireDb().raw, profileId);
 }
 
+// FIN (migration 051). No IPC channel names these yet — slice a is the data
+// layer alone — but both interchange flows already gather through them, which
+// is what makes a FIN row ride in every archive and every restore from the day
+// the tables exist rather than from the day a page can draw them.
+function finAccountStore(profileId: string): FinAccountStore {
+  return new FinAccountStore(requireDb().raw, profileId);
+}
+
+function finCategoryStore(profileId: string): FinCategoryStore {
+  return new FinCategoryStore(requireDb().raw, profileId);
+}
+
+function finTransactionStore(profileId: string): FinTransactionStore {
+  return new FinTransactionStore(requireDb().raw, profileId);
+}
+
 /** The whole sets state every `dash:*-set` channel answers with (ADR-055): the named boards in board order plus the active choice. */
 function dashboardSetsState(profileId: string): DashboardSetsState {
   const store = dashboardSetStore(profileId);
@@ -4091,6 +4110,9 @@ function restoreDeps(): ImportDeps {
     dashboardSettingsStore,
     dashboardWidgetStore,
     dashboardSetStore,
+    finAccountStore,
+    finCategoryStore,
+    finTransactionStore,
     saveBlob: (bytes) => saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes),
     // Injected rather than reached for, so `restore.ts` never has to know WHICH
     // tables reference a blob — that union lives in exactly one place
@@ -4154,6 +4176,9 @@ function imexArchiveDeps(): ImexArchiveDeps {
     dashboardSettingsStore,
     dashboardWidgetStore,
     dashboardSetStore,
+    finAccountStore,
+    finCategoryStore,
+    finTransactionStore,
     flagStore,
     readBlob: (sha256) => readBlob(blobStorePathsFor(), requireBlobKeys(), sha256),
     // A private attachment's decrypted bytes, under whatever section is open

@@ -1281,6 +1281,12 @@ export function translateLlmRecords(
     dashboardSettings: [],
     dashboardSets: [],
     dashboardWidgets: [],
+    // The LLM extraction produces tasks, events and notes; a ledger row is not
+    // something a model may invent about somebody's money (migration 051).
+    finAccounts: [],
+    finCategories: [],
+    finTransactions: [],
+    finBudgets: [],
   };
 
   return { data, seededIds, planned: tasks.length + events.length + cards.length + decks.length };

@@ -76,6 +76,10 @@ function emptyInput(): ExportArchiveInput {
       dashboardSettings: [],
       dashboardSets: [],
       dashboardWidgets: [],
+      finAccounts: [],
+      finCategories: [],
+      finTransactions: [],
+      finBudgets: [],
     },
     hash: sha256,
   };
@@ -216,6 +220,7 @@ describe("buildExportArchive", () => {
           "data/notes.ndjson",
           "data/dashboard.ndjson",
           "data/private-notes.ndjson",
+          "data/finance.ndjson",
           "data/calendar.ics",
           "tables/tasks.csv",
           "tables/events.csv",
@@ -239,6 +244,8 @@ describe("buildExportArchive", () => {
       // ADR-057 §6: an absent `privateNotes` input writes the empty file —
       // indistinguishable from a profile with no private notes, on purpose.
       expect(archive.files.get("data/private-notes.ndjson")).toBe("");
+      // FIN (migration 051): the empty file a profile with no ledger writes.
+      expect(archive.files.get("data/finance.ndjson")).toBe("");
 
       // CSV mirrors still carry their header row.
       expect(archive.files.get("tables/tasks.csv")).toMatch(/^id,/);
@@ -248,7 +255,7 @@ describe("buildExportArchive", () => {
 
       expect(archive.totalRecords).toBe(0);
       expect(archive.byModule).toEqual({
-        tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0, dashboard: 0,
+        tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0, dashboard: 0, finance: 0,
       });
       expect(archive.binaries).toEqual([]);
     });
@@ -260,7 +267,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.27.0");
+      expect(manifest.schemaVersion).toBe("1.28.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       // `picture: null` is written out loud rather than omitted: the manifest is
@@ -295,6 +302,7 @@ describe("buildExportArchive", () => {
         { id: "notifications", records: 0 },
         { id: "notes", records: 0 },
         { id: "dashboard", records: 0 },
+        { id: "finance", records: 0 },
       ]);
       expect(manifest.checksums).toEqual({
         "data/tasks.ndjson": sha256(""),
@@ -304,6 +312,7 @@ describe("buildExportArchive", () => {
         "data/notes.ndjson": sha256(""),
         "data/dashboard.ndjson": sha256(""),
         "data/private-notes.ndjson": sha256(""),
+        "data/finance.ndjson": sha256(""),
       });
       expect(manifest.blobs).toEqual([]);
       // The private inventory (ADR-057 §6), beside the blob list it mirrors —
@@ -1001,7 +1010,7 @@ describe("buildExportArchive", () => {
       ];
       const archive = buildExportArchive(input);
       expect(archive.byModule).toEqual({
-        tasks: 1, calendar: 0, study: 0, notifications: 1, notes: 0, dashboard: 0,
+        tasks: 1, calendar: 0, study: 0, notifications: 1, notes: 0, dashboard: 0, finance: 0,
       });
       expect(archive.totalRecords).toBe(2);
     });
@@ -1137,6 +1146,24 @@ describe("buildExportArchive", () => {
             position: 1024, config: null, createdAt: t, updatedAt: t, setId: "set1",
           },
         ],
+        // TWO accounts rather than one, because a transfer names both sides —
+        // a fixture whose counter account dangled would be counting something
+        // the exporter could never write, exactly as the two tasks above are.
+        finAccounts: [
+          { id: "fa1", profileId: "p1", name: "Tekući", kind: "current", currency: "RSD", openingBalance: 100_00, archived: false, createdAt: t, updatedAt: t },
+          { id: "fa2", profileId: "p1", name: "Štednja", kind: "savings", currency: "RSD", openingBalance: 0, archived: false, createdAt: t, updatedAt: t },
+        ],
+        finCategories: [
+          { id: "fc1", profileId: "p1", name: "Hrana", kind: "expense", createdAt: t, updatedAt: t },
+        ],
+        finTransactions: [
+          { id: "ftx1", profileId: "p1", accountId: "fa1", counterAccountId: null, categoryId: "fc1", date: "2026-01-02", amount: -12_00, payee: "Maxi", note: null, createdAt: t, updatedAt: t },
+          // The transfer: ONE row, both sides, no category.
+          { id: "ftx2", profileId: "p1", accountId: "fa1", counterAccountId: "fa2", categoryId: null, date: "2026-01-03", amount: -50_00, payee: null, note: null, createdAt: t, updatedAt: t },
+        ],
+        finBudgets: [
+          { id: "fb1", profileId: "p1", categoryId: "fc1", currency: "RSD", amount: 300_00, createdAt: t, updatedAt: t },
+        ],
       };
     }
 
@@ -1149,6 +1176,7 @@ describe("buildExportArchive", () => {
         notifications: 1,
         notes: 8, // 1 each of note/folder/tag/category/tag-link/template/attachment/version
         dashboard: 3, // the one settings row a profile can ever have + 1 named board + 1 placed widget
+        finance: 6, // 2 accounts + 1 category + 2 transactions (one of them the transfer) + 1 budget
       });
     });
 
@@ -1161,7 +1189,7 @@ describe("buildExportArchive", () => {
 
     it("counts every bucket as zero for empty data", () => {
       expect(countProfileModules(emptyInput().data)).toEqual({
-        tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0, dashboard: 0,
+        tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0, dashboard: 0, finance: 0,
       });
     });
   });
@@ -1215,6 +1243,95 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       expect(archive.files.get("data/study.ndjson")).toBe("");
       expect(archive.byModule.study).toBe(0);
+    });
+  });
+
+  describe("data/finance.ndjson (FIN slice a, migration 051)", () => {
+    const t = "2026-01-01T00:00:00.000Z";
+
+    function financeInput(): ExportArchiveInput {
+      const input = emptyInput();
+      input.data.finAccounts = [
+        { id: "fa1", profileId: "profile1", name: "Tekući", kind: "current", currency: "RSD", openingBalance: 100_00, archived: false, createdAt: t, updatedAt: t },
+        { id: "fa2", profileId: "profile1", name: "Štednja", kind: "savings", currency: "RSD", openingBalance: 0, archived: false, createdAt: t, updatedAt: t },
+      ];
+      input.data.finCategories = [
+        { id: "fc1", profileId: "profile1", name: "Hrana", kind: "expense", createdAt: t, updatedAt: t },
+      ];
+      input.data.finTransactions = [
+        { id: "ftx1", profileId: "profile1", accountId: "fa1", counterAccountId: null, categoryId: "fc1", date: "2026-01-02", amount: -12_00, payee: "Maxi", note: null, createdAt: t, updatedAt: t },
+        { id: "ftx2", profileId: "profile1", accountId: "fa1", counterAccountId: "fa2", categoryId: null, date: "2026-01-03", amount: -50_00, payee: null, note: null, createdAt: t, updatedAt: t },
+      ];
+      input.data.finBudgets = [
+        { id: "fb1", profileId: "profile1", categoryId: "fc1", currency: "RSD", amount: 300_00, createdAt: t, updatedAt: t },
+      ];
+      return input;
+    }
+
+    it("writes the four types in dependency order: accounts and categories before the rows that name them", () => {
+      const archive = buildExportArchive(financeInput());
+      const types = parseNdjson(archive.files.get("data/finance.ndjson") ?? "").map(
+        (row) => (row as { type: string }).type,
+      );
+      expect(types).toEqual([
+        "fin-account",
+        "fin-account",
+        "fin-category",
+        "fin-transaction",
+        "fin-transaction",
+        "fin-budget",
+      ]);
+    });
+
+    it("carries a transfer as ONE row naming both sides, with no category", () => {
+      const archive = buildExportArchive(financeInput());
+      const rows = parseNdjson(archive.files.get("data/finance.ndjson") ?? "") as {
+        type: string;
+        counterAccountId?: string | null;
+        categoryId?: string | null;
+      }[];
+      const transfers = rows.filter(
+        (row) => row.type === "fin-transaction" && row.counterAccountId !== null,
+      );
+      expect(transfers).toHaveLength(1);
+      expect(transfers[0]?.categoryId).toBeNull();
+    });
+
+    it("carries every amount as an INTEGER of minor units, never a decimal", () => {
+      const archive = buildExportArchive(financeInput());
+      const text = archive.files.get("data/finance.ndjson") ?? "";
+      // Serialized as bare integers — 12,00 RSD is `-1200`, not `-12.00`.
+      expect(text).toContain('"openingBalance":10000');
+      expect(text).toContain('"amount":-1200');
+      expect(text).toContain('"amount":30000');
+      for (const row of parseNdjson(text) as Record<string, unknown>[]) {
+        for (const field of ["openingBalance", "amount"]) {
+          const value = row[field];
+          if (value === undefined) continue;
+          expect({ field, integer: Number.isInteger(value) }).toEqual({ field, integer: true });
+        }
+      }
+    });
+
+    it("counts the whole ledger into byModule.finance", () => {
+      const archive = buildExportArchive(financeInput());
+      expect(archive.byModule.finance).toBe(6);
+    });
+
+    it("drops the whole ledger under a subset export that does not name it (IMEX-003)", () => {
+      const input = financeInput();
+      input.modules = new Set<ArchiveModuleId>(["tasks"]);
+      const archive = buildExportArchive(input);
+      expect(archive.files.get("data/finance.ndjson")).toBe("");
+      expect(archive.byModule.finance).toBe(0);
+    });
+
+    it("keeps the ledger whole under a finance-only export — no FIN reference crosses a module", () => {
+      const input = financeInput();
+      input.modules = new Set<ArchiveModuleId>(["finance"]);
+      const archive = buildExportArchive(input);
+      expect(archive.byModule.finance).toBe(6);
+      expect(archive.files.get("data/tasks.ndjson")).toBe("");
     });
   });
 
@@ -1654,6 +1771,7 @@ describe("buildExportArchive", () => {
         { id: "notifications", records: 0 },
         { id: "notes", records: archive.byModule.notes },
         { id: "dashboard", records: archive.byModule.dashboard },
+        { id: "finance", records: 0 },
       ]);
       expect(archive.byModule.notes).toBeGreaterThan(0);
       expect(archive.totalRecords).toBe(archive.byModule.notes + archive.byModule.dashboard);
@@ -1847,6 +1965,7 @@ describe("filterProfileData", () => {
       notifications: 0,
       notes: 0,
       dashboard: 0,
+      finance: 0,
     });
   });
 });

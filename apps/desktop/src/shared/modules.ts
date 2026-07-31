@@ -361,6 +361,21 @@ const CALENDAR_SETTINGS: SettingsPanel = {
  * unbuilt module must not appear anywhere — not in the sidebar, not in the
  * Settings module gallery — so nothing in the app leads to an empty page.
  * A module's manifest is added here in the same slice that ships its page.
+ *
+ * FIN is the live example, and its ABSENCE from this list is deliberate. Slice
+ * a shipped the module's whole data layer (migration 051) and its archive
+ * travel, but no page — so registering it here would put „Finansije“ in the
+ * sidebar, in the Moduli gallery and on ADR-065's „Oblasti“ onboarding screen,
+ * and clicking it would land on `App.tsx`'s `ModulePage` placeholder, which is
+ * exactly the empty page the rule above forbids. No shell guard was added
+ * either: the shell is not wrong here, the registration would be. Its manifest
+ * lands in the same slice as its page.
+ *
+ * Note the deliberate asymmetry this creates, so nobody "fixes" it: „Finansije“
+ * IS visible in Settings, as a row of the export picker and the restore
+ * comparison table. That vocabulary is the INTERCHANGE's (`ARCHIVE_MODULE_IDS`,
+ * `strings.settings.restore.modules`), not this registry's, and a backup that
+ * silently omitted rows it actually carries would be the far worse lie.
  */
 const V0_MODULES: ModuleManifest[] = [
   {

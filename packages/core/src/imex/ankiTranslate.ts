@@ -714,6 +714,13 @@ export function translateApkg(parsed: ParsedApkg, target: ApkgTranslateTarget): 
     dashboardSettings: [],
     dashboardSets: [],
     dashboardWidgets: [],
+    // An Anki deck carries no ledger (migration 051), so all four are empty —
+    // the same "this source has nothing of that module" every collection above
+    // says.
+    finAccounts: [],
+    finCategories: [],
+    finTransactions: [],
+    finBudgets: [],
   };
 
   return {

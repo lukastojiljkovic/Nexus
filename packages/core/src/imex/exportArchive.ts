@@ -44,6 +44,37 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
  *
+ * `1.28.0` adds the FINANCE module (FIN slice a, migration 051): four record
+ * types — `fin-account`, `fin-category`, `fin-transaction`, `fin-budget` —
+ * riding in their OWN `data/finance.ndjson`, a new `DATA_FILES` entry
+ * checksummed like the seven before it, plus a new `finance` member in
+ * `ARCHIVE_MODULE_IDS` so the module can be counted, filtered and chosen
+ * exactly as the six it joins. A whole new module rather than rows filed under
+ * an existing one, deliberately: `countProfileModules` and `filterProfileData`
+ * share one module↔collection mapping, and filing a ledger under (say) the
+ * dashboard would make a dashboard-only export carry someone's bank accounts —
+ * a mapping that says something untrue, which is precisely the reason the
+ * profile picture is a manifest fact rather than a collection.
+ *
+ * Two facts about the money are the interchange contract, not implementation
+ * detail. Every amount is an INTEGER of minor units — `openingBalance`,
+ * `amount` on a transaction, `amount` on a budget — so a reader that turned one
+ * into a float would be reading a different file than this one wrote. And
+ * currency lives on the ACCOUNT, with no rate anywhere in the archive: a
+ * transfer's two sides are guaranteed to share a currency (the store refuses
+ * otherwise), so nothing that reads this file ever needs to convert, and
+ * nothing in it could tell them how.
+ *
+ * A transfer is ONE row (`counterAccountId` filled, `categoryId` null), which
+ * is the whole reason the interchange needs no transfer-pair rule: there is no
+ * second row to lose, to duplicate, or to disagree with. None of the four types
+ * needs an `ArchiveEra` flag — the whole-absent-type rule below covers them all,
+ * exactly as it covered `note-category` and `exam-topic`. The bump is owed for
+ * the same reason every one below was: an older reader handed this archive
+ * would refuse `fin-account` as an unrecognised type, and the version gate is
+ * what turns that into one honest sentence about the build instead of one
+ * baffling line-error per row of somebody's ledger.
+ *
  * `1.27.0` adds note CATEGORIES (NOTE-002, migration 049): the `note-category`
  * record type, riding in `data/notes.ndjson` beside the folders and tags it is
  * the third axis to, plus a `categoryId` on every `note` row. The record type
@@ -213,7 +244,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.27.0";
+const SCHEMA_VERSION = "1.28.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -1035,6 +1066,93 @@ export interface ExportDashboardWidget {
   setId?: string | null;
 }
 
+// --- FIN (the finance module, migration 051) --------------------------------
+//
+// Money is an INTEGER of MINOR UNITS on every row below, and the interchange
+// carries it exactly as the schema stores it: no decimal string, no scale
+// field, no float anywhere. 1234 in an RSD account is 12,34 RSD; which
+// separator that renders with is a display fact, and the archive deliberately
+// says nothing about it. Currency lives on the ACCOUNT, and nothing in this
+// interchange converts between two of them — there is no rate here because
+// there is no honest source for one.
+
+/**
+ * One account (migration 051). `openingBalance` is minor units and never
+ * changes as money moves; a BALANCE is derived from it plus the transactions
+ * and is deliberately not carried — an archive that shipped a stored balance
+ * would ship a number that can disagree with the rows beside it.
+ */
+export interface ExportFinAccount {
+  id: string;
+  profileId: string;
+  name: string;
+  /** `cash` | `current` | `card` | `savings` — migration 051's closed CHECK domain. */
+  kind: string;
+  /** ISO-4217, upper-case. The one place a currency is decided. */
+  currency: string;
+  openingBalance: number;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One flat category with its income/expense kind (migration 051, ADR-072's
+ * argument). There is no `parentId` and there never will be: a category tree IS
+ * a folder tree, and one tree per app is enough. Rides in
+ * `data/finance.ndjson` ahead of the transactions whose `categoryId` names it.
+ */
+export interface ExportFinCategory {
+  id: string;
+  profileId: string;
+  name: string;
+  /** `income` | `expense`. */
+  kind: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One movement of money — and a TRANSFER between the user's own accounts is
+ * this same row with `counterAccountId` filled, never a pair. `amount` is
+ * signed from `accountId`'s point of view, so the counter account receives
+ * `-amount`; that is what lets one row carry both halves without them ever
+ * falling out of step. A transfer's `categoryId` is always null (migration
+ * 051's CHECK, re-validated by the reader): it is neither income nor expense.
+ */
+export interface ExportFinTransaction {
+  id: string;
+  profileId: string;
+  accountId: string;
+  counterAccountId: string | null;
+  categoryId: string | null;
+  /** The LOCAL day as a bare `YYYY-MM-DD`, the way this interchange already carries bare dates. */
+  date: string;
+  /** Minor units, INTEGER, never zero. */
+  amount: number;
+  payee: string | null;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One category's monthly allowance in ONE currency (migration 051). Per
+ * currency because there is no FX to fold two of them with, and only ever on an
+ * EXPENSE category — a budget is a spending limit, and an income category would
+ * want a target, which compares the other way.
+ */
+export interface ExportFinBudget {
+  id: string;
+  profileId: string;
+  categoryId: string;
+  currency: string;
+  /** Minor units, INTEGER, positive. */
+  amount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /**
  * Everything the manifest's "settings" section carries (founder decision #11:
  * flags + NTF settings ship with the export).
@@ -1201,6 +1319,18 @@ export interface ProfileData {
    * then leaves the target on.
    */
   dashboardWidgets: readonly ExportDashboardWidget[];
+  /**
+   * The FIN module's four collections (migration 051). Required like every
+   * field above and for the same reason: a module the caller forgets must be a
+   * type error, not a quiet omission — which is exactly the failure this whole
+   * shape was written to repair. EMPTY both for a pre-`1.28.0` archive and for a
+   * profile that keeps no ledger, indistinguishable on purpose, because they
+   * mean the same thing.
+   */
+  finAccounts: readonly ExportFinAccount[];
+  finCategories: readonly ExportFinCategory[];
+  finTransactions: readonly ExportFinTransaction[];
+  finBudgets: readonly ExportFinBudget[];
 }
 
 // --- Private notes (PRIV v1, ADR-057 §6) ------------------------------------
@@ -1407,6 +1537,11 @@ export const DATA_FILES = [
   // archive neither carries the file nor declares its checksum, and
   // absent-and-undeclared is nothing at all.
   "data/private-notes.ndjson",
+  // The FIN module (migration 051, `1.28.0`): its own file, appended on exactly
+  // the terms the union-walk comment above promises stay backward-compatible —
+  // a pre-1.28 archive neither carries it nor declares its checksum, and
+  // absent-and-undeclared is nothing at all.
+  "data/finance.ndjson",
 ] as const;
 
 /** The manifest's module ids, in manifest order — the grouping `countProfileModules` counts by and `buildExportArchive` builds `manifest.modules` from, so the two can never disagree. */
@@ -1417,6 +1552,11 @@ export const ARCHIVE_MODULE_IDS = [
   "notifications",
   "notes",
   "dashboard",
+  // FIN (migration 051, `1.28.0`) — its own module, for the reason the
+  // `SCHEMA_VERSION` entry gives: one module↔collection mapping serves both the
+  // counter and the filter, so a ledger filed under somebody else's module
+  // would make a subset export carry what it says it does not.
+  "finance",
 ] as const;
 export type ArchiveModuleId = (typeof ARCHIVE_MODULE_IDS)[number];
 
@@ -1491,6 +1631,16 @@ export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, 
     // change, which is the entire job of that table.
     dashboard:
       data.dashboardSettings.length + data.dashboardSets.length + data.dashboardWidgets.length,
+    // The whole ledger in one bucket (migration 051): accounts, the flat
+    // categories, every transaction — transfers included, since a transfer IS a
+    // row — and the budgets. A restore preview that showed one number too few
+    // would be telling the user something untrue about what is about to change,
+    // which is the entire job of that table.
+    finance:
+      data.finAccounts.length +
+      data.finCategories.length +
+      data.finTransactions.length +
+      data.finBudgets.length,
   };
 }
 
@@ -1621,6 +1771,15 @@ export function filterProfileData(
     // references documented in the header.
     dashboardSets: only("dashboard", data.dashboardSets),
     dashboardWidgets: only("dashboard", data.dashboardWidgets),
+    // Every FIN reference has both ends inside FIN — a transaction's account,
+    // its counter account and its category; a budget's category — so the four
+    // drop as one unit with no repair rule, unlike the three genuinely
+    // cross-module references documented in the header. Nothing outside FIN
+    // points INTO it either, so dropping the module dangles nothing elsewhere.
+    finAccounts: only("finance", data.finAccounts),
+    finCategories: only("finance", data.finCategories),
+    finTransactions: only("finance", data.finTransactions),
+    finBudgets: only("finance", data.finBudgets),
   };
 }
 
@@ -1740,6 +1899,17 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   // them — the "everything a row points at came before it" reading every other
   // data file keeps. Absent input writes the empty file, exactly what a profile
   // with no private notes writes.
+  // Dependency order, the reading every data file keeps: the accounts and the
+  // flat categories a transaction points at come first, then the transactions
+  // (a transfer names TWO accounts, both already written), then the budgets,
+  // which point only at a category.
+  const financeNdjson = toNdjson([
+    ...data.finAccounts.map((row) => ({ type: "fin-account", ...row })),
+    ...data.finCategories.map((row) => ({ type: "fin-category", ...row })),
+    ...data.finTransactions.map((row) => ({ type: "fin-transaction", ...row })),
+    ...data.finBudgets.map((row) => ({ type: "fin-budget", ...row })),
+  ]);
+
   const privateNotes = input.privateNotes ?? EMPTY_PRIVATE_NOTES;
   const privateNotesNdjson = toNdjson([
     ...privateNotes.notes.map((row) => ({ type: "private-note", ...row })),
@@ -1753,6 +1923,7 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   files.set("data/notes.ndjson", notesNdjson);
   files.set("data/dashboard.ndjson", dashboardNdjson);
   files.set("data/private-notes.ndjson", privateNotesNdjson);
+  files.set("data/finance.ndjson", financeNdjson);
 
   // --- Notes: Markdown mirror + binary entries (ADR-022 section 3) -------
   const binaries: ExportBinaryEntry[] = [];
