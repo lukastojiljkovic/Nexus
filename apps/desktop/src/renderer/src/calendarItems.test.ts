@@ -9,6 +9,8 @@ import {
   isMutedItem,
   isSpanItem,
   isTimedEventItem,
+  LAST_MINUTE_OF_DAY,
+  parseClock,
   persistSources,
   readStoredSources,
   type CalendarItem,
@@ -176,6 +178,32 @@ describe("formatClock", () => {
     expect(formatClock(90)).toBe("01:30");
     expect(formatClock(720)).toBe("12:00");
     expect(formatClock(1439)).toBe("23:59");
+  });
+
+  // CAL §5 puts a 12-hour clock behind a device preference, and this function
+  // is what serializes `startAt`/`endAt` and fills the time fields — so it
+  // must stay 24-hour regardless of what the labels read. `formatClockLabel`
+  // (calendarPrefs) is the one that follows the preference.
+  it("is a serializer, so `LAST_MINUTE_OF_DAY` round-trips as the day's last time", () => {
+    expect(formatClock(LAST_MINUTE_OF_DAY)).toBe("23:59");
+  });
+});
+
+describe("parseClock", () => {
+  it("is formatClock's inverse across the whole day", () => {
+    for (let minutes = 0; minutes <= LAST_MINUTE_OF_DAY; minutes += 1) {
+      expect(parseClock(formatClock(minutes)), String(minutes)).toBe(minutes);
+    }
+  });
+
+  it("accepts the un-padded hour a hand-typed value can carry", () => {
+    expect(parseClock("9:05")).toBe(9 * 60 + 5);
+  });
+
+  it("returns null for anything that is not a time of day", () => {
+    for (const value of ["", "  ", "9", "09:5", "24:00", "23:60", "12:00:00", "1200", "aa:bb"]) {
+      expect(parseClock(value), JSON.stringify(value)).toBeNull();
+    }
   });
 });
 

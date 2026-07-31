@@ -104,6 +104,32 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
       "sedmica",
     ],
   },
+  // CAL §5's two preferences. They live in the „Izgled“ card beside the week
+  // start, so they are filed under that section — but the words somebody types
+  // hunting for them are the calendar's, which is what the keywords carry.
+  {
+    id: "calendar-event-duration",
+    section: "appearance",
+    label: s.appearance.eventDurationLabel,
+    keywords: ["kalendar", "dogadjaj", "trajanje", "duzina", "sat", "minuta", "kraj"],
+  },
+  {
+    id: "calendar-clock",
+    section: "appearance",
+    // The two option labels answer for themselves: somebody looking for this
+    // types „12“ or „24“ long before they type „prikaz vremena“.
+    label: s.appearance.clockLabel,
+    keywords: [
+      s.appearance.clockOptions["24h"],
+      s.appearance.clockOptions["12h"],
+      "kalendar",
+      "vreme",
+      "sat",
+      "casovni",
+      "am",
+      "pm",
+    ],
+  },
   // ADR-049: the one TASK device preference. „blokirani“ and „danas“ already
   // sit in the label, so the keywords carry what someone would type instead —
   // the concept („zavisnost“) and the two answers.
@@ -249,6 +275,26 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
     section: "backup",
     label: s.markdownImport.title,
     keywords: ["markdown", "md", "beleske", "fajlovi", "obsidian", "uvoz"],
+  },
+  {
+    // SET-010: five sentences, one entry. There is nothing to operate in that
+    // card, so it has nothing to highlight and only ever steers visibility —
+    // and the words are the ones a worried user types, not the card's own.
+    id: "privacy-practices",
+    section: "privacy",
+    label: s.sectionTitle.privacy,
+    keywords: [
+      "privatnost",
+      "podaci",
+      "sifrovanje",
+      "telemetrija",
+      "analitika",
+      "mreza",
+      "internet",
+      "offline",
+      "lokalno",
+      "brisanje",
+    ],
   },
   {
     // The panel is one read-only block of facts, so it is one entry: splitting

@@ -45,7 +45,7 @@ import type {
 import { authErrorMessage, passcodeMeetsPolicy, RecoveryKitPanel } from "./AuthGate.js";
 import { ALL_NOTIFICATION_SOURCES, NOTIFICATION_PRESETS } from "./notificationFormat.js";
 import { NotificationSettingsControls } from "./NotificationSettingsControls.js";
-import type { ThemePreference } from "./theme.js";
+import { DEFAULT_THEME_PREFERENCE, type ThemePreference } from "./theme.js";
 import { AUTO_LOCK_MINUTES, type AutoLockMinutes } from "./autoLock.js";
 import {
   isGlobalShortcutAction,
@@ -56,9 +56,26 @@ import {
   type ShortcutOverrides,
 } from "./shortcuts.js";
 import { Kbd } from "./ShortcutsDialog.js";
-import { persistAccent, readStoredAccent } from "./accent.js";
+import { clearStoredAccent, persistAccent, readStoredAccent } from "./accent.js";
 import { ProfileAvatar } from "./profileAvatar.js";
-import { persistWeekStart, readStoredWeekStart, type WeekStartPreference } from "./weekStart.js";
+import {
+  clearStoredWeekStart,
+  persistWeekStart,
+  readStoredWeekStart,
+  type WeekStartPreference,
+} from "./weekStart.js";
+import {
+  clearStoredCalendarPreferences,
+  CLOCK_PREFERENCES,
+  EVENT_DURATIONS,
+  persistClock,
+  persistEventDuration,
+  readStoredClock,
+  readStoredEventDuration,
+  type ClockPreference,
+  type EventDurationMinutes,
+} from "./calendarPrefs.js";
+import { SettingsResetDialog } from "./SettingsResetDialog.js";
 import {
   buildSettingsSearchEntries,
   foldSettingsQuery,
@@ -67,6 +84,7 @@ import {
   shortcutEntryId,
 } from "./settingsSearch.js";
 import {
+  clearStoredNotePreferences,
   NOTE_WIDTHS,
   persistNoteMarkdownShortcuts,
   persistNoteWidth,
@@ -76,6 +94,7 @@ import {
 } from "./notePrefs.js";
 import {
   BLOCKED_IN_TODAY_OPTIONS,
+  clearStoredTaskPreferences,
   persistBlockedInToday,
   readStoredBlockedInToday,
   type BlockedInToday,
@@ -113,6 +132,33 @@ function labelClass(base: string, hit: boolean): string {
  */
 function sectionClass(visible: boolean): string {
   return visible ? "set__section" : "set__section set__section--hidden";
+}
+
+/**
+ * The cards whose whole state is DEVICE preferences, and so the only ones that
+ * offer „Vrati na podrazumevano“ (SET §5).
+ *
+ * „Učenje“, „Kontrolna tabla“ and „Obaveštenja“ are deliberately absent: their
+ * settings live in the profile's database, so resetting one would be a write
+ * about the user's DATA rather than about this machine — a different act with
+ * a different blast radius (a dashboard layout somebody arranged, a background
+ * image, quiet hours) and a different place to belong. It waits for the slice
+ * that decides what „podrazumevano“ means for a profile.
+ */
+type ResettableSection = "appearance" | "tasks" | "notes";
+
+/**
+ * The quiet link at the foot of a resettable card. Typographic and muted,
+ * exactly like `.set__disclosure` — a reset is available, not advertised — and
+ * a plain `<button>` rather than an `nx-button`, since a bordered control here
+ * would read heavier than the settings it undoes.
+ */
+function ResetLink({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" className="set__reset" onClick={onClick}>
+      {strings.settings.reset.action}
+    </button>
+  );
 }
 
 /** The home surface and this page itself can never be disabled — someone has to render the toggles. */
@@ -2670,6 +2716,13 @@ export function SettingsPage({
   const [blockedInToday, setBlockedInToday] = useState<BlockedInToday>(() =>
     readStoredBlockedInToday(),
   );
+  /** CAL §5, beside the week start and read the same way: how long a seeded event runs, and which clock the calendar draws. */
+  const [eventDuration, setEventDuration] = useState<EventDurationMinutes>(() =>
+    readStoredEventDuration(),
+  );
+  const [clock, setClock] = useState<ClockPreference>(() => readStoredClock());
+  /** SET §5: which card's „Vrati na podrazumevano“ is currently being confirmed, or `null`. */
+  const [resetting, setResetting] = useState<ResettableSection | null>(null);
   // SET-014: the raw query. Empty means "render everything exactly as before" —
   // the filter is additive, it never becomes the page's normal state.
   const [query, setQuery] = useState("");
@@ -2726,6 +2779,38 @@ export function SettingsPage({
       setPresetError(strings.notifications.settings.saveError);
       console.error("Nexus: failed to apply notification preset:", error);
     }
+  }
+
+  /**
+   * SET §5. A card's reset clears exactly ITS OWN keys — each enumerated in
+   * the preference module that owns them, never swept by prefix — and then
+   * re-reads every one of them, so the controls show the defaults live rather
+   * than only after a reload.
+   *
+   * The theme is the single value here this page does not own: App holds it and
+   * drives `<html data-theme>` and the whole shell, so it is reset through the
+   * very channel every other theme change goes through, handed `theme.ts`'s own
+   * default — which is exactly what an absent `nexus.theme` reads back as.
+   */
+  function runReset(section: ResettableSection): void {
+    if (section === "appearance") {
+      onPreferenceChange(DEFAULT_THEME_PREFERENCE);
+      clearStoredAccent();
+      clearStoredWeekStart();
+      clearStoredCalendarPreferences();
+      setAccent(readStoredAccent());
+      setWeekStart(readStoredWeekStart());
+      setEventDuration(readStoredEventDuration());
+      setClock(readStoredClock());
+    } else if (section === "tasks") {
+      clearStoredTaskPreferences();
+      setBlockedInToday(readStoredBlockedInToday());
+    } else {
+      clearStoredNotePreferences();
+      setNoteWidth(readStoredNoteWidth());
+      setMarkdownShortcuts(readStoredNoteMarkdownShortcuts());
+    }
+    setResetting(null);
   }
 
   const activePreset =
@@ -2834,6 +2919,50 @@ export function SettingsPage({
             </Button>
           ))}
         </div>
+        {/* CAL §5, beside the week start: both say how this machine reads a
+            calendar. Selects rather than segmented rows — four spans and two
+            clocks with example times in them are longer labels than a row of
+            chips can carry without wrapping (the auto-lock precedent). */}
+        <p className={labelClass("set__section-caption", hits.has("calendar-event-duration"))}>
+          {a.eventDurationLabel}
+        </p>
+        <select
+          className="set__select"
+          value={eventDuration}
+          aria-label={a.eventDurationLabel}
+          onChange={(event) => {
+            const next = Number(event.target.value) as EventDurationMinutes;
+            persistEventDuration(next);
+            setEventDuration(next);
+          }}
+        >
+          {EVENT_DURATIONS.map((minutes) => (
+            <option key={minutes} value={minutes}>
+              {a.eventDurationOptions[String(minutes)] ?? String(minutes)}
+            </option>
+          ))}
+        </select>
+        <p className={labelClass("set__section-caption", hits.has("calendar-clock"))}>
+          {a.clockLabel}
+        </p>
+        <select
+          className="set__select"
+          value={clock}
+          aria-label={a.clockLabel}
+          onChange={(event) => {
+            const next = event.target.value as ClockPreference;
+            persistClock(next);
+            setClock(next);
+          }}
+        >
+          {CLOCK_PREFERENCES.map((option) => (
+            <option key={option} value={option}>
+              {a.clockOptions[option]}
+            </option>
+          ))}
+        </select>
+        <p className="set__section-caption">{a.clockHint}</p>
+        <ResetLink onClick={() => setResetting("appearance")} />
       </Card>
 
       {/* Zadaci (ADR-049). Its own card rather than a row under „Izgled“, on the
@@ -2865,6 +2994,7 @@ export function SettingsPage({
           ))}
         </div>
         <p className="set__section-caption">{strings.settings.tasks.blockedInTodayCaption}</p>
+        <ResetLink onClick={() => setResetting("tasks")} />
       </Card>
 
       <Card title={strings.settings.sectionTitle.notes} className={sectionClass(sections.has("notes"))}>
@@ -2903,6 +3033,7 @@ export function SettingsPage({
             }}
           />
         </div>
+        <ResetLink onClick={() => setResetting("notes")} />
       </Card>
 
       <Card title={strings.settings.sectionTitle.shortcuts} className={sectionClass(sections.has("shortcuts"))}>
@@ -2999,6 +3130,21 @@ export function SettingsPage({
         <MarkdownImportSection profileId={profileId} hits={hits} />
       </Card>
 
+      {/* SET-010, local half. Five statements of fact and nothing to operate:
+          no toggle, no link, no „saznaj više“. Every sentence is checkable in
+          the source — see the copy block's own comment, which names the file
+          each one is true because of. */}
+      <Card
+        title={strings.settings.sectionTitle.privacy}
+        className={sectionClass(sections.has("privacy"))}
+      >
+        <p className="set__section-caption">{strings.settings.privacy.storage}</p>
+        <p className="set__section-caption">{strings.settings.privacy.noTelemetry}</p>
+        <p className="set__section-caption">{strings.settings.privacy.offline}</p>
+        <p className="set__section-caption">{strings.settings.privacy.exports}</p>
+        <p className="set__section-caption">{strings.settings.privacy.deletion}</p>
+      </Card>
+
       <Card title={strings.settings.sectionTitle.about} className={sectionClass(sections.has("about"))}>
         {info ? (
           <dl className="app__facts">
@@ -3029,6 +3175,16 @@ export function SettingsPage({
           <p className="app__muted">{strings.app.loading}</p>
         )}
       </Card>
+
+      {/* One dialog for all three cards — the question is the same question,
+          and only the card it names differs (SET §5). */}
+      {resetting !== null && (
+        <SettingsResetDialog
+          sectionTitle={strings.settings.sectionTitle[resetting]}
+          onConfirm={() => runReset(resetting)}
+          onCancel={() => setResetting(null)}
+        />
+      )}
     </div>
   );
 }

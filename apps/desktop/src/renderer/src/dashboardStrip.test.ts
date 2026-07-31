@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Event, Person, RunningFocusSession } from "../../shared/ipc.js";
 import { buildCalendarItems, type CalendarItem, type CalendarSource } from "./calendarItems.js";
+import type { ClockPreference } from "./calendarPrefs.js";
 import { dayStripLine, nextStripEvent } from "./dashboardStrip.js";
 
 /**
@@ -195,8 +196,16 @@ describe("dayStripLine", () => {
     nowMinutes: number,
     focus: RunningFocusSession | null,
     nowMs = noon,
+    clock: ClockPreference = "24h",
   ): string | null {
-    return dayStripLine({ items: itemsOf(events), todayKey: TODAY, nowMinutes, nowMs, focus });
+    return dayStripLine({
+      items: itemsOf(events),
+      todayKey: TODAY,
+      nowMinutes,
+      nowMs,
+      clock,
+      focus,
+    });
   }
 
   it("is absent entirely when there is nothing to say", () => {
@@ -206,6 +215,21 @@ describe("dayStripLine", () => {
   it("names the next event with its time", () => {
     const events = [makeEvent({ id: "a", startAt: `${TODAY}T14:00`, title: "Sastanak sa mentorom" })];
     expect(line(events, at(10, 0), null)).toBe("14:00 · Sastanak sa mentorom");
+  });
+
+  // CAL §5. The clock arrives in the input rather than being read here, which
+  // is exactly what keeps this module pure — and what lets one assertion pin
+  // that the strip and every calendar surface draw the same label.
+  it("writes that time on whichever clock the device reads", () => {
+    const events = [makeEvent({ id: "a", startAt: `${TODAY}T14:00`, title: "Sastanak sa mentorom" })];
+    expect(line(events, at(10, 0), null, noon, "12h")).toBe("2:00 PM · Sastanak sa mentorom");
+  });
+
+  it("leaves „danas“ alone on the 12-hour clock — there is no hour in it to convert", () => {
+    const events = [
+      makeEvent({ id: "a", startAt: `${TODAY}T00:00`, allDay: true, title: "Godišnjica" }),
+    ];
+    expect(line(events, at(10, 0), null, noon, "12h")).toBe("danas · Godišnjica");
   });
 
   it("says „danas“ in place of an hour for a day-long entry", () => {

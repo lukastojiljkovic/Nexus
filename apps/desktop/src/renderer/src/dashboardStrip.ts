@@ -1,6 +1,7 @@
 import type { RunningFocusSession } from "../../shared/ipc.js";
-import { formatClock } from "./calendarItems.js";
 import type { CalendarItem } from "./calendarItems.js";
+import { formatClockLabel } from "./calendarPrefs.js";
+import type { ClockPreference } from "./calendarPrefs.js";
 import { formatDurationMinutes } from "./focusFormat.js";
 import { strings } from "./strings.js";
 
@@ -111,11 +112,11 @@ export function nextStripEvent(
 }
 
 /** „14:00 · Sastanak sa mentorom", or „danas · Godišnjica" when there is no hour to name. */
-function eventSegment(next: StripEvent): string {
+function eventSegment(next: StripEvent, clock: ClockPreference): string {
   const when =
     next.startMinutes === null
       ? strings.dashboard.strip.dayLong
-      : formatClock(next.startMinutes);
+      : formatClockLabel(next.startMinutes, clock);
   return `${when}${SEPARATOR}${next.item.event.title}`;
 }
 
@@ -148,6 +149,13 @@ export interface DayStripInput {
   readonly nowMinutes: number;
   /** The same instant in epoch milliseconds — what the running timer's elapsed is measured against. */
   readonly nowMs: number;
+  /**
+   * Which clock the event's time is written in (CAL §5). It arrives here for
+   * the same reason the readings above do: this module is pure by contract, so
+   * the device preference is READ by the page and named in the input rather
+   * than fetched out of `localStorage` half-way down a formatter.
+   */
+  readonly clock: ClockPreference;
   /** The main-process focus timer, or `null` when none runs (or STUDY is switched off). */
   readonly focus: RunningFocusSession | null;
 }
@@ -159,7 +167,7 @@ export interface DayStripInput {
 export function dayStripLine(input: DayStripInput): string | null {
   const segments: string[] = [];
   const next = nextStripEvent(input.items, input.todayKey, input.nowMinutes);
-  if (next !== null) segments.push(eventSegment(next));
+  if (next !== null) segments.push(eventSegment(next, input.clock));
   if (input.focus !== null) segments.push(focusSegment(input.focus, input.nowMs));
   return segments.length > 0 ? segments.join(SEPARATOR) : null;
 }

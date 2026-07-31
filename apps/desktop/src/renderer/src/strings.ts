@@ -16,6 +16,7 @@ import type {
   RestoreModuleCounts,
   RestoreProblemCode,
 } from "../../shared/ipc.js";
+import type { ClockPreference } from "./calendarPrefs.js";
 import type { BlockedInToday } from "./taskPrefs.js";
 import type { WeekStartPreference } from "./weekStart.js";
 
@@ -1175,6 +1176,17 @@ export const strings = {
       /** Appended to that name when the day holds an exam — what its ring says. */
       examMark: "ispit",
     },
+    /**
+     * The half-day markers of the 12-hour clock (CAL §5), used only when this
+     * device is set to it. „AM“/„PM“ rather than a Serbian phrase on purpose:
+     * they are exactly what `Intl.DateTimeFormat("sr-Latn", { hour12: true })`
+     * itself produces for this locale, so a user who switches clocks sees the
+     * form their OS shows them everywhere else.
+     */
+    clock: {
+      am: "AM",
+      pm: "PM",
+    },
     /** Tag chip on a read-only task row in the agenda (ADR-020). */
     taskTag: "Zadatak",
     /** Grid navigation (ADR-020): prev/today/next — one pair of labels shared by Mesec/Nedelja/Dan, since each shifts by its own period. */
@@ -1759,7 +1771,27 @@ export const strings = {
       modules: "Moduli",
       notifications: "Obaveštenja",
       backup: "Rezervna kopija",
+      privacy: "Podaci i privatnost",
       about: "O aplikaciji",
+    },
+    /**
+     * SET §5: the per-card „Vrati na podrazumevano“. One block of copy for
+     * every card that has the link, because the act is the same act each time
+     * — only the card's own name changes, and the dialog shows that rather
+     * than repeating it in a sentence per section.
+     *
+     * The question states the two bounds the reset actually respects, since
+     * both are things the user would otherwise have to trust: it reaches only
+     * this card, and only this device.
+     */
+    reset: {
+      /** The quiet link at the foot of a card. */
+      action: "Vrati na podrazumevano",
+      title: "Vrati na podrazumevano",
+      question:
+        "Podešavanja ovog odeljka vraćaju se na podrazumevana. Menja se samo ovaj uređaj — ništa u tvojim podacima se ne dira.",
+      confirm: "Vrati podrazumevano",
+      cancel: "Otkaži",
     },
     profile: {
       nameLabel: "Ime",
@@ -1835,6 +1867,27 @@ export const strings = {
         monday: "Ponedeljak",
         sunday: "Nedelja",
       } satisfies Record<WeekStartPreference, string>,
+      /**
+       * CAL §5, beside the week start and for the same reason: both describe
+       * how this machine reads a calendar. The duration is what the create
+       * form seeds an end time with; the clock is how every calendar time is
+       * DRAWN — the time fields themselves stay whatever form the system draws
+       * them in, which the caption says out loud rather than leaving to be
+       * discovered.
+       */
+      eventDurationLabel: "Podrazumevano trajanje događaja",
+      eventDurationOptions: {
+        "30": "30 minuta",
+        "60": "1 sat",
+        "90": "1 sat i 30 minuta",
+        "120": "2 sata",
+      } as Record<string, string>,
+      clockLabel: "Prikaz vremena",
+      clockOptions: {
+        "24h": "24-časovni (14:00)",
+        "12h": "12-časovni (2:00 PM)",
+      } satisfies Record<ClockPreference, string>,
+      clockHint: "Polja za unos vremena zadržavaju oblik koji crta sistem.",
     },
     /**
      * Zadaci section (ADR-049): a device preference over the „Danas“ and
@@ -2408,6 +2461,47 @@ export const strings = {
         "not-markdown": "Nije Markdown fajl (.md ili .markdown).",
       } satisfies Record<MarkdownImportSkipCode, string>,
       error: "Uvoz beležaka nije uspeo. Pokušaj ponovo.",
+    },
+    /**
+     * „Podaci i privatnost“ (SET-010, local half): five plain sentences, each
+     * one a fact about how this build is put together rather than a promise.
+     *
+     * There is deliberately NOTHING to operate here — no toggle, no link, no
+     * „saznaj više“. A privacy panel with a switch on it is a panel about a
+     * setting; this one is about what is already true, and every sentence is
+     * checkable in the source:
+     *
+     *  - `storage`   — `packages/db/src/database.ts` opens every profile
+     *                  database through SQLCipher (`PRAGMA cipher`/`key`), and
+     *                  `main/auth.ts` unwraps that key from the passcode
+     *                  (Argon2id → AES-GCM, ADR-018).
+     *  - `noTelemetry` — there is no telemetry or analytics dependency, and no
+     *                  such code, anywhere in the tree.
+     *  - `offline`   — `apps/desktop/src` contains no `fetch`, `XMLHttpRequest`,
+     *                  `WebSocket` or remote URL at all, and the packaged
+     *                  renderer's CSP is `default-src 'self'; connect-src
+     *                  'self'`. The ONE exception is named out loud rather than
+     *                  papered over: the packaged build asks its release feed
+     *                  whether a newer Nexus exists (`checkForUpdates`,
+     *                  SEC-EL-07), which carries none of the user's data.
+     *  - `exports`   — `main/imex.ts` writes to a path chosen in the system
+     *                  save dialog, sealed under a passphrase-derived key when
+     *                  one is given (ADR-022).
+     *  - `deletion`  — `main/accounts.ts`'s `deleteAccount` erases the
+     *                  account's directory, key chain included; there is no
+     *                  undo and no grace period.
+     */
+    privacy: {
+      storage:
+        "Svi tvoji podaci — beleške, zadaci, događaji, kartice i prilozi — stoje na ovom uređaju, u bazi koja je šifrovana. Ključ se otključava tvojim pristupnim kodom i nigde se ne šalje.",
+      noTelemetry:
+        "Nexus ne prikuplja telemetriju ni analitiku. Nema brojača, nema izveštaja o korišćenju, nema profilisanja.",
+      offline:
+        "Tvoj sadržaj se nikada ne šalje na mrežu i aplikacija radi bez interneta. Jedino što izlazi napolje jeste provera da li postoji novija verzija Nexusa — ona ne nosi ništa od tvojih podataka.",
+      exports:
+        "Izvoz je običan fajl: ti biraš gde se čuva, a arhivu možeš zaštititi lozinkom pri pravljenju.",
+      deletion:
+        "Brisanje naloga trajno uništava njegove podatke, zajedno sa ključem kojim su šifrovani. Nema opoziva i nema perioda čekanja.",
     },
     about: {
       version: "Verzija",

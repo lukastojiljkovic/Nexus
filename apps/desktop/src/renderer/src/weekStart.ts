@@ -31,6 +31,11 @@ export function persistWeekStart(preference: WeekStartPreference): void {
   localStorage.setItem(STORAGE_KEY, preference);
 }
 
+/** Forgets the stored choice, so the next read is Ponedeljak again — part of „Izgled“'s „Vrati na podrazumevano“ (SET §5). */
+export function clearStoredWeekStart(): void {
+  localStorage.removeItem(STORAGE_KEY);
+}
+
 /** The layout engine's own form: `Date.getUTCDay()` terms, 1 = Monday, 0 = Sunday. */
 export function toWeekStart(preference: WeekStartPreference): WeekStart {
   return preference === "sunday" ? 0 : 1;

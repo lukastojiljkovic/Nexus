@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   applyStoredNoteWidth,
+  clearStoredNotePreferences,
   NOTE_WIDTHS,
   persistNoteMarkdownShortcuts,
   persistNoteWidth,
@@ -280,5 +281,52 @@ describe("persistRootNoteView", () => {
   it("needs no document — a folder's view is a store write, the root's is this key", () => {
     stubStorage();
     expect(() => persistRootNoteView("cards")).not.toThrow();
+  });
+});
+
+// --- the per-card reset (SET §5) ---------------------------------------------
+
+describe("clearStoredNotePreferences", () => {
+  it("forgets all three keys, so every reader is back on its default", () => {
+    const storage = stubStorage({
+      [WIDTH_KEY]: "siroka",
+      [MARKDOWN_KEY]: "off",
+      [ROOT_VIEW_KEY]: "cards",
+    });
+    stubDocument();
+
+    clearStoredNotePreferences();
+
+    expect(storage.getItem(WIDTH_KEY)).toBeNull();
+    expect(storage.getItem(MARKDOWN_KEY)).toBeNull();
+    expect(storage.getItem(ROOT_VIEW_KEY)).toBeNull();
+    expect(readStoredNoteWidth()).toBe("normalna");
+    expect(readStoredNoteMarkdownShortcuts()).toBe(true);
+    expect(readStoredRootNoteView()).toBe("list");
+  });
+
+  it("repaints the document root on the default measure — a still-wide editor is not reset", () => {
+    stubStorage({ [WIDTH_KEY]: "siroka" });
+    const { attributes } = stubDocument();
+
+    clearStoredNotePreferences();
+
+    expect(attributes["data-note-width"]).toBe("normalna");
+  });
+
+  it("touches nothing outside its own card", () => {
+    const storage = stubStorage({
+      [WIDTH_KEY]: "uska",
+      "nexus.theme": "dan",
+      "nexus.accent": "bordo",
+      "nexus.tasks.blockedInToday": "prikazi",
+    });
+    stubDocument();
+
+    clearStoredNotePreferences();
+
+    expect(storage.getItem("nexus.theme")).toBe("dan");
+    expect(storage.getItem("nexus.accent")).toBe("bordo");
+    expect(storage.getItem("nexus.tasks.blockedInToday")).toBe("prikazi");
   });
 });

@@ -23,3 +23,15 @@ export function persistAccent(accent: AccentId): void {
 export function applyStoredAccent(): void {
   persistAccent(readStoredAccent());
 }
+
+/**
+ * Forgets the stored accent and puts the document back on the default — part
+ * of „Izgled“'s „Vrati na podrazumevano“ (SET §5). The key is REMOVED rather
+ * than overwritten with the default, so a reset leaves exactly what a fresh
+ * install has; the document attribute is written from the read that follows,
+ * because a page whose stylesheet still says „bordo“ has not been reset.
+ */
+export function clearStoredAccent(): void {
+  localStorage.removeItem(STORAGE_KEY);
+  document.documentElement.setAttribute("data-accent", readStoredAccent());
+}

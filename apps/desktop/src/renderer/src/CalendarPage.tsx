@@ -27,9 +27,18 @@ import {
   CALENDAR_SOURCES,
   daysBetweenKeys,
   formatClock,
+  LAST_MINUTE_OF_DAY,
+  parseClock,
   persistSources,
   readStoredSources,
 } from "./calendarItems.js";
+import {
+  formatClockLabel,
+  localMinutesOfDay,
+  readStoredClock,
+  readStoredEventDuration,
+  type ClockPreference,
+} from "./calendarPrefs.js";
 import type {
   CalendarItem,
   CalendarRange,
@@ -160,13 +169,13 @@ function formatDay(key: string): string {
       }).format(date);
 }
 
-/** Row time label — "Ceo dan" for all-day, else HH:MM; raw start on bad input. */
-function formatTime(event: Event): string {
+/** Row time label — "Ceo dan" for all-day, else the device's clock (CAL §5); raw start on bad input. */
+function formatTime(event: Event, clock: ClockPreference): string {
   if (event.allDay) return strings.calendar.allDay;
   const date = new Date(event.startAt);
   return Number.isNaN(date.getTime())
     ? event.startAt
-    : new Intl.DateTimeFormat("sr-Latn", { hour: "2-digit", minute: "2-digit" }).format(date);
+    : formatClockLabel(localMinutesOfDay(date), clock);
 }
 
 const monthLabelFormatter = new Intl.DateTimeFormat("sr-Latn", {
@@ -489,6 +498,14 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
   // a time, so leaving Podešavanja and coming back here remounts this component
   // and picks up a changed setting. Nothing needs to watch localStorage.
   const [weekStart] = useState<WeekStart>(() => toWeekStart(readStoredWeekStart()));
+  // CAL §5's two preferences, read on every render rather than frozen the way
+  // `weekStart` is. Neither feeds a layout this page computes once — the clock
+  // only decides how a label reads, and the duration is only consulted the
+  // moment the form seeds an end time — so there is nothing to keep stable
+  // across a redraw, and a change made in Podešavanja lands as soon as this
+  // page draws again rather than only on the next remount.
+  const clock = readStoredClock();
+  const eventDuration = readStoredEventDuration();
   // The single anchor day every grid view derives from: the month view takes
   // its month, the week view the week around it (starting on whichever weekday
   // `weekStart` says), the day view the key itself — so "Danas" and the
@@ -508,6 +525,13 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [endTime, setEndTime] = useState("");
+  // CAL §5. False while the end field still holds whatever the form put there
+  // (nothing, a slot click's span, the default duration), true the moment the
+  // user types in it — including typing it EMPTY, which is a deliberate "this
+  // event has no end" and must survive a later change of start just as a typed
+  // time does. An event opened for editing starts out touched: its end is
+  // already somebody's answer.
+  const [endTimeTouched, setEndTimeTouched] = useState(false);
   const [location, setLocation] = useState("");
   const [recurrence, setRecurrence] = useState<RecurrenceRule | null>(null);
   const [reminderOffsets, setReminderOffsets] = useState<number[]>([]);
@@ -599,6 +623,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
     setDate("");
     setTime("");
     setEndTime("");
+    setEndTimeTouched(false);
     setLocation("");
     setRecurrence(null);
     setReminderOffsets([]);
@@ -631,6 +656,9 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
     setDate(event.startAt.slice(0, 10));
     setTime(event.allDay ? "" : event.startAt.slice(11, 16));
     setEndTime(!event.allDay && event.endAt ? event.endAt.slice(11, 16) : "");
+    // A stored end — including a stored ABSENCE of one — is already the user's
+    // answer, so moving the start of an existing event never rewrites it.
+    setEndTimeTouched(true);
     setLocation(event.location ?? "");
     setRecurrence(master.recurrence);
     // Reminders belong to the stored row, so they are read off the master —
@@ -707,12 +735,35 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
     titleRef.current?.focus();
   }
 
-  /** Click on empty hour-grid space (week/day view): prefill date, a default hour-long span, and focus the title. */
+  /**
+   * The end an untouched field is seeded with: the start plus this device's
+   * default duration (CAL §5), clamped to the day's last minute rather than
+   * spilling into tomorrow — an event that crosses midnight is a date change,
+   * not something a duration setting gets to make silently.
+   *
+   * Two cases seed NOTHING rather than something unusable, so the form can
+   * never put a value in the field that its own submit guard would then
+   * reject:
+   *
+   *  - a start that is not a time of day at all (empty, half-typed) — which is
+   *    also how clearing the start clears the end the form had put there;
+   *  - a start so late that the clamp lands on or before it (23:59 has no room
+   *    left in the day for any end).
+   */
+  function seedEndTime(startTime: string): string {
+    const startMinutes = parseClock(startTime);
+    if (startMinutes === null) return "";
+    const endMinutes = Math.min(startMinutes + eventDuration, LAST_MINUTE_OF_DAY);
+    return endMinutes > startMinutes ? formatClock(endMinutes) : "";
+  }
+
+  /** Click on empty hour-grid space (week/day view): prefill date, a span of the default duration, and focus the title. */
   function selectSlot(dayKey: string, minutes: number): void {
-    resetForm();
+    resetForm(); // also clears the touched flag — the span below is the form's, not the user's
+    const startTime = formatClock(minutes);
     setDate(dayKey);
-    setTime(formatClock(minutes));
-    setEndTime(formatClock(Math.min(minutes + 60, 23 * 60 + 59)));
+    setTime(startTime);
+    setEndTime(seedEndTime(startTime)); // one seeding rule, whichever way the form was reached
     titleRef.current?.focus();
   }
 
@@ -1269,17 +1320,30 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
             />
             {!allDay && (
               <>
+                {/* Both fields stay `type="time"`: the system draws those, so
+                    the clock preference (CAL §5) reaches every calendar LABEL
+                    and deliberately none of the inputs — their value is the
+                    24-hour "HH:MM" the store is given either way. */}
                 <TextField
                   type="time"
                   value={time}
                   aria-label={strings.calendar.timeLabel}
-                  onChange={(event) => setTime(event.target.value)}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setTime(next);
+                    // CAL §5: an end the form seeded follows the start; one the
+                    // user typed is never overwritten.
+                    if (!endTimeTouched) setEndTime(seedEndTime(next));
+                  }}
                 />
                 <TextField
                   type="time"
                   value={endTime}
                   aria-label={strings.calendar.endTimeLabel}
-                  onChange={(event) => setEndTime(event.target.value)}
+                  onChange={(event) => {
+                    setEndTime(event.target.value);
+                    setEndTimeTouched(true);
+                  }}
                 />
               </>
             )}
@@ -1515,6 +1579,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
                   monthKey={monthKey}
                   todayKey={todayKey}
                   weekStart={weekStart}
+                  clock={clock}
                   items={calendarItems}
                   onSelectDay={selectDay}
                   onOpenDay={openDay}
@@ -1551,6 +1616,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
                 <CalendarTimeGrid
                   dayKeys={view === "nedelja" ? weekKeys : [anchorKey]}
                   todayKey={todayKey}
+                  clock={clock}
                   items={calendarItems}
                   onSelectSlot={selectSlot}
                   onOpenDay={openDay}
@@ -1575,7 +1641,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
                       return (
                         <ListRow
                           key={item.id}
-                          leading={<span className="cal__time">{formatTime(item.event)}</span>}
+                          leading={<span className="cal__time">{formatTime(item.event, clock)}</span>}
                           trailing={
                             <span className="cal__row-actions">
                               <Button

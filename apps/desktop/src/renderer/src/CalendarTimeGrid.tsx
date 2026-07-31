@@ -18,8 +18,10 @@ import type { Event } from "../../shared/ipc.js";
 // defines those classes; importing it is what keeps the two views from
 // drifting apart the way two copies eventually would.
 import { renderBarContent } from "./CalendarMonth.js";
-import { formatClock, isMutedItem, isSpanItem, isTimedEventItem } from "./calendarItems.js";
+import { isMutedItem, isSpanItem, isTimedEventItem } from "./calendarItems.js";
 import type { CalendarItem, EventOccurrence, TimedEventItem } from "./calendarItems.js";
+import { formatClockLabel } from "./calendarPrefs.js";
+import type { ClockPreference } from "./calendarPrefs.js";
 import { RecurrenceMark } from "./RecurrencePicker.js";
 import { strings } from "./strings.js";
 
@@ -45,6 +47,8 @@ export interface CalendarTimeGridProps {
   /** 7 keys for the week view, 1 for the day view. Ascending, consecutive. */
   dayKeys: readonly string[];
   todayKey: string;
+  /** Which clock the hour gutter and every block's time are drawn in (CAL §5) — the page reads the preference; the grid only obeys it. */
+  clock: ClockPreference;
   items: readonly CalendarItem[];
   /** Click on empty grid space — the page prefills the form's date and time. */
   onSelectSlot: (dayKey: string, minutes: number) => void;
@@ -164,6 +168,7 @@ function currentMinutes(): number {
 export function CalendarTimeGrid({
   dayKeys,
   todayKey,
+  clock,
   items,
   onSelectSlot,
   onOpenDay,
@@ -484,7 +489,10 @@ export function CalendarTimeGrid({
   return (
     // Deliberately NOT role="grid", for the same reason CalendarMonth avoids it:
     // the absolutely-positioned band/event overlays are not valid grid children.
-    <div className="cal__grid" role="group" tabIndex={0} aria-label={ariaLabel}>
+    // `data-clock` carries CAL §5 to the stylesheet, and to nothing else: a
+    // „2:00 PM“ hour label is wider than „14:00“, so the gutter it lives in
+    // widens with it rather than clipping. One declaration, not a measurement.
+    <div className="cal__grid" data-clock={clock} role="group" tabIndex={0} aria-label={ariaLabel}>
       <div className="cal__grid-header-row">
         {/* The week's ISO number, in the one corner this grid has spare
             (CAL-010). Read off the row's fourth day, so a Sunday-first week
@@ -544,7 +552,7 @@ export function CalendarTimeGrid({
         <div className="cal__grid-gutter">
           {HOURS.map((hour) => (
             <div key={hour} className="cal__grid-hour-label">
-              {formatClock(hour * 60)}
+              {formatClockLabel(hour * 60, clock)}
             </div>
           ))}
         </div>
@@ -612,7 +620,10 @@ export function CalendarTimeGrid({
                       }}
                     >
                       <span className="cal__grid-event-time">
-                        {formatClock(dragged?.candidate?.startMinutes ?? item.startMinutes)}
+                        {formatClockLabel(
+                          dragged?.candidate?.startMinutes ?? item.startMinutes,
+                          clock,
+                        )}
                       </span>
                       <span className="cal__grid-event-title">
                         {item.occurrence !== null && <RecurrenceMark />}

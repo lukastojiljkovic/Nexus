@@ -3,8 +3,10 @@ import type { DragEvent, MouseEvent, ReactNode } from "react";
 import { isoWeekNumber, layoutMonthBars, monthGridDays } from "@nexus/core";
 import type { MonthGridDay, SpanItem, WeekStart } from "@nexus/core";
 import type { Event } from "../../shared/ipc.js";
-import { formatClock, isMutedItem, isSpanItem, isTimedEventItem } from "./calendarItems.js";
+import { isMutedItem, isSpanItem, isTimedEventItem } from "./calendarItems.js";
 import type { CalendarItem, EventOccurrence } from "./calendarItems.js";
+import { formatClockLabel } from "./calendarPrefs.js";
+import type { ClockPreference } from "./calendarPrefs.js";
 import { RecurrenceMark } from "./RecurrencePicker.js";
 import { strings } from "./strings.js";
 
@@ -22,6 +24,8 @@ export interface CalendarMonthProps {
    * layout engine returns, so the header and the rows can never disagree.
    */
   weekStart: WeekStart;
+  /** Which clock a timed chip's time is drawn in (CAL §5) — the page reads the preference; the grid only obeys it. */
+  clock: ClockPreference;
   items: readonly CalendarItem[];
   /** Click on a day cell's empty area — the page prefills the form's date. */
   onSelectDay: (dayKey: string) => void;
@@ -115,6 +119,7 @@ export function CalendarMonth({
   monthKey,
   todayKey,
   weekStart,
+  clock,
   items,
   onSelectDay,
   onOpenDay,
@@ -312,7 +317,7 @@ export function CalendarMonth({
                             onDragEnd={endDrag}
                           >
                             {item.occurrence !== null && <RecurrenceMark />}
-                            {formatClock(item.startMinutes)} — {item.event.title}
+                            {formatClockLabel(item.startMinutes, clock)} — {item.event.title}
                           </button>
                         ))}
                       </div>

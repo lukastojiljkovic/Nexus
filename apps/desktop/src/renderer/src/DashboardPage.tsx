@@ -12,6 +12,7 @@ import type {
   RunningFocusSession,
 } from "../../shared/ipc.js";
 import { buildCalendarItems, type CalendarSource } from "./calendarItems.js";
+import { localMinutesOfDay, readStoredClock } from "./calendarPrefs.js";
 import { lookupString, moveNeighbours, type LayoutNeighbours } from "./dashboardLayout.js";
 import { dayStripLine } from "./dashboardStrip.js";
 import { DASHBOARD_WIDGETS, type DashboardWidgetBodyProps } from "./dashboardWidgets.js";
@@ -556,8 +557,11 @@ export function DashboardPage({
       : dayStripLine({
           items: stripItems,
           todayKey,
-          nowMinutes: now.getHours() * 60 + now.getMinutes(),
+          nowMinutes: localMinutesOfDay(now),
           nowMs: now.getTime(),
+          // CAL §5: the strip is pure, so the device preference is read HERE
+          // and handed in — the same clock „Danas“ below draws its rows on.
+          clock: readStoredClock(),
           focus: strip.focus,
         });
 

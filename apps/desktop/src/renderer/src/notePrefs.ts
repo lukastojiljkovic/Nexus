@@ -116,3 +116,26 @@ export function readStoredRootNoteView(): NoteFolderView {
 export function persistRootNoteView(view: NoteFolderView): void {
   localStorage.setItem(ROOT_VIEW_KEY, view);
 }
+
+/**
+ * Forgets all three NOTE device preferences — „Beleške“'s „Vrati na
+ * podrazumevano“ (SET §5). The three keys are ENUMERATED rather than swept by
+ * prefix, so the reset can never grow to reach something else that happens to
+ * be called `nexus.note…`.
+ *
+ * The root note view has no control on the Settings card (it is chosen in the
+ * note list itself), but it IS one of this module's three device preferences,
+ * so a card that says „vrati Beleške na podrazumevano“ would be lying if it
+ * left it behind. Everything a folder stores stays untouched — that lives in
+ * the profile, not here.
+ *
+ * The width is the only one with a document attribute, and it is rewritten
+ * from the read that follows: an editor still laid out at „siroka“ has not
+ * been reset.
+ */
+export function clearStoredNotePreferences(): void {
+  localStorage.removeItem(WIDTH_KEY);
+  localStorage.removeItem(MARKDOWN_KEY);
+  localStorage.removeItem(ROOT_VIEW_KEY);
+  document.documentElement.setAttribute("data-note-width", readStoredNoteWidth());
+}

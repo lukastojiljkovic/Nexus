@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { strings } from "./strings.js";
 import {
   BLOCKED_IN_TODAY_OPTIONS,
+  clearStoredTaskPreferences,
   persistBlockedInToday,
   readStoredBlockedInToday,
   toIncludeBlocked,
@@ -82,6 +83,21 @@ describe("persistBlockedInToday", () => {
     const storage = stubStorage({ "nexus.theme": "dan", "nexus.noteWidth": "siroka" });
     persistBlockedInToday("prikazi");
     expect(storage.getItem("nexus.theme")).toBe("dan");
+    expect(storage.getItem("nexus.noteWidth")).toBe("siroka");
+  });
+});
+
+describe("clearStoredTaskPreferences", () => {
+  it("removes the key outright, so the next read hides blocked tasks again", () => {
+    const storage = stubStorage({ [KEY]: "prikazi" });
+    clearStoredTaskPreferences();
+    expect(storage.getItem(KEY)).toBeNull();
+    expect(readStoredBlockedInToday()).toBe("sakrij");
+  });
+
+  it("touches nothing outside its own card", () => {
+    const storage = stubStorage({ [KEY]: "prikazi", "nexus.noteWidth": "siroka" });
+    clearStoredTaskPreferences();
     expect(storage.getItem("nexus.noteWidth")).toBe("siroka");
   });
 });

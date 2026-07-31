@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { strings } from "./strings.js";
 import { memoryStorage } from "./testStorage.js";
 import {
+  clearStoredWeekStart,
   persistWeekStart,
   readStoredWeekStart,
   toWeekStart,
@@ -77,6 +78,21 @@ describe("persistWeekStart", () => {
     const storage = stubStorage();
     expect(readStoredWeekStart()).toBe("monday");
     expect(storage.length).toBe(0);
+  });
+});
+
+describe("clearStoredWeekStart", () => {
+  it("removes the key outright, so the next read is Ponedeljak again", () => {
+    const storage = stubStorage({ [STORAGE_KEY]: "sunday" });
+    clearStoredWeekStart();
+    expect(storage.getItem(STORAGE_KEY)).toBeNull();
+    expect(readStoredWeekStart()).toBe("monday");
+  });
+
+  it("touches no other preference key", () => {
+    const storage = stubStorage({ [STORAGE_KEY]: "sunday", "nexus.accent": "bordo" });
+    clearStoredWeekStart();
+    expect(storage.getItem("nexus.accent")).toBe("bordo");
   });
 });
 

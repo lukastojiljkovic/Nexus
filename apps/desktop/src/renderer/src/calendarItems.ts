@@ -351,11 +351,33 @@ export function buildCalendarItems(
   return items;
 }
 
-/** Minutes since midnight → "HH:MM". */
+/**
+ * Minutes since midnight → "HH:MM". A SERIALIZER, not a label: it builds the
+ * `startAt`/`endAt` the store is given and fills `<input type="time">`, so it
+ * stays zero-padded 24-hour whatever clock the device reads (CAL §5 — see
+ * `calendarPrefs.ts`'s `formatClockLabel` for the display twin).
+ */
 export function formatClock(minutes: number): string {
   const hours = String(Math.floor(minutes / 60)).padStart(2, "0");
   const mins = String(minutes % 60).padStart(2, "0");
   return `${hours}:${mins}`;
+}
+
+/** The last minute a calendar day has — where a seeded end time is clamped rather than spilling into tomorrow. */
+export const LAST_MINUTE_OF_DAY = 23 * 60 + 59;
+
+/**
+ * "HH:MM" → minutes since midnight, `null` for anything that is not a time of
+ * day — `formatClock`'s exact inverse, and the one place a time field's raw
+ * value becomes arithmetic. A half-typed or cleared `<input type="time">`
+ * yields `null` rather than a number the caller would have to second-guess.
+ */
+export function parseClock(value: string): number | null {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value);
+  if (match === null) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  return hours > 23 || minutes > 59 ? null : hours * 60 + minutes;
 }
 
 /**

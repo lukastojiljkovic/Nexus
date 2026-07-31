@@ -6,6 +6,8 @@ import { Button, Chip, ListRow } from "@nexus/ui";
 import type { DocumentStatus, Event, Exam, Subject } from "../../shared/ipc.js";
 import { buildCalendarItems } from "./calendarItems.js";
 import type { CalendarItem, CalendarSource } from "./calendarItems.js";
+import { formatClockLabel, localMinutesOfDay, readStoredClock } from "./calendarPrefs.js";
+import type { ClockPreference } from "./calendarPrefs.js";
 import {
   daysUntilExam,
   examCountdownLabel,
@@ -47,13 +49,13 @@ import { dayUnit, strings } from "./strings.js";
 // bare calendar date (a due date, an all-day start) is treated as UTC so it does
 // not shift a day back when formatted in a negative-offset timezone.
 
-/** Row time label — "Ceo dan" for all-day, else HH:MM (mirrors CalendarPage). */
-function formatEventTime(event: Event): string {
+/** Row time label — "Ceo dan" for all-day, else the device's clock (CAL §5; mirrors CalendarPage). */
+function formatEventTime(event: Event, clock: ClockPreference): string {
   if (event.allDay) return strings.calendar.allDay;
   const date = new Date(event.startAt);
   return Number.isNaN(date.getTime())
     ? event.startAt
-    : new Intl.DateTimeFormat("sr-Latn", { hour: "2-digit", minute: "2-digit" }).format(date);
+    : formatClockLabel(localMinutesOfDay(date), clock);
 }
 
 /** Compact due-date chip label — "15. jul"; UTC-parsed for the bare calendar date. */
@@ -238,6 +240,9 @@ function TodayWidget({ profileId, enabledModules, onOpenModule }: DashboardWidge
   const { state, retry } = useWidgetData(load);
   const s = strings.dashboard.today;
   const todayKey = localTodayKey();
+  // CAL §5, read once per render — the same clock the day strip above this card
+  // is drawn on, so one dashboard never shows two clocks at once.
+  const clock = readStoredClock();
 
   return (
     <WidgetData state={state} retry={retry}>
@@ -284,7 +289,7 @@ function TodayWidget({ profileId, enabledModules, onOpenModule }: DashboardWidge
               <DashRow
                 key={item.id}
                 onClick={() => onOpenModule("calendar")}
-                leading={<span className="dash__time">{formatEventTime(item.event)}</span>}
+                leading={<span className="dash__time">{formatEventTime(item.event, clock)}</span>}
               >
                 <span className="dash__row-title">{item.event.title}</span>
               </DashRow>

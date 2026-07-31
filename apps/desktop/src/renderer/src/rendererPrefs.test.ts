@@ -1,11 +1,12 @@
 import { ACCENT_IDS } from "@nexus/tokens";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { applyStoredAccent, persistAccent, readStoredAccent } from "./accent.js";
+import { applyStoredAccent, clearStoredAccent, persistAccent, readStoredAccent } from "./accent.js";
 import { AUTO_LOCK_MINUTES, persistAutoLock, readStoredAutoLock } from "./autoLock.js";
 import { memoryStorage } from "./testStorage.js";
 import {
   applyStoredThemePreference,
+  DEFAULT_THEME_PREFERENCE,
   persistThemePreference,
   readStoredThemePreference,
   resolveTheme,
@@ -127,7 +128,44 @@ describe("applyStoredAccent", () => {
   });
 });
 
+describe("clearStoredAccent", () => {
+  it("removes the key outright and repaints the document root on the default", () => {
+    const storage = stubStorage({ "nexus.accent": "bordo" });
+    const { attributes } = stubDocument();
+
+    clearStoredAccent();
+
+    expect(storage.getItem("nexus.accent")).toBeNull();
+    expect(attributes["data-accent"]).toBe("zlato");
+    expect(readStoredAccent()).toBe("zlato");
+  });
+
+  it("touches no other preference key — „Izgled“'s reset stops at its own card", () => {
+    const storage = stubStorage({
+      "nexus.accent": "bordo",
+      "nexus.noteWidth": "siroka",
+      "nexus.tasks.blockedInToday": "prikazi",
+    });
+    stubDocument();
+
+    clearStoredAccent();
+
+    expect(storage.getItem("nexus.noteWidth")).toBe("siroka");
+    expect(storage.getItem("nexus.tasks.blockedInToday")).toBe("prikazi");
+  });
+});
+
 // --- theme --------------------------------------------------------------------
+
+describe("DEFAULT_THEME_PREFERENCE", () => {
+  // SET §5 hands this to App rather than clearing `nexus.theme` itself, so the
+  // two readings of "no choice made" have to agree.
+  it("is what an unset key reads back as", () => {
+    stubStorage();
+    expect(readStoredThemePreference()).toBe(DEFAULT_THEME_PREFERENCE);
+    expect(DEFAULT_THEME_PREFERENCE).toBe("noc");
+  });
+});
 
 describe("readStoredThemePreference", () => {
   it("defaults to noc — the product's identity theme — for anything unrecognized", () => {

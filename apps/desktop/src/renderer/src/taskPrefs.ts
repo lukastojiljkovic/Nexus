@@ -36,6 +36,11 @@ export function persistBlockedInToday(preference: BlockedInToday): void {
   localStorage.setItem(BLOCKED_IN_TODAY_KEY, preference);
 }
 
+/** Forgets this card's one key, so the next read hides blocked tasks again — „Zadaci“'s „Vrati na podrazumevano“ (SET §5). */
+export function clearStoredTaskPreferences(): void {
+  localStorage.removeItem(BLOCKED_IN_TODAY_KEY);
+}
+
 /** The form `selectSmartList` takes — the one place the preference's spelling meets the query's flag. */
 export function toIncludeBlocked(preference: BlockedInToday): boolean {
   return preference === "prikazi";
