@@ -374,6 +374,113 @@ body {
   color: var(--nx-danger);
   font-size: var(--nx-font-size-body-sm);
 }
+/* ADR-065 — the four-screen questionnaire, drawn on the shell above. The card
+   keeps its 400px so the first and second screens a user ever sees still match
+   (.auth mirrors it); everything below is content inside that width. */
+.onb__steps {
+  margin: 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+  letter-spacing: var(--nx-font-tracking-label);
+}
+/* „Uloga“ and „Podsetnici“: a wrapping row of choices, the .set__preset-row
+   recipe — the picked one is the primary button, no glow and no fill trickery. */
+.onb__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+.onb__choice {
+  flex: 1 1 auto;
+}
+.onb__caption {
+  margin: 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+}
+/* „Oblasti“: the Settings module gallery's own rows. Capped and scrollable so a
+   growing registry can never push the card past the viewport — the shell is a
+   centred grid with no scroll of its own. */
+.onb__modules {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  max-height: 46vh;
+  overflow-y: auto;
+}
+.onb__module-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.onb__module-group-title {
+  margin: 0;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.onb__module-list {
+  display: flex;
+  flex-direction: column;
+}
+.onb__module-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-2) 0;
+}
+.onb__module-row + .onb__module-row {
+  border-top: 1px solid var(--nx-border);
+}
+.onb__module-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.onb__module-name {
+  font-weight: var(--nx-font-weight-medium);
+}
+.onb__module-desc {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+/* „Nazad“ beside „Dalje“/„Počni“, the primary always last so the forward move
+   sits where the eye leaves the card. */
+.onb__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.onb__actions > .nx-button[type="submit"] {
+  margin-left: auto;
+}
+/* „Preskoči“/„Otkaži“: typographic and muted, the .set__reset idiom — an exit
+   is available, not advertised, so no border and no fill. */
+.onb__quiet {
+  align-self: center;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--nx-radius-xs);
+  background: transparent;
+  color: var(--nx-text-muted);
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+  cursor: pointer;
+}
+.onb__quiet:hover:enabled {
+  color: var(--nx-text);
+}
+.onb__quiet:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.onb__quiet:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
 
 /* Local account lock screen (AUTH, ADR-018) ---------------------------- */
 /* Mirrors .onb's shell exactly (centered grid, 400px card) so the first
@@ -5316,6 +5423,13 @@ button.cal__grid-event--dragging {
   padding: var(--nx-space-2) 0;
 }
 .set__module-row + .set__module-row {
+  border-top: 1px solid var(--nx-border);
+}
+/* ADR-065 §5: the „ponovo pokreni upitnik“ row at the card's foot. It sits
+   outside the category groups, so it earns the rule the stacked rows get from
+   their sibling selector, plus one step clear of the last group. */
+.set__module-row--foot {
+  margin-top: var(--nx-space-2);
   border-top: 1px solid var(--nx-border);
 }
 .set__module-info {

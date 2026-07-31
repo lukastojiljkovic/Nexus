@@ -70,6 +70,7 @@ import type {
   Subject,
   TaskList,
 } from "../../shared/ipc.js";
+import { LOCKED_MODULE_IDS } from "../../shared/modules.js";
 import { authErrorMessage, passcodeMeetsPolicy, RecoveryKitPanel } from "./AuthGate.js";
 import { ALL_NOTIFICATION_SOURCES, NOTIFICATION_PRESETS } from "./notificationFormat.js";
 import { NotificationSettingsControls } from "./NotificationSettingsControls.js";
@@ -195,9 +196,6 @@ function ResetLink({ onClick }: { onClick: () => void }) {
     </button>
   );
 }
-
-/** The home surface and this page itself can never be disabled — someone has to render the toggles. */
-const LOCKED_MODULES = new Set(["dashboard", "settings"]);
 
 function sameSourceSet(a: readonly NotificationSource[], b: readonly NotificationSource[]): boolean {
   return a.length === b.length && a.every((source) => b.includes(source));
@@ -4983,6 +4981,8 @@ export interface SettingsPageProps {
   /** TASK-002: main's answer to the last global registration — false whenever the system granted it. */
   globalShortcutTaken: boolean;
   onShowShortcuts: () => void;
+  /** ADR-065 §5: reopens the onboarding questionnaire over this profile. App owns the flow — it is the same screen the first run draws, not a dialog of this page's. */
+  onRerunOnboarding: () => void;
 }
 
 /**
@@ -5022,6 +5022,7 @@ export function SettingsPage({
   onShortcutOverridesChange,
   globalShortcutTaken,
   onShowShortcuts,
+  onRerunOnboarding,
 }: SettingsPageProps) {
   // The accent is per-profile (ADR-058 §3), and its default depends on the
   // profile's KIND (bordo for business, decision #11). Reading it lazily in a
@@ -5420,7 +5421,7 @@ export function SettingsPage({
             </h3>
             <div className="set__module-list">
               {members.map((manifest) => {
-                const locked = LOCKED_MODULES.has(manifest.id);
+                const locked = LOCKED_MODULE_IDS.has(manifest.id);
                 const enabled = flags[manifest.id] ?? manifest.defaultEnabled;
                 return (
                   <div className="set__module-row" key={manifest.id}>
@@ -5453,6 +5454,22 @@ export function SettingsPage({
           </div>
         ))}
         {modulesError != null && <p className="set__error">{modulesError}</p>}
+        {/* ADR-065 §5 — the questionnaire's third screen IS this gallery, only
+            asked as a question, so its way back in belongs at this card's foot
+            rather than in a card of its own. */}
+        <div className="set__module-row set__module-row--foot">
+          <div className="set__module-info">
+            <span
+              className={labelClass("set__module-name", hits.has("modules-onboarding"))}
+            >
+              {strings.settings.onboardingRerunTitle}
+            </span>
+            <span className="set__module-desc">{strings.settings.onboardingRerunCaption}</span>
+          </div>
+          <Button size="sm" onClick={onRerunOnboarding}>
+            {strings.settings.onboardingRerunAction}
+          </Button>
+        </div>
       </Card>
 
       <Card title={strings.settings.sectionTitle.notifications} className={sectionClass(sections.has("notifications"))}>

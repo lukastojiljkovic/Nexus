@@ -193,7 +193,10 @@ describe("buildSettingsSearchEntries", () => {
     const actual = buildSettingsSearchEntries(registry)
       .filter((entry) => entry.section === "modules")
       .map((entry) => entry.id);
-    expect(actual).toEqual(expected);
+    // The „Moduli“ card also holds ADR-065's „ponovo pokreni upitnik“ row,
+    // which is a control rather than a module of its own; it is a fixed entry,
+    // so it leads, and the per-module rows follow whole and in gallery order.
+    expect(actual).toEqual(["modules-onboarding", ...expected]);
   });
 
   it("labels a module row with the sidebar's name and keywords it with its description", () => {

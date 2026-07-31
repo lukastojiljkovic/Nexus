@@ -200,6 +200,19 @@ const V0_MODULES: ModuleManifest[] = [
   { id: "study", prefix: "STUDY", category: "Life hubs", defaultEnabled: true, widgets: STUDY_WIDGETS },
 ];
 
+/**
+ * The two modules nothing may switch off: the home surface and the settings
+ * page itself — someone has to render the toggles (SET-007).
+ *
+ * Lives here, beside the manifests, because THREE surfaces read it now: the
+ * Settings module gallery (which draws these as „Uvek uključeno“ chips), ADR-065's
+ * „Oblasti“ onboarding screen (which draws the same chips), and that screen's
+ * completion write (which must never store a `feature_flags` row for one). A
+ * second hand-copied set is exactly the drift the module comment above warns
+ * about.
+ */
+export const LOCKED_MODULE_IDS: ReadonlySet<string> = new Set(["dashboard", "settings"]);
+
 /** Builds the app's registry — each process constructs its own (not a singleton) per ADR-008. */
 export function createModuleRegistry(): ModuleRegistry {
   const registry = new ModuleRegistry();

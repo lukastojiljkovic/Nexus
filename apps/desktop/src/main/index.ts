@@ -851,8 +851,8 @@ function seedFirstRunProfile(database: NexusDatabase): void {
  * founder-approved): the four work modules on, STUDY off. Written as explicit
  * rows — not left to `defaultEnabled` — so the preset is a stored fact of the
  * profile rather than an accident of this build's manifests. The `settings`
- * module is deliberately NOT here: the gallery locks it (`LOCKED_MODULES`,
- * `SettingsPage.tsx`) and its absent row falls back to `defaultEnabled: true`,
+ * module is deliberately NOT here: it is locked (`LOCKED_MODULE_IDS`,
+ * `shared/modules.ts`) and its absent row falls back to `defaultEnabled: true`,
  * exactly as the gallery expects — a personal profile gets no rows at all,
  * since the defaults already say all-on.
  */

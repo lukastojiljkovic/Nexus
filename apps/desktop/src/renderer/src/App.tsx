@@ -15,6 +15,7 @@ import { Onboarding } from "./Onboarding.js";
 import { ProfileSwitchDialog } from "./ProfileSwitchDialog.js";
 import { NotePopover } from "./notePopover.js";
 import { applyProfileAccent, defaultAccent, seedAccent } from "./accent.js";
+import { pruneOnboardingDrafts } from "./onboardingDraft.js";
 import {
   persistActiveProfile,
   profileDisplayName,
@@ -203,6 +204,10 @@ export function App() {
   // (its own held-cycle mechanism), so setting a boolean already true is the
   // guard against opening twice.
   const [appetiteAsk, setAppetiteAsk] = useState(false);
+  // ADR-065 §5: the Settings row reopened the questionnaire. Session state, not
+  // a preference — a rerun interrupted by a lock is simply over, since the name
+  // sentinel (the thing that gates the shell) was satisfied long ago.
+  const [rerunOnboarding, setRerunOnboarding] = useState(false);
 
   /** Loads everything that requires an open database. Only ever called once `auth:status` (or an unlock/create/recover result) has confirmed `state === "unlocked"`. */
   async function loadUnlockedData(): Promise<void> {
@@ -217,6 +222,11 @@ export function App() {
     // paint corrected.
     const active = resolveActiveProfile(nextProfiles);
     const nextFlags = active ? await window.nexus.getFlags(active.id) : {};
+    // ADR-065: the same live-list rule, applied to the questionnaire's
+    // in-progress drafts — a profile can be deleted (or replaced wholesale by a
+    // restore) between two runs, and its half-answered draft has nothing left
+    // to resume. This is the one place the live list first exists.
+    pruneOnboardingDrafts(nextProfiles.map((profile) => profile.id));
     setInfo(nextInfo);
     setProfiles(nextProfiles);
     setActiveProfileId(active?.id ?? null);
@@ -656,6 +666,11 @@ export function App() {
   useEffect(() => {
     if (authStatus?.state !== "unlocked") {
       setAppetiteAsk(false);
+      // ADR-065 §5, for the same reason: a rerun is session state, and this
+      // component outlives a lock cycle. Leaving the flag set would drop the
+      // user straight back into the questionnaire on the next unlock, over a
+      // profile that has been named for months — the rerun is simply over.
+      setRerunOnboarding(false);
       return;
     }
     return window.nexus.onNotificationAppetiteAsk(() => {
@@ -913,26 +928,42 @@ export function App() {
     );
   }
 
-  // ONB lite gates the shell on the ACTIVE profile's empty name — the
-  // deliberate "not yet named" sentinel (ADR-058): the seeded personal profile
-  // on first run, and a fresh business profile on its FIRST ENTRY (created
-  // empty from the switcher or the „Profili“ card, named here). The theme is
-  // device-wide, so a business entry asks only for the name.
-  if (activeProfile && activeProfile.name.trim() === "") {
+  // ONB gates the shell on the ACTIVE profile's empty name — the deliberate
+  // "not yet named" sentinel (ADR-058): the seeded personal profile on first
+  // run, and a fresh business profile on its FIRST ENTRY (created empty from
+  // the switcher or the „Profili“ card, named here). ADR-065 grew that one
+  // screen into the four-screen questionnaire without moving the sentinel: the
+  // flow's single `renameProfile` write is still what opens this gate, and it
+  // still happens exactly once, at the end.
+  //
+  // The Settings row (§5) reopens the SAME flow over a profile that already has
+  // a name, which is what `rerunOnboarding` adds — one component, one render
+  // site, told apart by `mode`.
+  if (activeProfile && (activeProfile.name.trim() === "" || rerunOnboarding)) {
+    const rerun = activeProfile.name.trim() !== "";
+    const onboardingProfile = activeProfile;
     return (
       <div className="nx-app app">
         <Onboarding
-          profileId={activeProfile.id}
-          kind={activeProfile.kind}
+          key={onboardingProfile.id}
+          profileId={onboardingProfile.id}
+          kind={onboardingProfile.kind}
+          mode={rerun ? "rerun" : "first-run"}
+          initialName={onboardingProfile.name}
+          flags={flags}
+          registry={registry}
           theme={theme}
           onThemeChange={changePreference}
-          onComplete={(name) =>
+          onCancel={rerun ? () => setRerunOnboarding(false) : null}
+          onComplete={({ name, flags: nextFlags }) => {
             setProfiles(
               profiles.map((profile) =>
-                profile.id === activeProfile.id ? { ...profile, name } : profile,
+                profile.id === onboardingProfile.id ? { ...profile, name } : profile,
               ),
-            )
-          }
+            );
+            setFlags(nextFlags);
+            setRerunOnboarding(false);
+          }}
         />
       </div>
     );
@@ -1240,6 +1271,7 @@ export function App() {
               onShortcutOverridesChange={changeShortcutOverrides}
               globalShortcutTaken={globalCaptureTaken}
               onShowShortcuts={() => setShortcutsHelpOpen(true)}
+              onRerunOnboarding={() => setRerunOnboarding(true)}
             />
           ) : (
             <ModulePage id={effectiveId} />

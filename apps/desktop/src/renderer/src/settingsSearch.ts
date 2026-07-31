@@ -256,6 +256,15 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
     keywords: ["semestar", "kalendar", "datumi", "pocetak", "kraj", "pregled"],
   },
   {
+    // ADR-065 §5: the row that reopens the questionnaire. Filed under „Moduli“
+    // because that is the card it sits in and the screen it mostly decides; the
+    // keywords carry the words somebody hunting for it would actually type.
+    id: "modules-onboarding",
+    section: "modules",
+    label: s.onboardingRerunTitle,
+    keywords: ["upitnik", "onboarding", "podesavanje", "ponovo", "pocetak", "moduli", "oblasti"],
+  },
+  {
     id: "notifications-presets",
     section: "notifications",
     label: s.sectionTitle.notifications,

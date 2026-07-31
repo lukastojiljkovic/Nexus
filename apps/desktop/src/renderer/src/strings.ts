@@ -25,6 +25,7 @@ import type {
   RestoreModuleCounts,
   RestoreProblemCode,
 } from "../../shared/ipc.js";
+import type { OnboardingOccupation } from "../../shared/onboardingPresets.js";
 import type { ClockPreference } from "./calendarPrefs.js";
 import type { BlockedInToday } from "./taskPrefs.js";
 import type { WeekStartPreference } from "./weekStart.js";
@@ -42,7 +43,15 @@ export const strings = {
       "Veza sa lokalnom bazom podataka nije uspostavljena. Zatvori aplikaciju i pokreni je ponovo.",
   },
 
+  /**
+   * ADR-065 — the four-screen questionnaire: ime + tema, uloga, oblasti,
+   * podsetnici. Every screen is skippable, and the copy never pretends
+   * otherwise: each answer says what it changes and that Podešavanja can undo
+   * it later, because that is the only honest way to ask four questions before
+   * anybody has seen the app.
+   */
   onboarding: {
+    /** Screen 1 — the original ONB-lite content, unchanged. */
     title: "Tvoj Nexus",
     description:
       "Nexus radi potpuno lokalno — svi podaci ostaju na ovom uređaju. Upiši ime profila i izaberi temu; sve ostalo podešavaš kasnije.",
@@ -58,7 +67,60 @@ export const strings = {
     nameLabel: "Ime profila",
     namePlaceholder: "Upiši ime",
     themeLabel: "Tema",
-    cta: "Kreni",
+    /** Screen 2 — uloga. Its only effect is which boxes the next screen opens ticked, and the description says exactly that. */
+    occupationTitle: "Šta te najbolje opisuje?",
+    occupationDescription:
+      "Na osnovu ovoga Nexus predlaže oblasti u sledećem koraku. To je predlog, ne pravilo — sve možeš da promeniš.",
+    occupationOptions: {
+      student: "Student",
+      zaposleni: "Zaposleni",
+      preduzetnik: "Preduzetnik",
+      drugo: "Nešto drugo",
+    } satisfies Record<OnboardingOccupation, string>,
+    /** Screen 3 — oblasti. The module names and one-line descriptions are the gallery's own (`settings.moduleDescriptions`), never respelled. */
+    modulesTitle: "Šta ti treba?",
+    modulesDescription:
+      "Izaberi oblasti koje želiš u Nexusu. Uključuješ ih i isključuješ kad god poželiš, u Podešavanjima → Moduli.",
+    /** Screen 4 — podsetnici; the three choices reuse `settings.notificationPresets`, so a word means the same set everywhere. */
+    remindersTitle: "Podsetnici",
+    remindersDescription: "Koliko obaveštenja želiš od Nexusa?",
+    /** Said out loud rather than left as a surprise: no pick here is a valid answer, and the one-time question (NTF-008) simply stays where it was. */
+    remindersNoChoice: "Ako ne izabereš, Nexus će pitati kada prvi podsetnik bude spreman.",
+    /** Screen chrome. „Korak 2 od 4“ is composed in JSX around the number, the `settings.backup.savedPrefix` idiom. */
+    stepPrefix: "Korak",
+    stepOf: "od",
+    next: "Dalje",
+    back: "Nazad",
+    start: "Počni",
+    /** First run only: stop asking and take what the flow already holds. */
+    skip: "Preskoči",
+    /** Rerun only: leave without writing anything — see `Onboarding.tsx` for why a rerun cannot „skip to Osnovno“. */
+    cancel: "Otkaži",
+    /** The same flow reopened from Podešavanja (SET). Screen 1 shows the current name, screen 3 the live modules. */
+    rerunTitle: "Ponovo podesi Nexus",
+    rerunDescription:
+      "Ista pitanja kao pri prvom pokretanju. Kreće od onoga što sada imaš i menja samo ono što promeniš.",
+    /**
+     * The one genuine starter row (ADR-065 §4): a real, useful, deletable note
+     * written through the ordinary note path. Markdown, because that is what
+     * `parseMarkdownNote` reads and what the note editor renders back. Every
+     * sentence is checkable in the app — no invented numbers, no promises the
+     * build does not keep, and no printed keyboard chord (they are remappable,
+     * ADR-040, so the note points at the screen that shows the live ones).
+     */
+    welcomeNote: {
+      title: "Dobro došli u Nexus",
+      body: `# Dobro došli u Nexus
+
+Ovo je tvoja prva beleška — promeni je ili obriši, tvoja je.
+
+- Svi podaci ostaju na ovom uređaju. Nexus ne šalje ništa na internet.
+- Oblasti uključuješ i isključuješ u Podešavanjima → Moduli.
+- Prečice na tastaturi vidiš i menjaš u Podešavanjima → Prečice.
+
+Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde.
+`,
+    },
     saveError: "Čuvanje nije uspelo. Pokušaj ponovo.",
   },
 
@@ -2468,6 +2530,17 @@ export const strings = {
     } as Record<string, string>,
     modulesAlwaysOn: "Uvek uključeno",
     modulesToggleError: "Promena nije uspela. Pokušaj ponovo.",
+    /**
+     * ADR-065 §5 — the one row that reopens the onboarding questionnaire. It
+     * sits at the foot of this card because the questionnaire's third screen IS
+     * this gallery, only asked as a question; the caption states the two things
+     * a rerun could otherwise be feared to do, since it starts from what the
+     * profile has and writes only what changes.
+     */
+    onboardingRerunTitle: "Podešavanje modula",
+    onboardingRerunAction: "Ponovo pokreni upitnik",
+    onboardingRerunCaption:
+      "Ista pitanja kao pri prvom pokretanju — kreće od onoga što sada imaš i menja samo ono što promeniš.",
     /** NTF-008 appetite presets — shortcuts over the per-source toggles below. */
     notificationPresets: {
       minimal: "Minimalno",
