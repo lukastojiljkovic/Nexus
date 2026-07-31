@@ -277,6 +277,70 @@ describe("TaskListStore — lists", () => {
       expect(() => lists.setViewConfig(inboxId, {}, "danas")).toThrow(TaskListValidationError);
     });
 
+    it("stores a kanban column arrangement whose keys the grouping actually has (ADR-060)", () => {
+      const { lists, inboxId } = scope();
+      const a = lists.createSection(inboxId, "Faza 1", NOW);
+      const b = lists.createSection(inboxId, "Faza 2", NOW);
+
+      const config: TaskViewConfig = {
+        kanban: { groupBy: "section", hiddenColumns: [b.id], columnOrder: [b.id, a.id] },
+      };
+      lists.setViewConfig(inboxId, config, LATER);
+      expect(lists.listActive()[0]?.viewConfig).toEqual(config);
+
+      const byStatus: TaskViewConfig = {
+        kanban: { hiddenColumns: ["done"], columnOrder: ["doing", "todo"] },
+      };
+      lists.setViewConfig(inboxId, byStatus, LATER);
+      expect(lists.listActive()[0]?.viewConfig).toEqual(byStatus);
+    });
+
+    it("refuses a section-grouped column key that is not a section of THIS list (ADR-060)", () => {
+      const { lists, inboxId } = scope();
+      const other = lists.createList({ name: "Druga", parentId: null }, NOW);
+      const foreign = lists.createSection(other.id, "Tuđa", NOW);
+
+      for (const key of [uuidv7(), foreign.id]) {
+        expect(() =>
+          lists.setViewConfig(
+            inboxId,
+            { kanban: { groupBy: "section", hiddenColumns: [key] } },
+            LATER,
+          ),
+        ).toThrow(TaskListValidationError);
+        expect(() =>
+          lists.setViewConfig(
+            inboxId,
+            { kanban: { groupBy: "section", columnOrder: [key] } },
+            LATER,
+          ),
+        ).toThrow(TaskListValidationError);
+      }
+      expect(storedViewConfig(inboxId)).toBeNull();
+    });
+
+    it("refuses a hidden set that would hide the whole board (ADR-060)", () => {
+      const { lists, inboxId } = scope();
+      expect(() =>
+        lists.setViewConfig(
+          inboxId,
+          { kanban: { hiddenColumns: ["todo", "doing", "done"] } } as TaskViewConfig,
+          LATER,
+        ),
+      ).toThrow(TaskListValidationError);
+      // Hiding every SECTION is not that: the list body column has no key and
+      // is always drawn, so the board keeps a column.
+      const section = lists.createSection(inboxId, "Jedina", NOW);
+      lists.setViewConfig(
+        inboxId,
+        { kanban: { groupBy: "section", hiddenColumns: [section.id] } },
+        LATER,
+      );
+      expect(lists.listActive()[0]?.viewConfig).toEqual({
+        kanban: { groupBy: "section", hiddenColumns: [section.id] },
+      });
+    });
+
     it("reads a damaged column leniently — a config can cost a fallback, never the list", () => {
       const { lists, inboxId } = scope();
       const write = (text: string) =>

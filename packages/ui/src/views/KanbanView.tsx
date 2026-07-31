@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import {
   applyFilters,
   applySort,
+  arrangeKanbanColumns,
   groupForKanban,
   moveBetweenGroups,
 } from "@nexus/core";
@@ -43,6 +44,12 @@ export interface KanbanViewProps<T extends Record<string, unknown>> {
    * human-ready option values need not pass it.
    */
   columnTitle?: (value: string) => string;
+  /**
+   * Renders one column's header actions (the TASK page hangs its „⋯“ hide menu
+   * here, ADR-060) — the same "modules own the anatomy" seam `renderCard` is.
+   * Called with the column's value, null for the ungrouped bucket.
+   */
+  columnActions?: (value: string | null) => ReactNode;
   /** Stable React key per item; falls back to the render index. */
   itemKey?: (item: T) => string | number;
 }
@@ -73,6 +80,7 @@ export function KanbanView<T extends Record<string, unknown>>({
   onMove,
   ungroupedTitle = "—",
   columnTitle,
+  columnActions,
   itemKey,
 }: KanbanViewProps<T>) {
   const dragged = useRef<T | null>(null);
@@ -81,14 +89,20 @@ export function KanbanView<T extends Record<string, unknown>>({
   // The bucket for values outside the select's options is noise until something
   // lands in it — unless the config says it is a real place of its own (a task
   // list's BODY, under section grouping), in which case a column that comes and
-  // goes with its contents is a drop target the user cannot rely on.
-  const groups = groupForKanban(
-    applySort(applyFilters(items, config.filters), config.sort, schema),
+  // goes with its contents is a drop target the user cannot rely on. What
+  // survives that rule is then ARRANGED (ADR-060): the config's own column
+  // order and hidden set, applied by the engine so this view and the caller's
+  // column list cannot disagree about what is drawn where.
+  const groups = arrangeKanbanColumns(
+    groupForKanban(
+      applySort(applyFilters(items, config.filters), config.sort, schema),
+      config,
+      schema,
+    ).filter(
+      (group) =>
+        group.value !== null || group.items.length > 0 || config.ungroupedAlwaysShown === true,
+    ),
     config,
-    schema,
-  ).filter(
-    (group) =>
-      group.value !== null || group.items.length > 0 || config.ungroupedAlwaysShown === true,
   );
   const columnValues = groups.map((group) => group.value);
 
@@ -134,7 +148,11 @@ export function KanbanView<T extends Record<string, unknown>>({
               finishDrag();
             }}
           >
-            <KanbanColumn title={title} count={group.items.length}>
+            <KanbanColumn
+              title={title}
+              count={group.items.length}
+              actions={columnActions?.(group.value)}
+            >
               {group.items.map((item, itemIndex) => (
                 <div
                   key={itemKey ? itemKey(item) : itemIndex}

@@ -860,12 +860,14 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.23.0`: the nearest minor strictly ahead of this build's `1.22.0`.
+  // SUPERVISOR NOTE: `1.25.0`, not `1.23.0` — the nearest minor strictly ahead
+  // of this build's `1.24.0`. `1.23.0` is a sibling lane's concurrent bump and
+  // sits BEHIND this build, so it would pass the gate, not exercise it.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.23.0" });
+    const files = baseFiles({ schemaVersion: "1.25.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.23.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.25.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -1088,7 +1090,9 @@ describe("parseImportArchive — task lists and sections (TASK-004 / ADR-029)", 
   it("round-trips a list's view config, and reads its absence as no preferences", () => {
     const viewConfig = {
       list: { sort: { field: "dueDate", direction: "asc" }, filters: { status: "todo" } },
-      kanban: { groupBy: "section" },
+      // The column arrangement rides INSIDE the config (ADR-060, `1.24.0`) —
+      // section ids here, whose existence is the store's check, not this gate's.
+      kanban: { groupBy: "section", hiddenColumns: ["sec-a"], columnOrder: ["sec-b", "sec-a"] },
       cards: { sort: { field: "title", direction: "desc" } },
       calendar: { filters: { priority: "high" } },
     };
@@ -1119,6 +1123,11 @@ describe("parseImportArchive — task lists and sections (TASK-004 / ADR-029)", 
     { name: "a view config grouping by something outside the set", row: { viewConfig: { kanban: { groupBy: "tag" } } }, detail: "viewConfig" },
     { name: "a view config sorting by a field the schema has not got", row: { viewConfig: { list: { sort: { field: "listId", direction: "asc" } } } }, detail: "viewConfig" },
     { name: "a view config filtering on a status outside the domain", row: { viewConfig: { cards: { filters: { status: "arhiva" } } } }, detail: "viewConfig" },
+    // ADR-060 (`1.24.0`): the column keys are the grouping's own vocabulary,
+    // and a set hiding EVERY column is not a view — both refused strictly here,
+    // exactly as the store's write gate refuses them.
+    { name: "a view config hiding a column the grouping has not got", row: { viewConfig: { kanban: { groupBy: "priority", hiddenColumns: ["todo"] } } }, detail: "viewConfig" },
+    { name: "a view config hiding every column of the board", row: { viewConfig: { kanban: { hiddenColumns: ["todo", "doing", "done"] } } }, detail: "viewConfig" },
     { name: "a non-boolean isInbox", row: { isInbox: 1 }, detail: "isInbox" },
     { name: "a fractional position", row: { position: 1.5 }, detail: "position" },
     { name: "no position at all", row: { position: undefined }, detail: "position" },
@@ -2836,8 +2845,10 @@ describe("parseImportArchive — note folder preferences (the 1.7.0 era gate)", 
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.22.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.22.0");
+  // SUPERVISOR NOTE: 1.24.0 skips 1.23.0 deliberately — a sibling lane holds
+  // 1.23.0 concurrently. After both merge, this pin stays at the higher number.
+  it("is 1.24.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.24.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -3027,11 +3038,13 @@ describe("parseImportArchive — schema version", () => {
     expect(result.manifest?.profile.kind).toBe("personal");
   });
 
-  // `1.23.0`: the nearest minor strictly ahead of this build's `1.22.0`.
+  // SUPERVISOR NOTE: `1.25.0`, not `1.23.0` — the nearest minor strictly ahead
+  // of this build's `1.24.0` (`1.23.0` belongs to a sibling lane and is BEHIND
+  // this build, so it parses; see the constant's note).
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.23.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.25.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.23.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.25.0" },
     ]);
     expect(result.data).toBeNull();
   });

@@ -121,6 +121,91 @@ describe("parseStoredTaskViewConfig / serializeTaskViewConfig", () => {
   });
 });
 
+describe("kanban column configuration (ADR-060)", () => {
+  it("accepts hidden columns and an order in the grouping's own vocabulary, copied fresh", () => {
+    const config = {
+      kanban: { groupBy: "priority", hiddenColumns: ["none"], columnOrder: ["high", "low"] },
+    };
+    const validated = validateTaskViewConfig(config);
+    expect(validated).toEqual(config);
+    expect(validated?.kanban?.hiddenColumns).not.toBe(config.kanban.hiddenColumns);
+    expect(validated?.kanban?.columnOrder).not.toBe(config.kanban.columnOrder);
+  });
+
+  it("reads an absent groupBy as the status board — the grouping the page draws by default", () => {
+    expect(validateTaskViewConfig({ kanban: { hiddenColumns: ["done"] } })).toEqual({
+      kanban: { hiddenColumns: ["done"] },
+    });
+    expect(validateTaskViewConfig({ kanban: { hiddenColumns: ["high"] } })).toBeNull();
+  });
+
+  it("checks the keys against the grouping the config itself names", () => {
+    expect(
+      validateTaskViewConfig({ kanban: { groupBy: "status", hiddenColumns: ["high"] } }),
+    ).toBeNull();
+    expect(
+      validateTaskViewConfig({ kanban: { groupBy: "priority", columnOrder: ["todo"] } }),
+    ).toBeNull();
+  });
+
+  it("accepts section ids as keys under section grouping — their existence is the store's check, not this shape's", () => {
+    const config = {
+      kanban: { groupBy: "section", hiddenColumns: ["sec-1"], columnOrder: ["sec-2", "sec-1"] },
+    };
+    expect(validateTaskViewConfig(config)).toEqual(config);
+  });
+
+  it("refuses a key list that is not an array of distinct non-empty strings", () => {
+    expect(validateTaskViewConfig({ kanban: { hiddenColumns: "todo" } })).toBeNull();
+    expect(validateTaskViewConfig({ kanban: { hiddenColumns: [7] } })).toBeNull();
+    expect(validateTaskViewConfig({ kanban: { hiddenColumns: [""] } })).toBeNull();
+    expect(validateTaskViewConfig({ kanban: { columnOrder: ["todo", "todo"] } })).toBeNull();
+  });
+
+  it("refuses a hidden set that hides every column — a board with no columns is not a view", () => {
+    expect(
+      validateTaskViewConfig({ kanban: { hiddenColumns: ["todo", "doing", "done"] } }),
+    ).toBeNull();
+    expect(
+      validateTaskViewConfig({
+        kanban: { groupBy: "priority", hiddenColumns: ["none", "low", "medium", "high"] },
+      }),
+    ).toBeNull();
+    // An ORDER naming every column is just a complete order, not a loss.
+    expect(validateTaskViewConfig({ kanban: { columnOrder: ["todo", "doing", "done"] } })).toEqual({
+      kanban: { columnOrder: ["todo", "doing", "done"] },
+    });
+  });
+
+  it("prunes empty key lists, so one arrangement has one canonical form", () => {
+    expect(validateTaskViewConfig({ kanban: { hiddenColumns: [], columnOrder: [] } })).toEqual({});
+  });
+
+  it("normalizes leniently: unknown keys drop, duplicates collapse, a hide-everything set drops whole", () => {
+    expect(
+      normalizeTaskViewConfig({
+        kanban: {
+          groupBy: "status",
+          hiddenColumns: ["done", "urgent", "done", 5],
+          columnOrder: ["doing", "gantt", "todo"],
+        },
+      }),
+    ).toEqual({
+      kanban: { groupBy: "status", hiddenColumns: ["done"], columnOrder: ["doing", "todo"] },
+    });
+    expect(normalizeTaskViewConfig({ kanban: { hiddenColumns: ["todo", "doing", "done"] } })).toEqual(
+      {},
+    );
+  });
+
+  it("round-trips the arrangement through the column", () => {
+    const config: TaskViewConfig = {
+      kanban: { groupBy: "priority", hiddenColumns: ["none"], columnOrder: ["high", "medium", "low"] },
+    };
+    expect(parseStoredTaskViewConfig(serializeTaskViewConfig(config))).toEqual(config);
+  });
+});
+
 describe("taskViewFilterSpecs", () => {
   it("renders the filters as engine specs in a fixed order", () => {
     expect(taskViewFilterSpecs({ priority: "high", status: "doing" })).toEqual([

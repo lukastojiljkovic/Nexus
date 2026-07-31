@@ -123,6 +123,61 @@ export function groupForKanban<T extends Record<string, unknown>>(
 }
 
 /**
+ * Column keys in drawing order (ADR-060): keys listed in `order` first, in that
+ * order, then every unlisted key in its natural order — so a key the order has
+ * never heard of APPEARS at the end rather than vanishing. Keys `natural` does
+ * not contain are dropped (a stale order entry must not conjure a column), and
+ * a duplicate is drawn once. Pure and total: no order means the natural order.
+ */
+export function orderKanbanColumnKeys(
+  natural: readonly string[],
+  order: readonly string[] | undefined,
+): string[] {
+  if (order === undefined || order.length === 0) return [...natural];
+  const remaining = new Set(natural);
+  const arranged: string[] = [];
+  for (const key of order) {
+    if (remaining.delete(key)) arranged.push(key);
+  }
+  for (const key of natural) if (remaining.has(key)) arranged.push(key);
+  return arranged;
+}
+
+/**
+ * The drawn board, arranged (ADR-060): the keyed columns reordered by
+ * `config.columnOrder` (see `orderKanbanColumnKeys`) and stripped of
+ * `config.hiddenColumns`, with the ungrouped bucket — which has no key to hide
+ * or order by — kept at its trailing place. Takes the groups a view is actually
+ * DRAWING (after its own occupancy rules), because the one guard here is about
+ * what ends up on screen: a hidden set that would leave the board without a
+ * single column is ignored outright, since a board with no columns is not a
+ * view. Hiding is a VIEW fact — the hidden groups' items still exist and still
+ * count everywhere else; they are simply not drawn here.
+ */
+export function arrangeKanbanColumns<T>(
+  groups: readonly KanbanGroup<T>[],
+  config: KanbanViewConfig,
+): KanbanGroup<T>[] {
+  const trailing = groups.filter((group) => group.value === null);
+  const byKey = new Map<string, KanbanGroup<T>>();
+  const natural: string[] = [];
+  for (const group of groups) {
+    if (group.value === null) continue;
+    natural.push(group.value);
+    byKey.set(group.value, group);
+  }
+  const ordered: KanbanGroup<T>[] = [];
+  for (const key of orderKanbanColumnKeys(natural, config.columnOrder)) {
+    const group = byKey.get(key);
+    if (group !== undefined) ordered.push(group);
+  }
+  const hidden = new Set(config.hiddenColumns ?? []);
+  const drawn = ordered.filter((group) => group.value === null || !hidden.has(group.value));
+  const kept = drawn.length === 0 && trailing.length === 0 ? ordered : drawn;
+  return [...kept, ...trailing];
+}
+
+/**
  * The field patch a drop between kanban columns means: set the grouped field
  * to the target column's option, or clear it (null) for the ungrouped bucket.
  * The engine owns drag semantics; callers apply the patch to storage — that

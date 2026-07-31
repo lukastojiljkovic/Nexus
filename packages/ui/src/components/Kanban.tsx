@@ -3,17 +3,22 @@ import type { ReactNode } from "react";
 export interface KanbanColumnProps {
   title: string;
   count?: number;
+  /** Header actions beside the count (e.g. the TASK board's „⋯“ column menu, ADR-060). Modules own what they do. */
+  actions?: ReactNode;
   children?: ReactNode;
 }
 
-export function KanbanColumn({ title, count, children }: KanbanColumnProps) {
+export function KanbanColumn({ title, count, actions, children }: KanbanColumnProps) {
   return (
     <div className="nx-kanban-col">
       <div className="nx-kanban-col__head">
         <span>{title}</span>
-        {count != null && (
-          <span className="nx-kanban-col__count">{count}</span>
-        )}
+        <span className="nx-kanban-col__tools">
+          {count != null && (
+            <span className="nx-kanban-col__count">{count}</span>
+          )}
+          {actions}
+        </span>
       </div>
       {children}
     </div>

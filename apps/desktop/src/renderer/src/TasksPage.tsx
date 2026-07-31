@@ -74,6 +74,13 @@ import type {
   TaskTemplate,
 } from "../../shared/ipc.js";
 import { localTodayKey } from "./examDates.js";
+import {
+  hiddenKanbanColumnCount,
+  kanbanColumnRows,
+  moveKanbanColumn,
+  pruneStaleSectionColumns,
+  toggleKanbanColumnHidden,
+} from "./kanbanColumns.js";
 import { NotePopover } from "./notePopover.js";
 import { RecurrenceMark, RecurrencePicker } from "./RecurrencePicker.js";
 import { TaskMonthGrid } from "./TaskMonthGrid.js";
@@ -1270,6 +1277,31 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   /** That order as bare ids — the scope „Pomeri gore/dole“ steps a heading through (`stepNeighbours`). */
   const sectionOrder = listSections.map((section) => section.id);
 
+  /**
+   * ADR-060: the CURRENT grouping's column vocabulary, in the natural order the
+   * board draws without an arrangement — statuses, priorities urgent-first, or
+   * this list's sections by their own order. `hiddenColumns`/`columnOrder` keys
+   * are checked against and arranged over exactly this set. Sections contribute
+   * their IDS (a rename must not unhide), and the section board's keyless „Telo
+   * liste“ is not in it — which is why that column can be neither hidden nor
+   * reordered.
+   */
+  const kanbanColumnKeys: readonly string[] =
+    kanbanGroupBy === "status"
+      ? TASK_STATUSES
+      : kanbanGroupBy === "priority"
+        ? KANBAN_PRIORITY_COLUMNS
+        : sectionOrder;
+  /** The „Kolone“ popover's rows — every column, hidden ones included, so hiding stays reversible. */
+  const kanbanRows = kanbanColumnRows(kanbanColumnKeys, kanbanSettings);
+  /** How many columns the board is suppressing; the „Skrivene kolone“ chip is drawn exactly when this is positive. */
+  const hiddenKanbanCount = hiddenKanbanColumnCount(kanbanColumnKeys, kanbanSettings);
+  /** ↑/↓ only for status/prioritet (ADR-060): sections already have their own order control, the list view's „Pomeri gore/dole“. */
+  const kanbanReorderable = kanbanGroupBy !== "section";
+  /** Whether hiding ONE MORE drawn column is refused: without the section board's fixed „Telo liste“, the last drawn column must stay. */
+  const kanbanHideRefused =
+    kanbanGroupBy !== "section" && kanbanColumnKeys.length - hiddenKanbanCount <= 1;
+
   // The tag ids each task carries, from the flat link list — one pass over an
   // array the page already holds, like the tree below.
   const tagIdsByTask = new Map<string, Set<string>>();
@@ -1598,7 +1630,11 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   function saveViewConfig(draft: unknown): void {
     const list = selectedList;
     if (list === null) return;
-    const next = normalizeTaskViewConfig(draft);
+    // The stale-section prune (ADR-060, see `pruneStaleSectionColumns`): a
+    // deleted heading's id may still sit in the stored arrangement, and the
+    // store refuses writes naming sections the list has not got — pruning here
+    // keeps that refusal for real mistakes without sinking an unrelated write.
+    const next = pruneStaleSectionColumns(normalizeTaskViewConfig(draft), sectionOrder);
     const stored = isEmptyTaskViewConfig(next) ? null : next;
     void (async () => {
       try {
@@ -1635,7 +1671,41 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   }
 
   function setKanbanGroupBy(groupBy: TaskViewKanbanGroup): void {
-    saveViewConfig({ ...viewConfig, kanban: { ...kanbanSettings, groupBy } });
+    if (groupBy === kanbanGroupBy) return;
+    // The column arrangement's keys are the grouping's OWN vocabulary
+    // (ADR-060): a hidden status means nothing to a section board, and the
+    // strict write gate would refuse the mix — so a grouping switch starts
+    // with every column drawn, in natural order.
+    const kept: TaskKanbanViewSettings = { groupBy };
+    if (kanbanSettings.sort !== undefined) kept.sort = kanbanSettings.sort;
+    if (kanbanSettings.filters !== undefined) kept.filters = kanbanSettings.filters;
+    saveViewConfig({ ...viewConfig, kanban: kept });
+  }
+
+  /** ADR-060: replaces the board's column arrangement, leaving every other kanban knob as it is. */
+  function setKanbanColumns(next: {
+    hiddenColumns?: string[] | undefined;
+    columnOrder?: string[] | undefined;
+  }): void {
+    saveViewConfig({ ...viewConfig, kanban: { ...kanbanSettings, ...next } });
+  }
+
+  /** Hides or re-shows one column. A refused hide (the last drawn column) is a no-op; the controls disable it too. */
+  function toggleKanbanColumn(key: string): void {
+    const next = toggleKanbanColumnHidden(
+      kanbanColumnKeys,
+      kanbanSettings,
+      key,
+      kanbanGroupBy === "section",
+    );
+    if (next === null) return;
+    setKanbanColumns({ hiddenColumns: next.length === 0 ? undefined : next });
+  }
+
+  /** Steps one column through the drawn order (↑/↓ in the „Kolone“ popover); an edge is a disabled no-op. */
+  function moveKanbanColumnKey(key: string, delta: -1 | 1): void {
+    const next = moveKanbanColumn(kanbanColumnKeys, kanbanSettings, key, delta);
+    if (next !== null) setKanbanColumns({ columnOrder: next });
   }
 
   /** Switches the page to another list, closing everything that was bound to the one being left. */
@@ -3579,6 +3649,15 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     // in it: every task carries both.
     ungroupedAlwaysShown: kanbanGroupBy === "section",
     ...(activeSort === undefined ? {} : { sort: activeSort }),
+    // The list's own column arrangement (ADR-060), applied where the columns
+    // are drawn; the board's engine drops stale keys and refuses to draw an
+    // empty board, so a stored set can only ever cost a fallback.
+    ...(kanbanSettings.hiddenColumns === undefined
+      ? {}
+      : { hiddenColumns: kanbanSettings.hiddenColumns }),
+    ...(kanbanSettings.columnOrder === undefined
+      ? {}
+      : { columnOrder: kanbanSettings.columnOrder }),
   };
 
   const sectionNameById = new Map(listSections.map((section) => [section.id, section.name]));
@@ -4076,6 +4155,85 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
               </select>
             )}
 
+            {/* „Kolone“ (ADR-060): one row per column of the CURRENT grouping,
+                hidden ones included — hiding must always be reversible from
+                here. The row's toggle is a menuitemcheckbox (drawn = checked);
+                unchecking the last drawn column is disabled, because a board
+                with no columns is not a view. ↑/↓ reorder only for status and
+                prioritet — sections already have their own order control (the
+                list view's „Pomeri gore/dole“), and a second one here would
+                let the two disagree. The popover stays open across toggles: it
+                is a checklist, not a pick-one menu. */}
+            {view === "kanban" && kanbanRows.length > 0 && (
+              <NotePopover
+                label={strings.tasks.controls.columnsLabel}
+                triggerContent={strings.tasks.controls.columns}
+                triggerClassName="tasks__columns-trigger"
+              >
+                {() => (
+                  <>
+                    <span className="note__menu-label">
+                      {strings.tasks.controls.columnsLabel}
+                    </span>
+                    {kanbanRows.map(({ key, hidden }, index) => {
+                      const title = kanbanColumnTitle(key);
+                      return (
+                        <div key={key} className="tasks__column-row">
+                          <button
+                            className="note__menu-item note__menu-item--check tasks__column-toggle"
+                            role="menuitemcheckbox"
+                            aria-checked={!hidden}
+                            type="button"
+                            disabled={!hidden && kanbanHideRefused}
+                            onClick={() => toggleKanbanColumn(key)}
+                          >
+                            <span
+                              className={`note__menu-check${hidden ? " note__menu-check--hidden" : ""}`}
+                              aria-hidden="true"
+                            >
+                              ✓
+                            </span>
+                            {title}
+                          </button>
+                          {kanbanReorderable && (
+                            <>
+                              <button
+                                className="tasks__column-step"
+                                type="button"
+                                aria-label={`${strings.tasks.controls.columnUp}: ${title}`}
+                                disabled={index === 0}
+                                onClick={() => moveKanbanColumnKey(key, -1)}
+                              >
+                                ↑
+                              </button>
+                              <button
+                                className="tasks__column-step"
+                                type="button"
+                                aria-label={`${strings.tasks.controls.columnDown}: ${title}`}
+                                disabled={index === kanbanRows.length - 1}
+                                onClick={() => moveKanbanColumnKey(key, 1)}
+                              >
+                                ↓
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+              </NotePopover>
+            )}
+
+            {/* The quiet statement that columns are not being drawn (ADR-060) —
+                rows never vanish silently. A caption, not a control: the
+                popover beside it is where hiding is undone. */}
+            {view === "kanban" && hiddenKanbanCount > 0 && (
+              <span className="tasks__hidden-columns" role="status">
+                {strings.tasks.controls.hiddenColumns} {hiddenKanbanCount}
+              </span>
+            )}
+
             <select
               className="tasks__select"
               value={activeFilters.status ?? ""}
@@ -4427,6 +4585,33 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
             config={kanbanConfig}
             columnTitle={kanbanColumnTitle}
             ungroupedTitle={kanbanUngroupedTitle}
+            // The column head's own „⋯“ (ADR-060): one action, „Sakrij kolonu“,
+            // disabled on the last drawn column. The keyless „Telo liste“
+            // bucket cannot be hidden, so it gets no menu rather than a menu
+            // of nothing.
+            columnActions={(value) =>
+              value === null ? null : (
+                <NotePopover
+                  label={`${strings.tasks.controls.columnMenuLabel} ${kanbanColumnTitle(value)}`}
+                  triggerClassName="tasks__column-menu"
+                >
+                  {(close) => (
+                    <button
+                      className="note__menu-item"
+                      role="menuitem"
+                      type="button"
+                      disabled={kanbanHideRefused}
+                      onClick={() => {
+                        toggleKanbanColumn(value);
+                        close();
+                      }}
+                    >
+                      {strings.tasks.controls.hideColumn}
+                    </button>
+                  )}
+                </NotePopover>
+              )
+            }
             itemKey={(task) => task.id}
             renderCard={(task, { groupValue, columnValues }) => (
               <KanbanCard

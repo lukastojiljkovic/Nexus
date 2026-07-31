@@ -315,6 +315,13 @@
 .nx-kanban-col__count {
   font-variant-numeric: tabular-nums;
 }
+/* The head's right side: the count and, when a module hangs one here (ADR-060),
+   its column actions — one flex group so the pair stays on the head's baseline. */
+.nx-kanban-col__tools {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
 .nx-kanban-card {
   background: var(--nx-surface);
   border: 1px solid var(--nx-border);

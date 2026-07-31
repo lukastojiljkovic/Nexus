@@ -44,6 +44,26 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
  *
+ * `1.24.0` adds a task list's kanban column arrangement (ADR-060): two OPTIONAL
+ * members INSIDE the `task-list` row's existing `viewConfig` object —
+ * `kanban.hiddenColumns` and `kanban.columnOrder`, both absent meaning "every
+ * column drawn, in natural order", which is what every earlier archive's boards
+ * were. Not a new record type, not even a new top-level field — and a MINOR
+ * bump all the same, because the interchange does NOT carry the stored JSON
+ * verbatim: the exporter serializes the config from the store's PARSED,
+ * leniently-read form (`TaskListStore` reads the column through
+ * `parseStoredTaskViewConfig`, which drops what it does not recognize), and the
+ * reader re-validates it STRICTLY against its own grammar
+ * (`parseTaskList` → `validateTaskViewConfig`, which refuses what it does not
+ * recognize). An older build handed this archive would therefore not round-trip
+ * the arrangement blind — it would refuse the row as a malformed `viewConfig`,
+ * a baffling field error on a perfectly honest file. The version gate turns
+ * that into the truthful answer an older reader owes a newer archive, exactly
+ * as `1.16.0` did when `viewConfig` itself arrived.
+ *
+ * `1.23.0` is deliberately not this entry: it is reserved by a concurrent
+ * change (see the note at the constant below).
+ *
  * `1.22.0` adds the profile's `kind` (ADR-058, business profiles): one field on
  * the manifest's own `profile` object, ALWAYS written — what kind of profile an
  * archive is OF is never something a reader should infer. A manifest fact
@@ -136,7 +156,11 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.22.0";
+// SUPERVISOR NOTE: this lane takes 1.24.0, skipping 1.23.0, because a sibling
+// lane concurrently holds 1.23.0 for its own addition. Whichever lane merges
+// second must keep BOTH history entries and leave this constant at the higher
+// number; the skip is deliberate, not a gap to "fix".
+const SCHEMA_VERSION = "1.24.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 

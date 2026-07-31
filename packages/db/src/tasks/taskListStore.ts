@@ -466,6 +466,26 @@ export class TaskListStore {
       throw new TaskListValidationError('"config" is not a valid task view configuration.');
     }
     this.requireActiveList(id);
+    // ADR-060: a section-grouped board's column keys are section IDS — the one
+    // vocabulary the shape validator cannot know, so it is checked here, where
+    // the sections are. Closed vocabularies (status/priority) and the
+    // hide-every-column refusal are already the validator's; hiding every
+    // SECTION is legal, because the keyless list-body column is always drawn.
+    const kanban = valid.kanban;
+    if (kanban !== undefined && kanban.groupBy === "section") {
+      const keys = [...(kanban.hiddenColumns ?? []), ...(kanban.columnOrder ?? [])];
+      if (keys.length > 0) {
+        const rows = this.selectSectionScopeIds.all(id) as { id: string }[];
+        const sections = new Set(rows.map((row) => row.id));
+        for (const key of keys) {
+          if (!sections.has(key)) {
+            throw new TaskListValidationError(
+              '"config" names a kanban column that is not a section of this list.',
+            );
+          }
+        }
+      }
+    }
     this.updateListViewConfig.run(
       serializeTaskViewConfig(valid),
       validNow,

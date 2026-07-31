@@ -64,8 +64,10 @@ export type {
 export {
   applyFilters,
   applySort,
+  arrangeKanbanColumns,
   groupForKanban,
   moveBetweenGroups,
+  orderKanbanColumnKeys,
   ViewConfigError,
 } from "./views/engine.js";
 export type { KanbanGroup } from "./views/engine.js";

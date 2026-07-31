@@ -8,10 +8,13 @@ import type {
 import {
   applyFilters,
   applySort,
+  arrangeKanbanColumns,
   groupForKanban,
   moveBetweenGroups,
+  orderKanbanColumnKeys,
   ViewConfigError,
 } from "./engine.js";
+import type { KanbanGroup } from "./engine.js";
 
 const schema: CollectionSchema = {
   fields: [
@@ -236,6 +239,70 @@ describe("groupForKanban", () => {
     expect(() =>
       groupForKanban([], { type: "kanban", groupBy: "kolona" }, schema),
     ).toThrow(ViewConfigError);
+  });
+});
+
+describe("orderKanbanColumnKeys", () => {
+  it("puts listed keys first in their listed order, appends the rest naturally, drops unknown keys", () => {
+    expect(orderKanbanColumnKeys(["a", "b", "c"], ["c", "x", "a"])).toEqual(["c", "a", "b"]);
+  });
+
+  it("returns the natural order untouched without an order, and ignores a duplicate entry", () => {
+    expect(orderKanbanColumnKeys(["a", "b"], undefined)).toEqual(["a", "b"]);
+    expect(orderKanbanColumnKeys(["a", "b"], [])).toEqual(["a", "b"]);
+    expect(orderKanbanColumnKeys(["a", "b"], ["b", "b"])).toEqual(["b", "a"]);
+  });
+});
+
+describe("arrangeKanbanColumns", () => {
+  // The board as KanbanView draws it before arranging: keyed columns in natural
+  // order, the ungrouped bucket trailing.
+  const board = (): KanbanGroup<Record<string, unknown>>[] => [
+    { value: "Za učenje", items: [{ naslov: "a" }] },
+    { value: "U toku", items: [] },
+    { value: "Naučeno", items: [{ naslov: "b" }] },
+    { value: null, items: [{ naslov: "c" }] },
+  ];
+  const values = (groups: readonly KanbanGroup<Record<string, unknown>>[]) =>
+    groups.map((g) => g.value);
+
+  it("returns the drawn columns unchanged when nothing is configured", () => {
+    expect(values(arrangeKanbanColumns(board(), kanban))).toEqual([
+      "Za učenje",
+      "U toku",
+      "Naučeno",
+      null,
+    ]);
+  });
+
+  it("draws ordered keys first, appends the unlisted in natural order, keeps the bucket trailing", () => {
+    expect(
+      values(arrangeKanbanColumns(board(), { ...kanban, columnOrder: ["Naučeno"] })),
+    ).toEqual(["Naučeno", "Za učenje", "U toku", null]);
+  });
+
+  it("drops order keys the board does not have — a stale id must not conjure a column", () => {
+    expect(
+      values(arrangeKanbanColumns(board(), { ...kanban, columnOrder: ["Nema", "U toku"] })),
+    ).toEqual(["U toku", "Za učenje", "Naučeno", null]);
+  });
+
+  it("does not draw hidden columns, and can never hide the ungrouped bucket", () => {
+    expect(
+      values(arrangeKanbanColumns(board(), { ...kanban, hiddenColumns: ["U toku"] })),
+    ).toEqual(["Za učenje", "Naučeno", null]);
+  });
+
+  it("ignores a hidden set that would leave the board without a single column", () => {
+    const everything = ["Za učenje", "U toku", "Naučeno"];
+    const noBucket = board().filter((g) => g.value !== null);
+    expect(
+      values(arrangeKanbanColumns(noBucket, { ...kanban, hiddenColumns: everything })),
+    ).toEqual(everything);
+    // With the bucket drawn the board keeps a column, so the hiding stands.
+    expect(
+      values(arrangeKanbanColumns(board(), { ...kanban, hiddenColumns: everything })),
+    ).toEqual([null]);
   });
 });
 

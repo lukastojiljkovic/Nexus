@@ -915,16 +915,66 @@ body {
 
 /* „Šabloni“ (ADR-035) borrows the popover trigger (.note__menu-trigger) but is
    a NAMED button, not the row-level "⋯" glyph — so it takes the toggle's quiet
-   text feel and a width that fits a word instead of the 24px grid square. */
-.tasks__templates-trigger {
+   text feel and a width that fits a word instead of the 24px grid square.
+   „Kolone“ (ADR-060) is the same arrangement one row down, among the board's
+   controls. */
+.tasks__templates-trigger,
+.tasks__columns-trigger {
   /* Only the WIDTH opens up: the trigger keeps its 24px height and its grid
      centring, so the word sits on the same baseline as the toggle beside it. */
   width: auto;
   padding: 0 var(--nx-space-2);
   font-size: var(--nx-font-size-body-sm);
 }
-.tasks__templates-trigger[aria-expanded="true"] {
+.tasks__templates-trigger[aria-expanded="true"],
+.tasks__columns-trigger[aria-expanded="true"] {
   color: var(--nx-text);
+}
+
+/* The board's column configuration (ADR-060). One popover row: the checkmark
+   toggle (the house .note__menu-item--check recipe — the mark keeps its slot
+   while unchecked, so titles stay aligned) grows, and the ↑/↓ steps stay a
+   quiet fixed square on its right. */
+.tasks__column-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.tasks__column-toggle {
+  flex: 1;
+}
+.tasks__column-step {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--nx-radius-sm);
+  background: transparent;
+  color: var(--nx-text-muted);
+  cursor: pointer;
+}
+.tasks__column-step:hover:not(:disabled) {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.tasks__column-step:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* The column head's own „⋯“ — the card menu's rule (always drawn, never
+   hover-revealed: it is the keyboard's way to hide a column too). */
+.tasks__column-menu.note__menu-trigger {
+  flex: none;
+  cursor: pointer;
+}
+.tasks__column-menu:hover {
+  background: var(--nx-surface-alt);
+}
+/* The quiet statement that columns are hidden — a caption among the controls,
+   deliberately not a button: the „Kolone“ popover is where it is undone. */
+.tasks__hidden-columns {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
 }
 /* One template in the popover list: its name applies it, the × removes it. */
 .tasks__template-row {

@@ -94,6 +94,30 @@ export interface TaskSortedViewSettings {
 
 export interface TaskKanbanViewSettings extends TaskSortedViewSettings {
   groupBy?: TaskViewKanbanGroup;
+  /**
+   * Column KEYS the board does not draw (ADR-060). The vocabulary is the
+   * GROUPING'S OWN — a status value, a priority value, or a section ID (the id,
+   * not the name, so a rename cannot unhide) — and both readings re-check it
+   * against the grouping this same object names (absent = `"status"`, the board
+   * the page draws by default). Hiding is a VIEW fact: the rows still exist,
+   * still count in the rail and still surface in the list view; the board
+   * simply does not draw the column and says so in its header. A set that would
+   * hide EVERY column of a closed grouping is refused strictly and dropped
+   * leniently — a board with no columns is not a view. Section ids cannot be
+   * checked here (the list's sections live in the store); they are validated as
+   * existing sections on write and dropped at the board when stale.
+   */
+  hiddenColumns?: string[];
+  /**
+   * The drawn columns' order, same vocabulary (ADR-060): listed keys first, in
+   * this order; unlisted keys after them in their natural order (a new status
+   * or section APPEARS, never vanishes); unknown keys dropped where the board
+   * is arranged. Under section grouping the sections' own order is the natural
+   * base and this still applies on read — but the UI offers reordering only for
+   * status/priority groupings, because sections already have their own order
+   * control (the list view's section move menu).
+   */
+  columnOrder?: string[];
 }
 
 /** The calendar view: filters only — its order is the calendar's (see `CalendarViewConfig`). */
@@ -195,20 +219,73 @@ function readSorted(value: unknown, mode: Mode): TaskSortedViewSettings | undefi
   return Object.keys(settings).length === 0 ? undefined : settings;
 }
 
+/**
+ * A list of column KEYS (ADR-060): distinct non-empty strings, each a member of
+ * `allowed` when the grouping's vocabulary is closed (`null` for section ids,
+ * whose set only the store knows). Strict rejects the first bad entry; lenient
+ * drops it. An empty result reads as absent, so `[]` and "never set" have one
+ * stored form.
+ */
+function readColumnKeys(
+  value: unknown,
+  allowed: readonly string[] | null,
+  mode: Mode,
+): string[] | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!Array.isArray(value)) {
+    if (mode === "strict") throw new RejectedError();
+    return undefined;
+  }
+  const keys: string[] = [];
+  for (const entry of value) {
+    const accepted =
+      typeof entry === "string" &&
+      entry.length > 0 &&
+      (allowed === null || allowed.includes(entry)) &&
+      !keys.includes(entry);
+    if (accepted) keys.push(entry);
+    else if (mode === "strict") throw new RejectedError();
+  }
+  return keys.length === 0 ? undefined : keys;
+}
+
 function readKanban(value: unknown, mode: Mode): TaskKanbanViewSettings | undefined {
   if (value === undefined || value === null) return undefined;
   if (!isRecord(value)) {
     if (mode === "strict") throw new RejectedError();
     return undefined;
   }
-  assertKnownKeys(value, ["groupBy", "sort", "filters"], mode);
+  assertKnownKeys(value, ["groupBy", "sort", "filters", "hiddenColumns", "columnOrder"], mode);
   const groupBy = member(value["groupBy"], TASK_VIEW_KANBAN_GROUPS, mode);
   const sort = readSort(value["sort"], mode);
   const filters = readFilters(value["filters"], mode);
+  // The column-key vocabulary is the grouping's own (ADR-060), and the grouping
+  // is THIS object's — absent means "status", the board the page draws by
+  // default. Section ids are open here (see the member's doc); the closed sets
+  // are checked in full.
+  const grouping = groupBy ?? "status";
+  const vocabulary =
+    grouping === "status"
+      ? TASK_VIEW_FILTER_STATUSES
+      : grouping === "priority"
+        ? TASK_VIEW_FILTER_PRIORITIES
+        : null;
+  let hiddenColumns = readColumnKeys(value["hiddenColumns"], vocabulary, mode);
+  const columnOrder = readColumnKeys(value["columnOrder"], vocabulary, mode);
+  // Entries are distinct members of the closed vocabulary, so covering its
+  // length is covering ALL of it: a board with no columns is not a view. The
+  // lenient reading falls back to drawing everything — the same "costs a
+  // default, never a loss" posture the file header states.
+  if (hiddenColumns !== undefined && vocabulary !== null && hiddenColumns.length === vocabulary.length) {
+    if (mode === "strict") throw new RejectedError();
+    hiddenColumns = undefined;
+  }
   const settings: TaskKanbanViewSettings = {};
   if (groupBy !== undefined) settings.groupBy = groupBy;
   if (sort !== undefined) settings.sort = sort;
   if (filters !== undefined) settings.filters = filters;
+  if (hiddenColumns !== undefined) settings.hiddenColumns = hiddenColumns;
+  if (columnOrder !== undefined) settings.columnOrder = columnOrder;
   return Object.keys(settings).length === 0 ? undefined : settings;
 }
 

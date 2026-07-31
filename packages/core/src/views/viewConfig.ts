@@ -29,6 +29,24 @@ export interface KanbanViewConfig {
   sort?: SortSpec;
   filters?: FilterSpec[];
   /**
+   * Column KEYS (groupBy option values) the board does not draw (ADR-060). A
+   * VIEW fact, never a data one: the rows of a hidden column still exist, still
+   * count, and still surface in every other view — the board simply does not
+   * draw the column (the caller's own header says so; see the TASK page's
+   * „Skrivene kolone“ chip). The ungrouped bucket has no key and so can never
+   * be hidden, and a set that would hide EVERY drawn column is ignored where
+   * the columns are arranged — a board with no columns is not a view.
+   */
+  hiddenColumns?: readonly string[];
+  /**
+   * The drawn columns' order, same vocabulary (ADR-060): listed keys draw
+   * first, in this order; keys absent from the list draw AFTER them in their
+   * natural (options) order, so a new option APPEARS rather than vanishing;
+   * keys the board does not have are ignored. The ungrouped bucket keeps its
+   * trailing place regardless.
+   */
+  columnOrder?: readonly string[];
+  /**
    * Whether the trailing ungrouped column is drawn even while it is empty
    * (ADR-050). Off by default, which is the rule every board has had: a bucket
    * for values outside the select's options is noise until something lands in

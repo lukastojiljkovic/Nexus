@@ -472,6 +472,23 @@ export const strings = {
       moveLeft: "Pomeri levo",
       moveRight: "Pomeri desno",
       /**
+       * The board's column configuration (ADR-060). The „Kolone“ popover lists
+       * every column of the current grouping — hidden ones included, so hiding
+       * is always reversible — and the chip states how many the board is not
+       * drawing, because a column that quietly vanished would read as lost
+       * work. The rows' ↑/↓ move within the popover's top-to-bottom list, which
+       * IS the board's left-to-right order.
+       */
+      columns: "Kolone",
+      columnsLabel: "Kolone table",
+      /** The column head's own „⋯“ menu; rendered with the column's title after it. */
+      columnMenuLabel: "Radnje nad kolonom",
+      hideColumn: "Sakrij kolonu",
+      columnUp: "Pomeri gore",
+      columnDown: "Pomeri dole",
+      /** The quiet chip beside the controls; rendered with the count after it: „Skrivene kolone: 2“. */
+      hiddenColumns: "Skrivene kolone:",
+      /**
        * Shown in place of the rows when the view's own filter matches nothing.
        * Its own sentence rather than the oznake one: the two hide rows for
        * different reasons, and an answer that named the wrong filter would send

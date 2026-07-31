@@ -199,7 +199,17 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.22.0` added the
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.24.0` added a task
+ * list's kanban column arrangement (ADR-060): `hiddenColumns`/`columnOrder`
+ * INSIDE the `task-list` row's existing `viewConfig` object, both optional and
+ * absent meaning "every column drawn, in natural order" — which is what every
+ * earlier archive's boards were, so no `ArchiveEra` flag. A minor bump even
+ * though no record type and no top-level field changed, because `viewConfig`
+ * is re-validated STRICTLY here (`parseTaskList`): a pre-`1.24.0` build handed
+ * these members would refuse the row as malformed rather than carry it blind,
+ * and the version gate owes it the honest answer instead of that baffling
+ * field error. (`1.23.0` is a concurrent lane's own entry — see the note at
+ * the constant.) Before it, `1.22.0` added the
  * profile's `kind` on the manifest's own `profile` object (ADR-058, business
  * profiles) — always written on the way out, OPTIONAL with the default
  * `"personal"` on the way in, since a personal profile is the only kind any
@@ -288,7 +298,11 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.22.0";
+// SUPERVISOR NOTE: 1.24.0 skips 1.23.0 on purpose — a sibling lane concurrently
+// holds 1.23.0. Kept equal to `SCHEMA_VERSION` (exportArchive.ts) by
+// importArchive.test.ts; whichever lane merges second leaves the HIGHER number
+// standing and keeps both history entries.
+export const INTERCHANGE_SCHEMA_VERSION = "1.24.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
