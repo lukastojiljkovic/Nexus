@@ -13,7 +13,13 @@ import { StarterKit } from "@tiptap/starter-kit";
 import { Collaboration } from "@tiptap/extension-collaboration";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Placeholder } from "@tiptap/extensions";
-import { collectNoteCards, collectNoteLinkIds, isInlineImageMime, replaceNoteContent } from "@nexus/core";
+import {
+  collectNoteCards,
+  collectNoteLinkIds,
+  isInlineImageMime,
+  replaceNoteContent,
+  xmlTextContent,
+} from "@nexus/core";
 import { EmptyState } from "@nexus/ui";
 import {
   NOTE_ATTACHMENT_MAX_BYTES,
@@ -84,9 +90,15 @@ async function sendBatch(
   }
 }
 
-/** The concatenated text of one XML node (leaf text, or its children in order). */
+/**
+ * The concatenated text of one XML node (leaf text, or its children in order).
+ * Leaf text goes through `xmlTextContent`, never `Y.XmlText.toString()` — the
+ * latter serializes marks as `<bold>…</bold>` markup, which would land
+ * literally in a derived title (the exact defect `yjsText.ts` exists to
+ * prevent, found while building note duplication).
+ */
 function nodeText(node: Y.XmlElement | Y.XmlText | Y.XmlHook): string {
-  if (node instanceof Y.XmlText) return node.toString();
+  if (node instanceof Y.XmlText) return xmlTextContent(node);
   if (node instanceof Y.XmlElement) {
     let text = "";
     for (const child of node.toArray()) text += nodeText(child);

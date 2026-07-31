@@ -125,6 +125,8 @@ export { interleavePractice } from "./study/interleave.js";
 
 export { replaceNoteContent } from "./notes/yjsRestore.js";
 
+export { xmlTextContent } from "./notes/yjsText.js";
+
 export {
   BUILTIN_NOTE_TEMPLATE_IDS,
   isBuiltinNoteTemplateId,
