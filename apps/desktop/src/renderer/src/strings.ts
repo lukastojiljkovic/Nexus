@@ -1602,6 +1602,20 @@ export const strings = {
     statsBlocksLabel: "Blokovi",
     statsBlocksDone: "urađeno",
     statsBlocksMissed: "propušteno",
+    /**
+     * Maturity summary (STUDY-013) — „Sazrele kartice: 4 (ukupno 37 zrelih)"
+     * builds inline. The count is the range's; the total in brackets is a live
+     * census of the whole collection.
+     */
+    statsMaturedLabel: "Sazrele kartice",
+    statsMaturedTotalPrefix: "ukupno",
+    statsMaturedTotalSuffix: "zrelih",
+    /**
+     * Plan adherence (STUDY-013) — „Praćenje plana: 82%", or the em dash when
+     * no block was due in the period, since there is no percentage to give.
+     */
+    statsAdherenceLabel: "Praćenje plana",
+    statsAdherenceNone: "—",
     focusSessionsTitle: "Nedavne sesije fokusa",
     focusSessionsEmpty: "Nema sesija fokusa u poslednjih 7 dana.",
     deleteFocusSessionLabel: "Obriši sesiju fokusa",

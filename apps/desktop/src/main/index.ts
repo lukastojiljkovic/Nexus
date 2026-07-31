@@ -4604,6 +4604,11 @@ function registerIpc(): void {
       activityDays: stats.activityDays(fromDate, toDate),
       reviews: stats.reviewCounts(fromDate, toDate),
       blocks: stats.blockTotals(fromDate, toDate),
+      // The two named STUDY-013 metrics travel on this same channel rather than
+      // one of their own: they are read for the same profile over the same
+      // range, by the same caller, on the same refresh.
+      matured: stats.cardsMatured(fromDate, toDate),
+      adherence: stats.planAdherence(fromDate, toDate),
     };
   });
 

@@ -22,6 +22,29 @@ export interface BlockTotals {
 }
 
 /**
+ * How many cards MATURED in a range (STUDY-013), plus how many are mature right
+ * now. The two answer different questions on purpose: `inRange` is a count of
+ * milestones reached inside a window and can only ever go up as that window
+ * moves; `total` is a live census of the collection and falls when a card lapses
+ * or is deleted.
+ */
+export interface MaturedCards {
+  inRange: number;
+  total: number;
+}
+
+/**
+ * Plan adherence over a range (STUDY-013): the blocks kept, the blocks let go,
+ * and the fraction of the two — `null` when nothing was actually due, because a
+ * ratio over an empty denominator is a number nobody earned.
+ */
+export interface PlanAdherence {
+  done: number;
+  missed: number;
+  ratio: number | null;
+}
+
+/**
  * One LOCAL calendar day of a subject's study log (STUDY-014). Every field is a
  * fact about that day and nothing else: how many cards of this subject were
  * reviewed, how many minutes of focus it held, how many minutes its study plans
@@ -54,6 +77,18 @@ export interface SubjectStudyLog {
 const BARE_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 const MINUTE_MS = 60_000;
+
+/**
+ * The scheduled interval, in days, at or above which a card counts as MATURE.
+ *
+ * 21 days is the community-standard cutoff — Anki set it and the rest of the
+ * spaced-repetition world inherited it — and it is CHOSEN here, not sacred:
+ * three weeks is simply the point at which a card has outlived the stretch where
+ * most forgetting happens and stops being something you are still learning. If
+ * the founder ever wants a different line, this constant is the only place it
+ * lives.
+ */
+const MATURE_THRESHOLD_DAYS = 21;
 
 function validateBareDate(value: string, field: string): string {
   if (!BARE_DATE.test(value)) {
@@ -147,6 +182,9 @@ export class StatsStore {
   private readonly activityDaysStudyBlocks: Database.Statement;
   private readonly reviewCountsStatement: Database.Statement;
   private readonly blockTotalsStatement: Database.Statement;
+  private readonly maturedInRangeStatement: Database.Statement;
+  private readonly maturedTotalStatement: Database.Statement;
+  private readonly planAdherenceStatement: Database.Statement;
   private readonly logReviews: Database.Statement;
   private readonly logFocusSessions: Database.Statement;
   private readonly logBlocks: Database.Statement;
@@ -215,6 +253,46 @@ export class StatsStore {
         FROM study_blocks b
         JOIN study_plans p
           ON p.id = b.plan_id AND p.profile_id = b.profile_id AND p.deleted_at IS NULL
+       WHERE b.profile_id = ?
+         AND b.block_date BETWEEN ? AND ?
+    `);
+
+    // --- The two named STUDY-013 metrics ------------------------------------
+    // One SQL pass each; in particular the maturity read groups the whole log by
+    // card ONCE and keeps each card's earliest qualifying review, rather than
+    // asking a question per card.
+    this.maturedInRangeStatement = db.prepare(`
+      SELECT COUNT(*) AS matured
+        FROM (
+          SELECT MIN(review) AS first_crossing
+            FROM review_log
+           WHERE profile_id = ? AND scheduled_days >= ?
+           GROUP BY card_id
+        )
+       WHERE first_crossing >= ? AND first_crossing < ?
+    `);
+
+    this.maturedTotalStatement = db.prepare(`
+      SELECT COUNT(*) AS total
+        FROM cards
+       WHERE profile_id = ? AND deleted_at IS NULL AND scheduled_days >= ?
+    `);
+
+    // Same shape as `blockTotalsStatement`, with one hop more: the plan's exam
+    // must be active too, the join discipline `BLOCK_SUBJECT_JOIN` and every
+    // user-facing plan read (`PlanStore.listPlans`, `listBlocksInRange`) already
+    // keep. Deleting an exam does not soft-delete its plan, so without this hop
+    // a withdrawn exam's blocks would go on being counted as obligations —
+    // adherence would be measured against a plan the user can no longer see.
+    this.planAdherenceStatement = db.prepare(`
+      SELECT
+        SUM(CASE WHEN b.status = 'done' THEN 1 ELSE 0 END) AS done,
+        SUM(CASE WHEN b.status = 'missed' THEN 1 ELSE 0 END) AS missed
+        FROM study_blocks b
+        JOIN study_plans p
+          ON p.id = b.plan_id AND p.profile_id = b.profile_id AND p.deleted_at IS NULL
+        JOIN exams e
+          ON e.id = p.exam_id AND e.profile_id = b.profile_id AND e.deleted_at IS NULL
        WHERE b.profile_id = ?
          AND b.block_date BETWEEN ? AND ?
     `);
@@ -333,6 +411,94 @@ export class StatsStore {
       missed: number | null;
     };
     return { done: row.done ?? 0, missed: row.missed ?? 0 };
+  }
+
+  /**
+   * How many cards MATURED inside `[fromDay, toDay]`, plus how many are mature
+   * right now (STUDY-013).
+   *
+   * **What maturing is.** A card matures the first time a review hands it a
+   * scheduled interval of at least `MATURE_THRESHOLD_DAYS` (21) days — see that
+   * constant for why 21. The evidence is `review_log.scheduled_days`, the
+   * interval each review actually granted, so the milestone is dated by the
+   * review that produced it and not by anything reconstructed afterwards.
+   *
+   * **The first crossing, and only ever the first.** `inRange` counts a card
+   * when its EARLIEST qualifying review falls in the range. A card that lapses
+   * back under the threshold and climbs over it again is NOT counted a second
+   * time, in this range or any later one: "sazrela" is a milestone in a card's
+   * life, not a state transition to be tallied every time it happens. The
+   * consequence is worth stating plainly — the metric answers "how much of my
+   * collection crossed over during this window", so re-learning old ground never
+   * inflates it. (`total` is where a lapse does show, by falling.)
+   *
+   * **Live cards vs. reviews that happened.** `total` counts ACTIVE card rows
+   * whose own `scheduled_days` is at or above the threshold — the census of what
+   * is mature at this moment, so a deleted card leaves it. `inRange` reads the
+   * log and therefore deliberately does NOT filter deleted cards, exactly as
+   * `REVIEW_SUBJECT_JOIN` explains: a review that happened, happened, and
+   * deleting the card afterwards does not unmake the day it crossed over.
+   *
+   * **The day boundary** is `studyLogForSubject`'s: the range is a half-open
+   * instant window `[localDayStart(fromDay), localDayStart(toDay + 1))`, so a
+   * crossing logged at exactly local midnight belongs to the day that starts
+   * there and to no other. Comparing `review` instants as text is the same
+   * ordering assumption that read already makes.
+   */
+  cardsMatured(fromDay: string, toDay: string): MaturedCards {
+    const from = validateBareDate(fromDay, "fromDay");
+    const to = validateBareDate(toDay, "toDay");
+    const rangeStart = localDayStart(from, 0);
+    const rangeEnd = localDayStart(to, 1); // exclusive: the instant the day after `to` begins
+
+    const matured = this.maturedInRangeStatement.get(
+      this.profileId,
+      MATURE_THRESHOLD_DAYS,
+      rangeStart,
+      rangeEnd,
+    ) as { matured: number };
+    const total = this.maturedTotalStatement.get(this.profileId, MATURE_THRESHOLD_DAYS) as {
+      total: number;
+    };
+    return { inRange: matured.matured, total: total.total };
+  }
+
+  /**
+   * How faithfully the user's study plans were kept over `[fromDay, toDay]`
+   * (STUDY-013): `done / (done + missed)` over the blocks of active plans of
+   * active exams, ranged on `block_date`.
+   *
+   * **The denominator is only what was actually due.** A block still `planned`
+   * is left out of both counters — a plan you have not reached yet is not a plan
+   * you disobeyed — which is exactly `blockTotals`'s existing reading of the
+   * three statuses, applied per range. Past blocks become `missed` when
+   * `PlanStore.syncAllPlans` runs, so "still planned" and "still in the future"
+   * are the same set in practice.
+   *
+   * **No fabricated hundred percent.** With nothing due in the range, `ratio` is
+   * `null` rather than 1: the honest answer to "how well did you follow a plan
+   * you had none of" is not "perfectly". The raw fraction is returned unrounded;
+   * turning it into a percentage is the caller's business.
+   *
+   * **Where this can disagree with `blockTotals`.** `blockTotals` stops at the
+   * plan and never checks the exam, so the one case the two read differently is
+   * a plan whose exam was soft-deleted while the plan itself was left active —
+   * counted there, ignored here. Tightening `blockTotals` to match would change
+   * a number the hub and dashboard already show, so it is left alone until the
+   * founder decides; this method takes the stricter reading because "adherence"
+   * is a claim about obligations the user still has.
+   */
+  planAdherence(fromDay: string, toDay: string): PlanAdherence {
+    const from = validateBareDate(fromDay, "fromDay");
+    const to = validateBareDate(toDay, "toDay");
+    const row = this.planAdherenceStatement.get(this.profileId, from, to) as {
+      done: number | null;
+      missed: number | null;
+    };
+    const done = row.done ?? 0;
+    const missed = row.missed ?? 0;
+    const due = done + missed;
+    return { done, missed, ratio: due === 0 ? null : done / due };
   }
 
   /**

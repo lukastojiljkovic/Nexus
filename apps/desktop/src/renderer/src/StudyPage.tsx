@@ -347,6 +347,16 @@ function joinSubjectMinutes(
 }
 
 /**
+ * Plan adherence as a whole percent, or an em dash when nothing was due
+ * (STUDY-013). The store hands back `null` for an empty denominator and the
+ * dash is what that looks like: a period you were never asked to study in earns
+ * no score, least of all a flattering 100%.
+ */
+function formatAdherence(ratio: number | null): string {
+  return ratio === null ? strings.study.statsAdherenceNone : `${Math.round(ratio * 100)}%`;
+}
+
+/**
  * Maps a PlanStore/IPC failure onto the Serbian plan-form copy by matching the
  * store's known validation messages (they cross IPC inside the error text);
  * anything unrecognized falls back to the generic line. UX only — the store
@@ -3186,6 +3196,28 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                     <span className="study__stats-muted">
                       {statsRecent?.blocks.missed ?? 0} {strings.study.statsBlocksMissed}
                     </span>
+                  </p>
+                  {/*
+                    The two named STUDY-013 metrics, read off `statsRecent` — the
+                    30-day window — and not `statsYear`. A year of adherence
+                    averages away the semester you are actually in; thirty days is
+                    the stretch a student can still recognise as "lately", and it
+                    is the same window every other line in this section already
+                    reports, so „Poslednjih 30 dana" above labels the period once
+                    for all of them. The bracketed maturity total is the one live
+                    figure here and is written as such („ukupno … zrelih"), so it
+                    cannot be misread as another 30-day count.
+                  */}
+                  <p className="study__stats-line">
+                    {strings.study.statsMaturedLabel}: {statsRecent?.matured.inRange ?? 0}{" "}
+                    <span className="study__stats-muted">
+                      ({strings.study.statsMaturedTotalPrefix} {statsRecent?.matured.total ?? 0}{" "}
+                      {strings.study.statsMaturedTotalSuffix})
+                    </span>
+                  </p>
+                  <p className="study__stats-line">
+                    {strings.study.statsAdherenceLabel}:{" "}
+                    {formatAdherence(statsRecent?.adherence.ratio ?? null)}
                   </p>
                 </>
               )}

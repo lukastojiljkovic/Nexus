@@ -2205,14 +2205,23 @@ export interface FocusRestoreRequest {
 
 /**
  * The composed STUDY stats payload for one profile's date range: per-subject
- * focus minutes, the set of days with any study activity, review counts, and
- * study-block totals (STUDY stats).
+ * focus minutes, the set of days with any study activity, review counts,
+ * study-block totals, and the two named STUDY-013 metrics (cards matured, plan
+ * adherence).
+ *
+ * Every field but `matured.total` is a fact about the requested range;
+ * `matured.total` is a live census of the whole collection and rides along
+ * because it is the number that gives `matured.inRange` its scale.
  */
 export interface StudyStats {
   subjectMinutes: Array<{ subjectId: string; minutes: number }>;
   activityDays: string[];
   reviews: { total: number; perDay: Array<{ day: string; count: number }> };
   blocks: { done: number; missed: number };
+  /** Cards that crossed the mature interval threshold in range, and how many are mature now. */
+  matured: { inRange: number; total: number };
+  /** Study blocks kept vs. let go in range; `ratio` is null when nothing was due. */
+  adherence: { done: number; missed: number; ratio: number | null };
 }
 
 export interface StatsStudyRequest {

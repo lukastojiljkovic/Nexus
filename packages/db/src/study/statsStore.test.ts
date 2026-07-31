@@ -71,7 +71,14 @@ function insertDeck(profileId: string, subjectId: string): string {
   return id;
 }
 
-function insertCard(profileId: string, deckId: string): string {
+function insertCard(
+  profileId: string,
+  deckId: string,
+  // The card row's OWN current interval and liveness — explicit only where a
+  // test asserts on `cardsMatured().total`, which reads exactly these two.
+  scheduledDays = 0,
+  deletedAt: string | null = null,
+): string {
   const id = uuidv7();
   const now = new Date().toISOString();
   db.raw
@@ -79,14 +86,42 @@ function insertCard(profileId: string, deckId: string): string {
       `INSERT INTO cards
          (id, profile_id, deck_id, front, back, due, stability, difficulty,
           elapsed_days, scheduled_days, learning_steps, reps, lapses, state,
-          created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(id, profileId, deckId, "front", "back", now, 0, 0, 0, 0, 0, 0, 0, 2, now, now);
+    .run(
+      id,
+      profileId,
+      deckId,
+      "front",
+      "back",
+      now,
+      0,
+      0,
+      0,
+      scheduledDays,
+      0,
+      0,
+      0,
+      2,
+      now,
+      now,
+      deletedAt,
+    );
   return id;
 }
 
-function insertReview(profileId: string, cardId: string, review: string): void {
+/**
+ * One review of a card. `scheduledDays` is the interval that review HANDED OUT
+ * — the field `cardsMatured` reads — and defaults to 1, well under the mature
+ * threshold, so every pre-existing test's reviews stay immature.
+ */
+function insertReview(
+  profileId: string,
+  cardId: string,
+  review: string,
+  scheduledDays = 1,
+): void {
   const now = new Date().toISOString();
   db.raw
     .prepare(
@@ -96,7 +131,7 @@ function insertReview(profileId: string, cardId: string, review: string): void {
           review, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(uuidv7(), profileId, cardId, 3, 2, now, 1, 1, 0, 0, 1, 0, review, now);
+    .run(uuidv7(), profileId, cardId, 3, 2, now, 1, 1, 0, 0, scheduledDays, 0, review, now);
 }
 
 function insertExam(
@@ -389,6 +424,270 @@ describe("StatsStore", () => {
     it("rejects a malformed fromDate or toDate", () => {
       const { stats } = fixture();
       expect(() => stats.blockTotals("not-a-date", "2026-07-31")).toThrow(FocusValidationError);
+    });
+  });
+
+  describe("cardsMatured", () => {
+    /** One card of this subject, with its own current interval. */
+    function cardOf(profileId: string, subjectId: string, scheduledDays = 0): string {
+      return insertCard(profileId, insertDeck(profileId, subjectId), scheduledDays);
+    }
+
+    describe("inRange", () => {
+      it("counts a card whose first review at the threshold falls in the range", () => {
+        const { stats, profileId, subjectId } = fixture();
+        insertReview(profileId, cardOf(profileId, subjectId), "2026-07-08T12:00:00.000Z", 21);
+
+        expect(stats.cardsMatured("2026-07-01", "2026-07-31").inRange).toBe(1);
+      });
+
+      it("does not count a card that stopped one day short of the threshold", () => {
+        const { stats, profileId, subjectId } = fixture();
+        insertReview(profileId, cardOf(profileId, subjectId), "2026-07-08T12:00:00.000Z", 20);
+
+        expect(stats.cardsMatured("2026-07-01", "2026-07-31").inRange).toBe(0);
+      });
+
+      it("counts a card once however many qualifying reviews it has in the range", () => {
+        const { stats, profileId, subjectId } = fixture();
+        const cardId = cardOf(profileId, subjectId);
+        insertReview(profileId, cardId, "2026-07-08T12:00:00.000Z", 21);
+        insertReview(profileId, cardId, "2026-07-20T12:00:00.000Z", 60);
+
+        expect(stats.cardsMatured("2026-07-01", "2026-07-31").inRange).toBe(1);
+      });
+
+      it("dates a card at its FIRST crossing, not a later qualifying review", () => {
+        const { stats, profileId, subjectId } = fixture();
+        const cardId = cardOf(profileId, subjectId);
+        insertReview(profileId, cardId, "2026-07-08T12:00:00.000Z", 21);
+        insertReview(profileId, cardId, "2026-07-20T12:00:00.000Z", 60);
+
+        expect(stats.cardsMatured("2026-07-01", "2026-07-10").inRange).toBe(1);
+        expect(stats.cardsMatured("2026-07-15", "2026-07-31").inRange).toBe(0);
+      });
+
+      it("does not recount a card that lapsed and crossed the threshold again", () => {
+        const { stats, profileId, subjectId } = fixture();
+        const cardId = cardOf(profileId, subjectId);
+        // Matured in June, forgotten (interval collapses), matured again in July.
+        // "Matured" is a milestone, so only the June crossing is ever counted.
+        insertReview(profileId, cardId, "2026-06-10T12:00:00.000Z", 30);
+        insertReview(profileId, cardId, "2026-06-20T12:00:00.000Z", 1);
+        insertReview(profileId, cardId, "2026-07-08T12:00:00.000Z", 25);
+
+        expect(stats.cardsMatured("2026-07-01", "2026-07-31").inRange).toBe(0);
+        expect(stats.cardsMatured("2026-06-01", "2026-06-30").inRange).toBe(1);
+      });
+
+      it("includes both edges of the range and nothing beyond them", () => {
+        const { stats, profileId, subjectId } = fixture();
+        insertReview(profileId, cardOf(profileId, subjectId), "2026-07-07T12:00:00.000Z", 21);
+        insertReview(profileId, cardOf(profileId, subjectId), "2026-07-08T12:00:00.000Z", 21);
+        insertReview(profileId, cardOf(profileId, subjectId), "2026-07-10T12:00:00.000Z", 21);
+        insertReview(profileId, cardOf(profileId, subjectId), "2026-07-11T12:00:00.000Z", 21);
+
+        expect(stats.cardsMatured("2026-07-08", "2026-07-10").inRange).toBe(2);
+      });
+
+      it("counts distinct cards separately", () => {
+        const { stats, profileId, subjectId } = fixture();
+        insertReview(profileId, cardOf(profileId, subjectId), "2026-07-08T12:00:00.000Z", 21);
+        insertReview(profileId, cardOf(profileId, subjectId), "2026-07-09T12:00:00.000Z", 40);
+
+        expect(stats.cardsMatured("2026-07-01", "2026-07-31").inRange).toBe(2);
+      });
+
+      it("isolates between profiles", () => {
+        const a = fixture();
+        const b = fixture();
+        insertReview(a.profileId, cardOf(a.profileId, a.subjectId), "2026-07-08T12:00:00.000Z", 21);
+
+        expect(b.stats.cardsMatured("2026-07-01", "2026-07-31").inRange).toBe(0);
+      });
+    });
+
+    describe("total", () => {
+      it("counts live cards whose own interval is at or above the threshold", () => {
+        const { stats, profileId, subjectId } = fixture();
+        cardOf(profileId, subjectId, 21);
+        cardOf(profileId, subjectId, 90);
+        cardOf(profileId, subjectId, 20);
+
+        expect(stats.cardsMatured("2026-07-01", "2026-07-31").total).toBe(2);
+      });
+
+      it("excludes soft-deleted cards", () => {
+        const { stats, profileId, subjectId } = fixture();
+        insertCard(profileId, insertDeck(profileId, subjectId), 90, "2026-07-08T12:00:00.000Z");
+
+        expect(stats.cardsMatured("2026-07-01", "2026-07-31").total).toBe(0);
+      });
+
+      it("does not depend on the range, unlike inRange", () => {
+        const { stats, profileId, subjectId } = fixture();
+        const cardId = cardOf(profileId, subjectId, 90);
+        insertReview(profileId, cardId, "2026-07-08T12:00:00.000Z", 90);
+
+        expect(stats.cardsMatured("2026-01-01", "2026-01-31")).toEqual({ inRange: 0, total: 1 });
+      });
+
+      it("isolates between profiles", () => {
+        const a = fixture();
+        const b = fixture();
+        cardOf(a.profileId, a.subjectId, 90);
+
+        expect(b.stats.cardsMatured("2026-07-01", "2026-07-31").total).toBe(0);
+      });
+    });
+
+    it("rejects a malformed fromDay or toDay", () => {
+      const { stats } = fixture();
+      expect(() => stats.cardsMatured("not-a-date", "2026-07-31")).toThrow(FocusValidationError);
+      expect(() => stats.cardsMatured("2026-07-01", "not-a-date")).toThrow(FocusValidationError);
+    });
+  });
+
+  describe("planAdherence", () => {
+    /** An active plan of this subject, via a (necessarily active) exam of it. */
+    function planOf(profileId: string, subjectId: string): string {
+      return insertPlan(profileId, insertExam(profileId, subjectId, "2026-08-01"));
+    }
+
+    it("is done over done plus missed", () => {
+      const { stats, profileId, subjectId } = fixture();
+      const planId = planOf(profileId, subjectId);
+      insertBlock(profileId, planId, "2026-07-08", "done", "2026-07-08T12:00:00.000Z");
+      insertBlock(profileId, planId, "2026-07-09", "done", "2026-07-09T12:00:00.000Z");
+      insertBlock(profileId, planId, "2026-07-10", "done", "2026-07-10T12:00:00.000Z");
+      insertBlock(profileId, planId, "2026-07-11", "missed", "2026-07-11T12:00:00.000Z");
+
+      expect(stats.planAdherence("2026-07-01", "2026-07-31")).toEqual({
+        done: 3,
+        missed: 1,
+        ratio: 0.75,
+      });
+    });
+
+    it("keeps still-planned blocks out of the denominator", () => {
+      const { stats, profileId, subjectId } = fixture();
+      const planId = planOf(profileId, subjectId);
+      insertBlock(profileId, planId, "2026-07-08", "done", "2026-07-08T12:00:00.000Z");
+      insertBlock(profileId, planId, "2026-07-20", "planned", "2026-07-20T12:00:00.000Z");
+      insertBlock(profileId, planId, "2026-07-21", "planned", "2026-07-21T12:00:00.000Z");
+
+      expect(stats.planAdherence("2026-07-01", "2026-07-31")).toEqual({
+        done: 1,
+        missed: 0,
+        ratio: 1,
+      });
+    });
+
+    it("has no ratio when the range holds only future blocks", () => {
+      const { stats, profileId, subjectId } = fixture();
+      insertBlock(
+        profileId,
+        planOf(profileId, subjectId),
+        "2026-07-20",
+        "planned",
+        "2026-07-20T12:00:00.000Z",
+      );
+
+      expect(stats.planAdherence("2026-07-01", "2026-07-31")).toEqual({
+        done: 0,
+        missed: 0,
+        ratio: null,
+      });
+    });
+
+    it("has no ratio when the range holds no blocks at all", () => {
+      const { stats } = fixture();
+      expect(stats.planAdherence("2026-07-01", "2026-07-31")).toEqual({
+        done: 0,
+        missed: 0,
+        ratio: null,
+      });
+    });
+
+    it("rounds nothing — the raw fraction is what the caller formats", () => {
+      const { stats, profileId, subjectId } = fixture();
+      const planId = planOf(profileId, subjectId);
+      insertBlock(profileId, planId, "2026-07-08", "done", "2026-07-08T12:00:00.000Z");
+      insertBlock(profileId, planId, "2026-07-09", "missed", "2026-07-09T12:00:00.000Z");
+      insertBlock(profileId, planId, "2026-07-10", "missed", "2026-07-10T12:00:00.000Z");
+
+      expect(stats.planAdherence("2026-07-01", "2026-07-31").ratio).toBeCloseTo(1 / 3, 10);
+    });
+
+    it("excludes blocks of a soft-deleted plan", () => {
+      const { stats, profileId, subjectId } = fixture();
+      const planId = insertPlan(
+        profileId,
+        insertExam(profileId, subjectId, "2026-08-01"),
+        "2026-07-10T12:00:00.000Z",
+      );
+      insertBlock(profileId, planId, "2026-07-08", "done", "2026-07-08T12:00:00.000Z");
+
+      expect(stats.planAdherence("2026-07-01", "2026-07-31")).toEqual({
+        done: 0,
+        missed: 0,
+        ratio: null,
+      });
+    });
+
+    it("excludes blocks whose exam is soft-deleted", () => {
+      const { stats, profileId, subjectId } = fixture();
+      const examId = insertExam(
+        profileId,
+        subjectId,
+        "2026-08-01",
+        uuidv7(),
+        "2026-07-10T12:00:00.000Z",
+      );
+      insertBlock(profileId, insertPlan(profileId, examId), "2026-07-08", "missed", "2026-07-08T12:00:00.000Z");
+
+      expect(stats.planAdherence("2026-07-01", "2026-07-31")).toEqual({
+        done: 0,
+        missed: 0,
+        ratio: null,
+      });
+    });
+
+    it("filters on the block_date range", () => {
+      const { stats, profileId, subjectId } = fixture();
+      const planId = planOf(profileId, subjectId);
+      insertBlock(profileId, planId, "2026-06-30", "missed", "2026-06-30T12:00:00.000Z");
+      insertBlock(profileId, planId, "2026-07-08", "done", "2026-07-08T12:00:00.000Z");
+
+      expect(stats.planAdherence("2026-07-01", "2026-07-31")).toEqual({
+        done: 1,
+        missed: 0,
+        ratio: 1,
+      });
+    });
+
+    it("isolates between profiles", () => {
+      const a = fixture();
+      const b = fixture();
+      insertBlock(
+        a.profileId,
+        planOf(a.profileId, a.subjectId),
+        "2026-07-08",
+        "done",
+        "2026-07-08T12:00:00.000Z",
+      );
+
+      expect(b.stats.planAdherence("2026-07-01", "2026-07-31")).toEqual({
+        done: 0,
+        missed: 0,
+        ratio: null,
+      });
+    });
+
+    it("rejects a malformed fromDay or toDay", () => {
+      const { stats } = fixture();
+      expect(() => stats.planAdherence("not-a-date", "2026-07-31")).toThrow(FocusValidationError);
+      expect(() => stats.planAdherence("2026-07-01", "not-a-date")).toThrow(FocusValidationError);
     });
   });
 

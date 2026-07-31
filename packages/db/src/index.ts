@@ -261,6 +261,8 @@ export type { CreateFocusSessionInput, FocusSession } from "./study/focusStore.j
 export { StatsStore } from "./study/statsStore.js";
 export type {
   BlockTotals,
+  MaturedCards,
+  PlanAdherence,
   ReviewCounts,
   StudyLogDay,
   SubjectMinutes,
