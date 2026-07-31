@@ -1,13 +1,15 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { createPortal } from "react-dom";
 import {
   CLOZE_MASK,
+  clozeNumbers,
   computeStreak,
   findClozeRuns,
   interleavePractice,
   splitClozeSegments,
   splitProblemSteps,
+  withClozeDeletion,
 } from "@nexus/core";
 import type { ClozeSegment } from "@nexus/core";
 import { Button, Checkbox, Chip, EmptyState, ListRow, TextField } from "@nexus/ui";
@@ -268,13 +270,17 @@ function ClozeLine({
  * The cloze form's live line: "3 praznine → 3 kartice", or the nudge that
  * there is nothing to make a card from yet. Both nouns take the full
  * three-form Serbian agreement, hence `countUnit` rather than `dayUnit`.
+ *
+ * The two numbers are counted separately (ADR-068): blanks are `{{…}}` runs,
+ * cards are distinct deletion NUMBERS, and „2 praznine → 1 kartica" is the
+ * honest line for a template that hides the same thing twice.
  */
-function clozeCountLabel(blanks: number): string {
+function clozeCountLabel(blanks: number, cards: number): string {
   const copy = strings.study.clozeCount;
   if (blanks === 0) return copy.none;
   const blankWord = countUnit(blanks, copy.blankOne, copy.blankFew, copy.blankMany);
-  const cardWord = countUnit(blanks, copy.cardOne, copy.cardFew, copy.cardMany);
-  return `${blanks} ${blankWord} ${copy.arrow} ${blanks} ${cardWord}`;
+  const cardWord = countUnit(cards, copy.cardOne, copy.cardFew, copy.cardMany);
+  return `${blanks} ${blankWord} ${copy.arrow} ${cards} ${cardWord}`;
 }
 
 /**
@@ -644,16 +650,23 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   // shows, never what it is.
   const [cardForm, setCardForm] = useState<CardForm>("basic");
   const [clozeText, setClozeText] = useState("");
+  // The cloze field itself, and the selection „Dodaj prazninu" wants restored
+  // once React has written the new template into it (see `addClozeBlank`).
+  const clozeTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const pendingClozeSelection = useRef<{ from: number; to: number } | null>(null);
   const [problemSteps, setProblemSteps] = useState("");
   // Inline, in-form failure text (the store's refusal to drop this card's own
   // deletion, or any other save failure) — the study page has no toast slot
   // for a form, and a silent console error would look like a dead button.
   const [cardFormError, setCardFormError] = useState<string | null>(null);
   const [pendingUndoCardId, setPendingUndoCardId] = useState<string | null>(null);
-  // How many cards the cloze text currently makes — one per `{{…}}` deletion,
-  // read by the SAME grammar the store derives the rows with, so the live line
-  // can never promise a count the store would not produce.
-  const clozeBlankCount = findClozeRuns(clozeText.trim()).length;
+  // What the cloze text currently makes, read by the SAME grammar the store
+  // derives the rows with, so the live line can never promise a count the store
+  // would not produce. Blanks and cards are two numbers since ADR-068: two runs
+  // carrying one number are one card with two blanks.
+  const clozeRuns = findClozeRuns(clozeText.trim());
+  const clozeBlankCount = clozeRuns.length;
+  const clozeCardNumbers = clozeNumbers(clozeRuns);
   // Likewise for the problem form: the SAME grammar the store derives `back`
   // with, so the live count and preview can never promise a card the store
   // would refuse.
@@ -662,6 +675,18 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   // Lazily loaded id -> title map backing the note-source link control
   // (ADR-017); stays empty, and unfetched, for a deck with no generated cards.
   const [noteTitles, setNoteTitles] = useState<Map<string, string>>(new Map());
+
+  // Puts the caret back on the answer „Dodaj prazninu" just wrapped, once the
+  // new template is actually in the field. No dependency array on purpose: the
+  // ref is a one-shot handoff, cleared the moment it is honoured.
+  useLayoutEffect(() => {
+    const pending = pendingClozeSelection.current;
+    const field = clozeTextareaRef.current;
+    if (pending === null || field === null) return;
+    pendingClozeSelection.current = null;
+    field.focus();
+    field.setSelectionRange(pending.from, pending.to);
+  });
 
   useEffect(() => {
     let active = true;
@@ -1816,14 +1841,34 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   /**
    * Whether the save failed because the new template no longer contains the
    * deletion this card asks about — the one refusal worth naming in the form
-   * (ADR-042). Read off the row's own ordinal rather than guessed from the
-   * blank count alone: a card asking deletion 2 dies under a two-blank text
-   * just as surely as under a zero-blank one.
+   * (ADR-042). Read off the row's own NUMBER against the numbers the text
+   * currently carries (ADR-068), never against the blank count: with explicit
+   * labels a three-blank text may carry the numbers 1, 4 and 9, and a card
+   * asking 4 is perfectly alive in it.
    */
   function clozeOrdinalGone(): boolean {
     if (cardForm !== "cloze" || editingCardId == null) return false;
     const ordinal = cards?.find((card) => card.id === editingCardId)?.clozeOrdinal;
-    return ordinal != null && ordinal >= clozeBlankCount;
+    return ordinal != null && !clozeCardNumbers.includes(ordinal);
+  }
+
+  /**
+   * „Dodaj prazninu": wraps the textarea's selection — or, with none, its caret
+   * — in a new deletion, numbered by the same `withClozeDeletion` the note
+   * editor's own Mod-Shift-C uses (ADR-068), and puts the selection back on the
+   * answer so the author can keep typing. A no-op when the selection overlaps a
+   * deletion already there, since one cannot nest inside another.
+   */
+  function addClozeBlank(): void {
+    const field = clozeTextareaRef.current;
+    if (!field) return;
+    const next = withClozeDeletion(field.value, field.selectionStart, field.selectionEnd);
+    if (next === null) return;
+    setClozeText(next.text);
+    // Handed to the layout effect below rather than set here: the field still
+    // holds the OLD value at this point, and a range set against it would land
+    // somewhere else entirely once React writes the new one.
+    pendingClozeSelection.current = { from: next.from, to: next.to };
   }
 
   /** Creates or updates a plain front/back card. Returns false when the form is not yet submittable. */
@@ -2281,6 +2326,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                 {cardForm === "cloze" ? (
                   <div className="study__card-field">
                     <textarea
+                      ref={clozeTextareaRef}
                       className="nx-textfield__input study__textarea"
                       value={clozeText}
                       placeholder={strings.study.clozePlaceholder}
@@ -2291,16 +2337,21 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                         setClozeText(event.target.value)
                       }
                     />
-                    <p
-                      className={
-                        clozeBlankCount === 0
-                          ? "study__cloze-count study__cloze-count--empty"
-                          : "study__cloze-count"
-                      }
-                      aria-live="polite"
-                    >
-                      {clozeCountLabel(clozeBlankCount)}
-                    </p>
+                    <div className="study__cloze-actions">
+                      <Button size="sm" onClick={addClozeBlank}>
+                        {strings.study.clozeAddBlank}
+                      </Button>
+                      <p
+                        className={
+                          clozeBlankCount === 0
+                            ? "study__cloze-count study__cloze-count--empty"
+                            : "study__cloze-count"
+                        }
+                        aria-live="polite"
+                      >
+                        {clozeCountLabel(clozeBlankCount, clozeCardNumbers.length)}
+                      </p>
+                    </div>
                   </div>
                 ) : (
                   <>

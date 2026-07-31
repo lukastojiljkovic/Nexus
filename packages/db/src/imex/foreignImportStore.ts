@@ -232,7 +232,11 @@ export class ForeignImportStore {
     // those rules before the planner ran, and the planner copies the four fields
     // through untouched. They are spelled out here anyway, because an INSERT
     // that named no columns would silently depend on the table's physical
-    // column order.
+    // column order. `cloze_ordinal` rides through VERBATIM for the reason
+    // `RestoreStore`'s own card loop spells out: since interchange `1.26.0` it
+    // is the deletion's NUMBER (ADR-068), and only the parser — which read the
+    // archive's declared version — can say whether the value it handed over
+    // needed upgrading from a position.
     this.insertCard = db.prepare(
       `INSERT INTO cards
          (id, profile_id, deck_id, front, back, source_note_id, source_block_key,

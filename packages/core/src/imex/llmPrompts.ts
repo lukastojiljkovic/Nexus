@@ -1,4 +1,4 @@
-import { findClozeRuns, renderClozeCard } from "../study/clozeText.js";
+import { clozeNumbers, findClozeRuns, renderClozeCard } from "../study/clozeText.js";
 import { freshCardScheduling } from "./ankiTranslate.js";
 import type { ExportCard, ExportDeck, ExportEvent, ExportTask, ProfileData } from "./exportArchive.js";
 
@@ -1210,14 +1210,13 @@ export function translateLlmRecords(
           });
           return;
         }
-        // One card per DELETION, rendered by core's own `renderClozeCard` — the
-        // same function `CardStore` re-derives a cloze row's sides with, so an
-        // imported cloze card and a hand-written one are the same row the
-        // moment they land.
-        const deletions = findClozeRuns(record.clozeText).length;
-        for (let ordinal = 0; ordinal < deletions; ordinal += 1) {
+        // One card per deletion NUMBER, rendered by core's own
+        // `renderClozeCard` — the same function `CardStore` re-derives a cloze
+        // row's sides with, so an imported cloze card and a hand-written one
+        // are the same row the moment they land.
+        for (const ordinal of clozeNumbers(findClozeRuns(record.clozeText))) {
           const rendered = renderClozeCard(record.clozeText, ordinal);
-          // Unreachable: the ordinal came from `findClozeRuns` over this very
+          // Unreachable: the number came from `findClozeRuns` over this very
           // text. Kept because `renderClozeCard`'s null IS the contract, and a
           // `?? ""` here would write a blank card rather than skip one.
           if (rendered === null) continue;

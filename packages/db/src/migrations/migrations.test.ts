@@ -3,8 +3,14 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3-multiple-ciphers";
-import { foldSearchText } from "@nexus/core";
-import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index.js";
+import {
+  CLOZE_MASK,
+  clozeNumbers,
+  findClozeRuns,
+  foldSearchText,
+  renderClozeCard,
+} from "@nexus/core";
+import { CardStore, MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index.js";
 
 /**
  * Derived, not spelled out sixteen times over: every migration's own suite
@@ -16,8 +22,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 46 (exam topics), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(46);
+  it("is at version 47 (cloze deletion numbers), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(47);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -5392,6 +5398,300 @@ describe("migration 046 — exam topics (ADR-063)", () => {
         created_at: t,
         updated_at: t,
       });
+    } finally {
+      raw.close();
+    }
+  });
+});
+
+describe("migration 047 — cloze deletion numbers (ADR-068)", () => {
+  const T = "2026-01-01T00:00:00.000Z";
+  type Handle = Database.Database;
+
+  /**
+   * A database migrated to 46 and seeded with the world a cloze card needs,
+   * opened the two-stage way every data-migration test here opens one (see
+   * migration 046's rebuild test for why `nx_fold` has to be registered first).
+   */
+  function seeded(name: string): Handle {
+    const raw = new Database(join(dir, name));
+    raw.pragma("journal_mode = WAL");
+    raw.pragma("foreign_keys = ON");
+    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
+      typeof value === "string" ? foldSearchText(value) : null,
+    );
+    runMigrations(raw, MIGRATIONS.slice(0, 46));
+    raw
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES ('p1', 'personal', 'P', ?)")
+      .run(T);
+    raw
+      .prepare(
+        `INSERT INTO subjects (id, profile_id, name, color, created_at, updated_at)
+         VALUES ('s1', 'p1', 'x', 'jade', ?, ?)`,
+      )
+      .run(T, T);
+    raw
+      .prepare(
+        `INSERT INTO decks (id, profile_id, subject_id, name, created_at, updated_at)
+         VALUES ('dk1', 'p1', 's1', 'Glava 1', ?, ?)`,
+      )
+      .run(T, T);
+    raw
+      .prepare(
+        `INSERT INTO notes (id, profile_id, title, created_at, updated_at)
+         VALUES ('n1', 'p1', 'Beleška', ?, ?)`,
+      )
+      .run(T, T);
+    return raw;
+  }
+
+  /** One `cards` row as a 46-era build wrote it: `cloze_ordinal` is a 0-based POSITION. */
+  function insertCard(
+    raw: Handle,
+    id: string,
+    overrides: Partial<{
+      front: string;
+      back: string;
+      kind: string;
+      clozeText: string | null;
+      clozeOrdinal: number | null;
+      sourceNoteId: string | null;
+      sourceBlockKey: string | null;
+    }> = {},
+  ): void {
+    const row = {
+      front: "Q",
+      back: "A",
+      kind: "basic",
+      clozeText: null as string | null,
+      clozeOrdinal: null as number | null,
+      sourceNoteId: null as string | null,
+      sourceBlockKey: null as string | null,
+      ...overrides,
+    };
+    raw
+      .prepare(
+        `INSERT INTO cards
+           (id, profile_id, deck_id, front, back, source_note_id, source_block_key,
+            kind, cloze_text, cloze_ordinal, problem_steps,
+            due, stability, difficulty, elapsed_days, scheduled_days, learning_steps,
+            reps, lapses, state, last_review, created_at, updated_at, deleted_at)
+         VALUES (?, 'p1', 'dk1', ?, ?, ?, ?, ?, ?, ?, NULL,
+                 ?, 3, 5, 1, 2, 0, 4, 1, 2, ?, ?, ?, NULL)`,
+      )
+      .run(
+        id,
+        row.front,
+        row.back,
+        row.sourceNoteId,
+        row.sourceBlockKey,
+        row.kind,
+        row.clozeText,
+        row.clozeOrdinal,
+        T,
+        T,
+        T,
+        T,
+      );
+  }
+
+  /** One FSRS review of `cardId` — the history the rebase must not cost anybody. */
+  function insertReview(raw: Handle, id: string, cardId: string): void {
+    raw
+      .prepare(
+        `INSERT INTO review_log
+           (id, profile_id, card_id, rating, state, due, stability, difficulty,
+            elapsed_days, last_elapsed_days, scheduled_days, learning_steps, review, created_at)
+         VALUES (?, 'p1', ?, 3, 2, ?, 3, 5, 1, 1, 2, 0, ?, ?)`,
+      )
+      .run(id, cardId, T, T, T);
+  }
+
+  const cardRow = (raw: Handle, id: string) =>
+    raw.prepare("SELECT kind, cloze_ordinal, source_block_key FROM cards WHERE id = ?").get(id) as {
+      kind: string;
+      cloze_ordinal: number | null;
+      source_block_key: string | null;
+    };
+
+  it("stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh-047.db") });
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("rebases every cloze row's position onto its 1-based number, leaving basic rows alone", () => {
+    const raw = seeded("rebase.db");
+    try {
+      insertCard(raw, "c-basic");
+      insertCard(raw, "c0", { kind: "cloze", clozeText: "{{A}} i {{B}}", clozeOrdinal: 0 });
+      insertCard(raw, "c1", { kind: "cloze", clozeText: "{{A}} i {{B}}", clozeOrdinal: 1 });
+
+      runMigrations(raw, MIGRATIONS);
+
+      expect(cardRow(raw, "c0").cloze_ordinal).toBe(1);
+      expect(cardRow(raw, "c1").cloze_ordinal).toBe(2);
+      expect(cardRow(raw, "c-basic").cloze_ordinal).toBeNull();
+    } finally {
+      raw.close();
+    }
+  });
+
+  it("keeps every FSRS review row — the ADR-042 hazard a table rebuild would fire", () => {
+    // `review_log` cascades from `cards`, and `PRAGMA foreign_keys` is a no-op
+    // inside the transaction each migration runs in, so a create-copy-drop of
+    // this table would delete a user's whole study history mid-migration. This
+    // test is the pin: it fails the moment 047 stops being an UPDATE.
+    const raw = seeded("history.db");
+    try {
+      insertCard(raw, "c0", { kind: "cloze", clozeText: "{{A}} i {{B}}", clozeOrdinal: 0 });
+      insertCard(raw, "c1", { kind: "cloze", clozeText: "{{A}} i {{B}}", clozeOrdinal: 1 });
+      insertReview(raw, "r1", "c0");
+      insertReview(raw, "r2", "c0");
+      insertReview(raw, "r3", "c1");
+
+      runMigrations(raw, MIGRATIONS);
+
+      expect(raw.prepare("SELECT id, card_id FROM review_log ORDER BY id").all()).toEqual([
+        { id: "r1", card_id: "c0" },
+        { id: "r2", card_id: "c0" },
+        { id: "r3", card_id: "c1" },
+      ]);
+      // And the cards themselves are the same rows, not recreated ones.
+      expect((raw.prepare("SELECT count(*) AS n FROM cards").get() as { n: number }).n).toBe(2);
+    } finally {
+      raw.close();
+    }
+  });
+
+  it("rebases a note-derived card's `#N` key suffix in lockstep, past the UNIQUE slot it moves onto", () => {
+    const raw = seeded("keys.db");
+    try {
+      insertCard(raw, "c0", {
+        kind: "cloze",
+        clozeText: "{{A}} i {{B}}",
+        clozeOrdinal: 0,
+        sourceNoteId: "n1",
+        sourceBlockKey: "blok-1#0",
+      });
+      insertCard(raw, "c1", {
+        kind: "cloze",
+        clozeText: "{{A}} i {{B}}",
+        clozeOrdinal: 1,
+        sourceNoteId: "n1",
+        sourceBlockKey: "blok-1#1",
+      });
+      // A Q/A card of the same note: no numeric suffix, so nothing to rebase.
+      insertCard(raw, "c-qna", { sourceNoteId: "n1", sourceBlockKey: "blok-2" });
+      // A pre-031 note-derived cloze row: still `basic` with a NULL ordinal
+      // (ADR-042's lazy upgrade), and its key must move all the same.
+      insertCard(raw, "c-stale", { sourceNoteId: "n1", sourceBlockKey: "blok-3#0" });
+
+      runMigrations(raw, MIGRATIONS);
+
+      expect(cardRow(raw, "c0").source_block_key).toBe("blok-1#1");
+      expect(cardRow(raw, "c1").source_block_key).toBe("blok-1#2");
+      expect(cardRow(raw, "c-qna").source_block_key).toBe("blok-2");
+      expect(cardRow(raw, "c-stale")).toMatchObject({
+        source_block_key: "blok-3#1",
+        cloze_ordinal: null,
+      });
+    } finally {
+      raw.close();
+    }
+  });
+
+  it("rebases a two-digit suffix as a number, not as text", () => {
+    const raw = seeded("two-digit.db");
+    try {
+      insertCard(raw, "c9", {
+        kind: "cloze",
+        clozeText: "{{A}}",
+        clozeOrdinal: 9,
+        sourceNoteId: "n1",
+        sourceBlockKey: "blok-1#9",
+      });
+      runMigrations(raw, MIGRATIONS);
+      expect(cardRow(raw, "c9")).toMatchObject({
+        cloze_ordinal: 10,
+        source_block_key: "blok-1#10",
+      });
+    } finally {
+      raw.close();
+    }
+  });
+
+  it("leaves a hand-made cloze card's NULL key and a non-numeric suffix alone", () => {
+    const raw = seeded("untouched.db");
+    try {
+      insertCard(raw, "c-hand", { kind: "cloze", clozeText: "{{A}}", clozeOrdinal: 0 });
+      insertCard(raw, "c-odd", { sourceNoteId: "n1", sourceBlockKey: "blok-4#x" });
+      runMigrations(raw, MIGRATIONS);
+      expect(cardRow(raw, "c-hand")).toMatchObject({ source_block_key: null, cloze_ordinal: 1 });
+      expect(cardRow(raw, "c-odd").source_block_key).toBe("blok-4#x");
+    } finally {
+      raw.close();
+    }
+  });
+
+  it("lets the note's NEXT sync find the same rows: no duplicate, no lost history", () => {
+    // The whole reason the key suffix rebases with the ordinal. After 047 the
+    // generator writes `#1`/`#2` for this block, and the reconcile has to match
+    // the rows that are already there — otherwise every cloze card is
+    // soft-deleted and recreated, FSRS history and all.
+    const raw = seeded("resync.db");
+    try {
+      const template = "{{A}} i {{B}}";
+      // The sides a 46-era build stored: rendered off the POSITIONS this
+      // database still holds, which is what makes the sync below a true no-op
+      // rather than a rewrite.
+      insertCard(raw, "c0", {
+        front: `${CLOZE_MASK} i B`,
+        back: "A i B",
+        kind: "cloze",
+        clozeText: template,
+        clozeOrdinal: 0,
+        sourceNoteId: "n1",
+        sourceBlockKey: "blok-1#0",
+      });
+      insertCard(raw, "c1", {
+        front: `A i ${CLOZE_MASK}`,
+        back: "A i B",
+        kind: "cloze",
+        clozeText: template,
+        clozeOrdinal: 1,
+        sourceNoteId: "n1",
+        sourceBlockKey: "blok-1#1",
+      });
+      insertReview(raw, "r1", "c0");
+      runMigrations(raw, MIGRATIONS);
+
+      // Exactly what `collectNoteCards` now sends for this block.
+      const store = new CardStore(raw, "p1");
+      const specs = clozeNumbers(findClozeRuns(template)).map((number) => {
+        const sides = renderClozeCard(template, number);
+        return {
+          key: `blok-1#${number}`,
+          front: sides?.front ?? "",
+          back: sides?.back ?? "",
+          kind: "cloze" as const,
+          clozeText: template,
+          clozeOrdinal: number,
+        };
+      });
+      const result = store.syncFromNote("n1", "dk1", specs, T);
+
+      // Not one row created, not one removed, and not one even rewritten: the
+      // migrated rows ARE the rows the new generator names.
+      expect(result).toEqual({ created: 0, updated: 0, removed: 0 });
+      expect(store.listByDeck("dk1").map((card) => card.id)).toEqual(["c0", "c1"]);
+      expect(
+        (
+          raw.prepare("SELECT count(*) AS n FROM review_log WHERE card_id = 'c0'").get() as {
+            n: number;
+          }
+        ).n,
+      ).toBe(1);
     } finally {
       raw.close();
     }

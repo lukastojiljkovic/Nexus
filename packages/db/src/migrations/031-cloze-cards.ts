@@ -21,7 +21,12 @@ import type { Migration } from "./migrations.js";
  *    sides are derived from. It is the template and not the sides that the
  *    user edits, and it is what the reviewer needs to show the blank in its
  *    context and then the answer in the blank's place.
- *  - `cloze_ordinal` — which deletion of `cloze_text` this row asks (0-based).
+ *  - `cloze_ordinal` — which deletion of `cloze_text` this row asks. 0-based
+ *    POSITION as this migration wrote it; migration 047 rebased every value
+ *    onto the deletion's 1-based NUMBER (ADR-068), which is what it means from
+ *    there on. The `>= 0` CHECK below still holds — a number is a strictly
+ *    narrower domain — and "this number is really in this template" stays where
+ *    it always was, in `@nexus/core`'s grammar.
  *
  * The pair invariant — both NULL for `'basic'`, both set for `'cloze'`, the
  * ordinal never negative — is expressed as real CHECK constraints rather than

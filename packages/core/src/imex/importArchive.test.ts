@@ -341,7 +341,7 @@ function richProfileData(): ProfileData {
         back: "Glavni grad je Beograd, a reka je Sava.",
         sourceNoteId: null, sourceBlockKey: null,
         kind: "cloze", clozeText: "Glavni grad je {{Beograd}}, a reka je {{Sava}}.",
-        clozeOrdinal: 0, problemSteps: null,
+        clozeOrdinal: 1, problemSteps: null,
         due: "2026-01-06T00:00:00.000Z", stability: 2, difficulty: 3, elapsedDays: 1,
         scheduledDays: 2, learningSteps: 0, reps: 2, lapses: 0, state: 2,
         lastReview: "2026-01-04T00:00:00.000Z",
@@ -889,12 +889,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.26.0`: the nearest minor strictly ahead of this build's `1.25.0`.
+  // `1.27.0`: the nearest minor strictly ahead of this build's `1.26.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.26.0" });
+    const files = baseFiles({ schemaVersion: "1.27.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.26.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.27.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -1487,18 +1487,28 @@ describe("parseImportArchive — card kind (STUDY-006 / ADR-042)", () => {
     });
   });
 
-  it("accepts a fully-formed cloze card and keeps its template and ordinal", () => {
+  it("accepts a fully-formed cloze card and keeps its template and number", () => {
     const result = parseCardRow({
       kind: "cloze",
       clozeText: "Glavni grad je {{Beograd}}.",
-      clozeOrdinal: 0,
+      clozeOrdinal: 1,
     });
     expect(result.problems).toEqual([]);
     expect(result.data?.cards[0]).toMatchObject({
       kind: "cloze",
       clozeText: "Glavni grad je {{Beograd}}.",
-      clozeOrdinal: 0,
+      clozeOrdinal: 1,
     });
+  });
+
+  it("takes a labelled template's number verbatim, wherever the run sits", () => {
+    const result = parseCardRow({
+      kind: "cloze",
+      clozeText: "{{c9::Beograd}} je glavni grad.",
+      clozeOrdinal: 9,
+    });
+    expect(result.problems).toEqual([]);
+    expect(result.data?.cards[0]).toMatchObject({ clozeOrdinal: 9 });
   });
 
   it("accepts an explicitly-basic card that spells both cloze fields as null", () => {
@@ -1514,7 +1524,7 @@ describe("parseImportArchive — card kind (STUDY-006 / ADR-042)", () => {
   });
 
   it("refuses a cloze card missing either half of the pair", () => {
-    expect(cardDetails(parseCardRow({ kind: "cloze", clozeOrdinal: 0 }))).toEqual(["clozeText"]);
+    expect(cardDetails(parseCardRow({ kind: "cloze", clozeOrdinal: 1 }))).toEqual(["clozeText"]);
     expect(cardDetails(parseCardRow({ kind: "cloze", clozeText: "{{A}}" }))).toEqual([
       "clozeOrdinal",
     ]);
@@ -1522,11 +1532,11 @@ describe("parseImportArchive — card kind (STUDY-006 / ADR-042)", () => {
 
   it("refuses a basic card carrying either half of the pair", () => {
     expect(cardDetails(parseCardRow({ clozeText: "{{A}}" }))).toEqual(["clozeText"]);
-    expect(cardDetails(parseCardRow({ clozeOrdinal: 0 }))).toEqual(["clozeOrdinal"]);
+    expect(cardDetails(parseCardRow({ clozeOrdinal: 1 }))).toEqual(["clozeOrdinal"]);
   });
 
   it("refuses a malformed clozeText or clozeOrdinal", () => {
-    expect(cardDetails(parseCardRow({ kind: "cloze", clozeText: "", clozeOrdinal: 0 }))).toEqual([
+    expect(cardDetails(parseCardRow({ kind: "cloze", clozeText: "", clozeOrdinal: 1 }))).toEqual([
       "clozeText",
     ]);
     expect(
@@ -1537,10 +1547,70 @@ describe("parseImportArchive — card kind (STUDY-006 / ADR-042)", () => {
     ).toEqual(["clozeOrdinal"]);
   });
 
-  it("refuses a cloze template with no deletion at all — ordinal 0 names nothing in it", () => {
+  it("refuses a cloze template with no deletion at all — number 1 names nothing in it", () => {
     expect(
-      cardDetails(parseCardRow({ kind: "cloze", clozeText: "obična rečenica", clozeOrdinal: 0 })),
+      cardDetails(parseCardRow({ kind: "cloze", clozeText: "obična rečenica", clozeOrdinal: 1 })),
     ).toEqual(["clozeOrdinal"]);
+  });
+
+  it("refuses ordinal 0 at this era — a deletion NUMBER is 1-based (ADR-068)", () => {
+    expect(
+      cardDetails(parseCardRow({ kind: "cloze", clozeText: "{{A}}", clozeOrdinal: 0 })),
+    ).toEqual(["clozeOrdinal"]);
+  });
+
+  // --- Deletion numbers vs positions (ADR-068, `writesClozeNumbers`) -------
+  //
+  // The one era flag about a field's MEANING rather than its presence: nothing
+  // in the row itself can tell a 0-based position from a 1-based number, so the
+  // declared version is the only thing that can.
+
+  /** The same row read at an explicit schema version, so an era can be chosen. */
+  function parseCardRowAt(schemaVersion: string, overrides: Record<string, unknown>) {
+    const files = baseFiles({
+      schemaVersion,
+      fileContents: {
+        "data/study.ndjson": ndjson([VALID_SUBJECT, VALID_DECK, { ...VALID_CARD, ...overrides }]),
+      },
+    });
+    return parseImportArchive(emptyInputWith(files));
+  }
+
+  it("upgrades a pre-1.26.0 archive's 0-based position to the deletion's number", () => {
+    const cloze = { kind: "cloze", clozeText: "{{A}} i {{B}}" };
+    expect(
+      parseCardRowAt("1.25.0", { ...cloze, clozeOrdinal: 0 }).data?.cards[0]?.clozeOrdinal,
+    ).toBe(1);
+    expect(
+      parseCardRowAt("1.25.0", { ...cloze, clozeOrdinal: 1 }).data?.cards[0]?.clozeOrdinal,
+    ).toBe(2);
+  });
+
+  it("checks the UPGRADED number against the template, not the raw one", () => {
+    // Position 1 of a one-deletion text is nothing — and so is number 2.
+    const details = parseCardRowAt("1.25.0", {
+      kind: "cloze",
+      clozeText: "{{A}}",
+      clozeOrdinal: 1,
+    })
+      .problems.filter((problem) => problem.code === "invalid-record")
+      .map((problem) => problem.detail);
+    expect(details).toEqual(["clozeOrdinal"]);
+  });
+
+  it("takes a 1.26.0 archive's number verbatim — no +1 anywhere", () => {
+    expect(
+      parseCardRowAt("1.26.0", {
+        kind: "cloze",
+        clozeText: "{{A}} i {{B}}",
+        clozeOrdinal: 2,
+      }).data?.cards[0]?.clozeOrdinal,
+    ).toBe(2);
+  });
+
+  it("leaves a basic card's null ordinal null in either era", () => {
+    expect(parseCardRowAt("1.25.0", {}).data?.cards[0]?.clozeOrdinal).toBeNull();
+    expect(parseCardRowAt("1.25.0", { clozeOrdinal: null }).data?.cards[0]?.clozeOrdinal).toBeNull();
   });
 
   // --- Problem steps (ADR-046) ---------------------------------------------
@@ -1571,7 +1641,7 @@ describe("parseImportArchive — card kind (STUDY-006 / ADR-042)", () => {
   it("refuses steps on a cloze card — its back already has a source", () => {
     expect(
       cardDetails(
-        parseCardRow({ kind: "cloze", clozeText: "{{A}}", clozeOrdinal: 0, problemSteps: "korak" }),
+        parseCardRow({ kind: "cloze", clozeText: "{{A}}", clozeOrdinal: 1, problemSteps: "korak" }),
       ),
     ).toEqual(["problemSteps"]);
   });
@@ -2872,8 +2942,8 @@ describe("parseImportArchive — note folder preferences (the 1.7.0 era gate)", 
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.25.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.25.0");
+  it("is 1.26.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.26.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -3063,11 +3133,11 @@ describe("parseImportArchive — schema version", () => {
     expect(result.manifest?.profile.kind).toBe("personal");
   });
 
-  // `1.26.0`: the nearest minor strictly ahead of this build's `1.25.0`.
+  // `1.27.0`: the nearest minor strictly ahead of this build's `1.26.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.26.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.27.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.26.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.27.0" },
     ]);
     expect(result.data).toBeNull();
   });

@@ -1153,6 +1153,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       toggle: "Sklopivi odeljak",
       tableOfContents: "Sadržaj",
       flashcard: "Kartica (pitanje :: odgovor)",
+      /** Wraps the selection in a new `{{cN::…}}` deletion, numbered for the author (ADR-068). */
+      clozeBlank: "Praznina (cloze)",
     },
     /**
      * Callout variants (NOTE-011). These name the block for a screen reader —
@@ -1883,8 +1885,15 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       problem: "Zadatak",
     },
     clozeLabel: "Tekst sa prazninama",
-    clozePlaceholder: "Glavni grad Srbije je {{Beograd}}.",
-    clozeHint: "Stavi {{…}} oko svakog dela koji treba da bude skriven.",
+    clozePlaceholder: "Glavni grad Srbije je {{c1::Beograd}}.",
+    clozeHint:
+      "Stavi {{…}} oko svakog dela koji treba da bude skriven. Broj u {{c1::…}} kaže kojoj kartici praznina pripada — dve praznine sa istim brojem su jedna kartica.",
+    /**
+     * Wraps the selection in a new deletion and numbers it (ADR-068). A verb:
+     * it says what pressing it does, and it is the reason the author never has
+     * to count braces or renumber anything by hand.
+     */
+    clozeAddBlank: "Dodaj prazninu",
     /**
      * The live line under the cloze field: "3 praznine → 3 kartice". Both
      * counted nouns take three Serbian forms (1 / 2–4 / 5+), so they go
@@ -1901,7 +1910,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       /** Shown instead of the count line while the text has no deletion; creation stays disabled. */
       none: "Nema praznina — dodaj {{…}} da bi nastala kartica.",
     },
-    /** Inline refusal when an edit drops the very deletion this card asks about. */
+    /** Inline refusal when an edit drops the very deletion this card asks about — by NUMBER, not by position (ADR-068). */
     clozeOrdinalMissing: "Ova kartica pita prazninu koju novi tekst više ne sadrži.",
 
     // --- Problem cards (ADR-046) --------------------------------------------
@@ -3064,8 +3073,6 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         "template-unsupported":
           "Anki šablon koji ova verzija ne ume da prikaže — uvoze se osnovna i obrnuta kartica.",
         "cloze-nested": "Praznina unutar praznine — takva beleška se ne može zapisati.",
-        "cloze-ordinal-reused":
-          "Isti broj praznine se u belešci pojavljuje dvaput; Nexus prazninu vezuje za mesto u tekstu, pa to ne može da zapiše.",
         "cloze-no-deletions": "Beleška je „cloze“, a nema nijednu prazninu.",
         "cloze-unrepresentable":
           "Praznine u belešci se ne mogu tačno zapisati u Nexus obliku, pa se beleška preskače u celini — pogrešno postavljena praznina bila bi gora od nijedne.",
@@ -3742,6 +3749,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       notesCodeBlock: "Blok koda",
       notesSlash: "Meni komandi za blokove",
       notesLink: "Veza ka drugoj belešci",
+      /** Mod-Shift-C in the note editor (ADR-068): the number is assigned, never typed. */
+      notesCloze: "Napravi prazninu od izabranog teksta",
       notesHistory: "Opozovi i ponovi izmenu",
       notesFindOpen: "Otvori traku za pretragu u belešci",
       notesFindStep: "Sledeći ili prethodni rezultat",

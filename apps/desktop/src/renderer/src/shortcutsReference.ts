@@ -82,6 +82,7 @@ export const SHORTCUT_REFERENCE: readonly ShortcutReferenceGroup[] = [
       { keys: ["```"], description: r.notesCodeBlock },
       { keys: ["/"], description: r.notesSlash },
       { keys: ["[["], description: r.notesLink },
+      { keys: ["Ctrl+Shift+C"], description: r.notesCloze },
       { keys: ["Ctrl+Z", "Ctrl+Y"], description: r.notesHistory },
     ],
   },

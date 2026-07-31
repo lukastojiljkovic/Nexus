@@ -2111,6 +2111,11 @@ export interface Card {
    * `front`/`back` are DERIVED by the store from `clozeText`/`clozeOrdinal`
    * and are never written directly — the reviewer renders the template so the
    * blank stays in its context, and the editor edits the template.
+   *
+   * `clozeOrdinal` is the deletion's NUMBER (ADR-068): its `{{cN::…}}` label,
+   * or its position + 1 when it carries none. 1-based, and never a position —
+   * a blank inserted ahead of this one leaves this card asking exactly what it
+   * asked before.
    */
   kind: CardKind;
   clozeText: string | null;
@@ -4588,7 +4593,6 @@ export type ApkgImportSkipCode =
   | "empty-deck"
   | "template-unsupported"
   | "cloze-nested"
-  | "cloze-ordinal-reused"
   | "cloze-no-deletions"
   | "cloze-unrepresentable"
   | "cloze-hint-dropped"
@@ -5544,7 +5548,7 @@ export interface NexusApi {
   restoreDeck(profileId: string, id: string): Promise<void>;
   listCardsByDeck(profileId: string, deckId: string): Promise<Card[]>;
   createCard(profileId: string, card: NewCardFields): Promise<Card>;
-  /** Creates one cloze card per `{{…}}` deletion in `text`, atomically; returns the siblings in ordinal order (ADR-042). */
+  /** Creates one cloze card per deletion NUMBER in `text`, atomically; returns the siblings in number order (ADR-042 / ADR-068). */
   createClozeCards(profileId: string, deckId: string, text: string): Promise<Card[]>;
   /** Creates one problem card — a basic card whose `back` the main process derives from `stepsText` (ADR-046). */
   createProblemCard(

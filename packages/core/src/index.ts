@@ -148,12 +148,17 @@ export type { CalloutVariant } from "./notes/noteBlocks.js";
 
 export {
   CLOZE_MASK,
+  MAX_CLOZE_NUMBER,
+  clozeDeletionEdits,
+  clozeNumbers,
   findClozeRuns,
+  nextClozeNumber,
   renderClozeCard,
   renderClozeSide,
   splitClozeSegments,
+  withClozeDeletion,
 } from "./study/clozeText.js";
-export type { ClozeRun, ClozeSegment } from "./study/clozeText.js";
+export type { ClozeEdit, ClozeRun, ClozeSegment } from "./study/clozeText.js";
 
 export {
   PROBLEM_STEP_SEPARATOR,

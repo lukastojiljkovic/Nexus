@@ -618,7 +618,7 @@ describe("translateLlmRecords", () => {
       deck: { kind: "existing", id: "deck-1" },
     });
     expect(planned).toBe(2);
-    expect(data.cards.map((card) => card.clozeOrdinal)).toEqual([0, 1]);
+    expect(data.cards.map((card) => card.clozeOrdinal)).toEqual([1, 2]);
     expect(data.cards[0]).toMatchObject({
       kind: "cloze",
       clozeText: "{{Beograd}} je glavni grad {{Srbije}}.",

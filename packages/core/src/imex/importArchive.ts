@@ -227,7 +227,19 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.25.0` added exam
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.26.0` changes what
+ * a cloze card's `clozeOrdinal` MEANS (ADR-068, migration 047): it was the
+ * deletion's 0-based POSITION in `clozeText` and is now its 1-based NUMBER —
+ * the `{{cN::…}}` label when the run carries one, its position + 1 when it does
+ * not. The field's name, type and pair rule are untouched, which is exactly why
+ * this needs an `ArchiveEra` flag rather than a default: nothing about a
+ * pre-`1.26.0` row LOOKS different, so only the declared version can say
+ * whether the number in it is a position (upgraded by +1 on the way in) or
+ * already a number (taken verbatim). `writesClozeNumbers` is that flag. A MINOR
+ * bump because nothing was removed and no reader loses a row — but an honest
+ * one, because an older build handed a `1.26.0` archive would read every cloze
+ * card's ordinal one deletion to the right, and the version gate owes it the
+ * refusal instead — after `1.25.0` added exam
  * topics and the honest planner (ADR-063, STUDY-003/004/005, migration 046):
  * the `exam-topic` record type riding in `data/study.ndjson` ahead of the
  * plans, an OPTIONAL `weekdayMinutes` on `plan` (absent or null = "every day =
@@ -346,7 +358,7 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.25.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.26.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -404,6 +416,18 @@ interface ArchiveEra {
    * it would let an old archive claim the mark for every folder at once.
    */
   writesNoteFolderPrefs: boolean;
+  /**
+   * A cloze card's `clozeOrdinal` as a deletion NUMBER rather than a 0-based
+   * position (ADR-068) — the meaning that arrived AT the `1.26.0` bump. The
+   * first flag here that is not about a field's ABSENCE: the key is present in
+   * both eras, and what changes is what its value counts. Below `1.26.0` the
+   * value is a position and is upgraded by +1 (which is precisely the closed
+   * numbering rule read backwards — an unlabelled run's number IS its position
+   * + 1, and no archive written before `1.26.0` can contain a label, because no
+   * build before it could write one); at `1.26.0` and above it is taken
+   * verbatim, labels and all.
+   */
+  writesClozeNumbers: boolean;
 }
 
 /**
@@ -420,6 +444,7 @@ function eraOf(schemaVersion: string): ArchiveEra {
       writesTaskReminders: true,
       writesTaskLists: true,
       writesNoteFolderPrefs: true,
+      writesClozeNumbers: true,
     };
   }
   return {
@@ -427,6 +452,7 @@ function eraOf(schemaVersion: string): ArchiveEra {
     writesTaskReminders: version.minor >= 2,
     writesTaskLists: version.minor >= 3,
     writesNoteFolderPrefs: version.minor >= 7,
+    writesClozeNumbers: version.minor >= 26,
   };
 }
 
@@ -1564,7 +1590,7 @@ function parseDeck(raw: Record<string, unknown>): ExportDeck {
   return { id, profileId, subjectId, name, createdAt, updatedAt };
 }
 
-function parseCard(raw: Record<string, unknown>): ExportCard {
+function parseCard(raw: Record<string, unknown>, era: ArchiveEra): ExportCard {
   const id = nonEmptyStr(raw.id, "id");
   const profileId = nonEmptyStr(raw.profileId, "profileId");
   const deckId = nonEmptyStr(raw.deckId, "deckId");
@@ -1581,7 +1607,7 @@ function parseCard(raw: Record<string, unknown>): ExportCard {
   if ((sourceNoteId === null) !== (sourceBlockKey === null)) {
     throw new InvalidFieldError("sourceBlockKey");
   }
-  const { kind, clozeText, clozeOrdinal, problemSteps } = parseCardKind(raw);
+  const { kind, clozeText, clozeOrdinal, problemSteps } = parseCardKind(raw, era);
   const due = isoDateTime(raw.due, "due");
   const stability = finiteNumber(raw.stability, "stability");
   const difficulty = finiteNumber(raw.difficulty, "difficulty");
@@ -1615,7 +1641,16 @@ function parseCard(raw: Record<string, unknown>): ExportCard {
  * against the template by RE-RUNNING the `{{…}}` grammar rather than by
  * re-describing it: an ordinal the template does not contain would restore a
  * card whose blank nothing can fill, and `renderClozeCard` is the same reader
- * `CardStore` derives that card's sides with.
+ * `CardStore` derives that card's sides with. That check is what also refuses a
+ * `1.26.0` row whose ordinal is 0: a deletion NUMBER is 1-based, so 0 names
+ * nothing, in this template or any other.
+ *
+ * `clozeOrdinal` is the one field here the ERA changes the meaning of rather
+ * than the presence of (`writesClozeNumbers`, ADR-068): a pre-`1.26.0` writer
+ * put the deletion's 0-based position in it, so that value is upgraded by +1
+ * BEFORE the template check runs — under the closed numbering rule the two are
+ * the same deletion, and an archive of that era can carry no `{{cN::…}}` label
+ * to complicate it.
  *
  * `problemSteps` is optional-with-a-default in the same way (absent or null =
  * no worked solution) and mirrors migration 033's CHECK: only a basic card may
@@ -1623,7 +1658,10 @@ function parseCard(raw: Record<string, unknown>): ExportCard {
  * and the value is required TRIMMED — `CardStore` trims before writing, so
  * anything else is a row it did not write.
  */
-function parseCardKind(raw: Record<string, unknown>): {
+function parseCardKind(
+  raw: Record<string, unknown>,
+  era: ArchiveEra,
+): {
   kind: string;
   clozeText: string | null;
   clozeOrdinal: number | null;
@@ -1632,10 +1670,12 @@ function parseCardKind(raw: Record<string, unknown>): {
   const kind = raw.kind === undefined ? "basic" : enumStr(raw.kind, "kind", CARD_KINDS);
   const clozeText =
     raw.clozeText === undefined ? null : nullableNonEmptyStr(raw.clozeText, "clozeText");
-  const clozeOrdinal =
+  const declaredOrdinal =
     raw.clozeOrdinal === undefined || raw.clozeOrdinal === null
       ? null
       : nonNegativeInt(raw.clozeOrdinal, "clozeOrdinal");
+  const clozeOrdinal =
+    declaredOrdinal === null || era.writesClozeNumbers ? declaredOrdinal : declaredOrdinal + 1;
   const problemSteps =
     raw.problemSteps === undefined || raw.problemSteps === null
       ? null
@@ -2287,7 +2327,7 @@ function newCollections(): Collections {
   };
 }
 
-/** Parses `raw` per its `type` and files it into the matching bucket. Throws `InvalidFieldError` on a bad field — the line loop turns that into `invalid-record` at `ctx`'s severity. `era` reaches only the parsers whose rows gained fields after the first release (see `ArchiveEra`). */
+/** Parses `raw` per its `type` and files it into the matching bucket. Throws `InvalidFieldError` on a bad field — the line loop turns that into `invalid-record` at `ctx`'s severity. `era` reaches only the parsers whose rows gained fields — or, for a card's `clozeOrdinal`, a new MEANING — after the first release (see `ArchiveEra`). */
 function dispatchRecord(
   type: ArchiveRecordType,
   raw: Record<string, unknown>,
@@ -2420,7 +2460,7 @@ function dispatchRecord(
       return;
     }
     case "card": {
-      const row = parseCard(raw);
+      const row = parseCard(raw, era);
       pushRow(collections.cards, row.id, row, type, path, line, ctx);
       return;
     }

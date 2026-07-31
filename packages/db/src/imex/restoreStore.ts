@@ -696,6 +696,13 @@ export class RestoreStore {
         // (ADR-042), and the parser has already enforced the pair rule the
         // `cards` CHECK constraints also state — so the three columns ride the
         // existing insert with nothing but a `??` between them and the row.
+        //
+        // `clozeOrdinal` is written VERBATIM, deliberately: since interchange
+        // `1.26.0` it is the deletion's NUMBER (ADR-068), and turning an older
+        // archive's 0-based position into one is the parser's job, done once,
+        // off the declared schema version (`writesClozeNumbers`). Re-deriving
+        // anything here would be a second opinion on a question only the
+        // manifest can answer.
         this.insertCard.run(
           card.id, this.profileId, card.deckId, card.front, card.back,
           card.sourceNoteId, card.sourceBlockKey,

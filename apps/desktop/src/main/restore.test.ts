@@ -2482,12 +2482,14 @@ describe("Anki .apkg import", () => {
     const clozes = cards
       .filter((card) => card.kind === "cloze")
       .sort((a, b) => (a.clozeOrdinal ?? 0) - (b.clozeOrdinal ?? 0));
+    // Anki's own `cN` numbers cross over untouched (ADR-068), so the template
+    // arrives spelled exactly as its author wrote it.
     expect(clozes.map((card) => card.clozeText)).toEqual([
-      "Reka je {{Sava}}, grad je {{Beograd}}.",
-      "Reka je {{Sava}}, grad je {{Beograd}}.",
+      "Reka je {{c1::Sava}}, grad je {{c2::Beograd}}.",
+      "Reka je {{c1::Sava}}, grad je {{c2::Beograd}}.",
     ]);
-    expect(clozes[0]).toMatchObject({ front: "Reka je […], grad je Beograd.", clozeOrdinal: 0 });
-    expect(clozes[1]).toMatchObject({ front: "Reka je Sava, grad je […].", clozeOrdinal: 1 });
+    expect(clozes[0]).toMatchObject({ front: "Reka je […], grad je Beograd.", clozeOrdinal: 1 });
+    expect(clozes[1]).toMatchObject({ front: "Reka je Sava, grad je […].", clozeOrdinal: 2 });
     // Fresh FSRS, whatever the collection's own scheduling said.
     expect(
       cards.every((card) => card.reps === 0 && card.state === 0 && card.lastReview === null),
@@ -2978,8 +2980,8 @@ describe("LLM-assisted import", () => {
     const clozes = cards
       .filter((card) => card.kind === "cloze")
       .sort((a, b) => (a.clozeOrdinal ?? 0) - (b.clozeOrdinal ?? 0));
-    expect(clozes[0]).toMatchObject({ front: "Reka je […], grad je Beograd.", clozeOrdinal: 0 });
-    expect(clozes[1]).toMatchObject({ front: "Reka je Sava, grad je […].", clozeOrdinal: 1 });
+    expect(clozes[0]).toMatchObject({ front: "Reka je […], grad je Beograd.", clozeOrdinal: 1 });
+    expect(clozes[1]).toMatchObject({ front: "Reka je Sava, grad je […].", clozeOrdinal: 2 });
     // Fresh FSRS, exactly as every other importer creates a card.
     expect(cards.every((card) => card.reps === 0 && card.lastReview === null)).toBe(true);
   });

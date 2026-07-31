@@ -1,7 +1,13 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import type { Card as FsrsCard, CardInput, ReviewLogInput } from "ts-fsrs";
 import { createEmptyCard, fsrs, Rating } from "ts-fsrs";
-import { findClozeRuns, renderClozeCard, renderProblemBack, splitProblemSteps } from "@nexus/core";
+import {
+  clozeNumbers,
+  findClozeRuns,
+  renderClozeCard,
+  renderProblemBack,
+  splitProblemSteps,
+} from "@nexus/core";
 import { CardNotFoundError, CardValidationError } from "../errors.js";
 import { uuidv7 } from "../ids.js";
 import { MAX_NEW_PER_DAY, StudySettingsStore } from "./studySettingsStore.js";
@@ -51,7 +57,13 @@ export interface Card {
    * both cloze fields are set exactly when `kind` is `cloze`.
    */
   clozeText: string | null;
-  /** For a `cloze` card: which deletion of `clozeText` this row asks (0-based). */
+  /**
+   * For a `cloze` card: which deletion of `clozeText` this row asks, by NUMBER
+   * (ADR-068, migration 047) — the `{{cN::…}}` label a run declares, or its
+   * position + 1 when it declares none. 1-based, and not a position: a deletion
+   * inserted ahead of this one must not move the question this row's review
+   * history belongs to.
+   */
   clozeOrdinal: number | null;
   /**
    * A problem card's worked solution in the `--` grammar of `@nexus/core`'s
@@ -574,10 +586,11 @@ export class CardStore {
   }
 
   /**
-   * Creates one card per `{{…}}` deletion of `text`, in ordinal order, inside
-   * ONE transaction (ADR-042): a template that yields three deletions lands
-   * three siblings or none at all — a partially-created cloze is a card set
-   * the user would have to notice was incomplete.
+   * Creates one card per deletion NUMBER of `text`, in number order, inside ONE
+   * transaction (ADR-042): a template that yields three deletions lands three
+   * siblings or none at all — a partially-created cloze is a card set the user
+   * would have to notice was incomplete. Two runs sharing a number are one card
+   * with two blanks (ADR-068), so the count is of numbers, never of runs.
    *
    * The caller supplies only the template. Every row's `front`/`back` is
    * DERIVED here, by the same `renderClozeCard` the note generator and the
@@ -595,7 +608,7 @@ export class CardStore {
     const validNow = validateNow(now);
     const template = validateClozeText(text);
     const validDeckId = this.resolveDeck(deckId);
-    const ordinals = findClozeRuns(template).map((_, ordinal) => ordinal);
+    const ordinals = clozeNumbers(findClozeRuns(template));
     if (ordinals.length === 0) {
       throw new CardValidationError("A cloze card needs at least one {{…}} deletion.");
     }
@@ -615,15 +628,15 @@ export class CardStore {
     });
 
     return this.db.transaction((): Card[] => {
-      // One millisecond apart, ascending by ordinal, rather than one shared
-      // stamp for the whole transaction. `listByDeck` orders by
-      // `(created_at, id)`, and `uuidv7`'s sub-millisecond bits are random —
-      // identical stamps would leave siblings in an ARBITRARY order in the
-      // deck list, which for a three-blank template is simply wrong on screen.
-      // Creation order is also the true answer here: ordinal 0 was authored
-      // first.
+      // One millisecond apart, ascending, rather than one shared stamp for the
+      // whole transaction. `listByDeck` orders by `(created_at, id)`, and
+      // `uuidv7`'s sub-millisecond bits are random — identical stamps would
+      // leave siblings in an ARBITRARY order in the deck list, which for a
+      // three-blank template is simply wrong on screen. The stagger counts
+      // POSITIONS in the sibling set, never the numbers themselves: a labelled
+      // template may start at `c7` or skip `c2` entirely.
       const base = Date.now();
-      return sides.map((side) =>
+      return sides.map((side, index) =>
         this.insertNew(
           {
             deckId: validDeckId,
@@ -634,7 +647,7 @@ export class CardStore {
             clozeOrdinal: side.ordinal,
           },
           validNow,
-          new Date(base + side.ordinal).toISOString(),
+          new Date(base + index).toISOString(),
         ),
       );
     })();
@@ -773,8 +786,8 @@ export class CardStore {
 
     const template = validateClozeText(fields.clozeText);
     // `clozeOrdinal` is never null on a cloze row (migration 031's CHECK), but
-    // the type says it can be — `?? -1` names no run, so a corrupt row is
-    // refused rather than silently re-derived off ordinal 0.
+    // the type says it can be — `?? -1` names no deletion, so a corrupt row is
+    // refused rather than silently re-derived off the first one.
     const rendered = renderClozeCard(template, current.clozeOrdinal ?? -1);
     if (rendered === null) {
       throw new CardValidationError(

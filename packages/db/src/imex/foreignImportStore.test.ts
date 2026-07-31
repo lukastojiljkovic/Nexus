@@ -470,6 +470,31 @@ describe("ForeignImportStore", () => {
       );
     });
 
+    it("carries a cloze card's deletion NUMBER through the merge untouched (ADR-068)", () => {
+      // The planner re-mints ids and nothing else; this store writes what it is
+      // handed. A labelled deletion's number is not a position, so anything
+      // that "helpfully" renumbered here would point the imported card at a
+      // blank its author never wrote.
+      const source = createProfile("Izvor");
+      const target = createProfile("Odredište");
+      const subject = new SubjectStore(db.raw, source).create({ name: "Predmet" });
+      const deck = new DeckStore(db.raw, source).create({ subjectId: subject.id, name: "Špil" });
+      const clozeText = "Glavni grad je {{c9::Beograd}}, a reka je {{c4::Sava}}.";
+      new CardStore(db.raw, source).createCloze(deck.id, clozeText, "2026-01-01T00:00:00.000Z");
+
+      const plan = planForeignImport(
+        { data: gather(source), dropped: [], profilePicture: null, privateNotes: { notes: 0, versions: 0 } },
+        targetFor(target),
+        uuidv7,
+      );
+      new ForeignImportStore(db.raw, target).insertPlanned(plan.data, new Map(), NOW);
+
+      const importedDeck = new DeckStore(db.raw, target).listActive()[0];
+      const imported = new CardStore(db.raw, target).listByDeck(importedDeck?.id ?? "");
+      expect(imported.map((card) => card.clozeOrdinal)).toEqual([4, 9]);
+      expect(imported.every((card) => card.clozeText === clozeText)).toBe(true);
+    });
+
     it("files the source's Inbox tasks into the target's own Inbox and imports no second Inbox", () => {
       const source = createProfile("Izvor");
       const target = createProfile("Odredište");

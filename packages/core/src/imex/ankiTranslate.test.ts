@@ -110,17 +110,16 @@ describe("stripAnkiHtml", () => {
 });
 
 describe("canonicalizeCloze", () => {
-  it("renumbers by first appearance and drops the {{c…}} wrapper", () => {
+  it("keeps Anki's own cN numbers, whatever order they appear in", () => {
     const result = canonicalizeCloze("Glavni grad je {{c2::Beograd}}, a reka je {{c1::Sava}}.");
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.template).toBe("Glavni grad je {{Beograd}}, a reka je {{Sava}}.");
-    // c2 appears FIRST, so it is deletion 0; c1 is deletion 1. That ordering is
-    // what makes the positional ordinals reproduce Anki's own card set.
-    expect([...result.value.positionByAnkiNumber]).toEqual([
-      [2, 0],
-      [1, 1],
-    ]);
+    // Since ADR-068 a Nexus deletion's number IS its label, so the note crosses
+    // over spelled exactly as its author wrote it — c2 first, c1 second.
+    expect(result.value.template).toBe(
+      "Glavni grad je {{c2::Beograd}}, a reka je {{c1::Sava}}.",
+    );
+    expect(result.value.numbers).toEqual([1, 2]);
     expect(result.value.hintsDropped).toBe(0);
   });
 
@@ -128,13 +127,17 @@ describe("canonicalizeCloze", () => {
     const result = canonicalizeCloze("{{c1::Sava::reka}} i {{c2::Dunav::reka}}");
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.template).toBe("{{Sava}} i {{Dunav}}");
+    expect(result.value.template).toBe("{{c1::Sava}} i {{c2::Dunav}}");
     expect(result.value.hintsDropped).toBe(2);
   });
 
-  it("refuses the same cN twice in one note", () => {
+  it("carries the same cN twice as ONE card with two blanks", () => {
     const result = canonicalizeCloze("{{c1::a}} i {{c1::b}}");
-    expect(result).toEqual({ ok: false, reason: "cloze-ordinal-reused" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.template).toBe("{{c1::a}} i {{c1::b}}");
+    expect(result.value.numbers).toEqual([1]);
+    expect(renderClozeCard(result.value.template, 1)?.front).toBe("[…] i […]");
   });
 
   it("refuses a nested deletion", () => {
@@ -157,7 +160,8 @@ describe("canonicalizeCloze", () => {
       ok: false,
       reason: "cloze-unrepresentable",
     });
-    // An empty deletion renders no run at all, so the ordinals would shift.
+    // An empty deletion renders no run at all, so a card Anki had would be
+    // missing from the set that arrives.
     expect(canonicalizeCloze("{{c1::}} i {{c2::b}}")).toEqual({
       ok: false,
       reason: "cloze-unrepresentable",
@@ -170,17 +174,22 @@ describe("canonicalizeCloze", () => {
     });
   });
 
-  it("accepts a cN above 9 and one with leading zeros, and refuses c0", () => {
+  it("accepts a cN above 9 and refuses c0", () => {
     const high = canonicalizeCloze("{{c12::a}} {{c3::b}}");
     expect(high.ok).toBe(true);
-    if (high.ok) {
-      expect([...high.value.positionByAnkiNumber]).toEqual([
-        [12, 0],
-        [3, 1],
-      ]);
-    }
+    if (high.ok) expect(high.value.numbers).toEqual([3, 12]);
     const zero = canonicalizeCloze("{{c0::a}}");
     expect(zero).toEqual({ ok: false, reason: "cloze-no-deletions" });
+  });
+
+  it("refuses a label this grammar cannot read back, rather than shipping it as answer text", () => {
+    // Seven digits is past the label cap, so core would read `c1234567::a` as
+    // the ANSWER of an unlabelled run — a card asking something the author
+    // never wrote. The self-check catches it by construction.
+    expect(canonicalizeCloze("{{c1234567::a}}")).toEqual({
+      ok: false,
+      reason: "cloze-unrepresentable",
+    });
   });
 
   it("produces a template every deletion of which core's own renderer can render", () => {
@@ -189,8 +198,8 @@ describe("canonicalizeCloze", () => {
     if (!result.ok) return;
     const runs = findClozeRuns(result.value.template);
     expect(runs).toHaveLength(3);
-    for (let position = 0; position < runs.length; position += 1) {
-      expect(renderClozeCard(result.value.template, position)).not.toBeNull();
+    for (const number of result.value.numbers) {
+      expect(renderClozeCard(result.value.template, number)).not.toBeNull();
     }
   });
 });
@@ -377,9 +386,11 @@ describe("translateApkg", () => {
       { profileId: "profile-1", subject: { kind: "new", name: "S" }, now: NOW },
     );
 
-    const template = "Glavni grad je {{Beograd}}, reka je {{Sava}}.";
+    const template = "Glavni grad je {{c2::Beograd}}, reka je {{c1::Sava}}.";
     expect(data.cards).toHaveLength(2);
-    expect(data.cards.map((card) => card.clozeOrdinal)).toEqual([0, 1]);
+    // One row per Anki cN, listed in number order — c1 is the card Anki calls
+    // ord 0, wherever in the sentence it happens to sit.
+    expect(data.cards.map((card) => card.clozeOrdinal)).toEqual([1, 2]);
     for (const card of data.cards) {
       expect(card.kind).toBe("cloze");
       expect(card.clozeText).toBe(template);
@@ -387,6 +398,45 @@ describe("translateApkg", () => {
       expect({ front: card.front, back: card.back }).toEqual(rendered);
     }
     expect(skipMap(report.skips)["cloze-hint-dropped"]).toBe(1);
+  });
+
+  it("collapses a repeated cN into one card with both blanks masked", () => {
+    const { data, report } = translateApkg(
+      minimalApkg({
+        notetypes: [{ id: 10, name: "Cloze", kind: "cloze", templateCount: 1 }],
+        notes: [
+          { id: 100, notetypeId: 10, fields: ["{{c1::Sava}} i {{c1::Dunav}}"], tags: [] },
+        ],
+        cards: [{ noteId: 100, ord: 0, deckId: 1, reps: 0, suspended: false }],
+      }),
+      { profileId: "profile-1", subject: { kind: "new", name: "S" }, now: NOW },
+    );
+    expect(data.cards).toHaveLength(1);
+    expect(data.cards[0]).toMatchObject({ clozeOrdinal: 1, front: "[…] i […]" });
+    expect(report.notes).toBe(1);
+  });
+
+  it("lands each deletion in the deck of the Anki card that asked it", () => {
+    const { data } = translateApkg(
+      minimalApkg({
+        decks: [
+          { id: 1, name: "Prvi" },
+          { id: 2, name: "Drugi" },
+        ],
+        notetypes: [{ id: 10, name: "Cloze", kind: "cloze", templateCount: 1 }],
+        notes: [{ id: 100, notetypeId: 10, fields: ["{{c2::a}} i {{c1::b}}"], tags: [] }],
+        cards: [
+          // ord 0 is c1, ord 1 is c2 — the mapping the numbers now make direct.
+          { noteId: 100, ord: 0, deckId: 2, reps: 0, suspended: false },
+          { noteId: 100, ord: 1, deckId: 1, reps: 0, suspended: false },
+        ],
+      }),
+      { profileId: "profile-1", subject: { kind: "new", name: "S" }, now: NOW },
+    );
+    expect(data.cards.map((card) => [card.clozeOrdinal, card.deckId])).toEqual([
+      [1, "apkg:deck:2"],
+      [2, "apkg:deck:1"],
+    ]);
   });
 
   it("names every cloze refusal instead of importing a broken note", () => {
@@ -404,7 +454,6 @@ describe("translateApkg", () => {
         }).report.skips,
       );
 
-    expect(run("{{c1::a}} {{c1::b}}")["cloze-ordinal-reused"]).toBe(1);
     expect(run("{{c1::a {{c2::b}} c}}")["cloze-nested"]).toBe(1);
     expect(run("bez ijedne praznine")["cloze-no-deletions"]).toBe(1);
     expect(run("{{c1::a}b}}")["cloze-unrepresentable"]).toBe(1);

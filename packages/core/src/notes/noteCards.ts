@@ -1,6 +1,6 @@
 import * as Y from "yjs";
 
-import { findClozeRuns, renderClozeSide } from "../study/clozeText.js";
+import { clozeNumbers, findClozeRuns, renderClozeSide } from "../study/clozeText.js";
 import type { ClozeRun } from "../study/clozeText.js";
 import { xmlTextContent } from "./yjsText.js";
 
@@ -28,21 +28,30 @@ export type CardKind = "basic" | "cloze";
 export interface ParsedCard {
   front: string;
   back: string;
-  /** "" for a Q/A card, `#${ordinal}` for the ordinal-th cloze deletion of the block. */
+  /**
+   * "" for a Q/A card, `#${number}` for one cloze deletion of the block — the
+   * deletion's NUMBER (ADR-068), not its position, so inserting a blank in the
+   * middle of a sentence leaves every other card's slot exactly where it was.
+   */
   suffix: string;
   /** `basic` for a Q/A card, `cloze` for one deletion of a cloze block (ADR-042). */
   kind: CardKind;
   /** The block's raw `{{…}}` template, or null for a Q/A card — both set exactly when `kind` is `cloze`. */
   clozeText: string | null;
-  /** Which deletion of `clozeText` this card asks, or null for a Q/A card. */
+  /** Which deletion of `clozeText` this card asks, BY NUMBER, or null for a Q/A card. */
   clozeOrdinal: number | null;
 }
 
-/** A run of card syntax inside a block's text, as half-open offsets, for the editor's decorations. */
+/**
+ * A run of card syntax inside a block's text, as half-open offsets, for the
+ * editor's decorations. `cloze-label` is the `cN::` head of a labelled run —
+ * inside that run's own `cloze` span, so the editor can draw the number as a
+ * quiet marker and the answer as the answer.
+ */
 export interface CardSyntaxSpan {
   start: number;
   end: number;
-  kind: "separator" | "cloze";
+  kind: "separator" | "cloze" | "cloze-label";
 }
 
 /** What one block's text yields: the cards, and the syntax spans to highlight. Both empty when the block is not a card. */
@@ -94,10 +103,12 @@ function parseQnA(text: string): ParsedBlock | null {
 }
 
 /**
- * Applies only when the Q/A rule did not match. One card per deletion, all
- * sharing one fully-unwrapped back — and all carrying the block's raw text as
- * their template, so a note-derived cloze row is the same shape as a hand-made
- * one (ADR-042) and the reviewer can put the blank back in its context.
+ * Applies only when the Q/A rule did not match. One card per deletion NUMBER —
+ * not per run, since two runs may share a number and are then the same card
+ * with two blanks (ADR-068) — all sharing one fully-unwrapped back, and all
+ * carrying the block's raw text as their template, so a note-derived cloze row
+ * is the same shape as a hand-made one (ADR-042) and the reviewer can put the
+ * blank back in its context.
  *
  * The grammar itself lives in `study/clozeText.ts`: the editor's decorations,
  * the store's re-derivation and the reviewer all read it from there, and a
@@ -108,19 +119,22 @@ function parseCloze(text: string): ParsedBlock {
   if (runs.length === 0) return { cards: [], spans: [] };
 
   const back = renderClozeSide(text, runs, null).trim();
-  const cards: ParsedCard[] = runs.map((_, ordinal) => ({
-    front: renderClozeSide(text, runs, ordinal).trim(),
+  const cards: ParsedCard[] = clozeNumbers(runs).map((number) => ({
+    front: renderClozeSide(text, runs, number).trim(),
     back,
-    suffix: `#${ordinal}`,
+    suffix: `#${number}`,
     kind: "cloze",
     clozeText: text,
-    clozeOrdinal: ordinal,
+    clozeOrdinal: number,
   }));
-  const spans: CardSyntaxSpan[] = runs.map((run) => ({
-    start: run.start,
-    end: run.end,
-    kind: "cloze",
-  }));
+  const spans: CardSyntaxSpan[] = runs.flatMap((run) =>
+    run.label === null
+      ? [{ start: run.start, end: run.end, kind: "cloze" as const }]
+      : [
+          { start: run.start, end: run.end, kind: "cloze" as const },
+          { start: run.start + 2, end: run.answerStart, kind: "cloze-label" as const },
+        ],
+  );
   return { cards, spans };
 }
 

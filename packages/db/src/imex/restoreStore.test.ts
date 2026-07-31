@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { renderClozeCard } from "@nexus/core";
 import type {
   ExportEvent,
   ExportNote,
@@ -1573,6 +1574,54 @@ describe("RestoreStore", () => {
     expect(lists.listActive()).toEqual(withProfile(taskLists, profileB));
     expect(lists.listSections(workId)).toEqual(taskSections);
     expect(new TaskStore(db.raw, profileB).listActive()).toEqual([{ ...task, profileId: profileB }]);
+  });
+
+  it("restores a cloze card's ordinal as the NUMBER the parser handed it (ADR-068)", () => {
+    // The parser is the only place an archive's ordinal is interpreted: it
+    // upgrades a pre-1.26.0 position and takes a 1.26.0 number verbatim. This
+    // store must then write exactly what it was given — a 9 that named a
+    // labelled deletion must not come back as a position.
+    const profileB = createProfile(db, "cloze-numbers");
+    const timestamps = { createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" };
+    const subjectId = uuidv7();
+    const deckId = uuidv7();
+    const clozeText = "Glavni grad je {{c9::Beograd}}.";
+    const sides = renderClozeCard(clozeText, 9);
+    const card = {
+      id: uuidv7(), profileId: "ignored", deckId, front: sides?.front ?? "", back: sides?.back ?? "",
+      sourceNoteId: null, sourceBlockKey: null,
+      kind: "cloze", clozeText, clozeOrdinal: 9, problemSteps: null,
+      due: "2026-01-02T00:00:00.000Z", stability: 1, difficulty: 2, elapsedDays: 0,
+      scheduledDays: 1, learningSteps: 0, reps: 0, lapses: 0, state: 0 as const, lastReview: null,
+      ...timestamps,
+    };
+
+    new RestoreStore(db.raw, profileB).replaceProfileData(
+      {
+        profileName: "Cloze",
+        profilePicture: null,
+        settings: emptySettings(),
+        data: {
+          ...emptyProfileData(),
+          subjects: [
+            { id: subjectId, profileId: "ignored", name: "Predmet", color: "jade", semester: null, archived: false, ...timestamps },
+          ],
+          decks: [{ id: deckId, profileId: "ignored", subjectId, name: "Špil", ...timestamps }],
+          cards: [card],
+        },
+        derived: new Map(),
+      },
+      NOW,
+    );
+
+    const restored = new CardStore(db.raw, profileB).listByDeck(deckId)[0];
+    expect(restored).toMatchObject({ kind: "cloze", clozeText, clozeOrdinal: 9 });
+    // And the row is a live card, not a stranded one: its own sides still
+    // re-derive from its own template under that number.
+    expect(renderClozeCard(restored?.clozeText ?? "", restored?.clozeOrdinal ?? -1)).toEqual({
+      front: restored?.front,
+      back: restored?.back,
+    });
   });
 
   it("restores a task's tags and their links verbatim, ids and all (migration 023)", () => {

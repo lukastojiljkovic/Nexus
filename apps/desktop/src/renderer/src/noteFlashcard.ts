@@ -1,12 +1,14 @@
 import { Extension } from "@tiptap/core";
+import type { Editor } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
-import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { Plugin, PluginKey, TextSelection } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { parseCardBlock } from "@nexus/core";
+import { planClozeInsertion } from "./noteClozeInsert.js";
 
 /**
  * Inline flashcards (ADR-017 / NOTE-006c): a single TipTap extension with
- * three independent parts, all built on `@nexus/core`'s `parseCardBlock` so
+ * four independent parts, all built on `@nexus/core`'s `parseCardBlock` so
  * what the user sees highlighted and what gets persisted as a card can never
  * drift apart:
  *
@@ -22,8 +24,11 @@ import { parseCardBlock } from "@nexus/core";
  * (c) a view plugin (`decorations`) that highlights card syntax — pure
  *     derived state, recomputed on every transaction, nothing written to
  *     the document.
+ * (d) `Mod-Shift-c`, which wraps the selection in a new cloze deletion
+ *     (`insertClozeDeletion`, ADR-068) — the one action that has to assign a
+ *     number rather than let the author guess one.
  *
- * `countEditorCards` (bottom of file) is a fourth, small export: the same
+ * `countEditorCards` (bottom of file) is a fifth, small export: the same
  * walk as (c), used by the editor to drive the deck-mapping bar's live count.
  */
 
@@ -126,10 +131,19 @@ export function blockTextAndPositions(
   return { text, positions };
 }
 
+/** One `CardSyntaxSpan` kind's decoration class. A labelled run's `cN::` head sits INSIDE its own `{{…}}` span and only quiets it down (ADR-068). */
+const SPAN_CLASS = {
+  separator: "note__card-sep",
+  cloze: "note__card-cloze",
+  "cloze-label": "note__card-cloze-num",
+} as const;
+
 /**
  * Highlights what the parser found — decorations only, nothing stored. A
  * card-bearing block gets an accent left rule (`note__card-block`); each
- * `::` separator and `{{…}}` span gets its own inline decoration.
+ * `::` separator and `{{…}}` span gets its own inline decoration, and a
+ * labelled deletion's number is muted inside its run so the answer reads as
+ * the answer and the number as a marker.
  */
 function cardDecorationPlugin(): Plugin {
   return new Plugin({
@@ -153,11 +167,7 @@ function cardDecorationPlugin(): Plugin {
             // noUncheckedIndexedAccess: an out-of-range lookup means skip the
             // span rather than decorate the wrong range.
             if (from === undefined || to === undefined) continue;
-            decorations.push(
-              Decoration.inline(from, to + 1, {
-                class: span.kind === "separator" ? "note__card-sep" : "note__card-cloze",
-              }),
-            );
+            decorations.push(Decoration.inline(from, to + 1, { class: SPAN_CLASS[span.kind] }));
           }
           return true;
         });
@@ -168,8 +178,54 @@ function cardDecorationPlugin(): Plugin {
   });
 }
 
+/**
+ * Wraps the selection — or, with none, the caret — in a NEW cloze deletion and
+ * spells out the number of every run in this block that carries none yet
+ * (ADR-068). Returns false, changing nothing, when there is nowhere sensible to
+ * put one: outside a card-capable block, across two blocks, over an inline
+ * atom, or overlapping a deletion already there.
+ *
+ * Which number the deletion takes is `@nexus/core`'s `clozeDeletionEdits`, and
+ * turning its text offsets into document positions is `planClozeInsertion` —
+ * the pure half, testable without an editor. What is left here is the part that
+ * genuinely needs ProseMirror: reading the block, and dispatching. The
+ * insertions arrive DESCENDING, which is what lets them ride one transaction
+ * without re-mapping — every position behind the one being written is still
+ * valid.
+ *
+ * Materialising the other runs' numbers is safe by construction — an
+ * unlabelled run's number IS its position + 1 — and it is what stops the new
+ * deletion from shifting every later card onto different content.
+ */
+export function insertClozeDeletion(editor: Editor): boolean {
+  const { state } = editor;
+  const { $from, $to, from, to } = state.selection;
+  if (!$from.sameParent($to) || !isCardCandidate($from.parent)) return false;
+
+  const blockPos = $from.before($from.depth);
+  const { text, positions } = blockTextAndPositions($from.parent, blockPos);
+  const plan = planClozeInsertion({ text, positions, blockPos }, from, to);
+  if (plan === null) return false;
+
+  const tr = state.tr;
+  for (const insert of plan.inserts) tr.insertText(insert.text, insert.at);
+  tr.setSelection(TextSelection.create(tr.doc, plan.selection.from, plan.selection.to));
+
+  editor.view.dispatch(tr.scrollIntoView());
+  return true;
+}
+
 export const NoteFlashcard = Extension.create({
   name: "noteFlashcard",
+
+  addKeyboardShortcuts() {
+    return {
+      // Anki's own shortcut for the same act, and free here: the note editor
+      // has no toolbar and StarterKit binds Mod-e / Mod-Shift-b / Mod-Shift-x,
+      // never this one.
+      "Mod-Shift-c": ({ editor }) => insertClozeDeletion(editor),
+    };
+  },
 
   addGlobalAttributes() {
     return [

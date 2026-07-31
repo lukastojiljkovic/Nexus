@@ -4690,6 +4690,14 @@ button.cal__grid-event--dragging {
    cards, or how many steps, this text currently makes. Quiet by default; the
    zero nudge is muted rather than alarming — nothing is wrong yet, there is
    simply nothing to make a card from. */
+/* „Dodaj prazninu" and the live count share one row under the cloze field: the
+   action on the left, what it produced on the right, on the same baseline. */
+.study__cloze-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+}
 .study__cloze-count,
 .study__step-count {
   margin: 0;
@@ -7084,6 +7092,14 @@ button.cal__grid-event--dragging {
 .note__card-cloze {
   color: var(--nx-data);
   border-bottom: 1px dotted var(--nx-data);
+}
+/* A labelled deletion's `cN::` head (ADR-068), nested inside the run above:
+   the number stays legible but reads as a marker rather than as answer text,
+   which is all it takes for „{{c1::Beograd}}" to be read as „Beograd, praznina
+   broj 1". Colour only — changing the size here would shift the line's
+   baseline mid-sentence. */
+.note__card-cloze-num {
+  color: var(--nx-text-muted);
 }
 .note__card-sep {
   color: var(--nx-text-muted);

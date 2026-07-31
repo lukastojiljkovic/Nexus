@@ -1112,7 +1112,7 @@ describe("CardStore", () => {
       cards.syncFromNote(
         noteId,
         deckId,
-        [clozeSpec("b1#0", template, 0), clozeSpec("b1#1", template, 1)],
+        [clozeSpec("b1#1", template, 1), clozeSpec("b1#2", template, 2)],
         T0,
       );
 
@@ -1120,7 +1120,7 @@ describe("CardStore", () => {
       expect(listed).toHaveLength(2);
       expect(listed.every((c) => c.kind === "cloze")).toBe(true);
       expect(listed.every((c) => c.clozeText === template)).toBe(true);
-      expect(listed.map((c) => c.clozeOrdinal).sort()).toEqual([0, 1]);
+      expect(listed.map((c) => c.clozeOrdinal).sort()).toEqual([1, 2]);
       expect(listed.map((c) => c.front).sort()).toEqual(
         [
           `Glavni grad je ${CLOZE_MASK}, a reka je Sava.`,
@@ -1133,10 +1133,10 @@ describe("CardStore", () => {
       const { cards, deckId, profileId } = fixture();
       const noteId = insertNote(profileId);
       const template = "Glavni grad je {{Beograd}}.";
-      const sides = renderClozeCard(template, 0)!;
+      const sides = renderClozeCard(template, 1)!;
 
       // The row as a pre-ADR-042 build wrote it: right sides, no kind.
-      cards.syncFromNote(noteId, deckId, [spec("b1#0", sides.front, sides.back)], T0);
+      cards.syncFromNote(noteId, deckId, [spec("b1#1", sides.front, sides.back)], T0);
       const before = cards.listByDeck(deckId)[0]!;
       expect(before.kind).toBe("basic");
       const reviewed = cards.review(before.id, 3, T0);
@@ -1144,7 +1144,7 @@ describe("CardStore", () => {
       const result = cards.syncFromNote(
         noteId,
         deckId,
-        [clozeSpec("b1#0", template, 0)],
+        [clozeSpec("b1#1", template, 1)],
         "2026-07-08T11:00:00.000Z",
       );
 
@@ -1153,7 +1153,7 @@ describe("CardStore", () => {
       expect(after.id).toBe(before.id);
       expect(after.kind).toBe("cloze");
       expect(after.clozeText).toBe(template);
-      expect(after.clozeOrdinal).toBe(0);
+      expect(after.clozeOrdinal).toBe(1);
       expect(after.due).toBe(reviewed.due);
       expect(after.stability).toBe(reviewed.stability);
       expect(after.reps).toBe(reviewed.reps);
@@ -1162,7 +1162,7 @@ describe("CardStore", () => {
     it("is still a no-op when only the kind fields are already in step", () => {
       const { cards, deckId, profileId } = fixture();
       const noteId = insertNote(profileId);
-      const specs = [clozeSpec("b1#0", "{{A}} i B", 0)];
+      const specs = [clozeSpec("b1#1", "{{A}} i B", 1)];
       cards.syncFromNote(noteId, deckId, specs, T0);
       const before = cards.listByDeck(deckId)[0]!;
 
@@ -1175,14 +1175,14 @@ describe("CardStore", () => {
     it("a changed TEMPLATE alone is an update, even when the rendered sides are identical", () => {
       const { cards, deckId, profileId } = fixture();
       const noteId = insertNote(profileId);
-      cards.syncFromNote(noteId, deckId, [clozeSpec("b1#0", "{{A}} i B", 0)], T0);
+      cards.syncFromNote(noteId, deckId, [clozeSpec("b1#1", "{{A}} i B", 1)], T0);
 
       // `{{A}} i {{B}}` at ordinal 0 masks A and unwraps B — the same front and
       // back as `{{A}} i B`. Only the template differs, and it must still land.
       const result = cards.syncFromNote(
         noteId,
         deckId,
-        [clozeSpec("b1#0", "{{A}} i {{B}}", 0)],
+        [clozeSpec("b1#1", "{{A}} i {{B}}", 1)],
         "2026-07-08T11:00:00.000Z",
       );
 
@@ -1193,14 +1193,14 @@ describe("CardStore", () => {
     it("restores a soft-deleted cloze row with its kind fields rewritten", () => {
       const { cards, deckId, profileId } = fixture();
       const noteId = insertNote(profileId);
-      cards.syncFromNote(noteId, deckId, [clozeSpec("b1#0", "{{A}} i B", 0)], T0);
+      cards.syncFromNote(noteId, deckId, [clozeSpec("b1#1", "{{A}} i B", 1)], T0);
       const created = cards.listByDeck(deckId)[0]!;
       cards.syncFromNote(noteId, deckId, [], "2026-07-08T11:00:00.000Z");
 
       cards.syncFromNote(
         noteId,
         deckId,
-        [clozeSpec("b1#0", "{{C}} i D", 0)],
+        [clozeSpec("b1#1", "{{C}} i D", 1)],
         "2026-07-08T12:00:00.000Z",
       );
 
@@ -1238,7 +1238,7 @@ describe("CardStore", () => {
         cards.syncFromNote(
           noteId,
           deckId,
-          [{ key: "b1", front: "f", back: "b", kind: "basic", clozeText: "{{A}}", clozeOrdinal: 0 }],
+          [{ key: "b1", front: "f", back: "b", kind: "basic", clozeText: "{{A}}", clozeOrdinal: 1 }],
           T0,
         ),
       ).toThrow(CardValidationError);
@@ -1253,7 +1253,7 @@ describe("CardStore", () => {
       const created = cards.createCloze(deckId, template, T0);
 
       expect(created).toHaveLength(2);
-      expect(created.map((c) => c.clozeOrdinal)).toEqual([0, 1]);
+      expect(created.map((c) => c.clozeOrdinal)).toEqual([1, 2]);
       expect(created.every((c) => c.kind === "cloze")).toBe(true);
       expect(created.every((c) => c.clozeText === template)).toBe(true);
       expect(created.every((c) => c.deckId === deckId)).toBe(true);
@@ -1280,6 +1280,24 @@ describe("CardStore", () => {
       expect(created.every((c) => c.sourceBlockKey === null)).toBe(true);
     });
 
+    it("takes a labelled template's numbers as the rows' ordinals, in number order", () => {
+      const { cards, deckId } = fixture();
+      const created = cards.createCloze(deckId, "{{c3::A}} i {{c1::B}}", T0);
+
+      expect(created.map((c) => c.clozeOrdinal)).toEqual([1, 3]);
+      expect(created[0]?.front).toBe(`A i ${CLOZE_MASK}`);
+      expect(created[1]?.front).toBe(`${CLOZE_MASK} i B`);
+    });
+
+    it("makes ONE row of two runs sharing a number, masking both blanks", () => {
+      const { cards, deckId } = fixture();
+      const created = cards.createCloze(deckId, "{{c1::A}} i {{c2::B}} i {{c1::C}}", T0);
+
+      expect(created).toHaveLength(2);
+      expect(created.map((c) => c.clozeOrdinal)).toEqual([1, 2]);
+      expect(created[0]?.front).toBe(`${CLOZE_MASK} i B i ${CLOZE_MASK}`);
+    });
+
     it("persists every sibling and lists them back in ordinal order", () => {
       // `listByDeck` orders by `(created_at, id)` and `uuidv7`'s
       // sub-millisecond bits are random, so siblings are stamped a millisecond
@@ -1287,7 +1305,7 @@ describe("CardStore", () => {
       const { cards, deckId } = fixture();
       const created = cards.createCloze(deckId, "{{A}} i {{B}} i {{C}}", T0);
       expect(cards.listByDeck(deckId).map((c) => c.id)).toEqual(created.map((c) => c.id));
-      expect(cards.listByDeck(deckId).map((c) => c.clozeOrdinal)).toEqual([0, 1, 2]);
+      expect(cards.listByDeck(deckId).map((c) => c.clozeOrdinal)).toEqual([1, 2, 3]);
     });
 
     it("refuses a text with no deletion at all, writing nothing", () => {
@@ -1349,7 +1367,7 @@ describe("CardStore", () => {
       const updated = cards.update(second.id, { clozeText: "{{C}} i {{D}}" });
 
       expect(updated.clozeText).toBe("{{C}} i {{D}}");
-      expect(updated.clozeOrdinal).toBe(1);
+      expect(updated.clozeOrdinal).toBe(2);
       expect(updated.front).toBe(`C i ${CLOZE_MASK}`);
       expect(updated.back).toBe("C i D");
       expect(updated.kind).toBe("cloze");
@@ -1366,6 +1384,20 @@ describe("CardStore", () => {
       expect(updated.stability).toBe(reviewed.stability);
       expect(updated.reps).toBe(reviewed.reps);
       expect(updated.state).toBe(reviewed.state);
+    });
+
+    it("survives a deletion inserted AHEAD of this row's own, once the text is labelled", () => {
+      // The defect ADR-068 exists for: under positions, inserting a blank in
+      // front of this one would have handed this row's history to the new
+      // blank's content. With numbers the row keeps asking „B".
+      const { cards, deckId } = fixture();
+      const second = cards.createCloze(deckId, "{{c1::A}} i {{c2::B}}", T0)[1]!;
+      expect(second.clozeOrdinal).toBe(2);
+
+      const updated = cards.update(second.id, { clozeText: "{{c1::A}} i {{c3::X}} i {{c2::B}}" });
+
+      expect(updated.clozeOrdinal).toBe(2);
+      expect(updated.front).toBe(`A i X i ${CLOZE_MASK}`);
     });
 
     it("refuses a template in which this row's ordinal no longer exists", () => {
@@ -1674,7 +1706,7 @@ describe("CardStore", () => {
     it("leaves content, kind and steps alone", () => {
       const { cards, deckId, profileId } = fixture();
       const noteId = insertNote(profileId);
-      cards.syncFromNote(noteId, deckId, [clozeSpec("b1", "Rim je {{prestonica}} Italije", 0)], T0);
+      cards.syncFromNote(noteId, deckId, [clozeSpec("b1", "Rim je {{prestonica}} Italije", 1)], T0);
       const before = cards.listByDeck(deckId)[0]!;
 
       cards.detachCardsFromNote(noteId);

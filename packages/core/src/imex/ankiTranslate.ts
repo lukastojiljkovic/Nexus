@@ -1,4 +1,4 @@
-import { findClozeRuns, renderClozeCard } from "../study/clozeText.js";
+import { clozeNumbers, findClozeRuns, renderClozeCard } from "../study/clozeText.js";
 import type { ExportCard, ExportDeck, ExportSubject, ProfileData } from "./exportArchive.js";
 import { walkProtoFields } from "./protoWalk.js";
 
@@ -25,11 +25,11 @@ import { walkProtoFields } from "./protoWalk.js";
  *    every image and sound reference it removes. v1 carries no media, and the
  *    preview says so in a number.
  *  - **A cloze note either translates exactly or does not translate at all.**
- *    `canonicalizeCloze` rewrites `{{cN::…}}` into Nexus's positional `{{…}}`
- *    grammar and then CHECKS its own output against `findClozeRuns` — core's
- *    own reader of that grammar. Anything the check disagrees with is refused
- *    by name. A cloze card whose blanks landed one position off would be worse
- *    than a card that never arrived.
+ *    `canonicalizeCloze` keeps Anki's own `{{cN::…}}` numbers — since ADR-068
+ *    they are Nexus's numbers too — and then CHECKS its own output against
+ *    `findClozeRuns`, core's own reader of that grammar. Anything the check
+ *    disagrees with is refused by name. A cloze card whose blanks landed one
+ *    position off would be worse than a card that never arrived.
  *  - **No scheduling history crosses.** Every card is born new, at `now`, in
  *    exactly the shape `createEmptyCard` gives one (`CardStore.insertNew`).
  *    FSRS's parameters are not Anki's SM-2 ones, and a stability invented from
@@ -208,15 +208,14 @@ export function stripAnkiHtml(field: string): AnkiFieldText {
 /** Why one Anki cloze note cannot become Nexus cloze cards. Every one of these refuses the NOTE and is counted; none of them ever refuses the archive. */
 export type ClozeCanonicalRefusal =
   | "cloze-nested"
-  | "cloze-ordinal-reused"
   | "cloze-no-deletions"
   | "cloze-unrepresentable";
 
 export interface ClozeCanonical {
   /** The note's text in Nexus's `{{…}}` grammar — the `cloze_text` every sibling row stores. */
   template: string;
-  /** Anki's own `cN` number → that deletion's 0-based POSITION in `template`, which is the `cloze_ordinal` a Nexus row asks by. */
-  positionByAnkiNumber: ReadonlyMap<number, number>;
+  /** The deletion numbers `template` carries, ascending — Anki's own `cN`, unchanged, and one Nexus card each. */
+  numbers: readonly number[];
   /** How many `::hint` parts were dropped — Nexus's grammar has no hint, and a silently discarded one is indistinguishable from a bug. */
   hintsDropped: number;
 }
@@ -233,25 +232,25 @@ const ANY_BRACE_RUN = /\{\{|\}\}/g;
 /**
  * One Anki cloze field as a Nexus cloze template.
  *
- * Deletions are renumbered BY FIRST APPEARANCE, not by their `cN` number: Nexus
- * ordinals are POSITIONAL (`findClozeRuns` returns runs left to right), so a
- * note written `{{c2::…}} … {{c1::…}}` has to become deletion 0 then deletion 1
- * in that order, or every sibling card would ask about the wrong blank.
+ * Anki's `cN` numbers are KEPT (ADR-068): a Nexus deletion's number is its own
+ * `cN` label, so `{{c2::…}} … {{c1::…}}` stays exactly that and the two decks
+ * agree on which blank is which. Only the `::hint` part is dropped, since this
+ * grammar has none — and a repeated `cN`, which Anki blanks on ONE card, is now
+ * one Nexus card with two blanks rather than a refusal.
  *
- * Four refusals, each of them a case where the two grammars genuinely disagree
+ * Three refusals, each of them a case where the two grammars genuinely disagree
  * and guessing would corrupt somebody's deck:
  *
- *  - `cloze-ordinal-reused` — Anki lets one `cN` appear twice, blanking both
- *    halves on a single card. A positional grammar cannot say that at all.
  *  - `cloze-nested` — Anki's own parser rejects these too; ours must not
  *    silently half-match one.
  *  - `cloze-no-deletions` — a cloze note with nothing to hide has no cards.
  *  - `cloze-unrepresentable` — the catch-all, and the one that makes the other
- *    three safe: the finished template is read back with `findClozeRuns`, and
+ *    two safe: the finished template is read back with `findClozeRuns`, and
  *    unless it yields exactly the deletions that were put in, in order, with
- *    the same text, the note is refused. A brace inside a deletion, an empty
- *    deletion, a stray `{{…}}` in the surrounding prose — none of them needs
- *    its own rule, because the check catches all of them by construction.
+ *    the same number and the same text, the note is refused. A brace inside a
+ *    deletion, an empty deletion, a stray `{{…}}` in the surrounding prose —
+ *    none of them needs its own rule, because the check catches all of them by
+ *    construction.
  */
 export function canonicalizeCloze(
   field: string,
@@ -274,8 +273,8 @@ export function canonicalizeCloze(
     return { ok: false, reason: nested ? "cloze-nested" : "cloze-unrepresentable" };
   }
 
-  const positionByAnkiNumber = new Map<number, number>();
-  const texts: string[] = [];
+  /** Every deletion written into the template, in document order — what the self-check reads back. */
+  const written: { number: number; text: string }[] = [];
   let hintsDropped = 0;
   let template = "";
   let cursor = 0;
@@ -283,33 +282,33 @@ export function canonicalizeCloze(
   for (const match of matches) {
     const index = match.index ?? 0;
     const number = Number.parseInt(match[1] ?? "", 10);
-    // `c0` is not a deletion in Anki either — its card would be ordinal -1. Left
-    // in the text as it was written rather than unwrapped, since unwrapping it
-    // would silently change what the note says.
+    // `c0` is not a deletion in Anki either. Left in the text as it was written
+    // rather than unwrapped, since unwrapping it would silently change what the
+    // note says — and the self-check below then refuses the note, because a
+    // stray `{{…}}` in the prose is exactly what it is looking for.
     if (!Number.isInteger(number) || number < 1) continue;
-    // Anki lets one `cN` appear twice, blanking both halves on ONE card. A
-    // positional grammar has no way to say that, so the note is refused rather
-    // than turned into two cards the author never wrote.
-    if (positionByAnkiNumber.has(number)) return { ok: false, reason: "cloze-ordinal-reused" };
     if (match[3] !== undefined) hintsDropped += 1;
     const inner = match[2] ?? "";
-    positionByAnkiNumber.set(number, texts.length);
-    texts.push(inner);
-    template += field.slice(cursor, index) + `{{${inner}}}`;
+    written.push({ number, text: inner });
+    template += field.slice(cursor, index) + `{{c${number}::${inner}}}`;
     cursor = index + match[0].length;
   }
   template += field.slice(cursor);
 
-  if (texts.length === 0) return { ok: false, reason: "cloze-no-deletions" };
+  if (written.length === 0) return { ok: false, reason: "cloze-no-deletions" };
 
   // The self-check. `findClozeRuns` is core's OWN reader of the `{{…}}` grammar
   // — the same one `CardStore` re-derives a row's sides with and the reviewer
   // splits its segments with — so agreeing with it is the only definition of
   // "this template says what we meant" that cannot drift.
   const runs = findClozeRuns(template);
-  if (runs.length !== texts.length) return { ok: false, reason: "cloze-unrepresentable" };
+  if (runs.length !== written.length) return { ok: false, reason: "cloze-unrepresentable" };
   for (let index = 0; index < runs.length; index += 1) {
-    if (runs[index]?.inner !== texts[index]) return { ok: false, reason: "cloze-unrepresentable" };
+    const run = runs[index];
+    const meant = written[index];
+    if (run?.label !== meant?.number || run?.inner !== meant?.text) {
+      return { ok: false, reason: "cloze-unrepresentable" };
+    }
   }
   // A brace run outside the deletions we wrote would not change what
   // `findClozeRuns` returns but WOULD be text the user never sees the same way
@@ -317,7 +316,7 @@ export function canonicalizeCloze(
   const braceRuns = template.match(ANY_BRACE_RUN)?.length ?? 0;
   if (braceRuns !== runs.length * 2) return { ok: false, reason: "cloze-unrepresentable" };
 
-  return { ok: true, value: { template, positionByAnkiNumber, hintsDropped } };
+  return { ok: true, value: { template, numbers: clozeNumbers(runs), hintsDropped } };
 }
 
 // --- Schema 18's notetype kind ----------------------------------------------
@@ -367,7 +366,6 @@ export type ApkgSkipCode =
   | "template-unsupported"
   | "extra-fields-dropped"
   | "cloze-nested"
-  | "cloze-ordinal-reused"
   | "cloze-no-deletions"
   | "cloze-unrepresentable"
   | "cloze-hint-dropped"
@@ -384,7 +382,6 @@ export const APKG_SKIP_CODES: readonly ApkgSkipCode[] = [
   "empty-deck",
   "template-unsupported",
   "cloze-nested",
-  "cloze-ordinal-reused",
   "cloze-no-deletions",
   "cloze-unrepresentable",
   "cloze-hint-dropped",
@@ -804,11 +801,12 @@ function translateBasicNote(
 }
 
 /**
- * A cloze note: one Nexus card per DELETION of the canonical template, not per
- * Anki card. The two normally agree exactly — Anki makes one card per `cN` — but
- * the template is the authority here, because it is what the row stores and
- * what `renderClozeCard` derives the sides from. A card Anki had for a deletion
- * the text no longer contains would otherwise arrive asking about nothing.
+ * A cloze note: one Nexus card per deletion NUMBER of the canonical template,
+ * not per Anki card. The two normally agree exactly — Anki makes one card per
+ * `cN` — but the template is the authority here, because it is what the row
+ * stores and what `renderClozeCard` derives the sides from. A card Anki had for
+ * a deletion the text no longer contains would otherwise arrive asking about
+ * nothing, and a `cN` written twice is one card in both apps.
  *
  * The sides are rendered by core's OWN `renderClozeCard`, the same function
  * `CardStore` re-derives them with on every edit, so an imported cloze card and
@@ -840,27 +838,28 @@ function translateClozeNote(
 
   // Which deck each deletion lands in: the deck of the Anki card that asked
   // that very deletion when there is one (a cloze note's siblings CAN sit in
-  // different decks), otherwise the note's first card's deck.
-  const deckByPosition = new Map<number, number>();
+  // different decks), otherwise the note's first card's deck. An Anki cloze
+  // card's `ord` is its own `cN` minus one, which is the whole mapping now that
+  // both apps number deletions the same way.
+  const deckByNumber = new Map<number, number>();
   for (const card of noteCards) {
-    const position = canonical.value.positionByAnkiNumber.get(card.ord + 1);
-    if (position !== undefined && !deckByPosition.has(position)) {
-      deckByPosition.set(position, card.deckId);
+    const number = card.ord + 1;
+    if (canonical.value.numbers.includes(number) && !deckByNumber.has(number)) {
+      deckByNumber.set(number, card.deckId);
     }
   }
   const fallbackDeckId = noteCards[0]?.deckId;
   if (fallbackDeckId === undefined) return;
 
   const template = canonical.value.template;
-  const deletions = findClozeRuns(template).length;
-  for (let position = 0; position < deletions; position += 1) {
-    const deckId = deckByPosition.get(position) ?? fallbackDeckId;
+  for (const number of canonical.value.numbers) {
+    const deckId = deckByNumber.get(number) ?? fallbackDeckId;
     if (!deckNames.has(deckId)) {
       skips.add("unknown-deck");
       continue;
     }
-    const rendered = renderClozeCard(template, position);
-    // Unreachable: `canonicalizeCloze` already proved every position renders.
+    const rendered = renderClozeCard(template, number);
+    // Unreachable: `canonicalizeCloze` already proved every number renders.
     // Kept because `renderClozeCard`'s null is the contract, and a silent
     // `?? ""` here would write a blank card rather than say so.
     if (rendered === null) {
@@ -869,7 +868,7 @@ function translateClozeNote(
     }
     ctx.usedDeckIds.add(deckId);
     out.push({
-      id: ctx.cardSourceId(note.id, position),
+      id: ctx.cardSourceId(note.id, number),
       profileId: ctx.profileId,
       deckId: ctx.deckSourceId(deckId),
       front: rendered.front,
@@ -878,7 +877,7 @@ function translateClozeNote(
       sourceBlockKey: null,
       kind: "cloze",
       clozeText: template,
-      clozeOrdinal: position,
+      clozeOrdinal: number,
       problemSteps: null,
       ...scheduling,
     });

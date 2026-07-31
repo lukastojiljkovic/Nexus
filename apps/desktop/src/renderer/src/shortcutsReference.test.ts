@@ -114,8 +114,17 @@ describe("the Beleške group", () => {
       r.notesCodeBlock,
       r.notesSlash,
       r.notesLink,
+      r.notesCloze,
       r.notesHistory,
     ]);
+  });
+
+  it("documents the cloze key beside the two other real chords in the group", () => {
+    // Not a markdown trigger, so it prints as a chord rather than as characters
+    // the user types — and it earns a row because a number the editor assigns
+    // is not something anyone can guess from the syntax alone (ADR-068).
+    const rows = groupById("notes").rows;
+    expect(rows.find((row) => row.description === r.notesCloze)?.keys).toEqual(["Ctrl+Shift+C"]);
   });
 
   it("prints the markdown triggers as the characters the user types", () => {

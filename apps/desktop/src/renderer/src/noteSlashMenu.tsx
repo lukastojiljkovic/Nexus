@@ -5,6 +5,7 @@ import type { SuggestionProps } from "@tiptap/suggestion";
 import { CALLOUT_VARIANTS } from "@nexus/core";
 import type { CalloutVariant } from "@nexus/core";
 import { applyCallout } from "./noteCallout.js";
+import { insertClozeDeletion } from "./noteFlashcard.js";
 import { insertToggle } from "./noteToggle.js";
 import { SuggestionMenu } from "./suggestionMenu.js";
 import type { TemplateEntry } from "./noteTemplates.js";
@@ -137,6 +138,17 @@ const SLASH_ITEMS: readonly SlashItem[] = [
     // immediately becomes a real card via `NoteFlashcard`'s key plugin.
     run: (editor, range) =>
       editor.chain().focus().deleteRange(range).insertContent(strings.notes.cardScaffold).run(),
+  },
+  {
+    key: "clozeBlank",
+    label: strings.notes.slash.clozeBlank,
+    // The `/query` goes first, as every item's does; the deletion is then
+    // inserted at the caret it left behind, numbered by `insertClozeDeletion`
+    // (ADR-068) — never by the author counting braces.
+    run: (editor, range) => {
+      editor.chain().focus().deleteRange(range).run();
+      insertClozeDeletion(editor);
+    },
   },
 ];
 

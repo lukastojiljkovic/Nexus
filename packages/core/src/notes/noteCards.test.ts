@@ -90,7 +90,7 @@ describe("parseCardBlock — cloze rule", () => {
     const start = text.indexOf("{{");
     const end = text.indexOf("}}") + 2;
     expect(parseCardBlock(text)).toEqual({
-      cards: [cloze("Rečenica sa […] delom", "Rečenica sa skrivenim delom", text, 0)],
+      cards: [cloze("Rečenica sa […] delom", "Rečenica sa skrivenim delom", text, 1)],
       spans: [{ start, end, kind: "cloze" }],
     });
   });
@@ -99,11 +99,35 @@ describe("parseCardBlock — cloze rule", () => {
     const text = "{{A}} i {{B}}";
     const parsed = parseCardBlock(text);
     expect(parsed.cards).toEqual([
-      cloze("[…] i B", "A i B", text, 0),
-      cloze("A i […]", "A i B", text, 1),
+      cloze("[…] i B", "A i B", text, 1),
+      cloze("A i […]", "A i B", text, 2),
     ]);
     expect(parsed.spans).toHaveLength(2);
     expect(parsed.spans.every((span) => span.kind === "cloze")).toBe(true);
+  });
+
+  it("keys a card by the run's LABEL when it has one, in number order", () => {
+    const text = "{{c3::A}} i {{c1::B}}";
+    expect(parseCardBlock(text).cards).toEqual([
+      cloze("A i […]", "A i B", text, 1),
+      cloze("[…] i B", "A i B", text, 3),
+    ]);
+  });
+
+  it("makes ONE card of two runs sharing a number, masking both blanks", () => {
+    const text = "{{c1::A}} i {{c2::B}} i {{c1::C}}";
+    expect(parseCardBlock(text).cards).toEqual([
+      cloze("[…] i B i […]", "A i B i C", text, 1),
+      cloze("A i […] i C", "A i B i C", text, 2),
+    ]);
+  });
+
+  it("spans a labelled run's `cN::` head separately, inside the run's own span", () => {
+    const text = "Grad je {{c1::Beograd}}.";
+    expect(parseCardBlock(text).spans).toEqual([
+      { start: 8, end: 23, kind: "cloze" },
+      { start: 10, end: 14, kind: "cloze-label" },
+    ]);
   });
 
   it("does not apply once the Q/A rule matched — the braces stay literal", () => {
@@ -291,12 +315,24 @@ describe("collectNoteCards", () => {
     expect(collectNoteCards(docWithBlocks(el))).toEqual([]);
   });
 
-  it("expands cloze deletions into separate, ordinal-suffixed specs", () => {
+  it("expands cloze deletions into separate, number-suffixed specs", () => {
     const doc = docWithBlocks(paragraph("{{A}} i {{B}}", "cloze-key"));
     expect(collectNoteCards(doc)).toEqual([
-      clozeSpec("cloze-key#0", "[…] i B", "A i B", "{{A}} i {{B}}", 0),
-      clozeSpec("cloze-key#1", "A i […]", "A i B", "{{A}} i {{B}}", 1),
+      clozeSpec("cloze-key#1", "[…] i B", "A i B", "{{A}} i {{B}}", 1),
+      clozeSpec("cloze-key#2", "A i […]", "A i B", "{{A}} i {{B}}", 2),
     ]);
+  });
+
+  it("keeps a labelled deletion on its own slot when a blank is inserted before it", () => {
+    // The whole point of ADR-068: the card that asked „B" keeps key `#2` and
+    // therefore keeps its FSRS history, even though it is now the third run.
+    const before = collectNoteCards(docWithBlocks(paragraph("{{c1::A}} i {{c2::B}}", "k")));
+    const after = collectNoteCards(
+      docWithBlocks(paragraph("{{c1::A}} i {{c3::X}} i {{c2::B}}", "k")),
+    );
+    expect(before.map((spec) => spec.key)).toEqual(["k#1", "k#2"]);
+    expect(after.map((spec) => spec.key)).toEqual(["k#1", "k#2", "k#3"]);
+    expect(after.find((spec) => spec.key === "k#2")?.front).toBe("A i X i […]");
   });
 
   it("carries the block's raw template on every cloze spec, so the row can re-derive itself (ADR-042)", () => {
@@ -304,7 +340,7 @@ describe("collectNoteCards", () => {
     const specs = collectNoteCards(doc);
     expect(specs).toHaveLength(1);
     expect(specs[0]?.clozeText).toBe("Glavni grad je {{Beograd}}.");
-    expect(specs[0]?.clozeOrdinal).toBe(0);
+    expect(specs[0]?.clozeOrdinal).toBe(1);
     expect(specs[0]?.kind).toBe("cloze");
   });
 

@@ -44,6 +44,17 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
  *
+ * `1.26.0` changes what a cloze card's `clozeOrdinal` MEANS (ADR-068, migration
+ * 047): the field carried the deletion's 0-based POSITION in `clozeText` and
+ * now carries its 1-based NUMBER — the `{{cN::…}}` label a run declares, or its
+ * position + 1 when it declares none. Nothing was added and nothing removed, so
+ * a MINOR bump is the strongest signal available; the reader's own
+ * `writesClozeNumbers` era flag is what turns that number back into whichever
+ * of the two an archive actually holds. An older reader handed this archive
+ * would restore every cloze card asking the deletion one to the right of the
+ * one it was written for — the version gate refuses it instead, which is the
+ * whole reason the bump exists.
+ *
  * `1.25.0` adds exam topics and the honest planner (ADR-063, STUDY-003/004/005,
  * migration 046): the `exam-topic` record type — one row per entry of an exam's
  * ranked curriculum, riding in `data/study.ndjson` AHEAD of the plans whose
@@ -190,7 +201,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.25.0";
+const SCHEMA_VERSION = "1.26.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -627,6 +638,11 @@ export interface ExportCard {
    * the reader additionally re-runs the `{{…}}` grammar to confirm the ordinal
    * is actually IN the template. Without them a restored cloze card would keep
    * its rendered sides but lose the only text its owner can edit.
+   *
+   * Since `1.26.0` (ADR-068) `clozeOrdinal` is the deletion's 1-based NUMBER,
+   * not its 0-based position; the reader upgrades an older archive's value by
+   * +1 off its own `writesClozeNumbers` era flag, since nothing in the row
+   * itself can tell the two apart.
    */
   clozeText?: string | null;
   clozeOrdinal?: number | null;
