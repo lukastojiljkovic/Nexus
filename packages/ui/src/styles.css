@@ -1,5 +1,37 @@
 /* @nexus/ui — component styles. Tokens only; no raw color values. */
 
+/* --- Reduced motion (house policy) ------------------------------------
+   The OS-level preference, honoured product-wide from one place: this is the
+   only stylesheet every app loads, so the rule reaches the desktop shell, the
+   gallery and any component added later without a per-selector sweep — and
+   motion written tomorrow is calm by default rather than by remembering.
+
+   Motion is DISABLED, not slowed: durations collapse to an imperceptible 1ms
+   and repeats stop after a single pass. Deliberately `1ms` and NOT
+   `animation: none` — `none` never fires `animationend`, which would strand
+   any state machine waiting on it (the dashboard's landed mark is exactly
+   that: its handler is what removes the mark). A near-zero duration still
+   fires the event, so those keep completing.
+
+   Motion that CARRIES INFORMATION rather than decorating is excepted by the
+   stylesheet that owns it: it restores its own duration and switches its
+   timing function to `step-end`, so the mark holds perfectly still for its
+   full dwell and then disappears in one step — present, but with no fade to
+   animate. See `.nx-revealed` and `.dash__widget-mark` in the desktop
+   app.css; there are no others. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* --- Base ------------------------------------------------------------ */
 .nx-app {
   font-family: var(--nx-font-family-ui);

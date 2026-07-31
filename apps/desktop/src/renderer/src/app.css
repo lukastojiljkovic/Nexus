@@ -31,10 +31,13 @@ body {
    back when the class goes. Duration matches REVEAL_DURATION_MS, which is
    what removes the class once the fade has finished. */
 .nx-revealed {
+  /* One source of truth for the dwell: the reduced-motion rule below reuses it,
+     and it must stay equal to REVEAL_DURATION_MS in reveal.ts. */
+  --nx-reveal-duration: 2000ms;
   outline: 1px solid transparent;
   outline-offset: 2px;
   border-radius: var(--nx-radius-xs);
-  animation: nx-reveal 2000ms var(--nx-motion-ease) forwards;
+  animation: nx-reveal var(--nx-reveal-duration) var(--nx-motion-ease) forwards;
 }
 
 @keyframes nx-reveal {
@@ -46,6 +49,21 @@ body {
   100% {
     outline-color: transparent;
     background-image: linear-gradient(transparent, transparent);
+  }
+}
+
+/* Reduced motion — a documented exception to the blanket rule in
+   @nexus/ui's styles.css. This mark is the whole answer to "which row was the
+   search result", so it has to still appear; what goes is the fade, not the
+   mark. Restoring the duration and stepping the timing function holds the ring
+   perfectly still for the full dwell and drops it in one frame at the end,
+   which is also exactly when reveal.ts's timer takes the class away. Letting
+   the blanket 1ms apply instead would land on the animation's last keyframe —
+   transparent — and the row would never be marked at all. */
+@media (prefers-reduced-motion: reduce) {
+  .nx-revealed {
+    animation-duration: var(--nx-reveal-duration) !important;
+    animation-timing-function: step-end !important;
   }
 }
 
@@ -2444,12 +2462,14 @@ button.cal__grid-event--dragging {
    `inset: -1px` lays the ring exactly over the card's own border rather than
    inside it, so nothing appears to grow. */
 .dash__widget-mark {
+  /* One source of truth for the dwell — the reduced-motion rule below reuses it. */
+  --dash-landed-duration: 900ms;
   position: absolute;
   inset: -1px;
   border: 1px solid var(--nx-accent);
   border-radius: inherit;
   pointer-events: none;
-  animation: dash-landed 900ms var(--nx-motion-ease) forwards;
+  animation: dash-landed var(--dash-landed-duration) var(--nx-motion-ease) forwards;
 }
 @keyframes dash-landed {
   0%,
@@ -2458,6 +2478,20 @@ button.cal__grid-event--dragging {
   }
   100% {
     opacity: 0;
+  }
+}
+
+/* Reduced motion — a documented exception to the blanket rule in @nexus/ui's
+   styles.css, for two reasons at once. The ring is the only thing that says
+   WHERE the card just went, so it must still be seen; and its `animationend`
+   is what clears `landed` in DashboardPage, so the animation must still run to
+   completion. Keeping the real duration satisfies both, and `step-end` removes
+   the one thing reduced motion is actually about: the fade. The ring holds
+   still for the full dwell, then goes in a single step. */
+@media (prefers-reduced-motion: reduce) {
+  .dash__widget-mark {
+    animation-duration: var(--dash-landed-duration) !important;
+    animation-timing-function: step-end !important;
   }
 }
 

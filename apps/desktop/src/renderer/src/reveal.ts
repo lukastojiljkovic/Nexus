@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-/** Must match the `nx-reveal` animation's duration in app.css — the class is removed exactly when the fade ends. */
+/** Must match `--nx-reveal-duration` on `.nx-revealed` in app.css — the class is removed exactly when the fade ends. */
 const REVEAL_DURATION_MS = 2000;
 
 export function useRevealedRow(): { revealedId: string | null; reveal: (id: string) => void } {
@@ -43,6 +43,10 @@ export function useRevealedRow(): { revealedId: string | null; reveal: (id: stri
  * already visible never jumps. Silently a no-op when the id is not (yet, or
  * no longer) in the DOM, which happens for free during the load races the
  * pages above already guard against.
+ *
+ * No `behavior`, so the scroll takes the computed `scroll-behavior`, which no
+ * stylesheet sets to `smooth` and which the reduced-motion rule in @nexus/ui's
+ * styles.css pins to `auto`. Nothing to opt out of here.
  */
 export function scrollRevealedIntoView(domId: string): void {
   document.getElementById(domId)?.scrollIntoView({ block: "nearest" });
