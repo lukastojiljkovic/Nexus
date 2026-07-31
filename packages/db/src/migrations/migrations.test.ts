@@ -16,8 +16,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 44 (scheduled backups), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(44);
+  it("is at version 45 (private notes), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(45);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -4947,6 +4947,168 @@ describe("migration 044 — backup settings", () => {
     insertSettings(db, "p1");
     db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
     expect(db.raw.prepare("SELECT count(*) AS n FROM backup_settings").get()).toEqual({ n: 0 });
+    db.close();
+  });
+});
+
+describe("migration 045 — private notes", () => {
+  const now = () => new Date().toISOString();
+
+  const insertNote = (db: NexusDatabase, id: string, profileId: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO private_notes (id, profile_id, sealed, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(id, profileId, Buffer.from([1, 2, 3]), now(), now());
+
+  const insertVersion = (db: NexusDatabase, noteId: string, seq: number) =>
+    db.raw
+      .prepare(
+        `INSERT INTO private_note_versions (note_id, seq, sealed, created_at)
+         VALUES (?, ?, ?, ?)`,
+      )
+      .run(noteId, seq, Buffer.from([4, 5, 6]), now());
+
+  /** Writes a `private_settings` row raw, defaulting to a valid credential-only one; `overrides` names what a test bends. */
+  const insertSettings = (
+    db: NexusDatabase,
+    profileId: string,
+    overrides: Partial<{
+      kitSalt: string | null;
+      kitWrap: string | null;
+      usesAccountPasscode: number;
+      autoLockMinutes: number;
+      lockOnMinimize: number;
+    }> = {},
+  ) => {
+    const row = {
+      kitSalt: null as string | null,
+      kitWrap: null as string | null,
+      usesAccountPasscode: 0,
+      autoLockMinutes: 5,
+      lockOnMinimize: 1,
+      ...overrides,
+    };
+    db.raw
+      .prepare(
+        `INSERT INTO private_settings
+           (profile_id, kdf, pass_salt, pass_wrap, kit_salt, kit_wrap,
+            uses_account_passcode, auto_lock_minutes, lock_on_minimize, created_at, updated_at)
+         VALUES (?, '{"algorithm":"argon2id"}', 'c2FsdA==', '{"v":1}', ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        profileId,
+        row.kitSalt,
+        row.kitWrap,
+        row.usesAccountPasscode,
+        row.autoLockMinutes,
+        row.lockOnMinimize,
+        now(),
+        now(),
+      );
+  };
+
+  it("creates all three private tables and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    const names = tableNames(db);
+    expect(names).toContain("private_notes");
+    expect(names).toContain("private_note_versions");
+    expect(names).toContain("private_settings");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("keeps the cleartext surface to ids and timestamps only — no title, no plaintext column", () => {
+    const db = openDatabase({ path: join(dir, "columns.db") });
+    const columns = (
+      db.raw.prepare(`PRAGMA table_info(private_notes)`).all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(columns.sort()).toEqual(["created_at", "id", "profile_id", "sealed", "updated_at"]);
+    db.close();
+  });
+
+  it("creates the private_notes_profile_updated index for list ordering", () => {
+    const db = openDatabase({ path: join(dir, "index.db") });
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("private_notes_profile_updated");
+    db.close();
+  });
+
+  it("enforces PRIMARY KEY (note_id, seq) on private_note_versions", () => {
+    const db = openDatabase({ path: join(dir, "unique-seq.db") });
+    insertProfile(db, "p1");
+    insertNote(db, "n1", "p1");
+    insertVersion(db, "n1", 1);
+    expect(() => insertVersion(db, "n1", 1)).toThrow();
+    expect(() => insertVersion(db, "n1", 2)).not.toThrow();
+    db.close();
+  });
+
+  it("cascades notes, versions and settings when the owning profile is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade-profile.db") });
+    insertProfile(db, "p1");
+    insertNote(db, "n1", "p1");
+    insertVersion(db, "n1", 1);
+    insertSettings(db, "p1");
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    for (const table of ["private_notes", "private_note_versions", "private_settings"]) {
+      const { n } = db.raw.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number };
+      expect({ table, n }).toEqual({ table, n: 0 });
+    }
+    db.close();
+  });
+
+  it("cascades version deletion when the owning note is removed — a hard delete takes the history with it", () => {
+    const db = openDatabase({ path: join(dir, "cascade-note.db") });
+    insertProfile(db, "p1");
+    insertNote(db, "n1", "p1");
+    insertVersion(db, "n1", 1);
+    insertVersion(db, "n1", 2);
+
+    db.raw.prepare("DELETE FROM private_notes WHERE id = ?").run("n1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM private_note_versions").get() as { n: number }).n,
+    ).toBe(0);
+    db.close();
+  });
+
+  it("holds auto_lock_minutes inside 1..60 with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-autolock.db") });
+    insertProfile(db, "p1");
+    insertProfile(db, "p2");
+    insertProfile(db, "bad");
+    expect(() => insertSettings(db, "p1", { autoLockMinutes: 1 })).not.toThrow();
+    expect(() => insertSettings(db, "p2", { autoLockMinutes: 60 })).not.toThrow();
+    expect(() => insertSettings(db, "bad", { autoLockMinutes: 0 })).toThrow();
+    expect(() => insertSettings(db, "bad", { autoLockMinutes: 61 })).toThrow();
+    db.close();
+  });
+
+  it("holds the two flags to {0, 1} with CHECKs", () => {
+    const db = openDatabase({ path: join(dir, "check-flags.db") });
+    insertProfile(db, "p1");
+    insertProfile(db, "bad");
+    expect(() => insertSettings(db, "p1", { usesAccountPasscode: 1 })).not.toThrow();
+    expect(() => insertSettings(db, "bad", { usesAccountPasscode: 2 })).toThrow();
+    expect(() => insertSettings(db, "bad", { lockOnMinimize: 2 })).toThrow();
+    db.close();
+  });
+
+  it("refuses a kit salt without a kit wrap and the reverse — both or neither", () => {
+    const db = openDatabase({ path: join(dir, "check-kit.db") });
+    insertProfile(db, "p1");
+    insertProfile(db, "p2");
+    insertProfile(db, "bad");
+    expect(() => insertSettings(db, "p1")).not.toThrow();
+    expect(() => insertSettings(db, "p2", { kitSalt: "a2l0", kitWrap: '{"v":1}' })).not.toThrow();
+    expect(() => insertSettings(db, "bad", { kitSalt: "a2l0" })).toThrow();
+    expect(() => insertSettings(db, "bad", { kitWrap: '{"v":1}' })).toThrow();
     db.close();
   });
 });

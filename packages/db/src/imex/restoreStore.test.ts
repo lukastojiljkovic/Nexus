@@ -938,6 +938,12 @@ describe("RestoreStore", () => {
     //    opens only under this account's data key — and a restore deliberately
     //    does not touch the device's backup routine: backups keep running
     //    right through a restore, which is when they matter most.
+    //  - private_notes / private_note_versions / private_settings (migration
+    //    045 / ADR-057): PRIV slice d (interchange) decides how private notes
+    //    travel; until then a restore of ANY archive must not destroy sealed
+    //    rows it knows nothing about — no archive carries them, so wiping them
+    //    would be pure loss, and gather/undo deliberately do not carry them
+    //    either. The key-chain row goes with the notes it opens.
     const allowlist = new Set<string>([
       "meta",
       "profiles",
@@ -948,6 +954,9 @@ describe("RestoreStore", () => {
       "search_fts_docsize",
       "search_fts_config",
       "backup_settings",
+      "private_notes",
+      "private_note_versions",
+      "private_settings",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);

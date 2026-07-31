@@ -479,6 +479,30 @@ const api: NexusApi = {
   setBackupPassphrase: (profileId, passphrase) =>
     ipcRenderer.invoke(IpcChannel.backupSetPassphrase, { profileId, passphrase }),
   runBackupNow: (profileId) => ipcRenderer.invoke(IpcChannel.backupRunNow, { profileId }),
+  privStatus: (profileId) => ipcRenderer.invoke(IpcChannel.privStatus, { profileId }),
+  privSetup: (profileId, credential, usesAccountPasscode, regenerateKit) =>
+    ipcRenderer.invoke(IpcChannel.privSetup, {
+      profileId,
+      credential,
+      usesAccountPasscode,
+      regenerateKit,
+    }),
+  privUnlock: (profileId, credential) =>
+    ipcRenderer.invoke(IpcChannel.privUnlock, { profileId, credential }),
+  privLock: () => ipcRenderer.invoke(IpcChannel.privLock),
+  privList: (profileId) => ipcRenderer.invoke(IpcChannel.privList, { profileId }),
+  privRead: (profileId, id) => ipcRenderer.invoke(IpcChannel.privRead, { profileId, id }),
+  privWrite: (profileId, id, envelope) =>
+    ipcRenderer.invoke(IpcChannel.privWrite, { profileId, id, envelope }),
+  privDelete: (profileId, id) => ipcRenderer.invoke(IpcChannel.privDelete, { profileId, id }),
+  privSearch: (profileId, query) =>
+    ipcRenderer.invoke(IpcChannel.privSearch, { profileId, query }),
+  privSetLockPrefs: (profileId, autoLockMinutes, lockOnMinimize) =>
+    ipcRenderer.invoke(IpcChannel.privSetLockPrefs, {
+      profileId,
+      autoLockMinutes,
+      lockOnMinimize,
+    }),
   setGlobalShortcut: (chord) => ipcRenderer.invoke(IpcChannel.shortcutsSetGlobal, { chord }),
   onGlobalCapture: (listener) => {
     const handler = (): void => listener();

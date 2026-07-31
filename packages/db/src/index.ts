@@ -8,6 +8,9 @@ export type { OpenDatabaseOptions } from "./database.js";
 
 export {
   BackupSettingsValidationError,
+  PrivateNoteNotFoundError,
+  PrivateNoteValidationError,
+  PrivateSettingsValidationError,
   CalendarSettingsValidationError,
   CardNotFoundError,
   CardValidationError,
@@ -353,6 +356,21 @@ export {
   rebuildSearchIndex,
 } from "./search/searchStore.js";
 export type { RecentOptions, SearchOptions } from "./search/searchStore.js";
+
+export { MAX_PRIVATE_NOTE_VERSIONS, PrivateNoteStore } from "./priv/privateNoteStore.js";
+export type { PrivateNoteMeta, PrivateNoteVersionMeta } from "./priv/privateNoteStore.js";
+
+export {
+  DEFAULT_PRIV_AUTO_LOCK_MINUTES,
+  MAX_PRIV_AUTO_LOCK_MINUTES,
+  MIN_PRIV_AUTO_LOCK_MINUTES,
+  PrivateSettingsStore,
+} from "./priv/privateSettingsStore.js";
+export type {
+  CreatePrivateSettingsInput,
+  PrivateSettings,
+  ReplacePrivateWrapsInput,
+} from "./priv/privateSettingsStore.js";
 
 export { uuidv7 } from "./ids.js";
 

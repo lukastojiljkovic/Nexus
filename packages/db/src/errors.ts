@@ -637,3 +637,26 @@ export class ProfileAnchorDeleteError extends DatabaseError {}
  * the last row is undeletable regardless of its kind.
  */
 export class ProfileLastDeleteError extends DatabaseError {}
+
+/**
+ * Thrown when a private-note write breaks a rule migration 045's schema cannot
+ * express on its own (ADR-057): empty sealed bytes, a non-positive version
+ * sequence, a malformed `now`, or an id that names another profile's row —
+ * the one cross-profile write the global `private_notes` primary key could
+ * otherwise let through. The store revalidates because renderer input is
+ * untrusted (SEC-EL-02), even though main is the only caller today.
+ */
+export class PrivateNoteValidationError extends DatabaseError {}
+
+/** Thrown when a private-note call names an id this profile has no row for — unknown, or owned by another profile (the same uniform gate every scoped store keeps). */
+export class PrivateNoteNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a private-settings write breaks a rule migration 045's CHECKs
+ * cannot fully express (ADR-057): a second setup for a profile that already
+ * has one, a kit salt without a kit wrap (or the reverse), an empty or
+ * oversized opaque field, an auto-lock outside 1..60 whole minutes, or a
+ * malformed `now`. `updateLockPrefs`/`replaceWraps` against a profile that
+ * never set PRIV up land here too — there is no row for them to mean.
+ */
+export class PrivateSettingsValidationError extends DatabaseError {}

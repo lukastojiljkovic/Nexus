@@ -42,6 +42,7 @@ import type {
   TagFacetSource,
 } from "@nexus/core";
 import {
+  DEFAULT_KDF_PARAMS,
   MAX_PASSCODE_LENGTH,
   blobStorageName,
   deriveBlobKeys,
@@ -86,7 +87,9 @@ import {
   MAX_TASK_REMINDERS,
   MAX_TASK_REMINDER_DAYS,
   MAX_TASK_TEMPLATE_DUE_OFFSET_DAYS,
+  MAX_PRIV_AUTO_LOCK_MINUTES,
   MIN_BACKUP_KEEP_LAST,
+  MIN_PRIV_AUTO_LOCK_MINUTES,
   NOTE_FOLDER_COLORS,
   NOTE_FOLDER_VIEWS,
   NoteAttachmentNotFoundError,
@@ -99,6 +102,8 @@ import {
   PeopleStore,
   PERSON_KINDS,
   PlanStore,
+  PrivateNoteStore,
+  PrivateSettingsStore,
   PROFILE_KINDS,
   ProfileStore,
   rebuildSearchIndex,
@@ -228,12 +233,29 @@ import {
   changePasscode,
   createAccount,
   isKeystoreAvailable,
+  readDeviceSecret,
   readStatus,
   regenerateRecoveryCode,
   unlockWithPasscode,
   unlockWithRecovery,
   verifyPasscode,
 } from "./auth.js";
+import {
+  privDelete,
+  privHandleMinimize,
+  privList,
+  privLock,
+  privRead,
+  privSearch,
+  privSetLockPrefs,
+  privSetup,
+  privStatus,
+  privUnlock,
+  privWrite,
+  rewrapPrivKitsForNewCode,
+  type AccountPasscodeCheck,
+  type PrivDeps,
+} from "./priv.js";
 import {
   runBackupNow,
   startBackupScheduler,
@@ -311,6 +333,9 @@ import {
   NOTE_CARD_DISPOSITIONS,
   NOTE_CARD_KEY_MAX_LENGTH,
   NOTE_CARDS_MAX_COUNT,
+  PRIV_PLAINTEXT_MAX_BYTES,
+  PRIV_STATE_MAX_BYTES,
+  PRIV_TITLE_MAX_BYTES,
   SEARCH_PAGE_MAX_RESULTS,
   SEARCH_QUERY_MAX_BYTES,
   SEARCH_RESULT_MAX_LIMIT,
@@ -356,6 +381,11 @@ import {
   type NoteDocPayload,
   type NoteDuplicateResult,
   type NoteVersionMeta,
+  type PrivNoteEnvelopePayload,
+  type PrivNoteListEntry,
+  type PrivSetupResult,
+  type PrivStatus,
+  type PrivUnlockResult,
   type Profile,
   type ProfileKind,
   type ProfilePicturePickResult,
@@ -1126,6 +1156,40 @@ function asBackupKeepLast(value: unknown, field: string): number {
   throw new Error(
     `Invalid IPC payload: "${field}" must be a whole number between ${MIN_BACKUP_KEEP_LAST} and ${MAX_BACKUP_KEEP_LAST}.`,
   );
+}
+
+/** `priv:set-lock-prefs`' minutes — the store's whole 1..60 range (migration 045's CHECK), mirrored at the wire (SEC-EL-02). */
+function asPrivAutoLockMinutes(value: unknown, field: string): number {
+  if (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= MIN_PRIV_AUTO_LOCK_MINUTES &&
+    value <= MAX_PRIV_AUTO_LOCK_MINUTES
+  ) {
+    return value;
+  }
+  throw new Error(
+    `Invalid IPC payload: "${field}" must be a whole number between ${MIN_PRIV_AUTO_LOCK_MINUTES} and ${MAX_PRIV_AUTO_LOCK_MINUTES}.`,
+  );
+}
+
+/**
+ * `priv:write`'s envelope, rebuilt field by field (SEC-EL-02): three capped
+ * text fields plus — THIS slice — an attachments list that must be EMPTY
+ * (private attachments and their `priv-blob:` protocol land with slice c, so
+ * a non-empty list is refused outright rather than half-honoured).
+ */
+function asPrivEnvelope(value: unknown, field: string): PrivNoteEnvelopePayload {
+  const body = asRecord(value);
+  const title = asCappedString(body.title, `${field}.title`, PRIV_TITLE_MAX_BYTES);
+  const yjsState = asCappedString(body.yjsState, `${field}.yjsState`, PRIV_STATE_MAX_BYTES);
+  const plaintext = asCappedString(body.plaintext, `${field}.plaintext`, PRIV_PLAINTEXT_MAX_BYTES);
+  if (!Array.isArray(body.attachments) || body.attachments.length !== 0) {
+    throw new Error(
+      `Invalid IPC payload: "${field}.attachments" must be an empty array (private attachments arrive with slice c).`,
+    );
+  }
+  return { title, yjsState, plaintext, attachments: [] };
 }
 
 /**
@@ -2569,6 +2633,14 @@ function backupSettingsStore(profileId: string): BackupSettingsStore {
   return new BackupSettingsStore(requireDb().raw, profileId);
 }
 
+function privateNoteStore(profileId: string): PrivateNoteStore {
+  return new PrivateNoteStore(requireDb().raw, profileId);
+}
+
+function privateSettingsStore(profileId: string): PrivateSettingsStore {
+  return new PrivateSettingsStore(requireDb().raw, profileId);
+}
+
 function dashboardSetStore(profileId: string): DashboardSetStore {
   return new DashboardSetStore(requireDb().raw, profileId);
 }
@@ -3072,6 +3144,10 @@ function flushSecurityNotices(): void {
 
 /** Closes the database, stops the scheduler, and drops the data key (and the blob keys derived from it) from memory. Shared by the `auth:lock` handler and the smoke run's own lock/unlock exercise. */
 function performLock(): void {
+  // An app lock IS a PRIV lock (ADR-057 §5): the PRIV DEK must never outlive
+  // the session whose database holds its sealed rows. Unconditional, first —
+  // nothing below may run against a still-open private section.
+  privLock();
   stopNotificationScheduler();
   // A backup run needs the data key and the open database; both die here. A
   // run already in flight bails on its own `stillThisSession` check.
@@ -3348,6 +3424,11 @@ async function handleAuthRegenerateRecovery(): Promise<AuthResult> {
     // NTF-007. Always while unlocked (the guard above), so this is recorded and
     // shown on the spot.
     recordSecurityNotice({ kind: "recovery-kit-reissued", at: new Date().toISOString() });
+    // The PRIV half (ADR-057 §4): every profile whose private section keeps a
+    // kit wrap is settled against the new code — re-wrapped where the DEK is
+    // in hand, dropped to credential-only where it is sealed away — so no
+    // wrap the just-invalidated code still opens survives the reissue.
+    await rewrapPrivKitsForNewCode(privDeps(), recoveryCode);
     return { ok: true, recoveryCode };
   } catch (error) {
     return authResultFromError(error, activeAccountDir());
@@ -3534,6 +3615,71 @@ function backupRunnerDeps(): BackupRunnerDeps {
 function backupSettingsView(profileId: string): BackupSettingsView {
   const { passphraseWrapped, ...rest } = backupSettingsStore(profileId).get();
   return { ...rest, passphraseSet: passphraseWrapped !== null };
+}
+
+// --- Private notes (PRIV v1 / ADR-057) ---------------------------------------
+
+/**
+ * Everything `main/priv.ts` runs on, resolved at call time like every other
+ * deps literal here — with the session captured for `stillThisSession`, the
+ * `backupRunnerDeps` arrangement. The two auth seams adapt `main/auth.ts`
+ * (which `priv.ts` must never import — it pulls `electron`):
+ * `verifyAccountPasscode` charges the lock screen's OWN throttle counter and
+ * reports a cleared trip exactly as `profiles:verify-switch` does (NTF-007),
+ * and `regenerateRecoveryKit` is the existing reissue flow, security notice
+ * included.
+ */
+function privDeps(): PrivDeps {
+  const session = requireDb();
+  return {
+    privateNotes: privateNoteStore,
+    privateSettings: privateSettingsStore,
+    listProfileIds: () => listProfiles(requireDb()).map((profile) => profile.id),
+    deviceSecret: () => readDeviceSecret(activeAccountDir()),
+    kdfParams: () => DEFAULT_KDF_PARAMS,
+    verifyAccountPasscode: async (credential): Promise<AccountPasscodeCheck> => {
+      try {
+        const clearedThrottle = await verifyPasscode(
+          activeAccountDir(),
+          credential,
+          requireUnlockedDataKeyHex(),
+        );
+        if (clearedThrottle !== null) {
+          recordSecurityNotice({
+            kind: "unlock-throttle",
+            at: new Date().toISOString(),
+            ...clearedThrottle,
+          });
+        }
+        return { ok: true };
+      } catch (error) {
+        if (error instanceof AuthError && error.reason === "wrongPasscode") {
+          return { ok: false, reason: "wrongPasscode" };
+        }
+        if (error instanceof AuthError && error.reason === "throttled") {
+          return {
+            ok: false,
+            reason: "throttled",
+            lockedForMs: readStatus(activeAccountDir()).lockedForMs,
+          };
+        }
+        throw error;
+      }
+    },
+    regenerateRecoveryKit: async () => {
+      const recoveryCode = await regenerateRecoveryCode(
+        activeAccountDir(),
+        requireUnlockedDataKeyHex(),
+      );
+      // NTF-007, exactly as `auth:regenerate-recovery` records it: this IS a
+      // Recovery Kit reissue, whichever dialog asked for it.
+      recordSecurityNotice({ kind: "recovery-kit-reissued", at: new Date().toISOString() });
+      return recoveryCode;
+    },
+    runInTransaction: (write) => requireDb().raw.transaction(write)(),
+    stillThisSession: () => db === session,
+    now: () => new Date(),
+  };
 }
 
 // --- Dashboard background (SET-006 / ADR-041) --------------------------------
@@ -6319,6 +6465,102 @@ function registerIpc(): void {
     return backupSettingsView(profileId);
   });
 
+  // Private notes (PRIV v1 / ADR-057). Ten thin validation shims over
+  // `main/priv.ts`, which holds the one secret this surface turns on — the
+  // unwrapped PRIV DEK — and never lets anything key-shaped cross the bridge.
+  // Decrypted envelopes flow to the renderer ONLY while the section is
+  // unlocked; every data handler's `privDeps()` resolves against the live
+  // session, and `requireProfile` proves the caller names a real profile
+  // before anything else runs.
+  ipcMain.handle(IpcChannel.privStatus, (event, payload): PrivStatus => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    requireProfile(requireDb(), profileId);
+    return privStatus(privDeps(), profileId);
+  });
+
+  ipcMain.handle(IpcChannel.privSetup, (event, payload): Promise<PrivSetupResult> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const credential = asPasscode(body.credential, "credential");
+    const usesAccountPasscode = asBoolean(body.usesAccountPasscode, "usesAccountPasscode");
+    const regenerateKit = asBoolean(body.regenerateKit, "regenerateKit");
+    requireProfile(requireDb(), profileId);
+    return privSetup(privDeps(), profileId, { credential, usesAccountPasscode, regenerateKit });
+  });
+
+  ipcMain.handle(IpcChannel.privUnlock, (event, payload): Promise<PrivUnlockResult> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const credential = asPasscode(body.credential, "credential");
+    requireProfile(requireDb(), profileId);
+    return privUnlock(privDeps(), profileId, credential);
+  });
+
+  // The panic path: payload-free, allowed in ANY state — locking must never be
+  // refused, so there is deliberately no requireDb() here (privLock touches
+  // only main's own memory).
+  ipcMain.handle(IpcChannel.privLock, (event): void => {
+    assertTrustedSender(event);
+    privLock();
+  });
+
+  ipcMain.handle(IpcChannel.privList, (event, payload): Promise<PrivNoteListEntry[]> => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    requireProfile(requireDb(), profileId);
+    return privList(privDeps(), profileId);
+  });
+
+  ipcMain.handle(IpcChannel.privRead, (event, payload): Promise<PrivNoteEnvelopePayload> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    requireProfile(requireDb(), profileId);
+    return privRead(privDeps(), profileId, id);
+  });
+
+  ipcMain.handle(IpcChannel.privWrite, (event, payload): Promise<{ id: string }> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNullableId(body.id, "id");
+    const envelope = asPrivEnvelope(body.envelope, "envelope");
+    requireProfile(requireDb(), profileId);
+    return privWrite(privDeps(), profileId, id, envelope);
+  });
+
+  ipcMain.handle(IpcChannel.privDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    requireProfile(requireDb(), profileId);
+    privDelete(privDeps(), profileId, id);
+  });
+
+  ipcMain.handle(IpcChannel.privSearch, (event, payload): Promise<string[]> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const query = asCappedString(body.query, "query", SEARCH_QUERY_MAX_BYTES);
+    requireProfile(requireDb(), profileId);
+    return privSearch(privDeps(), profileId, query);
+  });
+
+  ipcMain.handle(IpcChannel.privSetLockPrefs, (event, payload): PrivStatus => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const autoLockMinutes = asPrivAutoLockMinutes(body.autoLockMinutes, "autoLockMinutes");
+    const lockOnMinimize = asBoolean(body.lockOnMinimize, "lockOnMinimize");
+    requireProfile(requireDb(), profileId);
+    return privSetLockPrefs(privDeps(), profileId, { autoLockMinutes, lockOnMinimize });
+  });
+
   // ADR-040 / TASK-002. The renderer owns the chord (it lives in this device's
   // `localStorage`) and main owns the registration, so this is the one channel
   // where the renderer asks for something OUTSIDE the app's own window. It is
@@ -6388,6 +6630,14 @@ function createWindow(): BrowserWindow {
   });
 
   win.once("ready-to-show", () => win.show());
+
+  // PRIV's minimize hook (ADR-057 §5): a minimized window with an open private
+  // section is exactly the walked-away-from screen `lock_on_minimize` exists
+  // for. Guarded on the session — while locked there is no section to close
+  // and no database for the deps to reach.
+  win.on("minimize", () => {
+    if (db !== null) privHandleMinimize(privDeps());
+  });
 
   // SEC-EL-03: deny every attempt to open a new window. The shell has no external
   // links yet; a vetted shell.openExternal wrapper lands with the first one.

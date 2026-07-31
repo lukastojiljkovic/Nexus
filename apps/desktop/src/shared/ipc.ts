@@ -323,6 +323,24 @@ export const IpcChannel = {
   backupPickFolder: "backup:pick-folder",
   backupSetPassphrase: "backup:set-passphrase",
   backupRunNow: "backup:run-now",
+  // Private notes (PRIV v1 / ADR-057). The renderer sees decrypted envelopes
+  // ONLY while the section is unlocked — the PRIV DEK lives in main and never
+  // crosses this bridge in any form, wrapped or not. `priv:lock` doubles as
+  // the renderer's panic path (its shortcut wiring is slice c); main also
+  // locks on its own idle timer, on minimize when the preference says so, and
+  // unconditionally inside every app lock. Note-move channels (move-in /
+  // move-out) are deliberately absent until slice c: they orchestrate note
+  // deletion + FTS rebuild + attachments and belong beside their dialogs.
+  privStatus: "priv:status",
+  privSetup: "priv:setup",
+  privUnlock: "priv:unlock",
+  privLock: "priv:lock",
+  privList: "priv:list",
+  privRead: "priv:read",
+  privWrite: "priv:write",
+  privDelete: "priv:delete",
+  privSearch: "priv:search",
+  privSetLockPrefs: "priv:set-lock-prefs",
   // ADR-040's OS-level half (TASK-002). The chord lives in the renderer's
   // `localStorage` (a device preference, never profile data), so the renderer
   // is the only side that knows it — it tells main at boot and on every remap,
@@ -3511,6 +3529,88 @@ export interface BackupSettingsView {
   lastError: string | null;
 }
 
+// --- Private notes (PRIV v1 / ADR-057) ---------------------------------------
+
+/** The auto-lock bound `@nexus/db`'s `private_settings` CHECK also holds — redeclared on `BACKUP_CADENCES`' terms (this file imports nothing; main assigns the store's values, so drift is a compile error). */
+export const PRIV_MIN_AUTO_LOCK_MINUTES = 1;
+export const PRIV_MAX_AUTO_LOCK_MINUTES = 60;
+
+/** Byte caps on one envelope's three text fields (SEC-EL-02) — structural bounds on the wire, not editor rules. */
+export const PRIV_TITLE_MAX_BYTES = 1024;
+export const PRIV_STATE_MAX_BYTES = 8_388_608; // the whole Yjs document state, base64 — a private note carries no incremental update log
+export const PRIV_PLAINTEXT_MAX_BYTES = 2_097_152;
+
+/**
+ * The private section's whole visible state (`priv:status`). While `setUp` is
+ * false the lock preferences report the defaults a fresh setup would write
+ * (5 minutes, lock on minimize) — there is no row yet for them to come from.
+ */
+export interface PrivStatus {
+  setUp: boolean;
+  unlocked: boolean;
+  /** Whether the credential is the account passcode (true) or a separate passphrase (false). */
+  usesAccountPasscode: boolean;
+  autoLockMinutes: number;
+  lockOnMinimize: boolean;
+}
+
+/** One attachment's reference INSIDE the sealed envelope — mirrors `@nexus/core`'s `PrivAttachmentRef`, redeclared (main assigns one to the other, so drift is a compile error). This slice accepts only an EMPTY list; private attachments arrive with slice c. */
+export interface PrivAttachmentRef {
+  id: string;
+  fileName: string;
+  mime: string;
+  sizeBytes: number;
+}
+
+/** A private note's entire decrypted payload — `@nexus/core`'s `PrivNoteEnvelope`, redeclared on `PrivAttachmentRef`'s terms. Crosses the bridge ONLY while the section is unlocked. */
+export interface PrivNoteEnvelopePayload {
+  title: string;
+  /** The note's whole Yjs document state, base64 — opaque to main and to this wire. */
+  yjsState: string;
+  /** The flat text mirror the in-memory search index folds (SEC-ZK-05). */
+  plaintext: string;
+  attachments: PrivAttachmentRef[];
+}
+
+/**
+ * One row of `priv:list`: the cleartext facts (id, updatedAt) plus the title
+ * the DEK just opened. A row whose container fails to open is reported as a
+ * named unreadable entry (`title: null, unreadable: true`) rather than
+ * crashing the list — the other notes are still the user's to read.
+ */
+export interface PrivNoteListEntry {
+  id: string;
+  title: string | null;
+  updatedAt: string;
+  unreadable: boolean;
+}
+
+/**
+ * Why `priv:setup` was refused. `wrongPasscode`/`throttled` come from the
+ * account-passcode verification (the SAME throttle counter the lock screen
+ * charges — see `main/auth.ts`'s `verifyPasscode`); `weakCredential` is a
+ * separate passphrase failing the account passcode's own 8+/letter-digit rule.
+ */
+export type PrivSetupErrorReason = "alreadySetUp" | "weakCredential" | "wrongPasscode" | "throttled";
+
+export type PrivSetupResult =
+  | {
+      ok: true;
+      status: PrivStatus;
+      /** The freshly minted Recovery Kit code when `regenerateKit` was asked for — shown EXACTLY once, held nowhere. Null when the user opted out. */
+      recoveryCode: string | null;
+    }
+  | { ok: false; reason: Exclude<PrivSetupErrorReason, "throttled"> }
+  | { ok: false; reason: "throttled"; lockedForMs: number };
+
+/** Why `priv:unlock` was refused. The throttle is PRIV's own in-memory escalating delay (no permanent lockout; state dies with the process), not the keystore counter. */
+export type PrivUnlockErrorReason = "notSetUp" | "wrongCredential" | "throttled";
+
+export type PrivUnlockResult =
+  | { ok: true; status: PrivStatus }
+  | { ok: false; reason: Exclude<PrivUnlockErrorReason, "throttled"> }
+  | { ok: false; reason: "throttled"; lockedForMs: number };
+
 /**
  * Why an archive could not be opened (IMEX slice 3c, ADR-023). Lives here
  * rather than in `main/archiveReader.ts` — the module that actually produces
@@ -5099,6 +5199,46 @@ export interface NexusApi {
   setBackupPassphrase(profileId: string, passphrase: string): Promise<BackupSettingsView>;
   /** Runs one backup immediately through the scheduled path's own guard, and answers the settings view carrying the run's recorded outcome. */
   runBackupNow(profileId: string): Promise<BackupSettingsView>;
+  /** The private section's state (PRIV v1 / ADR-057). Safe while locked — it answers facts, never contents. */
+  privStatus(profileId: string): Promise<PrivStatus>;
+  /**
+   * First-time PRIV setup. `credential` is what the user typed either way:
+   * with `usesAccountPasscode` main first proves it IS the account passcode
+   * against the live session (charging the lock screen's own throttle);
+   * otherwise it must pass the 8+/letter-digit rule. `regenerateKit` mints a
+   * NEW Recovery Kit code that re-wraps BOTH the account data key and the
+   * PRIV DEK — returned once in the result, held nowhere. Ends unlocked.
+   */
+  privSetup(
+    profileId: string,
+    credential: string,
+    usesAccountPasscode: boolean,
+    regenerateKit: boolean,
+  ): Promise<PrivSetupResult>;
+  /** Unlocks the private section: main derives, unwraps and HOLDS the DEK — nothing key-shaped ever crosses back. Wrong attempts pay an escalating in-memory delay. */
+  privUnlock(profileId: string, credential: string): Promise<PrivUnlockResult>;
+  /** Drops the held PRIV DEK immediately — the renderer's panic path, and what every app lock also does on its own. */
+  privLock(): Promise<void>;
+  /** The unlocked section's notes, newest-touched first, each title freshly decrypted; a row that fails to open arrives as a named unreadable entry. */
+  privList(profileId: string): Promise<PrivNoteListEntry[]>;
+  /** One note's decrypted envelope. Only while unlocked. */
+  privRead(profileId: string, id: string): Promise<PrivNoteEnvelopePayload>;
+  /** Writes one note's envelope (`id: null` mints a new note; main owns the id). Every 5th write per note per session also captures a sealed version row. This slice accepts only `attachments: []`. */
+  privWrite(
+    profileId: string,
+    id: string | null,
+    envelope: PrivNoteEnvelopePayload,
+  ): Promise<{ id: string }>;
+  /** HARD-deletes a private note and its version history — no undo bar, deliberately (ADR-057): the renderer's typed confirm is the only gate. */
+  privDelete(profileId: string, id: string): Promise<void>;
+  /** Ranked note ids for a query, matched in main over decrypted envelopes (v1 rebuilds the in-memory index per call). Only while unlocked. */
+  privSearch(profileId: string, query: string): Promise<string[]>;
+  /** Sets the two lock preferences; a running idle clock adopts the new interval immediately. */
+  privSetLockPrefs(
+    profileId: string,
+    autoLockMinutes: number,
+    lockOnMinimize: boolean,
+  ): Promise<PrivStatus>;
   /**
    * Asks main to hold `chord` as an OS-wide hotkey (TASK-002), replacing
    * whatever it held before. Called once at boot — after the renderer has read

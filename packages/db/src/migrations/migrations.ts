@@ -44,6 +44,7 @@ import { migration041 } from "./041-snooze-default.js";
 import { migration042 } from "./042-calendar-settings.js";
 import { migration043 } from "./043-dashboard-sets.js";
 import { migration044 } from "./044-backup-settings.js";
+import { migration045 } from "./045-private-notes.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -99,6 +100,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration042,
   migration043,
   migration044,
+  migration045,
 ];
 
 /**

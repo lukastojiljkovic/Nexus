@@ -694,6 +694,24 @@ export async function changePasscode(
 }
 
 /**
+ * The account's device secret, for the ONE consumer outside this module's own
+ * key chain: PRIV's credential wrap (ADR-057), whose
+ * `derivePrivCredentialKey` mixes it in as HKDF salt exactly as
+ * `derivePasscodeKey` does — so a stolen database file is as unattackable for
+ * private notes as it is for the passcode. Refuses on a foreign guard
+ * (`otherDevice`): a migrated account has no local secret until recovery
+ * mints one, and PRIV must not silently derive from garbage.
+ */
+export function readDeviceSecret(dir: string): Uint8Array {
+  const file = readKeychainFile(dir);
+  if (file === null) {
+    throw new AuthError("notInitialized", "No local account exists yet.");
+  }
+  assertKeystoreAvailable();
+  return fromBase64(requireLocalGuard(file).deviceSecret);
+}
+
+/**
  * Issues a fresh Recovery Kit code, rewrapping the data key under a new
  * recovery salt and invalidating the old code. Takes the already-unlocked
  * data key (hex, as `main/index.ts` holds it for the duration of the unlocked

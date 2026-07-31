@@ -1,0 +1,584 @@
+/**
+ * Private notes (PRIV v1, ADR-057): the main-process half of the sealed
+ * section. This module owns the ONE piece of state the whole feature turns on
+ * — the profile's unwrapped PRIV DEK, held in memory strictly between an
+ * unlock and a lock — plus everything that uses it: setup, unlock/lock, the
+ * sealed read/write/version paths, and the in-memory search.
+ *
+ * The DEK is nulled on FOUR paths, all of which must hold (ADR-057 §5):
+ *  - its own idle timer (`auto_lock_minutes`, re-armed by every successful
+ *    `priv:*` data call);
+ *  - window minimize, when `lock_on_minimize` says so (`privHandleMinimize`,
+ *    hooked to the BrowserWindow's 'minimize' event in `main/index.ts`);
+ *  - the renderer's explicit `priv:lock` (the panic path — its shortcut
+ *    wiring is slice c);
+ *  - unconditionally inside `performLock()` — an app lock IS a PRIV lock.
+ *
+ * Wrong-attempt throttling reuses `unlockThrottle`'s state machine
+ * (`registerFailedAttempt`/`remainingLockMs`) but keeps its state IN MEMORY,
+ * per profile — deliberately NOT the keystore counter: PRIV has no permanent
+ * lockout (PRD §7), and the state dying with the process is the design, not
+ * a gap.
+ *
+ * Deliberately Electron-free, mirroring `backup.ts`: every environment
+ * dependency arrives through `PrivDeps`, so the whole surface runs under
+ * plain Node/Vitest and `main/index.ts` owns the wiring.
+ */
+
+import {
+  PrivSealError,
+  buildPrivIndex,
+  openPrivNote,
+  sealPrivNote,
+  searchPrivIndex,
+  type PrivIndexNote,
+  type PrivNoteEnvelope,
+} from "@nexus/core";
+import {
+  INITIAL_ATTEMPT_STATE,
+  KeyUnwrapError,
+  derivePrivCredentialKey,
+  generatePrivDek,
+  generateSalt,
+  normalizeRecoveryCode,
+  registerFailedAttempt,
+  remainingLockMs,
+  unwrapPrivDek,
+  validatePasscode,
+  wrapPrivDek,
+  wrapPrivDekWithKit,
+  type AttemptState,
+  type KdfParams,
+  type WrappedKey,
+} from "@nexus/core/auth";
+import {
+  DEFAULT_PRIV_AUTO_LOCK_MINUTES,
+  uuidv7,
+  type PrivateNoteStore,
+  type PrivateSettingsStore,
+  type ReplacePrivateWrapsInput,
+} from "@nexus/db";
+import type {
+  PrivNoteListEntry,
+  PrivSetupResult,
+  PrivStatus,
+  PrivUnlockResult,
+} from "../shared/ipc.js";
+
+/** Every Nth successful write of one note (per unlocked session) also captures the replaced state as a sealed version row — the whole cadence rule, deliberately simple (explicit-close capture is a slice-c refinement). */
+export const PRIV_VERSION_WRITE_CADENCE = 5;
+
+/** Whether write number `writeCount` (1-based, per note per session) is a capturing one. */
+export function shouldCaptureVersion(writeCount: number): boolean {
+  return writeCount > 0 && writeCount % PRIV_VERSION_WRITE_CADENCE === 0;
+}
+
+/** The account-passcode check's outcome, adapted from `main/auth.ts`'s `verifyPasscode` by the deps wiring — this module never imports `auth.ts` (it pulls `electron`, which would end testability under Vitest). */
+export type AccountPasscodeCheck =
+  | { ok: true }
+  | { ok: false; reason: "wrongPasscode" }
+  | { ok: false; reason: "throttled"; lockedForMs: number };
+
+/**
+ * Everything PRIV needs from the outside, resolved at call time exactly like
+ * `BackupRunnerDeps`: the getters reach `requireDb()` when called, so a deps
+ * object can never outlive the session that made it — and `stillThisSession`
+ * says when it has.
+ */
+export interface PrivDeps {
+  privateNotes(profileId: string): PrivateNoteStore;
+  privateSettings(profileId: string): PrivateSettingsStore;
+  listProfileIds(): string[];
+  /** The account's device secret (`main/auth.ts`'s `readDeviceSecret`) — `derivePrivCredentialKey`'s HKDF salt. */
+  deviceSecret(): Uint8Array;
+  /** The Argon2id parameters a NEW wrap is derived under (main wires `DEFAULT_KDF_PARAMS`; tests pass fast ones). Unlock always reads the ROW's recorded parameters instead, so raising these never locks anyone out. */
+  kdfParams(): KdfParams;
+  /** Proves `credential` IS the account passcode against the live session — `main/auth.ts`'s `verifyPasscode` seam, charging the lock screen's own throttle counter. */
+  verifyAccountPasscode(credential: string): Promise<AccountPasscodeCheck>;
+  /** Mints a fresh Recovery Kit code, re-wrapping the account DATA key under it (the existing `regenerateRecoveryCode` flow); this module adds the PRIV DEK's wrap under the same code. */
+  regenerateRecoveryKit(): Promise<string>;
+  /** One database transaction around a multi-statement write (`markdownImport`'s seam) — what makes a capturing write's version + live row land or fail together. */
+  runInTransaction<T>(write: () => T): T;
+  /** The `db === session` identity guard (the house idiom for work outliving a lock). */
+  stillThisSession(): boolean;
+  now(): Date;
+}
+
+// --- Session state -----------------------------------------------------------
+
+/**
+ * The unlocked PRIV section: ONE profile at a time, beside
+ * `unlockedDataKeyHex`'s pattern in `main/index.ts` — unlocking another
+ * profile's section (or the same one again) replaces this slot through a full
+ * `privLock()` first, so two DEKs never coexist in memory.
+ */
+let privSession: { profileId: string; dek: Uint8Array } | null = null;
+
+/** The idle auto-lock clock; re-armed by every successful data call, cleared by every lock. */
+let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** In-memory wrong-attempt state per profile — `unlockThrottle`'s shape, dying with the process on purpose (no permanent PRIV lockout, PRD §7). Survives `privLock`, exactly as the account's counter survives an app lock. */
+const unlockAttempts = new Map<string, AttemptState>();
+
+/** How many times each note was written THIS unlocked session — the version cadence's counter. Cleared on every lock: a session is the unit the rule names. */
+const sessionWriteCounts = new Map<string, number>();
+
+/**
+ * Drops the unwrapped DEK: zeroed first (best effort — the copy inside crypto
+ * internals is the platform's business), then unreferenced, plus the idle
+ * timer and the per-session write counters. Idempotent, and called from every
+ * lock path listed in the module header.
+ */
+export function privLock(): void {
+  if (idleTimer !== null) {
+    clearTimeout(idleTimer);
+    idleTimer = null;
+  }
+  if (privSession !== null) {
+    privSession.dek.fill(0);
+    privSession = null;
+  }
+  sessionWriteCounts.clear();
+}
+
+/** Test seam: everything `privLock` drops PLUS the throttle map, which production deliberately keeps until the process dies. */
+export function resetPrivStateForTests(): void {
+  privLock();
+  unlockAttempts.clear();
+}
+
+/** Adopts a freshly unwrapped DEK for `profileId`, replacing any previous section wholesale and starting its idle clock. */
+function adoptPrivDek(deps: PrivDeps, profileId: string, dek: Uint8Array): void {
+  privLock();
+  privSession = { profileId, dek };
+  armIdleTimer(deps);
+}
+
+/** (Re)arms the idle auto-lock from the profile's own preference. `unref` keeps the timer from holding the process open — a pending auto-lock is not work. */
+function armIdleTimer(deps: PrivDeps): void {
+  if (idleTimer !== null) {
+    clearTimeout(idleTimer);
+    idleTimer = null;
+  }
+  const session = privSession;
+  if (session === null) return;
+  const minutes =
+    deps.privateSettings(session.profileId).get()?.autoLockMinutes ??
+    DEFAULT_PRIV_AUTO_LOCK_MINUTES;
+  idleTimer = setTimeout(() => {
+    idleTimer = null;
+    // The app may have locked (performLock already ran privLock) — the guard
+    // just spares a redundant wipe; privLock is idempotent either way.
+    if (!deps.stillThisSession()) return;
+    privLock();
+  }, minutes * 60_000);
+  idleTimer.unref?.();
+}
+
+/** The gate every data call passes: the section must be unlocked FOR THIS PROFILE. Passing it is activity, so it re-arms the idle clock. */
+function requirePrivDek(deps: PrivDeps, profileId: string): Uint8Array {
+  if (privSession === null || privSession.profileId !== profileId) {
+    throw new Error("Private notes are locked.");
+  }
+  armIdleTimer(deps);
+  return privSession.dek;
+}
+
+// --- Serialization of the settings row's opaque fields -----------------------
+//
+// `PrivateSettingsStore` stores strings it never parses; THIS module is the
+// one place that reads meaning into them, so the shapes live here.
+
+function toBase64(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString("base64");
+}
+
+function fromBase64(value: string): Uint8Array {
+  return new Uint8Array(Buffer.from(value, "base64"));
+}
+
+/** A row whose opaque fields fail these shapes was hand-edited or corrupted — an unexpected failure, never an expected refusal, hence plain `Error`s. */
+function parseKdf(raw: string): KdfParams {
+  const parsed = JSON.parse(raw) as Partial<KdfParams>;
+  if (
+    parsed.algorithm !== "argon2id" ||
+    typeof parsed.memoryKiB !== "number" ||
+    typeof parsed.iterations !== "number" ||
+    typeof parsed.parallelism !== "number"
+  ) {
+    throw new Error("The private_settings kdf descriptor is not a recognizable shape.");
+  }
+  return {
+    algorithm: "argon2id",
+    memoryKiB: parsed.memoryKiB,
+    iterations: parsed.iterations,
+    parallelism: parsed.parallelism,
+  };
+}
+
+function parseWrap(raw: string): WrappedKey {
+  const parsed = JSON.parse(raw) as Partial<WrappedKey>;
+  if (typeof parsed.nonce !== "string" || typeof parsed.ciphertext !== "string") {
+    throw new Error("A private_settings key wrap is not a recognizable shape.");
+  }
+  return { nonce: parsed.nonce, ciphertext: parsed.ciphertext };
+}
+
+// --- Status ------------------------------------------------------------------
+
+/** The section's whole visible state. Before setup the lock preferences report the defaults a fresh row would get — there is no row for them to come from. */
+export function privStatus(deps: PrivDeps, profileId: string): PrivStatus {
+  const settings = deps.privateSettings(profileId).get();
+  if (settings === null) {
+    return {
+      setUp: false,
+      unlocked: false,
+      usesAccountPasscode: false,
+      autoLockMinutes: DEFAULT_PRIV_AUTO_LOCK_MINUTES,
+      lockOnMinimize: true,
+    };
+  }
+  return {
+    setUp: true,
+    unlocked: privSession !== null && privSession.profileId === profileId,
+    usesAccountPasscode: settings.usesAccountPasscode,
+    autoLockMinutes: settings.autoLockMinutes,
+    lockOnMinimize: settings.lockOnMinimize,
+  };
+}
+
+// --- Setup -------------------------------------------------------------------
+
+export interface PrivSetupInput {
+  /** What the user typed, whichever kind it is — Argon2id needs the string either way; `usesAccountPasscode` says which rule gates it. */
+  credential: string;
+  usesAccountPasscode: boolean;
+  regenerateKit: boolean;
+}
+
+/**
+ * First-time setup (ADR-057 §4): generates the DEK, wraps it under the
+ * credential — the account passcode, VERIFIED against the live session first
+ * (the renderer's word is never enough, SEC-EL-02), or a separate passphrase
+ * gated by the passcode policy's own 8+/letter-digit rule — and, when asked,
+ * under a freshly minted Recovery Kit code. `regenerateKit` runs the
+ * EXISTING account regenerate flow, so ONE new code (with two salts) opens
+ * both the data key and the PRIV DEK independently; opting out leaves
+ * `kit_salt`/`kit_wrap` NULL and the code is returned exactly once, held
+ * nowhere. Ends with the section unlocked.
+ */
+export async function privSetup(
+  deps: PrivDeps,
+  profileId: string,
+  input: PrivSetupInput,
+): Promise<PrivSetupResult> {
+  const store = deps.privateSettings(profileId);
+  if (store.get() !== null) return { ok: false, reason: "alreadySetUp" };
+
+  if (input.usesAccountPasscode) {
+    const check = await deps.verifyAccountPasscode(input.credential);
+    if (!check.ok) {
+      return check.reason === "throttled"
+        ? { ok: false, reason: "throttled", lockedForMs: check.lockedForMs }
+        : { ok: false, reason: "wrongPasscode" };
+    }
+  } else if (validatePasscode(input.credential) !== null) {
+    return { ok: false, reason: "weakCredential" };
+  }
+
+  const params = deps.kdfParams();
+  const dek = generatePrivDek();
+  const passSalt = generateSalt();
+  const kek = await derivePrivCredentialKey(input.credential, passSalt, deps.deviceSecret(), params);
+  const passWrap = await wrapPrivDek(dek, kek);
+
+  let kitSalt: string | null = null;
+  let kitWrap: string | null = null;
+  let recoveryCode: string | null = null;
+  if (input.regenerateKit) {
+    // The account flow first: the new code re-wraps the DATA key and
+    // invalidates the old one. Only then does PRIV hang its own wrap off the
+    // same code — `deriveRecoveryKey` over PRIV's OWN salt is the domain
+    // separation (see `privKeys.ts`'s module header).
+    recoveryCode = await deps.regenerateRecoveryKit();
+    const canonical = normalizeRecoveryCode(recoveryCode);
+    if (canonical === null) {
+      throw new Error("Internal error: freshly generated recovery code failed to normalize.");
+    }
+    const salt = generateSalt();
+    kitSalt = toBase64(salt);
+    kitWrap = JSON.stringify(await wrapPrivDekWithKit(dek, canonical, salt, params));
+  }
+
+  store.create(
+    {
+      kdf: JSON.stringify(params),
+      passSalt: toBase64(passSalt),
+      passWrap: JSON.stringify(passWrap),
+      kitSalt,
+      kitWrap,
+      usesAccountPasscode: input.usesAccountPasscode,
+      autoLockMinutes: DEFAULT_PRIV_AUTO_LOCK_MINUTES,
+      lockOnMinimize: true,
+    },
+    deps.now().toISOString(),
+  );
+
+  adoptPrivDek(deps, profileId, dek);
+  return { ok: true, status: privStatus(deps, profileId), recoveryCode };
+}
+
+// --- Unlock / lock -----------------------------------------------------------
+
+/**
+ * Derives and unwraps under the row's own recorded KDF parameters, holding
+ * the DEK on success. Failures pay `unlockThrottle`'s escalating in-memory
+ * delay (checked FIRST, before any Argon2id work — a throttled caller costs
+ * nothing); the wrap's AES-GCM tag is the whole verdict on the credential,
+ * so a wrong passphrase and an edited row refuse identically.
+ */
+export async function privUnlock(
+  deps: PrivDeps,
+  profileId: string,
+  credential: string,
+): Promise<PrivUnlockResult> {
+  const settings = deps.privateSettings(profileId).get();
+  if (settings === null) return { ok: false, reason: "notSetUp" };
+
+  const nowIso = deps.now().toISOString();
+  const state = unlockAttempts.get(profileId) ?? INITIAL_ATTEMPT_STATE;
+  const lockedForMs = remainingLockMs(state, nowIso);
+  if (lockedForMs > 0) return { ok: false, reason: "throttled", lockedForMs };
+
+  const kek = await derivePrivCredentialKey(
+    credential,
+    fromBase64(settings.passSalt),
+    deps.deviceSecret(),
+    parseKdf(settings.kdf),
+  );
+  try {
+    const dek = await unwrapPrivDek(parseWrap(settings.passWrap), kek);
+    unlockAttempts.delete(profileId);
+    adoptPrivDek(deps, profileId, dek);
+    return { ok: true, status: privStatus(deps, profileId) };
+  } catch (error) {
+    if (!(error instanceof KeyUnwrapError)) throw error;
+    unlockAttempts.set(profileId, registerFailedAttempt(state, nowIso));
+    return { ok: false, reason: "wrongCredential" };
+  }
+}
+
+// --- Sealed data paths -------------------------------------------------------
+//
+// The live container's bound sequence is always `maxVersionSeq + 1` — MAX,
+// not COUNT, because eviction shrinks the count while the maximum survives,
+// and the AAD arithmetic must stay monotonic (see `privateNoteStore.ts`).
+
+/** One note's decrypted envelope. */
+export async function privRead(
+  deps: PrivDeps,
+  profileId: string,
+  id: string,
+): Promise<PrivNoteEnvelope> {
+  const dek = requirePrivDek(deps, profileId);
+  const store = deps.privateNotes(profileId);
+  return openPrivNote(dek, id, store.maxVersionSeq(id) + 1, store.readSealed(id));
+}
+
+/**
+ * Writes one note's envelope; `id: null` mints a new note (uuidv7, main's
+ * id). Every `PRIV_VERSION_WRITE_CADENCE`th write of one note per session
+ * ALSO captures the state being replaced as a version row — the previous
+ * live container, verbatim, at the sequence it was sealed under — inside ONE
+ * transaction with the new write, so a crash can never leave the live row's
+ * sequence arithmetic pointing past its own bytes.
+ *
+ * This slice's envelopes carry `attachments: []` — private attachments and
+ * their `priv-blob:` protocol land with slice c (the editor adapter), so a
+ * non-empty list here is refused outright rather than half-honoured.
+ */
+export async function privWrite(
+  deps: PrivDeps,
+  profileId: string,
+  id: string | null,
+  envelope: PrivNoteEnvelope,
+): Promise<{ id: string }> {
+  const dek = requirePrivDek(deps, profileId);
+  if (envelope.attachments.length !== 0) {
+    throw new Error("Private note attachments arrive with slice c; this envelope must carry none.");
+  }
+  const store = deps.privateNotes(profileId);
+  const nowIso = deps.now().toISOString();
+
+  if (id === null) {
+    const noteId = uuidv7();
+    const sealed = await sealPrivNote(dek, noteId, 1, envelope); // no versions yet → live seq 1
+    store.writeSealed(noteId, sealed, nowIso);
+    sessionWriteCounts.set(noteId, 1);
+    return { id: noteId };
+  }
+
+  const currentMax = store.maxVersionSeq(id); // also proves the note is this profile's
+  const writeCount = (sessionWriteCounts.get(id) ?? 0) + 1;
+  sessionWriteCounts.set(id, writeCount);
+
+  if (!shouldCaptureVersion(writeCount)) {
+    store.writeSealed(id, await sealPrivNote(dek, id, currentMax + 1, envelope), nowIso);
+    return { id };
+  }
+
+  const previous = store.readSealed(id); // the state being replaced, still sealed at currentMax + 1
+  const sealed = await sealPrivNote(dek, id, currentMax + 2, envelope);
+  deps.runInTransaction(() => {
+    store.writeVersion(id, currentMax + 1, previous, nowIso);
+    store.writeSealed(id, sealed, nowIso);
+  });
+  return { id };
+}
+
+/** HARD delete (ADR-057 — no undo bar; the renderer's typed confirm is the UX gate, this just deletes). The cascade takes the version history. */
+export function privDelete(deps: PrivDeps, profileId: string, id: string): void {
+  requirePrivDek(deps, profileId);
+  deps.privateNotes(profileId).delete(id);
+  sessionWriteCounts.delete(id);
+}
+
+/**
+ * The unlocked section's notes, newest-touched first, each title freshly
+ * decrypted (the list CANNOT come cheaper: titles exist nowhere in
+ * cleartext, by design). A row whose container fails to open — edited bytes,
+ * a foreign magic, a desynced sequence — becomes a named unreadable entry
+ * rather than a crash: the other notes are still the user's to read.
+ */
+export async function privList(deps: PrivDeps, profileId: string): Promise<PrivNoteListEntry[]> {
+  const dek = requirePrivDek(deps, profileId);
+  const store = deps.privateNotes(profileId);
+  const entries: PrivNoteListEntry[] = [];
+  for (const meta of store.list()) {
+    try {
+      const envelope = await openPrivNote(
+        dek,
+        meta.id,
+        store.maxVersionSeq(meta.id) + 1,
+        store.readSealed(meta.id),
+      );
+      entries.push({ id: meta.id, title: envelope.title, updatedAt: meta.updatedAt, unreadable: false });
+    } catch (error) {
+      if (!(error instanceof PrivSealError)) throw error;
+      entries.push({ id: meta.id, title: null, updatedAt: meta.updatedAt, unreadable: true });
+    }
+  }
+  return entries;
+}
+
+/**
+ * Ranked note ids for a query, over `buildPrivIndex`/`searchPrivIndex` — the
+ * ONE folding grammar public search also uses (ADR-021), run in main over
+ * decrypted envelopes. v1 deliberately rebuilds the index per call: a
+ * private section holds tens of notes, and an index cached on unlock is a
+ * slice-c refinement, not a correctness need. Unreadable rows are simply not
+ * searchable — the list is where they are reported by name.
+ */
+export async function privSearch(
+  deps: PrivDeps,
+  profileId: string,
+  query: string,
+): Promise<string[]> {
+  const dek = requirePrivDek(deps, profileId);
+  const store = deps.privateNotes(profileId);
+  const notes: PrivIndexNote[] = [];
+  for (const meta of store.list()) {
+    try {
+      const envelope = await openPrivNote(
+        dek,
+        meta.id,
+        store.maxVersionSeq(meta.id) + 1,
+        store.readSealed(meta.id),
+      );
+      notes.push({ id: meta.id, title: envelope.title, plaintext: envelope.plaintext });
+    } catch (error) {
+      if (!(error instanceof PrivSealError)) throw error;
+    }
+  }
+  return searchPrivIndex(buildPrivIndex(notes), query);
+}
+
+// --- Preferences and the minimize hook ---------------------------------------
+
+/** Sets the two lock preferences; a running idle clock adopts the new interval immediately (the store owns the 1..60 bound). */
+export function privSetLockPrefs(
+  deps: PrivDeps,
+  profileId: string,
+  prefs: { autoLockMinutes: number; lockOnMinimize: boolean },
+): PrivStatus {
+  deps
+    .privateSettings(profileId)
+    .updateLockPrefs(prefs.autoLockMinutes, prefs.lockOnMinimize, deps.now().toISOString());
+  if (privSession !== null && privSession.profileId === profileId) armIdleTimer(deps);
+  return privStatus(deps, profileId);
+}
+
+/** The BrowserWindow 'minimize' hook: locks the open section when its profile's preference says so. A missing row (unreachable while unlocked) locks defensively — the fail-safe direction. */
+export function privHandleMinimize(deps: PrivDeps): void {
+  const session = privSession;
+  if (session === null) return;
+  const settings = deps.privateSettings(session.profileId).get();
+  if (settings === null || settings.lockOnMinimize) privLock();
+}
+
+// --- Recovery Kit regeneration across the account ----------------------------
+
+/**
+ * The PRIV half of `auth:regenerate-recovery` (ADR-057 §4): the account flow
+ * just minted `recoveryCode` and re-wrapped the DATA key under it — this
+ * walks every profile whose PRIV keeps a kit wrap and settles it against the
+ * new code, because a wrap the OLD code still opens would quietly keep a
+ * sheet the user was just told to destroy able to open their private notes.
+ *
+ *  - The profile whose section is UNLOCKED right now: its DEK is in hand, so
+ *    the kit wrap is properly re-wrapped under the new canonical code with a
+ *    fresh PRIV salt.
+ *  - Every other kit-carrying profile: the DEK is sealed away, so the stale
+ *    wrap is DROPPED to NULL — honest degradation (the credential still
+ *    opens the section; PRIV settings can re-mint a kit wrap on the next
+ *    regeneration while unlocked) over a standing lie.
+ */
+export async function rewrapPrivKitsForNewCode(
+  deps: PrivDeps,
+  recoveryCode: string,
+): Promise<void> {
+  const canonical = normalizeRecoveryCode(recoveryCode);
+  if (canonical === null) {
+    throw new Error("Internal error: the freshly minted recovery code failed to normalize.");
+  }
+  const nowIso = deps.now().toISOString();
+  for (const profileId of deps.listProfileIds()) {
+    const store = deps.privateSettings(profileId);
+    const settings = store.get();
+    if (settings === null || settings.kitSalt === null) continue;
+
+    const unchanged: ReplacePrivateWrapsInput = {
+      kdf: settings.kdf,
+      passSalt: settings.passSalt,
+      passWrap: settings.passWrap,
+      kitSalt: null,
+      kitWrap: null,
+      usesAccountPasscode: settings.usesAccountPasscode,
+    };
+    if (privSession !== null && privSession.profileId === profileId) {
+      const salt = generateSalt();
+      const wrap = await wrapPrivDekWithKit(
+        privSession.dek,
+        canonical,
+        salt,
+        parseKdf(settings.kdf),
+      );
+      store.replaceWraps(
+        { ...unchanged, kitSalt: toBase64(salt), kitWrap: JSON.stringify(wrap) },
+        nowIso,
+      );
+    } else {
+      store.replaceWraps(unchanged, nowIso);
+    }
+  }
+}
