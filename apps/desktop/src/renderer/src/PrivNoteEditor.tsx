@@ -5,7 +5,7 @@ import { StarterKit } from "@tiptap/starter-kit";
 import { Collaboration } from "@tiptap/extension-collaboration";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Placeholder } from "@tiptap/extensions";
-import { isInlineImageMime, mergeNoteState } from "@nexus/core";
+import { isInlineImageMime, mergeNoteState, replaceNoteContent } from "@nexus/core";
 import { EmptyState } from "@nexus/ui";
 import {
   PRIV_ATTACHMENTS_MAX_COUNT,
@@ -13,6 +13,7 @@ import {
   PRIV_STATE_MAX_BYTES,
   PRIV_TITLE_MAX_BYTES,
   type PrivAttachmentRef,
+  type PrivNoteEnvelopePayload,
 } from "../../shared/ipc.js";
 import { Callout } from "./noteCallout.js";
 import { createNoteFindExtension, NoteFindBar } from "./noteFindBar.js";
@@ -22,6 +23,7 @@ import { createSlashExtension, SlashMenu, type SlashRenderState } from "./noteSl
 import { NoteTableOfContents } from "./noteTableOfContents.js";
 import { Toggle, ToggleContent, ToggleSummary } from "./noteToggle.js";
 import { PrivAttachmentImage, PrivAttachmentProvider } from "./privAttachmentImage.js";
+import { PrivVersionHistory } from "./privVersionHistory.js";
 import { strings } from "./strings.js";
 
 /**
@@ -32,6 +34,13 @@ import { strings } from "./strings.js";
  * no update log, no checkpoints of its own: whole-envelope writes are the
  * design (main captures sealed versions on its own cadence).
  *
+ * „Istorija verzija" IS here (ADR-057), as its own in-pane mode exactly like
+ * the public editor's: the panel browses the note's sealed versions and
+ * previews one read-only, and restoring is an ORDINARY EDIT — the current
+ * state is captured as a version first, then the version's content is written
+ * forward through the normal write path, so the step the user just took is
+ * itself undoable by restoring what that capture holds.
+ *
  * What is deliberately NOT here, and why (each is a coupling to a PUBLIC
  * store the private section must never touch):
  *  - the `[[` wiki-link MENU and backlinks (they query public notes) — the
@@ -39,8 +48,6 @@ import { strings } from "./strings.js";
  *    resolving to their label snapshot, inert;
  *  - inline flashcards and the deck bar (they sync into STUDY decks);
  *  - templates and the Šabloni pane (public template rows);
- *  - version history UI (private versions are main's sealed cadence, v1 has
- *    no browse surface);
  *  - open-externally / save-as for attachments (the recorded v1 limit: no
  *    plaintext temp copies — files open only inside, said in the copy).
  */
@@ -124,6 +131,9 @@ export function PrivNoteEditor({ profileId, noteId, onSaved, onMaybeLocked }: Pr
     "generic" | "tooLarge" | "tooMany" | null
   >(null);
   const [attaching, setAttaching] = useState(false);
+  const [mode, setMode] = useState<"edit" | "history">("edit");
+  const [restoring, setRestoring] = useState(false);
+  const [restoreError, setRestoreError] = useState(false);
 
   const docRef = useRef<Y.Doc | null>(null);
   const dirtyRef = useRef(false);
@@ -247,13 +257,67 @@ export function PrivNoteEditor({ profileId, noteId, onSaved, onMaybeLocked }: Pr
         timerRef.current = null;
       }
       // Final flush on unmount/switch — its prologue reads the doc before
-      // this cleanup destroys it (see `flush`).
-      void flushRef.current();
+      // this cleanup destroys it (see `flush`) — and then the CLOSE CAPTURE
+      // (ADR-057): the surface is being left, so what was written since the
+      // last capture becomes a version, the flush included. Best-effort, like
+      // the flush itself: main refuses while locked, which costs nothing —
+      // every lock path captures on its own way out.
+      void flushRef.current()
+        .then(() => window.nexus.privCaptureVersion(profileId, noteId))
+        .catch((error: unknown) => {
+          console.error("Nexus: failed to capture a closing private note version:", error);
+        });
       if (created !== null && handler !== null) created.off("update", handler);
       if (created !== null) created.destroy();
       if (docRef.current === created) docRef.current = null;
     };
   }, [profileId, noteId, scheduleFlush]);
+
+  /**
+   * Restore (ADR-057): flush the pending keystrokes so the checkpoint below
+   * includes them, capture the CURRENT state as a version, then rewrite the
+   * live doc forward to the chosen one — `replaceNoteContent` deletes and
+   * re-inserts the "default" fragment's children in one transaction, so this
+   * is an ordinary edit the normal write path persists, never a destructive
+   * load of old bytes. The version's own attachment references are merged into
+   * the live envelope's, because the restored content's images resolve through
+   * that list and dropping them would restore a note with broken pictures; the
+   * envelope's own cap is respected, current references first.
+   */
+  const restoreVersion = useCallback(
+    async (version: PrivNoteEnvelopePayload) => {
+      const liveDoc = docRef.current;
+      if (restoring || liveDoc === null) return;
+      setRestoring(true);
+      setRestoreError(false);
+      try {
+        await flushRef.current();
+        await window.nexus.privCaptureVersion(profileId, noteId);
+        // Re-checked after the awaits: a note switched away in the meantime
+        // destroyed that doc, and writing into it would be an edit to a note
+        // nobody is looking at anymore.
+        if (docRef.current !== liveDoc) return;
+        const merged = [...attachmentsRef.current];
+        for (const ref of version.attachments) {
+          if (merged.length >= PRIV_ATTACHMENTS_MAX_COUNT) break;
+          if (!merged.some((existing) => existing.id === ref.id)) merged.push(ref);
+        }
+        attachmentsRef.current = merged;
+        setAttachments(merged);
+        replaceNoteContent(liveDoc, fromBase64(version.yjsState));
+        dirtyRef.current = true;
+        await flushRef.current();
+        setMode("edit");
+      } catch (error) {
+        setRestoreError(true);
+        console.error("Nexus: failed to restore a private note version:", error);
+        onMaybeLockedRef.current();
+      } finally {
+        setRestoring(false);
+      }
+    },
+    [profileId, noteId, restoring],
+  );
 
   /** „Priloži": main picks and seals, the reference lands in the envelope through an IMMEDIATE flush — a reference that waited out a debounce could die with a crash. */
   const attachFile = useCallback(async () => {
@@ -313,49 +377,80 @@ export function PrivNoteEditor({ profileId, noteId, onSaved, onMaybeLocked }: Pr
           {saveError === "tooLarge" ? strings.priv.editor.saveTooLarge : strings.priv.editor.saveError}
         </div>
       )}
+      {restoreError && (
+        <div className="note__history-error" role="status">
+          {strings.priv.editor.history.error}
+        </div>
+      )}
       <div className="note__editor-body">
-        <PrivEditorCanvas doc={doc} attachmentsById={attachmentsById} />
-        <section className="note__attachments" aria-label={strings.priv.editor.attachmentsTitle}>
-          <div className="note__attachments-head">
-            <h3 className="note__attachments-title">
-              {strings.priv.editor.attachmentsTitle}
-              {attachments.length > 0 ? ` (${attachments.length})` : ""}
-            </h3>
-            <button
-              type="button"
-              className="note__attach"
-              disabled={attaching}
-              onClick={() => void attachFile()}
-            >
-              {strings.priv.editor.attach}
-            </button>
-          </div>
-          <p className="note__menu-caption priv__attachments-note">
-            {strings.priv.editor.attachmentsNote}
-          </p>
-          {attachmentError !== null && (
-            <div className="note__attachment-error" role="status">
-              {attachmentError === "tooLarge"
-                ? strings.priv.editor.attachmentTooLarge
-                : attachmentError === "tooMany"
-                  ? strings.notes.moveToPriv.tooManyAttachments
-                  : strings.priv.editor.attachmentError}
-            </div>
-          )}
-          {attachments.map((ref) => (
-            <div key={ref.id} className="note__attachment">
-              {isInlineImageMime(ref.mime) && (
-                <img
-                  className="note__attachment-thumb"
-                  src={`priv-blob://${ref.id}`}
-                  alt={ref.fileName}
-                />
+        <div className="note__editor-tools">
+          <button
+            type="button"
+            className="note__attach"
+            onClick={() => setMode(mode === "edit" ? "history" : "edit")}
+          >
+            {mode === "edit"
+              ? strings.priv.editor.history.open
+              : strings.priv.editor.history.back}
+          </button>
+        </div>
+        {mode === "history" ? (
+          // The live `Y.Doc` and its flush machinery stay mounted underneath:
+          // a restore rewrites that doc, and leaving history is a state change,
+          // never a reload.
+          <PrivVersionHistory
+            profileId={profileId}
+            noteId={noteId}
+            onRestore={(version) => void restoreVersion(version)}
+            restoring={restoring}
+            onMaybeLocked={onMaybeLocked}
+          />
+        ) : (
+          <>
+            <PrivEditorCanvas doc={doc} attachmentsById={attachmentsById} />
+            <section className="note__attachments" aria-label={strings.priv.editor.attachmentsTitle}>
+              <div className="note__attachments-head">
+                <h3 className="note__attachments-title">
+                  {strings.priv.editor.attachmentsTitle}
+                  {attachments.length > 0 ? ` (${attachments.length})` : ""}
+                </h3>
+                <button
+                  type="button"
+                  className="note__attach"
+                  disabled={attaching}
+                  onClick={() => void attachFile()}
+                >
+                  {strings.priv.editor.attach}
+                </button>
+              </div>
+              <p className="note__menu-caption priv__attachments-note">
+                {strings.priv.editor.attachmentsNote}
+              </p>
+              {attachmentError !== null && (
+                <div className="note__attachment-error" role="status">
+                  {attachmentError === "tooLarge"
+                    ? strings.priv.editor.attachmentTooLarge
+                    : attachmentError === "tooMany"
+                      ? strings.notes.moveToPriv.tooManyAttachments
+                      : strings.priv.editor.attachmentError}
+                </div>
               )}
-              <span className="note__attachment-name">{ref.fileName}</span>
-              <span className="note__attachment-size">{formatBytes(ref.sizeBytes)}</span>
-            </div>
-          ))}
-        </section>
+              {attachments.map((ref) => (
+                <div key={ref.id} className="note__attachment">
+                  {isInlineImageMime(ref.mime) && (
+                    <img
+                      className="note__attachment-thumb"
+                      src={`priv-blob://${ref.id}`}
+                      alt={ref.fileName}
+                    />
+                  )}
+                  <span className="note__attachment-name">{ref.fileName}</span>
+                  <span className="note__attachment-size">{formatBytes(ref.sizeBytes)}</span>
+                </div>
+              ))}
+            </section>
+          </>
+        )}
       </div>
     </>
   );

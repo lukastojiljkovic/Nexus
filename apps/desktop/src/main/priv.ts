@@ -3,7 +3,8 @@
  * section. This module owns the ONE piece of state the whole feature turns on
  * — the profile's unwrapped PRIV DEK, held in memory strictly between an
  * unlock and a lock — plus everything that uses it: setup, unlock/lock, the
- * sealed read/write/version paths, and the in-memory search.
+ * sealed read/write/version paths, the in-memory search index built at unlock,
+ * and the sweep that reclaims sealed blob files nothing refers to anymore.
  *
  * The DEK is nulled on FOUR paths, all of which must hold (ADR-057 §5):
  *  - its own idle timer (`auto_lock_minutes`, re-armed by every successful
@@ -13,6 +14,14 @@
  *  - the renderer's explicit `priv:lock` (the panic path — the section
  *    header's „Zaključaj" and the remappable `privLock` shortcut);
  *  - unconditionally inside `performLock()` — an app lock IS a PRIV lock.
+ *
+ * Every one of them ends at `privLock()`, which is synchronous and
+ * unconditional on purpose. What a lock path may do FIRST, when it can afford
+ * one await, is seal the close captures the section owes (`privCaptureAndLock`
+ * / `privCapturePendingVersions`): those need the very key the lock is about
+ * to zero, so ordering them the other way would silently drop the last edits
+ * somebody walked away from. Two more things die with the key on every path:
+ * the pending-capture marks and the session search index.
  *
  * Wrong-attempt throttling reuses `unlockThrottle`'s state machine
  * (`registerFailedAttempt`/`remainingLockMs`) but keeps its state IN MEMORY,
@@ -39,6 +48,7 @@ import {
   type ExportPrivateNotes,
   type ExportPrivateNoteVersion,
   type PrivAttachmentRef,
+  type PrivIndexEntry,
   type PrivIndexNote,
   type PrivNoteEnvelope,
 } from "@nexus/core";
@@ -63,6 +73,7 @@ import {
   DEFAULT_PRIV_AUTO_LOCK_MINUTES,
   uuidv7,
   type PrivateNoteStore,
+  type PrivateNoteVersionMeta,
   type PrivateSettingsStore,
   type ReplacePrivateWrapsInput,
   type RestoredPrivateNote,
@@ -78,7 +89,7 @@ import type {
   PrivUnlockResult,
 } from "../shared/ipc.js";
 
-/** Every Nth successful write of one note (per unlocked session) also captures the replaced state as a sealed version row — the whole cadence rule, deliberately simple (explicit-close capture is a slice-c refinement). */
+/** Every Nth successful write of one note (per unlocked session) also captures the replaced state as a sealed version row — the cadence half of the version rule; `privCaptureVersion` is the explicit close-capture half. */
 export const PRIV_VERSION_WRITE_CADENCE = 5;
 
 /** Whether write number `writeCount` (1-based, per note per session) is a capturing one. */
@@ -125,7 +136,17 @@ export interface PrivDeps {
     write(id: string, sealed: Uint8Array): Promise<void>;
     read(id: string): Promise<Uint8Array>;
     remove(id: string): Promise<void>;
+    /** Every sealed container currently in the directory, by id — the orphan sweep's left-hand side. Answers an empty list for a directory that does not exist yet (nothing sealed, nothing to sweep). */
+    list(): Promise<string[]>;
   };
+  /**
+   * Whether the one-slot restore/import undo could still put `profileId`'s
+   * SEALED private rows back (`restore.ts`'s `privateUndoPending`). The orphan
+   * sweep's ordering gate and the whole reason it is safe: rows that can still
+   * come back still own the blob files their envelopes name, even though
+   * nothing in the live tables references them right now.
+   */
+  privateUndoPending(profileId: string): boolean;
   /** The `db === session` identity guard (the house idiom for work outliving a lock). */
   stillThisSession(): boolean;
   now(): Date;
@@ -151,10 +172,52 @@ const unlockAttempts = new Map<string, AttemptState>();
 const sessionWriteCounts = new Map<string, number>();
 
 /**
+ * Note ids whose LIVE state is not in the version history yet — the explicit
+ * close capture's whole condition (`privCaptureVersion`), and what makes it
+ * idempotent: only a capture of the live state clears the mark, so closing
+ * twice, or locking right after a note switch, writes exactly one version and
+ * never two identical adjacent ones. Every write sets it, the cadence capture
+ * deliberately does NOT clear it (see `privWrite`). Cleared on every lock,
+ * like the write counters: a session is the unit both rules name.
+ */
+const uncapturedWrites = new Set<string>();
+
+/**
+ * The open section's in-memory search index (ADR-057 §5 / SEC-ZK-05): one
+ * folded entry per readable note, built ONCE at unlock over decrypted
+ * envelopes and kept current by the write path, so a query costs a substring
+ * scan rather than re-opening every container. Keyed by note id; the RESULT
+ * ORDER comes from the store's own `list()` (newest-touched first) at query
+ * time, never from this map's insertion order — which is also why nothing here
+ * sorts, and why no collator is involved: ranking is rank-tier then recency,
+ * never lexicographic.
+ *
+ * Dropped at lock, like every other piece of session state. "Zeroed" is not a
+ * thing a JavaScript string can be — the folded text is immutable and the
+ * engine owns its copies — so dropping the only reference to it IS the whole
+ * teardown, exactly as `privIndex.ts` says.
+ *
+ * This index is registered NOWHERE: not with the global palette, not with the
+ * search page, not with FTS. Private notes stay invisible to those by
+ * construction (no projection views, migration 045), never by a filter someone
+ * could forget.
+ */
+let sessionIndex: Map<string, PrivIndexEntry> | null = null;
+
+/** Set when sealed rows were replaced OUTSIDE the write path (an archive restore or its undo): the next query rebuilds the index before answering. */
+let sessionIndexStale = false;
+
+/**
  * Drops the unwrapped DEK: zeroed first (best effort — the copy inside crypto
  * internals is the platform's business), then unreferenced, plus the idle
- * timer and the per-session write counters. Idempotent, and called from every
- * lock path listed in the module header.
+ * timer, the per-session write counters, the pending close captures and the
+ * search index. Idempotent, and called from every lock path listed in the
+ * module header.
+ *
+ * Deliberately synchronous and unconditional: a lock must never be refused,
+ * delayed or argued with. The paths that CAN afford one await go through
+ * `privCaptureAndLock` instead, which seals the pending close captures first
+ * — a capture that cannot seal is a lost capture.
  */
 export function privLock(): void {
   if (idleTimer !== null) {
@@ -166,6 +229,9 @@ export function privLock(): void {
     privSession = null;
   }
   sessionWriteCounts.clear();
+  uncapturedWrites.clear();
+  sessionIndex = null;
+  sessionIndexStale = false;
 }
 
 /** Test seam: everything `privLock` drops PLUS the throttle map, which production deliberately keeps until the process dies. */
@@ -174,11 +240,12 @@ export function resetPrivStateForTests(): void {
   unlockAttempts.clear();
 }
 
-/** Adopts a freshly unwrapped DEK for `profileId`, replacing any previous section wholesale and starting its idle clock. */
-function adoptPrivDek(deps: PrivDeps, profileId: string, dek: Uint8Array): void {
+/** Adopts a freshly unwrapped DEK for `profileId`, replacing any previous section wholesale, starting its idle clock and building the session's search index (the ONE pass that unseals every note). */
+async function adoptPrivDek(deps: PrivDeps, profileId: string, dek: Uint8Array): Promise<void> {
   privLock();
   privSession = { profileId, dek };
   armIdleTimer(deps);
+  await rebuildSessionIndex(deps, profileId);
 }
 
 /** (Re)arms the idle auto-lock from the profile's own preference. `unref` keeps the timer from holding the process open — a pending auto-lock is not work. */
@@ -197,9 +264,27 @@ function armIdleTimer(deps: PrivDeps): void {
     // The app may have locked (performLock already ran privLock) — the guard
     // just spares a redundant wipe; privLock is idempotent either way.
     if (!deps.stillThisSession()) return;
-    privLock();
+    lockAfterPendingCaptures(deps);
   }, minutes * 60_000);
   idleTimer.unref?.();
+}
+
+/**
+ * The lock both of main's OWN lock paths (the idle timer and the minimize
+ * hook) take: with nothing pending it is the plain synchronous wipe; with a
+ * capture owed it seals that first and drops the key immediately after. The
+ * key living for the length of one seal is the price of not losing the last
+ * edits somebody walked away from — and `privCaptureAndLock` locks in a
+ * `finally`, so no failure can leave the section open.
+ */
+function lockAfterPendingCaptures(deps: PrivDeps): void {
+  if (!privHasPendingCaptures()) {
+    privLock();
+    return;
+  }
+  void privCaptureAndLock(deps).catch((error: unknown) => {
+    console.error("Failed to capture closing private-note versions before locking:", error);
+  });
 }
 
 /** The gate every data call passes: the section must be unlocked FOR THIS PROFILE. Passing it is activity, so it re-arms the idle clock. */
@@ -354,7 +439,7 @@ export async function privSetup(
     deps.now().toISOString(),
   );
 
-  adoptPrivDek(deps, profileId, dek);
+  await adoptPrivDek(deps, profileId, dek);
   return { ok: true, status: privStatus(deps, profileId), recoveryCode };
 }
 
@@ -389,7 +474,7 @@ export async function privUnlock(
   try {
     const dek = await unwrapPrivDek(parseWrap(settings.passWrap), kek);
     unlockAttempts.delete(profileId);
-    adoptPrivDek(deps, profileId, dek);
+    await adoptPrivDek(deps, profileId, dek);
     return { ok: true, status: privStatus(deps, profileId) };
   } catch (error) {
     if (!(error instanceof KeyUnwrapError)) throw error;
@@ -449,6 +534,8 @@ export async function privWrite(
     const sealed = await sealPrivNote(dek, noteId, 1, envelope); // no versions yet → live seq 1
     store.writeSealed(noteId, sealed, nowIso);
     sessionWriteCounts.set(noteId, 1);
+    uncapturedWrites.add(noteId);
+    indexNote(noteId, envelope);
     return { id: noteId };
   }
 
@@ -458,6 +545,8 @@ export async function privWrite(
 
   if (!shouldCaptureVersion(writeCount)) {
     store.writeSealed(id, await sealPrivNote(dek, id, currentMax + 1, envelope), nowIso);
+    uncapturedWrites.add(id);
+    indexNote(id, envelope);
     return { id };
   }
 
@@ -467,7 +556,133 @@ export async function privWrite(
     store.writeVersion(id, currentMax + 1, previous, nowIso);
     store.writeSealed(id, sealed, nowIso);
   });
+  // Still marked, deliberately: what the cadence just captured is the state
+  // this write REPLACED, so the state it leaves live is as unrepresented as
+  // any other write's — and it is exactly what the next session's first write
+  // would overwrite without recording. Only a capture of the LIVE state clears
+  // the mark.
+  uncapturedWrites.add(id);
+  indexNote(id, envelope);
   return { id };
+}
+
+// --- Version history and the explicit close capture (ADR-057) ----------------
+
+/**
+ * One note's surviving versions, newest first — the TWO cleartext facts a
+ * version row has (its bound sequence and when it was captured). No sealed
+ * byte crosses this call, ever; the panel that lists them asks
+ * `privReadVersion` for one version's contents when the user selects it.
+ * Gated on the unlocked section like every other data call, so the history
+ * surface is reachable only while the section is open.
+ */
+export function privListVersions(
+  deps: PrivDeps,
+  profileId: string,
+  id: string,
+): PrivateNoteVersionMeta[] {
+  requirePrivDek(deps, profileId);
+  return deps.privateNotes(profileId).listVersions(id);
+}
+
+/**
+ * One version's decrypted envelope — CLEARTEXT FOR DISPLAY ONLY, opened at the
+ * sequence its own container is bound to (never the live one's). The renderer
+ * receives exactly what the unlocked editor already receives for the live
+ * note; a sealed container never crosses the bridge in either direction.
+ */
+export async function privReadVersion(
+  deps: PrivDeps,
+  profileId: string,
+  id: string,
+  seq: number,
+): Promise<PrivNoteEnvelope> {
+  const store = deps.privateNotes(profileId);
+  const dek = new Uint8Array(requirePrivDek(deps, profileId));
+  try {
+    return await openPrivNote(dek, id, seq, store.readVersion(id, seq));
+  } finally {
+    dek.fill(0);
+  }
+}
+
+/** Whether the OPEN section owes any close capture — what lets the two synchronous lock paths stay synchronous when they owe nothing. */
+export function privHasPendingCaptures(): boolean {
+  return privSession !== null && uncapturedWrites.size > 0;
+}
+
+/**
+ * Captures one note's CURRENT state as a version — the explicit close capture
+ * (the surface being left: a note switched away, the section locked, the app
+ * locked, the window closed) and the checkpoint a version restore takes before
+ * it overwrites anything.
+ *
+ * Writes only when the note has been written since its last capture, so it is
+ * idempotent: closing twice, or locking right after a switch, can never
+ * produce two identical adjacent versions. Answers whether anything was
+ * written.
+ *
+ * The live container is copied VERBATIM into the version row at the sequence
+ * it was already sealed under, and the live row is re-sealed with the same
+ * content at the bumped sequence — both in ONE transaction, because the
+ * store's `maxVersionSeq + 1` arithmetic must never point past the live row's
+ * own bytes (see `privateNoteStore.ts`). The unseal in between is unavoidable:
+ * the sequence is AES-GCM AAD, so re-sealing needs the plaintext.
+ */
+export async function privCaptureVersion(
+  deps: PrivDeps,
+  profileId: string,
+  id: string,
+): Promise<boolean> {
+  const dek = new Uint8Array(requirePrivDek(deps, profileId));
+  try {
+    if (!uncapturedWrites.has(id)) return false;
+    const store = deps.privateNotes(profileId);
+    const currentMax = store.maxVersionSeq(id); // also proves the note is this profile's
+    const previous = store.readSealed(id); // sealed at currentMax + 1
+    const envelope = await openPrivNote(dek, id, currentMax + 1, previous);
+    const resealed = await sealPrivNote(dek, id, currentMax + 2, envelope);
+    const nowIso = deps.now().toISOString();
+    deps.runInTransaction(() => {
+      store.writeVersion(id, currentMax + 1, previous, nowIso);
+      store.writeSealed(id, resealed, nowIso);
+    });
+    uncapturedWrites.delete(id);
+    return true;
+  } finally {
+    dek.fill(0);
+  }
+}
+
+/**
+ * Captures every close capture the OPEN section still owes. One note's failure
+ * is logged and skipped rather than thrown: this runs on the way to a lock,
+ * and a lock must never be refused by bookkeeping.
+ */
+export async function privCapturePendingVersions(deps: PrivDeps): Promise<void> {
+  const session = privSession;
+  if (session === null) return;
+  for (const id of [...uncapturedWrites]) {
+    try {
+      await privCaptureVersion(deps, session.profileId, id);
+    } catch (error) {
+      console.error(`Failed to capture a closing version of private note "${id}":`, error);
+    }
+  }
+}
+
+/**
+ * The ORDERED lock: seal what is owed FIRST, then drop the key — a capture
+ * that cannot seal is a lost capture, and the key it needs is the one the lock
+ * is about to zero. `privLock` runs in a `finally`, so no failure anywhere
+ * above can leave the section open.
+ */
+export async function privCaptureAndLock(deps: PrivDeps): Promise<void> {
+  try {
+    await privCapturePendingVersions(deps);
+  } finally {
+    privLock();
+  }
 }
 
 /**
@@ -491,6 +706,8 @@ export async function privDelete(deps: PrivDeps, profileId: string, id: string):
   }
   store.delete(id);
   sessionWriteCounts.delete(id);
+  uncapturedWrites.delete(id); // a deleted note owes no close capture
+  sessionIndex?.delete(id);
   for (const ref of attachments) {
     await deps.privBlobs.remove(ref.id); // best-effort by the seam's own contract
   }
@@ -524,36 +741,96 @@ export async function privList(deps: PrivDeps, profileId: string): Promise<PrivN
   return entries;
 }
 
+// --- The unlocked section's search index --------------------------------------
+
+/** Folds one note's title and body through `buildPrivIndex` — the ONE folding grammar public search also uses (ADR-021), so "Đorđe", "djordje" and "Ђорђе" match here exactly as they do there. */
+function foldIndexEntry(note: PrivIndexNote): PrivIndexEntry {
+  const [entry] = buildPrivIndex([note]).entries;
+  if (entry === undefined) {
+    throw new Error("Internal error: buildPrivIndex dropped the only note it was given.");
+  }
+  return entry;
+}
+
+/** Records (or replaces) one note's folded text in the open session's index. A no-op while there is no index — every write path calls this, including the ones that run before a section is unlocked in tests. */
+function indexNote(id: string, envelope: PrivNoteEnvelope): void {
+  sessionIndex?.set(id, foldIndexEntry({ id, title: envelope.title, plaintext: envelope.plaintext }));
+}
+
 /**
- * Ranked note ids for a query, over `buildPrivIndex`/`searchPrivIndex` — the
- * ONE folding grammar public search also uses (ADR-021), run in main over
- * decrypted envelopes. v1 deliberately rebuilds the index per call: a
- * private section holds tens of notes, and an index cached on unlock is a
- * slice-c refinement, not a correctness need. Unreadable rows are simply not
- * searchable — the list is where they are reported by name.
+ * Unseals every note ONCE and installs the folded result as this session's
+ * index. A row whose container no longer opens is simply not searchable —
+ * `privList` is where it is reported by name — and a lock that lands mid-build
+ * discards the whole thing rather than leaving decrypted text behind a closed
+ * section.
+ */
+async function rebuildSessionIndex(deps: PrivDeps, profileId: string): Promise<void> {
+  const store = deps.privateNotes(profileId);
+  const dek = new Uint8Array(requirePrivDek(deps, profileId));
+  const built = new Map<string, PrivIndexEntry>();
+  try {
+    for (const meta of store.list()) {
+      try {
+        const envelope = await openPrivNote(
+          dek,
+          meta.id,
+          store.maxVersionSeq(meta.id) + 1,
+          store.readSealed(meta.id),
+        );
+        built.set(
+          meta.id,
+          foldIndexEntry({ id: meta.id, title: envelope.title, plaintext: envelope.plaintext }),
+        );
+      } catch (error) {
+        if (!(error instanceof PrivSealError)) throw error;
+      }
+    }
+  } finally {
+    dek.fill(0);
+  }
+  // The section may have locked across the awaits above; nothing decrypted may
+  // survive that, so the freshly built index is dropped rather than installed.
+  if (!privUnlockedFor(profileId)) return;
+  sessionIndex = built;
+  sessionIndexStale = false;
+}
+
+/**
+ * Marks the session index as no longer describing the sealed rows — for the
+ * two paths that replace them WHOLESALE rather than through `privWrite`: an
+ * archive restore's conditional replace and its undo (ADR-057 §6). The next
+ * query rebuilds; nothing else can tell the difference.
+ */
+export function privMarkIndexStale(): void {
+  sessionIndexStale = true;
+}
+
+/**
+ * Ranked note ids for a query, over the session index built at unlock.
+ *
+ * The channel answers IDS ONLY, deliberately: the private list already holds
+ * every title it shows (`privList` decrypts them for the same open section),
+ * so a snippet crossing the bridge would be cleartext the renderer does not
+ * need — and body text, which the list does NOT show, would be a new leak
+ * surface for nothing. The renderer maps the ids onto rows it already has.
  */
 export async function privSearch(
   deps: PrivDeps,
   profileId: string,
   query: string,
 ): Promise<string[]> {
-  const dek = requirePrivDek(deps, profileId);
-  const store = deps.privateNotes(profileId);
-  const notes: PrivIndexNote[] = [];
-  for (const meta of store.list()) {
-    try {
-      const envelope = await openPrivNote(
-        dek,
-        meta.id,
-        store.maxVersionSeq(meta.id) + 1,
-        store.readSealed(meta.id),
-      );
-      notes.push({ id: meta.id, title: envelope.title, plaintext: envelope.plaintext });
-    } catch (error) {
-      if (!(error instanceof PrivSealError)) throw error;
-    }
+  requirePrivDek(deps, profileId);
+  if (sessionIndex === null || sessionIndexStale) await rebuildSessionIndex(deps, profileId);
+  const index = sessionIndex;
+  if (index === null) return [];
+  // Ordered by the store's own newest-touched-first list, so rank tiers break
+  // by recency and an id the index has not caught up with is simply not there.
+  const entries: PrivIndexEntry[] = [];
+  for (const meta of deps.privateNotes(profileId).list()) {
+    const entry = index.get(meta.id);
+    if (entry !== undefined) entries.push(entry);
   }
-  return searchPrivIndex(buildPrivIndex(notes), query);
+  return searchPrivIndex({ entries }, query);
 }
 
 // --- Private attachments (sealed blobs) --------------------------------------
@@ -601,6 +878,104 @@ export async function privSessionBlobKey(): Promise<Uint8Array | null> {
   return derivePrivBlobKey(privSession.dek);
 }
 
+/**
+ * Removes sealed blob files nothing refers to anymore, and answers how many it
+ * asked the store to remove. The residue this exists for: a restore that is
+ * never undone leaves the PRE-restore rows' files behind (their rows are gone,
+ * their bytes are not), and a crash between `privBlobs.write` and the envelope
+ * write that would have named the file leaves the same thing.
+ *
+ * Three rules make it safe, and each is load-bearing:
+ *
+ *  - **Never while an undo could bring those rows back.** The restore/import
+ *    undo is a one-slot whole-profile snapshot holding the pre-operation
+ *    SEALED rows verbatim; the envelopes in it name blob files nothing live
+ *    references. Sweeping then would delete exactly the files that undo is
+ *    about to need. `privateUndoPending` is that gate, and it is why the app's
+ *    own sweeps hang off the moments the slot is discarded (plus one at
+ *    unlock, for the crash case where no slot exists at all).
+ *  - **Never on an incomplete reference set.** The referenced ids live INSIDE
+ *    the sealed envelopes — live and version alike — so a container that does
+ *    not open makes its own references unknowable. One such row aborts the
+ *    whole sweep: deleting on a partial picture is how a sweep eats a file
+ *    somebody still has.
+ *  - **Only files this section's key can prove are ours.** `private-blobs` is
+ *    per ACCOUNT, not per profile (ADR-058: two profiles share it), and
+ *    another profile's ids are unknowable from here — they live under its own
+ *    DEK. So an unreferenced file is opened before it is removed: authenticating
+ *    under this session's blob key is the proof of ownership, and anything that
+ *    fails it (another profile's file, corrupt bytes) is left alone. In the
+ *    single-profile case that costs nothing — the candidate set is exactly the
+ *    true orphans, normally empty.
+ *
+ * Every per-file failure is logged and skipped, never thrown: a sweep is
+ * housekeeping, and it must not be able to take down the restore, undo or
+ * unlock that triggered it.
+ */
+export async function privSweepOrphanBlobs(deps: PrivDeps, profileId: string): Promise<number> {
+  if (!privUnlockedFor(profileId)) return 0; // the references are sealed; no key, no answer
+  if (deps.privateUndoPending(profileId)) return 0;
+
+  const store = deps.privateNotes(profileId);
+  const dek = new Uint8Array(requirePrivDek(deps, profileId));
+  let blobKey: Uint8Array | null = null;
+  try {
+    const referenced = new Set<string>();
+    try {
+      for (const meta of store.list()) {
+        const live = await openPrivNote(
+          dek,
+          meta.id,
+          store.maxVersionSeq(meta.id) + 1,
+          store.readSealed(meta.id),
+        );
+        for (const ref of live.attachments) referenced.add(ref.id);
+        for (const version of store.listVersions(meta.id)) {
+          const opened = await openPrivNote(
+            dek,
+            meta.id,
+            version.seq,
+            store.readVersion(meta.id, version.seq),
+          );
+          for (const ref of opened.attachments) referenced.add(ref.id);
+        }
+      }
+    } catch (error) {
+      console.error(
+        "Private orphan-blob sweep skipped: a sealed container did not open, so its references cannot be enumerated.",
+        error,
+      );
+      return 0;
+    }
+
+    blobKey = await derivePrivBlobKey(dek);
+    let removed = 0;
+    for (const id of await deps.privBlobs.list()) {
+      if (referenced.has(id)) continue;
+      try {
+        // The ownership proof (see the rules above) — and the only reason this
+        // read exists at all.
+        await openPrivBlob(blobKey, id, await deps.privBlobs.read(id));
+      } catch {
+        continue; // another profile's file, or bytes no key of ours authenticates
+      }
+      try {
+        await deps.privBlobs.remove(id);
+        removed += 1;
+      } catch (error) {
+        console.error(`Failed to sweep the orphaned private blob "${id}":`, error);
+      }
+    }
+    return removed;
+  } catch (error) {
+    console.error("Private orphan-blob sweep failed:", error);
+    return 0;
+  } finally {
+    dek.fill(0);
+    blobKey?.fill(0);
+  }
+}
+
 // --- Preferences and the minimize hook ---------------------------------------
 
 /** Sets the two lock preferences; a running idle clock adopts the new interval immediately (the store owns the 1..60 bound). */
@@ -616,12 +991,12 @@ export function privSetLockPrefs(
   return privStatus(deps, profileId);
 }
 
-/** The BrowserWindow 'minimize' hook: locks the open section when its profile's preference says so. A missing row (unreachable while unlocked) locks defensively — the fail-safe direction. */
+/** The BrowserWindow 'minimize' hook: locks the open section when its profile's preference says so — through `lockAfterPendingCaptures`, since a minimize IS somebody walking away from the surface. A missing row (unreachable while unlocked) locks defensively — the fail-safe direction. */
 export function privHandleMinimize(deps: PrivDeps): void {
   const session = privSession;
   if (session === null) return;
   const settings = deps.privateSettings(session.profileId).get();
-  if (settings === null || settings.lockOnMinimize) privLock();
+  if (settings === null || settings.lockOnMinimize) lockAfterPendingCaptures(deps);
 }
 
 // --- Recovery Kit regeneration across the account ----------------------------
@@ -922,6 +1297,9 @@ export async function privResealForRestore(
         createdAt: version.createdAt,
       });
     }
+    // The caller is about to replace the sealed tables wholesale, so whatever
+    // the session index says about them stops being true the moment it does.
+    privMarkIndexStale();
     return { rows: { notes, versions }, addedBlobIds, missingBlobs };
   } finally {
     dek.fill(0);

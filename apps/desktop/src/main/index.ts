@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import {
   mkdir as mkdirAsync,
+  readdir as readdirAsync,
   readFile as readFileAsync,
   rename as renameAsync,
   stat as statAsync,
@@ -258,19 +259,27 @@ import {
 } from "./auth.js";
 import {
   privAddAttachment,
+  privCaptureAndLock,
+  privCapturePendingVersions,
+  privCaptureVersion,
   privCollectForExport,
   privDelete,
   privHandleMinimize,
+  privHasPendingCaptures,
   privList,
+  privListVersions,
   privLock,
+  privMarkIndexStale,
   privRead,
   privReadAttachmentForExport,
+  privReadVersion,
   privResealForRestore,
   privSearch,
   privSessionBlobKey,
   privSetLockPrefs,
   privSetup,
   privStatus,
+  privSweepOrphanBlobs,
   privUnlock,
   privUnlockedFor,
   privWrite,
@@ -344,6 +353,7 @@ import {
   previewImport,
   previewLlmImport,
   previewRestore,
+  privateUndoPending,
   replanImport,
   replanLlmImport,
   restoreStatus,
@@ -447,6 +457,7 @@ import {
   type PrivMoveOutResult,
   type PrivNoteEnvelopePayload,
   type PrivNoteListEntry,
+  type PrivNoteVersionMeta,
   type PrivSetupResult,
   type PrivStatus,
   type PrivUnlockResult,
@@ -3485,6 +3496,23 @@ function flushSecurityNotices(): void {
   deliverSecurityNotices(securityNotificationDeps(), notices);
 }
 
+/**
+ * Seals whatever close capture the open private section still owes, BEFORE a
+ * caller tears the session down (ADR-057): `performLock` zeroes the PRIV DEK
+ * those captures have to be sealed under, and a capture that cannot seal is a
+ * lost capture. A no-op while nothing is open, and it never refuses — every
+ * per-note failure is logged inside `privCapturePendingVersions`.
+ *
+ * Deliberately NOT wired into `performLock` itself: that function is
+ * synchronous on purpose (it is also the quit and smoke path), and a lock must
+ * never be delayed by, or made to depend on, bookkeeping. The handlers that
+ * CAN afford one await call this first; everything else still gets the
+ * unconditional wipe.
+ */
+async function capturePrivBeforeSessionTeardown(): Promise<void> {
+  if (db !== null) await privCapturePendingVersions(privDeps());
+}
+
 /** Closes the database, stops the scheduler, and drops the data key (and the blob keys derived from it) from memory. Shared by the `auth:lock` handler and the smoke run's own lock/unlock exercise. */
 function performLock(): void {
   // An app lock IS a PRIV lock (ADR-057 §5): the PRIV DEK must never outlive
@@ -3918,15 +3946,19 @@ function restoreDeps(): ImportDeps {
     blobRefCount,
     deleteBlobIfOrphaned: (sha256, refCount) =>
       deleteBlobIfOrphaned(blobStorePathsFor(), requireBlobKeys(), sha256, refCount),
-    // The private section's four restore seams (ADR-057 §6): the sealed store
+    // The private section's five restore seams (ADR-057 §6): the sealed store
     // undo's parallel capture reads through, the gate the preview reports,
-    // the re-seal `main/priv.ts` owns (the DEK lives there), and the
-    // best-effort unlink undo cleans a re-seal's fresh files with.
+    // the re-seal `main/priv.ts` owns (the DEK lives there), the best-effort
+    // unlink undo cleans a re-seal's fresh files with, and the orphan sweep
+    // undo runs once its slot can no longer put sealed rows back.
     privateNoteStore,
     privUnlocked: (profileId) => privUnlockedFor(profileId),
     resealPrivateNotes: (profileId, data, readArchiveBlob) =>
       privResealForRestore(privDeps(), profileId, data, readArchiveBlob),
     removePrivateBlob: (id) => privBlobFiles.remove(id),
+    sweepPrivateBlobs: async (profileId) => {
+      await privSweepOrphanBlobs(privDeps(), profileId);
+    },
   };
 }
 
@@ -4073,6 +4105,21 @@ const privBlobFiles: PrivDeps["privBlobs"] = {
       }
     }
   },
+  async list() {
+    let names: string[];
+    try {
+      names = await readdirAsync(privBlobsDirPath());
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return []; // nothing sealed yet
+      throw error;
+    }
+    // Only id-shaped names: everything else in this directory is either a
+    // crashed atomic write's `.tmp-…` leftover (its writer's business, and not
+    // a sealed container) or something this app never put there — and the
+    // sweep must be able to hand every name it answers straight back to
+    // `read`/`remove`, which accept nothing else (`privBlobFilePath`).
+    return names.filter((name) => PRIV_BLOB_ID_PATTERN.test(name));
+  },
 };
 
 function privDeps(): PrivDeps {
@@ -4124,6 +4171,10 @@ function privDeps(): PrivDeps {
       return recoveryCode;
     },
     runInTransaction: (write) => requireDb().raw.transaction(write)(),
+    // The orphan sweep's ordering gate (see `privSweepOrphanBlobs`): the one
+    // undo slot `restore.ts` owns is the only thing that can put sealed rows
+    // — and therefore blob references — back after they left the tables.
+    privateUndoPending,
     stillThisSession: () => db === session,
     now: () => new Date(),
   };
@@ -4349,17 +4400,24 @@ function registerIpc(): void {
     return handleAuthCreate(label, passcode);
   });
 
-  ipcMain.handle(IpcChannel.authCreateAdditional, (event, payload): Promise<AuthResult> => {
+  ipcMain.handle(IpcChannel.authCreateAdditional, async (event, payload): Promise<AuthResult> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
     const label = asAccountLabel(body.label, "label");
     const passcode = asPasscode(body.passcode, "passcode");
+    // Both of these lock the current session on their way through
+    // (`performLock`), which is an app lock as far as the private section is
+    // concerned — so its pending close captures are sealed first, exactly as
+    // `auth:lock` does it. A DELETE deliberately has no twin: the database
+    // those versions would land in is about to be erased.
+    await capturePrivBeforeSessionTeardown();
     return handleAuthCreateAdditional(label, passcode);
   });
 
-  ipcMain.handle(IpcChannel.authSelectAccount, (event, payload): AuthStatus => {
+  ipcMain.handle(IpcChannel.authSelectAccount, async (event, payload): Promise<AuthStatus> => {
     assertTrustedSender(event);
     const accountId = asAccountId(asRecord(payload).accountId, "accountId");
+    await capturePrivBeforeSessionTeardown();
     return handleAuthSelectAccount(accountId);
   });
 
@@ -4404,8 +4462,9 @@ function registerIpc(): void {
     return handleAuthRegenerateRecovery();
   });
 
-  ipcMain.handle(IpcChannel.authLock, (event): void => {
+  ipcMain.handle(IpcChannel.authLock, async (event): Promise<void> => {
     assertTrustedSender(event);
+    await capturePrivBeforeSessionTeardown();
     performLock();
   });
 
@@ -6977,10 +7036,16 @@ function registerIpc(): void {
     return applyRestore(restoreDeps(), profileId, token);
   });
 
-  ipcMain.handle(IpcChannel.imexRestoreUndo, (event, payload): Promise<RestoreUndoResult> => {
+  ipcMain.handle(IpcChannel.imexRestoreUndo, async (event, payload): Promise<RestoreUndoResult> => {
     assertTrustedSender(event);
     const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
-    return undoRestore(restoreDeps(), profileId);
+    const result = await undoRestore(restoreDeps(), profileId);
+    // The undo just put a different set of sealed rows back, wholesale and
+    // without passing through `privWrite` — so whatever the open section's
+    // search index says about them is no longer true (the apply's own half of
+    // this is inside `privResealForRestore`).
+    privMarkIndexStale();
+    return result;
   });
 
   ipcMain.handle(IpcChannel.imexRestoreStatus, (event, payload): RestoreStatus => {
@@ -7334,21 +7399,40 @@ function registerIpc(): void {
     return privSetup(privDeps(), profileId, { credential, usesAccountPasscode, regenerateKit });
   });
 
-  ipcMain.handle(IpcChannel.privUnlock, (event, payload): Promise<PrivUnlockResult> => {
+  ipcMain.handle(IpcChannel.privUnlock, async (event, payload): Promise<PrivUnlockResult> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const credential = asPasscode(body.credential, "credential");
     requireProfile(requireDb(), profileId);
-    return privUnlock(privDeps(), profileId, credential);
+    const result = await privUnlock(privDeps(), profileId, credential);
+    // The boot-time orphan-blob sweep (ADR-057): an unlock is the FIRST moment
+    // this process holds the key the referenced-id set is sealed behind, so it
+    // is where the crash case gets cleaned up — a restore whose undo slot died
+    // with the last session leaves files nothing names. Never awaited: an
+    // unlock must not wait on housekeeping, and the sweep refuses on its own
+    // while an undo could still bring rows back.
+    if (result.ok) {
+      void privSweepOrphanBlobs(privDeps(), profileId).catch((error: unknown) => {
+        console.error("Private orphan-blob sweep failed after unlock:", error);
+      });
+    }
+    return result;
   });
 
   // The panic path: payload-free, allowed in ANY state — locking must never be
   // refused, so there is deliberately no requireDb() here (privLock touches
-  // only main's own memory).
-  ipcMain.handle(IpcChannel.privLock, (event): void => {
+  // only main's own memory). What it DOES do first, when there is a database to
+  // write into, is seal whatever close capture the section owes: the key it
+  // needs is the one this call is about to zero (`privCaptureAndLock` locks in
+  // a `finally`, so a failing capture cannot leave the section open).
+  ipcMain.handle(IpcChannel.privLock, async (event): Promise<void> => {
     assertTrustedSender(event);
-    privLock();
+    if (db === null) {
+      privLock();
+      return;
+    }
+    await privCaptureAndLock(privDeps());
   });
 
   ipcMain.handle(IpcChannel.privList, (event, payload): Promise<PrivNoteListEntry[]> => {
@@ -7421,6 +7505,38 @@ function registerIpc(): void {
     const query = asCappedString(body.query, "query", SEARCH_QUERY_MAX_BYTES);
     requireProfile(requireDb(), profileId);
     return privSearch(privDeps(), profileId, query);
+  });
+
+  // The sealed version history. `priv:versions` answers cleartext FACTS (seq +
+  // capture time), `priv:version-read` answers ONE unsealed envelope for
+  // display, and `priv:version-capture` is the explicit close capture — all
+  // three refused while the section is locked, by `priv.ts`'s own gate.
+  ipcMain.handle(IpcChannel.privVersions, (event, payload): PrivNoteVersionMeta[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    requireProfile(requireDb(), profileId);
+    return privListVersions(privDeps(), profileId, id);
+  });
+
+  ipcMain.handle(IpcChannel.privVersionRead, (event, payload): Promise<PrivNoteEnvelopePayload> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const seq = asPositiveInteger(body.seq, "seq");
+    requireProfile(requireDb(), profileId);
+    return privReadVersion(privDeps(), profileId, id, seq);
+  });
+
+  ipcMain.handle(IpcChannel.privVersionCapture, async (event, payload): Promise<void> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    requireProfile(requireDb(), profileId);
+    await privCaptureVersion(privDeps(), profileId, id);
   });
 
   ipcMain.handle(IpcChannel.privSetLockPrefs, (event, payload): PrivStatus => {
@@ -7570,6 +7686,26 @@ function createWindow(): BrowserWindow {
   // and no database for the deps to reach.
   win.on("minimize", () => {
     if (db !== null) privHandleMinimize(privDeps());
+  });
+
+  // The private section's close capture on the way out (ADR-057): closing the
+  // window leaves the private surface exactly as locking does, and the capture
+  // it owes has to be SEALED before the process stops being able to. The close
+  // is deferred exactly once, and only when something is actually owed —
+  // `closing` makes the second pass unconditional, and the `finally` closes the
+  // window whatever the capture did, so this can never strand a window open.
+  let closing = false;
+  win.on("close", (event) => {
+    if (closing || db === null || !privHasPendingCaptures()) return;
+    closing = true;
+    event.preventDefault();
+    void privCaptureAndLock(privDeps())
+      .catch((error: unknown) => {
+        console.error("Failed to capture closing private-note versions on window close:", error);
+      })
+      .finally(() => {
+        if (!win.isDestroyed()) win.close();
+      });
   });
 
   // SEC-EL-03: deny every attempt to open a new window. The shell has no external

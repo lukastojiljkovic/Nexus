@@ -111,6 +111,7 @@ import {
   previewImport,
   previewLlmImport,
   previewRestore,
+  privateUndoPending,
   replanImport,
   replanLlmImport,
   restoreStatus,
@@ -230,6 +231,13 @@ interface TestPrivSeam {
   unlocked: boolean;
   blobFiles: Map<string, Uint8Array>;
   resealCalls: number;
+  /**
+   * What the orphan-blob sweep saw each time it was called (ADR-057): the
+   * sealed rows in the tables at that moment, and whether the undo slot could
+   * still put a different set back. Both are the ordering this feature turns
+   * on — a sweep that ran a step earlier would delete files an undo needs.
+   */
+  sweepCalls: { profileId: string; sealedIds: string[]; undoPending: boolean }[];
 }
 
 /**
@@ -250,7 +258,12 @@ function makeTestDeps(
   const blobs = new Map<string, Uint8Array>();
   const cancelFocusCalls: string[] = [];
   let reloadCount = 0;
-  const priv: TestPrivSeam = { unlocked: false, blobFiles: new Map(), resealCalls: 0 };
+  const priv: TestPrivSeam = {
+    unlocked: false,
+    blobFiles: new Map(),
+    resealCalls: 0,
+    sweepCalls: [],
+  };
 
   const deps: ImportDeps = {
     ...profileDataDeps(handle),
@@ -367,6 +380,16 @@ function makeTestDeps(
     },
     removePrivateBlob: async (id) => {
       priv.blobFiles.delete(id);
+    },
+    // The real sweep's ordering gate, recorded rather than performed: what it
+    // could have seen is the whole assertion (`privSweepOrphanBlobs` itself is
+    // tested against real sealed containers in `priv.test.ts`).
+    sweepPrivateBlobs: async (profileId) => {
+      priv.sweepCalls.push({
+        profileId,
+        sealedIds: new PrivateNoteStore(handle.raw, profileId).list().map((meta) => meta.id),
+        undoPending: privateUndoPending(profileId),
+      });
     },
   };
 
@@ -1669,6 +1692,32 @@ describe("private notes through a restore (ADR-057 §6)", () => {
     expect(new Uint8Array(store.readSealed("target-priv"))).toEqual(seeded.note);
     expect(new Uint8Array(store.readVersion("target-priv", 1))).toEqual(seeded.version);
     expect(priv.blobFiles.size).toBe(0);
+  });
+
+  it("the orphan-blob sweep runs only once the undo slot can no longer put sealed rows back", async () => {
+    const { filePath } = await writePrivateArchive("sweep-order.nexus.zip");
+    const profileB = createProfile(dbB, "B-target");
+    seedTargetSealedRows(profileB);
+    const { deps, priv } = makeTestDeps(dbB, filePath);
+    priv.unlocked = true;
+
+    await pickRestoreFile(deps);
+    const preview = await previewRestore(deps, profileB, null);
+    if (preview.status !== "ready") unreachable();
+    await applyRestore(deps, profileB, preview.preview.token);
+
+    // While the slot HOLDS the pre-restore sealed rows, nothing sweeps: those
+    // rows' envelopes still own their blob files even though no live row does.
+    expect(priv.sweepCalls).toEqual([]);
+    expect(privateUndoPending(profileB)).toBe(true);
+
+    await undoRestore(deps, profileB);
+
+    // Exactly one sweep, and it saw the world it needs to see: the slot gone,
+    // and the rows it was holding already back in the tables.
+    expect(priv.sweepCalls).toEqual([
+      { profileId: profileB, sealedIds: ["target-priv"], undoPending: false },
+    ]);
   });
 
   it("an import preview names the private section as never imported, counted per record type", async () => {

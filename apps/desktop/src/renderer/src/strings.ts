@@ -1385,6 +1385,23 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       /** The recorded v1 limit, said where the files live: no external opening, no plaintext temp copies. */
       attachmentsNote:
         "Prilozi su šifrovani i otvaraju se samo ovde, dok je sekcija otključana — bez otvaranja u spoljnim programima.",
+      /**
+       * The sealed version history (ADR-057) — the private twin of „Istorija
+       * verzija". Verzije su šifrovane kao i sama beleška, pa se otvara jedna
+       * po jedna, i sve to postoji samo dok je sekcija otključana.
+       */
+      history: {
+        open: "Istorija verzija",
+        back: "Nazad na uređivanje",
+        title: "Istorija verzija",
+        empty:
+          "Još nema sačuvanih verzija — nastaju automatski tokom pisanja i pri zatvaranju beleške.",
+        restore: "Vrati ovu verziju",
+        restoreNote: "Trenutno stanje se čuva kao verzija pre vraćanja, pa je i ovaj korak povratan.",
+        error: "Radnja nad verzijama nije uspela. Pokušaj ponovo.",
+        /** The preview column's label for the selected version's own title. */
+        previewLabel: "Naslov u ovoj verziji",
+      },
     },
     /**
      * The best-effort clipboard guard (PRIV-012): copying inside the section

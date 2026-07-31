@@ -73,7 +73,9 @@ function makePrivDeps(): PrivDeps {
       remove: async (id) => {
         privBlobFiles.delete(id);
       },
+      list: async () => [...privBlobFiles.keys()],
     },
+    privateUndoPending: () => false,
     stillThisSession: () => true,
     now: () => new Date(),
   };

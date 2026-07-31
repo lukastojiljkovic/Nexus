@@ -352,6 +352,15 @@ export interface RestoreDeps extends ProfileDataDeps {
   ): Promise<PrivResealOutcome | null>;
   /** Best-effort removal of ONE sealed private-blob file the re-seal added — undo's cleanup. No refcount twin: the ids are random and never shared (no content addressing, by design). */
   removePrivateBlob(id: string): Promise<void>;
+  /**
+   * `main/priv.ts`'s `privSweepOrphanBlobs` for this profile, injected on
+   * `resealPrivateNotes`' terms. Called at the ONE moment an undo stops being
+   * able to bring sealed rows back (see `undoRestore`), because until then the
+   * files those rows name must stay put. Best-effort by contract: it is
+   * housekeeping, and it may never fail an operation that has already
+   * committed.
+   */
+  sweepPrivateBlobs(profileId: string): Promise<void>;
 }
 
 /**
@@ -959,9 +968,31 @@ export async function undoRestore(deps: RestoreDeps, profileId: string): Promise
 
   undo = null;
 
+  // The ordering the private orphan sweep hangs on (ADR-057): the slot that
+  // could put sealed rows — and with them the blob files their envelopes name
+  // — back has just been discarded, and the rows it was holding are back in
+  // the tables, so from HERE on an unreferenced sealed file really is garbage.
+  // A sweep any earlier would delete exactly what the undo above needed.
+  // Best-effort: the replace has committed and nothing below may fail it.
+  await deps.sweepPrivateBlobs(profileId).catch((error: unknown) => {
+    console.error("Private orphan-blob sweep after an undo failed:", error);
+  });
+
   setTimeout(() => deps.reloadRenderer(), 0);
 
   return { rowsWritten, blobsRemoved };
+}
+
+/**
+ * Whether the one undo slot could still put `profileId`'s SEALED private rows
+ * back — true exactly while the last applied operation replaced those tables
+ * and has not been undone (an import never touches them, so its snapshot
+ * answers false). The private orphan-blob sweep's gate: those held rows'
+ * envelopes name blob files nothing live references, and deleting them would
+ * make the undo restore rows whose attachments are gone.
+ */
+export function privateUndoPending(profileId: string): boolean {
+  return undo !== null && undo.profileId === profileId && undo.privateSealed !== null;
 }
 
 /**

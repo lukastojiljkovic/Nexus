@@ -3,7 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as Y from "yjs";
-import { openPrivNote, type ExportPrivateNotes, type PrivNoteEnvelope } from "@nexus/core";
+import {
+  openPrivNote,
+  sealPrivNote,
+  type ExportPrivateNotes,
+  type PrivNoteEnvelope,
+} from "@nexus/core";
 import {
   derivePrivCredentialKey,
   generateRecoveryCode,
@@ -23,20 +28,27 @@ import { PRIV_ATTACHMENTS_MAX_COUNT } from "../shared/ipc.js";
 import {
   PRIV_VERSION_WRITE_CADENCE,
   privAddAttachment,
+  privCaptureAndLock,
+  privCaptureVersion,
   privCollectForExport,
   privDelete,
   privHandleMinimize,
+  privHasPendingCaptures,
   privList,
+  privListVersions,
   privLock,
+  privMarkIndexStale,
   privOpenAttachment,
   privRead,
   privReadAttachmentForExport,
+  privReadVersion,
   privResealForRestore,
   privSearch,
   privSessionBlobKey,
   privSetLockPrefs,
   privSetup,
   privStatus,
+  privSweepOrphanBlobs,
   privUnlock,
   privUnlockedFor,
   privWrite,
@@ -94,7 +106,9 @@ function makeDeps(overrides: Partial<PrivDeps> = {}): PrivDeps {
       remove: async (id) => {
         privBlobFiles.delete(id);
       },
+      list: async () => [...privBlobFiles.keys()],
     },
+    privateUndoPending: () => false,
     stillThisSession: () => true,
     now: () => new Date(),
     ...overrides,
@@ -412,13 +426,8 @@ describe("private attachments", () => {
   });
 });
 
-/** Opens a captured version container by re-deriving the DEK from the settings row exactly as `privUnlock` does — version-read channels are slice c's, so tests reach the bytes store-side. */
-async function openVersionForTest(
-  deps: PrivDeps,
-  noteId: string,
-  seq: number,
-  sealed: Uint8Array,
-): Promise<PrivNoteEnvelope> {
+/** Re-derives the profile's PRIV DEK from the settings row exactly as `privUnlock` does — what lets a test read (or forge) sealed bytes without going through the session. */
+async function dekForTest(deps: PrivDeps): Promise<Uint8Array> {
   const settings = deps.privateSettings(profileId).get();
   if (settings === null) throw new Error("not set up");
   const kek = await derivePrivCredentialKey(
@@ -427,8 +436,17 @@ async function openVersionForTest(
     DEVICE_SECRET,
     FAST_KDF_PARAMS,
   );
-  const dek = await unwrapPrivDek(JSON.parse(settings.passWrap) as WrappedKey, kek);
-  return openPrivNote(dek, noteId, seq, sealed);
+  return unwrapPrivDek(JSON.parse(settings.passWrap) as WrappedKey, kek);
+}
+
+/** Opens a captured version container store-side, under the re-derived DEK. */
+async function openVersionForTest(
+  deps: PrivDeps,
+  noteId: string,
+  seq: number,
+  sealed: Uint8Array,
+): Promise<PrivNoteEnvelope> {
+  return openPrivNote(await dekForTest(deps), noteId, seq, sealed);
 }
 
 describe("privList / privSearch", () => {
@@ -758,5 +776,382 @@ describe("privResealForRestore (ADR-057 §6)", () => {
     expect(version.title).toBe("Iz arhive (staro)");
     expect(version.attachments.map((ref) => ref.id)).toEqual([freshA]);
     expect(attachmentIdsOf(Buffer.from(version.yjsState, "base64"))).toEqual([freshA]);
+  });
+});
+
+// --- PRIV slice d: history, close capture, the session index, the blob sweep --
+
+describe("private version history", () => {
+  it("lists a note's versions newest-first, and refuses while the section is locked", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    const { id } = await privWrite(deps, profileId, null, envelope({ title: "v1" }));
+    for (let write = 2; write <= PRIV_VERSION_WRITE_CADENCE; write += 1) {
+      await privWrite(deps, profileId, id, envelope({ title: `v${write}` }));
+    }
+    await privWrite(deps, profileId, id, envelope({ title: "posle" }));
+    await privCaptureVersion(deps, profileId, id); // a second version, newer
+
+    const versions = privListVersions(deps, profileId, id);
+    expect(versions.map((version) => version.seq)).toEqual([2, 1]);
+    expect(Number.isNaN(new Date(versions[0]?.createdAt ?? "").getTime())).toBe(false);
+
+    privLock();
+    expect(() => privListVersions(deps, profileId, id)).toThrow("locked");
+  });
+
+  it("reads one version back as cleartext, at its own bound sequence, and refuses while locked", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    const { id } = await privWrite(deps, profileId, null, envelope({ title: "v1" }));
+    for (let write = 2; write <= PRIV_VERSION_WRITE_CADENCE; write += 1) {
+      await privWrite(
+        deps,
+        profileId,
+        id,
+        envelope({ title: `v${write}`, plaintext: `telo ${write}` }),
+      );
+    }
+
+    const version = await privReadVersion(deps, profileId, id, 1);
+    expect(version.title).toBe(`v${PRIV_VERSION_WRITE_CADENCE - 1}`);
+    expect(version.plaintext).toBe(`telo ${PRIV_VERSION_WRITE_CADENCE - 1}`);
+
+    privLock();
+    await expect(privReadVersion(deps, profileId, id, 1)).rejects.toThrow("locked");
+  });
+
+  it("refuses a sequence the note has no version for", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    const { id } = await privWrite(deps, profileId, null, envelope());
+    await expect(privReadVersion(deps, profileId, id, 7)).rejects.toThrow();
+  });
+});
+
+describe("the explicit close capture", () => {
+  it("captures the state at close when something was written since the last capture, and the live note stays readable", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    const { id } = await privWrite(deps, profileId, null, envelope({ title: "Prva" }));
+    await privWrite(deps, profileId, id, envelope({ title: "Druga" }));
+    expect(privHasPendingCaptures()).toBe(true);
+
+    expect(await privCaptureVersion(deps, profileId, id)).toBe(true);
+    expect(privListVersions(deps, profileId, id).map((version) => version.seq)).toEqual([1]);
+    expect((await privReadVersion(deps, profileId, id, 1)).title).toBe("Druga");
+    // The live container was re-sealed at the bumped sequence, so it still opens.
+    expect((await privRead(deps, profileId, id)).title).toBe("Druga");
+    expect(privHasPendingCaptures()).toBe(false);
+  });
+
+  it("is idempotent: closing twice writes no second, identical, adjacent version", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    const { id } = await privWrite(deps, profileId, null, envelope({ title: "Prva" }));
+    await privWrite(deps, profileId, id, envelope({ title: "Druga" }));
+
+    expect(await privCaptureVersion(deps, profileId, id)).toBe(true);
+    expect(await privCaptureVersion(deps, profileId, id)).toBe(false);
+    expect(privListVersions(deps, profileId, id).map((version) => version.seq)).toEqual([1]);
+  });
+
+  it("still owes a capture after a cadence write — that write's own state is what the next session would overwrite unrecorded", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    const { id } = await privWrite(deps, profileId, null, envelope({ title: "v1" }));
+    for (let write = 2; write <= PRIV_VERSION_WRITE_CADENCE; write += 1) {
+      await privWrite(deps, profileId, id, envelope({ title: `v${write}` }));
+    }
+    // The cadence captured the state the capturing write REPLACED; the state it
+    // left live is not in the history yet.
+    expect(privListVersions(deps, profileId, id).map((version) => version.seq)).toEqual([1]);
+    expect(privHasPendingCaptures()).toBe(true);
+
+    expect(await privCaptureVersion(deps, profileId, id)).toBe(true);
+    expect(privListVersions(deps, profileId, id).map((version) => version.seq)).toEqual([2, 1]);
+    expect((await privReadVersion(deps, profileId, id, 2)).title).toBe(
+      `v${PRIV_VERSION_WRITE_CADENCE}`,
+    );
+    expect((await privReadVersion(deps, profileId, id, 1)).title).toBe(
+      `v${PRIV_VERSION_WRITE_CADENCE - 1}`,
+    );
+  });
+
+  it("a delete takes its pending capture with it", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    const { id } = await privWrite(deps, profileId, null, envelope());
+    expect(privHasPendingCaptures()).toBe(true);
+    await privDelete(deps, profileId, id);
+    expect(privHasPendingCaptures()).toBe(false);
+  });
+
+  it("privCaptureAndLock seals the capture BEFORE the lock zeroes the key", async () => {
+    let unlockedAtWrite: boolean | null = null;
+    const deps = makeDeps({
+      runInTransaction: (write) => {
+        unlockedAtWrite = privUnlockedFor(profileId);
+        return db.raw.transaction(write)();
+      },
+    });
+    await setUp(deps);
+    const { id } = await privWrite(deps, profileId, null, envelope({ title: "Prva" }));
+    await privWrite(deps, profileId, id, envelope({ title: "Poslednja" }));
+
+    await privCaptureAndLock(deps);
+    expect(unlockedAtWrite).toBe(true);
+    expect(privUnlockedFor(profileId)).toBe(false);
+
+    // And the bytes really were sealed under the LIVE key: they open under the
+    // DEK the credential unwraps, which an all-zero key never would.
+    const store = new PrivateNoteStore(db.raw, profileId);
+    expect((await openVersionForTest(deps, id, 1, store.readVersion(id, 1))).title).toBe(
+      "Poslednja",
+    );
+  });
+
+  it("privCaptureAndLock drops the key even when there is nothing to capture", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    expect(privHasPendingCaptures()).toBe(false);
+    await privCaptureAndLock(deps);
+    expect(privUnlockedFor(profileId)).toBe(false);
+  });
+});
+
+describe("the unlock-time private search index", () => {
+  it("is built at unlock and answered from memory — a row edited underneath it still matches", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    const { id } = await privWrite(deps, profileId, null, envelope({ title: "Đorđe" }));
+    privLock();
+    expect((await privUnlock(deps, profileId, PASSPHRASE)).ok).toBe(true);
+
+    // Corrupting the row now proves the query does not re-open a container: the
+    // index was built once, at unlock, over decrypted envelopes.
+    db.raw
+      .prepare("UPDATE private_notes SET sealed = ? WHERE id = ?")
+      .run(Buffer.from([1, 2, 3, 4]), id);
+    expect(await privSearch(deps, profileId, "djordje")).toEqual([id]);
+  });
+
+  it("is dropped at lock: the next unlock rebuilds it from what the rows now say", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    const { id } = await privWrite(deps, profileId, null, envelope({ title: "Đorđe" }));
+    db.raw
+      .prepare("UPDATE private_notes SET sealed = ? WHERE id = ?")
+      .run(Buffer.from([1, 2, 3, 4]), id);
+    privLock();
+    expect((await privUnlock(deps, profileId, PASSPHRASE)).ok).toBe(true);
+    // The row no longer opens, so it is no longer searchable — `privList` is
+    // where it is named instead.
+    expect(await privSearch(deps, profileId, "djordje")).toEqual([]);
+  });
+
+  it("stays current across writes and deletes without an unlock in between", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    const { id } = await privWrite(
+      deps,
+      profileId,
+      null,
+      envelope({ title: "Prva", plaintext: "prva" }),
+    );
+    expect(await privSearch(deps, profileId, "prva")).toEqual([id]);
+
+    await privWrite(deps, profileId, id, envelope({ title: "Druga", plaintext: "druga" }));
+    expect(await privSearch(deps, profileId, "prva")).toEqual([]);
+    expect(await privSearch(deps, profileId, "druga")).toEqual([id]);
+
+    await privDelete(deps, profileId, id);
+    expect(await privSearch(deps, profileId, "druga")).toEqual([]);
+  });
+
+  it("ranks title matches first and, within a tier, newest-touched first", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    const first = await privWrite(deps, profileId, null, envelope({ title: "Zapis", plaintext: "a" }));
+    const second = await privWrite(deps, profileId, null, envelope({ title: "Zapis", plaintext: "b" }));
+    const body = await privWrite(
+      deps,
+      profileId,
+      null,
+      envelope({ title: "Drugo", plaintext: "zapis u telu" }),
+    );
+    expect(await privSearch(deps, profileId, "zapis")).toEqual([second.id, first.id, body.id]);
+  });
+
+  it("a stale mark rebuilds it — sealed rows replaced outside the write path (a restore)", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    const { id } = await privWrite(
+      deps,
+      profileId,
+      null,
+      envelope({ title: "Prva", plaintext: "prva" }),
+    );
+
+    // Exactly what `RestoreStore.replaceProfileData` does: the sealed bytes are
+    // replaced wholesale, without ever passing through `privWrite`.
+    const sealed = await sealPrivNote(await dekForTest(deps), id, 1, {
+      title: "Iz arhive",
+      yjsState: "AAECAw==",
+      plaintext: "arhiva",
+      attachments: [],
+    });
+    db.raw.prepare("UPDATE private_notes SET sealed = ? WHERE id = ?").run(Buffer.from(sealed), id);
+
+    expect(await privSearch(deps, profileId, "arhiva")).toEqual([]); // still the indexed text
+    privMarkIndexStale();
+    expect(await privSearch(deps, profileId, "arhiva")).toEqual([id]);
+  });
+});
+
+describe("privSweepOrphanBlobs", () => {
+  const BYTES = new Uint8Array([1, 2, 3]);
+
+  async function attach(deps: PrivDeps, pid = profileId): Promise<string> {
+    const ref = await privAddAttachment(deps, pid, {
+      fileName: "a.bin",
+      mime: "application/octet-stream",
+      bytes: BYTES,
+    });
+    return ref.id;
+  }
+
+  it("removes a sealed file no row references and keeps the referenced ones", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    const referenced = await privAddAttachment(deps, profileId, {
+      fileName: "a.bin",
+      mime: "application/octet-stream",
+      bytes: BYTES,
+    });
+    const orphan = await attach(deps);
+    await privWrite(deps, profileId, null, envelope({ attachments: [referenced] }));
+
+    expect(await privSweepOrphanBlobs(deps, profileId)).toBe(1);
+    expect(privBlobFiles.has(referenced.id)).toBe(true);
+    expect(privBlobFiles.has(orphan)).toBe(false);
+  });
+
+  it("keeps a file only a VERSION still references", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    const ref = await privAddAttachment(deps, profileId, {
+      fileName: "a.bin",
+      mime: "application/octet-stream",
+      bytes: BYTES,
+    });
+    const { id } = await privWrite(deps, profileId, null, envelope({ attachments: [ref] }));
+    for (let write = 2; write < PRIV_VERSION_WRITE_CADENCE; write += 1) {
+      await privWrite(deps, profileId, id, envelope({ attachments: [ref] }));
+    }
+    // The capturing write drops the reference from the LIVE envelope; the
+    // version it captures still names it.
+    await privWrite(deps, profileId, id, envelope({ attachments: [] }));
+    expect(privListVersions(deps, profileId, id)).toHaveLength(1);
+
+    expect(await privSweepOrphanBlobs(deps, profileId)).toBe(0);
+    expect(privBlobFiles.has(ref.id)).toBe(true);
+  });
+
+  it("never sweeps while an undo could still bring the rows that name those files back", async () => {
+    let undoPending = true;
+    const deps = makeDeps({ privateUndoPending: () => undoPending });
+    await setUp(deps);
+    const ref = await privAddAttachment(deps, profileId, {
+      fileName: "a.bin",
+      mime: "application/octet-stream",
+      bytes: BYTES,
+    });
+    const { id } = await privWrite(deps, profileId, null, envelope({ attachments: [ref] }));
+    // What a restore leaves behind: the sealed rows replaced wholesale, so the
+    // note naming this file is gone from the live tables while the one-slot undo
+    // still holds it, byte for byte, ready to put back.
+    db.raw.prepare("DELETE FROM private_notes WHERE id = ?").run(id);
+
+    expect(await privSweepOrphanBlobs(deps, profileId)).toBe(0);
+    expect(privBlobFiles.has(ref.id)).toBe(true);
+
+    // Once the slot can no longer restore those rows, the file really is garbage.
+    undoPending = false;
+    expect(await privSweepOrphanBlobs(deps, profileId)).toBe(1);
+    expect(privBlobFiles.has(ref.id)).toBe(false);
+  });
+
+  it("leaves a file this session's key cannot open — another profile's, in the shared account directory", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    const otherProfile = createProfile("B");
+    const otherSetup = await privSetup(deps, otherProfile, {
+      credential: PASSPHRASE,
+      usesAccountPasscode: false,
+      regenerateKit: false,
+    });
+    expect(otherSetup.ok).toBe(true);
+    const foreign = await attach(deps, otherProfile);
+
+    expect((await privUnlock(deps, profileId, PASSPHRASE)).ok).toBe(true);
+    expect(await privSweepOrphanBlobs(deps, profileId)).toBe(0);
+    expect(privBlobFiles.has(foreign)).toBe(true);
+  });
+
+  it("sweeps nothing while the section is locked", async () => {
+    const deps = makeDeps();
+    await setUp(deps);
+    const orphan = await attach(deps);
+    privLock();
+    expect(await privSweepOrphanBlobs(deps, profileId)).toBe(0);
+    expect(privBlobFiles.has(orphan)).toBe(true);
+  });
+
+  it("aborts when a sealed row does not open: its references are unknowable", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const deps = makeDeps();
+      await setUp(deps);
+      const orphan = await attach(deps);
+      const { id } = await privWrite(deps, profileId, null, envelope());
+      db.raw
+        .prepare("UPDATE private_notes SET sealed = ? WHERE id = ?")
+        .run(Buffer.from([1, 2, 3, 4]), id);
+
+      expect(await privSweepOrphanBlobs(deps, profileId)).toBe(0);
+      expect(privBlobFiles.has(orphan)).toBe(true);
+    } finally {
+      errors.mockRestore();
+    }
+  });
+
+  it("a failing removal is logged and skipped, never thrown into the caller", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const deps = makeDeps({
+        privBlobs: {
+          write: async (id, sealed) => {
+            privBlobFiles.set(id, sealed);
+          },
+          read: async (id) => {
+            const sealed = privBlobFiles.get(id);
+            if (sealed === undefined) throw new Error(`No private blob "${id}".`);
+            return sealed;
+          },
+          remove: async () => {
+            throw new Error("EBUSY");
+          },
+          list: async () => [...privBlobFiles.keys()],
+        },
+      });
+      await setUp(deps);
+      const orphan = await attach(deps);
+
+      await expect(privSweepOrphanBlobs(deps, profileId)).resolves.toBe(0);
+      expect(privBlobFiles.has(orphan)).toBe(true);
+    } finally {
+      errors.mockRestore();
+    }
   });
 });

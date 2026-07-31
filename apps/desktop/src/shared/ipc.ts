@@ -413,6 +413,16 @@ export const IpcChannel = {
   privDelete: "priv:delete",
   privSearch: "priv:search",
   privSetLockPrefs: "priv:set-lock-prefs",
+  // The sealed version history (ADR-057). `priv:versions` answers the two
+  // CLEARTEXT facts a version row has (its sequence and its capture time) —
+  // never a sealed byte; `priv:version-read` unseals ONE version in main and
+  // answers the cleartext envelope, exactly what the unlocked editor already
+  // receives for the live note. `priv:version-capture` is the explicit close
+  // capture (a note switched away, a restore's pre-overwrite checkpoint), a
+  // no-op unless the note was written since its last capture.
+  privVersions: "priv:versions",
+  privVersionRead: "priv:version-read",
+  privVersionCapture: "priv:version-capture",
   // `priv:attachment-pick` is the ONE way bytes enter the private store: the
   // native dialog in main picks the file (the renderer never names a path,
   // SEC-EL), main seals the bytes and answers with the reference — the
@@ -4003,6 +4013,20 @@ export interface PrivNoteListEntry {
 }
 
 /**
+ * One row of `priv:versions`: the two CLEARTEXT facts a sealed version row has
+ * — its bound sequence number and when it was captured. Mirrors `@nexus/db`'s
+ * `PrivateNoteVersionMeta`, redeclared on `PrivAttachmentRef`'s terms (main
+ * assigns one to the other, so drift is a compile error). Deliberately carries
+ * no title: unlike the public history, a private version's title lives inside
+ * its sealed container, and opening every container just to label a list is
+ * work the panel does one selection at a time (`priv:version-read`).
+ */
+export interface PrivNoteVersionMeta {
+  seq: number;
+  createdAt: string;
+}
+
+/**
  * Why `priv:setup` was refused. `wrongPasscode`/`throttled` come from the
  * account-passcode verification (the SAME throttle counter the lock screen
  * charges — see `main/auth.ts`'s `verifyPasscode`); `weakCredential` is a
@@ -6112,8 +6136,19 @@ export interface NexusApi {
   ): Promise<{ id: string }>;
   /** HARD-deletes a private note and its version history — no undo bar, deliberately (ADR-057): the renderer's typed confirm is the only gate. */
   privDelete(profileId: string, id: string): Promise<void>;
-  /** Ranked note ids for a query, matched in main over decrypted envelopes (v1 rebuilds the in-memory index per call). Only while unlocked. */
+  /**
+   * Ranked note ids for a query, matched in main against the in-memory index
+   * built at unlock over decrypted envelopes and dropped at lock. IDS only:
+   * the list already holds every title it shows, so no snippet — and no body
+   * text the list does not show — needs to cross. Only while unlocked.
+   */
   privSearch(profileId: string, query: string): Promise<string[]>;
+  /** One note's captured versions, newest first — sequence and capture time, the two cleartext facts a sealed version row has. Only while unlocked. */
+  privListVersions(profileId: string, id: string): Promise<PrivNoteVersionMeta[]>;
+  /** One version's decrypted envelope, for read-only display — main unseals it at its own bound sequence; the sealed container never crosses. Only while unlocked. */
+  privReadVersion(profileId: string, id: string, seq: number): Promise<PrivNoteEnvelopePayload>;
+  /** Captures the note's CURRENT state as a version — the close capture, and a version restore's checkpoint before it overwrites anything. Writes nothing unless the note was written since its last capture, so calling it twice is safe. */
+  privCaptureVersion(profileId: string, id: string): Promise<void>;
   /** Sets the two lock preferences; a running idle clock adopts the new interval immediately. */
   privSetLockPrefs(
     profileId: string,

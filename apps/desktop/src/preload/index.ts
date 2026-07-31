@@ -548,6 +548,12 @@ const api: NexusApi = {
   privDelete: (profileId, id) => ipcRenderer.invoke(IpcChannel.privDelete, { profileId, id }),
   privSearch: (profileId, query) =>
     ipcRenderer.invoke(IpcChannel.privSearch, { profileId, query }),
+  privListVersions: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.privVersions, { profileId, id }),
+  privReadVersion: (profileId, id, seq) =>
+    ipcRenderer.invoke(IpcChannel.privVersionRead, { profileId, id, seq }),
+  privCaptureVersion: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.privVersionCapture, { profileId, id }),
   privSetLockPrefs: (profileId, autoLockMinutes, lockOnMinimize) =>
     ipcRenderer.invoke(IpcChannel.privSetLockPrefs, {
       profileId,
