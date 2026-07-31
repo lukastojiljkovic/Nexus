@@ -990,6 +990,7 @@ export const strings = {
     viewMesec: "Mesec",
     viewNedelja: "Nedelja",
     viewDan: "Dan",
+    viewSemestar: "Semestar",
     viewAgenda: "Agenda",
     viewDokumenta: "Dokumenta",
     viewLjudi: "Ljudi",
@@ -1066,6 +1067,38 @@ export const strings = {
       applyDayLabel: "Primenjuje se na",
       delete: "Obriši šablon",
       actionError: "Radnja nad šablonom nije uspela. Pokušaj ponovo.",
+    },
+    /**
+     * ISO week numbers (CAL-010) — the quiet gutter label down the left of the
+     * month grid, and the week view's header corner.
+     *
+     * „sed.“ (sedmica), never „ned.“: in Serbian „nedelja“ is both „week“ and
+     * „Sunday“, and this label sits directly beside a row of weekday shorts
+     * that ends in „ned“ — one letter away from reading as a weekday column.
+     */
+    weekNumber: {
+      /** Header above the gutter, and the prefix in the week view's corner. */
+      abbrev: "sed.",
+      /** Hover text — says out loud which of the several week numberings this is. */
+      title: "Sedmica u godini (ISO 8601)",
+    },
+    /**
+     * Semestar (CAL-010) — four months at once: the month the calendar is on
+     * plus the next three, each day carrying only how much it holds. It is an
+     * overview and nothing else — no drag, no creating, one click that opens
+     * the day it names.
+     */
+    semester: {
+      /** Accessible name of the four-month grid. */
+      regionLabel: "Pregled semestra",
+      /** Caption under the grid — what a dot and a ring mean, said once. */
+      legend: "Tačka — dan sa obavezama · prsten — ispit",
+      /** Appended to a day's accessible name when it holds something: „3 stavke“. */
+      itemsOne: "stavka",
+      itemsFew: "stavke",
+      itemsMany: "stavki",
+      /** Appended to that name when the day holds an exam — what its ring says. */
+      examMark: "ispit",
     },
     /** Tag chip on a read-only task row in the agenda (ADR-020). */
     taskTag: "Zadatak",

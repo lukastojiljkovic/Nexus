@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import {
   exceedsTimeGridDragThreshold,
+  isoWeekNumber,
   layoutMonthBars,
   layoutTimedColumns,
   MIN_TIMED_MINUTES,
@@ -399,6 +400,8 @@ export function CalendarTimeGrid({
 
   const isWeek = dayKeys.length === 7;
   const singleDayKey = dayKeys.length === 1 ? dayKeys[0] : undefined;
+  /** The day the week's ISO number is read off — see the header corner below. */
+  const weekNumberKey = dayKeys[3];
 
   const weekBars = isWeek
     ? layoutMonthBars(
@@ -483,7 +486,19 @@ export function CalendarTimeGrid({
     // the absolutely-positioned band/event overlays are not valid grid children.
     <div className="cal__grid" role="group" tabIndex={0} aria-label={ariaLabel}>
       <div className="cal__grid-header-row">
-        <div className="cal__grid-gutter-spacer" aria-hidden="true" />
+        {/* The week's ISO number, in the one corner this grid has spare
+            (CAL-010). Read off the row's fourth day, so a Sunday-first week
+            takes the number six of its seven days belong to — the month
+            grid's own rule. Written out with „sed.“ rather than left as a
+            bare number: alone above the hour gutter it would read as a time.
+            The day view has no week to name, so it shows nothing here. */}
+        <div className="cal__grid-gutter-spacer">
+          {isWeek && weekNumberKey !== undefined && (
+            <span className="cal__grid-weeknum" title={strings.calendar.weekNumber.title}>
+              {strings.calendar.weekNumber.abbrev} {isoWeekNumber(weekNumberKey)}
+            </span>
+          )}
+        </div>
         <div className="cal__grid-headers">
           {dayKeys.map((dayKey) => {
             const isToday = dayKey === todayKey;

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { DragEvent, MouseEvent, ReactNode } from "react";
-import { layoutMonthBars, monthGridDays } from "@nexus/core";
+import { isoWeekNumber, layoutMonthBars, monthGridDays } from "@nexus/core";
 import type { MonthGridDay, SpanItem, WeekStart } from "@nexus/core";
 import type { Event } from "../../shared/ipc.js";
 import { formatClock, isMutedItem, isSpanItem, isTimedEventItem } from "./calendarItems.js";
@@ -198,13 +198,20 @@ export function CalendarMonth({
     // its full date as an aria-label. A half-honoured grid role reads worse to
     // a screen reader than none at all.
     <div
-      className={dragging ? "cal__month-grid cal__month-grid--dragging" : "cal__month-grid"}
+      className={
+        "cal__month-grid cal__month-grid--weeknum" +
+        (dragging ? " cal__month-grid--dragging" : "")
+      }
       role="group"
       tabIndex={0}
       aria-label={strings.calendar.viewMesec}
     >
-      {/* Decorative: each cell's own aria-label already names its weekday. */}
+      {/* Decorative: each cell's own aria-label already names its weekday. The
+          leading cell heads the week-number gutter below it. */}
       <div className="cal__month-weekdays" aria-hidden="true">
+        <span className="cal__month-weeknum-head" title={strings.calendar.weekNumber.title}>
+          {strings.calendar.weekNumber.abbrev}
+        </span>
         {(weeks[0] ?? []).map((day) => (
           <span key={day.key} className="cal__month-weekday">
             {formatUtcKey(day.key, weekdayFormatter)}
@@ -222,8 +229,26 @@ export function CalendarMonth({
         const hiddenBars = bars.filter((bar) => bar.lane >= laneCount);
         const timedBudget = expanded ? Number.POSITIVE_INFINITY : Math.max(TOTAL_ROWS - laneCount, 1);
 
+        // The ISO week this row is numbered by, read off its FOURTH day — the
+        // Thursday when rows open on Monday, and the day that keeps a
+        // Sunday-first row on the ISO week six of its seven days belong to
+        // rather than the one its leading Sunday closes. ISO weeks are
+        // Monday-based by definition, so the number a user sees never depends
+        // on which weekday they chose to open their rows on (see isoWeekNumber).
+        const weekNumberKey = weekKeys[3];
+
         return (
           <div key={weekKeys.join("/")} className="cal__month-week">
+            {/* aria-hidden for the reason the weekday header is: a bare number
+                read out before seven fully-named dates is noise, and this one
+                is a scanning aid rather than content. */}
+            <span
+              className="cal__month-weeknum"
+              aria-hidden="true"
+              title={strings.calendar.weekNumber.title}
+            >
+              {weekNumberKey !== undefined && isoWeekNumber(weekNumberKey)}
+            </span>
             <div className="cal__month-cells">
               {week.map((day, dayIndex) => {
                 const dayChips = chipItems

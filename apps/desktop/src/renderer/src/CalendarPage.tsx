@@ -16,9 +16,12 @@ import type {
   Subject,
   Task,
 } from "../../shared/ipc.js";
+import { CalendarMiniMonth } from "./CalendarMiniMonth.js";
 import { CalendarMonth } from "./CalendarMonth.js";
 import { CalendarTimeGrid } from "./CalendarTimeGrid.js";
 import type { TimedEventDragTarget } from "./CalendarTimeGrid.js";
+import { buildDayDensity, semesterMonthKeys, semesterRange } from "./semesterGrid.js";
+import type { DayDensity } from "./semesterGrid.js";
 import {
   buildCalendarItems,
   CALENDAR_SOURCES,
@@ -46,10 +49,29 @@ import { dayUnit, strings } from "./strings.js";
 
 // --- Per-profile view memory (interim, mirrors TasksPage) -------------------
 //
-// Mesec / Nedelja / Dan / Agenda / Dokumenta / Ljudi is a lightweight UI
-// preference, persisted per profile in localStorage exactly like the tasks
+// Mesec / Nedelja / Dan / Semestar / Agenda / Dokumenta / Ljudi is a lightweight
+// UI preference, persisted per profile in localStorage exactly like the tasks
 // list/kanban toggle.
-type CalendarView = "mesec" | "nedelja" | "dan" | "agenda" | "dokumenta" | "ljudi";
+type CalendarView = "mesec" | "nedelja" | "dan" | "semestar" | "agenda" | "dokumenta" | "ljudi";
+/** Every view, in the order the toggle draws them — also what a stored value is checked against. */
+const CALENDAR_VIEWS = [
+  "mesec",
+  "nedelja",
+  "dan",
+  "semestar",
+  "agenda",
+  "dokumenta",
+  "ljudi",
+] as const satisfies readonly CalendarView[];
+const VIEW_LABEL: Record<CalendarView, string> = {
+  mesec: strings.calendar.viewMesec,
+  nedelja: strings.calendar.viewNedelja,
+  dan: strings.calendar.viewDan,
+  semestar: strings.calendar.viewSemestar,
+  agenda: strings.calendar.viewAgenda,
+  dokumenta: strings.calendar.viewDokumenta,
+  ljudi: strings.calendar.viewLjudi,
+};
 const VIEW_KEY_PREFIX = "nexus.calendar.view.";
 
 /** The two views that replace the whole event surface with a panel of their own. */
@@ -57,15 +79,16 @@ function isPanelView(view: CalendarView): boolean {
   return view === "dokumenta" || view === "ljudi";
 }
 
+/** Narrowing helper over the stored string — never a cast, so an unknown value falls through to the default. */
+function isCalendarView(value: string | null): value is CalendarView {
+  return CALENDAR_VIEWS.some((view) => view === value);
+}
+
 function readStoredView(profileId: string): CalendarView {
+  // Anything unrecognized — including a profile that has never chosen — opens
+  // on the month, the view this page has always defaulted to.
   const raw = localStorage.getItem(VIEW_KEY_PREFIX + profileId);
-  return raw === "nedelja" ||
-    raw === "dan" ||
-    raw === "agenda" ||
-    raw === "dokumenta" ||
-    raw === "ljudi"
-    ? raw
-    : "mesec";
+  return isCalendarView(raw) ? raw : "mesec";
 }
 function persistView(profileId: string, view: CalendarView): void {
   localStorage.setItem(VIEW_KEY_PREFIX + profileId, view);
@@ -186,6 +209,23 @@ function formatWeekLabel(weekKeys: readonly string[]): string {
   return `${startDay}. ${formatMonthName(start)} — ${endDay}. ${formatMonthName(end)} ${year}`;
 }
 
+/**
+ * Semester nav label: „jul — oktobar 2026“ within one year, „novembar 2026 —
+ * februar 2027“ across a year end. Composed from bare month names for the same
+ * reason `formatWeekLabel` is — sr-Latn's combined month+year pattern trails a
+ * period this header does not want.
+ */
+function formatSemesterLabel(monthKeys: readonly string[]): string {
+  const first = monthKeys[0];
+  const last = monthKeys.at(-1);
+  if (first === undefined || last === undefined) return "";
+  const firstYear = first.slice(0, 4);
+  const lastYear = last.slice(0, 4);
+  const opening =
+    firstYear === lastYear ? formatMonthName(first) : `${formatMonthName(first)} ${firstYear}`;
+  return `${opening} — ${formatMonthName(last)} ${lastYear}`;
+}
+
 const dayLabelFormatter = new Intl.DateTimeFormat("sr-Latn", {
   weekday: "long",
   day: "numeric",
@@ -213,6 +253,9 @@ const BLOCKS_FUTURE_DAYS = 365;
  */
 const MONTH_RANGE_BEFORE = 7;
 const MONTH_RANGE_AFTER = 41;
+
+/** Shared by every view that is not Semestar, so no render allocates a map it will not read. */
+const EMPTY_DENSITY: ReadonlyMap<string, DayDensity> = new Map();
 
 // --- Reminders (CAL-006) ----------------------------------------------------
 
@@ -681,7 +724,12 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
 
   function shiftPeriod(delta: number): void {
     setAnchorKey((prev) => {
-      if (view === "mesec") return `${shiftMonthKey(monthKeyOf(prev), delta)}-01`;
+      // Semestar moves a month at a time, like Mesec: a term is scanned by
+      // sliding the window, not by jumping four months past what you were
+      // looking at.
+      if (view === "mesec" || view === "semestar") {
+        return `${shiftMonthKey(monthKeyOf(prev), delta)}-01`;
+      }
       if (view === "nedelja") return shiftDayKey(prev, delta * 7);
       return shiftDayKey(prev, delta);
     });
@@ -1099,11 +1147,13 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
   // Latin script; the popover re-sorts, as every alphabetical list here does.
   const sortedTemplates = templates.slice().sort((a, b) => collator.compare(a.name, b.name));
 
-  // Every grid view derives from the one anchor day; cheap to compute both
+  // Every grid view derives from the one anchor day; cheap to compute all three
   // unconditionally rather than branch on `view` twice below.
   const monthKey = monthKeyOf(anchorKey);
   const weekKeys = weekDayKeys(anchorKey, weekStart);
-  const isGridView = view === "mesec" || view === "nedelja" || view === "dan";
+  const semesterMonths = semesterMonthKeys(monthKey);
+  const isGridView =
+    view === "mesec" || view === "nedelja" || view === "dan" || view === "semestar";
 
   // How far a recurring master is expanded (ADR-024): exactly what this view can
   // show, so no view pays for another's reach. The agenda has no bounds of its
@@ -1119,13 +1169,19 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
         ? { from: weekKeys[0] ?? anchorKey, to: weekKeys[6] ?? anchorKey }
         : view === "dan"
           ? { from: anchorKey, to: anchorKey }
-          : {
-              from: shiftDayKey(todayKey, -BLOCKS_PAST_DAYS),
-              to: shiftDayKey(todayKey, BLOCKS_FUTURE_DAYS),
-            };
+          : // Semestar reaches furthest of all — its whole four-month span, and
+            // it is merged ONCE over that span rather than a month at a time.
+            view === "semestar"
+            ? semesterRange(monthKey)
+            : {
+                from: shiftDayKey(todayKey, -BLOCKS_PAST_DAYS),
+                to: shiftDayKey(todayKey, BLOCKS_FUTURE_DAYS),
+              };
   const calendarItems = dataLoading
     ? []
     : buildCalendarItems({ events, tasks, exams, blocks, subjects, people }, sources, expansionRange);
+  // Only Semestar reads density, and it reads it off that single merge.
+  const dayDensity = view === "semestar" ? buildDayDensity(calendarItems) : EMPTY_DENSITY;
   const periodLabel =
     view === "mesec"
       ? formatMonthLabel(monthKey)
@@ -1133,7 +1189,9 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
         ? formatWeekLabel(weekKeys)
         : view === "dan"
           ? formatDayLabel(anchorKey)
-          : "";
+          : view === "semestar"
+            ? formatSemesterLabel(semesterMonths)
+            : "";
 
   return (
     <div className="cal">
@@ -1146,7 +1204,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
       )}
 
       <div className="cal__views" role="group" aria-label={strings.calendar.viewLabel}>
-        {(["mesec", "nedelja", "dan", "agenda", "dokumenta", "ljudi"] as const).map((option) => (
+        {CALENDAR_VIEWS.map((option) => (
           <Button
             key={option}
             size="sm"
@@ -1154,17 +1212,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
             aria-pressed={view === option}
             onClick={() => selectView(option)}
           >
-            {option === "mesec"
-              ? strings.calendar.viewMesec
-              : option === "nedelja"
-                ? strings.calendar.viewNedelja
-                : option === "dan"
-                  ? strings.calendar.viewDan
-                  : option === "agenda"
-                    ? strings.calendar.viewAgenda
-                    : option === "dokumenta"
-                      ? strings.calendar.viewDokumenta
-                      : strings.calendar.viewLjudi}
+            {VIEW_LABEL[option]}
           </Button>
         ))}
       </div>
@@ -1474,6 +1522,31 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
                   onOpenPeople={() => selectView("ljudi")}
                   onMoveItem={(item, dayKey) => void moveItem(item, dayKey)}
                 />
+              ) : view === "semestar" ? (
+                /* An overview and nothing else (CAL-010): no drag, no
+                   creating, no editor — the one thing a mini day does is open
+                   the Dan view, through the very same `openDay` the month
+                   grid's day numbers and the week grid's headers use. */
+                <>
+                  <div
+                    className="cal__semester"
+                    role="group"
+                    tabIndex={0}
+                    aria-label={strings.calendar.semester.regionLabel}
+                  >
+                    {semesterMonths.map((key) => (
+                      <CalendarMiniMonth
+                        key={key}
+                        monthKey={key}
+                        todayKey={todayKey}
+                        weekStart={weekStart}
+                        density={dayDensity}
+                        onOpenDay={openDay}
+                      />
+                    ))}
+                  </div>
+                  <p className="cal__semester-legend">{strings.calendar.semester.legend}</p>
+                </>
               ) : (
                 <CalendarTimeGrid
                   dayKeys={view === "nedelja" ? weekKeys : [anchorKey]}

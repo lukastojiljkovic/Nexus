@@ -261,6 +261,7 @@ export {
   dayKeyToUtcMs,
   daySpanKeys,
   isValidDayKey,
+  isoWeekNumber,
   layoutMonthBars,
   layoutTimedColumns,
   monthGridDays,

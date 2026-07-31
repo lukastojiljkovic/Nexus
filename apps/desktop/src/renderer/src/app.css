@@ -1787,6 +1787,55 @@ button.tasks__cal-chip:active {
   font-weight: var(--nx-font-weight-semibold);
 }
 
+/* ISO week numbers (CAL-010) — a gutter column down the left of the grid,
+   opened by a modifier so it stays CAL's: the TASK module renders these very
+   same cal__month-* classes (see TaskMonthGrid) and keeps its plain 7 columns.
+   Everything the gutter costs is one column: the weekday header grows a
+   leading cell, the week row becomes [gutter | cells], and the bar overlay —
+   absolutely positioned, so no column of any grid — is pushed off the gutter
+   by the same width. */
+.cal__month-grid--weeknum {
+  /* Wide enough for the „sed.“ header at label size + its tracking; the numbers
+     under it are never more than two digits. */
+  --cal-weeknum-w: 36px;
+}
+.cal__month-grid--weeknum .cal__month-weekdays {
+  grid-template-columns: var(--cal-weeknum-w) repeat(7, 1fr);
+}
+.cal__month-grid--weeknum .cal__month-week {
+  display: grid;
+  grid-template-columns: var(--cal-weeknum-w) 1fr;
+}
+.cal__month-grid--weeknum .cal__month-bars {
+  left: var(--cal-weeknum-w);
+}
+/* The way back out of an expanded row spans both columns — it belongs to the
+   whole week, not to the cells beside the number. */
+.cal__month-grid--weeknum .cal__month-collapse {
+  grid-column: 1 / -1;
+}
+/* Lower case where the weekday shorts beside it are upper — „sed.“ has to read
+   as a different kind of label than „PON … NED“, not as an eighth weekday. */
+.cal__month-weeknum-head {
+  padding: var(--nx-space-1);
+  text-align: center;
+  font-size: var(--nx-font-size-label);
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* Quiet by construction: muted, caption-sized, on the same baseline as the day
+   numbers it sits beside (--cal-daynum-h, the cells' own top line). */
+.cal__month-weeknum {
+  padding: var(--nx-space-1) 0;
+  line-height: var(--cal-daynum-h);
+  text-align: center;
+  border-right: 1px solid var(--nx-border);
+  font-size: var(--nx-font-size-caption);
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text-muted);
+}
+
 /* One week row: the 7-column cell grid (normal flow) plus one absolutely-
    positioned bar overlay sharing its coordinate space — see .cal__month-bars. */
 .cal__month-week {
@@ -2061,6 +2110,115 @@ button.cal__month-day-number:hover {
   font-size: var(--nx-font-size-body-sm);
 }
 
+/* Semestar (CAL-010) --------------------------------------------------- */
+/* Four mini months in a responsive track: as many columns as fit at 210px, so
+   a maximized window shows the term in one row and a narrow one folds it to
+   two and then to one. The track does that on its own — no media query. */
+.cal__semester {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: var(--nx-space-3);
+  border-radius: var(--nx-radius-lg);
+}
+/* Focusable for the same reason the month and week grids are: ‹ / › and Danas
+   are also ← / → and Home, and the ring says where those keys land. Outside
+   the tracks rather than inset — unlike those grids this one has no border of
+   its own to draw the ring into, which is also why it carries a radius: the
+   outline takes it, and lands parallel to the cards' own corners. */
+.cal__semester:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.cal__mini {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  padding: var(--nx-space-2);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  background: var(--nx-surface);
+}
+.cal__mini-title {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.cal__mini-weekdays,
+.cal__mini-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+.cal__mini-days {
+  gap: 1px;
+}
+.cal__mini-weekday {
+  text-align: center;
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+}
+/* One day: its number, plus an absolutely-placed dot — so a day holding
+   nothing is exactly as tall as a day holding everything. The transparent
+   border is the exam ring's reserved space; without it the ring would shift
+   the whole row by a pixel when it appears. */
+button.cal__mini-day {
+  position: relative;
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  padding: 3px 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--nx-radius-sm);
+  background: transparent;
+  color: var(--nx-text);
+  cursor: pointer;
+}
+.cal__mini-day:hover {
+  background: var(--nx-surface-alt);
+}
+.cal__mini-day:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 1px;
+}
+/* Today in the app's own typographic idiom — accent + weight, never a ring;
+   the ring here already means something else. */
+.cal__mini-day--today .cal__mini-num {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* The exam ring — what a term is actually scanned for. A border, never a glow. */
+.cal__mini-day--exam {
+  border-color: var(--nx-accent);
+}
+.cal__mini-dot {
+  position: absolute;
+  left: 50%;
+  bottom: 3px;
+  width: 4px;
+  height: 4px;
+  transform: translateX(-50%);
+  border-radius: var(--nx-radius-round);
+  background: var(--nx-accent);
+}
+/* Three steps, opacity only — the same "quieter, never a different colour"
+   rule a muted bar follows. */
+.cal__mini-dot--1 {
+  opacity: 0.35;
+}
+.cal__mini-dot--2 {
+  opacity: 0.65;
+}
+.cal__mini-dot--3 {
+  opacity: 1;
+}
+.cal__semester-legend {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+
 /* Week/day time grid (CAL Nedelja/Dan views, ADR-020) ------------------ */
 /* Three local geometry constants, same idiom as .cal__month-grid's own
    --cal-bar-h: the all-day band reuses that exact value so a bar looks
@@ -2086,6 +2244,20 @@ button.cal__month-day-number:hover {
 .cal__grid-gutter {
   flex: none;
   width: var(--cal-gutter-w);
+}
+/* The header corner is the one gutter spacer that carries anything: the week's
+   ISO number (CAL-010). The band row's spacer below it stays empty. */
+.cal__grid-header-row .cal__grid-gutter-spacer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--nx-space-1);
+}
+.cal__grid-weeknum {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* Column headers: weekday + day number, each a button (click → Dan view). */

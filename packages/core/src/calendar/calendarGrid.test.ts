@@ -4,6 +4,7 @@ import {
   MIN_TIMED_MINUTES,
   MINUTES_PER_DAY,
   daySpanKeys,
+  isoWeekNumber,
   layoutMonthBars,
   layoutTimedColumns,
   monthGridDays,
@@ -95,6 +96,65 @@ describe("weekDayKeys", () => {
 
   it("throws TypeError on a malformed day key", () => {
     expect(() => weekDayKeys("2026-02-30", 1)).toThrow(TypeError);
+  });
+});
+
+describe("isoWeekNumber", () => {
+  // The seven ways a year can open. ISO week 1 is the week holding the first
+  // Thursday, so 1 January belongs to week 1 only from Monday through Thursday;
+  // Friday, Saturday and Sunday hand it back to the previous year's last week.
+  it("Jan 1 on Monday through Thursday is week 1", () => {
+    expect(isoWeekNumber("2024-01-01")).toBe(1); // Monday
+    expect(isoWeekNumber("2030-01-01")).toBe(1); // Tuesday
+    expect(isoWeekNumber("2025-01-01")).toBe(1); // Wednesday
+    expect(isoWeekNumber("2026-01-01")).toBe(1); // Thursday
+  });
+
+  it("Jan 1 on Friday, Saturday or Sunday belongs to the previous year's last week", () => {
+    expect(isoWeekNumber("2021-01-01")).toBe(53); // Friday — 2020 was a 53-week year
+    expect(isoWeekNumber("2022-01-01")).toBe(52); // Saturday
+    expect(isoWeekNumber("2023-01-01")).toBe(52); // Sunday
+  });
+
+  it("counts week 53 in the years that have one", () => {
+    expect(isoWeekNumber("2015-12-31")).toBe(53); // Thursday — 2015 has 53 weeks
+    expect(isoWeekNumber("2020-12-31")).toBe(53); // Thursday — so does 2020
+    expect(isoWeekNumber("2026-12-31")).toBe(53); // Thursday — and 2026
+    expect(isoWeekNumber("2021-01-03")).toBe(53); // still 2020's week 53
+    expect(isoWeekNumber("2021-01-04")).toBe(1); // the Monday that opens 2021
+  });
+
+  it("counts a 52-week year's last week as 52", () => {
+    expect(isoWeekNumber("2027-12-31")).toBe(52); // Friday, in 2027's last week
+    expect(isoWeekNumber("2025-12-28")).toBe(52); // the Sunday that closes 2025
+  });
+
+  it("late December can already belong to next year's week 1", () => {
+    expect(isoWeekNumber("2019-12-31")).toBe(1); // Tuesday, in 2020's week 1
+    expect(isoWeekNumber("2024-12-30")).toBe(1); // the Monday that opens 2025
+    expect(isoWeekNumber("2024-12-31")).toBe(1);
+  });
+
+  it("numbers a whole week identically, Monday through Sunday", () => {
+    const week = weekDayKeys("2026-07-29", 1);
+    expect(week.map(isoWeekNumber)).toEqual([31, 31, 31, 31, 31, 31, 31]);
+  });
+
+  it("is Monday-based whatever the display week start is: a Sunday closes its week, never opens one", () => {
+    // A `weekStart: sunday` user sees 2026-08-02 first in the row; ISO still
+    // reads it as the last day of week 31, and the Monday after it as week 32.
+    expect(isoWeekNumber("2026-08-02")).toBe(31);
+    expect(isoWeekNumber("2026-08-03")).toBe(32);
+  });
+
+  it("steps by exactly one across a week boundary mid-year", () => {
+    expect(isoWeekNumber("2026-03-08")).toBe(10); // Sunday
+    expect(isoWeekNumber("2026-03-09")).toBe(11); // Monday
+  });
+
+  it("throws TypeError on a malformed day key", () => {
+    expect(() => isoWeekNumber("2026-02-30")).toThrow(TypeError);
+    expect(() => isoWeekNumber("2026-01")).toThrow(TypeError);
   });
 });
 

@@ -183,6 +183,29 @@ export function weekDayKeys(dayKey: DayKey, firstDayOfWeek: WeekStart): DayKey[]
   return Array.from({ length: 7 }, (_, i) => utcMsToDayKey(startMs + i * MS_PER_DAY));
 }
 
+/**
+ * The ISO-8601 week number a day falls in, 1..53.
+ *
+ * ISO weeks run Monday→Sunday and week 1 is the one containing the year's
+ * first Thursday — equivalently, the week holding 4 January. That makes the
+ * week's own Thursday the only day that can name it: whichever calendar year
+ * that Thursday lands in is the week-numbering year, which is why late
+ * December can already read as week 1 and 1 January as week 52/53.
+ *
+ * Deliberately independent of `WeekStart`: the ISO number is a property of the
+ * date, not of how a grid chooses to draw it. A `weekStart: sunday` user sees
+ * the same number on the same day — their row simply opens on the day ISO
+ * counts last.
+ */
+export function isoWeekNumber(dayKey: DayKey): number {
+  const ms = dayKeyToUtcMs(dayKey);
+  // Monday = 0 … Sunday = 6, so the offset to this week's Thursday is 3 - that.
+  const isoWeekday = (new Date(ms).getUTCDay() + 6) % 7;
+  const thursdayMs = ms + (3 - isoWeekday) * MS_PER_DAY;
+  const januaryFirstMs = Date.UTC(new Date(thursdayMs).getUTCFullYear(), 0, 1);
+  return Math.floor((thursdayMs - januaryFirstMs) / MS_PER_DAY / 7) + 1;
+}
+
 export function daySpanKeys(startKey: DayKey, endKey: DayKey): DayKey[] {
   const startMs = dayKeyToUtcMs(startKey);
   const endMs = dayKeyToUtcMs(endKey);
