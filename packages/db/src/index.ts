@@ -8,6 +8,7 @@ export type { OpenDatabaseOptions } from "./database.js";
 
 export {
   BackupSettingsValidationError,
+  CalendarSettingsValidationError,
   CardNotFoundError,
   CardValidationError,
   DashboardSettingsValidationError,
@@ -84,6 +85,9 @@ export {
   MAX_BACKGROUND_DIM,
 } from "./dashboard/dashboardSettingsStore.js";
 export type { DashboardSettings } from "./dashboard/dashboardSettingsStore.js";
+
+export { CalendarSettingsStore } from "./calendar/calendarSettingsStore.js";
+export type { CalendarSettings } from "./calendar/calendarSettingsStore.js";
 
 export {
   BackupSettingsStore,

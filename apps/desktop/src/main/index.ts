@@ -51,6 +51,7 @@ import {
 } from "@nexus/core/auth";
 import {
   BackupSettingsStore,
+  CalendarSettingsStore,
   CARD_RATINGS,
   CardStore,
   DashboardSettingsStore,
@@ -320,6 +321,7 @@ import {
   type AuthStatus,
   type BackupCadence,
   type BackupSettingsView,
+  type CalendarSettings,
   type DashboardPickResult,
   type DashboardSettings,
   type ReviewQueue,
@@ -2248,6 +2250,10 @@ function eventTemplateStore(profileId: string): EventTemplateStore {
   return new EventTemplateStore(requireDb().raw, profileId);
 }
 
+function calendarSettingsStore(profileId: string): CalendarSettingsStore {
+  return new CalendarSettingsStore(requireDb().raw, profileId);
+}
+
 function peopleStore(profileId: string): PeopleStore {
   return new PeopleStore(requireDb().raw, profileId);
 }
@@ -3217,6 +3223,7 @@ function restoreDeps(): ImportDeps {
     taskDependencyStore,
     eventStore,
     eventTemplateStore,
+    calendarSettingsStore,
     peopleStore,
     documentStore,
     subjectStore,
@@ -3313,6 +3320,7 @@ function imexArchiveDeps(): ImexArchiveDeps {
     taskDependencyStore,
     eventStore,
     eventTemplateStore,
+    calendarSettingsStore,
     peopleStore,
     documentStore,
     subjectStore,
@@ -4262,6 +4270,38 @@ function registerIpc(): void {
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const id = asNonEmptyString(body.id, "id");
     eventTemplateStore(profileId).delete(id);
+  });
+
+  // The calendar's semester dates (CAL-010 / ADR-054). SEC-EL-02 as everywhere
+  // else: `assertTrustedSender` first, `asRecord` on the payload, each date
+  // through the bare-day validator when present — and the pair rule plus the
+  // order re-checked HERE, before the store re-checks both again, because a
+  // store is never the place that assumes its caller did.
+  ipcMain.handle(IpcChannel.calendarGetSettings, (event, payload): CalendarSettings => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return calendarSettingsStore(profileId).get();
+  });
+
+  ipcMain.handle(IpcChannel.calendarSetSettings, (event, payload): CalendarSettings => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    // Both together, never one at a time: a term with one edge means nothing,
+    // so a half-set pair is refused before anything reaches the store.
+    const semesterStart =
+      body.semesterStart === null ? null : asBareDate(body.semesterStart, "semesterStart");
+    const semesterEnd =
+      body.semesterEnd === null ? null : asBareDate(body.semesterEnd, "semesterEnd");
+    if ((semesterStart === null) !== (semesterEnd === null)) {
+      throw new Error(
+        `Invalid IPC payload: "semesterStart" and "semesterEnd" must be set together or cleared together.`,
+      );
+    }
+    if (semesterStart !== null && semesterEnd !== null && semesterStart > semesterEnd) {
+      throw new Error(`Invalid IPC payload: "semesterStart" must not be after "semesterEnd".`);
+    }
+    return calendarSettingsStore(profileId).save({ semesterStart, semesterEnd });
   });
 
   // CAL-007 (ADR-026). `PeopleStore` takes `now` from its caller rather than

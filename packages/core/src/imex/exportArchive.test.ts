@@ -51,6 +51,7 @@ function emptyInput(): ExportArchiveInput {
       documents: [],
       renewals: [],
       people: [],
+      calendarSettings: [],
       subjects: [],
       subjectAttachments: [],
       subjectNoteLinks: [],
@@ -249,7 +250,9 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.19.0");
+      // SUPERVISOR NOTE: a sibling lane is landing 1.21.0 in parallel — this
+      // pin moves to that number at merge, never below 1.20.0 (ADR-054).
+      expect(manifest.schemaVersion).toBe("1.20.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       // `picture: null` is written out loud rather than omitted: the manifest is
@@ -721,6 +724,49 @@ describe("buildExportArchive", () => {
       // ...and with its reminder ladder (CAL-006).
       expect(rows[0]?.reminderOffsets).toEqual([15, 1440]);
     });
+
+    // ADR-054: the term's fixed dates, one line, FIRST — the settings the rest
+    // of the module is read under, exactly as `study-settings` leads its file —
+    // and counted into CALENDAR like every row the module owns.
+    it("writes the calendar-settings row as one type-discriminated line ahead of the events", () => {
+      const input = emptyInput();
+      input.data.calendarSettings = [
+        { profileId: "profile1", semesterStart: "2026-10-01", semesterEnd: "2027-01-31" },
+      ];
+      input.data.events = [
+        {
+          id: "e1", profileId: "profile1", title: "Sastanak", description: null,
+          startAt: "2026-10-05T10:00:00.000Z", endAt: null, allDay: false, location: null,
+          category: null, createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+          recurrence: null, recurrenceExdates: [], reminderOffsets: [],
+        },
+      ];
+      const archive = buildExportArchive(input);
+
+      const rows = parseNdjson(archive.files.get("data/calendar.ndjson") ?? "") as Array<{ type: string }>;
+      expect(rows.map((row) => row.type)).toEqual(["calendar-settings", "event"]);
+      expect(rows[0]).toEqual({
+        type: "calendar-settings", profileId: "profile1",
+        semesterStart: "2026-10-01", semesterEnd: "2027-01-31",
+      });
+      expect(archive.byModule.calendar).toBe(2);
+    });
+
+    // Both-null is a real row saying "no term set" out loud — the resolved
+    // value the gatherer always writes, exactly as `dashboard-settings` writes
+    // its no-background row.
+    it("writes an unset term as a both-null calendar-settings row", () => {
+      const input = emptyInput();
+      input.data.calendarSettings = [
+        { profileId: "profile1", semesterStart: null, semesterEnd: null },
+      ];
+      const archive = buildExportArchive(input);
+      expect(parseNdjson(archive.files.get("data/calendar.ndjson") ?? "")).toEqual([
+        { type: "calendar-settings", profileId: "profile1", semesterStart: null, semesterEnd: null },
+      ]);
+      expect(archive.byModule.calendar).toBe(1);
+      expect(archive.totalRecords).toBe(1);
+    });
   });
 
   describe("data/calendar.ics", () => {
@@ -988,6 +1034,9 @@ describe("buildExportArchive", () => {
         people: [
           { id: "pe1", profileId: "p1", name: "Marko", kind: "birthday", month: 3, day: 14, year: 1990, note: null, createdAt: t, updatedAt: t },
         ],
+        calendarSettings: [
+          { profileId: "p1", semesterStart: "2026-10-01", semesterEnd: "2027-01-31" },
+        ],
         subjects: [
           { id: "s1", profileId: "p1", name: "S", color: "jade", semester: null, archived: false, createdAt: t, updatedAt: t },
         ],
@@ -1060,7 +1109,7 @@ describe("buildExportArchive", () => {
       const data = populatedData();
       expect(countProfileModules(data)).toEqual({
         tasks: 9, // 2 tasks + 1 list + 1 section + 1 tag + 1 tag link + 1 attachment + 1 template + 1 dependency
-        calendar: 5, // 1 event + 1 event template + 1 document + 1 renewal + 1 person
+        calendar: 6, // 1 event + 1 event template + 1 document + 1 renewal + 1 person + the settings row
         study: 11, // 1 each of subject/material/note-link/exam/deck/card/review/plan/block/focus-session + the settings row
         notifications: 1,
         notes: 7, // 1 each of note/folder/tag/tag-link/template/attachment/version
@@ -1536,6 +1585,7 @@ describe("filterProfileData", () => {
     expect(filtered.documents).toEqual([]);
     expect(filtered.renewals).toEqual([]);
     expect(filtered.people).toEqual([]);
+    expect(filtered.calendarSettings).toEqual([]);
     expect(filtered.subjects).toEqual([]);
     expect(filtered.subjectAttachments).toEqual([]);
     expect(filtered.subjectNoteLinks).toEqual([]);
@@ -1698,6 +1748,9 @@ function everyModuleInput(): ExportArchiveInput {
   ];
   input.data.studySettings = [
     { profileId: "profile1", targetRetention: 0.9, newPerDay: 20, maxReviewsPerDay: null },
+  ];
+  input.data.calendarSettings = [
+    { profileId: "profile1", semesterStart: "2026-10-01", semesterEnd: "2027-01-31" },
   ];
   input.data.notifications = [
     {

@@ -41,8 +41,9 @@ import { migration038 } from "./038-task-list-views.js";
 import { migration039 } from "./039-note-folder-views.js";
 import { migration040 } from "./040-profile-picture.js";
 import { migration041 } from "./041-snooze-default.js";
-// SUPERVISOR NOTE: pre-assigned 044; siblings hold 042/043; supervisor
-// restores the gap-free pin at merge.
+import { migration042 } from "./042-calendar-settings.js";
+// SUPERVISOR NOTE: 043 still out with a sibling lane; gap-free pin returns
+// when it lands.
 import { migration044 } from "./044-backup-settings.js";
 
 type DatabaseHandle = Database.Database;
@@ -96,6 +97,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration039,
   migration040,
   migration041,
+  migration042,
   migration044,
 ];
 

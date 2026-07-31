@@ -104,6 +104,10 @@ export const RESTORE_WIPE_TABLES = [
   // same way. Nothing hangs off it — the cards it governs are already gone by
   // the time this line runs.
   "study_settings",
+  // The calendar's semester dates (migration 042 / ADR-054): a per-profile
+  // settings row like its neighbours, wiped and rewritten the same way.
+  // Nothing hangs off it — the term is a pair of day keys naming no row.
+  "calendar_settings",
   // The dashboard's background choice (migration 030 / ADR-041): a per-profile
   // settings row like the two above it, wiped and rewritten the same way. The
   // blob it names is main's to garbage-collect afterward, never this store's.
@@ -223,6 +227,7 @@ export class RestoreStore {
   private readonly insertNtfSettings: Database.Statement;
   private readonly insertNtfSourceSetting: Database.Statement;
   private readonly insertStudySettings: Database.Statement;
+  private readonly insertCalendarSettings: Database.Statement;
   private readonly insertDashboardSettings: Database.Statement;
   private readonly insertDashboardWidget: Database.Statement;
 
@@ -422,6 +427,13 @@ export class RestoreStore {
          new_per_day = excluded.new_per_day,
          max_reviews_per_day = excluded.max_reviews_per_day,
          updated_at = excluded.updated_at`,
+    );
+    // A plain INSERT, not an upsert: the wipe above has just emptied this
+    // table for the profile, and unlike `study_settings` the row carries no
+    // timestamps to reconcile — two columns and a key.
+    this.insertCalendarSettings = db.prepare(
+      `INSERT INTO calendar_settings (profile_id, semester_start, semester_end)
+       VALUES (?, ?, ?)`,
     );
     this.insertDashboardSettings = db.prepare(
       `INSERT INTO dashboard_settings
@@ -736,6 +748,20 @@ export class RestoreStore {
         this.insertPerson.run(
           person.id, this.profileId, person.name, person.kind, person.month, person.day,
           person.year, person.note, person.createdAt, person.updatedAt,
+        );
+        written += 1;
+      }
+
+      // ADR-054, retargeted onto THIS profile like every other row here. Zero
+      // rows is the shape every pre-1.20.0 archive has, and the absence of a
+      // row IS "no term set" (`CalendarSettingsStore.get`) — while a both-null
+      // row says the same thing out loud, which is what the gatherer always
+      // writes.
+      for (const calendar of input.data.calendarSettings) {
+        this.insertCalendarSettings.run(
+          this.profileId,
+          calendar.semesterStart,
+          calendar.semesterEnd,
         );
         written += 1;
       }

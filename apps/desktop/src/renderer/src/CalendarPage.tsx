@@ -5,6 +5,7 @@ import { isValidDayKey, monthKeyOf, shiftDayKey, shiftMonthKey, weekDayKeys } fr
 import type { WeekStart } from "@nexus/core";
 import { MAX_EVENT_TEMPLATE_NAME_LENGTH } from "../../shared/ipc.js";
 import type {
+  CalendarSettings,
   Event,
   EventFieldChanges,
   EventTemplate,
@@ -20,7 +21,12 @@ import { CalendarMiniMonth } from "./CalendarMiniMonth.js";
 import { CalendarMonth } from "./CalendarMonth.js";
 import { CalendarTimeGrid } from "./CalendarTimeGrid.js";
 import type { TimedEventDragTarget } from "./CalendarTimeGrid.js";
-import { buildDayDensity, semesterMonthKeys, semesterRange } from "./semesterGrid.js";
+import {
+  buildDayDensity,
+  monthsRange,
+  semesterMonthKeys,
+  termMonthKeys,
+} from "./semesterGrid.js";
 import type { DayDensity } from "./semesterGrid.js";
 import {
   buildCalendarItems,
@@ -489,6 +495,15 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
   const [exams, setExams] = useState<Exam[] | null>(null);
   const [blocks, setBlocks] = useState<StudyBlockWithExam[] | null>(null);
   const [people, setPeople] = useState<Person[] | null>(null);
+  // The profile's semester dates (CAL-010 / ADR-054) — what the Semestar view
+  // anchors to when set, loaded with everything else below.
+  const [term, setTerm] = useState<CalendarSettings | null>(null);
+  // Narrowed once: non-null exactly when a term is SET (the store's pair rule
+  // means the two are only ever null together, and this is where that pays).
+  const activeTerm =
+    term !== null && term.semesterStart !== null && term.semesterEnd !== null
+      ? { start: term.semesterStart, end: term.semesterEnd }
+      : null;
   const [failed, setFailed] = useState(false);
   const [view, setView] = useState<CalendarView>(() => readStoredView(profileId));
   const [sources, setSources] = useState<ReadonlySet<CalendarSource>>(() =>
@@ -569,6 +584,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
           nextBlocks,
           nextPeople,
           nextTemplates,
+          nextTerm,
         ] = await Promise.all([
           window.nexus.listEvents(profileId),
           window.nexus.listTasks(profileId),
@@ -581,6 +597,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
           ),
           window.nexus.listPeople(profileId),
           window.nexus.listEventTemplates(profileId),
+          window.nexus.calendarSettings(profileId),
         ]);
         if (!active) return;
         setEvents(nextEvents);
@@ -590,6 +607,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
         setBlocks(nextBlocks);
         setPeople(nextPeople);
         setTemplates(nextTemplates);
+        setTerm(nextTerm);
       } catch (error) {
         if (active) setFailed(true);
         console.error("Nexus: failed to load events:", error);
@@ -774,10 +792,14 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
   }
 
   function shiftPeriod(delta: number): void {
+    // A SET term does not slide (ADR-054): the Semestar view is anchored to
+    // its dates, so ←/→ have nothing to move — the buttons are disabled below,
+    // and the arrow keys land here to be ignored for the same reason.
+    if (view === "semestar" && activeTerm !== null) return;
     setAnchorKey((prev) => {
-      // Semestar moves a month at a time, like Mesec: a term is scanned by
-      // sliding the window, not by jumping four months past what you were
-      // looking at.
+      // Semestar with no term moves a month at a time, like Mesec: the window
+      // is scanned by sliding it, not by jumping four months past what you
+      // were looking at.
       if (view === "mesec" || view === "semestar") {
         return `${shiftMonthKey(monthKeyOf(prev), delta)}-01`;
       }
@@ -1185,14 +1207,15 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
     }
   }
 
-  // All six resolve together (one Promise.all), so a single null means loading.
+  // All seven resolve together (one Promise.all), so a single null means loading.
   const dataLoading =
     events === null ||
     tasks === null ||
     subjects === null ||
     exams === null ||
     blocks === null ||
-    people === null;
+    people === null ||
+    term === null;
   const todayKey = localTodayKey();
   // The store orders by SQLite's binary collation, which mis-tailors Serbian
   // Latin script; the popover re-sorts, as every alphabetical list here does.
@@ -1202,7 +1225,16 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
   // unconditionally rather than branch on `view` twice below.
   const monthKey = monthKeyOf(anchorKey);
   const weekKeys = weekDayKeys(anchorKey, weekStart);
-  const semesterMonths = semesterMonthKeys(monthKey);
+  // A SET term anchors Semestar to ITS months (ADR-054); without one the view
+  // keeps the sliding anchored-month-plus-three it always had.
+  const semesterMonths =
+    activeTerm !== null
+      ? termMonthKeys(activeTerm.start, activeTerm.end)
+      : semesterMonthKeys(monthKey);
+  // A span past the cap renders its first six and says so in a caption — the
+  // last rendered month falling short of the end's month is exactly that case.
+  const termTruncated =
+    activeTerm !== null && (semesterMonths.at(-1) ?? "") < monthKeyOf(activeTerm.end);
   const isGridView =
     view === "mesec" || view === "nedelja" || view === "dan" || view === "semestar";
 
@@ -1220,10 +1252,11 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
         ? { from: weekKeys[0] ?? anchorKey, to: weekKeys[6] ?? anchorKey }
         : view === "dan"
           ? { from: anchorKey, to: anchorKey }
-          : // Semestar reaches furthest of all — its whole four-month span, and
+          : // Semestar reaches furthest of all — its whole rendered span (the
+            // term's months when one is set, the sliding four otherwise), and
             // it is merged ONCE over that span rather than a month at a time.
             view === "semestar"
-            ? semesterRange(monthKey)
+            ? monthsRange(semesterMonths)
             : {
                 from: shiftDayKey(todayKey, -BLOCKS_PAST_DAYS),
                 to: shiftDayKey(todayKey, BLOCKS_FUTURE_DAYS),
@@ -1555,9 +1588,13 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
               <div className="cal__month-nav">
                 <span className="cal__month-label">{periodLabel}</span>
                 <span className="cal__month-nav-actions">
+                  {/* A SET term does not slide (ADR-054): Semestar is anchored
+                      to its dates, so the month arrows are disabled there —
+                      and only there. */}
                   <Button
                     size="sm"
                     aria-label={strings.calendar.prevPeriod}
+                    disabled={view === "semestar" && activeTerm !== null}
                     onClick={() => shiftPeriod(-1)}
                   >
                     ‹
@@ -1568,6 +1605,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
                   <Button
                     size="sm"
                     aria-label={strings.calendar.nextPeriod}
+                    disabled={view === "semestar" && activeTerm !== null}
                     onClick={() => shiftPeriod(1)}
                   >
                     ›
@@ -1606,11 +1644,22 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
                         todayKey={todayKey}
                         weekStart={weekStart}
                         density={dayDensity}
+                        term={activeTerm}
                         onOpenDay={openDay}
                       />
                     ))}
                   </div>
                   <p className="cal__semester-legend">{strings.calendar.semester.legend}</p>
+                  {/* The term has edges (ADR-054): a span past six months
+                      renders its first six and says so; no term at all earns
+                      one quiet line naming where the dates are set — plain
+                      text, since no caption here navigates. */}
+                  {termTruncated && (
+                    <p className="cal__semester-legend">{strings.calendar.semester.truncated}</p>
+                  )}
+                  {activeTerm === null && (
+                    <p className="cal__semester-legend">{strings.calendar.semester.unsetHint}</p>
+                  )}
                 </>
               ) : (
                 <CalendarTimeGrid

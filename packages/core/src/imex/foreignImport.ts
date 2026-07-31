@@ -219,6 +219,7 @@ export type ImportSkipCode =
   | "dashboard-settings-not-imported"
   | "dashboard-widgets-not-imported"
   | "study-settings-not-imported"
+  | "calendar-settings-not-imported"
   | "profile-picture-not-imported"
   | "template-name-taken"
   | "source-inbox-collapsed"
@@ -530,6 +531,10 @@ const ID_MINTERS: Record<keyof ProfileData, (data: ProfileData, ctx: PlanContext
   // ADR-051: `(name, month, day)` — the recurring day CAL-007 actually
   // celebrates. The year is out of the key; see `personDuplicateKey`.
   people: (data, ctx) => mintUnlessDuplicate(data.people, PERSON_DUPLICATES, ctx),
+  // Not imported (the remap literal plans an empty array, ADR-054): the
+  // semester dates are the TARGET user's own calendar anchor, keyed by their
+  // profile alone — so there is no id of its own to mint.
+  calendarSettings: NO_IDS,
   subjects: (data, ctx) => mintAll(data.subjects, ctx),
   subjectAttachments: (data, ctx) =>
     mintUnlessDuplicate(
@@ -850,6 +855,12 @@ export function planForeignImport(
       id: mapped(row.id, ctx),
       profileId: target.profileId,
     })),
+    // ADR-054's semester dates are NOT imported, for the reason the study
+    // preferences are not: the term the calendar is anchored to is the TARGET
+    // user's own choice, keyed by their profile alone — and the import card
+    // promises DODAJE, which an upsert over their row would break. The skip is
+    // named below, like every by-design skip.
+    calendarSettings: [],
     // `notAbsorbed` here, unlike on every other STUDY member, because this is
     // the one table a seeded id can name (ADR-052): a subject the user chose is
     // a subject that already exists, so its source row is a reference now, not
@@ -1071,6 +1082,12 @@ function buildReport(
     source.dashboardWidgets.length,
   );
   note("study-settings-not-imported", "study", "study-settings", source.studySettings.length);
+  note(
+    "calendar-settings-not-imported",
+    "calendar",
+    "calendar-settings",
+    source.calendarSettings.length,
+  );
   // The manifest's settings section — the target's flags and notification
   // preferences are the user's own choices, not the archive author's. It rides
   // in the manifest rather than in a module, so it is named without being

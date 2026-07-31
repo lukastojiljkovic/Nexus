@@ -1186,6 +1186,10 @@ export const strings = {
       regionLabel: "Pregled semestra",
       /** Caption under the grid — what a dot and a ring mean, said once. */
       legend: "Tačka — dan sa obavezama · prsten — ispit",
+      /** One quiet line while no term is set (ADR-054) — plain text, not a link; it names where the dates live. */
+      unsetHint: "Podesi datume semestra u Podešavanjima.",
+      /** Said when a set term runs past six months and the grid shows only its first six. */
+      truncated: "Semestar je duži od šest meseci — prikazano je prvih šest.",
       /** Appended to a day's accessible name when it holds something: „3 stavke“. */
       itemsOne: "stavka",
       itemsFew: "stavke",
@@ -1785,6 +1789,7 @@ export const strings = {
       shortcuts: "Prečice",
       dashboard: "Kontrolna tabla",
       study: "Učenje",
+      calendar: "Kalendar",
       modules: "Moduli",
       notifications: "Obaveštenja",
       backup: "Rezervna kopija",
@@ -1976,6 +1981,28 @@ export const strings = {
       /** The one thing about this card a user could otherwise get wrong: nothing already scheduled moves. */
       retroNotice: "Promena važi od sledećeg ponavljanja — već zakazane kartice ostaju kako jesu.",
       error: "Čuvanje podešavanja učenja nije uspelo. Pokušaj ponovo.",
+    },
+    /**
+     * Kalendar section (CAL-010 / ADR-054): the semester's fixed dates the
+     * Semestar view anchors to. A PROFILE fact, unlike the week start and the
+     * clock, which are device preferences and stay in „Izgled" — which is why
+     * this is its own card rather than two more rows there.
+     */
+    calendar: {
+      caption:
+        "Datumi semestra drže pregled „Semestar“ na istim mesecima. Bez njih pregled klizi od tekućeg meseca.",
+      /** Heading over the two date fields — also the SET-014 hit label. */
+      datesLabel: "Datumi semestra",
+      startLabel: "Početak semestra",
+      endLabel: "Kraj semestra",
+      save: "Sačuvaj",
+      clear: "Ukloni datume",
+      /** The pair rule, said before main and the store refuse it: both dates, in order. */
+      invalidPair: "Unesi oba datuma — semestar ima i početak i kraj.",
+      invalidOrder: "Kraj semestra ne može biti pre početka.",
+      saved: "Datumi semestra su sačuvani.",
+      cleared: "Datumi semestra su uklonjeni.",
+      error: "Čuvanje datuma semestra nije uspelo. Pokušaj ponovo.",
     },
     /** One-line module descriptions for the gallery, keyed by module id. */
     moduleDescriptions: {
@@ -2332,6 +2359,8 @@ export const strings = {
           "Raspored kontrolne table se ne uvozi — tvoja tabla ostaje kakva jeste.",
         "study-settings-not-imported":
           "Podešavanja učenja iz arhive se ne uvoze — tvoja ciljana zapamćenost i dnevni limiti ostaju tvoji.",
+        "calendar-settings-not-imported":
+          "Datumi semestra iz arhive se ne uvoze — tvoj kalendar ostaje na tvom rasporedu.",
         "profile-picture-not-imported":
           "Slika profila iz arhive se ne uvozi — tvoja slika ostaje tvoja.",
         "template-name-taken": "Šablon istog imena već postoji kod tebe — tvoj se zadržava.",

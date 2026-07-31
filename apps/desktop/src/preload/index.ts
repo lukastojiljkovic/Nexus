@@ -144,6 +144,10 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.eventTemplatesApply, { profileId, templateId, dayKey }),
   deleteEventTemplate: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.eventTemplatesDelete, { profileId, id }),
+  calendarSettings: (profileId) =>
+    ipcRenderer.invoke(IpcChannel.calendarGetSettings, { profileId }),
+  setCalendarSettings: (profileId, settings) =>
+    ipcRenderer.invoke(IpcChannel.calendarSetSettings, { profileId, ...settings }),
   listPeople: (profileId) => ipcRenderer.invoke(IpcChannel.peopleList, { profileId }),
   createPerson: (profileId, person) =>
     ipcRenderer.invoke(IpcChannel.peopleCreate, { profileId, person }),

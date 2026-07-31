@@ -12,6 +12,7 @@ import type {
   ProfileData,
 } from "@nexus/core";
 import {
+  CalendarSettingsStore,
   CardStore,
   DashboardSettingsStore,
   DashboardWidgetStore,
@@ -137,6 +138,7 @@ function emptyProfileData(): ProfileData {
     documents: [],
     renewals: [],
     people: [],
+    calendarSettings: [],
     subjects: [],
     subjectAttachments: [],
     subjectNoteLinks: [],
@@ -260,6 +262,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   const dashboardStore = new DashboardSettingsStore(handle.raw, profileId);
   const dashboardWidgetStore = new DashboardWidgetStore(handle.raw, profileId);
   const studySettingsStore = new StudySettingsStore(handle.raw, profileId);
+  const calendarSettingsStore = new CalendarSettingsStore(handle.raw, profileId);
 
   // The merged Yjs state and derived body an export would carry for the edited
   // note — stand-ins for real Yjs bytes (see `bytes()`), but genuinely stored
@@ -434,6 +437,9 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   // STUDY-007: NON-default on all three, so the round trip below would fail if
   // the settings row were dropped rather than passing on the defaults.
   studySettingsStore.save({ targetRetention: 0.95, newPerDay: 7, maxReviewsPerDay: 120 }, t2);
+  // ADR-054: a SET term, so the round trip below would fail if the row were
+  // dropped rather than passing on the both-null default.
+  calendarSettingsStore.save({ semesterStart: "2026-10-01", semesterEnd: "2027-01-31" });
 
   const taskLists = taskListStore.listActive();
   const data: ProfileData = {
@@ -478,6 +484,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
       snapshot: noteStore.loadVersion(editedNote.id, version.coveredSeq),
     })),
     studySettings: [{ profileId, ...studySettingsStore.get() }],
+    calendarSettings: [{ profileId, ...calendarSettingsStore.get() }],
     dashboardSettings: [{ profileId, ...dashboardStore.get() }],
     dashboardWidgets: dashboardWidgetStore.listAll(),
   };
@@ -700,6 +707,12 @@ function assertModulesMatch(
     [{ profileId: remapTo, ...new StudySettingsStore(handle.raw, readProfileId).get() }],
   ).toEqual(remap(fixture.data.studySettings));
 
+  // ADR-054: the semester's fixed dates, remapped onto the reading profile
+  // exactly as every row around them is.
+  expect(
+    [{ profileId: remapTo, ...new CalendarSettingsStore(handle.raw, readProfileId).get() }],
+  ).toEqual(remap(fixture.data.calendarSettings));
+
   // ADR-041: the dashboard's background and dim, remapped onto the reading
   // profile exactly as every row above is.
   expect(
@@ -838,6 +851,13 @@ describe("RestoreStore", () => {
       targetRetention: DEFAULT_TARGET_RETENTION,
       newPerDay: DEFAULT_NEW_PER_DAY,
       maxReviewsPerDay: null,
+    });
+    // An archive carrying no calendar-settings row puts the profile back on
+    // "no term set" (ADR-054) — the semester dates B had are gone, and the
+    // Semestar view slides again.
+    expect(new CalendarSettingsStore(db.raw, profileB).get()).toEqual({
+      semesterStart: null,
+      semesterEnd: null,
     });
     // An archive carrying no dashboard row puts the profile back on the
     // dashboard's own defaults (ADR-041) — the background B had is gone, not

@@ -70,6 +70,7 @@ function emptyExportInput(): ExportArchiveInput {
       documents: [],
       renewals: [],
       people: [],
+      calendarSettings: [],
       subjects: [],
       subjectAttachments: [],
       subjectNoteLinks: [],
@@ -268,6 +269,11 @@ function richProfileData(): ProfileData {
         year: null, note: null, createdAt: "2026-07-01T00:00:00.000Z",
         updatedAt: "2026-07-01T00:00:00.000Z",
       },
+    ],
+    // Deliberately SET (ADR-054): a round trip that carried the both-null
+    // default would pass even if the record were dropped entirely.
+    calendarSettings: [
+      { profileId: "profile1", semesterStart: "2026-10-01", semesterEnd: "2027-01-31" },
     ],
     subjects: [
       {
@@ -794,12 +800,14 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.20.0`: the nearest minor strictly ahead of this build's `1.19.0`.
+  // `1.21.0`: the nearest minor strictly ahead of this build's `1.20.0`.
+  // SUPERVISOR NOTE: a sibling lane is landing 1.21.0 in parallel — at merge
+  // this fixture moves one minor past whatever the build then writes.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.20.0" });
+    const files = baseFiles({ schemaVersion: "1.21.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.20.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.21.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -1687,6 +1695,111 @@ describe("parseImportArchive — study settings (migration 034 / STUDY-007)", ()
   });
 });
 
+describe("parseImportArchive — calendar settings (migration 042 / ADR-054)", () => {
+  const VALID_CALENDAR_SETTINGS = {
+    type: "calendar-settings", profileId: "profile1",
+    semesterStart: "2026-10-01", semesterEnd: "2027-01-31",
+  };
+
+  function parseCalendarFile(rows: readonly Record<string, unknown>[]) {
+    return parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/calendar.ndjson": ndjson(rows) } })),
+    );
+  }
+
+  function calendarProblem(detail: string) {
+    return {
+      severity: "error", code: "invalid-record", path: "data/calendar.ndjson", line: 1, detail,
+    };
+  }
+
+  it("round-trips the term's two dates", () => {
+    const result = parseCalendarFile([VALID_CALENDAR_SETTINGS]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.calendarSettings).toEqual([
+      { profileId: "profile1", semesterStart: "2026-10-01", semesterEnd: "2027-01-31" },
+    ]);
+  });
+
+  it("round-trips the both-null pair — that is how 'no term set' is said", () => {
+    const result = parseCalendarFile([
+      { ...VALID_CALENDAR_SETTINGS, semesterStart: null, semesterEnd: null },
+    ]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.calendarSettings).toEqual([
+      { profileId: "profile1", semesterStart: null, semesterEnd: null },
+    ]);
+  });
+
+  it("accepts a one-day term — equality is inside the closed range", () => {
+    const result = parseCalendarFile([
+      { ...VALID_CALENDAR_SETTINGS, semesterEnd: "2026-10-01" },
+    ]);
+    expect(result.problems).toEqual([]);
+  });
+
+  // The store's own pair rule (a term with one edge means nothing), restated
+  // here so a half-set pair is a named `invalid-record` rather than a raw
+  // SQLite constraint error inside the restore transaction.
+  it("refuses a half-set pair, naming the null half", () => {
+    const startOnly = parseCalendarFile([{ ...VALID_CALENDAR_SETTINGS, semesterEnd: null }]);
+    expect(startOnly.problems).toContainEqual(calendarProblem("semesterEnd"));
+    expect(startOnly.data).toBeNull();
+
+    const endOnly = parseCalendarFile([{ ...VALID_CALENDAR_SETTINGS, semesterStart: null }]);
+    expect(endOnly.problems).toContainEqual(calendarProblem("semesterEnd"));
+    expect(endOnly.data).toBeNull();
+  });
+
+  it("refuses a start after its end", () => {
+    const result = parseCalendarFile([
+      { ...VALID_CALENDAR_SETTINGS, semesterStart: "2027-02-01", semesterEnd: "2026-10-01" },
+    ]);
+    expect(result.problems).toContainEqual(calendarProblem("semesterEnd"));
+    expect(result.data).toBeNull();
+  });
+
+  it("refuses a value that is not a real calendar day, shaped or not", () => {
+    for (const semesterStart of ["2026-02-30", "oktobar", "2026-13-01", 20261001, undefined]) {
+      const result = parseCalendarFile([{ ...VALID_CALENDAR_SETTINGS, semesterStart }]);
+      expect(result.problems).toContainEqual(calendarProblem("semesterStart"));
+      expect(result.data).toBeNull();
+    }
+  });
+
+  it("refuses a row missing its profile", () => {
+    const result = parseCalendarFile([{ ...VALID_CALENDAR_SETTINGS, profileId: undefined }]);
+    expect(result.problems).toContainEqual(calendarProblem("profileId"));
+    expect(result.data).toBeNull();
+  });
+
+  // One row per profile is migration 042's PRIMARY KEY, so the profile id IS
+  // the row's identity — the same rule `study-settings` lives under.
+  it("refuses two rows for the same profile", () => {
+    const result = parseCalendarFile([
+      VALID_CALENDAR_SETTINGS,
+      { ...VALID_CALENDAR_SETTINGS, semesterStart: null, semesterEnd: null },
+    ]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "duplicate-id", path: "data/calendar.ndjson", line: 2,
+      detail: "profile1",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  it("refuses a calendar-settings record filed in another data file", () => {
+    const result = parseImportArchive(
+      emptyInputWith(
+        baseFiles({ fileContents: { "data/study.ndjson": ndjson([VALID_CALENDAR_SETTINGS]) } }),
+      ),
+    );
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "invalid-record", path: "data/study.ndjson", line: 1, detail: "type",
+    });
+    expect(result.data).toBeNull();
+  });
+});
+
 describe("parseImportArchive — dashboard settings (migration 030 / ADR-041)", () => {
   const HASH = "a".repeat(64);
 
@@ -2511,8 +2624,10 @@ describe("parseImportArchive — note folder preferences (the 1.7.0 era gate)", 
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.19.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.19.0");
+  // SUPERVISOR NOTE: a sibling lane is landing 1.21.0 in parallel — this pin
+  // moves to that number at merge, never below 1.20.0 (ADR-054).
+  it("is 1.20.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.20.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -2677,17 +2792,29 @@ describe("parseImportArchive — schema version", () => {
     expect(result.data).not.toBeNull();
   });
 
+  // And for the one ADR-054's term superseded: a 1.19 archive carries no
+  // `calendar-settings` row at all, which is exactly what a profile that never
+  // set its semester dates looks like — a whole absent record type, so again
+  // no era flag, and the Semestar view keeps sliding.
+  it("accepts an older minor — a 1.19 archive still parses here, the term unset", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.19.0" })));
+    expect(result.problems).toEqual([]);
+    expect(result.data).toMatchObject({ calendarSettings: [] });
+  });
+
   it("accepts a newer patch", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.19.7" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.20.7" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
 
-  // `1.20.0`: the nearest minor strictly ahead of this build's `1.19.0`.
+  // `1.21.0`: the nearest minor strictly ahead of this build's `1.20.0`.
+  // SUPERVISOR NOTE: a sibling lane is landing 1.21.0 in parallel — at merge
+  // this fixture moves one minor past whatever the build then writes.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.20.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.21.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.20.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.21.0" },
     ]);
     expect(result.data).toBeNull();
   });

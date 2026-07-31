@@ -690,6 +690,7 @@ export function translateApkg(parsed: ParsedApkg, target: ApkgTranslateTarget): 
     documents: [],
     renewals: [],
     people: [],
+    calendarSettings: [],
     subjects,
     subjectAttachments: [],
     subjectNoteLinks: [],

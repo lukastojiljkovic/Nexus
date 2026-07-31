@@ -9,6 +9,7 @@ import { DATA_FILES } from "./exportArchive.js";
 import type {
   ArchiveModuleId,
   ArchiveProfilePicture,
+  ExportCalendarSettings,
   ExportCard,
   ExportDashboardSettings,
   ExportDashboardWidget,
@@ -188,7 +189,11 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.19.0` added the
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.20.0` added the
+ * `calendar-settings` record type — the profile's fixed semester dates
+ * (CAL-010 / ADR-054, migration 042), zero-or-one row riding first in the data
+ * file the CAL module already had, exactly as `study-settings` rides in its
+ * own — after `1.19.0` added the
  * profile's default snooze preset (NTF-009, migration 041) — one field in the
  * manifest's `settings.notifications` object, beside the quiet hours it is a
  * sibling preference of — after `1.18.0` added a
@@ -240,7 +245,8 @@ export interface ImportArchiveResult {
  * that never rearranged its dashboard, or, at `1.13.0`, from one that never
  * touched its study preferences, at `1.14.0` from one whose subjects carry
  * neither materials nor linked notes, or, at `1.15.0`, from one that never
- * saved an event as a template — while a NEWER archive
+ * saved an event as a template, or, at `1.20.0`, from one that never set its
+ * semester dates — while a NEWER archive
  * never reaches a parser at all, because the gate above refuses it. Era flags
  * exist only for the "this row is missing a field it now must have" question,
  * which a whole absent type never asks — and which an OPTIONAL-with-a-default
@@ -262,7 +268,7 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.19.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.20.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -841,6 +847,7 @@ export type ArchiveRecordType =
   | "document"
   | "renewal"
   | "person"
+  | "calendar-settings"
   | "subject"
   | "subject-attachment"
   | "subject-note-link"
@@ -877,6 +884,7 @@ const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "document",
   "renewal",
   "person",
+  "calendar-settings",
   "subject",
   "subject-attachment",
   "subject-note-link",
@@ -914,7 +922,14 @@ const FILE_RECORD_TYPES: Record<DataFilePath, readonly ArchiveRecordType[]> = {
     "task-template",
     "task-dependency",
   ],
-  "data/calendar.ndjson": ["event", "document", "renewal", "person", "event-template"],
+  "data/calendar.ndjson": [
+    "calendar-settings",
+    "event",
+    "document",
+    "renewal",
+    "person",
+    "event-template",
+  ],
   "data/study.ndjson": [
     "study-settings",
     "subject",
@@ -1726,6 +1741,34 @@ function parseNoteAttachment(raw: Record<string, unknown>): ExportNoteAttachment
  *   to say it — or a whole number inside 1..1000. Zero is refused rather than
  *   read as "uncapped": a cap of nothing is not a cap.
  */
+/**
+ * The profile's fixed semester dates (CAL-010 / ADR-054). Three rules beyond
+ * the field shapes, each one `CalendarSettingsStore` enforces on every live
+ * write, restated here so a bad archive is a named `invalid-record` rather
+ * than a raw SQLite constraint error inside the restore transaction:
+ *
+ * - each date, when present, is a REAL bare calendar day (`bareDate` — the
+ *   table's GLOB CHECK knows shapes, not February);
+ * - the pair is both-set or both-null (migration 042's table tolerates a half
+ *   so one upsert can stage it; a term with one edge means nothing);
+ * - the closed range runs forward (`semesterStart <= semesterEnd`).
+ *
+ * Both cross-field problems name `semesterEnd` — the second half of the pair,
+ * the same convention the quiet-hours pair rule follows.
+ */
+function parseCalendarSettings(raw: Record<string, unknown>): ExportCalendarSettings {
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const semesterStart = nullableBareDate(raw.semesterStart, "semesterStart");
+  const semesterEnd = nullableBareDate(raw.semesterEnd, "semesterEnd");
+  if ((semesterStart === null) !== (semesterEnd === null)) {
+    throw new InvalidFieldError("semesterEnd");
+  }
+  if (semesterStart !== null && semesterEnd !== null && semesterStart > semesterEnd) {
+    throw new InvalidFieldError("semesterEnd");
+  }
+  return { profileId, semesterStart, semesterEnd };
+}
+
 function parseStudySettings(raw: Record<string, unknown>): ExportStudySettings {
   const profileId = nonEmptyStr(raw.profileId, "profileId");
   const targetRetention = numberInRange(
@@ -1928,6 +1971,7 @@ interface Collections {
   documents: Bucket<ExportDocument>;
   renewals: Bucket<ExportRenewal>;
   people: Bucket<ExportPerson>;
+  calendarSettings: Bucket<ExportCalendarSettings>;
   subjects: Bucket<ExportSubject>;
   subjectAttachments: Bucket<ExportSubjectAttachment>;
   subjectNoteLinks: Bucket<ExportSubjectNoteLink>;
@@ -1958,7 +2002,7 @@ function newCollections(): Collections {
     taskTemplates: newBucket(), taskDependencies: newBucket(),
     events: newBucket(), eventTemplates: newBucket(),
     documents: newBucket(), renewals: newBucket(),
-    people: newBucket(), subjects: newBucket(),
+    people: newBucket(), calendarSettings: newBucket(), subjects: newBucket(),
     subjectAttachments: newBucket(), subjectNoteLinks: newBucket(),
     exams: newBucket(), decks: newBucket(), cards: newBucket(),
     reviewLog: newBucket(), plans: newBucket(), blocks: newBucket(), focusSessions: newBucket(),
@@ -2056,6 +2100,14 @@ function dispatchRecord(
     case "person": {
       const row = parsePerson(raw);
       pushRow(collections.people, row.id, row, type, path, line, ctx);
+      return;
+    }
+    // One row per profile (migration 042's PRIMARY KEY), so `profileId` IS the
+    // row's identity and a second one is a `duplicate-id` — exactly as for
+    // `study-settings` and `dashboard-settings`.
+    case "calendar-settings": {
+      const row = parseCalendarSettings(raw);
+      pushRow(collections.calendarSettings, row.profileId, row, type, path, line, ctx);
       return;
     }
     case "subject": {
@@ -3409,6 +3461,10 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         documents: rowsOf(collections.documents),
         renewals: rowsOf(collections.renewals),
         people: rowsOf(collections.people),
+        // Empty for every pre-1.20.0 archive, which carries no such row at all
+        // — and a restore reads that emptiness as "no term set", which is
+        // exactly where the profile was (the Semestar view keeps sliding).
+        calendarSettings: rowsOf(collections.calendarSettings),
         subjects: rowsOf(collections.subjects),
         subjectAttachments: rowsOf(collections.subjectAttachments),
         subjectNoteLinks: rowsOf(collections.subjectNoteLinks),

@@ -551,6 +551,17 @@ export class DashboardSettingsValidationError extends DatabaseError {}
 export class BackupSettingsValidationError extends DatabaseError {}
 
 /**
+ * Thrown when a calendar-settings write breaks a rule migration 042's CHECKs
+ * cannot express on their own (CAL-010 / ADR-054): a half-set pair (the table
+ * tolerates one so a single upsert can stage the halves; a term with one edge
+ * means nothing), a value that is not a REAL calendar day (the GLOB knows
+ * shapes, not February), or a start after its end. The store revalidates
+ * because renderer input is untrusted (SEC-EL-02), even after main has already
+ * checked the same three rules.
+ */
+export class CalendarSettingsValidationError extends DatabaseError {}
+
+/**
  * Thrown when a study-settings write breaks a rule migration 034's CHECKs
  * cannot express on their own (STUDY-007): a target retention outside
  * `MIN_TARGET_RETENTION`..`MAX_TARGET_RETENTION` or not a finite number at all,

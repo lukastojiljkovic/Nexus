@@ -63,6 +63,7 @@ function emptyProfileData(): ProfileData {
     tasks: [], taskLists: [], taskSections: [], taskTags: [], taskTagLinks: [],
     taskAttachments: [], taskTemplates: [], taskDependencies: [],
     events: [], eventTemplates: [], documents: [], renewals: [], people: [],
+    calendarSettings: [],
     subjects: [], subjectAttachments: [], subjectNoteLinks: [],
     exams: [], decks: [], cards: [], reviewLog: [], plans: [], blocks: [],
     focusSessions: [], studySettings: [], notifications: [],
@@ -648,6 +649,28 @@ describe("planForeignImport — the report adds up", () => {
       type: "study-settings",
       count: 1,
     });
+  });
+
+  // ADR-054, on the study preferences' exact terms: the term the calendar is
+  // anchored to is the target user's own choice, and DODAJE must not move it.
+  it("never imports the semester dates — the skip is named, the target's term stays", () => {
+    const source = {
+      ...foreignProfileData(),
+      calendarSettings: [
+        { profileId: "src", semesterStart: "2026-10-01", semesterEnd: "2027-01-31" },
+      ],
+    };
+    const { data, report } = plan(source);
+    expect(data.calendarSettings).toEqual([]);
+    expect(report.skips).toContainEqual({
+      code: "calendar-settings-not-imported",
+      module: "calendar",
+      type: "calendar-settings",
+      count: 1,
+    });
+    // 1 event + 1 event template + 1 document + 1 renewal + 1 person imported;
+    // the dates row is the module's one by-design skip, and it still balances.
+    expect(report.modules.calendar).toEqual({ parsed: 6, imported: 5, merged: 0, skipped: 1 });
   });
 
   it("counts the notifications module as entirely skipped", () => {

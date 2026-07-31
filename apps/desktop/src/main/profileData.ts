@@ -28,6 +28,7 @@ import type {
 } from "@nexus/core";
 import type { RestoredNoteDerived } from "@nexus/db";
 import type {
+  CalendarSettingsStore,
   CardStore,
   DashboardSettingsStore,
   DashboardWidgetStore,
@@ -72,6 +73,7 @@ export interface ProfileDataDeps {
   taskDependencyStore(profileId: string): TaskDependencyStore;
   eventStore(profileId: string): EventStore;
   eventTemplateStore(profileId: string): EventTemplateStore;
+  calendarSettingsStore(profileId: string): CalendarSettingsStore;
   peopleStore(profileId: string): PeopleStore;
   documentStore(profileId: string): DocumentStore;
   subjectStore(profileId: string): SubjectStore;
@@ -223,6 +225,11 @@ export function gatherProfileData(deps: ProfileDataDeps, profileId: string): Pro
     documents,
     renewals: documents.flatMap((document) => documentsStore.listRenewals(document.id)),
     people: deps.peopleStore(profileId).listActive(),
+    // Always exactly one row (ADR-054), on the `dashboardSettings` argument
+    // below: `get` resolves the both-null default a profile with no row still
+    // has, so the archive says "no term set" out loud — and the undo snapshot
+    // can put back the dates the user had set, which an omission could not.
+    calendarSettings: [{ profileId, ...deps.calendarSettingsStore(profileId).get() }],
     subjects,
     subjectAttachments: subjects.flatMap((subject) => subjectAttachmentsStore.list(subject.id)),
     // A profile-wide read (migration 035), and filtered to live BOTH ends by the

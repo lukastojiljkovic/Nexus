@@ -105,6 +105,7 @@ function emptyProfileData(): ProfileData {
     documents: [],
     renewals: [],
     people: [],
+    calendarSettings: [],
     subjects: [],
     subjectAttachments: [],
     subjectNoteLinks: [],

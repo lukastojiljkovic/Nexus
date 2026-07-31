@@ -16,8 +16,9 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  // SUPERVISOR NOTE: pre-assigned 044; siblings hold 042/043; supervisor
-  // restores the gap-free pin at merge.
+  // SUPERVISOR NOTE: 043 (named dashboards) is still out with a sibling lane —
+  // the gap-free-from-1 pin returns when it lands; until then 042+044 stand
+  // with 043's slot open.
   it("is at version 44 (scheduled backups), ascending and duplicate-free", () => {
     expect(LATEST_VERSION).toBe(44);
     const versions = MIGRATIONS.map((migration) => migration.version);
@@ -4627,6 +4628,111 @@ describe("migration 041 — the default snooze preset", () => {
     db.close();
   });
 });
+
+describe("migration 042 — calendar settings", () => {
+  /**
+   * Writes `calendar_settings` raw, one column list either way — the CHECKs
+   * are per-column GLOBs plus one pair rule, so half-set rows are legal at the
+   * TABLE (a single upsert statement stages them) and refused by the store.
+   */
+  const insertCalendarSettings = (
+    db: NexusDatabase,
+    profileId: string,
+    semesterStart: string | null,
+    semesterEnd: string | null,
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO calendar_settings (profile_id, semester_start, semester_end)
+         VALUES (?, ?, ?)`,
+      )
+      .run(profileId, semesterStart, semesterEnd);
+
+  it("creates the calendar_settings table and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    expect(tableNames(db)).toContain("calendar_settings");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("accepts the pair both set, both null — and each half alone (the store's rule, not the table's)", () => {
+    const db = openDatabase({ path: join(dir, "pair.db") });
+    for (const id of ["p1", "p2", "p3", "p4"]) insertProfile(db, id);
+    expect(() => insertCalendarSettings(db, "p1", "2026-10-01", "2027-01-31")).not.toThrow();
+    expect(() => insertCalendarSettings(db, "p2", null, null)).not.toThrow();
+    // Half-set is legal HERE so one upsert statement can stage either column;
+    // both-or-neither is `CalendarSettingsStore`'s own gate.
+    expect(() => insertCalendarSettings(db, "p3", "2026-10-01", null)).not.toThrow();
+    expect(() => insertCalendarSettings(db, "p4", null, "2027-01-31")).not.toThrow();
+    db.close();
+  });
+
+  it("rejects a date outside the YYYY-MM-DD shape with the GLOB CHECK", () => {
+    const db = openDatabase({ path: join(dir, "glob.db") });
+    insertProfile(db, "p1");
+    expect(() => insertCalendarSettings(db, "p1", "oktobar", "2027-01-31")).toThrow();
+    expect(() => insertCalendarSettings(db, "p1", "2026-10-1", "2027-01-31")).toThrow();
+    expect(() => insertCalendarSettings(db, "p1", "2026-10-01", "31.01.2027")).toThrow();
+    db.close();
+  });
+
+  it("rejects a start after its end with the pair CHECK", () => {
+    const db = openDatabase({ path: join(dir, "order.db") });
+    insertProfile(db, "p1");
+    insertProfile(db, "p2");
+    expect(() => insertCalendarSettings(db, "p1", "2027-02-01", "2026-10-01")).toThrow();
+    // One-day terms are legal: equality is inside the closed range.
+    expect(() => insertCalendarSettings(db, "p2", "2026-10-01", "2026-10-01")).not.toThrow();
+    db.close();
+  });
+
+  it("allows at most one row per profile", () => {
+    const db = openDatabase({ path: join(dir, "singleton.db") });
+    insertProfile(db, "p1");
+    insertCalendarSettings(db, "p1", "2026-10-01", "2027-01-31");
+    expect(() => insertCalendarSettings(db, "p1", null, null)).toThrow();
+    db.close();
+  });
+
+  it("cascades calendar_settings deletion when the owning profile is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade.db") });
+    insertProfile(db, "p1");
+    insertCalendarSettings(db, "p1", "2026-10-01", "2027-01-31");
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM calendar_settings").get() as { n: number }).n,
+    ).toBe(0);
+    db.close();
+  });
+
+  it("upgrades a database written before it, leaving the profile with no row", () => {
+    const path = join(dir, "upgrade-042.db");
+    const before = new Database(path);
+    before.pragma("journal_mode = WAL");
+    before.pragma("foreign_keys = ON");
+    before.function("nx_fold", { deterministic: true }, (value: unknown) =>
+      typeof value === "string" ? foldSearchText(value) : null,
+    );
+    runMigrations(
+      before,
+      MIGRATIONS.filter((migration) => migration.version < 42),
+    );
+    before
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run("p1", "personal", "Stari profil", new Date().toISOString());
+    before.close();
+
+    const db = openDatabase({ path });
+    expect(tableNames(db)).toContain("calendar_settings");
+    // No row IS "unset": the store's get-or-default answers both-null for it.
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM calendar_settings").get() as { n: number }).n,
+    ).toBe(0);
+    db.close();
+  });
+});
+
 
 describe("migration 044 — backup settings", () => {
   const now = () => new Date().toISOString();

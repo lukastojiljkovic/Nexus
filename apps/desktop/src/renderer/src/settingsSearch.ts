@@ -215,6 +215,14 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
     label: s.study.reviewCapLabel,
     keywords: ["ucenje", "ponavljanje", "dnevno", "limit", "ogranicenje", "kapa"],
   },
+  // CAL-010 (ADR-054): the semester's fixed dates — one entry for the card's
+  // one control group; the label is drawn, so it earns the hit highlight.
+  {
+    id: "calendar-semester-dates",
+    section: "calendar",
+    label: s.calendar.datesLabel,
+    keywords: ["semestar", "kalendar", "datumi", "pocetak", "kraj", "pregled"],
+  },
   {
     id: "notifications-presets",
     section: "notifications",

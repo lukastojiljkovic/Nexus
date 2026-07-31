@@ -1255,6 +1255,7 @@ export function translateLlmRecords(
     documents: [],
     renewals: [],
     people: [],
+    calendarSettings: [],
     subjects: [],
     subjectAttachments: [],
     subjectNoteLinks: [],

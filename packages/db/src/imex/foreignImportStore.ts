@@ -268,9 +268,10 @@ export class ForeignImportStore {
    * anyway; this store simply does not have a statement for either, and asserts
    * nothing about them. Which rows belong in a plan is the planner's policy,
    * proved by the planner's own tests — a throw here would be this store holding
-   * an opinion about a decision it does not make. (`studySettings` never
-   * arrives: the planner drops it by design — the target's scheduling
-   * preferences are their own — so this store has no statement for it.)
+   * an opinion about a decision it does not make. (`studySettings` and
+   * `calendarSettings` never arrive: the planner drops both by design — the
+   * target's scheduling preferences and semester dates are their own — so
+   * this store has no statement for either.)
    */
   insertPlanned(
     planned: ProfileData,

@@ -2231,6 +2231,12 @@ button.cal__mini-day {
 .cal__mini-day--exam {
   border-color: var(--nx-accent);
 }
+/* Days outside a SET term inside a boundary month (ADR-054): the term has
+   edges, and opacity is this grid's one word for "quieter" — same rule as the
+   density dot's steps, never a different colour. Still clickable. */
+.cal__mini-day--outside {
+  opacity: 0.35;
+}
 .cal__mini-dot {
   position: absolute;
   left: 50%;
@@ -4876,6 +4882,23 @@ button.cal__grid-event--dragging {
 .set__study-number {
   max-width: 110px;
   font-variant-numeric: tabular-nums;
+}
+
+/* Kalendar (ADR-054): the two date fields side by side, actions on their own
+   row below — the study card's field row with a submit, not a new pattern. */
+.set__calendar-form {
+  display: flex;
+  gap: var(--nx-space-4);
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.set__calendar-form .nx-textfield {
+  max-width: 200px;
+}
+.set__calendar-actions {
+  display: flex;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
 }
 
 /* Moduli: category heading + one bordered row per module. */

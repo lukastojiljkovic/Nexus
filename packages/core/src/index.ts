@@ -152,6 +152,7 @@ export type {
   ExportArchive,
   ExportArchiveInput,
   ExportBinaryEntry,
+  ExportCalendarSettings,
   ExportCard,
   ExportDashboardSettings,
   ExportDashboardWidget,

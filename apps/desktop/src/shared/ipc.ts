@@ -94,6 +94,8 @@ export const IpcChannel = {
   eventTemplatesCapture: "event-templates:capture",
   eventTemplatesApply: "event-templates:apply",
   eventTemplatesDelete: "event-templates:delete",
+  calendarGetSettings: "calendar:get-settings",
+  calendarSetSettings: "calendar:set-settings",
   peopleList: "people:list",
   peopleCreate: "people:create",
   peopleUpdate: "people:update",
@@ -1372,6 +1374,35 @@ export interface EventTemplatesApplyRequest {
 export interface EventTemplatesDeleteRequest {
   profileId: string;
   id: string;
+}
+
+/**
+ * The calendar's per-profile facts (CAL-010 / ADR-054, migration 042) — the
+ * semester's fixed dates the Semestar view anchors to. Both bare `YYYY-MM-DD`
+ * day keys, both-or-neither: both null means "no term set" and the view slides
+ * as it always did. Mirrors `@nexus/db`'s `CalendarSettings`; redeclared so
+ * the renderer never imports DB code.
+ */
+export interface CalendarSettings {
+  /** First day of the term; null exactly when `semesterEnd` is. */
+  semesterStart: string | null;
+  /** Last day of the term, inclusive; never before `semesterStart`. */
+  semesterEnd: string | null;
+}
+
+/** Reads this profile's calendar settings. Never writes. */
+export interface CalendarSettingsRequest {
+  profileId: string;
+}
+
+/**
+ * Writes the WHOLE pair at once — both dates, or both null to clear. One
+ * channel rather than per-field setters, because a term with one edge means
+ * nothing: main re-checks the pair rule and the order (SEC-EL-02), and the
+ * store re-checks both after main.
+ */
+export interface CalendarSettingsSetRequest extends CalendarSettings {
+  profileId: string;
 }
 
 /** Closed person-kind domain (mirrors `PERSON_KINDS` in `@nexus/db`; redeclared so the renderer never imports DB code). */
@@ -3575,6 +3606,7 @@ export type ImportRecordType =
   | "document"
   | "renewal"
   | "person"
+  | "calendar-settings"
   | "subject"
   | "subject-attachment"
   | "subject-note-link"
@@ -3616,6 +3648,7 @@ export type ImportSkipCode =
   | "dashboard-settings-not-imported"
   | "dashboard-widgets-not-imported"
   | "study-settings-not-imported"
+  | "calendar-settings-not-imported"
   | "profile-picture-not-imported"
   | "template-name-taken"
   | "source-inbox-collapsed"
@@ -4431,6 +4464,10 @@ export interface NexusApi {
   applyEventTemplate(profileId: string, templateId: string, dayKey: string): Promise<Event>;
   /** Deletes a template; no event created from it is touched. */
   deleteEventTemplate(profileId: string, id: string): Promise<void>;
+  /** This profile's semester dates (CAL-010 / ADR-054), both null while no term is set. Never writes. */
+  calendarSettings(profileId: string): Promise<CalendarSettings>;
+  /** Writes the whole pair at once — both dates, or both null to clear — and answers with what is now stored. */
+  setCalendarSettings(profileId: string, settings: CalendarSettings): Promise<CalendarSettings>;
   /** This profile's people, name-ordered by SQLite's binary collation (CAL-007); the renderer re-sorts with `Intl.Collator(["sr-Latn","sr"])`. */
   listPeople(profileId: string): Promise<Person[]>;
   createPerson(profileId: string, person: NewPersonFields): Promise<Person>;

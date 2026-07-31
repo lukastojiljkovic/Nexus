@@ -21,6 +21,7 @@ import {
 } from "@nexus/core";
 import { deriveArchiveKey, generateSalt } from "@nexus/core/auth";
 import {
+  CalendarSettingsStore,
   CardStore,
   DashboardSettingsStore,
   DashboardWidgetStore,
@@ -166,6 +167,7 @@ function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
     taskDependencyStore: (profileId) => new TaskDependencyStore(handle.raw, profileId),
     eventStore: (profileId) => new EventStore(handle.raw, profileId),
     eventTemplateStore: (profileId) => new EventTemplateStore(handle.raw, profileId),
+    calendarSettingsStore: (profileId) => new CalendarSettingsStore(handle.raw, profileId),
     peopleStore: (profileId) => new PeopleStore(handle.raw, profileId),
     documentStore: (profileId) => new DocumentStore(handle.raw, profileId),
     subjectStore: (profileId) => new SubjectStore(handle.raw, profileId),
@@ -516,6 +518,12 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   // ADR-045: a rearranged layout, so the fixture carries real widget rows —
   // adding one materializes the default five beside it.
   dashboardWidgetStore.add("study:ispiti", "L", t0);
+  // ADR-054: a SET term, so the round trip would fail if the calendar-settings
+  // row were dropped rather than passing on the both-null default.
+  new CalendarSettingsStore(handle.raw, profileId).save({
+    semesterStart: "2026-10-01",
+    semesterEnd: "2027-01-31",
+  });
 
   // The profile's own picture with its OWN blob (SET-001): a fifth, independent
   // entry in the archive's `blobs/` union, and the only one named by the
@@ -540,6 +548,8 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     documents: [],
     renewals: [],
     people: peopleStore.listActive(),
+    // ADR-054: always exactly one row, since `get` resolves the both-null default.
+    calendarSettings: [{ profileId, ...new CalendarSettingsStore(handle.raw, profileId).get() }],
     subjects: subjectStore.listActive(),
     subjectAttachments: subjectAttachmentStore.list(subject.id),
     subjectNoteLinks: subjectNoteLinkStore.listLinks(),
@@ -1403,10 +1413,13 @@ describe("foreign import", () => {
       // Restore mode would call this `invalid-record` at ERROR severity and
       // refuse the whole file; import mode drops the row and carries on. That
       // difference IS `mode: "import"` being wired through — nothing else in
-      // this file can tell the two apart.
+      // this file can tell the two apart. The damage lands on `profileId`
+      // rather than a type-specific field, so it stays a bad row no matter
+      // which record type happens to lead the file (ADR-054 put the
+      // calendar-settings row first).
       const { profileB, handle } = await twoProfiles("salvage.nexus.zip", (files) =>
         withDamagedRecord(files, "data/calendar.ndjson", (line) =>
-          JSON.stringify({ ...(JSON.parse(line) as Record<string, unknown>), startAt: "ne-datum" }),
+          JSON.stringify({ ...(JSON.parse(line) as Record<string, unknown>), profileId: 5 }),
         ),
       );
       const { deps } = handle;

@@ -31,6 +31,7 @@ import type {
   ApkgImportSubjectChoice,
   AppInfo,
   BackupSettingsView,
+  CalendarSettings,
   DashboardSettings,
   FlagState,
   ImportDuplicateChoice,
@@ -3135,6 +3136,140 @@ function retentionLabel(preset: number): string {
     : percent;
 }
 
+interface CalendarSectionProps {
+  profileId: string;
+  /** SET-014 hit ids — this card owns one: `calendar-semester-dates`. */
+  hits: ReadonlySet<string>;
+}
+
+/**
+ * Kalendar section (CAL-010 / ADR-054): the semester's fixed dates the
+ * Semestar view anchors to. A PROFILE fact stored through main, unlike the
+ * week start and clock that stay in „Izgled" as device preferences — which is
+ * why this is its own card rather than two more rows there.
+ *
+ * Save-on-SUBMIT, unlike the study card's commit-per-change, and deliberately:
+ * the pair rule means a lone date is not a value anyone can store, so
+ * committing per keystroke would either refuse loudly mid-edit or write a term
+ * the user has not finished stating. „Ukloni datume" is the one-click clear —
+ * a both-null save over the same channel.
+ */
+function CalendarSection({ profileId, hits }: CalendarSectionProps) {
+  const s = strings.settings.calendar;
+  const [settings, setSettings] = useState<CalendarSettings | null>(null);
+  const [startDraft, setStartDraft] = useState("");
+  const [endDraft, setEndDraft] = useState("");
+  const [message, setMessage] = useState<{ text: string; failed: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  function adopt(next: CalendarSettings): void {
+    setSettings(next);
+    setStartDraft(next.semesterStart ?? "");
+    setEndDraft(next.semesterEnd ?? "");
+  }
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const next = await window.nexus.calendarSettings(profileId);
+        if (active) adopt(next);
+      } catch (loadError) {
+        // Module-level strings, not the component's own `s` alias — the same
+        // spelling `StudySection`'s effect uses, so the dependency list stays
+        // exactly `[profileId]`.
+        if (active) setMessage({ text: strings.settings.calendar.error, failed: true });
+        console.error("Nexus: failed to load calendar settings:", loadError);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profileId]);
+
+  async function write(next: CalendarSettings, confirmation: string): Promise<void> {
+    setBusy(true);
+    setMessage(null);
+    try {
+      adopt(await window.nexus.setCalendarSettings(profileId, next));
+      setMessage({ text: confirmation, failed: false });
+    } catch (saveError) {
+      setMessage({ text: s.error, failed: true });
+      console.error("Nexus: failed to save calendar settings:", saveError);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (busy) return;
+    // The date inputs yield "" or a real day, so emptiness is the only
+    // half-pair this form can produce; the order rule is the other thing worth
+    // saying HERE, before main and the store refuse it less kindly.
+    if (startDraft === "" || endDraft === "") {
+      setMessage({ text: s.invalidPair, failed: true });
+      return;
+    }
+    if (startDraft > endDraft) {
+      setMessage({ text: s.invalidOrder, failed: true });
+      return;
+    }
+    await write({ semesterStart: startDraft, semesterEnd: endDraft }, s.saved);
+  }
+
+  if (settings === null) {
+    return message !== null ? (
+      <p className="set__error">{message.text}</p>
+    ) : (
+      <p className="app__muted">{strings.app.loading}</p>
+    );
+  }
+
+  const termStored = settings.semesterStart !== null && settings.semesterEnd !== null;
+
+  return (
+    <>
+      <p className="set__section-caption">{s.caption}</p>
+      <p className={labelClass("set__section-caption", hits.has("calendar-semester-dates"))}>
+        {s.datesLabel}
+      </p>
+      <form className="set__calendar-form" onSubmit={(event) => void submit(event)}>
+        <TextField
+          type="date"
+          label={s.startLabel}
+          value={startDraft}
+          onChange={(event) => setStartDraft(event.target.value)}
+        />
+        <TextField
+          type="date"
+          label={s.endLabel}
+          value={endDraft}
+          onChange={(event) => setEndDraft(event.target.value)}
+        />
+        <div className="set__calendar-actions">
+          <Button type="submit" size="sm" variant="primary" disabled={busy}>
+            {s.save}
+          </Button>
+          {termStored && (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => void write({ semesterStart: null, semesterEnd: null }, s.cleared)}
+            >
+              {s.clear}
+            </Button>
+          )}
+        </div>
+      </form>
+      {message !== null && (
+        <p className={message.failed ? "set__error" : "set__section-caption"}>{message.text}</p>
+      )}
+    </>
+  );
+}
+
 /** A settings-form result line: green-ish caption on success, `.set__error` on failure — same idiom as `ProfileSection`/`BackupSection`, just shared across the two Sigurnost sub-forms. */
 interface SecurityMessage {
   text: string;
@@ -3870,6 +4005,13 @@ export function SettingsPage({
         className={sectionClass(sections.has("study"))}
       >
         <StudySection profileId={profileId} hits={hits} />
+      </Card>
+
+      <Card
+        title={strings.settings.sectionTitle.calendar}
+        className={sectionClass(sections.has("calendar"))}
+      >
+        <CalendarSection profileId={profileId} hits={hits} />
       </Card>
 
       <Card title={strings.settings.sectionTitle.modules} className={sectionClass(sections.has("modules"))}>

@@ -44,6 +44,14 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
  *
+ * `1.20.0` adds the `calendar-settings` record type (CAL-010 / ADR-054,
+ * migration 042): the profile's fixed semester dates, zero-or-one row riding
+ * FIRST in `data/calendar.ndjson` exactly as `study-settings` leads its own
+ * file. A MINOR bump by the same honesty every settings row below made: an
+ * older reader handed this archive would restore a profile whose Semestar view
+ * silently slid back to the current four months, losing the term its owner
+ * anchored it to — after
+ *
  * `1.19.0` adds the profile's default snooze preset (NTF-009, migration 041):
  * one field in the manifest's `settings.notifications` object, beside the quiet
  * hours it is a sibling preference of. Optional-with-a-default on the way in
@@ -104,7 +112,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.19.0";
+const SCHEMA_VERSION = "1.20.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -421,6 +429,24 @@ export interface ExportPerson {
   note: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * One profile's fixed semester dates (CAL-010 / ADR-054, migration 042): the
+ * closed day range the Semestar view anchors to, or both null for "no term
+ * set". Rides in `data/calendar.ndjson`, FIRST — it references nothing and
+ * nothing references it, so its position is readability (the term the rest of
+ * the module is read under, before the rows), exactly as `study-settings`
+ * leads its own file.
+ *
+ * Both bare `YYYY-MM-DD` day keys, both-or-neither (the store's rule,
+ * re-checked by the reader — migration 042's table tolerates a half so one
+ * upsert can stage it), and never start > end.
+ */
+export interface ExportCalendarSettings {
+  profileId: string;
+  semesterStart: string | null;
+  semesterEnd: string | null;
 }
 
 export interface ExportSubject {
@@ -841,6 +867,15 @@ export interface ProfileData {
   documents: readonly ExportDocument[];
   renewals: readonly ExportRenewal[];
   people: readonly ExportPerson[];
+  /**
+   * Zero or one row (CAL-010 / ADR-054) — the profile's fixed semester dates.
+   * Required, like every field above and for the same reason: a module the
+   * caller forgets must be a type error, not a quiet omission. An EMPTY array
+   * is the honest shape for "this archive carries no such row", which is
+   * exactly what every pre-`1.20.0` archive is, and what a restore then reads
+   * as "leave the profile with no term set".
+   */
+  calendarSettings: readonly ExportCalendarSettings[];
   subjects: readonly ExportSubject[];
   // Required, for `taskAttachments`' sharpest-of-reasons: a material row is the
   // ONLY thing that names its blob, so an archive that forgot them would not
@@ -1028,13 +1063,17 @@ export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, 
       data.taskDependencies.length,
     // Event templates are CAL module rows, so they count into the calendar
     // bucket beside the events themselves — the same way a task template counts
-    // into tasks.
+    // into tasks. The semester-dates row (zero or one, ADR-054) counts here for
+    // the reason `study-settings` counts into STUDY: a restore preview that
+    // showed one number too few would be telling the user something untrue
+    // about what is about to change.
     calendar:
       data.events.length +
       data.eventTemplates.length +
       data.documents.length +
       data.renewals.length +
-      data.people.length,
+      data.people.length +
+      data.calendarSettings.length,
     // The scheduling-preferences row (zero or one) counts into STUDY beside the
     // rows it governs, for the reason the dashboard's background row counts into
     // its own module: a restore preview that showed one number too few would be
@@ -1154,6 +1193,7 @@ export function filterProfileData(
     documents: only("calendar", data.documents),
     renewals: only("calendar", data.renewals),
     people: only("calendar", data.people),
+    calendarSettings: only("calendar", data.calendarSettings),
     subjects: only("study", data.subjects),
     subjectAttachments: only("study", data.subjectAttachments),
     subjectNoteLinks: only("study", data.subjectNoteLinks).filter((link) => noteIds.has(link.noteId)),
@@ -1215,6 +1255,10 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     ...data.taskDependencies.map((row) => ({ type: "task-dependency", ...row })),
   ]);
   const calendarNdjson = toNdjson([
+    // The term's dates lead, exactly as `study-settings` leads its own file:
+    // the row points at nothing, so this is how the file reads, not what it
+    // requires.
+    ...data.calendarSettings.map((row) => ({ type: "calendar-settings", ...row })),
     ...data.events.map((row) => ({ type: "event", ...row })),
     ...data.documents.map((row) => ({ type: "document", ...row })),
     ...data.renewals.map((row) => ({ type: "renewal", ...row })),

@@ -1,6 +1,6 @@
 import { monthGridDays } from "@nexus/core";
 import type { WeekStart } from "@nexus/core";
-import { densityLevel } from "./semesterGrid.js";
+import { densityLevel, isWithinTerm } from "./semesterGrid.js";
 import type { DayDensity } from "./semesterGrid.js";
 import { countUnit, strings } from "./strings.js";
 
@@ -25,8 +25,14 @@ export interface CalendarMiniMonthProps {
   todayKey: string;
   /** Which weekday the rows open on (PRD 04 §5) — the same preference the full grids read. */
   weekStart: WeekStart;
-  /** Density per day key, built once by the page over the whole four-month span. */
+  /** Density per day key, built once by the page over the whole rendered span. */
   density: ReadonlyMap<string, DayDensity>;
+  /**
+   * The SET term's closed day range (ADR-054), or null while none is set. With
+   * one, days outside it inside a boundary month draw at reduced opacity — the
+   * term has edges, and a month that half-belongs should say so.
+   */
+  term: { start: string; end: string } | null;
   /** Click on a day — the page switches to that day's Dan view. */
   onOpenDay: (dayKey: string) => void;
 }
@@ -71,6 +77,7 @@ export function CalendarMiniMonth({
   todayKey,
   weekStart,
   density,
+  term,
   onOpenDay,
 }: CalendarMiniMonthProps) {
   const days = monthGridDays(monthKey, weekStart);
@@ -99,6 +106,12 @@ export function CalendarMiniMonth({
           const classes = ["cal__mini-day"];
           if (day.key === todayKey) classes.push("cal__mini-day--today");
           if (dayDensity?.hasExam === true) classes.push("cal__mini-day--exam");
+          // Out-of-term days inside a boundary month recede (ADR-054): still
+          // real, still clickable — the term simply has edges, and opacity is
+          // how this grid already says "quieter" (see the dot's three steps).
+          if (term !== null && !isWithinTerm(day.key, term.start, term.end)) {
+            classes.push("cal__mini-day--outside");
+          }
 
           return (
             <button
