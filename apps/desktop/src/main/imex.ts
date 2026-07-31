@@ -1,17 +1,18 @@
 import { createHash } from "node:crypto";
 import { createWriteStream } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { Readable, Transform } from "node:stream";
 import type { BrowserWindow } from "electron";
 import { app, dialog } from "electron";
 import { ZipFile } from "yazl";
-import { buildExportArchive, createArchiveWriter } from "@nexus/core";
+import { buildExportArchive, buildIcsCalendar, createArchiveWriter } from "@nexus/core";
 import type { ArchiveWriter, ExportBinaryEntry } from "@nexus/core";
 // Main-process-only subpath (pulls in Argon2id's WASM) — see that module's own
 // header comment on why the renderer must never import it.
 import { ARCHIVE_KDF_PARAMS, deriveArchiveKey, generateSalt } from "@nexus/core/auth";
 import { localToday } from "./clock.js";
 import { gatherProfileData, gatherProfileSettings, type ProfileDataDeps } from "./profileData.js";
-import type { ExportResult } from "../shared/ipc.js";
+import type { ExportResult, IcsExportResult } from "../shared/ipc.js";
 
 /**
  * Everything `handleExport` needs: one profile's whole state (`ProfileDataDeps`,
@@ -101,6 +102,58 @@ export async function handleExport(
     totalRecords: archive.totalRecords,
     missingAttachments,
     encrypted: passphrase !== null,
+  };
+}
+
+/** Everything the ICS export needs, which is one store and the window the dialog belongs to — a calendar file names no attachment, no note and no setting. */
+export interface ImexIcsExportDeps extends Pick<ProfileDataDeps, "eventStore"> {
+  getMainWindow(): BrowserWindow | null;
+}
+
+/**
+ * Calendar-only export (CAL-008, closing IMEX-001's "ICS for calendar" clause):
+ * reads this profile's live events through the store main already owns, hands
+ * them to the pure `buildIcsCalendar` (`@nexus/core`) with a `now` stamped here,
+ * and writes the resulting RFC 5545 text at a path the user picks in a native
+ * save dialog.
+ *
+ * SEC-EL, exactly as `handleExport`: the renderer never supplies a filesystem
+ * path — the dialog is the only source of `filePath`, owned entirely by this
+ * main-process function.
+ *
+ * No passphrase branch, and deliberately so. An `.ics` is an interchange file
+ * for the user's OTHER calendar; there is no format in which a sealed one would
+ * be readable by anything on the other end, so the choice `handleExport` offers
+ * would be a choice between "works" and "does not". The whole-profile archive
+ * remains the encrypted path, and the settings copy says which is which.
+ *
+ * The file is written whole (`writeFile`) rather than streamed: a calendar is
+ * text proportional to the number of events, with none of the 50 MB attachment
+ * blobs that make the archive's streaming discipline necessary.
+ */
+export async function handleIcsExport(
+  deps: ImexIcsExportDeps,
+  profile: { id: string },
+): Promise<IcsExportResult> {
+  const win = deps.getMainWindow();
+  const dialogOptions = {
+    defaultPath: `nexus-kalendar-${localToday()}.ics`,
+    filters: [{ name: "Kalendar (iCalendar)", extensions: ["ics"] }],
+  };
+  const { canceled, filePath } = win
+    ? await dialog.showSaveDialog(win, dialogOptions)
+    : await dialog.showSaveDialog(dialogOptions);
+  if (canceled || !filePath) return { canceled: true };
+
+  const events = deps.eventStore(profile.id).listActive();
+  const calendar = buildIcsCalendar(events, { now: new Date().toISOString() });
+  await writeFile(filePath, calendar.text, "utf8");
+
+  return {
+    canceled: false,
+    path: filePath,
+    events: events.length - calendar.skipped.length,
+    skipped: calendar.skipped.length,
   };
 }
 

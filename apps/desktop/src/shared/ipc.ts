@@ -199,6 +199,12 @@ export const IpcChannel = {
   searchPage: "search:page",
   searchRebuild: "search:rebuild",
   imexExport: "imex:export",
+  // The calendar alone, as an RFC 5545 `.ics` (CAL-008). Its own channel rather
+  // than a mode on `imex:export`: it writes a different file, in a different
+  // format, with no passphrase branch at all — and a shared channel would be one
+  // validated field away from letting a request for a calendar produce an
+  // archive of the whole profile.
+  imexExportIcs: "imex:export-ics",
   imexRestorePick: "imex:restore-pick",
   imexRestorePreview: "imex:restore-preview",
   imexRestoreApply: "imex:restore-apply",
@@ -2810,6 +2816,32 @@ export type ExportResult =
     };
 
 /**
+ * An ICS calendar export (CAL-008 / IMEX-001's "ICS for calendar" clause). Only
+ * the profile is named: this writes ONE open, unencrypted text file of the
+ * user's own appointments — there is nothing to seal and no passphrase branch,
+ * which is exactly why it is its own channel rather than a flag on
+ * `ImexExportRequest`.
+ */
+export interface ImexExportIcsRequest {
+  profileId: string;
+}
+
+/**
+ * The outcome of an ICS export, shaped like `ExportResult`'s: either the user
+ * canceled the native save dialog, or the file was written to the `path` that
+ * dialog returned (never one the renderer supplied — SEC-EL).
+ *
+ * `events` is how many `VEVENT`s were written and `skipped` how many rows could
+ * not be expressed as one — a start date that is not a real calendar day today.
+ * Reported rather than swallowed, for the reason `missingAttachments` is: a
+ * partial export the user is not told about is the one failure an export cannot
+ * afford.
+ */
+export type IcsExportResult =
+  | { canceled: true }
+  | { canceled: false; path: string; events: number; skipped: number };
+
+/**
  * Why an archive could not be opened (IMEX slice 3c, ADR-023). Lives here
  * rather than in `main/archiveReader.ts` — the module that actually produces
  * it — because this file is the one place every wire shape is declared once;
@@ -3628,6 +3660,8 @@ export interface NexusApi {
    * written.
    */
   exportData(profileId: string, passphrase: string | null): Promise<ExportResult>;
+  /** The calendar alone, as an RFC 5545 `.ics` (CAL-008) — one open text file, no passphrase branch. Resolves after the native save dialog is settled. */
+  exportCalendarIcs(profileId: string): Promise<IcsExportResult>;
   /** Opens the native "pick a restore archive" dialog (IMEX slice 3c, ADR-023). Main remembers the pick, which is why nothing below ever names a path. */
   pickRestoreArchive(): Promise<RestorePickResult>;
   /** Dry-runs the restore by really parsing the picked archive — never an estimate. `passphrase` is `null` for a plain `.nexus.zip`; a wrong one comes back as `{ status: "unreadable", code: "passphrase-wrong" }` rather than as a rejection. */

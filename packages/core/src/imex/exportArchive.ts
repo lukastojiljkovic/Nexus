@@ -23,11 +23,22 @@
 import type { RecurrenceRule } from "../recurrence/recurrence.js";
 import { claimUniqueName, sanitizePathSegment, UNTITLED_NOTE_NAME } from "./archivePaths.js";
 import { toCsv } from "./csv.js";
+import { buildIcsCalendar } from "./icsExport.js";
 import { renderNoteMarkdown } from "./noteMarkdown.js";
 import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown.js";
 
 /**
- * IMEX-004: the archive's own semver. `1.13.0` adds the `study-settings` record
+ * IMEX-004: the archive's own semver. NOT bumped by `data/calendar.ics`
+ * (CAL-008): the archive gained a FILE, not a record type. Nothing parses it on
+ * the way back in — `archiveReader.ts`'s allowlist ignores every entry that is
+ * not the manifest, a `DATA_FILES` NDJSON, a `.ydoc` or a blob, and
+ * `parseImportArchive` walks only `DATA_FILES` ∪ the manifest's own checksums —
+ * so it is a convenience copy for the user's other calendar, exactly as
+ * `tables/*.csv` is for their spreadsheet, and it is checksummed by neither. An
+ * older reader handed a newer archive is therefore no worse off for its
+ * presence, which is precisely what a version bump would otherwise be claiming.
+ *
+ * `1.13.0` adds the `study-settings` record
  * type — the profile's FSRS target retention and its two daily caps (STUDY-007,
  * migration 034) — after `1.12.0` added a card's `problemSteps` —
  * the worked solution a problem card's `back` is derived from (ADR-046) —
@@ -954,6 +965,14 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     if (dashboard.backgroundHash === null || dashboard.backgroundSizeBytes === null) continue;
     declareBlob(dashboard.backgroundHash, dashboard.backgroundSizeBytes);
   }
+
+  // The calendar as a standards-honest `.ics` beside the lossless NDJSON
+  // (IMEX-001's "ICS for calendar" clause, CAL-008). A convenience copy for
+  // whatever else the user keeps a calendar in — a restore reads the NDJSON and
+  // ignores this file entirely (see `SCHEMA_VERSION`'s note). Stamped with the
+  // archive's own `createdAt`, so it reads no clock either and two exports of
+  // the same profile at the same moment are byte-identical.
+  files.set("data/calendar.ics", buildIcsCalendar(input.data.events, { now: input.createdAt }).text);
 
   files.set("tables/tasks.csv", tasksCsv(input.data.tasks));
   files.set("tables/events.csv", eventsCsv(input.data.events));

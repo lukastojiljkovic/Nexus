@@ -315,6 +315,66 @@ function BackupSection({ profileId }: BackupSectionProps) {
   );
 }
 
+interface CalendarExportSectionProps {
+  profileId: string;
+  hits: ReadonlySet<string>;
+}
+
+/**
+ * Izvoz kalendara (CAL-008): the quiet `.ics` action inside the same "Rezervna
+ * kopija" card, below the full export. Deliberately one button and one result
+ * line — there is no passphrase, no confirmation and no preview, because the
+ * file is an open interchange copy of appointments the user already sees.
+ */
+function CalendarExportSection({ profileId, hits }: CalendarExportSectionProps) {
+  const s = strings.settings.calendarExport;
+
+  const [running, setRunning] = useState(false);
+  const [saved, setSaved] = useState<{ path: string; events: number; skipped: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function runExport(): Promise<void> {
+    if (running) return;
+    setError(null);
+    setSaved(null);
+    setRunning(true);
+    try {
+      const outcome = await window.nexus.exportCalendarIcs(profileId);
+      if (!outcome.canceled) {
+        setSaved({ path: outcome.path, events: outcome.events, skipped: outcome.skipped });
+      }
+    } catch (exportError) {
+      setError(s.error);
+      console.error("Nexus: failed to export the calendar:", exportError);
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div className="set__restore-block">
+      <h3 className={labelClass("set__module-group-title", hits.has("backup-calendar"))}>{s.title}</h3>
+      <p className="app__muted">{s.description}</p>
+      <Button size="sm" disabled={running} onClick={() => void runExport()}>
+        {s.button}
+      </Button>
+      {saved != null && (
+        <p className="set__section-caption">
+          {strings.settings.backup.savedPrefix} <span className="app__path">{saved.path}</span> (
+          {saved.events} {dayUnit(saved.events, s.eventsUnitOne, s.eventsUnitMany)})
+        </p>
+      )}
+      {saved != null && saved.skipped > 0 && (
+        <p className="set__error">
+          {s.skippedPrefix} {saved.skipped} {dayUnit(saved.skipped, s.eventsUnitOne, s.eventsUnitMany)}{" "}
+          {s.skippedSuffix}
+        </p>
+      )}
+      {error != null && <p className="set__error">{error}</p>}
+    </div>
+  );
+}
+
 /** The picked archive as this section remembers it. Never a path: main holds the pick, and the renderer refers to it without naming it (SEC-EL). */
 interface PickedArchive {
   fileName: string;
@@ -2061,6 +2121,7 @@ export function SettingsPage({
 
       <Card title={strings.settings.sectionTitle.backup} className={sectionClass(sections.has("backup"))}>
         <BackupSection profileId={profileId} />
+        <CalendarExportSection profileId={profileId} hits={hits} />
         <RestoreSection profileId={profileId} hits={hits} />
         <ImportSection profileId={profileId} hits={hits} />
       </Card>

@@ -192,12 +192,21 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
     label: s.backup.exportButton,
     keywords: ["izvoz", "arhiva", "kopija"],
   },
-  // The "Rezervna kopija" card holds three blocks — export, restore, import —
-  // so each gets its own entry inside that one section rather than a section of
-  // its own: they are one subject, and splitting the card would hide the
-  // contrast the two archive flows are meant to be read against. „uvoz“ now
+  // The "Rezervna kopija" card holds four blocks — export, calendar, restore,
+  // import — so each gets its own entry inside that one section rather than a
+  // section of its own: they are one subject, and splitting the card would hide
+  // the contrast the two archive flows are meant to be read against. „uvoz“ now
   // belongs to the import block alone; the restore entry answers to the words
   // that describe what IT does.
+  {
+    // „kalendar“ and „ics“ are the words someone actually types looking for
+    // this; „izvoz“ is deliberately NOT repeated from `backup-export`, which
+    // owns it — an entry that answers every query answers none of them.
+    id: "backup-calendar",
+    section: "backup",
+    label: s.calendarExport.title,
+    keywords: ["kalendar", "ics", "icalendar", "dogadjaji", "google"],
+  },
   {
     id: "backup-restore",
     section: "backup",

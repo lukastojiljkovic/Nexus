@@ -193,6 +193,7 @@ describe("buildExportArchive", () => {
           "data/notifications.ndjson",
           "data/notes.ndjson",
           "data/dashboard.ndjson",
+          "data/calendar.ics",
           "tables/tasks.csv",
           "tables/events.csv",
           "tables/documents.csv",
@@ -634,6 +635,43 @@ describe("buildExportArchive", () => {
       expect(rows[0]?.recurrenceExdates).toEqual(["2026-07-18"]);
       // ...and with its reminder ladder (CAL-006).
       expect(rows[0]?.reminderOffsets).toEqual([15, 1440]);
+    });
+  });
+
+  describe("data/calendar.ics", () => {
+    it("carries a valid, empty RFC 5545 calendar when the profile has no events", () => {
+      const archive = buildExportArchive(emptyInput());
+      const ics = archive.files.get("data/calendar.ics") ?? "";
+      expect(ics.startsWith("BEGIN:VCALENDAR\r\n")).toBe(true);
+      expect(ics.endsWith("END:VCALENDAR\r\n")).toBe(true);
+      expect(ics).not.toContain("BEGIN:VEVENT");
+    });
+
+    it("writes one VEVENT per event, stamped with the archive's own createdAt", () => {
+      const input = emptyInput();
+      input.data.events = [
+        {
+          id: "e1", profileId: "profile1", title: "Sastanak", description: null,
+          startAt: "2026-07-15T10:00", endAt: "2026-07-15T11:00", allDay: false,
+          location: null, category: null,
+          createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+          recurrence: null, recurrenceExdates: [], reminderOffsets: [],
+        },
+      ];
+
+      const ics = buildExportArchive(input).files.get("data/calendar.ics") ?? "";
+      expect(ics).toContain("UID:e1@nexus.stojiljkovic.rs\r\n");
+      // `createdAt` is the manifest's own stamp — the archive reads no clock.
+      expect(ics).toContain("DTSTAMP:20260711T100000Z\r\n");
+      expect(ics).toContain("DTSTART:20260715T100000\r\n");
+    });
+
+    it("is NOT checksummed — it is a convenience copy, not part of the interchange", () => {
+      const archive = buildExportArchive(emptyInput());
+      const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as {
+        checksums: Record<string, string>;
+      };
+      expect(Object.keys(manifest.checksums)).not.toContain("data/calendar.ics");
     });
   });
 

@@ -1576,6 +1576,34 @@ export const strings = {
       error: "Izvoz nije uspeo. Pokušaj ponovo.",
     },
     /**
+     * Izvoz kalendara (CAL-008) — the small `.ics` action beside the full
+     * export in the same "Rezervna kopija" card. Its own block rather than more
+     * keys on `backup`, because it is a different file in a different format
+     * with its own result line; it borrows `backup.savedPrefix` for the path,
+     * which is the same sentence saying the same thing.
+     *
+     * `description` names the one thing the user has to know before clicking:
+     * this file is not protected, because no other calendar could open it if it
+     * were.
+     */
+    calendarExport: {
+      title: "Izvoz kalendara",
+      description:
+        "Izvezi samo kalendar kao .ics — standardni format koji Google kalendar, Apple kalendar i Outlook otvaraju. Fajl nije zaštićen lozinkom, jer ga tako nijedan drugi kalendar ne bi mogao otvoriti.",
+      button: "Izvezi kalendar (.ics)",
+      /** "N događaj"/"N događaja" — Serbian numeral agreement via `dayUnit`. */
+      eventsUnitOne: "događaj",
+      eventsUnitMany: "događaja",
+      /**
+       * Shown only when `skipped > 0`: "N događaj(a) nije izvezeno — datum
+       * početka nije ispravan." Numeral agreement via `dayUnit`, and the reason
+       * sits outside the counted phrase so it reads correctly at every count.
+       */
+      skippedPrefix: "Nije izvezeno:",
+      skippedSuffix: "— datum početka nije ispravan.",
+      error: "Izvoz kalendara nije uspeo. Pokušaj ponovo.",
+    },
+    /**
      * Vraćanje iz arhive (IMEX slice 3d, ADR-023) — the restore flow that sits
      * below the export in the same "Rezervna kopija" card, plus the post-reload
      * undo banner the app shell renders (`App.tsx`).

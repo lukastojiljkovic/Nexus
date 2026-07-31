@@ -361,6 +361,7 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.searchRebuild, { profileId }),
   exportData: (profileId, passphrase) =>
     ipcRenderer.invoke(IpcChannel.imexExport, { profileId, passphrase }),
+  exportCalendarIcs: (profileId) => ipcRenderer.invoke(IpcChannel.imexExportIcs, { profileId }),
   pickRestoreArchive: () => ipcRenderer.invoke(IpcChannel.imexRestorePick),
   previewRestore: (profileId, passphrase) =>
     ipcRenderer.invoke(IpcChannel.imexRestorePreview, { profileId, passphrase }),

@@ -176,6 +176,15 @@ export type {
 export { renderNoteMarkdown } from "./imex/noteMarkdown.js";
 export type { NoteMarkdownAttachment, NoteMarkdownContext } from "./imex/noteMarkdown.js";
 
+export { buildIcsCalendar } from "./imex/icsExport.js";
+export type {
+  IcsCalendar,
+  IcsCalendarOptions,
+  IcsEvent,
+  IcsSkippedEvent,
+  IcsSkipReason,
+} from "./imex/icsExport.js";
+
 export {
   MAX_ARCHIVE_PASSPHRASE_LENGTH,
   MIN_ARCHIVE_PASSPHRASE_LENGTH,

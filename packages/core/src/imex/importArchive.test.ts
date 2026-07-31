@@ -430,6 +430,25 @@ describe("parseImportArchive — round trip", () => {
   });
 });
 
+describe("parseImportArchive — files it does not know", () => {
+  it("ignores the archive's own data/calendar.ics, which `toImportInput` hands it verbatim", () => {
+    const archive = buildExportArchive({ ...emptyExportInput(), data: richProfileData() });
+    const input = toImportInput(archive);
+
+    // The convenience copy really is in the map this reader was handed — the
+    // tolerance below is not vacuous (CAL-008: it is checksummed by nobody and
+    // parsed by nobody, so a restore must simply not care that it is there).
+    expect(input.files.has("data/calendar.ics")).toBe(true);
+    expect(parseImportArchive(input).problems).toEqual([]);
+  });
+
+  it("ignores an entirely unknown data file too", () => {
+    const files = baseFiles();
+    files.set("data/whatever.txt", "ne znam šta je ovo");
+    expect(parseImportArchive(emptyInputWith(files)).problems).toEqual([]);
+  });
+});
+
 describe("parseImportArchive — empty archive", () => {
   it("round-trips zero rows everywhere with no problems", () => {
     const input = emptyExportInput();

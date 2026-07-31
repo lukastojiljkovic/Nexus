@@ -204,7 +204,7 @@ import {
 } from "./auth.js";
 import { localToday } from "./clock.js";
 import { releaseGlobalCapture, setGlobalCaptureAccelerator } from "./globalCapture.js";
-import { handleExport } from "./imex.js";
+import { handleExport, handleIcsExport } from "./imex.js";
 import {
   cancelIdleCompactions,
   captureNoteVersion,
@@ -265,6 +265,7 @@ import {
   type FlagState,
   type GlobalShortcutChord,
   type GlobalShortcutResult,
+  type IcsExportResult,
   type ImportApplyResult,
   type ImportPickResult,
   type ImportPreviewResult,
@@ -4772,6 +4773,17 @@ function registerIpc(): void {
       profile,
       passphrase,
     );
+  });
+
+  // CAL-008: the calendar alone, as an RFC 5545 `.ics` at a path the same kind
+  // of native save dialog returns. `profileId` is the whole payload — an ICS is
+  // one open text file with nothing to seal, so there is no passphrase to
+  // validate and no plaintext confirmation to honour.
+  ipcMain.handle(IpcChannel.imexExportIcs, (event, payload): Promise<IcsExportResult> => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profile = requireProfile(requireDb(), profileId);
+    return handleIcsExport({ eventStore, getMainWindow: () => mainWindow }, profile);
   });
 
   // IMEX restore (ADR-023, slice 3c). Each of these is a thin validation shim
