@@ -5,7 +5,30 @@ export { ModuleRegistry } from "./modules/registry.js";
 export { resolveEnabled } from "./flags/flags.js";
 export type { FlagState, FlagStore } from "./flags/flags.js";
 
-export type { JsonSchema, WidgetContract, WidgetSize } from "./contracts/widgets.js";
+export type {
+  JsonSchema,
+  WidgetChoiceField,
+  WidgetChoiceOption,
+  WidgetConfigField,
+  WidgetContract,
+  WidgetCountField,
+  WidgetSize,
+  WidgetTaskListsField,
+} from "./contracts/widgets.js";
+export {
+  parseWidgetConfig,
+  serializeWidgetConfig,
+  validateWidgetConfig,
+  WIDGET_CONFIG_MAX_TASK_LISTS,
+  widgetChoice,
+  widgetCount,
+  widgetTaskLists,
+} from "./contracts/widgetConfig.js";
+export type {
+  ParseWidgetConfigOptions,
+  WidgetConfig,
+  WidgetConfigValue,
+} from "./contracts/widgetConfig.js";
 export type {
   SettingDefinition,
   SettingScope,

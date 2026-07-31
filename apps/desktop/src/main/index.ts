@@ -30,12 +30,14 @@ import {
   rankSearchResults,
   resolveDueRange,
   resolveEnabled,
+  serializeWidgetConfig,
   shiftDayKey,
   sniffMime,
   toFtsMatchExpression,
   validateArchivePassphrase,
   validateRecurrenceRule,
   validateTaskViewConfig,
+  validateWidgetConfig,
 } from "@nexus/core";
 import type { TaskViewConfig } from "@nexus/core";
 import type {
@@ -6344,6 +6346,41 @@ function registerIpc(): void {
         asDashboardSetScope(body.setId),
         instanceId,
         size,
+        new Date().toISOString(),
+      );
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannel.dashboardWidgetsSetConfig,
+    (event, payload): DashboardWidgetInstance[] => {
+      assertTrustedSender(event);
+      const body = asRecord(payload);
+      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const instanceId = asNonEmptyString(body.instanceId, "instanceId");
+      const scope = asDashboardSetScope(body.setId);
+      const store = dashboardWidgetStore(profileId);
+      // The domain `config` is validated into is the CONTRACT of the widget
+      // this placement draws (DASH-004 / ADR-059) — resolved from the board's
+      // own layout (a not-yet-materialized default entry included), never from
+      // anything the renderer claims about itself.
+      const entry = store.listLayout(scope).find((row) => row.instanceId === instanceId);
+      if (entry === undefined) {
+        throw new Error('Invalid IPC payload: "instanceId" names no placement of this board.');
+      }
+      // A placement whose widget this build does not publish declares nothing,
+      // so the empty declaration accepts exactly one config: the clear (`{}`).
+      const contract = moduleRegistry.findWidget(entry.widgetId) ?? {};
+      const config = validateWidgetConfig(contract, body.config);
+      if (config === null) {
+        throw new Error(
+          'Invalid IPC payload: "config" is not a valid configuration for this widget.',
+        );
+      }
+      return store.setConfig(
+        scope,
+        instanceId,
+        serializeWidgetConfig(config),
         new Date().toISOString(),
       );
     },

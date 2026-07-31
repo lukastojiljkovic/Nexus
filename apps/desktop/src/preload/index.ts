@@ -416,6 +416,13 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.dashboardWidgetsRemove, { profileId, instanceId, setId }),
   setDashboardWidgetSize: (profileId, instanceId, size, setId) =>
     ipcRenderer.invoke(IpcChannel.dashboardWidgetsSetSize, { profileId, instanceId, size, setId }),
+  setDashboardWidgetConfig: (profileId, instanceId, config, setId) =>
+    ipcRenderer.invoke(IpcChannel.dashboardWidgetsSetConfig, {
+      profileId,
+      instanceId,
+      config,
+      setId,
+    }),
   moveDashboardWidget: (profileId, instanceId, beforeId, afterId, setId) =>
     ipcRenderer.invoke(IpcChannel.dashboardWidgetsMove, {
       profileId,

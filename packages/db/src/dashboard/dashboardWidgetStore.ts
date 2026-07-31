@@ -66,7 +66,11 @@ export interface DashboardWidgetInstance {
   /** `moduleId:widgetId`, the id a module's manifest publishes. */
   widgetId: string;
   size: DashboardWidgetSize;
-  /** Per-widget JSON text, or null. Opaque here: no widget publishes a config schema yet. */
+  /**
+   * Per-widget JSON text, or null (= the widget's own defaults). Written by
+   * `setConfig`; opaque HERE beyond being a JSON object — the contract that
+   * gives its keys meaning lives with the module manifests (ADR-059).
+   */
   config: string | null;
 }
 
@@ -176,6 +180,7 @@ export class DashboardWidgetStore {
   private readonly selectSetId: Database.Statement;
   private readonly insertWidget: Database.Statement;
   private readonly updateSize: Database.Statement;
+  private readonly updateConfig: Database.Statement;
   private readonly updatePlacement: Database.Statement;
   private readonly updatePosition: Database.Statement;
   private readonly deleteWidget: Database.Statement;
@@ -223,6 +228,10 @@ export class DashboardWidgetStore {
     );
     this.updateSize = db.prepare(
       `UPDATE dashboard_widgets SET size = ?, updated_at = ?
+       WHERE instance_id = ? AND profile_id = ? AND set_id IS ?`,
+    );
+    this.updateConfig = db.prepare(
+      `UPDATE dashboard_widgets SET config = ?, updated_at = ?
        WHERE instance_id = ? AND profile_id = ? AND set_id IS ?`,
     );
     this.updatePlacement = db.prepare(
@@ -326,6 +335,32 @@ export class DashboardWidgetStore {
       this.materializeDefault(scope, validNow);
       this.requirePlacement(scope, instanceId);
       this.updateSize.run(validSize, validNow, instanceId, this.profileId, scope);
+      return this.listLayout(scope);
+    })();
+  }
+
+  /**
+   * Writes one placement's config — JSON text a widget's own contract gives
+   * meaning to (DASH-004 / ADR-059), or NULL to clear it back to the widget's
+   * defaults. The store checks the SHAPE and nothing more (a JSON object, the
+   * posture `listAll`'s archive reader has always demanded of this column);
+   * which keys a widget accepts is its contract's declaration, revalidated in
+   * main against `shared/modules.ts` — the catalogue this store deliberately
+   * does not hold.
+   */
+  setConfig(
+    setId: string | null,
+    instanceId: string,
+    config: string | null,
+    now: string,
+  ): DashboardWidgetInstance[] {
+    const validNow = validateDateTime(now);
+    const validConfig = validateConfigText(config);
+    return this.db.transaction((): DashboardWidgetInstance[] => {
+      const scope = this.requireSetScope(setId);
+      this.materializeDefault(scope, validNow);
+      this.requirePlacement(scope, instanceId);
+      this.updateConfig.run(validConfig, validNow, instanceId, this.profileId, scope);
       return this.listLayout(scope);
     })();
   }
@@ -500,6 +535,26 @@ function validateWidgetId(value: string): string {
 function validateSize(value: DashboardWidgetSize): DashboardWidgetSize {
   if (!(DASHBOARD_WIDGET_SIZES as readonly string[]).includes(value)) {
     throw new DashboardWidgetValidationError(`Unknown widget size "${String(value)}".`);
+  }
+  return value;
+}
+
+/**
+ * A config column value: NULL, or text holding a JSON OBJECT — the same rule
+ * the interchange parser applies to this column, one notch tighter (an object,
+ * not just any JSON) because every writer since ADR-059 produces one. WHAT the
+ * object may say is the widget contract's business, not this store's.
+ */
+function validateConfigText(value: string | null): string | null {
+  if (value === null) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new DashboardWidgetValidationError('"config" must be JSON text.');
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new DashboardWidgetValidationError('"config" must hold a JSON object.');
   }
   return value;
 }

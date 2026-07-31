@@ -301,6 +301,78 @@ describe("DashboardWidgetStore.setSize", () => {
   });
 });
 
+describe("DashboardWidgetStore.setConfig", () => {
+  it("writes one placement's config and answers with the whole layout", () => {
+    const { store } = storeFor("a");
+    const target = store.listLayout(null)[1]!;
+    const layout = store.setConfig(null, target.instanceId, '{"count":7}', NOW);
+    expect(layout.map((entry) => entry.widgetId)).toEqual(DEFAULT_WIDGET_IDS);
+    expect(layout[1]?.config).toBe('{"count":7}');
+    expect(layout.filter((entry) => entry.config === null)).toHaveLength(
+      DEFAULT_DASHBOARD_LAYOUT.length - 1,
+    );
+  });
+
+  it("materializes the default arrangement when the FIRST edit is a config write", () => {
+    const { store } = storeFor("a");
+    const target = store.listLayout(null)[0]!;
+    store.setConfig(null, target.instanceId, '{"count":7}', NOW);
+    expect(rowCount()).toBe(DEFAULT_DASHBOARD_LAYOUT.length);
+    expect(store.listLayout(null).map((entry) => entry.instanceId)).toContain(target.instanceId);
+  });
+
+  it("clears back to NULL — no stored config IS today's behaviour", () => {
+    const { store } = storeFor("a");
+    const target = store.listLayout(null)[0]!;
+    store.setConfig(null, target.instanceId, '{"count":7}', NOW);
+    const layout = store.setConfig(null, target.instanceId, null, LATER);
+    expect(layout[0]?.config).toBeNull();
+  });
+
+  it("stamps updated_at without touching created_at", () => {
+    const { store } = storeFor("a");
+    store.add(null, "finance:budzet", "M", NOW);
+    const target = store.listLayout(null)[0]!;
+    store.setConfig(null, target.instanceId, '{"count":7}', LATER);
+    const row = store.listAll().find((entry) => entry.instanceId === target.instanceId);
+    expect(row?.createdAt).toBe(NOW);
+    expect(row?.updatedAt).toBe(LATER);
+  });
+
+  it("refuses text that is not JSON, or whose JSON is not an object", () => {
+    const { store } = storeFor("a");
+    const target = store.listLayout(null)[0]!;
+    expect(() => store.setConfig(null, target.instanceId, "{nije json", NOW)).toThrow(
+      DashboardWidgetValidationError,
+    );
+    expect(() => store.setConfig(null, target.instanceId, "[3]", NOW)).toThrow(
+      DashboardWidgetValidationError,
+    );
+    expect(() => store.setConfig(null, target.instanceId, '"tekst"', NOW)).toThrow(
+      DashboardWidgetValidationError,
+    );
+    expect(rowCount()).toBe(0);
+  });
+
+  it("throws for an instance this profile does not have", () => {
+    const { store } = storeFor("a");
+    expect(() => store.setConfig(null, "nema-ga", '{"count":7}', NOW)).toThrow(
+      DashboardWidgetNotFoundError,
+    );
+  });
+
+  it("cannot reach a placement through the wrong set", () => {
+    const { store, profileId } = storeFor("a");
+    const setId = new DashboardSetStore(db.raw, profileId).create("Fakultet", NOW).id;
+    const placed = store.add(setId, "finance:budzet", "M", NOW).at(-1)!.instanceId;
+    expect(() => store.setConfig(null, placed, '{"count":7}', LATER)).toThrow(
+      DashboardWidgetNotFoundError,
+    );
+    const layout = store.setConfig(setId, placed, '{"count":7}', LATER);
+    expect(layout.at(-1)?.config).toBe('{"count":7}');
+  });
+});
+
 describe("DashboardWidgetStore.move", () => {
   it("moves a placement between two neighbours", () => {
     const { store } = storeFor("a");

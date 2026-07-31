@@ -1,6 +1,7 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ComponentType, CSSProperties, DragEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { parseWidgetConfig, widgetChoice, widgetCount, widgetTaskLists } from "@nexus/core";
 import type { ModuleRegistry, WidgetContract } from "@nexus/core";
 import { Button, Card, TextField } from "@nexus/ui";
 import { DASHBOARD_SET_NAME_MAX_LENGTH, DASHBOARD_WIDGET_SPANS } from "../../shared/ipc.js";
@@ -12,6 +13,7 @@ import type {
   DashboardWidgetSize,
   Event,
   RunningFocusSession,
+  TaskList,
 } from "../../shared/ipc.js";
 import { buildCalendarItems, type CalendarSource } from "./calendarItems.js";
 import { localMinutesOfDay, readStoredClock } from "./calendarPrefs.js";
@@ -59,40 +61,83 @@ interface PlacedWidget {
   Body: ComponentType<DashboardWidgetBodyProps>;
 }
 
+/** What the „Podesi…" form sends: the canonical non-default fields, `{}` to clear — the wire's own shape. */
+type WidgetConfigPayload = Record<string, number | string | string[]>;
+
 interface WidgetMenuProps {
   /** The card this menu belongs to, so its "⋯" has a name of its own among five. */
   title: string;
   contract: WidgetContract;
   size: DashboardWidgetSize;
+  /** Whose task lists the config form offers — the one field kind that reads live data. */
+  profileId: string;
+  /** The placement's stored config text — what the „Podesi…" form edits. */
+  config: string | null;
   /** Where a step up / down would land the card, or null at that end of the layout. */
   up: LayoutNeighbours | null;
   down: LayoutNeighbours | null;
   onMove: (step: LayoutNeighbours) => void;
   onResize: (size: DashboardWidgetSize) => void;
+  onConfigure: (config: WidgetConfigPayload) => void;
   onRemove: () => void;
 }
 
 /**
- * The edit-mode "⋯" on one card: move it, resize it, take it off (ADR-045
- * section 5). A menu of plain focusable buttons, the `MoveMenu` shape TASK-004
- * established — which is what gives the whole edit mode keyboard parity with the
- * drag by construction, rather than as a second implementation.
+ * The edit-mode "⋯" on one card: move it, resize it, configure it (when its
+ * contract declares fields — ADR-059), take it off (ADR-045 section 5). A menu
+ * of plain focusable buttons, the `MoveMenu` shape TASK-004 established —
+ * which is what gives the whole edit mode keyboard parity with the drag by
+ * construction, rather than as a second implementation.
  *
  * An item at an end of the layout is DISABLED, never dropped: a menu whose items
  * come and go is one the user has to re-read on every open.
  */
-function WidgetMenu({
-  title,
+function WidgetMenu(props: WidgetMenuProps) {
+  return (
+    <NotePopover
+      label={`${strings.dashboard.edit.menuLabel}: ${props.title}`}
+      triggerClassName="dash__widget-menu"
+    >
+      {(close) => <WidgetMenuContent {...props} close={close} />}
+    </NotePopover>
+  );
+}
+
+/**
+ * The panel's content, a component of its own so „Podesi…" can flip the SAME
+ * popover into the config form and back — and so the mode resets with the
+ * panel: the popover unmounts its children when it closes, which is exactly
+ * the lifetime the flag should have.
+ */
+function WidgetMenuContent({
   contract,
   size,
+  profileId,
+  config,
   up,
   down,
   onMove,
   onResize,
+  onConfigure,
   onRemove,
-}: WidgetMenuProps) {
+  close,
+}: WidgetMenuProps & { close: () => void }) {
   const s = strings.dashboard.edit;
-  const step = (text: string, target: LayoutNeighbours | null, close: () => void): ReactNode => (
+  const [configuring, setConfiguring] = useState(false);
+
+  if (configuring) {
+    return (
+      <WidgetConfigForm
+        profileId={profileId}
+        contract={contract}
+        config={config}
+        onApply={onConfigure}
+        onBack={() => setConfiguring(false)}
+      />
+    );
+  }
+
+  const step = (text: string, target: LayoutNeighbours | null): ReactNode => (
     <button
       className="note__menu-item"
       role="menuitem"
@@ -108,51 +153,259 @@ function WidgetMenu({
   );
 
   return (
-    <NotePopover label={`${s.menuLabel}: ${title}`} triggerClassName="dash__widget-menu">
-      {(close) => (
+    <>
+      {step(s.moveUp, up)}
+      {step(s.moveDown, down)}
+      <div className="note__menu-sep" role="separator" />
+      <span className="note__menu-label">{s.sizeLabel}</span>
+      {/* Only the presets this widget publishes: a size it cannot honour is
+          precisely what `WidgetContract.sizes` exists to withhold. */}
+      {contract.sizes.map((preset) => (
+        <button
+          key={preset}
+          className="note__menu-item note__menu-item--check"
+          role="menuitemradio"
+          type="button"
+          aria-checked={preset === size}
+          onClick={() => {
+            if (preset !== size) onResize(preset);
+            close();
+          }}
+        >
+          <span
+            className={`note__menu-check${preset === size ? "" : " note__menu-check--hidden"}`}
+            aria-hidden="true"
+          >
+            ✓
+          </span>
+          {s.size[preset]}
+        </button>
+      ))}
+      {/* „Podesi…" appears only where a choice exists (ADR-059): a contract
+          declaring no fields gets no entry, not a disabled one — there is no
+          state in which it could become available. */}
+      {(contract.configFields?.length ?? 0) > 0 && (
         <>
-          {step(s.moveUp, up, close)}
-          {step(s.moveDown, down, close)}
-          <div className="note__menu-sep" role="separator" />
-          <span className="note__menu-label">{s.sizeLabel}</span>
-          {/* Only the presets this widget publishes: a size it cannot honour is
-              precisely what `WidgetContract.sizes` exists to withhold. */}
-          {contract.sizes.map((preset) => (
-            <button
-              key={preset}
-              className="note__menu-item note__menu-item--check"
-              role="menuitemradio"
-              type="button"
-              aria-checked={preset === size}
-              onClick={() => {
-                if (preset !== size) onResize(preset);
-                close();
-              }}
-            >
-              <span
-                className={`note__menu-check${preset === size ? "" : " note__menu-check--hidden"}`}
-                aria-hidden="true"
-              >
-                ✓
-              </span>
-              {s.size[preset]}
-            </button>
-          ))}
           <div className="note__menu-sep" role="separator" />
           <button
-            className="note__menu-item note__menu-item--danger"
+            className="note__menu-item"
             role="menuitem"
             type="button"
-            onClick={() => {
-              onRemove();
-              close();
-            }}
+            onClick={() => setConfiguring(true)}
           >
-            {s.remove}
+            {strings.dashboard.config.open}
           </button>
         </>
       )}
-    </NotePopover>
+      <div className="note__menu-sep" role="separator" />
+      <button
+        className="note__menu-item note__menu-item--danger"
+        role="menuitem"
+        type="button"
+        onClick={() => {
+          onRemove();
+          close();
+        }}
+      >
+        {s.remove}
+      </button>
+    </>
+  );
+}
+
+/** The select value standing for a count's out-of-range „no cap" default — never stored, only shown. */
+const COUNT_ALL_VALUE = "sve";
+
+interface WidgetConfigFormProps {
+  profileId: string;
+  contract: WidgetContract;
+  config: string | null;
+  onApply: (config: WidgetConfigPayload) => void;
+  onBack: () => void;
+}
+
+/**
+ * The generic per-widget config form (DASH-004 / ADR-059), drawn INSIDE the
+ * card's ⋯ popover from nothing but the contract's `configFields`: a count is
+ * the settings page's select over its range, a choice is the size-preset radio
+ * idiom, and the task-list field is a checkbox list over the profile's LIVE
+ * lists. Every change applies IMMEDIATELY — the settings page's own manner —
+ * by sending the whole canonical config (non-default fields only), which main
+ * revalidates against the same declaration.
+ *
+ * Current values come from `parseWidgetConfig` over the stored text, dead list
+ * selections dropped once the live lists are known — so the form always shows
+ * what the card is actually doing, config rot included.
+ */
+function WidgetConfigForm({ profileId, contract, config, onApply, onBack }: WidgetConfigFormProps) {
+  const s = strings.dashboard.config;
+  const fields = contract.configFields ?? [];
+  const needsLists = fields.some((field) => field.kind === "taskLists");
+  const [taskLists, setTaskLists] = useState<TaskList[] | null>(null);
+  const [listsFailed, setListsFailed] = useState(false);
+
+  useEffect(() => {
+    if (!needsLists) return;
+    let active = true;
+    void (async () => {
+      try {
+        const snapshot = await window.nexus.listTaskLists(profileId);
+        if (active) setTaskLists(snapshot.lists);
+      } catch (error) {
+        if (active) setListsFailed(true);
+        console.error("Nexus: failed to load the task lists for a widget's config:", error);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profileId, needsLists]);
+
+  const values = parseWidgetConfig(
+    contract,
+    config,
+    taskLists !== null ? { liveTaskListIds: new Set(taskLists.map((list) => list.id)) } : {},
+  );
+
+  /** The canonical payload: every field's current value with `key` overridden, default-equal fields left out. */
+  const apply = (key: string, value: number | string | string[]): void => {
+    const next: WidgetConfigPayload = {};
+    for (const field of fields) {
+      const held = field.key === key ? value : values[field.key];
+      if (held === undefined) continue;
+      const isDefault =
+        (field.kind === "count" && held === field.default) ||
+        (field.kind === "choice" && held === field.default) ||
+        (field.kind === "taskLists" && Array.isArray(held) && held.length === 0);
+      if (!isDefault) next[field.key] = held;
+    }
+    onApply(next);
+  };
+
+  const fieldLabel = (key: string): string =>
+    lookupString(strings, `dashboard.config.fields.${key}`) ?? key;
+  const check = (on: boolean): ReactNode => (
+    <span className={`note__menu-check${on ? "" : " note__menu-check--hidden"}`} aria-hidden="true">
+      ✓
+    </span>
+  );
+
+  return (
+    <>
+      <button className="note__menu-item" role="menuitem" type="button" onClick={onBack}>
+        ‹ {s.back}
+      </button>
+      {fields.map((field) => {
+        if (field.kind === "count") {
+          const current = widgetCount(values, field.key);
+          // A default outside the range means "uncapped as shipped" — the
+          // select then leads with „Sve", which clears the field back to it.
+          const uncappedDefault = !Number.isInteger(field.default);
+          const range: number[] = [];
+          for (let n = field.min; n <= field.max; n += 1) range.push(n);
+          return (
+            <Fragment key={field.key}>
+              <span className="note__menu-label">{fieldLabel(field.key)}</span>
+              <select
+                className="dash__config-select"
+                aria-label={fieldLabel(field.key)}
+                value={Number.isInteger(current) ? String(current) : COUNT_ALL_VALUE}
+                onChange={(event) =>
+                  apply(
+                    field.key,
+                    event.target.value === COUNT_ALL_VALUE
+                      ? field.default
+                      : Number(event.target.value),
+                  )
+                }
+              >
+                {uncappedDefault && <option value={COUNT_ALL_VALUE}>{s.countAll}</option>}
+                {range.map((n) => (
+                  <option key={n} value={String(n)}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </Fragment>
+          );
+        }
+        if (field.kind === "choice") {
+          const current = widgetChoice(values, field.key);
+          return (
+            <Fragment key={field.key}>
+              <span className="note__menu-label">{fieldLabel(field.key)}</span>
+              {field.options.map((option) => (
+                <button
+                  key={option.id}
+                  className="note__menu-item note__menu-item--check"
+                  role="menuitemradio"
+                  type="button"
+                  aria-checked={option.id === current}
+                  onClick={() => {
+                    if (option.id !== current) apply(field.key, option.id);
+                  }}
+                >
+                  {check(option.id === current)}
+                  {lookupString(strings, option.labelKey) ?? option.id}
+                </button>
+              ))}
+            </Fragment>
+          );
+        }
+        const selection = widgetTaskLists(values, field.key);
+        const selected = new Set(selection);
+        return (
+          <Fragment key={field.key}>
+            <span className="note__menu-label">{fieldLabel(field.key)}</span>
+            {listsFailed ? (
+              <p className="note__menu-caption">{s.listsError}</p>
+            ) : taskLists === null ? (
+              <p className="note__menu-caption">{strings.app.loading}</p>
+            ) : (
+              <>
+                {/* The empty selection IS "all lists" (ADR-059), so it is drawn
+                    as the leading answer rather than left implicit. */}
+                <button
+                  className="note__menu-item note__menu-item--check"
+                  role="menuitemradio"
+                  type="button"
+                  aria-checked={selection.length === 0}
+                  onClick={() => {
+                    if (selection.length > 0) apply(field.key, []);
+                  }}
+                >
+                  {check(selection.length === 0)}
+                  {s.allLists}
+                </button>
+                {taskLists.map((list) => {
+                  const on = selected.has(list.id);
+                  return (
+                    <button
+                      key={list.id}
+                      className="note__menu-item note__menu-item--check"
+                      role="menuitemcheckbox"
+                      type="button"
+                      aria-checked={on}
+                      onClick={() =>
+                        apply(
+                          field.key,
+                          on
+                            ? selection.filter((id) => id !== list.id)
+                            : [...selection, list.id],
+                        )
+                      }
+                    >
+                      {check(on)}
+                      {list.name}
+                    </button>
+                  );
+                })}
+              </>
+            )}
+          </Fragment>
+        );
+      })}
+    </>
   );
 }
 
@@ -565,6 +818,15 @@ export function DashboardPage({
   async function resizeWidget(instanceId: string, size: DashboardWidgetSize): Promise<void> {
     await runLayout(() =>
       window.nexus.setDashboardWidgetSize(profileId, instanceId, size, activeSetId),
+    );
+  }
+
+  async function configureWidget(
+    instanceId: string,
+    config: Record<string, number | string | string[]>,
+  ): Promise<void> {
+    await runLayout(() =>
+      window.nexus.setDashboardWidgetConfig(profileId, instanceId, config, activeSetId),
     );
   }
 
@@ -1047,10 +1309,13 @@ export function DashboardPage({
                       title={title}
                       contract={contract}
                       size={entry.size}
+                      profileId={profileId}
+                      config={entry.config}
                       up={moveNeighbours(order, index, index - 1)}
                       down={moveNeighbours(order, index, index + 1)}
                       onMove={(step) => void moveWidget(entry.instanceId, step)}
                       onResize={(size) => void resizeWidget(entry.instanceId, size)}
+                      onConfigure={(config) => void configureWidget(entry.instanceId, config)}
                       onRemove={() => void removeWidget(entry.instanceId)}
                     />
                   </div>
@@ -1058,6 +1323,8 @@ export function DashboardPage({
                 <Body
                   profileId={profileId}
                   enabledModules={enabledModules}
+                  contract={contract}
+                  config={entry.config}
                   onOpenModule={onOpenModule}
                   onOpenNote={onOpenNote}
                 />

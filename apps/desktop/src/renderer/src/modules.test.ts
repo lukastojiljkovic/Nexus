@@ -1,4 +1,4 @@
-import { MODULE_CATEGORIES, resolveEnabled } from "@nexus/core";
+import { MODULE_CATEGORIES, parseWidgetConfig, resolveEnabled } from "@nexus/core";
 // The one place a renderer file names `@nexus/db`, and it is a TEST: the
 // default dashboard layout is a db constant (`DashboardWidgetStore`) whose
 // entries name widgets these manifests publish, and nothing else in the build
@@ -182,6 +182,104 @@ describe("the widgets the v0 modules publish (ADR-045)", () => {
             strings,
           );
         expect(typeof resolved, widget.title).toBe("string");
+      }
+    }
+  });
+});
+
+describe("the per-widget configuration declarations (DASH-004 / ADR-059)", () => {
+  const registry = createModuleRegistry();
+  const contractOf = (qualified: string) => {
+    const contract = registry.findWidget(qualified);
+    expect(contract, qualified).toBeDefined();
+    return contract!;
+  };
+  const lookup = (path: string): unknown =>
+    path
+      .split(".")
+      .reduce<unknown>(
+        (node, key) =>
+          typeof node === "object" && node !== null
+            ? (node as Record<string, unknown>)[key]
+            : undefined,
+        strings,
+      );
+
+  it("declares exactly the decided v1 fields, widget by widget", () => {
+    const shape = (qualified: string) =>
+      (contractOf(qualified).configFields ?? []).map((field) => `${field.kind}:${field.key}`);
+    expect(shape("tasks:predstojece")).toEqual(["count:count", "choice:period", "taskLists:lists"]);
+    expect(shape("tasks:hitno-kasni")).toEqual(["count:count"]);
+    expect(shape("calendar:danas")).toEqual(["count:count"]);
+    expect(shape("calendar:isticanja")).toEqual(["choice:horizon"]);
+    expect(shape("notes:nedavno")).toEqual(["count:count"]);
+    expect(shape("study:ispiti")).toEqual(["choice:horizon"]);
+    // „Učenje" declares NOTHING — the affordance appears only where a choice exists.
+    expect(contractOf("study:ucenje").configFields).toBeUndefined();
+  });
+
+  it("pins every default to TODAY'S behaviour — an absent config renders the widget exactly as it ships", () => {
+    expect(parseWidgetConfig(contractOf("tasks:predstojece"), null)).toEqual({
+      count: 5, // the card's shipped `.slice(0, 5)`
+      period: "svi", // shipped with NO period window
+      lists: [], // empty selection = every list
+    });
+    expect(parseWidgetConfig(contractOf("tasks:hitno-kasni"), null)).toEqual({ count: 5 });
+    // „Danas" ships UNCAPPED, so its unconfigured cap is infinite — a value the
+    // strict writer refuses, so it can never be anything but the default.
+    expect(parseWidgetConfig(contractOf("calendar:danas"), null)).toEqual({
+      count: Number.POSITIVE_INFINITY,
+    });
+    // „Isticanja" ships on each document's own reminder ladder, not a window.
+    expect(parseWidgetConfig(contractOf("calendar:isticanja"), null)).toEqual({ horizon: "prag" });
+    expect(parseWidgetConfig(contractOf("notes:nedavno"), null)).toEqual({ count: 5 });
+    // „Ispiti" ships showing every upcoming exam.
+    expect(parseWidgetConfig(contractOf("study:ispiti"), null)).toEqual({ horizon: "svi" });
+  });
+
+  it("keeps every declaration well-formed: slug keys and ids, sane ranges, defaults inside their domains", () => {
+    for (const manifest of registry.all()) {
+      for (const widget of registry.widgetsOf(manifest.id)) {
+        const fields = widget.configFields ?? [];
+        const keys = fields.map((field) => field.key);
+        expect(new Set(keys).size, widget.id).toBe(keys.length);
+        for (const field of fields) {
+          expect(field.key, widget.id).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+          if (field.kind === "count") {
+            expect(Number.isInteger(field.min) && Number.isInteger(field.max), widget.id).toBe(true);
+            expect(field.min, widget.id).toBeLessThanOrEqual(field.max);
+            // A count default is an integer in range, or the documented
+            // "uncapped" infinity — never anything else.
+            expect(
+              (Number.isInteger(field.default) &&
+                field.default >= field.min &&
+                field.default <= field.max) ||
+                field.default === Number.POSITIVE_INFINITY,
+              widget.id,
+            ).toBe(true);
+          }
+          if (field.kind === "choice") {
+            const ids = field.options.map((option) => option.id);
+            expect(new Set(ids).size, widget.id).toBe(ids.length);
+            expect(ids, widget.id).toContain(field.default);
+            for (const id of ids) expect(id, widget.id).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+          }
+        }
+      }
+    }
+  });
+
+  it("resolves every field label and every option label to a real string", () => {
+    for (const manifest of registry.all()) {
+      for (const widget of registry.widgetsOf(manifest.id)) {
+        for (const field of widget.configFields ?? []) {
+          expect(typeof lookup(`dashboard.config.fields.${field.key}`), field.key).toBe("string");
+          if (field.kind === "choice") {
+            for (const option of field.options) {
+              expect(typeof lookup(option.labelKey), option.labelKey).toBe("string");
+            }
+          }
+        }
       }
     }
   });

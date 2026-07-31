@@ -16,6 +16,64 @@ export interface JsonSchema {
 export type WidgetSize = "S" | "M" | "L";
 
 /**
+ * The closed vocabulary a widget's configuration is declared in (DASH-004 /
+ * ADR-059). Three kinds and no fourth: a ROW CAP, a CLOSED CHOICE, and a
+ * multi-select over the profile's task lists. A widget states its knobs as
+ * `WidgetContract.configFields`; `widgetConfig.ts` beside this file is the one
+ * reader and the one writer's gate over that declaration, so every widget's
+ * fallback discipline is identical by construction.
+ *
+ * `key`s are ASCII slugs, unique within one widget's declaration. They are the
+ * property names of the stored JSON (`dashboard_widgets.config`, migration 032)
+ * AND the lookup keys the renderer resolves field labels by
+ * (`strings.dashboard.config.fields.<key>`), so a key shared across widgets —
+ * `count`, say — deliberately reads as one label everywhere.
+ */
+export interface WidgetCountField {
+  kind: "count";
+  key: string;
+  /** Inclusive bounds of what a writer may store — always integers. */
+  min: number;
+  max: number;
+  /**
+   * What an absent (or unreadable) value means — TODAY'S behaviour of the
+   * widget, pinned by tests. May legitimately sit OUTSIDE `min..max`: a widget
+   * that ships uncapped declares `Number.POSITIVE_INFINITY`, which no write
+   * ever stores (the writer accepts integers in range only), so the value can
+   * only ever mean "unconfigured".
+   */
+  default: number;
+}
+
+/** One answer of a closed choice; `labelKey` resolves through the renderer's `strings` tree, exactly as `WidgetContract.title` does. */
+export interface WidgetChoiceOption {
+  id: string;
+  labelKey: string;
+}
+
+export interface WidgetChoiceField {
+  kind: "choice";
+  key: string;
+  /** The closed domain, in the order the UI offers it. */
+  options: WidgetChoiceOption[];
+  /** One of `options`' ids — and, as everywhere here, today's behaviour. */
+  default: string;
+}
+
+/**
+ * A multi-select over the profile's LIVE task lists. Its default needs no
+ * declaring: an empty selection means "all lists", which is also what a
+ * selection loses itself back into when every list it named is gone — a dead
+ * id is dropped on read, never an error (ADR-059).
+ */
+export interface WidgetTaskListsField {
+  kind: "taskLists";
+  key: string;
+}
+
+export type WidgetConfigField = WidgetCountField | WidgetChoiceField | WidgetTaskListsField;
+
+/**
  * A dashboard widget a module publishes. Fields mirror the widget contract in
  * PRD 02 DASH §6 (name, sizes, config schema, data query, deep link).
  *
@@ -44,6 +102,13 @@ export interface WidgetContract {
   sizes: WidgetSize[];
   /** Optional description of the widget's config shape. */
   configSchema?: JsonSchema;
+  /**
+   * The knobs this widget exposes (DASH-004 / ADR-059), in the order the
+   * „Podesi…" form draws them. Absent (or empty) means the widget configures
+   * NOTHING — no entry appears in its edit-mode menu, and the one write
+   * channel refuses any keyed config for it.
+   */
+  configFields?: WidgetConfigField[];
   /** The module id whose page this widget opens (DASH-005) — a registry id, not a URL. */
   deepLink: string;
   // The data-query shape is resolved when the storage layer lands (ADR-001).

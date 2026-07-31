@@ -244,6 +244,7 @@ export const IpcChannel = {
   dashboardWidgetsAdd: "dashboard:widgets-add",
   dashboardWidgetsRemove: "dashboard:widgets-remove",
   dashboardWidgetsSetSize: "dashboard:widgets-set-size",
+  dashboardWidgetsSetConfig: "dashboard:widgets-set-config",
   dashboardWidgetsMove: "dashboard:widgets-move",
   // Named dashboards (DASH-008 / ADR-055) — the wire names ADR-055 decided.
   dashboardSetsList: "dash:list-sets",
@@ -3199,7 +3200,7 @@ export interface DashboardSetDimRequest {
 }
 
 /**
- * The dashboard's widget layout (DASH-002 / ADR-045, migration 032). Five
+ * The dashboard's widget layout (DASH-002 / ADR-045, migration 032). Six
  * channels, all of them answering with the WHOLE resulting layout rather than
  * with the row they touched: a layout is an ordered list, every mutation can
  * re-space its neighbours, and a renderer that patched one entry locally would
@@ -3245,7 +3246,12 @@ export interface DashboardWidgetInstance {
   instanceId: string;
   widgetId: string;
   size: DashboardWidgetSize;
-  /** Per-widget JSON text, or null. Opaque: no widget publishes a config schema yet. */
+  /**
+   * Per-widget JSON text, or null (DASH-004 / ADR-059). Null — and every field
+   * the text does not carry — means the widget's own defaults, i.e. exactly
+   * how the card ships; the renderer reads it through `parseWidgetConfig`
+   * against the contract's `configFields`, never by hand.
+   */
   config: string | null;
 }
 
@@ -3255,7 +3261,7 @@ export interface DashboardWidgetsListRequest {
   setId?: string | null;
 }
 
-/** Places a widget at the end of the layout. No `config`: nothing configures a widget yet. */
+/** Places a widget at the end of the layout. No `config`: a fresh placement starts on the widget's own defaults. */
 export interface DashboardWidgetsAddRequest {
   profileId: string;
   widgetId: string;
@@ -3273,6 +3279,21 @@ export interface DashboardWidgetsSetSizeRequest {
   profileId: string;
   instanceId: string;
   size: DashboardWidgetSize;
+  setId?: string | null;
+}
+
+/**
+ * Writes one placement's per-widget configuration (DASH-004 / ADR-059).
+ * `config` is canonical — only the fields that differ from the widget's own
+ * defaults, so `{}` clears back to exactly how the card ships. Main revalidates
+ * it FIELD BY FIELD against the contract the placement's widget declares in
+ * `shared/modules.ts` (SEC-EL-02: the renderer's JSON is never trusted), and
+ * the store re-checks the shape.
+ */
+export interface DashboardWidgetsSetConfigRequest {
+  profileId: string;
+  instanceId: string;
+  config: Record<string, number | string | string[]>;
   setId?: string | null;
 }
 
@@ -5116,6 +5137,17 @@ export interface NexusApi {
     profileId: string,
     instanceId: string,
     size: DashboardWidgetSize,
+    setId: string | null,
+  ): Promise<DashboardWidgetInstance[]>;
+  /**
+   * Writes one placement's per-widget configuration (DASH-004 / ADR-059) —
+   * only the fields differing from the widget's defaults, `{}` to clear.
+   * Revalidated in main against the widget's own contract declaration.
+   */
+  setDashboardWidgetConfig(
+    profileId: string,
+    instanceId: string,
+    config: Record<string, number | string | string[]>,
     setId: string | null,
   ): Promise<DashboardWidgetInstance[]>;
   /** Re-orders one placement between two others, either null at an end of the layout. Neighbours resolve within the same board only. */

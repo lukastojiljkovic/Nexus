@@ -1,4 +1,9 @@
-import { ModuleRegistry, type ModuleManifest, type WidgetContract } from "@nexus/core";
+import {
+  ModuleRegistry,
+  type ModuleManifest,
+  type WidgetConfigField,
+  type WidgetContract,
+} from "@nexus/core";
 
 /**
  * The dashboard cards the app can draw, declared as the contracts their OWNING
@@ -26,16 +31,61 @@ import { ModuleRegistry, type ModuleManifest, type WidgetContract } from "@nexus
  * widget deliberately points at its own module rather than at the dashboard it
  * is drawn on.
  */
+/**
+ * Per-widget configuration declarations (DASH-004 / ADR-059). The rule every
+ * `default` below obeys: it IS the widget's shipped behaviour, pinned by
+ * `modules.test.ts` — a placement with no stored config renders exactly as the
+ * card always has. Which is also why two of the choices carry an option the
+ * range alone would not suggest: „Predstojeći zadaci" ships with NO period
+ * window and „Ispiti" with NO horizon, so each declares an explicit
+ * everything-option (`svi`) as its default, and „Danas" ships UNCAPPED, so its
+ * count defaults to `Infinity` — a value no write can store (the writer takes
+ * integers in `min..max` only), meaning simply "unconfigured".
+ *
+ * Keys are shared across widgets on purpose (`count`, `horizon`): one key, one
+ * Serbian label (`strings.dashboard.config.fields.<key>`), one meaning.
+ */
+const ROW_CAP: WidgetConfigField = { kind: "count", key: "count", min: 3, max: 10, default: 5 };
+
+/** 30/60/90-day windows over „ističe za koliko dana“ — shared by the two horizon widgets, each with its own default option prepended. */
+const HORIZON_DAY_OPTIONS = [
+  { id: "30", labelKey: "dashboard.config.horizon.30" },
+  { id: "60", labelKey: "dashboard.config.horizon.60" },
+  { id: "90", labelKey: "dashboard.config.horizon.90" },
+];
+
 const CALENDAR_WIDGETS: WidgetContract[] = [
   // The agenda card: today's events, birthdays and tasks. Owned by CAL because
   // the day is a calendar concept, even though the tasks due today ride along.
-  { id: "danas", title: "dashboard.today.title", sizes: ["S", "M", "L"], deepLink: "calendar" },
+  {
+    id: "danas",
+    title: "dashboard.today.title",
+    sizes: ["S", "M", "L"],
+    deepLink: "calendar",
+    configFields: [
+      // The one cap over the card's WHOLE row list (events, then birthdays,
+      // then tasks) — uncapped as shipped, hence the infinity default.
+      { kind: "count", key: "count", min: 3, max: 10, default: Number.POSITIVE_INFINITY },
+    ],
+  },
   // Tracked documents nearing their expiry (CAL-005).
   {
     id: "isticanja",
     title: "dashboard.expiring.title",
     sizes: ["S", "M", "L"],
     deepLink: "calendar",
+    configFields: [
+      {
+        kind: "choice",
+        key: "horizon",
+        options: [
+          // As shipped: each document's own reminder ladder decides (`uskoro`).
+          { id: "prag", labelKey: "dashboard.config.horizon.prag" },
+          ...HORIZON_DAY_OPTIONS,
+        ],
+        default: "prag",
+      },
+    ],
   },
 ];
 
@@ -45,6 +95,23 @@ const TASKS_WIDGETS: WidgetContract[] = [
     title: "dashboard.upcoming.title",
     sizes: ["S", "M", "L"],
     deepLink: "tasks",
+    configFields: [
+      ROW_CAP,
+      {
+        kind: "choice",
+        key: "period",
+        options: [
+          // As shipped: every active task, however far its rok. The two window
+          // options are TASK's own smart lists (ADR-049), labels included, so
+          // the card and the views can never disagree on what a window means.
+          { id: "svi", labelKey: "dashboard.config.period.svi" },
+          { id: "danas", labelKey: "tasks.smart.names.danas" },
+          { id: "sledecih7", labelKey: "tasks.smart.names.sledecih7" },
+        ],
+        default: "svi",
+      },
+      { kind: "taskLists", key: "lists" },
+    ],
   },
   // „Kasni“ and „Hitno“ (ADR-049) as one card — the two smart lists that answer
   // „šta je već trebalo da bude gotovo, i šta gori“.
@@ -53,6 +120,7 @@ const TASKS_WIDGETS: WidgetContract[] = [
     title: "dashboard.urgent.title",
     sizes: ["S", "M"],
     deepLink: "tasks",
+    configFields: [ROW_CAP],
   },
 ];
 
@@ -63,11 +131,31 @@ const NOTES_WIDGETS: WidgetContract[] = [
     title: "dashboard.recentNotes.title",
     sizes: ["S", "M"],
     deepLink: "notes",
+    configFields: [ROW_CAP],
   },
 ];
 
 const STUDY_WIDGETS: WidgetContract[] = [
-  { id: "ispiti", title: "study.dashboardTitle", sizes: ["S", "M", "L"], deepLink: "study" },
+  {
+    id: "ispiti",
+    title: "study.dashboardTitle",
+    sizes: ["S", "M", "L"],
+    deepLink: "study",
+    configFields: [
+      {
+        kind: "choice",
+        key: "horizon",
+        options: [
+          // As shipped: every upcoming exam, however distant.
+          { id: "svi", labelKey: "dashboard.config.horizon.svi" },
+          ...HORIZON_DAY_OPTIONS,
+        ],
+        default: "svi",
+      },
+    ],
+  },
+  // Deliberately NO `configFields`: a streak-and-minutes card has no knob worth
+  // turning, and the „Podesi…" affordance appears only where a choice exists.
   {
     id: "ucenje",
     title: "study.dashboardStudyTitle",

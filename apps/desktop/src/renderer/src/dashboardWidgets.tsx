@@ -1,11 +1,25 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
-import { computeStreak, matchesSmartList, selectSmartList } from "@nexus/core";
-import type { SmartListContext } from "@nexus/core";
+import {
+  computeStreak,
+  matchesSmartList,
+  parseWidgetConfig,
+  widgetChoice,
+  widgetCount,
+  widgetTaskLists,
+} from "@nexus/core";
+import type { WidgetContract } from "@nexus/core";
 import { Button, Chip, ListRow } from "@nexus/ui";
 import type { DocumentStatus, Event, Exam, Subject } from "../../shared/ipc.js";
 import { buildCalendarItems } from "./calendarItems.js";
 import type { CalendarItem, CalendarSource } from "./calendarItems.js";
+import {
+  capTodayGroups,
+  expiringDocumentRows,
+  horizonWindowDays,
+  upcomingTaskRows,
+  urgentTaskRows,
+} from "./dashboardWidgetRows.js";
 import { formatClockLabel, localMinutesOfDay, readStoredClock } from "./calendarPrefs.js";
 import type { ClockPreference } from "./calendarPrefs.js";
 import {
@@ -198,6 +212,15 @@ export interface DashboardWidgetBodyProps {
   profileId: string;
   /** SET-007 flags, for the one widget that reads across two modules. */
   enabledModules: ReadonlySet<string>;
+  /** This widget's own contract — where its `configFields` declaration lives (DASH-004 / ADR-059). */
+  contract: WidgetContract;
+  /**
+   * The placement's stored config text, or null (= the widget's defaults). A
+   * body reads it ONLY through `parseWidgetConfig` against its own contract,
+   * so every card's fallback discipline is the same one: an unreadable value
+   * costs a per-field fallback to how the card ships, never a broken card.
+   */
+  config: string | null;
   onOpenModule: (id: string) => void;
   /**
    * Opens ONE note (021-e's reveal intent), for the widget whose rows name
@@ -226,7 +249,13 @@ const TODAY_SOURCES: ReadonlySet<CalendarSource> = new Set<CalendarSource>([
  * the one whose fetch is per-module conditional: with CAL off it is a task
  * card, with TASK off a calendar one (see `DASHBOARD_WIDGETS`' visibility).
  */
-function TodayWidget({ profileId, enabledModules, onOpenModule }: DashboardWidgetBodyProps) {
+function TodayWidget({
+  profileId,
+  enabledModules,
+  contract,
+  config,
+  onOpenModule,
+}: DashboardWidgetBodyProps) {
   const calendarEnabled = enabledModules.has("calendar");
   const tasksEnabled = enabledModules.has("tasks");
   const load = useCallback(async () => {
@@ -285,9 +314,18 @@ function TodayWidget({ profileId, enabledModules, onOpenModule }: DashboardWidge
         if (todayEvents.length + todayBirthdays.length + todayTasks.length === 0) {
           return <p className="dash__empty">{s.empty}</p>;
         }
+        // The one knob this card has (ADR-059): a cap over the WHOLE row list,
+        // in draw order — uncapped as shipped (the infinity default).
+        const cfg = parseWidgetConfig(contract, config);
+        const capped = capTodayGroups(
+          widgetCount(cfg, "count"),
+          todayEvents,
+          todayBirthdays,
+          todayTasks,
+        );
         return (
           <div className="dash__list">
-            {todayEvents.map((item) => (
+            {capped.events.map((item) => (
               <DashRow
                 key={item.id}
                 onClick={() => onOpenModule("calendar")}
@@ -296,7 +334,7 @@ function TodayWidget({ profileId, enabledModules, onOpenModule }: DashboardWidge
                 <span className="dash__row-title">{item.event.title}</span>
               </DashRow>
             ))}
-            {todayBirthdays.map((item) => (
+            {capped.birthdays.map((item) => (
               <DashRow
                 key={item.id}
                 onClick={() => onOpenModule("calendar")}
@@ -316,7 +354,7 @@ function TodayWidget({ profileId, enabledModules, onOpenModule }: DashboardWidge
                 <span className="dash__row-title">{item.person.name}</span>
               </DashRow>
             ))}
-            {todayTasks.map((task) => (
+            {capped.tasks.map((task) => (
               <DashRow
                 key={`task-${task.id}`}
                 onClick={() => onOpenModule("tasks")}
@@ -332,25 +370,38 @@ function TodayWidget({ profileId, enabledModules, onOpenModule }: DashboardWidge
   );
 }
 
-/** „Predstojeći zadaci" — the next 5 active tasks by due date (nulls last), then age. */
-function UpcomingTasksWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps) {
-  const load = useCallback(() => window.nexus.listTasks(profileId), [profileId]);
+/**
+ * „Predstojeći zadaci" — active tasks by due date (nulls last), then age. The
+ * most configurable card (ADR-059): a row cap, a period window (TASK's own
+ * smart lists) and a task-list filter, all applied in `upcomingTaskRows` and
+ * all defaulting to exactly the shipped card — the next five, no window, every
+ * list.
+ *
+ * The lists snapshot rides the fetch for ONE reason: a selected list that no
+ * longer exists must be dropped against the LIVE set (a dead selection falls
+ * back to "all lists", never an error), and the task rows alone cannot answer
+ * "which lists exist" — an empty list has no task to speak for it.
+ */
+function UpcomingTasksWidget({ profileId, contract, config, onOpenModule }: DashboardWidgetBodyProps) {
+  const load = useCallback(async () => {
+    const [tasks, taskLists] = await Promise.all([
+      window.nexus.listTasks(profileId),
+      window.nexus.listTaskLists(profileId),
+    ]);
+    return { tasks, liveListIds: new Set(taskLists.lists.map((list) => list.id)) };
+  }, [profileId]);
   const { state, retry } = useWidgetData(load);
   const s = strings.dashboard.upcoming;
 
   return (
     <WidgetData state={state} retry={retry}>
-      {(tasks) => {
-        const upcoming = tasks
-          .filter((task) => !task.done)
-          .sort((a, b) => {
-            if (a.dueDate == null && b.dueDate == null)
-              return a.createdAt.localeCompare(b.createdAt);
-            if (a.dueDate == null) return 1;
-            if (b.dueDate == null) return -1;
-            return a.dueDate.localeCompare(b.dueDate) || a.createdAt.localeCompare(b.createdAt);
-          })
-          .slice(0, 5);
+      {({ tasks, liveListIds }) => {
+        const cfg = parseWidgetConfig(contract, config, { liveTaskListIds: liveListIds });
+        const upcoming = upcomingTaskRows(tasks, localTodayKey(), {
+          cap: widgetCount(cfg, "count"),
+          period: widgetChoice(cfg, "period"),
+          listIds: widgetTaskLists(cfg, "lists"),
+        });
         if (upcoming.length === 0) return <p className="dash__empty">{s.empty}</p>;
         return (
           <div className="dash__list">
@@ -377,17 +428,18 @@ function UpcomingTasksWidget({ profileId, onOpenModule }: DashboardWidgetBodyPro
  * ONE card, because they answer one question together: what should already
  * have been done, and what is on fire.
  *
- * The union rule, in full: every late task first, longest overdue leading, then
- * every high-priority task that is not already among them, earliest rok first
- * (undated last) — the two lists' OWN orders, `selectSmartList`'s. Five rows
- * total, so a bad week reads as five things to look at and not as a backlog;
+ * The union rule, in full (now `urgentTaskRows`): every late task first,
+ * longest overdue leading, then every high-priority task that is not already
+ * among them, earliest rok first (undated last) — the two lists' OWN orders,
+ * `selectSmartList`'s. Five rows as shipped (configurable 3..10, ADR-059), so
+ * a bad week reads as a handful of things to look at and not as a backlog;
  * that a late row can also be high priority is why the cap is on the union
  * rather than on each half.
  *
  * The predicates are `@nexus/core`'s, the very ones the two views run, so the
  * card and those views cannot drift on what "late" or "urgent" means.
  */
-function UrgentTasksWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps) {
+function UrgentTasksWidget({ profileId, contract, config, onOpenModule }: DashboardWidgetBodyProps) {
   const load = useCallback(() => window.nexus.listTasks(profileId), [profileId]);
   const { state, retry } = useWidgetData(load);
   const s = strings.dashboard.urgent;
@@ -396,22 +448,10 @@ function UrgentTasksWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps
   return (
     <WidgetData state={state} retry={retry}>
       {(tasks) => {
-        // `includeBlocked` is true for the reason „Danas" gives: this widget
-        // reads the task list alone and never the dependency edges (ADR-037),
-        // so it has no honest way to tell a blocked task from a free one.
-        // Neither of these two lists filters on blocked-ness anyway — the
-        // predicate is here because the context shape requires one.
-        const context: SmartListContext = {
-          today: todayKey,
-          isBlocked: () => false,
-          includeBlocked: true,
-        };
-        const late = selectSmartList(tasks, "kasni", context);
-        const lateIds = new Set(late.map((task) => task.id));
-        const urgent = selectSmartList(tasks, "hitno", context).filter(
-          (task) => !lateIds.has(task.id),
-        );
-        const rows = [...late, ...urgent].slice(0, 5);
+        // The union rule lives in `urgentTaskRows` since ADR-059; the one knob
+        // is the cap over the union, five as shipped.
+        const cfg = parseWidgetConfig(contract, config);
+        const rows = urgentTaskRows(tasks, todayKey, widgetCount(cfg, "count"));
         if (rows.length === 0) return <p className="dash__empty">{s.empty}</p>;
         return (
           <div className="dash__list">
@@ -463,7 +503,7 @@ function UrgentTasksWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps
  * recency — a note pinned last month leading a card called „Nedavne beleške"
  * would simply be false.
  */
-function RecentNotesWidget({ profileId, onOpenNote }: DashboardWidgetBodyProps) {
+function RecentNotesWidget({ profileId, contract, config, onOpenNote }: DashboardWidgetBodyProps) {
   const load = useCallback(() => window.nexus.listNotes(profileId), [profileId]);
   const { state, retry } = useWidgetData(load);
   const s = strings.dashboard.recentNotes;
@@ -471,11 +511,13 @@ function RecentNotesWidget({ profileId, onOpenNote }: DashboardWidgetBodyProps) 
   return (
     <WidgetData state={state} retry={retry}>
       {(notes) => {
+        // Five as shipped; the cap is the card's one knob (ADR-059).
+        const cfg = parseWidgetConfig(contract, config);
         // Copied before sorting: the array is this widget's loaded state, and
         // sorting it in place would be a render mutating what it renders.
         const recent = [...notes]
           .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id))
-          .slice(0, 5);
+          .slice(0, widgetCount(cfg, "count"));
         if (recent.length === 0) return <p className="dash__empty">{s.empty}</p>;
         return (
           <div className="dash__list">
@@ -502,8 +544,12 @@ function RecentNotesWidget({ profileId, onOpenNote }: DashboardWidgetBodyProps) 
   );
 }
 
-/** „Dokumenta koja ističu" — anything past the reminder threshold, soonest first. */
-function ExpiringDocumentsWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps) {
+/**
+ * „Dokumenta koja ističu" — soonest first. As shipped („prag“), anything past
+ * its own reminder threshold; the one knob (ADR-059) swaps that for a fixed
+ * 30/60/90-day horizon (`expiringDocumentRows`).
+ */
+function ExpiringDocumentsWidget({ profileId, contract, config, onOpenModule }: DashboardWidgetBodyProps) {
   const load = useCallback(() => window.nexus.listDocuments(profileId), [profileId]);
   const { state, retry } = useWidgetData(load);
   const s = strings.dashboard.expiring;
@@ -511,9 +557,8 @@ function ExpiringDocumentsWidget({ profileId, onOpenModule }: DashboardWidgetBod
   return (
     <WidgetData state={state} retry={retry}>
       {(documents) => {
-        const expiring = documents
-          .filter((doc) => doc.status !== "ok")
-          .sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry || a.id.localeCompare(b.id));
+        const cfg = parseWidgetConfig(contract, config);
+        const expiring = expiringDocumentRows(documents, widgetChoice(cfg, "horizon"));
         if (expiring.length === 0) return <p className="dash__empty">{s.empty}</p>;
         return (
           <div className="dash__list">
@@ -544,9 +589,10 @@ function ExpiringDocumentsWidget({ profileId, onOpenModule }: DashboardWidgetBod
 /**
  * „Ispiti" — the next upcoming exams (today or later), soonest first, capped at
  * 5. An orphaned exam (its subject was soft-deleted) is skipped rather than
- * shown without a name.
+ * shown without a name. The one knob (ADR-059) narrows "upcoming" to a
+ * 30/60/90-day horizon — every upcoming exam as shipped („svi“).
  */
-function ExamsWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps) {
+function ExamsWidget({ profileId, contract, config, onOpenModule }: DashboardWidgetBodyProps) {
   const load = useCallback(async () => {
     const [subjects, exams] = await Promise.all([
       window.nexus.listSubjects(profileId),
@@ -559,6 +605,8 @@ function ExamsWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps) {
   return (
     <WidgetData state={state} retry={retry}>
       {({ subjects, exams }) => {
+        const cfg = parseWidgetConfig(contract, config);
+        const horizon = horizonWindowDays(widgetChoice(cfg, "horizon"));
         const subjectsById = new Map(subjects.map((subject) => [subject.id, subject] as const));
         const upcoming = exams
           .map((exam) => ({
@@ -570,6 +618,7 @@ function ExamsWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps) {
             (entry): entry is { exam: Exam; subject: Subject; days: number } =>
               entry.subject != null && entry.days >= 0,
           )
+          .filter((entry) => horizon === null || entry.days <= horizon)
           .sort((a, b) => a.days - b.days || a.exam.id.localeCompare(b.exam.id))
           .slice(0, 5);
         if (upcoming.length === 0) {

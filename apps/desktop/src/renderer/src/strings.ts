@@ -369,6 +369,42 @@ export const strings = {
       /** A set write that did not land — the layout's own `edit.failed`, for the boards. */
       failed: "Promena tabli nije uspela. Pokušaj ponovo.",
     },
+    /**
+     * Per-widget configuration (DASH-004 / ADR-059): the edit-mode „Podesi…"
+     * entry and the form the card's ⋯ menu becomes. Field labels resolve BY
+     * THE KEY a contract declares (`fields.<key>`), and a choice option by the
+     * `labelKey` path it carries — both through `lookupString`, exactly as
+     * widget titles do, so an option may just as well point at another
+     * module's copy (the period windows reuse `tasks.smart.names`).
+     */
+    config: {
+      open: "Podesi…",
+      /** The form's way back to the card's actions, same menu, same open. */
+      back: "Nazad",
+      /** One label per declared key, shared across widgets on purpose. */
+      fields: {
+        count: "Broj redova",
+        period: "Period",
+        horizon: "Vremenski okvir",
+        lists: "Liste zadataka",
+      },
+      /** The leading count option on a widget that ships uncapped: no cap at all. */
+      countAll: "Sve",
+      /** The empty selection over task lists — every list counts. */
+      allLists: "Sve liste",
+      /** The lists could not be read for the form; the card itself is untouched. */
+      listsError: "Liste se ne mogu učitati.",
+      period: {
+        svi: "Svi zadaci",
+      },
+      horizon: {
+        prag: "Prema podsetniku dokumenta",
+        svi: "Svi predstojeći",
+        "30": "30 dana",
+        "60": "60 dana",
+        "90": "90 dana",
+      },
+    },
   },
 
   modulePlaceholder: {
