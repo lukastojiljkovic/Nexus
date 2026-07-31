@@ -438,6 +438,19 @@ export class RestoreStore {
         written += 1;
       }
 
+      // The wipe above removed the profile's Inbox with everything else, and an
+      // archive that carries no lists at all — a tasks-excluded subset export
+      // (IMEX-003), or a pre-1.3.0 archive with zero tasks — brings none back.
+      // A profile without an Inbox is one where `TaskStore.create` has nowhere
+      // to put a task (quick-add and the palette throw), so the restore leaves
+      // one standing unconditionally: `ensureInbox` finds the archive's own
+      // when it carried one, and mints a fresh, uncounted-elsewhere row when it
+      // did not.
+      {
+        const inbox = this.taskLists.ensureInbox(now);
+        if (!input.data.taskLists.some((list) => list.id === inbox.id)) written += 1;
+      }
+
       for (const section of input.data.taskSections) {
         this.insertTaskSection.run(
           section.id, section.listId, section.name, section.position,
@@ -590,12 +603,9 @@ export class RestoreStore {
         let position = task.position;
         if (listId === null) {
           if (fallbackListId === null) {
-            const inbox = this.taskLists.ensureInbox(now);
-            fallbackListId = inbox.id;
-            // `written` counts the rows this restore wrote: an Inbox
-            // `ensureInbox` had to mint is one of them, while one it found among
-            // the archive's own lists was already counted above.
-            if (!input.data.taskLists.some((list) => list.id === inbox.id)) written += 1;
+            // Always found, never minted: the unconditional `ensureInbox` after
+            // the list loop above guarantees one exists (and counted it there).
+            fallbackListId = this.taskLists.ensureInbox(now).id;
           }
           listId = fallbackListId;
           fallbackPosition += TASK_ORDER_GAP;

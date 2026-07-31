@@ -760,6 +760,33 @@ describe("RestoreStore", () => {
     );
   });
 
+  it("T1c: an archive with no tasks and no lists still restores a profile WITH an Inbox", () => {
+    // The case a tasks-excluded subset export (IMEX-003) always produces, and a
+    // pre-1.3.0 archive with zero tasks always was: the wipe removes every list
+    // including the Inbox, and nothing in the data brings one back. A profile
+    // without an Inbox is one where quick-add and the palette throw — so the
+    // restore must leave one standing, minted fresh when the archive carries
+    // none.
+    const profileB = createProfile(db, "B");
+    seedFixture(db, profileB, "Old");
+
+    new RestoreStore(db.raw, profileB).replaceProfileData(
+      {
+        profileName: "B prazan",
+        settings: emptySettings(),
+        data: emptyProfileData(),
+        derived: new Map(),
+      },
+      NOW,
+    );
+
+    const lists = new TaskListStore(db.raw, profileB).listActive();
+    expect(lists.filter((list) => list.isInbox)).toHaveLength(1);
+    // And it is usable: a task created with no list named lands in it.
+    const task = new TaskStore(db.raw, profileB).create({ title: "Posle vraćanja" });
+    expect(task.listId).toBe(lists.find((list) => list.isInbox)?.id);
+  });
+
   it("T2: totality of replacement — old rows gone, new rows exact, every module the archive omits ends up empty", () => {
     const profileB = createProfile(db, "B");
     seedFixture(db, profileB, "Old"); // B starts with live rows in every module.
