@@ -227,6 +227,30 @@ export type {
   ImportSkipReason,
 } from "./imex/foreignImport.js";
 
+export {
+  APKG_SKIP_CODES,
+  APKG_SUBJECT_SOURCE_ID,
+  canonicalizeCloze,
+  stripAnkiHtml,
+  translateApkg,
+} from "./imex/ankiTranslate.js";
+export type {
+  AnkiFieldText,
+  ApkgCard,
+  ApkgDeck,
+  ApkgNote,
+  ApkgNotetype,
+  ApkgSkip,
+  ApkgSkipCode,
+  ApkgSubjectChoice,
+  ApkgTranslateReport,
+  ApkgTranslateTarget,
+  ApkgTranslation,
+  ClozeCanonical,
+  ClozeCanonicalRefusal,
+  ParsedApkg,
+} from "./imex/ankiTranslate.js";
+
 export { renderNoteMarkdown } from "./imex/noteMarkdown.js";
 export type { NoteMarkdownAttachment, NoteMarkdownContext } from "./imex/noteMarkdown.js";
 

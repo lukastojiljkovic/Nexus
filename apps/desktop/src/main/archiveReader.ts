@@ -21,6 +21,14 @@
  * `yauzl` seeks over: there is no separate "unencrypted" code path once
  * bytes are flowing, only a different `ArchiveByteSource` in front of it.
  *
+ * Three of those pieces — `createFileByteSource`,
+ * `ByteSourceRandomAccessReader` and `collectStream` — are EXPORTED, because
+ * `apkgReader.ts` (ADR-052) reads a plain zip off disk through exactly the same
+ * three and reimplementing them would be two copies of the short-read loop and
+ * the chunked range pull. Nothing else here is shared: this module's allowlist,
+ * its limits and its `NXA1` branch describe a NEXUS archive, and an `.apkg` is
+ * not one.
+ *
  * Every archive entry not on the fixed allowlist (`manifest.json`,
  * `DATA_FILES`, `data/notes/<id>.ydoc`, `data/note-versions/<id>/<seq>.ydoc`,
  * `blobs/<sha256>`) is ignored. Two entries claiming the SAME allowlisted
@@ -188,7 +196,7 @@ export async function inspectArchiveFile(filePath: string): Promise<{ encrypted:
  * the file has genuinely run out, matching `ArchiveByteSource.read`'s
  * "resolves EXACTLY `length` bytes, or rejects" contract.
  */
-function createFileByteSource(handle: FileHandle, byteLength: number): ArchiveByteSource {
+export function createFileByteSource(handle: FileHandle, byteLength: number): ArchiveByteSource {
   return {
     byteLength,
     async read(offset: number, length: number): Promise<Uint8Array> {
@@ -227,7 +235,7 @@ const RANGE_READ_CHUNK_BYTES = 262_144; // 256 KiB
  * its own initiative, but overriding it explicitly documents that this class
  * holds no resource of its own to release.
  */
-class ByteSourceRandomAccessReader extends RandomAccessReader {
+export class ByteSourceRandomAccessReader extends RandomAccessReader {
   constructor(private readonly source: ArchiveByteSource) {
     super();
   }
@@ -280,7 +288,8 @@ function classifyEntryName(name: string): EntryClass {
   return { kind: "skip" };
 }
 
-async function collectStream(stream: Readable): Promise<Buffer> {
+/** Drains a `yauzl` entry stream into one buffer. Exported for `apkgReader.ts`, which reads whole entries on the same terms this module reads its text ones. */
+export async function collectStream(stream: Readable): Promise<Buffer> {
   const chunks: Buffer[] = [];
   for await (const chunk of stream) {
     chunks.push(chunk as Buffer);

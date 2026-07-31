@@ -7,6 +7,9 @@ import {
   parseImportArchive,
   personDuplicateKey,
   planForeignImport,
+  translateApkg,
+  type ApkgSkip as CoreApkgSkip,
+  type ApkgSubjectChoice,
   type ArchiveProfilePicture,
   type ExportSettings,
   type ForeignImportPlan,
@@ -16,11 +19,13 @@ import {
   type ImportPlanReport as CoreImportPlanReport,
   type ImportSkipReason as CoreImportSkipReason,
   type ImportProblem,
+  type ParsedApkg,
   type ProfileData,
 } from "@nexus/core";
 import { uuidv7 } from "@nexus/db";
 import type { ForeignImportStore, RestoredNoteDerived, RestoreStore } from "@nexus/db";
 
+import { ApkgReadError, readApkg } from "./apkgReader.js";
 import { ArchiveReadError, inspectArchiveFile, openArchive, type OpenedArchive } from "./archiveReader.js";
 import { cancelIdleCompactions } from "./notes.js";
 import {
@@ -30,6 +35,13 @@ import {
   type ProfileDataDeps,
 } from "./profileData.js";
 import type {
+  ApkgImportApplyResult,
+  ApkgImportPickResult,
+  ApkgImportPreview,
+  ApkgImportPreviewResult,
+  ApkgImportSkip,
+  ApkgImportSkipCode,
+  ApkgImportSubjectChoice,
   ArchiveModuleName,
   ImportApplyResult,
   ImportDuplicateChoices,
@@ -53,26 +65,27 @@ import type {
 } from "../shared/ipc.js";
 
 /**
- * The orchestrator for both ways an archive can enter a profile: IMEX RESTORE
- * (ADR-023, slice 3c), which replaces a profile preserving ids, and FOREIGN
- * IMPORT (ADR-043), which merges an archive into a profile that already has
- * data. Each is the seam between the untrusted-input reader
- * (`archiveReader.ts`), the pure validator/planner (`@nexus/core`'s
- * `parseImportArchive` and, for an import, `planForeignImport`), and the write
- * (`@nexus/db`'s `RestoreStore.replaceProfileData` or
- * `ForeignImportStore.insertPlanned`). Nothing here parses a byte of archive
- * content itself and nothing here writes SQL itself — this module's whole job
- * is sequencing those pieces the way each operation's safety model requires: a
- * preview that is a real dry run rather than an estimate, and a one-step undo
- * that needs no storage design of its own.
+ * The orchestrator for every way a FILE can enter a profile: IMEX RESTORE
+ * (ADR-023, slice 3c), which replaces a profile preserving ids; FOREIGN IMPORT
+ * (ADR-043), which merges an archive into a profile that already has data; and
+ * the ANKI `.apkg` IMPORT (ADR-052), which merges somebody else's flashcard
+ * collection into it. Each is the seam between an untrusted-input reader
+ * (`archiveReader.ts` or `apkgReader.ts`), the pure validator/planner
+ * (`@nexus/core`'s `parseImportArchive` / `translateApkg`, and, for both
+ * imports, `planForeignImport`), and the write (`@nexus/db`'s
+ * `RestoreStore.replaceProfileData` or `ForeignImportStore.insertPlanned`).
+ * Nothing here parses a byte of file content itself and nothing here writes SQL
+ * itself — this module's whole job is sequencing those pieces the way each
+ * operation's safety model requires: a preview that is a real dry run rather
+ * than an estimate, and a one-step undo that needs no storage design of its own.
  *
- * The two live in ONE module, and deliberately so: they share the undo slot.
+ * The three live in ONE module, and deliberately so: they share the undo slot.
  * `undo` below is a single whole-profile snapshot covering whichever operation
  * ran last, which is what makes "the same banner just works" true and what
- * makes "one slot" a fact of this file's shape rather than a convention two
+ * makes "one slot" a fact of this file's shape rather than a convention three
  * modules would have to keep. Everything else about them is kept APART — their
  * own picks, their own channels, their own tokens — so that no call on one
- * surface can ever trigger the other's semantics.
+ * surface can ever trigger another's semantics.
  *
  * Deliberately Electron-free — no `import "electron"`, directly or
  * transitively — exactly like `archiveReader.ts` and `profileData.ts`: the
@@ -81,7 +94,8 @@ import type {
  * pipeline be exercised under plain Node/Vitest. Wiring the two new IPC
  * channels this will eventually need is the next slice's job, not this one's.
  *
- * Two pieces of state live at module scope, and ONLY two:
+ * Four pieces of state live at module scope, and ONLY four — one pick per
+ * surface, and the shared undo:
  *
  * - `pending`: the archive file the user picked, and — once a preview has
  *   succeeded — the full parse result that preview reported, plus the
@@ -91,6 +105,11 @@ import type {
  *   re-read or re-validated, and an attachment blob streams from the SAME
  *   file handle the preview opened rather than paying to reopen the archive
  *   (and, for an encrypted one, to re-run Argon2id) a second time.
+ * - `pendingImport`: the same, for the archive picked to be MERGED in.
+ * - `pendingApkg`: the Anki file picked, plus the collection a preview read out
+ *   of it. No handle is held here — `readApkg` closes the file before it
+ *   returns — but the collection IS, so that previewing again under a different
+ *   subject costs a re-translate and a re-plan rather than a second read.
  * - `undo`: the pre-restore snapshot of the last COMPLETED restore, gathered
  *   with the exact same `gatherProfileData`/`gatherProfileSettings` the
  *   exporter itself gathers with (`profileData.ts`), so the undo snapshot and
@@ -100,10 +119,10 @@ import type {
  *   accepted price of a one-click undo that needs no storage design, retention
  *   policy, or on-disk format of its own.
  *
- * Both are wiped on lock (`clearRestoreState`), because either one surviving
- * a lock would mean holding decrypted archive bytes, or a whole profile's
- * plaintext, past the moment the user asked this session's key material to be
- * dropped.
+ * All four are wiped on lock (`clearRestoreState`), because any one of them
+ * surviving a lock would mean holding decrypted archive bytes, somebody else's
+ * whole collection, or a whole profile's plaintext, past the moment the user
+ * asked this session's key material to be dropped.
  */
 
 /**
@@ -172,7 +191,7 @@ interface ReadyImport {
  */
 interface RestoreUndo {
   /** Which operation this snapshot was taken for — carried onto the wire so the banner can name what it is offering to undo. */
-  kind: "restore" | "import";
+  kind: "restore" | "import" | "apkg";
   profileId: string;
   snapshot: {
     profileName: string;
@@ -207,6 +226,8 @@ export interface RestoreDeps extends ProfileDataDeps {
   getProfile(profileId: string): { id: string; name: string; picture: ArchiveProfilePicture | null };
   /** The native open dialog: resolves the chosen path, or null when the user canceled. Injected so this module never imports electron — main owns the dialog, exactly as it does for export. */
   pickArchiveFile(): Promise<string | null>;
+  /** The same dialog with the `.apkg` filter (ADR-052). Its own injection, not a parameter on the one above, so no call on the archive surface can ever open the Anki picker or the reverse. */
+  pickApkgFile(): Promise<string | null>;
   /** Reloads the renderer once a restore or an undo has landed. */
   reloadRenderer(): void;
   /** Discards this profile's in-memory focus timer. */
@@ -239,6 +260,8 @@ export interface ImportDeps extends RestoreDeps {
 let pending: PendingRestore | null = null;
 /** The archive the user picked to IMPORT, and (once a preview has succeeded) the plan that preview reported. Deliberately a second variable: the two picks never touch. */
 let pendingImport: PendingImport | null = null;
+/** The Anki `.apkg` the user picked, its collection once read, and the plan once a preview has succeeded. A third variable, on the same terms the second is: the three picks never touch. */
+let pendingApkg: PendingApkg | null = null;
 /** The pre-operation snapshot of the last applied restore OR import — one slot, whichever ran last. */
 let undo: RestoreUndo | null = null;
 
@@ -771,6 +794,10 @@ export function clearRestoreState(): void {
     void pendingImport.ready.archive.close().catch(() => {});
   }
   pendingImport = null;
+  // The Anki pick holds no file handle (`readApkg` closes the file before it
+  // returns) but it DOES hold somebody's whole collection in memory, which must
+  // no more outlive a lock than a decrypted archive does.
+  pendingApkg = null;
 }
 
 // --- Foreign import (ADR-043) -----------------------------------------------
@@ -1169,4 +1196,302 @@ export async function applyImport(
  */
 export async function cancelImport(): Promise<void> {
   await closePendingImport();
+}
+
+// --- Anki .apkg import (ADR-052 / STUDY-011) --------------------------------
+
+/**
+ * The `.apkg` the user picked, its COLLECTION once a preview has read it, and
+ * the plan once one has succeeded.
+ *
+ * `source` is what makes a subject change cheap. An archive's preview keeps its
+ * `OpenedArchive` open so a re-plan costs a parse of bytes already in memory
+ * rather than a second open and a second Argon2id pass (ADR-051); an `.apkg` has
+ * nothing to keep OPEN — `readApkg` closes the file before it returns — so the
+ * same property is bought by keeping what it read. Previewing again under a
+ * different subject then costs a re-translate and a re-plan, never a re-read of
+ * the file and never a second walk over somebody's whole collection.
+ *
+ * Its own three fields rather than `PickedArchive`'s shape, because an `.apkg`
+ * has no `encrypted` flag to carry: a plain zip is the only form it comes in.
+ */
+interface PendingApkg {
+  filePath: string;
+  fileName: string;
+  /** The collection, read once. Null until the first preview succeeds. */
+  source: ParsedApkg | null;
+  ready: ReadyApkg | null;
+}
+
+/**
+ * One successful `.apkg` preview, held exactly as `applyApkgImport` needs it:
+ * the plan — already translated, remapped, stamped and counted, so applying
+ * writes precisely what the user was shown — the translator's own report, and
+ * the token proving an apply is confirming THIS plan.
+ *
+ * The plan and not the parse, for `ReadyImport`'s reason: the answer depends on
+ * the TARGET (which subject, and — through the planner — what that profile
+ * already has) as much as on the file.
+ */
+interface ReadyApkg {
+  token: string;
+  /** The profile this plan was computed against — the apply refuses any other, mirroring the token check. */
+  profileId: string;
+  plan: ForeignImportPlan;
+  /** The subject the decks hang off, as the preview named it. */
+  subjectName: string;
+  subjectIsNew: boolean;
+  /** Everything the translator could not carry across, already on the wire's shape. */
+  skips: ApkgImportSkip[];
+  /** What the collection itself held, before any of this build's rules ran. */
+  sourceDecks: number;
+  sourceNotes: number;
+  sourceCards: number;
+  plannedDecks: number;
+  plannedNotes: number;
+  plannedCards: number;
+}
+
+/**
+ * Maps one core `ApkgSkip` onto the wire. The annotated `code` assignment is the
+ * drift check every other wire→core hand-off in this file makes: a skip code
+ * added in `@nexus/core` and forgotten in `shared/ipc.ts` stops this file
+ * compiling, rather than reaching a renderer that has no sentence for it.
+ */
+function toApkgSkip(skip: CoreApkgSkip): ApkgImportSkip {
+  const code: ApkgImportSkipCode = skip.code;
+  return { code, count: skip.count };
+}
+
+/**
+ * The renderer's subject choice, resolved against the profile as it is NOW.
+ *
+ * Both halves are checked here rather than at the IPC edge, because both are
+ * SEMANTIC: `main/index.ts` proves the payload is one non-null field of the
+ * right shape, and this proves the subject it names actually exists (or that the
+ * new name is one this app would accept). A renderer naming a subject of another
+ * profile — or a soft-deleted one — must be refused, not planned around.
+ */
+function resolveApkgSubject(
+  deps: ImportDeps,
+  profileId: string,
+  choice: ApkgImportSubjectChoice,
+): { subject: ApkgSubjectChoice; name: string; isNew: boolean } {
+  if (choice.existingSubjectId !== null) {
+    const subject = deps
+      .subjectStore(profileId)
+      .listActive()
+      .find((row) => row.id === choice.existingSubjectId);
+    if (subject === undefined) {
+      throw new Error(`No active subject "${choice.existingSubjectId}" in this profile.`);
+    }
+    return { subject: { kind: "existing", id: subject.id }, name: subject.name, isNew: false };
+  }
+  const name = (choice.newSubjectName ?? "").trim();
+  if (name.length === 0) {
+    throw new Error("An .apkg import needs either an existing subject or a name for a new one.");
+  }
+  return { subject: { kind: "new", name }, name, isNew: true };
+}
+
+/**
+ * Picks an `.apkg` to import, replacing whatever was picked for one before. The
+ * two archive picks are untouched: three surfaces, three pieces of state, and
+ * nothing on any of them can reach another's file.
+ */
+export async function pickApkgFile(deps: ImportDeps): Promise<ApkgImportPickResult> {
+  pendingApkg = null;
+
+  const filePath = await deps.pickApkgFile();
+  if (filePath === null) return { canceled: true };
+
+  pendingApkg = { filePath, fileName: basename(filePath), source: null, ready: null };
+  return { canceled: false, path: filePath, fileName: basename(filePath) };
+}
+
+/**
+ * Reads the picked `.apkg` (once), translates it and really plans it against
+ * this profile under `subject` — which is what makes the preview a dry run
+ * rather than an estimate, on all three counts.
+ *
+ * Called again with a different subject, it re-uses the collection it already
+ * read: only the translation and the plan are redone. That is ADR-051's re-plan
+ * precedent in the one form it can take here, and it matters for the same
+ * reason — changing an answer must not cost what opening the file cost, and on a
+ * large collection opening it is the expensive part (a zip walk, a zstd pass,
+ * SQLite's own `quick_check` over the whole image).
+ */
+export async function previewApkgImport(
+  deps: ImportDeps,
+  profileId: string,
+  choice: ApkgImportSubjectChoice,
+): Promise<ApkgImportPreviewResult> {
+  // Bound to a local for exactly the reason `previewImport` binds its own:
+  // `pendingApkg` can be replaced across the await below.
+  const picked = pendingApkg;
+  if (picked === null) return { status: "no-file" };
+
+  let source = picked.source;
+  if (source === null) {
+    try {
+      source = await readApkg(picked.filePath);
+    } catch (error) {
+      if (error instanceof ApkgReadError) return { status: "unreadable", code: error.code };
+      throw error;
+    }
+    // Re-checked AFTER the await, where this can change out from under us: the
+    // renderer is untrusted and nothing stops it firing a second pick while this
+    // read is in flight. Unlike an archive there is no handle to leak — the file
+    // is already closed — so the stale read is simply dropped.
+    if (pendingApkg !== picked) return { status: "no-file" };
+    picked.source = source;
+  }
+
+  const resolved = resolveApkgSubject(deps, profileId, choice);
+  const translation = translateApkg(source, {
+    profileId,
+    subject: resolved.subject,
+    now: new Date().toISOString(),
+  });
+
+  // The target is read as late as possible — immediately before planning against
+  // it — for `previewImport`'s reason: every identity question the planner
+  // answers is answered about the profile as it is NOW. `seededIds` is the one
+  // thing added to it (ADR-052): when the user chose an EXISTING subject, the
+  // translator's `apkg:subject` resolves onto that row instead of minting one.
+  const plan = planForeignImport(
+    { data: translation.data, dropped: [], profilePicture: null },
+    { ...importTargetFor(deps, profileId), seededIds: translation.seededIds },
+    uuidv7,
+  );
+
+  const token = randomBytes(16).toString("hex");
+  picked.ready = {
+    token,
+    profileId,
+    plan,
+    subjectName: resolved.name,
+    subjectIsNew: resolved.isNew,
+    skips: translation.report.skips.map(toApkgSkip),
+    sourceDecks: source.decks.length,
+    sourceNotes: source.notes.length,
+    sourceCards: source.cards.length,
+    plannedDecks: translation.report.decks,
+    plannedNotes: translation.report.notes,
+    plannedCards: translation.report.cards,
+  };
+
+  return { status: "ready", preview: apkgPreviewOf(picked.fileName, picked.ready, plan) };
+}
+
+/** One `.apkg` preview on the wire, from the plan and the report that produced it. */
+function apkgPreviewOf(
+  fileName: string,
+  ready: ReadyApkg,
+  plan: ForeignImportPlan,
+): ApkgImportPreview {
+  return {
+    token: ready.token,
+    fileName,
+    subjectName: ready.subjectName,
+    subjectIsNew: ready.subjectIsNew,
+    sourceDecks: ready.sourceDecks,
+    sourceNotes: ready.sourceNotes,
+    sourceCards: ready.sourceCards,
+    plannedDecks: ready.plannedDecks,
+    plannedNotes: ready.plannedNotes,
+    plannedCards: ready.plannedCards,
+    // The planner's own per-module arithmetic, reused verbatim. Its `skips` are
+    // deliberately NOT carried: for an `.apkg` the only line it ever produces is
+    // "the archive's settings are not imported", and an Anki deck has no
+    // settings — the honest account of what does not arrive is the translator's,
+    // which `ready.skips` holds.
+    modules: plan.report.modules,
+    skips: ready.skips,
+  };
+}
+
+/**
+ * Applies the ready plan identified by `token`. The import half of
+ * `applyImport`, minus the one thing an `.apkg` cannot have: there are no blobs
+ * to copy, because v1 carries no media at all (every image and sound is counted
+ * in the preview and left behind), so the plan's `blobNames` is empty by
+ * construction and there is no pre-transaction copy loop.
+ *
+ * Everything else is identical, deliberately: the undo snapshot is taken before
+ * a single row is added, the insert is one transaction, the snapshot lands in
+ * the SAME one slot both archive operations share, and the renderer reload is
+ * scheduled on `setTimeout(…, 0)` so this call's reply reaches it first.
+ *
+ * Like `applyImport` and unlike `applyRestore`, it does NOT cancel the running
+ * focus session or the idle note compactions: an import wipes nothing, so
+ * discarding them would destroy user state it had no business touching.
+ */
+export async function applyApkgImport(
+  deps: ImportDeps,
+  profileId: string,
+  token: string,
+): Promise<ApkgImportApplyResult> {
+  const ready = pendingApkg?.ready;
+  if (ready === undefined || ready === null) {
+    throw new Error("No .apkg preview is ready to apply.");
+  }
+  if (ready.token !== token) {
+    throw new Error("This .apkg preview is stale; re-run the preview before applying.");
+  }
+  if (ready.profileId !== profileId) {
+    throw new Error("This .apkg preview was computed for a different profile.");
+  }
+
+  const currentProfile = deps.getProfile(profileId);
+  const undoSettings = await gatherProfileSettings(deps, profileId);
+  const undoData = gatherProfileData(deps, profileId);
+  const undoDerived = deriveRestoredNotes(undoData.notes);
+
+  const now = new Date().toISOString();
+  const derived = deriveRestoredNotes(ready.plan.data.notes);
+  const rowsWritten = deps
+    .foreignImportStore(profileId)
+    .insertPlanned(ready.plan.data, derived, now);
+
+  const summary: ApkgImportApplyResult = {
+    restored: countProfileModules(ready.plan.data),
+    rowsWritten,
+    blobsAdded: 0,
+    // An `.apkg` names no attachment row at all, so there is no blob that could
+    // be missing — the media it carries is reported as a SKIP in the preview,
+    // which is a different (and honest) statement.
+    missingBlobs: 0,
+  };
+
+  undo = {
+    kind: "apkg",
+    profileId,
+    snapshot: {
+      profileName: currentProfile.name,
+      profilePicture: currentProfile.picture,
+      settings: undoSettings,
+      data: undoData,
+      derived: undoDerived,
+    },
+    addedBlobs: [],
+    appliedAt: now,
+    summary,
+  };
+
+  pendingApkg = null;
+
+  setTimeout(() => deps.reloadRenderer(), 0);
+
+  return summary;
+}
+
+/**
+ * Drops the picked `.apkg` — what the UI calls when the user backs out before
+ * applying. No file handle is released (the reader closed the file the moment it
+ * finished), but the collection it read is, which on a large deck is the whole
+ * of somebody's cards sitting in main's memory.
+ */
+export function cancelApkgImport(): void {
+  pendingApkg = null;
 }

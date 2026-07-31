@@ -437,6 +437,12 @@ const api: NexusApi = {
   applyImport: (profileId, token) =>
     ipcRenderer.invoke(IpcChannel.imexImportApply, { profileId, token }),
   cancelImport: () => ipcRenderer.invoke(IpcChannel.imexImportCancel),
+  pickApkgFile: () => ipcRenderer.invoke(IpcChannel.imexImportApkgPick),
+  previewApkgImport: (profileId, subject) =>
+    ipcRenderer.invoke(IpcChannel.imexImportApkgPreview, { profileId, subject }),
+  applyApkgImport: (profileId, token) =>
+    ipcRenderer.invoke(IpcChannel.imexImportApkgApply, { profileId, token }),
+  cancelApkgImport: () => ipcRenderer.invoke(IpcChannel.imexImportApkgCancel),
   importMarkdownNotes: (profileId, folderId, source) =>
     ipcRenderer.invoke(IpcChannel.imexImportMarkdown, { profileId, folderId, source }),
   setGlobalShortcut: (chord) => ipcRenderer.invoke(IpcChannel.shortcutsSetGlobal, { chord }),

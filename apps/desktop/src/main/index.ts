@@ -245,13 +245,17 @@ import type { SecurityNotice } from "./notificationStrings.js";
 import { computeSnoozeUntil, resolveDefaultSnoozePreset } from "./snooze.js";
 import { pickProfilePicture } from "./profilePicture.js";
 import {
+  applyApkgImport,
   applyImport,
   applyRestore,
+  cancelApkgImport,
   cancelImport,
   cancelRestore,
   clearRestoreState,
+  pickApkgFile,
   pickImportFile,
   pickRestoreFile,
+  previewApkgImport,
   previewImport,
   previewRestore,
   replanImport,
@@ -260,6 +264,7 @@ import {
   type ImportDeps,
 } from "./restore.js";
 import {
+  APKG_IMPORT_MAX_SUBJECT_NAME_LENGTH,
   CARD_KINDS,
   CARD_TEXT_MAX_LENGTH,
   IMPORT_DUPLICATE_TYPES,
@@ -281,6 +286,10 @@ import {
   SEARCH_QUERY_MAX_BYTES,
   SEARCH_RESULT_MAX_LIMIT,
   type AccountSummary,
+  type ApkgImportApplyResult,
+  type ApkgImportPickResult,
+  type ApkgImportPreviewResult,
+  type ApkgImportSubjectChoice,
   type AppInfo,
   type CardKind,
   type AuthResult,
@@ -1016,6 +1025,37 @@ function asImportDuplicateChoices(value: unknown, field: string): ImportDuplicat
     choices[key as ImportDuplicateType] = answer;
   }
   return choices;
+}
+
+/**
+ * `imex:import-apkg-preview`'s subject choice (ADR-052). Structurally validated
+ * here — EXACTLY one of the two fields non-null, and a new name within the same
+ * ceiling the subject form itself is held to — and semantically validated in
+ * `restore.ts`, which is where the profile's live subjects can be asked whether
+ * the named one actually exists. The same division `asRestoreToken` follows.
+ *
+ * "Exactly one" is checked rather than "at least one" on purpose: a payload
+ * carrying both would leave the decision to whichever branch happened to be
+ * read first, which is not a decision anybody made.
+ */
+function asApkgSubjectChoice(value: unknown, field: string): ApkgImportSubjectChoice {
+  const body = asRecord(value);
+  const existingSubjectId = asNullableId(body.existingSubjectId, `${field}.existingSubjectId`);
+  const newSubjectName = asNullableString(body.newSubjectName, `${field}.newSubjectName`);
+  if ((existingSubjectId === null) === (newSubjectName === null)) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must name exactly one of an existing subject or a new subject name.`,
+    );
+  }
+  if (newSubjectName !== null) {
+    const trimmed = newSubjectName.trim();
+    if (trimmed.length === 0 || trimmed.length > APKG_IMPORT_MAX_SUBJECT_NAME_LENGTH) {
+      throw new Error(
+        `Invalid IPC payload: "${field}.newSubjectName" must be 1..${APKG_IMPORT_MAX_SUBJECT_NAME_LENGTH} characters.`,
+      );
+    }
+  }
+  return { existingSubjectId, newSubjectName };
 }
 
 function asRestoreToken(value: unknown, field: string): string {
@@ -3048,6 +3088,20 @@ function restoreDeps(): ImportDeps {
       const options: OpenDialogOptions = {
         properties: ["openFile"],
         filters: [{ name: "Nexus arhiva", extensions: ["nexus", "zip"] }],
+      };
+      const { canceled, filePaths } = mainWindow
+        ? await dialog.showOpenDialog(mainWindow, options)
+        : await dialog.showOpenDialog(options);
+      return canceled ? null : (filePaths[0] ?? null);
+    },
+    // ADR-052's picker. Its OWN injection rather than an argument on the one
+    // above, so that no call on the archive surface can open this dialog and no
+    // call here can open that one. The filter is a convenience, not a check:
+    // `readApkg` decides what the file is from its own bytes.
+    pickApkgFile: async () => {
+      const options: OpenDialogOptions = {
+        properties: ["openFile"],
+        filters: [{ name: "Anki špil", extensions: ["apkg"] }],
       };
       const { canceled, filePaths } = mainWindow
         ? await dialog.showOpenDialog(mainWindow, options)
@@ -5593,6 +5647,43 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.imexImportCancel, (event): Promise<void> => {
     assertTrustedSender(event);
     return cancelImport();
+  });
+
+  // The Anki `.apkg` import (ADR-052 / STUDY-011): its own pick, its own
+  // preview and its own apply, on the same four-step shape and sharing the same
+  // one undo slot. The renderer never supplies a filesystem path here either —
+  // `imex:import-apkg-pick` is the sole source of one (SEC-EL).
+  ipcMain.handle(IpcChannel.imexImportApkgPick, (event): Promise<ApkgImportPickResult> => {
+    assertTrustedSender(event);
+    return pickApkgFile(restoreDeps());
+  });
+
+  // The SUBJECT rides here rather than on the apply, because the plan depends on
+  // it: whether a subject row is created at all is what this choice decides.
+  // Structurally validated below, semantically in `restore.ts` against the
+  // profile's own live subjects.
+  ipcMain.handle(
+    IpcChannel.imexImportApkgPreview,
+    (event, payload): Promise<ApkgImportPreviewResult> => {
+      assertTrustedSender(event);
+      const body = asRecord(payload);
+      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const subject = asApkgSubjectChoice(body.subject, "subject");
+      return previewApkgImport(restoreDeps(), profileId, subject);
+    },
+  );
+
+  ipcMain.handle(IpcChannel.imexImportApkgApply, (event, payload): Promise<ApkgImportApplyResult> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const token = asRestoreToken(body.token, "token");
+    return applyApkgImport(restoreDeps(), profileId, token);
+  });
+
+  ipcMain.handle(IpcChannel.imexImportApkgCancel, (event): void => {
+    assertTrustedSender(event);
+    cancelApkgImport();
   });
 
   // IMEX-007's markdown slice: plain `.md` files into real notes. One call does

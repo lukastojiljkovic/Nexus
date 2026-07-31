@@ -204,12 +204,13 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
     // about the export above it, not a fifth thing the card can do.
     keywords: ["izvoz", "arhiva", "kopija", "moduli"],
   },
-  // The "Rezervna kopija" card holds four blocks — export, calendar, restore,
-  // import — so each gets its own entry inside that one section rather than a
-  // section of its own: they are one subject, and splitting the card would hide
-  // the contrast the two archive flows are meant to be read against. „uvoz“ now
-  // belongs to the import block alone; the restore entry answers to the words
-  // that describe what IT does.
+  // The "Rezervna kopija" card holds five blocks — export, calendar, restore,
+  // archive import, Anki import, markdown import — so each gets its own entry
+  // inside that one section rather than a section of its own: they are one
+  // subject, and splitting the card would hide the contrast the archive flows
+  // are meant to be read against. „uvoz“ is shared by the three import entries,
+  // which are then told apart by the words that name what each one reads; the
+  // restore entry answers to the words that describe what IT does.
   {
     // „kalendar“ and „ics“ are the words someone actually types looking for
     // this; „izvoz“ is deliberately NOT repeated from `backup-export`, which
@@ -230,6 +231,15 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
     section: "backup",
     label: s.import.title,
     keywords: ["uvoz", "uvezi", "spajanje", "dodaj", "arhiva"],
+  },
+  {
+    // ADR-052. The words are the SOURCE's, not the flow's — somebody looking for
+    // this types „anki“ or „apkg“, never „uvoz iz arhive“ — so „arhiva“ is
+    // deliberately absent, exactly as it is from the markdown entry below.
+    id: "backup-apkg",
+    section: "backup",
+    label: s.apkgImport.title,
+    keywords: ["anki", "apkg", "kartice", "spil", "flashcards", "uvoz"],
   },
   {
     // The words someone looking for THIS types are the format's, not the

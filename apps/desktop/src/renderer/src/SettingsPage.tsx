@@ -20,6 +20,9 @@ import {
   TARGET_RETENTION_PRESETS,
 } from "../../shared/ipc.js";
 import type {
+  ApkgImportPreview,
+  ApkgImportSkip,
+  ApkgImportSubjectChoice,
   AppInfo,
   DashboardSettings,
   FlagState,
@@ -37,6 +40,7 @@ import type {
   RestorePreview,
   RestoreProblem,
   StudySettings,
+  Subject,
 } from "../../shared/ipc.js";
 import { authErrorMessage, passcodeMeetsPolicy, RecoveryKitPanel } from "./AuthGate.js";
 import { ALL_NOTIFICATION_SOURCES, NOTIFICATION_PRESETS } from "./notificationFormat.js";
@@ -1388,6 +1392,403 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
 /** The unfiled root, as a `<select>` value — an empty option value, so no sentinel id can ever collide with a real folder's. */
 const UNFILED_VALUE = "";
 
+/** „Nova oblast…" as a `<select>` value — an empty option value, exactly as `UNFILED_VALUE` is, so no sentinel can collide with a real subject id. */
+const NEW_SUBJECT_VALUE = "";
+
+/**
+ * The `.apkg` flow's state. The same machine `RestoreState` and `ImportState`
+ * are, minus the two phases this flow cannot reach: there is no passphrase
+ * (an `.apkg` is a plain zip) and no `"invalid"` (an `.apkg` carries no manifest
+ * to be wrong about — every way it can fail is a way it could not be READ, which
+ * is `"picked"` with an error on it).
+ */
+type ApkgState =
+  | { phase: "idle"; error: string | null }
+  | { phase: "picked"; fileName: string; busy: boolean; error: string | null }
+  | { phase: "ready"; fileName: string; preview: ApkgImportPreview; busy: boolean; error: string | null }
+  | { phase: "applying"; fileName: string; preview: ApkgImportPreview }
+  | { phase: "applied" };
+
+/** One named group of things the Anki deck carried and this import does not: its Serbian reason, then how many. */
+function ApkgSkipRow({ skip }: { skip: ApkgImportSkip }) {
+  const s = strings.settings.apkgImport;
+  return (
+    <li className="set__import-skip">
+      {s.skips[skip.code]} <span className="set__import-skip-meta">{skip.count}</span>
+    </li>
+  );
+}
+
+interface ApkgImportSectionProps {
+  profileId: string;
+  /** SET-014 search hits; the section reads only its own entry id out of it. */
+  hits: ReadonlySet<string>;
+}
+
+/**
+ * Uvoz iz Anki (.apkg) — ADR-052 / STUDY-011.
+ *
+ * Deliberately the import section's twin, one step longer: pick → CHOOSE A
+ * SUBJECT → preview → confirm, the same busy and error states, the same `set__`
+ * recipes, the same shared undo banner afterwards. The extra step is the one
+ * thing an `.apkg` cannot answer for itself — a Nexus deck lives inside a
+ * subject and an Anki collection has no such concept — so the user names it,
+ * and the preview cannot be computed until they have.
+ *
+ * The subject sits ABOVE the file button rather than inside the preview,
+ * because it is a precondition rather than a refinement: nothing can be
+ * previewed without it. Changing it afterwards re-previews, which main answers
+ * by re-translating and re-planning the collection it already read — never by
+ * reading the file again (ADR-051's re-plan precedent, in the form this flow
+ * can take).
+ *
+ * Two tables, answering two different questions. The first is the Anki side:
+ * what the file holds, and how much of it arrives. The second is the plan's own
+ * per-module arithmetic — the same table the archive import shows, from the same
+ * planner — narrowed to the modules that actually carry something, which for an
+ * `.apkg` is only Učenje. Below them, every named loss, counted.
+ */
+function ApkgImportSection({ profileId, hits }: ApkgImportSectionProps) {
+  const s = strings.settings.apkgImport;
+  // The half of the flow that is identical to a restore's, read from where it is
+  // already spelled rather than spelled a second time.
+  const shared = strings.settings.restore;
+
+  const [state, setState] = useState<ApkgState>({ phase: "idle", error: null });
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  // Outside the state machine for the reason `RestoreSection`'s passphrase is:
+  // the choice survives the phase changes around it, and resets exactly where a
+  // new pick starts.
+  const [subjectId, setSubjectId] = useState<string>(NEW_SUBJECT_VALUE);
+  const [newSubjectName, setNewSubjectName] = useState("");
+  // Read by the unmount cleanup only. An apply in flight must never be cancelled
+  // from here: main is writing the very plan `cancelApkgImport` would drop.
+  const applying = useRef(false);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const list = await window.nexus.listSubjects(profileId);
+        if (active) setSubjects(list);
+      } catch (loadError) {
+        // The list is a convenience: „Nova oblast" still works without it, so
+        // this must not take the whole block down.
+        console.error("Nexus: failed to load subjects:", loadError);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profileId]);
+
+  // Releasing the pick on unmount matters for the reason the two archive
+  // sections' does — and for one more here: main is holding somebody's whole
+  // collection in memory until it is told to let go.
+  useEffect(() => {
+    return () => {
+      if (applying.current) return;
+      void window.nexus.cancelApkgImport().catch((error: unknown) => {
+        console.error("Nexus: failed to release the picked .apkg:", error);
+      });
+    };
+  }, []);
+
+  const trimmedName = newSubjectName.trim();
+  const choosingNew = subjectId === NEW_SUBJECT_VALUE;
+  /** The preview cannot be planned without a subject, so nothing that would ask for one is offered until there is one. */
+  const subjectReady = choosingNew ? trimmedName.length > 0 : true;
+
+  function subjectChoice(): ApkgImportSubjectChoice {
+    return choosingNew
+      ? { existingSubjectId: null, newSubjectName: trimmedName }
+      : { existingSubjectId: subjectId, newSubjectName: null };
+  }
+
+  async function runPreview(fileName: string, choice: ApkgImportSubjectChoice): Promise<void> {
+    setState({ phase: "picked", fileName, busy: true, error: null });
+    try {
+      const result = await window.nexus.previewApkgImport(profileId, choice);
+      switch (result.status) {
+        case "ready":
+          setState({ phase: "ready", fileName, preview: result.preview, busy: false, error: null });
+          return;
+        case "unreadable":
+          setState({ phase: "picked", fileName, busy: false, error: s.unreadable[result.code] });
+          return;
+        case "no-file":
+          setState({ phase: "idle", error: s.noFileError });
+          return;
+      }
+    } catch (previewError) {
+      setState({ phase: "picked", fileName, busy: false, error: s.readError });
+      console.error("Nexus: failed to preview an .apkg:", previewError);
+    }
+  }
+
+  /** Picking from any phase starts over — main drops the superseded pick itself. */
+  async function choose(): Promise<void> {
+    setState({ phase: "idle", error: null });
+    try {
+      const picked = await window.nexus.pickApkgFile();
+      if (picked.canceled) return;
+      await runPreview(picked.fileName, subjectChoice());
+    } catch (pickError) {
+      setState({ phase: "idle", error: s.readError });
+      console.error("Nexus: failed to pick an .apkg:", pickError);
+    }
+  }
+
+  /**
+   * Re-previews under a changed subject. Main re-uses the collection it already
+   * read, so this costs a re-translate and a re-plan rather than a second walk
+   * over the file — which is what lets the user try the choice both ways.
+   */
+  function reprovision(nextChoice: ApkgImportSubjectChoice): void {
+    if (state.phase !== "ready" && state.phase !== "picked") return;
+    if (state.busy) return;
+    void runPreview(state.fileName, nextChoice);
+  }
+
+  /**
+   * Switching TO „Nova oblast…" while a preview is on screen: the plan showing
+   * is the previous subject's, and a „Uvezi" pressed against it would write
+   * somewhere the picker no longer says. So the preview is dropped back to the
+   * picked state until a name exists to re-plan on — the file itself is
+   * untouched, so that costs nothing.
+   */
+  function invalidatePreview(): void {
+    if (state.phase !== "ready") return;
+    setState({ phase: "picked", fileName: state.fileName, busy: false, error: null });
+  }
+
+  async function apply(fileName: string, preview: ApkgImportPreview): Promise<void> {
+    applying.current = true;
+    setState({ phase: "applying", fileName, preview });
+    try {
+      await window.nexus.applyApkgImport(profileId, preview.token);
+      // Main reloads this renderer moments after the reply lands, so the success
+      // line simply stands until the whole screen is replaced.
+      setState({ phase: "applied" });
+    } catch (applyError) {
+      // A failed apply leaves the plan — and the token main accepts — untouched,
+      // so the screen goes back to it rather than to idle.
+      setState({ phase: "ready", fileName, preview, busy: false, error: s.error });
+      console.error("Nexus: failed to apply an .apkg import:", applyError);
+    } finally {
+      applying.current = false;
+    }
+  }
+
+  async function cancel(): Promise<void> {
+    setState({ phase: "idle", error: null });
+    try {
+      await window.nexus.cancelApkgImport();
+    } catch (cancelError) {
+      console.error("Nexus: failed to release the picked .apkg:", cancelError);
+    }
+  }
+
+  const previewing = state.phase === "ready" || state.phase === "applying";
+  const busy = (state.phase === "picked" || state.phase === "ready") && state.busy;
+
+  return (
+    <div className="set__import-block">
+      <h3 className={labelClass("set__module-group-title", hits.has("backup-apkg"))}>{s.title}</h3>
+      <p className="app__muted">{s.description}</p>
+
+      {state.phase !== "applied" && (
+        <div className="set__apkg-subject">
+          <p className="set__section-caption">{s.subjectLabel}</p>
+          <select
+            className="set__select"
+            value={subjectId}
+            aria-label={s.subjectLabel}
+            disabled={busy || state.phase === "applying"}
+            onChange={(event) => {
+              const next = event.target.value;
+              setSubjectId(next);
+              if (next === NEW_SUBJECT_VALUE) {
+                invalidatePreview();
+                return;
+              }
+              reprovision({ existingSubjectId: next, newSubjectName: null });
+            }}
+          >
+            <option value={NEW_SUBJECT_VALUE}>{s.newSubjectOption}</option>
+            {subjects.map((subject) => (
+              <option key={subject.id} value={subject.id}>
+                {subject.name}
+              </option>
+            ))}
+          </select>
+          {choosingNew && (
+            <TextField
+              label={s.newSubjectLabel}
+              placeholder={s.newSubjectPlaceholder}
+              value={newSubjectName}
+              disabled={busy || state.phase === "applying"}
+              onChange={(event) => {
+                setNewSubjectName(event.target.value);
+                // The plan on screen was made for the previous name; it stops
+                // describing what „Uvezi" would do the moment this changes.
+                invalidatePreview();
+              }}
+              // Committed on blur and on Enter, never on every keystroke: a
+              // re-plan is cheap but it is not free, and re-running it per
+              // letter would make the preview flicker while somebody types.
+              onBlur={() => {
+                if (trimmedName.length > 0) {
+                  reprovision({ existingSubjectId: null, newSubjectName: trimmedName });
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || trimmedName.length === 0) return;
+                event.preventDefault();
+                reprovision({ existingSubjectId: null, newSubjectName: trimmedName });
+              }}
+            />
+          )}
+        </div>
+      )}
+
+      {!previewing && state.phase !== "applied" && (
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={busy || !subjectReady}
+          onClick={() => void choose()}
+        >
+          {s.pickButton}
+        </Button>
+      )}
+
+      {state.phase === "idle" && state.error != null && <p className="set__error">{state.error}</p>}
+
+      {state.phase === "picked" && (
+        <>
+          <p className="set__section-caption">
+            {shared.pickedPrefix} <span className="app__path">{state.fileName}</span>
+          </p>
+          {state.busy && <p className="app__muted">{s.previewRunning}</p>}
+          {state.error != null && <p className="set__error">{state.error}</p>}
+        </>
+      )}
+
+      {previewing && (
+        <>
+          <div className="set__restore-head">
+            <span className="app__path">{state.preview.fileName}</span>
+            <span className="set__restore-meta">
+              {s.subjectPrefix} {state.preview.subjectName}
+              {state.preview.subjectIsNew ? ` ${s.subjectNewSuffix}` : ""}
+            </span>
+          </div>
+
+          <table className="set__restore-table">
+            <thead>
+              <tr>
+                {/* The row-header column's own corner cell: a row name needs no heading. */}
+                <td />
+                <th scope="col">{s.columnSource}</th>
+                <th scope="col">{s.columnPlanned}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">{s.rowDecks}</th>
+                <td>{state.preview.sourceDecks}</td>
+                <td>{state.preview.plannedDecks}</td>
+              </tr>
+              <tr>
+                <th scope="row">{s.rowNotes}</th>
+                <td>{state.preview.sourceNotes}</td>
+                <td>{state.preview.plannedNotes}</td>
+              </tr>
+              <tr>
+                <th scope="row">{s.rowCards}</th>
+                <td>{state.preview.sourceCards}</td>
+                <td>{state.preview.plannedCards}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {/* The plan's OWN arithmetic, from the same planner the archive import
+              uses, narrowed to the modules that carry anything — an `.apkg`
+              touches only Učenje, and five rows of zeros would say nothing. */}
+          <table className="set__restore-table set__import-table">
+            <thead>
+              <tr>
+                <td />
+                <th scope="col">{strings.settings.import.columnParsed}</th>
+                <th scope="col">{strings.settings.import.columnImported}</th>
+                <th scope="col">{strings.settings.import.columnMerged}</th>
+                <th scope="col">{strings.settings.import.columnSkipped}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ARCHIVE_MODULES.filter((key) => state.preview.modules[key].parsed > 0).map((key) => {
+                const counts = state.preview.modules[key];
+                return (
+                  <tr key={key}>
+                    <th scope="row">{shared.modules[key]}</th>
+                    <td>{counts.parsed}</td>
+                    <td>{counts.imported}</td>
+                    <td>{counts.merged}</td>
+                    <td>{counts.skipped}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {state.preview.skips.length > 0 && (
+            <>
+              <h4 className="set__module-group-title">{s.skipsTitle}</h4>
+              <ul className="set__restore-problems">
+                {state.preview.skips.map((skip) => (
+                  <ApkgSkipRow key={skip.code} skip={skip} />
+                ))}
+              </ul>
+            </>
+          )}
+
+          {state.preview.plannedCards === 0 && (
+            <p className="set__section-caption">{s.nothingToImport}</p>
+          )}
+
+          <div className="set__restore-actions">
+            {state.preview.plannedCards > 0 && (
+              <Button
+                size="sm"
+                variant="primary"
+                disabled={state.phase === "applying"}
+                onClick={() => void apply(state.fileName, state.preview)}
+              >
+                {s.applyButton}
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={state.phase === "applying"}
+              onClick={() => void cancel()}
+            >
+              {shared.cancelButton}
+            </Button>
+          </div>
+
+          {state.phase === "applying" && <p className="app__muted">{s.applying}</p>}
+          {state.phase === "ready" && state.busy && <p className="app__muted">{s.previewRunning}</p>}
+          {state.phase === "ready" && state.error != null && <p className="set__error">{state.error}</p>}
+        </>
+      )}
+
+      {state.phase === "applied" && <p className="set__section-caption">{s.applied}</p>}
+    </div>
+  );
+}
+
 /** sr-Latn collation for the destination list — plain "sr" mis-tailors Latin š/č/ć. */
 const FOLDER_COLLATOR = new Intl.Collator(["sr-Latn", "sr"]);
 
@@ -2594,6 +2995,7 @@ export function SettingsPage({
         <CalendarExportSection profileId={profileId} hits={hits} />
         <RestoreSection profileId={profileId} hits={hits} />
         <ImportSection profileId={profileId} hits={hits} />
+        <ApkgImportSection profileId={profileId} hits={hits} />
         <MarkdownImportSection profileId={profileId} hits={hits} />
       </Card>
 

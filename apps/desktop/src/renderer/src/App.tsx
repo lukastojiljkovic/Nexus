@@ -116,14 +116,15 @@ export function App() {
   // mounted at the moment the palette closes; the page consumes it on mount
   // and clears it through `onSeedConsumed`.
   const [searchSeed, setSearchSeed] = useState<string | null>(null);
-  // The post-reload archive banner (IMEX slice 3d, ADR-023; ADR-043 §4).
-  // Applying a restore OR an import reloads this renderer, so the screen that
-  // ran it is gone by the time there is anything to say — `restoreStatus` below
-  // is how the fresh renderer learns an undo is still available. One slot, one
-  // banner: `kind` is what the offer is worded from, since "vraćanje" and
-  // "uvoz" undo very different things through the same mechanism.
+  // The post-reload archive banner (IMEX slice 3d, ADR-023; ADR-043 §4;
+  // ADR-052). Applying a restore, an archive import OR an Anki import reloads
+  // this renderer, so the screen that ran it is gone by the time there is
+  // anything to say — `restoreStatus` below is how the fresh renderer learns an
+  // undo is still available. One slot, one banner: `kind` is what the offer is
+  // worded from, since "vraćanje", "uvoz iz arhive" and "uvoz iz Ankija" undo
+  // very different things through the same mechanism.
   const [restoreUndo, setRestoreUndo] = useState<{
-    kind: "restore" | "import";
+    kind: "restore" | "import" | "apkg";
     appliedAt: string;
   } | null>(null);
   // Dismissal is presentational and session-only: it hides the banner, it does
@@ -877,9 +878,11 @@ export function App() {
           {restoreUndo != null && !restoreBannerHidden && (
             <div className="app__restore-banner" role="status">
               <span className="app__restore-banner-text">
-                {restoreUndo.kind === "import"
-                  ? strings.settings.import.undoBanner
-                  : strings.settings.restore.undoBanner}{" "}
+                {restoreUndo.kind === "apkg"
+                  ? strings.settings.apkgImport.undoBanner
+                  : restoreUndo.kind === "import"
+                    ? strings.settings.import.undoBanner
+                    : strings.settings.restore.undoBanner}{" "}
                 <span className="app__restore-banner-when">
                   {formatArchiveInstant(restoreUndo.appliedAt)}
                 </span>

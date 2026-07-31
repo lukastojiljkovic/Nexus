@@ -1,0 +1,474 @@
+import { describe, expect, it } from "vitest";
+
+import { findClozeRuns, renderClozeCard } from "../study/clozeText.js";
+import {
+  APKG_SKIP_CODES,
+  APKG_SUBJECT_SOURCE_ID,
+  canonicalizeCloze,
+  stripAnkiHtml,
+  translateApkg,
+  type ApkgSkipCode,
+  type ParsedApkg,
+} from "./ankiTranslate.js";
+
+/** Every skip the report names, as a plain map — the shape assertions read against. */
+function skipMap(skips: readonly { code: ApkgSkipCode; count: number }[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const skip of skips) counts[skip.code] = skip.count;
+  return counts;
+}
+
+const NOW = "2026-07-31T10:00:00.000Z";
+
+/** The smallest collection that translates to something: one deck, one basic notetype, one note, one card. */
+function minimalApkg(overrides: Partial<ParsedApkg> = {}): ParsedApkg {
+  return {
+    decks: [{ id: 1, name: "Biologija" }],
+    notetypes: [{ id: 10, name: "Basic", kind: "basic", templateCount: 1 }],
+    notes: [{ id: 100, notetypeId: 10, fields: ["Prednja", "Zadnja"], tags: [] }],
+    cards: [{ noteId: 100, ord: 0, deckId: 1, reps: 0, suspended: false }],
+    mediaCount: 0,
+    ...overrides,
+  };
+}
+
+describe("stripAnkiHtml", () => {
+  it("strips tags and keeps the text between them", () => {
+    expect(stripAnkiHtml("<b>Mitohondrija</b> je <i>organela</i>").text).toBe(
+      "Mitohondrija je organela",
+    );
+  });
+
+  it("turns block tags into newlines and inline tags into nothing", () => {
+    expect(stripAnkiHtml("prvi<br>drugi<div>treći</div>").text).toBe("prvi\ndrugi\ntreći");
+    expect(stripAnkiHtml("<p>a</p><p>b</p>").text).toBe("a\nb");
+    expect(stripAnkiHtml("<ul><li>a</li><li>b</li></ul>").text).toBe("a\nb");
+    expect(stripAnkiHtml("a<span>b</span>c").text).toBe("abc");
+  });
+
+  it("decodes the standard entities and leaves a broken one alone", () => {
+    expect(stripAnkiHtml("&amp;&lt;&gt;&quot;&#39;&apos;").text).toBe(`&<>"''`);
+    expect(stripAnkiHtml("&#65;&#x42;").text).toBe("AB");
+    // No semicolon, an unknown name, an empty numeric — none of these is an
+    // entity, and inventing a decoding for them would corrupt the text.
+    expect(stripAnkiHtml("&amp &nosuch; &#; 5 &lt 6").text).toBe("&amp &nosuch; &#; 5 &lt 6");
+  });
+
+  it("decodes an entity AFTER stripping tags, so an encoded tag can never become one", () => {
+    // The classic smuggle: `&lt;script&gt;` must survive as visible text, never
+    // be re-read as markup.
+    expect(stripAnkiHtml("&lt;script&gt;alert(1)&lt;/script&gt;").text).toBe(
+      "<script>alert(1)</script>",
+    );
+  });
+
+  it("removes a script or style block together with its contents", () => {
+    expect(stripAnkiHtml("pre<script>alert(1)</script>post").text).toBe("prepost");
+    expect(stripAnkiHtml("pre<style>body{color:red}</style>post").text).toBe("prepost");
+    expect(stripAnkiHtml("<script src='x'>\nmulti\nline\n</script>ostalo").text).toBe("ostalo");
+  });
+
+  it("counts images and sounds, and removes both from the text", () => {
+    const stripped = stripAnkiHtml('pre<img src="a.png">mid[sound:b.mp3]post<img src="c.jpg"/>');
+    expect(stripped.text).toBe("premidpost");
+    expect(stripped.images).toBe(2);
+    expect(stripped.sounds).toBe(1);
+  });
+
+  it("keeps $…$ and rewrites the two MathJax spellings into it", () => {
+    expect(stripAnkiHtml("vrednost $x^2$ ovde").text).toBe("vrednost $x^2$ ovde");
+    expect(stripAnkiHtml("vrednost \\(x^2\\) ovde").text).toBe("vrednost $x^2$ ovde");
+    expect(stripAnkiHtml("blok \\[x^2\\] ovde").text).toBe("blok $x^2$ ovde");
+    expect(stripAnkiHtml("<anki-mathjax>x^2</anki-mathjax>").text).toBe("$x^2$");
+    expect(stripAnkiHtml('<anki-mathjax block="true">x^2</anki-mathjax>').text).toBe("$x^2$");
+  });
+
+  it("collapses whitespace and trims, &nbsp; included", () => {
+    expect(stripAnkiHtml("  a   \t b &nbsp; c  ").text).toBe("a b c");
+    expect(stripAnkiHtml("a<br><br><br>b").text).toBe("a\nb");
+    expect(stripAnkiHtml("<div>  </div>").text).toBe("");
+  });
+
+  it("survives deeply nested and unbalanced tags without hanging", () => {
+    const nested = `${"<div>".repeat(500)}jezgro${"</div>".repeat(500)}`;
+    expect(stripAnkiHtml(nested).text).toBe("jezgro");
+    expect(stripAnkiHtml("<b><i>a</b> nezatvoreno <").text).toBe("a nezatvoreno <");
+    expect(stripAnkiHtml("<>< ><b >x</b >").text).toBe("<>< >x");
+  });
+
+  it("handles a field at the per-field cap in linear time", () => {
+    // 256 KiB of alternating markup and text: any regex that backtracked would
+    // never finish this, which is exactly what the assertion proves.
+    const huge = "<b>a</b>&amp;".repeat(20_000);
+    const started = Date.now();
+    const stripped = stripAnkiHtml(huge);
+    expect(stripped.text.length).toBe(40_000);
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+});
+
+describe("canonicalizeCloze", () => {
+  it("renumbers by first appearance and drops the {{c…}} wrapper", () => {
+    const result = canonicalizeCloze("Glavni grad je {{c2::Beograd}}, a reka je {{c1::Sava}}.");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.template).toBe("Glavni grad je {{Beograd}}, a reka je {{Sava}}.");
+    // c2 appears FIRST, so it is deletion 0; c1 is deletion 1. That ordering is
+    // what makes the positional ordinals reproduce Anki's own card set.
+    expect([...result.value.positionByAnkiNumber]).toEqual([
+      [2, 0],
+      [1, 1],
+    ]);
+    expect(result.value.hintsDropped).toBe(0);
+  });
+
+  it("drops a hint and counts it", () => {
+    const result = canonicalizeCloze("{{c1::Sava::reka}} i {{c2::Dunav::reka}}");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.template).toBe("{{Sava}} i {{Dunav}}");
+    expect(result.value.hintsDropped).toBe(2);
+  });
+
+  it("refuses the same cN twice in one note", () => {
+    const result = canonicalizeCloze("{{c1::a}} i {{c1::b}}");
+    expect(result).toEqual({ ok: false, reason: "cloze-ordinal-reused" });
+  });
+
+  it("refuses a nested deletion", () => {
+    const result = canonicalizeCloze("{{c1::spolja {{c2::iznutra}} kraj}}");
+    expect(result).toEqual({ ok: false, reason: "cloze-nested" });
+  });
+
+  it("refuses a cloze note with no deletion at all", () => {
+    expect(canonicalizeCloze("obična rečenica")).toEqual({
+      ok: false,
+      reason: "cloze-no-deletions",
+    });
+    // `{{c1}}` with no `::` is not a deletion either — it is not the grammar.
+    expect(canonicalizeCloze("{{c1}}")).toEqual({ ok: false, reason: "cloze-no-deletions" });
+  });
+
+  it("refuses text the Nexus grammar cannot express", () => {
+    // A brace inside the deletion would break `{{…}}`'s own `[^{}]*` run.
+    expect(canonicalizeCloze("{{c1::a}b}}")).toEqual({
+      ok: false,
+      reason: "cloze-unrepresentable",
+    });
+    // An empty deletion renders no run at all, so the ordinals would shift.
+    expect(canonicalizeCloze("{{c1::}} i {{c2::b}}")).toEqual({
+      ok: false,
+      reason: "cloze-unrepresentable",
+    });
+    // Surrounding text carrying its own `{{…}}` run would add a deletion the
+    // note never asked for.
+    expect(canonicalizeCloze("{{c1::a}} plus {{ručno}}")).toEqual({
+      ok: false,
+      reason: "cloze-unrepresentable",
+    });
+  });
+
+  it("accepts a cN above 9 and one with leading zeros, and refuses c0", () => {
+    const high = canonicalizeCloze("{{c12::a}} {{c3::b}}");
+    expect(high.ok).toBe(true);
+    if (high.ok) {
+      expect([...high.value.positionByAnkiNumber]).toEqual([
+        [12, 0],
+        [3, 1],
+      ]);
+    }
+    const zero = canonicalizeCloze("{{c0::a}}");
+    expect(zero).toEqual({ ok: false, reason: "cloze-no-deletions" });
+  });
+
+  it("produces a template every deletion of which core's own renderer can render", () => {
+    const result = canonicalizeCloze("{{c1::A}} {{c2::B}} {{c3::C}}");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const runs = findClozeRuns(result.value.template);
+    expect(runs).toHaveLength(3);
+    for (let position = 0; position < runs.length; position += 1) {
+      expect(renderClozeCard(result.value.template, position)).not.toBeNull();
+    }
+  });
+});
+
+describe("translateApkg", () => {
+  it("builds one deck, one card and a subject row when a new subject is named", () => {
+    const { data, seededIds, report } = translateApkg(minimalApkg(), {
+      profileId: "profile-1",
+      subject: { kind: "new", name: "Anki uvoz" },
+      now: NOW,
+    });
+
+    expect(data.subjects).toHaveLength(1);
+    expect(data.subjects[0]).toMatchObject({
+      id: APKG_SUBJECT_SOURCE_ID,
+      profileId: "profile-1",
+      name: "Anki uvoz",
+      color: "jade",
+      archived: false,
+    });
+    expect(seededIds.size).toBe(0);
+
+    expect(data.decks).toHaveLength(1);
+    expect(data.decks[0]).toMatchObject({ subjectId: APKG_SUBJECT_SOURCE_ID, name: "Biologija" });
+
+    expect(data.cards).toHaveLength(1);
+    expect(data.cards[0]).toMatchObject({
+      front: "Prednja",
+      back: "Zadnja",
+      kind: "basic",
+      clozeText: null,
+      clozeOrdinal: null,
+      sourceNoteId: null,
+      sourceBlockKey: null,
+    });
+    expect(report).toMatchObject({ decks: 1, notes: 1, cards: 1 });
+  });
+
+  it("seeds the chosen subject's id instead of emitting a subject row", () => {
+    const { data, seededIds } = translateApkg(minimalApkg(), {
+      profileId: "profile-1",
+      subject: { kind: "existing", id: "subject-live" },
+      now: NOW,
+    });
+    expect(data.subjects).toHaveLength(0);
+    expect([...seededIds]).toEqual([[APKG_SUBJECT_SOURCE_ID, "subject-live"]]);
+    expect(data.decks[0]?.subjectId).toBe(APKG_SUBJECT_SOURCE_ID);
+  });
+
+  it("gives every card a fresh FSRS state at `now`, whatever the collection carried", () => {
+    const { data, report } = translateApkg(
+      minimalApkg({
+        cards: [{ noteId: 100, ord: 0, deckId: 1, reps: 47, suspended: false }],
+      }),
+      { profileId: "profile-1", subject: { kind: "new", name: "S" }, now: NOW },
+    );
+    expect(data.cards[0]).toMatchObject({
+      due: NOW,
+      stability: 0,
+      difficulty: 0,
+      elapsedDays: 0,
+      scheduledDays: 0,
+      learningSteps: 0,
+      reps: 0,
+      lapses: 0,
+      state: 0,
+      lastReview: null,
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    expect(data.reviewLog).toHaveLength(0);
+    expect(skipMap(report.skips)["history-dropped"]).toBe(1);
+  });
+
+  it("folds a suspended card into the history-dropped line", () => {
+    const { report } = translateApkg(
+      minimalApkg({
+        cards: [{ noteId: 100, ord: 0, deckId: 1, reps: 0, suspended: true }],
+      }),
+      { profileId: "profile-1", subject: { kind: "new", name: "S" }, now: NOW },
+    );
+    expect(skipMap(report.skips)["history-dropped"]).toBe(1);
+  });
+
+  it("flattens Parent::Child and skips a deck with no card", () => {
+    const { data, report } = translateApkg(
+      minimalApkg({
+        decks: [
+          { id: 1, name: "Fakultet::Biologija::Ćelija" },
+          { id: 2, name: "Prazan" },
+        ],
+      }),
+      { profileId: "profile-1", subject: { kind: "new", name: "S" }, now: NOW },
+    );
+    expect(data.decks.map((deck) => deck.name)).toEqual(["Fakultet / Biologija / Ćelija"]);
+    expect(skipMap(report.skips)["empty-deck"]).toBe(1);
+  });
+
+  it("makes two cards from a reversed note, the second with the sides swapped", () => {
+    const { data } = translateApkg(
+      minimalApkg({
+        notetypes: [{ id: 10, name: "Basic (and reversed card)", kind: "basic", templateCount: 2 }],
+        cards: [
+          { noteId: 100, ord: 0, deckId: 1, reps: 0, suspended: false },
+          { noteId: 100, ord: 1, deckId: 1, reps: 0, suspended: false },
+        ],
+      }),
+      { profileId: "profile-1", subject: { kind: "new", name: "S" }, now: NOW },
+    );
+    expect(data.cards.map((card) => [card.front, card.back])).toEqual([
+      ["Prednja", "Zadnja"],
+      ["Zadnja", "Prednja"],
+    ]);
+  });
+
+  it("refuses a third template rather than guessing what it renders", () => {
+    const { data, report } = translateApkg(
+      minimalApkg({
+        notetypes: [{ id: 10, name: "Custom", kind: "basic", templateCount: 3 }],
+        cards: [
+          { noteId: 100, ord: 0, deckId: 1, reps: 0, suspended: false },
+          { noteId: 100, ord: 2, deckId: 1, reps: 0, suspended: false },
+        ],
+      }),
+      { profileId: "profile-1", subject: { kind: "new", name: "S" }, now: NOW },
+    );
+    expect(data.cards).toHaveLength(1);
+    expect(skipMap(report.skips)["template-unsupported"]).toBe(1);
+  });
+
+  it("emits one row per cloze deletion, rendered by core's own renderer", () => {
+    const { data, report } = translateApkg(
+      minimalApkg({
+        notetypes: [{ id: 10, name: "Cloze", kind: "cloze", templateCount: 1 }],
+        notes: [
+          {
+            id: 100,
+            notetypeId: 10,
+            fields: ["Glavni grad je {{c2::Beograd}}, reka je {{c1::Sava::reka}}."],
+            tags: [],
+          },
+        ],
+        cards: [
+          { noteId: 100, ord: 0, deckId: 1, reps: 0, suspended: false },
+          { noteId: 100, ord: 1, deckId: 1, reps: 0, suspended: false },
+        ],
+      }),
+      { profileId: "profile-1", subject: { kind: "new", name: "S" }, now: NOW },
+    );
+
+    const template = "Glavni grad je {{Beograd}}, reka je {{Sava}}.";
+    expect(data.cards).toHaveLength(2);
+    expect(data.cards.map((card) => card.clozeOrdinal)).toEqual([0, 1]);
+    for (const card of data.cards) {
+      expect(card.kind).toBe("cloze");
+      expect(card.clozeText).toBe(template);
+      const rendered = renderClozeCard(template, card.clozeOrdinal ?? -1);
+      expect({ front: card.front, back: card.back }).toEqual(rendered);
+    }
+    expect(skipMap(report.skips)["cloze-hint-dropped"]).toBe(1);
+  });
+
+  it("names every cloze refusal instead of importing a broken note", () => {
+    const cloze = (text: string): ParsedApkg =>
+      minimalApkg({
+        notetypes: [{ id: 10, name: "Cloze", kind: "cloze", templateCount: 1 }],
+        notes: [{ id: 100, notetypeId: 10, fields: [text], tags: [] }],
+      });
+    const run = (text: string): Record<string, number> =>
+      skipMap(
+        translateApkg(cloze(text), {
+          profileId: "profile-1",
+          subject: { kind: "new", name: "S" },
+          now: NOW,
+        }).report.skips,
+      );
+
+    expect(run("{{c1::a}} {{c1::b}}")["cloze-ordinal-reused"]).toBe(1);
+    expect(run("{{c1::a {{c2::b}} c}}")["cloze-nested"]).toBe(1);
+    expect(run("bez ijedne praznine")["cloze-no-deletions"]).toBe(1);
+    expect(run("{{c1::a}b}}")["cloze-unrepresentable"]).toBe(1);
+  });
+
+  it("counts the media it strips, from the fields and from the manifest alike", () => {
+    const { data, report } = translateApkg(
+      minimalApkg({
+        notes: [
+          {
+            id: 100,
+            notetypeId: 10,
+            fields: ['Šta je ovo? <img src="a.png">', "Ćelija [sound:c.mp3]"],
+            tags: [],
+          },
+        ],
+        mediaCount: 5,
+      }),
+      { profileId: "profile-1", subject: { kind: "new", name: "S" }, now: NOW },
+    );
+    expect(data.cards[0]).toMatchObject({ front: "Šta je ovo?", back: "Ćelija" });
+    // Two references in the fields plus the five entries the manifest declared.
+    expect(skipMap(report.skips)["media-stripped"]).toBe(7);
+  });
+
+  it("counts the Anki tags it drops and the extra fields it does not carry", () => {
+    const { report } = translateApkg(
+      minimalApkg({
+        notes: [
+          {
+            id: 100,
+            notetypeId: 10,
+            fields: ["Prednja", "Zadnja", "Dodatno"],
+            tags: ["biologija", "ispit"],
+          },
+        ],
+      }),
+      { profileId: "profile-1", subject: { kind: "new", name: "S" }, now: NOW },
+    );
+    const skips = skipMap(report.skips);
+    expect(skips["tags-dropped"]).toBe(1);
+    expect(skips["extra-fields-dropped"]).toBe(1);
+  });
+
+  it("names a note whose notetype, deck or content is missing", () => {
+    const { data, report } = translateApkg(
+      {
+        decks: [{ id: 1, name: "D" }],
+        notetypes: [{ id: 10, name: "Basic", kind: "basic", templateCount: 1 }],
+        notes: [
+          { id: 100, notetypeId: 999, fields: ["a", "b"], tags: [] },
+          { id: 101, notetypeId: 10, fields: ["  ", ""], tags: [] },
+          { id: 102, notetypeId: 10, fields: ["c", "d"], tags: [] },
+        ],
+        cards: [
+          { noteId: 100, ord: 0, deckId: 1, reps: 0, suspended: false },
+          { noteId: 101, ord: 0, deckId: 1, reps: 0, suspended: false },
+          { noteId: 102, ord: 0, deckId: 42, reps: 0, suspended: false },
+          { noteId: 777, ord: 0, deckId: 1, reps: 0, suspended: false },
+        ],
+        mediaCount: 0,
+      },
+      { profileId: "profile-1", subject: { kind: "new", name: "S" }, now: NOW },
+    );
+    const skips = skipMap(report.skips);
+    expect(skips["unknown-notetype"]).toBe(1);
+    expect(skips["empty-note"]).toBe(1);
+    expect(skips["unknown-deck"]).toBe(1);
+    expect(skips["card-without-note"]).toBe(1);
+    expect(data.cards).toHaveLength(0);
+    expect(data.decks).toHaveLength(0);
+  });
+
+  it("reports its skips in the declared order and never lists a zero", () => {
+    const { report } = translateApkg(
+      minimalApkg({
+        notes: [{ id: 100, notetypeId: 10, fields: ["a", "b", "c"], tags: ["x"] }],
+        cards: [{ noteId: 100, ord: 0, deckId: 1, reps: 3, suspended: false }],
+      }),
+      { profileId: "profile-1", subject: { kind: "new", name: "S" }, now: NOW },
+    );
+    const codes = report.skips.map((skip) => skip.code);
+    expect(codes.every((code) => APKG_SKIP_CODES.includes(code))).toBe(true);
+    expect([...codes].sort((a, b) => APKG_SKIP_CODES.indexOf(a) - APKG_SKIP_CODES.indexOf(b))).toEqual(
+      codes,
+    );
+    expect(report.skips.every((skip) => skip.count > 0)).toBe(true);
+  });
+
+  it("leaves every module but STUDY empty — an apkg carries nothing else", () => {
+    const { data } = translateApkg(minimalApkg(), {
+      profileId: "profile-1",
+      subject: { kind: "new", name: "S" },
+      now: NOW,
+    });
+    expect(data.tasks).toEqual([]);
+    expect(data.notes).toEqual([]);
+    expect(data.events).toEqual([]);
+    expect(data.taskLists).toEqual([]);
+    expect(data.notifications).toEqual([]);
+    expect(data.exams).toEqual([]);
+    expect(data.studySettings).toEqual([]);
+    expect(data.dashboardWidgets).toEqual([]);
+  });
+});

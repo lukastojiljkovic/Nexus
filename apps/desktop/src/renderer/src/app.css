@@ -5117,6 +5117,16 @@ button.cal__grid-event--dragging {
   color: var(--nx-accent-strong);
   font-weight: var(--nx-font-weight-semibold);
 }
+/* Uvoz iz Anki (ADR-052): the subject choice — a caption, the select, and the
+   „Nova oblast" name field when that option is picked. Its own column at the
+   same width the security forms use, so the text input does not stretch to the
+   card's full width beside a select that never would. */
+.set__apkg-subject {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  max-width: 320px;
+}
 /* Native select matched to the textfield input (tokens only, no custom arrow; mirrors .study__select). */
 .set__select {
   font: inherit;

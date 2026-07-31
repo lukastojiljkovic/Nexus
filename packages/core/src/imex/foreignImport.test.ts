@@ -1285,3 +1285,85 @@ describe("planForeignImport — duplicate detection", () => {
     expect(second.report).toEqual(first.report);
   });
 });
+
+/**
+ * The seeded-id seam (ADR-052). Its only caller today is the Anki import, whose
+ * translator names its subject `apkg:subject` and lets the CHOICE decide
+ * whether that name becomes a new row or resolves onto one this profile already
+ * has — but the seam is tested here, on the planner's own terms, because it is
+ * the planner's contract and not the translator's.
+ */
+describe("planForeignImport — seeded ids", () => {
+  const SEEDED = "apkg:subject";
+
+  function deckedData(withSubjectRow: boolean): ProfileData {
+    return {
+      ...emptyProfileData(),
+      subjects: withSubjectRow
+        ? [
+            {
+              id: SEEDED,
+              profileId: "src",
+              name: "Ne bi trebalo da stigne",
+              color: "jade",
+              semester: null,
+              archived: false,
+              createdAt: T0,
+              updatedAt: T0,
+            },
+          ]
+        : [],
+      decks: [
+        {
+          id: "src-deck",
+          profileId: "src",
+          subjectId: SEEDED,
+          name: "Biologija",
+          createdAt: T0,
+          updatedAt: T0,
+        },
+      ],
+    };
+  }
+
+  it("resolves a reference to a seeded id onto the target's own row", () => {
+    const { data } = plan(
+      deckedData(false),
+      emptyTarget({ seededIds: new Map([[SEEDED, "subject-live"]]) }),
+    );
+    expect(data.decks).toHaveLength(1);
+    expect(data.decks[0]?.subjectId).toBe("subject-live");
+    // The deck ITSELF is minted like any other row — only the seeded id is not.
+    expect(data.decks[0]?.id).toBe("new-1");
+  });
+
+  it("never spends a minted id on a seeded entry", () => {
+    let minted = 0;
+    const mintId = (): string => `new-${++minted}`;
+    planForeignImport(
+      { data: deckedData(false), dropped: [], profilePicture: null },
+      emptyTarget({ seededIds: new Map([[SEEDED, "subject-live"]]) }),
+      mintId,
+    );
+    // Exactly one row needed an id: the deck. The subject's came from the map.
+    expect(minted).toBe(1);
+  });
+
+  it("drops a source row that carries a seeded id — the entry says the target already has it", () => {
+    const { data } = plan(
+      deckedData(true),
+      emptyTarget({ seededIds: new Map([[SEEDED, "subject-live"]]) }),
+    );
+    expect(data.subjects).toHaveLength(0);
+    expect(data.decks[0]?.subjectId).toBe("subject-live");
+  });
+
+  it("plans exactly as it always did when no seeded map is given", () => {
+    const withEmptyMap = plan(foreignProfileData(), emptyTarget({ seededIds: new Map() }));
+    const withoutTheField = plan(foreignProfileData());
+    expect(withEmptyMap.report).toEqual(withoutTheField.report);
+    expect(countProfileModules(withEmptyMap.data)).toEqual(
+      countProfileModules(withoutTheField.data),
+    );
+  });
+});

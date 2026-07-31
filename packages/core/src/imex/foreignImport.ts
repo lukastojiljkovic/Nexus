@@ -168,6 +168,24 @@ export interface ForeignImportTarget {
    * own claim is cleared — the target's choice wins (ADR-043 §2).
    */
   claimsCaptureDefault: boolean;
+  /**
+   * Source ids that ALREADY name a row of this profile (ADR-052). Each entry
+   * pre-populates the id map, so a reference to that source id resolves onto the
+   * target's own row and NO id is minted for it — and the source row carrying it
+   * (if any) is absorbed rather than planned, exactly as a name-matched tag is.
+   *
+   * The seam exists for an import whose source is not a Nexus archive at all.
+   * The Anki importer (`ankiTranslate.ts`) names its subject `apkg:subject` and
+   * lets the user's CHOICE decide what that name means: „Nova oblast" leaves this
+   * absent and plans a real subject row, while choosing an existing subject seeds
+   * that one entry — and every imported deck then hangs off the subject the user
+   * picked, with no id of the archive's own left anywhere.
+   *
+   * OPTIONAL, unlike every other member here, and deliberately: an ordinary
+   * archive import seeds nothing, and a required field would make every caller
+   * spell an empty map to say so. Absent and empty mean the same thing.
+   */
+  seededIds?: ReadonlyMap<string, string>;
 }
 
 /** What the planner consumes: a successfully parsed archive plus what salvage mode had to drop getting there. */
@@ -724,6 +742,15 @@ export function planForeignImport(
     duplicateSkips: [],
   };
 
+  // Pass 0 (ADR-052): the answers the CALLER already knows. Seeded before pass 1
+  // so `mint` finds them and returns without spending a minted id, and absorbed
+  // so any row carrying one is dropped instead of inserted a second time under
+  // the target's own id — a seeded entry says "this row is already here".
+  for (const [sourceId, targetId] of target.seededIds ?? []) {
+    ctx.ids.set(sourceId, targetId);
+    ctx.absorbed.add(sourceId);
+  }
+
   // Pass 1: every id in the archive gets its answer before any reference is
   // rewritten — a task can name a list that appears later in the file, and a
   // card can name a note in an entirely different one.
@@ -825,7 +852,12 @@ export function planForeignImport(
       id: mapped(row.id, ctx),
       profileId: target.profileId,
     })),
-    subjects: source.subjects.map((row) => ({
+    // `notAbsorbed` here, unlike on every other STUDY member, because this is
+    // the one table a seeded id can name (ADR-052): a subject the user chose is
+    // a subject that already exists, so its source row is a reference now, not
+    // a row. An ordinary archive import absorbs no subject, so this filter is a
+    // no-op for it.
+    subjects: notAbsorbed(source.subjects, ctx).map((row) => ({
       ...row,
       id: mapped(row.id, ctx),
       profileId: target.profileId,

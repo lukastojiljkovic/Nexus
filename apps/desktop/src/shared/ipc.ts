@@ -256,6 +256,22 @@ export const IpcChannel = {
   imexImportReplan: "imex:import-replan",
   imexImportApply: "imex:import-apply",
   imexImportCancel: "imex:import-cancel",
+  // An Anki `.apkg` (ADR-052 / STUDY-011). Its OWN four channels, on exactly
+  // the reasoning that gave the foreign import its own: an `.apkg` is somebody
+  // else's SQLite database inside a plain zip, read by a different reader under
+  // different caps, and a shared channel would be one validated field away from
+  // letting a request for one produce the other. The pick/preview/apply/cancel
+  // SHAPE is deliberately identical, though — same one-slot undo, same named
+  // skips, same token — because the user is doing the same thing.
+  //
+  // No replan channel: an `.apkg` has no duplicate groups to answer. What it
+  // has instead is a SUBJECT choice, and that rides on the preview request —
+  // re-previewing with a different subject re-plans the archive main already
+  // has open, exactly as `imex:import-replan` re-plans on a changed choice.
+  imexImportApkgPick: "imex:import-apkg-pick",
+  imexImportApkgPreview: "imex:import-apkg-preview",
+  imexImportApkgApply: "imex:import-apkg-apply",
+  imexImportApkgCancel: "imex:import-apkg-cancel",
   // Plain `.md` files into notes (IMEX-007). Deliberately NOT a mode on the
   // archive channels above: there is no manifest to read, nothing to preview
   // and nothing to undo — main picks, parses and writes in one call, exactly
@@ -3394,12 +3410,19 @@ export interface RestoreUndoResult {
 /**
  * What a freshly reloaded renderer asks for, since the reload replaced the
  * screen that would have shown the undo banner (IMEX-006). ONE slot covers
- * whichever archive operation ran last (ADR-043 section 4) — `kind` is what the
- * banner names, since "poništi vraćanje" and "poništi uvoz" undo very different
- * things even though the mechanism putting them back is identical.
+ * whichever archive operation ran last (ADR-043 section 4, extended by ADR-052
+ * to the Anki import) — `kind` is what the banner names, since "poništi
+ * vraćanje" and "poništi uvoz" undo very different things even though the
+ * mechanism putting them back is identical. `"apkg"` is its own value rather
+ * than a second `"import"` for exactly that reason: the sentence that names it
+ * is about an Anki deck, not about a Nexus archive.
  */
 export interface RestoreStatus {
-  undo: { kind: "restore" | "import"; appliedAt: string; summary: RestoreApplyResult } | null;
+  undo: {
+    kind: "restore" | "import" | "apkg";
+    appliedAt: string;
+    summary: RestoreApplyResult;
+  } | null;
 }
 
 /**
@@ -3681,6 +3704,199 @@ export const MARKDOWN_IMPORT_MAX_BYTES = 1_048_576;
 
 /** Maximum number of files one pick may turn into notes; the rest are reported, never silently dropped. */
 export const MARKDOWN_IMPORT_MAX_FILES = 200;
+
+// --- Anki .apkg import (ADR-052 / STUDY-011) ---------------------------------
+
+/**
+ * Every bound `main/apkgReader.ts` enforces on an `.apkg`, declared here beside
+ * `MARKDOWN_IMPORT_*` because this file is where every limit the app is willing
+ * to state lives.
+ *
+ * An `.apkg` is a plain zip carrying somebody else's SQLite DATABASE, which is
+ * a wider attack surface than any other file this app opens: the reader has to
+ * hand those bytes to SQLite itself. Every one of these is a NAMED REFUSAL —
+ * the file is rejected with a reason the screen can say out loud — and never a
+ * truncation, because half of somebody's deck arriving silently is the one
+ * outcome an import must never produce.
+ */
+
+/** The `.apkg` file itself, on disk. Anki's own shared decks top out far below this; anything larger is not a deck, it is a payload. */
+export const APKG_IMPORT_MAX_FILE_BYTES = 524_288_000; // 500 MiB
+
+/**
+ * The UNCOMPRESSED collection database. Lower than the file cap, and
+ * deliberately so: this one becomes RESIDENT — the whole database is held in
+ * main's heap while it is read (there is no temp file and nothing on disk) — so
+ * it is the number that protects the process, exactly as `maxResidentBytes`
+ * does for a Nexus archive. Also the ceiling a zstd-compressed collection is
+ * decompressed under, so a compression bomb never allocates past it.
+ */
+export const APKG_IMPORT_MAX_COLLECTION_BYTES = 268_435_456; // 256 MiB
+
+/** Entries in the zip's central directory, counting the ones the reader skips — the cost of the walk itself. */
+export const APKG_IMPORT_MAX_ENTRIES = 10_000;
+
+/** Rows read out of the collection's `notes` table. */
+export const APKG_IMPORT_MAX_NOTES = 200_000;
+
+/** Rows read out of the collection's `cards` table — higher than the note cap, since one note makes several. */
+export const APKG_IMPORT_MAX_CARDS = 500_000;
+
+/** Entries the `media` manifest may declare. Counted, never fetched: v1 imports no media. */
+export const APKG_IMPORT_MAX_MEDIA_ENTRIES = 200_000;
+
+/** One field of one note, in UTF-8 bytes. A card's text, not a file: past this the field is not text somebody typed. */
+export const APKG_IMPORT_MAX_FIELD_BYTES = 262_144; // 256 KiB
+
+/**
+ * Why an `.apkg` could not be read at all. The counterpart of
+ * `ArchiveReadErrorCode` for this file type, and separate from it because the
+ * failures are genuinely different ones — there is no passphrase here, and
+ * there are two ways to be unreadable that a Nexus archive has no equivalent
+ * of.
+ *
+ * `unsupported-schema` is the honest name for a collection this build will not
+ * GUESS about: Anki's schema 18 keeps a notetype's kind (basic vs cloze) in a
+ * protobuf blob, and a cloze note imported as a basic one would arrive as a
+ * card whose front is raw `{{c1::…}}` text. Exporting with „Support older Anki
+ * versions" produces a schema this build reads completely.
+ */
+export type ApkgReadErrorCode =
+  | "not-an-apkg"
+  | "no-collection"
+  | "unsupported-schema"
+  | "zstd-unavailable"
+  | "damaged"
+  | "too-large";
+
+/**
+ * Why something the `.apkg` carried is not in the plan. Mirrors `@nexus/core`'s
+ * `ApkgSkipCode` exactly — redeclared here like every other closed domain in
+ * this file, so `main`'s assignment of a core value to this type turns a code
+ * added in core into a compile error rather than a line the screen cannot
+ * label.
+ */
+export type ApkgImportSkipCode =
+  | "unknown-notetype"
+  | "unknown-deck"
+  | "empty-note"
+  | "empty-deck"
+  | "template-unsupported"
+  | "cloze-nested"
+  | "cloze-ordinal-reused"
+  | "cloze-no-deletions"
+  | "cloze-unrepresentable"
+  | "cloze-hint-dropped"
+  | "extra-fields-dropped"
+  | "media-stripped"
+  | "tags-dropped"
+  | "history-dropped"
+  | "card-without-note";
+
+/** One named, counted group of things that will not arrive. */
+export interface ApkgImportSkip {
+  code: ApkgImportSkipCode;
+  count: number;
+}
+
+/**
+ * Where the imported decks land. Exactly one of the two is non-null, which main
+ * validates before a single row is planned: an `.apkg` has no subject of its
+ * own, so this is a decision only the user can make and the preview cannot be
+ * computed without it.
+ */
+export interface ApkgImportSubjectChoice {
+  /** An existing subject of this profile. */
+  existingSubjectId: string | null;
+  /** A subject this import creates. */
+  newSubjectName: string | null;
+}
+
+/** Longest name „Nova oblast" accepts — the same ceiling the subject form itself is held to. */
+export const APKG_IMPORT_MAX_SUBJECT_NAME_LENGTH = 120;
+
+/**
+ * The outcome of the native "pick an .apkg" dialog. Structurally a
+ * `RestorePickResult` minus its `encrypted` flag, which an `.apkg` has no
+ * concept of — a plain zip is the only shape this file comes in.
+ */
+export type ApkgImportPickResult =
+  | { canceled: true }
+  | { canceled: false; path: string; fileName: string };
+
+/**
+ * A dry run of a real `.apkg` import: the file really read, really translated
+ * and really planned against this profile under the subject the request named.
+ *
+ * Two reports, and they answer different questions. `modules` is
+ * `planForeignImport`'s own per-module arithmetic, the same table the archive
+ * import shows — what the plan will insert. `skips` is the TRANSLATOR's: every
+ * Anki-shaped thing that does not survive the crossing, named and counted, from
+ * the media this build does not carry to the review history it deliberately
+ * drops.
+ */
+export interface ApkgImportPreview {
+  /** Identifies this exact read-and-plan. The apply refuses any other value, so a stale screen can never write a plan the user did not see. */
+  token: string;
+  fileName: string;
+  /** The subject the decks will hang off, by name — the existing one the user picked, or the one this import will create. */
+  subjectName: string;
+  /** True when that subject does not exist yet, so the screen can say the import will create it. */
+  subjectIsNew: boolean;
+  /** What the collection carried, before any of this build's rules ran. */
+  sourceDecks: number;
+  sourceNotes: number;
+  sourceCards: number;
+  /** What the plan will actually create. `plannedNotes` counts Anki NOTES that produced at least one card, so it is comparable with `sourceNotes` — Nexus itself has no note row here. */
+  plannedDecks: number;
+  plannedNotes: number;
+  plannedCards: number;
+  /** `planForeignImport`'s own arithmetic, per archive module — only STUDY is ever non-zero for an `.apkg`. */
+  modules: Record<ArchiveModuleName, ImportModuleCounts>;
+  skips: ApkgImportSkip[];
+}
+
+/**
+ * `"no-file"` when nothing has been picked yet; `"unreadable"` when the file
+ * could not be read at all (not a zip, no collection inside, a schema this
+ * build refuses to guess about, a cap); `"ready"` is the only state the apply
+ * accepts.
+ *
+ * There is no `"invalid"` arm, unlike an archive's: an `.apkg` carries no
+ * manifest to be wrong and no checksum to mismatch, so every way it can fail is
+ * a way it could not be READ.
+ */
+export type ApkgImportPreviewResult =
+  | { status: "no-file" }
+  | { status: "unreadable"; code: ApkgReadErrorCode }
+  | { status: "ready"; preview: ApkgImportPreview };
+
+/** What a completed `.apkg` import wrote. The same shape both archive operations report, because it is undone through the same one slot and shown through the same one banner. */
+export type ApkgImportApplyResult = RestoreApplyResult;
+
+/**
+ * Picking a file (`imex:import-apkg-pick`) and dropping the picked one
+ * (`imex:import-apkg-cancel`) carry no payload — main holds the pick — and so
+ * declare no request shape. Undo and status have none either: one slot, one
+ * banner, `imex:restore-undo`/`imex:restore-status` for all three operations.
+ *
+ * The SUBJECT rides on the preview request rather than on the apply, because
+ * the plan depends on it: which subject the decks hang off decides whether a
+ * subject row is created at all. Re-previewing under a different subject
+ * re-plans the file main already has open — the same precedent
+ * `imex:import-replan` sets, and for the same reason: changing an answer must
+ * not cost what opening the file cost.
+ */
+export interface ImexImportApkgPreviewRequest {
+  profileId: string;
+  subject: ApkgImportSubjectChoice;
+}
+
+/** `token` names the exact plan being confirmed — main refuses any other value. */
+export interface ImexImportApkgApplyRequest {
+  profileId: string;
+  token: string;
+}
 
 /**
  * Why one file of a pick did not become a note. Every one of these is REPORTED
@@ -4332,6 +4548,30 @@ export interface NexusApi {
   applyImport(profileId: string, token: string): Promise<ImportApplyResult>;
   /** Drops the picked import archive without applying it, releasing the OS file lock an opened one holds. */
   cancelImport(): Promise<void>;
+  /**
+   * Opens the native "pick an .apkg" dialog (ADR-052). Its own pick, held apart
+   * from both archive picks for the reason they are held apart from each other:
+   * nothing on one surface may ever reach another's file.
+   */
+  pickApkgFile(): Promise<ApkgImportPickResult>;
+  /**
+   * Dry-runs the `.apkg` import by really reading the file, really translating
+   * it and really planning it against this profile under `subject` — never an
+   * estimate. Calling it again with a different `subject` re-plans the file main
+   * already has open, at the cost of a re-plan rather than a re-read.
+   */
+  previewApkgImport(
+    profileId: string,
+    subject: ApkgImportSubjectChoice,
+  ): Promise<ApkgImportPreviewResult>;
+  /**
+   * Confirms the plan `token` names, ADDING its decks and cards to this profile.
+   * Undoable through `undoRestore`, which all three archive operations share.
+   * The renderer is reloaded shortly AFTER this resolves.
+   */
+  applyApkgImport(profileId: string, token: string): Promise<ApkgImportApplyResult>;
+  /** Drops the picked `.apkg` without applying it, releasing the OS file lock an opened one holds. */
+  cancelApkgImport(): Promise<void>;
   /**
    * Opens the native `.md` picker in MAIN (files or a folder, per `source`),
    * reads and parses every file there, and writes each one as a real note in

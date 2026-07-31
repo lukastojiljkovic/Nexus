@@ -3,6 +3,7 @@ import { mkdtemp, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import BetterSqlite3 from "better-sqlite3-multiple-ciphers";
 import { ZipFile } from "yazl";
 import * as Y from "yjs";
 
@@ -73,17 +74,22 @@ import type {
   TaskTag,
 } from "@nexus/db";
 
+import * as apkgReaderModule from "./apkgReader.js";
 import * as archiveReaderModule from "./archiveReader.js";
 import { deriveRestoredNotes, gatherProfileData } from "./profileData.js";
 import type { ProfileDataDeps } from "./profileData.js";
 import {
+  applyApkgImport,
   applyImport,
   applyRestore,
+  cancelApkgImport,
   cancelImport,
   cancelRestore,
   clearRestoreState,
+  pickApkgFile,
   pickImportFile,
   pickRestoreFile,
+  previewApkgImport,
   previewImport,
   previewRestore,
   replanImport,
@@ -195,7 +201,11 @@ interface TestDepsHandle {
  * and the blob store — those are test doubles backed by a plain in-memory map
  * so `created`/orphan-deletion are directly observable.
  */
-function makeTestDeps(handle: NexusDatabase, filePath: string | null): TestDepsHandle {
+function makeTestDeps(
+  handle: NexusDatabase,
+  filePath: string | null,
+  apkgPath: string | null = null,
+): TestDepsHandle {
   const blobs = new Map<string, Uint8Array>();
   const cancelFocusCalls: string[] = [];
   let reloadCount = 0;
@@ -221,6 +231,9 @@ function makeTestDeps(handle: NexusDatabase, filePath: string | null): TestDepsH
       };
     },
     pickArchiveFile: async () => filePath,
+    // ADR-052's own picker, injected separately for the reason main injects it
+    // separately: nothing on the archive surface may ever open this dialog.
+    pickApkgFile: async () => apkgPath,
     reloadRenderer: () => {
       reloadCount += 1;
     },
@@ -1925,5 +1938,305 @@ describe("foreign import — what the target already has", () => {
       if (replanned.status !== "ready") unreachable();
       expect(replanned.preview.report.duplicates).toEqual([{ type: "event", count: 1 }]);
     });
+  });
+});
+
+// --- Anki .apkg import (ADR-052 / STUDY-011) --------------------------------
+
+/**
+ * A real `.apkg` on disk, built the way `apkgReader.test.ts` builds its
+ * fixtures: a genuine zip carrying a genuine schema-11 SQLite image. The
+ * ORCHESTRATION is what these tests are about — the pick, the subject choice,
+ * the seeded-id seam, the token and the shared undo — so the collection itself
+ * is kept to the smallest thing that exercises both card kinds.
+ */
+async function writeApkgFixture(fileName: string): Promise<string> {
+  const US = String.fromCharCode(0x1f);
+  const db = new BetterSqlite3(":memory:");
+  db.exec(`
+    CREATE TABLE col (
+      id integer PRIMARY KEY, crt integer NOT NULL, mod integer NOT NULL,
+      scm integer NOT NULL, ver integer NOT NULL, dty integer NOT NULL,
+      usn integer NOT NULL, ls integer NOT NULL, conf text NOT NULL,
+      models text NOT NULL, decks text NOT NULL, dconf text NOT NULL, tags text NOT NULL
+    );
+    CREATE TABLE notes (
+      id integer PRIMARY KEY, guid text NOT NULL, mid integer NOT NULL, mod integer NOT NULL,
+      usn integer NOT NULL, tags text NOT NULL, flds text NOT NULL, sfld integer NOT NULL,
+      csum integer NOT NULL, flags integer NOT NULL, data text NOT NULL
+    );
+    CREATE TABLE cards (
+      id integer PRIMARY KEY, nid integer NOT NULL, did integer NOT NULL, ord integer NOT NULL,
+      mod integer NOT NULL, usn integer NOT NULL, type integer NOT NULL, queue integer NOT NULL,
+      due integer NOT NULL, ivl integer NOT NULL, factor integer NOT NULL, reps integer NOT NULL,
+      lapses integer NOT NULL, left integer NOT NULL, odue integer NOT NULL, odid integer NOT NULL,
+      flags integer NOT NULL, data text NOT NULL
+    );
+  `);
+  db.prepare("INSERT INTO col VALUES (1, 1700000000, 0, 0, 11, 0, 0, 0, '{}', ?, ?, '{}', '{}')").run(
+    JSON.stringify({
+      "10": { id: 10, name: "Basic", type: 0, tmpls: [{ ord: 0 }] },
+      "20": { id: 20, name: "Cloze", type: 1, tmpls: [{ ord: 0 }] },
+    }),
+    JSON.stringify({ "1": { id: 1, name: "Fakultet::Biologija" } }),
+  );
+  const insertNote = db.prepare("INSERT INTO notes VALUES (?, ?, ?, 0, 0, ?, ?, '', 0, 0, '')");
+  insertNote.run(100, "g100", 10, " ispit ", ["<b>Šta je ćelija?</b>", "Osnovna jedinica"].join(US));
+  insertNote.run(200, "g200", 20, "", ["Reka je {{c1::Sava}}, grad je {{c2::Beograd}}.", ""].join(US));
+  const insertCard = db.prepare(
+    "INSERT INTO cards VALUES (?, ?, ?, ?, 0, 0, 0, 0, 0, 0, 0, ?, 0, 0, 0, 0, 0, '')",
+  );
+  insertCard.run(1000, 100, 1, 0, 9);
+  insertCard.run(1001, 200, 1, 0, 0);
+  insertCard.run(1002, 200, 1, 1, 0);
+  const collection = db.serialize();
+  db.close();
+
+  const zipBytes = await new Promise<Buffer>((resolve, reject) => {
+    const zipfile = new ZipFile();
+    zipfile.addBuffer(collection, "collection.anki2");
+    zipfile.addBuffer(Buffer.from('{"0":"cell.jpg"}', "utf8"), "media");
+    zipfile.addBuffer(Buffer.alloc(32, 3), "0");
+    const chunks: Buffer[] = [];
+    zipfile.outputStream.on("data", (chunk: Buffer) => chunks.push(chunk));
+    zipfile.outputStream.on("end", () => resolve(Buffer.concat(chunks)));
+    zipfile.outputStream.on("error", reject);
+    zipfile.end();
+  });
+
+  const filePath = fixturePath(fileName);
+  await writeFile(filePath, zipBytes);
+  return filePath;
+}
+
+describe("Anki .apkg import", () => {
+  it("imports one deck and three cards under a NEW subject, and undoes them away completely", async () => {
+    const filePath = await writeApkgFixture("deck.apkg");
+    const profileB = createProfile(dbB, "B");
+    const { deps, getReloadCount } = makeTestDeps(dbB, null, filePath);
+
+    const picked = await pickApkgFile(deps);
+    expect(picked).toEqual({ canceled: false, path: filePath, fileName: "deck.apkg" });
+
+    const previewed = await previewApkgImport(deps, profileB, {
+      existingSubjectId: null,
+      newSubjectName: "Anki uvoz",
+    });
+    if (previewed.status !== "ready") unreachable();
+    const preview = previewed.preview;
+    expect(preview).toMatchObject({
+      fileName: "deck.apkg",
+      subjectName: "Anki uvoz",
+      subjectIsNew: true,
+      sourceDecks: 1,
+      sourceNotes: 2,
+      sourceCards: 3,
+      plannedDecks: 1,
+      plannedNotes: 2,
+      plannedCards: 3,
+    });
+    // The plan's own arithmetic, straight off `planForeignImport` — a subject,
+    // a deck and three cards, all inserted, none merged, none skipped.
+    expect(preview.modules.study).toEqual({ parsed: 5, imported: 5, merged: 0, skipped: 0 });
+    // Nothing has been written yet: a preview is a dry run.
+    expect(new SubjectStore(dbB.raw, profileB).listActive()).toHaveLength(0);
+
+    // Every named loss, counted: the media file, the note that had review
+    // history, and the Anki tags on it.
+    const skips = Object.fromEntries(preview.skips.map((skip) => [skip.code, skip.count]));
+    expect(skips["media-stripped"]).toBe(1);
+    expect(skips["history-dropped"]).toBe(1);
+    expect(skips["tags-dropped"]).toBe(1);
+
+    const applied = await applyApkgImport(deps, profileB, preview.token);
+    expect(applied.rowsWritten).toBe(5);
+    expect(applied.blobsAdded).toBe(0);
+    expect(applied.missingBlobs).toBe(0);
+
+    const subjects = new SubjectStore(dbB.raw, profileB).listActive();
+    expect(subjects.map((subject) => subject.name)).toEqual(["Anki uvoz"]);
+    const decks = new DeckStore(dbB.raw, profileB).listActive();
+    expect(decks.map((deck) => deck.name)).toEqual(["Fakultet / Biologija"]);
+    expect(decks[0]?.subjectId).toBe(subjects[0]?.id);
+
+    const cards = new CardStore(dbB.raw, profileB).listByDeck(decks[0]?.id ?? "");
+    expect(cards).toHaveLength(3);
+    const basic = cards.find((card) => card.kind === "basic");
+    expect(basic).toMatchObject({ front: "Šta je ćelija?", back: "Osnovna jedinica" });
+    const clozes = cards
+      .filter((card) => card.kind === "cloze")
+      .sort((a, b) => (a.clozeOrdinal ?? 0) - (b.clozeOrdinal ?? 0));
+    expect(clozes.map((card) => card.clozeText)).toEqual([
+      "Reka je {{Sava}}, grad je {{Beograd}}.",
+      "Reka je {{Sava}}, grad je {{Beograd}}.",
+    ]);
+    expect(clozes[0]).toMatchObject({ front: "Reka je […], grad je Beograd.", clozeOrdinal: 0 });
+    expect(clozes[1]).toMatchObject({ front: "Reka je Sava, grad je […].", clozeOrdinal: 1 });
+    // Fresh FSRS, whatever the collection's own scheduling said.
+    expect(
+      cards.every((card) => card.reps === 0 && card.state === 0 && card.lastReview === null),
+    ).toBe(true);
+
+    // The shared banner, naming this operation as its own kind.
+    expect(restoreStatus(profileB).undo?.kind).toBe("apkg");
+    await flushSetTimeout();
+    expect(getReloadCount()).toBe(1);
+
+    await undoRestore(deps, profileB);
+    expect(new SubjectStore(dbB.raw, profileB).listActive()).toHaveLength(0);
+    expect(new DeckStore(dbB.raw, profileB).listActive()).toHaveLength(0);
+    expect(restoreStatus(profileB).undo).toBeNull();
+  });
+
+  it("hangs the decks off an EXISTING subject without creating one (the seeded-id seam)", async () => {
+    const filePath = await writeApkgFixture("existing.apkg");
+    const profileB = createProfile(dbB, "B");
+    const subjects = new SubjectStore(dbB.raw, profileB);
+    const existing = subjects.create({ name: "Biologija" });
+    const { deps } = makeTestDeps(dbB, null, filePath);
+
+    await pickApkgFile(deps);
+    const previewed = await previewApkgImport(deps, profileB, {
+      existingSubjectId: existing.id,
+      newSubjectName: null,
+    });
+    if (previewed.status !== "ready") unreachable();
+    expect(previewed.preview.subjectName).toBe("Biologija");
+    expect(previewed.preview.subjectIsNew).toBe(false);
+    // One row fewer than the new-subject plan: no subject is created.
+    expect(previewed.preview.modules.study.imported).toBe(4);
+
+    await applyApkgImport(deps, profileB, previewed.preview.token);
+
+    expect(subjects.listActive().map((subject) => subject.id)).toEqual([existing.id]);
+    const decks = new DeckStore(dbB.raw, profileB).listActive();
+    expect(decks).toHaveLength(1);
+    expect(decks[0]?.subjectId).toBe(existing.id);
+  });
+
+  it("re-previews under a different subject without reading the file again", async () => {
+    const filePath = await writeApkgFixture("replan.apkg");
+    const profileB = createProfile(dbB, "B");
+    const existing = new SubjectStore(dbB.raw, profileB).create({ name: "Biologija" });
+    const { deps } = makeTestDeps(dbB, null, filePath);
+
+    await pickApkgFile(deps);
+    const readSpy = vi.spyOn(apkgReaderModule, "readApkg");
+
+    const first = await previewApkgImport(deps, profileB, {
+      existingSubjectId: null,
+      newSubjectName: "Prvi pokušaj",
+    });
+    if (first.status !== "ready") unreachable();
+    expect(readSpy).toHaveBeenCalledTimes(1);
+
+    const second = await previewApkgImport(deps, profileB, {
+      existingSubjectId: existing.id,
+      newSubjectName: null,
+    });
+    if (second.status !== "ready") unreachable();
+    // The collection was read ONCE: changing the subject costs a re-translate
+    // and a re-plan, never a second walk over the file.
+    expect(readSpy).toHaveBeenCalledTimes(1);
+    expect(second.preview.subjectName).toBe("Biologija");
+    // A fresh token, and the old plan gone with it.
+    expect(second.preview.token).not.toBe(first.preview.token);
+    await expect(applyApkgImport(deps, profileB, first.preview.token)).rejects.toThrow(/stale/);
+  });
+
+  it("refuses a stale token, a foreign profile and a second apply of the same plan", async () => {
+    const filePath = await writeApkgFixture("guards.apkg");
+    const profileB = createProfile(dbB, "B");
+    const otherProfile = createProfile(dbB, "Drugi");
+    const { deps } = makeTestDeps(dbB, null, filePath);
+
+    await pickApkgFile(deps);
+    const previewed = await previewApkgImport(deps, profileB, {
+      existingSubjectId: null,
+      newSubjectName: "S",
+    });
+    if (previewed.status !== "ready") unreachable();
+    const token = previewed.preview.token;
+
+    await expect(applyApkgImport(deps, profileB, "not-the-token")).rejects.toThrow(/stale/);
+    await expect(applyApkgImport(deps, otherProfile, token)).rejects.toThrow(/different profile/);
+
+    await applyApkgImport(deps, profileB, token);
+    await expect(applyApkgImport(deps, profileB, token)).rejects.toThrow(/No \.apkg preview/);
+  });
+
+  it("refuses a subject this profile does not have", async () => {
+    const filePath = await writeApkgFixture("subject.apkg");
+    const profileB = createProfile(dbB, "B");
+    const otherProfile = createProfile(dbB, "Drugi");
+    const foreignSubject = new SubjectStore(dbB.raw, otherProfile).create({ name: "Tuđa" });
+    const { deps } = makeTestDeps(dbB, null, filePath);
+
+    await pickApkgFile(deps);
+    await expect(
+      previewApkgImport(deps, profileB, {
+        existingSubjectId: foreignSubject.id,
+        newSubjectName: null,
+      }),
+    ).rejects.toThrow(/No active subject/);
+  });
+
+  it("reports an unreadable file by code rather than rejecting", async () => {
+    const filePath = fixturePath("nope.apkg");
+    await writeFile(filePath, Buffer.from("ovo nije zip", "utf8"));
+    const profileB = createProfile(dbB, "B");
+    const { deps } = makeTestDeps(dbB, null, filePath);
+
+    await pickApkgFile(deps);
+    await expect(
+      previewApkgImport(deps, profileB, { existingSubjectId: null, newSubjectName: "S" }),
+    ).resolves.toEqual({ status: "unreadable", code: "not-an-apkg" });
+  });
+
+  it("keeps its pick apart from the two archive picks and refuses a token across them", async () => {
+    const filePath = await writeApkgFixture("apart.apkg");
+    const profileA = createProfile(dbA, "A");
+    const fixtureA = seedProfile(dbA, profileA, "A");
+    const archive = buildArchiveFor(fixtureA, profileA, "A");
+    const archivePath = fixturePath("apart.nexus.zip");
+    await writeFile(archivePath, await buildArchiveZip(archive, fixtureA.blobBytes));
+
+    const profileB = createProfile(dbB, "B");
+    const { deps } = makeTestDeps(dbB, archivePath, filePath);
+
+    await pickImportFile(deps);
+    await pickApkgFile(deps);
+    // Picking an `.apkg` did not disturb the archive pick, and vice versa.
+    const archivePreview = await previewImport(deps, profileB, null);
+    if (archivePreview.status !== "ready") unreachable();
+    const apkgPreview = await previewApkgImport(deps, profileB, {
+      existingSubjectId: null,
+      newSubjectName: "S",
+    });
+    if (apkgPreview.status !== "ready") unreachable();
+
+    // Neither surface will honour the other's token.
+    await expect(applyImport(deps, profileB, apkgPreview.preview.token)).rejects.toThrow(/stale/);
+    await expect(applyApkgImport(deps, profileB, archivePreview.preview.token)).rejects.toThrow(
+      /stale/,
+    );
+  });
+
+  it("drops the pick on cancel and on lock", async () => {
+    const filePath = await writeApkgFixture("drop.apkg");
+    const profileB = createProfile(dbB, "B");
+    const { deps } = makeTestDeps(dbB, null, filePath);
+
+    await pickApkgFile(deps);
+    cancelApkgImport();
+    await expect(
+      previewApkgImport(deps, profileB, { existingSubjectId: null, newSubjectName: "S" }),
+    ).resolves.toEqual({ status: "no-file" });
+
+    await pickApkgFile(deps);
+    clearRestoreState();
+    await expect(
+      previewApkgImport(deps, profileB, { existingSubjectId: null, newSubjectName: "S" }),
+    ).resolves.toEqual({ status: "no-file" });
   });
 });

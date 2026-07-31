@@ -5,6 +5,8 @@
  */
 import type { SmartListId } from "@nexus/core";
 import type {
+  ApkgImportSkipCode,
+  ApkgReadErrorCode,
   ArchiveReadErrorCode,
   DashboardPickErrorCode,
   ImportDuplicateType,
@@ -2261,6 +2263,101 @@ export const strings = {
       error: "Uvoz nije uspeo. Pokušaj ponovo.",
       /** The post-reload banner (App.tsx) when the undo slot holds an IMPORT — the button, the dismiss label and the error line are the restore's, since undoing is one mechanism. */
       undoBanner: "Podaci su uvezeni iz arhive.",
+    },
+    /**
+     * Uvoz iz Anki (.apkg) — ADR-052 / STUDY-011, the block beside „Uvoz iz
+     * arhive" and deliberately its sibling in shape: pick → choose → preview →
+     * confirm, the same undo banner afterwards. What differs is what it is
+     * reading and therefore what it has to be honest about.
+     *
+     * The copy's whole job is that honesty. An Anki deck carries things this
+     * app does not model — media files, SM-2 review history, Anki tags, custom
+     * card templates — and the description says so BEFORE the user picks a file
+     * rather than leaving them to notice afterwards. `skips` then names, one
+     * counted line at a time, exactly what did not make it out of THIS deck.
+     *
+     * Everything the flow shares with its two siblings — „Izabrano:", „Otkaži",
+     * the preview-running line — is read straight off `strings.settings.restore`
+     * by the component, exactly as the import block reads it, because a second
+     * spelling of one sentence is a sentence that will drift.
+     *
+     * `unreadable` and `skips` are typed against the wire's own closed domains,
+     * so a code added in `shared/ipc.ts` is a compile error here rather than a
+     * silently missing sentence in the one screen that has to be honest.
+     */
+    apkgImport: {
+      title: "Uvoz iz Anki (.apkg)",
+      description:
+        "Uvezi Anki špil kao Nexus kartice. Špilovi ulaze u oblast koju izabereš, a ništa što već imaš se ne menja. Kartice kreću kao nove: istorija učenja, slike, zvuk i Anki oznake se ne prenose — sve što ne stigne piše, komad po komad, u pregledu pre uvoza. Uvoz možeš opozvati jednim klikom, ali samo dok ne zaključaš ili ne zatvoriš aplikaciju.",
+      pickButton: "Izaberi .apkg fajl…",
+      /** The subject picker — the one decision only the user can make, since an .apkg has no subject of its own. */
+      subjectLabel: "Oblast za uvezene špilove",
+      /** The „make one" option, first in the list because a first Anki import usually has nowhere to land yet. */
+      newSubjectOption: "Nova oblast…",
+      newSubjectLabel: "Naziv nove oblasti",
+      newSubjectPlaceholder: "npr. Anatomija",
+      previewButton: "Prikaži pregled",
+      previewRunning: "Čitanje špila…",
+      /** Preview header: what the file holds, and where it is going. */
+      subjectPrefix: "Oblast:",
+      subjectNewSuffix: "— biće napravljena",
+      columnSource: "U špilu",
+      columnPlanned: "Uvozi se",
+      rowDecks: "Špilovi",
+      rowNotes: "Beleške",
+      rowCards: "Kartice",
+      skipsTitle: "Šta se ne uvozi",
+      /**
+       * One sentence per `ApkgImportSkipCode`, each saying what was lost and —
+       * where it is not obvious — why this app cannot carry it. The wording
+       * never blames the user's deck for a difference between two programs.
+       */
+      skips: {
+        "unknown-notetype":
+          "Beleška koristi tip kartice koji špil ne opisuje — bez njega se ne zna šta je pitanje, a šta odgovor.",
+        "unknown-deck": "Kartica pripada špilu kog u fajlu nema.",
+        "empty-note": "Beleška nema teksta na prednjoj strani.",
+        "empty-deck": "Prazan špil se ne pravi — u njemu nije ostala nijedna kartica.",
+        "template-unsupported":
+          "Anki šablon koji ova verzija ne ume da prikaže — uvoze se osnovna i obrnuta kartica.",
+        "cloze-nested": "Praznina unutar praznine — takva beleška se ne može zapisati.",
+        "cloze-ordinal-reused":
+          "Isti broj praznine se u belešci pojavljuje dvaput; Nexus prazninu vezuje za mesto u tekstu, pa to ne može da zapiše.",
+        "cloze-no-deletions": "Beleška je „cloze“, a nema nijednu prazninu.",
+        "cloze-unrepresentable":
+          "Praznine u belešci se ne mogu tačno zapisati u Nexus obliku, pa se beleška preskače u celini — pogrešno postavljena praznina bila bi gora od nijedne.",
+        "cloze-hint-dropped": "Nagoveštaj uz prazninu se ne prenosi — ostaje sama praznina.",
+        "extra-fields-dropped":
+          "Dodatna polja beleške se ne prenose — kartica ima prednju i zadnju stranu.",
+        "media-stripped": "Slike i zvuk se ne prenose; kartice stižu kao čist tekst.",
+        "tags-dropped": "Anki oznake se ne prenose.",
+        "history-dropped":
+          "Istorija učenja se ne prenosi — kartice kreću kao nove. Odložene i sakrivene kartice stižu na isti način.",
+        "card-without-note": "Kartica upućuje na belešku koje u špilu nema.",
+      } satisfies Record<ApkgImportSkipCode, string>,
+      /** One sentence per `ApkgReadErrorCode`: the file could not be read at all. */
+      unreadable: {
+        "not-an-apkg": "Ovaj fajl nije Anki špil.",
+        "no-collection": "U ovom fajlu nema Anki kolekcije — nije .apkg špil.",
+        "unsupported-schema":
+          "Špil je izvezen u novijem Anki formatu koji ova verzija ne čita. Izvezi ga ponovo iz Ankija sa uključenom opcijom „Support older Anki versions“.",
+        "zstd-unavailable": "Ovo izdanje ne može da otvori zstd sažimanje koje ovaj špil koristi.",
+        damaged: "Špil je oštećen i ne može se pročitati.",
+        "too-large": "Špil prelazi bezbednosna ograničenja i zato je odbijen.",
+      } satisfies Record<ApkgReadErrorCode, string>,
+      applyButton: "Uvezi",
+      applying: "Uvoz u toku…",
+      applied: "Kartice su uvezene. Aplikacija se osvežava…",
+      /** A rejected pick/preview call (not one of the typed statuses above). */
+      readError: "Čitanje špila nije uspelo. Pokušaj ponovo.",
+      /** A rejected apply call; the preview itself stays valid, so this invites a retry. */
+      error: "Uvoz nije uspeo. Pokušaj ponovo.",
+      /** `{ status: "no-file" }`: main no longer holds the pick this screen was showing. */
+      noFileError: "Špil više nije izabran. Izaberi ga ponovo.",
+      /** Shown when the deck translates to nothing at all — the „Uvezi" button is hidden, because there is nothing to confirm. */
+      nothingToImport: "Iz ovog špila nema šta da se uvede — razlozi su izlistani iznad.",
+      /** The post-reload banner (App.tsx) when the undo slot holds an Anki import. */
+      undoBanner: "Kartice su uvezene iz Anki špila.",
     },
     /**
      * Uvoz beležaka (.md) — IMEX-007's markdown slice, the quiet fourth block
