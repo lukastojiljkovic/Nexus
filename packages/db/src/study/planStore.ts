@@ -772,7 +772,12 @@ export class PlanStore {
     return overflow;
   }
 
-  /** One engine-shaped topic list for an exam: live topics with their effective confidences resolved. */
+  /**
+   * One engine-shaped topic list for an exam: live topics with their effective
+   * confidences resolved. A topic whose linked deck has since been deleted
+   * derives nothing (ADR-063 read rule), so it reaches the engine as unknown —
+   * the same shape as a topic with no signal at all.
+   */
   private engineTopics(examId: string, today: string): PlanTopic[] {
     return this.topics.listEffectiveByExam(examId, today).map((topicRecord) => ({
       id: topicRecord.id,

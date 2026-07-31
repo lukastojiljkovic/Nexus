@@ -27,15 +27,16 @@ export interface ExamTopicRecord {
   updatedAt: string;
 }
 
-/** A topic with its EFFECTIVE confidence resolved: manual when set, else deck-derived, else null. */
+/** A topic with its EFFECTIVE confidence resolved: manual when set, else derived from a LIVE deck, else null. */
 export interface EffectiveExamTopic extends ExamTopicRecord {
   effectiveConfidence: number | null;
   /**
    * True when `deckId` is set but no longer names an ACTIVE deck of this
    * profile — the deck was deleted after the link was made (`setDeck` validates
-   * only at set time). The link is left standing exactly as stored; this flag
-   * is how the UI says „Nedostupan špil" instead of letting the confidence
-   * signal go quiet without explanation.
+   * only at set time). The link is left standing exactly as stored, but a dead
+   * deck derives nothing: this flag and `effectiveConfidence` always agree, so
+   * a row that says „Nedostupan špil" never also shows a number that came from
+   * the deck the user deleted.
    */
   deckMissing: boolean;
 }
@@ -105,8 +106,8 @@ const MS_PER_DAY = 86_400_000;
  * ever clears it again).
  *
  * This store also OWNS the FSRS-derived weakness read (ADR-063): a topic
- * without a manual confidence but with a linked deck gets one derived from
- * that deck's recent Again-rate and mature-card fraction — see
+ * without a manual confidence but with a link to a LIVE deck gets one derived
+ * from that deck's recent Again-rate and mature-card fraction — see
  * `deriveDeckConfidence` for the pinned blend. Derivation is store-side so the
  * plan engine stays pure and takes numbers.
  */
@@ -188,10 +189,10 @@ export class TopicStore {
     // Deck LIVENESS for a whole exam's topics in ONE query (ADR-063): the
     // distinct deck ids the exam's live topics link to that still resolve to an
     // active deck of this profile. The join carries both scopes, so a foreign
-    // or deleted deck simply produces no row — and the caller marks every
-    // linked topic missing from this set as `deckMissing`. Deliberately batch:
-    // a per-topic existence check would be the N+1 `listEffectiveByExam`
-    // already avoids for the derivation.
+    // or deleted deck simply produces no row — and the caller both marks every
+    // linked topic missing from this set as `deckMissing` AND refuses to derive
+    // its confidence. Deliberately batch: a per-topic existence check would be
+    // the N+1 `listEffectiveByExam` already avoids for the derivation.
     this.selectLiveLinkedDecks = db.prepare(
       `SELECT DISTINCT t.deck_id AS deck_id
          FROM exam_topics t
@@ -234,15 +235,19 @@ export class TopicStore {
 
   /**
    * `listByExam` with each topic's EFFECTIVE confidence resolved (ADR-063):
-   * the manual value when set, else the deck-derived one, else null. What
+   * the manual value when set, else the LIVE deck's derived one, else null. What
    * `PlanStore` feeds the engine, and what the topic list renders as the
    * weakness column.
    *
    * Each row also carries `deckMissing` — a link whose deck has since been
    * deleted — resolved for the WHOLE listed set by one `selectLiveLinkedDecks`
-   * query, beside the derivation's own per-deck memo. The derivation itself is
-   * untouched by liveness: whatever a stale link still derives, it keeps
-   * deriving; the flag only makes the staleness sayable.
+   * query, beside the derivation's own per-deck memo. That same set GATES the
+   * derivation: a soft-deleted deck feeds nothing, so a stale link falls back
+   * to the topic's manual confidence and otherwise to null — the very answer a
+   * topic with no link at all gives. Flag and number therefore always agree.
+   * The stored link is untouched by all of this: liveness is a read rule, and
+   * because the deck's delete is soft, restoring the deck restores the derived
+   * number with no further action.
    */
   listEffectiveByExam(examId: string, today: string): EffectiveExamTopic[] {
     const validToday = validateBareDate(today, "today");
@@ -254,7 +259,7 @@ export class TopicStore {
       if (topicRecord.confidence !== null) {
         return { ...topicRecord, effectiveConfidence: topicRecord.confidence, deckMissing };
       }
-      if (topicRecord.deckId === null) {
+      if (topicRecord.deckId === null || deckMissing) {
         return { ...topicRecord, effectiveConfidence: null, deckMissing };
       }
       let derived = derivedByDeck.get(topicRecord.deckId);
@@ -381,6 +386,12 @@ export class TopicStore {
    * mature deck is not failing), and `matureFraction` is the live deck's
    * share of cards at or past `MATURE_THRESHOLD_DAYS`. Both signals are
    * facts the stats page already reads, blended here once.
+   *
+   * The blend is a RAW per-deck read: it does not itself check that the deck is
+   * still live, because its one caller — `listEffectiveByExam` — resolves
+   * liveness for a whole exam in a single query and never asks about a dead
+   * deck. Any future caller has to make that same decision consciously rather
+   * than inherit it by accident.
    */
   deriveDeckConfidence(deckId: string, today: string): number | null {
     const validToday = validateBareDate(today, "today");

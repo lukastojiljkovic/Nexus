@@ -2123,7 +2123,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       remove: "Obriši temu",
       confidenceLabel: "Pouzdanje",
       confidenceUnknown: "Nepoznato",
-      /** Muted „izvedeno: 72" beside an unknown manual confidence the linked špil resolved. */
+      /** Muted „izvedeno: 72" beside an unknown manual confidence a LIVE linked špil resolved. */
       derivedPrefix: "izvedeno:",
       deckLabel: "Špil teme",
       deckNone: "Bez špila",
@@ -2131,10 +2131,13 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
        * A stored link whose deck is no longer live (the store's `deckMissing`)
        * — one label for both the row's muted chip and the picker's stale
        * option, so the row says the same thing twice rather than lying „Bez
-       * špila" once.
+       * špila" once. The title also states the consequence: a dead špil stops
+       * feeding the derived confidence, which is why the „izvedeno" hint beside
+       * such a row is gone rather than stale.
        */
       deckMissing: "Nedostupan špil",
-      deckMissingTitle: "Špil ove teme više ne postoji — izaberi drugi ili ukloni vezu.",
+      deckMissingTitle:
+        "Špil ove teme više ne postoji — pouzdanje se više ne izvodi iz njega. Izaberi drugi špil ili ukloni vezu.",
       /** Chip on a topic the user accepted out of the plan (STUDY-004). */
       cutChip: "van plana",
       /** The un-cut action — the only affordance anywhere that returns a cut topic to the plan. */

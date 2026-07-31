@@ -3664,9 +3664,10 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                                 ))}
                               </select>
                               {/* A link whose deck was deleted after it was
-                                  made: the store says so, the row says so —
-                                  the confidence signal never goes quiet
-                                  unexplained. */}
+                                  made: the store derives nothing from it, so
+                                  the „izvedeno" hint above is absent — this
+                                  chip is what says why, rather than letting
+                                  the weakness column go quiet unexplained. */}
                               {topic.deckMissing && (
                                 <Chip
                                   className="study__topic-stale-deck"

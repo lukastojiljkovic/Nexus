@@ -2468,9 +2468,13 @@ export interface ExamTopic {
   deckId: string | null;
   /** Set ONLY via `plans:accept-scope-cut`, cleared ONLY via `topics:restore-to-plan` — never by the machine. */
   cut: boolean;
-  /** Manual confidence when set, else deck-derived, else null — what the weakness column renders. */
+  /** Manual confidence when set, else derived from a LIVE linked deck, else null — what the weakness column renders. */
   effectiveConfidence: number | null;
-  /** A `deckId` whose deck is no longer a live deck of this profile — the row draws „Nedostupan špil" instead of going quiet. */
+  /**
+   * A `deckId` whose deck is no longer a live deck of this profile. Such a link
+   * derives nothing, so the row draws „Nedostupan špil" where the „izvedeno"
+   * hint would have been — the number and the chip never contradict each other.
+   */
   deckMissing: boolean;
   createdAt: string;
   updatedAt: string;

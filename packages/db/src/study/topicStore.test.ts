@@ -357,6 +357,20 @@ describe("TopicStore", () => {
         ExamTopicValidationError,
       );
     });
+
+    it("is the raw per-deck blend and does not gate on the deck being live itself", () => {
+      const { topics, decks, deckId, profileId } = fixture();
+      insertCard(profileId, deckId, 30);
+      insertCard(profileId, deckId, 5);
+
+      decks.softDelete(deckId);
+
+      // Liveness is the CALLER's gate: `listEffectiveByExam` resolves it for a
+      // whole exam in one query and refuses to derive from a dead deck. Keeping
+      // it out of here leaves the blend a pure deck read — any future caller
+      // has to make the liveness decision consciously, as this one does.
+      expect(topics.deriveDeckConfidence(deckId, TODAY)).toBe(80);
+    });
   });
 
   describe("listEffectiveByExam", () => {
@@ -384,7 +398,7 @@ describe("TopicStore", () => {
   });
 
   describe("deck liveness (the stale-link flag behind Nedostupan spil)", () => {
-    it("marks a link whose deck was deleted afterwards, leaves the derivation alone, and clears with the link", () => {
+    it("marks a link whose deck was deleted afterwards, stops deriving from it, and clears with the link", () => {
       const { topics, decks, examId, deckId, profileId } = fixture();
       insertCard(profileId, deckId, 30);
       insertCard(profileId, deckId, 5); // derived confidence: 80
@@ -397,15 +411,29 @@ describe("TopicStore", () => {
       decks.softDelete(deckId);
 
       const stale = topics.listEffectiveByExam(examId, TODAY)[0]!;
-      expect(stale.deckId).toBe(deckId); // the stored link is untouched
+      expect(stale.deckId).toBe(deckId); // the stored link is untouched: a read rule, not a write
       expect(stale.deckMissing).toBe(true);
-      // The derivation is unchanged in behaviour — only the telling is new.
-      expect(stale.effectiveConfidence).toBe(80);
+      // A dead deck feeds nothing: the row that says „Nedostupan špil" must not
+      // also show a number that came from the deck the user deleted.
+      expect(stale.effectiveConfidence).toBeNull();
 
       topics.setDeck(topic.id, null, T0);
       const cleared = topics.listEffectiveByExam(examId, TODAY)[0]!;
       expect(cleared.deckMissing).toBe(false);
       expect(cleared.effectiveConfidence).toBeNull();
+    });
+
+    it("still answers a stale-linked topic's MANUAL confidence — only the derivation stops", () => {
+      const { topics, decks, examId, deckId, profileId } = fixture();
+      insertCard(profileId, deckId, 30);
+      insertCard(profileId, deckId, 5); // the deck would derive 80
+
+      topics.create({ examId, name: "Ručno", confidence: 30, deckId }, T0);
+      decks.softDelete(deckId);
+
+      const row = topics.listEffectiveByExam(examId, TODAY)[0]!;
+      expect(row.deckMissing).toBe(true);
+      expect(row.effectiveConfidence).toBe(30);
     });
 
     it("never marks a topic with no link at all", () => {
@@ -415,30 +443,47 @@ describe("TopicStore", () => {
     });
 
     it("resolves the whole listed set at once: two topics on the dead deck, one on a live one", () => {
-      const { topics, decks, examId, deckId, subjectId } = fixture();
+      const { topics, decks, examId, deckId, subjectId, profileId } = fixture();
       const liveDeckId = decks.create({ subjectId, name: "Glava 2" }).id;
+      insertCard(profileId, deckId, 30);
+      insertCard(profileId, deckId, 5); // the dead deck would derive 80
+      insertCard(profileId, liveDeckId, 30); // the live one derives 100
       topics.create({ examId, name: "A", deckId }, T0);
       topics.create({ examId, name: "B", deckId }, T0);
       topics.create({ examId, name: "C", deckId: liveDeckId }, T0);
 
       decks.softDelete(deckId);
 
-      expect(topics.listEffectiveByExam(examId, TODAY).map((t) => [t.name, t.deckMissing])).toEqual([
-        ["A", true],
-        ["B", true],
-        ["C", false],
+      // Flag and number agree row by row, off ONE liveness query for the set.
+      expect(
+        topics
+          .listEffectiveByExam(examId, TODAY)
+          .map((t) => [t.name, t.deckMissing, t.effectiveConfidence]),
+      ).toEqual([
+        ["A", true, null],
+        ["B", true, null],
+        ["C", false, 100],
       ]);
     });
 
-    it("marks a link the deck's own profile no longer backs, and unmarks it when the deck comes back", () => {
-      const { topics, decks, examId, deckId } = fixture();
+    it("undoes with the deck: restoring it restores the derivation, no further action", () => {
+      const { topics, decks, examId, deckId, profileId } = fixture();
+      insertCard(profileId, deckId, 30);
+      insertCard(profileId, deckId, 5); // derived confidence: 80
       topics.create({ examId, name: "Iz špila", deckId }, T0);
 
-      decks.softDelete(deckId);
-      expect(topics.listEffectiveByExam(examId, TODAY)[0]?.deckMissing).toBe(true);
+      const linked = topics.listEffectiveByExam(examId, TODAY)[0]!;
+      expect([linked.deckMissing, linked.effectiveConfidence]).toEqual([false, 80]);
 
+      decks.softDelete(deckId);
+      const stale = topics.listEffectiveByExam(examId, TODAY)[0]!;
+      expect([stale.deckMissing, stale.effectiveConfidence]).toEqual([true, null]);
+
+      // The delete is soft and undoable, so the derivation has to come back
+      // exactly as it was — the link was never rewritten to make it stop.
       decks.restore(deckId);
-      expect(topics.listEffectiveByExam(examId, TODAY)[0]?.deckMissing).toBe(false);
+      const restored = topics.listEffectiveByExam(examId, TODAY)[0]!;
+      expect([restored.deckMissing, restored.effectiveConfidence]).toEqual([false, 80]);
     });
   });
 });
