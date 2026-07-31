@@ -6,11 +6,15 @@ import "katex/dist/katex.min.css";
 import "./app.css";
 import { App } from "./App.js";
 import { applyStoredThemePreference } from "./theme.js";
-import { applyStoredAccent } from "./accent.js";
+import { applyBootAccent } from "./accent.js";
+import { readStoredActiveProfileId } from "./profilePrefs.js";
 import { applyStoredNoteWidth } from "./notePrefs.js";
 
 applyStoredThemePreference();
-applyStoredAccent();
+// The accent is per-profile (ADR-058 §3); before first render only the RAW
+// last-active id is knowable, so this is a best-effort paint that App corrects
+// the moment the live profile list arrives.
+applyBootAccent(readStoredActiveProfileId());
 applyStoredNoteWidth();
 
 const rootElement = document.getElementById("root");

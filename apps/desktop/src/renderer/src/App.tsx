@@ -12,6 +12,14 @@ import type {
 } from "../../shared/ipc.js";
 import { AuthGate } from "./AuthGate.js";
 import { Onboarding } from "./Onboarding.js";
+import { ProfileSwitchDialog } from "./ProfileSwitchDialog.js";
+import { NotePopover } from "./notePopover.js";
+import { applyProfileAccent, defaultAccent, seedAccent } from "./accent.js";
+import {
+  persistActiveProfile,
+  profileDisplayName,
+  resolveActiveProfile,
+} from "./profilePrefs.js";
 import { DashboardPage } from "./DashboardPage.js";
 import { TasksPage, type TasksIntent } from "./TasksPage.js";
 import { CalendarPage, type CalendarIntent } from "./CalendarPage.js";
@@ -101,6 +109,21 @@ export function App() {
   const [theme, setTheme] = useState<ThemeName>(() => resolveTheme(preference));
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [profiles, setProfiles] = useState<Profile[] | null>(null);
+  // Which of the account's profiles the shell is standing in (ADR-058 §1).
+  // Null only until `loadUnlockedData` resolves the stored device pref against
+  // the live list; from then on it names a member of `profiles`, and every
+  // page below hangs off it.
+  const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  // The profile the passcode gate (AUTH-024) is currently asking about, or
+  // null. Set by the sidebar switcher and the „Profili“ card; the dialog's
+  // verified answer lands in `completeSwitch`.
+  const [switchTarget, setSwitchTarget] = useState<Profile | null>(null);
+  // The switcher's own error line, for the two refusals that have no card to
+  // report into: creating a business profile from the popover, and a delete
+  // that failed AFTER evicting the active profile (the card that asked was
+  // remounted away by the eviction). The „Profili“ card shows every other
+  // error itself.
+  const [profileActionError, setProfileActionError] = useState<string | null>(null);
   // Per-profile module overrides (SET-007). Empty until loaded — every v0
   // module defaults enabled, so the pre-load render matches the common case.
   const [flags, setFlags] = useState<FlagState>({});
@@ -170,11 +193,21 @@ export function App() {
       window.nexus.appInfo(),
       window.nexus.listProfiles(),
     ]);
-    const firstProfile = nextProfiles[0];
-    const nextFlags = firstProfile ? await window.nexus.getFlags(firstProfile.id) : {};
+    // ADR-058 §1: the last-active device pref, validated against the live list
+    // — a stale id falls back to the personal profile. Persisted back so the
+    // stored pref always names a live profile, and the profile's own accent is
+    // re-applied here (§3) so an unlock lands in it fully, boot's raw-pref
+    // paint corrected.
+    const active = resolveActiveProfile(nextProfiles);
+    const nextFlags = active ? await window.nexus.getFlags(active.id) : {};
     setInfo(nextInfo);
     setProfiles(nextProfiles);
+    setActiveProfileId(active?.id ?? null);
     setFlags(nextFlags);
+    if (active) {
+      persistActiveProfile(active.id);
+      applyProfileAccent(active.id, active.kind);
+    }
     // Signal the --smoke harness that the full renderer -> main -> DB path worked.
     window.__nexusReady = true;
     window.dispatchEvent(new Event("nexus-ready"));
@@ -231,6 +264,11 @@ export function App() {
     } catch (error) {
       console.error("Nexus: failed to lock:", error);
     }
+    // A half-answered profile switch dies with the session: the next unlock may
+    // be a DIFFERENT account (ADR-044), and a surviving `switchTarget` would
+    // resurrect a passcode dialog aimed at a profile that account does not have.
+    setSwitchTarget(null);
+    setProfileActionError(null);
     setAuthStatus((previous) => ({
       state: "locked",
       lockedForMs: 0,
@@ -337,14 +375,99 @@ export function App() {
     );
   }, [flags]);
 
-  // v0 runs a single profile; this is the same one every page below is handed.
-  const activeProfileId = profiles?.[0]?.id;
+  // The profile every page below is handed (ADR-058) — the state's id resolved
+  // against the live list. Same-array lookups return the same object, so this
+  // is a stable effect dependency across unrelated renders.
+  const activeProfile = profiles?.find((profile) => profile.id === activeProfileId);
+
+  /**
+   * Lands a VERIFIED profile switch (AUTH-024 passed — or a forced eviction,
+   * see `deleteProfileAnywhere`). The restore flow reloads the whole renderer
+   * for its version of this; a switch takes the lighter path: swap the id
+   * every page hangs off (each page carries `key={activeProfile.id}`, so it
+   * remounts and re-enters the new profile cleanly), persist the device pref,
+   * re-apply the profile's own accent (§3) and re-read its flags. Cross-profile
+   * leftovers — a pending intent, a seeded search query, the open palette —
+   * are dropped: they were aimed at entities of the profile being left.
+   */
+  async function completeSwitch(profile: Profile): Promise<void> {
+    setSwitchTarget(null);
+    setProfileActionError(null);
+    setActiveProfileId(profile.id);
+    persistActiveProfile(profile.id);
+    applyProfileAccent(profile.id, profile.kind);
+    setPending(null);
+    setSearchSeed(null);
+    closePalette();
+    try {
+      setFlags(await window.nexus.getFlags(profile.id));
+    } catch (error) {
+      console.error("Nexus: failed to load flags after a profile switch:", error);
+    }
+  }
+
+  /**
+   * ADR-058 §4: creates THE business profile (v1 allows one per account) with
+   * the EMPTY-name sentinel, which routes its first entry through ONB-lite
+   * naming. The reserved bordo accent (§3, decision #11) is seeded — written,
+   * not painted — immediately, so the profile's very first entry, the naming
+   * screen included, already opens under it. Main seeds the profile's data
+   * side (Inbox, module preset); the renderer names only kind and name.
+   */
+  async function createBusinessProfile(): Promise<Profile> {
+    const created = await window.nexus.createProfile("business", "");
+    seedAccent(created.id, defaultAccent("business"));
+    setProfiles((previous) => (previous === null ? [created] : [...previous, created]));
+    return created;
+  }
+
+  /** The switcher popover's „Novi poslovni profil…“: create, then offer the switch through the same passcode gate every switch passes. */
+  async function createBusinessFromSwitcher(): Promise<void> {
+    setProfileActionError(null);
+    try {
+      setSwitchTarget(await createBusinessProfile());
+    } catch (error) {
+      setProfileActionError(strings.profiles.createError);
+      console.error("Nexus: failed to create the business profile:", error);
+    }
+  }
+
+  /**
+   * ADR-058 §4: deletes a business profile after the „Profili“ card's
+   * typed-name confirm. Deleting the ACTIVE profile moves the shell to the
+   * personal profile FIRST — without the passcode gate, deliberately: AUTH-024
+   * guards switching INTO a profile by choice, while this is an eviction from
+   * one that is about to stop existing, and the personal anchor belongs to the
+   * session the user already proved. The wire re-refuses the personal anchor
+   * and the last profile; this UI never offers them (UI is UX, main is the
+   * gate). Errors are the caller's — the card owns the dialog's error line.
+   */
+  async function deleteProfileAnywhere(profile: Profile): Promise<void> {
+    const evicting = profile.id === activeProfileId;
+    if (evicting) {
+      const personal = profiles?.find((candidate) => candidate.kind === "personal");
+      if (personal === undefined) return;
+      await completeSwitch(personal);
+    }
+    try {
+      await window.nexus.deleteProfile(profile.id);
+    } catch (error) {
+      // When the switch above ran, the „Profili“ card was just remounted away
+      // (pages are keyed by the active profile) — its own error line cannot
+      // show, so the refusal surfaces under the switcher instead of nowhere.
+      if (evicting) setProfileActionError(strings.settings.profiles.deleteError);
+      throw error;
+    }
+    setProfiles((previous) =>
+      previous === null ? previous : previous.filter((candidate) => candidate.id !== profile.id),
+    );
+  }
 
   // Asked once per unlocked session, and only after profiles are known: main
   // holds the undo in memory, so a locked or freshly launched app has nothing
   // to report and the banner never appears.
   useEffect(() => {
-    if (authStatus?.state !== "unlocked" || activeProfileId === undefined) return;
+    if (authStatus?.state !== "unlocked" || activeProfileId === null) return;
     let active = true;
     void (async () => {
       try {
@@ -364,7 +487,7 @@ export function App() {
 
   /** The banner's "Opozovi": puts the profile back exactly as it was before the restore — or before the import, which undoes through the same slot. */
   async function undoRestore(): Promise<void> {
-    if (activeProfileId === undefined || undoingRestore) return;
+    if (activeProfileId === null || undoingRestore) return;
     setUndoingRestore(true);
     setRestoreUndoError(null);
     try {
@@ -652,9 +775,10 @@ export function App() {
    * when there is no Nth module for them to reach.
    */
   useEffect(() => {
-    const firstProfile = profiles?.[0];
     const ready =
-      authStatus?.state === "unlocked" && firstProfile !== undefined && firstProfile.name.trim() !== "";
+      authStatus?.state === "unlocked" &&
+      activeProfile !== undefined &&
+      activeProfile.name.trim() !== "";
     if (!ready) return;
     function handleGlobalKeydown(event: KeyboardEvent): void {
       if (event.repeat) return;
@@ -681,7 +805,7 @@ export function App() {
     // close over nothing that changes except `activeId` and `visibleModuleIds`,
     // both listed here — everything else they touch is a stable state setter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authStatus?.state, profiles, shortcuts, visibleModuleIds, activeId, closePalette]);
+  }, [authStatus?.state, activeProfile, shortcuts, visibleModuleIds, activeId, closePalette]);
 
   // Rebuilt whenever the enabled-module set can change (flags), the active
   // profile changes, or `theme` changes — the last one matters because
@@ -696,7 +820,7 @@ export function App() {
   const searchCommands = useMemo(
     () =>
       buildSearchCommands({
-        profileId: profiles?.[0]?.id ?? "",
+        profileId: activeProfile?.id ?? "",
         enabledModuleIds: resolveEnabled(registry, flags),
         moduleName,
         onNavigate: setActiveId,
@@ -712,7 +836,7 @@ export function App() {
         onRebuildComplete: setSearchStatus,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [flags, profiles, theme],
+    [flags, profiles, activeProfileId, theme],
   );
 
   const enabledIds = new Set(resolveEnabled(registry, flags));
@@ -758,14 +882,17 @@ export function App() {
     );
   }
 
-  // v0 runs a single seeded personal profile; an empty name means onboarding
-  // has not happened yet (ONB lite gates the shell, not the modules).
-  const activeProfile = profiles[0];
+  // ONB lite gates the shell on the ACTIVE profile's empty name — the
+  // deliberate "not yet named" sentinel (ADR-058): the seeded personal profile
+  // on first run, and a fresh business profile on its FIRST ENTRY (created
+  // empty from the switcher or the „Profili“ card, named here). The theme is
+  // device-wide, so a business entry asks only for the name.
   if (activeProfile && activeProfile.name.trim() === "") {
     return (
       <div className="nx-app app">
         <Onboarding
           profileId={activeProfile.id}
+          kind={activeProfile.kind}
           theme={theme}
           onThemeChange={changePreference}
           onComplete={(name) =>
@@ -868,6 +995,77 @@ export function App() {
                 {strings.search.navLabel}
               </NavItem>
               <NotificationCenter profileId={activeProfile.id} onNavigate={setActiveId} />
+              {/* ADR-058 §2: the PROFILE switcher — which of the account's
+                  profiles the shell is standing in. A different axis from
+                  „Promeni nalog“ below, which switches ACCOUNTS (lock +
+                  picker); the copy keeps the words apart — this row says
+                  „profil“, that one „nalog“. Every switch INTO another profile
+                  passes the passcode gate (AUTH-024); there is deliberately no
+                  row that switches without it. With a single profile the row
+                  still names where you are, and its one extra offer is the
+                  business profile v1 allows. */}
+              <NotePopover
+                label={strings.profiles.switcherLabel}
+                triggerClassName="app__profile-switch"
+                triggerContent={`${strings.profiles.rowPrefix} ${profileDisplayName(activeProfile)}`}
+              >
+                {(close) => (
+                  <>
+                    {profiles.map((profile) => {
+                      const isActive = profile.id === activeProfile.id;
+                      return (
+                        <button
+                          key={profile.id}
+                          className={`note__menu-item note__menu-item--check${isActive ? " app__profile-item--active" : ""}`}
+                          role="menuitemradio"
+                          type="button"
+                          aria-checked={isActive}
+                          onClick={() => {
+                            close();
+                            if (!isActive) setSwitchTarget(profile);
+                          }}
+                        >
+                          <span
+                            className={`note__menu-check${isActive ? "" : " note__menu-check--hidden"}`}
+                            aria-hidden="true"
+                          >
+                            ✓
+                          </span>
+                          {profileDisplayName(profile)}
+                          {profile.kind === "business" && (
+                            <span className="app__profile-kind">
+                              {strings.profiles.businessLabel}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                    {/* ONE business profile per account (the ADR's v1 limit):
+                        the offer exists exactly while none does. */}
+                    {!profiles.some((profile) => profile.kind === "business") && (
+                      <>
+                        <div className="note__menu-sep" role="separator" />
+                        <button
+                          className="note__menu-item"
+                          role="menuitem"
+                          type="button"
+                          onClick={() => {
+                            close();
+                            void createBusinessFromSwitcher();
+                          }}
+                        >
+                          {strings.profiles.createBusiness}…
+                        </button>
+                      </>
+                    )}
+                  </>
+                )}
+              </NotePopover>
+              {profileActionError != null && (
+                <p className="app__profile-error" role="alert">
+                  {profileActionError}
+                </p>
+              )}
               {/* Only with somewhere to switch TO (ADR-044). Locking is the
                   whole action: AuthGate opens on the picker by itself once
                   this device holds more than one account. */}
@@ -925,8 +1123,12 @@ export function App() {
               </Button>
             </div>
           )}
+          {/* Every page is keyed by the active profile (ADR-058 §1): a switch
+              remounts it, so page-local state — a selected task, an open note,
+              a half-typed filter — never leaks across profiles. */}
           {effectiveId === "dashboard" && activeProfile ? (
             <DashboardPage
+              key={activeProfile.id}
               profileId={activeProfile.id}
               profileName={activeProfile.name}
               registry={registry}
@@ -936,24 +1138,28 @@ export function App() {
             />
           ) : effectiveId === "tasks" && activeProfile ? (
             <TasksPage
+              key={activeProfile.id}
               profileId={activeProfile.id}
               intent={pending?.module === "tasks" ? pending.intent : null}
               onIntentHandled={clearIntent}
             />
           ) : effectiveId === "calendar" && activeProfile ? (
             <CalendarPage
+              key={activeProfile.id}
               profileId={activeProfile.id}
               intent={pending?.module === "calendar" ? pending.intent : null}
               onIntentHandled={clearIntent}
             />
           ) : effectiveId === "notes" && activeProfile ? (
             <NotesPage
+              key={activeProfile.id}
               profileId={activeProfile.id}
               intent={pending?.module === "notes" ? pending.intent : null}
               onIntentHandled={clearIntent}
             />
           ) : effectiveId === "study" && activeProfile ? (
             <StudyPage
+              key={activeProfile.id}
               profileId={activeProfile.id}
               onOpenNote={openNote}
               intent={pending?.module === "study" ? pending.intent : null}
@@ -961,6 +1167,7 @@ export function App() {
             />
           ) : effectiveId === SEARCH_PAGE_ID && activeProfile ? (
             <SearchPage
+              key={activeProfile.id}
               profileId={activeProfile.id}
               seed={searchSeed}
               onSeedConsumed={clearSearchSeed}
@@ -969,14 +1176,19 @@ export function App() {
             />
           ) : effectiveId === "settings" && activeProfile ? (
             <SettingsPage
+              key={activeProfile.id}
               profileId={activeProfile.id}
               profileName={activeProfile.name}
               profilePictureHash={activeProfile.pictureHash}
+              profiles={profiles}
               info={info}
               flags={flags}
               onFlagsChanged={setFlags}
               onProfileRenamed={renameActiveProfile}
               onProfilePictureChanged={setActiveProfilePicture}
+              onCreateBusinessProfile={createBusinessProfile}
+              onRequestProfileSwitch={setSwitchTarget}
+              onDeleteProfile={deleteProfileAnywhere}
               preference={preference}
               onPreferenceChange={changePreference}
               registry={registry}
@@ -1007,6 +1219,17 @@ export function App() {
 
       {appetiteAsk && activeProfile && (
         <NotificationAppetiteDialog profileId={activeProfile.id} onAnswered={closeAppetiteAsk} />
+      )}
+
+      {/* The passcode gate (AUTH-024) in front of the switch the popover or the
+          „Profili“ card asked for. Rendered here so both surfaces share the one
+          dialog — and the one verified landing. */}
+      {switchTarget != null && (
+        <ProfileSwitchDialog
+          profile={switchTarget}
+          onVerified={() => void completeSwitch(switchTarget)}
+          onCancel={() => setSwitchTarget(null)}
+        />
       )}
 
       {shortcutsHelpOpen && (

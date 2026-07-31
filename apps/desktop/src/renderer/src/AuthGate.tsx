@@ -77,8 +77,8 @@ export function authErrorMessage(reason: AuthErrorReason): string {
   }
 }
 
-/** `lockedForMs` as a live "m:ss" countdown — sidesteps Serbian's three-way plural for "second" entirely. */
-function formatCountdown(ms: number): string {
+/** `lockedForMs` as a live "m:ss" countdown — sidesteps Serbian's three-way plural for "second" entirely. Exported so the profile-switch gate (ADR-058) counts the SAME throttle down the same way. */
+export function formatCountdown(ms: number): string {
   const totalSeconds = Math.ceil(ms / 1000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;

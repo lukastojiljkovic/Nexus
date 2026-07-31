@@ -61,6 +61,15 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
     label: s.profile.pictureLabel,
     keywords: ["avatar", "fotografija", "nalog", "izaberi", "ukloni"],
   },
+  // SET-003 (ADR-058): the „Profili“ card. „profil“ sits in the section title
+  // already; the keywords carry the business half's own words, „biznis“
+  // included — the word someone types even though the app never prints it.
+  {
+    id: "profiles-business",
+    section: "profiles",
+    label: strings.profiles.createBusiness,
+    keywords: ["profil", "poslovni", "biznis", "posao"],
+  },
   {
     id: "security-passcode",
     section: "security",

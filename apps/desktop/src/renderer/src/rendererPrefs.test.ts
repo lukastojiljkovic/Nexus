@@ -1,7 +1,15 @@
 import { ACCENT_IDS } from "@nexus/tokens";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { applyStoredAccent, clearStoredAccent, persistAccent, readStoredAccent } from "./accent.js";
+import {
+  applyBootAccent,
+  applyProfileAccent,
+  clearStoredAccent,
+  defaultAccent,
+  persistAccent,
+  readStoredAccent,
+  seedAccent,
+} from "./accent.js";
 import { AUTO_LOCK_MINUTES, persistAutoLock, readStoredAutoLock } from "./autoLock.js";
 import { memoryStorage } from "./testStorage.js";
 import {
@@ -14,8 +22,9 @@ import {
 } from "./theme.js";
 
 /**
- * The three `localStorage`-backed preference modules — accent (`nexus.accent`),
- * theme (`nexus.theme`) and idle auto-lock (`nexus.autoLock`) — share one
+ * The three `localStorage`-backed preference modules — accent
+ * (`nexus.accent.<profileId>`, per profile since ADR-058 §3), theme
+ * (`nexus.theme`) and idle auto-lock (`nexus.autoLock`) — share one
  * shape: a closed set of allowed values, a safe fallback for anything else,
  * and a persist that also touches `document.documentElement`. They are tested
  * together because the fallback rule is the same rule, and any drift between
@@ -75,81 +84,225 @@ function stubStorage(seed: Readonly<Record<string, string>> = {}): Storage {
   return storage;
 }
 
-// --- accent -------------------------------------------------------------------
+// --- accent (per-profile, AUTH-025 / ADR-058 §3) -----------------------------
+
+describe("defaultAccent", () => {
+  it("is zlato for a personal profile and the reserved bordo for a business one (decision #11)", () => {
+    expect(defaultAccent("personal")).toBe("zlato");
+    expect(defaultAccent("business")).toBe("bordo");
+  });
+});
 
 describe("readStoredAccent", () => {
-  it("falls back to zlato for nothing stored, an unknown id, or an empty string", () => {
+  it("falls back to the kind's default for nothing stored, an unknown id, or an empty string", () => {
     stubStorage();
-    expect(readStoredAccent()).toBe("zlato");
+    expect(readStoredAccent("p1", "personal")).toBe("zlato");
+    expect(readStoredAccent("p1", "business")).toBe("bordo");
 
-    stubStorage({ "nexus.accent": "chartreuse" });
-    expect(readStoredAccent()).toBe("zlato");
+    stubStorage({ "nexus.accent.p1": "chartreuse" });
+    expect(readStoredAccent("p1", "personal")).toBe("zlato");
 
-    stubStorage({ "nexus.accent": "" });
-    expect(readStoredAccent()).toBe("zlato");
+    stubStorage({ "nexus.accent.p1": "" });
+    expect(readStoredAccent("p1", "personal")).toBe("zlato");
   });
 
-  it("reads back every accent the token package defines", () => {
+  it("reads back every accent the token package defines, keyed per profile", () => {
     for (const accent of ACCENT_IDS) {
-      stubStorage({ "nexus.accent": accent });
-      expect(readStoredAccent()).toBe(accent);
+      stubStorage({ "nexus.accent.p1": accent });
+      expect(readStoredAccent("p1", "personal")).toBe(accent);
     }
+  });
+
+  it("keeps two profiles' accents apart", () => {
+    stubStorage({ "nexus.accent.p1": "maslina", "nexus.accent.p2": "bordo" });
+    expect(readStoredAccent("p1", "personal")).toBe("maslina");
+    expect(readStoredAccent("p2", "business")).toBe("bordo");
+  });
+
+  // The one-time migration: readers only ever ask about the ACTIVE profile, so
+  // a pre-ADR-058 device-wide `nexus.accent` value becomes THAT profile's own.
+  it("adopts an unprefixed legacy value as this profile's own and removes the old key", () => {
+    const storage = stubStorage({ "nexus.accent": "suma" });
+
+    expect(readStoredAccent("p1", "personal")).toBe("suma");
+
+    expect(storage.getItem("nexus.accent.p1")).toBe("suma");
+    expect(storage.getItem("nexus.accent")).toBeNull();
+  });
+
+  it("discards an unrecognized legacy value instead of migrating it", () => {
+    const storage = stubStorage({ "nexus.accent": "chartreuse" });
+
+    expect(readStoredAccent("p1", "business")).toBe("bordo");
+
+    expect(storage.getItem("nexus.accent")).toBeNull();
+    expect(storage.getItem("nexus.accent.p1")).toBeNull();
+  });
+
+  it("prefers the profile's own value over a lingering legacy key, and still consumes the old key", () => {
+    const storage = stubStorage({ "nexus.accent": "suma", "nexus.accent.p1": "ruza" });
+
+    expect(readStoredAccent("p1", "personal")).toBe("ruza");
+
+    // Consumed either way: a stale device-wide value left behind would be
+    // adopted by the NEXT fresh profile's first read, which is nobody's choice.
+    expect(storage.getItem("nexus.accent")).toBeNull();
+    expect(storage.getItem("nexus.accent.p1")).toBe("ruza");
   });
 });
 
 describe("persistAccent", () => {
-  it("writes the key and mirrors the choice onto the document root", () => {
+  it("writes the profile's own key and mirrors the choice onto the document root", () => {
     const storage = stubStorage();
     const { attributes } = stubDocument();
 
-    persistAccent("bordo");
+    persistAccent("p1", "bordo");
 
-    expect(storage.getItem("nexus.accent")).toBe("bordo");
+    expect(storage.getItem("nexus.accent.p1")).toBe("bordo");
     expect(attributes["data-accent"]).toBe("bordo");
   });
 
-  it("round-trips through readStoredAccent", () => {
-    stubStorage();
+  it("round-trips through readStoredAccent and leaves other profiles' keys alone", () => {
+    const storage = stubStorage({ "nexus.accent.p2": "grafit" });
     stubDocument();
-    persistAccent("maslina");
-    expect(readStoredAccent()).toBe("maslina");
+
+    persistAccent("p1", "maslina");
+
+    expect(readStoredAccent("p1", "personal")).toBe("maslina");
+    expect(storage.getItem("nexus.accent.p2")).toBe("grafit");
   });
 });
 
-describe("applyStoredAccent", () => {
-  it("applies and normalizes an unrecognized stored value to the default", () => {
-    const storage = stubStorage({ "nexus.accent": "chartreuse" });
+describe("seedAccent", () => {
+  // No stubDocument on purpose: seeding a profile that is NOT active (a fresh
+  // business profile's bordo, §3) must not repaint the document the active
+  // profile is looking at — touching `document` here would throw.
+  it("writes the profile's key without touching the document", () => {
+    const storage = stubStorage();
+
+    seedAccent("p-new", "bordo");
+
+    expect(storage.getItem("nexus.accent.p-new")).toBe("bordo");
+  });
+});
+
+describe("applyProfileAccent", () => {
+  it("paints the profile's stored accent — where a profile switch lands", () => {
+    stubStorage({ "nexus.accent.p2": "grafit" });
     const { attributes } = stubDocument();
 
-    applyStoredAccent();
+    applyProfileAccent("p2", "personal");
+
+    expect(attributes["data-accent"]).toBe("grafit");
+  });
+
+  it("paints the kind's default when the profile never chose", () => {
+    stubStorage();
+    const { attributes } = stubDocument();
+
+    applyProfileAccent("p-biz", "business");
+
+    expect(attributes["data-accent"]).toBe("bordo");
+  });
+
+  it("runs the legacy migration, so the adopted value is also what gets painted", () => {
+    const storage = stubStorage({ "nexus.accent": "ruza" });
+    const { attributes } = stubDocument();
+
+    applyProfileAccent("p1", "personal");
+
+    expect(attributes["data-accent"]).toBe("ruza");
+    expect(storage.getItem("nexus.accent.p1")).toBe("ruza");
+    expect(storage.getItem("nexus.accent")).toBeNull();
+  });
+});
+
+describe("applyBootAccent", () => {
+  it("paints the remembered profile's accent before first render, writing nothing", () => {
+    const storage = stubStorage({ "nexus.accent.p1": "bordo" });
+    const { attributes } = stubDocument();
+
+    applyBootAccent("p1");
+
+    expect(attributes["data-accent"]).toBe("bordo");
+    expect(storage.getItem("nexus.accent.p1")).toBe("bordo");
+    expect(storage.length).toBe(1);
+  });
+
+  it("falls back to a not-yet-migrated legacy value, leaving the migration to the real read", () => {
+    const storage = stubStorage({ "nexus.accent": "suma" });
+    const { attributes } = stubDocument();
+
+    applyBootAccent(null);
+
+    expect(attributes["data-accent"]).toBe("suma");
+    // Boot validates nothing, so it writes nothing — the key survives for
+    // readStoredAccent to migrate once the live profile list is known.
+    expect(storage.getItem("nexus.accent")).toBe("suma");
+  });
+
+  it("paints the personal default when it knows nothing better", () => {
+    stubStorage();
+    const { attributes } = stubDocument();
+
+    applyBootAccent(null);
 
     expect(attributes["data-accent"]).toBe("zlato");
-    expect(storage.getItem("nexus.accent")).toBe("zlato");
+  });
+
+  it("ignores garbage wherever it finds it", () => {
+    stubStorage({ "nexus.accent.p1": "chartreuse", "nexus.accent": "neon" });
+    const { attributes } = stubDocument();
+
+    applyBootAccent("p1");
+
+    expect(attributes["data-accent"]).toBe("zlato");
   });
 });
 
 describe("clearStoredAccent", () => {
-  it("removes the key outright and repaints the document root on the default", () => {
-    const storage = stubStorage({ "nexus.accent": "bordo" });
+  it("removes the profile's key outright and repaints the document root on its kind's default", () => {
+    const storage = stubStorage({ "nexus.accent.p1": "bordo" });
     const { attributes } = stubDocument();
 
-    clearStoredAccent();
+    clearStoredAccent("p1", "personal");
+
+    expect(storage.getItem("nexus.accent.p1")).toBeNull();
+    expect(attributes["data-accent"]).toBe("zlato");
+    expect(readStoredAccent("p1", "personal")).toBe("zlato");
+  });
+
+  it("resets a business profile onto bordo, not onto the personal default", () => {
+    stubStorage({ "nexus.accent.p-biz": "grafit" });
+    const { attributes } = stubDocument();
+
+    clearStoredAccent("p-biz", "business");
+
+    expect(attributes["data-accent"]).toBe("bordo");
+  });
+
+  it("also drops a pre-migration legacy key, so a reset can never resurrect it", () => {
+    const storage = stubStorage({ "nexus.accent": "suma", "nexus.accent.p1": "bordo" });
+    const { attributes } = stubDocument();
+
+    clearStoredAccent("p1", "personal");
 
     expect(storage.getItem("nexus.accent")).toBeNull();
     expect(attributes["data-accent"]).toBe("zlato");
-    expect(readStoredAccent()).toBe("zlato");
   });
 
-  it("touches no other preference key — „Izgled“'s reset stops at its own card", () => {
+  it("touches no other profile's accent and no other preference key — „Izgled“'s reset stops at its own card", () => {
     const storage = stubStorage({
-      "nexus.accent": "bordo",
+      "nexus.accent.p1": "bordo",
+      "nexus.accent.p2": "grafit",
       "nexus.noteWidth": "siroka",
       "nexus.tasks.blockedInToday": "prikazi",
     });
     stubDocument();
 
-    clearStoredAccent();
+    clearStoredAccent("p1", "personal");
 
+    expect(storage.getItem("nexus.accent.p2")).toBe("grafit");
     expect(storage.getItem("nexus.noteWidth")).toBe("siroka");
     expect(storage.getItem("nexus.tasks.blockedInToday")).toBe("prikazi");
   });
@@ -313,9 +466,9 @@ describe("persistAutoLock", () => {
   });
 
   it("touches no other key — the three preference modules never collide", () => {
-    const storage = stubStorage({ "nexus.accent": "bordo", "nexus.theme": "dan" });
+    const storage = stubStorage({ "nexus.accent.p1": "bordo", "nexus.theme": "dan" });
     persistAutoLock(60);
-    expect(storage.getItem("nexus.accent")).toBe("bordo");
+    expect(storage.getItem("nexus.accent.p1")).toBe("bordo");
     expect(storage.getItem("nexus.theme")).toBe("dan");
   });
 });

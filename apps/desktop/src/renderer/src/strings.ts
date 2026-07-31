@@ -41,6 +41,15 @@ export const strings = {
     title: "Tvoj Nexus",
     description:
       "Nexus radi potpuno lokalno — svi podaci ostaju na ovom uređaju. Upiši ime profila i izaberi temu; sve ostalo podešavaš kasnije.",
+    /**
+     * The business first entry (ADR-058 §5): the same naming screen, minus the
+     * theme group — the theme is device-wide and was chosen long before a
+     * second profile existed — so the copy asks for exactly what the screen
+     * still asks for: a name.
+     */
+    titleBusiness: "Poslovni profil",
+    descriptionBusiness:
+      "Poslovni profil drži posao odvojeno od ličnog — ima svoje zadatke, beleške i podešavanja, pod istim nalogom. Upiši mu ime; sve ostalo podešavaš kasnije.",
     nameLabel: "Ime profila",
     namePlaceholder: "Upiši ime",
     themeLabel: "Tema",
@@ -165,6 +174,39 @@ export const strings = {
     lockAction: "Zaključaj",
     /** Sidebar, only when this device holds more than one account: locks the open one, which brings the picker back (ADR-044). */
     switchAction: "Promeni nalog",
+  },
+
+  /**
+   * More than one profile per account (ADR-058): the sidebar switcher and the
+   * passcode gate every switch passes (AUTH-024). „Profil“ and „nalog“ are
+   * DIFFERENT axes — a nalog is a lock-screen identity with its own passcode
+   * and database, a profil is a compartment inside the open one — and the copy
+   * keeps the two words strictly apart: this block never says „nalog“ except
+   * to name whose pristupni kod the gate asks for.
+   */
+  profiles: {
+    /**
+     * „Posao“ is three things at once, deliberately one spelling: the kind
+     * marker beside a business profile's name, the display fallback for a
+     * business profile still carrying the empty-name ONB-lite sentinel, and
+     * therefore the text a delete of such a profile is confirmed by typing.
+     */
+    businessLabel: "Posao",
+    /** The switcher row reads „Profil: <ime>“ — a statement of where you are that opens the list. */
+    rowPrefix: "Profil:",
+    switcherLabel: "Promena profila",
+    createBusiness: "Novi poslovni profil",
+    createError: "Pravljenje profila nije uspelo. Pokušaj ponovo.",
+    /**
+     * The passcode gate in front of EVERY switch (AUTH-024). The error map is
+     * the lock screen's own (`authErrorMessage`), never respelled here — a
+     * wrong passcode is the same sentence wherever it is typed.
+     */
+    switchTitle: "Prelazak na profil",
+    switchQuestion: "Unesi pristupni kod naloga da pređeš na ovaj profil.",
+    switchPasscodeLabel: "Pristupni kod",
+    switchConfirm: "Potvrdi",
+    switchCancel: "Otkaži",
   },
 
   /** Display names for registered modules, keyed by module id. */
@@ -1821,6 +1863,7 @@ export const strings = {
     /** Section-card titles, in the order they appear on the page. */
     sectionTitle: {
       profile: "Profil",
+      profiles: "Profili",
       security: "Sigurnost",
       appearance: "Izgled",
       tasks: "Zadaci",
@@ -1881,6 +1924,38 @@ export const strings = {
       } satisfies Record<ProfilePicturePickErrorCode, string>,
       /** A rejected IPC call (not one of the named reasons above). */
       pictureError: "Promena slike nije uspela. Pokušaj ponovo.",
+    },
+    /**
+     * „Profili“ card (SET-003 / ADR-058): the account's profiles, the ONE
+     * business profile v1 allows, and a delete that never touches the personal
+     * anchor. The kind marker, the empty-name fallback and the switch-gate copy
+     * live in the top-level `profiles` block — the sidebar switcher reads the
+     * same words, and two spellings of „Posao“ would eventually disagree.
+     */
+    profiles: {
+      caption:
+        "Poslovni profil drži posao odvojeno od privatnog — svoje zadatke, beleške i podešavanja, pod istim nalogom i istim pristupnim kodom.",
+      /** The active row's second line; the name itself carries the gold active state. */
+      activeMarker: "Trenutno aktivan",
+      /** Shown once a business profile is created here: what happened, and that naming comes at first entry (the ONB-lite sentinel, said out loud). */
+      createdNotice: "Poslovni profil je napravljen. Ime mu daješ pri prvom ulasku.",
+      /** The offer beside the notice — the same passcode gate every switch passes. */
+      switchToNew: "Pređi na novi profil",
+      delete: "Obriši",
+      /**
+       * Deleting a business profile (ADR-058, the ADR-048 typed-name idiom).
+       * Immediate and irreversible, so the warning is read BEFORE the field:
+       * what goes, and that it cannot be taken back. Confirmed by typing the
+       * profile's display name — for an unnamed business profile that is
+       * „Posao“, its fallback label everywhere else too.
+       */
+      deleteTitle: "Brisanje profila",
+      deleteWarning: "Svi podaci profila biće trajno obrisani. Ovo se ne može opozvati.",
+      deleteConfirmLabel: "Ime profila za potvrdu",
+      deleteConfirmPlaceholder: "Upiši tačno ime profila",
+      deleteSubmit: "Obriši profil",
+      deleteCancel: "Otkaži",
+      deleteError: "Brisanje nije uspelo. Pokušaj ponovo.",
     },
     /** Sigurnost section (ADR-018 / AUTH): change passcode, regenerate the Recovery Kit, idle auto-lock. */
     security: {

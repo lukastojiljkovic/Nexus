@@ -197,6 +197,64 @@ body {
   color: var(--nx-text);
 }
 
+/* The profile switcher (ADR-058 §2): a quiet typographic row — „Profil: <ime>“
+   — over the house popover. It borrows the popover trigger and only reshapes
+   it from the 24px "⋯" square into a full-width text row; active state inside
+   the panel is gold + weight (the dash__set-item precedent), never a pill. */
+.app__profile-switch.note__menu-trigger {
+  width: 100%;
+  height: auto;
+  justify-items: start;
+  padding: var(--nx-space-1) var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+  text-align: left;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.app__profile-switch.note__menu-trigger:hover,
+.app__profile-switch.note__menu-trigger[aria-expanded="true"] {
+  color: var(--nx-text);
+}
+/* Doubled with the base class on purpose: .note__menu-item declares its own
+   colour later in this file, and the ACTIVE profile's gold must win over it. */
+.note__menu-item.app__profile-item--active {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* The „Posao“ kind marker beside a business profile's name in the popover —
+   typographic (the calendar's undated-label caption treatment), never a pill.
+   The row's own flex gap spaces it off the name. */
+.app__profile-kind {
+  font-size: var(--nx-font-size-caption);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+/* The switcher path's own error line (the „Profili“ card reports its errors
+   itself): danger-hued caption under the row, nothing louder. */
+.app__profile-error {
+  margin: 0;
+  padding: 0 var(--nx-space-2);
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-danger);
+}
+/* The two profile dialogs (passcode gate, typed-name delete): a field inside
+   the house dialog panel. The panel's own gap spaces the blocks; the form only
+   stacks its field over its actions and gives the action row the pair gap the
+   base class (justify-end, no gap) does not carry. */
+.app__profile-dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+.app__profile-dialog-form .nx-textfield {
+  width: 100%;
+}
+.app__profile-dialog-actions.recur-dialog__actions {
+  gap: var(--nx-space-2);
+}
+
 /* App-info facts (Settings "O aplikaciji") ---------------------------- */
 .app__facts {
   margin: 0;
@@ -4990,6 +5048,19 @@ button.cal__grid-event--dragging {
 .set__module-desc {
   color: var(--nx-text-muted);
   font-size: var(--nx-font-size-body-sm);
+}
+/* „Profili“ (SET-003 / ADR-058): a profile row is the module-row recipe with
+   the name and its kind chip on one line; the ACTIVE profile's name carries
+   the gold + weight active state, the app's one active-marker idiom. */
+.set__profile-name-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+.set__profile-active {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
 }
 /* Obaveštenja: NTF-008 preset shortcuts above the shared ntf controls. */
 .set__preset-row {

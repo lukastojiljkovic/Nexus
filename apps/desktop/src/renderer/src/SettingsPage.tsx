@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
+import { createPortal } from "react-dom";
 import { Button, Card, Checkbox, Chip, TextField } from "@nexus/ui";
 import {
   buildLlmPrompt,
@@ -49,6 +50,8 @@ import type {
   MarkdownImportSource,
   NoteFolder,
   NotificationSource,
+  Profile,
+  ProfileKind,
   RestoreModuleCounts,
   RestorePreview,
   RestoreProblem,
@@ -71,6 +74,7 @@ import {
 import { Kbd } from "./ShortcutsDialog.js";
 import { clearStoredAccent, persistAccent, readStoredAccent } from "./accent.js";
 import { ProfileAvatar } from "./profileAvatar.js";
+import { profileDisplayName } from "./profilePrefs.js";
 import {
   clearStoredWeekStart,
   persistWeekStart,
@@ -336,6 +340,237 @@ function ProfileSection({
           {pictureError != null && <p className="set__error">{pictureError}</p>}
         </div>
       </div>
+    </>
+  );
+}
+
+interface ProfileDeleteDialogProps {
+  profile: Profile;
+  busy: boolean;
+  error: string | null;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+/**
+ * „Obriši profil“ (ADR-058 §4) — the ADR-048 typed-name idiom on the house
+ * dialog recipe: the warning is read before the field, intent is proved by
+ * typing the profile's DISPLAY name (for an unnamed business profile that is
+ * „Posao“, its fallback label everywhere else too), and the danger button
+ * stays disabled until the text matches. Escape, the backdrop and „Otkaži“
+ * all cancel. The typed name is a UX gate only: main re-refuses the personal
+ * anchor and the last profile, whatever this dialog was talked into.
+ */
+function ProfileDeleteDialog({ profile, busy, error, onConfirm, onCancel }: ProfileDeleteDialogProps) {
+  const s = strings.settings.profiles;
+  const displayName = profileDisplayName(profile);
+  const [confirmText, setConfirmText] = useState("");
+  const titleId = useId();
+  const questionId = useId();
+
+  const match = confirmText.trim() === displayName;
+
+  // Ignored while the delete is in flight, so a cancel cannot close the dialog
+  // out from under the call and hide the error line the failure would land in.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !busy) onCancel();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [busy, onCancel]);
+
+  return createPortal(
+    <div className="recur-dialog__overlay">
+      <div
+        className="recur-dialog__backdrop"
+        onClick={() => {
+          if (!busy) onCancel();
+        }}
+      />
+      <div
+        className="recur-dialog__panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={questionId}
+      >
+        <h2 id={titleId} className="recur-dialog__title">
+          {s.deleteTitle}
+        </h2>
+        <p className="recur-dialog__name">„{displayName}“</p>
+        <p id={questionId} className="recur-dialog__question">
+          {s.deleteWarning}
+        </p>
+        <form
+          className="app__profile-dialog-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (match && !busy) onConfirm();
+          }}
+        >
+          <TextField
+            label={s.deleteConfirmLabel}
+            placeholder={s.deleteConfirmPlaceholder}
+            value={confirmText}
+            maxLength={NAME_MAX}
+            autoFocus
+            required
+            onChange={(event) => setConfirmText(event.target.value)}
+          />
+          {error != null && (
+            <p className="set__error" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="recur-dialog__actions app__profile-dialog-actions">
+            <Button type="button" className="recur-dialog__cancel" disabled={busy} onClick={onCancel}>
+              {s.deleteCancel}
+            </Button>
+            <Button type="submit" variant="danger" disabled={busy || !match}>
+              {s.deleteSubmit}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+interface ProfilesSectionProps {
+  profiles: Profile[];
+  activeProfileId: string;
+  /** App creates (and seeds the bordo accent for) the business profile; the row lands in the shell's own list. */
+  onCreateBusiness: () => Promise<Profile>;
+  /** Opens the shell's passcode gate (AUTH-024) aimed at this profile — the same dialog every switch passes. */
+  onRequestSwitch: (profile: Profile) => void;
+  /** App owns the delete: an ACTIVE profile is moved to personal first, then the wire is asked. Rejections land back here. */
+  onDelete: (profile: Profile) => Promise<void>;
+}
+
+/**
+ * „Profili“ card (SET-003 / ADR-058 §4): the account's profiles — name, kind
+ * chip, active marker — plus the ONE business profile v1 allows and the delete
+ * that never touches the personal anchor. The create hands over the EMPTY name
+ * deliberately: that is the ONB-lite "not yet named" sentinel, and the notice
+ * under the fresh row says so out loud. Everything destructive or
+ * identity-changing goes through App: switching needs the passcode gate,
+ * deleting may need to evict the active profile first.
+ */
+function ProfilesSection({
+  profiles,
+  activeProfileId,
+  onCreateBusiness,
+  onRequestSwitch,
+  onDelete,
+}: ProfilesSectionProps) {
+  const s = strings.settings.profiles;
+  const [creating, setCreating] = useState(false);
+  const [created, setCreated] = useState<Profile | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<Profile | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const hasBusiness = profiles.some((profile) => profile.kind === "business");
+
+  async function create(): Promise<void> {
+    if (creating) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      setCreated(await onCreateBusiness());
+    } catch (error) {
+      setCreateError(strings.profiles.createError);
+      console.error("Nexus: failed to create the business profile:", error);
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function confirmDelete(): Promise<void> {
+    if (deleting === null || deleteBusy) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      await onDelete(deleting);
+      // The offer to switch into a profile that no longer exists dies with it.
+      setCreated((current) => (current?.id === deleting.id ? null : current));
+      setDeleting(null);
+    } catch (error) {
+      setDeleteError(s.deleteError);
+      console.error("Nexus: failed to delete the profile:", error);
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <p className="set__section-caption">{s.caption}</p>
+      <div className="set__module-list">
+        {profiles.map((profile) => {
+          const isActive = profile.id === activeProfileId;
+          return (
+            <div className="set__module-row" key={profile.id}>
+              <div className="set__module-info">
+                <span className="set__profile-name-row">
+                  {/* Active = gold text + weight, the active-nav discipline — never a pill. */}
+                  <span className={isActive ? "set__module-name set__profile-active" : "set__module-name"}>
+                    {profileDisplayName(profile)}
+                  </span>
+                  {profile.kind === "business" && <Chip>{strings.profiles.businessLabel}</Chip>}
+                </span>
+                {isActive && <span className="set__module-desc">{s.activeMarker}</span>}
+              </div>
+              {/* Business only, and never the last profile: the personal anchor
+                  is undeletable by design, so the action simply is not offered
+                  there — main re-refuses regardless. */}
+              {profile.kind === "business" && profiles.length > 1 && (
+                <Button
+                  size="sm"
+                  className="set__avatar-remove"
+                  disabled={deleteBusy}
+                  onClick={() => {
+                    setDeleting(profile);
+                    setDeleteError(null);
+                  }}
+                >
+                  {s.delete}
+                </Button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {/* ONE business profile per account (the ADR's v1 limit): the offer exists exactly while none does. */}
+      {!hasBusiness && (
+        <div className="set__avatar-actions">
+          <Button size="sm" disabled={creating} onClick={() => void create()}>
+            {strings.profiles.createBusiness}
+          </Button>
+        </div>
+      )}
+      {created != null && (
+        <div className="set__row">
+          <p className="set__section-caption">{s.createdNotice}</p>
+          <Button size="sm" variant="primary" onClick={() => onRequestSwitch(created)}>
+            {s.switchToNew}
+          </Button>
+        </div>
+      )}
+      {createError != null && <p className="set__error">{createError}</p>}
+
+      {deleting !== null && (
+        <ProfileDeleteDialog
+          profile={deleting}
+          busy={deleteBusy}
+          error={deleteError}
+          onConfirm={() => void confirmDelete()}
+          onCancel={() => setDeleting(null)}
+        />
+      )}
     </>
   );
 }
@@ -3604,12 +3839,18 @@ export interface SettingsPageProps {
   profileName: string;
   /** The active profile's picture hash (SET-001), or null — owned by the shell, exactly as its name is. */
   profilePictureHash: string | null;
+  /** Every profile of the account (ADR-058), the shell's own list — the „Profili“ card and the active profile's kind both read it. */
+  profiles: Profile[];
   info: AppInfo | null;
   flags: FlagState;
   onFlagsChanged: (flags: FlagState) => void;
   onProfileRenamed: (name: string) => void;
   /** Reports a picture change back to the shell, so the sidebar's avatar follows this page. */
   onProfilePictureChanged: (pictureHash: string | null) => void;
+  /** ADR-058 §4 — all three owned by App: creation lands in the shell's list, switching passes its passcode gate, deletion may evict the active profile first. */
+  onCreateBusinessProfile: () => Promise<Profile>;
+  onRequestProfileSwitch: (profile: Profile) => void;
+  onDeleteProfile: (profile: Profile) => Promise<void>;
   preference: ThemePreference;
   onPreferenceChange: (preference: ThemePreference) => void;
   registry: ModuleRegistry;
@@ -3642,11 +3883,15 @@ export function SettingsPage({
   profileId,
   profileName,
   profilePictureHash,
+  profiles,
   info,
   flags,
   onFlagsChanged,
   onProfileRenamed,
   onProfilePictureChanged,
+  onCreateBusinessProfile,
+  onRequestProfileSwitch,
+  onDeleteProfile,
   preference,
   onPreferenceChange,
   registry,
@@ -3657,7 +3902,13 @@ export function SettingsPage({
   globalShortcutTaken,
   onShowShortcuts,
 }: SettingsPageProps) {
-  const [accent, setAccent] = useState<AccentId>(() => readStoredAccent());
+  // The accent is per-profile (ADR-058 §3), and its default depends on the
+  // profile's KIND (bordo for business, decision #11). Reading it lazily in a
+  // useState initializer is safe because App keys this page by the active
+  // profile, so `profileId` is constant for the lifetime of a mount.
+  const activeKind: ProfileKind =
+    profiles.find((profile) => profile.id === profileId)?.kind ?? "personal";
+  const [accent, setAccent] = useState<AccentId>(() => readStoredAccent(profileId, activeKind));
   const [weekStart, setWeekStart] = useState<WeekStartPreference>(() => readStoredWeekStart());
   /** ADR-049: whether blocked tasks appear in the „Danas“ / „Sledećih 7 dana“ views. A device preference, exactly like the week start above. */
   const [blockedInToday, setBlockedInToday] = useState<BlockedInToday>(() =>
@@ -3742,10 +3993,10 @@ export function SettingsPage({
   function runReset(section: ResettableSection): void {
     if (section === "appearance") {
       onPreferenceChange(DEFAULT_THEME_PREFERENCE);
-      clearStoredAccent();
+      clearStoredAccent(profileId, activeKind);
       clearStoredWeekStart();
       clearStoredCalendarPreferences();
-      setAccent(readStoredAccent());
+      setAccent(readStoredAccent(profileId, activeKind));
       setWeekStart(readStoredWeekStart());
       setEventDuration(readStoredEventDuration());
       setClock(readStoredClock());
@@ -3796,6 +4047,19 @@ export function SettingsPage({
         />
       </Card>
 
+      <Card
+        title={strings.settings.sectionTitle.profiles}
+        className={sectionClass(sections.has("profiles"))}
+      >
+        <ProfilesSection
+          profiles={profiles}
+          activeProfileId={profileId}
+          onCreateBusiness={onCreateBusinessProfile}
+          onRequestSwitch={onRequestProfileSwitch}
+          onDelete={onDeleteProfile}
+        />
+      </Card>
+
       <Card title={strings.settings.sectionTitle.security} className={sectionClass(sections.has("security"))}>
         <SecuritySection
           autoLockMinutes={autoLockMinutes}
@@ -3838,7 +4102,7 @@ export function SettingsPage({
                 aria-label={name}
                 style={{ background: `var(--nx-swatch-${id})` }}
                 onClick={() => {
-                  persistAccent(id);
+                  persistAccent(profileId, id);
                   setAccent(id);
                 }}
               />
