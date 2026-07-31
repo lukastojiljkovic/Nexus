@@ -36,6 +36,14 @@ export interface DashboardSettings {
   backgroundSizeBytes: number | null;
   /** How much the scrim above the image dims it, 0..`MAX_BACKGROUND_DIM`. */
   backgroundDim: number;
+  /**
+   * The named dashboard the profile is currently looking at (DASH-008 /
+   * ADR-055), or null for the default one („Početna“). READ here because the
+   * choice lives on this row and the exporter reads the row whole; WRITTEN
+   * only by `DashboardSetStore.setActive` and cleared by its `delete` — the
+   * background writes below carry it through untouched.
+   */
+  activeSetId: string | null;
 }
 
 interface SettingsRow {
@@ -43,6 +51,7 @@ interface SettingsRow {
   background_mime: string | null;
   background_size_bytes: number | null;
   background_dim: number;
+  active_set_id: string | null;
 }
 
 /**
@@ -81,10 +90,15 @@ export class DashboardSettingsStore {
     private readonly profileId: string,
   ) {
     this.selectSettings = db.prepare(
-      `SELECT background_hash, background_mime, background_size_bytes, background_dim
+      `SELECT background_hash, background_mime, background_size_bytes, background_dim,
+              active_set_id
          FROM dashboard_settings
         WHERE profile_id = ?`,
     );
+    // `active_set_id` is deliberately absent from both branches (ADR-055): a
+    // first insert leaves it NULL — a profile that never chose a board is on
+    // the default one — and the conflict branch not naming it is what carries
+    // an existing choice through every background and dim write untouched.
     this.upsertSettings = db.prepare(
       `INSERT INTO dashboard_settings
          (profile_id, background_hash, background_mime, background_size_bytes,
@@ -105,7 +119,7 @@ export class DashboardSettingsStore {
     );
   }
 
-  /** This profile's resolved preferences: no background and dim 40 while the row is absent. Never writes. */
+  /** This profile's resolved preferences: no background, dim 40 and the default board while the row is absent. Never writes. */
   get(): DashboardSettings {
     const row = this.selectSettings.get(this.profileId) as SettingsRow | undefined;
     if (row === undefined) {
@@ -114,6 +128,7 @@ export class DashboardSettingsStore {
         backgroundMime: null,
         backgroundSizeBytes: null,
         backgroundDim: DEFAULT_BACKGROUND_DIM,
+        activeSetId: null,
       };
     }
     return {
@@ -121,6 +136,7 @@ export class DashboardSettingsStore {
       backgroundMime: row.background_mime,
       backgroundSizeBytes: row.background_size_bytes,
       backgroundDim: row.background_dim,
+      activeSetId: row.active_set_id,
     };
   }
 
@@ -161,6 +177,7 @@ export class DashboardSettingsStore {
       backgroundMime: validMime,
       backgroundSizeBytes: size,
       backgroundDim: current.backgroundDim,
+      activeSetId: current.activeSetId,
     };
   }
 
@@ -187,6 +204,7 @@ export class DashboardSettingsStore {
       backgroundMime: null,
       backgroundSizeBytes: null,
       backgroundDim: current.backgroundDim,
+      activeSetId: current.activeSetId,
     };
   }
 

@@ -3,6 +3,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  DashboardSetNotFoundError,
+  DashboardSetStore,
   DashboardWidgetNotFoundError,
   DashboardWidgetStore,
   DashboardWidgetValidationError,
@@ -31,7 +33,7 @@ function storeFor(name: string): { store: DashboardWidgetStore; profileId: strin
 }
 
 function widgetIds(store: DashboardWidgetStore): string[] {
-  return store.listLayout().map((entry) => entry.widgetId);
+  return store.listLayout(null).map((entry) => entry.widgetId);
 }
 
 function rowCount(): number {
@@ -54,43 +56,43 @@ describe("DashboardWidgetStore.listLayout", () => {
   it("answers with the default arrangement while no row exists", () => {
     const { store } = storeFor("a");
     expect(widgetIds(store)).toEqual(DEFAULT_WIDGET_IDS);
-    expect(store.listLayout().every((entry) => entry.size === "M")).toBe(true);
-    expect(store.listLayout().every((entry) => entry.config === null)).toBe(true);
+    expect(store.listLayout(null).every((entry) => entry.size === "M")).toBe(true);
+    expect(store.listLayout(null).every((entry) => entry.config === null)).toBe(true);
   });
 
   it("never writes a row just by being read", () => {
     const { store } = storeFor("a");
-    store.listLayout();
+    store.listLayout(null);
     expect(rowCount()).toBe(0);
   });
 
   it("gives the default entries stable instance ids across reads", () => {
     const { store } = storeFor("a");
-    expect(store.listLayout().map((e) => e.instanceId)).toEqual(
-      store.listLayout().map((e) => e.instanceId),
+    expect(store.listLayout(null).map((e) => e.instanceId)).toEqual(
+      store.listLayout(null).map((e) => e.instanceId),
     );
   });
 
   it("gives two profiles' defaults different instance ids — the column is a global primary key", () => {
     const first = storeFor("a");
     const second = storeFor("b");
-    const firstIds = new Set(first.store.listLayout().map((e) => e.instanceId));
-    for (const entry of second.store.listLayout()) {
+    const firstIds = new Set(first.store.listLayout(null).map((e) => e.instanceId));
+    for (const entry of second.store.listLayout(null)) {
       expect(firstIds.has(entry.instanceId)).toBe(false);
     }
   });
 
   it("returns the stored rows, in position order, once the profile has any", () => {
     const { store } = storeFor("a");
-    store.setSize(store.listLayout()[0]!.instanceId, "L", NOW);
+    store.setSize(null, store.listLayout(null)[0]!.instanceId, "L", NOW);
     expect(widgetIds(store)).toEqual(DEFAULT_WIDGET_IDS);
-    expect(store.listLayout()[0]?.size).toBe("L");
+    expect(store.listLayout(null)[0]?.size).toBe("L");
   });
 
   it("is scoped to its own profile", () => {
     const first = storeFor("a");
     const second = storeFor("b");
-    first.store.add("finance:budzet", "S", NOW);
+    first.store.add(null, "finance:budzet", "S", NOW);
     expect(widgetIds(second.store)).toEqual(DEFAULT_WIDGET_IDS);
   });
 });
@@ -103,7 +105,7 @@ describe("DashboardWidgetStore.listAll", () => {
 
   it("returns full rows, in position order, once the default has been materialized", () => {
     const { store, profileId } = storeFor("a");
-    store.add("finance:budzet", "S", NOW);
+    store.add(null, "finance:budzet", "S", NOW);
     const rows = store.listAll();
     expect(rows.map((row) => row.widgetId)).toEqual([...DEFAULT_WIDGET_IDS, "finance:budzet"]);
     expect(rows.every((row) => row.profileId === profileId)).toBe(true);
@@ -116,17 +118,17 @@ describe("DashboardWidgetStore.listAll", () => {
 describe("DashboardWidgetStore materialization", () => {
   it("writes the whole default arrangement on the first mutation, then applies the change", () => {
     const { store } = storeFor("a");
-    store.add("finance:budzet", "M", NOW);
+    store.add(null, "finance:budzet", "M", NOW);
     expect(rowCount()).toBe(DEFAULT_DASHBOARD_LAYOUT.length + 1);
     expect(widgetIds(store)).toEqual([...DEFAULT_WIDGET_IDS, "finance:budzet"]);
   });
 
   it("keeps the unedited rest when the first mutation edits ONE default entry", () => {
     const { store } = storeFor("a");
-    const target = store.listLayout()[2]!;
-    store.setSize(target.instanceId, "L", NOW);
+    const target = store.listLayout(null)[2]!;
+    store.setSize(null, target.instanceId, "L", NOW);
 
-    const layout = store.listLayout();
+    const layout = store.listLayout(null);
     expect(layout.map((entry) => entry.widgetId)).toEqual(DEFAULT_WIDGET_IDS);
     expect(layout[2]?.size).toBe("L");
     expect(layout.filter((entry) => entry.size === "M")).toHaveLength(
@@ -136,32 +138,32 @@ describe("DashboardWidgetStore materialization", () => {
 
   it("materializes a default entry under the very instance id `listLayout` had already handed out", () => {
     const { store } = storeFor("a");
-    const before = store.listLayout().map((entry) => entry.instanceId);
-    store.setSize(before[0]!, "S", NOW);
-    expect(store.listLayout().map((entry) => entry.instanceId)).toEqual(before);
+    const before = store.listLayout(null).map((entry) => entry.instanceId);
+    store.setSize(null, before[0]!, "S", NOW);
+    expect(store.listLayout(null).map((entry) => entry.instanceId)).toEqual(before);
   });
 
   it("happens exactly once — a second mutation adds no default rows", () => {
     const { store } = storeFor("a");
-    store.add("finance:budzet", "M", NOW);
-    store.add("finance:racuni", "M", LATER);
+    store.add(null, "finance:budzet", "M", NOW);
+    store.add(null, "finance:racuni", "M", LATER);
     expect(rowCount()).toBe(DEFAULT_DASHBOARD_LAYOUT.length + 2);
   });
 
   it("does not happen when the profile already has rows — even a single one", () => {
     const { store } = storeFor("a");
-    store.add("finance:budzet", "M", NOW);
-    for (const entry of store.listLayout()) {
-      if (entry.widgetId !== "finance:budzet") store.remove(entry.instanceId, LATER);
+    store.add(null, "finance:budzet", "M", NOW);
+    for (const entry of store.listLayout(null)) {
+      if (entry.widgetId !== "finance:budzet") store.remove(null, entry.instanceId, LATER);
     }
     expect(widgetIds(store)).toEqual(["finance:budzet"]);
-    store.setSize(store.listLayout()[0]!.instanceId, "L", LATER);
+    store.setSize(null, store.listLayout(null)[0]!.instanceId, "L", LATER);
     expect(widgetIds(store)).toEqual(["finance:budzet"]);
   });
 
   it("brings the default back once the last widget is removed — no rows IS the default", () => {
     const { store } = storeFor("a");
-    for (const entry of store.listLayout()) store.remove(entry.instanceId, NOW);
+    for (const entry of store.listLayout(null)) store.remove(null, entry.instanceId, NOW);
     expect(rowCount()).toBe(0);
     expect(widgetIds(store)).toEqual(DEFAULT_WIDGET_IDS);
   });
@@ -170,7 +172,7 @@ describe("DashboardWidgetStore materialization", () => {
 describe("DashboardWidgetStore.add", () => {
   it("appends at the end and returns the resulting layout", () => {
     const { store } = storeFor("a");
-    const layout = store.add("finance:budzet", "L", NOW);
+    const layout = store.add(null, "finance:budzet", "L", NOW);
     expect(layout.map((entry) => entry.widgetId)).toEqual([...DEFAULT_WIDGET_IDS, "finance:budzet"]);
     expect(layout.at(-1)?.size).toBe("L");
     expect(layout.at(-1)?.config).toBeNull();
@@ -178,16 +180,16 @@ describe("DashboardWidgetStore.add", () => {
 
   it("mints a fresh instance id each time, so the same widget can be placed twice", () => {
     const { store } = storeFor("a");
-    store.add("calendar:danas", "S", NOW);
-    store.add("calendar:danas", "L", LATER);
-    const placements = store.listLayout().filter((entry) => entry.widgetId === "calendar:danas");
+    store.add(null, "calendar:danas", "S", NOW);
+    store.add(null, "calendar:danas", "L", LATER);
+    const placements = store.listLayout(null).filter((entry) => entry.widgetId === "calendar:danas");
     expect(placements).toHaveLength(3);
     expect(new Set(placements.map((entry) => entry.instanceId)).size).toBe(3);
   });
 
   it("refuses an unknown size", () => {
     const { store } = storeFor("a");
-    expect(() => store.add("calendar:danas", "XL" as never, NOW)).toThrow(
+    expect(() => store.add(null, "calendar:danas", "XL" as never, NOW)).toThrow(
       DashboardWidgetValidationError,
     );
     expect(rowCount()).toBe(0);
@@ -195,21 +197,21 @@ describe("DashboardWidgetStore.add", () => {
 
   it("refuses a widget id that is not a `moduleId:widgetId` slug", () => {
     const { store } = storeFor("a");
-    expect(() => store.add("", "M", NOW)).toThrow(DashboardWidgetValidationError);
-    expect(() => store.add("danas", "M", NOW)).toThrow(DashboardWidgetValidationError);
-    expect(() => store.add("calendar:danas:extra", "M", NOW)).toThrow(DashboardWidgetValidationError);
-    expect(() => store.add("Calendar:Danas", "M", NOW)).toThrow(DashboardWidgetValidationError);
-    expect(() => store.add("calendar: danas", "M", NOW)).toThrow(DashboardWidgetValidationError);
+    expect(() => store.add(null, "", "M", NOW)).toThrow(DashboardWidgetValidationError);
+    expect(() => store.add(null, "danas", "M", NOW)).toThrow(DashboardWidgetValidationError);
+    expect(() => store.add(null, "calendar:danas:extra", "M", NOW)).toThrow(DashboardWidgetValidationError);
+    expect(() => store.add(null, "Calendar:Danas", "M", NOW)).toThrow(DashboardWidgetValidationError);
+    expect(() => store.add(null, "calendar: danas", "M", NOW)).toThrow(DashboardWidgetValidationError);
   });
 
   it("accepts a widget id no module publishes — the catalogue is not this store's to hold", () => {
     const { store } = storeFor("a");
-    expect(() => store.add("finance:budzet", "M", NOW)).not.toThrow();
+    expect(() => store.add(null, "finance:budzet", "M", NOW)).not.toThrow();
   });
 
   it("refuses a `now` that is not an ISO-8601 date-time", () => {
     const { store } = storeFor("a");
-    expect(() => store.add("calendar:danas", "M", "yesterday")).toThrow(
+    expect(() => store.add(null, "calendar:danas", "M", "yesterday")).toThrow(
       DashboardWidgetValidationError,
     );
   });
@@ -218,39 +220,39 @@ describe("DashboardWidgetStore.add", () => {
 describe("DashboardWidgetStore.remove", () => {
   it("removes one placement, leaving the rest in order", () => {
     const { store } = storeFor("a");
-    const layout = store.listLayout();
-    store.remove(layout[1]!.instanceId, NOW);
+    const layout = store.listLayout(null);
+    store.remove(null, layout[1]!.instanceId, NOW);
     expect(widgetIds(store)).toEqual(DEFAULT_WIDGET_IDS.filter((_, index) => index !== 1));
   });
 
   it("throws for an instance this profile does not have", () => {
     const { store } = storeFor("a");
-    expect(() => store.remove("nema-ga", NOW)).toThrow(DashboardWidgetNotFoundError);
+    expect(() => store.remove(null, "nema-ga", NOW)).toThrow(DashboardWidgetNotFoundError);
   });
 
   it("cannot reach another profile's placement", () => {
     const first = storeFor("a");
     const second = storeFor("b");
-    const stolen = first.store.add("finance:budzet", "M", NOW).at(-1)!.instanceId;
-    expect(() => second.store.remove(stolen, LATER)).toThrow(DashboardWidgetNotFoundError);
-    expect(first.store.listLayout().some((e) => e.instanceId === stolen)).toBe(true);
+    const stolen = first.store.add(null, "finance:budzet", "M", NOW).at(-1)!.instanceId;
+    expect(() => second.store.remove(null, stolen, LATER)).toThrow(DashboardWidgetNotFoundError);
+    expect(first.store.listLayout(null).some((e) => e.instanceId === stolen)).toBe(true);
   });
 });
 
 describe("DashboardWidgetStore.setSize", () => {
   it("changes one placement's size and nothing else", () => {
     const { store } = storeFor("a");
-    const target = store.listLayout()[3]!;
-    const layout = store.setSize(target.instanceId, "S", NOW);
+    const target = store.listLayout(null)[3]!;
+    const layout = store.setSize(null, target.instanceId, "S", NOW);
     expect(layout.map((entry) => entry.widgetId)).toEqual(DEFAULT_WIDGET_IDS);
     expect(layout[3]?.size).toBe("S");
   });
 
   it("stamps updated_at without touching created_at", () => {
     const { store } = storeFor("a");
-    store.add("finance:budzet", "M", NOW);
-    const target = store.listLayout()[0]!;
-    store.setSize(target.instanceId, "L", LATER);
+    store.add(null, "finance:budzet", "M", NOW);
+    const target = store.listLayout(null)[0]!;
+    store.setSize(null, target.instanceId, "L", LATER);
     const row = store.listAll().find((entry) => entry.instanceId === target.instanceId);
     expect(row?.createdAt).toBe(NOW);
     expect(row?.updatedAt).toBe(LATER);
@@ -258,24 +260,24 @@ describe("DashboardWidgetStore.setSize", () => {
 
   it("refuses an unknown size", () => {
     const { store } = storeFor("a");
-    const target = store.listLayout()[0]!;
-    expect(() => store.setSize(target.instanceId, "XL" as never, NOW)).toThrow(
+    const target = store.listLayout(null)[0]!;
+    expect(() => store.setSize(null, target.instanceId, "XL" as never, NOW)).toThrow(
       DashboardWidgetValidationError,
     );
   });
 
   it("throws for an instance this profile does not have", () => {
     const { store } = storeFor("a");
-    expect(() => store.setSize("nema-ga", "L", NOW)).toThrow(DashboardWidgetNotFoundError);
+    expect(() => store.setSize(null, "nema-ga", "L", NOW)).toThrow(DashboardWidgetNotFoundError);
   });
 });
 
 describe("DashboardWidgetStore.move", () => {
   it("moves a placement between two neighbours", () => {
     const { store } = storeFor("a");
-    const layout = store.listLayout();
+    const layout = store.listLayout(null);
     // Take the last entry and drop it between the first and the second.
-    store.move(layout[4]!.instanceId, layout[0]!.instanceId, layout[1]!.instanceId, NOW);
+    store.move(null, layout[4]!.instanceId, layout[0]!.instanceId, layout[1]!.instanceId, NOW);
     expect(widgetIds(store)).toEqual([
       DEFAULT_WIDGET_IDS[0],
       DEFAULT_WIDGET_IDS[4],
@@ -287,12 +289,12 @@ describe("DashboardWidgetStore.move", () => {
 
   it("prepends when `beforeId` is null and appends when `afterId` is null", () => {
     const { store } = storeFor("a");
-    const layout = store.listLayout();
-    store.move(layout[2]!.instanceId, null, layout[0]!.instanceId, NOW);
+    const layout = store.listLayout(null);
+    store.move(null, layout[2]!.instanceId, null, layout[0]!.instanceId, NOW);
     expect(widgetIds(store)[0]).toBe(DEFAULT_WIDGET_IDS[2]);
 
-    const moved = store.listLayout();
-    store.move(moved[0]!.instanceId, moved.at(-1)!.instanceId, null, LATER);
+    const moved = store.listLayout(null);
+    store.move(null, moved[0]!.instanceId, moved.at(-1)!.instanceId, null, LATER);
     expect(widgetIds(store).at(-1)).toBe(DEFAULT_WIDGET_IDS[2]);
   });
 
@@ -303,9 +305,9 @@ describe("DashboardWidgetStore.move", () => {
     // gap; the ones after that are what force the renumber-and-retry inside
     // `placeBetween`.
     for (let index = 0; index < 12; index += 1) {
-      const added = store.add(`finance:w${index}`, "S", NOW);
-      const layout = store.listLayout();
-      store.move(added.at(-1)!.instanceId, layout[0]!.instanceId, layout[1]!.instanceId, NOW);
+      const added = store.add(null, `finance:w${index}`, "S", NOW);
+      const layout = store.listLayout(null);
+      store.move(null, added.at(-1)!.instanceId, layout[0]!.instanceId, layout[1]!.instanceId, NOW);
     }
     const ids = widgetIds(store);
     expect(ids[0]).toBe(DEFAULT_WIDGET_IDS[0]);
@@ -319,25 +321,116 @@ describe("DashboardWidgetStore.move", () => {
 
   it("refuses to order a placement against itself", () => {
     const { store } = storeFor("a");
-    const layout = store.listLayout();
-    expect(() => store.move(layout[0]!.instanceId, layout[0]!.instanceId, null, NOW)).toThrow(
+    const layout = store.listLayout(null);
+    expect(() => store.move(null, layout[0]!.instanceId, layout[0]!.instanceId, null, NOW)).toThrow(
       DashboardWidgetValidationError,
     );
-    expect(() => store.move(layout[0]!.instanceId, null, layout[0]!.instanceId, NOW)).toThrow(
+    expect(() => store.move(null, layout[0]!.instanceId, null, layout[0]!.instanceId, NOW)).toThrow(
       DashboardWidgetValidationError,
     );
   });
 
   it("throws for a neighbour this profile does not have", () => {
     const { store } = storeFor("a");
-    const layout = store.listLayout();
-    expect(() => store.move(layout[0]!.instanceId, "nema-ga", null, NOW)).toThrow(
+    const layout = store.listLayout(null);
+    expect(() => store.move(null, layout[0]!.instanceId, "nema-ga", null, NOW)).toThrow(
       DashboardWidgetNotFoundError,
     );
   });
 
   it("throws for an instance this profile does not have", () => {
     const { store } = storeFor("a");
-    expect(() => store.move("nema-ga", null, null, NOW)).toThrow(DashboardWidgetNotFoundError);
+    expect(() => store.move(null, "nema-ga", null, null, NOW)).toThrow(DashboardWidgetNotFoundError);
+  });
+});
+
+describe("DashboardWidgetStore per-set scoping (DASH-008 / ADR-055)", () => {
+  function setFor(profileId: string, name: string): string {
+    return new DashboardSetStore(db.raw, profileId).create(name, NOW).id;
+  }
+
+  it("answers a named set with the default arrangement while it has no rows — an EMPTY set is the default per set", () => {
+    const { store, profileId } = storeFor("a");
+    const setId = setFor(profileId, "Fakultet");
+    expect(store.listLayout(setId).map((e) => e.widgetId)).toEqual(DEFAULT_WIDGET_IDS);
+    expect(rowCount()).toBe(0);
+  });
+
+  it("gives the same profile's NULL set and named set different default instance ids", () => {
+    const { store, profileId } = storeFor("a");
+    const setId = setFor(profileId, "Fakultet");
+    const nullIds = new Set(store.listLayout(null).map((e) => e.instanceId));
+    for (const entry of store.listLayout(setId)) {
+      expect(nullIds.has(entry.instanceId)).toBe(false);
+    }
+  });
+
+  it("materializes and edits one set without touching the other", () => {
+    const { store, profileId } = storeFor("a");
+    const setId = setFor(profileId, "Fakultet");
+    store.add(setId, "finance:budzet", "M", NOW);
+    expect(rowCount()).toBe(DEFAULT_DASHBOARD_LAYOUT.length + 1);
+    // The NULL set is still on its (unstored) default.
+    expect(store.listLayout(null).map((e) => e.widgetId)).toEqual(DEFAULT_WIDGET_IDS);
+    expect(store.listAll().every((row) => row.setId === setId)).toBe(true);
+
+    // And editing the NULL set materializes ITS default without touching the set's rows.
+    store.setSize(null, store.listLayout(null)[0]!.instanceId, "L", LATER);
+    expect(rowCount()).toBe(DEFAULT_DASHBOARD_LAYOUT.length * 2 + 1);
+    expect(store.listLayout(setId)).toHaveLength(DEFAULT_DASHBOARD_LAYOUT.length + 1);
+  });
+
+  it("cannot reach a placement through the wrong set", () => {
+    const { store, profileId } = storeFor("a");
+    const setId = setFor(profileId, "Fakultet");
+    const placed = store.add(setId, "finance:budzet", "M", NOW).at(-1)!.instanceId;
+    expect(() => store.remove(null, placed, LATER)).toThrow(DashboardWidgetNotFoundError);
+    expect(() => store.setSize(null, placed, "L", LATER)).toThrow(DashboardWidgetNotFoundError);
+    expect(store.listLayout(setId).some((e) => e.instanceId === placed)).toBe(true);
+  });
+
+  it("cannot order a placement against a neighbour from another set", () => {
+    const { store, profileId } = storeFor("a");
+    const setId = setFor(profileId, "Fakultet");
+    store.add(setId, "finance:budzet", "M", NOW);
+    const inSet = store.listLayout(setId)[0]!.instanceId;
+    store.add(null, "finance:racuni", "M", NOW);
+    const inNull = store.listLayout(null)[0]!.instanceId;
+    expect(() => store.move(setId, inSet, inNull, null, LATER)).toThrow(
+      DashboardWidgetNotFoundError,
+    );
+  });
+
+  it("removing a named set's last widget puts that set's default back — reset stays free per set", () => {
+    const { store, profileId } = storeFor("a");
+    const setId = setFor(profileId, "Fakultet");
+    store.add(setId, "finance:budzet", "M", NOW);
+    for (const entry of store.listLayout(setId)) store.remove(setId, entry.instanceId, LATER);
+    expect(store.listLayout(setId).map((e) => e.widgetId)).toEqual(DEFAULT_WIDGET_IDS);
+  });
+
+  it("refuses a set this profile does not have", () => {
+    const first = storeFor("a");
+    const second = storeFor("b");
+    const foreign = setFor(second.profileId, "Tudja");
+    expect(() => first.store.add(foreign, "finance:budzet", "M", NOW)).toThrow(
+      DashboardSetNotFoundError,
+    );
+    expect(() => first.store.add("nema-ga", "finance:budzet", "M", NOW)).toThrow(
+      DashboardSetNotFoundError,
+    );
+    // Reads are gated identically: a layout of a set that is not there is a
+    // question about nothing.
+    expect(() => first.store.listLayout("nema-ga")).toThrow(DashboardSetNotFoundError);
+  });
+
+  it("listAll carries every set's rows with their setId — the exporter reads one profile whole", () => {
+    const { store, profileId } = storeFor("a");
+    const setId = setFor(profileId, "Fakultet");
+    store.add(null, "finance:budzet", "M", NOW);
+    store.add(setId, "finance:racuni", "M", NOW);
+    const rows = store.listAll();
+    expect(rows).toHaveLength(DEFAULT_DASHBOARD_LAYOUT.length * 2 + 2);
+    expect(new Set(rows.map((row) => row.setId))).toEqual(new Set([null, setId]));
   });
 });

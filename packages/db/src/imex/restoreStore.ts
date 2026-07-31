@@ -118,6 +118,11 @@ export const RESTORE_WIPE_TABLES = [
   // no rows IS the default arrangement (`DashboardWidgetStore`), so a profile
   // that never rearranged its dashboard restores to the same default it had.
   "dashboard_widgets",
+  // The named boards (migration 043 / ADR-055), AFTER the widgets that
+  // reference them — children before parents, the rule this whole list keeps.
+  // Zero rows in the archive likewise restores a profile with only „Početna“,
+  // which is not a row and so needs nothing written to exist.
+  "dashboard_sets",
 ] as const;
 
 type WipeTable = (typeof RESTORE_WIPE_TABLES)[number];
@@ -229,6 +234,7 @@ export class RestoreStore {
   private readonly insertStudySettings: Database.Statement;
   private readonly insertCalendarSettings: Database.Statement;
   private readonly insertDashboardSettings: Database.Statement;
+  private readonly insertDashboardSet: Database.Statement;
   private readonly insertDashboardWidget: Database.Statement;
 
   constructor(
@@ -438,13 +444,17 @@ export class RestoreStore {
     this.insertDashboardSettings = db.prepare(
       `INSERT INTO dashboard_settings
          (profile_id, background_hash, background_mime, background_size_bytes,
-          background_dim, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          background_dim, active_set_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    this.insertDashboardSet = db.prepare(
+      `INSERT INTO dashboard_sets (id, profile_id, name, position, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
     );
     this.insertDashboardWidget = db.prepare(
       `INSERT INTO dashboard_widgets
-         (profile_id, instance_id, widget_id, size, position, config, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (profile_id, instance_id, widget_id, size, set_id, position, config, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
   }
 
@@ -902,6 +912,9 @@ export class RestoreStore {
       // pre-1.9.0 archive has, and the absence of a row IS the default
       // (`DashboardSettingsStore.get`) — so nothing is written to say "no
       // background, dim 40", because that is what no row already means.
+      // `activeSetId` rides along (ADR-055): the parser reference-checked it
+      // against the archive's own sets, and null — every pre-1.21.0 archive —
+      // is „Početna“, which is not a row and needs nothing to point at.
       for (const dashboard of input.data.dashboardSettings) {
         this.insertDashboardSettings.run(
           this.profileId,
@@ -909,8 +922,26 @@ export class RestoreStore {
           dashboard.backgroundMime,
           dashboard.backgroundSizeBytes,
           dashboard.backgroundDim,
+          dashboard.activeSetId ?? null,
           now,
           now,
+        );
+        written += 1;
+      }
+
+      // The named boards (ADR-055), replaced WHOLESALE with everything else
+      // here: the wipe above took the target's own sets (and their widget rows)
+      // out, and what the archive carries is what stands afterwards. Timestamps
+      // from the ARCHIVE, the widget rule below: a board is a row the user made
+      // at a moment.
+      for (const set of input.data.dashboardSets) {
+        this.insertDashboardSet.run(
+          set.id,
+          this.profileId,
+          set.name,
+          set.position,
+          set.createdAt,
+          set.updatedAt,
         );
         written += 1;
       }
@@ -920,12 +951,14 @@ export class RestoreStore {
       // `now`, unlike the settings row: a placement is a row the user made at a
       // moment, and a restore reproduces rows (R-reproduce-byte-for-byte), while
       // the settings row is a resolved singleton with no history to preserve.
+      // `setId` null — the default board — is every pre-1.21.0 archive's shape.
       for (const widget of input.data.dashboardWidgets) {
         this.insertDashboardWidget.run(
           this.profileId,
           widget.instanceId,
           widget.widgetId,
           widget.size,
+          widget.setId ?? null,
           widget.position,
           widget.config,
           widget.createdAt,

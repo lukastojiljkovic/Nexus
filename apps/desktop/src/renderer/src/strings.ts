@@ -287,6 +287,45 @@ export const strings = {
       added: "već dodat",
       close: "Zatvori",
     },
+    /**
+     * Named dashboards (DASH-008 / ADR-055): the typographic switcher beside
+     * the greeting, its popover, and the edit-mode manage actions. The default
+     * board is named here in COPY ONLY — it is not a row, which is exactly why
+     * it can be neither renamed nor deleted.
+     */
+    sets: {
+      /** The default board's display name. */
+      defaultName: "Početna",
+      /** Accessible label on the switcher trigger; its visible content is the active board's name. */
+      switcherLabel: "Izbor table",
+      /** Accessible label on the „⋯“ manage menu beside the switcher (edit mode only). */
+      manageLabel: "Radnje nad tablama",
+      /** In the switcher list (edit mode only) AND in the manage menu: opens the name line. */
+      create: "Nova tabla…",
+      rename: "Preimenuj tablu",
+      remove: "Obriši tablu",
+      /** The inline name line the switcher row becomes — the tasks-rail idiom. */
+      namePlaceholder: "Naziv table",
+      createLabel: "Nova tabla",
+      renameLabel: "Preimenuj tablu",
+      save: "Sačuvaj",
+      cancel: "Otkaži",
+      /**
+       * The house confirm (the recurrence-dialog recipe) for deleting a board:
+       * what goes is the ARRANGEMENT — the content the cards read lives in its
+       * modules and is untouched, and saying so is what makes the question
+       * answerable.
+       */
+      deleteDialog: {
+        title: "Obriši tablu",
+        question:
+          "Briše se samo raspored kartica na ovoj tabli. Sadržaj — zadaci, događaji, beleške — ostaje netaknut.",
+        confirm: "Obriši",
+        cancel: "Otkaži",
+      },
+      /** A set write that did not land — the layout's own `edit.failed`, for the boards. */
+      failed: "Promena tabli nije uspela. Pokušaj ponovo.",
+    },
   },
 
   modulePlaceholder: {
@@ -2355,6 +2394,8 @@ export const strings = {
           "Zabeležena obaveštenja se ne uvoze — taj spisak pripada profilu u kom je nastao.",
         "dashboard-settings-not-imported":
           "Pozadina kontrolne table se ne uvozi — izgled tvoje table ostaje tvoj.",
+        "dashboard-sets-not-imported":
+          "Imenovane table iz arhive se ne uvoze — tvoje table ostaju tvoje.",
         "dashboard-widgets-not-imported":
           "Raspored kontrolne table se ne uvozi — tvoja tabla ostaje kakva jeste.",
         "study-settings-not-imported":

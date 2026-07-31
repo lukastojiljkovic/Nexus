@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import {
+  DashboardSetNotFoundError,
   DashboardWidgetNotFoundError,
   DashboardWidgetValidationError,
 } from "../errors.js";
@@ -26,13 +27,15 @@ const ISO_8601_DATETIME =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})?$/;
 
 /**
- * The arrangement a profile that has never edited its dashboard sees (ADR-045
- * section 2): today's five cards, in today's DOM order, each at the medium
- * preset. Computed in code rather than seeded by a migration, for the reason
- * `DashboardSettingsStore`'s defaults are: a profile that never touched the
+ * The arrangement a board that has never been edited shows (ADR-045 section 2):
+ * today's five cards, in today's DOM order, each at the medium preset. Computed
+ * in code rather than seeded by a migration, for the reason
+ * `DashboardSettingsStore`'s defaults are: a board that never touched its
  * layout costs no row, and the default lives in ONE place instead of being
- * copied into every profile at creation — so changing it later reaches every
- * profile that never overrode it, which a seed could not do.
+ * copied into every board at creation — so changing it later reaches every
+ * board that never overrode it, which a seed could not do. Since ADR-055 this
+ * holds PER SET: an empty named set shows this arrangement exactly as the
+ * default (NULL) set always has.
  *
  * The ids are the `moduleId:widgetId` slugs the five owning manifests publish
  * (`apps/desktop/src/renderer/src/modules.ts`); ASCII, because an id is a key,
@@ -70,7 +73,9 @@ export interface DashboardWidgetInstance {
 /** One stored row, whole — what the archive carries and what a restore reproduces. */
 export interface DashboardWidget extends DashboardWidgetInstance {
   profileId: string;
-  /** Sparse sort key within the profile's layout; may be negative. */
+  /** The named board this placement belongs to (ADR-055), or null for the default one. */
+  setId: string | null;
+  /** Sparse sort key within the board's layout; may be negative. */
   position: number;
   createdAt: string;
   updatedAt: string;
@@ -81,6 +86,7 @@ interface WidgetRow {
   instance_id: string;
   widget_id: string;
   size: DashboardWidgetSize;
+  set_id: string | null;
   position: number;
   config: string | null;
   created_at: string;
@@ -88,48 +94,64 @@ interface WidgetRow {
 }
 
 const WIDGET_COLUMNS =
-  "profile_id, instance_id, widget_id, size, position, config, created_at, updated_at";
+  "profile_id, instance_id, widget_id, size, set_id, position, config, created_at, updated_at";
 
 /**
  * The instance id a DEFAULT arrangement's entry is handed out under, and the
  * very id materialization then writes it as.
  *
  * Deterministic on purpose, and this is the hinge of the whole get-or-default
- * arrangement: `listLayout` hands the renderer five entries for a profile that
+ * arrangement: `listLayout` hands the renderer five entries for a board that
  * has no rows, and the renderer then names one of them in `setSize`/`move`/
  * `remove`. If materialization minted fresh ids, that first edit would name a
  * placement nothing had ever written — so the default's ids must be the ones the
  * rows get.
  *
  * Scoped by profile because `instance_id` is the table's PRIMARY KEY, which is
- * global: two profiles materializing the same default would otherwise collide on
- * the first id. A minted id (`uuidv7`) can never look like one of these, so the
- * two families never meet.
+ * global — and, since ADR-055, by SET: every board materializes the same five
+ * entries, so two boards of one profile would otherwise collide on the first
+ * id. The NULL set keeps the pre-ADR-055 spelling exactly, so a default row a
+ * profile materialized before named boards existed is still the row its layout
+ * names today. The two spellings can never meet: the set-scoped id carries one
+ * more `:`-segment than the default-set one, and a minted id (`uuidv7`) looks
+ * like neither.
  */
-function defaultInstanceId(profileId: string, widgetId: string): string {
-  return `default:${profileId}:${widgetId}`;
+function defaultInstanceId(profileId: string, setId: string | null, widgetId: string): string {
+  return setId === null
+    ? `default:${profileId}:${widgetId}`
+    : `default:${profileId}:${setId}:${widgetId}`;
 }
 
 /**
- * The dashboard's widget layout for one profile (DASH-002 / ADR-045, migration
- * 032), over prepared, parameterized statements (SEC-API-03; every value is
- * bound, never interpolated). Constructed one per profile and reused, like every
- * other store here, and every statement is scoped by `profile_id`.
+ * The dashboard's widget layouts for one profile (DASH-002 / ADR-045, migration
+ * 032; named boards per DASH-008 / ADR-055, migration 043), over prepared,
+ * parameterized statements (SEC-API-03; every value is bound, never
+ * interpolated). Constructed one per profile and reused, like every other store
+ * here, and every statement is scoped by `profile_id`.
  *
- * **Get-or-default, materialized on first write.** `listLayout` answers with
- * `DEFAULT_DASHBOARD_LAYOUT` while the profile has no rows — the
+ * **Every read and write is additionally scoped by `set_id`, where NULL is the
+ * default board** („Početna“, ADR-055): each method takes the board it operates
+ * on, `set_id IS ?` is the bound-null spelling of that scope, and a non-null
+ * scope is gated through `requireSetScope` so a board another profile owns — or
+ * one that does not exist — is a `DashboardSetNotFoundError`, never a layout of
+ * nothing. One board's placements are invisible to a call scoped to another,
+ * including as `move` neighbours.
+ *
+ * **Get-or-default, materialized on first write — PER BOARD.** `listLayout`
+ * answers with `DEFAULT_DASHBOARD_LAYOUT` while the board has no rows — the
  * `DashboardSettingsStore` / `ntf_settings` arrangement, one step further along:
  * the first MUTATION writes that whole default out as real rows and then applies
  * the change to them. Materializing the whole thing rather than just the edited
  * entry is the point: a user who resizes one card must not lose the other four,
- * and a table holding a single row would say "this profile's layout is one
+ * and a table holding a single row would say "this board's layout is one
  * widget", which is not what they did.
  *
  * A consequence worth stating out loud, because it is a product behaviour and
- * not a bug: no rows IS the default, so removing the LAST widget puts the
- * default arrangement back rather than leaving an empty dashboard. An empty
- * layout is not a state this table can express, and "remove everything" is
- * therefore also how a user resets.
+ * not a bug: no rows IS the default, so removing a board's LAST widget puts the
+ * default arrangement back rather than leaving an empty board. An empty layout
+ * is not a state this table can express, and "remove everything" is therefore
+ * also how a user resets — on the default board and on every named one alike
+ * (ADR-055's "reset stays free").
  *
  * **Nothing here knows which widgets exist.** A row whose `widgetId` no manifest
  * publishes — a module dropped from the build, or one the user switched off — is
@@ -140,16 +162,18 @@ function defaultInstanceId(profileId: string, widgetId: string): string {
  * could never name a widget at all is refused at the door.
  *
  * **Ordering** is the sparse `position` idiom of `taskListStore` — same
- * arithmetic, same helpers, one scope per profile — read and written through
- * `placeBetween`. Two copies of "where does this row go" could only ever drift
- * apart, so there is one.
+ * arithmetic, same helpers, one scope per (profile, board) — read and written
+ * through `placeBetween`. Two copies of "where does this row go" could only
+ * ever drift apart, so there is one.
  */
 export class DashboardWidgetStore {
   private readonly selectLayout: Database.Statement;
+  private readonly selectAll: Database.Statement;
   private readonly countWidgets: Database.Statement;
   private readonly selectMaxPosition: Database.Statement;
   private readonly selectPosition: Database.Statement;
   private readonly selectScopeIds: Database.Statement;
+  private readonly selectSetId: Database.Statement;
   private readonly insertWidget: Database.Statement;
   private readonly updateSize: Database.Statement;
   private readonly updatePlacement: Database.Statement;
@@ -161,53 +185,68 @@ export class DashboardWidgetStore {
     private readonly profileId: string,
   ) {
     // `instance_id` breaks a position tie, so the order is total even for rows
-    // a hand-made archive gave the same sort key.
+    // a hand-made archive gave the same sort key. `set_id IS ?` rather than
+    // `= ?`, because NULL — the default board — is a value this scope must be
+    // able to bind.
     this.selectLayout = db.prepare(
       `SELECT ${WIDGET_COLUMNS} FROM dashboard_widgets
-       WHERE profile_id = ? ORDER BY position, instance_id`,
+       WHERE profile_id = ? AND set_id IS ? ORDER BY position, instance_id`,
+    );
+    // The whole profile, boards and all, for the exporter — ordered by board
+    // first so one archive lists each board's rows together, in layout order.
+    this.selectAll = db.prepare(
+      `SELECT ${WIDGET_COLUMNS} FROM dashboard_widgets
+       WHERE profile_id = ? ORDER BY set_id, position, instance_id`,
     );
     this.countWidgets = db.prepare(
-      `SELECT count(*) AS n FROM dashboard_widgets WHERE profile_id = ?`,
+      `SELECT count(*) AS n FROM dashboard_widgets WHERE profile_id = ? AND set_id IS ?`,
     );
     this.selectMaxPosition = db.prepare(
-      `SELECT max(position) AS maxPosition FROM dashboard_widgets WHERE profile_id = ?`,
+      `SELECT max(position) AS maxPosition FROM dashboard_widgets
+       WHERE profile_id = ? AND set_id IS ?`,
     );
     this.selectPosition = db.prepare(
-      `SELECT position FROM dashboard_widgets WHERE instance_id = ? AND profile_id = ?`,
+      `SELECT position FROM dashboard_widgets
+       WHERE instance_id = ? AND profile_id = ? AND set_id IS ?`,
     );
     this.selectScopeIds = db.prepare(
       `SELECT instance_id FROM dashboard_widgets
-       WHERE profile_id = ? ORDER BY position, instance_id`,
+       WHERE profile_id = ? AND set_id IS ? ORDER BY position, instance_id`,
+    );
+    this.selectSetId = db.prepare(
+      `SELECT id FROM dashboard_sets WHERE id = ? AND profile_id = ?`,
     );
     this.insertWidget = db.prepare(
       `INSERT INTO dashboard_widgets
-         (profile_id, instance_id, widget_id, size, position, config, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (profile_id, instance_id, widget_id, size, set_id, position, config, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     this.updateSize = db.prepare(
       `UPDATE dashboard_widgets SET size = ?, updated_at = ?
-       WHERE instance_id = ? AND profile_id = ?`,
+       WHERE instance_id = ? AND profile_id = ? AND set_id IS ?`,
     );
     this.updatePlacement = db.prepare(
       `UPDATE dashboard_widgets SET position = ?, updated_at = ?
-       WHERE instance_id = ? AND profile_id = ?`,
+       WHERE instance_id = ? AND profile_id = ? AND set_id IS ?`,
     );
     // A renumber re-spaces placements the user did not touch, so it deliberately
     // leaves their `updated_at` alone — `TaskListStore`'s rule, verbatim.
     this.updatePosition = db.prepare(
-      `UPDATE dashboard_widgets SET position = ? WHERE instance_id = ? AND profile_id = ?`,
+      `UPDATE dashboard_widgets SET position = ?
+       WHERE instance_id = ? AND profile_id = ? AND set_id IS ?`,
     );
     this.deleteWidget = db.prepare(
-      `DELETE FROM dashboard_widgets WHERE instance_id = ? AND profile_id = ?`,
+      `DELETE FROM dashboard_widgets WHERE instance_id = ? AND profile_id = ? AND set_id IS ?`,
     );
   }
 
-  /** This profile's layout in draw order — the default arrangement while it has no rows. Never writes. */
-  listLayout(): DashboardWidgetInstance[] {
-    const rows = this.selectRows();
+  /** One board's layout in draw order — the default arrangement while it has no rows. Never writes. */
+  listLayout(setId: string | null): DashboardWidgetInstance[] {
+    const scope = this.requireSetScope(setId);
+    const rows = this.selectRows(scope);
     if (rows.length === 0) {
       return DEFAULT_DASHBOARD_LAYOUT.map((entry) => ({
-        instanceId: defaultInstanceId(this.profileId, entry.widgetId),
+        instanceId: defaultInstanceId(this.profileId, scope, entry.widgetId),
         widgetId: entry.widgetId,
         size: entry.size,
         config: null,
@@ -217,55 +256,65 @@ export class DashboardWidgetStore {
   }
 
   /**
-   * The STORED rows, whole and in order — EMPTY while the profile is on the
-   * default arrangement. That emptiness is the honest thing for an archive to
-   * carry: a profile that never arranged its dashboard has nothing to reproduce,
-   * and a restore reading zero rows leaves the target on the default, which is
-   * exactly where the source was.
+   * The STORED rows of the WHOLE profile — every board's, each row naming its
+   * board — EMPTY for every board still on the default arrangement. That
+   * emptiness is the honest thing for an archive to carry: a board that never
+   * arranged itself has nothing to reproduce, and a restore reading zero rows
+   * leaves the target on the default, which is exactly where the source was.
    */
   listAll(): DashboardWidget[] {
-    return this.selectRows().map(toWidget);
+    return (this.selectAll.all(this.profileId) as WidgetRow[]).map(toWidget);
   }
 
-  /** Places a widget at the end of the layout (ADR-045). Returns the resulting layout. */
-  add(widgetId: string, size: DashboardWidgetSize, now: string): DashboardWidgetInstance[] {
+  /** Places a widget at the end of one board's layout (ADR-045). Returns that board's resulting layout. */
+  add(
+    setId: string | null,
+    widgetId: string,
+    size: DashboardWidgetSize,
+    now: string,
+  ): DashboardWidgetInstance[] {
     const validNow = validateDateTime(now);
     const validWidgetId = validateWidgetId(widgetId);
     const validSize = validateSize(size);
 
     return this.db.transaction((): DashboardWidgetInstance[] => {
-      this.materializeDefault(validNow);
-      const position = nextPosition(this.maxPosition());
+      const scope = this.requireSetScope(setId);
+      this.materializeDefault(scope, validNow);
+      const position = nextPosition(this.maxPosition(scope));
       this.insertWidget.run(
         this.profileId,
         uuidv7(),
         validWidgetId,
         validSize,
+        scope,
         position,
         null,
         validNow,
         validNow,
       );
-      return this.listLayout();
+      return this.listLayout(scope);
     })();
   }
 
   /**
-   * Removes one placement. Removing the LAST one leaves the profile back on the
-   * default arrangement — see the class comment: no rows IS the default.
+   * Removes one placement from its board. Removing the LAST one leaves the
+   * board back on the default arrangement — see the class comment: no rows IS
+   * the default, per board.
    */
-  remove(instanceId: string, now: string): DashboardWidgetInstance[] {
+  remove(setId: string | null, instanceId: string, now: string): DashboardWidgetInstance[] {
     const validNow = validateDateTime(now);
     return this.db.transaction((): DashboardWidgetInstance[] => {
-      this.materializeDefault(validNow);
-      this.requirePlacement(instanceId);
-      this.deleteWidget.run(instanceId, this.profileId);
-      return this.listLayout();
+      const scope = this.requireSetScope(setId);
+      this.materializeDefault(scope, validNow);
+      this.requirePlacement(scope, instanceId);
+      this.deleteWidget.run(instanceId, this.profileId, scope);
+      return this.listLayout(scope);
     })();
   }
 
   /** Changes one placement's size preset, leaving its position alone. */
   setSize(
+    setId: string | null,
     instanceId: string,
     size: DashboardWidgetSize,
     now: string,
@@ -273,21 +322,23 @@ export class DashboardWidgetStore {
     const validNow = validateDateTime(now);
     const validSize = validateSize(size);
     return this.db.transaction((): DashboardWidgetInstance[] => {
-      this.materializeDefault(validNow);
-      this.requirePlacement(instanceId);
-      this.updateSize.run(validSize, validNow, instanceId, this.profileId);
-      return this.listLayout();
+      const scope = this.requireSetScope(setId);
+      this.materializeDefault(scope, validNow);
+      this.requirePlacement(scope, instanceId);
+      this.updateSize.run(validSize, validNow, instanceId, this.profileId, scope);
+      return this.listLayout(scope);
     })();
   }
 
   /**
-   * Re-orders a placement within the profile's layout. `beforeId`/`afterId` are
+   * Re-orders a placement within its board's layout. `beforeId`/`afterId` are
    * the placements it lands BETWEEN, either null at an end of the layout — the
    * pair API `TaskListStore.moveList` established, so a drag-and-drop caller
    * states its intent in terms of what it can see rather than an index it would
-   * have to keep in step.
+   * have to keep in step. Neighbours resolve within the SAME board only.
    */
   move(
+    setId: string | null,
     instanceId: string,
     beforeId: string | null,
     afterId: string | null,
@@ -302,11 +353,12 @@ export class DashboardWidgetStore {
     // made room for are one edit: half of them is a layout re-spaced for a
     // placement that never arrived.
     return this.db.transaction((): DashboardWidgetInstance[] => {
-      this.materializeDefault(validNow);
-      this.requirePlacement(instanceId);
-      const position = this.placeInLayout(beforeId, afterId);
-      this.updatePlacement.run(position, validNow, instanceId, this.profileId);
-      return this.listLayout();
+      const scope = this.requireSetScope(setId);
+      this.materializeDefault(scope, validNow);
+      this.requirePlacement(scope, instanceId);
+      const position = this.placeInLayout(scope, beforeId, afterId);
+      this.updatePlacement.run(position, validNow, instanceId, this.profileId, scope);
+      return this.listLayout(scope);
     })();
   }
 
@@ -315,20 +367,36 @@ export class DashboardWidgetStore {
   // ---------------------------------------------------------------------
 
   /**
+   * The gate every board scope goes through (ADR-055): NULL — the default
+   * board — always passes, because it is not a row and cannot be missing; a
+   * non-null id must name THIS profile's own set. Returns the scope so callers
+   * read as "resolve once, use everywhere".
+   */
+  private requireSetScope(setId: string | null): string | null {
+    if (setId === null) return null;
+    const row = this.selectSetId.get(setId, this.profileId) as { id: string } | undefined;
+    if (!row) {
+      throw new DashboardSetNotFoundError(`No dashboard set "${setId}" in this profile.`);
+    }
+    return setId;
+  }
+
+  /**
    * Writes `DEFAULT_DASHBOARD_LAYOUT` out as real rows when — and only when —
-   * this profile has none. Every mutation calls it first, so an edit always
+   * this board has none. Every mutation calls it first, so an edit always
    * lands on a complete layout rather than on the one entry it touched.
    */
-  private materializeDefault(now: string): void {
-    if (this.count() > 0) return;
+  private materializeDefault(setId: string | null, now: string): void {
+    if (this.count(setId) > 0) return;
     let position = 0;
     for (const entry of DEFAULT_DASHBOARD_LAYOUT) {
       position += TASK_ORDER_GAP;
       this.insertWidget.run(
         this.profileId,
-        defaultInstanceId(this.profileId, entry.widgetId),
+        defaultInstanceId(this.profileId, setId, entry.widgetId),
         entry.widgetId,
         entry.size,
+        setId,
         position,
         null,
         now,
@@ -337,14 +405,23 @@ export class DashboardWidgetStore {
     }
   }
 
-  /** The position a placement takes between two of its own layout's neighbours, renumbering once if the gap has run out. */
-  private placeInLayout(beforeId: string | null, afterId: string | null): number {
+  /** The position a placement takes between two of its own board's neighbours, renumbering once if the gap has run out. */
+  private placeInLayout(
+    setId: string | null,
+    beforeId: string | null,
+    afterId: string | null,
+  ): number {
     const position = placeBetween(
-      (siblingId) => this.requirePlacement(siblingId),
+      (siblingId) => this.requirePlacement(setId, siblingId),
       () => {
-        const ids = this.selectScopeIds.all(this.profileId) as { instance_id: string }[];
+        const ids = this.selectScopeIds.all(this.profileId, setId) as { instance_id: string }[];
         ids.forEach((row, index) => {
-          this.updatePosition.run((index + 1) * TASK_ORDER_GAP, row.instance_id, this.profileId);
+          this.updatePosition.run(
+            (index + 1) * TASK_ORDER_GAP,
+            row.instance_id,
+            this.profileId,
+            setId,
+          );
         });
       },
       beforeId,
@@ -358,30 +435,31 @@ export class DashboardWidgetStore {
     return position;
   }
 
-  /** Reads a placement's position in this profile or throws — the gate every instance reference goes through. */
-  private requirePlacement(instanceId: string): number {
-    const row = this.selectPosition.get(instanceId, this.profileId) as
+  /** Reads a placement's position in this profile's board or throws — the gate every instance reference goes through. */
+  private requirePlacement(setId: string | null, instanceId: string): number {
+    const row = this.selectPosition.get(instanceId, this.profileId, setId) as
       | { position: number }
       | undefined;
     if (!row) {
       throw new DashboardWidgetNotFoundError(
-        `No dashboard widget "${instanceId}" in this profile.`,
+        `No dashboard widget "${instanceId}" in this profile's set.`,
       );
     }
     return row.position;
   }
 
-  private selectRows(): WidgetRow[] {
-    return this.selectLayout.all(this.profileId) as WidgetRow[];
+  private selectRows(setId: string | null): WidgetRow[] {
+    return this.selectLayout.all(this.profileId, setId) as WidgetRow[];
   }
 
-  private count(): number {
-    return (this.countWidgets.get(this.profileId) as { n: number }).n;
+  private count(setId: string | null): number {
+    return (this.countWidgets.get(this.profileId, setId) as { n: number }).n;
   }
 
-  private maxPosition(): number | null {
-    return (this.selectMaxPosition.get(this.profileId) as { maxPosition: number | null })
-      .maxPosition;
+  private maxPosition(setId: string | null): number | null {
+    return (
+      this.selectMaxPosition.get(this.profileId, setId) as { maxPosition: number | null }
+    ).maxPosition;
   }
 }
 
@@ -403,6 +481,7 @@ function toWidget(row: WidgetRow): DashboardWidget {
   return {
     ...toInstance(row),
     profileId: row.profile_id,
+    setId: row.set_id,
     position: row.position,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

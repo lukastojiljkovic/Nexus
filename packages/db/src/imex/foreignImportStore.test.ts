@@ -18,6 +18,7 @@ import type {
 } from "@nexus/core";
 import {
   CardStore,
+  DashboardSetStore,
   DashboardSettingsStore,
   DashboardWidgetStore,
   DeckStore,
@@ -126,6 +127,7 @@ function emptyProfileData(): ProfileData {
     noteAttachments: [],
     noteVersions: [],
     dashboardSettings: [],
+    dashboardSets: [],
     dashboardWidgets: [],
   };
 }
@@ -713,7 +715,37 @@ describe("ForeignImportStore", () => {
         {
           instanceId: "dw-imported", profileId: target, widgetId: "finance:budzet",
           size: "S", position: 4096, config: '{"a":1}', createdAt: t, updatedAt: t,
+          setId: null,
         },
+      ]);
+    });
+
+    // The same terms one table over (ADR-055): the planner plans sets EMPTY by
+    // design, and the executor stays total over `ProfileData` regardless.
+    it("writes a planned dashboard set, additively and under this profile", () => {
+      const target = createProfile("Odredište");
+      const t = "2026-01-01T00:00:00.000Z";
+      const planned: ProfileData = {
+        ...emptyProfileData(),
+        dashboardSets: [
+          { id: "dset-imported", profileId: "ignored", name: "Tabla", position: 1024, createdAt: t, updatedAt: t },
+        ],
+        dashboardWidgets: [
+          {
+            instanceId: "dw-in-set", profileId: "ignored", widgetId: "finance:budzet",
+            size: "S", position: 1024, config: null, createdAt: t, updatedAt: t, setId: "dset-imported",
+          },
+        ],
+      };
+
+      const written = new ForeignImportStore(db.raw, target).insertPlanned(planned, new Map(), NOW);
+
+      expect(written).toBe(2);
+      expect(new DashboardSetStore(db.raw, target).list()).toEqual([
+        { id: "dset-imported", profileId: target, name: "Tabla", position: 1024, createdAt: t, updatedAt: t },
+      ]);
+      expect(new DashboardWidgetStore(db.raw, target).listAll().map((row) => row.setId)).toEqual([
+        "dset-imported",
       ]);
     });
 

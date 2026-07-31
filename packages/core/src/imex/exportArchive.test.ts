@@ -72,6 +72,7 @@ function emptyInput(): ExportArchiveInput {
       noteAttachments: [],
       noteVersions: [],
       dashboardSettings: [],
+      dashboardSets: [],
       dashboardWidgets: [],
     },
     hash: sha256,
@@ -250,9 +251,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      // SUPERVISOR NOTE: a sibling lane is landing 1.21.0 in parallel — this
-      // pin moves to that number at merge, never below 1.20.0 (ADR-054).
-      expect(manifest.schemaVersion).toBe("1.20.0");
+      expect(manifest.schemaVersion).toBe("1.21.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       // `picture: null` is written out loud rather than omitted: the manifest is
@@ -1093,13 +1092,16 @@ describe("buildExportArchive", () => {
         dashboardSettings: [
           {
             profileId: "p1", backgroundHash: "f".repeat(64), backgroundMime: "image/png",
-            backgroundSizeBytes: 32, backgroundDim: 40,
+            backgroundSizeBytes: 32, backgroundDim: 40, activeSetId: "set1",
           },
+        ],
+        dashboardSets: [
+          { id: "set1", profileId: "p1", name: "Fakultet", position: 1024, createdAt: t, updatedAt: t },
         ],
         dashboardWidgets: [
           {
             instanceId: "dw1", profileId: "p1", widgetId: "calendar:danas", size: "M",
-            position: 1024, config: null, createdAt: t, updatedAt: t,
+            position: 1024, config: null, createdAt: t, updatedAt: t, setId: "set1",
           },
         ],
       };
@@ -1113,7 +1115,7 @@ describe("buildExportArchive", () => {
         study: 11, // 1 each of subject/material/note-link/exam/deck/card/review/plan/block/focus-session + the settings row
         notifications: 1,
         notes: 7, // 1 each of note/folder/tag/tag-link/template/attachment/version
-        dashboard: 2, // the one settings row a profile can ever have + 1 placed widget
+        dashboard: 3, // the one settings row a profile can ever have + 1 named board + 1 placed widget
       });
     });
 
@@ -1252,6 +1254,48 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(emptyInput());
       expect(archive.files.get("data/dashboard.ndjson")).toBe("");
       expect(archive.byModule.dashboard).toBe(0);
+    });
+
+    // DASH-008 / ADR-055: named boards ride between the settings row and the
+    // widgets — after the preferences that lead the file, before the rows that
+    // reference them — and count into the dashboard bucket like any other row.
+    it("writes dashboard sets between the settings row and the widgets, and counts them", () => {
+      const input = emptyInput();
+      const t = "2026-07-31T09:00:00.000Z";
+      input.data.dashboardSettings = [
+        {
+          profileId: "profile1", backgroundHash: null, backgroundMime: null,
+          backgroundSizeBytes: null, backgroundDim: 40, activeSetId: "set1",
+        },
+      ];
+      input.data.dashboardSets = [
+        { id: "set1", profileId: "profile1", name: "Fakultet", position: 1024, createdAt: t, updatedAt: t },
+      ];
+      input.data.dashboardWidgets = [
+        {
+          instanceId: "dw1", profileId: "profile1", widgetId: "calendar:danas", size: "M",
+          position: 1024, config: null, createdAt: t, updatedAt: t, setId: "set1",
+        },
+      ];
+      const archive = buildExportArchive(input);
+
+      expect(parseNdjson(archive.files.get("data/dashboard.ndjson") ?? "")).toEqual([
+        {
+          type: "dashboard-settings", profileId: "profile1", backgroundHash: null,
+          backgroundMime: null, backgroundSizeBytes: null, backgroundDim: 40, activeSetId: "set1",
+        },
+        {
+          type: "dashboard-set", id: "set1", profileId: "profile1", name: "Fakultet",
+          position: 1024, createdAt: t, updatedAt: t,
+        },
+        {
+          type: "dashboard-widget", instanceId: "dw1", profileId: "profile1",
+          widgetId: "calendar:danas", size: "M", position: 1024, config: null,
+          createdAt: t, updatedAt: t, setId: "set1",
+        },
+      ]);
+      expect(archive.byModule.dashboard).toBe(3);
+      expect(archive.totalRecords).toBe(3);
     });
   });
 
@@ -1605,6 +1649,7 @@ describe("filterProfileData", () => {
     expect(filtered.noteAttachments).toEqual([]);
     expect(filtered.noteVersions).toEqual([]);
     expect(filtered.dashboardSettings).toEqual([]);
+    expect(filtered.dashboardSets).toEqual([]);
     expect(filtered.dashboardWidgets).toEqual([]);
   });
 
@@ -1764,10 +1809,13 @@ function everyModuleInput(): ExportArchiveInput {
     { noteId: "n1", coveredSeq: 1, title: "Beleška", createdAt: at, snapshot: emptyNoteSnapshot() },
   ];
   input.data.dashboardSettings = [
-    { profileId: "profile1", backgroundHash: BACKGROUND_BLOB, backgroundMime: "image/png", backgroundSizeBytes: 40, backgroundDim: 40 },
+    { profileId: "profile1", backgroundHash: BACKGROUND_BLOB, backgroundMime: "image/png", backgroundSizeBytes: 40, backgroundDim: 40, activeSetId: "set1" },
+  ];
+  input.data.dashboardSets = [
+    { id: "set1", profileId: "profile1", name: "Fakultet", position: 1024, createdAt: at, updatedAt: at },
   ];
   input.data.dashboardWidgets = [
-    { instanceId: "w1", profileId: "profile1", widgetId: "tasks:danas", size: "M", position: 1024, config: null, createdAt: at, updatedAt: at },
+    { instanceId: "w1", profileId: "profile1", widgetId: "tasks:danas", size: "M", position: 1024, config: null, createdAt: at, updatedAt: at, setId: "set1" },
   ];
   return input;
 }

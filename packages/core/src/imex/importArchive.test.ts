@@ -91,6 +91,7 @@ function emptyExportInput(): ExportArchiveInput {
       noteAttachments: [],
       noteVersions: [],
       dashboardSettings: [],
+      dashboardSets: [],
       dashboardWidgets: [],
     },
     hash: sha256,
@@ -459,31 +460,44 @@ function richProfileData(): ProfileData {
     ],
     // A background sharing the attachments' hash deliberately (ADR-041): the
     // blob union has to declare it ONCE, and the round trip has to carry the
-    // settings row whole either way.
+    // settings row whole either way. The active board (ADR-055) names the
+    // named set below, so the pointer's round trip is proved too.
     dashboardSettings: [
       {
         profileId: "profile1", backgroundHash: "a".repeat(64), backgroundMime: "image/jpeg",
-        backgroundSizeBytes: 10, backgroundDim: 65,
+        backgroundSizeBytes: 10, backgroundDim: 65, activeSetId: "dset-1",
+      },
+    ],
+    // One named board (DASH-008 / ADR-055), so the round trip carries a set
+    // row, a widget filed into it AND widgets on the default (null) board.
+    dashboardSets: [
+      {
+        id: "dset-1", profileId: "profile1", name: "Fakultet", position: 1024,
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
       },
     ],
     // A rearranged layout (ADR-045): the same widget placed twice at different
     // sizes — a layout, not a mistake — plus one carrying config, so the round
-    // trip proves the opaque JSON survives verbatim.
+    // trip proves the opaque JSON survives verbatim. `setId` explicit on every
+    // row, null and named alike: the writer emits the resolved value.
     dashboardWidgets: [
       {
         instanceId: "dw-1", profileId: "profile1", widgetId: "calendar:danas", size: "L",
         position: 1024, config: null,
         createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-02T00:00:00.000Z",
+        setId: null,
       },
       {
         instanceId: "dw-2", profileId: "profile1", widgetId: "study:ispiti", size: "S",
         position: 2048, config: '{"limit":3}',
         createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+        setId: null,
       },
       {
         instanceId: "dw-3", profileId: "profile1", widgetId: "calendar:danas", size: "S",
         position: 3072, config: null,
         createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+        setId: "dset-1",
       },
     ],
   };
@@ -800,14 +814,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.21.0`: the nearest minor strictly ahead of this build's `1.20.0`.
-  // SUPERVISOR NOTE: a sibling lane is landing 1.21.0 in parallel — at merge
-  // this fixture moves one minor past whatever the build then writes.
+  // `1.22.0`: the nearest minor strictly ahead of this build's `1.21.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.21.0" });
+    const files = baseFiles({ schemaVersion: "1.22.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.21.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.22.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -1826,7 +1838,7 @@ describe("parseImportArchive — dashboard settings (migration 030 / ADR-041)", 
     expect(result.data?.dashboardSettings).toEqual([
       {
         profileId: "profile1", backgroundHash: HASH, backgroundMime: "image/png",
-        backgroundSizeBytes: 4096, backgroundDim: 40,
+        backgroundSizeBytes: 4096, backgroundDim: 40, activeSetId: null,
       },
     ]);
   });
@@ -1842,7 +1854,7 @@ describe("parseImportArchive — dashboard settings (migration 030 / ADR-041)", 
     expect(result.data?.dashboardSettings).toEqual([
       {
         profileId: "profile1", backgroundHash: null, backgroundMime: null,
-        backgroundSizeBytes: null, backgroundDim: 0,
+        backgroundSizeBytes: null, backgroundDim: 0, activeSetId: null,
       },
     ]);
   });
@@ -1949,7 +1961,7 @@ describe("parseImportArchive — dashboard widgets (migration 032 / ADR-045)", (
     expect(result.data?.dashboardWidgets).toEqual([
       {
         instanceId: "dw1", profileId: "profile1", widgetId: "calendar:danas", size: "M",
-        position: 1024, config: null, createdAt: T, updatedAt: T,
+        position: 1024, config: null, createdAt: T, updatedAt: T, setId: null,
       },
     ]);
   });
@@ -2049,6 +2061,160 @@ describe("parseImportArchive — dashboard widgets (migration 032 / ADR-045)", (
   it("refuses a widget record filed in another data file", () => {
     const result = parseImportArchive(
       emptyInputWith(baseFiles({ fileContents: { "data/notes.ndjson": ndjson([VALID_WIDGET]) } })),
+    );
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "invalid-record", path: "data/notes.ndjson", line: 1, detail: "type",
+    });
+    expect(result.data).toBeNull();
+  });
+});
+
+describe("parseImportArchive — dashboard sets (migration 043 / ADR-055)", () => {
+  const T = "2026-07-31T09:00:00.000Z";
+
+  const VALID_SET = {
+    type: "dashboard-set", id: "set1", profileId: "profile1", name: "Fakultet",
+    position: 1024, createdAt: T, updatedAt: T,
+  };
+  const WIDGET_IN_SET = {
+    type: "dashboard-widget", instanceId: "dw1", profileId: "profile1",
+    widgetId: "calendar:danas", size: "M", position: 1024, config: null,
+    createdAt: T, updatedAt: T, setId: "set1",
+  };
+
+  function parseDashboardFile(rows: readonly Record<string, unknown>[], mode?: "import") {
+    return parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/dashboard.ndjson": ndjson(rows) } }), {
+        ...(mode === undefined ? {} : { mode }),
+      }),
+    );
+  }
+
+  it("round-trips a named set and the widget filed into it", () => {
+    const result = parseDashboardFile([VALID_SET, WIDGET_IN_SET]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.dashboardSets).toEqual([
+      {
+        id: "set1", profileId: "profile1", name: "Fakultet", position: 1024,
+        createdAt: T, updatedAt: T,
+      },
+    ]);
+    expect(result.data?.dashboardWidgets).toEqual([
+      {
+        instanceId: "dw1", profileId: "profile1", widgetId: "calendar:danas", size: "M",
+        position: 1024, config: null, createdAt: T, updatedAt: T, setId: "set1",
+      },
+    ]);
+  });
+
+  // Optional with a default (the ADR-028 rule, `kind`'s precedent): an absent
+  // `setId` means the DEFAULT board, which is what every widget in every
+  // pre-1.21.0 archive actually was — so no `ArchiveEra` flag is involved, and
+  // an explicit null says the same thing a missing key does.
+  it("defaults an absent setId to null — the default board — and accepts an explicit null", () => {
+    const bare = { ...WIDGET_IN_SET };
+    delete (bare as Record<string, unknown>).setId;
+    for (const row of [bare, { ...WIDGET_IN_SET, setId: null }]) {
+      const result = parseDashboardFile([row]);
+      expect(result.problems).toEqual([]);
+      expect(result.data?.dashboardWidgets[0]?.setId).toBeNull();
+    }
+  });
+
+  it("refuses a setId that is present but not a non-empty string", () => {
+    for (const setId of ["", 7, {}]) {
+      const result = parseDashboardFile([VALID_SET, { ...WIDGET_IN_SET, setId }]);
+      expect(result.problems).toContainEqual({
+        severity: "error", code: "invalid-record", path: "data/dashboard.ndjson", line: 2,
+        detail: "setId",
+      });
+      expect(result.data).toBeNull();
+    }
+  });
+
+  it("refuses a widget whose setId names no set in the archive", () => {
+    const result = parseDashboardFile([{ ...WIDGET_IN_SET, setId: "missing" }]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "unknown-reference", path: "data/dashboard.ndjson", line: 1,
+      detail: "setId=missing",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  it("import mode detaches such a widget onto the default board instead", () => {
+    const result = parseDashboardFile([{ ...WIDGET_IN_SET, setId: "missing" }], "import");
+    expect(result.problems).toContainEqual({
+      severity: "warning", code: "unknown-reference", path: "data/dashboard.ndjson", line: 1,
+      detail: "setId=missing",
+    });
+    expect(result.data?.dashboardWidgets[0]?.setId).toBeNull();
+  });
+
+  it("defaults an absent activeSetId to null and round-trips a present one", () => {
+    const settings = {
+      type: "dashboard-settings", profileId: "profile1", backgroundHash: null,
+      backgroundMime: null, backgroundSizeBytes: null, backgroundDim: 40,
+    };
+    const bare = parseDashboardFile([settings]);
+    expect(bare.problems).toEqual([]);
+    expect(bare.data?.dashboardSettings[0]?.activeSetId).toBeNull();
+
+    const chosen = parseDashboardFile([VALID_SET, { ...settings, activeSetId: "set1" }]);
+    expect(chosen.problems).toEqual([]);
+    expect(chosen.data?.dashboardSettings[0]?.activeSetId).toBe("set1");
+  });
+
+  it("refuses an activeSetId that names no set in the archive, and import mode falls back to the default board", () => {
+    const settings = {
+      type: "dashboard-settings", profileId: "profile1", backgroundHash: null,
+      backgroundMime: null, backgroundSizeBytes: null, backgroundDim: 40,
+      activeSetId: "missing",
+    };
+    const refused = parseDashboardFile([settings]);
+    expect(refused.problems).toContainEqual({
+      severity: "error", code: "unknown-reference", path: "data/dashboard.ndjson", line: 1,
+      detail: "activeSetId=missing",
+    });
+    expect(refused.data).toBeNull();
+
+    const salvaged = parseDashboardFile([settings], "import");
+    expect(salvaged.data?.dashboardSettings[0]?.activeSetId).toBeNull();
+  });
+
+  const BAD_SET_ROWS: { name: string; row: Record<string, unknown>; detail: string }[] = [
+    { name: "no id", row: { id: undefined }, detail: "id" },
+    { name: "an empty id", row: { id: "" }, detail: "id" },
+    { name: "no profile", row: { profileId: undefined }, detail: "profileId" },
+    { name: "no name", row: { name: undefined }, detail: "name" },
+    { name: "a whitespace-only name", row: { name: "   " }, detail: "name" },
+    { name: "an over-100-character name", row: { name: "x".repeat(101) }, detail: "name" },
+    { name: "a fractional position", row: { position: 1024.5 }, detail: "position" },
+    { name: "no created_at", row: { createdAt: undefined }, detail: "createdAt" },
+    { name: "a malformed updated_at", row: { updatedAt: "juče" }, detail: "updatedAt" },
+  ];
+
+  for (const { name, row, detail } of BAD_SET_ROWS) {
+    it(`refuses a set row with ${name}`, () => {
+      const result = parseDashboardFile([{ ...VALID_SET, ...row }]);
+      expect(result.problems).toContainEqual({
+        severity: "error", code: "invalid-record", path: "data/dashboard.ndjson", line: 1, detail,
+      });
+      expect(result.data).toBeNull();
+    });
+  }
+
+  it("refuses two rows sharing a set id", () => {
+    const result = parseDashboardFile([VALID_SET, { ...VALID_SET, name: "Posao" }]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "duplicate-id", path: "data/dashboard.ndjson", line: 2,
+      detail: "set1",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  it("refuses a set record filed in another data file", () => {
+    const result = parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/notes.ndjson": ndjson([VALID_SET]) } })),
     );
     expect(result.problems).toContainEqual({
       severity: "error", code: "invalid-record", path: "data/notes.ndjson", line: 1, detail: "type",
@@ -2624,10 +2790,8 @@ describe("parseImportArchive — note folder preferences (the 1.7.0 era gate)", 
 });
 
 describe("parseImportArchive — schema version", () => {
-  // SUPERVISOR NOTE: a sibling lane is landing 1.21.0 in parallel — this pin
-  // moves to that number at merge, never below 1.20.0 (ADR-054).
-  it("is 1.20.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.20.0");
+  it("is 1.21.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.21.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -2808,13 +2972,11 @@ describe("parseImportArchive — schema version", () => {
     expect(result.data).not.toBeNull();
   });
 
-  // `1.21.0`: the nearest minor strictly ahead of this build's `1.20.0`.
-  // SUPERVISOR NOTE: a sibling lane is landing 1.21.0 in parallel — at merge
-  // this fixture moves one minor past whatever the build then writes.
+  // `1.22.0`: the nearest minor strictly ahead of this build's `1.21.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.21.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.22.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.21.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.22.0" },
     ]);
     expect(result.data).toBeNull();
   });

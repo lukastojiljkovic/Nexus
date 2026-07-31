@@ -44,13 +44,25 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
  *
+ * `1.21.0` adds named dashboards (DASH-008 / ADR-055, migration 043): the
+ * `dashboard-set` record type — one row per named board, riding in
+ * `data/dashboard.ndjson` between the settings row and the widgets — plus an
+ * OPTIONAL `setId` on `dashboard-widget` (absent = the default board, which is
+ * what every widget in every earlier archive was) and an OPTIONAL `activeSetId`
+ * on `dashboard-settings` (absent = the default board is showing). A MINOR
+ * bump by the same honesty every entry below made: an older reader handed this
+ * archive would restore a profile whose named boards are simply gone —
+ * arrangements their owner built by hand and nothing else in the archive can
+ * reconstruct.
+ *
  * `1.20.0` adds the `calendar-settings` record type (CAL-010 / ADR-054,
  * migration 042): the profile's fixed semester dates, zero-or-one row riding
  * FIRST in `data/calendar.ndjson` exactly as `study-settings` leads its own
  * file. A MINOR bump by the same honesty every settings row below made: an
  * older reader handed this archive would restore a profile whose Semestar view
  * silently slid back to the current four months, losing the term its owner
- * anchored it to — after
+ * anchored it to — and refusing is the truthful answer to a file it cannot
+ * fully read.
  *
  * `1.19.0` adds the profile's default snooze preset (NTF-009, migration 041):
  * one field in the manifest's `settings.notifications` object, beside the quiet
@@ -112,7 +124,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.20.0";
+const SCHEMA_VERSION = "1.21.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -765,6 +777,39 @@ export interface ExportDashboardSettings {
   backgroundMime: string | null;
   backgroundSizeBytes: number | null;
   backgroundDim: number;
+  /**
+   * The named board the profile is currently looking at (DASH-008 / ADR-055),
+   * naming a `dashboard-set` row of this archive, or null for the default
+   * board. OPTIONAL with a default, like a card's `kind`: absent means null,
+   * which is the only board any archive written before `1.21.0` could have
+   * been showing, so no `ArchiveEra` flag is involved. A PRESENT id is
+   * reference-checked against the archive's own sets.
+   */
+  activeSetId?: string | null;
+}
+
+/**
+ * One named dashboard („tabla“, DASH-008 / ADR-055, migration 043). Rides in
+ * `data/dashboard.ndjson` between the settings row and the widgets: after the
+ * preferences that lead the file (the `study-settings` idiom), before the rows
+ * whose `setId` names it — so the file still reads as "everything a row points
+ * at came before it", with the one exception of the settings row's own
+ * `activeSetId`, which the reader resolves in the reference pass exactly as it
+ * resolves a `subject-note-link` across files.
+ *
+ * The DEFAULT board is deliberately NOT among these rows: `set_id NULL` is the
+ * default dashboard, named „Početna“ in copy only, so an archive of a profile
+ * that never made a named board carries no `dashboard-set` at all — which is
+ * also what every pre-`1.21.0` archive is.
+ */
+export interface ExportDashboardSet {
+  id: string;
+  profileId: string;
+  name: string;
+  /** Sparse sort key among the profile's boards; may be negative. */
+  position: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /**
@@ -791,6 +836,15 @@ export interface ExportDashboardWidget {
   config: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * The named board this placement belongs to (DASH-008 / ADR-055), naming a
+   * `dashboard-set` row of this archive, or null for the default board.
+   * OPTIONAL with a default, like a card's `kind` (the ADR-028 rule — no
+   * `ArchiveEra` flag): absent means null, because the default board is the
+   * only one any widget in any pre-`1.21.0` archive could have been on. A
+   * PRESENT id is reference-checked against the archive's own sets.
+   */
+  setId?: string | null;
 }
 
 /**
@@ -924,8 +978,18 @@ export interface ProfileData {
    */
   dashboardSettings: readonly ExportDashboardSettings[];
   /**
-   * The profile's dashboard layout (DASH-002 / ADR-045) — one row per placed
-   * widget, in position order. Required, like every field above and for the same
+   * The profile's named boards (DASH-008 / ADR-055), in board order. Required,
+   * like every field above and for the same reason: a module the caller forgets
+   * must be a type error, not a quiet omission. EMPTY both for a pre-`1.21.0`
+   * archive and for a profile that never made a named board — indistinguishable
+   * on purpose, because they mean the same thing: only „Početna“, which is not
+   * a row and therefore not carried.
+   */
+  dashboardSets: readonly ExportDashboardSet[];
+  /**
+   * The profile's dashboard layouts (DASH-002 / ADR-045; per-board since
+   * ADR-055) — one row per placed widget, each naming its board, in position
+   * order. Required, like every field above and for the same
    * reason: a module the caller forgets must be a type error, not a quiet
    * omission.
    *
@@ -1099,12 +1163,13 @@ export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, 
       data.noteTemplates.length +
       data.noteAttachments.length +
       data.noteVersions.length,
-    // The background row (zero or one) plus every placed widget, counted like
-    // any other rows rather than folded into a neighbouring module: a restore
-    // preview that showed "Kontrolna tabla: 6" against "0" is telling the user
-    // something true about what is about to change, which is the entire job of
-    // that table.
-    dashboard: data.dashboardSettings.length + data.dashboardWidgets.length,
+    // The background row (zero or one) plus every named board plus every
+    // placed widget, counted like any other rows rather than folded into a
+    // neighbouring module: a restore preview that showed "Kontrolna tabla: 6"
+    // against "0" is telling the user something true about what is about to
+    // change, which is the entire job of that table.
+    dashboard:
+      data.dashboardSettings.length + data.dashboardSets.length + data.dashboardWidgets.length,
   };
 }
 
@@ -1220,6 +1285,12 @@ export function filterProfileData(
     noteAttachments: only("notes", data.noteAttachments),
     noteVersions: only("notes", data.noteVersions),
     dashboardSettings: only("dashboard", data.dashboardSettings),
+    // The sets and the widgets that name them drop AS ONE module with the
+    // settings row above, so `dashboard-widget.setId` and
+    // `dashboard-settings.activeSetId` can never dangle across this filter —
+    // no repair rule is needed, unlike the three genuinely cross-module
+    // references documented in the header.
+    dashboardSets: only("dashboard", data.dashboardSets),
     dashboardWidgets: only("dashboard", data.dashboardWidgets),
   };
 }
@@ -1310,12 +1381,14 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     ...noteTemplates.map((row) => ({ type: "note-template", ...row })),
   ]);
 
-  // The background row first and the layout after it, in the order the two
-  // shipped. Neither references the other — a dashboard with no picture still
-  // has its widgets, and a widget names no settings row — so the order here is
-  // readability, not a dependency.
+  // The background row first (the preferences lead the file, the
+  // `study-settings` idiom), then the named boards, then the widgets whose
+  // `setId` names them — dependency order for the widgets, and the one forward
+  // reference (`activeSetId` on the settings row) is resolved by the reader's
+  // reference pass, never by file order (see `ExportDashboardSet`).
   const dashboardNdjson = toNdjson([
     ...data.dashboardSettings.map((row) => ({ type: "dashboard-settings", ...row })),
+    ...data.dashboardSets.map((row) => ({ type: "dashboard-set", ...row })),
     ...data.dashboardWidgets.map((row) => ({ type: "dashboard-widget", ...row })),
   ]);
 

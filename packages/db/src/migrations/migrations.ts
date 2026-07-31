@@ -42,8 +42,7 @@ import { migration039 } from "./039-note-folder-views.js";
 import { migration040 } from "./040-profile-picture.js";
 import { migration041 } from "./041-snooze-default.js";
 import { migration042 } from "./042-calendar-settings.js";
-// SUPERVISOR NOTE: 043 still out with a sibling lane; gap-free pin returns
-// when it lands.
+import { migration043 } from "./043-dashboard-sets.js";
 import { migration044 } from "./044-backup-settings.js";
 
 type DatabaseHandle = Database.Database;
@@ -98,6 +97,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration040,
   migration041,
   migration042,
+  migration043,
   migration044,
 ];
 

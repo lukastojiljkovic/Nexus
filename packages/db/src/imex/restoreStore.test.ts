@@ -14,6 +14,7 @@ import type {
 import {
   CalendarSettingsStore,
   CardStore,
+  DashboardSetStore,
   DashboardSettingsStore,
   DashboardWidgetStore,
   DEFAULT_DASHBOARD_LAYOUT,
@@ -160,6 +161,7 @@ function emptyProfileData(): ProfileData {
     noteVersions: [],
     taskTemplates: [],
     dashboardSettings: [],
+    dashboardSets: [],
     dashboardWidgets: [],
   };
 }
@@ -261,6 +263,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   const eventTemplateStore = new EventTemplateStore(handle.raw, profileId);
   const dashboardStore = new DashboardSettingsStore(handle.raw, profileId);
   const dashboardWidgetStore = new DashboardWidgetStore(handle.raw, profileId);
+  const dashboardSetStore = new DashboardSetStore(handle.raw, profileId);
   const studySettingsStore = new StudySettingsStore(handle.raw, profileId);
   const calendarSettingsStore = new CalendarSettingsStore(handle.raw, profileId);
 
@@ -433,7 +436,12 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   // ADR-045: a REARRANGED dashboard, so the round trip carries real layout rows
   // rather than the get-or-default emptiness a untouched profile would give.
   // Adding one widget materializes the default five beside it.
-  dashboardWidgetStore.add("study:ispiti", "L", t2);
+  dashboardWidgetStore.add(null, "study:ispiti", "L", t2);
+  // ADR-055: a NAMED board, active and with its own arranged layout, so the
+  // round trip carries a set row, per-set widget rows AND the active pointer.
+  const dashboardSet = dashboardSetStore.create(`${name} tabla`, t2);
+  dashboardWidgetStore.add(dashboardSet.id, "tasks:predstojece", "S", t2);
+  dashboardSetStore.setActive(dashboardSet.id, t2);
   // STUDY-007: NON-default on all three, so the round trip below would fail if
   // the settings row were dropped rather than passing on the defaults.
   studySettingsStore.save({ targetRetention: 0.95, newPerDay: 7, maxReviewsPerDay: 120 }, t2);
@@ -486,6 +494,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     studySettings: [{ profileId, ...studySettingsStore.get() }],
     calendarSettings: [{ profileId, ...calendarSettingsStore.get() }],
     dashboardSettings: [{ profileId, ...dashboardStore.get() }],
+    dashboardSets: dashboardSetStore.list(),
     dashboardWidgets: dashboardWidgetStore.listAll(),
   };
 
@@ -724,6 +733,12 @@ function assertModulesMatch(
   expect(new DashboardWidgetStore(handle.raw, readProfileId).listAll()).toEqual(
     remap(fixture.data.dashboardWidgets),
   );
+
+  // ADR-055: the named boards, reproduced under their own ids and timestamps —
+  // and note the active pointer already rode in `dashboardSettings` above.
+  expect(new DashboardSetStore(handle.raw, readProfileId).list()).toEqual(
+    remap(fixture.data.dashboardSets),
+  );
 }
 
 describe("RestoreStore", () => {
@@ -867,18 +882,22 @@ describe("RestoreStore", () => {
       backgroundMime: null,
       backgroundSizeBytes: null,
       backgroundDim: DEFAULT_BACKGROUND_DIM,
+      activeSetId: null,
     });
     // And the same for the layout (ADR-045): B's rearranged dashboard is wiped,
     // which leaves no rows — and no rows IS the default arrangement, so B opens
-    // on exactly what the archive's own profile had.
+    // on exactly what the archive's own profile had. B's named boards (ADR-055)
+    // go the same way: sets are arrangement, and an archive carrying none
+    // leaves only „Početna“, which is not a row.
     expect(
       (db.raw
         .prepare("SELECT count(*) AS n FROM dashboard_widgets WHERE profile_id = ?")
         .get(profileB) as { n: number }).n,
     ).toBe(0);
-    expect(new DashboardWidgetStore(db.raw, profileB).listLayout().map((e) => e.widgetId)).toEqual(
+    expect(new DashboardWidgetStore(db.raw, profileB).listLayout(null).map((e) => e.widgetId)).toEqual(
       DEFAULT_DASHBOARD_LAYOUT.map((e) => e.widgetId),
     );
+    expect(new DashboardSetStore(db.raw, profileB).list()).toEqual([]);
 
     // Including the child tables no store lists on its own — the ones a wipe
     // that leaned on ON DELETE CASCADE would be most likely to miss.

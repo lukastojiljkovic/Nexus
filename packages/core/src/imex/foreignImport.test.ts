@@ -69,7 +69,7 @@ function emptyProfileData(): ProfileData {
     focusSessions: [], studySettings: [], notifications: [],
     notes: [], noteFolders: [], noteTags: [], noteTagLinks: [], noteTemplates: [],
     noteAttachments: [], noteVersions: [],
-    dashboardSettings: [], dashboardWidgets: [],
+    dashboardSettings: [], dashboardSets: [], dashboardWidgets: [],
   };
 }
 
@@ -864,6 +864,43 @@ describe("planForeignImport — task attachments, templates, dependencies, dashb
     });
     expect(result.report.modules.dashboard).toEqual({ parsed: 2, imported: 0, merged: 0, skipped: 2 });
     // And every module still balances with both dashboard members skipped by design.
+    for (const counts of Object.values(result.report.modules)) {
+      expect(counts.parsed).toBe(counts.imported + counts.merged + counts.skipped);
+    }
+  });
+
+  // Named boards inherit the layout's posture whole (ADR-055): a set is nothing
+  // but an arrangement's name, so importing one would import an arrangement.
+  // Its own skip code — `dashboard-sets-not-imported` — rather than a fold into
+  // the widgets' line, because a skip line reports one (code, module, type)
+  // triple and these rows are a different record type; one line covering both
+  // would attribute set rows to the widget type, which is a report that lies.
+  it("never imports dashboard sets and says so on their own skip line", () => {
+    const t = "2026-07-01T00:00:00.000Z";
+    const data = {
+      ...withTaskExtras(),
+      dashboardSets: [
+        { id: "src-set1", profileId: "src", name: "Fakultet", position: 1024, createdAt: t, updatedAt: t },
+        { id: "src-set2", profileId: "src", name: "Posao", position: 2048, createdAt: t, updatedAt: t },
+      ],
+      dashboardWidgets: [
+        {
+          instanceId: "src-dw1", profileId: "src", widgetId: "calendar:danas", size: "L",
+          position: 1024, config: null, createdAt: t, updatedAt: t, setId: "src-set1",
+        },
+      ],
+    };
+    const result = plan(data);
+
+    expect(result.data.dashboardSets).toEqual([]);
+    expect(result.data.dashboardWidgets).toEqual([]);
+    expect(result.report.skips).toContainEqual({
+      code: "dashboard-sets-not-imported", module: "dashboard", type: "dashboard-set", count: 2,
+    });
+    expect(result.report.skips).toContainEqual({
+      code: "dashboard-widgets-not-imported", module: "dashboard", type: "dashboard-widget", count: 1,
+    });
+    expect(result.report.modules.dashboard).toEqual({ parsed: 3, imported: 0, merged: 0, skipped: 3 });
     for (const counts of Object.values(result.report.modules)) {
       expect(counts.parsed).toBe(counts.imported + counts.merged + counts.skipped);
     }

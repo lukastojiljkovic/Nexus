@@ -11,6 +11,7 @@ import type {
   ArchiveProfilePicture,
   ExportCalendarSettings,
   ExportCard,
+  ExportDashboardSet,
   ExportDashboardSettings,
   ExportDashboardWidget,
   ExportDeck,
@@ -189,11 +190,15 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.20.0` added the
- * `calendar-settings` record type — the profile's fixed semester dates
- * (CAL-010 / ADR-054, migration 042), zero-or-one row riding first in the data
- * file the CAL module already had, exactly as `study-settings` rides in its
- * own — after `1.19.0` added the
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.21.0` added named
+ * dashboards (DASH-008 / ADR-055, migration 043) — the `dashboard-set` record
+ * type riding in the data file `1.9.0` created, an OPTIONAL `setId` on
+ * `dashboard-widget` and an OPTIONAL `activeSetId` on `dashboard-settings`,
+ * each absent meaning the default board, which is the only board any earlier
+ * archive could describe — after `1.20.0` added the `calendar-settings`
+ * record type — the profile's fixed semester dates (CAL-010 / ADR-054,
+ * migration 042), zero-or-one row riding first in the data file the CAL module
+ * already had, exactly as `study-settings` rides in its own — after `1.19.0` added the
  * profile's default snooze preset (NTF-009, migration 041) — one field in the
  * manifest's `settings.notifications` object, beside the quiet hours it is a
  * sibling preference of — after `1.18.0` added a
@@ -259,16 +264,18 @@ export interface ImportArchiveResult {
  * `defaultView` absence means `"list"`, because that is the only shape a folder
  * written before NOTE-002's toggle was ever drawn in, and `profile.picture`'s
  * absence means "no picture", because no profile written before `1.18.0` could
- * have had one, and `settings.notifications.snoozeDefault`'s absence means
+ * have had one, `settings.notifications.snoozeDefault`'s absence means
  * „10 min“, because that is what the snooze button did in every build before
- * `1.19.0` gave it a preference to read.
+ * `1.19.0` gave it a preference to read, and a widget's `setId` — like the
+ * settings row's `activeSetId` — absent means the DEFAULT board, because
+ * before `1.21.0` there was no other board a row could belong to.
  *
  * Major is still 1 throughout, so there is nothing yet to migrate an older
  * major forward from — a migration framework for a major that has never
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.20.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.21.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -754,6 +761,13 @@ const MAX_REVIEWS_PER_DAY = 1000;
 const DASHBOARD_WIDGET_SIZES = ["S", "M", "L"] as const;
 
 /**
+ * Mirrors `MAX_DASHBOARD_SET_NAME_LENGTH` in `@nexus/db`'s
+ * `dashboard/dashboardSetStore.ts` (copied, not imported — `@nexus/core` must
+ * not depend on `@nexus/db`), the `NOTE_FOLDER_COLORS` arrangement.
+ */
+const MAX_DASHBOARD_SET_NAME_LENGTH = 100;
+
+/**
  * A widget id as a module's manifest publishes it: `moduleId:widgetId`, both
  * ASCII kebab slugs. Mirrors `WIDGET_ID_PATTERN` in `@nexus/db`'s
  * `dashboard/dashboardWidgetStore.ts`. The SHAPE is all either side checks —
@@ -868,6 +882,7 @@ export type ArchiveRecordType =
   | "note-version"
   | "note-template"
   | "dashboard-settings"
+  | "dashboard-set"
   | "dashboard-widget";
 
 const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
@@ -905,6 +920,7 @@ const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "note-version",
   "note-template",
   "dashboard-settings",
+  "dashboard-set",
   "dashboard-widget",
 ];
 
@@ -953,7 +969,7 @@ const FILE_RECORD_TYPES: Record<DataFilePath, readonly ArchiveRecordType[]> = {
     "note-version",
     "note-template",
   ],
-  "data/dashboard.ndjson": ["dashboard-settings", "dashboard-widget"],
+  "data/dashboard.ndjson": ["dashboard-settings", "dashboard-set", "dashboard-widget"],
 };
 
 /**
@@ -1820,7 +1836,32 @@ function parseDashboardSettings(raw: Record<string, unknown>): ExportDashboardSe
     throw new InvalidFieldError("backgroundSizeBytes");
   }
   const backgroundDim = intInRange(raw.backgroundDim, "backgroundDim", 0, MAX_BACKGROUND_DIM);
-  return { profileId, backgroundHash, backgroundMime, backgroundSizeBytes, backgroundDim };
+  // Optional with a default (absent or null = the default board), so no era
+  // flag — the `kind` reasoning at INTERCHANGE_SCHEMA_VERSION. A PRESENT id is
+  // validated here for shape and reference-checked against the archive's own
+  // sets in the reference pass.
+  const activeSetId =
+    raw.activeSetId === undefined || raw.activeSetId === null
+      ? null
+      : nonEmptyStr(raw.activeSetId, "activeSetId");
+  return { profileId, backgroundHash, backgroundMime, backgroundSizeBytes, backgroundDim, activeSetId };
+}
+
+/**
+ * One named dashboard (DASH-008 / ADR-055). The name is checked against what
+ * `DashboardSetStore` would itself have written — trimmed, 1..100 characters —
+ * because migration 043 has no CHECK to lean on, and an archive is the one way
+ * text could reach that column having passed nobody's writer. The DEFAULT
+ * board never appears here: it is not a row (see `ExportDashboardSet`).
+ */
+function parseDashboardSet(raw: Record<string, unknown>): ExportDashboardSet {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const name = trimmedNonEmptyStr(raw.name, "name", MAX_DASHBOARD_SET_NAME_LENGTH);
+  const position = int(raw.position, "position");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, profileId, name, position, createdAt, updatedAt };
 }
 
 /**
@@ -1854,7 +1895,11 @@ function parseDashboardWidget(raw: Record<string, unknown>): ExportDashboardWidg
   const config = raw.config === null ? null : jsonText(raw.config, "config");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
-  return { instanceId, profileId, widgetId, size, position, config, createdAt, updatedAt };
+  // Optional with a default (absent or null = the default board, ADR-055), so
+  // no era flag — see `parseDashboardSettings`' `activeSetId`, its exact twin.
+  const setId =
+    raw.setId === undefined || raw.setId === null ? null : nonEmptyStr(raw.setId, "setId");
+  return { instanceId, profileId, widgetId, size, position, config, createdAt, updatedAt, setId };
 }
 
 /** Metadata only — `snapshot` is attached afterward from `input.ydocs`, and is REQUIRED (rule 7), unlike a note's. */
@@ -1992,6 +2037,7 @@ interface Collections {
   noteVersions: Bucket<Omit<ExportNoteVersion, "snapshot">>;
   noteTemplates: Bucket<ExportNoteTemplate>;
   dashboardSettings: Bucket<ExportDashboardSettings>;
+  dashboardSets: Bucket<ExportDashboardSet>;
   dashboardWidgets: Bucket<ExportDashboardWidget>;
 }
 
@@ -2009,7 +2055,8 @@ function newCollections(): Collections {
     studySettings: newBucket(),
     notifications: newBucket(), noteFolders: newBucket(), noteTags: newBucket(), notes: newBucket(),
     noteTagLinks: newBucket(), noteAttachments: newBucket(), noteVersions: newBucket(),
-    noteTemplates: newBucket(), dashboardSettings: newBucket(), dashboardWidgets: newBucket(),
+    noteTemplates: newBucket(), dashboardSettings: newBucket(), dashboardSets: newBucket(),
+    dashboardWidgets: newBucket(),
   };
 }
 
@@ -2240,6 +2287,11 @@ function dispatchRecord(
     case "dashboard-widget": {
       const row = parseDashboardWidget(raw);
       pushRow(collections.dashboardWidgets, row.instanceId, row, type, path, line, ctx);
+      return;
+    }
+    case "dashboard-set": {
+      const row = parseDashboardSet(raw);
+      pushRow(collections.dashboardSets, row.id, row, type, path, line, ctx);
       return;
     }
   }
@@ -3043,6 +3095,36 @@ function referenceRules(collections: Collections): ReferenceRule[] {
       },
       onDangling: "drop",
     }),
+    // ADR-055: a placement's board must be a set this archive carries — null
+    // (the default board) carries no reference at all. DETACHED rather than
+    // dropped, on the task `listId` precedent: a widget whose board is gone
+    // falls back onto the default board, which is where every widget was
+    // before boards existed, rather than costing the user a card.
+    referenceRule({
+      bucket: collections.dashboardWidgets,
+      type: "dashboard-widget",
+      field: "setId",
+      ref: (row) => row.setId ?? null,
+      resolver: () => {
+        const ids = idsOf(collections.dashboardSets);
+        return (ref) => ids.has(ref);
+      },
+      onDangling: { detach: (row) => ({ ...row, setId: null }) },
+    }),
+    // And the settings row's own pointer, on the same terms: an active board
+    // that is not in the archive detaches to „Početna“, never to a pointer at
+    // nothing.
+    referenceRule({
+      bucket: collections.dashboardSettings,
+      type: "dashboard-settings",
+      field: "activeSetId",
+      ref: (row) => row.activeSetId ?? null,
+      resolver: () => {
+        const ids = idsOf(collections.dashboardSets);
+        return (ref) => ids.has(ref);
+      },
+      onDangling: { detach: (row) => ({ ...row, activeSetId: null }) },
+    }),
   ];
 }
 
@@ -3491,6 +3573,10 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         // and a restore reads that emptiness as "leave the profile on the
         // dashboard's own defaults", which is exactly where it was.
         dashboardSettings: rowsOf(collections.dashboardSettings),
+        // Empty both for a pre-1.21.0 archive and for a profile that never made
+        // a named board — indistinguishable on purpose, because they mean the
+        // same thing: only „Početna“, which is not a row (ADR-055).
+        dashboardSets: rowsOf(collections.dashboardSets),
         // Empty both for a pre-1.11.0 archive and for a profile that never
         // rearranged its dashboard — indistinguishable on purpose, because they
         // mean the same thing: the default arrangement (`DashboardWidgetStore`

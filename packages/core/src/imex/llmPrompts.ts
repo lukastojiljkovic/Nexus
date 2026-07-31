@@ -1277,6 +1277,7 @@ export function translateLlmRecords(
     noteAttachments: [],
     noteVersions: [],
     dashboardSettings: [],
+    dashboardSets: [],
     dashboardWidgets: [],
   };
 

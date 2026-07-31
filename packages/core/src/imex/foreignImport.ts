@@ -217,6 +217,7 @@ export type ImportSkipCode =
   | "settings-not-imported"
   | "notifications-not-imported"
   | "dashboard-settings-not-imported"
+  | "dashboard-sets-not-imported"
   | "dashboard-widgets-not-imported"
   | "study-settings-not-imported"
   | "calendar-settings-not-imported"
@@ -497,6 +498,11 @@ const ID_MINTERS: Record<keyof ProfileData, (data: ProfileData, ctx: PlanContext
   // import must not rearrange it. No row is planned, so no id is minted — and
   // nothing references a placement, so there is nothing to dangle.
   dashboardWidgets: NO_IDS,
+  // Named boards inherit that posture whole (ADR-055): a set is nothing but an
+  // arrangement's name, so importing one would import an arrangement. Nothing
+  // that IS planned can reference one — the widgets above are planned empty —
+  // so nothing dangles here either.
+  dashboardSets: NO_IDS,
   // ADR-051: `(title, startAt, allDay)` is what the calendar itself treats as
   // "the same appointment", so an event the target already has is a duplicate.
   events: (data, ctx) => mintUnlessDuplicate(data.events, EVENT_DUPLICATES, ctx),
@@ -989,6 +995,9 @@ export function planForeignImport(
     // ADR-043: the dashboard background and dim are the TARGET user's own
     // preferences — an import must not redecorate their home.
     dashboardSettings: [],
+    // Nor its boards (ADR-055): a named tabla is an arrangement with a name,
+    // and both stay the target's own — skipped by design, named below.
+    dashboardSets: [],
     // Nor rearrange it (founder, 2026-07-31): the layout stays the target's
     // own, so the archive's placements are skipped by design — named below,
     // like every other by-design skip.
@@ -1075,6 +1084,12 @@ function buildReport(
     "dashboard-settings",
     source.dashboardSettings.length,
   );
+  // Its own code and line rather than a fold into the widgets' (ADR-055): a
+  // skip line reports one (code, module, type) triple, and set rows are a
+  // different record type — one line covering both would attribute them to the
+  // widget type, which is a report that lies. The per-module arithmetic
+  // balances either way; this is what keeps the REASONS per-type true.
+  note("dashboard-sets-not-imported", "dashboard", "dashboard-set", source.dashboardSets.length);
   note(
     "dashboard-widgets-not-imported",
     "dashboard",

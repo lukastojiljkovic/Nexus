@@ -154,6 +154,7 @@ export type {
   ExportBinaryEntry,
   ExportCalendarSettings,
   ExportCard,
+  ExportDashboardSet,
   ExportDashboardSettings,
   ExportDashboardWidget,
   ExportDeck,

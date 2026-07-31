@@ -30,6 +30,7 @@ import type { RestoredNoteDerived } from "@nexus/db";
 import type {
   CalendarSettingsStore,
   CardStore,
+  DashboardSetStore,
   DashboardSettingsStore,
   DashboardWidgetStore,
   DeckStore,
@@ -93,6 +94,7 @@ export interface ProfileDataDeps {
   flagStore(profileId: string): SqliteFlagStore;
   dashboardSettingsStore(profileId: string): DashboardSettingsStore;
   dashboardWidgetStore(profileId: string): DashboardWidgetStore;
+  dashboardSetStore(profileId: string): DashboardSetStore;
 }
 
 /** Every NOTE-module row `ProfileData` requires (ADR-022 section 3) — `gatherNotes`'s return shape. */
@@ -255,15 +257,19 @@ export function gatherProfileData(deps: ProfileDataDeps, profileId: string): Pro
     // profile with no row still has: an archive that carried nothing here would
     // restore as "no background, dim 40" anyway, so writing the resolved values
     // says the same thing out loud — and makes the undo snapshot able to put
-    // back a dim the user had set, which an omission could not.
+    // back a dim the user had set, which an omission could not. `activeSetId`
+    // (ADR-055) rides in the same resolved row, its null meaning „Početna“.
     dashboardSettings: [{ profileId, ...deps.dashboardSettingsStore(profileId).get() }],
+    // The named boards (DASH-008 / ADR-055): plain stored rows, one per board
+    // the user made — the default board is not a row and so is not gathered.
+    dashboardSets: deps.dashboardSetStore(profileId).list(),
     // The STORED rows, not the resolved layout — the opposite choice from the
-    // settings row above, and for the opposite reason (ADR-045). A profile that
-    // never rearranged its dashboard has no rows, and that emptiness is itself
+    // settings row above, and for the opposite reason (ADR-045). A board that
+    // never was rearranged has no rows, and that emptiness is itself
     // the fact worth carrying: it says "on the default arrangement", so a
     // restore leaves the target there and a later change to the default still
     // reaches it. Writing out the resolved five instead would silently freeze
-    // every profile onto today's default the first time it was backed up.
+    // every board onto today's default the first time it was backed up.
     dashboardWidgets: deps.dashboardWidgetStore(profileId).listAll(),
   };
 }

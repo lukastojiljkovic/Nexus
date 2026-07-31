@@ -712,6 +712,7 @@ export function translateApkg(parsed: ParsedApkg, target: ApkgTranslateTarget): 
     noteAttachments: [],
     noteVersions: [],
     dashboardSettings: [],
+    dashboardSets: [],
     dashboardWidgets: [],
   };
 

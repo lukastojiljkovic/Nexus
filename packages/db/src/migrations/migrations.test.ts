@@ -16,14 +16,11 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  // SUPERVISOR NOTE: 043 (named dashboards) is still out with a sibling lane —
-  // the gap-free-from-1 pin returns when it lands; until then 042+044 stand
-  // with 043's slot open.
-  it("is at version 44 (scheduled backups), ascending and duplicate-free", () => {
+  it("is at version 44 (scheduled backups), ascending and gap-free from 1", () => {
     expect(LATEST_VERSION).toBe(44);
-    const versions = MIGRATIONS.map((migration) => migration.version);
-    expect(versions).toEqual([...versions].sort((a, b) => a - b));
-    expect(new Set(versions).size).toBe(versions.length);
+    expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
+      Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
+    );
   });
 });
 
@@ -4729,6 +4726,114 @@ describe("migration 042 — calendar settings", () => {
     expect(
       (db.raw.prepare("SELECT count(*) AS n FROM calendar_settings").get() as { n: number }).n,
     ).toBe(0);
+    db.close();
+  });
+});
+
+
+describe("migration 043 — named dashboards (DASH-008 / ADR-055)", () => {
+  const now = () => new Date().toISOString();
+
+  const columnNames = (db: NexusDatabase, table: string): string[] =>
+    (db.raw.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(
+      (row) => row.name,
+    );
+
+  const insertSet = (db: NexusDatabase, id: string, profileId: string, name = "Fakultet") =>
+    db.raw
+      .prepare(
+        `INSERT INTO dashboard_sets (id, profile_id, name, position, created_at, updated_at)
+         VALUES (?, ?, ?, 1024, ?, ?)`,
+      )
+      .run(id, profileId, name, now(), now());
+
+  const insertWidget = (db: NexusDatabase, id: string, profileId: string, setId: string | null) =>
+    db.raw
+      .prepare(
+        `INSERT INTO dashboard_widgets
+           (profile_id, instance_id, widget_id, size, position, set_id, config, created_at, updated_at)
+         VALUES (?, ?, 'calendar:danas', 'M', 1024, ?, NULL, ?, ?)`,
+      )
+      .run(profileId, id, setId, now(), now());
+
+  it("creates the dashboard_sets table, its index, and stamps the latest user_version", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    expect(tableNames(db)).toContain("dashboard_sets");
+    expect(columnNames(db, "dashboard_sets")).toEqual([
+      "id", "profile_id", "name", "position", "created_at", "updated_at",
+    ]);
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'dashboard_sets'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("dashboard_sets_profile_position");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("adds set_id to dashboard_widgets and active_set_id to dashboard_settings, both NULL", () => {
+    const db = openDatabase({ path: join(dir, "columns.db") });
+    expect(columnNames(db, "dashboard_widgets")).toContain("set_id");
+    expect(columnNames(db, "dashboard_settings")).toContain("active_set_id");
+    insertProfile(db, "p1");
+    insertWidget(db, "w-null", "p1", null); // NULL set_id IS the default dashboard
+    expect(
+      db.raw.prepare("SELECT set_id FROM dashboard_widgets WHERE instance_id = ?").get("w-null"),
+    ).toEqual({ set_id: null });
+    db.close();
+  });
+
+  it("enforces the set_id foreign key on dashboard_widgets", () => {
+    const db = openDatabase({ path: join(dir, "fk.db") });
+    insertProfile(db, "p1");
+    expect(() => insertWidget(db, "w-bad", "p1", "no-such-set")).toThrow();
+    insertSet(db, "set1", "p1");
+    expect(() => insertWidget(db, "w-ok", "p1", "set1")).not.toThrow();
+    db.close();
+  });
+
+  it("cascades set deletion when the owning profile is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade.db") });
+    insertProfile(db, "p1");
+    insertSet(db, "set1", "p1");
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM dashboard_sets").get() as { n: number }).n,
+    ).toBe(0);
+    db.close();
+  });
+
+  it("upgrades a database written before it, leaving existing widget rows on the default set", () => {
+    const path = join(dir, "upgrade-043.db");
+    const before = new Database(path);
+    before.pragma("journal_mode = WAL");
+    before.pragma("foreign_keys = ON");
+    before.function("nx_fold", { deterministic: true }, (value: unknown) =>
+      typeof value === "string" ? foldSearchText(value) : null,
+    );
+    runMigrations(
+      before,
+      MIGRATIONS.filter((migration) => migration.version < 43),
+    );
+    before
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run("p1", "personal", "Stari profil", now());
+    before
+      .prepare(
+        `INSERT INTO dashboard_widgets
+           (profile_id, instance_id, widget_id, size, position, config, created_at, updated_at)
+         VALUES (?, ?, 'calendar:danas', 'L', 1024, NULL, ?, ?)`,
+      )
+      .run("p1", "w1", now(), now());
+    before.close();
+
+    const db = openDatabase({ path });
+    expect(
+      db.raw
+        .prepare("SELECT size, set_id FROM dashboard_widgets WHERE instance_id = ?")
+        .get("w1"),
+    ).toEqual({ size: "L", set_id: null });
     db.close();
   });
 });

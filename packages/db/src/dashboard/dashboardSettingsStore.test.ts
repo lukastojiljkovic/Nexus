@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  DashboardSetStore,
   DashboardSettingsStore,
   DashboardSettingsValidationError,
   DEFAULT_BACKGROUND_DIM,
@@ -45,6 +46,7 @@ describe("DashboardSettingsStore.get", () => {
       backgroundMime: null,
       backgroundSizeBytes: null,
       backgroundDim: DEFAULT_BACKGROUND_DIM,
+      activeSetId: null,
     });
   });
 
@@ -67,6 +69,7 @@ describe("DashboardSettingsStore.setBackground", () => {
       backgroundMime: "image/png",
       backgroundSizeBytes: 2048,
       backgroundDim: DEFAULT_BACKGROUND_DIM,
+      activeSetId: null,
     });
     expect(store.get()).toEqual(settings);
   });
@@ -139,6 +142,7 @@ describe("DashboardSettingsStore.clearBackground", () => {
       backgroundMime: null,
       backgroundSizeBytes: null,
       backgroundDim: 15,
+      activeSetId: null,
     });
   });
 
@@ -174,7 +178,21 @@ describe("DashboardSettingsStore.setDim", () => {
       backgroundMime: "image/webp",
       backgroundSizeBytes: 10,
       backgroundDim: 80,
+      activeSetId: null,
     });
+  });
+
+  it("preserves the active-set choice across background and dim writes (ADR-055)", () => {
+    const profileId = createProfile("a");
+    const store = new DashboardSettingsStore(db.raw, profileId);
+    const sets = new DashboardSetStore(db.raw, profileId);
+    const set = sets.create("Fakultet", NOW);
+    sets.setActive(set.id, NOW);
+
+    store.setDim(25, LATER);
+    store.setBackground(HASH, "image/png", 10, LATER);
+    store.clearBackground(LATER);
+    expect(store.get().activeSetId).toBe(set.id);
   });
 });
 

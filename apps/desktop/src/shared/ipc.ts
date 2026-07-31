@@ -224,6 +224,12 @@ export const IpcChannel = {
   dashboardWidgetsRemove: "dashboard:widgets-remove",
   dashboardWidgetsSetSize: "dashboard:widgets-set-size",
   dashboardWidgetsMove: "dashboard:widgets-move",
+  // Named dashboards (DASH-008 / ADR-055) — the wire names ADR-055 decided.
+  dashboardSetsList: "dash:list-sets",
+  dashboardSetCreate: "dash:create-set",
+  dashboardSetRename: "dash:rename-set",
+  dashboardSetDelete: "dash:delete-set",
+  dashboardSetActivate: "dash:set-active-set",
   searchQuery: "search:query",
   searchRecent: "search:recent",
   searchPage: "search:page",
@@ -3110,6 +3116,8 @@ export interface DashboardWidgetInstance {
 
 export interface DashboardWidgetsListRequest {
   profileId: string;
+  /** The board the layout belongs to (DASH-008 / ADR-055): a named set's id, or null/absent for the default one („Početna“). Main validates and the store gates a non-null id against the profile's own sets. */
+  setId?: string | null;
 }
 
 /** Places a widget at the end of the layout. No `config`: nothing configures a widget yet. */
@@ -3117,17 +3125,20 @@ export interface DashboardWidgetsAddRequest {
   profileId: string;
   widgetId: string;
   size: DashboardWidgetSize;
+  setId?: string | null;
 }
 
 export interface DashboardWidgetsRemoveRequest {
   profileId: string;
   instanceId: string;
+  setId?: string | null;
 }
 
 export interface DashboardWidgetsSetSizeRequest {
   profileId: string;
   instanceId: string;
   size: DashboardWidgetSize;
+  setId?: string | null;
 }
 
 /** Re-orders one placement: `beforeId`/`afterId` are the placements it lands between, either null at an end — the pair API `task-lists:move` established. */
@@ -3136,6 +3147,68 @@ export interface DashboardWidgetsMoveRequest {
   instanceId: string;
   beforeId: string | null;
   afterId: string | null;
+  setId?: string | null;
+}
+
+/**
+ * Named dashboards (DASH-008 / ADR-055). One profile holds any number of named
+ * boards („table“) over the one default board, which is NOT a row: „Početna“
+ * is `set_id NULL`, undeletable and un-renamable by construction, so it never
+ * appears in `sets` and is addressed as `null` everywhere a board is named.
+ */
+
+/** MUST equal `MAX_DASHBOARD_SET_NAME_LENGTH` in `@nexus/db` — one domain, declared on each side so neither imports the other. */
+export const DASHBOARD_SET_NAME_MAX_LENGTH = 100;
+
+/** One named board as the switcher lists it. No position: the array's own order IS the board order. */
+export interface DashboardSetSummary {
+  id: string;
+  name: string;
+}
+
+/**
+ * The whole sets state, answered by every set channel: the named boards in
+ * board order plus which board is showing (null = „Početna“). Whole rather
+ * than per-row, for the reason every widget channel answers with the whole
+ * layout — a delete can move the active pointer, and a renderer patching
+ * locally would be one fallback away from disagreeing with what is stored.
+ */
+export interface DashboardSetsState {
+  sets: DashboardSetSummary[];
+  activeSetId: string | null;
+}
+
+/** `dash:create-set`'s answer: the resulting state plus which id the new board got — the caller typically activates it next. */
+export interface DashboardSetsCreated extends DashboardSetsState {
+  createdSetId: string;
+}
+
+export interface DashboardSetsListRequest {
+  profileId: string;
+}
+
+/** `name` is trimmed in main and re-trimmed in the store, 1..100 characters (SEC-EL-02's usual split). */
+export interface DashboardSetCreateRequest {
+  profileId: string;
+  name: string;
+}
+
+export interface DashboardSetRenameRequest {
+  profileId: string;
+  setId: string;
+  name: string;
+}
+
+/** Deletes the board AND its widget rows (they are arrangement, not content); the active board falls back to „Početna“ when it was this one. */
+export interface DashboardSetDeleteRequest {
+  profileId: string;
+  setId: string;
+}
+
+/** Writes which board the profile is looking at — one choice per profile (ADR-055's recorded limit), not per device. Null returns to „Početna“. */
+export interface DashboardSetActivateRequest {
+  profileId: string;
+  setId: string | null;
 }
 
 /**
@@ -3627,6 +3700,7 @@ export type ImportRecordType =
   | "note-version"
   | "note-template"
   | "dashboard-settings"
+  | "dashboard-set"
   | "dashboard-widget";
 
 /**
@@ -3646,6 +3720,7 @@ export type ImportSkipCode =
   | "settings-not-imported"
   | "notifications-not-imported"
   | "dashboard-settings-not-imported"
+  | "dashboard-sets-not-imported"
   | "dashboard-widgets-not-imported"
   | "study-settings-not-imported"
   | "calendar-settings-not-imported"
@@ -4734,14 +4809,18 @@ export interface NexusApi {
   /** Sets how far the scrim dims the image, 0..`MAX_BACKGROUND_DIM`. */
   setDashboardDim(profileId: string, dim: number): Promise<DashboardSettings>;
   /**
-   * This profile's dashboard layout in draw order (DASH-002 / ADR-045) — the
-   * DEFAULT arrangement while the profile has never rearranged it, which is a
-   * resolved answer and not an empty one. Never writes.
+   * One board's dashboard layout in draw order (DASH-002 / ADR-045; per-board
+   * since ADR-055 — `setId` null is „Početna“) — the DEFAULT arrangement while
+   * that board has never been arranged, which is a resolved answer and not an
+   * empty one. Never writes.
    */
-  dashboardWidgets(profileId: string): Promise<DashboardWidgetInstance[]>;
+  dashboardWidgets(
+    profileId: string,
+    setId: string | null,
+  ): Promise<DashboardWidgetInstance[]>;
   /**
-   * Places `widgetId` at the end of the layout and answers with the whole
-   * resulting layout. The first mutation of a profile still on the default
+   * Places `widgetId` at the end of the board's layout and answers with the
+   * whole resulting layout. The first mutation of a board still on the default
    * writes that default out as real rows first, so adding a sixth widget never
    * costs the five that were there.
    */
@@ -4749,29 +4828,50 @@ export interface NexusApi {
     profileId: string,
     widgetId: string,
     size: DashboardWidgetSize,
+    setId: string | null,
   ): Promise<DashboardWidgetInstance[]>;
   /**
    * Removes one placement, answering with the resulting layout. Removing the
    * LAST one puts the default arrangement back: no rows IS the default, so
-   * "remove everything" is also how a user resets.
+   * "remove everything" is also how a user resets — per board.
    */
   removeDashboardWidget(
     profileId: string,
     instanceId: string,
+    setId: string | null,
   ): Promise<DashboardWidgetInstance[]>;
   /** Changes one placement's size preset, leaving its place in the order alone. */
   setDashboardWidgetSize(
     profileId: string,
     instanceId: string,
     size: DashboardWidgetSize,
+    setId: string | null,
   ): Promise<DashboardWidgetInstance[]>;
-  /** Re-orders one placement between two others, either null at an end of the layout. */
+  /** Re-orders one placement between two others, either null at an end of the layout. Neighbours resolve within the same board only. */
   moveDashboardWidget(
     profileId: string,
     instanceId: string,
     beforeId: string | null,
     afterId: string | null,
+    setId: string | null,
   ): Promise<DashboardWidgetInstance[]>;
+  /** The named boards in board order plus which one is showing (DASH-008 / ADR-055). Never writes. */
+  dashboardSets(profileId: string): Promise<DashboardSetsState>;
+  /** Creates a named board (its layout starts as the default arrangement) and answers the resulting state plus the new board's id. */
+  createDashboardSet(profileId: string, name: string): Promise<DashboardSetsCreated>;
+  /** Renames one named board. „Početna“ has no id to pass here — it is not a row. */
+  renameDashboardSet(
+    profileId: string,
+    setId: string,
+    name: string,
+  ): Promise<DashboardSetsState>;
+  /** Deletes one named board and its widget rows; the active board falls back to „Početna“ when it was this one. */
+  deleteDashboardSet(profileId: string, setId: string): Promise<DashboardSetsState>;
+  /** Writes which board this profile is looking at — null returns to „Početna“. */
+  setActiveDashboardSet(
+    profileId: string,
+    setId: string | null,
+  ): Promise<DashboardSetsState>;
   /** Runs the query pipeline (parse -> FTS match -> bm25 candidates -> rank), falling back to `searchRecent`'s order when the query has no matchable terms (ADR-021). */
   searchQuery(profileId: string, query: string, limit: number): Promise<SearchResult[]>;
   /** The profile's most recently touched entries, already in their final order — no ranking pass, unlike `searchQuery`. */

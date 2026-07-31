@@ -76,6 +76,7 @@ export class ForeignImportStore {
   private readonly insertNoteLink: Database.Statement;
   private readonly insertCard: Database.Statement;
   private readonly insertReviewLog: Database.Statement;
+  private readonly insertDashboardSet: Database.Statement;
   private readonly insertDashboardWidget: Database.Statement;
 
   constructor(
@@ -239,10 +240,14 @@ export class ForeignImportStore {
           review, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
+    this.insertDashboardSet = db.prepare(
+      `INSERT INTO dashboard_sets (id, profile_id, name, position, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    );
     this.insertDashboardWidget = db.prepare(
       `INSERT INTO dashboard_widgets
-         (profile_id, instance_id, widget_id, size, position, config, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (profile_id, instance_id, widget_id, size, set_id, position, config, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
   }
 
@@ -601,15 +606,25 @@ export class ForeignImportStore {
         written += 1;
       }
 
-      // The dashboard LAYOUT. The planner plans this member EMPTY by design
-      // (founder, 2026-07-31: an import must not rearrange the target's tabla),
-      // so this loop writes nothing today — it stays because this store is the
-      // plan's faithful executor over every `ProfileData` member, and POLICY
-      // about what a plan carries lives in `planForeignImport`, not here.
+      // The named boards, then the dashboard LAYOUT — sets before the widgets
+      // whose `set_id` names them, since foreign keys stay enforced here. The
+      // planner plans BOTH members EMPTY by design (founder, 2026-07-31: an
+      // import must not rearrange the target's tabla; ADR-055 extends that to
+      // its boards), so these loops write nothing today — they stay because
+      // this store is the plan's faithful executor over every `ProfileData`
+      // member, and POLICY about what a plan carries lives in
+      // `planForeignImport`, not here.
+      for (const set of planned.dashboardSets) {
+        this.insertDashboardSet.run(
+          set.id, this.profileId, set.name, set.position, set.createdAt, set.updatedAt,
+        );
+        written += 1;
+      }
       for (const widget of planned.dashboardWidgets) {
         this.insertDashboardWidget.run(
           this.profileId, widget.instanceId, widget.widgetId, widget.size,
-          widget.position, widget.config, widget.createdAt, widget.updatedAt,
+          widget.setId ?? null, widget.position, widget.config,
+          widget.createdAt, widget.updatedAt,
         );
         written += 1;
       }

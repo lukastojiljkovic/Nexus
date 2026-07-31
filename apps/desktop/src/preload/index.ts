@@ -399,21 +399,32 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.dashboardClearBackground, { profileId }),
   setDashboardDim: (profileId, dim) =>
     ipcRenderer.invoke(IpcChannel.dashboardSetDim, { profileId, dim }),
-  dashboardWidgets: (profileId) =>
-    ipcRenderer.invoke(IpcChannel.dashboardWidgetsList, { profileId }),
-  addDashboardWidget: (profileId, widgetId, size) =>
-    ipcRenderer.invoke(IpcChannel.dashboardWidgetsAdd, { profileId, widgetId, size }),
-  removeDashboardWidget: (profileId, instanceId) =>
-    ipcRenderer.invoke(IpcChannel.dashboardWidgetsRemove, { profileId, instanceId }),
-  setDashboardWidgetSize: (profileId, instanceId, size) =>
-    ipcRenderer.invoke(IpcChannel.dashboardWidgetsSetSize, { profileId, instanceId, size }),
-  moveDashboardWidget: (profileId, instanceId, beforeId, afterId) =>
+  dashboardWidgets: (profileId, setId) =>
+    ipcRenderer.invoke(IpcChannel.dashboardWidgetsList, { profileId, setId }),
+  addDashboardWidget: (profileId, widgetId, size, setId) =>
+    ipcRenderer.invoke(IpcChannel.dashboardWidgetsAdd, { profileId, widgetId, size, setId }),
+  removeDashboardWidget: (profileId, instanceId, setId) =>
+    ipcRenderer.invoke(IpcChannel.dashboardWidgetsRemove, { profileId, instanceId, setId }),
+  setDashboardWidgetSize: (profileId, instanceId, size, setId) =>
+    ipcRenderer.invoke(IpcChannel.dashboardWidgetsSetSize, { profileId, instanceId, size, setId }),
+  moveDashboardWidget: (profileId, instanceId, beforeId, afterId, setId) =>
     ipcRenderer.invoke(IpcChannel.dashboardWidgetsMove, {
       profileId,
       instanceId,
       beforeId,
       afterId,
+      setId,
     }),
+  dashboardSets: (profileId) =>
+    ipcRenderer.invoke(IpcChannel.dashboardSetsList, { profileId }),
+  createDashboardSet: (profileId, name) =>
+    ipcRenderer.invoke(IpcChannel.dashboardSetCreate, { profileId, name }),
+  renameDashboardSet: (profileId, setId, name) =>
+    ipcRenderer.invoke(IpcChannel.dashboardSetRename, { profileId, setId, name }),
+  deleteDashboardSet: (profileId, setId) =>
+    ipcRenderer.invoke(IpcChannel.dashboardSetDelete, { profileId, setId }),
+  setActiveDashboardSet: (profileId, setId) =>
+    ipcRenderer.invoke(IpcChannel.dashboardSetActivate, { profileId, setId }),
   searchQuery: (profileId, query, limit) =>
     ipcRenderer.invoke(IpcChannel.searchQuery, { profileId, query, limit }),
   searchRecent: (profileId, limit) =>

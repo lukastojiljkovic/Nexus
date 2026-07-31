@@ -54,6 +54,7 @@ import {
   CalendarSettingsStore,
   CARD_RATINGS,
   CardStore,
+  DashboardSetStore,
   DashboardSettingsStore,
   DashboardWidgetStore,
   DatabaseLockedError,
@@ -289,6 +290,7 @@ import {
   BACKUP_CADENCES,
   CARD_KINDS,
   CARD_TEXT_MAX_LENGTH,
+  DASHBOARD_SET_NAME_MAX_LENGTH,
   IMPORT_DUPLICATE_TYPES,
   IpcChannel,
   LLM_IMPORT_KINDS,
@@ -324,6 +326,8 @@ import {
   type CalendarSettings,
   type DashboardPickResult,
   type DashboardSettings,
+  type DashboardSetsCreated,
+  type DashboardSetsState,
   type ReviewQueue,
   type StudySettings,
   type DashboardWidgetInstance,
@@ -1579,6 +1583,27 @@ function asDashboardWidgetSize(value: unknown, field: string): DashboardWidgetSi
 }
 
 /** An integer field inside an inclusive structural range — the per-column halves of a person's yearless date. */
+/**
+ * A widget channel's board scope (ADR-055): absent or null means the default
+ * board („Početna“), anything else must be a non-empty id — structural here,
+ * semantic in the store, which gates a non-null id against the profile's own
+ * sets (SEC-EL-02's usual split).
+ */
+function asDashboardSetScope(value: unknown): string | null {
+  return value === undefined ? null : asNullableId(value, "setId");
+}
+
+/** A dashboard set's name (ADR-055): a string that trims to 1..100 characters, returned TRIMMED — the store re-trims and re-checks (SEC-EL-02). */
+function asDashboardSetName(value: unknown, field: string): string {
+  const trimmed = asNonEmptyString(value, field).trim();
+  if (trimmed.length === 0 || trimmed.length > DASHBOARD_SET_NAME_MAX_LENGTH) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be 1..${DASHBOARD_SET_NAME_MAX_LENGTH} characters after trimming.`,
+    );
+  }
+  return trimmed;
+}
+
 function asBoundedInteger(value: unknown, field: string, min: number, max: number): number {
   const int = asInteger(value, field);
   if (int < min || int > max) {
@@ -2428,6 +2453,19 @@ function dashboardWidgetStore(profileId: string): DashboardWidgetStore {
 
 function backupSettingsStore(profileId: string): BackupSettingsStore {
   return new BackupSettingsStore(requireDb().raw, profileId);
+}
+
+function dashboardSetStore(profileId: string): DashboardSetStore {
+  return new DashboardSetStore(requireDb().raw, profileId);
+}
+
+/** The whole sets state every `dash:*-set` channel answers with (ADR-055): the named boards in board order plus the active choice. */
+function dashboardSetsState(profileId: string): DashboardSetsState {
+  const store = dashboardSetStore(profileId);
+  return {
+    sets: store.list().map((set) => ({ id: set.id, name: set.name })),
+    activeSetId: store.activeSetId(),
+  };
 }
 
 /**
@@ -3291,6 +3329,7 @@ function restoreDeps(): ImportDeps {
     },
     dashboardSettingsStore,
     dashboardWidgetStore,
+    dashboardSetStore,
     saveBlob: (bytes) => saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes),
     // Injected rather than reached for, so `restore.ts` never has to know WHICH
     // tables reference a blob — that union lives in exactly one place
@@ -3339,6 +3378,7 @@ function imexArchiveDeps(): ImexArchiveDeps {
     noteAttachmentStore,
     dashboardSettingsStore,
     dashboardWidgetStore,
+    dashboardSetStore,
     flagStore,
     readBlob: (sha256) => readBlob(blobStorePathsFor(), requireBlobKeys(), sha256),
   };
@@ -5651,17 +5691,20 @@ function registerIpc(): void {
     return dashboardSettingsStore(profileId).setDim(dim, new Date().toISOString());
   });
 
-  // Dashboard layout (DASH-002 / ADR-045). SEC-EL-02 as everywhere else:
-  // `assertTrustedSender` first, every field through an `as*` validator, and
-  // every `now` stamped from main's own clock. Each answers with the WHOLE
-  // resulting layout — a mutation can re-space its neighbours, so a reply naming
-  // only the touched row would leave the renderer holding a stale order.
+  // Dashboard layout (DASH-002 / ADR-045; per-board since ADR-055). SEC-EL-02
+  // as everywhere else: `assertTrustedSender` first, every field through an
+  // `as*` validator, and every `now` stamped from main's own clock. Each
+  // answers with the WHOLE resulting layout — a mutation can re-space its
+  // neighbours, so a reply naming only the touched row would leave the renderer
+  // holding a stale order. `setId` (null/absent = the default board) scopes
+  // every one of them.
   ipcMain.handle(
     IpcChannel.dashboardWidgetsList,
     (event, payload): DashboardWidgetInstance[] => {
       assertTrustedSender(event);
-      const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
-      return dashboardWidgetStore(profileId).listLayout();
+      const body = asRecord(payload);
+      const profileId = asNonEmptyString(body.profileId, "profileId");
+      return dashboardWidgetStore(profileId).listLayout(asDashboardSetScope(body.setId));
     },
   );
 
@@ -5678,7 +5721,12 @@ function registerIpc(): void {
       // draw (migration 032).
       const widgetId = asNonEmptyString(body.widgetId, "widgetId");
       const size = asDashboardWidgetSize(body.size, "size");
-      return dashboardWidgetStore(profileId).add(widgetId, size, new Date().toISOString());
+      return dashboardWidgetStore(profileId).add(
+        asDashboardSetScope(body.setId),
+        widgetId,
+        size,
+        new Date().toISOString(),
+      );
     },
   );
 
@@ -5689,7 +5737,11 @@ function registerIpc(): void {
       const body = asRecord(payload);
       const profileId = asNonEmptyString(body.profileId, "profileId");
       const instanceId = asNonEmptyString(body.instanceId, "instanceId");
-      return dashboardWidgetStore(profileId).remove(instanceId, new Date().toISOString());
+      return dashboardWidgetStore(profileId).remove(
+        asDashboardSetScope(body.setId),
+        instanceId,
+        new Date().toISOString(),
+      );
     },
   );
 
@@ -5702,6 +5754,7 @@ function registerIpc(): void {
       const instanceId = asNonEmptyString(body.instanceId, "instanceId");
       const size = asDashboardWidgetSize(body.size, "size");
       return dashboardWidgetStore(profileId).setSize(
+        asDashboardSetScope(body.setId),
         instanceId,
         size,
         new Date().toISOString(),
@@ -5719,6 +5772,7 @@ function registerIpc(): void {
       const beforeId = asNullableString(body.beforeId, "beforeId");
       const afterId = asNullableString(body.afterId, "afterId");
       return dashboardWidgetStore(profileId).move(
+        asDashboardSetScope(body.setId),
         instanceId,
         beforeId,
         afterId,
@@ -5726,6 +5780,55 @@ function registerIpc(): void {
       );
     },
   );
+
+  // Named dashboards (DASH-008 / ADR-055): the switcher's five channels. Every
+  // answer is the WHOLE sets state — a delete can move the active pointer, and
+  // a renderer patching one row locally would be one fallback away from
+  // disagreeing with what is stored. Names are trimmed here and re-checked in
+  // the store; the default board needs no channel at all, because it is not a
+  // row.
+  ipcMain.handle(IpcChannel.dashboardSetsList, (event, payload): DashboardSetsState => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return dashboardSetsState(profileId);
+  });
+
+  ipcMain.handle(IpcChannel.dashboardSetCreate, (event, payload): DashboardSetsCreated => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const name = asDashboardSetName(body.name, "name");
+    const created = dashboardSetStore(profileId).create(name, new Date().toISOString());
+    return { ...dashboardSetsState(profileId), createdSetId: created.id };
+  });
+
+  ipcMain.handle(IpcChannel.dashboardSetRename, (event, payload): DashboardSetsState => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const setId = asNonEmptyString(body.setId, "setId");
+    const name = asDashboardSetName(body.name, "name");
+    dashboardSetStore(profileId).rename(setId, name, new Date().toISOString());
+    return dashboardSetsState(profileId);
+  });
+
+  ipcMain.handle(IpcChannel.dashboardSetDelete, (event, payload): DashboardSetsState => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const setId = asNonEmptyString(body.setId, "setId");
+    dashboardSetStore(profileId).delete(setId, new Date().toISOString());
+    return dashboardSetsState(profileId);
+  });
+
+  ipcMain.handle(IpcChannel.dashboardSetActivate, (event, payload): DashboardSetsState => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const setId = asNullableId(body.setId, "setId");
+    dashboardSetStore(profileId).setActive(setId, new Date().toISOString());
+    return dashboardSetsState(profileId);
+  });
 
   // Global search (ADR-021 / PRD 08 SRCH-001/002): `runSearchQuery`/
   // `runRecentSearch` own the actual pipeline (see their doc comments) so the

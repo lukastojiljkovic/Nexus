@@ -2,9 +2,11 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ComponentType, CSSProperties, DragEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { ModuleRegistry, WidgetContract } from "@nexus/core";
-import { Button, Card } from "@nexus/ui";
-import { DASHBOARD_WIDGET_SPANS } from "../../shared/ipc.js";
+import { Button, Card, TextField } from "@nexus/ui";
+import { DASHBOARD_SET_NAME_MAX_LENGTH, DASHBOARD_WIDGET_SPANS } from "../../shared/ipc.js";
 import type {
+  DashboardSetsState,
+  DashboardSetSummary,
   DashboardSettings,
   DashboardWidgetInstance,
   DashboardWidgetSize,
@@ -151,6 +153,74 @@ function WidgetMenu({
         </>
       )}
     </NotePopover>
+  );
+}
+
+/** What the board name line is naming: a fresh board, or one being renamed. */
+type SetEditor = { mode: "create" } | { mode: "rename"; setId: string };
+
+interface DashboardSetDeleteDialogProps {
+  set: DashboardSetSummary;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+/**
+ * „Obriši tablu“ (DASH-008 / ADR-055) — the house confirm, the recipe
+ * `NoteCardsDeleteDialog` and the recurrence-scope question share verbatim.
+ * What goes is the board's ARRANGEMENT; the content its cards read lives in the
+ * modules and is untouched, and the question says so, because that is what
+ * makes it answerable. No default: focus lands on the one choice, Enter picks
+ * nothing until it is focused, and Escape, the backdrop and Otkaži all cancel.
+ */
+function DashboardSetDeleteDialog({ set, onConfirm, onCancel }: DashboardSetDeleteDialogProps) {
+  const s = strings.dashboard.sets.deleteDialog;
+  const choicesRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const questionId = useId();
+
+  useEffect(() => {
+    choicesRef.current?.querySelector("button")?.focus();
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCancel();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onCancel]);
+
+  return createPortal(
+    <div className="recur-dialog__overlay">
+      <div className="recur-dialog__backdrop" onClick={onCancel} />
+      <div
+        className="recur-dialog__panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={questionId}
+      >
+        <h2 id={titleId} className="recur-dialog__title">
+          {s.title}
+        </h2>
+        <p className="recur-dialog__name">„{set.name}“</p>
+        <p id={questionId} className="recur-dialog__question">
+          {s.question}
+        </p>
+        <div className="recur-dialog__choices" ref={choicesRef}>
+          <Button className="recur-dialog__choice" onClick={onConfirm}>
+            {s.confirm}
+          </Button>
+        </div>
+        <div className="recur-dialog__actions">
+          <Button className="recur-dialog__cancel" onClick={onCancel}>
+            {s.cancel}
+          </Button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -313,6 +383,17 @@ export function DashboardPage({
   const [layoutAttempt, setLayoutAttempt] = useState(0);
   const [editing, setEditing] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
+  // The named boards and which one is showing (DASH-008 / ADR-055). Loaded
+  // before the layout — the layout IS the active board's — but a failed read
+  // falls back to „Početna“ rather than holding the page hostage: the switcher
+  // is navigation, and the default board always exists because it is not a row.
+  const [setsState, setSetsState] = useState<DashboardSetsState | null>(null);
+  const [setsActionFailed, setSetsActionFailed] = useState(false);
+  // The inline name line (create / rename) the switcher row becomes, and the
+  // draft it edits — the tasks-rail naming idiom, one surface over.
+  const [setEditor, setSetEditor] = useState<SetEditor | null>(null);
+  const [setDraft, setSetDraft] = useState("");
+  const [deleteSetPrompt, setDeleteSetPrompt] = useState<DashboardSetSummary | null>(null);
   // A write that did not land, and the one thing the store does that the user
   // could not have predicted: removing the last widget brings the default back.
   const [actionFailed, setActionFailed] = useState(false);
@@ -401,7 +482,35 @@ export function DashboardPage({
     let active = true;
     void (async () => {
       try {
-        const next = await window.nexus.dashboardWidgets(profileId);
+        const next = await window.nexus.dashboardSets(profileId);
+        if (active) setSetsState(next);
+      } catch (error) {
+        if (active) setSetsState({ sets: [], activeSetId: null });
+        console.error("Nexus: failed to load the dashboard sets:", error);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profileId]);
+
+  // The board actually showing: the stored choice when it still names a listed
+  // board, „Početna“ (null) otherwise — a defensive read, since a delete clears
+  // the pointer in the same transaction and nothing should ever dangle here.
+  const sets = setsState?.sets ?? [];
+  const activeSet = sets.find((set) => set.id === setsState?.activeSetId) ?? null;
+  const activeSetId = activeSet?.id ?? null;
+  const setsLoaded = setsState !== null;
+
+  useEffect(() => {
+    if (!setsLoaded) return; // which board's layout to read is not known yet
+    let active = true;
+    // Cleared up front so a board switch never shows the previous board's cards
+    // under the new board's name while the read is in flight.
+    setLayout(null);
+    void (async () => {
+      try {
+        const next = await window.nexus.dashboardWidgets(profileId, activeSetId);
         if (!active) return;
         setLayout(next);
         setLayoutFailed(false);
@@ -413,7 +522,7 @@ export function DashboardPage({
     return () => {
       active = false;
     };
-  }, [profileId, layoutAttempt]);
+  }, [profileId, layoutAttempt, setsLoaded, activeSetId]);
 
   /**
    * Runs one layout write and stores the layout it answers with. Every channel
@@ -442,29 +551,113 @@ export function DashboardPage({
 
   async function moveWidget(instanceId: string, step: LayoutNeighbours): Promise<void> {
     const next = await runLayout(() =>
-      window.nexus.moveDashboardWidget(profileId, instanceId, step.beforeId, step.afterId),
+      window.nexus.moveDashboardWidget(
+        profileId,
+        instanceId,
+        step.beforeId,
+        step.afterId,
+        activeSetId,
+      ),
     );
     if (next !== null) mark(instanceId);
   }
 
   async function resizeWidget(instanceId: string, size: DashboardWidgetSize): Promise<void> {
-    await runLayout(() => window.nexus.setDashboardWidgetSize(profileId, instanceId, size));
+    await runLayout(() =>
+      window.nexus.setDashboardWidgetSize(profileId, instanceId, size, activeSetId),
+    );
   }
 
   async function removeWidget(instanceId: string): Promise<void> {
     // Said out loud the moment it happens: no rows IS the default arrangement,
     // so taking the last card off is also how a user resets (the store's
-    // documented semantics) — and nothing else on screen would explain the five
-    // cards that just came back.
+    // documented semantics, per board since ADR-055) — and nothing else on
+    // screen would explain the five cards that just came back.
     const wasLast = layout !== null && layout.length === 1;
-    const next = await runLayout(() => window.nexus.removeDashboardWidget(profileId, instanceId));
+    const next = await runLayout(() =>
+      window.nexus.removeDashboardWidget(profileId, instanceId, activeSetId),
+    );
     if (next !== null && wasLast && next.length > 0) setDefaultRestored(true);
   }
 
   async function addWidget(widgetId: string, size: DashboardWidgetSize): Promise<void> {
-    const next = await runLayout(() => window.nexus.addDashboardWidget(profileId, widgetId, size));
+    const next = await runLayout(() =>
+      window.nexus.addDashboardWidget(profileId, widgetId, size, activeSetId),
+    );
     const added = next?.at(-1);
     if (added !== undefined) mark(added.instanceId);
+  }
+
+  // --- Named boards (DASH-008 / ADR-055) ------------------------------------
+
+  /** Runs one sets write and stores the state it answers with — every set channel answers whole, `runLayout`'s twin. */
+  async function runSets(
+    write: () => Promise<DashboardSetsState>,
+  ): Promise<DashboardSetsState | null> {
+    setSetsActionFailed(false);
+    try {
+      const next = await write();
+      setSetsState(next);
+      return next;
+    } catch (error) {
+      setSetsActionFailed(true);
+      console.error("Nexus: failed to change the dashboard sets:", error);
+      return null;
+    }
+  }
+
+  async function chooseSet(setId: string | null): Promise<void> {
+    if (setId === activeSetId) return;
+    // A switch is a navigation: the previous board's notices do not describe
+    // the one about to draw.
+    setDefaultRestored(false);
+    setActionFailed(false);
+    await runSets(() => window.nexus.setActiveDashboardSet(profileId, setId));
+  }
+
+  function openSetEditor(editor: SetEditor): void {
+    setSetEditor(editor);
+    setSetDraft(
+      editor.mode === "rename"
+        ? (sets.find((set) => set.id === editor.setId)?.name ?? "")
+        : "",
+    );
+  }
+
+  function closeSetEditor(): void {
+    setSetEditor(null);
+    setSetDraft("");
+  }
+
+  async function submitSetName(): Promise<void> {
+    if (setEditor === null) return;
+    const name = setDraft.trim();
+    if (name.length === 0) return;
+    if (setEditor.mode === "create") {
+      setSetsActionFailed(false);
+      try {
+        const created = await window.nexus.createDashboardSet(profileId, name);
+        setSetsState(created);
+        // A board is made to be used: switching to it right away is the one
+        // feedback that says it exists, and it starts on the default
+        // arrangement (an EMPTY set IS the default, per set).
+        await runSets(() =>
+          window.nexus.setActiveDashboardSet(profileId, created.createdSetId),
+        );
+      } catch (error) {
+        setSetsActionFailed(true);
+        console.error("Nexus: failed to create a dashboard set:", error);
+      }
+    } else {
+      await runSets(() => window.nexus.renameDashboardSet(profileId, setEditor.setId, name));
+    }
+    closeSetEditor();
+  }
+
+  async function deleteSet(set: DashboardSetSummary): Promise<void> {
+    // The store clears the active pointer in the same transaction, so the
+    // answered state already reads „Početna“ when the deleted board was showing.
+    await runSets(() => window.nexus.deleteDashboardSet(profileId, set.id));
   }
 
   // --- Drag & drop (edit mode) ----------------------------------------------
@@ -525,6 +718,9 @@ export function DashboardPage({
     setGalleryOpen(false);
     setActionFailed(false);
     setDefaultRestored(false);
+    setSetsActionFailed(false);
+    setDeleteSetPrompt(null);
+    closeSetEditor();
     endDrag();
   }
 
@@ -603,7 +799,158 @@ export function DashboardPage({
       )}
       <div className="dash__topbar">
         <header className="dash__greeting">
-          <h1 className="dash__hello">{greeting(profileName, now.getHours())}</h1>
+          <div className="dash__hello-row">
+            <h1 className="dash__hello">{greeting(profileName, now.getHours())}</h1>
+            {/* The board switcher (DASH-008 / ADR-055): the active board's name
+                as quiet text beside the greeting, the house popover behind it.
+                The active entry is typographic — gold + weight — never a pill,
+                never a glow. While a name is being typed, the line IS the
+                switcher's spot, the tasks-rail idiom. */}
+            {setsLoaded &&
+              (setEditor !== null ? (
+                <form
+                  className="dash__set-form"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void submitSetName();
+                  }}
+                >
+                  <TextField
+                    value={setDraft}
+                    placeholder={strings.dashboard.sets.namePlaceholder}
+                    aria-label={
+                      setEditor.mode === "create"
+                        ? strings.dashboard.sets.createLabel
+                        : strings.dashboard.sets.renameLabel
+                    }
+                    maxLength={DASHBOARD_SET_NAME_MAX_LENGTH}
+                    autoFocus
+                    onChange={(event) => setSetDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        closeSetEditor();
+                      }
+                    }}
+                  />
+                  <Button type="submit" size="sm" variant="primary">
+                    {strings.dashboard.sets.save}
+                  </Button>
+                  <Button type="button" size="sm" onClick={closeSetEditor}>
+                    {strings.dashboard.sets.cancel}
+                  </Button>
+                </form>
+              ) : (
+                <>
+                  <NotePopover
+                    label={strings.dashboard.sets.switcherLabel}
+                    triggerClassName="dash__set-switcher"
+                    triggerContent={activeSet?.name ?? strings.dashboard.sets.defaultName}
+                  >
+                    {(close) => (
+                      <>
+                        {[
+                          { id: null as string | null, name: strings.dashboard.sets.defaultName },
+                          ...sets,
+                        ].map((entry) => {
+                          const isActive = entry.id === activeSetId;
+                          return (
+                            <button
+                              key={entry.id ?? "pocetna"}
+                              className={`note__menu-item note__menu-item--check${isActive ? " dash__set-item--active" : ""}`}
+                              role="menuitemradio"
+                              type="button"
+                              aria-checked={isActive}
+                              onClick={() => {
+                                void chooseSet(entry.id);
+                                close();
+                              }}
+                            >
+                              <span
+                                className={`note__menu-check${isActive ? "" : " note__menu-check--hidden"}`}
+                                aria-hidden="true"
+                              >
+                                ✓
+                              </span>
+                              {entry.name}
+                            </button>
+                          );
+                        })}
+                        {editing && (
+                          <>
+                            <div className="note__menu-sep" role="separator" />
+                            <button
+                              className="note__menu-item"
+                              role="menuitem"
+                              type="button"
+                              onClick={() => {
+                                close();
+                                openSetEditor({ mode: "create" });
+                              }}
+                            >
+                              {strings.dashboard.sets.create}
+                            </button>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </NotePopover>
+                  {/* Manage — EDIT MODE only (ADR-055): create always, rename and
+                      delete only for a named board. „Početna“ offers neither,
+                      because it is not a row — the items stay drawn, disabled,
+                      so the menu never has to be re-read. */}
+                  {editing && (
+                    <NotePopover
+                      label={strings.dashboard.sets.manageLabel}
+                      triggerClassName="dash__set-manage"
+                    >
+                      {(close) => (
+                        <>
+                          <button
+                            className="note__menu-item"
+                            role="menuitem"
+                            type="button"
+                            onClick={() => {
+                              close();
+                              openSetEditor({ mode: "create" });
+                            }}
+                          >
+                            {strings.dashboard.sets.create}
+                          </button>
+                          <button
+                            className="note__menu-item"
+                            role="menuitem"
+                            type="button"
+                            disabled={activeSet === null}
+                            onClick={() => {
+                              if (activeSet !== null) {
+                                openSetEditor({ mode: "rename", setId: activeSet.id });
+                              }
+                              close();
+                            }}
+                          >
+                            {strings.dashboard.sets.rename}
+                          </button>
+                          <div className="note__menu-sep" role="separator" />
+                          <button
+                            className="note__menu-item note__menu-item--danger"
+                            role="menuitem"
+                            type="button"
+                            disabled={activeSet === null}
+                            onClick={() => {
+                              if (activeSet !== null) setDeleteSetPrompt(activeSet);
+                              close();
+                            }}
+                          >
+                            {strings.dashboard.sets.remove}
+                          </button>
+                        </>
+                      )}
+                    </NotePopover>
+                  )}
+                </>
+              ))}
+          </div>
           <p className="dash__date">{dateLine}</p>
           {/* Nothing to say ⇒ no element at all (DASH-009). A caption that
               persists to announce its own emptiness is an empty state, and the
@@ -628,7 +975,7 @@ export function DashboardPage({
         </div>
       </div>
 
-      {(layoutFailed || actionFailed || defaultRestored) && (
+      {(layoutFailed || actionFailed || setsActionFailed || defaultRestored) && (
         <div className="dash__notices">
           {layoutFailed && (
             <p className="dash__status" role="alert">
@@ -641,6 +988,11 @@ export function DashboardPage({
           {actionFailed && (
             <p className="dash__status" role="alert">
               {s.edit.failed}
+            </p>
+          )}
+          {setsActionFailed && (
+            <p className="dash__status" role="alert">
+              {s.sets.failed}
             </p>
           )}
           {defaultRestored && (
@@ -720,6 +1072,18 @@ export function DashboardPage({
           placed={placedWidgetIds}
           onAdd={(widgetId, size) => void addWidget(widgetId, size)}
           onClose={() => setGalleryOpen(false)}
+        />
+      )}
+
+      {deleteSetPrompt !== null && (
+        <DashboardSetDeleteDialog
+          set={deleteSetPrompt}
+          onConfirm={() => {
+            const doomed = deleteSetPrompt;
+            setDeleteSetPrompt(null);
+            void deleteSet(doomed);
+          }}
+          onCancel={() => setDeleteSetPrompt(null)}
         />
       )}
     </div>

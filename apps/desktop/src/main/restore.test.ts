@@ -23,6 +23,7 @@ import { deriveArchiveKey, generateSalt } from "@nexus/core/auth";
 import {
   CalendarSettingsStore,
   CardStore,
+  DashboardSetStore,
   DashboardSettingsStore,
   DashboardWidgetStore,
   DeckStore,
@@ -187,6 +188,7 @@ function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
     flagStore: (profileId) => new SqliteFlagStore(handle.raw, profileId),
     dashboardSettingsStore: (profileId) => new DashboardSettingsStore(handle.raw, profileId),
     dashboardWidgetStore: (profileId) => new DashboardWidgetStore(handle.raw, profileId),
+    dashboardSetStore: (profileId) => new DashboardSetStore(handle.raw, profileId),
   };
 }
 
@@ -378,6 +380,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   const taskTemplateStore = new TaskTemplateStore(handle.raw, profileId);
   const dashboardStore = new DashboardSettingsStore(handle.raw, profileId);
   const dashboardWidgetStore = new DashboardWidgetStore(handle.raw, profileId);
+  const dashboardSetStore = new DashboardSetStore(handle.raw, profileId);
 
   // A real list with a section, and the task filed inside it (TASK-004), so the
   // zip round trip carries a task's placement and not just the Inbox default.
@@ -516,8 +519,11 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   dashboardStore.setDim(70, t0);
   dashboardStore.setBackground(backgroundSha, "image/png", backgroundBytes.length, t0);
   // ADR-045: a rearranged layout, so the fixture carries real widget rows —
-  // adding one materializes the default five beside it.
-  dashboardWidgetStore.add("study:ispiti", "L", t0);
+  // adding one materializes the default five beside it. Plus a NAMED board
+  // (ADR-055), active, so the round trip carries a set row and the pointer.
+  dashboardWidgetStore.add(null, "study:ispiti", "L", t0);
+  const dashboardSet = dashboardSetStore.create(`${label} tabla`, t0);
+  dashboardSetStore.setActive(dashboardSet.id, t0);
   // ADR-054: a SET term, so the round trip would fail if the calendar-settings
   // row were dropped rather than passing on the both-null default.
   new CalendarSettingsStore(handle.raw, profileId).save({
@@ -580,6 +586,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
       snapshot: noteStore.loadVersion(note.id, version.coveredSeq),
     })),
     dashboardSettings: [{ profileId, ...dashboardStore.get() }],
+    dashboardSets: dashboardSetStore.list(),
     dashboardWidgets: dashboardWidgetStore.listAll(),
   };
 

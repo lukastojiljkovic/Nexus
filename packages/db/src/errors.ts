@@ -588,6 +588,26 @@ export class DashboardWidgetValidationError extends DatabaseError {}
 export class DashboardWidgetNotFoundError extends DatabaseError {}
 
 /**
+ * Thrown when a dashboard-set write breaks a rule migration 043's schema cannot
+ * express on its own (DASH-008 / ADR-055): an empty or over-100-character name
+ * after trimming, a malformed `now`, or a reorder whose `beforeId`/`afterId`
+ * describe no gap at all — the moved set among them, or the two given the
+ * wrong way round. The store revalidates because renderer input is untrusted
+ * (SEC-EL-02).
+ */
+export class DashboardSetValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a dashboard-set operation names a set this profile does not have —
+ * unknown, or owned by another profile. Raised for the set itself, for a
+ * reorder's neighbours, AND by `DashboardWidgetStore` for a layout scope that
+ * names no set of this profile — the same uniform gate that keeps one profile's
+ * rows invisible to a store scoped to another. The NULL scope is never in
+ * question: „Početna“ is not a row, so there is nothing to fail to find.
+ */
+export class DashboardSetNotFoundError extends DatabaseError {}
+
+/**
  * Thrown when a profile-picture write breaks a rule migration 040's CHECKs
  * cannot express on their own (SET-001): a hash that is not a 64-character
  * lowercase sha256, a mime outside `isInlineImageMime`'s four raster formats, or

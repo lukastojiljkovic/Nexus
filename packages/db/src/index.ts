@@ -11,6 +11,8 @@ export {
   CalendarSettingsValidationError,
   CardNotFoundError,
   CardValidationError,
+  DashboardSetNotFoundError,
+  DashboardSetValidationError,
   DashboardSettingsValidationError,
   DashboardWidgetNotFoundError,
   DashboardWidgetValidationError,
@@ -113,6 +115,12 @@ export type {
   DashboardWidgetInstance,
   DashboardWidgetSize,
 } from "./dashboard/dashboardWidgetStore.js";
+
+export {
+  DashboardSetStore,
+  MAX_DASHBOARD_SET_NAME_LENGTH,
+} from "./dashboard/dashboardSetStore.js";
+export type { DashboardSet } from "./dashboard/dashboardSetStore.js";
 
 export {
   TaskStore,

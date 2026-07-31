@@ -2869,6 +2869,54 @@ button.cal__grid-event--dragging {
   font-weight: var(--nx-font-weight-semibold);
   letter-spacing: var(--nx-font-tracking-normal);
 }
+
+/* Named dashboards (DASH-008 / ADR-055): the board switcher beside the
+   greeting. The trigger is the ACTIVE board's name as quiet text — the
+   .tasks__templates-trigger arrangement of the shared popover trigger, sized
+   for a word and sat on the heading's baseline — and the popover behind it is
+   the house menu, where the active entry is typographic (gold + weight, the
+   .nx-nav-item--active recipe): no pill, no glow, nothing filled. */
+.dash__hello-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-3);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.dash__set-switcher.note__menu-trigger {
+  width: auto;
+  height: auto;
+  padding: 2px var(--nx-space-2);
+  font-size: var(--nx-font-size-body);
+  color: var(--nx-text-muted);
+  max-width: 28ch;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.dash__set-switcher.note__menu-trigger:hover,
+.dash__set-switcher.note__menu-trigger[aria-expanded="true"] {
+  color: var(--nx-text);
+  background: var(--nx-surface-alt);
+}
+/* Doubled with the base class on purpose: .note__menu-item declares its own
+   colour later in this file, and the ACTIVE board's gold must win over it. */
+.note__menu-item.dash__set-item--active {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* The "⋯" manage trigger keeps the row-level glyph look; it only needs to sit
+   on the same baseline as the named trigger beside it. */
+.dash__set-manage.note__menu-trigger {
+  align-self: center;
+}
+/* The inline name line the switcher row becomes (create / rename) — the
+   tasks-rail naming idiom with the dashboard's own spacing. */
+.dash__set-form {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
 .dash__date {
   margin: 0;
   color: var(--nx-text-muted);

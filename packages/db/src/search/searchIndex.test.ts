@@ -722,10 +722,10 @@ describe("task attachment names inside the task's search entry (migration 025)",
     expect(staleBody?.body).toBe("");
 
     runMigrations(rawDb, MIGRATIONS);
-    // SUPERVISOR NOTE: was `MIGRATIONS.length`, which only equals the stamped
-    // version while the list is gap-free. This lane owns 033 and the sibling
-    // owns 032, so the list has one gap until they merge; the stamp is the
-    // MAX version, which is what `runMigrations` actually writes either way.
+    // Deliberately the MAX version, not `MIGRATIONS.length`: the two are equal
+    // only while the list is gap-free, and parallel lanes routinely hold
+    // pre-assigned numbers mid-merge — the stamp is what `runMigrations`
+    // actually writes either way.
     expect(rawDb.pragma("user_version", { simple: true })).toBe(
       MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0),
     );
