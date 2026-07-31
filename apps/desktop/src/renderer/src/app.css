@@ -1839,6 +1839,11 @@ button.tasks__cal-chip:active {
 .cal__block-tag {
   font-weight: var(--nx-font-weight-semibold);
 }
+/* The block's topic name on an agenda row (ADR-063) — quiet, beside the title. */
+.cal__block-topic {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
 
 /* Task rows (dated tasks merged into the agenda, ADR-020): same quiet tag
    idiom as the exam/block rows above; muted when done. */
@@ -4053,6 +4058,177 @@ button.cal__grid-event--dragging {
   flex-basis: 100%;
   color: var(--nx-danger);
   font-size: var(--nx-font-size-body-sm);
+}
+
+/* Exam topics & the honest planner (ADR-063, slice b) ----------------------
+   The plan card's health line, the exam-week row variant (the picked/drop-
+   target recipe — accent border + soft background, never a glow), the pin
+   toggle, the per-weekday minutes row and the topics editor inside the plan
+   form, and the „Predlog skraćenja" dialog body. Tokens only. */
+.study__plan-health {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-danger);
+}
+/* A passed exam's unabsorbed backlog is a fact, not an alarm — muted, no button. */
+.study__plan-health--passed {
+  color: var(--nx-text-muted);
+}
+/* Exam-week rows = the house picked recipe (accent border + soft background),
+   as an outline so a row lighting up never moves the rows under it. */
+.study__block-row--exam-week {
+  background: var(--nx-accent-soft);
+  outline: 1px solid var(--nx-accent);
+  outline-offset: -1px;
+  border-radius: var(--nx-radius-sm);
+}
+/* The block's topic name and quiet kind chip ride inside the checkbox label. */
+.study__block-topic {
+  margin-left: var(--nx-space-2);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__block-kind {
+  margin-left: var(--nx-space-2);
+}
+/* Pin toggle — quiet text affordance (the plan-toggle treatment); a pinned
+   block reads typographically: gold text + weight, never a glow. */
+.study__pin.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.study__pin.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.study__pin.nx-button[aria-pressed="true"] {
+  color: var(--nx-accent);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* Per-weekday minutes (Pon..Ned) — a full-width form line of seven labelled
+   inputs; the hint states the quiet contract (all equal = the scalar). */
+.study__weekdays {
+  flex-basis: 100%;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+.study__weekdays-label {
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+  align-self: center;
+  margin-right: var(--nx-space-1);
+}
+.study__weekday {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.study__weekday-name {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.study__weekday-input .nx-textfield__input {
+  width: 62px;
+}
+.study__weekdays-hint {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+/* The topics editor — a full-width block under the plan form's fields,
+   separated by the house hairline; rank order is scope-cut priority. */
+.study__topics {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  border-top: 1px solid var(--nx-border);
+  padding-top: var(--nx-space-2);
+}
+.study__topics-heading {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.study__topics-hint,
+.study__topics-empty {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.study__topic-row,
+.study__topic-add {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+.study__topic-rank {
+  flex: none;
+  width: 1.5em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__topic-name {
+  flex: 1;
+  min-width: 160px;
+}
+.study__topic-derived {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+  white-space: nowrap;
+}
+.study__topic-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex: none;
+}
+.study__topic-error {
+  margin: 0;
+  color: var(--nx-danger);
+  font-size: var(--nx-font-size-body-sm);
+}
+/* „Predlog skraćenja" — the house dialog recipe; rows scroll past ~40vh so a
+   long syllabus never pushes the actions off screen. */
+.study-cut__panel.recur-dialog__panel {
+  width: min(440px, calc(100vw - 2 * var(--nx-space-6)));
+}
+.study-cut__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  max-height: 40vh;
+  overflow-y: auto;
+  margin: var(--nx-space-2) 0;
+}
+.study-cut__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+  font-size: var(--nx-font-size-body-sm);
+}
+.study-cut__row-minutes {
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* Study stats + focus timer (Statistika i fokus, STUDY piece 4b) — a

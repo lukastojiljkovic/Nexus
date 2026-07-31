@@ -526,6 +526,9 @@ export function CalendarPage({
   const [subjects, setSubjects] = useState<Subject[] | null>(null);
   const [exams, setExams] = useState<Exam[] | null>(null);
   const [blocks, setBlocks] = useState<StudyBlockWithExam[] | null>(null);
+  // Topic names for the agenda's block rows (ADR-063): id → name over the
+  // exams the fetched blocks actually reference. Read-only, like the rows.
+  const [topicNames, setTopicNames] = useState<ReadonlyMap<string, string>>(new Map());
   const [people, setPeople] = useState<Person[] | null>(null);
   // The profile's semester dates (CAL-010 / ADR-054) — what the Semestar view
   // anchors to when set, loaded with everything else below.
@@ -643,12 +646,24 @@ export function CalendarPage({
           window.nexus.listEventTemplates(profileId),
           window.nexus.calendarSettings(profileId),
         ]);
+        // Resolve the topic names the fetched blocks point at (ADR-063): one
+        // list per distinct exam that actually carries topic-bearing blocks —
+        // few in practice (only exams with active plans generate blocks).
+        const topicExamIds = [
+          ...new Set(
+            nextBlocks.filter((block) => block.topicId !== null).map((block) => block.examId),
+          ),
+        ];
+        const topicLists = await Promise.all(
+          topicExamIds.map((examId) => window.nexus.listExamTopics(profileId, examId)),
+        );
         if (!active) return;
         setEvents(nextEvents);
         setTasks(nextTasks);
         setSubjects(nextSubjects);
         setExams(nextExams);
         setBlocks(nextBlocks);
+        setTopicNames(new Map(topicLists.flat().map((topic) => [topic.id, topic.name])));
         setPeople(nextPeople);
         setTemplates(nextTemplates);
         setTerm(nextTerm);
@@ -2009,6 +2024,16 @@ export function CalendarPage({
                           <span className="cal__event-title">
                             {item.subject.name} — {strings.study.examType[item.exam.examType]}
                           </span>
+                          {/* The block's topic and kind, quietly (ADR-063) — the
+                              row stays read-only; check-off lives on StudyPage. */}
+                          {item.block.topicId !== null && topicNames.has(item.block.topicId) && (
+                            <span className="cal__block-topic">
+                              {topicNames.get(item.block.topicId)}
+                            </span>
+                          )}
+                          {item.block.kind !== "coverage" && (
+                            <Chip>{strings.study.blockKind[item.block.kind]}</Chip>
+                          )}
                           <Chip>
                             {item.block.minutes} {strings.study.minutesUnit}
                           </Chip>

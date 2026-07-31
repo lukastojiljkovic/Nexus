@@ -1946,6 +1946,7 @@ export const strings = {
       examPast: "Ispit mora biti u budućnosti.",
       startAfterExam: "Početak učenja mora biti pre datuma ispita.",
       minutesRange: "Dnevni minuti moraju biti između 15 i 480.",
+      weekdayRange: "Minuti po danu moraju biti celi brojevi od 0 do 480, bar jedan veći od nule.",
       generic: "Čuvanje plana nije uspelo. Pokušaj ponovo.",
     },
     /**
@@ -1957,6 +1958,85 @@ export const strings = {
       duplicate: "Plan nije vraćen — ispit u međuvremenu ima nov aktivan plan.",
       generic: "Vraćanje plana nije uspelo.",
     },
+
+    // --- Exam topics & the honest planner (ADR-063, slice b) -----------------
+    /**
+     * Block kind, keyed by the wire's closed `StudyBlockKind` domain. A
+     * coverage block renders PLAIN — it is the ordinary case and a chip on
+     * every row would be noise — so only revision/recall are ever drawn, but
+     * all three are keyed here so the calendar can index by the raw value.
+     */
+    blockKind: {
+      coverage: "obrada",
+      revision: "obnavljanje",
+      recall: "prisećanje",
+    },
+    /** Pin toggle on future block rows; the titles say exactly what a pin means. */
+    blockPin: "Zakači",
+    blockUnpin: "Otkači",
+    blockPinTitle: "Zakačen blok preživljava svako ponovno planiranje.",
+    blockUnpinTitle: "Otkači blok — sledeće planiranje može da ga pomeri.",
+    /** Title on the „Vežbaj" deep link a recall block offers when its topic drills from a špil. */
+    blockPracticeTitle: "Pokreni ponavljanje špila ove teme.",
+    /** Title on rows inside the final-7-days window (the exam-week posture). */
+    examWeekTitle: "Poslednjih 7 dana pred ispit",
+    /**
+     * Plan health (ADR-063 invariant 5) — building blocks joined inline around
+     * the minutes count: „U preostale dane ne staje još 120 min učenja." and
+     * „Ispit je prošao — 90 min učenja je ostalo propušteno." Honest reporting,
+     * never a silently stretched day.
+     */
+    healthOverflowPrefix: "U preostale dane ne staje još",
+    healthOverflowSuffix: "min učenja.",
+    healthExamPassedPrefix: "Ispit je prošao —",
+    healthExamPassedSuffix: "min učenja je ostalo propušteno.",
+    /**
+     * The scope-cut conversation (STUDY-004): a computed proposal the user must
+     * explicitly accept — nothing is ever cut by the machine.
+     */
+    scopeCut: {
+      open: "Predlog skraćenja",
+      title: "Predlog skraćenja",
+      intro: "Da bi plan stao u preostalo vreme, ove teme bi izašle iz plana:",
+      /** „75 min preostalo" beside each proposed topic. */
+      minutesSuffix: "min preostalo",
+      empty: "Nema tema čije bi isključivanje oslobodilo dovoljno vremena.",
+      loadError: "Predlog se trenutno ne može učitati. Pokušaj ponovo.",
+      accept: "Prihvati",
+      decline: "Odustani",
+    },
+    /**
+     * The exam's topic list inside the plan form (ADR-063). Rank order is both
+     * curriculum order and scope-cut priority, which is what the hint says.
+     */
+    topics: {
+      title: "Teme",
+      hint: "Redosled je i prioritet — teme sa dna prve izlaze iz plana.",
+      empty: "Bez tema plan ostaje jednostavan — jedan blok učenja dnevno.",
+      nameLabel: "Naziv teme",
+      addPlaceholder: "Nova tema",
+      add: "Dodaj temu",
+      moveUp: "Pomeri temu naviše",
+      moveDown: "Pomeri temu naniže",
+      remove: "Obriši temu",
+      confidenceLabel: "Pouzdanje",
+      confidenceUnknown: "Nepoznato",
+      /** Muted „izvedeno: 72" beside an unknown manual confidence the linked špil resolved. */
+      derivedPrefix: "izvedeno:",
+      deckLabel: "Špil teme",
+      deckNone: "Bez špila",
+      /** A stored link whose deck is no longer live — shown as itself rather than lying „Bez špila". */
+      deckMissing: "Nedostupan špil",
+      /** Chip on a topic the user accepted out of the plan (STUDY-004). */
+      cutChip: "van plana",
+      /** The un-cut affordance is honestly disabled: no store path returns a cut topic to the plan yet. */
+      uncut: "Vrati u plan",
+      uncutUnavailableTitle: "Vraćanje u plan još ne postoji — tema ostaje van plana.",
+      actionError: "Radnja nad temom nije uspela. Pokušaj ponovo.",
+    },
+    /** Per-weekday minutes Pon..Ned (the labels reuse `recurrence.weekdayShort`). */
+    weekdayMinutesLabel: "Minuti po danu",
+    weekdayMinutesHint: "Ostavi sve jednako i svaki dan nosi iste dnevne minute.",
 
     // --- Study stats + focus timer (Statistika i fokus, STUDY piece 4b) ------
     statsTitle: "Statistika i fokus",

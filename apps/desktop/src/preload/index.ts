@@ -265,12 +265,32 @@ const api: NexusApi = {
   deletePlan: (profileId, id) => ipcRenderer.invoke(IpcChannel.plansDelete, { profileId, id }),
   restorePlan: (profileId, id) => ipcRenderer.invoke(IpcChannel.plansRestore, { profileId, id }),
   syncAllPlans: (profileId) => ipcRenderer.invoke(IpcChannel.plansSyncAll, { profileId }),
+  scopeCutProposal: (profileId, planId) =>
+    ipcRenderer.invoke(IpcChannel.plansScopeCutProposal, { profileId, planId }),
+  acceptScopeCut: (profileId, planId, topicIds) =>
+    ipcRenderer.invoke(IpcChannel.plansAcceptScopeCut, { profileId, planId, topicIds }),
   listBlocksByPlan: (profileId, planId) =>
     ipcRenderer.invoke(IpcChannel.blocksListByPlan, { profileId, planId }),
   listBlocksInRange: (profileId, fromDate, toDate) =>
     ipcRenderer.invoke(IpcChannel.blocksRange, { profileId, fromDate, toDate }),
   setBlockStatus: (profileId, id, status) =>
     ipcRenderer.invoke(IpcChannel.blocksSetStatus, { profileId, id, status }),
+  setBlockPinned: (profileId, id, pinned) =>
+    ipcRenderer.invoke(IpcChannel.blocksSetPinned, { profileId, id, pinned }),
+  listExamTopics: (profileId, examId) =>
+    ipcRenderer.invoke(IpcChannel.topicsListByExam, { profileId, examId }),
+  createExamTopic: (profileId, examId, name) =>
+    ipcRenderer.invoke(IpcChannel.topicsCreate, { profileId, examId, name }),
+  renameExamTopic: (profileId, id, name) =>
+    ipcRenderer.invoke(IpcChannel.topicsRename, { profileId, id, name }),
+  setExamTopicConfidence: (profileId, id, confidence) =>
+    ipcRenderer.invoke(IpcChannel.topicsSetConfidence, { profileId, id, confidence }),
+  setExamTopicDeck: (profileId, id, deckId) =>
+    ipcRenderer.invoke(IpcChannel.topicsSetDeck, { profileId, id, deckId }),
+  moveExamTopic: (profileId, id, direction) =>
+    ipcRenderer.invoke(IpcChannel.topicsMove, { profileId, id, direction }),
+  deleteExamTopic: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.topicsDelete, { profileId, id }),
   startFocus: (profileId, subjectId) =>
     ipcRenderer.invoke(IpcChannel.focusStart, { profileId, subjectId }),
   stopFocus: (profileId) => ipcRenderer.invoke(IpcChannel.focusStop, { profileId }),

@@ -181,7 +181,10 @@ import {
   type NoteTemplate,
   type Person,
   type PersonKind,
+  type EffectiveExamTopic,
+  type PlanHealth,
   type PreviewIntervals,
+  type ScopeCutProposal,
   type StudyBlock,
   type StudyBlockStatus,
   type StudyBlockWithExam,
@@ -454,6 +457,7 @@ import {
   type SnoozePreset,
   type StudyStats,
   type SubjectAttachmentsAddResult,
+  type TopicMoveDirection,
   type SubjectStudyLog,
   type TaskAttachmentsAddResult,
   type TaskListsSnapshot,
@@ -2371,23 +2375,53 @@ function asCardRating(value: unknown, field: string): CardRating {
 }
 
 /**
- * Validates a `NewPlanFields` payload into a store input; all four fields are
- * required. Structural checks only — the store owns the exam-lookup, date-
- * ordering, and `dailyMinutes`-range validation, the same division of labour
- * as the exam/deck validators. `now`/`today` are never taken from this payload
- * — they are stamped by main from its own clock.
+ * The weekday vector's bounds (ADR-063), mirroring `PlanStore`'s rule at the
+ * IPC edge: exactly 7 entries Mon..Sun, each an integer 0..480, at least one
+ * positive — a week of nothing is not a plan. Null passes through: it means
+ * "every day = dailyMinutes". The store revalidates identically.
+ */
+const WEEKDAY_VECTOR_LENGTH = 7;
+const MAX_WEEKDAY_MINUTES = 480;
+
+function asWeekdayMinutes(value: unknown, field: string): number[] | null {
+  if (value === null) return null;
+  if (!Array.isArray(value) || value.length !== WEEKDAY_VECTOR_LENGTH) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be null or an array of exactly ${WEEKDAY_VECTOR_LENGTH} entries.`,
+    );
+  }
+  const vector = value.map((entry, index) =>
+    asBoundedInteger(entry, `${field}[${index}]`, 0, MAX_WEEKDAY_MINUTES),
+  );
+  if (!vector.some((entry) => entry > 0)) {
+    throw new Error(`Invalid IPC payload: "${field}" must have at least one positive entry.`);
+  }
+  return vector;
+}
+
+/**
+ * Validates a `NewPlanFields` payload into a store input; the first four
+ * fields are required, the weekday vector optional (ADR-063). Structural
+ * checks only — the store owns the exam-lookup, date-ordering, and
+ * `dailyMinutes`-range validation, the same division of labour as the
+ * exam/deck validators. `now`/`today` are never taken from this payload —
+ * they are stamped by main from its own clock.
  */
 function asNewPlanInput(value: unknown): CreatePlanInput {
   const plan = asRecord(value);
-  return {
+  const input: CreatePlanInput = {
     examId: asNonEmptyString(plan.examId, "plan.examId"),
     dailyMinutes: asInteger(plan.dailyMinutes, "plan.dailyMinutes"),
     startDate: asNonEmptyString(plan.startDate, "plan.startDate"),
     examWeekBoost: asBoolean(plan.examWeekBoost, "plan.examWeekBoost"),
   };
+  if (plan.weekdayMinutes !== undefined) {
+    input.weekdayMinutes = asWeekdayMinutes(plan.weekdayMinutes, "plan.weekdayMinutes");
+  }
+  return input;
 }
 
-/** Validates a `PlanFieldChanges` payload into a store patch; an omitted key stays omitted. */
+/** Validates a `PlanFieldChanges` payload into a store patch; an omitted key stays omitted, and `weekdayMinutes: null` clears the vector. */
 function asPlanFieldChanges(value: unknown): UpdatePlanFields {
   const changes = asRecord(value);
   const patch: UpdatePlanFields = {};
@@ -2400,6 +2434,9 @@ function asPlanFieldChanges(value: unknown): UpdatePlanFields {
   if (changes.examWeekBoost !== undefined) {
     patch.examWeekBoost = asBoolean(changes.examWeekBoost, "changes.examWeekBoost");
   }
+  if (changes.weekdayMinutes !== undefined) {
+    patch.weekdayMinutes = asWeekdayMinutes(changes.weekdayMinutes, "changes.weekdayMinutes");
+  }
   return patch;
 }
 
@@ -2409,6 +2446,24 @@ function asBlockStatus(value: unknown, field: string): StudyBlockStatus {
     return value as StudyBlockStatus;
   }
   throw new Error(`Invalid IPC payload: "${field}" is not a valid block status.`);
+}
+
+/** The closed rank-move domain (ADR-063): one step toward the top or the bottom, nothing else. */
+function asTopicMoveDirection(value: unknown, field: string): TopicMoveDirection {
+  if (value === "up" || value === "down") return value;
+  throw new Error(`Invalid IPC payload: "${field}" is not a valid move direction.`);
+}
+
+/**
+ * A scope-cut acceptance's topic ids (STUDY-004): bounded like every other id
+ * array on this bridge. The bound is a generous DoS guard, not a domain fact —
+ * the store refuses any id that is not an active topic of this profile, which
+ * is the check that actually matters.
+ */
+const MAX_SCOPE_CUT_TOPIC_IDS = 500;
+
+function asScopeCutTopicIds(value: unknown, field: string): string[] {
+  return asStringArray(value, field, MAX_SCOPE_CUT_TOPIC_IDS, 64);
 }
 
 /**
@@ -2683,6 +2738,11 @@ function planStore(profileId: string): PlanStore {
 
 function topicStore(profileId: string): TopicStore {
   return new TopicStore(requireDb().raw, profileId);
+}
+
+/** One exam's effective topic list — the uniform answer of every topics:* channel (ADR-063). */
+function effectiveTopics(profileId: string, examId: string): EffectiveExamTopic[] {
+  return topicStore(profileId).listEffectiveByExam(examId, localToday());
 }
 
 function studySettingsStore(profileId: string): StudySettingsStore {
@@ -5600,13 +5660,36 @@ function registerIpc(): void {
     planStore(profileId).restore(id, new Date().toISOString());
   });
 
-  ipcMain.handle(IpcChannel.plansSyncAll, (event, payload): number => {
+  ipcMain.handle(IpcChannel.plansSyncAll, (event, payload): PlanHealth[] => {
     assertTrustedSender(event);
     const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
-    // The store now answers one PlanHealth per plan (ADR-063); this channel's
-    // wire contract stays the synced COUNT — surfacing the health list over
-    // IPC is slice b's, beside the UI that renders it.
-    return planStore(profileId).syncAll(new Date().toISOString(), localToday()).length;
+    // One honesty report per synced plan (ADR-063 invariant 5) — the health
+    // line every plan card renders. The pre-063 synced COUNT died here.
+    return planStore(profileId).syncAll(new Date().toISOString(), localToday());
+  });
+
+  ipcMain.handle(IpcChannel.plansScopeCutProposal, (event, payload): ScopeCutProposal => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const planId = asNonEmptyString(body.planId, "planId");
+    return planStore(profileId).scopeCutProposal(planId, localToday());
+  });
+
+  // The ONLY wire that ever cuts a topic (ADR-063: explicit user acceptance,
+  // never the machine). Acceptance and the plan's re-sync are one act: the
+  // fresh blocks exclude the cut topics immediately, and the returned health
+  // says whether the plan now fits — `requireActivePlan` inside `sync` is also
+  // what holds `planId` to an active plan of THIS profile.
+  ipcMain.handle(IpcChannel.plansAcceptScopeCut, (event, payload): PlanHealth => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const planId = asNonEmptyString(body.planId, "planId");
+    const topicIds = asScopeCutTopicIds(body.topicIds, "topicIds");
+    const store = planStore(profileId);
+    store.acceptScopeCut(topicIds, new Date().toISOString());
+    return store.sync(planId, new Date().toISOString(), localToday());
   });
 
   ipcMain.handle(IpcChannel.blocksListByPlan, (event, payload): StudyBlock[] => {
@@ -5633,6 +5716,110 @@ function registerIpc(): void {
     const id = asNonEmptyString(body.id, "id");
     const status = asBlockStatus(body.status, "status");
     return planStore(profileId).setBlockStatus(id, status, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.blocksSetPinned, (event, payload): StudyBlock => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const pinned = asBoolean(body.pinned, "pinned");
+    return planStore(profileId).setBlockPinned(id, pinned, new Date().toISOString());
+  });
+
+  // --- Exam topics (ADR-063) ------------------------------------------------
+  //
+  // Every mutation below answers with the exam's fresh EFFECTIVE list — the
+  // one read the renderer is allowed to hold (manual-else-derived confidence,
+  // resolved by the store; the renderer never derives). `today` for the
+  // derivation window is always stamped by `effectiveTopics` from main's own
+  // clock (SEC-EL-02).
+
+  ipcMain.handle(IpcChannel.topicsListByExam, (event, payload): EffectiveExamTopic[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const examId = asNonEmptyString(body.examId, "examId");
+    return effectiveTopics(profileId, examId);
+  });
+
+  ipcMain.handle(IpcChannel.topicsCreate, (event, payload): EffectiveExamTopic[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const examId = asNonEmptyString(body.examId, "examId");
+    const name = asNonEmptyString(body.name, "name");
+    topicStore(profileId).create({ examId, name }, new Date().toISOString());
+    return effectiveTopics(profileId, examId);
+  });
+
+  ipcMain.handle(IpcChannel.topicsRename, (event, payload): EffectiveExamTopic[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const name = asNonEmptyString(body.name, "name");
+    const renamed = topicStore(profileId).rename(id, name, new Date().toISOString());
+    return effectiveTopics(profileId, renamed.examId);
+  });
+
+  ipcMain.handle(IpcChannel.topicsSetConfidence, (event, payload): EffectiveExamTopic[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    // The closed manual-confidence domain at the IPC edge: null clears, else 0..100.
+    const confidence = asNullableBoundedInteger(body.confidence, "confidence", 0, 100);
+    const updated = topicStore(profileId).setConfidence(id, confidence, new Date().toISOString());
+    return effectiveTopics(profileId, updated.examId);
+  });
+
+  ipcMain.handle(IpcChannel.topicsSetDeck, (event, payload): EffectiveExamTopic[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    // Structural only — that a non-null id names a LIVE deck of THIS profile
+    // is the store's semantic re-check (`resolveDeck`).
+    const deckId = asNullableString(body.deckId, "deckId");
+    const updated = topicStore(profileId).setDeck(id, deckId, new Date().toISOString());
+    return effectiveTopics(profileId, updated.examId);
+  });
+
+  ipcMain.handle(IpcChannel.topicsMove, (event, payload): EffectiveExamTopic[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const direction = asTopicMoveDirection(body.direction, "direction");
+    const store = topicStore(profileId);
+    const moved = store.listAll().find((topic) => topic.id === id);
+    if (!moved) {
+      throw new Error(`No active exam topic "${id}" in this profile.`);
+    }
+    // One rank step; an edge move is a quiet no-op rather than an error — the
+    // renderer disables the buttons at the edges, but a concurrent reorder
+    // must not turn a click into a failure toast.
+    const siblings = store.listByExam(moved.examId);
+    const toRank = direction === "up" ? moved.rank - 1 : moved.rank + 1;
+    if (toRank >= 0 && toRank < siblings.length) {
+      store.moveTopic(id, toRank, new Date().toISOString());
+    }
+    return effectiveTopics(profileId, moved.examId);
+  });
+
+  ipcMain.handle(IpcChannel.topicsDelete, (event, payload): EffectiveExamTopic[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const store = topicStore(profileId);
+    const doomed = store.listAll().find((topic) => topic.id === id);
+    if (!doomed) {
+      throw new Error(`No active exam topic "${id}" in this profile.`);
+    }
+    store.softDelete(id, new Date().toISOString());
+    return effectiveTopics(profileId, doomed.examId);
   });
 
   // SEC-EL-02: `startedAt`/`endedAt`/`now` are always stamped here from the

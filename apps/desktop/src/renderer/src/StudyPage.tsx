@@ -21,6 +21,7 @@ import type {
   DeckFieldChanges,
   Exam,
   ExamFieldChanges,
+  ExamTopic,
   ExamType,
   FocusSession,
   LinkedNote,
@@ -31,9 +32,11 @@ import type {
   NewSubjectFields,
   NoteMeta,
   PlanFieldChanges,
+  PlanHealth,
   PreviewIntervals,
   ReviewQueueScope,
   RunningFocusSession,
+  ScopeCutProposal,
   StudyBlock,
   StudyBlockStatus,
   StudyBlockWithExam,
@@ -61,6 +64,15 @@ import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
 import { intervalLabel, isDueWithinSession } from "./reviewIntervals.js";
 import { countUnit, dayUnit, strings } from "./strings.js";
 import { STUDY_LOG_WINDOW_DAYS, studyLogExamLabels, studyLogFacts } from "./studyLog.js";
+import {
+  blockKindChipLabel,
+  isExamWeekDay,
+  parseWeekdayMinutes,
+  planHealthLine,
+  scopeCutRows,
+  weekdayMinutesForSave,
+} from "./studyPlanView.js";
+import type { ScopeCutRow } from "./studyPlanView.js";
 
 // --- Field orderings (renderer mirror of @nexus/db) -------------------------
 //
@@ -134,6 +146,17 @@ const RATING_KEYS: Record<CardRating, keyof typeof strings.study.rating> = {
 /** Mirrors PlanStore's daily-minutes bounds — client-side parity with the store's own validation. */
 const MIN_PLAN_MINUTES = 15;
 const MAX_PLAN_MINUTES = 480;
+
+/** The weekday vector's per-day cap, mirroring the store's (a day may be free, never longer than 480). */
+const MAX_WEEKDAY_INPUT = 480;
+
+/**
+ * The manual-confidence select's closed steps (ADR-063): Nepoznato plus five
+ * coarse marks — a self-assessment is not a measurement, so the form offers
+ * quarters rather than a 0-100 slider pretending precision. A value off the
+ * steps (an import, a restore) keeps its own option so the select never lies.
+ */
+const CONFIDENCE_STEPS: readonly number[] = [0, 25, 50, 75, 100];
 
 // Serbian Latin collation for subject/deck names (mirrors @nexus/core's views
 // engine collator) — plain "sr" resolves to the Cyrillic tailoring and
@@ -374,6 +397,7 @@ function planErrorMessage(error: unknown): string {
   if (message.includes("must be strictly after today")) return copy.examPast;
   if (message.includes("must be strictly before the exam date")) return copy.startAfterExam;
   if (message.includes('"dailyMinutes"')) return copy.minutesRange;
+  if (message.includes("weekdayMinutes")) return copy.weekdayRange;
   return copy.generic;
 }
 
@@ -531,6 +555,23 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   const [plans, setPlans] = useState<StudyPlan[] | null>(null);
   const [todayBlocks, setTodayBlocks] = useState<StudyBlockWithExam[] | null>(null);
   const [blocksByPlan, setBlocksByPlan] = useState<Record<string, StudyBlock[]>>({});
+  // One honesty report per plan (ADR-063 invariant 5), from the same
+  // `syncAllPlans` call that labels missed blocks — the health line's source.
+  const [planHealthById, setPlanHealthById] = useState<Record<string, PlanHealth>>({});
+  // The exams' topic lists (ADR-063), keyed by exam id: loaded for every plan's
+  // exam (block rows name their topic; recall rows deep-link its deck) and for
+  // whichever exam the plan form is showing. Every topics:* mutation answers
+  // with the exam's fresh effective list, which lands back here.
+  const [topicsByExam, setTopicsByExam] = useState<Record<string, ExamTopic[]>>({});
+  const [topicActionFailed, setTopicActionFailed] = useState(false);
+  const [topicName, setTopicName] = useState("");
+  // The „Predlog skraćenja" dialog (STUDY-004): which plan, the fetched
+  // proposal (null while in flight), and whether the fetch/accept failed.
+  const [scopeCut, setScopeCut] = useState<{
+    planId: string;
+    proposal: ScopeCutProposal | null;
+    failed: boolean;
+  } | null>(null);
   const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
   const [planFormVisible, setPlanFormVisible] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
@@ -538,6 +579,11 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   const [planStartDate, setPlanStartDate] = useState("");
   const [planMinutes, setPlanMinutes] = useState("60");
   const [planBoost, setPlanBoost] = useState(true);
+  // The seven Mon..Sun inputs (ADR-063), or null while they still MIRROR
+  // „Minuta dnevno" — the quiet idiom: no toggle, the inputs follow the scalar
+  // until touched, and an all-equal week saves back as the scalar (NULL vector
+  // = "svaki dan isto").
+  const [planWeekdays, setPlanWeekdays] = useState<string[] | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
   const [pendingUndoPlanId, setPendingUndoPlanId] = useState<string | null>(null);
   // Set when a plan restore fails — unlike the other restore paths, a stale
@@ -611,8 +657,9 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     void (async () => {
       try {
         // Sync every plan before any read so past blocks are already labelled
-        // `missed` when the today strip and the plan lists render.
-        await window.nexus.syncAllPlans(profileId);
+        // `missed` when the today strip and the plan lists render; the same
+        // call answers each plan's honesty report (ADR-063 invariant 5).
+        const nextHealths = await window.nexus.syncAllPlans(profileId);
         const today = localTodayKey();
         const [
           nextSubjects,
@@ -643,8 +690,11 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
         // Archived subjects are skipped: the hub draws them as flat rows with no
         // panel, so their two sections have nowhere to appear.
         const openSubjects = nextSubjects.filter((subject) => !subject.archived);
-        const [blockLists, materialLists, linkedLists, nextNotes] = await Promise.all([
+        const [blockLists, topicLists, materialLists, linkedLists, nextNotes] = await Promise.all([
           Promise.all(nextPlans.map((plan) => window.nexus.listBlocksByPlan(profileId, plan.id))),
+          // Each plan exam's topics (ADR-063): block rows name their topic, and
+          // a recall row deep-links its topic's deck.
+          Promise.all(nextPlans.map((plan) => window.nexus.listExamTopics(profileId, plan.examId))),
           Promise.all(
             openSubjects.map((subject) =>
               window.nexus.listSubjectAttachments(profileId, subject.id),
@@ -677,6 +727,12 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
         setTodayBlocks(nextTodayBlocks);
         setBlocksByPlan(
           Object.fromEntries(nextPlans.map((plan, index) => [plan.id, blockLists[index] ?? []])),
+        );
+        setPlanHealthById(
+          Object.fromEntries(nextHealths.map((health) => [health.planId, health])),
+        );
+        setTopicsByExam(
+          Object.fromEntries(nextPlans.map((plan, index) => [plan.examId, topicLists[index] ?? []])),
         );
         setFocusRunning(nextFocusRunning);
         setStatsYear(nextStatsYear);
@@ -804,6 +860,32 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     }, 1000);
     return () => window.clearInterval(id);
   }, [focusRunning]);
+
+  // The plan form's topics editor needs ITS exam's list even when no plan
+  // exists yet (a new plan's exam has no cached entry) — fetched once per
+  // exam and kept; the `topicsByExam[examId]` guard is what stops the
+  // set-state from re-triggering this effect into a loop.
+  const formExamId = planFormVisible
+    ? editingPlanId != null
+      ? (plans?.find((plan) => plan.id === editingPlanId)?.examId ?? "")
+      : planExamId
+    : "";
+  useEffect(() => {
+    if (formExamId === "" || topicsByExam[formExamId] !== undefined) return;
+    let active = true;
+    void (async () => {
+      try {
+        const list = await window.nexus.listExamTopics(profileId, formExamId);
+        if (active) setTopicsByExam((previous) => ({ ...previous, [formExamId]: list }));
+      } catch (error) {
+        console.error("Nexus: failed to load exam topics:", error);
+        if (active) setTopicActionFailed(true);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [formExamId, topicsByExam, profileId]);
 
   // The open subject's „Dnevnik učenja" (STUDY-014). Keyed on the request's own
   // fields rather than the object holding them, so only a real change re-reads.
@@ -1249,22 +1331,36 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     }
   }
 
-  /** Re-syncs every plan (missed labelling), then re-fetches plans, the today strip and each plan's blocks. */
+  /**
+   * Re-syncs every plan (missed labelling + fresh health reports), then
+   * re-fetches plans, the today strip, each plan's blocks and each plan
+   * exam's topics. Topic lists are MERGED over the cache rather than
+   * replacing it, so an exam the form is showing for a not-yet-created plan
+   * keeps its loaded list.
+   */
   async function refreshPlans(): Promise<void> {
-    await window.nexus.syncAllPlans(profileId);
+    const nextHealths = await window.nexus.syncAllPlans(profileId);
     const today = localTodayKey();
     const [nextPlans, nextTodayBlocks] = await Promise.all([
       window.nexus.listPlans(profileId),
       window.nexus.listBlocksInRange(profileId, today, today),
     ]);
-    const blockLists = await Promise.all(
-      nextPlans.map((plan) => window.nexus.listBlocksByPlan(profileId, plan.id)),
-    );
+    const [blockLists, topicLists] = await Promise.all([
+      Promise.all(nextPlans.map((plan) => window.nexus.listBlocksByPlan(profileId, plan.id))),
+      Promise.all(nextPlans.map((plan) => window.nexus.listExamTopics(profileId, plan.examId))),
+    ]);
     setPlans(nextPlans);
     setTodayBlocks(nextTodayBlocks);
     setBlocksByPlan(
       Object.fromEntries(nextPlans.map((plan, index) => [plan.id, blockLists[index] ?? []])),
     );
+    setPlanHealthById(Object.fromEntries(nextHealths.map((health) => [health.planId, health])));
+    setTopicsByExam((previous) => ({
+      ...previous,
+      ...Object.fromEntries(
+        nextPlans.map((plan, index) => [plan.examId, topicLists[index] ?? []]),
+      ),
+    }));
   }
 
   function closePlanForm(): void {
@@ -1274,7 +1370,10 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     setPlanStartDate("");
     setPlanMinutes("60");
     setPlanBoost(true);
+    setPlanWeekdays(null);
     setPlanError(null);
+    setTopicName("");
+    setTopicActionFailed(false);
   }
 
   function startAddPlan(firstExamId: string): void {
@@ -1284,7 +1383,10 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     setPlanStartDate(localTodayKey());
     setPlanMinutes("60");
     setPlanBoost(true);
+    setPlanWeekdays(null);
     setPlanError(null);
+    setTopicName("");
+    setTopicActionFailed(false);
   }
 
   function startEditPlan(plan: StudyPlan): void {
@@ -1294,7 +1396,12 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     setPlanStartDate(plan.startDate.slice(0, 10));
     setPlanMinutes(String(plan.dailyMinutes));
     setPlanBoost(plan.examWeekBoost);
+    // A stored vector opens materialized; without one the inputs keep
+    // mirroring „Minuta dnevno" until touched.
+    setPlanWeekdays(plan.weekdayMinutes === null ? null : plan.weekdayMinutes.map(String));
     setPlanError(null);
+    setTopicName("");
+    setTopicActionFailed(false);
   }
 
   async function submitPlanForm(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -1310,6 +1417,17 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
       setPlanError(strings.study.planError.minutesRange);
       return;
     }
+    // Untouched inputs never send a vector; touched ones must parse under the
+    // store's own rule, and an all-equal week collapses back onto the scalar.
+    let weekdayMinutes: number[] | null | undefined;
+    if (planWeekdays !== null) {
+      const vector = parseWeekdayMinutes(planWeekdays);
+      if (vector === null) {
+        setPlanError(strings.study.planError.weekdayRange);
+        return;
+      }
+      weekdayMinutes = weekdayMinutesForSave(vector, dailyMinutes);
+    }
 
     try {
       if (editingPlanId != null) {
@@ -1318,6 +1436,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
           startDate: planStartDate,
           examWeekBoost: planBoost,
         };
+        if (weekdayMinutes !== undefined) changes.weekdayMinutes = weekdayMinutes;
         await window.nexus.updatePlan(profileId, editingPlanId, changes);
       } else {
         if (planExamId.length === 0) return;
@@ -1327,6 +1446,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
           startDate: planStartDate,
           examWeekBoost: planBoost,
         };
+        if (weekdayMinutes !== undefined) fields.weekdayMinutes = weekdayMinutes;
         await window.nexus.createPlan(profileId, fields);
       }
       closePlanForm();
@@ -1407,6 +1527,112 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
       }
     } catch (error) {
       console.error("Nexus: failed to set block status:", error);
+    }
+  }
+
+  /**
+   * Pin ↔ unpin toggle for a future block (ADR-063): a pinned block survives
+   * regeneration exactly as done/missed rows do. Local-only update — pinning
+   * changes what the NEXT sync keeps, never what is on screen now, and sync is
+   * idempotent over an unpinned row nothing else moved.
+   */
+  async function toggleBlockPinned(block: StudyBlock): Promise<void> {
+    try {
+      const updated = await window.nexus.setBlockPinned(profileId, block.id, !block.pinned);
+      setTodayBlocks(
+        (prev) =>
+          prev &&
+          prev.map((existing) =>
+            existing.id === updated.id
+              ? { ...existing, pinned: updated.pinned, updatedAt: updated.updatedAt }
+              : existing,
+          ),
+      );
+      setBlocksByPlan((prev) => {
+        const list = prev[updated.planId];
+        if (!list) return prev;
+        return {
+          ...prev,
+          [updated.planId]: list.map((existing) => (existing.id === updated.id ? updated : existing)),
+        };
+      });
+    } catch (error) {
+      console.error("Nexus: failed to set block pin:", error);
+    }
+  }
+
+  /**
+   * Runs one topics:* mutation and lands its answer — the exam's fresh
+   * effective list — back in the cache, then re-syncs the plans: the exam's
+   * schedule is generated FROM its topics, so every topic write can move
+   * blocks (a rename cannot, but one uniform path beats a taxonomy of which
+   * writes regenerate). One shared error line, cleared on the next attempt.
+   */
+  async function mutateTopics(examId: string, action: () => Promise<ExamTopic[]>): Promise<void> {
+    setTopicActionFailed(false);
+    try {
+      const next = await action();
+      setTopicsByExam((previous) => ({ ...previous, [examId]: next }));
+      await refreshPlans();
+    } catch (error) {
+      console.error("Nexus: topic action failed:", error);
+      setTopicActionFailed(true);
+    }
+  }
+
+  async function addTopic(examId: string): Promise<void> {
+    const trimmed = topicName.trim();
+    if (trimmed.length === 0) return;
+    await mutateTopics(examId, () => window.nexus.createExamTopic(profileId, examId, trimmed));
+    setTopicName("");
+  }
+
+  /** Commits an inline rename if the field actually changed; an emptied field quietly restores the name. */
+  async function commitTopicRename(topic: ExamTopic, value: string): Promise<void> {
+    const trimmed = value.trim();
+    if (trimmed.length === 0 || trimmed === topic.name) return;
+    await mutateTopics(topic.examId, () =>
+      window.nexus.renameExamTopic(profileId, topic.id, trimmed),
+    );
+  }
+
+  /**
+   * Opens the „Predlog skraćenja" dialog and fetches the plan's proposal — a
+   * pure read (STUDY-004); nothing is cut until the user accepts.
+   */
+  async function openScopeCut(planId: string): Promise<void> {
+    setScopeCut({ planId, proposal: null, failed: false });
+    try {
+      const proposal = await window.nexus.scopeCutProposal(profileId, planId);
+      setScopeCut((current) =>
+        current?.planId === planId ? { planId, proposal, failed: false } : current,
+      );
+    } catch (error) {
+      console.error("Nexus: failed to load scope-cut proposal:", error);
+      setScopeCut((current) =>
+        current?.planId === planId ? { planId, proposal: null, failed: true } : current,
+      );
+    }
+  }
+
+  /** The explicit acceptance — the only path that ever cuts a topic. Re-reads the exam's topics (their `cut` flags moved) and the plans. */
+  async function confirmScopeCut(): Promise<void> {
+    if (scopeCut === null || scopeCut.proposal === null || scopeCut.proposal.topicIds.length === 0) {
+      return;
+    }
+    const { planId, proposal } = scopeCut;
+    const examId = plans?.find((plan) => plan.id === planId)?.examId;
+    try {
+      await window.nexus.acceptScopeCut(profileId, planId, proposal.topicIds);
+      setScopeCut(null);
+      if (examId !== undefined) {
+        const fresh = await window.nexus.listExamTopics(profileId, examId);
+        setTopicsByExam((previous) => ({ ...previous, [examId]: fresh }));
+      }
+      await refreshPlans();
+    } catch (error) {
+      console.error("Nexus: failed to accept scope cut:", error);
+      setScopeCut((current) => (current ? { ...current, failed: true } : current));
     }
   }
 
@@ -1798,6 +2024,25 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
 
   // --- Study stats + focus timer (Statistika i fokus, piece 4b) --------------
   const today = localTodayKey();
+
+  // --- Topic-aware plan form + scope-cut dialog derivations (ADR-063) --------
+  /** What the seven Mon..Sun inputs show: the touched vector, or the scalar mirrored. */
+  const weekdayInputValues = planWeekdays ?? Array.from({ length: 7 }, () => planMinutes);
+  /** The form exam's topics, or null while they load (the effect above fetches missing entries). */
+  const formTopics = formExamId === "" ? null : (topicsByExam[formExamId] ?? null);
+  /** Every live deck as a topic-link option, sr-Latn sorted; the subject name disambiguates. */
+  const topicDeckOptions = [...(decks ?? [])].sort((a, b) => collator.compare(a.name, b.name));
+  const scopeCutExamId =
+    scopeCut !== null ? (plans?.find((plan) => plan.id === scopeCut.planId)?.examId ?? "") : "";
+  const scopeCutDialogRows =
+    scopeCut !== null && scopeCut.proposal !== null
+      ? scopeCutRows(
+          scopeCut.proposal.topicIds,
+          topicsByExam[scopeCutExamId] ?? [],
+          blocksByPlan[scopeCut.planId] ?? [],
+          today,
+        )
+      : [];
 
   // The idle timer's select falls back to the sr-Latn-first active subject
   // once the current pick is missing or no longer active/loaded.
@@ -2909,24 +3154,55 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                 <p className="study__today-empty">{strings.study.todayEmpty}</p>
               ) : (
                 <div className="study__today-list">
-                  {todayEntries.map(({ block, exam, subject }) => (
-                    <ListRow
-                      key={block.id}
-                      trailing={
-                        <span className="study__block-minutes">
-                          {block.minutes} {strings.study.minutesUnit}
-                        </span>
-                      }
-                    >
-                      <Checkbox
-                        checked={block.status === "done"}
-                        done={block.status === "done"}
-                        onChange={(event) => void toggleBlockDone(block, event.target.checked)}
+                  {todayEntries.map(({ block, exam, subject }) => {
+                    const topic =
+                      block.topicId === null
+                        ? undefined
+                        : topicsByExam[block.examId]?.find((t) => t.id === block.topicId);
+                    const kindLabel = blockKindChipLabel(block.kind);
+                    const examWeek = isExamWeekDay(exam.examDate, block.blockDate);
+                    // A recall block whose topic drills from a špil deep-links
+                    // straight into the reviewer, scoped to that deck (ADR-063).
+                    const practiceDeckId =
+                      block.kind === "recall" ? (topic?.deckId ?? null) : null;
+                    return (
+                      <ListRow
+                        key={block.id}
+                        className={examWeek ? "study__block-row--exam-week" : undefined}
+                        trailing={
+                          <span className="study__block-meta">
+                            {practiceDeckId !== null && (
+                              <Button
+                                size="sm"
+                                variant="primary"
+                                title={strings.study.blockPracticeTitle}
+                                onClick={() => startReview({ deckIds: [practiceDeckId] })}
+                              >
+                                {strings.study.practice.open}
+                              </Button>
+                            )}
+                            <span className="study__block-minutes">
+                              {block.minutes} {strings.study.minutesUnit}
+                            </span>
+                          </span>
+                        }
                       >
-                        {subject.name} — {strings.study.examType[exam.examType]}
-                      </Checkbox>
-                    </ListRow>
-                  ))}
+                        <Checkbox
+                          checked={block.status === "done"}
+                          done={block.status === "done"}
+                          onChange={(event) => void toggleBlockDone(block, event.target.checked)}
+                        >
+                          <span title={examWeek ? strings.study.examWeekTitle : undefined}>
+                            {subject.name} — {strings.study.examType[exam.examType]}
+                            {topic && <span className="study__block-topic">{topic.name}</span>}
+                            {kindLabel !== null && (
+                              <Chip className="study__block-kind">{kindLabel}</Chip>
+                            )}
+                          </span>
+                        </Checkbox>
+                      </ListRow>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -2939,6 +3215,10 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                 const doneCount = blocks.filter((block) => block.status === "done").length;
                 const days = daysUntilExam(exam.examDate);
                 const expanded = expandedPlanId === plan.id;
+                const health = planHealthById[plan.id];
+                const healthLine = planHealthLine(health);
+                const examTopics = topicsByExam[plan.examId] ?? [];
+                const topicsById = new Map(examTopics.map((topic) => [topic.id, topic]));
                 return (
                   <div key={plan.id} className="study__plan-card">
                     <div className="study__plan-header">
@@ -2973,6 +3253,31 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                         {strings.study.planProgressDone}
                       </span>
                     </div>
+                    {/* The honesty line (ADR-063 invariant 5): what the capped
+                        replan could not fit, or what a passed exam will never
+                        absorb — with the scope-cut conversation's opener on
+                        the first (STUDY-004). */}
+                    {healthLine !== null && (
+                      <p
+                        className={
+                          (health?.overflowMinutes ?? 0) > 0
+                            ? "study__plan-health"
+                            : "study__plan-health study__plan-health--passed"
+                        }
+                        role="status"
+                      >
+                        {healthLine}
+                        {(health?.overflowMinutes ?? 0) > 0 && (
+                          <Button
+                            size="sm"
+                            className="study__plan-cut-open"
+                            onClick={() => void openScopeCut(plan.id)}
+                          >
+                            {strings.study.scopeCut.open}
+                          </Button>
+                        )}
+                      </p>
+                    )}
                     <Button
                       size="sm"
                       className="study__plan-toggle"
@@ -2982,33 +3287,80 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                     </Button>
                     {expanded && (
                       <div className="study__plan-blocks">
-                        {blocks.map((block) => (
-                          <ListRow
-                            key={block.id}
-                            muted={block.status === "missed"}
-                            trailing={
-                              <span className="study__block-meta">
-                                <span className="study__block-minutes">
-                                  {block.minutes} {strings.study.minutesUnit}
+                        {blocks.map((block) => {
+                          const topic =
+                            block.topicId === null ? undefined : topicsById.get(block.topicId);
+                          const kindLabel = blockKindChipLabel(block.kind);
+                          const examWeek = isExamWeekDay(exam.examDate, block.blockDate);
+                          const future = block.blockDate >= today;
+                          const practiceDeckId =
+                            block.kind === "recall" ? (topic?.deckId ?? null) : null;
+                          return (
+                            <ListRow
+                              key={block.id}
+                              muted={block.status === "missed"}
+                              className={examWeek ? "study__block-row--exam-week" : undefined}
+                              trailing={
+                                <span className="study__block-meta">
+                                  {practiceDeckId !== null && (
+                                    <Button
+                                      size="sm"
+                                      variant="primary"
+                                      title={strings.study.blockPracticeTitle}
+                                      onClick={() => startReview({ deckIds: [practiceDeckId] })}
+                                    >
+                                      {strings.study.practice.open}
+                                    </Button>
+                                  )}
+                                  {future && (
+                                    <Button
+                                      size="sm"
+                                      className="study__pin"
+                                      aria-pressed={block.pinned}
+                                      title={
+                                        block.pinned
+                                          ? strings.study.blockUnpinTitle
+                                          : strings.study.blockPinTitle
+                                      }
+                                      onClick={() => void toggleBlockPinned(block)}
+                                    >
+                                      {block.pinned
+                                        ? strings.study.blockUnpin
+                                        : strings.study.blockPin}
+                                    </Button>
+                                  )}
+                                  <span className="study__block-minutes">
+                                    {block.minutes} {strings.study.minutesUnit}
+                                  </span>
+                                  <Chip variant={blockStatusVariant(block.status)}>
+                                    {strings.study.blockStatus[block.status]}
+                                  </Chip>
                                 </span>
-                                <Chip variant={blockStatusVariant(block.status)}>
-                                  {strings.study.blockStatus[block.status]}
-                                </Chip>
-                              </span>
-                            }
-                          >
-                            <Checkbox
-                              checked={block.status === "done"}
-                              done={block.status === "done"}
-                              aria-label={strings.study.blockDoneLabel}
-                              onChange={(event) =>
-                                void toggleBlockDone(block, event.target.checked)
                               }
                             >
-                              {formatBlockDay(block.blockDate)}
-                            </Checkbox>
-                          </ListRow>
-                        ))}
+                              <Checkbox
+                                checked={block.status === "done"}
+                                done={block.status === "done"}
+                                aria-label={strings.study.blockDoneLabel}
+                                onChange={(event) =>
+                                  void toggleBlockDone(block, event.target.checked)
+                                }
+                              >
+                                <span
+                                  title={examWeek ? strings.study.examWeekTitle : undefined}
+                                >
+                                  {formatBlockDay(block.blockDate)}
+                                  {topic && (
+                                    <span className="study__block-topic">{topic.name}</span>
+                                  )}
+                                  {kindLabel !== null && (
+                                    <Chip className="study__block-kind">{kindLabel}</Chip>
+                                  )}
+                                </span>
+                              </Checkbox>
+                            </ListRow>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -3063,6 +3415,226 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                 <Checkbox checked={planBoost} onChange={(event) => setPlanBoost(event.target.checked)}>
                   {strings.study.planBoostLabel}
                 </Checkbox>
+                {/* Per-weekday minutes (ADR-063): no toggle — the inputs mirror
+                    „Minuta dnevno" until touched, and an all-equal week saves
+                    back as the scalar (NULL vector = "svaki dan isto"). */}
+                <div
+                  className="study__weekdays"
+                  role="group"
+                  aria-label={strings.study.weekdayMinutesLabel}
+                >
+                  <span className="study__weekdays-label">
+                    {strings.study.weekdayMinutesLabel}
+                  </span>
+                  {strings.recurrence.weekdayShort.map((dayLabel, index) => (
+                    <label key={dayLabel} className="study__weekday">
+                      <span className="study__weekday-name">{dayLabel}</span>
+                      <TextField
+                        type="number"
+                        className="study__weekday-input"
+                        min={0}
+                        max={MAX_WEEKDAY_INPUT}
+                        value={weekdayInputValues[index] ?? ""}
+                        aria-label={`${strings.study.weekdayMinutesLabel} — ${dayLabel}`}
+                        onChange={(event) => {
+                          const next = [...weekdayInputValues];
+                          next[index] = event.target.value;
+                          setPlanWeekdays(next);
+                        }}
+                      />
+                    </label>
+                  ))}
+                  <p className="study__weekdays-hint">{strings.study.weekdayMinutesHint}</p>
+                </div>
+                {/* The exam's topics (ADR-063): name rows in rank order —
+                    curriculum order AND scope-cut priority. Every edit writes
+                    through immediately (the plan regenerates from topics), so
+                    this block needs no save of its own. */}
+                {formExamId !== "" && (
+                  <div className="study__topics">
+                    <h4 className="study__topics-heading">{strings.study.topics.title}</h4>
+                    <p className="study__topics-hint">{strings.study.topics.hint}</p>
+                    {formTopics === null ? (
+                      <p className="app__muted">{strings.app.loading}</p>
+                    ) : (
+                      <>
+                        {formTopics.length === 0 ? (
+                          <p className="study__topics-empty">{strings.study.topics.empty}</p>
+                        ) : (
+                          formTopics.map((topic, index) => (
+                            <div key={topic.id} className="study__topic-row">
+                              <span className="study__topic-rank">{index + 1}.</span>
+                              <TextField
+                                key={`${topic.id}:${topic.updatedAt}`}
+                                className="study__topic-name"
+                                defaultValue={topic.name}
+                                aria-label={strings.study.topics.nameLabel}
+                                onBlur={(event) =>
+                                  void commitTopicRename(topic, event.target.value)
+                                }
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    event.currentTarget.blur();
+                                  }
+                                }}
+                              />
+                              <select
+                                className="study__select study__topic-confidence"
+                                value={topic.confidence === null ? "" : String(topic.confidence)}
+                                aria-label={strings.study.topics.confidenceLabel}
+                                onChange={(event) =>
+                                  void mutateTopics(topic.examId, () =>
+                                    window.nexus.setExamTopicConfidence(
+                                      profileId,
+                                      topic.id,
+                                      event.target.value === ""
+                                        ? null
+                                        : Number(event.target.value),
+                                    ),
+                                  )
+                                }
+                              >
+                                <option value="">
+                                  {strings.study.topics.confidenceUnknown}
+                                </option>
+                                {topic.confidence !== null &&
+                                  !CONFIDENCE_STEPS.includes(topic.confidence) && (
+                                    <option value={topic.confidence}>{topic.confidence}</option>
+                                  )}
+                                {CONFIDENCE_STEPS.map((step) => (
+                                  <option key={step} value={step}>
+                                    {step}
+                                  </option>
+                                ))}
+                              </select>
+                              {topic.confidence === null &&
+                                topic.effectiveConfidence !== null && (
+                                  <span className="study__topic-derived">
+                                    {strings.study.topics.derivedPrefix}{" "}
+                                    {topic.effectiveConfidence}
+                                  </span>
+                                )}
+                              <select
+                                className="study__select study__topic-deck"
+                                value={topic.deckId ?? ""}
+                                aria-label={strings.study.topics.deckLabel}
+                                onChange={(event) =>
+                                  void mutateTopics(topic.examId, () =>
+                                    window.nexus.setExamTopicDeck(
+                                      profileId,
+                                      topic.id,
+                                      event.target.value === "" ? null : event.target.value,
+                                    ),
+                                  )
+                                }
+                              >
+                                <option value="">{strings.study.topics.deckNone}</option>
+                                {topic.deckId !== null &&
+                                  !topicDeckOptions.some((deck) => deck.id === topic.deckId) && (
+                                    <option value={topic.deckId}>
+                                      {strings.study.topics.deckMissing}
+                                    </option>
+                                  )}
+                                {topicDeckOptions.map((deck) => (
+                                  <option key={deck.id} value={deck.id}>
+                                    {deck.name}
+                                    {subjectsById.get(deck.subjectId)
+                                      ? ` (${subjectsById.get(deck.subjectId)?.name})`
+                                      : ""}
+                                  </option>
+                                ))}
+                              </select>
+                              {topic.cut && (
+                                <>
+                                  <Chip className="study__topic-cut">
+                                    {strings.study.topics.cutChip}
+                                  </Chip>
+                                  {/* Honestly disabled: no store path returns a
+                                      cut topic to the plan yet (ADR-063 slice a
+                                      has no un-cut setter). */}
+                                  <Button
+                                    size="sm"
+                                    disabled
+                                    title={strings.study.topics.uncutUnavailableTitle}
+                                  >
+                                    {strings.study.topics.uncut}
+                                  </Button>
+                                </>
+                              )}
+                              <span className="study__topic-actions">
+                                <Button
+                                  size="sm"
+                                  aria-label={strings.study.topics.moveUp}
+                                  disabled={index === 0}
+                                  onClick={() =>
+                                    void mutateTopics(topic.examId, () =>
+                                      window.nexus.moveExamTopic(profileId, topic.id, "up"),
+                                    )
+                                  }
+                                >
+                                  ↑
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  aria-label={strings.study.topics.moveDown}
+                                  disabled={index === formTopics.length - 1}
+                                  onClick={() =>
+                                    void mutateTopics(topic.examId, () =>
+                                      window.nexus.moveExamTopic(profileId, topic.id, "down"),
+                                    )
+                                  }
+                                >
+                                  ↓
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  className="study__delete"
+                                  aria-label={strings.study.topics.remove}
+                                  onClick={() =>
+                                    void mutateTopics(topic.examId, () =>
+                                      window.nexus.deleteExamTopic(profileId, topic.id),
+                                    )
+                                  }
+                                >
+                                  ×
+                                </Button>
+                              </span>
+                            </div>
+                          ))
+                        )}
+                        <div className="study__topic-add">
+                          <TextField
+                            className="study__topic-name"
+                            value={topicName}
+                            placeholder={strings.study.topics.addPlaceholder}
+                            aria-label={strings.study.topics.addPlaceholder}
+                            onChange={(event) => setTopicName(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                void addTopic(formExamId);
+                              }
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={topicName.trim().length === 0}
+                            onClick={() => void addTopic(formExamId)}
+                          >
+                            {strings.study.topics.add}
+                          </Button>
+                        </div>
+                        {topicActionFailed && (
+                          <p className="study__topic-error" role="alert">
+                            {strings.study.topics.actionError}
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
                 <Button type="submit" variant="primary" size="sm">
                   {editingPlanId != null ? strings.study.savePlan : strings.study.addPlan}
                 </Button>
@@ -3271,6 +3843,16 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
           onClose={() => setPracticeSubjectId(null)}
         />
       )}
+
+      {scopeCut !== null && (
+        <ScopeCutDialog
+          proposal={scopeCut.proposal}
+          rows={scopeCutDialogRows}
+          failed={scopeCut.failed}
+          onAccept={() => void confirmScopeCut()}
+          onClose={() => setScopeCut(null)}
+        />
+      )}
     </div>
   );
 }
@@ -3399,6 +3981,112 @@ function PracticeDialog({ decks, countsFor, onStart, onClose }: PracticeDialogPr
             onClick={() => onStart([...selected], problemsOnly)}
           >
             {s.start}
+          </Button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// --- Scope-cut proposal (ADR-063 / STUDY-004) ----------------------------
+
+interface ScopeCutDialogProps {
+  /** The fetched proposal, or null while it loads. */
+  proposal: ScopeCutProposal | null;
+  /** The proposal's topics joined with rank + remaining minutes (see `scopeCutRows`). */
+  rows: readonly ScopeCutRow[];
+  failed: boolean;
+  onAccept: () => void;
+  onClose: () => void;
+}
+
+/**
+ * „Predlog skraćenja" — the scope-cut conversation (STUDY-004): the store's
+ * computed proposal, listed topic by topic (rank, remaining minutes), with
+ * accept/decline. Accepting is the only act that ever cuts a topic; declining
+ * changes nothing.
+ *
+ * The house dialog recipe, shared outright with `PracticeDialog`: backdrop and
+ * panel as siblings, Escape and the backdrop close, focus lands inside and
+ * returns where it came from, no glow. Focus lands on „Odustani": a cut is a
+ * deliberate act, not a default Enter should reach first.
+ */
+function ScopeCutDialog({ proposal, rows, failed, onAccept, onClose }: ScopeCutDialogProps) {
+  const s = strings.study.scopeCut;
+  const panelRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const titleId = useId();
+
+  // Focus lands on „Odustani" — the panel's first button — so Enter cannot
+  // reach the cut before the user has read what it takes.
+  useEffect(() => {
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    panelRef.current?.querySelector("button")?.focus();
+    return () => {
+      previousFocusRef.current?.focus();
+      previousFocusRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  const acceptable = proposal !== null && proposal.topicIds.length > 0;
+
+  return createPortal(
+    <div className="recur-dialog__overlay">
+      <div className="recur-dialog__backdrop" onClick={onClose} />
+      <div
+        ref={panelRef}
+        className="recur-dialog__panel study-cut__panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
+        <h2 id={titleId} className="recur-dialog__title">
+          {s.title}
+        </h2>
+        {failed ? (
+          <p className="study__topic-error" role="alert">
+            {s.loadError}
+          </p>
+        ) : proposal === null ? (
+          <p className="app__muted">{strings.app.loading}</p>
+        ) : !acceptable ? (
+          <p className="app__muted">{s.empty}</p>
+        ) : (
+          <>
+            <p className="recur-dialog__question">{s.intro}</p>
+            <div className="study-cut__rows">
+              {rows.map((row) => (
+                <div key={row.id} className="study-cut__row">
+                  <span className="study-cut__row-name">
+                    {row.rank + 1}. {row.name}
+                  </span>
+                  <span className="study-cut__row-minutes">
+                    {row.remainingMinutes} {s.minutesSuffix}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+        <div className="recur-dialog__actions study-cut__actions">
+          <Button className="recur-dialog__cancel" onClick={onClose}>
+            {s.decline}
+          </Button>
+          <Button variant="primary" disabled={!acceptable || failed} onClick={onAccept}>
+            {s.accept}
           </Button>
         </div>
       </div>

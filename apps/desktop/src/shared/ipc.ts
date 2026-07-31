@@ -170,9 +170,25 @@ export const IpcChannel = {
   plansDelete: "plans:delete",
   plansRestore: "plans:restore",
   plansSyncAll: "plans:sync-all",
+  // The scope-cut conversation (ADR-063 / STUDY-004): the proposal is a pure
+  // READ, and acceptance is its own channel — the ONLY wire that ever cuts a
+  // topic, so "cut only by explicit user acceptance" stays a structural fact.
+  plansScopeCutProposal: "plans:scope-cut-proposal",
+  plansAcceptScopeCut: "plans:accept-scope-cut",
   blocksListByPlan: "blocks:list-by-plan",
   blocksRange: "blocks:range",
   blocksSetStatus: "blocks:set-status",
+  blocksSetPinned: "blocks:set-pinned",
+  // Exam topics (ADR-063): every mutation answers with the exam's fresh
+  // EFFECTIVE list, so the renderer always renders manual-else-derived
+  // confidence and never derives anything itself.
+  topicsListByExam: "topics:list-by-exam",
+  topicsCreate: "topics:create",
+  topicsRename: "topics:rename",
+  topicsSetConfidence: "topics:set-confidence",
+  topicsSetDeck: "topics:set-deck",
+  topicsMove: "topics:move",
+  topicsDelete: "topics:delete",
   focusStart: "focus:start",
   focusStop: "focus:stop",
   focusStatus: "focus:status",
@@ -2299,6 +2315,9 @@ export interface ReviewPreviewRequest {
 /** Closed study-block status domain (mirrors `@nexus/db`'s `StudyBlockStatus`; redeclared so the renderer never imports DB code). `missed` is only ever set by main's sync, never accepted from `setBlockStatus`. */
 export type StudyBlockStatus = "planned" | "done" | "missed";
 
+/** Closed study-block kind domain (mirrors `@nexus/db`'s `StudyBlockKind`; migration 046's CHECK, ADR-063). */
+export type StudyBlockKind = "coverage" | "revision" | "recall";
+
 /**
  * A study plan as seen by the renderer (mirrors the `study_plans` table via the
  * store's mapping, STUDY exam planner). Its exam is carried by id. Redeclared
@@ -2311,23 +2330,32 @@ export interface StudyPlan {
   dailyMinutes: number;
   startDate: string;
   examWeekBoost: boolean;
+  /** Mon..Sun capacity vector (ADR-063), or null for "every day = dailyMinutes". */
+  weekdayMinutes: readonly number[] | null;
   createdAt: string;
   updatedAt: string;
 }
 
-/** Fields for a new plan; all four are required. The main process revalidates each and stamps `now`/`today` itself. */
+/**
+ * Fields for a new plan; the first four are required. `weekdayMinutes` is the
+ * optional Mon..Sun vector — null (or absent) means "every day =
+ * dailyMinutes". The main process revalidates each and stamps `now`/`today`
+ * itself.
+ */
 export interface NewPlanFields {
   examId: string;
   dailyMinutes: number;
   startDate: string;
   examWeekBoost: boolean;
+  weekdayMinutes?: readonly number[] | null;
 }
 
-/** A partial edit of a plan's own fields; an omitted key is untouched. */
+/** A partial edit of a plan's own fields; an omitted key is untouched, and `weekdayMinutes: null` clears the vector. */
 export interface PlanFieldChanges {
   dailyMinutes?: number;
   startDate?: string;
   examWeekBoost?: boolean;
+  weekdayMinutes?: readonly number[] | null;
 }
 
 /**
@@ -2342,9 +2370,74 @@ export interface StudyBlock {
   blockDate: string;
   minutes: number;
   status: StudyBlockStatus;
+  /** The topic this block serves (ADR-063), or null on an undifferentiated block. */
+  topicId: string | null;
+  kind: StudyBlockKind;
+  /** A pinned block survives regeneration exactly as done/missed rows do — the user's own hold on a slot. */
+  pinned: boolean;
   createdAt: string;
   updatedAt: string;
 }
+
+/**
+ * One plan's honesty report (ADR-063 invariant 5), one per plan from
+ * `plans:sync-all` (mirrors `@nexus/db`'s `PlanHealth`): `overflowMinutes` is
+ * the backlog no remaining day could absorb (the scope-cut conversation's
+ * trigger, STUDY-004), and `examPassedBacklogMinutes` the missed time a plan
+ * whose exam already passed will never absorb. Never both non-zero.
+ */
+export interface PlanHealth {
+  planId: string;
+  overflowMinutes: number;
+  examPassedBacklogMinutes: number;
+}
+
+/**
+ * One plan's scope-cut proposal (STUDY-004; mirrors `@nexus/db`'s
+ * `ScopeCutProposal`): the lowest-ranked topics whose removal brings the
+ * remaining load inside the remaining capacity. A pure COMPUTATION — nothing
+ * is written until the user explicitly accepts it over
+ * `plans:accept-scope-cut`, the only wire that ever sets `cut`.
+ */
+export interface ScopeCutProposal {
+  planId: string;
+  /** Σ day capacity over the remaining days (effective start .. exam-eve). */
+  capacityMinutes: number;
+  /** Remaining non-done minutes: future planned blocks plus the missed backlog. */
+  loadMinutes: number;
+  /** Topic ids to cut, walking the rank list from the bottom; empty when the load already fits. */
+  topicIds: readonly string[];
+  /** The non-done minutes those cuts would free. */
+  freedMinutes: number;
+}
+
+/**
+ * An exam topic as seen by the renderer (mirrors `@nexus/db`'s
+ * `EffectiveExamTopic` — the store's record WITH its effective confidence
+ * resolved, ADR-063). Every topics:* channel answers with these, so the
+ * renderer renders manual-else-derived confidence and never derives.
+ */
+export interface ExamTopic {
+  id: string;
+  profileId: string;
+  examId: string;
+  name: string;
+  /** The user's rank: 0 = the list's top = most important — curriculum order AND scope-cut priority. */
+  rank: number;
+  /** The user's own 0-100 self-assessment, or null for unknown. */
+  confidence: number | null;
+  /** The flashcard deck this topic is drilled from, or null for none. */
+  deckId: string | null;
+  /** Set ONLY via `plans:accept-scope-cut` — never by the machine. */
+  cut: boolean;
+  /** Manual confidence when set, else deck-derived, else null — what the weakness column renders. */
+  effectiveConfidence: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A rank move as the wire carries it: one step toward the top or the bottom. Main clamps an edge move to a no-op. */
+export type TopicMoveDirection = "up" | "down";
 
 /** A block joined with its plan's exam id — the calendar-merge read path (`listBlocksInRange`). */
 export interface StudyBlockWithExam extends StudyBlock {
@@ -2397,6 +2490,72 @@ export interface BlocksSetStatusRequest {
   profileId: string;
   id: string;
   status: StudyBlockStatus;
+}
+
+/** Pins or unpins a block (ADR-063): a pinned block survives regeneration exactly as done/missed rows do. */
+export interface BlocksSetPinnedRequest {
+  profileId: string;
+  id: string;
+  pinned: boolean;
+}
+
+/** Reads one plan's scope-cut proposal (STUDY-004). `today` is stamped by main, never accepted from the renderer. */
+export interface PlansScopeCutProposalRequest {
+  profileId: string;
+  planId: string;
+}
+
+/**
+ * Accepts a scope cut: marks `topicIds` cut and re-syncs `planId`, answering
+ * with its fresh health. The ONLY wire that ever sets `cut` (ADR-063).
+ */
+export interface PlansAcceptScopeCutRequest {
+  profileId: string;
+  planId: string;
+  topicIds: readonly string[];
+}
+
+export interface TopicsListByExamRequest {
+  profileId: string;
+  examId: string;
+}
+
+/** Appends a topic at the bottom rank of an exam; confidence/deck start unset (their own channels set them). */
+export interface TopicsCreateRequest {
+  profileId: string;
+  examId: string;
+  name: string;
+}
+
+export interface TopicsRenameRequest {
+  profileId: string;
+  id: string;
+  name: string;
+}
+
+/** Sets (0-100) or clears (null) the manual confidence. */
+export interface TopicsSetConfidenceRequest {
+  profileId: string;
+  id: string;
+  confidence: number | null;
+}
+
+/** Sets or clears the topic ↔ deck link; that the deck is live in this profile is the store's semantic re-check. */
+export interface TopicsSetDeckRequest {
+  profileId: string;
+  id: string;
+  deckId: string | null;
+}
+
+export interface TopicsMoveRequest {
+  profileId: string;
+  id: string;
+  direction: TopicMoveDirection;
+}
+
+export interface TopicsDeleteRequest {
+  profileId: string;
+  id: string;
 }
 
 /**
@@ -5315,7 +5474,16 @@ export interface NexusApi {
   updatePlan(profileId: string, id: string, changes: PlanFieldChanges): Promise<StudyPlan>;
   deletePlan(profileId: string, id: string): Promise<void>;
   restorePlan(profileId: string, id: string): Promise<void>;
-  syncAllPlans(profileId: string): Promise<number>;
+  /** Syncs every active plan whose exam is still active; answers one honesty report per synced plan (ADR-063). */
+  syncAllPlans(profileId: string): Promise<PlanHealth[]>;
+  /** One plan's scope-cut proposal (STUDY-004) — a pure read; nothing is cut until `acceptScopeCut`. */
+  scopeCutProposal(profileId: string, planId: string): Promise<ScopeCutProposal>;
+  /** Marks `topicIds` cut and re-syncs the plan — the ONLY path that ever sets `cut`. */
+  acceptScopeCut(
+    profileId: string,
+    planId: string,
+    topicIds: readonly string[],
+  ): Promise<PlanHealth>;
   listBlocksByPlan(profileId: string, planId: string): Promise<StudyBlock[]>;
   listBlocksInRange(
     profileId: string,
@@ -5323,6 +5491,26 @@ export interface NexusApi {
     toDate: string,
   ): Promise<StudyBlockWithExam[]>;
   setBlockStatus(profileId: string, id: string, status: StudyBlockStatus): Promise<StudyBlock>;
+  setBlockPinned(profileId: string, id: string, pinned: boolean): Promise<StudyBlock>;
+  /** One exam's topics with effective confidences resolved, in rank order (ADR-063). */
+  listExamTopics(profileId: string, examId: string): Promise<ExamTopic[]>;
+  /** Appends a topic at the exam's bottom rank; answers with the exam's fresh effective list. */
+  createExamTopic(profileId: string, examId: string, name: string): Promise<ExamTopic[]>;
+  renameExamTopic(profileId: string, id: string, name: string): Promise<ExamTopic[]>;
+  setExamTopicConfidence(
+    profileId: string,
+    id: string,
+    confidence: number | null,
+  ): Promise<ExamTopic[]>;
+  setExamTopicDeck(profileId: string, id: string, deckId: string | null): Promise<ExamTopic[]>;
+  /** Moves a topic one rank step; an edge move is a no-op. Answers with the fresh effective list. */
+  moveExamTopic(
+    profileId: string,
+    id: string,
+    direction: TopicMoveDirection,
+  ): Promise<ExamTopic[]>;
+  /** Soft-deletes a topic (its blocks become undifferentiated); answers with the exam's fresh effective list. */
+  deleteExamTopic(profileId: string, id: string): Promise<ExamTopic[]>;
   startFocus(profileId: string, subjectId: string): Promise<RunningFocusSession>;
   stopFocus(profileId: string): Promise<FocusSession | null>;
   focusStatus(profileId: string): Promise<RunningFocusSession | null>;
