@@ -29,6 +29,7 @@ import type {
   ExportFocusSession,
   ExportNote,
   ExportNoteAttachment,
+  ExportNoteCategory,
   ExportNoteFolder,
   ExportNoteTag,
   ExportNoteTagLink,
@@ -227,7 +228,21 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.26.0` changes what
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.27.0` adds note
+ * CATEGORIES (NOTE-002, migration 049): the `note-category` record type in
+ * `data/notes.ndjson` — a flat, per-profile row naming what KIND a note is,
+ * beside the folder that says where it lives and the tags that say what it is
+ * about — plus a `categoryId` on `note`. Neither needs an `ArchiveEra` flag:
+ * the whole-absent-type rule below covers the record, and the field is
+ * OPTIONAL-with-a-default whose absence means `null`, because uncategorized is
+ * what every note in every earlier archive actually was. A MINOR bump for the
+ * TYPE, not the field — an older build would refuse `note-category` as
+ * unrecognised (the version gate makes "ignore what you do not know"
+ * unreachable, deliberately), so the gate owes it that refusal at the manifest
+ * instead of one baffling error per category. A note whose `categoryId` names a
+ * category the archive does not carry is an `unknown-reference` with its line,
+ * exactly as a dangling `folderId` is — and, like a folder, it DETACHES rather
+ * than dropping the note in import mode. `1.26.0` changes what
  * a cloze card's `clozeOrdinal` MEANS (ADR-068, migration 047): it was the
  * deletion's 0-based POSITION in `clozeText` and is now its 1-based NUMBER —
  * the `{{cN::…}}` label when the run carries one, its position + 1 when it does
@@ -358,7 +373,7 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.26.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.27.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -981,6 +996,7 @@ export type ArchiveRecordType =
   | "notification"
   | "note-folder"
   | "note-tag"
+  | "note-category"
   | "note"
   | "note-tag-link"
   | "note-attachment"
@@ -1022,6 +1038,7 @@ const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "notification",
   "note-folder",
   "note-tag",
+  "note-category",
   "note",
   "note-tag-link",
   "note-attachment",
@@ -1074,6 +1091,7 @@ const FILE_RECORD_TYPES: Record<DataFilePath, readonly ArchiveRecordType[]> = {
   "data/notes.ndjson": [
     "note-folder",
     "note-tag",
+    "note-category",
     "note",
     "note-tag-link",
     "note-attachment",
@@ -1884,6 +1902,26 @@ function parseNoteTag(raw: Record<string, unknown>): ExportNoteTag {
   return { id, profileId, name, createdAt };
 }
 
+/**
+ * A note category (NOTE-002, migration 049). Flat by construction — there is no
+ * `parentId` to read, so this row can never join the cycle rules below, and a
+ * writer that invented one would simply have it ignored.
+ *
+ * `color` is validated against the FOLDER palette, because migration 049 stores
+ * a folder swatch key: one closed list, checked one way, so an archive cannot
+ * introduce a ninth colour through the category door that it could not
+ * introduce through the folder one.
+ */
+function parseNoteCategory(raw: Record<string, unknown>): ExportNoteCategory {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const name = nonEmptyStr(raw.name, "name");
+  const color = nullableFolderColor(raw.color, "color");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, profileId, name, color, createdAt, updatedAt };
+}
+
 /** Metadata only — `snapshot` is attached afterward from `input.ydocs` (rule 7 of the reader's spec). */
 function parseNoteMeta(raw: Record<string, unknown>): Omit<ExportNote, "snapshot"> {
   const id = nonEmptyStr(raw.id, "id");
@@ -1894,11 +1932,17 @@ function parseNoteMeta(raw: Record<string, unknown>): Omit<ExportNote, "snapshot
   // a corrupt row.
   const title = str(raw.title, "title");
   const folderId = nullableNonEmptyStr(raw.folderId, "folderId");
+  // Optional with a default (NOTE-002), so no era flag — the `defaultView`
+  // reasoning at INTERCHANGE_SCHEMA_VERSION. Absent means null, which is what
+  // every note in every archive written before 1.27.0 actually was; a PRESENT
+  // value is validated strictly, in every era.
+  const categoryId =
+    raw.categoryId === undefined ? null : nullableNonEmptyStr(raw.categoryId, "categoryId");
   const pinned = bool(raw.pinned, "pinned");
   const cardDeckId = nullableNonEmptyStr(raw.cardDeckId, "cardDeckId");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
-  return { id, profileId, title, folderId, pinned, cardDeckId, createdAt, updatedAt };
+  return { id, profileId, title, folderId, categoryId, pinned, cardDeckId, createdAt, updatedAt };
 }
 
 function parseNoteTagLink(raw: Record<string, unknown>): ExportNoteTagLink {
@@ -2295,6 +2339,7 @@ interface Collections {
   notifications: Bucket<ExportNotification>;
   noteFolders: Bucket<ExportNoteFolder>;
   noteTags: Bucket<ExportNoteTag>;
+  noteCategories: Bucket<ExportNoteCategory>;
   notes: Bucket<Omit<ExportNote, "snapshot">>;
   noteTagLinks: Bucket<ExportNoteTagLink>;
   noteAttachments: Bucket<ExportNoteAttachment>;
@@ -2320,7 +2365,8 @@ function newCollections(): Collections {
     reviewLog: newBucket(), examTopics: newBucket(),
     plans: newBucket(), blocks: newBucket(), focusSessions: newBucket(),
     studySettings: newBucket(),
-    notifications: newBucket(), noteFolders: newBucket(), noteTags: newBucket(), notes: newBucket(),
+    notifications: newBucket(), noteFolders: newBucket(), noteTags: newBucket(),
+    noteCategories: newBucket(), notes: newBucket(),
     noteTagLinks: newBucket(), noteAttachments: newBucket(), noteVersions: newBucket(),
     noteTemplates: newBucket(), dashboardSettings: newBucket(), dashboardSets: newBucket(),
     dashboardWidgets: newBucket(), privateNotes: newBucket(), privateNoteVersions: newBucket(),
@@ -2510,6 +2556,11 @@ function dispatchRecord(
     case "note-tag": {
       const row = parseNoteTag(raw);
       pushRow(collections.noteTags, row.id, row, type, path, line, ctx);
+      return;
+    }
+    case "note-category": {
+      const row = parseNoteCategory(raw);
+      pushRow(collections.noteCategories, row.id, row, type, path, line, ctx);
       return;
     }
     case "note": {
@@ -3038,6 +3089,7 @@ function referenceRules(collections: Collections): ReferenceRule[] {
   const noteIds = () => idsOf(collections.notes);
   const folderIds = () => idsOf(collections.noteFolders);
   const noteTagIds = () => idsOf(collections.noteTags);
+  const noteCategoryIds = () => idsOf(collections.noteCategories);
   /** Which list each section belongs to — a task's `sectionId` must resolve to a section of the task's OWN list, which a plain id set cannot say. */
   const listOfSection = () =>
     new Map(collections.taskSections.entries.map((entry) => [entry.row.id, entry.row.listId]));
@@ -3355,6 +3407,21 @@ function referenceRules(collections: Collections): ReferenceRule[] {
       // whose folder is absent directly under `notes/` (`buildNotePaths`), so
       // the archive format itself says a folderless note is a normal note.
       onDangling: { detach: (row) => ({ ...row, folderId: null }) },
+    }),
+    referenceRule({
+      bucket: collections.notes,
+      type: "note",
+      field: "categoryId",
+      ref: (row) => row.categoryId,
+      resolver: () => {
+        const ids = noteCategoryIds();
+        return (ref) => ids.has(ref);
+      },
+      // What KIND of note this is (NOTE-002) — optional by construction, and
+      // uncategorized is a first-class state rather than a damaged one. So it
+      // DETACHES like the folder above it, never drops: a note whose category
+      // row was lost is still every word the user wrote.
+      onDangling: { detach: (row) => ({ ...row, categoryId: null }) },
     }),
     referenceRule({
       bucket: collections.notes,
@@ -3961,6 +4028,10 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         notes,
         noteFolders: rowsOf(collections.noteFolders),
         noteTags: rowsOf(collections.noteTags),
+        // Empty for every pre-1.27.0 archive, which carries no such row at all
+        // — and a restore reads that emptiness as "this profile has no
+        // categories", which is exactly what it had.
+        noteCategories: rowsOf(collections.noteCategories),
         noteTagLinks: rowsOf(collections.noteTagLinks),
         noteTemplates: rowsOf(collections.noteTemplates),
         noteAttachments: rowsOf(collections.noteAttachments),

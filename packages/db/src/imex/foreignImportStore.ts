@@ -69,6 +69,7 @@ export class ForeignImportStore {
   private readonly insertNoteTemplate: Database.Statement;
   private readonly insertNoteFolder: Database.Statement;
   private readonly insertNoteTag: Database.Statement;
+  private readonly insertNoteCategory: Database.Statement;
   private readonly insertNote: Database.Statement;
   private readonly insertNoteSnapshot: Database.Statement;
   private readonly insertNoteAttachment: Database.Statement;
@@ -201,10 +202,15 @@ export class ForeignImportStore {
     this.insertNoteTag = db.prepare(
       `INSERT INTO note_tags (id, profile_id, name, created_at) VALUES (?, ?, ?, ?)`,
     );
+    this.insertNoteCategory = db.prepare(
+      `INSERT INTO note_categories (id, profile_id, name, color, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    );
     this.insertNote = db.prepare(
       `INSERT INTO notes
-         (id, profile_id, title, folder_id, pinned, card_deck_id, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+         (id, profile_id, title, folder_id, category_id, pinned, card_deck_id,
+          created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertNoteSnapshot = db.prepare(
       `INSERT INTO note_snapshots (note_id, snapshot, plaintext, covered_seq, updated_at)
@@ -534,6 +540,19 @@ export class ForeignImportStore {
         written += 1;
       }
 
+      // NOTE-002 / migration 049. Migration 049's `(profile_id, name)` UNIQUE
+      // is never in play here for the reason the tags' is not: a category whose
+      // name the target already holds was ABSORBED by the planner and is not in
+      // the plan at all — the notes that named it point at the target's row
+      // instead (ADR-043 §2, `ID_MINTERS.noteCategories`).
+      for (const category of planned.noteCategories) {
+        this.insertNoteCategory.run(
+          category.id, this.profileId, category.name, category.color,
+          category.createdAt, category.updatedAt,
+        );
+        written += 1;
+      }
+
       // `note_snapshots.covered_seq` is the highest `coveredSeq` among the
       // note's own imported versions, computed once here so each note's snapshot
       // row can look itself up (the versions themselves are written further
@@ -548,7 +567,7 @@ export class ForeignImportStore {
 
       for (const note of planned.notes) {
         this.insertNote.run(
-          note.id, this.profileId, note.title, note.folderId,
+          note.id, this.profileId, note.title, note.folderId, note.categoryId,
           note.pinned ? 1 : 0, note.cardDeckId, note.createdAt, note.updatedAt,
         );
         written += 1;

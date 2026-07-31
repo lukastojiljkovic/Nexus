@@ -133,6 +133,10 @@ export const RESTORE_WIPE_TABLES = [
   "notes",
   "note_tags",
   "note_folders",
+  // AFTER the notes whose `category_id` names them — children before parents,
+  // the rule this whole list keeps. Migration 049's `ON DELETE SET NULL` is
+  // never leaned on here for the same reason the folder's is not.
+  "note_categories",
   "note_templates",
   "feature_flags",
   "ntf_settings",
@@ -242,6 +246,7 @@ export class RestoreStore {
   private readonly insertTaskDependency: Database.Statement;
   private readonly insertNoteFolder: Database.Statement;
   private readonly insertNoteTag: Database.Statement;
+  private readonly insertNoteCategory: Database.Statement;
   private readonly insertSubject: Database.Statement;
   private readonly insertSubjectAttachment: Database.Statement;
   private readonly insertSubjectNoteLink: Database.Statement;
@@ -328,6 +333,10 @@ export class RestoreStore {
     this.insertNoteTag = db.prepare(
       `INSERT INTO note_tags (id, profile_id, name, created_at) VALUES (?, ?, ?, ?)`,
     );
+    this.insertNoteCategory = db.prepare(
+      `INSERT INTO note_categories (id, profile_id, name, color, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    );
     this.insertSubject = db.prepare(
       `INSERT INTO subjects
          (id, profile_id, name, color, semester, archived, created_at, updated_at, deleted_at)
@@ -351,8 +360,9 @@ export class RestoreStore {
     );
     this.insertNote = db.prepare(
       `INSERT INTO notes
-         (id, profile_id, title, folder_id, pinned, card_deck_id, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+         (id, profile_id, title, folder_id, category_id, pinned, card_deck_id,
+          created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertNoteSnapshot = db.prepare(
       `INSERT INTO note_snapshots (note_id, snapshot, plaintext, covered_seq, updated_at)
@@ -617,6 +627,19 @@ export class RestoreStore {
         written += 1;
       }
 
+      // NOTE-002 / migration 049. Nothing to reconcile against the profile's
+      // own categories: the wipe above removed them all, so `(profile_id, name)`
+      // is free for every row this archive carries — and the parser already
+      // refused a duplicate id. EMPTY for every pre-1.27.0 archive, which
+      // restores a profile with no categories, exactly as it had none.
+      for (const category of input.data.noteCategories) {
+        this.insertNoteCategory.run(
+          category.id, this.profileId, category.name, category.color,
+          category.createdAt, category.updatedAt,
+        );
+        written += 1;
+      }
+
       for (const subject of input.data.subjects) {
         this.insertSubject.run(
           subject.id, this.profileId, subject.name, subject.color, subject.semester,
@@ -671,7 +694,7 @@ export class RestoreStore {
 
       for (const note of input.data.notes) {
         this.insertNote.run(
-          note.id, this.profileId, note.title, note.folderId,
+          note.id, this.profileId, note.title, note.folderId, note.categoryId,
           note.pinned ? 1 : 0, note.cardDeckId, note.createdAt, note.updatedAt,
         );
         written += 1;

@@ -48,6 +48,7 @@ import { migration045 } from "./045-private-notes.js";
 import { migration046 } from "./046-exam-topics.js";
 import { migration047 } from "./047-cloze-numbers.js";
 import { migration048 } from "./048-attachment-text-search.js";
+import { migration049 } from "./049-note-categories.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -107,6 +108,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration046,
   migration047,
   migration048,
+  migration049,
 ];
 
 /**

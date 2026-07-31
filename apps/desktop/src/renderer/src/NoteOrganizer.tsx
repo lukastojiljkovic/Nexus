@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { ACCENT_IDS } from "@nexus/tokens";
 import { Button, TextField } from "@nexus/ui";
-import type { NoteFolder, NoteFolderColor, NoteTag } from "../../shared/ipc.js";
+import type { NoteCategory, NoteFolder, NoteFolderColor, NoteTag } from "../../shared/ipc.js";
 import { NotePopover } from "./notePopover.js";
 import { mergeTemplateEntries, type TemplateEntry } from "./noteTemplates.js";
 import { strings } from "./strings.js";
@@ -24,6 +24,18 @@ type Editing =
 
 /** The tag section's own state machine, parallel to the folder one above. */
 type TagEditing = null | { mode: "new" } | { mode: "rename"; id: string };
+
+/**
+ * The category section's own state machine (NOTE-002). Closer to the FOLDER's
+ * than to the tag's, because a category row is a folder row: it carries a
+ * swatch, so it has a `recolor` mode the tags have no use for. It carries no
+ * `parentId`, so it has no „new child" mode and never will.
+ */
+type CategoryEditing =
+  | null
+  | { mode: "new" }
+  | { mode: "rename"; id: string }
+  | { mode: "recolor"; id: string };
 
 interface FolderNode extends NoteFolder {
   children: FolderNode[];
@@ -65,6 +77,16 @@ export interface NoteOrganizerProps {
   onClearTagFilter: () => void;
   /** Re-fetch tags and links after a tag mutation. */
   onTagsChanged: () => void | Promise<void>;
+  /** All categories for the profile; category CRUD lives here, per-note assignment lives in the note-row menu. */
+  categories: NoteCategory[];
+  /** Ids currently active in the (OR-semantics) category filter, applied client-side by the page. */
+  categoryFilter: string[];
+  /** Toggles a category id in or out of the active filter. */
+  onToggleCategory: (id: string) => void;
+  /** Clears the active category filter. */
+  onClearCategoryFilter: () => void;
+  /** Re-fetch categories and notes after a category mutation (a delete uncategorizes its notes). */
+  onCategoriesChanged: () => void | Promise<void>;
 }
 
 /**
@@ -77,6 +99,14 @@ export interface NoteOrganizerProps {
  * every tag as a filter chip with inline create/rename/delete; the active
  * filter is also typographic (gold text + weight), never a fill or glow.
  * Foldering/pinning/tagging of individual notes lives in the middle list.
+ *
+ * Below the tags, Kategorije (NOTE-002) — the third axis. Its rows reuse the
+ * FOLDER row's markup outright (swatch dot, name, „⋯" menu, the same inline
+ * rename form and the same swatch picker), because a category is renamed and
+ * recoloured by exactly the affordances a folder is; only its INDENT is
+ * absent, since the list is flat. Selecting a category row toggles the filter
+ * rather than navigating, so it is `aria-pressed` like a tag chip, not
+ * `aria-current` like a folder.
  */
 export function NoteOrganizer({
   profileId,
@@ -89,6 +119,11 @@ export function NoteOrganizer({
   onToggleTag,
   onClearTagFilter,
   onTagsChanged,
+  categories,
+  categoryFilter,
+  onToggleCategory,
+  onClearCategoryFilter,
+  onCategoriesChanged,
 }: NoteOrganizerProps) {
   const [editing, setEditing] = useState<Editing>(null);
   const [draftName, setDraftName] = useState("");
@@ -96,6 +131,9 @@ export function NoteOrganizer({
   const [tagEditing, setTagEditing] = useState<TagEditing>(null);
   const [tagDraftName, setTagDraftName] = useState("");
   const [tagFailed, setTagFailed] = useState(false);
+  const [categoryEditing, setCategoryEditing] = useState<CategoryEditing>(null);
+  const [categoryDraftName, setCategoryDraftName] = useState("");
+  const [categoryFailed, setCategoryFailed] = useState(false);
   // The template picker's own list (ADR-036), through the same
   // `mergeTemplateEntries` the Šabloni pane and the slash menu read — built-ins
   // first, then this profile's rows sr-Latn sorted — so a folder's default is
@@ -122,6 +160,7 @@ export function NoteOrganizer({
 
   const tree = buildTree(folders);
   const sortedTags = tags.slice().sort((a, b) => collator.compare(a.name, b.name));
+  const sortedCategories = categories.slice().sort((a, b) => collator.compare(a.name, b.name));
 
   function cancel(): void {
     setEditing(null);
@@ -234,57 +273,258 @@ export function NoteOrganizer({
     void runTag(() => window.nexus.deleteNoteTag(profileId, id));
   }
 
-  const folderForm = (onSubmit: () => void): ReactNode => (
+  function cancelCategory(): void {
+    setCategoryEditing(null);
+    setCategoryDraftName("");
+  }
+
+  async function runCategory(action: () => Promise<void>): Promise<void> {
+    try {
+      setCategoryFailed(false);
+      await action();
+      cancelCategory();
+      await onCategoriesChanged();
+    } catch (error) {
+      setCategoryFailed(true);
+      console.error("Nexus: category action failed:", error);
+    }
+  }
+
+  function beginNewCategory(): void {
+    setCategoryFailed(false);
+    setCategoryDraftName("");
+    setCategoryEditing({ mode: "new" });
+  }
+
+  function beginRenameCategory(category: NoteCategory): void {
+    setCategoryFailed(false);
+    setCategoryDraftName(category.name);
+    setCategoryEditing({ mode: "rename", id: category.id });
+  }
+
+  function submitNewCategory(): void {
+    const name = categoryDraftName.trim();
+    if (name.length === 0) return;
+    void runCategory(() =>
+      window.nexus.createNoteCategory(profileId, { name, color: null }).then(() => undefined),
+    );
+  }
+
+  function submitRenameCategory(id: string): void {
+    const name = categoryDraftName.trim();
+    if (name.length === 0) return;
+    void runCategory(() => window.nexus.updateNoteCategory(profileId, id, { name }));
+  }
+
+  function recolorCategory(id: string, color: NoteFolderColor | null): void {
+    void runCategory(() => window.nexus.updateNoteCategory(profileId, id, { color }));
+  }
+
+  /**
+   * Deleting a category never deletes a note — its notes simply become
+   * uncategorized (migration 049's `ON DELETE SET NULL`). The filter is cleared
+   * of the removed id by the page's own refetch, exactly as a deleted tag's is.
+   */
+  function removeCategory(id: string): void {
+    void runCategory(() => window.nexus.deleteNoteCategory(profileId, id));
+  }
+
+  /**
+   * The inline create/rename form — ONE recipe for all three sections, because
+   * naming a folder, an oznaka and a kategorija is the same act with a
+   * different word in the placeholder. `className` is the only thing a section
+   * genuinely varies: the tag chips add `.note__tag-form`, whose
+   * `flex-basis: 100%` makes the form take a whole wrap row instead of sitting
+   * between two chips.
+   */
+  const nameForm = (spec: {
+    value: string;
+    onChange: (value: string) => void;
+    placeholder: string;
+    onSubmit: () => void;
+    onCancel: () => void;
+    className?: string;
+  }): ReactNode => (
     <form
-      className="note__folder-form"
+      className={`note__folder-form${spec.className === undefined ? "" : ` ${spec.className}`}`}
       onSubmit={(event) => {
         event.preventDefault();
-        onSubmit();
+        spec.onSubmit();
       }}
     >
       <TextField
-        value={draftName}
-        onChange={(event) => setDraftName(event.target.value)}
-        placeholder={strings.notes.folderNamePlaceholder}
-        aria-label={strings.notes.folderNamePlaceholder}
+        value={spec.value}
+        onChange={(event) => spec.onChange(event.target.value)}
+        placeholder={spec.placeholder}
+        aria-label={spec.placeholder}
         autoFocus
       />
       <div className="note__folder-form-actions">
         <Button type="submit" size="sm" variant="primary">
           {strings.notes.save}
         </Button>
-        <Button type="button" size="sm" onClick={cancel}>
+        <Button type="button" size="sm" onClick={spec.onCancel}>
           {strings.notes.cancel}
         </Button>
       </div>
     </form>
   );
 
-  const tagForm = (onSubmit: () => void): ReactNode => (
-    <form
-      className="note__folder-form note__tag-form"
-      onSubmit={(event) => {
-        event.preventDefault();
-        onSubmit();
-      }}
-    >
-      <TextField
-        value={tagDraftName}
-        onChange={(event) => setTagDraftName(event.target.value)}
-        placeholder={strings.notes.tagNamePlaceholder}
-        aria-label={strings.notes.tagNamePlaceholder}
-        autoFocus
-      />
-      <div className="note__folder-form-actions">
-        <Button type="submit" size="sm" variant="primary">
-          {strings.notes.save}
-        </Button>
-        <Button type="button" size="sm" onClick={cancelTag}>
-          {strings.notes.cancel}
-        </Button>
-      </div>
-    </form>
+  const folderForm = (onSubmit: () => void): ReactNode =>
+    nameForm({
+      value: draftName,
+      onChange: setDraftName,
+      placeholder: strings.notes.folderNamePlaceholder,
+      onSubmit,
+      onCancel: cancel,
+    });
+
+  const tagForm = (onSubmit: () => void): ReactNode =>
+    nameForm({
+      value: tagDraftName,
+      onChange: setTagDraftName,
+      placeholder: strings.notes.tagNamePlaceholder,
+      onSubmit,
+      onCancel: cancelTag,
+      className: "note__tag-form",
+    });
+
+  /**
+   * The eight accent swatches plus „Bez boje" — ONE recipe, used by the folder
+   * tree and the category list alike, because a swatch picker is a swatch
+   * picker: selection is a 2px text-coloured ring, never a fill or a glow.
+   * `style` carries the folder's depth indent; a category is flat and passes
+   * none.
+   */
+  const swatchRow = (
+    current: NoteFolderColor | null,
+    onPick: (color: NoteFolderColor | null) => void,
+    label: string,
+    style?: CSSProperties,
+  ): ReactNode => (
+    <div className="note__swatch-row" style={style} role="group" aria-label={label}>
+      {ACCENT_IDS.map((id) => (
+        <button
+          key={id}
+          type="button"
+          className={`note__swatch${current === id ? " note__swatch--selected" : ""}`}
+          style={{ background: `var(--nx-swatch-${id})` }}
+          aria-label={id}
+          aria-pressed={current === id}
+          onClick={() => onPick(id)}
+        />
+      ))}
+      <button
+        type="button"
+        className="note__swatch note__swatch--none"
+        aria-label={strings.notes.noColor}
+        aria-pressed={current === null}
+        onClick={() => onPick(null)}
+      >
+        ×
+      </button>
+    </div>
   );
+
+  const categoryForm = (onSubmit: () => void): ReactNode =>
+    nameForm({
+      value: categoryDraftName,
+      onChange: setCategoryDraftName,
+      placeholder: strings.notes.categoryNamePlaceholder,
+      onSubmit,
+      onCancel: cancelCategory,
+    });
+
+  const renderCategory = (category: NoteCategory): ReactNode => {
+    const isRenaming =
+      categoryEditing !== null &&
+      categoryEditing.mode === "rename" &&
+      categoryEditing.id === category.id;
+    const isRecoloring =
+      categoryEditing !== null &&
+      categoryEditing.mode === "recolor" &&
+      categoryEditing.id === category.id;
+    const active = categoryFilter.includes(category.id);
+
+    return (
+      <Fragment key={category.id}>
+        <div className="note__folder-row">
+          {isRenaming ? (
+            categoryForm(() => submitRenameCategory(category.id))
+          ) : (
+            <>
+              <button
+                type="button"
+                className={`note__folder${active ? " note__folder--active" : ""}`}
+                // `aria-pressed`, not `aria-current`: this row filters the list
+                // rather than navigating to a place, exactly like a tag chip.
+                aria-pressed={active}
+                onClick={() => onToggleCategory(category.id)}
+              >
+                <span
+                  className="note__folder-dot"
+                  data-empty={category.color === null ? "true" : undefined}
+                  style={
+                    category.color ? { background: `var(--nx-swatch-${category.color})` } : undefined
+                  }
+                  aria-hidden="true"
+                />
+                <span className="note__folder-name">{category.name}</span>
+              </button>
+              <NotePopover label={strings.notes.categoryMenuLabel}>
+                {(close) => (
+                  <>
+                    <button
+                      className="note__menu-item"
+                      role="menuitem"
+                      type="button"
+                      onClick={() => {
+                        beginRenameCategory(category);
+                        close();
+                      }}
+                    >
+                      {strings.notes.renameCategory}
+                    </button>
+                    <button
+                      className="note__menu-item"
+                      role="menuitem"
+                      type="button"
+                      onClick={() => {
+                        setCategoryFailed(false);
+                        setCategoryEditing({ mode: "recolor", id: category.id });
+                        close();
+                      }}
+                    >
+                      {strings.notes.recolorCategory}
+                    </button>
+                    <div className="note__menu-sep" role="separator" />
+                    <button
+                      className="note__menu-item note__menu-item--danger"
+                      role="menuitem"
+                      type="button"
+                      onClick={() => {
+                        removeCategory(category.id);
+                        close();
+                      }}
+                    >
+                      {strings.notes.deleteCategory}
+                    </button>
+                  </>
+                )}
+              </NotePopover>
+            </>
+          )}
+        </div>
+
+        {isRecoloring &&
+          swatchRow(
+            category.color,
+            (color) => recolorCategory(category.id, color),
+            strings.notes.recolorCategory,
+          )}
+      </Fragment>
+    );
+  };
 
   const renderFolder = (node: FolderNode, depth: number): ReactNode => {
     const isSelected = selection.kind === "folder" && selection.id === node.id;
@@ -416,30 +656,13 @@ export function NoteOrganizer({
           )}
         </div>
 
-        {isRecoloring && (
-          <div className="note__swatch-row" style={indent} role="group" aria-label={strings.notes.recolorFolder}>
-            {ACCENT_IDS.map((id) => (
-              <button
-                key={id}
-                type="button"
-                className={`note__swatch${node.color === id ? " note__swatch--selected" : ""}`}
-                style={{ background: `var(--nx-swatch-${id})` }}
-                aria-label={id}
-                aria-pressed={node.color === id}
-                onClick={() => recolor(node.id, id)}
-              />
-            ))}
-            <button
-              type="button"
-              className="note__swatch note__swatch--none"
-              aria-label={strings.notes.noColor}
-              aria-pressed={node.color === null}
-              onClick={() => recolor(node.id, null)}
-            >
-              ×
-            </button>
-          </div>
-        )}
+        {isRecoloring &&
+          swatchRow(
+            node.color,
+            (color) => recolor(node.id, color),
+            strings.notes.recolorFolder,
+            indent,
+          )}
 
         {isPickingTemplate && (
           <div
@@ -600,6 +823,36 @@ export function NoteOrganizer({
       {tagFailed && (
         <p className="note__org-error" role="status">
           {strings.notes.tagError}
+        </p>
+      )}
+
+      <div className="note__org-heading">
+        <span>{strings.notes.categoriesLabel}</span>
+        {categoryFilter.length > 0 && (
+          <button type="button" className="note__tag-clear" onClick={onClearCategoryFilter}>
+            {strings.notes.clearCategoryFilter}
+          </button>
+        )}
+      </div>
+      <div
+        className="note__folder-tree"
+        role="group"
+        aria-label={strings.notes.categoryFilterLabel}
+      >
+        {sortedCategories.map(renderCategory)}
+      </div>
+
+      {categoryEditing !== null && categoryEditing.mode === "new" ? (
+        <div className="note__folder-row">{categoryForm(submitNewCategory)}</div>
+      ) : (
+        <Button size="sm" className="note__new-folder" onClick={beginNewCategory}>
+          {strings.notes.newCategory}
+        </Button>
+      )}
+
+      {categoryFailed && (
+        <p className="note__org-error" role="status">
+          {strings.notes.categoryError}
         </p>
       )}
     </div>

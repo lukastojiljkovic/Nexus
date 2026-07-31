@@ -291,6 +291,29 @@ describe("duplicateNote — organization", () => {
     expect(copyTags).toEqual([posao.id, hitno.id].sort());
   });
 
+  // NOTE-002's third axis: a copy of a sastanak is a sastanak.
+  it("keeps the category, and returns it on the copy's own meta", () => {
+    const { notes, org } = stores();
+    const category = org.createCategory({ name: "sastanak", color: "zlato" }, now());
+    const source = seedNote((fragment) => {
+      fragment.push([block("heading", "Zapisnik")]);
+    }, "Zapisnik");
+    notes.setCategory(source.id, category.id);
+
+    const copy = duplicateOrFail(source.id);
+
+    expect(copy.categoryId).toBe(category.id);
+    expect(notes.list().find((note) => note.id === copy.id)?.categoryId).toBe(category.id);
+  });
+
+  it("leaves an uncategorized note's copy uncategorized", () => {
+    const source = seedNote((fragment) => {
+      fragment.push([block("heading", "Bez vrste")]);
+    }, "Bez vrste");
+
+    expect(duplicateOrFail(source.id).categoryId).toBeNull();
+  });
+
   it("never copies the pin — a pin is a curation decision about one row", () => {
     const { notes } = stores();
     const source = seedNote((fragment) => {

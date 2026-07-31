@@ -67,7 +67,7 @@ function emptyProfileData(): ProfileData {
     subjects: [], subjectAttachments: [], subjectNoteLinks: [],
     exams: [], decks: [], cards: [], reviewLog: [], examTopics: [], plans: [], blocks: [],
     focusSessions: [], studySettings: [], notifications: [],
-    notes: [], noteFolders: [], noteTags: [], noteTagLinks: [], noteTemplates: [],
+    notes: [], noteFolders: [], noteTags: [], noteCategories: [], noteTagLinks: [], noteTemplates: [],
     noteAttachments: [], noteVersions: [],
     dashboardSettings: [], dashboardSets: [], dashboardWidgets: [],
   };
@@ -163,9 +163,13 @@ function foreignProfileData(): ProfileData {
       { id: "src-ntag-a", profileId: "src", name: "ideja", createdAt: T0 },
       { id: "src-ntag-b", profileId: "src", name: "arhiva", createdAt: T0 },
     ],
+    noteCategories: [
+      { id: "src-ncat-a", profileId: "src", name: "sastanak", color: "zlato", createdAt: T0, updatedAt: T0 },
+      { id: "src-ncat-b", profileId: "src", name: "dnevnik", color: null, createdAt: T0, updatedAt: T0 },
+    ],
     notes: [
-      { id: "src-n1", profileId: "src", title: "Prva", folderId: "src-f2", pinned: true, cardDeckId: "src-dk1", createdAt: T0, updatedAt: T0, snapshot: linkedSnapshot("src-n2", "src-att1") },
-      { id: "src-n2", profileId: "src", title: "Druga", folderId: null, pinned: false, cardDeckId: null, createdAt: T0, updatedAt: T0, snapshot: null },
+      { id: "src-n1", profileId: "src", title: "Prva", folderId: "src-f2", categoryId: "src-ncat-a", pinned: true, cardDeckId: "src-dk1", createdAt: T0, updatedAt: T0, snapshot: linkedSnapshot("src-n2", "src-att1") },
+      { id: "src-n2", profileId: "src", title: "Druga", folderId: null, categoryId: null, pinned: false, cardDeckId: null, createdAt: T0, updatedAt: T0, snapshot: null },
     ],
     noteTagLinks: [
       { noteId: "src-n1", tagId: "src-ntag-a" },
@@ -190,6 +194,7 @@ function emptyTarget(overrides: Partial<ForeignImportTarget> = {}): ForeignImpor
     inboxListId: "target-inbox",
     noteTags: [],
     taskTags: [],
+    noteCategories: [],
     taskTemplateNames: [],
     eventTemplateNames: [],
     noteTemplateNames: new Set(),
@@ -452,6 +457,87 @@ describe("planForeignImport — tags merge by name onto the target's", () => {
     expect(report.modules.notes.merged).toBe(1);
   });
 
+  // NOTE-002 / 1.27.0. A category absorbs like a TAG, not like a template: it
+  // carries no payload a merge could overwrite (so additive-only is unbroken),
+  // things point AT it (so skipping would strand them), and migration 049's
+  // UNIQUE index makes a second row of the same name impossible anyway.
+  it("merges note categories by name, keeping the TARGET's row", () => {
+    const source: ProfileData = {
+      ...emptyProfileData(),
+      noteCategories: [
+        { id: "src-a", profileId: "src", name: "sastanak", color: "zlato", createdAt: T0, updatedAt: T0 },
+        { id: "src-b", profileId: "src", name: "recept", color: null, createdAt: T0, updatedAt: T0 },
+      ],
+    };
+    const { data, report } = plan(
+      source,
+      emptyTarget({ noteCategories: [{ id: "tgt-sastanak", name: "sastanak" }] }),
+    );
+
+    expect(data.noteCategories.map((row) => row.name)).toEqual(["recept"]);
+    expect(report.modules.notes.merged).toBe(1);
+  });
+
+  it("lands a note on the TARGET's category row when its own was absorbed", () => {
+    const source: ProfileData = {
+      ...emptyProfileData(),
+      noteCategories: [
+        { id: "src-a", profileId: "src", name: "sastanak", color: "zlato", createdAt: T0, updatedAt: T0 },
+      ],
+      notes: [
+        { id: "src-n1", profileId: "src", title: "Prva", folderId: null, categoryId: "src-a", pinned: false, cardDeckId: null, createdAt: T0, updatedAt: T0, snapshot: null },
+      ],
+    };
+    const { data } = plan(
+      source,
+      emptyTarget({ noteCategories: [{ id: "tgt-sastanak", name: "sastanak" }] }),
+    );
+
+    // No second „sastanak" row is planned, and the note points at the one the
+    // target already had — never at a foreign profile's id.
+    expect(data.noteCategories).toEqual([]);
+    expect(data.notes[0]?.categoryId).toBe("tgt-sastanak");
+  });
+
+  it("mints a fresh row, and remaps the note onto it, when the target holds no such name", () => {
+    const source: ProfileData = {
+      ...emptyProfileData(),
+      noteCategories: [
+        { id: "src-a", profileId: "src", name: "dnevnik", color: "suma", createdAt: T0, updatedAt: T0 },
+      ],
+      notes: [
+        { id: "src-n1", profileId: "src", title: "Prva", folderId: null, categoryId: "src-a", pinned: false, cardDeckId: null, createdAt: T0, updatedAt: T0, snapshot: null },
+      ],
+    };
+    const { data, report } = plan(source);
+
+    expect(data.noteCategories).toHaveLength(1);
+    expect(data.noteCategories[0]?.id).not.toBe("src-a");
+    expect(data.noteCategories[0]).toMatchObject({
+      name: "dnevnik",
+      color: "suma",
+      profileId: "target-profile",
+    });
+    expect(data.notes[0]?.categoryId).toBe(data.noteCategories[0]?.id);
+    expect(report.modules.notes.merged).toBe(0);
+  });
+
+  it("compares category names exactly — „Sastanak\" and „sastanak\" stay two categories", () => {
+    const source: ProfileData = {
+      ...emptyProfileData(),
+      noteCategories: [
+        { id: "src-a", profileId: "src", name: "Sastanak", color: null, createdAt: T0, updatedAt: T0 },
+      ],
+    };
+    const { data, report } = plan(
+      source,
+      emptyTarget({ noteCategories: [{ id: "tgt-sastanak", name: "sastanak" }] }),
+    );
+
+    expect(data.noteCategories.map((row) => row.name)).toEqual(["Sastanak"]);
+    expect(report.modules.notes.merged).toBe(0);
+  });
+
   it("never merges anything but tags — two lists named „Posao\" coexist", () => {
     const source: ProfileData = {
       ...emptyProfileData(),
@@ -597,7 +683,7 @@ describe("planForeignImport — Yjs state travels through the same map", () => {
     const source: ProfileData = {
       ...emptyProfileData(),
       notes: [
-        { id: "src-n1", profileId: "src", title: "Prva", folderId: null, pinned: false, cardDeckId: null, createdAt: T0, updatedAt: T0, snapshot: linkedSnapshot("gone-note", "gone-att") },
+        { id: "src-n1", profileId: "src", title: "Prva", folderId: null, categoryId: null, pinned: false, cardDeckId: null, createdAt: T0, updatedAt: T0, snapshot: linkedSnapshot("gone-note", "gone-att") },
       ],
     };
 

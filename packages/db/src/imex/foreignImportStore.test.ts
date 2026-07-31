@@ -124,6 +124,7 @@ function emptyProfileData(): ProfileData {
     notes: [],
     noteFolders: [],
     noteTags: [],
+    noteCategories: [],
     noteTagLinks: [],
     noteTemplates: [],
     noteAttachments: [],
@@ -305,6 +306,7 @@ function gather(profileId: string): ProfileData {
     notes: notes.list().map((meta) => ({ ...meta, snapshot: null })),
     noteFolders: org.listFolders(),
     noteTags: org.listTags(),
+    noteCategories: org.listCategories(),
     noteTagLinks: org.listTagLinks(),
     noteTemplates: new NoteTemplateStore(db.raw, profileId).list(),
     noteAttachments: notes.list().flatMap((meta) => noteAttachments.list(meta.id)),
@@ -320,6 +322,7 @@ function targetFor(profileId: string): ForeignImportTarget {
     profileId,
     inboxListId: inbox.id,
     noteTags: org.listTags(),
+    noteCategories: org.listCategories(),
     taskTags: new TaskTagStore(db.raw, profileId).listTags(),
     taskTemplateNames: new TaskTemplateStore(db.raw, profileId).list().map((row) => row.name),
     eventTemplateNames: new EventTemplateStore(db.raw, profileId).list().map((row) => row.name),
@@ -406,6 +409,7 @@ function makeNote(overrides: Partial<ExportNote> & { id: string }): ExportNote {
     profileId: "ignored",
     title: "Beleška",
     folderId: null,
+    categoryId: null,
     pinned: false,
     cardDeckId: null,
     createdAt: "2026-01-01T00:00:00.000Z",
@@ -609,6 +613,50 @@ describe("ForeignImportStore", () => {
   });
 
   describe("notes", () => {
+    // NOTE-002 / migration 049. Categories are inserted BEFORE the notes whose
+    // `category_id` names them — foreign keys stay enforced in this store, so
+    // the order is what makes the insert legal at all.
+    it("inserts a planned category and lands its notes on it", () => {
+      const target = createProfile("Odredište");
+      const categoryId = uuidv7();
+      const noteId = uuidv7();
+      const at = "2026-01-01T00:00:00.000Z";
+      const planned: ProfileData = {
+        ...emptyProfileData(),
+        noteCategories: [
+          { id: categoryId, profileId: "ignored", name: "sastanak", color: "zlato", createdAt: at, updatedAt: at },
+        ],
+        notes: [makeNote({ id: noteId, categoryId })],
+      };
+
+      const written = new ForeignImportStore(db.raw, target).insertPlanned(planned, new Map(), NOW);
+
+      expect(written).toBe(2);
+      expect(new NoteOrgStore(db.raw, target).listCategories()).toEqual([
+        { id: categoryId, profileId: target, name: "sastanak", color: "zlato", createdAt: at, updatedAt: at },
+      ]);
+      expect(new NoteStore(db.raw, target).list()[0]?.categoryId).toBe(categoryId);
+    });
+
+    // The planner absorbs a category whose name the target already holds, so
+    // the plan carries NO row for it and the notes already name the target's
+    // id — the additive-only store simply writes the note.
+    it("leaves the target's own category untouched when the plan names it directly", () => {
+      const target = createProfile("Odredište");
+      const org = new NoteOrgStore(db.raw, target);
+      const mine = org.createCategory({ name: "sastanak", color: "suma" }, NOW);
+      const noteId = uuidv7();
+
+      new ForeignImportStore(db.raw, target).insertPlanned(
+        { ...emptyProfileData(), notes: [makeNote({ id: noteId, categoryId: mine.id })] },
+        new Map(),
+        NOW,
+      );
+
+      expect(org.listCategories()).toEqual([mine]);
+      expect(new NoteStore(db.raw, target).list()[0]?.categoryId).toBe(mine.id);
+    });
+
     it("writes each note's snapshot, its derived plaintext and the highest covered_seq of its versions", () => {
       const target = createProfile("Odredište");
       const noteId = uuidv7();

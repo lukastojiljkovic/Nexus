@@ -18,6 +18,7 @@ import { extractNoteLinkTargets, mergeNoteState } from "@nexus/core";
 import type {
   ExportNote,
   ExportNoteAttachment,
+  ExportNoteCategory,
   ExportNoteFolder,
   ExportNoteTag,
   ExportNoteTagLink,
@@ -110,6 +111,7 @@ interface GatheredNoteData {
   notes: ExportNote[];
   noteFolders: ExportNoteFolder[];
   noteTags: ExportNoteTag[];
+  noteCategories: ExportNoteCategory[];
   noteTagLinks: ExportNoteTagLink[];
   noteTemplates: ExportNoteTemplate[];
   noteAttachments: ExportNoteAttachment[];
@@ -165,6 +167,7 @@ function gatherNotes(
     notes,
     noteFolders: orgStore.listFolders(),
     noteTags: orgStore.listTags(),
+    noteCategories: orgStore.listCategories(),
     noteTagLinks: orgStore.listTagLinks(),
     noteTemplates: deps.noteTemplateStore(profileId).list(),
     noteAttachments,

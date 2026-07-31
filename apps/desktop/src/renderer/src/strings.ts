@@ -1084,6 +1084,32 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     clearTagFilter: "Poništi",
     tagError: "Radnja nad oznakom nije uspela. Pokušaj ponovo.",
     tagFilterEmptyDescription: "Nijedna beleška ne odgovara izabranim oznakama.",
+    /**
+     * Kategorije (NOTE-002, migration 049) — the third organizational axis:
+     * a folder says WHERE a note lives, an oznaka says WHAT IT IS ABOUT, a
+     * kategorija says WHAT KIND it is (sastanak, ideja, dnevnik, recept).
+     *
+     * The wording is deliberately the FOLDER block's, not the tag block's,
+     * wherever the sentence is the same („Preimenuj“, „Promeni boju“): a
+     * category is managed by the same row, with the same swatch, so two
+     * phrasings for one action would only be two things to learn. Only
+     * „Bez kategorije“ is its own, because it is the answer to a question no
+     * folder or tag asks.
+     */
+    categoriesLabel: "Kategorije",
+    newCategory: "Nova kategorija",
+    categoryNamePlaceholder: "Naziv kategorije",
+    renameCategory: "Preimenuj",
+    recolorCategory: "Promeni boju",
+    deleteCategory: "Obriši kategoriju",
+    categoryMenuLabel: "Radnje nad kategorijom",
+    categoryFilterLabel: "Filter po kategorijama",
+    clearCategoryFilter: "Poništi",
+    categoryError: "Radnja nad kategorijom nije uspela. Pokušaj ponovo.",
+    categoryFilterEmptyDescription: "Nijedna beleška ne pripada izabranim kategorijama.",
+    /** The per-note picker in the row menu — „Bez kategorije“ is a real choice there, not an empty state. */
+    noteCategoryLabel: "Kategorija",
+    noCategory: "Bez kategorije",
     /** Wiki-links (slice b): the `[[` link menu + the backlinks panel. */
     backlinksTitle: "Povratne veze",
     wikiLinkMissing: "Nedostupna beleška",

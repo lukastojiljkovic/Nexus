@@ -254,6 +254,7 @@ export type {
   ExportFocusSession,
   ExportNote,
   ExportNoteAttachment,
+  ExportNoteCategory,
   ExportNoteFolder,
   ExportNoteTag,
   ExportNoteTagLink,

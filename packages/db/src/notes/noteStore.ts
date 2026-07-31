@@ -2,6 +2,7 @@ import type Database from "better-sqlite3-multiple-ciphers";
 import { thinNoteVersions } from "@nexus/core";
 import type { NoteVersionCheckpoint } from "@nexus/core";
 import {
+  NoteCategoryNotFoundError,
   NoteFolderNotFoundError,
   NoteNotFoundError,
   NoteValidationError,
@@ -17,6 +18,8 @@ export interface NoteMeta {
   profileId: string;
   title: string;
   folderId: string | null;
+  /** What KIND of note this is (NOTE-002, migration 049) — at most one, null when uncategorized. See `NoteOrgStore`'s header for how it differs from a folder and a tag. */
+  categoryId: string | null;
   pinned: boolean;
   /** The STUDY deck this note's inline-flashcard blocks sync into, or null if unmapped (NOTE-006). */
   cardDeckId: string | null;
@@ -56,6 +59,7 @@ interface NoteRow {
   profile_id: string;
   title: string;
   folder_id: string | null;
+  category_id: string | null;
   pinned: number;
   card_deck_id: string | null;
   created_at: string;
@@ -79,7 +83,8 @@ interface VersionTimeRow {
   created_at: string;
 }
 
-const COLUMNS = "id, profile_id, title, folder_id, pinned, card_deck_id, created_at, updated_at";
+const COLUMNS =
+  "id, profile_id, title, folder_id, category_id, pinned, card_deck_id, created_at, updated_at";
 
 /** The renderer batches updates below this; the store re-checks it because renderer input is untrusted (SEC-EL-02). */
 export const MAX_NOTE_UPDATE_BYTES = 262_144;
@@ -162,6 +167,8 @@ export class NoteStore {
   private readonly selectDeletedAt: Database.Statement;
   private readonly selectFolderInProfile: Database.Statement;
   private readonly updateFolderId: Database.Statement;
+  private readonly selectCategoryInProfile: Database.Statement;
+  private readonly updateCategoryId: Database.Statement;
   private readonly updatePinned: Database.Statement;
   private readonly selectDeckInProfile: Database.Statement;
   private readonly updateCardDeckId: Database.Statement;
@@ -274,6 +281,15 @@ export class NoteStore {
       `UPDATE notes SET folder_id = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
     );
+    // The category's own guard, mirroring `selectFolderInProfile`: migration
+    // 049's foreign key does not scope by profile, so only this lookup does.
+    this.selectCategoryInProfile = db.prepare(
+      `SELECT id FROM note_categories WHERE id = ? AND profile_id = ?`,
+    );
+    this.updateCategoryId = db.prepare(
+      `UPDATE notes SET category_id = ?
+       WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
+    );
     this.updatePinned = db.prepare(
       `UPDATE notes SET pinned = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
@@ -341,6 +357,7 @@ export class NoteStore {
       profileId: this.profileId,
       title: "",
       folderId: null,
+      categoryId: null,
       pinned: false,
       cardDeckId: null,
       createdAt: validNow,
@@ -523,6 +540,26 @@ export class NoteStore {
     this.updateFolderId.run(folderId, id, this.profileId);
   }
 
+  /**
+   * Sets (or clears, with `null`) what KIND of note this is — a category of
+   * this profile (NOTE-002, migration 049). At most one, because the column is
+   * one column: assigning a second category REPLACES the first rather than
+   * adding to it, which is the whole difference between this axis and a tag.
+   *
+   * Organizational, exactly like `setFolder` beside it, so `updated_at` is left
+   * untouched: calling a note a recept is not an edit to the recipe.
+   */
+  setCategory(id: string, categoryId: string | null): void {
+    this.requireActive(id);
+    if (categoryId !== null) {
+      const category = this.selectCategoryInProfile.get(categoryId, this.profileId);
+      if (!category) {
+        throw new NoteCategoryNotFoundError(`No category "${categoryId}" in this profile.`);
+      }
+    }
+    this.updateCategoryId.run(categoryId, id, this.profileId);
+  }
+
   /** Pins or unpins an active note — organizational, so `updated_at` is left untouched. */
   setPinned(id: string, pinned: boolean): void {
     this.requireActive(id);
@@ -695,6 +732,7 @@ function toNoteMeta(row: NoteRow): NoteMeta {
     profileId: row.profile_id,
     title: row.title,
     folderId: row.folder_id,
+    categoryId: row.category_id,
     pinned: row.pinned === 1,
     cardDeckId: row.card_deck_id,
     createdAt: row.created_at,

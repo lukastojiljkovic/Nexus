@@ -89,6 +89,7 @@ function emptyExportInput(): ExportArchiveInput {
       notes: [],
       noteFolders: [],
       noteTags: [],
+      noteCategories: [],
       noteTagLinks: [],
       noteTemplates: [],
       noteAttachments: [],
@@ -444,14 +445,29 @@ function richProfileData(): ProfileData {
       },
     ],
     noteTags: [{ id: "tag-1", profileId: "profile1", name: "posao", createdAt: "2026-07-01T00:00:00.000Z" }],
+    // One category with a swatch and one without (NOTE-002), and only ONE of
+    // the two notes carries one — so a round trip that dropped `categoryId`
+    // could not pass by accident.
+    noteCategories: [
+      {
+        id: "cat-1", profileId: "profile1", name: "sastanak", color: "bronza",
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+      {
+        id: "cat-2", profileId: "profile1", name: "dnevnik", color: null,
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+    ],
     notes: [
       {
         id: "note-1", profileId: "profile1", title: "Prva beleška", folderId: "folder-child",
+        categoryId: "cat-1",
         pinned: true, cardDeckId: "deck-1", createdAt: "2026-07-01T00:00:00.000Z",
         updatedAt: "2026-07-01T00:00:00.000Z", snapshot: docSnapshot("Sadržaj prve beleške"),
       },
       {
         id: "note-2", profileId: "profile1", title: "Druga beleška", folderId: null,
+        categoryId: null,
         pinned: false, cardDeckId: null, createdAt: "2026-07-01T00:00:00.000Z",
         updatedAt: "2026-07-01T00:00:00.000Z", snapshot: null,
       },
@@ -889,12 +905,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.27.0`: the nearest minor strictly ahead of this build's `1.26.0`.
+  // `1.28.0`: the nearest minor strictly ahead of this build's `1.27.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.27.0" });
+    const files = baseFiles({ schemaVersion: "1.28.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.27.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.28.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -2941,9 +2957,149 @@ describe("parseImportArchive — note folder preferences (the 1.7.0 era gate)", 
   });
 });
 
+/**
+ * NOTE-002's third axis (1.27.0, migration 049). A new RECORD TYPE plus one
+ * OPTIONAL-with-a-default field on `note`, so — like the folder's `defaultView`
+ * — there is no `ArchiveEra` flag: absence means uncategorized at every version,
+ * because that is what every note in every earlier archive actually was, and a
+ * PRESENT value is checked strictly in every era.
+ */
+describe("parseImportArchive — note categories (NOTE-002 / 1.27.0)", () => {
+  const VALID_NOTE_CATEGORY = {
+    type: "note-category", id: "nc1", profileId: "profile1", name: "sastanak", color: "zlato",
+    createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+  };
+
+  function parseNotesFile(rows: readonly Record<string, unknown>[], schemaVersion?: string) {
+    return parseImportArchive(
+      emptyInputWith(
+        baseFiles({
+          ...(schemaVersion === undefined ? {} : { schemaVersion }),
+          fileContents: { "data/notes.ndjson": ndjson(rows) },
+        }),
+      ),
+    );
+  }
+
+  const invalidDetails = (result: ReturnType<typeof parseNotesFile>): (string | undefined)[] =>
+    result.problems.filter((problem) => problem.code === "invalid-record").map((p) => p.detail);
+
+  it("carries a category through field for field", () => {
+    const result = parseNotesFile([VALID_NOTE_CATEGORY]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.noteCategories).toEqual([
+      {
+        id: "nc1", profileId: "profile1", name: "sastanak", color: "zlato",
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("accepts a null colour and refuses one outside the FOLDER palette", () => {
+    expect(parseNotesFile([{ ...VALID_NOTE_CATEGORY, color: null }]).problems).toEqual([]);
+    // One palette, one check: a colour the folder door refuses cannot enter
+    // through the category one either.
+    for (const color of ["neon", "", "ZLATO", 1]) {
+      expect(
+        invalidDetails(parseNotesFile([{ ...VALID_NOTE_CATEGORY, color }])),
+        String(color),
+      ).toEqual(["color"]);
+    }
+  });
+
+  it("refuses a malformed row, naming the field", () => {
+    expect(invalidDetails(parseNotesFile([{ ...VALID_NOTE_CATEGORY, name: "" }]))).toEqual(["name"]);
+    expect(invalidDetails(parseNotesFile([{ ...VALID_NOTE_CATEGORY, id: "" }]))).toEqual(["id"]);
+    expect(invalidDetails(parseNotesFile([{ ...VALID_NOTE_CATEGORY, updatedAt: "juče" }]))).toEqual([
+      "updatedAt",
+    ]);
+  });
+
+  it("refuses a second row with the same id", () => {
+    const result = parseNotesFile([VALID_NOTE_CATEGORY, { ...VALID_NOTE_CATEGORY, name: "druga" }]);
+    expect(result.problems).toEqual([
+      { severity: "error", code: "duplicate-id", path: "data/notes.ndjson", line: 2, detail: "nc1" },
+    ]);
+  });
+
+  it("refuses a note-category outside data/notes.ndjson", () => {
+    const result = parseImportArchive(
+      emptyInputWith(
+        baseFiles({ fileContents: { "data/tasks.ndjson": ndjson([VALID_NOTE_CATEGORY]) } }),
+      ),
+    );
+    expect(result.problems).toEqual([
+      { severity: "error", code: "invalid-record", path: "data/tasks.ndjson", line: 1, detail: "type" },
+    ]);
+  });
+
+  it("attaches a note to its category", () => {
+    const result = parseNotesFile([VALID_NOTE_CATEGORY, { ...VALID_NOTE, categoryId: "nc1" }]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.notes[0]?.categoryId).toBe("nc1");
+  });
+
+  it("REFUSES a note naming a category this archive does not carry, with its line", () => {
+    const result = parseNotesFile([VALID_NOTE_CATEGORY, { ...VALID_NOTE, categoryId: "nema-je" }]);
+    expect(result.problems).toEqual([
+      {
+        severity: "error",
+        code: "unknown-reference",
+        path: "data/notes.ndjson",
+        line: 2,
+        detail: "categoryId=nema-je",
+      },
+    ]);
+    expect(result.data).toBeNull();
+  });
+
+  it("import mode DETACHES instead: the note keeps its body, uncategorized", () => {
+    const broken = { ...VALID_NOTE_CATEGORY, name: "" };
+    const note = { ...VALID_NOTE, categoryId: "nc1" };
+    const result = parseImportArchive(
+      importInputWith(baseFiles({ fileContents: { "data/notes.ndjson": ndjson([broken, note]) } })),
+    );
+
+    expect(result.data?.noteCategories).toEqual([]);
+    expect(result.data?.notes).toHaveLength(1);
+    expect(result.data?.notes[0]?.categoryId).toBeNull();
+    expect(result.data?.notes[0]?.title).toBe("Beleška");
+  });
+
+  it("defaults an ABSENT categoryId to null, in every era", () => {
+    const { categoryId: _categoryId, ...withoutCategory } = { ...VALID_NOTE, categoryId: null };
+    for (const schemaVersion of ["1.0.0", "1.17.0", "1.26.0", INTERCHANGE_SCHEMA_VERSION]) {
+      const result = parseNotesFile([withoutCategory], schemaVersion);
+      expect(result.problems, schemaVersion).toEqual([]);
+      expect(result.data?.notes[0]?.categoryId, schemaVersion).toBeNull();
+    }
+  });
+
+  it("validates a PRESENT categoryId strictly in every era — leniency covers absence only", () => {
+    for (const schemaVersion of ["1.0.0", "1.26.0", INTERCHANGE_SCHEMA_VERSION]) {
+      expect(
+        invalidDetails(parseNotesFile([{ ...VALID_NOTE, categoryId: "" }], schemaVersion)),
+        schemaVersion,
+      ).toEqual(["categoryId"]);
+      expect(
+        invalidDetails(parseNotesFile([{ ...VALID_NOTE, categoryId: 7 }], schemaVersion)),
+        schemaVersion,
+      ).toEqual(["categoryId"]);
+    }
+  });
+
+  it("has no parentId to nest by — a category tree would be a folder tree", () => {
+    // A writer that invented one is simply ignored: nothing reads the key, and
+    // the row is accepted as the flat thing it is.
+    const result = parseNotesFile([{ ...VALID_NOTE_CATEGORY, parentId: "nc-ghost" }]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.noteCategories[0]).not.toHaveProperty("parentId");
+  });
+});
+
 describe("parseImportArchive — schema version", () => {
-  it("is 1.26.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.26.0");
+  it("is 1.27.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.27.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -3133,11 +3289,11 @@ describe("parseImportArchive — schema version", () => {
     expect(result.manifest?.profile.kind).toBe("personal");
   });
 
-  // `1.27.0`: the nearest minor strictly ahead of this build's `1.26.0`.
+  // `1.28.0`: the nearest minor strictly ahead of this build's `1.27.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.27.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.28.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.27.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.28.0" },
     ]);
     expect(result.data).toBeNull();
   });

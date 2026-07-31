@@ -984,6 +984,7 @@ export function translateIcsEvents(
     notes: [],
     noteFolders: [],
     noteTags: [],
+    noteCategories: [],
     noteTagLinks: [],
     noteTemplates: [],
     noteAttachments: [],

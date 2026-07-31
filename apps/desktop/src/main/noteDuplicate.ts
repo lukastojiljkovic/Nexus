@@ -36,6 +36,9 @@ import type { NoteDuplicateResult } from "../shared/ipc.js";
  * - **Tag links.** A tag is what the note is ABOUT; a copy is about the same
  *   thing.
  * - **The folder.** Same reason: a copy belongs where its original does.
+ * - **The category** (NOTE-002). Same reason again, and the plainest of the
+ *   three: a category is what KIND of thing the note is, and a copy of a
+ *   sastanak is a sastanak.
  * - **NOT the pin.** A pin is a curation decision about one row — "keep THIS at
  *   the top" — not a property of the content, and a duplicate that arrived
  *   pinned would push the original down the list it was pinned to lead.
@@ -144,6 +147,7 @@ function copyNote(deps: NoteDuplicateDeps, noteId: string, now: string): NoteMet
 
   deps.notes.appendUpdate(copy.id, state, duplicated.title, now);
   if (source.folderId !== null) deps.notes.setFolder(copy.id, source.folderId);
+  if (source.categoryId !== null) deps.notes.setCategory(copy.id, source.categoryId);
   for (const link of deps.org.listTagLinks()) {
     if (link.noteId === noteId) deps.org.attachTag(copy.id, link.tagId);
   }
@@ -155,5 +159,10 @@ function copyNote(deps: NoteDuplicateDeps, noteId: string, now: string): NoteMet
   // `create` stamped both timestamps with this same `now`, and `appendUpdate`
   // re-stamped `updated_at` with it — so the row now reads exactly this, with
   // no second `list()` scan to prove it.
-  return { ...copy, title: duplicated.title.trim(), folderId: source.folderId };
+  return {
+    ...copy,
+    title: duplicated.title.trim(),
+    folderId: source.folderId,
+    categoryId: source.categoryId,
+  };
 }

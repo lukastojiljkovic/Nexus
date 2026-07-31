@@ -5,6 +5,9 @@ import { join } from "node:path";
 import {
   NexusDatabase,
   NOTE_FOLDER_VIEWS,
+  NoteCategoryNotFoundError,
+  NoteCategoryValidationError,
+  type NoteFolderColor,
   NoteFolderNotFoundError,
   NoteFolderValidationError,
   type NoteFolderView,
@@ -650,5 +653,168 @@ describe("NoteOrgStore — default view", () => {
       isCaptureDefault: true,
       defaultView: "cards",
     });
+  });
+});
+
+// --- Categories (NOTE-002 / migration 049) ---------------------------------
+
+describe("NoteOrgStore — categories", () => {
+  it("creates a category with a trimmed name and a validated colour", () => {
+    const { org, profileId } = fixture();
+    const category = org.createCategory({ name: "  Sastanak  ", color: "zlato" }, T0);
+
+    expect(category).toEqual({
+      id: category.id,
+      profileId,
+      name: "Sastanak",
+      color: "zlato",
+      createdAt: T0,
+      updatedAt: T0,
+    });
+    expect(org.listCategories().map((row) => row.id)).toEqual([category.id]);
+  });
+
+  it("accepts a null colour", () => {
+    const { org } = fixture();
+    expect(org.createCategory({ name: "Ideja", color: null }, T0).color).toBeNull();
+  });
+
+  it("rejects an empty or over-50-character name, a bad colour and a malformed now", () => {
+    const { org } = fixture();
+    expect(() => org.createCategory({ name: "   ", color: null }, T0)).toThrow(
+      NoteCategoryValidationError,
+    );
+    expect(() => org.createCategory({ name: "x".repeat(51), color: null }, T0)).toThrow(
+      NoteCategoryValidationError,
+    );
+    expect(() =>
+      org.createCategory({ name: "Ideja", color: "neon" as NoteFolderColor }, T0),
+    ).toThrow(NoteCategoryValidationError);
+    expect(() => org.createCategory({ name: "Ideja", color: null }, "juče")).toThrow(
+      NoteCategoryValidationError,
+    );
+  });
+
+  it("REJECTS a duplicate name rather than getting-or-creating, unlike a tag", () => {
+    const { org } = fixture();
+    org.createCategory({ name: "Recept", color: null }, T0);
+    expect(() => org.createCategory({ name: " Recept ", color: "suma" }, T1)).toThrow(
+      NoteCategoryValidationError,
+    );
+    expect(org.listCategories()).toHaveLength(1);
+  });
+
+  it("compares names exactly, as the note_tags rule does — case and diacritics are not folded", () => {
+    const { org } = fixture();
+    org.createCategory({ name: "Sastanak", color: null }, T0);
+    expect(() => org.createCategory({ name: "sastanak", color: null }, T0)).not.toThrow();
+    expect(() => org.createCategory({ name: "Šastanak", color: null }, T0)).not.toThrow();
+    expect(org.listCategories()).toHaveLength(3);
+  });
+
+  it("lists this profile's categories name-ordered", () => {
+    const { org } = fixture();
+    org.createCategory({ name: "Recept", color: null }, T0);
+    org.createCategory({ name: "Dnevnik", color: null }, T0);
+    expect(org.listCategories().map((row) => row.name)).toEqual(["Dnevnik", "Recept"]);
+  });
+
+  it("updateCategory renames without touching the colour, and stamps updated_at", () => {
+    const { org } = fixture();
+    const category = org.createCategory({ name: "Ideja", color: "bordo" }, T0);
+
+    org.updateCategory(category.id, { name: "  Zamisao  " }, T1);
+
+    expect(org.listCategories()[0]).toMatchObject({
+      name: "Zamisao",
+      color: "bordo",
+      createdAt: T0,
+      updatedAt: T1,
+    });
+  });
+
+  it("updateCategory recolours without touching the name, and clears the colour with an explicit null", () => {
+    const { org } = fixture();
+    const category = org.createCategory({ name: "Ideja", color: "bordo" }, T0);
+
+    org.updateCategory(category.id, { color: "suma" }, T1);
+    expect(org.listCategories()[0]).toMatchObject({ name: "Ideja", color: "suma" });
+
+    org.updateCategory(category.id, { color: null }, T2);
+    expect(org.listCategories()[0]).toMatchObject({ name: "Ideja", color: null });
+  });
+
+  it("updateCategory renaming to its own current name is a no-op, not a collision", () => {
+    const { org } = fixture();
+    const category = org.createCategory({ name: "Ideja", color: null }, T0);
+    expect(() => org.updateCategory(category.id, { name: "Ideja" }, T1)).not.toThrow();
+  });
+
+  it("updateCategory rejects a collision with ANOTHER category's name", () => {
+    const { org } = fixture();
+    org.createCategory({ name: "Ideja", color: null }, T0);
+    const second = org.createCategory({ name: "Recept", color: null }, T0);
+    expect(() => org.updateCategory(second.id, { name: "Ideja" }, T1)).toThrow(
+      NoteCategoryValidationError,
+    );
+    expect(org.listCategories().map((row) => row.name)).toEqual(["Ideja", "Recept"]);
+  });
+
+  it("updateCategory validates its input and requires the category in this profile", () => {
+    const a = fixture();
+    const b = fixture();
+    const category = a.org.createCategory({ name: "Ideja", color: null }, T0);
+
+    expect(() => a.org.updateCategory(category.id, { name: "   " }, T0)).toThrow(
+      NoteCategoryValidationError,
+    );
+    expect(() =>
+      a.org.updateCategory(category.id, { color: "neon" as NoteFolderColor }, T0),
+    ).toThrow(NoteCategoryValidationError);
+    expect(() => a.org.updateCategory(category.id, { name: "X" }, "juče")).toThrow(
+      NoteCategoryValidationError,
+    );
+    expect(() => a.org.updateCategory("nema", { name: "X" }, T0)).toThrow(
+      NoteCategoryNotFoundError,
+    );
+    expect(() => b.org.updateCategory(category.id, { name: "X" }, T0)).toThrow(
+      NoteCategoryNotFoundError,
+    );
+  });
+
+  it("deleteCategory leaves its notes standing, simply uncategorized", () => {
+    const { org, notes } = fixture();
+    const category = org.createCategory({ name: "Recept", color: null }, T0);
+    const kept = notes.create(T0);
+    notes.setCategory(kept.id, category.id);
+
+    org.deleteCategory(category.id);
+
+    expect(org.listCategories()).toHaveLength(0);
+    expect(notes.list().map((note) => ({ id: note.id, categoryId: note.categoryId }))).toEqual([
+      { id: kept.id, categoryId: null },
+    ]);
+  });
+
+  it("deleteCategory requires the category in this profile", () => {
+    const a = fixture();
+    const b = fixture();
+    const category = a.org.createCategory({ name: "Recept", color: null }, T0);
+
+    expect(() => a.org.deleteCategory("nema")).toThrow(NoteCategoryNotFoundError);
+    expect(() => b.org.deleteCategory(category.id)).toThrow(NoteCategoryNotFoundError);
+    expect(a.org.listCategories()).toHaveLength(1);
+  });
+
+  it("isolates categories between profiles, names included", () => {
+    const a = fixture();
+    const b = fixture();
+    a.org.createCategory({ name: "Sastanak", color: null }, T0);
+
+    expect(b.org.listCategories()).toHaveLength(0);
+    // The same name in another profile is a different row (the UNIQUE index is per profile).
+    expect(() => b.org.createCategory({ name: "Sastanak", color: null }, T0)).not.toThrow();
+    expect(a.org.listCategories()).toHaveLength(1);
+    expect(b.org.listCategories()).toHaveLength(1);
   });
 });

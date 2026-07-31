@@ -25,7 +25,12 @@ import type { ArchiveRecordType, ImportDrop, ImportDropReason } from "./importAr
  * that adds up.
  */
 
-/** One tag the TARGET profile already has. `name` identity is the stores' own `(profile_id, name)` uniqueness — nothing else. */
+/**
+ * One row the TARGET profile already has whose identity IS its name — a note
+ * tag, a task tag, or a note category. Named for tags because they came first;
+ * the shape is "a row the store's own `(profile_id, name)` uniqueness makes
+ * unrepeatable", and nothing else.
+ */
 export interface ForeignImportTargetTag {
   id: string;
   name: string;
@@ -118,6 +123,12 @@ export interface ForeignImportTarget {
   noteTags: readonly ForeignImportTargetTag[];
   /** The target's existing task tags, by the same rule. */
   taskTags: readonly ForeignImportTargetTag[];
+  /**
+   * The target's existing note CATEGORIES (NOTE-002, migration 049), by exactly
+   * the tag rule — see `ID_MINTERS.noteCategories` for why a category absorbs
+   * like a tag rather than being skipped like a template.
+   */
+  noteCategories: readonly ForeignImportTargetTag[];
   /**
    * The target's existing task template names. A task template's NAME is its
    * user-facing identity (migration 027's UNIQUE, ADR-035's "naming IS
@@ -580,6 +591,32 @@ const ID_MINTERS: Record<keyof ProfileData, (data: ProfileData, ctx: PlanContext
   notes: (data, ctx) => mintAll(data.notes, ctx),
   noteFolders: (data, ctx) => mintAll(data.noteFolders, ctx),
   noteTags: (data, ctx) => mintTags(data.noteTags, ctx.target.noteTags, "notes", ctx),
+  /**
+   * A category ABSORBS by exact name, exactly as a tag does — and deliberately
+   * NOT the template rule, which skips a source row whose name the target
+   * holds.
+   *
+   * The two precedents differ in what a merge would cost. A template's name is
+   * its identity AND it carries a payload, so absorbing one would have to
+   * overwrite the target's content with the source's — which additive-only
+   * forbids, hence the skip, and the skip is harmless because a template stands
+   * alone: nothing else in the archive points at it. A category is the opposite
+   * on both counts. It carries no content to overwrite — a name and a swatch —
+   * and things DO point at it: every note that named it. Skipping would strand
+   * them uncategorized in a profile that has that very category on screen.
+   *
+   * Absorbing costs exactly one thing: the source category's colour, which is
+   * decoration on a row the target already made and already coloured. Nothing
+   * pre-existing is modified, so the additive-only rule is kept as literally as
+   * it is for tags. And minting a fresh row is not even available as an option
+   * — migration 049's `UNIQUE (profile_id, name)` is the same index that makes
+   * two same-named tags impossible, so the insert would simply fail. Exact
+   * string equality, like the tags: „Sastanak" and „sastanak" ARE two
+   * categories in the store, and folding them here would merge rows the app
+   * itself considers distinct.
+   */
+  noteCategories: (data, ctx) =>
+    mintTags(data.noteCategories, ctx.target.noteCategories, "notes", ctx),
   noteTagLinks: NO_IDS,
   // The same name-is-identity rule as the two template tables above, against the
   // NOTE module's own name space (migration 015's `UNIQUE (profile_id, name)`).
@@ -617,11 +654,12 @@ function mintAll(rows: readonly { id: string }[], ctx: PlanContext): void {
 }
 
 /**
- * The ONE place identity is deduplicated (ADR-043). A source tag whose name
- * exactly matches one the target already has resolves onto the target's id and
- * produces no row; two source tags of the same name collapse onto one, for the
- * same reason the stores' `(profile_id, name)` unique index exists — inserting
- * both would simply fail.
+ * The ONE place a NAME is treated as an identity (ADR-043) — the three tables
+ * whose rows are nothing but a name: note tags, task tags and note categories.
+ * A source row whose name exactly matches one the target already has resolves
+ * onto the target's id and produces no row of its own; two source rows of the
+ * same name collapse onto one, for the same reason the stores'
+ * `(profile_id, name)` unique index exists — inserting both would simply fail.
  *
  * Exact string equality, deliberately: `NoteOrgStore.createTag` and
  * `TaskTagStore.createTag` both get-or-create by `WHERE name = ?` on a BINARY
@@ -974,6 +1012,10 @@ export function planForeignImport(
       id: mapped(row.id, ctx),
       profileId: target.profileId,
       folderId: mappedOrNull(row.folderId, ctx),
+      // Remapped exactly as `folderId` is — and, when the category was absorbed
+      // by name, this is what lands the note on the TARGET's own row rather
+      // than on a second copy of it (see `ID_MINTERS.noteCategories`).
+      categoryId: mappedOrNull(row.categoryId, ctx),
       cardDeckId: mappedOrNull(row.cardDeckId, ctx),
       snapshot: row.snapshot === null ? null : mappedState(row.snapshot, ctx),
     })),
@@ -990,6 +1032,14 @@ export function planForeignImport(
       isCaptureDefault: target.claimsCaptureDefault ? false : row.isCaptureDefault,
     })),
     noteTags: notAbsorbed(source.noteTags, ctx).map((row) => ({
+      ...row,
+      id: mapped(row.id, ctx),
+      profileId: target.profileId,
+    })),
+    // The tags' own treatment, one axis over: an absorbed category is a
+    // reference now, not a row, so it is dropped from the plan and every note
+    // that named it points at the target's.
+    noteCategories: notAbsorbed(source.noteCategories, ctx).map((row) => ({
       ...row,
       id: mapped(row.id, ctx),
       profileId: target.profileId,

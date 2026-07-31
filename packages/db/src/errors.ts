@@ -463,6 +463,25 @@ export class NoteTagValidationError extends DatabaseError {}
 export class NoteTagNotFoundError extends DatabaseError {}
 
 /**
+ * Thrown when a note-category write is rejected at the store boundary because
+ * its input breaks a domain rule the caller is expected to have caught already
+ * — an empty or over-50-character name, a colour outside the closed palette, a
+ * malformed `now`, or a create/rename colliding with another category's name in
+ * this profile (migration 049's `UNIQUE (profile_id, name)`, surfaced as a
+ * domain error rather than a raw driver error) (NOTE-002). The store revalidates
+ * because renderer input is untrusted (SEC-EL-02).
+ */
+export class NoteCategoryValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a note-category operation targets an id that is not a category in
+ * the store's own profile — unknown or owned by another profile — including a
+ * `categoryId` reference that does not resolve there. Surfacing this uniformly
+ * keeps one profile's categories invisible to a store scoped to another.
+ */
+export class NoteCategoryNotFoundError extends DatabaseError {}
+
+/**
  * Thrown when a note-attachment write is rejected at the store boundary
  * because its input breaks a domain rule the caller is expected to have
  * caught already — an empty, over-255-character, or path-separator-carrying

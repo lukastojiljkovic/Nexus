@@ -4,6 +4,7 @@ import type { CardsViewConfig, CollectionSchema } from "@nexus/core";
 import { Button, CardsView, EmptyState } from "@nexus/ui";
 import type {
   NoteCardDisposition,
+  NoteCategory,
   NoteChecklistTasksResult,
   NoteFolder,
   NoteFolderView,
@@ -175,6 +176,8 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
   const [tags, setTags] = useState<NoteTag[]>([]);
   const [links, setLinks] = useState<NoteTagLink[]>([]);
   const [tagFilter, setTagFilter] = useState<string[]>([]);
+  const [categories, setCategories] = useState<NoteCategory[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   // ADR-036's create-then-apply hand-off: the blocks a freshly created note
   // should open with, tagged with the note they belong to so a slow round trip
   // can never drop them into whichever note happens to be selected by then.
@@ -241,6 +244,20 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
     }
   }, [profileId]);
 
+  // Fetches categories, then prunes the active filter of ids the profile no
+  // longer has — deleting a category can never leave a ghost filter, exactly as
+  // `loadTags` guarantees for a deleted tag.
+  const loadCategories = useCallback(async () => {
+    try {
+      const list = await window.nexus.listNoteCategories(profileId);
+      setCategories(list);
+      const validIds = new Set(list.map((category) => category.id));
+      setCategoryFilter((current) => current.filter((id) => validIds.has(id)));
+    } catch (error) {
+      console.error("Nexus: failed to load categories:", error);
+    }
+  }, [profileId]);
+
   useEffect(() => {
     void loadFolders();
   }, [loadFolders]);
@@ -252,6 +269,10 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
   useEffect(() => {
     void loadTags();
   }, [loadTags]);
+
+  useEffect(() => {
+    void loadCategories();
+  }, [loadCategories]);
 
   // `priv:status` answers facts, never contents, so this is safe while locked.
   useEffect(() => {
@@ -296,6 +317,7 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
     setSelectedId(intent.noteId);
     setSelection({ kind: "all" });
     setTagFilter([]);
+    setCategoryFilter([]);
     onIntentHandled?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intent, onIntentHandled]);
@@ -322,13 +344,27 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
     return map;
   }, [links]);
 
-  // Folder scoping already happened via IPC; the tag filter narrows further,
-  // client-side, with AND semantics (a note must carry every selected tag).
+  /**
+   * Folder scoping already happened via IPC; the two client-side filters narrow
+   * further, and they narrow DIFFERENTLY on purpose.
+   *
+   * The tag filter ANDs — a note must carry every selected tag — because a note
+   * carries many tags and "ideja AND arhiva" is a question with answers. The
+   * category filter ORs, because a note has exactly ONE category: ANDing two of
+   * them could only ever produce an empty list, so the same gesture that is a
+   * useful narrowing for tags would be a dead end for categories. The two
+   * filters then AND with EACH OTHER, which is what makes „sastanak or dnevnik,
+   * tagged hitno" expressible at all.
+   */
   const visibleNotes = useMemo(() => {
     if (notes === null) return [];
-    if (tagFilter.length === 0) return notes;
-    return notes.filter((note) => tagFilter.every((id) => tagsByNote.get(note.id)?.has(id)));
-  }, [notes, tagFilter, tagsByNote]);
+    return notes.filter(
+      (note) =>
+        tagFilter.every((id) => tagsByNote.get(note.id)?.has(id)) &&
+        (categoryFilter.length === 0 ||
+          (note.categoryId !== null && categoryFilter.includes(note.categoryId))),
+    );
+  }, [notes, tagFilter, tagsByNote, categoryFilter]);
 
   function onToggleTag(id: string): void {
     setTagFilter((current) =>
@@ -338,6 +374,32 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
 
   function onClearTagFilter(): void {
     setTagFilter([]);
+  }
+
+  function onToggleCategory(id: string): void {
+    setCategoryFilter((current) =>
+      current.includes(id) ? current.filter((categoryId) => categoryId !== id) : [...current, id],
+    );
+  }
+
+  function onClearCategoryFilter(): void {
+    setCategoryFilter([]);
+  }
+
+  /** Deleting a category uncategorizes its notes, so the list has to be refetched with the categories. */
+  const onCategoriesChanged = useCallback(async () => {
+    await loadCategories();
+    await loadNotes();
+  }, [loadCategories, loadNotes]);
+
+  /** Sets (or clears) what KIND a note is — exactly one, so this replaces rather than adds. */
+  async function setNoteCategory(note: NoteMeta, categoryId: string | null): Promise<void> {
+    try {
+      await window.nexus.setNoteCategory(profileId, note.id, categoryId);
+      await loadNotes();
+    } catch (error) {
+      console.error("Nexus: failed to set a note's category:", error);
+    }
   }
 
   async function toggleNoteTag(note: NoteMeta, tagId: string, attached: boolean): Promise<void> {
@@ -412,6 +474,9 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
       if (captureFolder !== undefined) {
         setSelection({ kind: "folder", id: captureFolder.id });
         setTagFilter([]);
+        // A fresh note is uncategorized, so an active category filter would
+        // hide the very note the capture just made.
+        setCategoryFilter([]);
       }
 
       const blocks = await templateBlocksFor(
@@ -593,6 +658,11 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
 
   const sortedFolders = folders.slice().sort((a, b) => collator.compare(a.name, b.name));
   const sortedTags = tags.slice().sort((a, b) => collator.compare(a.name, b.name));
+  const sortedCategories = categories.slice().sort((a, b) => collator.compare(a.name, b.name));
+  const categoryById = useMemo(
+    () => new Map(categories.map((category) => [category.id, category])),
+    [categories],
+  );
 
   /**
    * WHICH SHAPE the middle pane draws (NOTE-002). A folder remembers its own —
@@ -653,6 +723,7 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
     const noteTagIds = tagsByNote.get(note.id);
     const noteTags =
       noteTagIds && noteTagIds.size > 0 ? sortedTags.filter((tag) => noteTagIds.has(tag.id)) : [];
+    const noteCategory = note.categoryId === null ? undefined : categoryById.get(note.categoryId);
     return (
       <>
         <button
@@ -673,8 +744,28 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
           <span className="note__item-title">
             {note.title.trim().length > 0 ? note.title : strings.notes.untitled}
           </span>
-          {noteTags.length > 0 && (
+          {(noteCategory !== undefined || noteTags.length > 0) && (
             <span className="note__item-tags">
+              {/* The category leads its note's chips (NOTE-002): the same muted
+                  chip the tags are, told apart by the swatch the user gave it
+                  rather than by a second chip design — no new colour value, no
+                  glow. An uncoloured category shows the dashed dot the folder
+                  tree already uses for one. */}
+              {noteCategory !== undefined && (
+                <span className="note__item-tag note__item-tag--category">
+                  <span
+                    className="note__folder-dot"
+                    data-empty={noteCategory.color === null ? "true" : undefined}
+                    style={
+                      noteCategory.color
+                        ? { background: `var(--nx-swatch-${noteCategory.color})` }
+                        : undefined
+                    }
+                    aria-hidden="true"
+                  />
+                  {noteCategory.name}
+                </span>
+              )}
               {noteTags.map((tag) => (
                 <span key={tag.id} className="note__item-tag">
                   {tag.name}
@@ -713,6 +804,58 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
                   {folder.name}
                 </button>
               ))}
+              {/* Between the folder and the tags, in the order the three axes
+                  are defined: WHERE it lives, WHAT KIND it is, WHAT it is
+                  about. `menuitemradio`, not `menuitemcheckbox` — a note has
+                  exactly one category, so choosing one un-chooses the last. */}
+              {sortedCategories.length > 0 && (
+                <>
+                  <div className="note__menu-sep" role="separator" />
+                  <span className="note__menu-label">{strings.notes.noteCategoryLabel}</span>
+                  <button
+                    className="note__menu-item note__menu-item--check"
+                    role="menuitemradio"
+                    type="button"
+                    aria-checked={note.categoryId === null}
+                    onClick={() => {
+                      void setNoteCategory(note, null);
+                      close();
+                    }}
+                  >
+                    <span
+                      className={`note__menu-check${note.categoryId === null ? "" : " note__menu-check--hidden"}`}
+                      aria-hidden="true"
+                    >
+                      ✓
+                    </span>
+                    {strings.notes.noCategory}
+                  </button>
+                  {sortedCategories.map((category) => {
+                    const chosen = note.categoryId === category.id;
+                    return (
+                      <button
+                        key={category.id}
+                        className="note__menu-item note__menu-item--check"
+                        role="menuitemradio"
+                        type="button"
+                        aria-checked={chosen}
+                        onClick={() => {
+                          void setNoteCategory(note, chosen ? null : category.id);
+                          close();
+                        }}
+                      >
+                        <span
+                          className={`note__menu-check${chosen ? "" : " note__menu-check--hidden"}`}
+                          aria-hidden="true"
+                        >
+                          ✓
+                        </span>
+                        {category.name}
+                      </button>
+                    );
+                  })}
+                </>
+              )}
               {sortedTags.length > 0 && (
                 <>
                   <div className="note__menu-sep" role="separator" />
@@ -811,6 +954,11 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
         onToggleTag={onToggleTag}
         onClearTagFilter={onClearTagFilter}
         onTagsChanged={loadTags}
+        categories={categories}
+        categoryFilter={categoryFilter}
+        onToggleCategory={onToggleCategory}
+        onClearCategoryFilter={onClearCategoryFilter}
+        onCategoriesChanged={onCategoriesChanged}
       />
 
       <div className="note__list-pane">
@@ -889,9 +1037,16 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
             description={strings.notes.listEmptyDescription}
           />
         ) : visibleNotes.length === 0 ? (
+          // Two filters, two sentences: the line has to name the one the user
+          // actually set, and only the tag filter is on when both are off. With
+          // both on, the tag line is the more specific of the two.
           <EmptyState
             title={strings.notes.listEmptyTitle}
-            description={strings.notes.tagFilterEmptyDescription}
+            description={
+              tagFilter.length === 0
+                ? strings.notes.categoryFilterEmptyDescription
+                : strings.notes.tagFilterEmptyDescription
+            }
           />
         ) : view === "list" ? (
           <ul className="note__list">

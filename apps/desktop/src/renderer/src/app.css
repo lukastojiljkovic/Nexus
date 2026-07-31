@@ -6355,6 +6355,15 @@ button.cal__grid-event--dragging {
   border: 1px solid var(--nx-border);
   border-radius: var(--nx-radius-sm);
 }
+/* The category chip (NOTE-002) is the SAME muted chip as a tag's — it leads the
+   row and carries its own swatch dot, which is the only thing distinguishing
+   the two. No second colour, no second border treatment, no glow: the dot is a
+   colour the user chose for that category, not a state this chip is in. */
+.note__item-tag--category {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
 /* Per-row delete stays hidden until the row is hovered or the button focused. */
 .note__delete.nx-button {
   flex: none;

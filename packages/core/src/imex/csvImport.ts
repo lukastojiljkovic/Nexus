@@ -688,6 +688,7 @@ export function translateCsvTasks(
     notes: [],
     noteFolders: [],
     noteTags: [],
+    noteCategories: [],
     noteTagLinks: [],
     noteTemplates: [],
     noteAttachments: [],

@@ -44,6 +44,18 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
  *
+ * `1.27.0` adds note CATEGORIES (NOTE-002, migration 049): the `note-category`
+ * record type, riding in `data/notes.ndjson` beside the folders and tags it is
+ * the third axis to, plus a `categoryId` on every `note` row. The record type
+ * needs no `ArchiveEra` flag (an older archive simply carries none, exactly as
+ * a profile that never made one does) and neither does the field, whose absence
+ * means `null` — which is what every note in every archive written before this
+ * bump actually was. The bump is still owed, and for the record type rather
+ * than the field: an older reader handed this archive would refuse
+ * `note-category` as an unrecognised type — the version gate is what makes that
+ * refusal happen at the manifest instead, with a sentence about the build
+ * rather than about a line in a file.
+ *
  * `1.26.0` changes what a cloze card's `clozeOrdinal` MEANS (ADR-068, migration
  * 047): the field carried the deletion's 0-based POSITION in `clozeText` and
  * now carries its 1-based NUMBER — the `{{cN::…}}` label a run declares, or its
@@ -201,7 +213,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.26.0";
+const SCHEMA_VERSION = "1.27.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -806,6 +818,16 @@ export interface ExportNote {
   profileId: string;
   title: string;
   folderId: string | null;
+  /**
+   * What KIND of note this is (NOTE-002, migration 049) — a `note-category`
+   * row's id, or null when uncategorized. REQUIRED here, like the `folderId`
+   * and `cardDeckId` beside it, rather than optional the way a folder's
+   * `defaultView` is: the reader always produces a value for it (a pre-`1.27.0`
+   * archive carries no key at all and parses to `null`, which is exactly what
+   * every note in one was), so nothing downstream should have to spell a
+   * fallback for a field that is never absent by the time it is read.
+   */
+  categoryId: string | null;
   pinned: boolean;
   cardDeckId: string | null;
   createdAt: string;
@@ -848,6 +870,28 @@ export interface ExportNoteTag {
   profileId: string;
   name: string;
   createdAt: string;
+}
+
+/**
+ * A note category (NOTE-002, migration 049) — what KIND of note something is:
+ * sastanak, ideja, dnevnik, recept. The third organizational axis, and
+ * deliberately NOT a fourth spelling of the other two: a folder is a place (one
+ * per note, hierarchical), a tag is a subject (many per note, flat), a category
+ * is a type (exactly one per note, optional, FLAT).
+ *
+ * Flat is the whole shape: there is no `parentId` here because a hierarchy of
+ * categories would be a folder tree, and this archive already carries one.
+ * `color` is a folder swatch key, from the very same closed palette — the store
+ * validates both against one list, so the interchange carries one plain string
+ * rather than two enums that could drift apart.
+ */
+export interface ExportNoteCategory {
+  id: string;
+  profileId: string;
+  name: string;
+  color: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /** One note-tag attachment. */
@@ -1113,6 +1157,14 @@ export interface ProfileData {
   notes: readonly ExportNote[];
   noteFolders: readonly ExportNoteFolder[];
   noteTags: readonly ExportNoteTag[];
+  /**
+   * The profile's note categories (NOTE-002, migration 049). Required like
+   * every field around it and for the same reason: a module the caller forgets
+   * must be a type error, not a quiet omission. EMPTY both for a pre-`1.27.0`
+   * archive and for a profile that never made a category — indistinguishable on
+   * purpose, because they mean the same thing.
+   */
+  noteCategories: readonly ExportNoteCategory[];
   noteTagLinks: readonly ExportNoteTagLink[];
   noteTemplates: readonly ExportNoteTemplate[];
   noteAttachments: readonly ExportNoteAttachment[];
@@ -1427,6 +1479,7 @@ export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, 
       data.notes.length +
       data.noteFolders.length +
       data.noteTags.length +
+      data.noteCategories.length +
       data.noteTagLinks.length +
       data.noteTemplates.length +
       data.noteAttachments.length +
@@ -1551,6 +1604,11 @@ export function filterProfileData(
     ),
     noteFolders: only("notes", data.noteFolders),
     noteTags: only("notes", data.noteTags),
+    // A note's `categoryId` and the categories it names are ONE module, exactly
+    // as a folder and `folderId` are — the two drop together or not at all, so
+    // no cross-module repair rule is needed for it (unlike the three in the
+    // header, which really do straddle a boundary).
+    noteCategories: only("notes", data.noteCategories),
     noteTagLinks: only("notes", data.noteTagLinks),
     noteTemplates: only("notes", data.noteTemplates),
     noteAttachments: only("notes", data.noteAttachments),
@@ -1578,8 +1636,16 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
 
   // Read once and named locally — the note section below reaches for these
   // often enough that `data.` on every line only adds noise.
-  const { notes, noteFolders, noteTags, noteTagLinks, noteTemplates, noteAttachments, noteVersions } =
-    data;
+  const {
+    notes,
+    noteFolders,
+    noteTags,
+    noteCategories,
+    noteTagLinks,
+    noteTemplates,
+    noteAttachments,
+    noteVersions,
+  } = data;
 
   // Dependency order, as in `data/notes.ndjson`: the containers and labels a
   // task points at come first and the joins that need BOTH ends come last, so
@@ -1642,6 +1708,10 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   const notesNdjson = toNdjson([
     ...noteFolders.map((row) => ({ type: "note-folder", ...row })),
     ...noteTags.map((row) => ({ type: "note-tag", ...row })),
+    // Beside the tags and ahead of the notes whose `categoryId` names them —
+    // the same dependency order the folders keep. A category points at nothing
+    // (it is flat), so only what points AT it constrains where it goes.
+    ...noteCategories.map((row) => ({ type: "note-category", ...row })),
     ...notes.map((row) => {
       const { snapshot: _snapshot, ...rest } = row;
       return { type: "note", ...rest };

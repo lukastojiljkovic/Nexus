@@ -1273,6 +1273,7 @@ export function translateLlmRecords(
     notes: [],
     noteFolders: [],
     noteTags: [],
+    noteCategories: [],
     noteTagLinks: [],
     noteTemplates: [],
     noteAttachments: [],

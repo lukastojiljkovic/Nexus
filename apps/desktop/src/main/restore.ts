@@ -1143,6 +1143,10 @@ function importTargetFor(deps: ProfileDataDeps, profileId: string): ForeignImpor
     profileId,
     inboxListId: inbox.id,
     noteTags: org.listTags(),
+    // NOTE-002 / migration 049: a category's identity is its name, exactly as a
+    // tag's is (and backed by the same per-profile UNIQUE index), so the
+    // planner absorbs a source category this profile already holds.
+    noteCategories: org.listCategories(),
     taskTags: deps.taskTagStore(profileId).listTags(),
     taskTemplateNames: deps.taskTemplateStore(profileId).list().map((template) => template.name),
     eventTemplateNames: deps.eventTemplateStore(profileId).list().map((template) => template.name),

@@ -22,8 +22,8 @@ import { CardStore, MIGRATIONS, NexusDatabase, openDatabase, runMigrations } fro
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 48 (attachment text search), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(48);
+  it("is at version 49 (note categories), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(49);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -5868,6 +5868,153 @@ describe("migration 048 — attachment text search (SRCH-008)", () => {
       raw.prepare("UPDATE task_attachments SET extracted_text = '' WHERE id = 'ta1'").run();
       raw.prepare("UPDATE note_attachments SET extracted_text = '' WHERE id = 'na1'").run();
       expect(entries(raw)).toEqual(before);
+    } finally {
+      raw.close();
+    }
+  });
+});
+
+describe("migration 049 — note categories (NOTE-002)", () => {
+  const T = "2026-01-01T00:00:00.000Z";
+
+  const columnNames = (db: NexusDatabase, table: string): string[] =>
+    (db.raw.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(
+      (row) => row.name,
+    );
+
+  const insertNote = (db: NexusDatabase, id: string, profileId: string, categoryId?: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO notes (id, profile_id, title, category_id, created_at, updated_at, deleted_at)
+         VALUES (?, ?, '', ?, ?, ?, NULL)`,
+      )
+      .run(id, profileId, categoryId ?? null, T, T);
+
+  const insertCategory = (db: NexusDatabase, id: string, profileId: string, name: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO note_categories (id, profile_id, name, color, created_at, updated_at)
+         VALUES (?, ?, ?, NULL, ?, ?)`,
+      )
+      .run(id, profileId, name, T, T);
+
+  it("creates the note_categories table and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    expect(tableNames(db)).toContain("note_categories");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("has no parent_id — a category tree would be a folder tree, and this table is flat by design", () => {
+    const db = openDatabase({ path: join(dir, "flat.db") });
+    expect(columnNames(db, "note_categories")).toEqual([
+      "id",
+      "profile_id",
+      "name",
+      "color",
+      "created_at",
+      "updated_at",
+    ]);
+    db.close();
+  });
+
+  it("adds notes.category_id, defaulting to NULL", () => {
+    const db = openDatabase({ path: join(dir, "notes-column.db") });
+    expect(columnNames(db, "notes")).toContain("category_id");
+
+    insertProfile(db, "p1");
+    insertNote(db, "n1", "p1");
+    const row = db.raw.prepare("SELECT category_id FROM notes WHERE id = 'n1'").get() as {
+      category_id: string | null;
+    };
+    expect(row.category_id).toBeNull();
+    db.close();
+  });
+
+  it("enforces UNIQUE(profile_id, name) — the note_tags rule, per profile", () => {
+    const db = openDatabase({ path: join(dir, "unique.db") });
+    insertProfile(db, "p1");
+    insertProfile(db, "p2");
+    insertCategory(db, "c1", "p1", "sastanak");
+    expect(() => insertCategory(db, "c2", "p1", "sastanak")).toThrow();
+    // Another profile's own „sastanak" is a different row.
+    expect(() => insertCategory(db, "c3", "p2", "sastanak")).not.toThrow();
+    db.close();
+  });
+
+  it("creates the note_categories_profile_name index", () => {
+    const db = openDatabase({ path: join(dir, "index.db") });
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("note_categories_profile_name");
+    db.close();
+  });
+
+  it("SET-NULLs notes.category_id when the category row is deleted — the note survives, uncategorized", () => {
+    const db = openDatabase({ path: join(dir, "set-null.db") });
+    insertProfile(db, "p1");
+    insertCategory(db, "c1", "p1", "recept");
+    insertNote(db, "n1", "p1", "c1");
+
+    db.raw.prepare("DELETE FROM note_categories WHERE id = 'c1'").run();
+    const row = db.raw.prepare("SELECT category_id FROM notes WHERE id = 'n1'").get() as {
+      category_id: string | null;
+    };
+    expect(row.category_id).toBeNull();
+    expect((db.raw.prepare("SELECT count(*) AS n FROM notes").get() as { n: number }).n).toBe(1);
+    db.close();
+  });
+
+  it("cascades categories when the owning profile is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade-profile.db") });
+    insertProfile(db, "p1");
+    insertCategory(db, "c1", "p1", "dnevnik");
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = 'p1'").run();
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM note_categories").get() as { n: number }).n,
+    ).toBe(0);
+    db.close();
+  });
+
+  it("refuses a category_id that names no category row", () => {
+    const db = openDatabase({ path: join(dir, "fk.db") });
+    insertProfile(db, "p1");
+    expect(() => insertNote(db, "n1", "p1", "nema-takve")).toThrow();
+    db.close();
+  });
+
+  it("leaves every pre-existing note uncategorized when an older database is migrated", () => {
+    const raw = new Database(join(dir, "upgrade.db"));
+    try {
+      raw.pragma("journal_mode = WAL");
+      raw.pragma("foreign_keys = ON");
+      raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
+        typeof value === "string" ? foldSearchText(value) : null,
+      );
+      runMigrations(raw, MIGRATIONS.slice(0, 48));
+      raw
+        .prepare(
+          "INSERT INTO profiles (id, kind, name, created_at) VALUES ('p1', 'personal', 'P', ?)",
+        )
+        .run(T);
+      raw
+        .prepare(
+          `INSERT INTO notes (id, profile_id, title, created_at, updated_at)
+           VALUES ('n1', 'p1', 'Beleška', ?, ?)`,
+        )
+        .run(T, T);
+
+      runMigrations(raw, MIGRATIONS);
+
+      expect(raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+      const row = raw.prepare("SELECT category_id FROM notes WHERE id = 'n1'").get() as {
+        category_id: string | null;
+      };
+      expect(row.category_id).toBeNull();
     } finally {
       raw.close();
     }

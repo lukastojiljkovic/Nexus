@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   NexusDatabase,
+  NoteCategoryNotFoundError,
   NoteFolderNotFoundError,
   NoteNotFoundError,
   NoteStore,
@@ -372,6 +373,17 @@ function insertFolder(profileId: string, id: string): string {
   return id;
 }
 
+/** Inserts a category for `profileId` directly (NoteStore does not own categories — `NoteOrgStore` does). */
+function insertCategory(profileId: string, id: string, name = "sastanak"): string {
+  db.raw
+    .prepare(
+      `INSERT INTO note_categories (id, profile_id, name, color, created_at, updated_at)
+       VALUES (?, ?, ?, NULL, ?, ?)`,
+    )
+    .run(id, profileId, name, T0, T0);
+  return id;
+}
+
 /** Inserts a subject + deck for `profileId` directly (NoteStore does not own decks). */
 function insertDeck(profileId: string, id: string, deletedAt: string | null = null): string {
   const subjectId = uuidv7();
@@ -479,16 +491,82 @@ describe("NoteStore — organization (folder_id, pinned)", () => {
     expect(() => notes.setPinned("missing", true)).toThrow(NoteNotFoundError);
   });
 
-  it("does not bump updated_at when foldering or pinning", () => {
+  it("does not bump updated_at when foldering, categorizing or pinning", () => {
     const { notes, profileId } = storeWithProfile();
     const folder = insertFolder(profileId, uuidv7());
+    const category = insertCategory(profileId, uuidv7());
     const note = notes.create(T0);
 
     notes.setFolder(note.id, folder);
+    notes.setCategory(note.id, category);
     notes.setPinned(note.id, true);
 
     // Organizational changes never touch the content timestamp.
     expect(notes.list()[0]?.updatedAt).toBe(T0);
+  });
+
+  it("creates a note uncategorized", () => {
+    const notes = store();
+    expect(notes.create(T0).categoryId).toBeNull();
+    expect(notes.list()[0]?.categoryId).toBeNull();
+  });
+
+  it("setCategory names what KIND a note is, and clears it with null", () => {
+    const { notes, profileId } = storeWithProfile();
+    const category = insertCategory(profileId, uuidv7());
+    const note = notes.create(T0);
+
+    notes.setCategory(note.id, category);
+    expect(notes.list()[0]?.categoryId).toBe(category);
+
+    notes.setCategory(note.id, null);
+    expect(notes.list()[0]?.categoryId).toBeNull();
+  });
+
+  it("setCategory REPLACES rather than adds — a note has exactly one kind", () => {
+    const { notes, profileId } = storeWithProfile();
+    const first = insertCategory(profileId, uuidv7(), "sastanak");
+    const second = insertCategory(profileId, uuidv7(), "dnevnik");
+    const note = notes.create(T0);
+
+    notes.setCategory(note.id, first);
+    notes.setCategory(note.id, second);
+    expect(notes.list()[0]?.categoryId).toBe(second);
+  });
+
+  it("setCategory rejects a category that is not in this profile", () => {
+    const { notes } = storeWithProfile();
+    const foreign = insertCategory(createProfile(), uuidv7());
+    const note = notes.create(T0);
+
+    expect(() => notes.setCategory(note.id, "no-such-category")).toThrow(
+      NoteCategoryNotFoundError,
+    );
+    expect(() => notes.setCategory(note.id, foreign)).toThrow(NoteCategoryNotFoundError);
+    expect(notes.list()[0]?.categoryId).toBeNull();
+  });
+
+  it("setCategory rejects a note that is not active in this profile", () => {
+    const a = storeWithProfile();
+    const b = storeWithProfile();
+    const categoryB = insertCategory(b.profileId, uuidv7());
+    const owned = a.notes.create(T0);
+
+    expect(() => b.notes.setCategory(owned.id, categoryB)).toThrow(NoteNotFoundError);
+    expect(() => a.notes.setCategory("missing", null)).toThrow(NoteNotFoundError);
+  });
+
+  it("keeps the category independent of the folder — the two axes never touch", () => {
+    const { notes, profileId } = storeWithProfile();
+    const folder = insertFolder(profileId, uuidv7());
+    const category = insertCategory(profileId, uuidv7());
+    const note = notes.create(T0);
+
+    notes.setFolder(note.id, folder);
+    notes.setCategory(note.id, category);
+    notes.setFolder(note.id, null);
+
+    expect(notes.list()[0]).toMatchObject({ folderId: null, categoryId: category });
   });
 });
 

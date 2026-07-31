@@ -68,6 +68,7 @@ function emptyInput(): ExportArchiveInput {
       notes: [],
       noteFolders: [],
       noteTags: [],
+      noteCategories: [],
       noteTagLinks: [],
       noteTemplates: [],
       noteAttachments: [],
@@ -111,6 +112,7 @@ function noteRow(overrides: {
   id: string;
   title: string;
   folderId?: string | null;
+  categoryId?: string | null;
   snapshot?: Uint8Array | null;
 }): ExportNote {
   return {
@@ -118,6 +120,7 @@ function noteRow(overrides: {
     profileId: "profile1",
     title: overrides.title,
     folderId: overrides.folderId ?? null,
+    categoryId: overrides.categoryId ?? null,
     pinned: false,
     cardDeckId: null,
     createdAt: "2026-07-01T00:00:00.000Z",
@@ -257,7 +260,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.26.0");
+      expect(manifest.schemaVersion).toBe("1.27.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       // `picture: null` is written out loud rather than omitted: the manifest is
@@ -1108,6 +1111,9 @@ describe("buildExportArchive", () => {
         notes: [noteRow({ id: "note1", title: "N" })],
         noteFolders: [folderRow({ id: "f1", name: "F" })],
         noteTags: [{ id: "tag1", profileId: "p1", name: "Tag", createdAt: t }],
+        noteCategories: [
+          { id: "cat1", profileId: "p1", name: "sastanak", color: "zlato", createdAt: t, updatedAt: t },
+        ],
         noteTagLinks: [{ noteId: "note1", tagId: "tag1" }],
         noteTemplates: [
           { id: "tmpl1", profileId: "p1", name: "Tmpl", content: '{"type":"doc","content":[]}', createdAt: t, updatedAt: t },
@@ -1141,7 +1147,7 @@ describe("buildExportArchive", () => {
         calendar: 6, // 1 event + 1 event template + 1 document + 1 renewal + 1 person + the settings row
         study: 12, // 1 each of subject/material/note-link/exam/deck/card/review/topic/plan/block/focus-session + the settings row
         notifications: 1,
-        notes: 7, // 1 each of note/folder/tag/tag-link/template/attachment/version
+        notes: 8, // 1 each of note/folder/tag/category/tag-link/template/attachment/version
         dashboard: 3, // the one settings row a profile can ever have + 1 named board + 1 placed widget
       });
     });
@@ -1383,7 +1389,12 @@ describe("buildExportArchive", () => {
       const input = emptyInput();
       input.data.noteFolders = [folderRow({ id: "f1", name: "Fascikla" })];
       input.data.noteTags = [{ id: "tag1", profileId: "profile1", name: "posao", createdAt: "2026-07-01T00:00:00.000Z" }];
-      input.data.notes = [noteRow({ id: "n1", title: "Prva beleska", folderId: "f1", snapshot: emptyNoteSnapshot() })];
+      input.data.noteCategories = [
+        { id: "cat1", profileId: "profile1", name: "sastanak", color: null, createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z" },
+      ];
+      input.data.notes = [
+        noteRow({ id: "n1", title: "Prva beleska", folderId: "f1", categoryId: "cat1", snapshot: emptyNoteSnapshot() }),
+      ];
       input.data.noteTagLinks = [{ noteId: "n1", tagId: "tag1" }];
       input.data.noteAttachments = [attachmentRow({ id: "att1", noteId: "n1", sha256: "a".repeat(64) })];
       input.data.noteVersions = [
@@ -1398,14 +1409,42 @@ describe("buildExportArchive", () => {
       expect(rows.map((row) => row.type)).toEqual([
         "note-folder",
         "note-tag",
+        // Before the notes whose `categoryId` names it (NOTE-002 / 1.27.0).
+        "note-category",
         "note",
         "note-tag-link",
         "note-attachment",
         "note-version",
         "note-template",
       ]);
-      expect(archive.byModule.notes).toBe(7);
-      expect(archive.totalRecords).toBe(7);
+      expect(archive.byModule.notes).toBe(8);
+      expect(archive.totalRecords).toBe(8);
+    });
+
+    // NOTE-002 / 1.27.0: what KIND a note is travels on the note's own row,
+    // beside the folder that says where it lives.
+    it("carries a note's categoryId, null when the note is uncategorized", () => {
+      const input = emptyInput();
+      input.data.noteCategories = [
+        { id: "cat1", profileId: "profile1", name: "recept", color: "suma", createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z" },
+      ];
+      input.data.notes = [
+        noteRow({ id: "n1", title: "Sa kategorijom", categoryId: "cat1" }),
+        noteRow({ id: "n2", title: "Bez kategorije" }),
+      ];
+
+      const rows = parseNdjson(
+        buildExportArchive(input).files.get("data/notes.ndjson") ?? "",
+      ) as Array<Record<string, unknown>>;
+      const category = rows.find((row) => row.type === "note-category");
+      expect(category).toEqual({
+        type: "note-category", id: "cat1", profileId: "profile1", name: "recept", color: "suma",
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+      });
+      expect(rows.filter((row) => row.type === "note").map((row) => row.categoryId)).toEqual([
+        "cat1",
+        null,
+      ]);
     });
 
     // NOTE-002 / 1.17.0: the shape a folder's notes are drawn in travels with
@@ -1781,6 +1820,21 @@ describe("filterProfileData", () => {
     expect(filtered.notes[0]?.cardDeckId).toBe("dk1");
   });
 
+  // A category and the `categoryId` that names it are ONE module, so the pair
+  // never straddles the filter — unlike the three edges this suite exists for,
+  // it needs no repair rule, and this pins that.
+  it("drops a note's category WITH the note, and keeps the two together", () => {
+    const data = everyModuleInput().data;
+
+    const withoutNotes = filterProfileData(data, new Set<ArchiveModuleId>(["study"]));
+    expect(withoutNotes.noteCategories).toEqual([]);
+    expect(withoutNotes.notes).toEqual([]);
+
+    const withNotes = filterProfileData(data, new Set<ArchiveModuleId>(["notes"]));
+    expect(withNotes.noteCategories.map((row) => row.id)).toEqual(["nc1"]);
+    expect(withNotes.notes[0]?.categoryId).toBe("nc1");
+  });
+
   it("leaves an archive whose every cross-module edge is repaired countable", () => {
     const data = everyModuleInput().data;
     const filtered = filterProfileData(data, new Set<ArchiveModuleId>(["study"]));
@@ -1883,7 +1937,12 @@ function everyModuleInput(): ExportArchiveInput {
       deliveredAt: at, createdAt: at, updatedAt: at,
     },
   ];
-  input.data.notes = [{ ...noteRow({ id: "n1", title: "Beleška", snapshot: emptyNoteSnapshot() }), cardDeckId: "dk1" }];
+  input.data.noteCategories = [
+    { id: "nc1", profileId: "profile1", name: "sastanak", color: null, createdAt: at, updatedAt: at },
+  ];
+  input.data.notes = [
+    { ...noteRow({ id: "n1", title: "Beleška", categoryId: "nc1", snapshot: emptyNoteSnapshot() }), cardDeckId: "dk1" },
+  ];
   input.data.noteVersions = [
     { noteId: "n1", coveredSeq: 1, title: "Beleška", createdAt: at, snapshot: emptyNoteSnapshot() },
   ];

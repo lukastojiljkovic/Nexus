@@ -706,6 +706,7 @@ export function translateApkg(parsed: ParsedApkg, target: ApkgTranslateTarget): 
     notes: [],
     noteFolders: [],
     noteTags: [],
+    noteCategories: [],
     noteTagLinks: [],
     noteTemplates: [],
     noteAttachments: [],

@@ -160,6 +160,7 @@ function emptyProfileData(): ProfileData {
     notes: [],
     noteFolders: [],
     noteTags: [],
+    noteCategories: [],
     noteTagLinks: [],
     noteTemplates: [],
     noteAttachments: [],
@@ -190,6 +191,7 @@ function makeNote(overrides: Partial<ExportNote> & { id: string }): ExportNote {
     profileId: "ignored",
     title: "",
     folderId: null,
+    categoryId: null,
     pinned: false,
     cardDeckId: null,
     createdAt: "2026-01-01T00:00:00.000Z",
@@ -409,9 +411,13 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
 
   const folder = orgStore.createFolder({ parentId: null, name: `${name} folder`, color: "zlato" }, t0);
   const tag = orgStore.createTag(`${name} tag`, t0);
+  // NOTE-002's third axis, coloured so a restore that dropped the swatch would
+  // fail here rather than quietly.
+  const category = orgStore.createCategory({ name: `${name} kategorija`, color: "bordo" }, t0);
 
   const editedNote = noteStore.create(t0);
   noteStore.setFolder(editedNote.id, folder.id);
+  noteStore.setCategory(editedNote.id, category.id);
   noteStore.appendUpdate(editedNote.id, bytes(8), `${name} note`, t1);
   orgStore.attachTag(editedNote.id, tag.id);
   attachmentStore.add(
@@ -500,6 +506,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     })),
     noteFolders: orgStore.listFolders(),
     noteTags: orgStore.listTags(),
+    noteCategories: orgStore.listCategories(),
     noteTagLinks: orgStore.listTagLinks(),
     noteTemplates: templateStore.list(),
     noteAttachments: attachmentStore.list(editedNote.id),
@@ -700,6 +707,9 @@ function assertModulesMatch(
   );
   expect(new NoteOrgStore(handle.raw, readProfileId).listFolders()).toEqual(remap(fixture.data.noteFolders));
   expect(new NoteOrgStore(handle.raw, readProfileId).listTags()).toEqual(remap(fixture.data.noteTags));
+  expect(new NoteOrgStore(handle.raw, readProfileId).listCategories()).toEqual(
+    remap(fixture.data.noteCategories),
+  );
   expect(new NoteOrgStore(handle.raw, readProfileId).listTagLinks()).toEqual(fixture.data.noteTagLinks);
   expect(new NoteTemplateStore(handle.raw, readProfileId).list()).toEqual(remap(fixture.data.noteTemplates));
   expect(new NoteAttachmentStore(handle.raw, readProfileId).list(fixture.ids.editedNote.id)).toEqual(
@@ -1169,6 +1179,51 @@ describe("RestoreStore", () => {
 
     const ids = new NoteOrgStore(db.raw, profileB).listFolders().map((f) => f.id);
     expect(ids.sort()).toEqual([childId, parentId].sort());
+  });
+
+  // NOTE-002 / migration 049 / interchange 1.27.0.
+  it("T4b: restores a category and the note that names it, retargeting only the profile", () => {
+    const profileB = createProfile(db, "T4b");
+    const categoryId = uuidv7();
+    const noteId = uuidv7();
+    const at = "2026-01-01T00:00:00.000Z";
+    const data: ProfileData = {
+      ...emptyProfileData(),
+      noteCategories: [
+        { id: categoryId, profileId: "ignored", name: "sastanak", color: "zlato", createdAt: at, updatedAt: at },
+      ],
+      notes: [makeNote({ id: noteId, categoryId })],
+    };
+
+    new RestoreStore(db.raw, profileB).replaceProfileData(
+      { profileName: "T4b", profilePicture: null, settings: emptySettings(), data, derived: new Map() },
+      NOW,
+    );
+
+    expect(new NoteOrgStore(db.raw, profileB).listCategories()).toEqual([
+      { id: categoryId, profileId: profileB, name: "sastanak", color: "zlato", createdAt: at, updatedAt: at },
+    ]);
+    expect(new NoteStore(db.raw, profileB).list()[0]?.categoryId).toBe(categoryId);
+  });
+
+  // A pre-1.27.0 archive carries no `note-category` row and no `categoryId`;
+  // the parser fills the field with null, and this is what that restores as.
+  it("T4c: restores a profile with no categories at all from an archive that carries none", () => {
+    const profileB = createProfile(db, "T4c");
+    seedFixture(db, profileB, "Old"); // B starts with a category of its own.
+    expect(new NoteOrgStore(db.raw, profileB).listCategories()).toHaveLength(1);
+
+    new RestoreStore(db.raw, profileB).replaceProfileData(
+      {
+        profileName: "T4c", profilePicture: null, settings: emptySettings(),
+        data: { ...emptyProfileData(), notes: [makeNote({ id: uuidv7() })] },
+        derived: new Map(),
+      },
+      NOW,
+    );
+
+    expect(new NoteOrgStore(db.raw, profileB).listCategories()).toEqual([]);
+    expect(new NoteStore(db.raw, profileB).list()[0]?.categoryId).toBeNull();
   });
 
   it("T5: a failing row rolls back the entire restore, leaving profile B's existing rows untouched", () => {

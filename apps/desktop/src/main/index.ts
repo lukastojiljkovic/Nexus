@@ -173,6 +173,7 @@ import {
   type NotificationRecord,
   type NotificationSettings,
   type NoteAttachment,
+  type NoteCategory,
   type NoteFolder,
   type NoteFolderColor,
   type NoteFolderView,
@@ -2264,6 +2265,36 @@ function asNoteFolderCreateInput(value: unknown): {
  * never `!== undefined`, so the two cases are distinguishable.
  */
 function asNoteFolderFieldChanges(value: unknown): { name?: string; color?: NoteFolderColor | null } {
+  const rec = asRecord(value);
+  const patch: { name?: string; color?: NoteFolderColor | null } = {};
+  if ("name" in rec) patch.name = asString(rec.name, "name");
+  if ("color" in rec) patch.color = asNullableNoteFolderColor(rec.color, "color");
+  return patch;
+}
+
+/**
+ * Validates a note-CATEGORY create input (NOTE-002). Structural checks only —
+ * the trim, the length cap and the per-profile name collision are the store's,
+ * exactly as `asNoteFolderCreateInput` leaves those to `NoteOrgStore`. The
+ * colour goes through the FOLDER validator because it is the same closed
+ * palette; one list, one gate.
+ */
+function asNoteCategoryCreateInput(value: unknown): {
+  name: string;
+  color: NoteFolderColor | null;
+} {
+  const input = asRecord(value);
+  return {
+    name: asString(input.name, "input.name"),
+    color: asNullableNoteFolderColor(input.color, "input.color"),
+  };
+}
+
+/** Validates a note-category `fields` patch, on `asNoteFolderFieldChanges`' terms: `in`, never `!== undefined`, so `color: null` stays distinguishable from an omission. */
+function asNoteCategoryFieldChanges(value: unknown): {
+  name?: string;
+  color?: NoteFolderColor | null;
+} {
   const rec = asRecord(value);
   const patch: { name?: string; color?: NoteFolderColor | null } = {};
   if ("name" in rec) patch.name = asString(rec.name, "name");
@@ -6603,6 +6634,55 @@ function registerIpc(): void {
     const noteId = asNonEmptyString(body.noteId, "noteId");
     const tagId = asNonEmptyString(body.tagId, "tagId");
     noteOrgStore(profileId).detachTag(noteId, tagId);
+  });
+
+  // NOTE-002's third axis (migration 049): what KIND a note is. CRUD sits on
+  // `NoteOrgStore` beside the folders and tags; the per-note assignment sits on
+  // `NoteStore` beside `setFolder`, because it is a column on `notes`.
+  ipcMain.handle(IpcChannel.noteCategoriesList, (event, payload): NoteCategory[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return noteOrgStore(profileId).listCategories();
+  });
+
+  ipcMain.handle(IpcChannel.noteCategoriesCreate, (event, payload): NoteCategory => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return noteOrgStore(profileId).createCategory(
+      asNoteCategoryCreateInput(body.input),
+      new Date().toISOString(),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.noteCategoriesUpdate, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    noteOrgStore(profileId).updateCategory(
+      id,
+      asNoteCategoryFieldChanges(body.fields),
+      new Date().toISOString(),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.noteCategoriesDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    noteOrgStore(profileId).deleteCategory(id);
+  });
+
+  ipcMain.handle(IpcChannel.notesSetCategory, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const noteId = asNonEmptyString(body.noteId, "noteId");
+    // `null` is a real, meaningful value here — it uncategorizes the note.
+    const categoryId = asNullableString(body.categoryId, "categoryId");
+    noteStore(profileId).setCategory(noteId, categoryId);
   });
 
   ipcMain.handle(IpcChannel.notesSetFolder, (event, payload): void => {

@@ -238,6 +238,11 @@ export const IpcChannel = {
   noteTagsAttach: "note-tags:attach",
   noteTagsDetach: "note-tags:detach",
   noteTagLinksList: "note-tag-links:list",
+  noteCategoriesList: "note-categories:list",
+  noteCategoriesCreate: "note-categories:create",
+  noteCategoriesUpdate: "note-categories:update",
+  noteCategoriesDelete: "note-categories:delete",
+  notesSetCategory: "notes:set-category",
   notesSetFolder: "notes:set-folder",
   notesSetPinned: "notes:set-pinned",
   notesSetLinks: "notes:set-links",
@@ -2897,6 +2902,8 @@ export interface NoteMeta {
   profileId: string;
   title: string;
   folderId: string | null;
+  /** What KIND of note this is (NOTE-002) — at most one `NoteCategory` id, null when uncategorized. */
+  categoryId: string | null;
   pinned: boolean;
   /** The deck this note's generated cards go to, null until the author picks one (NOTE-006). */
   cardDeckId: string | null;
@@ -3079,6 +3086,29 @@ export interface NoteTagLink {
   tagId: string;
 }
 
+/**
+ * A note category as seen by the renderer (mirrors the `note_categories` table
+ * via `NoteOrgStore`'s mapping, NOTE-002) — what KIND of note something is:
+ * sastanak, ideja, dnevnik, recept. Redeclared here so the renderer never
+ * imports DB code.
+ *
+ * The third organizational axis, and NOT a fourth spelling of the other two: a
+ * folder is a place (one per note, hierarchical), a tag is a subject (many per
+ * note, flat), a category is a type (exactly one per note, optional, FLAT —
+ * there is no `parentId` here, and there will not be one).
+ *
+ * `color` is a `NoteFolderColor`, reused rather than respelled: there is one
+ * swatch palette in this app, and a second eight-value copy of it could drift.
+ */
+export interface NoteCategory {
+  id: string;
+  profileId: string;
+  name: string;
+  color: NoteFolderColor | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface NoteFoldersListRequest {
   profileId: string;
 }
@@ -3166,6 +3196,39 @@ export interface NoteTagsDetachRequest {
   profileId: string;
   noteId: string;
   tagId: string;
+}
+
+export interface NoteCategoriesListRequest {
+  profileId: string;
+}
+
+export interface NoteCategoriesCreateRequest {
+  profileId: string;
+  input: { name: string; color: NoteFolderColor | null };
+}
+
+/** A partial edit of a category's own fields; an omitted key is untouched, `null` clears `color`. */
+export interface NoteCategoryFieldChanges {
+  name?: string;
+  color?: NoteFolderColor | null;
+}
+
+export interface NoteCategoriesUpdateRequest {
+  profileId: string;
+  id: string;
+  fields: NoteCategoryFieldChanges;
+}
+
+export interface NoteCategoriesDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
+/** NOTE-002: what KIND this note is, or `null` to leave it uncategorized. At most one — setting a second REPLACES the first. */
+export interface NotesSetCategoryRequest {
+  profileId: string;
+  noteId: string;
+  categoryId: string | null;
 }
 
 export interface NotesSetFolderRequest {
@@ -4323,6 +4386,7 @@ export type ImportRecordType =
   | "notification"
   | "note-folder"
   | "note-tag"
+  | "note-category"
   | "note"
   | "note-tag-link"
   | "note-attachment"
@@ -5753,6 +5817,23 @@ export interface NexusApi {
   listNoteTagLinks(profileId: string): Promise<NoteTagLink[]>;
   attachNoteTag(profileId: string, noteId: string, tagId: string): Promise<void>;
   detachNoteTag(profileId: string, noteId: string, tagId: string): Promise<void>;
+  /** NOTE-002: this profile's categories, name-ordered; the renderer re-sorts with `Intl.Collator(["sr-Latn","sr"])`. */
+  listNoteCategories(profileId: string): Promise<NoteCategory[]>;
+  /** Rejects a name this profile already uses — unlike a tag, a category is never get-or-created. */
+  createNoteCategory(
+    profileId: string,
+    input: { name: string; color: NoteFolderColor | null },
+  ): Promise<NoteCategory>;
+  /** A partial patch: an omitted key is untouched, an explicit `color: null` clears the swatch. */
+  updateNoteCategory(
+    profileId: string,
+    id: string,
+    fields: NoteCategoryFieldChanges,
+  ): Promise<void>;
+  /** Deletes a category; its notes are NOT deleted — they simply become uncategorized. */
+  deleteNoteCategory(profileId: string, id: string): Promise<void>;
+  /** NOTE-002: what KIND this note is; `null` clears it. Exactly one, so setting a second replaces the first. */
+  setNoteCategory(profileId: string, noteId: string, categoryId: string | null): Promise<void>;
   setNoteFolder(profileId: string, noteId: string, folderId: string | null): Promise<void>;
   setNotePinned(profileId: string, noteId: string, pinned: boolean): Promise<void>;
   setNoteLinks(profileId: string, noteId: string, targetIds: string[]): Promise<void>;

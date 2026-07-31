@@ -45,6 +45,8 @@ export {
   FocusValidationError,
   NoteAttachmentNotFoundError,
   NoteAttachmentValidationError,
+  NoteCategoryNotFoundError,
+  NoteCategoryValidationError,
   NoteFolderNotFoundError,
   NoteFolderValidationError,
   NoteNotFoundError,
@@ -358,6 +360,7 @@ export type { NoteCompactionRead, NoteDoc, NoteMeta, NoteVersionMeta } from "./n
 
 export { NoteOrgStore, NOTE_FOLDER_COLORS, NOTE_FOLDER_VIEWS } from "./notes/noteOrgStore.js";
 export type {
+  NoteCategory,
   NoteFolder,
   NoteFolderColor,
   NoteFolderView,

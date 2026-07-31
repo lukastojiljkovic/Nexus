@@ -386,6 +386,16 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.noteTagsAttach, { profileId, noteId, tagId }),
   detachNoteTag: (profileId, noteId, tagId) =>
     ipcRenderer.invoke(IpcChannel.noteTagsDetach, { profileId, noteId, tagId }),
+  listNoteCategories: (profileId) =>
+    ipcRenderer.invoke(IpcChannel.noteCategoriesList, { profileId }),
+  createNoteCategory: (profileId, input) =>
+    ipcRenderer.invoke(IpcChannel.noteCategoriesCreate, { profileId, input }),
+  updateNoteCategory: (profileId, id, fields) =>
+    ipcRenderer.invoke(IpcChannel.noteCategoriesUpdate, { profileId, id, fields }),
+  deleteNoteCategory: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.noteCategoriesDelete, { profileId, id }),
+  setNoteCategory: (profileId, noteId, categoryId) =>
+    ipcRenderer.invoke(IpcChannel.notesSetCategory, { profileId, noteId, categoryId }),
   setNoteFolder: (profileId, noteId, folderId) =>
     ipcRenderer.invoke(IpcChannel.notesSetFolder, { profileId, noteId, folderId }),
   setNotePinned: (profileId, noteId, pinned) =>

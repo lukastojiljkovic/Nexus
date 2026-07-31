@@ -1,6 +1,8 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { isBuiltinNoteTemplateId } from "@nexus/core";
 import {
+  NoteCategoryNotFoundError,
+  NoteCategoryValidationError,
   NoteFolderNotFoundError,
   NoteFolderValidationError,
   NoteNotFoundError,
@@ -84,6 +86,23 @@ export interface NoteTagLink {
   tagId: string;
 }
 
+/**
+ * A note category as the store returns it (NOTE-002, migration 049) — a
+ * per-profile row, unique by name, FLAT: it has no `parentId`, and never will.
+ *
+ * `color` is the SAME closed domain a folder's is (`NoteFolderColor`), reused
+ * rather than respelled: the app has exactly one swatch palette, and a second
+ * eight-value list of the same eight values is a list that can drift.
+ */
+export interface NoteCategory {
+  id: string;
+  profileId: string;
+  name: string;
+  color: NoteFolderColor | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface NoteFolderRow {
   id: string;
   profile_id: string;
@@ -109,13 +128,30 @@ interface NoteTagLinkRow {
   tag_id: string;
 }
 
+interface NoteCategoryRow {
+  id: string;
+  profile_id: string;
+  name: string;
+  color: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 const FOLDER_COLUMNS =
   "id, profile_id, parent_id, name, color, default_template_id, is_capture_default, " +
   "default_view, created_at, updated_at";
 const TAG_COLUMNS = "id, profile_id, name, created_at";
+const CATEGORY_COLUMNS = "id, profile_id, name, color, created_at, updated_at";
 
 const MAX_FOLDER_NAME_LENGTH = 100;
 const MAX_TAG_NAME_LENGTH = 50;
+/**
+ * A category names a KIND — „sastanak", „dnevnik", „recept" — so it is a short
+ * word, and it is drawn as a chip on a note row rather than as a heading. The
+ * tag cap, not the folder's 100: the two rows that carry a unique per-profile
+ * name are the two that are chips.
+ */
+const MAX_CATEGORY_NAME_LENGTH = 50;
 
 /** Accepts a full ISO-8601 date-time (the `now` every mutating method takes) — mirrors noteStore.ts. */
 const ISO_8601_DATETIME =
@@ -123,13 +159,34 @@ const ISO_8601_DATETIME =
 
 /**
  * Persistence for the NOTE module's organization layer (ADR-012 / NOTE-002):
- * nested folders, per-profile tags, and the note-tag many-to-many join. Mirrors
+ * nested folders, per-profile tags, the note-tag many-to-many join, and flat
+ * per-profile categories. Mirrors
  * `NoteStore`: construct one per profile, reuse it, over prepared, parameterized
  * statements (SEC-API-03), every value bound, never interpolated. Inputs are
  * revalidated here because the renderer is untrusted (SEC-EL-02), and every
  * statement is scoped by `profile_id` — child rows (a note's tag links, a
  * folder's children) are reached through their already-scoped parent, so one
  * profile's organization is invisible to a store scoped to another.
+ *
+ * **The three axes, and why they are three.** NOTE-002 names folders, tags and
+ * a category, and they only earn their keep while they stay distinguishable:
+ *
+ * - a **folder** is WHERE a note lives — exactly one per note, hierarchical, a
+ *   place. `note_folders` + `notes.folder_id`.
+ * - a **tag** is WHAT A NOTE IS ABOUT — many per note, flat, a subject.
+ *   `note_tags` + the `note_tag_links` join.
+ * - a **category** is WHAT KIND OF THING the note is — exactly one per note,
+ *   optional, flat: sastanak, ideja, dnevnik, recept. It is the note's TYPE,
+ *   not its topic and not its location. `note_categories` + `notes.category_id`.
+ *
+ * That last definition is written down here because the pressure is always to
+ * "simplify" a category into a tag, and the answer is that a note has exactly
+ * one kind and arbitrarily many subjects — a cardinality difference, not a
+ * naming one. The pressure in the other direction is to give categories a
+ * `parent_id`, and the answer is that a hierarchy of places is a folder tree
+ * and the module already has one. Neither table is the other one spelled
+ * differently, and the moment either becomes so, one of them should be deleted
+ * rather than kept as a synonym.
  *
  * `deleteFolder` promotes its children (subfolders and notes) to its own parent
  * before removing the row, rather than relying on the schema's CASCADE — the
@@ -146,6 +203,13 @@ const ISO_8601_DATETIME =
  * (NOTE-002, migration 039) narrows to a closed set the schema also CHECKs.
  * None belongs in `updateFolder`'s partial-patch shape, which exists for the two
  * fields a rename/recolour form edits together.
+ *
+ * The category methods take `updateCategory`'s partial-patch shape from the
+ * folder side and their name rule from the tag side, which is exactly where each
+ * belongs: a category is renamed and recoloured by the same organizer row a
+ * folder is, and its name is unique per profile the way a tag's is. The one
+ * place it copies NEITHER sibling is `createCategory`, which REFUSES a taken
+ * name rather than getting-or-creating like `createTag` — see its own comment.
  */
 export class NoteOrgStore {
   private readonly insertFolder: Database.Statement;
@@ -170,6 +234,13 @@ export class NoteOrgStore {
   private readonly selectTagNameCollision: Database.Statement;
   private readonly updateTagName: Database.Statement;
   private readonly deleteTagRow: Database.Statement;
+
+  private readonly insertCategory: Database.Statement;
+  private readonly selectCategories: Database.Statement;
+  private readonly selectCategoryById: Database.Statement;
+  private readonly selectCategoryNameCollision: Database.Statement;
+  private readonly updateCategoryFields: Database.Statement;
+  private readonly deleteCategoryRow: Database.Statement;
 
   private readonly selectActiveNoteById: Database.Statement;
   private readonly selectTagLinks: Database.Statement;
@@ -260,6 +331,32 @@ export class NoteOrgStore {
       `UPDATE note_tags SET name = ? WHERE id = ? AND profile_id = ?`,
     );
     this.deleteTagRow = db.prepare(`DELETE FROM note_tags WHERE id = ? AND profile_id = ?`);
+
+    this.insertCategory = db.prepare(
+      `INSERT INTO note_categories (id, profile_id, name, color, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    this.selectCategories = db.prepare(
+      `SELECT ${CATEGORY_COLUMNS} FROM note_categories WHERE profile_id = ? ORDER BY name`,
+    );
+    this.selectCategoryById = db.prepare(
+      `SELECT ${CATEGORY_COLUMNS} FROM note_categories WHERE id = ? AND profile_id = ?`,
+    );
+    // `id != ?` so a rename to the row's OWN name is not a collision. A create
+    // passes an id no row can hold, which is what lets both paths share it.
+    this.selectCategoryNameCollision = db.prepare(
+      `SELECT id FROM note_categories WHERE profile_id = ? AND name = ? AND id != ?`,
+    );
+    this.updateCategoryFields = db.prepare(
+      `UPDATE note_categories SET name = ?, color = ?, updated_at = ?
+       WHERE id = ? AND profile_id = ?`,
+    );
+    // Migration 049's `ON DELETE SET NULL` uncategorizes this category's notes;
+    // nothing here has to promote them, because a flat table has nowhere to
+    // promote to (see the migration's own comment).
+    this.deleteCategoryRow = db.prepare(
+      `DELETE FROM note_categories WHERE id = ? AND profile_id = ?`,
+    );
 
     this.selectActiveNoteById = db.prepare(
       `SELECT id FROM notes WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
@@ -509,6 +606,73 @@ export class NoteOrgStore {
   }
 
   // ---------------------------------------------------------------------
+  // Categories (NOTE-002 / migration 049)
+  // ---------------------------------------------------------------------
+
+  /** This profile's categories, alphabetical by name — the whole read there is (the table is flat). */
+  listCategories(): NoteCategory[] {
+    const rows = this.selectCategories.all(this.profileId) as NoteCategoryRow[];
+    return rows.map(toNoteCategory);
+  }
+
+  /**
+   * Creates a category, trimming its name and validating its colour against the
+   * folder palette.
+   *
+   * REFUSES a name this profile already holds, rather than returning the
+   * existing row the way `createTag` does — the two paths are get-or-create for
+   * a reason that does not apply here. `createTag` backs a free-text tag input
+   * where re-typing an existing name obviously means "that one"; a category is
+   * only ever made from the organizer's explicit „Nova kategorija" form, where
+   * silently handing back somebody else's row would show the user no new row and
+   * no error, which reads as a bug. Refusing also matches `renameTag`, which has
+   * always rejected a collision — the same rule, at the only other place the
+   * name is chosen.
+   */
+  createCategory(input: { name: string; color: NoteFolderColor | null }, now: string): NoteCategory {
+    const validNow = validateDateTime(now, "now", NoteCategoryValidationError);
+    const name = validateCategoryName(input.name);
+    const color = validateCategoryColor(input.color);
+    this.requireCategoryNameFree(name, "");
+
+    const id = uuidv7();
+    this.insertCategory.run(id, this.profileId, name, color, validNow, validNow);
+    return { id, profileId: this.profileId, name, color, createdAt: validNow, updatedAt: validNow };
+  }
+
+  /**
+   * Applies a partial patch to a category's `name`/`color` — `updateFolder`'s
+   * shape, for the reason that method's own comment gives: a rename and a
+   * recolour are what one organizer form edits together. An omitted key is left
+   * untouched; an explicit `color: null` clears the colour, so presence is
+   * checked with `in`, never `??`.
+   */
+  updateCategory(
+    id: string,
+    fields: { name?: string; color?: NoteFolderColor | null },
+    now: string,
+  ): void {
+    const validNow = validateDateTime(now, "now", NoteCategoryValidationError);
+    const existing = this.requireCategory(id);
+
+    const newName = "name" in fields ? validateCategoryName(fields.name) : existing.name;
+    const newColor = "color" in fields ? validateCategoryColor(fields.color) : existing.color;
+    this.requireCategoryNameFree(newName, id);
+
+    this.updateCategoryFields.run(newName, newColor, validNow, id, this.profileId);
+  }
+
+  /**
+   * Deletes a category. Its notes are NOT deleted — migration 049's `ON DELETE
+   * SET NULL` leaves each of them standing and uncategorized, which is the
+   * whole of what "this kind no longer exists" should mean.
+   */
+  deleteCategory(id: string): void {
+    this.requireCategory(id);
+    this.deleteCategoryRow.run(id, this.profileId);
+  }
+
+  // ---------------------------------------------------------------------
   // Tag links
   // ---------------------------------------------------------------------
 
@@ -550,6 +714,30 @@ export class NoteOrgStore {
       throw new NoteTagNotFoundError(`No tag "${id}" in this profile.`);
     }
     return row;
+  }
+
+  /** Reads a category in this profile or throws — the gate every category reference goes through. */
+  private requireCategory(id: string): NoteCategoryRow {
+    const row = this.selectCategoryById.get(id, this.profileId) as NoteCategoryRow | undefined;
+    if (!row) {
+      throw new NoteCategoryNotFoundError(`No category "${id}" in this profile.`);
+    }
+    return row;
+  }
+
+  /**
+   * Refuses a name another category of this profile already holds — migration
+   * 049's `UNIQUE (profile_id, name)` restated so a collision surfaces as a
+   * named domain error instead of a raw SQLite constraint failure. `exceptId`
+   * is the row being renamed (`""` on a create, an id no row can hold), which
+   * is what makes renaming a category to its own current name a no-op.
+   */
+  private requireCategoryNameFree(name: string, exceptId: string): void {
+    if (this.selectCategoryNameCollision.get(this.profileId, name, exceptId)) {
+      throw new NoteCategoryValidationError(
+        `A category named "${name}" already exists in this profile.`,
+      );
+    }
   }
 
   /** Confirms an active note exists in this profile or throws. */
@@ -611,6 +799,39 @@ function validateFolderColor(value: NoteFolderColor | null): NoteFolderColor | n
 function validateFolderView(value: NoteFolderView): NoteFolderView {
   if (!(NOTE_FOLDER_VIEWS as readonly string[]).includes(value)) {
     throw new NoteFolderValidationError(`"${String(value)}" is not a known folder view.`);
+  }
+  return value;
+}
+
+function toNoteCategory(row: NoteCategoryRow): NoteCategory {
+  return {
+    id: row.id,
+    profileId: row.profile_id,
+    name: row.name,
+    color: row.color as NoteFolderColor | null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function validateCategoryName(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new NoteCategoryValidationError("A category name must not be empty.");
+  }
+  if (trimmed.length > MAX_CATEGORY_NAME_LENGTH) {
+    throw new NoteCategoryValidationError(
+      `A category name must not exceed ${MAX_CATEGORY_NAME_LENGTH} characters after trimming.`,
+    );
+  }
+  return trimmed;
+}
+
+/** The folder palette, checked against the folder's own list — one palette, one source (see `NoteCategory.color`). */
+function validateCategoryColor(value: NoteFolderColor | null): NoteFolderColor | null {
+  if (value === null) return null;
+  if (!(NOTE_FOLDER_COLORS as readonly string[]).includes(value)) {
+    throw new NoteCategoryValidationError(`"${value}" is not a known category colour.`);
   }
   return value;
 }

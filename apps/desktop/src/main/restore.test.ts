@@ -599,12 +599,16 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   // the interchange, and "absent" restores as the "list" every other folder has.
   orgStore.setFolderView(folder.id, "cards", t0);
   const tag = orgStore.createTag(`${label} tag`, t0);
+  // NOTE-002's third axis, with a swatch, so the round trip below would fail if
+  // either the category row or the note's `categoryId` were dropped on the way.
+  const category = orgStore.createCategory({ name: `${label} kategorija`, color: "bordo" }, t0);
 
   // A bare, never-edited note — purely so `note` below has a real id to link to.
   const linkedNote = noteStore.create(t0);
 
   const note = noteStore.create(t0);
   noteStore.setFolder(note.id, folder.id);
+  noteStore.setCategory(note.id, category.id);
   const update = noteSnapshotWithLink(linkedNote.id, `${label} note body`, "Linked note");
   noteStore.appendUpdate(note.id, update, `${label} note`, "2026-01-01T00:01:00.000Z");
   orgStore.attachTag(note.id, tag.id);
@@ -696,6 +700,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     })),
     noteFolders: orgStore.listFolders(),
     noteTags: orgStore.listTags(),
+    noteCategories: orgStore.listCategories(),
     noteTagLinks: orgStore.listTagLinks(),
     noteTemplates: templateStore.list(),
     noteAttachments: attachmentStore.list(note.id),
@@ -898,6 +903,15 @@ describe("restore", () => {
       expect(new NoteOrgStore(dbB.raw, profileB).listFolders()).toEqual(
         fixtureA.data.noteFolders.map((row) => ({ ...row, profileId: profileB })),
       );
+      // NOTE-002 / 1.27.0: the categories, and the note's own `categoryId`
+      // beside them — the row is worth nothing if the notes forgot it.
+      expect(new NoteOrgStore(dbB.raw, profileB).listCategories()).toEqual(
+        fixtureA.data.noteCategories.map((row) => ({ ...row, profileId: profileB })),
+      );
+      expect(
+        new NoteStore(dbB.raw, profileB).list().find((note) => note.id === fixtureA.ids.note.id)
+          ?.categoryId,
+      ).toBe(fixtureA.data.noteCategories[0]?.id);
       // The lists and the section a task was filed in travelled with it.
       const listsB = new TaskListStore(dbB.raw, profileB);
       expect(listsB.listActive()).toEqual(
