@@ -4185,6 +4185,13 @@ button.cal__grid-event--dragging {
 .study__plan-health--passed {
   color: var(--nx-text-muted);
 }
+/* How many topics the user cut out of this plan: a standing fact under the
+   health sentence, muted like the rest of the card's meta. */
+.study__plan-scope {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
 /* Exam-week rows = the house picked recipe (accent border + soft background),
    as an outline so a row lighting up never moves the rows under it. */
 .study__block-row--exam-week {
@@ -4300,6 +4307,11 @@ button.cal__grid-event--dragging {
 .study__topic-derived {
   font-size: var(--nx-font-size-caption);
   color: var(--nx-text-muted);
+  white-space: nowrap;
+}
+/* The stale-link chip sits inline with the deck picker it explains; its two
+   words never wrap the row. */
+.study__topic-stale-deck {
   white-space: nowrap;
 }
 .study__topic-actions {

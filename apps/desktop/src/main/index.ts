@@ -5864,6 +5864,28 @@ function registerIpc(): void {
     return effectiveTopics(profileId, doomed.examId);
   });
 
+  // The ONLY wire that ever CLEARS `cut` (ADR-063), the mirror of
+  // `plans:accept-scope-cut`. Structural validation only here — that the id is
+  // an active topic of THIS profile and that it is actually cut are
+  // `PlanStore.restoreScopeCut`'s own named refusals, so a stale click fails
+  // loudly instead of writing nothing. The plan's re-sync rides on the
+  // renderer's usual post-topic-write refresh, which is also what surfaces the
+  // wider scope's overflow.
+  ipcMain.handle(IpcChannel.topicsRestoreToPlan, (event, payload): EffectiveExamTopic[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const restored = topicStore(profileId)
+      .listAll()
+      .find((topic) => topic.id === id);
+    if (!restored) {
+      throw new Error(`No active exam topic "${id}" in this profile.`);
+    }
+    planStore(profileId).restoreScopeCut([id], new Date().toISOString());
+    return effectiveTopics(profileId, restored.examId);
+  });
+
   // SEC-EL-02: `startedAt`/`endedAt`/`now` are always stamped here from the
   // main process's own clock — the renderer never supplies a timer boundary.
   // The running timer itself lives only in `runningFocusSessions` (see its

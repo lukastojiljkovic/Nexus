@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   blockKindChipLabel,
+  cutTopicsLine,
   isExamWeekDay,
   parseWeekdayMinutes,
   planHealthLine,
@@ -95,6 +96,32 @@ describe("planHealthLine", () => {
   it("spells a passed exam's unabsorbed backlog out", () => {
     expect(planHealthLine({ overflowMinutes: 0, examPassedBacklogMinutes: 90 })).toBe(
       "Ispit je prošao — 90 min učenja je ostalo propušteno.",
+    );
+  });
+});
+
+describe("cutTopicsLine", () => {
+  it("says nothing at full scope (no topics, or none cut)", () => {
+    expect(cutTopicsLine([])).toBeNull();
+    expect(cutTopicsLine([{ cut: false }, { cut: false }])).toBeNull();
+  });
+
+  it("counts only the cut ones, in all three Serbian numeral forms", () => {
+    expect(cutTopicsLine([{ cut: true }, { cut: false }])).toBe("1 tema je van plana.");
+    expect(cutTopicsLine([{ cut: true }, { cut: true }, { cut: false }])).toBe(
+      "2 teme su van plana.",
+    );
+    expect(cutTopicsLine(Array.from({ length: 5 }, () => ({ cut: true })))).toBe(
+      "5 tema je van plana.",
+    );
+  });
+
+  it("keeps the teens on the many form", () => {
+    expect(cutTopicsLine(Array.from({ length: 12 }, () => ({ cut: true })))).toBe(
+      "12 tema je van plana.",
+    );
+    expect(cutTopicsLine(Array.from({ length: 21 }, () => ({ cut: true })))).toBe(
+      "21 tema je van plana.",
     );
   });
 });

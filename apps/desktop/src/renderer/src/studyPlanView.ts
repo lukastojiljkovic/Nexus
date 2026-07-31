@@ -1,6 +1,6 @@
 import type { ExamTopic, PlanHealth, StudyBlock, StudyBlockKind } from "../../shared/ipc.js";
 import { shiftDayKey } from "./examDates.js";
-import { strings } from "./strings.js";
+import { countUnit, strings } from "./strings.js";
 
 /**
  * Pure presentation arithmetic for the topic-aware study planner (ADR-063,
@@ -93,6 +93,21 @@ export function planHealthLine(
     return `${s.healthExamPassedPrefix} ${health.examPassedBacklogMinutes} ${s.healthExamPassedSuffix}`;
   }
   return null;
+}
+
+/**
+ * The plan card's scope line beside the health sentence (STUDY-004): how many
+ * of the exam's topics the user has accepted out of the plan, or null at full
+ * scope — a plan that cut nothing says nothing. Counted from the `cut` flags
+ * the page already holds; the store is the only thing that sets them, and
+ * „Vrati u plan" on a row is what makes this number go back down.
+ */
+export function cutTopicsLine(topics: readonly Pick<ExamTopic, "cut">[]): string | null {
+  const count = topics.reduce((acc, topic) => (topic.cut ? acc + 1 : acc), 0);
+  if (count === 0) return null;
+  const s = strings.study;
+  const unit = countUnit(count, s.scopeCountUnitOne, s.scopeCountUnitFew, s.scopeCountUnitMany);
+  return `${count} ${unit}`;
 }
 
 /**

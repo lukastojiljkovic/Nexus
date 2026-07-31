@@ -1143,4 +1143,128 @@ describe("PlanStore", () => {
       expect(() => plans.acceptScopeCut([foreign.id], T0)).toThrow(ExamTopicNotFoundError);
     });
   });
+
+  describe("restoreScopeCut (the un-cut path)", () => {
+    it("clears cut and the next sync generates over the restored scope again", () => {
+      const { plans, topics, exams, subjectId } = fixture();
+      const examId = exams.create({ subjectId, examType: "pismeni", examDate: "2026-07-14" }).id;
+      const t = topics.create({ examId, name: "T", confidence: 0 }, T0);
+      const created = plans.createPlan(
+        { examId, dailyMinutes: 30, startDate: "2026-07-08", examWeekBoost: false },
+        T0,
+        TODAY,
+      );
+
+      plans.acceptScopeCut([t.id], T0);
+      plans.sync(created.id, T0, TODAY);
+      expect(
+        plans.listBlocks(created.id).every((block) => block.topicId === null),
+      ).toBe(true);
+
+      plans.restoreScopeCut([t.id], "2026-07-09T10:00:00.000Z");
+      expect(topics.listByExam(examId)[0]?.cut).toBe(false);
+      expect(topics.listByExam(examId)[0]?.updatedAt).toBe("2026-07-09T10:00:00.000Z");
+
+      plans.sync(created.id, T0, TODAY);
+      const future = plans.listBlocks(created.id).filter((block) => block.status === "planned");
+      expect(future.length).toBeGreaterThan(0);
+      expect(future.every((block) => block.topicId === t.id)).toBe(true);
+    });
+
+    it("restores several topics in one transaction", () => {
+      const { plans, topics, examId } = fixture();
+      const a = topics.create({ examId, name: "A" }, T0);
+      const b = topics.create({ examId, name: "B" }, T0);
+      plans.acceptScopeCut([a.id, b.id], T0);
+
+      plans.restoreScopeCut([a.id, b.id], T0);
+      expect(topics.listByExam(examId).map((topic) => topic.cut)).toEqual([false, false]);
+    });
+
+    it("refuses an unknown or cross-profile topic id, leaving the whole restore unwritten", () => {
+      const { plans, topics, examId } = fixture();
+      const other = fixture();
+      const mine = topics.create({ examId, name: "Moja" }, T0);
+      const foreign = other.topics.create({ examId: other.examId, name: "X" }, T0);
+      plans.acceptScopeCut([mine.id], T0);
+      other.plans.acceptScopeCut([foreign.id], T0);
+
+      expect(() => plans.restoreScopeCut(["missing"], T0)).toThrow(ExamTopicNotFoundError);
+      expect(() => plans.restoreScopeCut([foreign.id], T0)).toThrow(ExamTopicNotFoundError);
+      // The valid id beside the refused one stays cut — one transaction.
+      expect(() => plans.restoreScopeCut([mine.id, "missing"], T0)).toThrow(
+        ExamTopicNotFoundError,
+      );
+      expect(topics.listByExam(examId)[0]?.cut).toBe(true);
+    });
+
+    it("refuses a topic that is not cut, and an exam with no cut topics at all", () => {
+      const { plans, topics, examId } = fixture();
+      const a = topics.create({ examId, name: "A" }, T0);
+      const b = topics.create({ examId, name: "B" }, T0);
+
+      // Nothing on this exam was ever cut.
+      expect(() => plans.restoreScopeCut([a.id], T0)).toThrow(PlanValidationError);
+      expect(() => plans.restoreScopeCut([a.id, b.id], T0)).toThrow(PlanValidationError);
+
+      // And an already-restored topic cannot be restored twice.
+      plans.acceptScopeCut([a.id], T0);
+      plans.restoreScopeCut([a.id], T0);
+      expect(() => plans.restoreScopeCut([a.id], T0)).toThrow(PlanValidationError);
+    });
+
+    it("refuses an empty restore and a malformed now", () => {
+      const { plans, topics, examId } = fixture();
+      const a = topics.create({ examId, name: "A" }, T0);
+      plans.acceptScopeCut([a.id], T0);
+      expect(() => plans.restoreScopeCut([], T0)).toThrow(PlanValidationError);
+      expect(() => plans.restoreScopeCut([a.id], "not-a-date")).toThrow(PlanValidationError);
+      expect(topics.listByExam(examId)[0]?.cut).toBe(true);
+    });
+
+    it("brings the cut topic's load back: over capacity, cut, restored, over capacity again", () => {
+      const { plans, topics, exams, subjectId } = fixture();
+      const examId = exams.create({ subjectId, examType: "pismeni", examDate: "2026-07-14" }).id;
+      topics.create({ examId, name: "Gore", confidence: 0 }, T0);
+      const bottom = topics.create({ examId, name: "Dole", confidence: 0 }, T0);
+      const created = plans.createPlan(
+        { examId, dailyMinutes: 30, startDate: "2026-07-08", examWeekBoost: false },
+        T0,
+        TODAY,
+      );
+
+      // Two missed days (60 min) against four remaining days already at capacity.
+      const over = plans.sync(created.id, "2026-07-10T10:00:00.000Z", "2026-07-10");
+      expect(over.overflowMinutes).toBe(60);
+      const proposal = plans.scopeCutProposal(created.id, "2026-07-10");
+      expect(proposal.topicIds[0]).toBe(bottom.id); // the walk starts at the bottom rank
+      expect(proposal.loadMinutes).toBeGreaterThan(proposal.capacityMinutes);
+
+      plans.acceptScopeCut([bottom.id], "2026-07-10T10:00:00.000Z");
+      const cut = plans.sync(created.id, "2026-07-10T10:00:00.000Z", "2026-07-10");
+      const cutFuture = plans
+        .listBlocks(created.id)
+        .filter((block) => block.status === "planned" && block.blockDate >= "2026-07-10");
+      expect(cutFuture.some((block) => block.topicId === bottom.id)).toBe(false);
+      // With the bottom topic out, it is no longer a candidate to cut.
+      expect(plans.scopeCutProposal(created.id, "2026-07-10").topicIds).not.toContain(bottom.id);
+      // The narrower scope does NOT absorb the missed backlog: the survivors'
+      // budgets simply grow to fill the same capacity, so the honest overflow
+      // still reports every missed minute (ADR-063 invariant 5).
+      expect(cut.overflowMinutes).toBe(60);
+
+      plans.restoreScopeCut([bottom.id], "2026-07-10T10:00:00.000Z");
+      const back = plans.sync(created.id, "2026-07-10T10:00:00.000Z", "2026-07-10");
+      const restoredFuture = plans
+        .listBlocks(created.id)
+        .filter((block) => block.status === "planned" && block.blockDate >= "2026-07-10");
+      expect(restoredFuture.some((block) => block.topicId === bottom.id)).toBe(true);
+      // The redistribution consequence, reported rather than hidden: the plan is
+      // over capacity again and the proposal names the restored topic once more.
+      expect(back.overflowMinutes).toBe(60);
+      const again = plans.scopeCutProposal(created.id, "2026-07-10");
+      expect(again.topicIds[0]).toBe(bottom.id);
+      expect(again.loadMinutes).toBeGreaterThan(again.capacityMinutes);
+    });
+  });
 });

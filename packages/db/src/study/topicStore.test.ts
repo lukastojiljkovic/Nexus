@@ -382,4 +382,63 @@ describe("TopicStore", () => {
       expect(() => topics.listEffectiveByExam("missing", TODAY)).toThrow(ExamNotFoundError);
     });
   });
+
+  describe("deck liveness (the stale-link flag behind Nedostupan spil)", () => {
+    it("marks a link whose deck was deleted afterwards, leaves the derivation alone, and clears with the link", () => {
+      const { topics, decks, examId, deckId, profileId } = fixture();
+      insertCard(profileId, deckId, 30);
+      insertCard(profileId, deckId, 5); // derived confidence: 80
+
+      const topic = topics.create({ examId, name: "Iz špila", deckId }, T0);
+      const linked = topics.listEffectiveByExam(examId, TODAY)[0]!;
+      expect(linked.deckMissing).toBe(false);
+      expect(linked.effectiveConfidence).toBe(80);
+
+      decks.softDelete(deckId);
+
+      const stale = topics.listEffectiveByExam(examId, TODAY)[0]!;
+      expect(stale.deckId).toBe(deckId); // the stored link is untouched
+      expect(stale.deckMissing).toBe(true);
+      // The derivation is unchanged in behaviour — only the telling is new.
+      expect(stale.effectiveConfidence).toBe(80);
+
+      topics.setDeck(topic.id, null, T0);
+      const cleared = topics.listEffectiveByExam(examId, TODAY)[0]!;
+      expect(cleared.deckMissing).toBe(false);
+      expect(cleared.effectiveConfidence).toBeNull();
+    });
+
+    it("never marks a topic with no link at all", () => {
+      const { topics, examId } = fixture();
+      topics.create({ examId, name: "Bez špila" }, T0);
+      expect(topics.listEffectiveByExam(examId, TODAY)[0]?.deckMissing).toBe(false);
+    });
+
+    it("resolves the whole listed set at once: two topics on the dead deck, one on a live one", () => {
+      const { topics, decks, examId, deckId, subjectId } = fixture();
+      const liveDeckId = decks.create({ subjectId, name: "Glava 2" }).id;
+      topics.create({ examId, name: "A", deckId }, T0);
+      topics.create({ examId, name: "B", deckId }, T0);
+      topics.create({ examId, name: "C", deckId: liveDeckId }, T0);
+
+      decks.softDelete(deckId);
+
+      expect(topics.listEffectiveByExam(examId, TODAY).map((t) => [t.name, t.deckMissing])).toEqual([
+        ["A", true],
+        ["B", true],
+        ["C", false],
+      ]);
+    });
+
+    it("marks a link the deck's own profile no longer backs, and unmarks it when the deck comes back", () => {
+      const { topics, decks, examId, deckId } = fixture();
+      topics.create({ examId, name: "Iz špila", deckId }, T0);
+
+      decks.softDelete(deckId);
+      expect(topics.listEffectiveByExam(examId, TODAY)[0]?.deckMissing).toBe(true);
+
+      decks.restore(deckId);
+      expect(topics.listEffectiveByExam(examId, TODAY)[0]?.deckMissing).toBe(false);
+    });
+  });
 });

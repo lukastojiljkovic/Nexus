@@ -189,6 +189,13 @@ export const IpcChannel = {
   topicsSetDeck: "topics:set-deck",
   topicsMove: "topics:move",
   topicsDelete: "topics:delete",
+  // „Vrati u plan": the inverse of `plans:accept-scope-cut` (ADR-063) — the
+  // only wire that ever CLEARS `cut`. It lives here rather than under plans:*
+  // because the affordance is a topic row's, and the answer is the exam's
+  // fresh effective list every other topics:* channel already returns; the
+  // plan re-sync rides on the same refresh the renderer runs after any topic
+  // write.
+  topicsRestoreToPlan: "topics:restore-to-plan",
   focusStart: "focus:start",
   focusStop: "focus:stop",
   focusStatus: "focus:status",
@@ -2444,10 +2451,12 @@ export interface ExamTopic {
   confidence: number | null;
   /** The flashcard deck this topic is drilled from, or null for none. */
   deckId: string | null;
-  /** Set ONLY via `plans:accept-scope-cut` — never by the machine. */
+  /** Set ONLY via `plans:accept-scope-cut`, cleared ONLY via `topics:restore-to-plan` — never by the machine. */
   cut: boolean;
   /** Manual confidence when set, else deck-derived, else null — what the weakness column renders. */
   effectiveConfidence: number | null;
+  /** A `deckId` whose deck is no longer a live deck of this profile — the row draws „Nedostupan špil" instead of going quiet. */
+  deckMissing: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -2570,6 +2579,16 @@ export interface TopicsMoveRequest {
 }
 
 export interface TopicsDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
+/**
+ * Returns one cut topic to the plan (ADR-063) — the ONLY wire that ever clears
+ * `cut`. That the id names an active topic of this profile AND that it is
+ * actually cut are the store's own named refusals (`PlanStore.restoreScopeCut`).
+ */
+export interface TopicsRestoreToPlanRequest {
   profileId: string;
   id: string;
 }
@@ -5570,6 +5589,8 @@ export interface NexusApi {
   ): Promise<ExamTopic[]>;
   /** Soft-deletes a topic (its blocks become undifferentiated); answers with the exam's fresh effective list. */
   deleteExamTopic(profileId: string, id: string): Promise<ExamTopic[]>;
+  /** „Vrati u plan": clears one topic's `cut` — the ONLY path that ever does. Answers with the exam's fresh effective list. */
+  restoreExamTopicToPlan(profileId: string, id: string): Promise<ExamTopic[]>;
   startFocus(profileId: string, subjectId: string): Promise<RunningFocusSession>;
   stopFocus(profileId: string): Promise<FocusSession | null>;
   focusStatus(profileId: string): Promise<RunningFocusSession | null>;

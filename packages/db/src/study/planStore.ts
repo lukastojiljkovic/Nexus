@@ -206,7 +206,9 @@ export class PlanStore {
   private readonly updateBlockPinned: Database.Statement;
   private readonly selectActivePlanIdsWithActiveExam: Database.Statement;
   private readonly selectRemainingMinutesByTopic: Database.Statement;
+  private readonly selectTopicCutState: Database.Statement;
   private readonly markTopicCut: Database.Statement;
+  private readonly markTopicUncut: Database.Statement;
   /** The exam's topic list and effective confidences — one owner (`TopicStore`), composed here. */
   private readonly topics: TopicStore;
 
@@ -314,10 +316,22 @@ export class PlanStore {
           AND (status = 'missed' OR (status = 'planned' AND block_date >= ?))
         GROUP BY topic_id`,
     );
-    // The ONLY statement anywhere that sets `cut` (ADR-063: explicit user
-    // acceptance, never the machine) — `TopicStore` deliberately has no setter.
+    // The `cut` column's TWO writers, both here and both driven by an explicit
+    // user decision (ADR-063: never the machine) — `TopicStore` deliberately
+    // has no setter. `markTopicCut` is the only statement anywhere that sets
+    // it; `markTopicUncut` the only one that clears it, and it reads the
+    // current state first so „not cut" refuses by name rather than as a
+    // zero-row no-op.
+    this.selectTopicCutState = db.prepare(
+      `SELECT cut FROM exam_topics
+       WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
+    );
     this.markTopicCut = db.prepare(
       `UPDATE exam_topics SET cut = 1, updated_at = ?
+       WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
+    );
+    this.markTopicUncut = db.prepare(
+      `UPDATE exam_topics SET cut = 0, updated_at = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
     );
     this.topics = new TopicStore(db, profileId);
@@ -634,6 +648,44 @@ export class PlanStore {
         if (changes === 0) {
           throw new ExamTopicNotFoundError(`No active exam topic "${topicId}" in this profile.`);
         }
+      }
+    })();
+  }
+
+  /**
+   * The inverse of `acceptScopeCut` — „Vrati u plan": clears `cut` on the named
+   * topics, the ONLY path anywhere that ever does. Same shape as its sibling:
+   * one transaction, the same `profile_id` scope on every statement, the same
+   * explicit `now`, and the caller re-syncs afterwards, at which point the
+   * restored topics are generated over again and the plan's health reports
+   * whatever the wider scope now costs (ADR-063 invariant 5 — a restore may
+   * well put the plan back over capacity, and that number is REPORTED, never
+   * smoothed away).
+   *
+   * Every refusal is named, never a silent no-op: an id that is not an active
+   * topic of this profile (`ExamTopicNotFoundError`), an id that is not cut,
+   * and an empty restore — which is what an exam with no cut topics amounts to
+   * — (`PlanValidationError`). A refusal anywhere rolls the whole restore back.
+   */
+  restoreScopeCut(topicIds: readonly string[], now: string): void {
+    const validNow = validateNow(now);
+    if (topicIds.length === 0) {
+      throw new PlanValidationError("A scope-cut restore must name at least one cut topic.");
+    }
+    this.db.transaction((): void => {
+      for (const topicId of topicIds) {
+        const row = this.selectTopicCutState.get(topicId, this.profileId) as
+          | { cut: number }
+          | undefined;
+        if (!row) {
+          throw new ExamTopicNotFoundError(`No active exam topic "${topicId}" in this profile.`);
+        }
+        if (row.cut !== 1) {
+          throw new PlanValidationError(
+            `Exam topic "${topicId}" is not cut — there is nothing to restore.`,
+          );
+        }
+        this.markTopicUncut.run(validNow, topicId, this.profileId);
       }
     })();
   }

@@ -21,7 +21,7 @@ export interface ExamTopicRecord {
   confidence: number | null;
   /** The flashcard deck this topic is drilled from, or null for none. */
   deckId: string | null;
-  /** Set ONLY via `PlanStore.acceptScopeCut` — never by the machine, never by this store's writes. */
+  /** Set ONLY via `PlanStore.acceptScopeCut`, cleared ONLY via `PlanStore.restoreScopeCut` — never by the machine, never by this store's writes. */
   cut: boolean;
   createdAt: string;
   updatedAt: string;
@@ -30,6 +30,14 @@ export interface ExamTopicRecord {
 /** A topic with its EFFECTIVE confidence resolved: manual when set, else deck-derived, else null. */
 export interface EffectiveExamTopic extends ExamTopicRecord {
   effectiveConfidence: number | null;
+  /**
+   * True when `deckId` is set but no longer names an ACTIVE deck of this
+   * profile — the deck was deleted after the link was made (`setDeck` validates
+   * only at set time). The link is left standing exactly as stored; this flag
+   * is how the UI says „Nedostupan špil" instead of letting the confidence
+   * signal go quiet without explanation.
+   */
+  deckMissing: boolean;
 }
 
 /** Fields accepted when creating a topic; the rank is always "the bottom of the exam's list". */
@@ -93,7 +101,8 @@ const MS_PER_DAY = 86_400_000;
  * arithmetic of its own. `cut` has deliberately NO setter here: the only path
  * that ever sets it is `PlanStore.acceptScopeCut`, which is what makes "cut
  * only by explicit user acceptance" a structural fact rather than a
- * convention.
+ * convention (its inverse, `PlanStore.restoreScopeCut`, is the only path that
+ * ever clears it again).
  *
  * This store also OWNS the FSRS-derived weakness read (ADR-063): a topic
  * without a manual confidence but with a linked deck gets one derived from
@@ -114,6 +123,7 @@ export class TopicStore {
   private readonly updateRank: Database.Statement;
   private readonly markDeleted: Database.Statement;
   private readonly promoteBlocksTopicNull: Database.Statement;
+  private readonly selectLiveLinkedDecks: Database.Statement;
   private readonly selectDeckCensus: Database.Statement;
   private readonly selectDeckRecentReviews: Database.Statement;
 
@@ -175,6 +185,20 @@ export class TopicStore {
       `UPDATE study_blocks SET topic_id = NULL, updated_at = ?
        WHERE topic_id = ? AND profile_id = ?`,
     );
+    // Deck LIVENESS for a whole exam's topics in ONE query (ADR-063): the
+    // distinct deck ids the exam's live topics link to that still resolve to an
+    // active deck of this profile. The join carries both scopes, so a foreign
+    // or deleted deck simply produces no row — and the caller marks every
+    // linked topic missing from this set as `deckMissing`. Deliberately batch:
+    // a per-topic existence check would be the N+1 `listEffectiveByExam`
+    // already avoids for the derivation.
+    this.selectLiveLinkedDecks = db.prepare(
+      `SELECT DISTINCT t.deck_id AS deck_id
+         FROM exam_topics t
+         JOIN decks d
+           ON d.id = t.deck_id AND d.profile_id = t.profile_id AND d.deleted_at IS NULL
+        WHERE t.exam_id = ? AND t.profile_id = ? AND t.deleted_at IS NULL AND t.deck_id IS NOT NULL`,
+    );
     // Maturity is a census of the LIVE deck (deleted cards leave it), read
     // through the same threshold `StatsStore` counts maturity by.
     this.selectDeckCensus = db.prepare(
@@ -213,23 +237,32 @@ export class TopicStore {
    * the manual value when set, else the deck-derived one, else null. What
    * `PlanStore` feeds the engine, and what the topic list renders as the
    * weakness column.
+   *
+   * Each row also carries `deckMissing` — a link whose deck has since been
+   * deleted — resolved for the WHOLE listed set by one `selectLiveLinkedDecks`
+   * query, beside the derivation's own per-deck memo. The derivation itself is
+   * untouched by liveness: whatever a stale link still derives, it keeps
+   * deriving; the flag only makes the staleness sayable.
    */
   listEffectiveByExam(examId: string, today: string): EffectiveExamTopic[] {
     const validToday = validateBareDate(today, "today");
+    const topics = this.listByExam(examId);
+    const liveDecks = this.liveLinkedDeckIds(examId);
     const derivedByDeck = new Map<string, number | null>();
-    return this.listByExam(examId).map((topicRecord) => {
+    return topics.map((topicRecord) => {
+      const deckMissing = topicRecord.deckId !== null && !liveDecks.has(topicRecord.deckId);
       if (topicRecord.confidence !== null) {
-        return { ...topicRecord, effectiveConfidence: topicRecord.confidence };
+        return { ...topicRecord, effectiveConfidence: topicRecord.confidence, deckMissing };
       }
       if (topicRecord.deckId === null) {
-        return { ...topicRecord, effectiveConfidence: null };
+        return { ...topicRecord, effectiveConfidence: null, deckMissing };
       }
       let derived = derivedByDeck.get(topicRecord.deckId);
       if (derived === undefined) {
         derived = this.deriveDeckConfidence(topicRecord.deckId, validToday);
         derivedByDeck.set(topicRecord.deckId, derived);
       }
-      return { ...topicRecord, effectiveConfidence: derived };
+      return { ...topicRecord, effectiveConfidence: derived, deckMissing };
     });
   }
 
@@ -369,6 +402,12 @@ export class TopicStore {
       100 * (AGAIN_RATE_WEIGHT * (1 - againRate) + MATURITY_WEIGHT * matureFraction),
     );
     return Math.min(100, Math.max(0, blended));
+  }
+
+  /** The exam's linked deck ids that still resolve to an active deck of this profile — one query for the whole list. */
+  private liveLinkedDeckIds(examId: string): Set<string> {
+    const rows = this.selectLiveLinkedDecks.all(examId, this.profileId) as { deck_id: string }[];
+    return new Set(rows.map((row) => row.deck_id));
   }
 
   /** Reads an active topic in this profile or throws — enforces scope + existence. */

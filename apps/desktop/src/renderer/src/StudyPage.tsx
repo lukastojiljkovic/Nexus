@@ -68,6 +68,7 @@ import { countUnit, dayUnit, strings } from "./strings.js";
 import { STUDY_LOG_WINDOW_DAYS, studyLogExamLabels, studyLogFacts } from "./studyLog.js";
 import {
   blockKindChipLabel,
+  cutTopicsLine,
   isExamWeekDay,
   parseWeekdayMinutes,
   planHealthLine,
@@ -1582,6 +1583,19 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   }
 
   /**
+   * The one „the plan changed" landing: put an exam's fresh EFFECTIVE topic
+   * list in the cache, then re-sync the plans so the regenerated blocks and the
+   * fresh health arrive with it. Every path that can move a topic's weight in
+   * the schedule — the topics editor's writes, the accepted scope cut and its
+   * „Vrati u plan" inverse — goes through here, so there is one code path for
+   * "the plan changed", not two.
+   */
+  async function landTopics(examId: string, next: ExamTopic[]): Promise<void> {
+    setTopicsByExam((previous) => ({ ...previous, [examId]: next }));
+    await refreshPlans();
+  }
+
+  /**
    * Runs one topics:* mutation and lands its answer — the exam's fresh
    * effective list — back in the cache, then re-syncs the plans: the exam's
    * schedule is generated FROM its topics, so every topic write can move
@@ -1591,9 +1605,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   async function mutateTopics(examId: string, action: () => Promise<ExamTopic[]>): Promise<void> {
     setTopicActionFailed(false);
     try {
-      const next = await action();
-      setTopicsByExam((previous) => ({ ...previous, [examId]: next }));
-      await refreshPlans();
+      await landTopics(examId, await action());
     } catch (error) {
       console.error("Nexus: topic action failed:", error);
       setTopicActionFailed(true);
@@ -1645,11 +1657,11 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     try {
       await window.nexus.acceptScopeCut(profileId, planId, proposal.topicIds);
       setScopeCut(null);
-      if (examId !== undefined) {
-        const fresh = await window.nexus.listExamTopics(profileId, examId);
-        setTopicsByExam((previous) => ({ ...previous, [examId]: fresh }));
+      if (examId === undefined) {
+        await refreshPlans();
+      } else {
+        await landTopics(examId, await window.nexus.listExamTopics(profileId, examId));
       }
-      await refreshPlans();
     } catch (error) {
       console.error("Nexus: failed to accept scope cut:", error);
       setScopeCut((current) => (current ? { ...current, failed: true } : current));
@@ -3266,6 +3278,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                 const healthLine = planHealthLine(health);
                 const examTopics = topicsByExam[plan.examId] ?? [];
                 const topicsById = new Map(examTopics.map((topic) => [topic.id, topic]));
+                const scopeLine = cutTopicsLine(examTopics);
                 return (
                   <div key={plan.id} className="study__plan-card">
                     <div className="study__plan-header">
@@ -3325,6 +3338,10 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                         )}
                       </p>
                     )}
+                    {/* How much of the syllabus the user has taken out of this
+                        plan (STUDY-004) — a fact beside the health sentence,
+                        undone one row at a time by „Vrati u plan". */}
+                    {scopeLine !== null && <p className="study__plan-scope">{scopeLine}</p>}
                     <Button
                       size="sm"
                       className="study__plan-toggle"
@@ -3577,12 +3594,15 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                                 }
                               >
                                 <option value="">{strings.study.topics.deckNone}</option>
-                                {topic.deckId !== null &&
-                                  !topicDeckOptions.some((deck) => deck.id === topic.deckId) && (
-                                    <option value={topic.deckId}>
-                                      {strings.study.topics.deckMissing}
-                                    </option>
-                                  )}
+                                {/* The stale link keeps its own option so the
+                                    picker shows what is stored — „Bez špila"
+                                    right beside it is the one click that
+                                    clears it (setDeck(id, null)). */}
+                                {topic.deckMissing && topic.deckId !== null && (
+                                  <option value={topic.deckId}>
+                                    {strings.study.topics.deckMissing}
+                                  </option>
+                                )}
                                 {topicDeckOptions.map((deck) => (
                                   <option key={deck.id} value={deck.id}>
                                     {deck.name}
@@ -3592,18 +3612,35 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                                   </option>
                                 ))}
                               </select>
+                              {/* A link whose deck was deleted after it was
+                                  made: the store says so, the row says so —
+                                  the confidence signal never goes quiet
+                                  unexplained. */}
+                              {topic.deckMissing && (
+                                <Chip
+                                  className="study__topic-stale-deck"
+                                  title={strings.study.topics.deckMissingTitle}
+                                >
+                                  {strings.study.topics.deckMissing}
+                                </Chip>
+                              )}
                               {topic.cut && (
                                 <>
                                   <Chip className="study__topic-cut">
                                     {strings.study.topics.cutChip}
                                   </Chip>
-                                  {/* Honestly disabled: no store path returns a
-                                      cut topic to the plan yet (ADR-063 slice a
-                                      has no un-cut setter). */}
+                                  {/* The inverse of an accepted scope cut —
+                                      the only affordance that clears `cut`,
+                                      landing through the same refresh every
+                                      other topic write runs. */}
                                   <Button
                                     size="sm"
-                                    disabled
-                                    title={strings.study.topics.uncutUnavailableTitle}
+                                    title={strings.study.topics.uncutTitle}
+                                    onClick={() =>
+                                      void mutateTopics(topic.examId, () =>
+                                        window.nexus.restoreExamTopicToPlan(profileId, topic.id),
+                                      )
+                                    }
                                   >
                                     {strings.study.topics.uncut}
                                   </Button>

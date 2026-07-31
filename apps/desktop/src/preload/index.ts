@@ -291,6 +291,8 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.topicsMove, { profileId, id, direction }),
   deleteExamTopic: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.topicsDelete, { profileId, id }),
+  restoreExamTopicToPlan: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.topicsRestoreToPlan, { profileId, id }),
   startFocus: (profileId, subjectId) =>
     ipcRenderer.invoke(IpcChannel.focusStart, { profileId, subjectId }),
   stopFocus: (profileId) => ipcRenderer.invoke(IpcChannel.focusStop, { profileId }),

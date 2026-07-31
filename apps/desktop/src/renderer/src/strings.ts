@@ -2059,6 +2059,14 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     healthExamPassedPrefix: "Ispit je prošao —",
     healthExamPassedSuffix: "min učenja je ostalo propušteno.",
     /**
+     * The plan card's scope line (STUDY-004): how many of the exam's topics the
+     * user has accepted out of the plan. Three Serbian forms after the count —
+     * „1 tema je van plana." / „2 teme su van plana." / „5 tema je van plana."
+     */
+    scopeCountUnitOne: "tema je van plana.",
+    scopeCountUnitFew: "teme su van plana.",
+    scopeCountUnitMany: "tema je van plana.",
+    /**
      * The scope-cut conversation (STUDY-004): a computed proposal the user must
      * explicitly accept — nothing is ever cut by the machine.
      */
@@ -2093,13 +2101,19 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       derivedPrefix: "izvedeno:",
       deckLabel: "Špil teme",
       deckNone: "Bez špila",
-      /** A stored link whose deck is no longer live — shown as itself rather than lying „Bez špila". */
+      /**
+       * A stored link whose deck is no longer live (the store's `deckMissing`)
+       * — one label for both the row's muted chip and the picker's stale
+       * option, so the row says the same thing twice rather than lying „Bez
+       * špila" once.
+       */
       deckMissing: "Nedostupan špil",
+      deckMissingTitle: "Špil ove teme više ne postoji — izaberi drugi ili ukloni vezu.",
       /** Chip on a topic the user accepted out of the plan (STUDY-004). */
       cutChip: "van plana",
-      /** The un-cut affordance is honestly disabled: no store path returns a cut topic to the plan yet. */
+      /** The un-cut action — the only affordance anywhere that returns a cut topic to the plan. */
       uncut: "Vrati u plan",
-      uncutUnavailableTitle: "Vraćanje u plan još ne postoji — tema ostaje van plana.",
+      uncutTitle: "Vrati temu u plan — sledeće planiranje je ponovo obuhvata.",
       actionError: "Radnja nad temom nije uspela. Pokušaj ponovo.",
     },
     /** Per-weekday minutes Pon..Ned (the labels reuse `recurrence.weekdayShort`). */
