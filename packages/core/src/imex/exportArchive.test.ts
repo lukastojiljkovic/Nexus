@@ -24,7 +24,7 @@ function sha256(content: string): string {
 
 function emptyInput(): ExportArchiveInput {
   return {
-    profile: { id: "profile1", name: "Luka", picture: null },
+    profile: { id: "profile1", name: "Luka", kind: "personal", picture: null },
     appVersion: "0.1.0",
     createdAt: "2026-07-11T10:00:00.000Z",
     settings: {
@@ -251,13 +251,22 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.21.0");
+      expect(manifest.schemaVersion).toBe("1.22.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       // `picture: null` is written out loud rather than omitted: the manifest is
       // the archive's own statement of what the profile IS, and "this profile
-      // has no picture" is a fact worth stating (SET-001, `1.18.0`).
-      expect(manifest.profile).toEqual({ id: "profile1", name: "Luka", picture: null });
+      // has no picture" is a fact worth stating (SET-001, `1.18.0`). `kind` is
+      // ALWAYS written on the same reasoning (ADR-058, `1.22.0`) — what kind of
+      // profile an archive is OF is never something a reader should infer.
+      expect(manifest.profile).toEqual({ id: "profile1", name: "Luka", kind: "personal", picture: null });
+
+      const businessInput = emptyInput();
+      businessInput.profile.kind = "business";
+      const businessManifest = JSON.parse(
+        buildExportArchive(businessInput).files.get("manifest.json") ?? "",
+      ) as { profile: { kind: string } };
+      expect(businessManifest.profile.kind).toBe("business");
       // `snoozeDefault` (NTF-009, `1.19.0`) rides here beside the quiet hours,
       // written out loud like every other resolved preference in this object.
       expect(manifest.settings).toEqual({
@@ -309,7 +318,12 @@ describe("buildExportArchive", () => {
         const manifest = JSON.parse(
           buildExportArchive(input).files.get("manifest.json") ?? "",
         ) as Record<string, unknown>;
-        expect(manifest.profile).toEqual({ id: "profile1", name: "Luka", picture: PICTURE });
+        expect(manifest.profile).toEqual({
+          id: "profile1",
+          name: "Luka",
+          kind: "personal",
+          picture: PICTURE,
+        });
       });
 
       it("declares its blob in the manifest inventory and as a binary entry", () => {

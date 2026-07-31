@@ -608,14 +608,32 @@ export class DashboardSetValidationError extends DatabaseError {}
 export class DashboardSetNotFoundError extends DatabaseError {}
 
 /**
- * Thrown when a profile-picture write breaks a rule migration 040's CHECKs
- * cannot express on their own (SET-001): a hash that is not a 64-character
- * lowercase sha256, a mime outside `isInlineImageMime`'s four raster formats, or
- * a non-positive size. The store revalidates for `DashboardSettingsValidationError`'s
- * reason — even though main produces these bytes itself and sniffs its own
- * output, a store is never the place that assumes its caller did.
+ * Thrown when a profile write breaks a rule the schema cannot fully express on
+ * its own: a picture trio outside SET-001's bounds (a hash that is not a
+ * 64-character lowercase sha256, a mime outside `isInlineImageMime`'s four
+ * raster formats, a non-positive size), or — `ProfileStore.create` (ADR-058) —
+ * a kind outside migration 001's CHECK domain, a name over 100 characters
+ * after trimming, or a malformed `now`. The store revalidates for
+ * `DashboardSettingsValidationError`'s reason — even where main produces the
+ * values itself, a store is never the place that assumes its caller did.
  */
 export class ProfileValidationError extends DatabaseError {}
 
-/** Thrown when a profile-picture write names an id no `profiles` row carries. */
+/** Thrown when a profile write names an id no `profiles` row carries. */
 export class ProfileNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when `ProfileStore.delete` targets the account's anchor — the
+ * `kind === "personal"` profile (ADR-058). Business profiles come and go; the
+ * personal profile is the account's identity, so deleting it is refused
+ * outright rather than gated behind any confirmation.
+ */
+export class ProfileAnchorDeleteError extends DatabaseError {}
+
+/**
+ * Thrown when `ProfileStore.delete` would remove the last remaining profile.
+ * A database with zero profiles is a state nothing above it can render or
+ * recover from — every other store is constructed around a profile id — so
+ * the last row is undeletable regardless of its kind.
+ */
+export class ProfileLastDeleteError extends DatabaseError {}

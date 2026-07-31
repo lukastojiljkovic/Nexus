@@ -95,6 +95,35 @@ describe("DashboardWidgetStore.listLayout", () => {
     first.store.add(null, "finance:budzet", "S", NOW);
     expect(widgetIds(second.store)).toEqual(DEFAULT_WIDGET_IDS);
   });
+
+  it("DASH-006: two profiles' widget and set rows never cross", () => {
+    // The per-profile-dashboard pin (ADR-058): a business profile beside a
+    // personal one must see only its own arrangement AND only its own named
+    // boards — both stores are constructed per profile, and every statement
+    // they prepare is scoped by `profile_id`.
+    const personal = storeFor("personal");
+    const business = storeFor("business");
+    const personalSets = new DashboardSetStore(db.raw, personal.profileId);
+    const businessSets = new DashboardSetStore(db.raw, business.profileId);
+
+    personal.store.add(null, "finance:budzet", "S", NOW);
+    const board = businessSets.create("Kancelarija", NOW);
+    business.store.add(board.id, "tasks:predstojece", "M", NOW);
+    businessSets.setActive(board.id, NOW);
+
+    expect(widgetIds(business.store)).toEqual(DEFAULT_WIDGET_IDS);
+    expect(business.store.listLayout(board.id).map((e) => e.widgetId)).toEqual([
+      ...DEFAULT_WIDGET_IDS,
+      "tasks:predstojece",
+    ]);
+    expect(widgetIds(personal.store)).toEqual([...DEFAULT_WIDGET_IDS, "finance:budzet"]);
+    expect(personalSets.list()).toEqual([]);
+    expect(businessSets.list().map((set) => set.name)).toEqual(["Kancelarija"]);
+    expect(personalSets.activeSetId()).toBeNull();
+    expect(businessSets.activeSetId()).toBe(board.id);
+    expect(personal.store.listAll().every((row) => row.profileId === personal.profileId)).toBe(true);
+    expect(business.store.listAll().every((row) => row.profileId === business.profileId)).toBe(true);
+  });
 });
 
 describe("DashboardWidgetStore.listAll", () => {

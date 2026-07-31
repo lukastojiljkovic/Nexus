@@ -1,16 +1,33 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { isInlineImageMime } from "@nexus/core";
-import { ProfileNotFoundError, ProfileValidationError } from "../errors.js";
+import {
+  ProfileAnchorDeleteError,
+  ProfileLastDeleteError,
+  ProfileNotFoundError,
+  ProfileValidationError,
+} from "../errors.js";
+import { uuidv7 } from "../ids.js";
 
 type DatabaseHandle = Database.Database;
 
 /** A plaintext sha256 exactly as the blob store names one: 64 lowercase hex characters. */
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 
+/** The `profiles.kind` CHECK's closed domain (migration 001) — the two kinds ADR-058 gives the top layer to. */
+export const PROFILE_KINDS = ["personal", "business"] as const;
+export type ProfileKind = (typeof PROFILE_KINDS)[number];
+
+/** Longest profile name after trimming — the `task_lists` bound, for its reason: a name is a label, not a body. Main's wire validator is narrower (80); the store is no narrower than a restore may legitimately carry. */
+export const MAX_PROFILE_NAME_LENGTH = 100;
+
+/** Accepts a full ISO-8601 date-time — the same shape every other store's `now` takes. */
+const ISO_8601_DATETIME =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})?$/;
+
 /** One profile row (migration 001) with the picture trio migration 040 added. */
 export interface ProfileRecord {
   id: string;
-  kind: "personal" | "business";
+  kind: ProfileKind;
   name: string;
   createdAt: string;
   /** The blob store's plaintext sha256 for this profile's picture, or null for "no picture". */
@@ -23,7 +40,7 @@ export interface ProfileRecord {
 
 interface ProfileRow {
   id: string;
-  kind: "personal" | "business";
+  kind: ProfileKind;
   name: string;
   created_at: string;
   picture_hash: string | null;
@@ -71,21 +88,34 @@ function toRecord(row: ProfileRow): ProfileRecord {
  * decodes it, re-encodes it and sniffs the result itself. The store still
  * checks, because a store is never the place that assumes its caller did.
  *
- * Naming and creating profiles stay in `main/index.ts` for now (`renameProfile`,
- * `seedFirstRunProfile`), and a restore writes the name and the picture together
- * through `RestoreStore` — this store's writes are the picture alone.
+ * This store owns the profile ROW's whole lifecycle (ADR-058): `create` mints
+ * one and `delete` hard-removes one, while renaming stays in `main/index.ts`
+ * (`renameProfile`) and a restore writes the name and the picture together
+ * through `RestoreStore`. What a fresh profile STARTS WITH — its Inbox, its
+ * feature-flag rows — is deliberately NOT seeded here: that is product policy,
+ * and main owns it (the `seedFirstRunProfile`/`ensureInbox` precedent).
  */
 export class ProfileStore {
   private readonly selectAll: Database.Statement;
   private readonly selectOne: Database.Statement;
+  private readonly countAll: Database.Statement;
+  private readonly insertProfile: Database.Statement;
   private readonly updatePicture: Database.Statement;
   private readonly countByHash: Database.Statement;
   private readonly selectMimeByHash: Database.Statement;
+  private readonly selectBlobHashes: Database.Statement;
+  private readonly deleteSearchEntries: Database.Statement;
+  private readonly deleteFlagRows: Database.Statement;
+  private readonly deleteProfileRow: Database.Statement;
 
-  constructor(db: DatabaseHandle) {
+  constructor(private readonly db: DatabaseHandle) {
     const columns = `id, kind, name, created_at, picture_hash, picture_mime, picture_size_bytes`;
     this.selectAll = db.prepare(`SELECT ${columns} FROM profiles ORDER BY created_at, id`);
     this.selectOne = db.prepare(`SELECT ${columns} FROM profiles WHERE id = ?`);
+    this.countAll = db.prepare(`SELECT count(*) AS n FROM profiles`);
+    this.insertProfile = db.prepare(
+      `INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)`,
+    );
     this.updatePicture = db.prepare(
       `UPDATE profiles
           SET picture_hash = ?, picture_mime = ?, picture_size_bytes = ?
@@ -95,6 +125,29 @@ export class ProfileStore {
     this.selectMimeByHash = db.prepare(
       `SELECT picture_mime AS mime FROM profiles WHERE picture_hash = ? LIMIT 1`,
     );
+    // The five blob-naming tables, joined through their parents where the row
+    // carries no `profile_id` of its own — the delete-side counterpart of
+    // main's `blobRefCount` union (ADR-019/041/SET-001). UNION deduplicates.
+    // Deliberately NO liveness filter on the parents: a soft-deleted task's
+    // attachment row still holds its hash, and the cascade takes it too.
+    this.selectBlobHashes = db.prepare(
+      `SELECT na.sha256 AS hash FROM note_attachments na
+         JOIN notes n ON n.id = na.note_id WHERE n.profile_id = ?
+       UNION
+       SELECT ta.sha256 FROM task_attachments ta
+         JOIN tasks t ON t.id = ta.task_id WHERE t.profile_id = ?
+       UNION
+       SELECT sa.sha256 FROM subject_attachments sa
+         JOIN subjects s ON s.id = sa.subject_id WHERE s.profile_id = ?
+       UNION
+       SELECT background_hash FROM dashboard_settings
+        WHERE profile_id = ? AND background_hash IS NOT NULL
+       UNION
+       SELECT picture_hash FROM profiles WHERE id = ? AND picture_hash IS NOT NULL`,
+    );
+    this.deleteSearchEntries = db.prepare(`DELETE FROM search_entries WHERE profile_id = ?`);
+    this.deleteFlagRows = db.prepare(`DELETE FROM feature_flags WHERE profile_id = ?`);
+    this.deleteProfileRow = db.prepare(`DELETE FROM profiles WHERE id = ?`);
   }
 
   /** Every profile, oldest first — the order the shell has always listed them in, with `id` breaking a tie between two created in the same millisecond. */
@@ -106,6 +159,89 @@ export class ProfileStore {
   get(id: string): ProfileRecord | null {
     const row = this.selectOne.get(id) as ProfileRow | undefined;
     return row === undefined ? null : toRecord(row);
+  }
+
+  /**
+   * Creates a profile row (ADR-058) and returns it. `kind` is revalidated
+   * against migration 001's CHECK domain and `name` is trimmed and capped —
+   * the store revalidates because no caller is ever assumed to have (SEC-EL-02).
+   *
+   * The EMPTY name (after trimming) is stored verbatim, deliberately: "" is the
+   * sentinel `seedFirstRunProfile` has always written for "not yet named", and
+   * the shell reads it as the cue to route the profile through the ONB-lite
+   * first-entry naming screen. Refusing it here would break that flow.
+   *
+   * The row is ALL this writes. The Inbox (`TaskListStore.ensureInbox`) and any
+   * feature-flag rows are main's to seed — what a new profile starts with is
+   * product policy, not schema.
+   */
+  create(kind: ProfileKind, name: string, now: string): ProfileRecord {
+    const validKind = validateKind(kind);
+    const validName = validateName(name);
+    const validNow = validateDateTime(now);
+    const id = uuidv7();
+    this.insertProfile.run(id, validKind, validName, validNow);
+    return this.require(id);
+  }
+
+  /**
+   * HARD-deletes a profile and everything it owns, in one transaction (ADR-058).
+   * Refused by named error for the account's anchor (`kind === "personal"`,
+   * `ProfileAnchorDeleteError`) and for the last remaining profile
+   * (`ProfileLastDeleteError`) — see each class's doc for why.
+   *
+   * Migration 001's `ON DELETE CASCADE` web takes the profile's data with the
+   * row, verified table by table in this store's test. Two deletes stay
+   * explicit, because cascade alone would not do them justice:
+   *
+   *  - `search_entries` (migration 017) DOES cascade, but its FTS shadow
+   *    (`search_fts`) is maintained purely by AFTER DELETE triggers. Deleting
+   *    the rows explicitly makes the shadow's cleanup a plain statement this
+   *    build's tests pin, rather than a bet on trigger-on-cascade semantics —
+   *    `RESTORE_WIPE_TABLES`' own "never lean on cascade to reach a row" rule.
+   *  - `feature_flags` is the one profile-referencing table migration 001 gave
+   *    no `ON DELETE CASCADE`; left alone it would block the delete on its FK.
+   *
+   * The blobs the profile's rows named are NOT touched here — the store never
+   * owns bytes on disk. Main collects the hashes BEFORE calling this
+   * (`blobHashes`) and runs its refcount-gated GC walk after, so a file another
+   * profile still names survives. `now` is the caller's clock, validated as on
+   * every mutation; a hard delete stamps nothing with it today.
+   */
+  delete(id: string, now: string): void {
+    validateDateTime(now);
+    this.db.transaction((): void => {
+      const row = this.selectOne.get(id) as ProfileRow | undefined;
+      if (row === undefined) {
+        throw new ProfileNotFoundError(`No profile "${id}".`);
+      }
+      if (row.kind === "personal") {
+        throw new ProfileAnchorDeleteError(`Profile "${id}" is the account's personal anchor.`);
+      }
+      const { n } = this.countAll.get() as { n: number };
+      if (n <= 1) {
+        throw new ProfileLastDeleteError(`Profile "${id}" is the last remaining profile.`);
+      }
+      this.deleteSearchEntries.run(id);
+      this.deleteFlagRows.run(id);
+      this.deleteProfileRow.run(id);
+    })();
+  }
+
+  /**
+   * Every blob hash this profile's rows name, deduplicated, across all five
+   * blob-naming tables — soft-deleted parents included, since their attachment
+   * rows still hold bytes the cascade is about to take. Main reads this BEFORE
+   * `delete` and then runs `deleteBlobIfOrphaned` per hash against the
+   * post-delete `blobRefCount`, which is what keeps a deleted profile from
+   * leaking files without ever deleting one some other profile still shows.
+   */
+  blobHashes(profileId: string): string[] {
+    return (
+      this.selectBlobHashes.all(profileId, profileId, profileId, profileId, profileId) as {
+        hash: string;
+      }[]
+    ).map((row) => row.hash);
   }
 
   /**
@@ -170,6 +306,31 @@ export class ProfileStore {
 function validateHash(value: string): string {
   if (!SHA256_PATTERN.test(value)) {
     throw new ProfileValidationError(`"sha256" must be 64 lowercase hexadecimal characters.`);
+  }
+  return value;
+}
+
+function validateKind(value: string): ProfileKind {
+  for (const kind of PROFILE_KINDS) {
+    if (kind === value) return kind;
+  }
+  throw new ProfileValidationError(`"${value}" is not a profile kind.`);
+}
+
+/** Trims, then allows either the EMPTY sentinel (see `create`) or 1..`MAX_PROFILE_NAME_LENGTH` characters. */
+function validateName(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length > MAX_PROFILE_NAME_LENGTH) {
+    throw new ProfileValidationError(
+      `"name" must be at most ${MAX_PROFILE_NAME_LENGTH} characters after trimming.`,
+    );
+  }
+  return trimmed;
+}
+
+function validateDateTime(value: string): string {
+  if (!ISO_8601_DATETIME.test(value)) {
+    throw new ProfileValidationError(`"now" must be an ISO-8601 date-time.`);
   }
   return value;
 }

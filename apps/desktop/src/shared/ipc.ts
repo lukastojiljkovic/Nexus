@@ -31,6 +31,14 @@ export const IpcChannel = {
   authRenameAccount: "auth:rename-account",
   authDeleteAccount: "auth:delete-account",
   profilesList: "profiles:list",
+  profilesCreate: "profiles:create",
+  profilesDelete: "profiles:delete",
+  // Verifies the account passcode against the CURRENT unlocked session
+  // (ADR-058): the gate in front of switching INTO a profile. Its own channel
+  // rather than a mode on `auth:unlock`, because the two do different things —
+  // an unlock may (re)open the database, while a verify must never touch it —
+  // and a shared channel would put that difference behind a boolean.
+  profilesVerifySwitch: "profiles:verify-switch",
   profilesRename: "profiles:rename",
   profilesPicturePick: "profiles:picture-pick",
   profilesPictureClear: "profiles:picture-clear",
@@ -488,10 +496,13 @@ export interface AuthChangePasscodeRequest {
   nextPasscode: string;
 }
 
+/** The `profiles.kind` CHECK's closed domain (ADR-058). Mirrors `@nexus/db`'s `ProfileKind` — redeclared, like every closed domain here, so the renderer never imports DB code; main's assignment of the store's value to this type is the drift check. */
+export type ProfileKind = "personal" | "business";
+
 /** A profile row as seen by the renderer (mirrors the `profiles` table, ADR-001). */
 export interface Profile {
   id: string;
-  kind: "personal" | "business";
+  kind: ProfileKind;
   name: string;
   createdAt: string;
   /**
@@ -534,6 +545,43 @@ export interface FlagsSetRequest {
 export interface ProfilesRenameRequest {
   id: string;
   name: string;
+}
+
+/**
+ * Creates a profile (ADR-058 — the business profile's front door, though the
+ * kind domain is the CHECK's, not "business only"). `name` may be EMPTY — the
+ * deliberate "not yet named" sentinel that routes the new profile through the
+ * ONB-lite first-entry naming screen — or 1–80 chars after trimming, the same
+ * wire cap the rename takes. Main seeds what the new profile starts with (its
+ * Inbox; for a business profile, the module preset with STUDY off) — the
+ * renderer names only what kind and what to call it.
+ */
+export interface ProfilesCreateRequest {
+  kind: ProfileKind;
+  name: string;
+}
+
+/**
+ * Deletes a profile and everything it owns, immediately and with no undo
+ * (ADR-058). Main refuses the personal profile (the account's anchor) and the
+ * last remaining profile outright; the renderer's confirmation UI is UX only.
+ * Blobs the profile's rows named are garbage-collected refcount-gated, so a
+ * file another profile still shows survives.
+ */
+export interface ProfilesDeleteRequest {
+  id: string;
+}
+
+/**
+ * Proves the account passcode at the profile-switch gate (ADR-058). Verified
+ * against the CURRENT session's key — never by reopening the database — and
+ * charged against the SAME throttle counter the lock screen uses: a passcode
+ * guess is a passcode guess wherever it is typed. Answers with the unlock's
+ * own `AuthResult` vocabulary (`ok`/`reason`/`lockedForMs`); `recoveryCode`
+ * is never set here.
+ */
+export interface ProfilesVerifySwitchRequest {
+  passcode: string;
 }
 
 /**
@@ -3479,11 +3527,18 @@ export type ArchiveReadErrorCode =
   | "too-large"; // a limit below was exceeded
 
 /**
- * Mirrors `@nexus/core`'s `ImportProblemCode` exactly. Redeclared rather than
- * imported — the same pattern `AuthErrorReason` follows — because this file
- * deliberately imports nothing. `main/restore.ts` assigns a core
- * `ImportProblemCode` to this type, so a code added in core and forgotten here
- * is a compile error rather than a silent gap.
+ * Mirrors `@nexus/core`'s `ImportProblemCode` — plus ONE code of main's own.
+ * Redeclared rather than imported — the same pattern `AuthErrorReason`
+ * follows — because this file deliberately imports nothing. `main/restore.ts`
+ * assigns a core `ImportProblemCode` to this type, so a code added in core and
+ * forgotten here is a compile error rather than a silent gap.
+ *
+ * `profile-kind-mismatch` is the one code the core parser can never produce:
+ * it needs the TARGET profile, which only main knows (ADR-058). A restore
+ * archive fits only its own KIND of profile — a business archive does not
+ * restore into a personal profile, nor the reverse — so main's preview refuses
+ * the pair by name. The foreign IMPORT deliberately has no such rule: an
+ * import copies rows, and rows are rows whichever kind of profile wrote them.
  */
 export type RestoreProblemCode =
   | "missing-manifest"
@@ -3499,7 +3554,8 @@ export type RestoreProblemCode =
   | "reference-cycle"
   | "invalid-ydoc"
   | "missing-ydoc"
-  | "missing-blob";
+  | "missing-blob"
+  | "profile-kind-mismatch";
 
 /** One thing wrong with an archive. `detail` is a machine-ish English fragment (a field name, an id) — never a sentence for a user; the renderer owns all Serbian copy. */
 export interface RestoreProblem {
@@ -4373,6 +4429,12 @@ export interface NexusApi {
   /** Closes the database and drops the data key from memory. */
   lock(): Promise<void>;
   listProfiles(): Promise<Profile[]>;
+  /** Creates a profile and seeds what it starts with (ADR-058); an empty `name` is the deliberate ONB-lite "not yet named" sentinel. */
+  createProfile(kind: ProfileKind, name: string): Promise<Profile>;
+  /** Deletes a profile and everything it owns, immediately and with no undo (ADR-058). Refused for the personal anchor and for the last remaining profile. */
+  deleteProfile(id: string): Promise<void>;
+  /** Proves the account passcode at the profile-switch gate (ADR-058), on the unlock's own throttle counter and `AuthResult` vocabulary — the session stays untouched either way. */
+  verifyProfileSwitch(passcode: string): Promise<AuthResult>;
   renameProfile(id: string, name: string): Promise<void>;
   /**
    * Opens the native picker and, if the user chooses a file, stores the square

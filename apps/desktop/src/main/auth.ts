@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { closeSync, fsyncSync, openSync, readFileSync, renameSync, writeSync } from "node:fs";
 import { join } from "node:path";
 import { safeStorage } from "electron";
@@ -462,6 +463,68 @@ export async function unlockWithPasscode(
     persistGuard(dir, file, { deviceSecret: guard.deviceSecret, ...updated });
     throw new AuthError("wrongPasscode", "The passcode is incorrect.");
   }
+}
+
+/**
+ * Verifies a passcode against an ALREADY-UNLOCKED session (ADR-058 — the
+ * profile-switch gate), without ever touching the database: the wrap is
+ * unwrapped exactly as `unlockWithPasscode` unwraps it, and the result is
+ * constant-time-compared to the data key the session is holding
+ * (`sessionDataKeyHex`, main's `unlockedDataKeyHex`). Same throttle counter,
+ * same discipline — checked first, folded on a wrong passcode, reset on
+ * success — because a passcode guess is a passcode guess wherever it is
+ * typed, and a gate with its own counter would be an unthrottled oracle for
+ * the one secret an attacker at an open session does not have
+ * (`changePasscode`'s reasoning, verbatim).
+ *
+ * A passcode that unwraps to a key that is NOT the session's is not a wrong
+ * passcode — it means `keychain.json` was swapped under a live session — so it
+ * throws a plain `Error` (an unexpected failure, not an expected refusal) and
+ * deliberately leaves the guard untouched.
+ */
+export async function verifyPasscode(
+  dir: string,
+  passcode: string,
+  sessionDataKeyHex: string,
+): Promise<ClearedThrottle | null> {
+  const sessionKey = dataKeyFromHex(sessionDataKeyHex);
+
+  const file = readKeychainFile(dir);
+  if (file === null) {
+    throw new AuthError("notInitialized", "No local account exists yet.");
+  }
+  assertKeystoreAvailable();
+
+  const guard = requireLocalGuard(file);
+  const now = new Date().toISOString();
+  const attemptState: AttemptState = {
+    failedAttempts: guard.failedAttempts,
+    lockedUntil: guard.lockedUntil,
+  };
+  const lockedForMs = remainingLockMs(attemptState, now);
+  if (lockedForMs > 0) {
+    throw new AuthError("throttled", `Too many attempts; try again in ${lockedForMs}ms.`);
+  }
+
+  const deviceSecret = fromBase64(guard.deviceSecret);
+  const kek = await derivePasscodeKey(passcode, fromBase64(file.passcodeSalt), deviceSecret, file.kdf);
+
+  let dataKey: Uint8Array;
+  try {
+    dataKey = await unwrapDataKey(file.passcodeWrap, kek);
+  } catch (error) {
+    if (!(error instanceof KeyUnwrapError)) throw error;
+    const updated = registerFailedAttempt(attemptState, now);
+    persistGuard(dir, file, { deviceSecret: guard.deviceSecret, ...updated });
+    throw new AuthError("wrongPasscode", "The passcode is incorrect.");
+  }
+
+  if (dataKey.length !== sessionKey.length || !timingSafeEqual(dataKey, sessionKey)) {
+    throw new Error("Internal error: the keychain no longer matches the unlocked session.");
+  }
+
+  persistGuard(dir, file, { deviceSecret: guard.deviceSecret, ...INITIAL_ATTEMPT_STATE });
+  return clearedThrottle(attemptState);
 }
 
 /**

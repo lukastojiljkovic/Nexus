@@ -24,6 +24,11 @@ const api: NexusApi = {
   regenerateRecoveryCode: () => ipcRenderer.invoke(IpcChannel.authRegenerateRecovery),
   lock: () => ipcRenderer.invoke(IpcChannel.authLock),
   listProfiles: () => ipcRenderer.invoke(IpcChannel.profilesList),
+  createProfile: (kind, name) =>
+    ipcRenderer.invoke(IpcChannel.profilesCreate, { kind, name }),
+  deleteProfile: (id) => ipcRenderer.invoke(IpcChannel.profilesDelete, { id }),
+  verifyProfileSwitch: (passcode) =>
+    ipcRenderer.invoke(IpcChannel.profilesVerifySwitch, { passcode }),
   renameProfile: (id, name) =>
     ipcRenderer.invoke(IpcChannel.profilesRename, { id, name }),
   pickProfilePicture: (profileId) =>

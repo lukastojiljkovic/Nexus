@@ -2320,6 +2320,9 @@ export const strings = {
         "invalid-ydoc": "Sadržaj beleške u arhivi nije ispravan.",
         "missing-ydoc": "Belešci u arhivi nedostaje sadržaj.",
         "missing-blob": "Prilogu nedostaje datoteka u arhivi — zapis se vraća bez nje.",
+        // ADR-058: arhiva se vraća samo u profil svoje vrste (lični ↔ poslovni).
+        "profile-kind-mismatch":
+          "Arhiva pripada drugoj vrsti profila (lični/poslovni) i ne može se vratiti u ovaj profil — izaberi profil iste vrste.",
       } satisfies Record<RestoreProblemCode, string>,
     },
     /**

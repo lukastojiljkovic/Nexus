@@ -44,6 +44,18 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
  *
+ * `1.22.0` adds the profile's `kind` (ADR-058, business profiles): one field on
+ * the manifest's own `profile` object, ALWAYS written — what kind of profile an
+ * archive is OF is never something a reader should infer. A manifest fact
+ * rather than a record for `1.18.0`'s reason: the kind is the profile's
+ * identity, exactly as its name and picture are. A MINOR bump by the same
+ * honesty every entry below made: an older reader handed a business profile's
+ * archive would restore it into a personal profile as if the two were the same
+ * thing — and refusing is the truthful answer to a file whose identity it
+ * cannot read. On the way back in the field is OPTIONAL with the default
+ * `"personal"` (the ADR-028 rule): the only kind any earlier archive could be
+ * of, so its absence is never ambiguous.
+ *
  * `1.21.0` adds named dashboards (DASH-008 / ADR-055, migration 043): the
  * `dashboard-set` record type — one row per named board, riding in
  * `data/dashboard.ndjson` between the settings row and the widgets — plus an
@@ -124,7 +136,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.21.0";
+const SCHEMA_VERSION = "1.22.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -1026,16 +1038,30 @@ export interface ArchiveProfilePicture {
   sizeBytes: number;
 }
 
+/**
+ * The profile kinds an archive's manifest may declare (ADR-058, `1.22.0`) —
+ * migration 001's own CHECK domain, restated here structurally because
+ * `@nexus/core` never imports `@nexus/db` (the file-header rule).
+ */
+export const ARCHIVE_PROFILE_KINDS = ["personal", "business"] as const;
+export type ArchiveProfileKind = (typeof ARCHIVE_PROFILE_KINDS)[number];
+
 export interface ExportArchiveInput {
   /**
-   * The profile this archive is OF: its id and name, plus the picture it
-   * carries (`1.18.0`) or null for none. The whole object is written into the
+   * The profile this archive is OF: its id, name and kind (`1.22.0` — always
+   * written; see `SCHEMA_VERSION`'s entry), plus the picture it carries
+   * (`1.18.0`) or null for none. The whole object is written into the
    * manifest verbatim, so a caller must build it explicitly rather than hand
    * over a wider profile row — a column the app's own `Profile` type gains later
    * would otherwise appear in every archive's manifest without anyone deciding
    * it should.
    */
-  profile: { id: string; name: string; picture: ArchiveProfilePicture | null };
+  profile: {
+    id: string;
+    name: string;
+    kind: ArchiveProfileKind;
+    picture: ArchiveProfilePicture | null;
+  };
   /** `app.getVersion()` — stamped by the caller, never read from here. */
   appVersion: string;
   /** ISO-8601, stamped by the caller — this module never reads a clock. */

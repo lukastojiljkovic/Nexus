@@ -48,6 +48,8 @@ export {
   PersonValidationError,
   PlanNotFoundError,
   PlanValidationError,
+  ProfileAnchorDeleteError,
+  ProfileLastDeleteError,
   ProfileNotFoundError,
   ProfileValidationError,
   RestoreValidationError,
@@ -78,8 +80,12 @@ export type { Migration } from "./migrations/migrations.js";
 
 export { SqliteFlagStore } from "./flags/sqliteFlagStore.js";
 
-export { ProfileStore } from "./profiles/profileStore.js";
-export type { ProfileRecord } from "./profiles/profileStore.js";
+export {
+  ProfileStore,
+  MAX_PROFILE_NAME_LENGTH,
+  PROFILE_KINDS,
+} from "./profiles/profileStore.js";
+export type { ProfileKind, ProfileRecord } from "./profiles/profileStore.js";
 
 export {
   DashboardSettingsStore,

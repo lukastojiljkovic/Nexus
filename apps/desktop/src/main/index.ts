@@ -99,6 +99,7 @@ import {
   PeopleStore,
   PERSON_KINDS,
   PlanStore,
+  PROFILE_KINDS,
   ProfileStore,
   rebuildSearchIndex,
   RestoreStore,
@@ -231,6 +232,7 @@ import {
   regenerateRecoveryCode,
   unlockWithPasscode,
   unlockWithRecovery,
+  verifyPasscode,
 } from "./auth.js";
 import {
   runBackupNow,
@@ -355,6 +357,7 @@ import {
   type NoteDuplicateResult,
   type NoteVersionMeta,
   type Profile,
+  type ProfileKind,
   type ProfilePicturePickResult,
   type RecurrenceRule,
   type RestoreApplyResult,
@@ -656,14 +659,17 @@ function requireProfile(database: NexusDatabase, id: string): Profile {
  *
  * Constructed field by field, deliberately: `buildExportArchive` writes this
  * object into `manifest.json` verbatim, so handing it a whole `Profile` would
- * quietly publish `kind` and `createdAt` — and every column the row gains
- * later — into the interchange contract, where nothing decided they belong.
- * (They were being published, harmlessly, until this function existed.)
+ * quietly publish `createdAt` — and every column the row gains later — into
+ * the interchange contract, where nothing decided they belong. `kind` IS here
+ * because interchange `1.22.0` decided it belongs (ADR-058): what kind of
+ * profile an archive is OF is part of its identity, and the restore preview
+ * refuses a kind-mismatched pair by name.
  */
 function archiveProfileOf(profile: Profile): ExportArchiveInput["profile"] {
   return {
     id: profile.id,
     name: profile.name,
+    kind: profile.kind,
     picture: profilePictureOf(profile),
   };
 }
@@ -715,6 +721,97 @@ function seedFirstRunProfile(database: NexusDatabase): void {
     .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
     .run(id, "personal", "", now);
   new TaskListStore(database.raw, id).ensureInbox(now);
+}
+
+/**
+ * What a fresh BUSINESS profile's `feature_flags` rows spell (ADR-058,
+ * founder-approved): the four work modules on, STUDY off. Written as explicit
+ * rows — not left to `defaultEnabled` — so the preset is a stored fact of the
+ * profile rather than an accident of this build's manifests. The `settings`
+ * module is deliberately NOT here: the gallery locks it (`LOCKED_MODULES`,
+ * `SettingsPage.tsx`) and its absent row falls back to `defaultEnabled: true`,
+ * exactly as the gallery expects — a personal profile gets no rows at all,
+ * since the defaults already say all-on.
+ */
+const BUSINESS_DEFAULT_FLAGS: readonly { moduleId: string; enabled: boolean }[] = [
+  { moduleId: "dashboard", enabled: true },
+  { moduleId: "tasks", enabled: true },
+  { moduleId: "calendar", enabled: true },
+  { moduleId: "notes", enabled: true },
+  { moduleId: "study", enabled: false },
+];
+
+/**
+ * `profiles:create` (ADR-058): the store mints the row, then main seeds what
+ * the profile STARTS WITH — its Inbox (the `seedFirstRunProfile` precedent:
+ * `TaskStore` refuses to place a task without one) and, for a business
+ * profile, the module preset above. The seed order is deliberate: the Inbox
+ * first, because a profile without one is broken while a profile without flag
+ * rows merely runs on defaults.
+ */
+async function handleProfilesCreate(kind: ProfileKind, name: string): Promise<Profile> {
+  const database = requireDb();
+  const now = new Date().toISOString();
+  const created = new ProfileStore(database.raw).create(kind, name, now);
+  new TaskListStore(database.raw, created.id).ensureInbox(now);
+  if (kind === "business") {
+    const flags = new SqliteFlagStore(database.raw, created.id);
+    for (const { moduleId, enabled } of BUSINESS_DEFAULT_FLAGS) {
+      await flags.set(moduleId, enabled);
+    }
+  }
+  return created;
+}
+
+/**
+ * `profiles:delete` (ADR-058): collects the blob hashes the profile's rows
+ * name BEFORE the delete (afterwards there is no row left to ask), lets the
+ * store's transaction take the row and its data, then runs the existing
+ * refcount-gated orphan walk over exactly those hashes — `undoRestore`'s own
+ * arrangement. A blob another profile still names keeps a non-zero refcount
+ * and survives; everything only this profile named is unlinked from disk.
+ */
+async function handleProfilesDelete(id: string): Promise<void> {
+  const database = requireDb();
+  const store = new ProfileStore(database.raw);
+  if (store.get(id) === null) {
+    throw new Error("Invalid IPC payload: unknown profile id.");
+  }
+  const hashes = store.blobHashes(id);
+  store.delete(id, new Date().toISOString());
+  for (const sha256 of hashes) {
+    await deleteBlobIfOrphaned(
+      blobStorePathsFor(),
+      requireBlobKeys(),
+      sha256,
+      blobRefCount(id, sha256),
+    );
+  }
+}
+
+/**
+ * `profiles:verify-switch` (ADR-058): proves the account passcode against the
+ * CURRENT unlocked session — the gate in front of switching into a profile.
+ * `verifyPasscode` never touches the database and charges the SAME throttle
+ * counter the lock screen uses (see its doc for why both halves matter). The
+ * cleared-throttle notice is recorded exactly as the unlock's is (NTF-007):
+ * a wrong-attempt burst at this gate is the same fact wherever it happened.
+ */
+async function handleProfilesVerifySwitch(passcode: string): Promise<AuthResult> {
+  const sessionKeyHex = requireUnlockedDataKeyHex();
+  try {
+    const clearedThrottle = await verifyPasscode(activeAccountDir(), passcode, sessionKeyHex);
+    if (clearedThrottle !== null) {
+      recordSecurityNotice({
+        kind: "unlock-throttle",
+        at: new Date().toISOString(),
+        ...clearedThrottle,
+      });
+    }
+    return { ok: true };
+  } catch (error) {
+    return authResultFromError(error, activeAccountDir());
+  }
 }
 
 function appInfo(): AppInfo {
@@ -949,6 +1046,23 @@ function asProfileName(value: unknown, field: string): string {
     );
   }
   return trimmed;
+}
+
+/** A profile kind: one of migration 001's CHECK domain (ADR-058). The store re-validates; this is the wire's own gate. */
+function asProfileKind(value: unknown, field: string): ProfileKind {
+  for (const kind of PROFILE_KINDS) {
+    if (kind === value) return kind;
+  }
+  throw new Error(`Invalid IPC payload: "${field}" must be a profile kind.`);
+}
+
+/** `profiles:create`'s name: the EMPTY string is allowed — the deliberate ONB-lite "not yet named" sentinel — otherwise exactly `asProfileName`'s 1–80 rule. */
+function asProfileCreateName(value: unknown, field: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`Invalid IPC payload: "${field}" must be a string.`);
+  }
+  if (value.trim().length === 0) return "";
+  return asProfileName(value, field);
 }
 
 /** A nullable optional string field: either a string or an explicit null. */
@@ -3286,7 +3400,12 @@ function restoreDeps(): ImportDeps {
     foreignImportStore: (profileId) => new ForeignImportStore(requireDb().raw, profileId),
     getProfile: (profileId) => {
       const profile = requireProfile(requireDb(), profileId);
-      return { id: profile.id, name: profile.name, picture: profilePictureOf(profile) };
+      return {
+        id: profile.id,
+        name: profile.name,
+        kind: profile.kind,
+        picture: profilePictureOf(profile),
+      };
     },
     pickArchiveFile: async () => {
       // One filter for both archive kinds: an encrypted export is `.nexus` and
@@ -3636,6 +3755,26 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.profilesList, (event): Profile[] => {
     assertTrustedSender(event);
     return listProfiles(requireDb());
+  });
+
+  ipcMain.handle(IpcChannel.profilesCreate, (event, payload): Promise<Profile> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const kind = asProfileKind(body.kind, "kind");
+    const name = asProfileCreateName(body.name, "name");
+    return handleProfilesCreate(kind, name);
+  });
+
+  ipcMain.handle(IpcChannel.profilesDelete, (event, payload): Promise<void> => {
+    assertTrustedSender(event);
+    const id = asNonEmptyString(asRecord(payload).id, "id");
+    return handleProfilesDelete(id);
+  });
+
+  ipcMain.handle(IpcChannel.profilesVerifySwitch, (event, payload): Promise<AuthResult> => {
+    assertTrustedSender(event);
+    const passcode = asPasscode(asRecord(payload).passcode, "passcode");
+    return handleProfilesVerifySwitch(passcode);
   });
 
   ipcMain.handle(IpcChannel.profilesRename, (event, payload): void => {

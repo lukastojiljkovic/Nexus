@@ -145,9 +145,16 @@ export { isInlineImageMime, sniffMime } from "./files/sniff.js";
 export { centerSquareCrop, PROFILE_PICTURE_SIZE } from "./files/squareCrop.js";
 export type { CropRect } from "./files/squareCrop.js";
 
-export { ARCHIVE_MODULE_IDS, buildExportArchive, countProfileModules, DATA_FILES } from "./imex/exportArchive.js";
+export {
+  ARCHIVE_MODULE_IDS,
+  ARCHIVE_PROFILE_KINDS,
+  buildExportArchive,
+  countProfileModules,
+  DATA_FILES,
+} from "./imex/exportArchive.js";
 export type {
   ArchiveModuleId,
+  ArchiveProfileKind,
   ArchiveProfilePicture,
   ExportArchive,
   ExportArchiveInput,

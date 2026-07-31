@@ -43,7 +43,7 @@ function toImportInput(archive: ExportArchive): ImportArchiveInput {
 
 function emptyExportInput(): ExportArchiveInput {
   return {
-    profile: { id: "profile1", name: "Luka", picture: null },
+    profile: { id: "profile1", name: "Luka", kind: "personal", picture: null },
     appVersion: "0.1.0",
     createdAt: "2026-07-11T10:00:00.000Z",
     settings: {
@@ -556,6 +556,12 @@ interface BaseFilesOptions {
    * default every other test in this file keeps reading against.
    */
   profilePicture?: unknown;
+  /**
+   * What the manifest's `profile.kind` says (ADR-058, `1.22.0`). ABSENT here
+   * leaves the key off the manifest entirely — the pre-`1.22.0` shape, which
+   * must parse as `"personal"`.
+   */
+  profileKind?: unknown;
 }
 
 const EMPTY_DATA_FILE_NAMES = [
@@ -585,6 +591,7 @@ function baseFiles(options: BaseFilesOptions = {}): Map<string, string> {
       id: "profile1",
       name: "Luka",
       ...("profilePicture" in options ? { picture: options.profilePicture } : {}),
+      ...("profileKind" in options ? { kind: options.profileKind } : {}),
     },
     settings: {
       flags: {},
@@ -784,6 +791,45 @@ describe("parseImportArchive — the profile picture", () => {
   });
 });
 
+/**
+ * The manifest's `profile.kind` (ADR-058, `1.22.0`): absent means `"personal"` —
+ * the only kind any archive written before business profiles existed could be
+ * OF — and a declared value is validated strictly against the closed domain in
+ * every era (the ADR-028 optional-with-a-default rule, `snoozeDefault`'s own).
+ */
+describe("parseImportArchive — the profile kind", () => {
+  it("reads personal when the key is absent — every pre-1.22.0 archive", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles()));
+    expect(result.problems).toEqual([]);
+    expect(result.manifest?.profile.kind).toBe("personal");
+  });
+
+  it("reads a declared business kind", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ profileKind: "business" })));
+    expect(result.problems).toEqual([]);
+    expect(result.manifest?.profile.kind).toBe("business");
+  });
+
+  it("refuses a kind outside the closed domain — a present key is strict in every era", () => {
+    for (const bad of [null, "", "work", "Personal", 1]) {
+      const result = parseImportArchive(emptyInputWith(baseFiles({ profileKind: bad })));
+      expect(result.problems, JSON.stringify(bad)).toEqual([
+        { severity: "error", code: "invalid-manifest", path: "manifest.json", detail: "profile.kind" },
+      ]);
+      expect(result.data).toBeNull();
+    }
+  });
+
+  it("survives a full write/read round trip through buildExportArchive", () => {
+    const input = emptyExportInput();
+    input.profile.kind = "business";
+    const archive = buildExportArchive(input);
+    const result = parseImportArchive(toImportInput(archive));
+    expect(result.problems).toEqual([]);
+    expect(result.manifest?.profile.kind).toBe("business");
+  });
+});
+
 describe("parseImportArchive — one test per problem code", () => {
   it("missing-manifest: manifest.json absent", () => {
     const result = parseImportArchive(emptyInputWith(new Map()));
@@ -814,12 +860,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.22.0`: the nearest minor strictly ahead of this build's `1.21.0`.
+  // `1.23.0`: the nearest minor strictly ahead of this build's `1.22.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.22.0" });
+    const files = baseFiles({ schemaVersion: "1.23.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.22.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.23.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -2790,8 +2836,8 @@ describe("parseImportArchive — note folder preferences (the 1.7.0 era gate)", 
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.21.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.21.0");
+  it("is 1.22.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.22.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -2972,11 +3018,20 @@ describe("parseImportArchive — schema version", () => {
     expect(result.data).not.toBeNull();
   });
 
-  // `1.22.0`: the nearest minor strictly ahead of this build's `1.21.0`.
+  // And for the one ADR-058's `kind` superseded: a 1.21 archive carries no
+  // `kind` on its manifest's profile, which is exactly what an archive OF a
+  // personal profile says — an optional-with-a-default, so again no era flag.
+  it("accepts an older minor — a 1.21 archive still parses here, kind defaulting to personal", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.21.0" })));
+    expect(result.problems).toEqual([]);
+    expect(result.manifest?.profile.kind).toBe("personal");
+  });
+
+  // `1.23.0`: the nearest minor strictly ahead of this build's `1.22.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.22.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.23.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.22.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.23.0" },
     ]);
     expect(result.data).toBeNull();
   });

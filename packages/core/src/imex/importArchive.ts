@@ -5,9 +5,10 @@ import { validateRecurrenceRule } from "../recurrence/recurrence.js";
 import type { RecurrenceRule } from "../recurrence/recurrence.js";
 import { renderClozeCard } from "../study/clozeText.js";
 import { isEmptyTaskViewConfig, validateTaskViewConfig } from "../tasks/taskViewConfig.js";
-import { DATA_FILES } from "./exportArchive.js";
+import { ARCHIVE_PROFILE_KINDS, DATA_FILES } from "./exportArchive.js";
 import type {
   ArchiveModuleId,
+  ArchiveProfileKind,
   ArchiveProfilePicture,
   ExportCalendarSettings,
   ExportCard,
@@ -108,9 +109,17 @@ export interface ImportManifest {
    * has none and for every archive written before `1.18.0` — indistinguishable
    * on purpose, because they mean the same thing (an OPTIONAL-with-a-default
    * field, so no `ArchiveEra` flag; see `INTERCHANGE_SCHEMA_VERSION`). A picture
-   * that IS declared is validated strictly, in every era.
+   * that IS declared is validated strictly, in every era. `kind` (ADR-058,
+   * `1.22.0`) follows the same rule: absent means `"personal"` — the only kind
+   * any earlier archive could be of — and a declared value is validated
+   * strictly against the closed domain.
    */
-  profile: { id: string; name: string; picture: ArchiveProfilePicture | null };
+  profile: {
+    id: string;
+    name: string;
+    kind: ArchiveProfileKind;
+    picture: ArchiveProfilePicture | null;
+  };
   settings: ExportSettings;
   modules: readonly { id: string; records: number }[];
   blobs: readonly { sha256: string; sizeBytes: number }[];
@@ -190,7 +199,11 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.21.0` added named
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.22.0` added the
+ * profile's `kind` on the manifest's own `profile` object (ADR-058, business
+ * profiles) — always written on the way out, OPTIONAL with the default
+ * `"personal"` on the way in, since a personal profile is the only kind any
+ * earlier archive could be OF — after `1.21.0` added named
  * dashboards (DASH-008 / ADR-055, migration 043) — the `dashboard-set` record
  * type riding in the data file `1.9.0` created, an OPTIONAL `setId` on
  * `dashboard-widget` and an OPTIONAL `activeSetId` on `dashboard-settings`,
@@ -275,7 +288,7 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.21.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.22.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -2428,6 +2441,15 @@ function parseManifest(
     const profile = {
       id: nonEmptyStr(profileRoot.id, "profile.id"),
       name: nonEmptyStr(profileRoot.name, "profile.name"),
+      // ADR-058 (`1.22.0`). Optional-with-a-default, so no `ArchiveEra` flag:
+      // an archive written before business profiles carries no key at all, and
+      // `"personal"` is the only kind its profile could have been. Absence
+      // only — a key that IS there is validated strictly, in every era,
+      // exactly as `settings.notifications.snoozeDefault` is.
+      kind:
+        profileRoot.kind === undefined
+          ? ("personal" as ArchiveProfileKind)
+          : enumStr(profileRoot.kind, "profile.kind", ARCHIVE_PROFILE_KINDS),
       picture: parseProfilePicture(profileRoot.picture),
     };
 

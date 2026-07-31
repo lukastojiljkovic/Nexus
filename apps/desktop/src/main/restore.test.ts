@@ -232,6 +232,7 @@ function makeTestDeps(
       return {
         id: row.id,
         name: row.name,
+        kind: row.kind,
         picture:
           row.pictureHash === null || row.pictureMime === null || row.pictureSizeBytes === null
             ? null
@@ -625,9 +626,10 @@ function buildArchiveFor(
   fixture: Pick<SeededFixture, "data" | "settings" | "picture">,
   profileId: string,
   profileName: string,
+  profileKind: "personal" | "business" = "personal",
 ): ExportArchive {
   const input: ExportArchiveInput = {
-    profile: { id: profileId, name: profileName, picture: fixture.picture },
+    profile: { id: profileId, name: profileName, kind: profileKind, picture: fixture.picture },
     appVersion: "0.1.0-test",
     createdAt: "2026-02-01T00:00:00.000Z",
     settings: fixture.settings,
@@ -869,6 +871,73 @@ describe("restore", () => {
       );
 
       expect(new TaskStore(dbB.raw, profileB).listActive()).toEqual(before);
+    });
+  });
+
+  describe("a kind-mismatched archive (ADR-058)", () => {
+    /** A business-kind target with the Inbox every profile carries — `createProfile`'s shape, one column different. */
+    function createBusinessProfile(handle: NexusDatabase, name: string): string {
+      const id = uuidv7();
+      const created = new Date().toISOString();
+      handle.raw
+        .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+        .run(id, "business", name, created);
+      new TaskListStore(handle.raw, id).ensureInbox(created);
+      return id;
+    }
+
+    it("refuses a personal archive into a business profile as a NAMED problem, both ways", async () => {
+      const profileA = createProfile(dbA, "A");
+      const fixtureA = seedProfile(dbA, profileA, "A");
+      const personalArchive = buildArchiveFor(fixtureA, profileA, "A");
+      const personalPath = fixturePath("personal.nexus.zip");
+      await writeFile(personalPath, await buildArchiveZip(personalArchive, fixtureA.blobBytes));
+
+      const businessTarget = createBusinessProfile(dbB, "Firma");
+      const { deps } = makeTestDeps(dbB, personalPath);
+      await pickRestoreFile(deps);
+      const preview = await previewRestore(deps, businessTarget, null);
+      expect(preview).toEqual({
+        status: "invalid",
+        problems: [
+          {
+            severity: "error",
+            code: "profile-kind-mismatch",
+            path: "manifest.json",
+            detail: "personal -> business",
+          },
+        ],
+      });
+
+      // And the reverse pair refuses the same way.
+      const businessArchive = buildArchiveFor(fixtureA, profileA, "A", "business");
+      const businessPath = fixturePath("business.nexus.zip");
+      await writeFile(businessPath, await buildArchiveZip(businessArchive, fixtureA.blobBytes));
+      const personalTarget = createProfile(dbB, "B");
+      const { deps: reverseDeps } = makeTestDeps(dbB, businessPath);
+      await pickRestoreFile(reverseDeps);
+      const reversePreview = await previewRestore(reverseDeps, personalTarget, null);
+      if (reversePreview.status !== "invalid") unreachable();
+      expect(reversePreview.problems[0]).toMatchObject({
+        code: "profile-kind-mismatch",
+        detail: "business -> personal",
+      });
+    });
+
+    it("previews ready when the kinds match — a business archive into a business profile", async () => {
+      const profileA = createProfile(dbA, "A");
+      const fixtureA = seedProfile(dbA, profileA, "A");
+      const archive = buildArchiveFor(fixtureA, profileA, "Firma A", "business");
+      const filePath = fixturePath("business-match.nexus.zip");
+      await writeFile(filePath, await buildArchiveZip(archive, fixtureA.blobBytes));
+
+      const businessTarget = createBusinessProfile(dbB, "Firma B");
+      const { deps } = makeTestDeps(dbB, filePath);
+      await pickRestoreFile(deps);
+      const preview = await previewRestore(deps, businessTarget, null);
+      if (preview.status !== "ready") unreachable();
+      expect(preview.preview.sourceProfileName).toBe("Firma A");
+      expect(preview.preview.targetProfileName).toBe("Firma B");
     });
   });
 

@@ -12,6 +12,7 @@ import {
   translateLlmRecords,
   type ApkgSkip as CoreApkgSkip,
   type ApkgSubjectChoice,
+  type ArchiveProfileKind,
   type ArchiveProfilePicture,
   type ExportSettings,
   type ForeignImportPlan,
@@ -235,9 +236,15 @@ export interface RestoreDeps extends ProfileDataDeps {
    * an undo snapshot can put its identity back. `picture` rides along with the
    * name for that second reason: a restore replaces the profile row's own facts
    * too, so an undo that restored only the name would leave the target wearing
-   * the archive's face.
+   * the archive's face. `kind` rides along for the preview's own gate (ADR-058):
+   * a restore archive fits only its own KIND of profile.
    */
-  getProfile(profileId: string): { id: string; name: string; picture: ArchiveProfilePicture | null };
+  getProfile(profileId: string): {
+    id: string;
+    name: string;
+    kind: ArchiveProfileKind;
+    picture: ArchiveProfilePicture | null;
+  };
   /** The native open dialog: resolves the chosen path, or null when the user canceled. Injected so this module never imports electron — main owns the dialog, exactly as it does for export. */
   pickArchiveFile(): Promise<string | null>;
   /** The same dialog with the `.apkg` filter (ADR-052). Its own injection, not a parameter on the one above, so no call on the archive surface can ever open the Anki picker or the reverse. */
@@ -532,7 +539,7 @@ export async function previewRestore(
     return { status: "invalid", problems: parsed.problems.map(toRestoreProblem) };
   }
 
-  let targetProfile: { name: string };
+  let targetProfile: { name: string; kind: ArchiveProfileKind };
   let current: ReturnType<typeof countProfileModules>;
   try {
     targetProfile = deps.getProfile(profileId);
@@ -544,6 +551,30 @@ export async function previewRestore(
     // `previewImport`'s own guard, mirrored.
     await archive.close().catch(() => {});
     throw error;
+  }
+
+  // ADR-058: a restore archive fits only its own KIND of profile — the "fits
+  // only its own profile" rule, one clause wider. A restore REPLACES the
+  // target with the archive's identity and contents, so restoring a business
+  // archive into a personal profile (or the reverse) would silently turn one
+  // kind of profile into the other's data wearing the wrong identity. Refused
+  // as a NAMED problem, not a thrown error, because it is a fact about the
+  // pair the user picked — something to read, choose the other profile over,
+  // and never something a retry fixes. The foreign IMPORT deliberately has no
+  // twin of this gate: it copies rows, and rows are rows.
+  if (parsed.manifest.profile.kind !== targetProfile.kind) {
+    await archive.close();
+    return {
+      status: "invalid",
+      problems: [
+        {
+          severity: "error",
+          code: "profile-kind-mismatch",
+          path: "manifest.json",
+          detail: `${parsed.manifest.profile.kind} -> ${targetProfile.kind}`,
+        },
+      ],
+    };
   }
   const incoming = countProfileModules(parsed.data);
   const warnings = parsed.problems.filter((problem) => problem.severity === "warning").map(toRestoreProblem);
@@ -988,6 +1019,11 @@ export async function previewImport(
         // Handed over only so the plan can NAME it as skipped: an import never
         // adopts the archive's profile picture (ADR-043 §2, the dashboard
         // background's rule at its sharpest).
+        //
+        // The manifest's `kind` (ADR-058) is deliberately NOT read here at
+        // all: a foreign import copies rows into the target, and rows are
+        // rows whichever kind of profile wrote them — only the RESTORE, which
+        // replaces a profile's identity wholesale, gates on the pair.
         profilePicture: parsed.manifest.profile.picture,
       },
       importTargetFor(deps, profileId),
