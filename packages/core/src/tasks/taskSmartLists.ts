@@ -195,3 +195,41 @@ export function selectSmartList<T extends SmartListTask>(
     .filter((task) => matchesSmartList(task, listId, context))
     .sort((a, b) => compareSmartListTasks(a, b, listId));
 }
+
+/**
+ * How many days a finished task stays under „Završeno“ before the view files it
+ * in the archive beneath. Chosen, not sacred: a month reads as "recently done"
+ * without becoming another preference to tune.
+ */
+export const TASK_ARCHIVE_AFTER_DAYS = 30;
+
+/**
+ * „Završeno“, parted at the archive boundary — the same predicate and the same
+ * ordering as `selectSmartList(…, "zavrseno", …)`, split into the tasks
+ * completed within the last `TASK_ARCHIVE_AFTER_DAYS` days (`recent`) and
+ * everything older (`archived`). NOT a sixth list: counts, search and batch
+ * selection keep meaning "completed at all", and this is only how the one view
+ * draws itself — recent rows in the open, archived ones behind a disclosure.
+ *
+ * The boundary day is INCLUSIVE on the recent side: a task completed exactly
+ * `TASK_ARCHIVE_AFTER_DAYS` days ago is still recent, so `today − 30` is the
+ * oldest recent day and only strictly older days archive. Only day keys are
+ * compared (the module's own `dayOf`, never a parsed `Date`), so a task ages
+ * out at midnight, whole days at a time.
+ */
+export function splitZavrseno<T extends SmartListTask>(
+  tasks: readonly T[],
+  context: SmartListContext,
+): { recent: T[]; archived: T[] } {
+  const oldestRecentDay = shiftDayKey(context.today, -TASK_ARCHIVE_AFTER_DAYS);
+  const recent: T[] = [];
+  const archived: T[] = [];
+  for (const row of selectSmartList(tasks, "zavrseno", context)) {
+    // A null completion day cannot leave the store (`completedAt` is non-null
+    // exactly when `done`); it falls to `archived` only to keep the split total,
+    // matching the ordering's own null-last branch.
+    const day = dayOf(row.completedAt);
+    (day !== null && day >= oldestRecentDay ? recent : archived).push(row);
+  }
+  return { recent, archived };
+}

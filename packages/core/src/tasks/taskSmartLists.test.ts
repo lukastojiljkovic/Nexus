@@ -5,6 +5,8 @@ import {
   matchesSmartList,
   selectSmartList,
   SMART_LIST_IDS,
+  splitZavrseno,
+  TASK_ARCHIVE_AFTER_DAYS,
   type SmartListContext,
   type SmartListId,
   type SmartListTask,
@@ -269,6 +271,63 @@ describe("zavrseno", () => {
       doneTask("oldest", "2026-06-01T08:00:00.000Z"),
     ];
     expect(idsOf(rows, "zavrseno")).toEqual(["newest", "a", "b", "oldest"]);
+  });
+});
+
+// --- splitZavrseno ----------------------------------------------------------
+
+describe("splitZavrseno", () => {
+  /** With TODAY 2026-07-15 and a 30-day boundary, the oldest day still recent — and the newest one archived. */
+  const BOUNDARY_DAY = "2026-06-15";
+  const DAY_BEFORE_BOUNDARY = "2026-06-14";
+
+  it("draws the boundary 30 days back", () => {
+    expect(TASK_ARCHIVE_AFTER_DAYS).toBe(30);
+  });
+
+  it("keeps the boundary day itself recent and archives the day before it", () => {
+    const rows = [
+      doneTask("today", `${TODAY}T09:00:00.000Z`),
+      doneTask("on-boundary", `${BOUNDARY_DAY}T23:59:00.000Z`),
+      doneTask("before-boundary", `${DAY_BEFORE_BOUNDARY}T00:00:00.000Z`),
+    ];
+    const { recent, archived } = splitZavrseno(rows, context());
+    expect(recent.map((row) => row.id)).toEqual(["today", "on-boundary"]);
+    expect(archived.map((row) => row.id)).toEqual(["before-boundary"]);
+  });
+
+  it("keeps the zavrseno order in both halves — most recently finished first, then id", () => {
+    const rows = [
+      doneTask("old-b", "2026-01-10T08:00:00.000Z"),
+      doneTask("new-b", "2026-07-01T08:00:00.000Z"),
+      doneTask("old-a", "2026-02-01T08:00:00.000Z"),
+      doneTask("new-a", "2026-07-10T08:00:00.000Z"),
+      doneTask("old-tie", "2026-02-01T08:00:00.000Z"),
+    ];
+    const { recent, archived } = splitZavrseno(rows, context());
+    expect(recent.map((row) => row.id)).toEqual(["new-a", "new-b"]);
+    expect(archived.map((row) => row.id)).toEqual(["old-a", "old-tie", "old-b"]);
+    // The two halves are a PARTITION of the one list, in its one order.
+    expect([...recent, ...archived].map((row) => row.id)).toEqual(idsOf(rows, "zavrseno"));
+  });
+
+  it("applies the zavrseno predicate — an open task lands in neither half", () => {
+    const { recent, archived } = splitZavrseno(
+      [task("open", { dueDate: YESTERDAY })],
+      context(),
+    );
+    expect(recent).toEqual([]);
+    expect(archived).toEqual([]);
+  });
+
+  it("splits nothing, everything-recent and everything-archived without inventing rows", () => {
+    expect(splitZavrseno([], context())).toEqual({ recent: [], archived: [] });
+
+    const fresh = [doneTask("a", `${TODAY}T08:00:00.000Z`)];
+    expect(splitZavrseno(fresh, context())).toEqual({ recent: fresh, archived: [] });
+
+    const stale = [doneTask("b", "2026-01-01T08:00:00.000Z")];
+    expect(splitZavrseno(stale, context())).toEqual({ recent: [], archived: stale });
   });
 });
 

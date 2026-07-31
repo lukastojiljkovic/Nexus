@@ -484,6 +484,17 @@ export const strings = {
       shownPrefix: "Prikazano prvih",
       shownOf: "od",
       showMore: "Prikaži još",
+      /** The collapsed disclosure beneath „Završeno“ holding everything past the archive boundary — drawn as „Arhiva (N)“, the count by the page. */
+      archiveTitle: "Arhiva",
+      /**
+       * „Završeno“'s empty state once every finished task has aged into the
+       * archive: „Sve završeno starije od 30 dana je u arhivi.“ The day count
+       * (TASK_ARCHIVE_AFTER_DAYS) is stated between the halves at the call
+       * site, and „dana“ after „od“ holds for any count the constant could
+       * become — genitive, so 21, 30 and 60 all read the same.
+       */
+      allArchivedPrefix: "Sve završeno starije od",
+      allArchivedSuffix: "dana je u arhivi.",
       /** Tooltip on the row chip that names a task's list — inside a view the rows come from every list at once. */
       listChipTitle: "Lista kojoj zadatak pripada",
     },

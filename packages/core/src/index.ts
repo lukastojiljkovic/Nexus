@@ -470,6 +470,8 @@ export {
   matchesSmartList,
   selectSmartList,
   SMART_LIST_IDS,
+  splitZavrseno,
+  TASK_ARCHIVE_AFTER_DAYS,
 } from "./tasks/taskSmartLists.js";
 export type { SmartListContext, SmartListId, SmartListTask } from "./tasks/taskSmartLists.js";
 

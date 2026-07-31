@@ -25,6 +25,8 @@ import {
   parseQuickAddDate,
   selectSmartList,
   SMART_LIST_IDS,
+  splitZavrseno,
+  TASK_ARCHIVE_AFTER_DAYS,
   TASK_VIEW_FILTER_PRIORITIES,
   TASK_VIEW_FILTER_STATUSES,
   TASK_VIEW_KANBAN_GROUPS,
@@ -973,9 +975,11 @@ type TaskSelection = { kind: "list"; id: string } | { kind: "smart"; id: SmartLi
 
 /**
  * How many finished tasks „Završeno“ draws at once, and how many „Prikaži još“
- * adds (ADR-039 §4's recipe). The rows are already in memory, so this bounds the
- * DOM rather than a query: a profile with years of history would otherwise pay
- * for every one of them on a view nobody scrolls to the end of.
+ * adds (ADR-039 §4's recipe) — the recent page and the expanded archive each
+ * pace themselves by the same two numbers. The rows are already in memory, so
+ * this bounds the DOM rather than a query: a profile with years of history
+ * would otherwise pay for every one of them on a view nobody scrolls to the
+ * end of.
  */
 const COMPLETED_PAGE_SIZE = 100;
 const COMPLETED_PAGE_STEP = 50;
@@ -1020,8 +1024,15 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
    * itself instead of blanking the page.
    */
   const [selection, setSelection] = useState<TaskSelection | null>(null);
-  /** How many rows „Završeno“ is currently drawing; reset whenever the rail's selection changes. */
+  /** How many recent rows „Završeno“ is currently drawing; reset whenever the rail's selection changes. */
   const [completedShown, setCompletedShown] = useState(COMPLETED_PAGE_SIZE);
+  /**
+   * Whether „Završeno“'s archive is expanded, and how many of its rows are
+   * drawn — session-only component state (never a stored preference), reset
+   * with the page counter above whenever the scope changes.
+   */
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiveShown, setArchiveShown] = useState(COMPLETED_PAGE_SIZE);
   /**
    * Whether the two "what now" views show blocked tasks (ADR-049). A device
    * preference read on mount, exactly as the calendar reads the week start: a
@@ -1304,15 +1315,30 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     activeFilterSpecs,
   );
   /**
-   * „Završeno“ is BOUNDED (ADR-039 §4): a profile accumulates finished tasks
-   * without limit, and every one of them would otherwise be a DOM row. The
-   * rows are already in memory, so the bound is a slice and „Prikaži još“ is a
-   * counter — no second query, and the ordering is untouched.
+   * „Završeno“ is BOUNDED (ADR-039 §4) and AGES: `splitZavrseno` parts the
+   * filtered rows at the 30-day boundary, the recent half pages exactly as the
+   * whole view used to, and the archived half waits beneath a collapsed
+   * „Arhiva“ disclosure with the same first-100-then-more recipe. The split
+   * runs over the rows the filters kept, so the archive count says exactly
+   * what expanding it would draw. Everywhere else the split is null, the
+   * archive empty, and nothing below changes shape. Still no second query —
+   * a bound and a boundary over rows already in memory, ordering untouched.
    */
-  const completedTruncated =
-    smartListId === "zavrseno" && matchedTasks.length > completedShown;
-  /** Everything on screen — and nothing that is not, which is what makes the derived batch selection below honest. */
-  const visibleTasks = completedTruncated ? matchedTasks.slice(0, completedShown) : matchedTasks;
+  const completedSplit =
+    smartListId === "zavrseno" ? splitZavrseno(matchedTasks, smartContext) : null;
+  const recentTasks = completedSplit === null ? matchedTasks : completedSplit.recent;
+  const archivedTasks = completedSplit === null ? [] : completedSplit.archived;
+  const completedTruncated = completedSplit !== null && recentTasks.length > completedShown;
+  const shownRecent = completedTruncated ? recentTasks.slice(0, completedShown) : recentTasks;
+  const archiveTruncated = archiveOpen && archivedTasks.length > archiveShown;
+  const shownArchived = !archiveOpen
+    ? []
+    : archiveTruncated
+      ? archivedTasks.slice(0, archiveShown)
+      : archivedTasks;
+  /** Everything on screen — and nothing that is not, which is what makes the derived batch selection below honest. Expanded archive rows are part of it, so Izbor reaches them like any other row. */
+  const visibleTasks =
+    completedSplit === null ? shownRecent : [...shownRecent, ...shownArchived];
   /** True when the scope holds rows but a filter — oznake or the view's own — shows none of them; its own empty state, not "the list is empty". */
   const filterHidesEverything =
     (tagFilter.length > 0 || activeFilterSpecs.length > 0) && visibleTasks.length === 0;
@@ -1355,10 +1381,12 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
    * belong to many lists (so no heading of any one of them applies) and nesting
    * a matching subtask under a matching parent would contradict that order —
    * which is also why the engine is handed the rows exactly as they arrive.
+   * For „Završeno“ that group is the RECENT page alone; the archive renders as
+   * its own group beneath the disclosure (see the archive block in the JSX).
    */
   const groups: TaskGroup[] =
     smartListId !== null
-      ? [{ section: null, roots: [...visibleTasks] }]
+      ? [{ section: null, roots: [...shownRecent] }]
       : [
           { section: null, roots: roots.filter((task) => groupKeyOf(task) === null) },
           ...listSections.map((section) => ({
@@ -1627,8 +1655,8 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   /**
    * Closes everything that was bound to the scope being left: the form, the
    * inline subtask line, the section editor, any batch selection, and the
-   * „Završeno“ page counter — none of which describes the rows about to be
-   * drawn.
+   * „Završeno“ page counters and archive disclosure — none of which describes
+   * the rows about to be drawn.
    */
   function leaveScope(): void {
     resetForm();
@@ -1638,6 +1666,8 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     setSectionDraft("");
     setListFailed(false);
     setCompletedShown(COMPLETED_PAGE_SIZE);
+    setArchiveOpen(false);
+    setArchiveShown(COMPLETED_PAGE_SIZE);
   }
 
   function replaceTask(updated: Task): void {
@@ -4276,7 +4306,15 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                 all to draw. A filter that matches nothing says so instead —
                 including where the list does have headings, since empty ones
                 would only be noise under an answer of "no rows". */}
-            {filterHidesEverything ? (
+            {completedSplit !== null && recentTasks.length === 0 && archivedTasks.length > 0 ? (
+              // „Završeno“ with everything aged past the boundary: not "nothing
+              // was ever finished" — the archive right beneath holds it all,
+              // and the empty state says so instead.
+              <EmptyState
+                title={strings.tasks.smart.names.zavrseno}
+                description={`${strings.tasks.smart.allArchivedPrefix} ${TASK_ARCHIVE_AFTER_DAYS} ${strings.tasks.smart.allArchivedSuffix}`}
+              />
+            ) : filterHidesEverything ? (
               <EmptyState title={strings.tasks.emptyTitle} description={filterEmptyDescription} />
             ) : smartListId !== null && visibleTasks.length === 0 ? (
               // A view's own calm statement of fact, never the list's „zapiši
@@ -4300,8 +4338,8 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
             {completedTruncated && (
               <div className="tasks__more">
                 <p className="tasks__more-note">
-                  {strings.tasks.smart.shownPrefix} {visibleTasks.length}{" "}
-                  {strings.tasks.smart.shownOf} {matchedTasks.length}
+                  {strings.tasks.smart.shownPrefix} {shownRecent.length}{" "}
+                  {strings.tasks.smart.shownOf} {recentTasks.length}
                 </p>
                 <Button
                   size="sm"
@@ -4311,6 +4349,42 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                   {strings.tasks.smart.showMore}
                 </Button>
               </div>
+            )}
+            {/* The archive: everything completed before the 30-day boundary,
+                beneath the recent rows and collapsed by default. A quiet
+                typographic disclosure — the export module picker's own idiom,
+                no chrome — and expanding it draws the same rows the view draws,
+                under the same paging recipe. The open state lives and dies with
+                this mount. */}
+            {archivedTasks.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  className="tasks__archive-toggle"
+                  aria-expanded={archiveOpen}
+                  onClick={() => setArchiveOpen((open) => !open)}
+                >
+                  <span className="tasks__archive-mark" aria-hidden="true" />
+                  {strings.tasks.smart.archiveTitle}
+                  <span className="tasks__archive-count">({archivedTasks.length})</span>
+                </button>
+                {archiveOpen && renderGroup({ section: null, roots: [...shownArchived] })}
+                {archiveTruncated && (
+                  <div className="tasks__more">
+                    <p className="tasks__more-note">
+                      {strings.tasks.smart.shownPrefix} {shownArchived.length}{" "}
+                      {strings.tasks.smart.shownOf} {archivedTasks.length}
+                    </p>
+                    <Button
+                      size="sm"
+                      className="tasks__more-action"
+                      onClick={() => setArchiveShown((shown) => shown + COMPLETED_PAGE_STEP)}
+                    >
+                      {strings.tasks.smart.showMore}
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
             {selectedId !== null &&
               (sectionEditing?.mode === "new" ? (
