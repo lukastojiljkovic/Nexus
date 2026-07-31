@@ -36,6 +36,7 @@ import type {
   ImportDuplicateType,
   ImportPreview,
   ImportSkipReason,
+  LlmImportDeckChoice,
   LlmImportKind,
   LlmImportPreview,
   LlmImportSkip,
@@ -107,6 +108,12 @@ import {
   readStoredBlockedInToday,
   type BlockedInToday,
 } from "./taskPrefs.js";
+import {
+  persistLlmImportKind,
+  persistLlmPromptLanguage,
+  readStoredLlmImportKind,
+  readStoredLlmPromptLanguage,
+} from "./llmImportPrefs.js";
 import { countUnit, dayUnit, strings } from "./strings.js";
 
 /** Sidebar/page display name for a module id; mirrors App.tsx's private helper (kept local — App renders this page, so importing it back would be circular). */
@@ -1914,10 +1921,16 @@ interface LlmImportSectionProps {
  * inferred.
  *
  * Read top to bottom it is the four steps in order: what → the instruction →
- * the answer → the preview. The deck picker appears only for kartice, because
+ * the answer → the preview. The deck choice appears only for kartice, because
  * it is the one decision an answer cannot make for itself, and it is a
  * PRECONDITION rather than a refinement — nothing can be planned without it,
- * exactly as the `.apkg` block's subject cannot.
+ * exactly as the `.apkg` block's subject cannot. Two paths, „Postojeći špil /
+ * Novi špil": a new deck lives under an existing subject, so a profile with no
+ * subject at all is the one honest dead end left.
+ *
+ * The kind and the prompt language are DEVICE preferences (`llmImportPrefs`),
+ * read once on mount and persisted on every change, so the block reopens on
+ * what this machine last imported rather than on its defaults.
  *
  * The prompt is shown as well as copied. A clipboard write can fail, and a
  * „Kopiraj" that silently did nothing would leave the user with no way through
@@ -1928,14 +1941,22 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
   const s = strings.settings.llmImport;
   const shared = strings.settings.restore;
 
-  const [kind, setKind] = useState<LlmImportKind>("tasks");
-  const [language, setLanguage] = useState<LlmPromptLanguage>("sr");
+  const [kind, setKind] = useState<LlmImportKind>(readStoredLlmImportKind);
+  const [language, setLanguage] = useState<LlmPromptLanguage>(readStoredLlmPromptLanguage);
   const [showPrompt, setShowPrompt] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
   const [answer, setAnswer] = useState("");
   const [decks, setDecks] = useState<{ id: string; label: string }[]>([]);
+  const [subjects, setSubjects] = useState<{ id: string; name: string }[]>([]);
+  const [deckMode, setDeckMode] = useState<"existing" | "new">("existing");
   const [deckId, setDeckId] = useState<string>("");
+  const [newDeckName, setNewDeckName] = useState("");
+  const [newDeckSubjectId, setNewDeckSubjectId] = useState<string>("");
+  // The duplicate answer the plan on screen was computed with (ADR-051) —
+  // committed only once main has actually re-planned on it, never
+  // optimistically, exactly as the import block's `choices` is.
+  const [importDuplicates, setImportDuplicates] = useState(false);
   const [state, setState] = useState<LlmState>({ phase: "editing", busy: false, error: null });
   // Read by the unmount cleanup only. An apply in flight must never be cancelled
   // from here: main is writing the very plan `cancelLlmImport` would drop.
@@ -1961,6 +1982,10 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
             label: `${subjectNames.get(deck.subjectId) ?? ""} / ${deck.name}`,
           })),
         );
+        setSubjects(subjectList.map((subject) => ({ id: subject.id, name: subject.name })));
+        // With no deck to pick, „Postojeći špil" opens on a dead end — so a
+        // profile that has none opens on the path that can actually proceed.
+        if (deckList.length === 0) setDeckMode("new");
       } catch (loadError) {
         // Only the cards branch needs this, and it says so out loud when the
         // list is empty — so a failure here must not take the whole block down.
@@ -2006,19 +2031,31 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
   }
 
   const needsDeck = kind === "cards";
-  const deckReady = !needsDeck || deckId.length > 0;
+  const trimmedDeckName = newDeckName.trim();
+  const deckReady =
+    !needsDeck ||
+    (subjects.length > 0 &&
+      (deckMode === "existing"
+        ? deckId.length > 0
+        : trimmedDeckName.length > 0 && newDeckSubjectId.length > 0));
+
+  /** The deck the preview is planned against, in the wire's own closed shape — null for the two kinds that need none. */
+  function deckChoice(): LlmImportDeckChoice | null {
+    if (!needsDeck) return null;
+    return deckMode === "existing"
+      ? { existingDeckId: deckId }
+      : { newDeckName: trimmedDeckName, subjectId: newDeckSubjectId };
+  }
 
   async function runPreview(): Promise<void> {
     setState({ phase: "editing", busy: true, error: null });
     try {
-      const result = await window.nexus.previewLlmImport(
-        profileId,
-        kind,
-        answer,
-        needsDeck ? deckId : null,
-      );
+      const result = await window.nexus.previewLlmImport(profileId, kind, answer, deckChoice());
       switch (result.status) {
         case "ready":
+          // A fresh preview is always planned on the default (duplicates
+          // skipped), so the choice on screen starts there too.
+          setImportDuplicates(false);
           setState({ phase: "ready", preview: result.preview, busy: false, error: null });
           return;
         case "unreadable":
@@ -2035,6 +2072,39 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
     } catch (previewError) {
       setState({ phase: "editing", busy: false, error: s.readError });
       console.error("Nexus: failed to preview an LLM answer:", previewError);
+    }
+  }
+
+  /**
+   * Re-plans the parsed answer under the other duplicate choice (ADR-051) and
+   * swaps in the fresh preview — and, with it, the fresh token, since the plan
+   * the old one named no longer exists. The import block's `chooseDuplicate`,
+   * narrowed to the one group an LLM answer can produce: a rejected re-plan
+   * leaves the preview, the token and the buttons exactly as they were.
+   */
+  async function chooseDuplicates(preview: LlmImportPreview, next: boolean): Promise<void> {
+    setState({ phase: "ready", preview, busy: true, error: null });
+    try {
+      const result = await window.nexus.replanLlmImport(profileId, preview.token, next);
+      if (result.status === "ready") {
+        setImportDuplicates(next);
+        setState({ phase: "ready", preview: result.preview, busy: false, error: null });
+        return;
+      }
+      setState({
+        phase: "ready",
+        preview,
+        busy: false,
+        error: strings.settings.import.duplicateError,
+      });
+    } catch (replanError) {
+      setState({
+        phase: "ready",
+        preview,
+        busy: false,
+        error: strings.settings.import.duplicateError,
+      });
+      console.error("Nexus: failed to re-plan an LLM import:", replanError);
     }
   }
 
@@ -2068,6 +2138,9 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
   const previewing = state.phase === "ready" || state.phase === "applying";
   const busy = (state.phase === "editing" || state.phase === "ready") && state.busy;
   const frozen = busy || state.phase === "applying";
+  // A re-plan is replacing the token this screen holds (ADR-051), so nothing
+  // that would spend it — least of all the apply — may fire meanwhile.
+  const replanning = state.phase === "ready" && state.busy;
 
   if (state.phase === "applied") {
     return (
@@ -2094,6 +2167,7 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
             disabled={frozen}
             onClick={() => {
               setKind(option);
+              persistLlmImportKind(option);
               setCopied(false);
               invalidatePreview();
             }}
@@ -2114,6 +2188,7 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
             disabled={frozen}
             onClick={() => {
               setLanguage(option);
+              persistLlmPromptLanguage(option);
               setCopied(false);
             }}
           >
@@ -2142,29 +2217,91 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
       )}
 
       {needsDeck &&
-        (decks.length === 0 ? (
-          <p className="set__section-caption">{s.noDecks}</p>
+        (subjects.length === 0 ? (
+          // The one honest dead end left: a new deck needs a subject to live
+          // in, and this profile has none — the way out is named, not implied.
+          <p className="set__section-caption">{s.noSubjects}</p>
         ) : (
-          <>
-            <p className="set__section-caption">{s.deckLabel}</p>
-            <select
-              className="set__select"
-              value={deckId}
-              aria-label={s.deckLabel}
-              disabled={frozen}
-              onChange={(event) => {
-                setDeckId(event.target.value);
-                invalidatePreview();
-              }}
-            >
-              <option value="">{s.deckPlaceholder}</option>
-              {decks.map((deck) => (
-                <option key={deck.id} value={deck.id}>
-                  {deck.label}
-                </option>
+          <div className="set__llm-deck">
+            <p className="set__section-caption">{s.deckChoiceLabel}</p>
+            <div className="set__segmented" role="group" aria-label={s.deckChoiceLabel}>
+              {(["existing", "new"] as const).map((option) => (
+                <Button
+                  key={option}
+                  size="sm"
+                  variant={deckMode === option ? "primary" : "ghost"}
+                  aria-pressed={deckMode === option}
+                  disabled={frozen}
+                  onClick={() => {
+                    setDeckMode(option);
+                    invalidatePreview();
+                  }}
+                >
+                  {option === "existing" ? s.deckExistingOption : s.deckNewOption}
+                </Button>
               ))}
-            </select>
-          </>
+            </div>
+            {deckMode === "existing" ? (
+              decks.length === 0 ? (
+                <p className="set__section-caption">{s.noDecks}</p>
+              ) : (
+                <>
+                  <p className="set__section-caption">{s.deckLabel}</p>
+                  <select
+                    className="set__select"
+                    value={deckId}
+                    aria-label={s.deckLabel}
+                    disabled={frozen}
+                    onChange={(event) => {
+                      setDeckId(event.target.value);
+                      invalidatePreview();
+                    }}
+                  >
+                    <option value="">{s.deckPlaceholder}</option>
+                    {decks.map((deck) => (
+                      <option key={deck.id} value={deck.id}>
+                        {deck.label}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )
+            ) : (
+              <>
+                <TextField
+                  label={s.newDeckLabel}
+                  placeholder={s.newDeckPlaceholder}
+                  value={newDeckName}
+                  disabled={frozen}
+                  onChange={(event) => {
+                    setNewDeckName(event.target.value);
+                    // The plan on screen was made for the previous name; it
+                    // stops describing what „Uvezi" would do the moment this
+                    // changes.
+                    invalidatePreview();
+                  }}
+                />
+                <p className="set__section-caption">{s.newDeckSubjectLabel}</p>
+                <select
+                  className="set__select"
+                  value={newDeckSubjectId}
+                  aria-label={s.newDeckSubjectLabel}
+                  disabled={frozen}
+                  onChange={(event) => {
+                    setNewDeckSubjectId(event.target.value);
+                    invalidatePreview();
+                  }}
+                >
+                  <option value="">{s.newDeckSubjectPlaceholder}</option>
+                  {subjects.map((subject) => (
+                    <option key={subject.id} value={subject.id}>
+                      {subject.name}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+          </div>
         ))}
 
       <p className="set__section-caption">{s.answerLabel}</p>
@@ -2220,17 +2357,47 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
             <p className="set__section-caption">{s.cardsCaption}</p>
           )}
 
+          {/* ADR-051: the one part of the preview the user can still CHANGE.
+              The sentence says which way the plan currently goes; the answer
+              is the import block's own two-state pair, so the flows read as
+              siblings. */}
           {state.preview.duplicates > 0 && (
-            <p className="set__section-caption">
-              {s.duplicatesPrefix} {state.preview.duplicates}{" "}
-              {countUnit(
-                state.preview.duplicates,
-                s.duplicatesUnitOne,
-                s.duplicatesUnitFew,
-                s.duplicatesUnitMany,
-              )}{" "}
-              {s.duplicatesSuffix}
-            </p>
+            <div className="set__llm-duplicates">
+              <p className="set__section-caption">
+                {s.duplicatesPrefix} {state.preview.duplicates}{" "}
+                {countUnit(
+                  state.preview.duplicates,
+                  s.duplicatesUnitOne,
+                  s.duplicatesUnitFew,
+                  s.duplicatesUnitMany,
+                )}{" "}
+                {importDuplicates ? s.duplicatesSuffixImported : s.duplicatesSuffix}
+              </p>
+              <span
+                className="set__llm-duplicate-choice"
+                role="group"
+                aria-label={strings.settings.import.duplicateChoiceLabel}
+              >
+                {DUPLICATE_CHOICES.map((option) => (
+                  <Button
+                    key={option}
+                    size="sm"
+                    className={
+                      (option === "import") === importDuplicates
+                        ? "set__import-choice set__import-choice--active"
+                        : "set__import-choice"
+                    }
+                    aria-pressed={(option === "import") === importDuplicates}
+                    disabled={frozen}
+                    onClick={() => void chooseDuplicates(state.preview, option === "import")}
+                  >
+                    {option === "skip"
+                      ? strings.settings.import.duplicateSkipButton
+                      : strings.settings.import.duplicateImportButton}
+                  </Button>
+                ))}
+              </span>
+            </div>
           )}
 
           {state.preview.droppedFields > 0 && (
@@ -2266,7 +2433,7 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
               <Button
                 size="sm"
                 variant="primary"
-                disabled={state.phase === "applying"}
+                disabled={state.phase === "applying" || replanning}
                 onClick={() => void apply(state.preview)}
               >
                 {s.applyButton}
@@ -2275,7 +2442,7 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
             <Button
               size="sm"
               variant="ghost"
-              disabled={state.phase === "applying"}
+              disabled={state.phase === "applying" || replanning}
               onClick={() => void cancel()}
             >
               {shared.cancelButton}
@@ -2283,6 +2450,7 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
           </div>
 
           {state.phase === "applying" && <p className="app__muted">{s.applying}</p>}
+          {replanning && <p className="app__muted">{shared.previewRunning}</p>}
           {state.phase === "ready" && state.error != null && (
             <p className="set__error">{state.error}</p>
           )}

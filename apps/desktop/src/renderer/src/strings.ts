@@ -2487,12 +2487,22 @@ export const strings = {
       /** Step 3 — the answer. */
       answerLabel: "Odgovor asistenta",
       answerPlaceholder: "Nalepi ovde ono što ti je asistent odgovorio…",
-      /** The deck picker, shown only for cards: an odgovor iz ćaskanja names no deck, and a Nexus card lives in one. */
+      /** The deck choice, shown only for cards: an odgovor iz ćaskanja names no deck, and a Nexus card lives in one. Two paths — a deck the profile already has, or one this import creates. */
+      deckChoiceLabel: "Gde ulaze kartice",
+      deckExistingOption: "Postojeći špil",
+      deckNewOption: "Novi špil",
       deckLabel: "Špil za uvezene kartice",
       deckPlaceholder: "Izaberi špil",
-      /** Shown instead of the picker when the profile has no deck at all — an honest dead end with the way out named. */
-      noDecks:
-        "Još nemaš nijedan špil. Napravi ga na stranici Učenje, pa se vrati ovde — kartice moraju negde da uđu.",
+      /** The new-deck form: a name, and the subject the deck lives under — a špil cannot exist outside an oblast. */
+      newDeckLabel: "Naziv novog špila",
+      newDeckPlaceholder: "npr. Ćelija",
+      newDeckSubjectLabel: "Oblast za novi špil",
+      newDeckSubjectPlaceholder: "Izaberi oblast",
+      /** Shown under „Postojeći špil" when the profile has none — the way out is the other path, one click away. */
+      noDecks: "Još nemaš nijedan špil — izaberi „Novi špil“ da ga napraviš ovde.",
+      /** Shown instead of the whole deck choice when the profile has no subject at all — an honest dead end with the way out named, because a new deck needs an oblast to live in. */
+      noSubjects:
+        "Još nemaš nijednu oblast. Napravi je na stranici Učenje, pa se vrati ovde — svaki špil živi u jednoj oblasti.",
       previewButton: "Pregledaj",
       previewRunning: "Čitanje odgovora…",
       /** The preview's three numbers, which answer three different questions. */
@@ -2502,12 +2512,20 @@ export const strings = {
       /** Said under the table, because „Uvozi se" being larger than „Pročitano" surprises anyone who has not met cloze cards. */
       cardsCaption:
         "Jedna rečenica sa više praznina postaje više kartica — po jedna za svaku prazninu.",
-      /** Shown only when the planner recognised events this profile already has. There is no choice to make here, so the sentence says which way it went. */
+      /**
+       * Shown only when the planner recognised events this profile already has
+       * (ADR-051). The sentence says which way the plan currently goes, and the
+       * choice beside it — the import block's own „Preskoči / Uvezi svejedno"
+       * pair, read from `settings.import` so the two flows cannot drift — is
+       * how the user says otherwise.
+       */
       duplicatesPrefix: "Već imaš",
       duplicatesUnitOne: "događaj",
       duplicatesUnitFew: "događaja",
       duplicatesUnitMany: "događaja",
       duplicatesSuffix: "iz ovog odgovora — oni se ne uvoze ponovo.",
+      /** The same sentence's other ending, once a re-plan said „uvezi svejedno": nothing merges, the rows arrive as new. */
+      duplicatesSuffixImported: "iz ovog odgovora — ipak se uvoze, kao novi događaji.",
       /** Shown only when unknown keys were dropped, so „uvezeno je manje polja nego što sam video" is never a surprise. */
       droppedPrefix: "Odbačeno je",
       droppedUnitOne: "polje",

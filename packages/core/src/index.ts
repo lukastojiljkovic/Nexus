@@ -266,6 +266,7 @@ export {
   LLM_MAX_RECORDS,
   LLM_MAX_TEXT_LENGTH,
   LLM_PROMPT_LANGUAGES,
+  LLM_SUBJECT_SOURCE_ID,
   parseLlmAnswer,
   translateLlmRecords,
 } from "./imex/llmPrompts.js";
@@ -274,6 +275,7 @@ export type {
   LlmAnswerProblem,
   LlmAnswerReport,
   LlmCardRecord,
+  LlmDeckChoice,
   LlmEventRecord,
   LlmImportKind,
   LlmPromptLanguage,

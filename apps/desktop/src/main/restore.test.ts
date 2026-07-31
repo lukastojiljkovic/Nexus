@@ -96,6 +96,7 @@ import {
   previewLlmImport,
   previewRestore,
   replanImport,
+  replanLlmImport,
   restoreStatus,
   undoRestore,
   type ImportDeps,
@@ -2349,7 +2350,7 @@ describe("LLM-assisted import", () => {
         { front: "Šta je ćelija?", back: "Osnovna jedinica" },
         { clozeText: "Reka je {{Sava}}, grad je {{Beograd}}." },
       ]),
-      deck.id,
+      { existingDeckId: deck.id },
     );
     if (previewed.status !== "ready") unreachable();
     // Two records, three rows: the cloze template has two blanks.
@@ -2410,8 +2411,135 @@ describe("LLM-assisted import", () => {
     const answer = llmAnswer("cards", [{ front: "a", back: "b" }]);
 
     expect(() => previewLlmImport(deps, profileB, "cards", answer, null)).toThrow(/deck/i);
-    expect(() => previewLlmImport(deps, profileB, "cards", answer, "not-a-deck")).toThrow(
-      /No active deck/,
+    expect(() =>
+      previewLlmImport(deps, profileB, "cards", answer, { existingDeckId: "not-a-deck" }),
+    ).toThrow(/No active deck/);
+  });
+
+  it("creates a NEW deck under the chosen subject, and the cards inside it", async () => {
+    const profileB = createProfile(dbB, "B");
+    const subject = new SubjectStore(dbB.raw, profileB).create({ name: "Biologija" });
+    const { deps } = makeTestDeps(dbB, null);
+
+    const previewed = previewLlmImport(
+      deps,
+      profileB,
+      "cards",
+      llmAnswer("cards", [{ front: "Šta je ćelija?", back: "Osnovna jedinica" }]),
+      { newDeckName: "Ćelija", subjectId: subject.id },
+    );
+    if (previewed.status !== "ready") unreachable();
+    // The deck row itself is planned, so „Uvozi se" counts it beside the card.
+    expect(previewed.preview).toMatchObject({ records: 1, accepted: 1, planned: 2 });
+
+    await applyLlmImport(deps, profileB, previewed.preview.token);
+
+    const decks = new DeckStore(dbB.raw, profileB).listActive();
+    expect(decks).toHaveLength(1);
+    expect(decks[0]).toMatchObject({ name: "Ćelija", subjectId: subject.id });
+    // No subject was created — the seam resolved onto the chosen one.
+    expect(new SubjectStore(dbB.raw, profileB).listActive()).toHaveLength(1);
+    expect(new CardStore(dbB.raw, profileB).listByDeck(decks[0]?.id ?? "")).toHaveLength(1);
+  });
+
+  it("resolves a new-deck name that a live deck of that subject already carries onto it", async () => {
+    const profileB = createProfile(dbB, "B");
+    const subject = new SubjectStore(dbB.raw, profileB).create({ name: "Biologija" });
+    const decks = new DeckStore(dbB.raw, profileB);
+    const existing = decks.create({ subjectId: subject.id, name: "Ćelija" });
+    const { deps } = makeTestDeps(dbB, null);
+
+    const previewed = previewLlmImport(
+      deps,
+      profileB,
+      "cards",
+      llmAnswer("cards", [{ front: "a", back: "b" }]),
+      // Whitespace included, because the store itself trims before comparing.
+      { newDeckName: "  Ćelija ", subjectId: subject.id },
+    );
+    if (previewed.status !== "ready") unreachable();
+    // Get-or-create: the exact-name match IS the deck the user named, so no
+    // second „Ćelija" is planned and the count is the card alone.
+    expect(previewed.preview).toMatchObject({ records: 1, accepted: 1, planned: 1 });
+
+    await applyLlmImport(deps, profileB, previewed.preview.token);
+    expect(decks.listActive().map((row) => row.id)).toEqual([existing.id]);
+    expect(new CardStore(dbB.raw, profileB).listByDeck(existing.id)).toHaveLength(1);
+  });
+
+  it("refuses a new deck under a subject that is not a live subject of this profile", () => {
+    const profileB = createProfile(dbB, "B");
+    const { deps } = makeTestDeps(dbB, null);
+    const answer = llmAnswer("cards", [{ front: "a", back: "b" }]);
+
+    expect(() =>
+      previewLlmImport(deps, profileB, "cards", answer, {
+        newDeckName: "Ćelija",
+        subjectId: "not-a-subject",
+      }),
+    ).toThrow(/No active subject/);
+  });
+
+  it("re-plans duplicate events onto „uvezi svejedno“ and back, rotating the token (ADR-051)", async () => {
+    const profileB = createProfile(dbB, "B");
+    const events = new EventStore(dbB.raw, profileB);
+    events.create({ title: "Sastanak", startAt: "2026-08-12T10:00", allDay: false });
+    const { deps } = makeTestDeps(dbB, null);
+
+    const previewed = previewLlmImport(
+      deps,
+      profileB,
+      "events",
+      llmAnswer("events", [
+        { title: "Sastanak", startAt: "2026-08-12T10:00" },
+        { title: "Koncert", startAt: "2026-08-12T20:00" },
+      ]),
+      null,
+    );
+    if (previewed.status !== "ready") unreachable();
+    expect(previewed.preview).toMatchObject({ planned: 1, duplicates: 1 });
+
+    const replanned = replanLlmImport(deps, profileB, previewed.preview.token, true);
+    if (replanned.status !== "ready") unreachable();
+    // The group is still REPORTED — that is what lets the screen offer the way
+    // back — but the plan now carries both events.
+    expect(replanned.preview).toMatchObject({ planned: 2, duplicates: 1 });
+    expect(replanned.preview.token).not.toBe(previewed.preview.token);
+    // The replaced token no longer applies anything.
+    await expect(applyLlmImport(deps, profileB, previewed.preview.token)).rejects.toThrow(/stale/);
+
+    const back = replanLlmImport(deps, profileB, replanned.preview.token, false);
+    if (back.status !== "ready") unreachable();
+    expect(back.preview).toMatchObject({ planned: 1, duplicates: 1 });
+
+    const again = replanLlmImport(deps, profileB, back.preview.token, true);
+    if (again.status !== "ready") unreachable();
+    await applyLlmImport(deps, profileB, again.preview.token);
+    // The duplicate arrived as a second, independent row — nothing was merged.
+    expect(events.listActive().map((event) => event.title).sort()).toEqual([
+      "Koncert",
+      "Sastanak",
+      "Sastanak",
+    ]);
+  });
+
+  it("refuses a re-plan with no pending preview, a stale token, or another profile", () => {
+    const profileB = createProfile(dbB, "B");
+    const { deps } = makeTestDeps(dbB, null);
+
+    expect(() => replanLlmImport(deps, profileB, "whatever", true)).toThrow(/No LLM/);
+
+    const previewed = previewLlmImport(
+      deps,
+      profileB,
+      "tasks",
+      llmAnswer("tasks", [{ title: "A" }]),
+      null,
+    );
+    if (previewed.status !== "ready") unreachable();
+    expect(() => replanLlmImport(deps, profileB, "stale-token", true)).toThrow(/stale/);
+    expect(() => replanLlmImport(deps, "other-profile", previewed.preview.token, true)).toThrow(
+      /different profile/,
     );
   });
 

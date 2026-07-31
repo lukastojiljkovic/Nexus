@@ -5233,6 +5233,33 @@ button.cal__grid-event--dragging {
   font-size: var(--nx-font-size-caption);
   line-height: 1.5;
 }
+/* The deck choice for kartice — „Postojeći špil / Novi špil" and whichever
+   form follows. The `.set__apkg-subject` column's recipe, at the same width,
+   so the two study-bound imports read as siblings. */
+.set__llm-deck {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  max-width: 320px;
+}
+/* „Već imaš N događaja…" plus its two-state answer (ADR-051): the sentence and
+   the same typographic choice pair the archive import's duplicate rows use —
+   no fill, no glow, the active answer carried by accent text and weight. */
+.set__llm-duplicates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.set__llm-duplicate-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+/* Overrides `.set__import-block .nx-button`'s `align-self: flex-start`, for the
+   reason `.set__import-duplicate-choice` does: these sit in a row of their own. */
+.set__llm-duplicate-choice .nx-button {
+  align-self: center;
+}
 /* Native select matched to the textfield input (tokens only, no custom arrow; mirrors .study__select). */
 .set__select {
   font: inherit;

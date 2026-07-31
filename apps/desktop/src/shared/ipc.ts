@@ -272,7 +272,7 @@ export const IpcChannel = {
   imexImportApkgPreview: "imex:import-apkg-preview",
   imexImportApkgApply: "imex:import-apkg-apply",
   imexImportApkgCancel: "imex:import-apkg-cancel",
-  // The LLM-assisted import (IMEX-005). Three channels, not four: there is no
+  // The LLM-assisted import (IMEX-005). Four channels, not five: there is no
   // FILE to pick — the "source" is text the user pasted out of their own chat,
   // which travels with the preview request. The prompt itself needs no channel
   // at all: `buildLlmPrompt` is pure, so the renderer builds it in place and
@@ -280,9 +280,13 @@ export const IpcChannel = {
   //
   // Its own channels for the same reason every other import has its own: a
   // shared one would be a validated field away from letting a paste trigger a
-  // restore. The preview/apply/cancel shape is deliberately identical, though —
-  // same one-slot undo, same token — because the user is doing the same thing.
+  // restore. The preview/replan/apply/cancel shape is deliberately identical,
+  // though — same one-slot undo, same token — because the user is doing the
+  // same thing. The replan is `imex:import-replan`'s twin: it re-plans the
+  // records main already parsed under a changed duplicate answer, so changing
+  // that answer never re-sends (or re-parses) the paste.
   imexImportLlmPreview: "imex:import-llm-preview",
+  imexImportLlmReplan: "imex:import-llm-replan",
   imexImportLlmApply: "imex:import-llm-apply",
   imexImportLlmCancel: "imex:import-llm-cancel",
   // Plain `.md` files into notes (IMEX-007). Deliberately NOT a mode on the
@@ -4004,10 +4008,11 @@ export interface LlmImportPreview {
   /** Rows the plan will insert. */
   planned: number;
   /**
-   * Rows the PLANNER will skip because this profile already holds them
-   * (ADR-051 — an event's identity is its title, start and all-day flag).
-   * Only ever non-zero for `"events"`; there is no choice to answer here, and
-   * the copy says which way it goes.
+   * Rows the planner RECOGNISED as ones this profile already holds (ADR-051 —
+   * an event's identity is its title, start and all-day flag). Only ever
+   * non-zero for `"events"`. Reported whichever way the current choice points
+   * — skipped by default, imported after an `imex:import-llm-replan` said so —
+   * because the screen must always be able to offer the other answer.
    */
   duplicates: number;
   skipped: LlmImportSkip[];
@@ -4031,10 +4036,29 @@ export type LlmImportPreviewResult =
 export type LlmImportApplyResult = RestoreApplyResult;
 
 /**
+ * Longest name „Novi špil" accepts — the ceiling `@nexus/db`'s own `DeckStore`
+ * holds every deck name to, redeclared here (like every other cap on this wire)
+ * so main can bound the payload without waiting for the store to refuse.
+ */
+export const LLM_IMPORT_MAX_DECK_NAME_LENGTH = 200;
+
+/**
+ * Where imported cards land (IMEX-005): a deck the profile already has, or one
+ * the import creates under an existing subject. `ApkgImportSubjectChoice`'s
+ * precedent one level down — a deck cannot exist outside a subject, so the new
+ * arm has to say which one. Told apart by which field is present; main
+ * validates the shape structurally and `restore.ts` proves the ids are live
+ * rows of THIS profile, the same division the `.apkg` subject follows.
+ */
+export type LlmImportDeckChoice =
+  | { existingDeckId: string }
+  | { newDeckName: string; subjectId: string };
+
+/**
  * The whole source of an LLM import: the kind being imported, the text the user
  * pasted, and — for `"cards"` only — the deck the cards land in.
  *
- * `deckId` is null for the other two kinds, and required for cards: an answer
+ * `deck` is null for the other two kinds, and required for cards: an answer
  * out of a chat names no deck, and a Nexus card lives in one, so it is the one
  * decision only the user can make. Tasks need no such choice — they land in
  * this profile's own default list, exactly as an imported archive's do — and
@@ -4045,7 +4069,22 @@ export interface ImexImportLlmPreviewRequest {
   kind: LlmImportKind;
   /** The pasted answer, capped at `LLM_IMPORT_MAX_ANSWER_LENGTH`. */
   text: string;
-  deckId: string | null;
+  deck: LlmImportDeckChoice | null;
+}
+
+/**
+ * Re-plans the answer THIS preview already parsed, under a different duplicate
+ * choice (ADR-051) — `ImexImportReplanRequest`'s twin, narrowed to the one
+ * group an LLM answer can produce: events. `token` names the plan being
+ * replaced, and main refuses any other value; the reply mints a fresh one,
+ * exactly as the archive re-plan does. The pasted text is deliberately absent —
+ * a re-plan re-uses the records main already holds, never a second paste.
+ */
+export interface ImexImportLlmReplanRequest {
+  profileId: string;
+  token: string;
+  /** True imports the recognised duplicates as new, independent rows; false (the default every fresh preview is planned on) skips them. */
+  importDuplicates: boolean;
 }
 
 /** `token` names the exact plan being confirmed — main refuses any other value. */
@@ -4733,13 +4772,26 @@ export interface NexusApi {
    * really planning it against this profile. No file and no dialog: the source
    * is `text`, which the user pasted out of their own chat, and the prompt that
    * produced it was built in the renderer by `@nexus/core`'s pure
-   * `buildLlmPrompt` — Nexus talks to no model, here or anywhere.
+   * `buildLlmPrompt` — Nexus talks to no model, here or anywhere. `deck` is
+   * required for `"cards"` and null otherwise — an existing deck, or a new one
+   * this import creates under an existing subject.
    */
   previewLlmImport(
     profileId: string,
     kind: LlmImportKind,
     text: string,
-    deckId: string | null,
+    deck: LlmImportDeckChoice | null,
+  ): Promise<LlmImportPreviewResult>;
+  /**
+   * Re-plans the answer `token`'s preview already parsed, under a changed
+   * duplicate choice (ADR-051), and answers a fresh preview carrying a fresh
+   * token — `replanImport`'s twin. Never re-sends the paste: changing the
+   * answer costs a re-plan of records main already holds, nothing more.
+   */
+  replanLlmImport(
+    profileId: string,
+    token: string,
+    importDuplicates: boolean,
   ): Promise<LlmImportPreviewResult>;
   /**
    * Confirms the plan `token` names, ADDING its rows to this profile. Undoable

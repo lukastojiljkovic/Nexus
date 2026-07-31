@@ -9,6 +9,7 @@ import {
   LLM_MAX_RECORDS,
   LLM_MAX_TEXT_LENGTH,
   LLM_PROMPT_LANGUAGES,
+  LLM_SUBJECT_SOURCE_ID,
   parseLlmAnswer,
   translateLlmRecords,
   type LlmImportKind,
@@ -511,7 +512,7 @@ describe("translateLlmRecords", () => {
     const { data, seededIds, planned } = translateLlmRecords(parsed, {
       profileId: "p1",
       now: NOW,
-      deckId: null,
+      deck: null,
     });
     expect(planned).toBe(2);
     expect(seededIds.size).toBe(0);
@@ -556,7 +557,7 @@ describe("translateLlmRecords", () => {
     const { data, planned } = translateLlmRecords(parsed, {
       profileId: "p1",
       now: NOW,
-      deckId: null,
+      deck: null,
     });
     expect(planned).toBe(1);
     expect(data.events[0]).toMatchObject({
@@ -581,7 +582,7 @@ describe("translateLlmRecords", () => {
     const { data, seededIds, planned } = translateLlmRecords(parsed, {
       profileId: "p1",
       now: NOW,
-      deckId: "deck-1",
+      deck: { kind: "existing", id: "deck-1" },
     });
     expect(planned).toBe(1);
     expect(data.decks).toEqual([]);
@@ -614,7 +615,7 @@ describe("translateLlmRecords", () => {
     const { data, planned } = translateLlmRecords(parsed, {
       profileId: "p1",
       now: NOW,
-      deckId: "deck-1",
+      deck: { kind: "existing", id: "deck-1" },
     });
     expect(planned).toBe(2);
     expect(data.cards.map((card) => card.clozeOrdinal)).toEqual([0, 1]);
@@ -627,6 +628,36 @@ describe("translateLlmRecords", () => {
     expect(data.cards[1]?.front).toBe("Beograd je glavni grad […].");
   });
 
+  it("plans a NEW deck as a row of the translation, seeded only through its subject", () => {
+    const parsed: LlmRecords = {
+      kind: "cards",
+      records: [{ kind: "basic", front: "2+2", back: "4" }],
+    };
+    const { data, seededIds, planned } = translateLlmRecords(parsed, {
+      profileId: "p1",
+      now: NOW,
+      deck: { kind: "new", name: "Ćelija", subjectId: "subject-1" },
+    });
+    // The deck row itself is planned, so the count is the card plus the deck.
+    expect(planned).toBe(2);
+    // No subject row: the chosen subject already exists, and only the SEAM names it.
+    expect(data.subjects).toEqual([]);
+    expect([...seededIds]).toEqual([[LLM_SUBJECT_SOURCE_ID, "subject-1"]]);
+    expect(data.decks).toEqual([
+      {
+        id: LLM_DECK_SOURCE_ID,
+        profileId: "p1",
+        subjectId: LLM_SUBJECT_SOURCE_ID,
+        name: "Ćelija",
+        createdAt: NOW,
+        updatedAt: NOW,
+      },
+    ]);
+    // The cards still point at the deck by its source-side name — the planner
+    // mints the real id once, for the row and every reference alike.
+    expect(data.cards.map((card) => card.deckId)).toEqual([LLM_DECK_SOURCE_ID]);
+  });
+
   it("mints a distinct id for every planned row", () => {
     const parsed: LlmRecords = {
       kind: "cards",
@@ -635,7 +666,11 @@ describe("translateLlmRecords", () => {
         { kind: "cloze", clozeText: "{{x}} i {{y}}" },
       ],
     };
-    const { data } = translateLlmRecords(parsed, { profileId: "p1", now: NOW, deckId: "d" });
+    const { data } = translateLlmRecords(parsed, {
+      profileId: "p1",
+      now: NOW,
+      deck: { kind: "existing", id: "d" },
+    });
     expect(new Set(data.cards.map((card) => card.id)).size).toBe(data.cards.length);
   });
 
@@ -643,7 +678,7 @@ describe("translateLlmRecords", () => {
     expect(() =>
       translateLlmRecords(
         { kind: "cards", records: [{ kind: "basic", front: "a", back: "b" }] },
-        { profileId: "p1", now: NOW, deckId: null },
+        { profileId: "p1", now: NOW, deck: null },
       ),
     ).toThrow(/deck/i);
   });
@@ -651,7 +686,7 @@ describe("translateLlmRecords", () => {
   it("plans every other module empty", () => {
     const { data } = translateLlmRecords(
       { kind: "tasks", records: [{ title: "A", dueDate: null, priority: "none", description: null }] },
-      { profileId: "p1", now: NOW, deckId: null },
+      { profileId: "p1", now: NOW, deck: null },
     );
     expect(data.notes).toEqual([]);
     expect(data.taskLists).toEqual([]);

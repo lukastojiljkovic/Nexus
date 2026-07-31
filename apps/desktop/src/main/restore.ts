@@ -21,6 +21,9 @@ import {
   type ImportPlanReport as CoreImportPlanReport,
   type ImportSkipReason as CoreImportSkipReason,
   type ImportProblem,
+  type LlmAnswerReport,
+  type LlmDeckChoice,
+  type LlmRecords,
   type LlmSkippedRecord,
   type ParsedApkg,
   type ProfileData,
@@ -59,6 +62,7 @@ import type {
   ImportSkipReason,
   LlmImportAnswerProblem,
   LlmImportApplyResult,
+  LlmImportDeckChoice,
   LlmImportKind,
   LlmImportPreview,
   LlmImportPreviewResult,
@@ -1514,21 +1518,29 @@ export function cancelApkgImport(): void {
 // --- LLM-assisted import (IMEX-005) -----------------------------------------
 
 /**
- * One successful LLM preview, held exactly as `applyLlmImport` needs it: the
- * plan — already translated, remapped, stamped and counted, so applying writes
- * precisely what the user was shown — the parse's own report, and the token
- * proving an apply is confirming THIS plan.
+ * One successful LLM preview, held exactly as `applyLlmImport` and
+ * `replanLlmImport` need it: the plan — already translated, remapped, stamped
+ * and counted, so applying writes precisely what the user was shown — plus what
+ * a re-plan re-uses, and the token proving either call is confirming THIS plan.
  *
- * The shortest of the four pending shapes, because this flow has the least
- * state: there is no file to hold open, no bytes to keep resident and nothing
- * to re-plan. The user's pasted TEXT is deliberately not kept either — it has
- * already become a plan, and holding their content in main's heap for no reason
- * is exactly what `clearRestoreState` exists to prevent.
+ * What a re-plan re-uses is the PARSED RECORDS and their report, never the raw
+ * text: the paste has already been read once, and its answer cannot change, so
+ * keeping the prose around would be holding more of the user's content in
+ * main's heap than the flow needs — exactly what `clearRestoreState` exists to
+ * prevent. The deck choice is kept as the WIRE shape and re-resolved against
+ * the live stores each time, for the reason `replanImport` re-reads its target:
+ * "now" has moved since the preview.
  */
 interface ReadyLlm {
   token: string;
   /** The profile this plan was computed against — the apply refuses any other, mirroring the token check. */
   profileId: string;
+  kind: LlmImportKind;
+  parsed: LlmRecords;
+  report: LlmAnswerReport;
+  deck: LlmImportDeckChoice | null;
+  /** The duplicate answer the plan was computed under (ADR-051) — `false`, the safe default, until a re-plan says otherwise. */
+  importDuplicates: boolean;
   plan: ForeignImportPlan;
   preview: LlmImportPreview;
 }
@@ -1537,6 +1549,69 @@ interface ReadyLlm {
 function toLlmSkip(skip: LlmSkippedRecord): LlmImportSkip {
   const reason: LlmImportSkipReason = skip.reason;
   return { index: skip.index, reason, field: skip.field };
+}
+
+/**
+ * What preview and re-plan share: translate the parsed records, really plan
+ * them against the profile as it is NOW, and mint the fresh token the result is
+ * named by — `importPreviewOf`'s role here, so the two calls can never describe
+ * the same answer differently. The ONLY things that legitimately differ between
+ * them are the inputs this takes.
+ *
+ * `choices` narrows to the one duplicate group an LLM answer can produce:
+ * events (ADR-051). The other three groups need no answer, because the
+ * translation cannot plan a person, a document or an attachment at all.
+ */
+function planLlm(
+  deps: ImportDeps,
+  profileId: string,
+  kind: LlmImportKind,
+  parsed: LlmRecords,
+  report: LlmAnswerReport,
+  deck: LlmImportDeckChoice | null,
+  importDuplicates: boolean,
+): ReadyLlm {
+  const translation = translateLlmRecords(parsed, {
+    profileId,
+    now: new Date().toISOString(),
+    deck: kind === "cards" ? resolveLlmDeck(deps, profileId, deck) : null,
+  });
+
+  // The target is read as late as possible — immediately before planning
+  // against it — for `previewImport`'s reason: every identity question the
+  // planner answers is answered about the profile as it is NOW. `seededIds` is
+  // the one thing added to it (ADR-052's seam): a card import resolves its
+  // `llm:deck` name onto the deck the user picked — or, for a new deck, its
+  // `llm:subject` onto the chosen subject, and the deck row is then minted
+  // exactly as every other planned row is.
+  const plan = planForeignImport(
+    { data: translation.data, dropped: [], profilePicture: null },
+    { ...importTargetFor(deps, profileId), seededIds: translation.seededIds },
+    uuidv7,
+    { event: importDuplicates ? "import" : "skip" },
+  );
+
+  // Counted off the PLAN rather than off the translation, so the number on
+  // screen is what will actually be inserted: the planner's duplicate rule
+  // (ADR-051) takes events this profile already has out of it — unless the
+  // user said otherwise — and `duplicates` below says how many it recognised.
+  // One kind touches one module, so summing the three this import can reach is
+  // exactly the row count.
+  const planned = countProfileModules(plan.data);
+
+  const token = randomBytes(16).toString("hex");
+  const preview: LlmImportPreview = {
+    token,
+    kind,
+    records: report.total,
+    accepted: report.accepted,
+    planned: planned.tasks + planned.calendar + planned.study,
+    duplicates: plan.report.duplicates.reduce((total, group) => total + group.count, 0),
+    skipped: report.skipped.map(toLlmSkip),
+    droppedFields: report.droppedFields,
+  };
+
+  return { token, profileId, kind, parsed, report, deck, importDuplicates, plan, preview };
 }
 
 /**
@@ -1550,16 +1625,20 @@ function toLlmSkip(skip: LlmSkippedRecord): LlmImportSkip {
  * not looking at. The refusal names what the answer actually was, so the fix is
  * obvious.
  *
- * `deckId` is checked here, not at the IPC edge, for `resolveApkgSubject`'s
- * reason: whether a deck EXISTS in this profile is a semantic question only the
- * live stores can answer.
+ * `deck` is checked in `resolveLlmDeck`, not at the IPC edge, for
+ * `resolveApkgSubject`'s reason: whether a deck or a subject EXISTS in this
+ * profile is a semantic question only the live stores can answer.
+ *
+ * Always planned on the safe duplicate default — every recognised event
+ * skipped (ADR-051) — because the user has not been shown the count yet, let
+ * alone answered it. `replanLlmImport` is what carries an answer back.
  */
 export function previewLlmImport(
   deps: ImportDeps,
   profileId: string,
   kind: LlmImportKind,
   text: string,
-  deckId: string | null,
+  deck: LlmImportDeckChoice | null,
 ): LlmImportPreviewResult {
   pendingLlm = null;
 
@@ -1573,66 +1652,99 @@ export function previewLlmImport(
     return { status: "kind-mismatch", answered };
   }
 
-  const translation = translateLlmRecords(answer.parsed, {
+  pendingLlm = planLlm(deps, profileId, kind, answer.parsed, answer.report, deck, false);
+  return { status: "ready", preview: pendingLlm.preview };
+}
+
+/**
+ * Re-plans the answer this preview already parsed, under a different duplicate
+ * choice (ADR-051), and answers a whole fresh preview — `replanImport`'s twin,
+ * minus the parse it never needs to redo: the records are already records, so a
+ * re-plan is a re-translate and a fresh planning pass against the live profile.
+ * Changing a choice must not re-send (or re-hold) the paste.
+ *
+ * Synchronous on purpose, exactly as `replanImport` is: there is no `await`
+ * below the guards, so `pendingLlm` cannot be replaced out from under this
+ * call. A FRESH token, and the slot replaced wholesale — the plan the previous
+ * token named no longer exists, so a screen still holding it must not be able
+ * to apply it. When the re-plan itself throws (a deck deleted since the
+ * preview), the slot is left untouched and the token on screen still applies
+ * the plan the user already saw.
+ */
+export function replanLlmImport(
+  deps: ImportDeps,
+  profileId: string,
+  token: string,
+  importDuplicates: boolean,
+): LlmImportPreviewResult {
+  const ready = pendingLlm;
+  if (ready === null) {
+    throw new Error("No LLM import preview is ready to re-plan.");
+  }
+  if (ready.token !== token) {
+    throw new Error("This LLM import preview is stale; re-run the preview before re-planning it.");
+  }
+  if (ready.profileId !== profileId) {
+    throw new Error("This LLM import preview was computed for a different profile.");
+  }
+
+  pendingLlm = planLlm(
+    deps,
     profileId,
-    now: new Date().toISOString(),
-    deckId: kind === "cards" ? resolveLlmDeck(deps, profileId, deckId) : null,
-  });
-
-  // The target is read as late as possible — immediately before planning
-  // against it — for `previewImport`'s reason: every identity question the
-  // planner answers is answered about the profile as it is NOW. `seededIds` is
-  // the one thing added to it (ADR-052's seam): a card import resolves its
-  // single `llm:deck` name onto the deck the user picked, so no deck row is
-  // ever created.
-  const plan = planForeignImport(
-    { data: translation.data, dropped: [], profilePicture: null },
-    { ...importTargetFor(deps, profileId), seededIds: translation.seededIds },
-    uuidv7,
+    ready.kind,
+    ready.parsed,
+    ready.report,
+    ready.deck,
+    importDuplicates,
   );
-
-  // Counted off the PLAN rather than off the translation, so the number on
-  // screen is what will actually be inserted: the planner's duplicate rule
-  // (ADR-051) takes events this profile already has out of it, and `duplicates`
-  // below says how many. One kind touches one module, so summing the three this
-  // import can reach is exactly the row count.
-  const planned = countProfileModules(plan.data);
-
-  const token = randomBytes(16).toString("hex");
-  const preview: LlmImportPreview = {
-    token,
-    kind,
-    records: answer.report.total,
-    accepted: answer.report.accepted,
-    planned: planned.tasks + planned.calendar + planned.study,
-    duplicates: plan.report.duplicates.reduce((total, group) => total + group.count, 0),
-    skipped: answer.report.skipped.map(toLlmSkip),
-    droppedFields: answer.report.droppedFields,
-  };
-
-  pendingLlm = { token, profileId, plan, preview };
-  return { status: "ready", preview };
+  return { status: "ready", preview: pendingLlm.preview };
 }
 
 /**
  * The renderer's deck choice, resolved against the profile as it is NOW —
  * `resolveApkgSubject`'s twin, and split from the IPC edge for the same reason:
- * `main/index.ts` proves the payload is a string or null, and this proves the
- * deck it names is a live deck of THIS profile. A renderer naming another
- * profile's deck — or a soft-deleted one — must be refused, not planned around.
+ * `main/index.ts` proves the payload's shape, and this proves the rows it names
+ * are live rows of THIS profile. A renderer naming another profile's deck or
+ * subject — or a soft-deleted one — must be refused, not planned around.
+ *
+ * A new deck is GET-OR-CREATE by exact name within the chosen subject: the
+ * store has no name-taken rule (two decks called „Kolokvijum" may coexist), but
+ * a user typing a name their subject already carries means THAT deck, and a
+ * silent second one under the same name would be indistinguishable from it on
+ * every screen. Exact string equality after the store's own trim — the same
+ * deliberate strictness `mintTags` applies, and for the same reason: folding
+ * case here would merge decks the app itself considers distinct.
  */
-function resolveLlmDeck(deps: ImportDeps, profileId: string, deckId: string | null): string {
-  if (deckId === null) {
+function resolveLlmDeck(
+  deps: ImportDeps,
+  profileId: string,
+  choice: LlmImportDeckChoice | null,
+): LlmDeckChoice {
+  if (choice === null) {
     throw new Error("An LLM card import needs a deck for the cards to land in.");
   }
-  const deck = deps
-    .deckStore(profileId)
-    .listActive()
-    .find((row) => row.id === deckId);
-  if (deck === undefined) {
-    throw new Error(`No active deck "${deckId}" in this profile.`);
+  const decks = deps.deckStore(profileId).listActive();
+  if ("existingDeckId" in choice) {
+    const deck = decks.find((row) => row.id === choice.existingDeckId);
+    if (deck === undefined) {
+      throw new Error(`No active deck "${choice.existingDeckId}" in this profile.`);
+    }
+    return { kind: "existing", id: deck.id };
   }
-  return deck.id;
+  const name = choice.newDeckName.trim();
+  if (name.length === 0) {
+    throw new Error("An LLM card import needs a name for the new deck.");
+  }
+  const subject = deps
+    .subjectStore(profileId)
+    .listActive()
+    .find((row) => row.id === choice.subjectId);
+  if (subject === undefined) {
+    throw new Error(`No active subject "${choice.subjectId}" in this profile.`);
+  }
+  const existing = decks.find((row) => row.subjectId === subject.id && row.name === name);
+  if (existing !== undefined) return { kind: "existing", id: existing.id };
+  return { kind: "new", name, subjectId: subject.id };
 }
 
 /**

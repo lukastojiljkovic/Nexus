@@ -262,6 +262,7 @@ import {
   previewLlmImport,
   previewRestore,
   replanImport,
+  replanLlmImport,
   restoreStatus,
   undoRestore,
   type ImportDeps,
@@ -274,6 +275,7 @@ import {
   IpcChannel,
   LLM_IMPORT_KINDS,
   LLM_IMPORT_MAX_ANSWER_LENGTH,
+  LLM_IMPORT_MAX_DECK_NAME_LENGTH,
   MAX_BACKGROUND_BYTES,
   MAX_BACKGROUND_DIM,
   MAX_PROFILE_PICTURE_BYTES,
@@ -316,6 +318,7 @@ import {
   type ImportPickResult,
   type ImportPreviewResult,
   type LlmImportApplyResult,
+  type LlmImportDeckChoice,
   type LlmImportKind,
   type LlmImportPreviewResult,
   type MarkdownImportResult,
@@ -1095,6 +1098,46 @@ function asLlmAnswerText(value: unknown, field: string): string {
     );
   }
   return value;
+}
+
+/**
+ * `imex:import-llm-preview`'s deck choice (IMEX-005) — `asApkgSubjectChoice`'s
+ * twin, with the null arm the `.apkg` has no use for: only a card import needs
+ * a deck at all. Structurally validated here — EXACTLY one of the two arms, a
+ * new name within the same ceiling the deck store itself enforces, and a
+ * subject named exactly when a deck is being created — and semantically
+ * validated in `restore.ts`, which is where the profile's live decks and
+ * subjects can be asked whether the named rows actually exist.
+ */
+function asLlmDeckChoice(value: unknown, field: string): LlmImportDeckChoice | null {
+  if (value === null) return null;
+  const body = asRecord(value);
+  const existingDeckId = asNullableId(body.existingDeckId, `${field}.existingDeckId`);
+  const newDeckName = asNullableString(body.newDeckName, `${field}.newDeckName`);
+  const subjectId = asNullableId(body.subjectId, `${field}.subjectId`);
+  if ((existingDeckId === null) === (newDeckName === null)) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must name exactly one of an existing deck or a new deck name.`,
+    );
+  }
+  if (existingDeckId !== null) {
+    if (subjectId !== null) {
+      throw new Error(
+        `Invalid IPC payload: "${field}.subjectId" belongs to a new deck, not an existing one.`,
+      );
+    }
+    return { existingDeckId };
+  }
+  const trimmed = (newDeckName ?? "").trim();
+  if (trimmed.length === 0 || trimmed.length > LLM_IMPORT_MAX_DECK_NAME_LENGTH) {
+    throw new Error(
+      `Invalid IPC payload: "${field}.newDeckName" must be 1..${LLM_IMPORT_MAX_DECK_NAME_LENGTH} characters.`,
+    );
+  }
+  if (subjectId === null) {
+    throw new Error(`Invalid IPC payload: "${field}.subjectId" must name the new deck's subject.`);
+  }
+  return { newDeckName: trimmed, subjectId };
 }
 
 function asRestoreToken(value: unknown, field: string): string {
@@ -5737,9 +5780,23 @@ function registerIpc(): void {
     const kind = asLlmImportKind(body.kind, "kind");
     const text = asLlmAnswerText(body.text, "text");
     // Structurally validated here, semantically in `restore.ts` against the
-    // profile's own live decks — the same division `asApkgSubjectChoice` follows.
-    const deckId = asNullableId(body.deckId, "deckId");
-    return previewLlmImport(restoreDeps(), profileId, kind, text, deckId);
+    // profile's own live decks and subjects — the same division
+    // `asApkgSubjectChoice` follows.
+    const deck = asLlmDeckChoice(body.deck, "deck");
+    return previewLlmImport(restoreDeps(), profileId, kind, text, deck);
+  });
+
+  // ADR-051 for the LLM flow: the same records, re-planned under a changed
+  // duplicate answer. The renderer names the plan it is looking at by token and
+  // nothing else — no text, no deck — so a re-plan can only ever touch the
+  // answer main already parsed for this profile.
+  ipcMain.handle(IpcChannel.imexImportLlmReplan, (event, payload): LlmImportPreviewResult => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const token = asRestoreToken(body.token, "token");
+    const importDuplicates = asBoolean(body.importDuplicates, "importDuplicates");
+    return replanLlmImport(restoreDeps(), profileId, token, importDuplicates);
   });
 
   ipcMain.handle(IpcChannel.imexImportLlmApply, (event, payload): Promise<LlmImportApplyResult> => {

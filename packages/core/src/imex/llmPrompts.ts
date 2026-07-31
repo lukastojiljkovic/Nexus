@@ -1,6 +1,6 @@
 import { findClozeRuns, renderClozeCard } from "../study/clozeText.js";
 import { freshCardScheduling } from "./ankiTranslate.js";
-import type { ExportCard, ExportEvent, ExportTask, ProfileData } from "./exportArchive.js";
+import type { ExportCard, ExportDeck, ExportEvent, ExportTask, ProfileData } from "./exportArchive.js";
 
 /**
  * The LLM-assisted import (IMEX-005): the one import in this package whose
@@ -1047,11 +1047,32 @@ function present(entry: Record<string, unknown>, key: string): boolean {
 
 /**
  * The source-side id every planned card's deck points at (ADR-052's seam,
- * reused). Deterministic rather than minted, because this module is pure: the
- * planner pre-populates its id map with this one entry, so every card lands in
- * the deck the user picked and no deck row is created at all.
+ * reused). Deterministic rather than minted, because this module is pure: for
+ * an EXISTING deck the planner pre-populates its id map with this one entry, so
+ * every card lands in the deck the user picked and no deck row is created at
+ * all — and for a NEW one this is simply the planned deck row's own name, which
+ * the planner mints over like any other row's.
  */
 export const LLM_DECK_SOURCE_ID = "llm:deck";
+
+/**
+ * The source-side id a NEW deck's subject points at — `APKG_SUBJECT_SOURCE_ID`'s
+ * twin, one module over. Only ever seeded, never planned: a new deck lives
+ * under a subject the profile already has (the screen offers no way to invent
+ * one here), so the planner resolves this name onto that subject and no subject
+ * row is created.
+ */
+export const LLM_SUBJECT_SOURCE_ID = "llm:subject";
+
+/**
+ * Where imported cards land (IMEX-005): a deck the profile already has, or one
+ * this import names into being under an existing subject. `ApkgSubjectChoice`'s
+ * shape, one level down — a deck cannot exist outside a subject, so the new arm
+ * has to say which one.
+ */
+export type LlmDeckChoice =
+  | { kind: "existing"; id: string }
+  | { kind: "new"; name: string; subjectId: string };
 
 export interface LlmTranslateTarget {
   /** The profile every row is stamped with. */
@@ -1059,15 +1080,15 @@ export interface LlmTranslateTarget {
   /** ISO-8601, injected: this module reads no clock. Every row's `createdAt`/`updatedAt`, and every fresh card's `due`. */
   now: string;
   /** The deck cards land in. Required for `"cards"` and ignored otherwise — an LLM answer names no deck, so this is a decision only the user can make. */
-  deckId: string | null;
+  deck: LlmDeckChoice | null;
 }
 
 export interface LlmTranslation {
   /** Ready for `planForeignImport`, whose id map re-mints every id below. */
   data: ProfileData;
-  /** `ForeignImportTarget.seededIds` — the one deck entry for a card import, empty otherwise. */
+  /** `ForeignImportTarget.seededIds` — one entry for a card import (the deck the user picked, or the new deck's subject), empty otherwise. */
   seededIds: ReadonlyMap<string, string>;
-  /** How many ROWS the plan creates. Not the record count: one cloze template becomes one card per deletion. */
+  /** How many ROWS the plan creates. Not the record count: one cloze template becomes one card per deletion, and a new deck is a row of its own. */
   planned: number;
 }
 
@@ -1092,6 +1113,7 @@ export function translateLlmRecords(
   const tasks: ExportTask[] = [];
   const events: ExportEvent[] = [];
   const cards: ExportCard[] = [];
+  const decks: ExportDeck[] = [];
   let seededIds: ReadonlyMap<string, string> = new Map();
 
   switch (parsed.kind) {
@@ -1146,11 +1168,29 @@ export function translateLlmRecords(
       });
       break;
     case "cards": {
-      const deckId = target.deckId;
-      if (deckId === null) {
+      const deck = target.deck;
+      if (deck === null) {
         throw new Error("An LLM card import needs a deck for the cards to land in.");
       }
-      seededIds = new Map([[LLM_DECK_SOURCE_ID, deckId]]);
+      if (deck.kind === "existing") {
+        // ADR-052's seam: the planner resolves `llm:deck` onto the picked row
+        // and no deck row is created at all.
+        seededIds = new Map([[LLM_DECK_SOURCE_ID, deck.id]]);
+      } else {
+        // A NEW deck is a planned ROW, not a seam: the planner mints its id
+        // exactly as it mints every card's, and only the SUBJECT is seeded —
+        // a deck cannot exist outside one, and the screen offers no way to
+        // invent a subject here.
+        seededIds = new Map([[LLM_SUBJECT_SOURCE_ID, deck.subjectId]]);
+        decks.push({
+          id: LLM_DECK_SOURCE_ID,
+          profileId: target.profileId,
+          subjectId: LLM_SUBJECT_SOURCE_ID,
+          name: deck.name,
+          createdAt: target.now,
+          updatedAt: target.now,
+        });
+      }
       const scheduling = freshCardScheduling(target.now);
       parsed.records.forEach((record, index) => {
         if (record.kind === "basic") {
@@ -1219,7 +1259,7 @@ export function translateLlmRecords(
     subjectAttachments: [],
     subjectNoteLinks: [],
     exams: [],
-    decks: [],
+    decks,
     cards,
     // No history crosses: an imported card is a new card (see `freshCardScheduling`).
     reviewLog: [],
@@ -1239,5 +1279,5 @@ export function translateLlmRecords(
     dashboardWidgets: [],
   };
 
-  return { data, seededIds, planned: tasks.length + events.length + cards.length };
+  return { data, seededIds, planned: tasks.length + events.length + cards.length + decks.length };
 }
