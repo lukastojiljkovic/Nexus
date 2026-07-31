@@ -1,7 +1,15 @@
-import { findChordConflict, formatChord, isBindableChord, parseChord, type Chord } from "@nexus/core";
+import {
+  chordAccelerator,
+  findChordConflict,
+  formatChord,
+  isBindableChord,
+  parseChord,
+  type Chord,
+} from "@nexus/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  isGlobalShortcutAction,
   readStoredShortcutOverrides,
   resolveShortcuts,
   shortcutActionLabel,
@@ -69,7 +77,7 @@ const DEFAULTS = resolveShortcuts({});
 // --- the action registry ------------------------------------------------------
 
 describe("SHORTCUT_ACTIONS", () => {
-  it("is the five declared ids, in order and without duplicates", () => {
+  it("is the six declared ids, in order and without duplicates", () => {
     expect(SHORTCUT_ACTIONS.map((action) => action.id)).toEqual([...SHORTCUT_ACTION_IDS]);
     expect(new Set(SHORTCUT_ACTION_IDS).size).toBe(SHORTCUT_ACTION_IDS.length);
   });
@@ -103,11 +111,30 @@ describe("SHORTCUT_ACTIONS", () => {
     expect(serialized(DEFAULTS)).toEqual({
       palette: "Ctrl+K",
       quickCreate: "Ctrl+N",
+      // Ctrl+Shift+N rather than Ctrl+Alt+N: Ctrl+Alt IS AltGr on Windows, and
+      // AltGr+N prints „}" on the Serbian Latin layout.
+      globalCapture: "Ctrl+Shift+N",
       lock: "Ctrl+L",
       settings: "Ctrl+,",
       // F1 rather than Ctrl+/: „/" is Shift+7 on the Serbian QWERTZ layout.
       shortcutsHelp: "F1",
     });
+  });
+
+  it("marks exactly one action global (TASK-002)", () => {
+    expect(SHORTCUT_ACTIONS.filter((action) => action.global).map((action) => action.id)).toEqual([
+      "globalCapture",
+    ]);
+    expect(isGlobalShortcutAction("globalCapture")).toBe(true);
+    expect(isGlobalShortcutAction("quickCreate")).toBe(false);
+    expect(isGlobalShortcutAction("moduleNav")).toBe(false);
+  });
+
+  it("gives every global action a default the OS can actually be asked for", () => {
+    for (const action of SHORTCUT_ACTIONS.filter((candidate) => candidate.global)) {
+      expect(chordAccelerator(action.defaultChord), action.id).not.toBeNull();
+    }
+    expect(chordAccelerator(DEFAULTS.globalCapture)).toBe("CommandOrControl+Shift+N");
   });
 });
 
@@ -146,6 +173,7 @@ describe("resolveShortcuts", () => {
       "Alt+F4",
       "Alt+F5",
       "Alt+F6",
+      "Alt+F7",
     ]);
   });
 
@@ -223,6 +251,32 @@ describe("readStoredShortcutOverrides", () => {
     seedRaw(JSON.stringify({ palette: "Ctrl+Shift+1" }));
     expect(readStoredShortcutOverrides()).toEqual({
       palette: { ctrl: true, alt: false, shift: true, key: "1" },
+    });
+  });
+
+  // TASK-002: the global row alone has to survive `chordAccelerator` too, or it
+  // would sit in Settings printing a chord main can never register.
+  it("drops a global chord the OS could not be asked for, keeping it for a local action", () => {
+    // Not "Ctrl+," — that one is `settings`' own default, and the second half
+    // of this test needs a chord no other action already holds.
+    for (const raw of ["Ctrl+.", "Ctrl+Alt++", "Ctrl+š", "F4"]) {
+      const chord = parseChord(raw);
+      expect(chord, raw).not.toBeNull();
+      expect(chord !== null && isBindableChord(chord), raw).toBe(true);
+      expect(chord === null ? "" : chordAccelerator(chord), raw).toBeNull();
+
+      seedRaw(JSON.stringify({ globalCapture: raw }));
+      expect(readStoredShortcutOverrides(), raw).toEqual({});
+      // The very same chord is perfectly good for an in-app action.
+      seedRaw(JSON.stringify({ lock: raw }));
+      expect(Object.keys(readStoredShortcutOverrides()), raw).toEqual(["lock"]);
+    }
+  });
+
+  it("keeps a global chord the OS can be asked for", () => {
+    seedRaw(JSON.stringify({ globalCapture: "Ctrl+Alt+J" }));
+    expect(readStoredShortcutOverrides()).toEqual({
+      globalCapture: { ctrl: true, alt: true, shift: false, key: "j" },
     });
   });
 

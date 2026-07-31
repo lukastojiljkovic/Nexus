@@ -209,6 +209,7 @@ describe("buildSettingsSearchEntries", () => {
     expect(shortcutIds).toEqual([
       shortcutEntryId("palette"),
       shortcutEntryId("quickCreate"),
+      shortcutEntryId("globalCapture"),
       shortcutEntryId("lock"),
       shortcutEntryId("settings"),
       shortcutEntryId("shortcutsHelp"),

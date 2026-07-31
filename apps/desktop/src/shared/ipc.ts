@@ -212,6 +212,12 @@ export const IpcChannel = {
   imexImportPreview: "imex:import-preview",
   imexImportApply: "imex:import-apply",
   imexImportCancel: "imex:import-cancel",
+  // ADR-040's OS-level half (TASK-002). The chord lives in the renderer's
+  // `localStorage` (a device preference, never profile data), so the renderer
+  // is the only side that knows it — it tells main at boot and on every remap,
+  // and main answers whether the system let it have the combination.
+  shortcutsSetGlobal: "shortcuts:set-global",
+  shortcutsGlobalCapture: "shortcuts:global-capture",
   appInfo: "app:info",
 } as const;
 
@@ -3062,6 +3068,28 @@ export interface ImexImportApplyRequest {
   token: string;
 }
 
+/**
+ * A key combination on the wire (ADR-040 / TASK-002). Mirrors `@nexus/core`'s
+ * `Chord` exactly — redeclared here, like every other shared shape in this
+ * file, so the renderer never imports core through the IPC contract. `key` is
+ * a single character (already lowercased) or a function key by name.
+ *
+ * Main deliberately takes the CHORD, not a finished accelerator string: it
+ * re-derives the accelerator itself with core's `chordAccelerator`, so no
+ * string the renderer composed is ever handed to `globalShortcut.register`.
+ */
+export interface GlobalShortcutChord {
+  ctrl: boolean;
+  alt: boolean;
+  shift: boolean;
+  key: string;
+}
+
+/** Whether the OS granted the requested global combination. `false` leaves the previous registration (if any) in place. */
+export interface GlobalShortcutResult {
+  ok: boolean;
+}
+
 /** Runtime and environment facts, proving the main-process path end to end. */
 export interface AppInfo {
   name: string;
@@ -3531,5 +3559,22 @@ export interface NexusApi {
   applyImport(profileId: string, token: string): Promise<ImportApplyResult>;
   /** Drops the picked import archive without applying it, releasing the OS file lock an opened one holds. */
   cancelImport(): Promise<void>;
+  /**
+   * Asks main to hold `chord` as an OS-wide hotkey (TASK-002), replacing
+   * whatever it held before. Called once at boot — after the renderer has read
+   * its `localStorage` overrides, which main cannot see — and again on every
+   * remap. `ok: false` means the system refused the combination (another
+   * application owns it); main keeps its previous working registration, so the
+   * caller only has a message to show, never a state to repair.
+   */
+  setGlobalShortcut(chord: GlobalShortcutChord): Promise<GlobalShortcutResult>;
+  /**
+   * Subscribes to the single `shortcuts:global-capture` push event — the
+   * OS hotkey firing while Nexus was in the background. Payload-free, exactly
+   * like `onNotificationsChanged`: main has already restored and focused the
+   * window, and the only thing this carries is "open a task for capture".
+   * Never pushed to a locked session. Returns an unsubscribe function.
+   */
+  onGlobalCapture(listener: () => void): () => void;
   appInfo(): Promise<AppInfo>;
 }

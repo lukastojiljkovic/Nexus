@@ -114,6 +114,7 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
     [
       ["palette", ["paleta", "pretraga", "ctrl", "k"]],
       ["quickCreate", ["novi", "unos", "kreiranje", "ctrl", "n"]],
+      ["globalCapture", ["globalna", "brzi", "unos", "zadatak", "pozadina", "sistem", "hotkey"]],
       ["lock", ["zakljucaj", "zakljucavanje", "ctrl", "l"]],
       ["settings", ["podesavanja", "ctrl"]],
       ["shortcutsHelp", ["pomoc", "referenca", "f1"]],

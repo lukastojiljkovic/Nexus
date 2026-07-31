@@ -1749,11 +1749,19 @@ export const strings = {
     captureHint: "Esc otkazuje.",
     /** Refusal shown when the captured combination is something typing could produce. */
     refuseUnbindable: "Kombinacija mora da drži Ctrl ili Alt, ili da bude taster F1–F12.",
+    /** Refusal for the GLOBAL row only: the OS binds a physical key, so punctuation and layout-specific characters cannot be registered. */
+    refuseGlobal:
+      "Globalna prečica mora da drži Ctrl ili Alt i da koristi slovo, cifru ili taster F1–F12.",
     /** Prefixes the name of whatever already holds the captured combination. */
     takenPrefix: "Zauzeto: ",
+    /** Caption under the global row — what „globalna" actually means. */
+    globalHint: "Radi i kada Nexus nije u prvom planu.",
+    /** The one runtime failure a global registration has: another application already holds the combination. */
+    globalTaken: "Prečica je zauzeta na nivou sistema.",
     actions: {
       palette: "Komandna paleta",
       quickCreate: "Novi unos u aktivnom modulu",
+      globalCapture: "Brzi unos zadatka — globalna prečica",
       lock: "Zaključaj aplikaciju",
       settings: "Otvori Podešavanja",
       shortcutsHelp: "Prikaži prečice",

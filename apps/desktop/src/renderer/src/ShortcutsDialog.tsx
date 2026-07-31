@@ -27,10 +27,27 @@ export function KbdKeys({ keys }: { keys: readonly string[] }) {
   );
 }
 
-function ReferenceRow({ label, keys }: { label: string; keys: readonly string[] }) {
+/**
+ * One reference line. `note` is the exception a row earns by behaving unlike
+ * its neighbours — today only the OS-level capture chord (TASK-002), which
+ * fires while Nexus is in the background and therefore means something else
+ * than every other key on this screen.
+ */
+function ReferenceRow({
+  label,
+  keys,
+  note,
+}: {
+  label: string;
+  keys: readonly string[];
+  note?: string | undefined;
+}) {
   return (
     <div className="shortcuts-dialog__row">
-      <span className="shortcuts-dialog__row-label">{label}</span>
+      <span className="shortcuts-dialog__row-label">
+        {label}
+        {note !== undefined && <span className="shortcuts-dialog__row-note">{note}</span>}
+      </span>
       <KbdKeys keys={keys} />
     </div>
   );
@@ -127,6 +144,7 @@ export function ShortcutsDialog({ bindings, moduleIds, onClose }: ShortcutsDialo
                 key={action.id}
                 label={action.label}
                 keys={[formatChord(bindings[action.id])]}
+                note={action.global ? s.globalHint : undefined}
               />
             ))}
           </ReferenceGroup>

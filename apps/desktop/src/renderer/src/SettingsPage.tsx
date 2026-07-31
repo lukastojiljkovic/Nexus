@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Button, Card, Checkbox, Chip, TextField } from "@nexus/ui";
 import {
+  chordAccelerator,
   chordFromEvent,
   findChordConflict,
   formatChord,
@@ -29,6 +30,7 @@ import { NotificationSettingsControls } from "./NotificationSettingsControls.js"
 import type { ThemePreference } from "./theme.js";
 import { AUTO_LOCK_MINUTES, type AutoLockMinutes } from "./autoLock.js";
 import {
+  isGlobalShortcutAction,
   resolveShortcuts,
   shortcutActionLabel,
   SHORTCUT_ACTIONS,
@@ -1325,6 +1327,8 @@ interface ShortcutsSectionProps {
   onChange: (overrides: ShortcutOverrides) => void;
   /** Opens the reference overlay App owns — the same one F1 and the palette command open. */
   onShowAll: () => void;
+  /** TASK-002: the system refused the global row's chord to another application. */
+  globalTaken: boolean;
   /** SET-014 hit ids — each action row highlights its label under `shortcutEntryId(action.id)`. */
   hits: ReadonlySet<string>;
 }
@@ -1343,8 +1347,21 @@ interface ShortcutsSectionProps {
  * A combination that is not bindable, or that something else already holds, is
  * refused with the reason named and capture stays open. Nothing is ever
  * swapped out from under another action.
+ *
+ * The global row (TASK-002) carries one extra rule and one extra state. The
+ * rule: its chord also has to be expressible as an OS accelerator, refused here
+ * so a chord that could never be registered is never stored in the first place.
+ * The state: the system can hand the combination to whoever asked first, which
+ * is not something capture can foresee — that one is reported after the fact,
+ * from `globalTaken`.
  */
-function ShortcutsSection({ overrides, onChange, onShowAll, hits }: ShortcutsSectionProps) {
+function ShortcutsSection({
+  overrides,
+  onChange,
+  onShowAll,
+  globalTaken,
+  hits,
+}: ShortcutsSectionProps) {
   const s = strings.shortcuts;
   const [capturing, setCapturing] = useState<ShortcutActionId | null>(null);
   const [refusal, setRefusal] = useState<string | null>(null);
@@ -1368,6 +1385,14 @@ function ShortcutsSection({ overrides, onChange, onShowAll, hits }: ShortcutsSec
       const chord = chordFromEvent(event);
       if (chord === null) {
         setRefusal(s.refuseUnbindable);
+        return;
+      }
+      // The OS binds a physical key, so punctuation and layout-specific
+      // characters would print one chord in Settings and fire from another
+      // (`chordAccelerator`). Refused here rather than after a failed
+      // registration, so what is stored is always registrable.
+      if (isGlobalShortcutAction(actionId) && chordAccelerator(chord) === null) {
+        setRefusal(s.refuseGlobal);
         return;
       }
       // `bindings` is this render's, and `overrides` — what it is derived from
@@ -1440,6 +1465,15 @@ function ShortcutsSection({ overrides, onChange, onShowAll, hits }: ShortcutsSec
                   {refusal ?? s.captureHint}
                 </p>
               )}
+              {/* The „globalna" marker, said rather than drawn: what makes this
+                  row different is a behaviour, so it is written out under it
+                  instead of dressed up as a badge. */}
+              {action.global && <p className="set__section-caption">{s.globalHint}</p>}
+              {action.global && globalTaken && (
+                <p className="set__error" role="status">
+                  {s.globalTaken}
+                </p>
+              )}
             </div>
           );
         })}
@@ -1472,6 +1506,8 @@ export interface SettingsPageProps {
   /** Remapped shortcuts (ADR-040), owned by App the way `autoLockMinutes` is. */
   shortcutOverrides: ShortcutOverrides;
   onShortcutOverridesChange: (overrides: ShortcutOverrides) => void;
+  /** TASK-002: main's answer to the last global registration — false whenever the system granted it. */
+  globalShortcutTaken: boolean;
   onShowShortcuts: () => void;
 }
 
@@ -1504,6 +1540,7 @@ export function SettingsPage({
   onAutoLockChange,
   shortcutOverrides,
   onShortcutOverridesChange,
+  globalShortcutTaken,
   onShowShortcuts,
 }: SettingsPageProps) {
   const [accent, setAccent] = useState<AccentId>(() => readStoredAccent());
@@ -1715,6 +1752,7 @@ export function SettingsPage({
           overrides={shortcutOverrides}
           onChange={onShortcutOverridesChange}
           onShowAll={onShowShortcuts}
+          globalTaken={globalShortcutTaken}
           hits={hits}
         />
       </Card>

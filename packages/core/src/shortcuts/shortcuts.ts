@@ -163,6 +163,47 @@ export function matchesChord(chord: Chord, event: ChordEvent): boolean {
   );
 }
 
+/**
+ * The keys a global (OS-level) hotkey may use. Deliberately narrower than what
+ * a chord accepts: an OS hotkey is registered against a *physical* key, while a
+ * chord names the key the layout *prints*. For letters and digits the two agree
+ * on every Latin layout; for punctuation they do not — Ctrl+Alt+, would be
+ * registered as the US comma key and fire from wherever that key sits on the
+ * Serbian QWERTZ layout, so Settings would be printing a chord that is a lie.
+ * Refusing punctuation outright is the honest answer, and it takes every
+ * layout-specific character (š, đ, €) with it.
+ */
+const ACCELERATOR_KEY = /^[a-z0-9]$/i;
+
+/**
+ * The Electron accelerator string for a chord — "CommandOrControl+Alt+N" — or
+ * `null` when the chord cannot honestly be a global hotkey. Pure string work,
+ * so the whole rule set is testable without Electron; main derives the
+ * accelerator with this function from the validated chord fields rather than
+ * trusting a string the renderer composed (SEC-EL-02).
+ *
+ * Two refusals, both deliberate and neither an Electron limitation:
+ *
+ *  - **Ctrl or Alt must be held.** Electron would happily register a bare F1,
+ *    but a global hotkey with no Ctrl/Alt takes that key away from every other
+ *    application on the machine. `isBindableChord`'s function-key exemption is
+ *    safe *inside* the app and not outside it.
+ *  - **Letters, digits and F1–F12 only** — see `ACCELERATOR_KEY`.
+ *
+ * `CommandOrControl` rather than `Control` for the same reason a chord's Ctrl
+ * matches Cmd: one binding, both platforms, displayed as "Ctrl" either way.
+ */
+export function chordAccelerator(chord: Chord): string | null {
+  if (!chord.ctrl && !chord.alt) return null;
+  if (!FUNCTION_KEY.test(chord.key) && !ACCELERATOR_KEY.test(chord.key)) return null;
+  const parts: string[] = [];
+  if (chord.ctrl) parts.push("CommandOrControl");
+  if (chord.alt) parts.push("Alt");
+  if (chord.shift) parts.push("Shift");
+  parts.push(chord.key.toUpperCase());
+  return parts.join("+");
+}
+
 /** The reserved family: bare Ctrl + a digit 1–9. Adding Alt or Shift leaves the combination free. */
 function isModuleNavChord(chord: Chord): boolean {
   return chord.ctrl && !chord.alt && !chord.shift && chord.key >= "1" && chord.key <= "9";

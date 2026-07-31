@@ -9,8 +9,10 @@ import {
   applySearchOperators,
   buildSearchSnippet,
   buildSearchTagFacets,
+  chordAccelerator,
   countSearchKinds,
   foldSearchTag,
+  normalizeChordKey,
   dayKeyToUtcMs,
   isValidDayKey,
   MAX_ARCHIVE_PASSPHRASE_LENGTH,
@@ -200,6 +202,7 @@ import {
   unlockWithRecovery,
 } from "./auth.js";
 import { localToday } from "./clock.js";
+import { releaseGlobalCapture, setGlobalCaptureAccelerator } from "./globalCapture.js";
 import { handleExport } from "./imex.js";
 import {
   cancelIdleCompactions,
@@ -252,6 +255,8 @@ import {
   type DashboardWidgetSize,
   type ExportResult,
   type FlagState,
+  type GlobalShortcutChord,
+  type GlobalShortcutResult,
   type ImportApplyResult,
   type ImportPickResult,
   type ImportPreviewResult,
@@ -1228,6 +1233,34 @@ function asBoundedInteger(value: unknown, field: string, min: number, max: numbe
 /** An optional whole number: an explicit null, or an integer (any range check stays in the store). */
 function asNullableInteger(value: unknown, field: string): number | null {
   return value === null ? null : asInteger(value, field);
+}
+
+/** "F12" is the longest key any chord can carry, so anything past this is not a chord at all (SEC-EL-02: bound the string before it is looked at). */
+const MAX_CHORD_KEY_LENGTH = 3;
+
+/**
+ * A chord on its way to `globalShortcut` (TASK-002). The one payload in this
+ * file that ends up in a *system* call rather than the database, so it is
+ * checked twice over: the three modifiers must be genuine booleans, and the key
+ * must be short enough to bother reading and then survive core's own
+ * `normalizeChordKey` unchanged — the same function the renderer's capture
+ * surface gates on, so main accepts exactly the shapes the app can produce.
+ *
+ * The accelerator string itself is never taken from the renderer; the caller
+ * derives it from this validated chord with `chordAccelerator`.
+ */
+function asGlobalShortcutChord(value: unknown, field: string): GlobalShortcutChord {
+  const chord = asRecord(value);
+  const key = asNonEmptyString(chord.key, `${field}.key`);
+  if (key.length > MAX_CHORD_KEY_LENGTH || normalizeChordKey(key) !== key) {
+    throw new Error(`Invalid IPC payload: "${field}.key" is not a normalized chord key.`);
+  }
+  return {
+    ctrl: asBoolean(chord.ctrl, `${field}.ctrl`),
+    alt: asBoolean(chord.alt, `${field}.alt`),
+    shift: asBoolean(chord.shift, `${field}.shift`),
+    key,
+  };
 }
 
 // A person's date is (month, day) rather than a date string, so each half is
@@ -4678,10 +4711,55 @@ function registerIpc(): void {
     return cancelImport();
   });
 
+  // ADR-040 / TASK-002. The renderer owns the chord (it lives in this device's
+  // `localStorage`) and main owns the registration, so this is the one channel
+  // where the renderer asks for something OUTSIDE the app's own window. It is
+  // handled the same way as every other: sender checked, payload revalidated,
+  // and — because a system call is on the other end — the accelerator derived
+  // here from the validated fields rather than accepted as a string.
+  ipcMain.handle(IpcChannel.shortcutsSetGlobal, (event, payload): GlobalShortcutResult => {
+    assertTrustedSender(event);
+    const chord = asGlobalShortcutChord(asRecord(payload).chord, "chord");
+    // The smoke run never claims an OS-wide combination: it would take a hotkey
+    // off the developer's session for the length of the run, and on a headless
+    // box there is no window manager to claim it from. Answered `ok` so the
+    // renderer under smoke renders its normal state — the same "not during the
+    // smoke run" rule the notification scheduler already follows.
+    if (isSmoke) return { ok: true };
+    const accelerator = chordAccelerator(chord);
+    if (accelerator === null) return { ok: false };
+    return { ok: setGlobalCaptureAccelerator(accelerator, fireGlobalCapture) };
+  });
+
   ipcMain.handle(IpcChannel.appInfo, (event): AppInfo => {
     assertTrustedSender(event);
     return appInfo();
   });
+}
+
+/**
+ * The global hotkey firing (TASK-002). Two things happen, in this order and for
+ * different reasons.
+ *
+ * First the window comes up — restored if minimized, shown if hidden, focused
+ * either way. That half runs whatever the session state is: the point of the
+ * chord is "bring Nexus here", and it must not become a no-op just because the
+ * app is locked.
+ *
+ * Then, and ONLY while unlocked, the capture intent is pushed to the renderer.
+ * A locked session deliberately gets nothing further: quick-add writes to the
+ * database, the database is closed while locked, and the lock screen is where
+ * the user has to act anyway — so the window arriving on the passcode prompt is
+ * the whole of the correct behaviour, with nothing to announce.
+ */
+function fireGlobalCapture(): void {
+  const win = mainWindow;
+  if (!win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
+  win.show(); // also raises and focuses a window that was merely hidden
+  win.focus();
+  if (computeAuthStatus().state !== "unlocked") return;
+  win.webContents.send(IpcChannel.shortcutsGlobalCapture);
 }
 
 // --- Window (hardened) ------------------------------------------------------
@@ -5284,6 +5362,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("will-quit", () => {
+  releaseGlobalCapture(); // Electron requires the registration be given back before the process exits
   stopNotificationScheduler();
   cancelIdleCompactions(); // same reasoning as `performLock` — about to close `db`
   clearRestoreState(); // likewise: decrypted archive bytes and a plaintext undo snapshot must not outlive the session

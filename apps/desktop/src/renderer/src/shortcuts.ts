@@ -14,13 +14,21 @@
  * this module is storage and copy.
  */
 
-import { findChordConflict, formatChord, isBindableChord, parseChord, type Chord } from "@nexus/core";
+import {
+  chordAccelerator,
+  findChordConflict,
+  formatChord,
+  isBindableChord,
+  parseChord,
+  type Chord,
+} from "@nexus/core";
 import { strings } from "./strings.js";
 
-/** The five remappable actions, in the order the Settings card and the reference list them. */
+/** The six remappable actions, in the order the Settings card and the reference list them. */
 export const SHORTCUT_ACTION_IDS = [
   "palette",
   "quickCreate",
+  "globalCapture",
   "lock",
   "settings",
   "shortcutsHelp",
@@ -33,17 +41,35 @@ export interface ShortcutAction {
   /** Serbian label, shown in the Settings card, the reference, and conflict refusals. */
   readonly label: string;
   readonly defaultChord: Chord;
+  /**
+   * True when the chord is registered with the OS rather than only with this
+   * window (TASK-002): it fires while Nexus is in the background, so it is
+   * additionally constrained by `chordAccelerator` and can be refused by the
+   * system when another application already holds it.
+   */
+  readonly global: boolean;
 }
 
+/** The one action the OS registers on the app's behalf — see `ShortcutAction.global`. */
+const GLOBAL_ACTION_IDS: ReadonlySet<string> = new Set<ShortcutActionId>(["globalCapture"]);
+
 /**
- * The defaults. `shortcutsHelp` is F1 rather than the more common Ctrl+/
- * deliberately: on the Serbian QWERTZ layout „/" sits on Shift+7, which makes
- * Ctrl+/ close to untypeable on the app's home layout, while F1 is the
- * OS-wide help convention and layout-independent.
+ * The defaults. Two of them are chosen against the app's home layout rather
+ * than by convention:
+ *
+ *  - `shortcutsHelp` is F1 rather than the more common Ctrl+/: on the Serbian
+ *    QWERTZ layout „/" sits on Shift+7, which makes Ctrl+/ close to untypeable,
+ *    while F1 is the OS-wide help convention and layout-independent.
+ *  - `globalCapture` is Ctrl+Shift+N rather than the usual Ctrl+Alt+N because
+ *    Ctrl+Alt *is* AltGr on Windows, and AltGr+N prints „}" on the Serbian
+ *    Latin layout — an OS-wide Ctrl+Alt+N would take that character away from
+ *    every editor on the machine. Ctrl+Shift+N keeps the N of Ctrl+N (its
+ *    in-app sibling) with one modifier more, and is free of AltGr entirely.
  */
 const DEFAULT_CHORDS: Readonly<Record<ShortcutActionId, Chord>> = {
   palette: { ctrl: true, alt: false, shift: false, key: "k" },
   quickCreate: { ctrl: true, alt: false, shift: false, key: "n" },
+  globalCapture: { ctrl: true, alt: false, shift: true, key: "n" },
   lock: { ctrl: true, alt: false, shift: false, key: "l" },
   settings: { ctrl: true, alt: false, shift: false, key: "," },
   shortcutsHelp: { ctrl: false, alt: false, shift: false, key: "F1" },
@@ -53,7 +79,17 @@ export const SHORTCUT_ACTIONS: readonly ShortcutAction[] = SHORTCUT_ACTION_IDS.m
   id,
   label: strings.shortcuts.actions[id],
   defaultChord: DEFAULT_CHORDS[id],
+  global: GLOBAL_ACTION_IDS.has(id),
 }));
+
+/**
+ * Whether an action's chord is registered with the OS. Exported so the Settings
+ * capture surface can apply the extra `chordAccelerator` rule to exactly that
+ * row without re-deriving which row it is.
+ */
+export function isGlobalShortcutAction(actionId: string): boolean {
+  return GLOBAL_ACTION_IDS.has(actionId);
+}
 
 /** Every action's effective chord — what the global handler matches against. */
 export type ShortcutBindings = Readonly<Record<ShortcutActionId, Chord>>;
@@ -72,10 +108,12 @@ export function shortcutActionLabel(actionId: string): string {
  * Reads the stored overrides. Anything that is not a known action id bound to
  * a chord this app would let the user record is dropped silently rather than
  * guessed at: an unknown id, unparsable text, a combination typing could
- * produce, one inside the reserved Ctrl+digit family, or one another action
- * already answers to. Every one of those is refused by the Settings capture
- * surface, so it can only arrive by hand-editing — and each would leave a chord
- * in Settings that either can never fire or fires two actions at once.
+ * produce, one inside the reserved Ctrl+digit family, one another action
+ * already answers to, or — for the global action alone — one the OS cannot be
+ * asked to register (`chordAccelerator`). Every one of those is refused by the
+ * Settings capture surface, so it can only arrive by hand-editing — and each
+ * would leave a chord in Settings that either can never fire or fires two
+ * actions at once.
  *
  * Collisions are settled by walking `SHORTCUT_ACTION_IDS` in order and judging
  * each candidate against the map as it would actually stand around it: every
@@ -109,6 +147,7 @@ export function readStoredShortcutOverrides(): ShortcutOverrides {
     if (typeof value !== "string") continue;
     const chord = parseChord(value);
     if (chord === null || !isBindableChord(chord)) continue;
+    if (GLOBAL_ACTION_IDS.has(id) && chordAccelerator(chord) === null) continue;
     // `findChordConflict` skips `id` itself, so `effective` — which still holds
     // this action's own default — reads as the bindings of every OTHER action.
     if (findChordConflict(id, chord, effective) !== null) continue;

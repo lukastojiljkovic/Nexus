@@ -334,6 +334,7 @@ export { MAX_RELATIVE_DAYS, parseQuickAddDate } from "./tasks/quickAddDate.js";
 export type { QuickAddDateMatch } from "./tasks/quickAddDate.js";
 
 export {
+  chordAccelerator,
   chordFromEvent,
   findChordConflict,
   formatChord,

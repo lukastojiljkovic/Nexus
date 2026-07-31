@@ -100,6 +100,11 @@ export function App() {
   const [shortcutOverrides, setShortcutOverrides] =
     useState<ShortcutOverrides>(readStoredShortcutOverrides);
   const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false);
+  // TASK-002: whether the SYSTEM refused the global capture chord because
+  // another application already holds it. Main keeps its previous working
+  // registration in that case, so this is only a message for the Settings row —
+  // never a state anything has to repair.
+  const [globalCaptureTaken, setGlobalCaptureTaken] = useState(false);
   // Global search palette (021-d). `searchStatus` is the rebuild command's
   // Serbian confirmation/error text — owned here since this is where the
   // command's `run` closure is built (see `buildSearchCommands` below).
@@ -270,6 +275,32 @@ export function App() {
 
   const shortcuts = useMemo(() => resolveShortcuts(shortcutOverrides), [shortcutOverrides]);
 
+  // TASK-002: main registers the OS-wide capture hotkey, but only the renderer
+  // can read which chord it is — `localStorage` is a renderer-side store, the
+  // same reason the theme and auto-lock preferences live here. So the chord is
+  // handed over once the shell mounts and again on every remap; the identity of
+  // `shortcuts.globalCapture` only changes when the overrides do (the memo
+  // above), so this does not re-register on unrelated renders.
+  //
+  // Deliberately NOT gated on the unlocked state: the hotkey brings the window
+  // up on the lock screen too (main decides what happens next), and a chord the
+  // user cannot use until they unlock is worse than none.
+  const globalCaptureChord = shortcuts.globalCapture;
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const result = await window.nexus.setGlobalShortcut(globalCaptureChord);
+        if (active) setGlobalCaptureTaken(!result.ok);
+      } catch (error) {
+        console.error("Nexus: failed to register the global shortcut:", error);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [globalCaptureChord]);
+
   /**
    * The sidebar's own order — `registry.byCategory()` flattened, filtered by
    * the enabled flags — which is what Ctrl+1…Ctrl+9 count along. Deliberately
@@ -411,6 +442,28 @@ export function App() {
     }
   }
 
+  /**
+   * TASK-002's landing: ZADACI with the quick-add input focused, which is
+   * exactly the tasks module's existing "create" intent (021-e) — the same one
+   * the palette's „Novi zadatak" and the in-app quick-create chord dispatch, so
+   * arriving from outside the app lands on precisely the surface arriving from
+   * inside it does.
+   *
+   * Nothing happens when TASKS is switched off (SET-007): dispatching would
+   * only bounce off the route guard back to the dashboard, and a hotkey that
+   * silently navigates elsewhere is worse than one that does nothing. The
+   * window has still been brought up by then — main does that unconditionally.
+   *
+   * Stable across renders: the push subscription below lists it in its
+   * dependency array, and a fresh reference each render would tear the
+   * subscription down and re-register it for nothing.
+   */
+  const openTaskCapture = useCallback((): void => {
+    if (!visibleModuleIds.includes("tasks")) return;
+    setPending({ module: "tasks", intent: { kind: "create" } });
+    setActiveId("tasks");
+  }, [visibleModuleIds]);
+
   // Stable across renders: `SearchPalette`'s own auto-close effect (the
   // rebuild command's confirmation timer) depends on this callback, and a
   // fresh reference on every unrelated App re-render would restart that
@@ -442,6 +495,22 @@ export function App() {
       setAppetiteAsk(true);
     });
   }, [authStatus?.state, closePalette]);
+
+  // The OS hotkey firing while Nexus was in the background (TASK-002). Main has
+  // already restored and focused the window by the time this arrives, and only
+  // ever pushes it to an unlocked session — subscribed only while unlocked for
+  // the same reason the appetite ask is: there is no shell to route into
+  // otherwise. Overlays are dismissed first, exactly as `runShortcutAction`
+  // does: the chord means "capture a task", and landing behind the palette or
+  // the reference is not that.
+  useEffect(() => {
+    if (authStatus?.state !== "unlocked") return;
+    return window.nexus.onGlobalCapture(() => {
+      closePalette();
+      setShortcutsHelpOpen(false);
+      openTaskCapture();
+    });
+  }, [authStatus?.state, closePalette, openTaskCapture]);
 
   // Stable across renders for the same reason `clearIntent` is: `SearchPage`
   // lists it in a mount effect's dependency array.
@@ -529,6 +598,12 @@ export function App() {
         // below actually renders, so the chord never creates in a module the
         // user is not looking at.
         createInModule(visibleModuleIds.includes(activeId) ? activeId : "dashboard");
+        return;
+      case "globalCapture":
+        // Also handled in-app, not only by the OS registration: when the system
+        // refused the combination (another application holds it), pressing it
+        // with Nexus focused must still capture a task.
+        openTaskCapture();
         return;
       case "lock":
         void handleLock();
@@ -855,6 +930,7 @@ export function App() {
               onAutoLockChange={changeAutoLock}
               shortcutOverrides={shortcutOverrides}
               onShortcutOverridesChange={changeShortcutOverrides}
+              globalShortcutTaken={globalCaptureTaken}
               onShowShortcuts={() => setShortcutsHelpOpen(true)}
             />
           ) : (

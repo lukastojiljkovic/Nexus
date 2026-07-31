@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  chordAccelerator,
   chordFromEvent,
   findChordConflict,
   formatChord,
@@ -204,6 +205,86 @@ describe("the reserved Ctrl+digit family", () => {
     expect(moduleNavPosition(event("3"))).toBeNull();
     expect(moduleNavPosition(event("3", { ctrlKey: true, shiftKey: true }))).toBeNull();
     expect(moduleNavPosition(event("3", { ctrlKey: true, altKey: true }))).toBeNull();
+  });
+});
+
+describe("chordAccelerator", () => {
+  it("writes the modifiers in Electron's order, Ctrl as CommandOrControl", () => {
+    expect(chordAccelerator(chord("n", { ctrl: true, shift: true }))).toBe("CommandOrControl+Shift+N");
+    expect(chordAccelerator(chord("n", { ctrl: true, alt: true }))).toBe("CommandOrControl+Alt+N");
+    expect(chordAccelerator(chord("j", { alt: true }))).toBe("Alt+J");
+    expect(chordAccelerator(chord("j", { alt: true, shift: true }))).toBe("Alt+Shift+J");
+    expect(chordAccelerator(chord("q", { ctrl: true, alt: true, shift: true }))).toBe(
+      "CommandOrControl+Alt+Shift+Q",
+    );
+  });
+
+  it("names letters uppercase, digits and function keys as they stand", () => {
+    expect(chordAccelerator(chord("z", { ctrl: true }))).toBe("CommandOrControl+Z");
+    expect(chordAccelerator(chord("0", { ctrl: true }))).toBe("CommandOrControl+0");
+    expect(chordAccelerator(chord("F12", { alt: true }))).toBe("Alt+F12");
+    // Casing on the way in is irrelevant — the accelerator is canonical.
+    expect(chordAccelerator(chord("f5", { ctrl: true }))).toBe("CommandOrControl+F5");
+  });
+
+  it("refuses a chord holding neither Ctrl nor Alt — a global hotkey must not swallow a bare key", () => {
+    expect(chordAccelerator(chord("F1"))).toBeNull();
+    expect(chordAccelerator(chord("F5", { shift: true }))).toBeNull();
+  });
+
+  it("refuses what typing looks like, exactly as `isBindableChord` does", () => {
+    expect(chordAccelerator(chord("k"))).toBeNull();
+    expect(chordAccelerator(chord("k", { shift: true }))).toBeNull();
+    expect(chordAccelerator(chord("1"))).toBeNull();
+  });
+
+  it("refuses punctuation: an OS hotkey binds a physical key, so the printed chord would be a lie on a non-US layout", () => {
+    for (const key of [",", ".", "+", "-", "/", ";", "'", "[", "]", "\\", "`"]) {
+      expect(chordAccelerator(chord(key, { ctrl: true })), key).toBeNull();
+      expect(chordAccelerator(chord(key, { ctrl: true, alt: true })), key).toBeNull();
+    }
+  });
+
+  it("refuses a key the layout prints but an accelerator cannot name", () => {
+    for (const key of ["š", "č", "ć", "ž", "đ", "€", "ю"]) {
+      expect(chordAccelerator(chord(key, { ctrl: true })), key).toBeNull();
+    }
+  });
+
+  it("refuses the named keys a chord can never legitimately carry", () => {
+    // None of these survives `normalizeChordKey`, so no captured or stored
+    // chord can hold one — this pins that a hand-built `Chord` is refused too.
+    for (const key of ["Escape", "Enter", "Tab", "Space", " ", "ArrowLeft", "Backspace", "F13", ""]) {
+      expect(normalizeChordKey(key), key).toBeNull();
+      expect(chordAccelerator(chord(key, { ctrl: true, alt: true })), key).toBeNull();
+    }
+  });
+
+  it("is never longer than the modifiers plus a function key — main's payload cap has headroom", () => {
+    expect(chordAccelerator(chord("F12", { ctrl: true, alt: true, shift: true }))).toBe(
+      "CommandOrControl+Alt+Shift+F12",
+    );
+  });
+
+  it("only ever answers for a chord this app would let the user bind", () => {
+    const keys = ["k", "n", "1", "F1", "F12", ",", "+", "š", "Escape"];
+    for (const key of keys) {
+      for (const held of [
+        {},
+        { ctrl: true },
+        { alt: true },
+        { shift: true },
+        { ctrl: true, alt: true },
+        { ctrl: true, shift: true },
+        { alt: true, shift: true },
+        { ctrl: true, alt: true, shift: true },
+      ]) {
+        const candidate = chord(key, held);
+        if (chordAccelerator(candidate) !== null) {
+          expect(isBindableChord(candidate), formatChord(candidate)).toBe(true);
+        }
+      }
+    }
   });
 });
 

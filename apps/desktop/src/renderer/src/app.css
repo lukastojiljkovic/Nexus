@@ -6158,6 +6158,13 @@ button.cal__grid-event--dragging {
 .shortcuts-dialog__row-label {
   min-width: 0;
 }
+/* The one row that behaves unlike its neighbours (TASK-002) says so on its own
+   second line — quiet, typographic, no badge and no colour of its own. */
+.shortcuts-dialog__row-note {
+  display: block;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+}
 
 /* „Dodaj vidžet" (ADR-045 section 5) — the same house dialog recipe again, and
    the same treatment the shortcuts reference gets: the recur-dialog classes
