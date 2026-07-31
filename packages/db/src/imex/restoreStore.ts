@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3-multiple-ciphers";
-import type { ExportSettings, ProfileData } from "@nexus/core";
+import type { ArchiveProfilePicture, ExportSettings, ProfileData } from "@nexus/core";
 import { RestoreValidationError } from "../errors.js";
 import { TOGGLEABLE_NOTIFICATION_SOURCES } from "../notify/notificationStore.js";
 import { TASK_ORDER_GAP, TaskListStore } from "../tasks/taskListStore.js";
@@ -18,6 +18,16 @@ export interface RestoredNoteDerived {
 export interface RestoreProfileInput {
   /** The profile's name from the archive's manifest — the restore renames the target profile to it. */
   profileName: string;
+  /**
+   * The profile's picture from the archive's manifest (SET-001), or null when it
+   * carries none. Written beside the name, in the same statement and for the
+   * same reason: a restore REPLACES a profile, so the target ends up looking
+   * exactly like the archive — including with no picture at all, when that is
+   * what the archive says. Required rather than optional for `profileName`'s
+   * reason: a caller that forgot it would silently leave the target wearing the
+   * face it had before.
+   */
+  profilePicture: ArchiveProfilePicture | null;
   settings: ExportSettings;
   data: ProfileData;
   /** Keyed by note id. REQUIRED for every note whose `snapshot` is non-null. */
@@ -159,7 +169,14 @@ function wipeSqlFor(table: WipeTable): string {
  */
 export class RestoreStore {
   private readonly wipeStatements: readonly Database.Statement[];
-  private readonly updateProfileName: Database.Statement;
+  /**
+   * The profile row's own facts, in ONE statement (SET-001): the name and the
+   * picture trio are the whole of what `profiles` says about a profile, and a
+   * restore replaces all of it at once. Not part of `RESTORE_WIPE_TABLES` — the
+   * `profiles` row is not wiped and rewritten (every other table's rows point at
+   * its id), it is overwritten in place.
+   */
+  private readonly updateProfileIdentity: Database.Statement;
   /**
    * The ONE store class this restore leans on, and deliberately so: an archive
    * written before ADR-029 names no list at all, and the Inbox its tasks then
@@ -214,7 +231,11 @@ export class RestoreStore {
     private readonly profileId: string,
   ) {
     this.wipeStatements = RESTORE_WIPE_TABLES.map((table) => db.prepare(wipeSqlFor(table)));
-    this.updateProfileName = db.prepare(`UPDATE profiles SET name = ? WHERE id = ?`);
+    this.updateProfileIdentity = db.prepare(
+      `UPDATE profiles
+          SET name = ?, picture_hash = ?, picture_mime = ?, picture_size_bytes = ?
+        WHERE id = ?`,
+    );
     this.taskLists = new TaskListStore(db, profileId);
 
     this.insertTaskList = db.prepare(
@@ -411,7 +432,8 @@ export class RestoreStore {
 
   /**
    * Replaces this profile's entire stored content with `input.data`/`input.settings`
-   * (ADR-023), renames the profile to `input.profileName`, and returns the number
+   * (ADR-023), rewrites the profile row's own facts — its name and its picture
+   * (SET-001) — to what the archive's manifest states, and returns the number
    * of rows written. One transaction (R1): `PRAGMA defer_foreign_keys = ON` is the
    * first statement inside it (R2), since a self-referencing chain (`tasks.parent_id`,
    * `note_folders.parent_id`) can arrive in any order within the archive's own array,
@@ -426,7 +448,17 @@ export class RestoreStore {
       for (const statement of this.wipeStatements) {
         statement.run(this.profileId);
       }
-      this.updateProfileName.run(input.profileName, this.profileId);
+      // The name and the picture together, exactly as the archive states them.
+      // A null picture is written as null rather than skipped: the archive
+      // saying "this profile has no picture" is a statement a REPLACE must
+      // honour, and leaving the target's own in place would be a merge.
+      this.updateProfileIdentity.run(
+        input.profileName,
+        input.profilePicture?.hash ?? null,
+        input.profilePicture?.mime ?? null,
+        input.profilePicture?.sizeBytes ?? null,
+        this.profileId,
+      );
 
       let written = 0;
 

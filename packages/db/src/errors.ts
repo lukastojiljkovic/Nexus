@@ -561,3 +561,16 @@ export class DashboardWidgetValidationError extends DatabaseError {}
 
 /** Thrown when a dashboard-layout call names a placement this profile does not have — the moved widget itself, or a neighbour it was to be ordered against. */
 export class DashboardWidgetNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a profile-picture write breaks a rule migration 040's CHECKs
+ * cannot express on their own (SET-001): a hash that is not a 64-character
+ * lowercase sha256, a mime outside `isInlineImageMime`'s four raster formats, or
+ * a non-positive size. The store revalidates for `DashboardSettingsValidationError`'s
+ * reason — even though main produces these bytes itself and sniffs its own
+ * output, a store is never the place that assumes its caller did.
+ */
+export class ProfileValidationError extends DatabaseError {}
+
+/** Thrown when a profile-picture write names an id no `profiles` row carries. */
+export class ProfileNotFoundError extends DatabaseError {}

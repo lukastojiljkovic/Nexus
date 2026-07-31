@@ -1,6 +1,6 @@
 import { remapNoteState } from "../notes/noteLinks.js";
 import { ARCHIVE_MODULE_IDS, countProfileModules } from "./exportArchive.js";
-import type { ArchiveModuleId, ProfileData } from "./exportArchive.js";
+import type { ArchiveModuleId, ArchiveProfilePicture, ProfileData } from "./exportArchive.js";
 import type { ArchiveRecordType, ImportDrop, ImportDropReason } from "./importArchive.js";
 
 /**
@@ -73,6 +73,16 @@ export interface ForeignImportSource {
   data: ProfileData;
   /** `parseImportArchive`'s `dropped` — folded into the report so one number covers the whole journey. */
   dropped: readonly ImportDrop[];
+  /**
+   * The archive's profile picture (`parseImportArchive`'s
+   * `manifest.profile.picture`), or null when it carries none. The ONE manifest
+   * fact this planner is told about, and only so it can be NAMED as skipped: an
+   * import never adopts somebody else's picture (see `plan`'s own note), and a
+   * skip nobody is told about is indistinguishable from a bug. Required rather
+   * than optional, for the reason every `ProfileData` member is: a caller that
+   * forgets it must be a type error, not a quiet omission.
+   */
+  profilePicture: ArchiveProfilePicture | null;
 }
 
 /**
@@ -86,6 +96,7 @@ export type ImportSkipCode =
   | "notifications-not-imported"
   | "dashboard-settings-not-imported"
   | "study-settings-not-imported"
+  | "profile-picture-not-imported"
   | "template-name-taken"
   | "source-inbox-collapsed";
 
@@ -633,7 +644,10 @@ export function planForeignImport(
       ...data.taskAttachments.map((row) => row.sha256),
       ...data.subjectAttachments.map((row) => row.sha256),
     ]),
-    report: buildReport(source, parsed.dropped, data, ctx),
+    // The profile picture is deliberately NOT among the blobs to copy: an
+    // import never adopts it (see `buildReport`'s own note), so there is no
+    // hash to fetch — the same reason the dashboard background is absent here.
+    report: buildReport(source, parsed.dropped, data, ctx, parsed.profilePicture),
   };
 }
 
@@ -654,6 +668,7 @@ function buildReport(
   dropped: readonly ImportDrop[],
   planned: ProfileData,
   ctx: PlanContext,
+  profilePicture: ArchiveProfilePicture | null,
 ): ImportPlanReport {
   const skips: ImportSkipReason[] = [];
   const skipIndex = new Map<string, ImportSkipReason>();
@@ -700,6 +715,14 @@ function buildReport(
   // in the manifest rather than in a module, so it is named without being
   // counted into one.
   note("settings-not-imported", null, null, 1);
+  // The archive's profile picture (SET-001), on the dashboard background's exact
+  // terms: a face is the most personal decoration a profile has, and an import
+  // that quietly made the user look like the archive's author would be the
+  // sharpest possible version of the mistake ADR-043 §2 forbids. Named only when
+  // the archive actually carries one — unlike the settings section above, which
+  // every manifest has — and, like it, counted into no module, because it
+  // belongs to none.
+  note("profile-picture-not-imported", null, null, profilePicture === null ? 0 : 1);
 
   const parsedCounts = countProfileModules(source);
   const importedCounts = countProfileModules(planned);

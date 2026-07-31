@@ -31,6 +31,8 @@ import {
 import type { TaskViewConfig } from "@nexus/core";
 import type {
   ArchiveModuleId,
+  ArchiveProfilePicture,
+  ExportArchiveInput,
   NotificationSource,
   ParsedSearchQuery,
   SearchHit,
@@ -85,6 +87,7 @@ import {
   PeopleStore,
   PERSON_KINDS,
   PlanStore,
+  ProfileStore,
   rebuildSearchIndex,
   RestoreStore,
   SearchStore,
@@ -236,6 +239,7 @@ import {
   type SecurityNotificationDeps,
 } from "./notifications.js";
 import type { SecurityNotice } from "./notificationStrings.js";
+import { pickProfilePicture } from "./profilePicture.js";
 import {
   applyImport,
   applyRestore,
@@ -256,6 +260,7 @@ import {
   IpcChannel,
   MAX_BACKGROUND_BYTES,
   MAX_BACKGROUND_DIM,
+  MAX_PROFILE_PICTURE_BYTES,
   MAX_NEW_PER_DAY,
   MAX_REVIEWS_PER_DAY,
   MAX_TARGET_RETENTION,
@@ -295,6 +300,7 @@ import {
   type NoteDocPayload,
   type NoteVersionMeta,
   type Profile,
+  type ProfilePicturePickResult,
   type RecurrenceRule,
   type RestoreApplyResult,
   type RestorePickResult,
@@ -560,32 +566,67 @@ function openEncrypted(dataKeyHex: string): void {
   seedFirstRunProfile(requireDb());
 }
 
-interface ProfileRow {
-  id: string;
-  kind: "personal" | "business";
-  name: string;
-  created_at: string;
+/**
+ * The `profiles` table's own store (SET-001, migration 040) — the one store
+ * constructed without a profile id, because this table IS the profile list. See
+ * `ProfileStore`'s class doc for why that is not a hole in the per-profile
+ * scoping rule.
+ */
+function profileStore(): ProfileStore {
+  return new ProfileStore(requireDb().raw);
 }
 
+/**
+ * Every profile, as the renderer sees one. `ProfileRecord` and the wire
+ * `Profile` are field-for-field identical by design (the wire type mirrors the
+ * table), so this is a pass-through rather than a mapping — the columns are
+ * already named once, in the store.
+ */
 function listProfiles(database: NexusDatabase): Profile[] {
-  const rows = database.raw
-    .prepare("SELECT id, kind, name, created_at FROM profiles ORDER BY created_at")
-    .all() as ProfileRow[];
-  return rows.map((row) => ({
-    id: row.id,
-    kind: row.kind,
-    name: row.name,
-    createdAt: row.created_at,
-  }));
+  return new ProfileStore(database.raw).list();
 }
 
-/** Reads one profile by id; throws when it matches no row (IMEX export needs the profile's name for the manifest). */
+/** Reads one profile by id; throws when it matches no row (IMEX export needs the profile's name and picture for the manifest). */
 function requireProfile(database: NexusDatabase, id: string): Profile {
-  const profile = listProfiles(database).find((candidate) => candidate.id === id);
-  if (!profile) {
+  const profile = new ProfileStore(database.raw).get(id);
+  if (profile === null) {
     throw new Error("Invalid IPC payload: unknown profile id.");
   }
   return profile;
+}
+
+/**
+ * One profile's identity in the shape an archive's manifest carries it
+ * (`@nexus/core`'s `ExportArchiveInput["profile"]`).
+ *
+ * Constructed field by field, deliberately: `buildExportArchive` writes this
+ * object into `manifest.json` verbatim, so handing it a whole `Profile` would
+ * quietly publish `kind` and `createdAt` — and every column the row gains
+ * later — into the interchange contract, where nothing decided they belong.
+ * (They were being published, harmlessly, until this function existed.)
+ */
+function archiveProfileOf(profile: Profile): ExportArchiveInput["profile"] {
+  return {
+    id: profile.id,
+    name: profile.name,
+    picture: profilePictureOf(profile),
+  };
+}
+
+/** The picture trio as the interchange's nested object, or null — the trio moves together (migration 040's CHECKs), so one guard covers all three. */
+function profilePictureOf(profile: Profile): ArchiveProfilePicture | null {
+  if (
+    profile.pictureHash === null ||
+    profile.pictureMime === null ||
+    profile.pictureSizeBytes === null
+  ) {
+    return null;
+  }
+  return {
+    hash: profile.pictureHash,
+    mime: profile.pictureMime,
+    sizeBytes: profile.pictureSizeBytes,
+  };
 }
 
 /** Renames an existing profile; throws when the id matches no row (ONB lite). */
@@ -2134,7 +2175,7 @@ function requireSubjectAttachment(
   return found;
 }
 
-// --- Blob reference counting (ADR-014/ADR-019 + migrations 024/030/035) -----
+// --- Blob reference counting (ADR-014/ADR-019 + migrations 024/030/035/040) --
 //
 // THE place that enumerates every table naming a blob. One on-disk store is
 // shared by every module that lets a user hang bytes off a row, so a blob is
@@ -2155,7 +2196,11 @@ function blobRefCount(profileId: string, sha256: string): number {
     noteAttachmentStore(profileId).refCount(sha256) +
     taskAttachmentStore(profileId).refCount(sha256) +
     subjectAttachmentStore(profileId).refCount(sha256) +
-    dashboardSettingsStore(profileId).refCount(sha256)
+    dashboardSettingsStore(profileId).refCount(sha256) +
+    // The `profiles` table itself (SET-001, migration 040) — the fifth member,
+    // and the only one whose store takes no profile id, because that table IS
+    // the profile list. Its count is profile-agnostic like every other here.
+    profileStore().refCount(sha256)
   );
 }
 
@@ -2165,7 +2210,12 @@ function blobMimeForHash(profileId: string, sha256: string): string | null {
     noteAttachmentStore(profileId).mimeForHash(sha256) ??
     taskAttachmentStore(profileId).mimeForHash(sha256) ??
     subjectAttachmentStore(profileId).mimeForHash(sha256) ??
-    dashboardSettingsStore(profileId).mimeForHash(sha256)
+    dashboardSettingsStore(profileId).mimeForHash(sha256) ??
+    // A profile picture is served by `nx-blob:` on exactly the terms an inline
+    // note image is, and THIS line is the gate: `registerBlobProtocol` 404s any
+    // hash whose mime resolves to null, so a picture becomes servable at the
+    // moment `profiles` joins this union and not before.
+    profileStore().mimeForHash(sha256)
   );
 }
 
@@ -2976,7 +3026,10 @@ function restoreDeps(): ImportDeps {
     // restore does not — every fact it reads about the target profile comes
     // through the same store getters above.
     foreignImportStore: (profileId) => new ForeignImportStore(requireDb().raw, profileId),
-    getProfile: (profileId) => requireProfile(requireDb(), profileId),
+    getProfile: (profileId) => {
+      const profile = requireProfile(requireDb(), profileId);
+      return { id: profile.id, name: profile.name, picture: profilePictureOf(profile) };
+    },
     pickArchiveFile: async () => {
       // One filter for both archive kinds: an encrypted export is `.nexus` and
       // a plaintext one `.nexus.zip`, and the reader tells them apart by the
@@ -3081,18 +3134,19 @@ async function handleDashboardPick(profileId: string): Promise<DashboardPickResu
     throw error;
   }
 
-  await releaseBackgroundBlob(profileId, previousHash, sha256);
+  await releaseReplacedBlob(profileId, previousHash, sha256);
   return { status: "ok", settings };
 }
 
 /**
- * Garbage-collects the background a profile just stopped using. `nextHash` is
- * what replaced it (null when the background was simply cleared): re-picking
- * the SAME image must not delete it, and the refcount would say so anyway —
- * the explicit comparison just avoids the pointless round trip through the
- * store and the filesystem.
+ * Garbage-collects an image a profile just stopped using — a dashboard
+ * background (ADR-041) or a profile picture (SET-001), which are the same
+ * operation over two columns. `nextHash` is what replaced it (null when it was
+ * simply cleared): re-picking the SAME image must not delete it, and the
+ * refcount would say so anyway — the explicit comparison just avoids the
+ * pointless round trip through the stores and the filesystem.
  */
-async function releaseBackgroundBlob(
+async function releaseReplacedBlob(
   profileId: string,
   previousHash: string | null,
   nextHash: string | null,
@@ -3104,6 +3158,56 @@ async function releaseBackgroundBlob(
     previousHash,
     blobRefCount(profileId, previousHash),
   );
+}
+
+// --- Profile picture (SET-001) -----------------------------------------------
+
+/**
+ * The whole pick flow for a profile picture, in main and nowhere else — the
+ * dashboard background's arrangement above, with the file handling and the
+ * image processing both in `main/profilePicture.ts` (see that module for the
+ * posture this keeps, and for why there is deliberately no interactive crop).
+ *
+ * The same four-step order, and for the same reasons: the dialog and the size
+ * gate first, then the bytes MAIN produced go into the blob store, then the row,
+ * then the previous picture's blob is released. The one difference is what is
+ * stored — never the file the user chose, always the square PNG this process
+ * re-encoded, which is what strips the original's EXIF.
+ */
+async function handleProfilePicturePick(profileId: string): Promise<ProfilePicturePickResult> {
+  // Resolved BEFORE the dialog: an unknown id is a bad payload, and putting a
+  // file picker in front of the user only to throw once they have chosen would
+  // be the rudest possible way to report one.
+  const store = profileStore();
+  const previous = store.get(profileId);
+  if (previous === null) {
+    throw new Error("Invalid IPC payload: unknown profile id.");
+  }
+
+  const picked = await pickProfilePicture(mainWindow, MAX_PROFILE_PICTURE_BYTES);
+  if (picked.status !== "ok") return picked;
+
+  const { bytes, mime } = picked.picture;
+  const { sha256 } = await saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes);
+
+  let profile: Profile;
+  try {
+    profile = store.setPicture(profileId, sha256, mime, bytes.byteLength);
+  } catch (error) {
+    // The blob was already written (write-if-absent); if the row failed, GC it
+    // so a failed pick never leaves an orphan file — but only if nothing else
+    // references it. The dashboard background's own arrangement.
+    await deleteBlobIfOrphaned(
+      blobStorePathsFor(),
+      requireBlobKeys(),
+      sha256,
+      blobRefCount(profileId, sha256),
+    );
+    throw error;
+  }
+
+  await releaseReplacedBlob(profileId, previous.pictureHash, sha256);
+  return { status: "ok", profile };
 }
 
 function registerIpc(): void {
@@ -3191,6 +3295,34 @@ function registerIpc(): void {
     const id = asNonEmptyString(body.id, "id");
     const name = asProfileName(body.name, "name");
     renameProfile(requireDb(), id, name);
+  });
+
+  // Profile picture (SET-001). The renderer names no file and — unlike every
+  // other image path in this app — never sends bytes either: main opens the
+  // picker, reads under a cap, sniffs, decodes, crops, resizes, re-encodes and
+  // stores. These two handlers therefore validate exactly one field, a profile
+  // id, because that is genuinely all that crosses IPC.
+  ipcMain.handle(
+    IpcChannel.profilesPicturePick,
+    (event, payload): Promise<ProfilePicturePickResult> => {
+      assertTrustedSender(event);
+      const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+      return handleProfilePicturePick(profileId);
+    },
+  );
+
+  ipcMain.handle(IpcChannel.profilesPictureClear, async (event, payload): Promise<Profile> => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+
+    const store = profileStore();
+    const previous = store.get(profileId);
+    if (previous === null) {
+      throw new Error("Invalid IPC payload: unknown profile id.");
+    }
+    const profile = store.clearPicture(profileId);
+    await releaseReplacedBlob(profileId, previous.pictureHash, null);
+    return profile;
   });
 
   ipcMain.handle(IpcChannel.flagsGet, (event, payload): Promise<FlagState> => {
@@ -5090,7 +5222,7 @@ function registerIpc(): void {
     const store = dashboardSettingsStore(profileId);
     const previousHash = store.get().backgroundHash;
     const settings = store.clearBackground(new Date().toISOString());
-    await releaseBackgroundBlob(profileId, previousHash, null);
+    await releaseReplacedBlob(profileId, previousHash, null);
     return settings;
   });
 
@@ -5272,7 +5404,7 @@ function registerIpc(): void {
         flagStore,
         getMainWindow: () => mainWindow,
       },
-      profile,
+      archiveProfileOf(profile),
       passphrase,
       modules,
     );

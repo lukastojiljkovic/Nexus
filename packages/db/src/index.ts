@@ -44,6 +44,8 @@ export {
   PersonValidationError,
   PlanNotFoundError,
   PlanValidationError,
+  ProfileNotFoundError,
+  ProfileValidationError,
   RestoreValidationError,
   SchemaVersionError,
   SearchValidationError,
@@ -71,6 +73,9 @@ export { MIGRATIONS, runMigrations } from "./migrations/migrations.js";
 export type { Migration } from "./migrations/migrations.js";
 
 export { SqliteFlagStore } from "./flags/sqliteFlagStore.js";
+
+export { ProfileStore } from "./profiles/profileStore.js";
+export type { ProfileRecord } from "./profiles/profileStore.js";
 
 export {
   DashboardSettingsStore,

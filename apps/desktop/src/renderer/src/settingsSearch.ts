@@ -52,6 +52,15 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
     label: s.profile.nameLabel,
     keywords: ["profil", "naziv", "preimenuj"],
   },
+  // SET-001: „slika“ and „profil“ sit in the label already, so the keywords
+  // carry what someone would type instead — the thing itself („avatar“), and
+  // the two actions.
+  {
+    id: "profile-picture",
+    section: "profile",
+    label: s.profile.pictureLabel,
+    keywords: ["avatar", "fotografija", "nalog", "izaberi", "ukloni"],
+  },
   {
     id: "security-passcode",
     section: "security",

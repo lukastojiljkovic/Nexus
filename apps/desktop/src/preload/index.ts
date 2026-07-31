@@ -26,6 +26,10 @@ const api: NexusApi = {
   listProfiles: () => ipcRenderer.invoke(IpcChannel.profilesList),
   renameProfile: (id, name) =>
     ipcRenderer.invoke(IpcChannel.profilesRename, { id, name }),
+  pickProfilePicture: (profileId) =>
+    ipcRenderer.invoke(IpcChannel.profilesPicturePick, { profileId }),
+  clearProfilePicture: (profileId) =>
+    ipcRenderer.invoke(IpcChannel.profilesPictureClear, { profileId }),
   getFlags: (profileId) => ipcRenderer.invoke(IpcChannel.flagsGet, { profileId }),
   setFlag: (profileId, moduleId, enabled) =>
     ipcRenderer.invoke(IpcChannel.flagsSet, { profileId, moduleId, enabled }),

@@ -18,6 +18,7 @@ import { SearchPage } from "./SearchPage.js";
 import { ShortcutsDialog } from "./ShortcutsDialog.js";
 import { buildSearchCommands } from "./searchCommands.js";
 import { createModuleRegistry } from "./modules.js";
+import { ProfileAvatar } from "./profileAvatar.js";
 import { persistAutoLock, readStoredAutoLock, type AutoLockMinutes } from "./autoLock.js";
 import {
   readStoredShortcutOverrides,
@@ -757,14 +758,24 @@ export function App() {
     );
   }
 
-  /** Reflects a Settings-page rename in the shell's own profile state. */
-  function renameActiveProfile(name: string): void {
+  /** Patches one field of the active profile in the shell's own state — what both Settings callbacks below reflect through. */
+  function patchActiveProfile(changes: Partial<Profile>): void {
     if (!profiles || !activeProfile) return;
     setProfiles(
       profiles.map((profile) =>
-        profile.id === activeProfile.id ? { ...profile, name } : profile,
+        profile.id === activeProfile.id ? { ...profile, ...changes } : profile,
       ),
     );
+  }
+
+  /** Reflects a Settings-page rename in the shell's own profile state. */
+  function renameActiveProfile(name: string): void {
+    patchActiveProfile({ name });
+  }
+
+  /** Reflects a Settings-page picture change, so the sidebar's avatar updates without a reload (SET-001). */
+  function setActiveProfilePicture(pictureHash: string | null): void {
+    patchActiveProfile({ pictureHash });
   }
 
   return (
@@ -804,6 +815,21 @@ export function App() {
           })}
           {activeProfile && (
             <>
+              {/* SET-001: the one place in the shell that says WHOSE data this
+                  is. It sits directly above the two actions that leave the
+                  profile („Promeni nalog“, „Zaključaj“), which is where a reader
+                  looks for it, and it is a statement rather than a control —
+                  clicking a name that only names itself would be a promise of a
+                  menu this app does not have. The name is `title`d because a
+                  220px sidebar truncates a long one. */}
+              <div className="app__profile-row" title={activeProfile.name}>
+                <ProfileAvatar
+                  name={activeProfile.name}
+                  pictureHash={activeProfile.pictureHash}
+                  size="sm"
+                />
+                <span className="app__profile-name">{activeProfile.name}</span>
+              </div>
               {/* Navigates to the full page (ADR-039 §1); the badge stays as
                   the hint for Ctrl+K, which still opens the palette. */}
               <NavItem
@@ -925,10 +951,12 @@ export function App() {
             <SettingsPage
               profileId={activeProfile.id}
               profileName={activeProfile.name}
+              profilePictureHash={activeProfile.pictureHash}
               info={info}
               flags={flags}
               onFlagsChanged={setFlags}
               onProfileRenamed={renameActiveProfile}
+              onProfilePictureChanged={setActiveProfilePicture}
               preference={preference}
               onPreferenceChange={changePreference}
               registry={registry}

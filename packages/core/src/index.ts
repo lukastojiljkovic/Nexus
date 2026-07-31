@@ -121,10 +121,13 @@ export { toCsv } from "./imex/csv.js";
 export type { CsvValue } from "./imex/csv.js";
 
 export { isInlineImageMime, sniffMime } from "./files/sniff.js";
+export { centerSquareCrop, PROFILE_PICTURE_SIZE } from "./files/squareCrop.js";
+export type { CropRect } from "./files/squareCrop.js";
 
 export { ARCHIVE_MODULE_IDS, buildExportArchive, countProfileModules, DATA_FILES } from "./imex/exportArchive.js";
 export type {
   ArchiveModuleId,
+  ArchiveProfilePicture,
   ExportArchive,
   ExportArchiveInput,
   ExportBinaryEntry,

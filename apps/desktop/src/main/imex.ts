@@ -72,7 +72,7 @@ export interface ImexExportDeps extends ProfileDataDeps {
  */
 export async function handleExport(
   deps: ImexExportDeps,
-  profile: { id: string; name: string },
+  profile: ExportArchiveInput["profile"],
   passphrase: string | null,
   modules?: ReadonlySet<ArchiveModuleId>,
 ): Promise<ExportResult> {

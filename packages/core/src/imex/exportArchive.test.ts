@@ -24,7 +24,7 @@ function sha256(content: string): string {
 
 function emptyInput(): ExportArchiveInput {
   return {
-    profile: { id: "profile1", name: "Luka" },
+    profile: { id: "profile1", name: "Luka", picture: null },
     appVersion: "0.1.0",
     createdAt: "2026-07-11T10:00:00.000Z",
     settings: {
@@ -243,10 +243,13 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.17.0");
+      expect(manifest.schemaVersion).toBe("1.18.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
-      expect(manifest.profile).toEqual({ id: "profile1", name: "Luka" });
+      // `picture: null` is written out loud rather than omitted: the manifest is
+      // the archive's own statement of what the profile IS, and "this profile
+      // has no picture" is a fact worth stating (SET-001, `1.18.0`).
+      expect(manifest.profile).toEqual({ id: "profile1", name: "Luka", picture: null });
       expect(manifest.settings).toEqual({
         flags: { tasks: true, notes: false },
         notifications: { quietFrom: null, quietTo: null, morningHour: "08:00", enabledSources: ["document", "exam"] },
@@ -274,6 +277,64 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(emptyInput());
       const raw = archive.files.get("manifest.json") ?? "";
       expect(raw).toContain("\n  ");
+    });
+
+    // SET-001 (`1.18.0`): the picture is a MANIFEST fact, so these four cover the
+    // whole of it — it is written where the profile's name is, its blob joins the
+    // same `blobs/` union every attachment travels in, it deduplicates against an
+    // attachment naming the same bytes, and it rides with a module subset that
+    // carries no dashboard at all.
+    describe("the profile picture", () => {
+      const PICTURE = { hash: "c".repeat(64), mime: "image/png", sizeBytes: 4096 };
+
+      it("is written into the manifest's profile object", () => {
+        const input = emptyInput();
+        input.profile.picture = PICTURE;
+        const manifest = JSON.parse(
+          buildExportArchive(input).files.get("manifest.json") ?? "",
+        ) as Record<string, unknown>;
+        expect(manifest.profile).toEqual({ id: "profile1", name: "Luka", picture: PICTURE });
+      });
+
+      it("declares its blob in the manifest inventory and as a binary entry", () => {
+        const input = emptyInput();
+        input.profile.picture = PICTURE;
+        const archive = buildExportArchive(input);
+        const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as {
+          blobs: { sha256: string; sizeBytes: number }[];
+        };
+        expect(manifest.blobs).toEqual([{ sha256: PICTURE.hash, sizeBytes: PICTURE.sizeBytes }]);
+        expect(archive.binaries).toContainEqual({
+          kind: "attachment",
+          path: `blobs/${PICTURE.hash}`,
+          sha256: PICTURE.hash,
+          sizeBytes: PICTURE.sizeBytes,
+        });
+      });
+
+      it("travels once when a note attachment names the same bytes", () => {
+        const input = emptyInput();
+        input.profile.picture = PICTURE;
+        input.data.notes = [noteRow({ id: "n1", title: "Beleška" })];
+        input.data.noteAttachments = [
+          attachmentRow({ id: "na1", noteId: "n1", sha256: PICTURE.hash, sizeBytes: PICTURE.sizeBytes }),
+        ];
+        const archive = buildExportArchive(input);
+        expect(
+          archive.binaries.filter((entry) => entry.path === `blobs/${PICTURE.hash}`),
+        ).toHaveLength(1);
+      });
+
+      it("rides with a module subset that carries no dashboard at all", () => {
+        const input = emptyInput();
+        input.profile.picture = PICTURE;
+        input.modules = new Set<ArchiveModuleId>(["tasks"]);
+        const manifest = JSON.parse(
+          buildExportArchive(input).files.get("manifest.json") ?? "",
+        ) as { profile: { picture: unknown }; blobs: unknown[] };
+        expect(manifest.profile.picture).toEqual(PICTURE);
+        expect(manifest.blobs).toEqual([{ sha256: PICTURE.hash, sizeBytes: PICTURE.sizeBytes }]);
+      });
     });
   });
 

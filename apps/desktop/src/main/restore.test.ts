@@ -12,6 +12,7 @@ import {
   createArchiveWriter,
   mergeNoteState,
   type ArchiveKdfParams,
+  type ArchiveProfilePicture,
   type ExportArchive,
   type ExportArchiveInput,
   type ExportSettings,
@@ -37,6 +38,7 @@ import {
   NotificationStore,
   PeopleStore,
   PlanStore,
+  ProfileStore,
   RestoreStore,
   SqliteFlagStore,
   StudySettingsStore,
@@ -201,12 +203,21 @@ function makeTestDeps(handle: NexusDatabase, filePath: string | null): TestDepsH
     ...profileDataDeps(handle),
     restoreStore: (profileId) => new RestoreStore(handle.raw, profileId),
     foreignImportStore: (profileId) => new ForeignImportStore(handle.raw, profileId),
+    // The REAL read `main/index.ts` performs, through the same store — the
+    // picture rides with the name because a restore replaces both, and an undo
+    // that snapshotted only the name would leave the target wearing the
+    // archive's face (SET-001).
     getProfile: (profileId) => {
-      const row = handle.raw.prepare("SELECT id, name FROM profiles WHERE id = ?").get(profileId) as
-        | { id: string; name: string }
-        | undefined;
+      const row = new ProfileStore(handle.raw).get(profileId);
       if (!row) throw new Error(`Test setup: no profile "${profileId}".`);
-      return row;
+      return {
+        id: row.id,
+        name: row.name,
+        picture:
+          row.pictureHash === null || row.pictureMime === null || row.pictureSizeBytes === null
+            ? null
+            : { hash: row.pictureHash, mime: row.pictureMime, sizeBytes: row.pictureSizeBytes },
+      };
     },
     pickArchiveFile: async () => filePath,
     reloadRenderer: () => {
@@ -230,7 +241,11 @@ function makeTestDeps(handle: NexusDatabase, filePath: string | null): TestDepsH
       new NoteAttachmentStore(handle.raw, profileId).refCount(sha256) +
       new TaskAttachmentStore(handle.raw, profileId).refCount(sha256) +
       new SubjectAttachmentStore(handle.raw, profileId).refCount(sha256) +
-      new DashboardSettingsStore(handle.raw, profileId).refCount(sha256),
+      new DashboardSettingsStore(handle.raw, profileId).refCount(sha256) +
+      // The fifth member (SET-001, migration 040): the `profiles` table itself.
+      // Its store takes no profile id — that table IS the profile list — and its
+      // count is profile-agnostic like every other one here.
+      new ProfileStore(handle.raw).refCount(sha256),
     deleteBlobIfOrphaned: async (sha256, refCount) => {
       if (refCount === 0) blobs.delete(sha256);
     },
@@ -276,6 +291,8 @@ interface SeededFixture {
   data: ProfileData;
   derived: Map<string, RestoredNoteDerived>;
   settings: ExportSettings;
+  /** The profile's own picture (SET-001) — a MANIFEST fact rather than a row, so it rides beside `data` here exactly as it does in `ExportArchiveInput`. */
+  picture: ArchiveProfilePicture;
   /** The plaintext bytes behind every attachment this fixture declares, keyed by their own sha256 — what feeds the zip's `blobs/<sha256>` entries. */
   blobBytes: Map<string, Uint8Array>;
   ids: {
@@ -302,6 +319,8 @@ interface SeededFixture {
     subjectAttachmentSha: string;
     /** The dashboard background's own hash (ADR-041) — a SECOND, independent member of the archive's `blobs/` union. */
     backgroundSha: string;
+    /** The profile picture's own hash (SET-001) — the union's fifth member, and the only one named by the MANIFEST rather than by a row. */
+    pictureSha: string;
   };
 }
 
@@ -480,6 +499,14 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   // adding one materializes the default five beside it.
   dashboardWidgetStore.add("study:ispiti", "L", t0);
 
+  // The profile's own picture with its OWN blob (SET-001): a fifth, independent
+  // entry in the archive's `blobs/` union, and the only one named by the
+  // manifest rather than by a row — so the round trip proves that a blob with no
+  // referring row still travels, restores, and is counted by the GC union.
+  const pictureBytes = new TextEncoder().encode(`${label} picture content`);
+  const pictureSha = sha256OfBytes(pictureBytes);
+  new ProfileStore(handle.raw).setPicture(profileId, pictureSha, "image/png", pictureBytes.length);
+
   const taskLists = taskListStore.listActive();
   const data: ProfileData = {
     tasks: taskStore.listActive(),
@@ -540,24 +567,26 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     [taskAttachmentSha, taskAttachmentBytes],
     [subjectAttachmentSha, subjectAttachmentBytes],
     [backgroundSha, backgroundBytes],
+    [pictureSha, pictureBytes],
   ]);
 
   return {
     data,
     derived,
     settings,
+    picture: { hash: pictureSha, mime: "image/png", sizeBytes: pictureBytes.length },
     blobBytes,
-    ids: { task, list, section, taskTag, event, person, subject, exam, deck, card, notification, note, linkedNote, folder, tag, template, attachmentSha, taskAttachmentSha, subjectAttachmentSha, backgroundSha },
+    ids: { task, list, section, taskTag, event, person, subject, exam, deck, card, notification, note, linkedNote, folder, tag, template, attachmentSha, taskAttachmentSha, subjectAttachmentSha, backgroundSha, pictureSha },
   };
 }
 
 function buildArchiveFor(
-  fixture: Pick<SeededFixture, "data" | "settings">,
+  fixture: Pick<SeededFixture, "data" | "settings" | "picture">,
   profileId: string,
   profileName: string,
 ): ExportArchive {
   const input: ExportArchiveInput = {
-    profile: { id: profileId, name: profileName },
+    profile: { id: profileId, name: profileName, picture: fixture.picture },
     appVersion: "0.1.0-test",
     createdAt: "2026-02-01T00:00:00.000Z",
     settings: fixture.settings,
@@ -659,16 +688,26 @@ describe("restore", () => {
 
       const result = await applyRestore(deps, profileB, preview.preview.token);
       expect(result.rowsWritten).toBeGreaterThan(0);
-      // Four: the note attachment's blob, the task attachment's, the subject
-      // material's (migration 035) and the dashboard background's (ADR-041) —
-      // every member of the one `blobs/` union had to be written before the
-      // transaction.
-      expect(result.blobsAdded).toBe(4);
+      // Five: the note attachment's blob, the task attachment's, the subject
+      // material's (migration 035), the dashboard background's (ADR-041) and the
+      // profile picture's (SET-001) — every member of the one `blobs/` union had
+      // to be written before the transaction, including the one no ROW names.
+      expect(result.blobsAdded).toBe(5);
       expect(blobs.has(fixtureA.ids.taskAttachmentSha)).toBe(true);
       expect(blobs.has(fixtureA.ids.subjectAttachmentSha)).toBe(true);
       expect(blobs.has(fixtureA.ids.backgroundSha)).toBe(true);
+      expect(blobs.has(fixtureA.ids.pictureSha)).toBe(true);
       expect(result.missingBlobs).toBe(0);
       expect(result.restored).toEqual(countProfileModules(fixtureA.data));
+
+      // SET-001: the picture came back onto the TARGET profile row, beside the
+      // name the restore also rewrote — the manifest's two profile facts,
+      // written together.
+      expect(new ProfileStore(dbB.raw).get(profileB)).toMatchObject({
+        name: "A",
+        pictureHash: fixtureA.ids.pictureSha,
+        pictureMime: "image/png",
+      });
 
       // Every module's rows landed under profile B, ids preserved.
       expect(new TaskStore(dbB.raw, profileB).listActive()).toEqual(
@@ -869,7 +908,11 @@ describe("restore", () => {
       blobBytesForArchive.set(privateSha, privateBytes);
 
       const archive = buildArchiveFor(
-        { data: dataWithSecondAttachment, settings: fixtureSource.settings },
+        {
+          data: dataWithSecondAttachment,
+          settings: fixtureSource.settings,
+          picture: fixtureSource.picture,
+        },
         profileSource,
         "Source",
       );
@@ -927,6 +970,19 @@ describe("restore", () => {
         "2026-01-01T00:05:00.000Z",
       );
 
+      // And the bystander PROFILE wearing the archive's picture as its own
+      // (SET-001) — the union's fifth member, on exactly the terms the three
+      // above state. After the undo, the bystander's `profiles` row is the only
+      // thing left naming those bytes: no attachment table and no dashboard row
+      // references this hash at any point, so a count blind to `profiles` would
+      // read 0 and delete the face another profile is still wearing.
+      new ProfileStore(dbB.raw).setPicture(
+        profileBystander,
+        fixtureSource.ids.pictureSha,
+        "image/png",
+        fixtureSource.blobBytes.get(fixtureSource.ids.pictureSha)?.length ?? 1,
+      );
+
       // The restore target: one pre-existing row the restore will wipe.
       const profileTarget = createProfile(dbB, "Target");
       const preexistingTask = new TaskStore(dbB.raw, profileTarget).create({ title: "Will be wiped by restore" });
@@ -936,17 +992,19 @@ describe("restore", () => {
       const preview = await previewRestore(deps, profileTarget, null);
       if (preview.status !== "ready") unreachable();
 
-      // Five distinct blobs: the shared note one, the private note one, the
+      // Six distinct blobs: the shared note one, the private note one, the
       // task one (which no note attachment anywhere references), the subject
-      // material (which nothing else references either), and the dashboard
-      // background (ADR-041) — one union, five distinct hashes.
+      // material (which nothing else references either), the dashboard
+      // background (ADR-041) and the profile picture (SET-001) — one union, six
+      // distinct hashes, and the last of them named by no row at all.
       const applyResult = await applyRestore(deps, profileTarget, preview.preview.token);
-      expect(applyResult.blobsAdded).toBe(5);
+      expect(applyResult.blobsAdded).toBe(6);
       expect(blobs.has(fixtureSource.ids.attachmentSha)).toBe(true);
       expect(blobs.has(privateSha)).toBe(true);
       expect(blobs.has(fixtureSource.ids.taskAttachmentSha)).toBe(true);
       expect(blobs.has(fixtureSource.ids.subjectAttachmentSha)).toBe(true);
       expect(blobs.has(fixtureSource.ids.backgroundSha)).toBe(true);
+      expect(blobs.has(fixtureSource.ids.pictureSha)).toBe(true);
 
       const afterApply = new TaskStore(dbB.raw, profileTarget).listActive();
       expect(afterApply.map((row) => row.id)).not.toContain(preexistingTask.id);
@@ -969,11 +1027,23 @@ describe("restore", () => {
       expect(blobs.has(privateSha)).toBe(false);
       // And the blob only a TASK attachment names survives too — the union.
       expect(blobs.has(fixtureSource.ids.taskAttachmentSha)).toBe(true);
-      // As does the one only a SUBJECT MATERIAL names (migration 035): the
-      // union's newest member, proved by exactly the same undo.
+      // As does the one only a SUBJECT MATERIAL names (migration 035).
       expect(blobs.has(fixtureSource.ids.subjectAttachmentSha)).toBe(true);
+      // And the one only another PROFILE'S PICTURE names (SET-001, migration
+      // 040): the union's newest member, proved by exactly the same undo — the
+      // target gave the hash up, the bystander did not, and nothing but
+      // `blobRefCount`'s fifth member could have known that.
+      expect(blobs.has(fixtureSource.ids.pictureSha)).toBe(true);
       expect(blobs.has(fixtureSource.ids.backgroundSha)).toBe(false);
       expect(undoResult.blobsRemoved).toBe(2);
+
+      // And the target's own picture came back to what it was before the
+      // restore: none at all. An undo that put the rows back but left the
+      // archive's face on would be an undo the user could see was incomplete.
+      expect(new ProfileStore(dbB.raw).get(profileTarget)).toMatchObject({
+        name: "Target",
+        pictureHash: null,
+      });
     });
   });
 
@@ -982,13 +1052,19 @@ describe("restore", () => {
       const profileA = createProfile(dbA, "A");
       const fixtureA = seedProfile(dbA, profileA, "A");
       const archive = buildArchiveFor(fixtureA, profileA, "A");
-      // BOTH members of the fixture's blob union are withheld — the attachment
-      // this case is about, and the dashboard background beside it — so
-      // "nothing was written" below stays the assertion it was written to be.
+      // Every DECORATION blob is withheld alongside the attachment this case is
+      // about — the dashboard background and the profile picture — so "nothing
+      // was written" below stays the assertion it was written to be. Neither
+      // costs the restore anything beyond itself: each is a warning, and the
+      // profile still comes back, plainer.
       const zipBytes = await buildArchiveZip(
         archive,
         fixtureA.blobBytes,
-        new Set([fixtureA.ids.attachmentSha, fixtureA.ids.backgroundSha]),
+        new Set([
+          fixtureA.ids.attachmentSha,
+          fixtureA.ids.backgroundSha,
+          fixtureA.ids.pictureSha,
+        ]),
       );
       const filePath = fixturePath("missing-blob.nexus.zip");
       await writeFile(filePath, zipBytes);
@@ -1010,10 +1086,17 @@ describe("restore", () => {
       expect(result.blobsAdded).toBe(2);
       expect(blobs.has(fixtureA.ids.attachmentSha)).toBe(false);
       expect(blobs.has(fixtureA.ids.taskAttachmentSha)).toBe(true);
+      expect(blobs.has(fixtureA.ids.pictureSha)).toBe(false);
 
       expect(
         new NoteAttachmentStore(dbB.raw, profileB).list(fixtureA.ids.note.id).map((row) => row.sha256),
       ).toContain(fixtureA.ids.attachmentSha);
+
+      // The picture ROW is written even though its bytes were not — exactly the
+      // attachment rule one line above, and the reason a lost image is a warning
+      // rather than a refusal: the hash is still the honest record of what this
+      // profile's picture IS, and the bytes may yet turn up in another archive.
+      expect(new ProfileStore(dbB.raw).get(profileB)?.pictureHash).toBe(fixtureA.ids.pictureSha);
     });
   });
 
@@ -1278,11 +1361,15 @@ describe("foreign import", () => {
       for (const counts of Object.values(preview.preview.report.modules)) {
         expect(counts.parsed).toBe(counts.imported + counts.merged + counts.skipped);
       }
-      // The two the planner never imports are named rather than silently absent.
+      // The ones the planner never imports are named rather than silently
+      // absent — including the archive's profile picture (SET-001), which
+      // reaches the planner from the MANIFEST rather than from a row and would
+      // otherwise vanish with nothing on screen to say so.
       const codes = preview.preview.report.skips.map((skip) => skip.code);
       expect(codes).toContain("notifications-not-imported");
       expect(codes).toContain("settings-not-imported");
       expect(codes).toContain("source-inbox-collapsed");
+      expect(codes).toContain("profile-picture-not-imported");
 
       // A dry run: the profile is byte for byte what it was.
       expect(gatherProfileData(deps, profileB)).toEqual(before);
@@ -1353,13 +1440,19 @@ describe("foreign import", () => {
       const result = await applyImport(deps, profileB, preview.preview.token);
       expect(result.rowsWritten).toBeGreaterThan(0);
       // The note attachment's blob, the task attachment's and the subject
-      // material's. NOT the dashboard background: an import never carries the
-      // archive's decoration.
+      // material's. NOT the dashboard background, and NOT the profile picture
+      // (SET-001): an import never carries the archive's decoration, and a face
+      // is the sharpest case of that rule — the target keeps its own.
       expect(result.blobsAdded).toBe(3);
       expect(blobs.has(fixtureA.ids.attachmentSha)).toBe(true);
       expect(blobs.has(fixtureA.ids.taskAttachmentSha)).toBe(true);
       expect(blobs.has(fixtureA.ids.subjectAttachmentSha)).toBe(true);
       expect(blobs.has(fixtureA.ids.backgroundSha)).toBe(false);
+      expect(blobs.has(fixtureA.ids.pictureSha)).toBe(false);
+      // The target is still wearing its OWN face, not the archive author's.
+      expect(new ProfileStore(dbB.raw).get(profileB)?.pictureHash).not.toBe(
+        fixtureA.ids.pictureSha,
+      );
       expect(result.missingBlobs).toBe(0);
 
       const after = gatherProfileData(deps, profileB);

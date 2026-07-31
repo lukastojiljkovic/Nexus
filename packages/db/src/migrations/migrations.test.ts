@@ -16,8 +16,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 39 (a note folder's default view), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(39);
+  it("is at version 40 (the profile picture), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(40);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -4411,6 +4411,121 @@ describe("migration 039 — a note folder's default view", () => {
         )
         .run("f2", "p1", now(), now()),
     ).toThrow();
+    db.close();
+  });
+});
+
+describe("migration 040 — profile picture", () => {
+  const columnNames = (db: NexusDatabase, table: string): string[] =>
+    (db.raw.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(
+      (row) => row.name,
+    );
+
+  const HASH = "b".repeat(64);
+
+  /**
+   * Writes the picture trio straight onto a profile row, bypassing the store
+   * entirely — which is exactly the path the CHECKs exist for: a restore writes
+   * raw `UPDATE`s, and a constraint is what holds when no store is involved.
+   */
+  const setPicture = (
+    db: NexusDatabase,
+    profileId: string,
+    hash: string | null,
+    mime: string | null,
+    sizeBytes: number | null,
+  ) =>
+    db.raw
+      .prepare(
+        `UPDATE profiles
+            SET picture_hash = ?, picture_mime = ?, picture_size_bytes = ?
+          WHERE id = ?`,
+      )
+      .run(hash, mime, sizeBytes, profileId);
+
+  it("adds the three picture columns and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    expect(columnNames(db, "profiles")).toEqual(
+      expect.arrayContaining(["picture_hash", "picture_mime", "picture_size_bytes"]),
+    );
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("creates the profiles_picture index the blob refcount and mime lookup both read", () => {
+    const db = openDatabase({ path: join(dir, "index.db") });
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("profiles_picture");
+    db.close();
+  });
+
+  it("leaves a profile created without one with no picture", () => {
+    const db = openDatabase({ path: join(dir, "no-picture.db") });
+    insertProfile(db, "p1");
+    expect(
+      db.raw
+        .prepare("SELECT picture_hash, picture_mime, picture_size_bytes FROM profiles WHERE id = ?")
+        .get("p1"),
+    ).toEqual({ picture_hash: null, picture_mime: null, picture_size_bytes: null });
+    db.close();
+  });
+
+  it("accepts the trio all set and all null, and refuses every half-set combination", () => {
+    const db = openDatabase({ path: join(dir, "trio.db") });
+    insertProfile(db, "p1");
+
+    expect(() => setPicture(db, "p1", HASH, "image/png", 512)).not.toThrow();
+    expect(() => setPicture(db, "p1", null, null, null)).not.toThrow();
+
+    expect(() => setPicture(db, "p1", HASH, null, 512)).toThrow();
+    expect(() => setPicture(db, "p1", HASH, "image/png", null)).toThrow();
+    expect(() => setPicture(db, "p1", null, "image/png", 512)).toThrow();
+    expect(() => setPicture(db, "p1", null, null, 512)).toThrow();
+    db.close();
+  });
+
+  it("refuses a non-positive size", () => {
+    const db = openDatabase({ path: join(dir, "size.db") });
+    insertProfile(db, "p1");
+    expect(() => setPicture(db, "p1", HASH, "image/png", 0)).toThrow();
+    expect(() => setPicture(db, "p1", HASH, "image/png", -1)).toThrow();
+    db.close();
+  });
+
+  it("upgrades a database written before it, keeping the profile it already held", () => {
+    const path = join(dir, "upgrade-040.db");
+    const before = new Database(path);
+    before.pragma("journal_mode = WAL");
+    before.pragma("foreign_keys = ON");
+    before.function("nx_fold", { deterministic: true }, (value: unknown) =>
+      typeof value === "string" ? foldSearchText(value) : null,
+    );
+    runMigrations(
+      before,
+      MIGRATIONS.filter((migration) => migration.version < 40),
+    );
+    before
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run("p1", "personal", "Stari profil", new Date().toISOString());
+    before.close();
+
+    const db = openDatabase({ path });
+    expect(
+      db.raw
+        .prepare(
+          "SELECT name, picture_hash, picture_mime, picture_size_bytes FROM profiles WHERE id = ?",
+        )
+        .get("p1"),
+    ).toEqual({
+      name: "Stari profil",
+      picture_hash: null,
+      picture_mime: null,
+      picture_size_bytes: null,
+    });
     db.close();
   });
 });

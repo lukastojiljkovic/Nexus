@@ -43,7 +43,7 @@ function toImportInput(archive: ExportArchive): ImportArchiveInput {
 
 function emptyExportInput(): ExportArchiveInput {
   return {
-    profile: { id: "profile1", name: "Luka" },
+    profile: { id: "profile1", name: "Luka", picture: null },
     appVersion: "0.1.0",
     createdAt: "2026-07-11T10:00:00.000Z",
     settings: {
@@ -524,6 +524,12 @@ describe("parseImportArchive — empty archive", () => {
 interface BaseFilesOptions {
   schemaVersion?: string;
   fileContents?: Partial<Record<string, string>>;
+  /**
+   * What the manifest's `profile.picture` says (SET-001, `1.18.0`). ABSENT here
+   * leaves the key off the manifest entirely — the pre-`1.18.0` shape, and the
+   * default every other test in this file keeps reading against.
+   */
+  profilePicture?: unknown;
 }
 
 const EMPTY_DATA_FILE_NAMES = [
@@ -549,7 +555,11 @@ function baseFiles(options: BaseFilesOptions = {}): Map<string, string> {
     schemaVersion: options.schemaVersion ?? INTERCHANGE_SCHEMA_VERSION,
     appVersion: "0.1.0",
     createdAt: "2026-07-11T10:00:00.000Z",
-    profile: { id: "profile1", name: "Luka" },
+    profile: {
+      id: "profile1",
+      name: "Luka",
+      ...("profilePicture" in options ? { picture: options.profilePicture } : {}),
+    },
     settings: {
       flags: {},
       notifications: { quietFrom: null, quietTo: null, morningHour: "08:00", enabledSources: [] },
@@ -637,6 +647,117 @@ const VALID_CARD = {
   updatedAt: "2026-01-01T00:00:00.000Z",
 };
 
+/**
+ * The manifest's `profile.picture` (SET-001, `1.18.0`): absent and null both mean
+ * "no picture", a declared one is validated strictly in every era, and a picture
+ * whose blob the archive does not carry is a WARNING — the profile restores
+ * either way and simply comes back without one.
+ */
+describe("parseImportArchive — the profile picture", () => {
+  const PICTURE_HASH = "c".repeat(64);
+  const PICTURE = { hash: PICTURE_HASH, mime: "image/png", sizeBytes: 4096 };
+
+  it("reads null when the key is absent — every pre-1.18.0 archive", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles()));
+    expect(result.problems).toEqual([]);
+    expect(result.manifest?.profile.picture).toBeNull();
+  });
+
+  it("reads null when the key is explicitly null", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ profilePicture: null })));
+    expect(result.problems).toEqual([]);
+    expect(result.manifest?.profile.picture).toBeNull();
+  });
+
+  it("reads a declared picture whose blob the archive carries", () => {
+    const result = parseImportArchive(
+      emptyInputWith(baseFiles({ profilePicture: PICTURE }), {
+        blobNames: new Set([PICTURE_HASH]),
+      }),
+    );
+    expect(result.problems).toEqual([]);
+    expect(result.manifest?.profile.picture).toEqual(PICTURE);
+  });
+
+  it("warns (never refuses) when the picture's blob is missing from the archive", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ profilePicture: PICTURE })));
+    expect(result.problems).toEqual([
+      {
+        severity: "warning",
+        code: "missing-blob",
+        path: `blobs/${PICTURE_HASH}`,
+        detail: "profile1",
+      },
+    ]);
+    expect(result.data).not.toBeNull();
+  });
+
+  it("refuses a hash that is not a content address", () => {
+    const result = parseImportArchive(
+      emptyInputWith(baseFiles({ profilePicture: { ...PICTURE, hash: "nope" } })),
+    );
+    expect(result.problems).toEqual([
+      {
+        severity: "error",
+        code: "invalid-manifest",
+        path: "manifest.json",
+        detail: "profile.picture.hash",
+      },
+    ]);
+  });
+
+  it("refuses a mime outside the inline-image set", () => {
+    const result = parseImportArchive(
+      emptyInputWith(baseFiles({ profilePicture: { ...PICTURE, mime: "application/pdf" } })),
+    );
+    expect(result.problems).toEqual([
+      {
+        severity: "error",
+        code: "invalid-manifest",
+        path: "manifest.json",
+        detail: "profile.picture.mime",
+      },
+    ]);
+  });
+
+  it("refuses a non-positive size", () => {
+    const result = parseImportArchive(
+      emptyInputWith(baseFiles({ profilePicture: { ...PICTURE, sizeBytes: 0 } })),
+    );
+    expect(result.problems).toEqual([
+      {
+        severity: "error",
+        code: "invalid-manifest",
+        path: "manifest.json",
+        detail: "profile.picture.sizeBytes",
+      },
+    ]);
+  });
+
+  it("refuses a half-set picture — the nested object is what makes that unrepresentable", () => {
+    const result = parseImportArchive(
+      emptyInputWith(baseFiles({ profilePicture: { hash: PICTURE_HASH } })),
+    );
+    expect(result.problems).toEqual([
+      {
+        severity: "error",
+        code: "invalid-manifest",
+        path: "manifest.json",
+        detail: "profile.picture.mime",
+      },
+    ]);
+  });
+
+  it("survives a full write/read round trip through buildExportArchive", () => {
+    const input = emptyExportInput();
+    input.profile.picture = PICTURE;
+    const archive = buildExportArchive(input);
+    const result = parseImportArchive(toImportInput(archive));
+    expect(result.problems).toEqual([]);
+    expect(result.manifest?.profile.picture).toEqual(PICTURE);
+  });
+});
+
 describe("parseImportArchive — one test per problem code", () => {
   it("missing-manifest: manifest.json absent", () => {
     const result = parseImportArchive(emptyInputWith(new Map()));
@@ -667,12 +788,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.18.0`: the nearest minor strictly ahead of this build's `1.17.0`.
+  // `1.19.0`: the nearest minor strictly ahead of this build's `1.18.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.18.0" });
+    const files = baseFiles({ schemaVersion: "1.19.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.18.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.19.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -2384,8 +2505,8 @@ describe("parseImportArchive — note folder preferences (the 1.7.0 era gate)", 
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.17.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.17.0");
+  it("is 1.18.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.18.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -2551,16 +2672,16 @@ describe("parseImportArchive — schema version", () => {
   });
 
   it("accepts a newer patch", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.17.7" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.18.7" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
 
-  // `1.18.0`: the nearest minor strictly ahead of this build's `1.17.0`.
+  // `1.19.0`: the nearest minor strictly ahead of this build's `1.18.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.18.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.19.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.18.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.19.0" },
     ]);
     expect(result.data).toBeNull();
   });

@@ -44,6 +44,17 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
  *
+ * `1.18.0` adds a profile's picture (SET-001, migration 040): three fields on
+ * the manifest's own `profile` object, declaring a blob that travels in the
+ * `blobs/` union like any other. The manifest rather than a record, because the
+ * picture is a fact about the PROFILE — precisely what `profile.name` beside it
+ * already is — and every `ProfileData` collection belongs to exactly one archive
+ * MODULE, which a profile's own identity does not; filing it under `dashboard`
+ * (its nearest neighbour) would mean a tasks-only export loses the user's
+ * picture while a dashboard-only export carries it, which is a mapping that says
+ * something untrue. Being a manifest fact, it is also not subject to the module
+ * choice (IMEX-003), on the same terms as `settings` below.
+ *
  * `1.17.0` adds a note folder's `defaultView` — the shape its notes are drawn in
  * (NOTE-002, migration 039) — after
  * `1.16.0` added a task list's `viewConfig` — what it remembers about each of its
@@ -83,7 +94,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.17.0";
+const SCHEMA_VERSION = "1.18.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -875,8 +886,40 @@ export interface ProfileData {
   dashboardWidgets: readonly ExportDashboardWidget[];
 }
 
+/**
+ * A profile's picture as the manifest carries it (SET-001, migration 040): the
+ * blob store's plaintext sha256, the mime the bytes are served as, and their
+ * length. A NESTED object rather than three nullable siblings on `profile`, for
+ * the reason a task template's payload is one: the three are meaningless apart —
+ * migration 040's CHECKs allow all-three or none — and nesting makes "all three
+ * or nothing" a fact of the TYPE, so neither the writer nor the reader needs a
+ * pair rule to enforce what the shape already says.
+ *
+ * The bytes travel in the archive's `blobs/` namespace exactly as a note
+ * attachment's do, deduplicated in the same union: a picture the user also
+ * attached to a note travels once, and either reference alone carries it.
+ *
+ * `mime` is whatever main sniffed from the bytes it produced itself
+ * (SEC-FILE-02) — in practice always `image/png`, since main re-encodes every
+ * picture, which is what strips the original's EXIF — and never a guess from a
+ * file name.
+ */
+export interface ArchiveProfilePicture {
+  hash: string;
+  mime: string;
+  sizeBytes: number;
+}
+
 export interface ExportArchiveInput {
-  profile: { id: string; name: string };
+  /**
+   * The profile this archive is OF: its id and name, plus the picture it
+   * carries (`1.18.0`) or null for none. The whole object is written into the
+   * manifest verbatim, so a caller must build it explicitly rather than hand
+   * over a wider profile row — a column the app's own `Profile` type gains later
+   * would otherwise appear in every archive's manifest without anyone deciding
+   * it should.
+   */
+  profile: { id: string; name: string; picture: ArchiveProfilePicture | null };
   /** `app.getVersion()` — stamped by the caller, never read from here. */
   appVersion: string;
   /** ISO-8601, stamped by the caller — this module never reads a clock. */
@@ -1057,12 +1100,14 @@ const NO_ROWS: readonly never[] = [];
  * Yjs state, are re-derived at restore time, and already tolerate a target that
  * is not there.
  *
- * BLOBS need no rule of their own: every blob is named by a row
- * (`taskAttachments`, `subjectAttachments`, `noteAttachments`,
- * `dashboardSettings.backgroundHash`), each of which lives in exactly one
- * module, so `buildExportArchive` declaring blobs off the FILTERED rows already
- * carries exactly the ones a chosen module needs — including the deduplication
- * that lets one file shared across two modules travel once when both ride.
+ * BLOBS need no rule of their own: every blob a ROW names (`taskAttachments`,
+ * `subjectAttachments`, `noteAttachments`, `dashboardSettings.backgroundHash`)
+ * is named by a row living in exactly one module, so `buildExportArchive`
+ * declaring blobs off the FILTERED rows already carries exactly the ones a
+ * chosen module needs — including the deduplication that lets one file shared
+ * across two modules travel once when both ride. The profile's picture
+ * (`1.18.0`) is the one blob no row names: it hangs off the manifest, so it is
+ * declared outside this filter entirely and rides with every subset.
  */
 export function filterProfileData(
   data: ProfileData,
@@ -1270,6 +1315,14 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     // so one guard covers the pair without the other needing a non-null claim.
     if (dashboard.backgroundHash === null || dashboard.backgroundSizeBytes === null) continue;
     declareBlob(dashboard.backgroundHash, dashboard.backgroundSizeBytes);
+  }
+  // The profile's picture (SET-001), joining the same union — and deliberately
+  // OUTSIDE the module filter above it, unlike every other blob here: this one
+  // is named by the manifest rather than by a row, so it rides with the archive
+  // itself exactly as `profile.name` and `settings` do. A tasks-only export
+  // still carries the picture of the profile it is an export of.
+  if (input.profile.picture !== null) {
+    declareBlob(input.profile.picture.hash, input.profile.picture.sizeBytes);
   }
 
   // The calendar as a standards-honest `.ics` beside the lossless NDJSON

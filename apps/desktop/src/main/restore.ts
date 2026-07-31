@@ -4,6 +4,7 @@ import {
   countProfileModules,
   parseImportArchive,
   planForeignImport,
+  type ArchiveProfilePicture,
   type ExportSettings,
   type ForeignImportPlan,
   type ForeignImportTarget,
@@ -127,6 +128,8 @@ interface ReadyRestore {
   /** The profile this preview was computed against — `applyRestore` refuses any other, mirroring the token check. */
   profileId: string;
   profileName: string;
+  /** The archive's own profile picture (SET-001), or null when it carries none — held beside the name because a restore writes the two together. */
+  profilePicture: ArchiveProfilePicture | null;
   settings: ExportSettings;
   data: ProfileData;
 }
@@ -165,6 +168,8 @@ interface RestoreUndo {
   profileId: string;
   snapshot: {
     profileName: string;
+    /** The picture the profile wore before the operation — undone alongside its name, because a restore replaced both. */
+    profilePicture: ArchiveProfilePicture | null;
     settings: ExportSettings;
     data: ProfileData;
     derived: ReadonlyMap<string, RestoredNoteDerived>;
@@ -184,8 +189,14 @@ interface RestoreUndo {
  */
 export interface RestoreDeps extends ProfileDataDeps {
   restoreStore(profileId: string): RestoreStore;
-  /** The target profile row, so a preview can name what is being overwritten. */
-  getProfile(profileId: string): { id: string; name: string };
+  /**
+   * The target profile row, so a preview can name what is being overwritten and
+   * an undo snapshot can put its identity back. `picture` rides along with the
+   * name for that second reason: a restore replaces the profile row's own facts
+   * too, so an undo that restored only the name would leave the target wearing
+   * the archive's face.
+   */
+  getProfile(profileId: string): { id: string; name: string; picture: ArchiveProfilePicture | null };
   /** The native open dialog: resolves the chosen path, or null when the user canceled. Injected so this module never imports electron — main owns the dialog, exactly as it does for export. */
   pickArchiveFile(): Promise<string | null>;
   /** Reloads the renderer once a restore or an undo has landed. */
@@ -428,6 +439,7 @@ export async function previewRestore(
     token,
     profileId,
     profileName: parsed.manifest.profile.name,
+    profilePicture: parsed.manifest.profile.picture,
     settings: parsed.manifest.settings,
     data: parsed.data,
   };
@@ -522,6 +534,16 @@ export async function applyRestore(
     const hash = dashboard.backgroundHash;
     if (hash !== null && ready.archive.blobNames.has(hash)) shasToWrite.add(hash);
   }
+  // The profile's picture (SET-001) — a referrer on exactly the same terms,
+  // named by the manifest rather than by a row. A restore that wrote the hash
+  // onto the profile without writing its bytes would leave an avatar pointing at
+  // nothing, which is the one failure this loop exists to prevent.
+  if (
+    ready.profilePicture !== null &&
+    ready.archive.blobNames.has(ready.profilePicture.hash)
+  ) {
+    shasToWrite.add(ready.profilePicture.hash);
+  }
   const addedBlobs: string[] = [];
   for (const sha256 of shasToWrite) {
     const bytes = await ready.archive.readBlob(sha256);
@@ -532,7 +554,13 @@ export async function applyRestore(
   const now = new Date().toISOString();
   const derived = deriveRestoredNotes(ready.data.notes);
   const rowsWritten = deps.restoreStore(profileId).replaceProfileData(
-    { profileName: ready.profileName, settings: ready.settings, data: ready.data, derived },
+    {
+      profileName: ready.profileName,
+      profilePicture: ready.profilePicture,
+      settings: ready.settings,
+      data: ready.data,
+      derived,
+    },
     now,
   );
 
@@ -552,6 +580,7 @@ export async function applyRestore(
     profileId,
     snapshot: {
       profileName: currentProfile.name,
+      profilePicture: currentProfile.picture,
       settings: undoSettings,
       data: undoData,
       derived: undoDerived,
@@ -579,8 +608,8 @@ export async function applyRestore(
  * below is live rather than stale — removes exactly the blobs the restore
  * had added and that nothing references anymore. A blob's row-level reference
  * count across EVERY table that names a hash (`deps.blobRefCount` —
- * attachments on either module, dashboard backgrounds; deliberately
- * profile-agnostic) is what decides this, never simply "was it one of
+ * attachments on either module, dashboard backgrounds, profile pictures;
+ * deliberately profile-agnostic) is what decides this, never simply "was it one of
  * `addedBlobs`": a blob the restore added that some OTHER profile's — or some
  * other MODULE's — row also happens to reference (content-addressed blobs are
  * shared) must survive regardless of who wrote it first.
@@ -603,6 +632,7 @@ export async function undoRestore(deps: RestoreDeps, profileId: string): Promise
   const rowsWritten = deps.restoreStore(profileId).replaceProfileData(
     {
       profileName: toUndo.snapshot.profileName,
+      profilePicture: toUndo.snapshot.profilePicture,
       settings: toUndo.snapshot.settings,
       data: toUndo.snapshot.data,
       derived: toUndo.snapshot.derived,
@@ -788,7 +818,14 @@ export async function previewImport(
   let plan: ForeignImportPlan;
   try {
     plan = planForeignImport(
-      { data: parsed.data, dropped: parsed.dropped },
+      {
+        data: parsed.data,
+        dropped: parsed.dropped,
+        // Handed over only so the plan can NAME it as skipped: an import never
+        // adopts the archive's profile picture (ADR-043 §2, the dashboard
+        // background's rule at its sharpest).
+        profilePicture: parsed.manifest.profile.picture,
+      },
       importTargetFor(deps, profileId),
       uuidv7,
     );
@@ -906,6 +943,7 @@ export async function applyImport(
     profileId,
     snapshot: {
       profileName: currentProfile.name,
+      profilePicture: currentProfile.picture,
       settings: undoSettings,
       data: undoData,
       derived: undoDerived,

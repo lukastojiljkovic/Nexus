@@ -9,6 +9,7 @@ import type {
   DashboardPickErrorCode,
   ImportSkipCode,
   MarkdownImportSkipCode,
+  ProfilePicturePickErrorCode,
   RestoreModuleCounts,
   RestoreProblemCode,
 } from "../../shared/ipc.js";
@@ -1622,6 +1623,29 @@ export const strings = {
       nameLabel: "Ime",
       save: "Sačuvaj",
       saveError: "Čuvanje nije uspelo — ime mora imati 1–80 karaktera.",
+      /**
+       * SET-001: the profile picture. „Slika profila“ names the block; the
+       * caption states the automatic crop out loud rather than letting the user
+       * discover it — an interactive crop is deliberately not built (the
+       * renderer would have to handle the image bytes, which it never does),
+       * and a promise the app cannot keep is worse than a plain sentence.
+       */
+      pictureLabel: "Slika profila",
+      pictureCaption: "Slika se automatski opseca na kvadrat.",
+      pickPicture: "Izaberi sliku",
+      /** Also the picture's own alt text: it is decoration, so it says what it is rather than describing it. */
+      pictureAlt: "Slika profila",
+      removePicture: "Ukloni sliku",
+      /** One sentence per `ProfilePicturePickErrorCode`: the file was refused, and why. */
+      pictureRejected: {
+        "too-large": "Slika je prevelika — najviše 10 MB.",
+        "unsupported-format": "Ovaj format nije podržan. Koristi PNG, JPEG, GIF ili WebP.",
+        unreadable: "Fajl nije moguće pročitati.",
+        /** The format IS allowed but the decoder could not open it — a different sentence, because the user's next step is different. */
+        undecodable: "Ovu sliku nije moguće obraditi. Pokušaj sa PNG ili JPEG fajlom.",
+      } satisfies Record<ProfilePicturePickErrorCode, string>,
+      /** A rejected IPC call (not one of the named reasons above). */
+      pictureError: "Promena slike nije uspela. Pokušaj ponovo.",
     },
     /** Sigurnost section (ADR-018 / AUTH): change passcode, regenerate the Recovery Kit, idle auto-lock. */
     security: {
@@ -2012,7 +2036,7 @@ export const strings = {
       /**
        * One sentence per `ImportSkipCode`. The first seven are rows salvage
        * mode could not read — the „oštećen red“ family, worded so it is clear
-       * the ARCHIVE is at fault and the rest of it still arrives. The last five
+       * the ARCHIVE is at fault and the rest of it still arrives. The last six
        * are skipped BY DESIGN, and each says whose choice wins and why.
        *
        * The default task list is deliberately never named („Inbox“): it is a
@@ -2035,6 +2059,8 @@ export const strings = {
           "Pozadina kontrolne table se ne uvozi — izgled tvoje table ostaje tvoj.",
         "study-settings-not-imported":
           "Podešavanja učenja iz arhive se ne uvoze — tvoja ciljana zapamćenost i dnevni limiti ostaju tvoji.",
+        "profile-picture-not-imported":
+          "Slika profila iz arhive se ne uvozi — tvoja slika ostaje tvoja.",
         "template-name-taken": "Šablon istog imena već postoji kod tebe — tvoj se zadržava.",
         "source-inbox-collapsed":
           "Podrazumevana lista iz arhive se ne pravi ponovo — njeni zadaci ulaze u tvoju podrazumevanu listu.",

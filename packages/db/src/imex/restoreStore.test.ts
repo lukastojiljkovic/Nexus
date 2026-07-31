@@ -33,6 +33,7 @@ import {
   NotificationStore,
   PeopleStore,
   PlanStore,
+  ProfileStore,
   RestoreStore,
   RestoreValidationError,
   RESTORE_WIPE_TABLES,
@@ -727,7 +728,7 @@ describe("RestoreStore", () => {
     };
 
     const written = new RestoreStore(freshDb.raw, profileB).replaceProfileData(
-      { profileName: "Restored profile", settings, data: fixtureA.data, derived: fixtureA.derived },
+      { profileName: "Restored profile", profilePicture: null, settings, data: fixtureA.data, derived: fixtureA.derived },
       NOW,
     );
     expect(written).toBeGreaterThan(0);
@@ -747,7 +748,7 @@ describe("RestoreStore", () => {
     new TaskStore(db.raw, profileA).create({ title: "Added after the backup was taken" });
 
     new RestoreStore(db.raw, profileA).replaceProfileData(
-      { profileName: "A", settings: emptySettings(), data: fixtureA.data, derived: fixtureA.derived },
+      { profileName: "A", profilePicture: null, settings: emptySettings(), data: fixtureA.data, derived: fixtureA.derived },
       NOW,
     );
 
@@ -772,7 +773,7 @@ describe("RestoreStore", () => {
 
     new RestoreStore(db.raw, profileB).replaceProfileData(
       {
-        profileName: "B prazan",
+        profileName: "B prazan", profilePicture: null,
         settings: emptySettings(),
         data: emptyProfileData(),
         derived: new Map(),
@@ -793,7 +794,7 @@ describe("RestoreStore", () => {
     const fresh = freshArchiveData(); // tasks, subjects and templates only
 
     new RestoreStore(db.raw, profileB).replaceProfileData(
-      { profileName: "B replaced", settings: emptySettings(), data: fresh, derived: new Map() },
+      { profileName: "B replaced", profilePicture: null, settings: emptySettings(), data: fresh, derived: new Map() },
       NOW,
     );
 
@@ -931,7 +932,7 @@ describe("RestoreStore", () => {
 
     expect(() =>
       new RestoreStore(db.raw, profileB).replaceProfileData(
-        { profileName: "T4", settings: emptySettings(), data, derived: new Map() },
+        { profileName: "T4", profilePicture: null, settings: emptySettings(), data, derived: new Map() },
         NOW,
       ),
     ).not.toThrow();
@@ -971,7 +972,7 @@ describe("RestoreStore", () => {
 
     expect(() =>
       new RestoreStore(db.raw, profileB).replaceProfileData(
-        { profileName: "T4", settings: emptySettings(), data, derived: new Map() },
+        { profileName: "T4", profilePicture: null, settings: emptySettings(), data, derived: new Map() },
         NOW,
       ),
     ).not.toThrow();
@@ -999,7 +1000,7 @@ describe("RestoreStore", () => {
 
     expect(() =>
       new RestoreStore(db.raw, profileB).replaceProfileData(
-        { profileName: "Should not stick", settings: emptySettings(), data, derived: new Map() },
+        { profileName: "Should not stick", profilePicture: null, settings: emptySettings(), data, derived: new Map() },
         NOW,
       ),
     ).toThrow();
@@ -1041,7 +1042,7 @@ describe("RestoreStore", () => {
     ]);
 
     new RestoreStore(db.raw, profileB).replaceProfileData(
-      { profileName: "T6", settings: emptySettings(), data, derived },
+      { profileName: "T6", profilePicture: null, settings: emptySettings(), data, derived },
       NOW,
     );
 
@@ -1068,7 +1069,7 @@ describe("RestoreStore", () => {
     ]);
 
     new RestoreStore(db.raw, profileB).replaceProfileData(
-      { profileName: "T7", settings: emptySettings(), data, derived },
+      { profileName: "T7", profilePicture: null, settings: emptySettings(), data, derived },
       NOW,
     );
 
@@ -1109,7 +1110,7 @@ describe("RestoreStore", () => {
     ]);
 
     new RestoreStore(db.raw, profileB).replaceProfileData(
-      { profileName: "T8", settings: emptySettings(), data, derived },
+      { profileName: "T8", profilePicture: null, settings: emptySettings(), data, derived },
       NOW,
     );
 
@@ -1143,7 +1144,7 @@ describe("RestoreStore", () => {
     };
 
     new RestoreStore(db.raw, profileB).replaceProfileData(
-      { profileName: "After rename", settings, data: emptyProfileData(), derived: new Map() },
+      { profileName: "After rename", profilePicture: null, settings, data: emptyProfileData(), derived: new Map() },
       NOW,
     );
 
@@ -1168,6 +1169,82 @@ describe("RestoreStore", () => {
     expect(profileRow.name).toBe("After rename");
   });
 
+  // SET-001: the picture is written beside the name, from the manifest, and a
+  // REPLACE honours "no picture" as loudly as it honours a picture — a restore
+  // that left the target's own face on would be a merge, not a replace.
+  describe("T9b: the profile picture rides with the name", () => {
+    const PICTURE = { hash: "e".repeat(64), mime: "image/png", sizeBytes: 4096 };
+
+    const readPicture = (profileId: string) =>
+      db.raw
+        .prepare(
+          "SELECT picture_hash, picture_mime, picture_size_bytes FROM profiles WHERE id = ?",
+        )
+        .get(profileId);
+
+    it("writes the archive's picture onto a profile that had none", () => {
+      const profileB = createProfile(db, "B");
+      new RestoreStore(db.raw, profileB).replaceProfileData(
+        {
+          profileName: "B",
+          profilePicture: PICTURE,
+          settings: emptySettings(),
+          data: emptyProfileData(),
+          derived: new Map(),
+        },
+        NOW,
+      );
+      expect(readPicture(profileB)).toEqual({
+        picture_hash: PICTURE.hash,
+        picture_mime: PICTURE.mime,
+        picture_size_bytes: PICTURE.sizeBytes,
+      });
+    });
+
+    it("clears the target's own picture when the archive carries none", () => {
+      const profileB = createProfile(db, "B");
+      new ProfileStore(db.raw).setPicture(profileB, "f".repeat(64), "image/png", 128);
+
+      new RestoreStore(db.raw, profileB).replaceProfileData(
+        {
+          profileName: "B",
+          profilePicture: null,
+          settings: emptySettings(),
+          data: emptyProfileData(),
+          derived: new Map(),
+        },
+        NOW,
+      );
+      expect(readPicture(profileB)).toEqual({
+        picture_hash: null,
+        picture_mime: null,
+        picture_size_bytes: null,
+      });
+    });
+
+    it("never touches another profile's picture", () => {
+      const profileA = createProfile(db, "A");
+      const profileB = createProfile(db, "B");
+      new ProfileStore(db.raw).setPicture(profileA, "f".repeat(64), "image/png", 128);
+
+      new RestoreStore(db.raw, profileB).replaceProfileData(
+        {
+          profileName: "B",
+          profilePicture: PICTURE,
+          settings: emptySettings(),
+          data: emptyProfileData(),
+          derived: new Map(),
+        },
+        NOW,
+      );
+      expect(readPicture(profileA)).toEqual({
+        picture_hash: "f".repeat(64),
+        picture_mime: "image/png",
+        picture_size_bytes: 128,
+      });
+    });
+  });
+
   it("T10: restoring into profile B never touches profile A's rows", () => {
     const profileA = createProfile(db, "A");
     const fixtureA = seedFixture(db, profileA, "A");
@@ -1175,7 +1252,7 @@ describe("RestoreStore", () => {
     seedFixture(db, profileB, "B-old");
 
     new RestoreStore(db.raw, profileB).replaceProfileData(
-      { profileName: "B restored", settings: emptySettings(), data: freshArchiveData(), derived: new Map() },
+      { profileName: "B restored", profilePicture: null, settings: emptySettings(), data: freshArchiveData(), derived: new Map() },
       NOW,
     );
 
@@ -1198,7 +1275,7 @@ describe("RestoreStore", () => {
 
     expect(() =>
       new RestoreStore(db.raw, profileB).replaceProfileData(
-        { profileName: "B", settings: emptySettings(), data: fixtureA.data, derived: fixtureA.derived },
+        { profileName: "B", profilePicture: null, settings: emptySettings(), data: fixtureA.data, derived: fixtureA.derived },
         NOW,
       ),
     ).toThrow(/UNIQUE constraint failed/);
@@ -1237,7 +1314,7 @@ describe("RestoreStore", () => {
     };
 
     new RestoreStore(db.raw, profileB).replaceProfileData(
-      { profileName: "Recurrence", settings: emptySettings(), data, derived: new Map() },
+      { profileName: "Recurrence", profilePicture: null, settings: emptySettings(), data, derived: new Map() },
       NOW,
     );
 
@@ -1295,7 +1372,7 @@ describe("RestoreStore", () => {
     };
 
     new RestoreStore(db.raw, profileB).replaceProfileData(
-      { profileName: "Placement", settings: emptySettings(), data: { ...emptyProfileData(), taskLists, tasks: [task], taskSections }, derived: new Map() },
+      { profileName: "Placement", profilePicture: null, settings: emptySettings(), data: { ...emptyProfileData(), taskLists, tasks: [task], taskSections }, derived: new Map() },
       NOW,
     );
 
@@ -1337,7 +1414,7 @@ describe("RestoreStore", () => {
 
     new RestoreStore(db.raw, profileB).replaceProfileData(
       {
-        profileName: "Tags",
+        profileName: "Tags", profilePicture: null,
         settings: emptySettings(),
         data: { ...emptyProfileData(), taskLists, tasks: [first, second], taskTags, taskTagLinks },
         derived: new Map(),
@@ -1363,7 +1440,7 @@ describe("RestoreStore", () => {
     new TaskTagStore(db.raw, profileB).attachTag(oldTask.id, oldTag.id);
 
     new RestoreStore(db.raw, profileB).replaceProfileData(
-      { profileName: "Wiped", settings: emptySettings(), data: freshArchiveData(), derived: new Map() },
+      { profileName: "Wiped", profilePicture: null, settings: emptySettings(), data: freshArchiveData(), derived: new Map() },
       NOW,
     );
 
@@ -1405,7 +1482,7 @@ describe("RestoreStore", () => {
 
     new RestoreStore(db.raw, profileB).replaceProfileData(
       {
-        profileName: "Deps",
+        profileName: "Deps", profilePicture: null,
         settings: emptySettings(),
         data: { ...emptyProfileData(), taskLists, tasks: [first, second, third], taskDependencies },
         derived: new Map(),
@@ -1430,7 +1507,7 @@ describe("RestoreStore", () => {
     new TaskDependencyStore(db.raw, profileB).addDependency(oldBlocker.id, oldBlocked.id);
 
     new RestoreStore(db.raw, profileB).replaceProfileData(
-      { profileName: "Wiped", settings: emptySettings(), data: freshArchiveData(), derived: new Map() },
+      { profileName: "Wiped", profilePicture: null, settings: emptySettings(), data: freshArchiveData(), derived: new Map() },
       NOW,
     );
 
@@ -1457,7 +1534,7 @@ describe("RestoreStore", () => {
     const tasks = [legacyTask("Prvi"), legacyTask("Drugi"), legacyTask("Treći")];
 
     const written = new RestoreStore(db.raw, profileB).replaceProfileData(
-      { profileName: "Era", settings: emptySettings(), data: { ...emptyProfileData(), tasks }, derived: new Map() },
+      { profileName: "Era", profilePicture: null, settings: emptySettings(), data: { ...emptyProfileData(), tasks }, derived: new Map() },
       NOW,
     );
 
@@ -1498,7 +1575,7 @@ describe("RestoreStore", () => {
     };
 
     new RestoreStore(db.raw, profileB).replaceProfileData(
-      { profileName: "Era2", settings: emptySettings(), data: { ...emptyProfileData(), taskLists, tasks: [task] }, derived: new Map() },
+      { profileName: "Era2", profilePicture: null, settings: emptySettings(), data: { ...emptyProfileData(), taskLists, tasks: [task] }, derived: new Map() },
       NOW,
     );
 
@@ -1518,7 +1595,7 @@ describe("RestoreStore", () => {
 
     expect(() =>
       new RestoreStore(db.raw, profileB).replaceProfileData(
-        { profileName: "R9", settings: emptySettings(), data, derived: new Map() },
+        { profileName: "R9", profilePicture: null, settings: emptySettings(), data, derived: new Map() },
         NOW,
       ),
     ).toThrow(RestoreValidationError);

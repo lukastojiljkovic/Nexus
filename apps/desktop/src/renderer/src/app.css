@@ -143,6 +143,60 @@ body {
   border-top: 1px solid var(--nx-border);
 }
 
+/* The profile avatar (SET-001). One circle, two diameters — `md` above the
+   Settings buttons, `sm` in the sidebar row. Quiet by construction: the surface
+   token behind it, a hairline border, and nothing else. No ring, no glow, no
+   accent fill. `object-fit: cover` matters even though main already crops to a
+   square: a picture restored from an older archive, or one a future build wrote
+   differently, must never stretch. */
+.avatar {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.avatar--md {
+  width: 64px;
+  height: 64px;
+  font-size: var(--nx-font-size-h1);
+}
+.avatar--sm {
+  width: 24px;
+  height: 24px;
+  font-size: var(--nx-font-size-label);
+}
+
+/* The sidebar's profile row: who this data belongs to, directly above the two
+   actions that leave the profile. A statement, not a nav item — same padding as
+   one so it lines up, but no hover, no pointer and no active state, because
+   there is nothing to click. */
+.app__profile-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  min-width: 0;
+  padding: var(--nx-space-2) var(--nx-space-2);
+  margin-top: var(--nx-space-2);
+  border-top: 1px solid var(--nx-border);
+}
+.app__profile-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+
 /* App-info facts (Settings "O aplikaciji") ---------------------------- */
 .app__facts {
   margin: 0;
@@ -4427,6 +4481,44 @@ button.cal__grid-event--dragging {
   min-width: 200px;
   max-width: 320px;
 }
+/* Profil → the picture (SET-001): the round preview beside its label, its two
+   actions and the caption that states the automatic crop. Laid out as
+   avatar-then-column so the caption sits under the buttons rather than under
+   the avatar, which is where the sentence it qualifies is. */
+.set__avatar-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nx-space-3);
+  margin-top: var(--nx-space-4);
+}
+.set__avatar-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+.set__avatar-label {
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.set__avatar-actions {
+  display: flex;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+/* Danger-QUIET: the destructive action is named in the danger hue without being
+   a filled red button. Removing a picture is one click to undo, so it must read
+   as available, not as a warning. The border stays the ordinary one until
+   hover, which is where the intent is confirmed. */
+.set__avatar-remove.nx-button {
+  color: var(--nx-danger);
+}
+.set__avatar-remove.nx-button:hover:not(:disabled) {
+  border-color: var(--nx-danger);
+  background: var(--nx-danger-soft);
+}
+
 /* Izgled: the three-way theme preference and the two-way first-day-of-week
    (PRD 04 §5) as compact segmented rows, each under its own caption label. */
 .set__segmented {

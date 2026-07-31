@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import * as Y from "yjs";
 
 import { extractNoteLinkTargets } from "../notes/noteLinks.js";
-import { countProfileModules, type ProfileData } from "./exportArchive.js";
+import {
+  countProfileModules,
+  type ArchiveProfilePicture,
+  type ProfileData,
+} from "./exportArchive.js";
 import { planForeignImport, type ForeignImportTarget } from "./foreignImport.js";
 import type { ImportDrop } from "./importArchive.js";
 
@@ -181,8 +185,13 @@ function emptyTarget(overrides: Partial<ForeignImportTarget> = {}): ForeignImpor
   };
 }
 
-function plan(data: ProfileData, target = emptyTarget(), dropped: readonly ImportDrop[] = []) {
-  return planForeignImport({ data, dropped }, target, counterMint());
+function plan(
+  data: ProfileData,
+  target = emptyTarget(),
+  dropped: readonly ImportDrop[] = [],
+  profilePicture: ArchiveProfilePicture | null = null,
+) {
+  return planForeignImport({ data, dropped, profilePicture }, target, counterMint());
 }
 
 /** Every id-shaped string the planned data holds, so a test can assert no source id survived. */
@@ -470,6 +479,25 @@ describe("planForeignImport — singletons collapse", () => {
     });
   });
 
+  // SET-001: a face is the most personal decoration a profile has, so an import
+  // must never adopt the archive's — the dashboard background's rule, at its
+  // sharpest. Named only when the archive actually carries one, and counted into
+  // no module, because a profile's picture belongs to none.
+  it("never imports the archive's profile picture, and names the skip when there is one", () => {
+    const picture = { hash: "d".repeat(64), mime: "image/png", sizeBytes: 4096 };
+    const withPicture = plan(emptyProfileData(), emptyTarget(), [], picture);
+    expect(withPicture.report.skips).toContainEqual({
+      code: "profile-picture-not-imported", module: null, type: null, count: 1,
+    });
+    // The picture's blob is NOT copied: nothing in the plan references it.
+    expect(withPicture.blobNames.has(picture.hash)).toBe(false);
+  });
+
+  it("names no profile-picture skip when the archive carries none", () => {
+    const { report } = plan(emptyProfileData());
+    expect(report.skips.map((skip) => skip.code)).not.toContain("profile-picture-not-imported");
+  });
+
   it("imports the review log and focus sessions — FSRS history is study data", () => {
     const { data } = plan(foreignProfileData());
     expect(data.reviewLog).toHaveLength(1);
@@ -656,8 +684,16 @@ describe("planForeignImport — purity", () => {
   });
 
   it("plans the same archive identically twice, given the same minting sequence", () => {
-    const first = planForeignImport({ data: foreignProfileData(), dropped: [] }, emptyTarget(), counterMint());
-    const second = planForeignImport({ data: foreignProfileData(), dropped: [] }, emptyTarget(), counterMint());
+    const first = planForeignImport(
+      { data: foreignProfileData(), dropped: [], profilePicture: null },
+      emptyTarget(),
+      counterMint(),
+    );
+    const second = planForeignImport(
+      { data: foreignProfileData(), dropped: [], profilePicture: null },
+      emptyTarget(),
+      counterMint(),
+    );
 
     expect(second.report).toEqual(first.report);
     expect(second.data.tasks).toEqual(first.data.tasks);

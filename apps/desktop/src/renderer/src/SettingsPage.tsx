@@ -49,6 +49,7 @@ import {
 } from "./shortcuts.js";
 import { Kbd } from "./ShortcutsDialog.js";
 import { persistAccent, readStoredAccent } from "./accent.js";
+import { ProfileAvatar } from "./profileAvatar.js";
 import { persistWeekStart, readStoredWeekStart, type WeekStartPreference } from "./weekStart.js";
 import {
   buildSettingsSearchEntries,
@@ -118,16 +119,46 @@ const NAME_MAX = 80;
 interface ProfileSectionProps {
   profileId: string;
   initialName: string;
+  /** The profile's picture hash as the shell currently knows it (SET-001), or null. */
+  initialPictureHash: string | null;
   onProfileRenamed: (name: string) => void;
+  /** Reflects a picture change in the shell, so the sidebar's own avatar follows the Settings page. */
+  onProfilePictureChanged: (pictureHash: string | null) => void;
   /** SET-014 search hits; the section reads only its own entry ids out of it. */
   hits: ReadonlySet<string>;
 }
 
-/** Profil section: renames the active profile (same 1–80-char rule as Onboarding). */
-function ProfileSection({ profileId, initialName, onProfileRenamed, hits }: ProfileSectionProps) {
+/**
+ * Profil section: the profile's name (same 1–80-char rule as Onboarding) and
+ * its picture (SET-001).
+ *
+ * The renderer validates nothing about the picture and never sees one — every
+ * button here is a request to main, which owns the picker, the size gate, the
+ * MIME sniff, the decode/crop/resize/re-encode and the blob store (SEC-EL). A
+ * refused pick comes back as a NAMED reason and is shown as such.
+ *
+ * The caption states the automatic square crop plainly. There is no crop
+ * handle to drag, and that is a decision rather than a gap: an interactive crop
+ * needs the image bytes in the renderer, which is precisely the thing this
+ * pipeline is built not to do (see `main/profilePicture.ts`). Saying so in one
+ * short sentence is more honest than a control that pretends to more choice
+ * than the app is willing to offer.
+ */
+function ProfileSection({
+  profileId,
+  initialName,
+  initialPictureHash,
+  onProfileRenamed,
+  onProfilePictureChanged,
+  hits,
+}: ProfileSectionProps) {
+  const s = strings.settings.profile;
   const [name, setName] = useState(initialName);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pictureHash, setPictureHash] = useState<string | null>(initialPictureHash);
+  const [pictureBusy, setPictureBusy] = useState(false);
+  const [pictureError, setPictureError] = useState<string | null>(null);
 
   const trimmed = name.trim();
   const valid = trimmed.length >= 1 && trimmed.length <= NAME_MAX;
@@ -141,10 +172,44 @@ function ProfileSection({ profileId, initialName, onProfileRenamed, hits }: Prof
       setName(trimmed);
       onProfileRenamed(trimmed);
     } catch (renameError) {
-      setError(strings.settings.profile.saveError);
+      setError(s.saveError);
       console.error("Nexus: failed to rename profile:", renameError);
     } finally {
       setSaving(false);
+    }
+  }
+
+  /** Adopts a profile main just answered with — one place, so the local state and the shell's can never disagree. */
+  function adopt(hash: string | null): void {
+    setPictureHash(hash);
+    onProfilePictureChanged(hash);
+  }
+
+  async function pickPicture(): Promise<void> {
+    setPictureBusy(true);
+    setPictureError(null);
+    try {
+      const result = await window.nexus.pickProfilePicture(profileId);
+      if (result.status === "ok") adopt(result.profile.pictureHash);
+      else if (result.status === "rejected") setPictureError(s.pictureRejected[result.code]);
+    } catch (pickError) {
+      setPictureError(s.pictureError);
+      console.error("Nexus: failed to pick a profile picture:", pickError);
+    } finally {
+      setPictureBusy(false);
+    }
+  }
+
+  async function removePicture(): Promise<void> {
+    setPictureBusy(true);
+    setPictureError(null);
+    try {
+      adopt((await window.nexus.clearProfilePicture(profileId)).pictureHash);
+    } catch (clearError) {
+      setPictureError(s.pictureError);
+      console.error("Nexus: failed to clear the profile picture:", clearError);
+    } finally {
+      setPictureBusy(false);
     }
   }
 
@@ -166,6 +231,38 @@ function ProfileSection({ profileId, initialName, onProfileRenamed, hits }: Prof
         </Button>
       </div>
       {error != null && <p className="set__error">{error}</p>}
+
+      <div className="set__avatar-row">
+        {/* Live: the avatar shows the name being typed, so the initials
+            fallback answers to the field above it rather than to whatever was
+            last saved. */}
+        <ProfileAvatar name={trimmed} pictureHash={pictureHash} size="md" />
+        <div className="set__avatar-side">
+          <span className={labelClass("set__avatar-label", hits.has("profile-picture"))}>
+            {s.pictureLabel}
+          </span>
+          <div className="set__avatar-actions">
+            <Button size="sm" disabled={pictureBusy} onClick={() => void pickPicture()}>
+              {s.pickPicture}
+            </Button>
+            {pictureHash !== null && (
+              // Quiet danger: the destructive action is named in the danger hue
+              // without being a filled red button — removing a picture is
+              // reversible in one click, so it must not shout.
+              <Button
+                size="sm"
+                className="set__avatar-remove"
+                disabled={pictureBusy}
+                onClick={() => void removePicture()}
+              >
+                {s.removePicture}
+              </Button>
+            )}
+          </div>
+          <p className="set__section-caption">{s.pictureCaption}</p>
+          {pictureError != null && <p className="set__error">{pictureError}</p>}
+        </div>
+      </div>
     </>
   );
 }
@@ -1973,10 +2070,14 @@ function ShortcutsSection({
 export interface SettingsPageProps {
   profileId: string;
   profileName: string;
+  /** The active profile's picture hash (SET-001), or null — owned by the shell, exactly as its name is. */
+  profilePictureHash: string | null;
   info: AppInfo | null;
   flags: FlagState;
   onFlagsChanged: (flags: FlagState) => void;
   onProfileRenamed: (name: string) => void;
+  /** Reports a picture change back to the shell, so the sidebar's avatar follows this page. */
+  onProfilePictureChanged: (pictureHash: string | null) => void;
   preference: ThemePreference;
   onPreferenceChange: (preference: ThemePreference) => void;
   registry: ModuleRegistry;
@@ -2008,10 +2109,12 @@ export interface SettingsPageProps {
 export function SettingsPage({
   profileId,
   profileName,
+  profilePictureHash,
   info,
   flags,
   onFlagsChanged,
   onProfileRenamed,
+  onProfilePictureChanged,
   preference,
   onPreferenceChange,
   registry,
@@ -2115,7 +2218,9 @@ export function SettingsPage({
         <ProfileSection
           profileId={profileId}
           initialName={profileName}
+          initialPictureHash={profilePictureHash}
           onProfileRenamed={onProfileRenamed}
+          onProfilePictureChanged={onProfilePictureChanged}
           hits={hits}
         />
       </Card>

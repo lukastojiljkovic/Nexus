@@ -32,6 +32,8 @@ export const IpcChannel = {
   authDeleteAccount: "auth:delete-account",
   profilesList: "profiles:list",
   profilesRename: "profiles:rename",
+  profilesPicturePick: "profiles:picture-pick",
+  profilesPictureClear: "profiles:picture-clear",
   flagsGet: "flags:get",
   flagsSet: "flags:set",
   tasksList: "tasks:list",
@@ -428,6 +430,19 @@ export interface Profile {
   kind: "personal" | "business";
   name: string;
   createdAt: string;
+  /**
+   * The blob store's plaintext sha256 for this profile's picture (SET-001,
+   * migration 040), or null for none. What the renderer turns into an
+   * `nx-blob://<hash>` URL — the same read protocol the dashboard background and
+   * inline note images use. The bytes themselves never cross IPC in EITHER
+   * direction: main opens, decodes and re-encodes the file, and the renderer
+   * only ever names the hash back to a protocol handler.
+   */
+  pictureHash: string | null;
+  /** The main-process-sniffed mime `nx-blob:` serves those bytes as; null exactly when `pictureHash` is. Always `image/png` for a picture this build produced. */
+  pictureMime: string | null;
+  /** The picture's byte length; null exactly when `pictureHash` is. Carried for the archive's blob inventory, not for display. */
+  pictureSizeBytes: number | null;
 }
 
 /**
@@ -455,6 +470,50 @@ export interface FlagsSetRequest {
 export interface ProfilesRenameRequest {
   id: string;
   name: string;
+}
+
+/**
+ * Maximum size, in bytes, of an image `profiles:picture-pick` will accept.
+ * 10 MiB: a phone photograph with room to spare, and half the dashboard
+ * background's cap because nothing here keeps the original — the file is decoded
+ * and re-encoded down to a 512px square, so what a larger allowance would buy is
+ * a longer decode, not a better picture. Stat'ed BEFORE the read, so an
+ * oversized file is refused without ever being loaded.
+ */
+export const MAX_PROFILE_PICTURE_BYTES = 10_485_760;
+
+/**
+ * Why a picture the user chose was refused. `too-large` is over
+ * `MAX_PROFILE_PICTURE_BYTES`; `unsupported-format` is anything the main-process
+ * sniff did not recognise as one of the four inline raster formats; `unreadable`
+ * is a file that could not be stat'ed or read at all; `undecodable` is a file
+ * that IS one of the four but that Electron's image decoder could not open —
+ * a real and separate case (it documents itself as handling PNG and JPEG), and
+ * one the user can act on differently.
+ */
+export type ProfilePicturePickErrorCode =
+  | "too-large"
+  | "unsupported-format"
+  | "unreadable"
+  | "undecodable";
+
+/**
+ * The outcome of the native "pick a profile picture" dialog: the user canceled,
+ * the file was refused for a NAMED reason, or the profile row now points at the
+ * square PNG main produced from it.
+ *
+ * `profile` rather than just the hash, for `DashboardPickResult`'s reason: a
+ * pick can change more than one field, and a renderer patching its copy from a
+ * partial reply would be maintaining a second, drifting model of the row.
+ */
+export type ProfilePicturePickResult =
+  | { status: "canceled" }
+  | { status: "rejected"; code: ProfilePicturePickErrorCode }
+  | { status: "ok"; profile: Profile };
+
+/** Both picture channels take just the profile — the renderer names no file, and sends no bytes (SEC-EL). */
+export interface ProfilesPictureRequest {
+  profileId: string;
 }
 
 /** Weekday index, 0 = Monday … 6 = Sunday — Monday-first, as everything Serbian in Nexus is. */
@@ -3381,6 +3440,7 @@ export type ImportSkipCode =
   | "notifications-not-imported"
   | "dashboard-settings-not-imported"
   | "study-settings-not-imported"
+  | "profile-picture-not-imported"
   | "template-name-taken"
   | "source-inbox-collapsed";
 
@@ -3614,6 +3674,15 @@ export interface NexusApi {
   lock(): Promise<void>;
   listProfiles(): Promise<Profile[]>;
   renameProfile(id: string, name: string): Promise<void>;
+  /**
+   * Opens the native picker and, if the user chooses a file, stores the square
+   * PNG main makes of it (SET-001). No path and no bytes cross this call in
+   * either direction — see `main/profilePicture.ts` for why that is the whole
+   * point, and why there is deliberately no interactive crop.
+   */
+  pickProfilePicture(profileId: string): Promise<ProfilePicturePickResult>;
+  /** Drops the profile's picture and releases its blob when nothing else references it. */
+  clearProfilePicture(profileId: string): Promise<Profile>;
   getFlags(profileId: string): Promise<FlagState>;
   setFlag(profileId: string, moduleId: string, enabled: boolean): Promise<void>;
   listTasks(profileId: string): Promise<Task[]>;

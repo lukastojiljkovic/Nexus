@@ -385,7 +385,7 @@ describe("ForeignImportStore", () => {
       seedProfile(target, "T");
 
       const before = gather(target);
-      const plan = planForeignImport({ data: gather(source), dropped: [] }, targetFor(target), uuidv7);
+      const plan = planForeignImport({ data: gather(source), dropped: [], profilePicture: null }, targetFor(target), uuidv7);
       const written = new ForeignImportStore(db.raw, target).insertPlanned(plan.data, new Map(), NOW);
       expect(written).toBeGreaterThan(0);
 
@@ -438,7 +438,7 @@ describe("ForeignImportStore", () => {
       sourceTasks.create({ title: "Iz tuđeg Inboxa" });
 
       const targetInbox = targetFor(target).inboxListId;
-      const plan = planForeignImport({ data: gather(source), dropped: [] }, targetFor(target), uuidv7);
+      const plan = planForeignImport({ data: gather(source), dropped: [], profilePicture: null }, targetFor(target), uuidv7);
       new ForeignImportStore(db.raw, target).insertPlanned(plan.data, new Map(), NOW);
 
       const lists = new TaskListStore(db.raw, target).listActive();
@@ -458,7 +458,7 @@ describe("ForeignImportStore", () => {
       const sourceTask = new TaskStore(db.raw, source).create({ title: "Tuđi zadatak" });
       sourceTags.attachTag(sourceTask.id, sourceTag.id);
 
-      const plan = planForeignImport({ data: gather(source), dropped: [] }, targetFor(target), uuidv7);
+      const plan = planForeignImport({ data: gather(source), dropped: [], profilePicture: null }, targetFor(target), uuidv7);
       new ForeignImportStore(db.raw, target).insertPlanned(plan.data, new Map(), NOW);
 
       const tags = new TaskTagStore(db.raw, target);
@@ -730,7 +730,7 @@ describe("ForeignImportStore", () => {
       seedProfile(target, "T");
 
       const before = gather(target);
-      const plan = planForeignImport({ data: gather(source), dropped: [] }, targetFor(target), uuidv7);
+      const plan = planForeignImport({ data: gather(source), dropped: [], profilePicture: null }, targetFor(target), uuidv7);
       const refusedEvent = plan.data.events[0];
       expect(refusedEvent).toBeDefined();
 

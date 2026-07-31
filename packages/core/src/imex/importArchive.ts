@@ -8,6 +8,7 @@ import { isEmptyTaskViewConfig, validateTaskViewConfig } from "../tasks/taskView
 import { DATA_FILES } from "./exportArchive.js";
 import type {
   ArchiveModuleId,
+  ArchiveProfilePicture,
   ExportCard,
   ExportDashboardSettings,
   ExportDashboardWidget,
@@ -100,7 +101,14 @@ export interface ImportManifest {
   schemaVersion: string;
   appVersion: string;
   createdAt: string;
-  profile: { id: string; name: string };
+  /**
+   * The profile the archive is OF. `picture` is `null` both for a profile that
+   * has none and for every archive written before `1.18.0` — indistinguishable
+   * on purpose, because they mean the same thing (an OPTIONAL-with-a-default
+   * field, so no `ArchiveEra` flag; see `INTERCHANGE_SCHEMA_VERSION`). A picture
+   * that IS declared is validated strictly, in every era.
+   */
+  profile: { id: string; name: string; picture: ArchiveProfilePicture | null };
   settings: ExportSettings;
   modules: readonly { id: string; records: number }[];
   blobs: readonly { sha256: string; sizeBytes: number }[];
@@ -180,9 +188,15 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.17.0` added a note
- * folder's `defaultView` — the shape its notes are drawn in (NOTE-002,
- * migration 039) — after `1.16.0` added a task
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.18.0` added a
+ * profile's picture (SET-001, migration 040) — three fields on the manifest's
+ * own `profile` object, declaring a blob in the same `blobs/` union every
+ * attachment travels in. A MANIFEST field rather than a record type, because a
+ * picture is a fact about the profile exactly as its name is, and because every
+ * `ProfileData` collection belongs to one archive module while a profile's
+ * identity belongs to none — after `1.17.0` added a note folder's `defaultView`
+ * — the shape its notes are drawn in (NOTE-002, migration 039) — after
+ * `1.16.0` added a task
  * list's `viewConfig` — what it remembers about each of its four views (ADR-050,
  * migration 038) — after `1.15.0` added the
  * `event-template` record type — a saved SHAPE of one event (CAL-009, migration
@@ -232,16 +246,18 @@ export interface ImportArchiveResult {
  * `problemSteps`'s absence means "no worked solution", because that is what
  * every pre-ADR-046 archive's cards actually had, a task list's
  * `viewConfig` absence means "no view preferences", because a list written
- * before ADR-050 had no views to have preferences about, and a note folder's
+ * before ADR-050 had no views to have preferences about, a note folder's
  * `defaultView` absence means `"list"`, because that is the only shape a folder
- * written before NOTE-002's toggle was ever drawn in.
+ * written before NOTE-002's toggle was ever drawn in, and `profile.picture`'s
+ * absence means "no picture", because no profile written before `1.18.0` could
+ * have had one.
  *
  * Major is still 1 throughout, so there is nothing yet to migrate an older
  * major forward from — a migration framework for a major that has never
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.17.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.18.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -728,10 +744,13 @@ const DASHBOARD_WIDGET_SIZES = ["S", "M", "L"] as const;
 const WIDGET_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*:[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /**
- * The inline image formats a dashboard background may use — `isInlineImageMime`
- * (`@nexus/core`'s own `files/sniff.ts`) spelled as a closed list so
- * `enumStr` can name the offending field the way every other enum here does.
- * The two are pinned equal by this module's own tests.
+ * The inline image formats a dashboard background — and, since `1.18.0`, a
+ * profile picture — may use. `isInlineImageMime` (`@nexus/core`'s own
+ * `files/sniff.ts`) spelled as a closed list so `enumStr` can name the offending
+ * field the way every other enum here does. The two are pinned equal by this
+ * module's own tests. ONE list for both, deliberately: they are the same
+ * question — "will `nx-blob:` serve this and will Chromium decode it" — asked
+ * about two blobs.
  */
 const BACKGROUND_MIMES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
 
@@ -2224,6 +2243,32 @@ function parseChecksums(value: unknown): Record<string, string> {
   return checksums;
 }
 
+/**
+ * The profile's picture, off the manifest's own `profile` object (SET-001,
+ * `1.18.0`). ABSENT and explicit `null` mean the same thing — "this profile has
+ * no picture" — which is exactly what every pre-`1.18.0` archive says by
+ * carrying no key at all, so this is an OPTIONAL-with-a-default field and needs
+ * no `ArchiveEra` flag (the ADR-028 rule: an era flag exists only for a field
+ * whose absence is AMBIGUOUS, and this one's never is).
+ *
+ * A value that IS present is validated strictly, in every era, against the same
+ * three rules `parseDashboardSettings` applies to the background it is shaped
+ * after: a real content-address, a mime inside the closed inline-image set (so a
+ * restored picture is always something `nx-blob:` can serve and Chromium can
+ * decode), and a positive size. The all-or-nothing rule those two need a pair
+ * check for is free here — the three live in one object, so half of one is not
+ * a shape this can hold.
+ */
+function parseProfilePicture(value: unknown): ArchiveProfilePicture | null {
+  if (value === undefined || value === null) return null;
+  const root = expectRecord(value, "profile.picture");
+  return {
+    hash: sha256Hex(root.hash, "profile.picture.hash"),
+    mime: enumStr(root.mime, "profile.picture.mime", BACKGROUND_MIMES),
+    sizeBytes: positiveInt(root.sizeBytes, "profile.picture.sizeBytes"),
+  };
+}
+
 function parseBlobs(value: unknown): { sha256: string; sizeBytes: number }[] {
   if (!Array.isArray(value)) throw new InvalidFieldError("blobs");
   return value.map((item, index) => {
@@ -2257,6 +2302,7 @@ function parseManifest(
     const profile = {
       id: nonEmptyStr(profileRoot.id, "profile.id"),
       name: nonEmptyStr(profileRoot.name, "profile.name"),
+      picture: parseProfilePicture(profileRoot.picture),
     };
 
     const settings = parseSettings(root.settings);
@@ -3280,6 +3326,22 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         problem("warning", "missing-blob", { path: `blobs/${backgroundHash}`, detail: profileId }),
       );
     }
+  }
+  // The profile's picture (SET-001), on exactly the same terms — a warning, not
+  // an error: the profile restores either way and simply comes back without a
+  // picture, which is a far better answer than refusing a whole backup over one
+  // lost image. Checked off the MANIFEST rather than off a row, because that is
+  // where this one blob is named.
+  if (
+    manifest.profile.picture !== null &&
+    !input.blobNames.has(manifest.profile.picture.hash)
+  ) {
+    problems.push(
+      problem("warning", "missing-blob", {
+        path: `blobs/${manifest.profile.picture.hash}`,
+        detail: manifest.profile.id,
+      }),
+    );
   }
 
   // --- Reference integrity and cycles ------------------------------------------
