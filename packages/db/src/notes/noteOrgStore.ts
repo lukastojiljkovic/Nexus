@@ -22,6 +22,19 @@ export type NoteFolderColor =
   | "bordo"
   | "grafit";
 
+/**
+ * Closed per-folder view domain (migration 039's CHECK) — the two shapes the
+ * note list pane can draw, in toggle order.
+ *
+ * Deliberately NARROWER than `TASK_LIST_VIEWS`: a board needs a select field to
+ * make columns from and a calendar needs a date to place rows on, and a note
+ * carries neither — its only dates are `createdAt`/`updatedAt`, which are when
+ * it was touched, not when it is due. Two shapes that both work beat four of
+ * which two would be empty.
+ */
+export const NOTE_FOLDER_VIEWS = ["list", "cards"] as const;
+export type NoteFolderView = (typeof NOTE_FOLDER_VIEWS)[number];
+
 /** Folder colours in the order the UI offers them (NOTE organization). */
 export const NOTE_FOLDER_COLORS: readonly NoteFolderColor[] = [
   "zlato",
@@ -51,6 +64,8 @@ export interface NoteFolder {
   defaultTemplateId: string | null;
   /** Whether a context-free "Nova beleška" files into this folder. At most one folder per profile carries it. */
   isCaptureDefault: boolean;
+  /** The shape the note list opens in while this folder is selected (NOTE-002, migration 039). `"list"` for every folder that predates the feature. */
+  defaultView: NoteFolderView;
   createdAt: string;
   updatedAt: string;
 }
@@ -77,6 +92,7 @@ interface NoteFolderRow {
   color: string | null;
   default_template_id: string | null;
   is_capture_default: number;
+  default_view: string;
   created_at: string;
   updated_at: string;
 }
@@ -94,7 +110,8 @@ interface NoteTagLinkRow {
 }
 
 const FOLDER_COLUMNS =
-  "id, profile_id, parent_id, name, color, default_template_id, is_capture_default, created_at, updated_at";
+  "id, profile_id, parent_id, name, color, default_template_id, is_capture_default, " +
+  "default_view, created_at, updated_at";
 const TAG_COLUMNS = "id, profile_id, name, created_at";
 
 const MAX_FOLDER_NAME_LENGTH = 100;
@@ -122,12 +139,13 @@ const ISO_8601_DATETIME =
  * get-or-create: tag names are unique per profile, and re-tagging with an
  * existing name is a normal, non-erroring path for the UI's tag input.
  *
- * A folder also carries two preferences (ADR-036, migration 028), each with its
- * own setter because each has its own invariant: `setDefaultTemplate` validates
- * an id against a union no foreign key could express, and `setCaptureDefault`
- * maintains a per-profile singleton. Neither belongs in `updateFolder`'s
- * partial-patch shape, which exists for the two fields a rename/recolour form
- * edits together.
+ * A folder also carries three preferences, each with its own setter because
+ * each has its own invariant: `setDefaultTemplate` (ADR-036, migration 028)
+ * validates an id against a union no foreign key could express,
+ * `setCaptureDefault` maintains a per-profile singleton, and `setFolderView`
+ * (NOTE-002, migration 039) narrows to a closed set the schema also CHECKs.
+ * None belongs in `updateFolder`'s partial-patch shape, which exists for the two
+ * fields a rename/recolour form edits together.
  */
 export class NoteOrgStore {
   private readonly insertFolder: Database.Statement;
@@ -136,6 +154,7 @@ export class NoteOrgStore {
   private readonly updateFolderFields: Database.Statement;
   private readonly updateFolderParent: Database.Statement;
   private readonly updateFolderTemplate: Database.Statement;
+  private readonly updateFolderView: Database.Statement;
   private readonly selectTemplateById: Database.Statement;
   private readonly clearCaptureDefault: Database.Statement;
   private readonly setCaptureDefaultRow: Database.Statement;
@@ -192,6 +211,10 @@ export class NoteOrgStore {
     );
     this.updateFolderTemplate = db.prepare(
       `UPDATE note_folders SET default_template_id = ?, updated_at = ?
+       WHERE id = ? AND profile_id = ?`,
+    );
+    this.updateFolderView = db.prepare(
+      `UPDATE note_folders SET default_view = ?, updated_at = ?
        WHERE id = ? AND profile_id = ?`,
     );
     this.selectTemplateById = db.prepare(
@@ -288,12 +311,15 @@ export class NoteOrgStore {
       parentId: input.parentId,
       name,
       color,
-      // Both preferences (ADR-036) are set afterwards, never at create time: a
-      // folder is named before it is configured, and the capture mark in
-      // particular is a per-profile singleton that a create must not silently
-      // take from another folder.
+      // Every preference is set afterwards, never at create time: a folder is
+      // named before it is configured, and the capture mark in particular is a
+      // per-profile singleton that a create must not silently take from another
+      // folder. The view is the column's own default (migration 039) rather
+      // than a value this insert writes — one declaration of "a folder opens as
+      // a list", in the schema, where a restore also reads it.
       defaultTemplateId: null,
       isCaptureDefault: false,
+      defaultView: "list",
       createdAt: validNow,
       updatedAt: validNow,
     };
@@ -393,6 +419,31 @@ export class NoteOrgStore {
       this.clearCaptureDefault.run(validNow, this.profileId);
       if (folderId !== null) this.setCaptureDefaultRow.run(validNow, folderId, this.profileId);
     })();
+  }
+
+  /**
+   * Sets the shape the note list opens in while this folder is selected
+   * (NOTE-002, migration 039) — `"list"` rows or a `"cards"` grid.
+   *
+   * A folder's view is PROFILE content, not a device setting: it travels with
+   * the folder through an export and a restore, because the answer ("this is a
+   * folder of recipes, show me cards") is a property of what is filed there, not
+   * of the machine reading it. The root — "Sve beleške" and "Bez fascikle", the
+   * two selections with no row — is the deliberate exception and lives in
+   * `notePrefs.ts` beside the other note device preferences; it has no row to
+   * hang a column on, and adding a table for one enum about a place in the UI
+   * would be schema for something the profile does not contain.
+   *
+   * The set is checked here as well as by the schema's CHECK: a caller gets a
+   * named `NoteFolderValidationError` naming the field, rather than a raw SQLite
+   * constraint failure surfacing from inside a transaction.
+   */
+  setFolderView(folderId: string, view: NoteFolderView, now: string): void {
+    const validNow = validateDateTime(now, "now", NoteFolderValidationError);
+    const validView = validateFolderView(view);
+    this.requireFolder(folderId);
+
+    this.updateFolderView.run(validView, validNow, folderId, this.profileId);
   }
 
   /**
@@ -519,6 +570,9 @@ function toNoteFolder(row: NoteFolderRow): NoteFolder {
     color: row.color as NoteFolderColor | null,
     defaultTemplateId: row.default_template_id,
     isCaptureDefault: row.is_capture_default === 1,
+    // The CHECK is the guarantee: migration 039 admits nothing else into the
+    // column, so no re-narrowing on the way out.
+    defaultView: row.default_view as NoteFolderView,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -550,6 +604,13 @@ function validateFolderColor(value: NoteFolderColor | null): NoteFolderColor | n
   if (value === null) return null;
   if (!(NOTE_FOLDER_COLORS as readonly string[]).includes(value)) {
     throw new NoteFolderValidationError(`"${value}" is not a known folder colour.`);
+  }
+  return value;
+}
+
+function validateFolderView(value: NoteFolderView): NoteFolderView {
+  if (!(NOTE_FOLDER_VIEWS as readonly string[]).includes(value)) {
+    throw new NoteFolderValidationError(`"${String(value)}" is not a known folder view.`);
   }
   return value;
 }

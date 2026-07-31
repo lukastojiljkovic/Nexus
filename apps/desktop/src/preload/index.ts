@@ -320,6 +320,8 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.noteFoldersSetTemplate, { profileId, id, templateId }),
   setNoteFolderCaptureDefault: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.noteFoldersSetCapture, { profileId, id }),
+  setNoteFolderView: (profileId, id, view) =>
+    ipcRenderer.invoke(IpcChannel.noteFoldersSetView, { profileId, id, view }),
   listNoteTags: (profileId) => ipcRenderer.invoke(IpcChannel.noteTagsList, { profileId }),
   createNoteTag: (profileId, name) =>
     ipcRenderer.invoke(IpcChannel.noteTagsCreate, { profileId, name }),

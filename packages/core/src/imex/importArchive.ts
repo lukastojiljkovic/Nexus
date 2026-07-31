@@ -180,7 +180,9 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.16.0` added a task
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.17.0` added a note
+ * folder's `defaultView` — the shape its notes are drawn in (NOTE-002,
+ * migration 039) — after `1.16.0` added a task
  * list's `viewConfig` — what it remembers about each of its four views (ADR-050,
  * migration 038) — after `1.15.0` added the
  * `event-template` record type — a saved SHAPE of one event (CAL-009, migration
@@ -228,16 +230,18 @@ export interface ImportArchiveResult {
  * field never asks either: `kind`'s absence means `"basic"` in every era,
  * because that is what every pre-ADR-042 archive's cards actually were,
  * `problemSteps`'s absence means "no worked solution", because that is what
- * every pre-ADR-046 archive's cards actually had, and a task list's
+ * every pre-ADR-046 archive's cards actually had, a task list's
  * `viewConfig` absence means "no view preferences", because a list written
- * before ADR-050 had no views to have preferences about.
+ * before ADR-050 had no views to have preferences about, and a note folder's
+ * `defaultView` absence means `"list"`, because that is the only shape a folder
+ * written before NOTE-002's toggle was ever drawn in.
  *
  * Major is still 1 throughout, so there is nothing yet to migrate an older
  * major forward from — a migration framework for a major that has never
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.16.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.17.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -682,6 +686,8 @@ const NOTIFICATION_STATUSES = ["delivered", "snoozed", "dismissed"] as const;
 const PERSON_KINDS = ["birthday", "anniversary"] as const;
 /** Mirrors `TASK_LIST_VIEWS` in `@nexus/db`'s `tasks/taskListStore.ts` and migration 038's CHECK (copied, not imported — the `NOTE_FOLDER_COLORS` arrangement). */
 const TASK_LIST_VIEWS = ["list", "kanban", "cards", "calendar"] as const;
+/** Mirrors `NOTE_FOLDER_VIEWS` in `@nexus/db`'s `notes/noteOrgStore.ts` and migration 039's CHECK. Narrower than the list's set above, and deliberately: a note has neither a select field to make columns from nor a date to sit on. */
+const NOTE_FOLDER_VIEWS = ["list", "cards"] as const;
 
 /**
  * Mirrors `MAX_BACKGROUND_DIM` in `@nexus/db`'s
@@ -1602,11 +1608,21 @@ function parseNoteFolder(raw: Record<string, unknown>, era: ArchiveEra): ExportN
     (value) => bool(value, "isCaptureDefault"),
     false,
   );
+  // Optional with a default (absent or null = the list every folder written
+  // before NOTE-002 was drawn as), so no era flag — the `viewConfig` reasoning
+  // at INTERCHANGE_SCHEMA_VERSION. A PRESENT value is validated strictly
+  // against the closed set: an archive is a file a person can edit, and
+  // migration 039's CHECK would otherwise refuse it mid-restore with a raw
+  // constraint error instead of a named `invalid-record`.
+  const defaultView =
+    raw.defaultView === undefined || raw.defaultView === null
+      ? "list"
+      : enumStr(raw.defaultView, "defaultView", NOTE_FOLDER_VIEWS);
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
   return {
     id, profileId, parentId, name, color, defaultTemplateId, isCaptureDefault,
-    createdAt, updatedAt,
+    defaultView, createdAt, updatedAt,
   };
 }
 

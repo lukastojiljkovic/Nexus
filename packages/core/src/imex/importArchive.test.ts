@@ -390,15 +390,18 @@ function richProfileData(): ProfileData {
         updatedAt: "2026-07-10T08:00:00.000Z",
       },
     ],
+    // One folder of each shape (NOTE-002): a round trip where every folder
+    // opened as a list would pass even if `defaultView` were dropped on the way
+    // out, since "absent" and "list" parse back to the same thing.
     noteFolders: [
       {
         id: "folder-root", profileId: "profile1", parentId: null, name: "Posao", color: "zlato",
-        defaultTemplateId: "builtin:sastanak", isCaptureDefault: true,
+        defaultTemplateId: "builtin:sastanak", isCaptureDefault: true, defaultView: "list",
         createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
       },
       {
         id: "folder-child", profileId: "profile1", parentId: "folder-root", name: "Projekti", color: null,
-        defaultTemplateId: null, isCaptureDefault: false,
+        defaultTemplateId: null, isCaptureDefault: false, defaultView: "cards",
         createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
       },
     ],
@@ -609,10 +612,10 @@ const VALID_NOTE = {
   cardDeckId: null, createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
 };
 
-/** A `note-folder` row as THIS build writes it (ADR-036 added the last two fields at the 1.7.0 bump). */
+/** A `note-folder` row as THIS build writes it (ADR-036 added the two preference fields at the 1.7.0 bump, NOTE-002 `defaultView` at 1.17.0). */
 const VALID_NOTE_FOLDER = {
   type: "note-folder", id: "nf1", profileId: "profile1", parentId: null, name: "Posao",
-  color: "zlato", defaultTemplateId: null, isCaptureDefault: false,
+  color: "zlato", defaultTemplateId: null, isCaptureDefault: false, defaultView: "list",
   createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
 };
 
@@ -664,12 +667,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.17.0`: the nearest minor strictly ahead of this build's `1.16.0`.
+  // `1.18.0`: the nearest minor strictly ahead of this build's `1.17.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.17.0" });
+    const files = baseFiles({ schemaVersion: "1.18.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.17.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.18.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -2324,11 +2327,65 @@ describe("parseImportArchive — note folder preferences (the 1.7.0 era gate)", 
     expect(result.problems).toEqual([]);
     expect(result.data?.noteFolders.filter((folder) => folder.isCaptureDefault)).toHaveLength(1);
   });
+
+  // --- NOTE-002's per-folder view (1.17.0) --------------------------------
+  //
+  // NOT an era gate, unlike the two preferences above: `defaultView` is
+  // optional WITH a default, so absence means `"list"` at every version and
+  // there is no flag on `ArchiveEra` to consult. Only a present value is
+  // checked — the same shape a task list's `viewConfig` arrived in at 1.16.0.
+
+  /** `VALID_NOTE_FOLDER` as a pre-1.17 writer emitted it: derived by REMOVING the field, so the fixture cannot drift from the current row shape. */
+  const withoutView = (): Record<string, unknown> => {
+    const { defaultView: _defaultView, ...rest } = VALID_NOTE_FOLDER;
+    return rest;
+  };
+
+  it("defaults defaultView to list wherever it is absent, in every era", () => {
+    for (const schemaVersion of ["1.0.0", "1.7.0", "1.16.0", INTERCHANGE_SCHEMA_VERSION]) {
+      const result = parseFolders(schemaVersion, [withoutView()]);
+      expect(result.problems, schemaVersion).toEqual([]);
+      expect(result.data?.noteFolders[0]?.defaultView, schemaVersion).toBe("list");
+    }
+  });
+
+  it("reads an explicit null as the same absence — one meaning, two spellings", () => {
+    const result = parseFolders(INTERCHANGE_SCHEMA_VERSION, [
+      { ...VALID_NOTE_FOLDER, defaultView: null },
+    ]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.noteFolders[0]?.defaultView).toBe("list");
+  });
+
+  it("carries both shapes through", () => {
+    const result = parseFolders(INTERCHANGE_SCHEMA_VERSION, [
+      { ...VALID_NOTE_FOLDER, id: "nf1", defaultView: "list" },
+      { ...VALID_NOTE_FOLDER, id: "nf2", defaultView: "cards" },
+    ]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.noteFolders.map((folder) => folder.defaultView)).toEqual([
+      "list",
+      "cards",
+    ]);
+  });
+
+  it("refuses a present value outside the closed set, in every era", () => {
+    // "kanban" and "calendar" are a TASK list's shapes (migration 038), not a
+    // folder's — the nearest plausible mistake, and refused like any other.
+    for (const schemaVersion of ["1.0.0", "1.16.0", INTERCHANGE_SCHEMA_VERSION]) {
+      for (const view of ["kanban", "calendar", "grid", "", "List", 1]) {
+        expect(
+          invalidDetails(parseFolders(schemaVersion, [{ ...VALID_NOTE_FOLDER, defaultView: view }])),
+          `${schemaVersion}/${String(view)}`,
+        ).toEqual(["defaultView"]);
+      }
+    }
+  });
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.16.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.16.0");
+  it("is 1.17.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.17.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -2483,17 +2540,27 @@ describe("parseImportArchive — schema version", () => {
     expect(result.data).not.toBeNull();
   });
 
-  it("accepts a newer patch", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.16.7" })));
+  // And for the one NOTE-002's per-folder view has just superseded: a 1.16
+  // archive carries no `defaultView` on any note folder, which is exactly what
+  // a profile whose folders had one shape to be drawn in looks like — an
+  // optional-with-a-default, so again no era flag.
+  it("accepts an older minor — a 1.16 archive still parses here", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.16.0" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
 
-  // `1.17.0`: the nearest minor strictly ahead of this build's `1.16.0`.
+  it("accepts a newer patch", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.17.7" })));
+    expect(result.problems).toEqual([]);
+    expect(result.data).not.toBeNull();
+  });
+
+  // `1.18.0`: the nearest minor strictly ahead of this build's `1.17.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.17.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.18.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.17.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.18.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -2919,7 +2986,7 @@ function importInputWith(files: Map<string, string>, extra: Partial<ImportArchiv
 
 const SALVAGE_NOTE_FOLDER = {
   type: "note-folder", id: "f1", profileId: "profile1", parentId: null, name: "Fakultet",
-  color: null, defaultTemplateId: null, isCaptureDefault: false,
+  color: null, defaultTemplateId: null, isCaptureDefault: false, defaultView: "list",
   createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
 };
 

@@ -44,7 +44,9 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
  *
- * `1.16.0` adds a task list's `viewConfig` — what it remembers about each of its
+ * `1.17.0` adds a note folder's `defaultView` — the shape its notes are drawn in
+ * (NOTE-002, migration 039) — after
+ * `1.16.0` added a task list's `viewConfig` — what it remembers about each of its
  * four views (ADR-050, migration 038) — after
  * `1.15.0` added the `event-template` record type — a saved SHAPE of one event
  * (CAL-009, migration 036), riding in the data file the CAL module already had —
@@ -67,7 +69,8 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * `reminderOffsets` (ADR-028) and `1.1.0` the `person` record type (CAL-007 /
  * ADR-026). Additive, so a MINOR bump by the same honesty each of those made
  * one: an archive this build writes is refused by an older reader, which would
- * otherwise restore a profile with every list opening on the wrong shape, every
+ * otherwise restore a profile with every list and every folder opening on the
+ * wrong shape, every
  * event template simply gone and every
  * course material missing — shapes their owner built by hand and files nothing
  * else in the archive can reconstruct; the same honesty `1.14.0` owed the
@@ -80,7 +83,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.16.0";
+const SCHEMA_VERSION = "1.17.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -638,6 +641,15 @@ export interface ExportNoteFolder {
   defaultTemplateId: string | null;
   /** Whether a context-free "Nova beleška" (the palette's) files into this folder. At most one folder per profile carries it. */
   isCaptureDefault: boolean;
+  /**
+   * The shape this folder's notes are drawn in — `"list"` or `"cards"`
+   * (NOTE-002, migration 039). OPTIONAL with a default, like a task list's
+   * `viewConfig`: absent means `"list"`, which is what every folder in every
+   * archive written before this field actually opened as, so no `ArchiveEra`
+   * flag is involved. A PRESENT value is validated strictly against the closed
+   * set, in every era.
+   */
+  defaultView?: "list" | "cards";
   createdAt: string;
   updatedAt: string;
 }

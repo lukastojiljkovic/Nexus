@@ -432,6 +432,10 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   );
 
   const folder = orgStore.createFolder({ parentId: null, name: `${label} folder`, color: "zlato" }, t0);
+  // NOTE-002: a NON-default shape, so the round trip below would fail if
+  // `defaultView` were dropped anywhere along the way — the field is optional in
+  // the interchange, and "absent" restores as the "list" every other folder has.
+  orgStore.setFolderView(folder.id, "cards", t0);
   const tag = orgStore.createTag(`${label} tag`, t0);
 
   // A bare, never-edited note — purely so `note` below has a real id to link to.

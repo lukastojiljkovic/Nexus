@@ -74,6 +74,7 @@ import {
   MAX_TASK_REMINDER_DAYS,
   MAX_TASK_TEMPLATE_DUE_OFFSET_DAYS,
   NOTE_FOLDER_COLORS,
+  NOTE_FOLDER_VIEWS,
   NoteAttachmentNotFoundError,
   NoteAttachmentStore,
   NotificationStore,
@@ -138,6 +139,7 @@ import {
   type NoteAttachment,
   type NoteFolder,
   type NoteFolderColor,
+  type NoteFolderView,
   type NoteMeta,
   type NoteTag,
   type NoteTagLink,
@@ -1550,6 +1552,14 @@ function asNoteFolderColor(value: unknown, field: string): NoteFolderColor {
 
 function asNullableNoteFolderColor(value: unknown, field: string): NoteFolderColor | null {
   return value === null ? null : asNoteFolderColor(value, field);
+}
+
+/** Which shape a folder's notes are drawn in (NOTE-002), checked against the store's own closed domain. */
+function asNoteFolderView(value: unknown, field: string): NoteFolderView {
+  if (typeof value === "string" && (NOTE_FOLDER_VIEWS as readonly string[]).includes(value)) {
+    return value as NoteFolderView;
+  }
+  throw new Error(`Invalid IPC payload: "${field}" is not a valid note folder view.`);
 }
 
 /** Validates a note-folder create input; only `parentId`/`name`/`color` are structurally checked — the store owns the trim/enum/parent-FK revalidation. */
@@ -4767,6 +4777,18 @@ function registerIpc(): void {
     // `null` is a real, meaningful value here — it clears the profile's mark.
     const id = asNullableId(body.id, "id");
     noteOrgStore(profileId).setCaptureDefault(id, new Date().toISOString());
+  });
+
+  // NOTE-002: which shape this folder's notes are drawn in. Only a FOLDER has a
+  // row to remember one in — the root's own choice is a device preference in the
+  // renderer (`notePrefs.ts`) and never reaches main.
+  ipcMain.handle(IpcChannel.noteFoldersSetView, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const view = asNoteFolderView(body.view, "view");
+    noteOrgStore(profileId).setFolderView(id, view, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.noteTagsList, (event, payload): NoteTag[] => {

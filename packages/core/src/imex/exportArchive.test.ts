@@ -117,11 +117,12 @@ function noteRow(overrides: {
   };
 }
 
-/** A minimal `ExportNoteFolder` row. */
+/** A minimal `ExportNoteFolder` row. `defaultView` is optional (NOTE-002), so it is only set when a test is about it. */
 function folderRow(overrides: {
   id: string;
   name: string;
   parentId?: string | null;
+  defaultView?: "list" | "cards";
 }): ExportNoteFolder {
   return {
     id: overrides.id,
@@ -131,6 +132,7 @@ function folderRow(overrides: {
     color: null,
     defaultTemplateId: null,
     isCaptureDefault: false,
+    ...(overrides.defaultView === undefined ? {} : { defaultView: overrides.defaultView }),
     createdAt: "2026-07-01T00:00:00.000Z",
     updatedAt: "2026-07-01T00:00:00.000Z",
   };
@@ -241,7 +243,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.16.0");
+      expect(manifest.schemaVersion).toBe("1.17.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       expect(manifest.profile).toEqual({ id: "profile1", name: "Luka" });
@@ -1157,6 +1159,24 @@ describe("buildExportArchive", () => {
       ]);
       expect(archive.byModule.notes).toBe(7);
       expect(archive.totalRecords).toBe(7);
+    });
+
+    // NOTE-002 / 1.17.0: the shape a folder's notes are drawn in travels with
+    // the folder, and a folder that expressed no preference writes no key —
+    // which is what a 1.16 reader would have seen anyway.
+    it("carries a folder's defaultView, and omits the key when the row has none", () => {
+      const input = emptyInput();
+      input.data.noteFolders = [
+        folderRow({ id: "f1", name: "Recepti", defaultView: "cards" }),
+        folderRow({ id: "f2", name: "Posao", defaultView: "list" }),
+        folderRow({ id: "f3", name: "Bez izbora" }),
+      ];
+
+      const rows = parseNdjson(
+        buildExportArchive(input).files.get("data/notes.ndjson") ?? "",
+      ) as Array<Record<string, unknown>>;
+      expect(rows.map((row) => row.defaultView)).toEqual(["cards", "list", undefined]);
+      expect(Object.keys(rows[2] ?? {})).not.toContain("defaultView");
     });
 
     it("never puts snapshot bytes in the NDJSON", () => {

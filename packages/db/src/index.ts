@@ -285,8 +285,14 @@ export {
 } from "./notes/noteStore.js";
 export type { NoteCompactionRead, NoteDoc, NoteMeta, NoteVersionMeta } from "./notes/noteStore.js";
 
-export { NoteOrgStore, NOTE_FOLDER_COLORS } from "./notes/noteOrgStore.js";
-export type { NoteFolder, NoteFolderColor, NoteTag, NoteTagLink } from "./notes/noteOrgStore.js";
+export { NoteOrgStore, NOTE_FOLDER_COLORS, NOTE_FOLDER_VIEWS } from "./notes/noteOrgStore.js";
+export type {
+  NoteFolder,
+  NoteFolderColor,
+  NoteFolderView,
+  NoteTag,
+  NoteTagLink,
+} from "./notes/noteOrgStore.js";
 
 export { NoteAttachmentStore, MAX_NOTE_ATTACHMENT_BYTES } from "./notes/noteAttachmentStore.js";
 export type { AddNoteAttachmentInput, NoteAttachment } from "./notes/noteAttachmentStore.js";

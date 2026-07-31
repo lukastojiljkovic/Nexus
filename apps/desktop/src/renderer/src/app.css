@@ -5147,6 +5147,57 @@ button.cal__grid-event--dragging {
   justify-content: center;
 }
 
+/* The pane's own toolbar (NOTE-002): today just the shape toggle, right-aligned
+   so it reads as a control over the list below rather than a second heading. */
+.note__list-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+/* Shape toggle — the TASK recipe verbatim (.tasks__views): the active state is
+   typographic (accent + weight), never a glow, a fill or a side-bar. */
+.note__views {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex: none;
+}
+.note__view.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.note__view.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
+}
+.note__view--active.nx-button {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+/* Kartice (NOTE-002): the same row anatomy the list draws, one per card — so
+   the pin, the hover-revealed "⋯" and the tag chips all keep their own rules
+   and the card needs none of its own. The grid, the card frame and its padding
+   are the UI package's (.nx-cards-view); what belongs here is only the scroll
+   the <ul> owns in the other shape, and putting the pin and the menu on the
+   card's TOP line rather than the middle of a stacked column. */
+.note__cards {
+  overflow-y: auto;
+  min-height: 0;
+}
+/* Top-aligned, not centred as in the dense column: a card is read from its
+   title down, and a star floating at the vertical middle of a three-line stack
+   would point at nothing. The open button drops its own padding here — the card
+   frame already provides it — which is also what lines the pin and the "⋯" up
+   with the title's first line. */
+.note__cards .note__item-row {
+  align-items: flex-start;
+}
+.note__cards .note__item {
+  padding: 0;
+}
+
 /* Delete + undo: the inline, token-styled undo bar (mirrors the tasks pattern). */
 .note__undo {
   display: flex;

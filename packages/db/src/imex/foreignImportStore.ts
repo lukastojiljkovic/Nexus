@@ -186,8 +186,8 @@ export class ForeignImportStore {
     this.insertNoteFolder = db.prepare(
       `INSERT INTO note_folders
          (id, profile_id, parent_id, name, color, default_template_id, is_capture_default,
-          created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          default_view, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     this.insertNoteTag = db.prepare(
       `INSERT INTO note_tags (id, profile_id, name, created_at) VALUES (?, ?, ?, ?)`,
@@ -480,10 +480,16 @@ export class ForeignImportStore {
       // folder per profile. When the target already claims it the planner
       // cleared every imported folder's own claim, so this insert cannot collide
       // — and when the target does NOT claim it, at most one source folder did.
+      //
+      // The imported folder keeps its own `defaultView` (NOTE-002): unlike the
+      // capture mark, it is a property of that folder alone and collides with
+      // nothing the target already decided. Absent — an archive older than
+      // 1.17.0 — it opens as a list, which is what it opened as there.
       for (const folder of parentsFirst(planned.noteFolders)) {
         this.insertNoteFolder.run(
           folder.id, this.profileId, folder.parentId, folder.name, folder.color,
           folder.defaultTemplateId, folder.isCaptureDefault ? 1 : 0,
+          folder.defaultView ?? "list",
           folder.createdAt, folder.updatedAt,
         );
         written += 1;

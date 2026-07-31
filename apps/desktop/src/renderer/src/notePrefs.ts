@@ -1,18 +1,26 @@
 /**
- * The two NOTE editor preferences (ADR-036), stored per device in
- * `localStorage` exactly as `theme.ts` and `accent.ts` store theirs: they
- * describe how this machine renders the editor, not what the profile contains,
- * so they belong beside the theme rather than in the encrypted database — and
- * they must be readable before the first paint, which an IPC round trip is not.
+ * The NOTE device preferences, stored in `localStorage` exactly as `theme.ts`
+ * and `accent.ts` store theirs: they describe how this machine renders the
+ * module, not what the profile contains, so they belong beside the theme rather
+ * than in the encrypted database — and they must be readable before the first
+ * paint, which an IPC round trip is not.
  *
- * Both readers narrow an arbitrary stored string to the typed value and fall
+ * Two of them are the editor's (ADR-036: the reading measure, the markdown
+ * input rules). The third is the ROOT's note-list shape (NOTE-002) — see
+ * `readStoredRootNoteView` for why the root's view lives here while a folder's
+ * lives in the database.
+ *
+ * Every reader narrows an arbitrary stored string to the typed value and falls
  * back to the default for anything unrecognized (including nothing stored yet),
- * so a hand-edited or stale key can never put the editor into a state the UI
+ * so a hand-edited or stale key can never put the module into a state the UI
  * cannot name.
  */
 
+import type { NoteFolderView } from "../../shared/ipc.js";
+
 const WIDTH_KEY = "nexus.noteWidth";
 const MARKDOWN_KEY = "nexus.noteMarkdownShortcuts";
+const ROOT_VIEW_KEY = "nexus.notes.rootView";
 
 /** The reading measure of the note editor column. "normalna" is today's 70ch — the default is the status quo. */
 export type NoteWidth = "uska" | "normalna" | "siroka";
@@ -65,4 +73,46 @@ export function readStoredNoteMarkdownShortcuts(): boolean {
 
 export function persistNoteMarkdownShortcuts(enabled: boolean): void {
   localStorage.setItem(MARKDOWN_KEY, enabled ? "on" : "off");
+}
+
+/**
+ * The shape the note list draws at the ROOT — "Sve beleške" and "Bez fascikle",
+ * the two selections that are not a folder (NOTE-002).
+ *
+ * **Why this is not in the database.** Every OTHER note-list view is: a folder's
+ * shape is a column on its own row (migration 039), so it travels with the
+ * folder through an export and a restore, because "this is a folder of recipes,
+ * show me cards" is a property of what is filed there. The root has no row to
+ * hang that on. Migration 028's folder preferences are columns on `note_folders`
+ * too — there is no note-preferences TABLE to extend — so storing the root's
+ * choice in the profile would mean a new table holding one enum about a place in
+ * the UI rather than about anything the profile contains. It belongs here
+ * instead, beside the reading measure: same shape, same fallback, same file.
+ *
+ * The asymmetry is deliberate and visible: a folder's view syncs with the
+ * profile, the root's stays on this machine.
+ *
+ * ONE key covers both rootless selections. They are the same reading situation
+ * — "how do I read notes when I am not inside a folder" — and two keys would be
+ * a second thing to explain for no difference the user asked for.
+ *
+ * The VALUE is `NoteFolderView`, not a parallel type: the toggle produces one
+ * choice, and where it is written is the only thing the root changes.
+ */
+export const ROOT_NOTE_VIEWS: readonly NoteFolderView[] = ["list", "cards"];
+
+/** Rows, matching the shape every folder opens in until its owner says otherwise (migration 039's own default). */
+const DEFAULT_ROOT_VIEW: NoteFolderView = "list";
+
+function isRootNoteView(value: string | null): value is NoteFolderView {
+  return value != null && ROOT_NOTE_VIEWS.some((view) => view === value);
+}
+
+export function readStoredRootNoteView(): NoteFolderView {
+  const stored = localStorage.getItem(ROOT_VIEW_KEY);
+  return isRootNoteView(stored) ? stored : DEFAULT_ROOT_VIEW;
+}
+
+export function persistRootNoteView(view: NoteFolderView): void {
+  localStorage.setItem(ROOT_VIEW_KEY, view);
 }

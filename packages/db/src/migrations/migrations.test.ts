@@ -16,8 +16,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 38 (the four task views), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(38);
+  it("is at version 39 (a note folder's default view), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(39);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -4275,6 +4275,142 @@ describe("migration 038 — the four task views", () => {
       const { n } = db.raw.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number };
       expect({ table, n }).toEqual({ table, n: 0 });
     }
+    db.close();
+  });
+});
+
+describe("migration 039 — a note folder's default view", () => {
+  type Handle = Database.Database;
+
+  const now = () => new Date().toISOString();
+
+  const insertFolder = (db: NexusDatabase, id: string, profileId: string, defaultView = "list") =>
+    db.raw
+      .prepare(
+        `INSERT INTO note_folders
+           (id, profile_id, parent_id, name, color, default_template_id, is_capture_default,
+            default_view, created_at, updated_at)
+         VALUES (?, ?, NULL, ?, NULL, NULL, 0, ?, ?, ?)`,
+      )
+      .run(id, profileId, `F${id}`, defaultView, now(), now());
+
+  /** As every upgrade test's helper: a connection held at exactly `version`, set up the way `openDatabase` sets one up. */
+  function openAtVersion(path: string, version: number): Handle {
+    const raw = new Database(path);
+    raw.pragma("journal_mode = WAL");
+    raw.pragma("foreign_keys = ON");
+    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
+      typeof value === "string" ? foldSearchText(value) : null,
+    );
+    runMigrations(
+      raw,
+      MIGRATIONS.filter((migration) => migration.version <= version),
+    );
+    return raw;
+  }
+
+  it("adds default_view to note_folders and stamps the latest user_version", () => {
+    const db = openDatabase({ path: join(dir, "folder-view-039.db") });
+    const columns = (
+      db.raw.prepare("PRAGMA table_info(note_folders)").all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(columns).toContain("default_view");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("accepts both shapes and refuses anything else with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-view-039.db") });
+    insertProfile(db, "p1");
+    for (const view of ["list", "cards"]) {
+      expect(() => insertFolder(db, `f-${view}`, "p1", view)).not.toThrow();
+    }
+    // The three shapes a TASK list has but a note folder does not (migration
+    // 038's set is wider on purpose), plus the empty string.
+    for (const view of ["kanban", "calendar", "grid", "", "List"]) {
+      expect(() => insertFolder(db, `bad-${view}`, "p1", view), view).toThrow();
+    }
+    db.close();
+  });
+
+  it("defaults a folder written through the PRE-039 column list to 'list'", () => {
+    const db = openDatabase({ path: join(dir, "default-view-039.db") });
+    insertProfile(db, "p1");
+    db.raw
+      .prepare(
+        `INSERT INTO note_folders (id, profile_id, parent_id, name, color, created_at, updated_at)
+         VALUES (?, ?, NULL, 'F', NULL, ?, ?)`,
+      )
+      .run("f1", "p1", now(), now());
+    expect(
+      db.raw.prepare("SELECT default_view FROM note_folders WHERE id = ?").get("f1"),
+    ).toEqual({ default_view: "list" });
+    db.close();
+  });
+
+  it("gives every folder of a seeded 038 database the 'list' it already opened as", () => {
+    const path = join(dir, "upgrade-039.db");
+    const before = openAtVersion(path, 38);
+    before
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run("p1", "personal", "P", now());
+    for (const [id, parentId] of [
+      ["nf1", null],
+      ["nf2", "nf1"],
+    ] as [string, string | null][]) {
+      before
+        .prepare(
+          `INSERT INTO note_folders (id, profile_id, parent_id, name, color, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'zlato', ?, ?)`,
+        )
+        .run(id, "p1", parentId, `F${id}`, now(), now());
+    }
+    expect(before.pragma("user_version", { simple: true })).toBe(38);
+    before.close();
+
+    const db = openDatabase({ path });
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    // An ADD COLUMN, so the tree is untouched — no rebuild, nothing to lose.
+    expect(
+      db.raw
+        .prepare("SELECT id, parent_id, color, default_view FROM note_folders ORDER BY id")
+        .all(),
+    ).toEqual([
+      { id: "nf1", parent_id: null, color: "zlato", default_view: "list" },
+      { id: "nf2", parent_id: "nf1", color: "zlato", default_view: "list" },
+    ]);
+    expect(db.raw.pragma("foreign_key_check")).toEqual([]);
+    db.close();
+  });
+
+  it("leaves migration 028's capture-default index standing — nothing was rebuilt", () => {
+    const db = openDatabase({ path: join(dir, "index-039.db") });
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("note_folders_capture_default");
+
+    insertProfile(db, "p1");
+    db.raw
+      .prepare(
+        `INSERT INTO note_folders
+           (id, profile_id, parent_id, name, color, default_template_id, is_capture_default,
+            default_view, created_at, updated_at)
+         VALUES (?, ?, NULL, 'F', NULL, NULL, 1, 'cards', ?, ?)`,
+      )
+      .run("f1", "p1", now(), now());
+    expect(() =>
+      db.raw
+        .prepare(
+          `INSERT INTO note_folders
+             (id, profile_id, parent_id, name, color, default_template_id, is_capture_default,
+              default_view, created_at, updated_at)
+           VALUES (?, ?, NULL, 'G', NULL, NULL, 1, 'list', ?, ?)`,
+        )
+        .run("f2", "p1", now(), now()),
+    ).toThrow();
     db.close();
   });
 });

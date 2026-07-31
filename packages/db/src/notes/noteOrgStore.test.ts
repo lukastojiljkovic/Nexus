@@ -4,8 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   NexusDatabase,
+  NOTE_FOLDER_VIEWS,
   NoteFolderNotFoundError,
   NoteFolderValidationError,
+  type NoteFolderView,
   NoteNotFoundError,
   NoteOrgStore,
   NoteStore,
@@ -557,5 +559,96 @@ describe("NoteOrgStore — capture default", () => {
 
     org.deleteFolder(folder.id, T2);
     expect(org.listFolders()).toHaveLength(0);
+  });
+});
+
+describe("NoteOrgStore — default view", () => {
+  it("offers exactly the two shapes the middle pane can draw, without duplicates", () => {
+    expect(NOTE_FOLDER_VIEWS).toEqual(["list", "cards"]);
+    expect(new Set(NOTE_FOLDER_VIEWS).size).toBe(NOTE_FOLDER_VIEWS.length);
+  });
+
+  it("opens a new folder as a list — the status quo, never an invented preference", () => {
+    const { org } = fixture();
+    const folder = org.createFolder({ parentId: null, name: "Posao", color: null }, T0);
+    expect(folder.defaultView).toBe("list");
+    expect(org.listFolders()[0]?.defaultView).toBe("list");
+  });
+
+  it("stores both shapes and reads each back off the list", () => {
+    const { org } = fixture();
+    const folder = org.createFolder({ parentId: null, name: "Recepti", color: null }, T0);
+
+    for (const view of NOTE_FOLDER_VIEWS) {
+      org.setFolderView(folder.id, view, T1);
+      expect(org.listFolders()[0]?.defaultView, view).toBe(view);
+    }
+  });
+
+  it("stamps updated_at on the folder it changed", () => {
+    const { org } = fixture();
+    const folder = org.createFolder({ parentId: null, name: "F", color: null }, T0);
+
+    org.setFolderView(folder.id, "cards", T1);
+    expect(org.listFolders()[0]?.updatedAt).toBe(T1);
+  });
+
+  it("rejects a shape outside the closed set — the CHECK's own domain, named here", () => {
+    const { org } = fixture();
+    const folder = org.createFolder({ parentId: null, name: "F", color: null }, T0);
+
+    // A TASK list has four shapes (migration 038); a note folder has two, and
+    // the other two are exactly the mistake this guard is for.
+    for (const view of ["kanban", "calendar", "grid", "", "List"]) {
+      expect(
+        () => org.setFolderView(folder.id, view as NoteFolderView, T1),
+        view,
+      ).toThrow(NoteFolderValidationError);
+    }
+    expect(org.listFolders()[0]?.defaultView).toBe("list");
+  });
+
+  it("rejects an unknown folder, another profile's folder, and a malformed now", () => {
+    const a = fixture();
+    const b = fixture();
+    const folderA = a.org.createFolder({ parentId: null, name: "A", color: null }, T0);
+
+    expect(() => a.org.setFolderView("no-such", "cards", T1)).toThrow(NoteFolderNotFoundError);
+    expect(() => b.org.setFolderView(folderA.id, "cards", T1)).toThrow(NoteFolderNotFoundError);
+    expect(() => a.org.setFolderView(folderA.id, "cards", "nope")).toThrow(
+      NoteFolderValidationError,
+    );
+  });
+
+  it("is per-folder: one folder's shape never disturbs a sibling's", () => {
+    const { org } = fixture();
+    const first = org.createFolder({ parentId: null, name: "Prva", color: null }, T0);
+    const second = org.createFolder({ parentId: null, name: "Druga", color: null }, T0);
+
+    org.setFolderView(first.id, "cards", T1);
+
+    const byId = new Map(org.listFolders().map((folder) => [folder.id, folder.defaultView]));
+    expect(byId.get(first.id)).toBe("cards");
+    expect(byId.get(second.id)).toBe("list");
+  });
+
+  it("leaves the name, colour, parent and both ADR-036 preferences untouched", () => {
+    const { org } = fixture();
+    const parent = org.createFolder({ parentId: null, name: "Root", color: null }, T0);
+    const child = org.createFolder({ parentId: parent.id, name: "Ime", color: "zlato" }, T0);
+    org.setDefaultTemplate(child.id, "builtin:recept", T1);
+    org.setCaptureDefault(child.id, T1);
+
+    org.setFolderView(child.id, "cards", T2);
+
+    const stored = org.listFolders().find((folder) => folder.id === child.id);
+    expect(stored).toMatchObject({
+      name: "Ime",
+      color: "zlato",
+      parentId: parent.id,
+      defaultTemplateId: "builtin:recept",
+      isCaptureDefault: true,
+      defaultView: "cards",
+    });
   });
 });

@@ -181,6 +181,7 @@ export const IpcChannel = {
   noteFoldersDelete: "note-folders:delete",
   noteFoldersSetTemplate: "note-folders:set-template",
   noteFoldersSetCapture: "note-folders:set-capture",
+  noteFoldersSetView: "note-folders:set-view",
   noteTagsList: "note-tags:list",
   noteTagsCreate: "note-tags:create",
   noteTagsRename: "note-tags:rename",
@@ -2458,6 +2459,14 @@ export type NoteFolderColor =
   | "grafit";
 
 /**
+ * Which shape the note list draws while a folder is selected (NOTE-002).
+ * Mirrors `@nexus/db`'s `NOTE_FOLDER_VIEWS`; redeclared so the renderer never
+ * imports DB code. Narrower than `TaskListView` on purpose — a note has neither
+ * a select field to make board columns from nor a date to sit on a grid.
+ */
+export type NoteFolderView = "list" | "cards";
+
+/**
  * A note folder as seen by the renderer (mirrors the `note_folders` table via
  * `NoteOrgStore`'s mapping, NOTE-002). `parentId` is null at the tree's root.
  * Redeclared here so the renderer never imports DB code.
@@ -2477,6 +2486,8 @@ export interface NoteFolder {
   defaultTemplateId: string | null;
   /** Whether a context-free "Nova beleška" (the palette's) files into this folder. At most one folder per profile. */
   isCaptureDefault: boolean;
+  /** The shape the note list opens in while this folder is selected (NOTE-002). `"list"` for every folder that predates the toggle. */
+  defaultView: NoteFolderView;
   createdAt: string;
   updatedAt: string;
 }
@@ -2543,6 +2554,13 @@ export interface NoteFoldersSetCaptureRequest {
   profileId: string;
   /** `null` clears the mark; the store keeps at most one marked folder per profile. */
   id: string | null;
+}
+
+/** NOTE-002: the shape the note list opens in while this folder is selected. */
+export interface NoteFoldersSetViewRequest {
+  profileId: string;
+  id: string;
+  view: NoteFolderView;
 }
 
 export interface NoteTagsListRequest {
@@ -3933,6 +3951,8 @@ export interface NexusApi {
   setNoteFolderTemplate(profileId: string, id: string, templateId: string | null): Promise<void>;
   /** ADR-036: moves this profile's quick-capture mark onto `id`, or clears it with `null`. */
   setNoteFolderCaptureDefault(profileId: string, id: string | null): Promise<void>;
+  /** NOTE-002: the shape the note list opens in while this folder is selected. The root's own choice is a device preference (`notePrefs.ts`), not this. */
+  setNoteFolderView(profileId: string, id: string, view: NoteFolderView): Promise<void>;
   listNoteTags(profileId: string): Promise<NoteTag[]>;
   createNoteTag(profileId: string, name: string): Promise<NoteTag>;
   renameNoteTag(profileId: string, id: string, name: string): Promise<void>;

@@ -5,8 +5,11 @@ import {
   NOTE_WIDTHS,
   persistNoteMarkdownShortcuts,
   persistNoteWidth,
+  persistRootNoteView,
   readStoredNoteMarkdownShortcuts,
   readStoredNoteWidth,
+  readStoredRootNoteView,
+  ROOT_NOTE_VIEWS,
 } from "./notePrefs.js";
 import { strings } from "./strings.js";
 import { memoryStorage } from "./testStorage.js";
@@ -24,6 +27,7 @@ import { memoryStorage } from "./testStorage.js";
 
 const WIDTH_KEY = "nexus.noteWidth";
 const MARKDOWN_KEY = "nexus.noteMarkdownShortcuts";
+const ROOT_VIEW_KEY = "nexus.notes.rootView";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -200,5 +204,81 @@ describe("persistNoteMarkdownShortcuts", () => {
   it("needs no document — unlike the width, nothing about it is a CSS attribute", () => {
     stubStorage();
     expect(() => persistNoteMarkdownShortcuts(true)).not.toThrow();
+  });
+});
+
+// --- the root's note-list shape (NOTE-002) ------------------------------------
+//
+// The one note-list view that is NOT profile content: a folder's shape is a
+// column on its own row (migration 039), the root has no row, and this is where
+// its choice lives instead. Same recipe as the width above — closed set, safe
+// fallback, no document write (nothing about it is a CSS attribute).
+
+describe("ROOT_NOTE_VIEWS", () => {
+  it("is exactly the two shapes the pane can draw, in toggle order, without duplicates", () => {
+    expect(ROOT_NOTE_VIEWS).toEqual(["list", "cards"]);
+    expect(new Set(ROOT_NOTE_VIEWS).size).toBe(ROOT_NOTE_VIEWS.length);
+  });
+
+  it("has a Serbian name for every shape the toggle can offer", () => {
+    for (const view of ROOT_NOTE_VIEWS) {
+      expect(strings.notes.viewNames[view]?.length, view).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("readStoredRootNoteView", () => {
+  it("defaults to list — the shape every folder opens in until its owner says otherwise", () => {
+    stubStorage();
+    expect(readStoredRootNoteView()).toBe("list");
+  });
+
+  it("reads back every shape", () => {
+    for (const view of ROOT_NOTE_VIEWS) {
+      stubStorage({ [ROOT_VIEW_KEY]: view });
+      expect(readStoredRootNoteView()).toBe(view);
+    }
+  });
+
+  it("falls back to list for anything unrecognized, casing included", () => {
+    // „kanban“ and „calendar“ are a TASK list's shapes, not a note folder's —
+    // the nearest plausible stale value, and it must not stick.
+    for (const stored of ["", "  ", "List", "CARDS", "kanban", "calendar", "grid", "null"]) {
+      stubStorage({ [ROOT_VIEW_KEY]: stored });
+      expect(readStoredRootNoteView(), stored).toBe("list");
+    }
+  });
+
+  it("does not write on read — a first run leaves storage untouched", () => {
+    const storage = stubStorage();
+    expect(readStoredRootNoteView()).toBe("list");
+    expect(storage.length).toBe(0);
+  });
+});
+
+describe("persistRootNoteView", () => {
+  it("round-trips both shapes", () => {
+    stubStorage();
+    for (const view of ["cards", "list", "cards"] as const) {
+      persistRootNoteView(view);
+      expect(readStoredRootNoteView()).toBe(view);
+    }
+  });
+
+  it("touches neither editor preference nor any other key", () => {
+    const storage = stubStorage({
+      [WIDTH_KEY]: "siroka",
+      [MARKDOWN_KEY]: "off",
+      "nexus.theme": "noc",
+    });
+    persistRootNoteView("cards");
+    expect(storage.getItem(WIDTH_KEY)).toBe("siroka");
+    expect(storage.getItem(MARKDOWN_KEY)).toBe("off");
+    expect(storage.getItem("nexus.theme")).toBe("noc");
+  });
+
+  it("needs no document — a folder's view is a store write, the root's is this key", () => {
+    stubStorage();
+    expect(() => persistRootNoteView("cards")).not.toThrow();
   });
 });

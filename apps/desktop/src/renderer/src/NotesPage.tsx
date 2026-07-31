@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { JSONContent } from "@tiptap/core";
-import { Button, EmptyState } from "@nexus/ui";
+import type { CardsViewConfig, CollectionSchema } from "@nexus/core";
+import { Button, CardsView, EmptyState } from "@nexus/ui";
 import type {
   NoteCardDisposition,
   NoteFolder,
+  NoteFolderView,
   NoteMeta,
   NoteTag,
   NoteTagLink,
@@ -11,7 +13,9 @@ import type {
 import { NoteCardsDeleteDialog } from "./NoteCardsDeleteDialog.js";
 import { NoteEditor } from "./NoteEditor.js";
 import { NoteOrganizer, type FolderSelection } from "./NoteOrganizer.js";
+import { formatNotificationWhen } from "./notificationFormat.js";
 import { NotePopover } from "./notePopover.js";
+import { persistRootNoteView, readStoredRootNoteView } from "./notePrefs.js";
 import { mergeTemplateEntries } from "./noteTemplates.js";
 import { strings } from "./strings.js";
 
@@ -25,6 +29,44 @@ function formatNoteDate(iso: string): string {
     ? iso
     : new Intl.DateTimeFormat("sr-Latn", { day: "2-digit", month: "short" }).format(date);
 }
+
+/** The two shapes the middle pane can draw, in toggle order (NOTE-002). */
+const VIEW_OPTIONS: readonly { value: NoteFolderView; label: string }[] = [
+  { value: "list", label: strings.notes.viewNames.list },
+  { value: "cards", label: strings.notes.viewNames.cards },
+];
+
+/**
+ * `NoteMeta` through a structurally identical mapped type — `CardsView`'s bound
+ * is `Record<string, unknown>`, which an interface does not satisfy but a mapped
+ * type does (the `TaskFields` arrangement, TasksPage).
+ */
+type NoteFields = { [K in keyof NoteMeta]: NoteMeta[K] };
+
+/**
+ * The note fields the views engine could order by. Declared because `CardsView`
+ * takes a schema, not because anything sorts through it: the config below
+ * carries NO sort spec, so `applySort` returns its input untouched and the cards
+ * land in exactly the order `listNotes` handed over — pinned first, then most
+ * recently touched. That order is the feature, and re-deriving it from a sort
+ * spec would be one place for the two views to disagree.
+ */
+const NOTE_SCHEMA: CollectionSchema = {
+  fields: [
+    { key: "title", type: "text", titleKey: "notes.field.title" },
+    { key: "pinned", type: "boolean", titleKey: "notes.field.pinned" },
+    { key: "createdAt", type: "date", titleKey: "notes.field.createdAt" },
+    { key: "updatedAt", type: "date", titleKey: "notes.field.updatedAt" },
+  ],
+};
+
+/**
+ * No sort, no filters. The tag filter has already narrowed the array by the time
+ * it reaches a view (a filter is what the pane SHOWS), and the view is only how
+ * the pane DRAWS it — which is why a tag-filtered or search-revealed pane
+ * renders as cards exactly as an unfiltered one does.
+ */
+const CARDS_CONFIG: CardsViewConfig = { type: "cards" };
 
 /** The `listNotes` filter for a folder selection: `undefined` = all, else scoped. */
 function filterFor(selection: FolderSelection): { folderId?: string | null } | undefined {
@@ -56,6 +98,12 @@ export interface NotesPageProps {
  * (right). Folders, pinning, foldering, and tagging all go through the note
  * organization IPC allowlist; the editor owns the live Yjs doc, main owns
  * storage. Writes are await-then-refetch (never optimistic), the house style.
+ *
+ * The middle pane draws in one of two shapes (NOTE-002): the rows above, or the
+ * views engine's `CardsView`. Which one is a property of the SELECTION — a
+ * folder remembers its own on its row, the root in a device preference — and
+ * never of what the pane is currently showing, so a tag-filtered or a
+ * search-revealed pane renders in exactly the shape an unfiltered one does.
  */
 export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps) {
   const [folders, setFolders] = useState<NoteFolder[]>([]);
@@ -80,6 +128,10 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
   const [pendingTemplate, setPendingTemplate] = useState<
     { noteId: string; blocks: JSONContent[] } | null
   >(null);
+  // The ROOT's shape (NOTE-002) — "Sve beleške" and "Bez fascikle", the two
+  // selections with no folder row to remember one in. Read once from the device
+  // preference; a folder's own shape comes off its row instead.
+  const [rootView, setRootView] = useState<NoteFolderView>(readStoredRootNoteView);
 
   const loadFolders = useCallback(async () => {
     try {
@@ -356,6 +408,171 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
   const sortedFolders = folders.slice().sort((a, b) => collator.compare(a.name, b.name));
   const sortedTags = tags.slice().sort((a, b) => collator.compare(a.name, b.name));
 
+  /**
+   * WHICH SHAPE the middle pane draws (NOTE-002). A folder remembers its own —
+   * the answer travels with the profile, because "this is a folder of recipes,
+   * show me cards" is a property of what is filed there — while the root's is a
+   * device preference (`notePrefs.ts`), since neither rootless selection has a
+   * row to hang a column on.
+   *
+   * The fallback covers the first paint, before `listNoteFolders` has returned:
+   * "list" is what every folder opens as by default, so the pane never flashes a
+   * shape the folder did not ask for.
+   */
+  const selectedFolder =
+    selection.kind === "folder" ? folders.find((folder) => folder.id === selection.id) : undefined;
+  const view: NoteFolderView =
+    selection.kind === "folder" ? (selectedFolder?.defaultView ?? "list") : rootView;
+
+  /** Remembers the shape this selection opens in — the store for a folder, the device for the root. */
+  async function selectView(next: NoteFolderView): Promise<void> {
+    if (view === next) return;
+    if (selection.kind !== "folder") {
+      persistRootNoteView(next);
+      setRootView(next);
+      return;
+    }
+    const folderId = selection.id;
+    try {
+      await window.nexus.setNoteFolderView(profileId, folderId, next);
+      // Patched in place rather than refetched: a folder's view changes nothing
+      // about the tree, and the whole point of the toggle is that it is instant.
+      setFolders((prev) =>
+        prev.map((folder) => (folder.id === folderId ? { ...folder, defaultView: next } : folder)),
+      );
+    } catch (error) {
+      console.error("Nexus: failed to remember the folder view:", error);
+    }
+  }
+
+  /**
+   * One note, drawn identically in both shapes (NOTE-002): the pin, the button
+   * that opens it (title, tag chips, timestamp) and the "⋯" menu — the same
+   * markup, so a card is a second RENDERING of the row rather than a second
+   * design of it.
+   *
+   * The card face therefore keeps every management affordance the row has, and
+   * keeps them just as quiet: the "⋯" is already hover-revealed
+   * (`.note__item-row:hover .note__row-menu`), and reusing the row's own wrapper
+   * class gives a card that treatment with no second rule. The alternative —
+   * a card that only opens the note, with move/tag/delete left to the organizer
+   * — was rejected because the organizer has no per-note menu at all, so cards
+   * would have been a view you cannot manage notes from.
+   *
+   * Only the TIMESTAMP differs, and by design: a row in a dense column says
+   * „28. jul“, while a card has room for the instant label the dashboard's recent
+   * notes and the search results already use.
+   */
+  function renderNoteEntry(note: NoteMeta, timestamp: string) {
+    const noteTagIds = tagsByNote.get(note.id);
+    const noteTags =
+      noteTagIds && noteTagIds.size > 0 ? sortedTags.filter((tag) => noteTagIds.has(tag.id)) : [];
+    return (
+      <>
+        <button
+          type="button"
+          className={`note__pin${note.pinned ? " note__pin--on" : ""}`}
+          aria-label={note.pinned ? strings.notes.unpin : strings.notes.pin}
+          aria-pressed={note.pinned}
+          onClick={() => void togglePin(note)}
+        >
+          {note.pinned ? "★" : "☆"}
+        </button>
+        <button
+          type="button"
+          className={note.id === selectedId ? "note__item note__item--active" : "note__item"}
+          aria-current={note.id === selectedId ? "true" : undefined}
+          onClick={() => setSelectedId(note.id)}
+        >
+          <span className="note__item-title">
+            {note.title.trim().length > 0 ? note.title : strings.notes.untitled}
+          </span>
+          {noteTags.length > 0 && (
+            <span className="note__item-tags">
+              {noteTags.map((tag) => (
+                <span key={tag.id} className="note__item-tag">
+                  {tag.name}
+                </span>
+              ))}
+            </span>
+          )}
+          <span className="note__item-date">{timestamp}</span>
+        </button>
+        <NotePopover label={strings.notes.noteMenuLabel} triggerClassName="note__row-menu">
+          {(close) => (
+            <>
+              <span className="note__menu-label">{strings.notes.moveToFolder}</span>
+              <button
+                className="note__menu-item"
+                role="menuitem"
+                type="button"
+                onClick={() => {
+                  void moveNote(note, null);
+                  close();
+                }}
+              >
+                {strings.notes.unfiled}
+              </button>
+              {sortedFolders.map((folder) => (
+                <button
+                  key={folder.id}
+                  className="note__menu-item"
+                  role="menuitem"
+                  type="button"
+                  onClick={() => {
+                    void moveNote(note, folder.id);
+                    close();
+                  }}
+                >
+                  {folder.name}
+                </button>
+              ))}
+              {sortedTags.length > 0 && (
+                <>
+                  <div className="note__menu-sep" role="separator" />
+                  <span className="note__menu-label">{strings.notes.tagsLabel}</span>
+                  {sortedTags.map((tag) => {
+                    const attached = tagsByNote.get(note.id)?.has(tag.id) ?? false;
+                    return (
+                      <button
+                        key={tag.id}
+                        className="note__menu-item note__menu-item--check"
+                        role="menuitemcheckbox"
+                        type="button"
+                        aria-checked={attached}
+                        onClick={() => void toggleNoteTag(note, tag.id, attached)}
+                      >
+                        <span
+                          className={`note__menu-check${attached ? "" : " note__menu-check--hidden"}`}
+                          aria-hidden="true"
+                        >
+                          ✓
+                        </span>
+                        {tag.name}
+                      </button>
+                    );
+                  })}
+                </>
+              )}
+              <div className="note__menu-sep" role="separator" />
+              <button
+                className="note__menu-item note__menu-item--danger"
+                role="menuitem"
+                type="button"
+                onClick={() => {
+                  void remove(note);
+                  close();
+                }}
+              >
+                {strings.notes.deleteLabel}
+              </button>
+            </>
+          )}
+        </NotePopover>
+      </>
+    );
+  }
+
   return (
     <div className="note">
       <NoteOrganizer
@@ -375,6 +592,25 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
         <Button variant="primary" className="note__new" onClick={() => void create()}>
           {strings.notes.newNote}
         </Button>
+
+        {/* The shape toggle (NOTE-002). Always drawn: it is a property of the
+            SELECTION, not of what happens to be in it, so an empty folder is
+            still a folder whose shape can be set. */}
+        <div className="note__list-head">
+          <div className="note__views" role="group" aria-label={strings.notes.viewLabel}>
+            {VIEW_OPTIONS.map(({ value, label }) => (
+              <Button
+                key={value}
+                size="sm"
+                className={view === value ? "note__view note__view--active" : "note__view"}
+                aria-pressed={view === value}
+                onClick={() => void selectView(value)}
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
+        </div>
 
         {pendingUndo != null && (
           <div className="note__undo" role="status">
@@ -411,120 +647,32 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
             title={strings.notes.listEmptyTitle}
             description={strings.notes.tagFilterEmptyDescription}
           />
-        ) : (
+        ) : view === "list" ? (
           <ul className="note__list">
-            {visibleNotes.map((note) => {
-              const noteTagIds = tagsByNote.get(note.id);
-              const noteTags =
-                noteTagIds && noteTagIds.size > 0
-                  ? sortedTags.filter((tag) => noteTagIds.has(tag.id))
-                  : [];
-              return (
+            {visibleNotes.map((note) => (
               <li key={note.id} className="note__item-row">
-                <button
-                  type="button"
-                  className={`note__pin${note.pinned ? " note__pin--on" : ""}`}
-                  aria-label={note.pinned ? strings.notes.unpin : strings.notes.pin}
-                  aria-pressed={note.pinned}
-                  onClick={() => void togglePin(note)}
-                >
-                  {note.pinned ? "★" : "☆"}
-                </button>
-                <button
-                  type="button"
-                  className={note.id === selectedId ? "note__item note__item--active" : "note__item"}
-                  aria-current={note.id === selectedId ? "true" : undefined}
-                  onClick={() => setSelectedId(note.id)}
-                >
-                  <span className="note__item-title">
-                    {note.title.trim().length > 0 ? note.title : strings.notes.untitled}
-                  </span>
-                  {noteTags.length > 0 && (
-                    <span className="note__item-tags">
-                      {noteTags.map((tag) => (
-                        <span key={tag.id} className="note__item-tag">
-                          {tag.name}
-                        </span>
-                      ))}
-                    </span>
-                  )}
-                  <span className="note__item-date">{formatNoteDate(note.updatedAt)}</span>
-                </button>
-                <NotePopover label={strings.notes.noteMenuLabel} triggerClassName="note__row-menu">
-                  {(close) => (
-                    <>
-                      <span className="note__menu-label">{strings.notes.moveToFolder}</span>
-                      <button
-                        className="note__menu-item"
-                        role="menuitem"
-                        type="button"
-                        onClick={() => {
-                          void moveNote(note, null);
-                          close();
-                        }}
-                      >
-                        {strings.notes.unfiled}
-                      </button>
-                      {sortedFolders.map((folder) => (
-                        <button
-                          key={folder.id}
-                          className="note__menu-item"
-                          role="menuitem"
-                          type="button"
-                          onClick={() => {
-                            void moveNote(note, folder.id);
-                            close();
-                          }}
-                        >
-                          {folder.name}
-                        </button>
-                      ))}
-                      {sortedTags.length > 0 && (
-                        <>
-                          <div className="note__menu-sep" role="separator" />
-                          <span className="note__menu-label">{strings.notes.tagsLabel}</span>
-                          {sortedTags.map((tag) => {
-                            const attached = tagsByNote.get(note.id)?.has(tag.id) ?? false;
-                            return (
-                              <button
-                                key={tag.id}
-                                className="note__menu-item note__menu-item--check"
-                                role="menuitemcheckbox"
-                                type="button"
-                                aria-checked={attached}
-                                onClick={() => void toggleNoteTag(note, tag.id, attached)}
-                              >
-                                <span
-                                  className={`note__menu-check${attached ? "" : " note__menu-check--hidden"}`}
-                                  aria-hidden="true"
-                                >
-                                  ✓
-                                </span>
-                                {tag.name}
-                              </button>
-                            );
-                          })}
-                        </>
-                      )}
-                      <div className="note__menu-sep" role="separator" />
-                      <button
-                        className="note__menu-item note__menu-item--danger"
-                        role="menuitem"
-                        type="button"
-                        onClick={() => {
-                          void remove(note);
-                          close();
-                        }}
-                      >
-                        {strings.notes.deleteLabel}
-                      </button>
-                    </>
-                  )}
-                </NotePopover>
+                {renderNoteEntry(note, formatNoteDate(note.updatedAt))}
               </li>
-              );
-            })}
+            ))}
           </ul>
+        ) : (
+          // The same notes, one card each, in the same order (the config
+          // carries no sort — see CARDS_CONFIG). The wrapper owns the scroll the
+          // <ul> owns in the other shape; the grid, the card frame and its
+          // padding are the UI package's.
+          <div className="note__cards">
+            <CardsView<NoteFields>
+              items={visibleNotes}
+              schema={NOTE_SCHEMA}
+              config={CARDS_CONFIG}
+              itemKey={(note) => note.id}
+              renderItem={(note) => (
+                <div className="note__item-row">
+                  {renderNoteEntry(note, formatNotificationWhen(note.updatedAt))}
+                </div>
+              )}
+            />
+          </div>
         )}
       </div>
 

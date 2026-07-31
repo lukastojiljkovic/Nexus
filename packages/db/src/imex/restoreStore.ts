@@ -247,8 +247,8 @@ export class RestoreStore {
     this.insertNoteFolder = db.prepare(
       `INSERT INTO note_folders
          (id, profile_id, parent_id, name, color, default_template_id, is_capture_default,
-          created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          default_view, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     this.insertNoteTag = db.prepare(
       `INSERT INTO note_tags (id, profile_id, name, created_at) VALUES (?, ?, ?, ?)`,
@@ -471,10 +471,15 @@ export class RestoreStore {
       // row the dangling-id rule already covers the miss — the apply path reads
       // an unresolvable default as "no template". Validating it here could only
       // turn a harmless blank note into a refused restore.
+      //
+      // `defaultView` is optional in the interchange (NOTE-002): an archive
+      // written before 1.17.0 carries none, and the folders in it opened as
+      // lists — which is exactly what the fallback restores them as.
       for (const folder of input.data.noteFolders) {
         this.insertNoteFolder.run(
           folder.id, this.profileId, folder.parentId, folder.name, folder.color,
           folder.defaultTemplateId, folder.isCaptureDefault ? 1 : 0,
+          folder.defaultView ?? "list",
           folder.createdAt, folder.updatedAt,
         );
         written += 1;

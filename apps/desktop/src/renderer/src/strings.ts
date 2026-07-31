@@ -826,6 +826,17 @@ export const strings = {
     noteMenuLabel: "Više opcija",
     pin: "Zakači",
     unpin: "Otkači",
+    /**
+     * The per-folder view toggle (NOTE-002). The same two words the TASK
+     * toggle uses for the same two shapes — one vocabulary across the app —
+     * keyed by the stored value, so the toggle names a shape by looking it up
+     * rather than by a parallel list that could fall out of step with the set.
+     */
+    viewLabel: "Prikaz",
+    viewNames: {
+      list: "Lista",
+      cards: "Kartice",
+    },
     save: "Sačuvaj",
     cancel: "Otkaži",
     folderError: "Radnja nad fasciklom nije uspela. Pokušaj ponovo.",
