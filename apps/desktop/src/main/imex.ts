@@ -20,14 +20,76 @@ import { gatherProfileData, gatherProfileSettings, type ProfileDataDeps } from "
 import type { ExportResult, IcsExportResult } from "../shared/ipc.js";
 
 /**
- * Everything `handleExport` needs: one profile's whole state (`ProfileDataDeps`,
- * shared verbatim with restore's undo snapshot — see `profileData.ts`), plus
- * the two things only an export uses.
+ * Everything `writeProfileArchive` needs: one profile's whole state
+ * (`ProfileDataDeps`, shared verbatim with restore's undo snapshot — see
+ * `profileData.ts`), plus the one thing only an archive write uses. No window
+ * and no dialog: this is the surface the scheduled backup (`main/backup.ts`,
+ * ADR-056) shares with the manual flow, and a scheduled run has no UI at all.
  */
-export interface ImexExportDeps extends ProfileDataDeps {
+export interface ImexArchiveDeps extends ProfileDataDeps {
   /** Decrypted attachment bytes by content hash, or null when the blob is missing from the store. Injected rather than reached for, so this module never touches blob paths or key material itself (mirrors the store getters above). */
   readBlob(sha256: string): Promise<Uint8Array | null>;
+}
+
+/** `writeProfileArchive`'s deps plus the one thing only the MANUAL flow uses: the window its save dialog belongs to. */
+export interface ImexExportDeps extends ImexArchiveDeps {
   getMainWindow(): BrowserWindow | null;
+}
+
+/** What landed on disk: the archive's record count and how many attachment blobs were missing from the store (skipped, never fatal). */
+export interface ArchiveWriteOutcome {
+  totalRecords: number;
+  missingAttachments: number;
+}
+
+/**
+ * Writes one profile's full archive at `filePath` — the reusable half of
+ * `handleExport`, extracted (ADR-056) so the scheduled backup runs the exact
+ * code path the manual export does rather than a copy of it: same gather, same
+ * `buildExportArchive`, same `writeZip` streaming discipline, same `NXA1`
+ * sealing. The caller owns WHERE the file goes (`handleExport`'s save dialog;
+ * the backup runner's configured folder + `.partial` rename), this function
+ * owns everything about WHAT is written.
+ *
+ * `passphrase === null` remains the explicitly-confirmed plaintext export the
+ * manual flow alone can reach (SEC-DAR-02) — the scheduled caller always
+ * passes a string, and its IPC surface has no plaintext field at all.
+ *
+ * Argon2id at `ARCHIVE_KDF_PARAMS`' cost blocks this process for roughly a
+ * second — the deliberate trade-off `unlockWithPasscode` (`auth.ts`) already
+ * makes. The passphrase is never logged and never part of any error thrown
+ * here — only `deriveArchiveKey` ever sees it.
+ */
+export async function writeProfileArchive(
+  deps: ImexArchiveDeps,
+  profile: ExportArchiveInput["profile"],
+  passphrase: string | null,
+  filePath: string,
+  modules?: ReadonlySet<ArchiveModuleId>,
+): Promise<ArchiveWriteOutcome> {
+  let writer: ArchiveWriter | null = null;
+  if (passphrase !== null) {
+    const salt = generateSalt();
+    const key = await deriveArchiveKey(passphrase, salt, ARCHIVE_KDF_PARAMS);
+    writer = await createArchiveWriter({ key, salt, kdf: ARCHIVE_KDF_PARAMS });
+  }
+
+  const archiveInput: ExportArchiveInput = {
+    profile,
+    appVersion: app.getVersion(),
+    createdAt: new Date().toISOString(),
+    settings: await gatherProfileSettings(deps, profile.id),
+    data: gatherProfileData(deps, profile.id),
+    hash: (content) => createHash("sha256").update(content, "utf8").digest("hex"),
+  };
+  // Only name a subset when there is one (exactOptionalPropertyTypes): an
+  // ABSENT key is what "every module" means to the builder, and an explicit
+  // `undefined` is not the same thing.
+  if (modules !== undefined) archiveInput.modules = modules;
+  const archive = buildExportArchive(archiveInput);
+
+  const missingAttachments = await writeZip(archive.files, archive.binaries, filePath, deps.readBlob, writer);
+  return { totalRecords: archive.totalRecords, missingAttachments };
 }
 
 /**
@@ -61,7 +123,7 @@ export interface ImexExportDeps extends ProfileDataDeps {
  * `undefined` is the whole profile, which is what this function did before the
  * choice existed and what it still does when nobody makes one.
  *
- * The narrowing happens inside `buildExportArchive`, not here: the gather above
+ * The narrowing happens inside `buildExportArchive`, not here: the gather
  * stays whole. That reads (and merges the Yjs state of) modules a subset export
  * then discards — the same work every export has always done — and it is the
  * right trade for now, because `gatherProfileData` is ALSO how a restore's undo
@@ -69,6 +131,11 @@ export interface ImexExportDeps extends ProfileDataDeps {
  * put a second copy of the module↔collection mapping in the one place a
  * disagreement with `countProfileModules` would silently corrupt an archive's
  * own counts.
+ *
+ * Everything after the dialog is `writeProfileArchive` (ADR-056): the dialog —
+ * resolved FIRST, so a canceled export never pays for the Argon2id derivation
+ * inside — is all that remains of the manual flow's own body, which is exactly
+ * what keeps it and the scheduled backup provably the same export.
  */
 export async function handleExport(
   deps: ImexExportDeps,
@@ -92,39 +159,12 @@ export async function handleExport(
     : await dialog.showSaveDialog(dialogOptions);
   if (canceled || !filePath) return { canceled: true };
 
-  // Derived only now that the dialog has resolved, so a canceled export never
-  // pays for it: Argon2id at `ARCHIVE_KDF_PARAMS`' cost blocks this process for
-  // roughly a second, the same deliberate trade-off `unlockWithPasscode`
-  // (`auth.ts`) already makes for the same reason. Never logged, never part of
-  // any error this function can throw — only `deriveArchiveKey` ever sees it.
-  let writer: ArchiveWriter | null = null;
-  if (passphrase !== null) {
-    const salt = generateSalt();
-    const key = await deriveArchiveKey(passphrase, salt, ARCHIVE_KDF_PARAMS);
-    writer = await createArchiveWriter({ key, salt, kdf: ARCHIVE_KDF_PARAMS });
-  }
-
-  const archiveInput: ExportArchiveInput = {
-    profile,
-    appVersion: app.getVersion(),
-    createdAt: new Date().toISOString(),
-    settings: await gatherProfileSettings(deps, profile.id),
-    data: gatherProfileData(deps, profile.id),
-    hash: (content) => createHash("sha256").update(content, "utf8").digest("hex"),
-  };
-  // Only name a subset when there is one (exactOptionalPropertyTypes): an
-  // ABSENT key is what "every module" means to the builder, and an explicit
-  // `undefined` is not the same thing.
-  if (modules !== undefined) archiveInput.modules = modules;
-  const archive = buildExportArchive(archiveInput);
-
-  const missingAttachments = await writeZip(archive.files, archive.binaries, filePath, deps.readBlob, writer);
+  const outcome = await writeProfileArchive(deps, profile, passphrase, filePath, modules);
 
   return {
     canceled: false,
     path: filePath,
-    totalRecords: archive.totalRecords,
-    missingAttachments,
+    ...outcome,
     encrypted: passphrase !== null,
   };
 }

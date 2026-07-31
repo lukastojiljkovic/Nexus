@@ -537,6 +537,20 @@ export class RestoreValidationError extends DatabaseError {}
 export class DashboardSettingsValidationError extends DatabaseError {}
 
 /**
+ * Thrown when a backup-settings write breaks a rule migration 044's CHECKs
+ * cannot express on their own or would leave the row in a state they forbid
+ * (SET-011 / ADR-056): enabling a schedule before a folder and a wrapped
+ * passphrase exist, a cadence outside `daily`/`weekly`, a `keepLast` that is
+ * not a whole number inside `MIN_BACKUP_KEEP_LAST`..`MAX_BACKUP_KEEP_LAST`, an
+ * empty or oversized folder path or wrap, a run record whose error does not
+ * match its status, or a malformed timestamp. The store revalidates because
+ * renderer input is untrusted (SEC-EL-02), even though main validates the same
+ * fields at the IPC boundary — a store is never the place that assumes its
+ * caller did.
+ */
+export class BackupSettingsValidationError extends DatabaseError {}
+
+/**
  * Thrown when a study-settings write breaks a rule migration 034's CHECKs
  * cannot express on their own (STUDY-007): a target retention outside
  * `MIN_TARGET_RETENTION`..`MAX_TARGET_RETENTION` or not a finite number at all,

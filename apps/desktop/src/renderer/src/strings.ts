@@ -2059,6 +2059,65 @@ export const strings = {
       error: "Izvoz nije uspeo. Pokušaj ponovo.",
     },
     /**
+     * Automatska rezervna kopija (SET-011 / ADR-056) — the scheduled half of
+     * the same "Rezervna kopija" card. There is deliberately NO plaintext
+     * wording anywhere in this block: a scheduled archive is always encrypted,
+     * and the copy never has to explain a choice that does not exist. The
+     * passphrase hint is borrowed from `backup.passphraseHint` in the JSX —
+     * same rule, same sentence, spelled once.
+     *
+     * `runErrors` mirrors the wire's `BackupRunErrorCode`; `unknown` catches a
+     * code a newer build recorded that this one cannot name.
+     */
+    autoBackup: {
+      title: "Automatska rezervna kopija",
+      description:
+        "Nexus sam pravi šifrovanu arhivu celog profila u izabranoj fascikli — dnevno ili nedeljno, dok je aplikacija otključana. Propušten termin se nadoknađuje pri prvom sledećem otključavanju.",
+      enableLabel: "Uključi automatsku rezervnu kopiju",
+      /** Shown while the toggle is disabled — names the two prerequisites instead of leaving a dead checkbox unexplained. */
+      enableHint: "Pre uključivanja izaberi fasciklu i postavi lozinku.",
+      cadenceLabel: "Učestalost",
+      cadenceOptions: {
+        daily: "Dnevno",
+        weekly: "Nedeljno",
+      },
+      folderLabel: "Fascikla",
+      folderPick: "Izaberi fasciklu…",
+      folderNone: "Fascikla nije izabrana.",
+      keepLastLabel: "Koliko kopija se čuva",
+      keepLastHint: "Posle svake uspešne kopije, starije od ovog broja se brišu.",
+      /** Labels for `BACKUP_KEEP_LAST_CHOICES`, keyed by the numeric value as a string — Serbian numeral agreement spelled per choice. */
+      keepLastOptions: {
+        "2": "2 kopije",
+        "3": "3 kopije",
+        "5": "5 kopija",
+        "10": "10 kopija",
+        "20": "20 kopija",
+        "50": "50 kopija",
+      } as Record<string, string>,
+      passphraseTitle: "Lozinka arhive",
+      /** One label, two moments: the button SETS a first passphrase and CHANGES an existing one — `passphraseStatusSet` says which state the card is in. */
+      passphraseSave: "Postavi lozinku",
+      passphraseChange: "Promeni lozinku",
+      passphraseStatusSet: "Lozinka je postavljena.",
+      /** The one fact a change must say out loud: it reaches only future runs. */
+      passphraseFutureNote:
+        "Nova lozinka važi za buduće kopije — ranije napravljeni fajlovi ostaju pod starom.",
+      runNow: "Napravi odmah",
+      lastRunPrefix: "Poslednja:",
+      lastRunOk: "uspešna",
+      lastRunFailed: "nije uspela",
+      lastRunNever: "Još nije napravljena nijedna kopija.",
+      /** One clause per `BackupRunErrorCode`, composed into „nije uspela — <razlog>, <vreme>". */
+      runErrors: {
+        "folder-unreachable": "fascikla nije dostupna",
+        "passphrase-unreadable": "sačuvanu lozinku nije moguće pročitati",
+        "write-failed": "pisanje arhive nije uspelo",
+        unknown: "nepoznata greška",
+      } as Record<string, string>,
+      error: "Radnja nije uspela. Pokušaj ponovo.",
+    },
+    /**
      * Izvoz kalendara (CAL-008) — the small `.ics` action beside the full
      * export in the same "Rezervna kopija" card. Its own block rather than more
      * keys on `backup`, because it is a different file in a different format

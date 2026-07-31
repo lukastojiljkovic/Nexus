@@ -7,6 +7,7 @@ export {
 export type { OpenDatabaseOptions } from "./database.js";
 
 export {
+  BackupSettingsValidationError,
   CardNotFoundError,
   CardValidationError,
   DashboardSettingsValidationError,
@@ -83,6 +84,20 @@ export {
   MAX_BACKGROUND_DIM,
 } from "./dashboard/dashboardSettingsStore.js";
 export type { DashboardSettings } from "./dashboard/dashboardSettingsStore.js";
+
+export {
+  BackupSettingsStore,
+  BACKUP_CADENCES,
+  BACKUP_RUN_STATUSES,
+  DEFAULT_BACKUP_KEEP_LAST,
+  MAX_BACKUP_KEEP_LAST,
+  MIN_BACKUP_KEEP_LAST,
+} from "./backup/backupSettingsStore.js";
+export type {
+  BackupCadence,
+  BackupRunStatus,
+  BackupSettings,
+} from "./backup/backupSettingsStore.js";
 
 export {
   DashboardWidgetStore,

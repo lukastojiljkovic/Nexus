@@ -14,6 +14,8 @@ import {
 } from "@nexus/core";
 import { ACCENT_IDS, type AccentId } from "@nexus/tokens";
 import {
+  BACKUP_CADENCES,
+  BACKUP_KEEP_LAST_CHOICES,
   DEFAULT_TARGET_RETENTION,
   LLM_IMPORT_KINDS,
   LLM_IMPORT_MAX_ANSWER_LENGTH,
@@ -28,6 +30,7 @@ import type {
   ApkgImportSkip,
   ApkgImportSubjectChoice,
   AppInfo,
+  BackupSettingsView,
   DashboardSettings,
   FlagState,
   ImportDuplicateChoice,
@@ -549,6 +552,220 @@ function BackupSection({ profileId }: BackupSectionProps) {
       )}
       {error != null && <p className="set__error">{error}</p>}
     </>
+  );
+}
+
+interface AutoBackupSectionProps {
+  profileId: string;
+  hits: ReadonlySet<string>;
+}
+
+/**
+ * Automatska rezervna kopija (SET-011 / ADR-056): the scheduled half of the
+ * same "Rezervna kopija" card — enable + cadence, the folder main's native
+ * directory picker chose, how many archives retention keeps, the write-only
+ * passphrase, a manual „Napravi odmah", and the last run's recorded outcome.
+ *
+ * Every mutation answers the whole `BackupSettingsView`, so this component
+ * never guesses at state main owns — including after „Napravi odmah", whose
+ * answer carries the run's own recorded status line.
+ *
+ * The passphrase is validated exactly as `BackupSection` validates the manual
+ * export's (same `validateArchivePassphrase`, same sentences), sent once, and
+ * cleared from component state success or failure — it is never pre-filled and
+ * never comes back from main in any form (`passphraseSet` is all the card
+ * knows). The enable toggle stays disabled until a folder AND a passphrase
+ * exist; main and the store refuse the same transition, so the disabled state
+ * is UX, never the gate (SEC-EL-02).
+ */
+function AutoBackupSection({ profileId, hits }: AutoBackupSectionProps) {
+  const s = strings.settings.autoBackup;
+  const b = strings.settings.backup;
+
+  const [settings, setSettings] = useState<BackupSettingsView | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [passphrase, setPassphrase] = useState("");
+  const [confirmPassphrase, setConfirmPassphrase] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    window.nexus
+      .backupSettings(profileId)
+      .then((view) => {
+        if (!cancelled) setSettings(view);
+      })
+      .catch((loadError: unknown) => {
+        console.error("Nexus: failed to read backup settings:", loadError);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [profileId]);
+
+  async function mutate(action: () => Promise<BackupSettingsView>): Promise<void> {
+    if (busy) return;
+    setError(null);
+    setBusy(true);
+    try {
+      setSettings(await action());
+    } catch (actionError) {
+      setError(s.error);
+      console.error("Nexus: backup settings action failed:", actionError);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function savePassphrase(): Promise<void> {
+    setError(null);
+    const problem = validateArchivePassphrase(passphrase);
+    if (problem === "tooShort") {
+      setError(b.passphraseTooShort);
+      return;
+    }
+    if (problem === "tooLong") {
+      setError(b.passphraseTooLong);
+      return;
+    }
+    if (passphrase !== confirmPassphrase) {
+      setError(b.passphraseMismatch);
+      return;
+    }
+    const value = passphrase;
+    // Cleared BEFORE the call resolves, not after: a used passphrase has no
+    // business surviving in component state (`BackupSection`'s hygiene rule),
+    // and a failed save should re-ask rather than silently retry a held copy.
+    setPassphrase("");
+    setConfirmPassphrase("");
+    await mutate(() => window.nexus.setBackupPassphrase(profileId, value));
+  }
+
+  if (settings === null) {
+    return (
+      <div className="set__restore-block">
+        <h3 className={labelClass("set__module-group-title", hits.has("backup-auto"))}>{s.title}</h3>
+        <p className="app__muted">{strings.app.loading}</p>
+      </div>
+    );
+  }
+
+  const configured = settings.folderPath !== null && settings.passphraseSet;
+  const schedule = { enabled: settings.enabled, cadence: settings.cadence, keepLast: settings.keepLast };
+
+  return (
+    <div className="set__restore-block">
+      <h3 className={labelClass("set__module-group-title", hits.has("backup-auto"))}>{s.title}</h3>
+      <p className="app__muted">{s.description}</p>
+
+      <Checkbox
+        checked={settings.enabled}
+        disabled={busy || (!settings.enabled && !configured)}
+        onChange={(event) =>
+          void mutate(() =>
+            window.nexus.setBackupSettings(profileId, { ...schedule, enabled: event.target.checked }),
+          )
+        }
+      >
+        {s.enableLabel}
+      </Checkbox>
+      {!configured && <p className="set__section-caption">{s.enableHint}</p>}
+
+      <p className="set__section-caption">{s.cadenceLabel}</p>
+      <div className="set__segmented" role="group" aria-label={s.cadenceLabel}>
+        {BACKUP_CADENCES.map((option) => (
+          <Button
+            key={option}
+            size="sm"
+            variant={settings.cadence === option ? "primary" : "ghost"}
+            aria-pressed={settings.cadence === option}
+            disabled={busy}
+            onClick={() =>
+              void mutate(() =>
+                window.nexus.setBackupSettings(profileId, { ...schedule, cadence: option }),
+              )
+            }
+          >
+            {s.cadenceOptions[option]}
+          </Button>
+        ))}
+      </div>
+
+      <p className="set__section-caption">{s.folderLabel}</p>
+      <Button size="sm" disabled={busy} onClick={() => void mutate(() => window.nexus.pickBackupFolder(profileId))}>
+        {s.folderPick}
+      </Button>
+      {settings.folderPath !== null ? (
+        <p className="set__section-caption">
+          <span className="app__path">{settings.folderPath}</span>
+        </p>
+      ) : (
+        <p className="app__muted">{s.folderNone}</p>
+      )}
+
+      <p className="set__section-caption">{s.keepLastLabel}</p>
+      <select
+        className="set__select"
+        value={settings.keepLast}
+        aria-label={s.keepLastLabel}
+        disabled={busy}
+        onChange={(event) =>
+          void mutate(() =>
+            window.nexus.setBackupSettings(profileId, {
+              ...schedule,
+              keepLast: Number(event.target.value),
+            }),
+          )
+        }
+      >
+        {BACKUP_KEEP_LAST_CHOICES.map((choice) => (
+          <option key={choice} value={choice}>
+            {s.keepLastOptions[String(choice)] ?? String(choice)}
+          </option>
+        ))}
+      </select>
+      <p className="set__section-caption">{s.keepLastHint}</p>
+
+      <p className="set__section-caption">{s.passphraseTitle}</p>
+      <div className="set__security-form">
+        <TextField
+          type="password"
+          label={b.passphraseLabel}
+          value={passphrase}
+          onChange={(event) => setPassphrase(event.target.value)}
+        />
+        <TextField
+          type="password"
+          label={b.passphraseConfirmLabel}
+          value={confirmPassphrase}
+          onChange={(event) => setConfirmPassphrase(event.target.value)}
+        />
+      </div>
+      <p className="set__section-caption">{b.passphraseHint}</p>
+      <p className="set__section-caption">{s.passphraseFutureNote}</p>
+      <Button size="sm" disabled={busy || passphrase.length === 0} onClick={() => void savePassphrase()}>
+        {settings.passphraseSet ? s.passphraseChange : s.passphraseSave}
+      </Button>
+      {settings.passphraseSet && <p className="set__section-caption">{s.passphraseStatusSet}</p>}
+
+      <Button size="sm" disabled={busy || !configured} onClick={() => void mutate(() => window.nexus.runBackupNow(profileId))}>
+        {s.runNow}
+      </Button>
+      {settings.lastRunAt === null ? (
+        <p className="app__muted">{s.lastRunNever}</p>
+      ) : settings.lastStatus === "failed" ? (
+        <p className="set__error">
+          {s.lastRunPrefix} {s.lastRunFailed} —{" "}
+          {s.runErrors[settings.lastError ?? "unknown"] ?? s.runErrors.unknown},{" "}
+          {formatArchiveInstant(settings.lastRunAt)}
+        </p>
+      ) : (
+        <p className="set__section-caption">
+          {s.lastRunPrefix} {s.lastRunOk} — {formatArchiveInstant(settings.lastRunAt)}
+        </p>
+      )}
+      {error != null && <p className="set__error">{error}</p>}
+    </div>
   );
 }
 
@@ -3718,6 +3935,7 @@ export function SettingsPage({
 
       <Card title={strings.settings.sectionTitle.backup} className={sectionClass(sections.has("backup"))}>
         <BackupSection profileId={profileId} />
+        <AutoBackupSection profileId={profileId} hits={hits} />
         <CalendarExportSection profileId={profileId} hits={hits} />
         <RestoreSection profileId={profileId} hits={hits} />
         <ImportSection profileId={profileId} hits={hits} />

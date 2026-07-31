@@ -893,6 +893,12 @@ describe("RestoreStore", () => {
     //  - search_entries / search_fts and its FTS5 shadow tables: maintained
     //    ENTIRELY by migration 017's triggers off the source tables above —
     //    RestoreStore never writes to them directly (R11).
+    //  - backup_settings (migration 044 / ADR-056): deliberately DEVICE-LOCAL,
+    //    excluded from the export archive and from the wipe alike. An absolute
+    //    folder path is meaningless on another machine, the passphrase wrap
+    //    opens only under this account's data key — and a restore deliberately
+    //    does not touch the device's backup routine: backups keep running
+    //    right through a restore, which is when they matter most.
     const allowlist = new Set<string>([
       "meta",
       "profiles",
@@ -902,6 +908,7 @@ describe("RestoreStore", () => {
       "search_fts_idx",
       "search_fts_docsize",
       "search_fts_config",
+      "backup_settings",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);

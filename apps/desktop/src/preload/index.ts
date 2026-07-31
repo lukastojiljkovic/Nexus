@@ -452,6 +452,13 @@ const api: NexusApi = {
   cancelLlmImport: () => ipcRenderer.invoke(IpcChannel.imexImportLlmCancel),
   importMarkdownNotes: (profileId, folderId, source) =>
     ipcRenderer.invoke(IpcChannel.imexImportMarkdown, { profileId, folderId, source }),
+  backupSettings: (profileId) => ipcRenderer.invoke(IpcChannel.backupGetSettings, { profileId }),
+  setBackupSettings: (profileId, settings) =>
+    ipcRenderer.invoke(IpcChannel.backupSetSettings, { profileId, ...settings }),
+  pickBackupFolder: (profileId) => ipcRenderer.invoke(IpcChannel.backupPickFolder, { profileId }),
+  setBackupPassphrase: (profileId, passphrase) =>
+    ipcRenderer.invoke(IpcChannel.backupSetPassphrase, { profileId, passphrase }),
+  runBackupNow: (profileId) => ipcRenderer.invoke(IpcChannel.backupRunNow, { profileId }),
   setGlobalShortcut: (chord) => ipcRenderer.invoke(IpcChannel.shortcutsSetGlobal, { chord }),
   onGlobalCapture: (listener) => {
     const handler = (): void => listener();

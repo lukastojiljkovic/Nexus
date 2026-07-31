@@ -294,6 +294,19 @@ export const IpcChannel = {
   // and nothing to undo — main picks, parses and writes in one call, exactly
   // the shape `dashboard:background-pick` already has.
   imexImportMarkdown: "imex:import-markdown",
+  // Scheduled backups (SET-011 / ADR-056): the encrypted export above, run by
+  // main on a schedule. Five channels, none of which ever carries a filesystem
+  // path FROM the renderer (`backup:pick-folder`'s native dialog is the sole
+  // source of one, SEC-EL) and none of which ever carries the passphrase BACK:
+  // the settings view says only whether one is set. There is deliberately no
+  // plaintext option anywhere on this surface — SEC-DAR-02 allows plaintext
+  // only behind an explicit per-export confirmation, and a schedule cannot
+  // confirm.
+  backupGetSettings: "backup:get-settings",
+  backupSetSettings: "backup:set-settings",
+  backupPickFolder: "backup:pick-folder",
+  backupSetPassphrase: "backup:set-passphrase",
+  backupRunNow: "backup:run-now",
   // ADR-040's OS-level half (TASK-002). The chord lives in the renderer's
   // `localStorage` (a device preference, never profile data), so the renderer
   // is the only side that knows it — it tells main at boot and on every remap,
@@ -3299,6 +3312,54 @@ export type IcsExportResult =
   | { canceled: false; path: string; events: number; skipped: number };
 
 /**
+ * The scheduled backup's cadence (SET-011 / ADR-056). Mirrors `@nexus/db`'s
+ * `BACKUP_CADENCES` exactly — redeclared rather than imported, the
+ * `AuthErrorReason` pattern, because this file deliberately imports nothing;
+ * main assigns the store's own value to this type, so a drift is a compile
+ * error rather than a silent gap.
+ */
+export const BACKUP_CADENCES = ["daily", "weekly"] as const;
+export type BackupCadence = (typeof BACKUP_CADENCES)[number];
+
+/** How the last recorded backup run ended — `@nexus/db`'s `BackupRunStatus`, redeclared on `BackupCadence`'s terms. */
+export type BackupRunStatus = "ok" | "failed";
+
+/**
+ * Why a scheduled backup run failed (`backup_settings.last_error` on the
+ * wire). Machine codes, never prose — the renderer maps each to its own
+ * Serbian sentence, exactly as `ArchiveReadErrorCode` below works.
+ */
+export type BackupRunErrorCode =
+  | "folder-unreachable" // the configured folder is missing or not a directory at run time
+  | "passphrase-unreadable" // the stored wrap does not open under this account's data key (an edited/corrupt row)
+  | "write-failed"; // the archive write or its rename into place failed
+
+/** The keep-last choices the settings card offers; main validates the store's whole 2..50 range, so the curated list is UX, never the gate. */
+export const BACKUP_KEEP_LAST_CHOICES = [2, 3, 5, 10, 20, 50] as const;
+
+/**
+ * One profile's scheduled-backup settings as the renderer sees them (SET-011 /
+ * ADR-056). Deliberately NOT the store's own row: `passphrase_wrapped` never
+ * crosses the bridge in either direction — the passphrase surface is
+ * write-only, and `passphraseSet` is everything the card needs to say
+ * „postavljena".
+ */
+export interface BackupSettingsView {
+  enabled: boolean;
+  cadence: BackupCadence;
+  /** The folder the native directory picker chose, shown verbatim in the card; null while none is chosen. */
+  folderPath: string | null;
+  /** Whether a wrapped passphrase exists — never the wrap, never the passphrase. */
+  passphraseSet: boolean;
+  keepLast: number;
+  /** When the last run was ATTEMPTED (`lastStatus` says how it went), or null before the first. */
+  lastRunAt: string | null;
+  lastStatus: BackupRunStatus | null;
+  /** A `BackupRunErrorCode` when `lastStatus` is "failed", else null. Typed as string because the row outlives this build's code list; the renderer keeps a fallback sentence. */
+  lastError: string | null;
+}
+
+/**
  * Why an archive could not be opened (IMEX slice 3c, ADR-023). Lives here
  * rather than in `main/archiveReader.ts` — the module that actually produces
  * it — because this file is the one place every wire shape is declared once;
@@ -4813,6 +4874,32 @@ export interface NexusApi {
     folderId: string | null,
     source: MarkdownImportSource,
   ): Promise<MarkdownImportResult>;
+  /** This profile's scheduled-backup settings (SET-011 / ADR-056), the passphrase already stripped to `passphraseSet`. Never writes. */
+  backupSettings(profileId: string): Promise<BackupSettingsView>;
+  /**
+   * Sets the schedule's three choices together. Enabling is refused by main
+   * (and the store) while no folder or no passphrase exists — the card's
+   * disabled toggle is UX, never the gate.
+   */
+  setBackupSettings(
+    profileId: string,
+    settings: { enabled: boolean; cadence: BackupCadence; keepLast: number },
+  ): Promise<BackupSettingsView>;
+  /**
+   * Opens the native directory picker in MAIN and stores the chosen absolute
+   * path — the renderer sends no path and sees only the stored result (SEC-EL).
+   * Resolves once the dialog is settled; a cancel answers the unchanged view.
+   */
+  pickBackupFolder(profileId: string): Promise<BackupSettingsView>;
+  /**
+   * Sets or replaces the passphrase future scheduled archives are sealed
+   * under, validated to the manual export's own rules. Write-only: main wraps
+   * it under the profile's data key and nothing ever sends it back — archives
+   * already written keep opening under whatever sealed them.
+   */
+  setBackupPassphrase(profileId: string, passphrase: string): Promise<BackupSettingsView>;
+  /** Runs one backup immediately through the scheduled path's own guard, and answers the settings view carrying the run's recorded outcome. */
+  runBackupNow(profileId: string): Promise<BackupSettingsView>;
   /**
    * Asks main to hold `chord` as an OS-wide hotkey (TASK-002), replacing
    * whatever it held before. Called once at boot — after the renderer has read

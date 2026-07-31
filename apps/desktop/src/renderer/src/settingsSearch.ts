@@ -230,6 +230,15 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
     // about the export above it, not a fifth thing the card can do.
     keywords: ["izvoz", "arhiva", "kopija", "moduli"],
   },
+  {
+    // SET-011 (ADR-056). „automatska“ and „rezervna“ sit in the label already;
+    // the keywords carry the English word half the world types for this exact
+    // thing, plus the schedule the block is about.
+    id: "backup-auto",
+    section: "backup",
+    label: s.autoBackup.title,
+    keywords: ["automatski", "backup", "rezervna", "raspored", "dnevno", "nedeljno", "fascikla"],
+  },
   // The "Rezervna kopija" card holds five blocks — export, calendar, restore,
   // archive import, Anki import, markdown import — so each gets its own entry
   // inside that one section rather than a section of its own: they are one

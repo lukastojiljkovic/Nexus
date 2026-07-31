@@ -41,8 +41,16 @@ import type {
   SearchTagMatch,
   TagFacetSource,
 } from "@nexus/core";
-import { MAX_PASSCODE_LENGTH, blobStorageName, deriveBlobKeys, type BlobKeys } from "@nexus/core/auth";
 import {
+  MAX_PASSCODE_LENGTH,
+  blobStorageName,
+  deriveBlobKeys,
+  unwrapBackupPassphrase,
+  wrapBackupPassphrase,
+  type BlobKeys,
+} from "@nexus/core/auth";
+import {
+  BackupSettingsStore,
   CARD_RATINGS,
   CardStore,
   DashboardSettingsStore,
@@ -64,6 +72,7 @@ import {
   MAX_NOTE_ATTACHMENT_BYTES,
   MAX_NOTE_LINKS,
   MAX_NOTE_TEMPLATE_BYTES,
+  MAX_BACKUP_KEEP_LAST,
   MAX_NOTE_UPDATE_BYTES,
   MAX_QUEUE_DECK_IDS,
   MAX_SEARCH_BROWSE_LIMIT,
@@ -75,6 +84,7 @@ import {
   MAX_TASK_REMINDERS,
   MAX_TASK_REMINDER_DAYS,
   MAX_TASK_TEMPLATE_DUE_OFFSET_DAYS,
+  MIN_BACKUP_KEEP_LAST,
   NOTE_FOLDER_COLORS,
   NOTE_FOLDER_VIEWS,
   NoteAttachmentNotFoundError,
@@ -220,9 +230,15 @@ import {
   unlockWithPasscode,
   unlockWithRecovery,
 } from "./auth.js";
+import {
+  runBackupNow,
+  startBackupScheduler,
+  stopBackupScheduler,
+  type BackupRunnerDeps,
+} from "./backup.js";
 import { localToday } from "./clock.js";
 import { releaseGlobalCapture, setGlobalCaptureAccelerator } from "./globalCapture.js";
-import { handleExport, handleIcsExport } from "./imex.js";
+import { handleExport, handleIcsExport, writeProfileArchive, type ImexArchiveDeps } from "./imex.js";
 import { handleMarkdownImport } from "./markdownImport.js";
 import { checklistToTasks, countNoteChecklistItems } from "./noteChecklistTasks.js";
 import { duplicateNote } from "./noteDuplicate.js";
@@ -269,6 +285,7 @@ import {
 } from "./restore.js";
 import {
   APKG_IMPORT_MAX_SUBJECT_NAME_LENGTH,
+  BACKUP_CADENCES,
   CARD_KINDS,
   CARD_TEXT_MAX_LENGTH,
   IMPORT_DUPLICATE_TYPES,
@@ -301,6 +318,8 @@ import {
   type CardKind,
   type AuthResult,
   type AuthStatus,
+  type BackupCadence,
+  type BackupSettingsView,
   type DashboardPickResult,
   type DashboardSettings,
   type ReviewQueue,
@@ -950,6 +969,43 @@ function asArchivePassphrase(value: unknown, field: string): string | null {
     throw new Error(`Invalid IPC payload: "${field}" must be null or a valid archive passphrase.`);
   }
   return value;
+}
+
+/**
+ * `backup:set-passphrase`'s field (ADR-056): the manual export's passphrase
+ * policy verbatim — same `validateArchivePassphrase`, same 12-character floor —
+ * but never null, because this surface has no plaintext branch to mean by it:
+ * SEC-DAR-02 allows plaintext only behind a per-export confirmation a schedule
+ * cannot give.
+ */
+function asBackupPassphrase(value: unknown, field: string): string {
+  if (typeof value !== "string" || validateArchivePassphrase(value) !== null) {
+    throw new Error(`Invalid IPC payload: "${field}" must be a valid archive passphrase.`);
+  }
+  return value;
+}
+
+/** `backup:set-settings`' cadence — the closed two-value domain migration 044's CHECK also holds. */
+function asBackupCadence(value: unknown, field: string): BackupCadence {
+  if (typeof value === "string" && (BACKUP_CADENCES as readonly string[]).includes(value)) {
+    return value as BackupCadence;
+  }
+  throw new Error(`Invalid IPC payload: "${field}" must be "daily" or "weekly".`);
+}
+
+/** `backup:set-settings`' keep-last — the store's whole 2..50 range, not just the card's curated choices (the select is UX, never the gate). */
+function asBackupKeepLast(value: unknown, field: string): number {
+  if (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= MIN_BACKUP_KEEP_LAST &&
+    value <= MAX_BACKUP_KEEP_LAST
+  ) {
+    return value;
+  }
+  throw new Error(
+    `Invalid IPC payload: "${field}" must be a whole number between ${MIN_BACKUP_KEEP_LAST} and ${MAX_BACKUP_KEEP_LAST}.`,
+  );
 }
 
 /**
@@ -2364,6 +2420,22 @@ function dashboardWidgetStore(profileId: string): DashboardWidgetStore {
   return new DashboardWidgetStore(requireDb().raw, profileId);
 }
 
+function backupSettingsStore(profileId: string): BackupSettingsStore {
+  return new BackupSettingsStore(requireDb().raw, profileId);
+}
+
+/**
+ * Mirrors `requireDb()`'s idiom for the session's data key: absent means
+ * locked. Only two things ever read the key — `auth:regenerate-recovery` (its
+ * own inline check predates this helper) and the backup passphrase wrap/unwrap
+ * (ADR-056), both unreachable from a locked renderer, so a throw here is a
+ * renderer bug surfacing, never an expected refusal.
+ */
+function requireUnlockedDataKeyHex(): string {
+  if (unlockedDataKeyHex === null) throw new Error("The data key is locked.");
+  return unlockedDataKeyHex;
+}
+
 // --- Search (ADR-021): the query pipeline -----------------------------------
 //
 // Extracted as named functions rather than closures inside `ipcMain.handle`,
@@ -2764,6 +2836,11 @@ function startUnlockedServices(): void {
       }`,
     );
   });
+
+  // Scheduled backups (ADR-056): the immediate check inside is the catch-up —
+  // a slot missed while locked or powered off runs now, at unlock, exactly
+  // when the data key exists again.
+  startBackupScheduler(backupRunnerDeps());
 }
 
 // --- Security notifications (NTF-007) ---------------------------------------
@@ -2838,6 +2915,9 @@ function flushSecurityNotices(): void {
 /** Closes the database, stops the scheduler, and drops the data key (and the blob keys derived from it) from memory. Shared by the `auth:lock` handler and the smoke run's own lock/unlock exercise. */
 function performLock(): void {
   stopNotificationScheduler();
+  // A backup run needs the data key and the open database; both die here. A
+  // run already in flight bails on its own `stillThisSession` check.
+  stopBackupScheduler();
   // A pending idle-compaction timer (scheduled from `notesAppendUpdate`) would
   // otherwise fire against a database this lock is about to close — throwing
   // where nothing can observe it, and holding open exactly the kind of
@@ -3213,6 +3293,80 @@ function restoreDeps(): ImportDeps {
     deleteBlobIfOrphaned: (sha256, refCount) =>
       deleteBlobIfOrphaned(blobStorePathsFor(), requireBlobKeys(), sha256, refCount),
   };
+}
+
+/**
+ * The archive writer's whole surface (`ImexArchiveDeps`) as ONE literal, handed
+ * verbatim to both flows that write an archive — the `imex:export` handler
+ * (plus its window) and the scheduled backup (ADR-056) — so the two can never
+ * gather different profiles. Built fresh per call, like `restoreDeps` and for
+ * its reason: every getter resolves `requireDb()`/`requireBlobKeys()` at use
+ * time, so a deps object can never outlive the session that made it.
+ */
+function imexArchiveDeps(): ImexArchiveDeps {
+  return {
+    taskStore,
+    taskListStore,
+    taskTagStore,
+    taskAttachmentStore,
+    taskTemplateStore,
+    taskDependencyStore,
+    eventStore,
+    eventTemplateStore,
+    peopleStore,
+    documentStore,
+    subjectStore,
+    subjectAttachmentStore,
+    subjectNoteLinkStore,
+    examStore,
+    deckStore,
+    cardStore,
+    planStore,
+    studySettingsStore,
+    focusStore,
+    notificationStore,
+    noteStore,
+    noteOrgStore,
+    noteTemplateStore,
+    noteAttachmentStore,
+    dashboardSettingsStore,
+    dashboardWidgetStore,
+    flagStore,
+    readBlob: (sha256) => readBlob(blobStorePathsFor(), requireBlobKeys(), sha256),
+  };
+}
+
+// --- Scheduled backups (SET-011 / ADR-056) -----------------------------------
+
+/**
+ * Everything `main/backup.ts` runs on. The session is captured HERE, at deps
+ * creation, and `stillThisSession` is the `db === session` identity guard the
+ * note-healing sweep and the legacy-blob drain already use: `performLock` sets
+ * `db = null` and a later unlock installs a NEW instance, so a run started
+ * under this session stops writing both when the app locks and when a newer
+ * session has superseded it.
+ */
+function backupRunnerDeps(): BackupRunnerDeps {
+  const session = requireDb();
+  return {
+    listProfileIds: () => listProfiles(requireDb()).map((profile) => profile.id),
+    backupSettings: backupSettingsStore,
+    archiveProfile: (profileId) => archiveProfileOf(requireProfile(requireDb(), profileId)),
+    unwrapPassphrase: (wrapped) => unwrapBackupPassphrase(requireUnlockedDataKeyHex(), wrapped),
+    // The exact function the manual export writes with (`imex.ts`), over the
+    // exact deps literal it gathers with — a scheduled archive IS a manual one.
+    writeArchive: async (profile, passphrase, filePath) => {
+      await writeProfileArchive(imexArchiveDeps(), profile, passphrase, filePath);
+    },
+    stillThisSession: () => db === session,
+    now: () => new Date(),
+  };
+}
+
+/** The renderer's view of one profile's backup settings: the store row with the wrap STRIPPED to a boolean — the passphrase surface is write-only (ADR-056). */
+function backupSettingsView(profileId: string): BackupSettingsView {
+  const { passphraseWrapped, ...rest } = backupSettingsStore(profileId).get();
+  return { ...rest, passphraseSet: passphraseWrapped !== null };
 }
 
 // --- Dashboard background (SET-006 / ADR-041) --------------------------------
@@ -5596,37 +5750,7 @@ function registerIpc(): void {
     const modules = asArchiveModules(body.modules, "modules");
     const profile = requireProfile(requireDb(), profileId);
     return handleExport(
-      {
-        taskStore,
-        taskListStore,
-        taskTagStore,
-        taskAttachmentStore,
-        taskTemplateStore,
-        taskDependencyStore,
-        eventStore,
-        eventTemplateStore,
-        peopleStore,
-        documentStore,
-        subjectStore,
-        subjectAttachmentStore,
-        subjectNoteLinkStore,
-        examStore,
-        deckStore,
-        cardStore,
-        planStore,
-        studySettingsStore,
-        focusStore,
-        notificationStore,
-        noteStore,
-        noteOrgStore,
-        noteTemplateStore,
-        noteAttachmentStore,
-        dashboardSettingsStore,
-        dashboardWidgetStore,
-        readBlob: (sha256) => readBlob(blobStorePathsFor(), requireBlobKeys(), sha256),
-        flagStore,
-        getMainWindow: () => mainWindow,
-      },
+      { ...imexArchiveDeps(), getMainWindow: () => mainWindow },
       archiveProfileOf(profile),
       passphrase,
       modules,
@@ -5834,6 +5958,83 @@ function registerIpc(): void {
       folderId,
       source,
     );
+  });
+
+  // Scheduled backups (SET-011 / ADR-056). Five thin validation shims over
+  // `main/backup.ts` and `BackupSettingsStore`; every answer is the same
+  // `backupSettingsView`, which strips the passphrase wrap to a boolean — the
+  // renderer NEVER sees the passphrase back, in any form.
+  ipcMain.handle(IpcChannel.backupGetSettings, (event, payload): BackupSettingsView => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    requireProfile(requireDb(), profileId);
+    return backupSettingsView(profileId);
+  });
+
+  ipcMain.handle(IpcChannel.backupSetSettings, (event, payload): BackupSettingsView => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const enabled = asBoolean(body.enabled, "enabled");
+    const cadence = asBackupCadence(body.cadence, "cadence");
+    const keepLast = asBackupKeepLast(body.keepLast, "keepLast");
+    requireProfile(requireDb(), profileId);
+    // The store re-validates the semantics (SEC-EL-02), including the one rule
+    // the structural checks above cannot see: enabling requires a folder and a
+    // wrapped passphrase to already exist.
+    backupSettingsStore(profileId).setSchedule(
+      { enabled, cadence, keepLast },
+      new Date().toISOString(),
+    );
+    return backupSettingsView(profileId);
+  });
+
+  // The native directory picker, in main — the sole source of a folder path on
+  // this surface (SEC-EL; the markdown import's folder pick is the precedent).
+  ipcMain.handle(
+    IpcChannel.backupPickFolder,
+    async (event, payload): Promise<BackupSettingsView> => {
+      assertTrustedSender(event);
+      const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+      requireProfile(requireDb(), profileId);
+      const options: OpenDialogOptions = { properties: ["openDirectory"] };
+      const { canceled, filePaths } = mainWindow
+        ? await dialog.showOpenDialog(mainWindow, options)
+        : await dialog.showOpenDialog(options);
+      const folder = canceled ? null : (filePaths[0] ?? null);
+      if (folder !== null) {
+        backupSettingsStore(profileId).setFolderPath(folder, new Date().toISOString());
+      }
+      return backupSettingsView(profileId);
+    },
+  );
+
+  // Write-only: the passphrase arrives, is wrapped under the session's data
+  // key (`@nexus/core/auth`, ADR-056), and only the wrap is stored. Changing
+  // it re-wraps for FUTURE runs — archives already on disk keep opening under
+  // whatever sealed them, which the card's copy says out loud.
+  ipcMain.handle(
+    IpcChannel.backupSetPassphrase,
+    async (event, payload): Promise<BackupSettingsView> => {
+      assertTrustedSender(event);
+      const body = asRecord(payload);
+      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const passphrase = asBackupPassphrase(body.passphrase, "passphrase");
+      requireProfile(requireDb(), profileId);
+      const wrapped = await wrapBackupPassphrase(requireUnlockedDataKeyHex(), passphrase);
+      backupSettingsStore(profileId).setPassphraseWrapped(wrapped, new Date().toISOString());
+      return backupSettingsView(profileId);
+    },
+  );
+
+  // The manual trigger, through the scheduled path's own in-flight guard; the
+  // view it answers carries the run's recorded outcome, which is the report.
+  ipcMain.handle(IpcChannel.backupRunNow, async (event, payload): Promise<BackupSettingsView> => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    requireProfile(requireDb(), profileId);
+    await runBackupNow(backupRunnerDeps(), profileId);
+    return backupSettingsView(profileId);
   });
 
   // ADR-040 / TASK-002. The renderer owns the chord (it lives in this device's

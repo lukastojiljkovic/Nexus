@@ -51,3 +51,5 @@ export {
   encryptBlob,
 } from "./blobCrypto.js";
 export type { BlobKeys } from "./blobCrypto.js";
+
+export { unwrapBackupPassphrase, wrapBackupPassphrase } from "./backupPassphrase.js";

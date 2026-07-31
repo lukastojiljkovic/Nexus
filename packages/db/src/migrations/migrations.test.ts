@@ -16,11 +16,13 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 41 (the default snooze), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(41);
-    expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
-      Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
-    );
+  // SUPERVISOR NOTE: pre-assigned 044; siblings hold 042/043; supervisor
+  // restores the gap-free pin at merge.
+  it("is at version 44 (scheduled backups), ascending and duplicate-free", () => {
+    expect(LATEST_VERSION).toBe(44);
+    const versions = MIGRATIONS.map((migration) => migration.version);
+    expect(versions).toEqual([...versions].sort((a, b) => a - b));
+    expect(new Set(versions).size).toBe(versions.length);
   });
 });
 
@@ -4622,6 +4624,118 @@ describe("migration 041 — the default snooze preset", () => {
         )
         .get("p1"),
     ).toEqual({ quiet_from: "22:00", morning_hour: "09:00", snooze_default: "10m" });
+    db.close();
+  });
+});
+
+describe("migration 044 — backup settings", () => {
+  const now = () => new Date().toISOString();
+
+  /** Writes a `backup_settings` row raw, defaulting to a fully-configured, disabled one; `overrides` names what a test bends. */
+  const insertSettings = (
+    db: NexusDatabase,
+    profileId: string,
+    overrides: Partial<{
+      enabled: number;
+      cadence: string;
+      folderPath: string | null;
+      passphraseWrapped: string | null;
+      keepLast: number;
+      lastStatus: string | null;
+      lastError: string | null;
+    }> = {},
+  ) => {
+    const row = {
+      enabled: 0,
+      cadence: "daily",
+      folderPath: "C:\\Backups" as string | null,
+      passphraseWrapped: '{"v":1}' as string | null,
+      keepLast: 5,
+      lastStatus: null as string | null,
+      lastError: null as string | null,
+      ...overrides,
+    };
+    db.raw
+      .prepare(
+        `INSERT INTO backup_settings
+           (profile_id, enabled, cadence, folder_path, passphrase_wrapped, keep_last,
+            last_run_at, last_status, last_error, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
+      )
+      .run(
+        profileId,
+        row.enabled,
+        row.cadence,
+        row.folderPath,
+        row.passphraseWrapped,
+        row.keepLast,
+        row.lastStatus,
+        row.lastError,
+        now(),
+        now(),
+      );
+  };
+
+  it("creates the backup_settings table and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    expect(tableNames(db)).toContain("backup_settings");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("accepts both cadences and refuses anything else with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-cadence.db") });
+    insertProfile(db, "p1");
+    insertProfile(db, "p2");
+    insertProfile(db, "bad");
+    expect(() => insertSettings(db, "p1", { cadence: "daily" })).not.toThrow();
+    expect(() => insertSettings(db, "p2", { cadence: "weekly" })).not.toThrow();
+    expect(() => insertSettings(db, "bad", { cadence: "hourly" })).toThrow();
+    db.close();
+  });
+
+  it("holds keep_last inside 2..50 with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-keep.db") });
+    insertProfile(db, "p1");
+    insertProfile(db, "p2");
+    insertProfile(db, "bad");
+    expect(() => insertSettings(db, "p1", { keepLast: 2 })).not.toThrow();
+    expect(() => insertSettings(db, "p2", { keepLast: 50 })).not.toThrow();
+    expect(() => insertSettings(db, "bad", { keepLast: 1 })).toThrow();
+    expect(() => insertSettings(db, "bad", { keepLast: 51 })).toThrow();
+    db.close();
+  });
+
+  it("refuses an enabled schedule without a folder or without a wrapped passphrase", () => {
+    const db = openDatabase({ path: join(dir, "check-enabled.db") });
+    insertProfile(db, "p1");
+    insertProfile(db, "bad");
+    expect(() => insertSettings(db, "p1", { enabled: 1 })).not.toThrow();
+    expect(() => insertSettings(db, "bad", { enabled: 1, folderPath: null })).toThrow();
+    expect(() => insertSettings(db, "bad", { enabled: 1, passphraseWrapped: null })).toThrow();
+    db.close();
+  });
+
+  it("allows last_error only beside a failed status", () => {
+    const db = openDatabase({ path: join(dir, "check-error.db") });
+    insertProfile(db, "p1");
+    insertProfile(db, "p2");
+    insertProfile(db, "bad");
+    expect(() =>
+      insertSettings(db, "p1", { lastStatus: "failed", lastError: "folder-unreachable" }),
+    ).not.toThrow();
+    expect(() => insertSettings(db, "p2", { lastStatus: "ok" })).not.toThrow();
+    expect(() => insertSettings(db, "bad", { lastStatus: "ok", lastError: "x" })).toThrow();
+    expect(() => insertSettings(db, "bad", { lastStatus: "done" })).toThrow();
+    db.close();
+  });
+
+  it("cascades settings deletion when the owning profile is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade.db") });
+    insertProfile(db, "p1");
+    insertSettings(db, "p1");
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    expect(db.raw.prepare("SELECT count(*) AS n FROM backup_settings").get()).toEqual({ n: 0 });
     db.close();
   });
 });
