@@ -18,14 +18,9 @@ import {
   BACKUP_CADENCES,
   BACKUP_KEEP_LAST_CHOICES,
   CSV_IMPORT_COLUMN_ROLES,
-  DEFAULT_TARGET_RETENTION,
   LLM_IMPORT_KINDS,
   LLM_IMPORT_MAX_ANSWER_LENGTH,
   LLM_PROMPT_LANGUAGES,
-  MAX_BACKGROUND_DIM,
-  MAX_NEW_PER_DAY,
-  MAX_REVIEWS_PER_DAY,
-  TARGET_RETENTION_PRESETS,
 } from "../../shared/ipc.js";
 import type {
   ApkgImportPreview,
@@ -33,13 +28,11 @@ import type {
   ApkgImportSubjectChoice,
   AppInfo,
   BackupSettingsView,
-  CalendarSettings,
   CsvImportColumnRole,
   CsvImportDelimiter,
   CsvImportListChoice,
   CsvImportPlanPreview,
   CsvImportPreview,
-  DashboardSettings,
   FlagState,
   IcsImportPreview,
   IcsImportSkip,
@@ -60,13 +53,11 @@ import type {
   NoteFolder,
   NotificationSource,
   PrivateNotesExportSkip,
-  PrivStatus,
   Profile,
   ProfileKind,
   RestoreModuleCounts,
   RestorePreview,
   RestoreProblem,
-  StudySettings,
   Subject,
   TaskList,
 } from "../../shared/ipc.js";
@@ -107,28 +98,16 @@ import {
 } from "./calendarPrefs.js";
 import { SettingsResetDialog } from "./SettingsResetDialog.js";
 import {
-  buildSettingsSearchEntries,
+  buildSettingsIndex,
   foldSettingsQuery,
+  labelClass,
   matchSettings,
   moduleEntryId,
+  sectionClass,
   shortcutEntryId,
 } from "./settingsSearch.js";
-import {
-  clearStoredNotePreferences,
-  NOTE_WIDTHS,
-  persistNoteMarkdownShortcuts,
-  persistNoteWidth,
-  readStoredNoteMarkdownShortcuts,
-  readStoredNoteWidth,
-  type NoteWidth,
-} from "./notePrefs.js";
-import {
-  BLOCKED_IN_TODAY_OPTIONS,
-  clearStoredTaskPreferences,
-  persistBlockedInToday,
-  readStoredBlockedInToday,
-  type BlockedInToday,
-} from "./taskPrefs.js";
+import { isDeviceOnlyPanel, moduleSettingsCards } from "./moduleSettings.js";
+import { MODULE_SETTINGS_PANELS } from "./moduleSettingsPanels.js";
 import {
   persistLlmImportKind,
   persistLlmPromptLanguage,
@@ -153,35 +132,19 @@ function themeOptionLabel(option: ThemePreference): string {
 const WEEK_START_OPTIONS: WeekStartPreference[] = ["monday", "sunday"];
 
 /**
- * SET-014 hit styling: a matched control label goes gold + semibold, exactly
- * like every other active state in the app. Never a background wash or a glow.
- */
-function labelClass(base: string, hit: boolean): string {
-  return hit ? `${base} set__hit` : base;
-}
-
-/**
- * SET-014 section visibility: a filtered-out card hides with CSS instead of
- * unmounting, so in-progress state — a restore preview holding its archive
- * open, a half-typed passcode, unsaved quiet-hours edits — survives a
- * keystroke in the filter box.
- */
-function sectionClass(visible: boolean): string {
-  return visible ? "set__section" : "set__section set__section--hidden";
-}
-
-/**
- * The cards whose whole state is DEVICE preferences, and so the only ones that
- * offer „Vrati na podrazumevano“ (SET §5).
+ * The card currently being reset (SET §5): its section id and its own title,
+ * which is the only thing the confirmation dialog needs to name it.
  *
- * „Učenje“, „Kontrolna tabla“ and „Obaveštenja“ are deliberately absent: their
- * settings live in the profile's database, so resetting one would be a write
- * about the user's DATA rather than about this machine — a different act with
- * a different blast radius (a dashboard layout somebody arranged, a background
- * image, quiet hours) and a different place to belong. It waits for the slice
- * that decides what „podrazumevano“ means for a profile.
+ * „Izgled“ is the shell's own resettable card; every other one is a MODULE's,
+ * and which of those offer a reset is decided by their declaration rather than
+ * by a list here — a panel whose values all live on this device offers it, and
+ * one holding profile rows never does, because resetting those would be a write
+ * about the user's DATA rather than about this machine (`isDeviceOnlyPanel`).
  */
-type ResettableSection = "appearance" | "tasks" | "notes";
+interface ResetTarget {
+  id: string;
+  title: string;
+}
 
 /**
  * The quiet link at the foot of a resettable card. Typographic and muted,
@@ -4063,465 +4026,6 @@ function MarkdownImportSection({ profileId, hits }: MarkdownImportSectionProps) 
   );
 }
 
-interface DashboardSectionProps {
-  profileId: string;
-  /** SET-014 hit ids — the dim label highlights under `"dashboard-dim"`; the picker entries steer section visibility only. */
-  hits: ReadonlySet<string>;
-}
-
-/**
- * Kontrolna tabla section (SET-006 / ADR-041): the dashboard's own background
- * image and the dim that holds it behind the widgets.
- *
- * The renderer validates nothing about the file and never sees one — every
- * button here is a request to main, which owns the picker, the size gate, the
- * MIME sniff and the blob store (SEC-EL). A refused pick comes back as a NAMED
- * reason and is shown as such; nothing is silently converted to fit.
- *
- * The slider is hidden while no background is set, because a dim with nothing
- * to dim is a control that does nothing. It commits on every change rather than
- * behind a save button: the value is one small integer, the effect is visual,
- * and a "Sačuvaj" between the two would only put a step between the user and
- * what they are looking at.
- */
-function DashboardSection({ profileId, hits }: DashboardSectionProps) {
-  const s = strings.settings.dashboard;
-  const [settings, setSettings] = useState<DashboardSettings | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    void (async () => {
-      try {
-        const next = await window.nexus.dashboardSettings(profileId);
-        if (active) setSettings(next);
-      } catch (loadError) {
-        if (active) setError(strings.settings.dashboard.error);
-        console.error("Nexus: failed to load dashboard settings:", loadError);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [profileId]);
-
-  async function pick(): Promise<void> {
-    setBusy(true);
-    setError(null);
-    try {
-      const result = await window.nexus.pickDashboardBackground(profileId);
-      if (result.status === "ok") setSettings(result.settings);
-      else if (result.status === "rejected") setError(s.rejected[result.code]);
-    } catch (pickError) {
-      setError(s.error);
-      console.error("Nexus: failed to pick a dashboard background:", pickError);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function clear(): Promise<void> {
-    setBusy(true);
-    setError(null);
-    try {
-      setSettings(await window.nexus.clearDashboardBackground(profileId));
-    } catch (clearError) {
-      setError(s.error);
-      console.error("Nexus: failed to clear the dashboard background:", clearError);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // Optimistic on purpose: the slider must track the pointer, so the local
-  // value moves first and main confirms after. A drag fires one write per step,
-  // and their replies can land out of order — `latestDim` is what stops a slow
-  // earlier reply from snapping the slider back over a newer position. Only the
-  // reply to the CURRENT value is ever adopted; the rest are dropped, which
-  // costs nothing since each carries the same row.
-  const latestDim = useRef<number | null>(null);
-
-  async function changeDim(dim: number): Promise<void> {
-    latestDim.current = dim;
-    setSettings((current) => (current === null ? current : { ...current, backgroundDim: dim }));
-    setError(null);
-    try {
-      const next = await window.nexus.setDashboardDim(profileId, dim);
-      if (latestDim.current === dim) setSettings(next);
-    } catch (dimError) {
-      setError(s.error);
-      console.error("Nexus: failed to set the dashboard dim:", dimError);
-    }
-  }
-
-  if (settings === null) {
-    return error != null ? <p className="set__error">{error}</p> : <p className="app__muted">{strings.app.loading}</p>;
-  }
-
-  const backgroundHash = settings.backgroundHash;
-
-  return (
-    <>
-      <p className="set__section-caption">{s.caption}</p>
-
-      <div className="set__dash-row">
-        {backgroundHash !== null && (
-          <img className="set__dash-thumb" src={`nx-blob://${backgroundHash}`} alt={s.thumbnailAlt} />
-        )}
-        <div className="set__dash-actions">
-          <Button size="sm" variant="primary" disabled={busy} onClick={() => void pick()}>
-            {s.pick}
-          </Button>
-          {backgroundHash !== null && (
-            <Button size="sm" variant="ghost" disabled={busy} onClick={() => void clear()}>
-              {s.clear}
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {backgroundHash !== null && (
-        <div className="set__dash-dim">
-          <label
-            className={labelClass("set__dash-dim-label", hits.has("dashboard-dim"))}
-            htmlFor="set-dash-dim"
-          >
-            {s.dimLabel}
-            <span className="set__dash-dim-value">{settings.backgroundDim}%</span>
-          </label>
-          <input
-            id="set-dash-dim"
-            className="set__dash-slider"
-            type="range"
-            min={0}
-            max={MAX_BACKGROUND_DIM}
-            step={5}
-            value={settings.backgroundDim}
-            onChange={(event) => void changeDim(Number(event.target.value))}
-          />
-          <p className="set__section-caption">{s.dimHint}</p>
-        </div>
-      )}
-
-      {error != null && <p className="set__error">{error}</p>}
-    </>
-  );
-}
-
-interface StudySectionProps {
-  profileId: string;
-  /** SET-014 hit ids — one per control: `study-retention`, `study-new-per-day`, `study-review-cap`. */
-  hits: ReadonlySet<string>;
-}
-
-/**
- * Učenje section (STUDY-007): the FSRS target retention and the two daily caps.
- *
- * „Ciljana zapamćenost" is a closed segmented row over `TARGET_RETENTION_PRESETS`,
- * not a numeric field — the value is a probability the scheduler aims for, and
- * nobody has an intuition about 0.9137. It follows the theme/week-start recipe
- * exactly, which is this app's spelling of a small closed select.
- *
- * The two caps are ordinary number inputs held as TEXT while being typed, and
- * committed only once the draft parses inside its own range — otherwise
- * backspacing "20" to "" would fire a write for a number the user is in the
- * middle of replacing. Blur snaps a half-typed draft back to what is stored, so
- * the field can never show something the profile does not have. The empty cap
- * field is a real value (`null`, "no limit"), so it commits on the spot.
- *
- * Every write is the WHOLE triple (one channel, one form), commits immediately
- * like the dashboard's dim, and carries a `latest`-wins guard for the same
- * reason: replies to a fast sequence of edits can land out of order.
- */
-function StudySection({ profileId, hits }: StudySectionProps) {
-  const s = strings.settings.study;
-  const [settings, setSettings] = useState<StudySettings | null>(null);
-  const [newPerDayDraft, setNewPerDayDraft] = useState("");
-  const [reviewCapDraft, setReviewCapDraft] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const latest = useRef<StudySettings | null>(null);
-
-  function adopt(next: StudySettings): void {
-    setSettings(next);
-    setNewPerDayDraft(String(next.newPerDay));
-    setReviewCapDraft(next.maxReviewsPerDay === null ? "" : String(next.maxReviewsPerDay));
-  }
-
-  useEffect(() => {
-    let active = true;
-    void (async () => {
-      try {
-        const next = await window.nexus.studySettings(profileId);
-        if (active) adopt(next);
-      } catch (loadError) {
-        if (active) setError(strings.settings.study.error);
-        console.error("Nexus: failed to load study settings:", loadError);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [profileId]);
-
-  async function save(next: StudySettings): Promise<void> {
-    latest.current = next;
-    setSettings(next);
-    setError(null);
-    try {
-      const stored = await window.nexus.setStudySettings(profileId, next);
-      if (latest.current === next) adopt(stored);
-    } catch (saveError) {
-      setError(s.error);
-      console.error("Nexus: failed to save study settings:", saveError);
-    }
-  }
-
-  if (settings === null) {
-    return error != null ? (
-      <p className="set__error">{error}</p>
-    ) : (
-      <p className="app__muted">{strings.app.loading}</p>
-    );
-  }
-
-  const current = settings;
-
-  const changeNewPerDay = (text: string): void => {
-    setNewPerDayDraft(text);
-    // The empty check leads: `Number("")` is 0, which is a legal value here, so
-    // an unfinished edit would otherwise commit "no new cards today".
-    const parsed = Number(text);
-    if (text.trim() === "" || !Number.isInteger(parsed) || parsed < 0 || parsed > MAX_NEW_PER_DAY) {
-      return;
-    }
-    void save({ ...current, newPerDay: parsed });
-  };
-
-  const changeReviewCap = (text: string): void => {
-    setReviewCapDraft(text);
-    // Here an empty field is the VALUE "no limit", not an unfinished edit — so
-    // it commits, unlike an empty „Novih kartica dnevno".
-    if (text.trim() === "") {
-      void save({ ...current, maxReviewsPerDay: null });
-      return;
-    }
-    const parsed = Number(text);
-    if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_REVIEWS_PER_DAY) return;
-    void save({ ...current, maxReviewsPerDay: parsed });
-  };
-
-  return (
-    <>
-      <p className="set__section-caption">{s.caption}</p>
-
-      <p className={labelClass("set__section-caption", hits.has("study-retention"))}>
-        {s.retentionLabel}
-      </p>
-      <div className="set__segmented" role="group" aria-label={s.retentionLabel}>
-        {TARGET_RETENTION_PRESETS.map((preset) => (
-          <Button
-            key={preset}
-            size="sm"
-            variant={current.targetRetention === preset ? "primary" : "ghost"}
-            aria-pressed={current.targetRetention === preset}
-            onClick={() => void save({ ...current, targetRetention: preset })}
-          >
-            {retentionLabel(preset)}
-          </Button>
-        ))}
-      </div>
-      <p className="set__section-caption">{s.retentionHint}</p>
-
-      <div className="set__study-fields">
-        <label className="set__study-field">
-          <span className={labelClass("set__study-label", hits.has("study-new-per-day"))}>
-            {s.newPerDayLabel}
-          </span>
-          <input
-            type="number"
-            inputMode="numeric"
-            className="nx-textfield__input set__study-number"
-            min={0}
-            max={MAX_NEW_PER_DAY}
-            value={newPerDayDraft}
-            onChange={(event) => changeNewPerDay(event.target.value)}
-            onBlur={() => setNewPerDayDraft(String(current.newPerDay))}
-          />
-          <span className="set__section-caption">{s.newPerDayHint}</span>
-        </label>
-
-        <label className="set__study-field">
-          <span className={labelClass("set__study-label", hits.has("study-review-cap"))}>
-            {s.reviewCapLabel}
-          </span>
-          <input
-            type="number"
-            inputMode="numeric"
-            className="nx-textfield__input set__study-number"
-            min={1}
-            max={MAX_REVIEWS_PER_DAY}
-            placeholder={s.reviewCapPlaceholder}
-            value={reviewCapDraft}
-            onChange={(event) => changeReviewCap(event.target.value)}
-            onBlur={() =>
-              setReviewCapDraft(
-                current.maxReviewsPerDay === null ? "" : String(current.maxReviewsPerDay),
-              )
-            }
-          />
-          <span className="set__section-caption">{s.reviewCapHint}</span>
-        </label>
-      </div>
-
-      <p className="set__section-caption">{s.retroNotice}</p>
-      {error != null && <p className="set__error">{error}</p>}
-    </>
-  );
-}
-
-/** A retention preset as a whole percent, with the scheduler's own default named as such. */
-function retentionLabel(preset: number): string {
-  const percent = `${Math.round(preset * 100)}%`;
-  return preset === DEFAULT_TARGET_RETENTION
-    ? `${percent} · ${strings.settings.study.retentionDefault}`
-    : percent;
-}
-
-interface CalendarSectionProps {
-  profileId: string;
-  /** SET-014 hit ids — this card owns one: `calendar-semester-dates`. */
-  hits: ReadonlySet<string>;
-}
-
-/**
- * Kalendar section (CAL-010 / ADR-054): the semester's fixed dates the
- * Semestar view anchors to. A PROFILE fact stored through main, unlike the
- * week start and clock that stay in „Izgled" as device preferences — which is
- * why this is its own card rather than two more rows there.
- *
- * Save-on-SUBMIT, unlike the study card's commit-per-change, and deliberately:
- * the pair rule means a lone date is not a value anyone can store, so
- * committing per keystroke would either refuse loudly mid-edit or write a term
- * the user has not finished stating. „Ukloni datume" is the one-click clear —
- * a both-null save over the same channel.
- */
-function CalendarSection({ profileId, hits }: CalendarSectionProps) {
-  const s = strings.settings.calendar;
-  const [settings, setSettings] = useState<CalendarSettings | null>(null);
-  const [startDraft, setStartDraft] = useState("");
-  const [endDraft, setEndDraft] = useState("");
-  const [message, setMessage] = useState<{ text: string; failed: boolean } | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  function adopt(next: CalendarSettings): void {
-    setSettings(next);
-    setStartDraft(next.semesterStart ?? "");
-    setEndDraft(next.semesterEnd ?? "");
-  }
-
-  useEffect(() => {
-    let active = true;
-    void (async () => {
-      try {
-        const next = await window.nexus.calendarSettings(profileId);
-        if (active) adopt(next);
-      } catch (loadError) {
-        // Module-level strings, not the component's own `s` alias — the same
-        // spelling `StudySection`'s effect uses, so the dependency list stays
-        // exactly `[profileId]`.
-        if (active) setMessage({ text: strings.settings.calendar.error, failed: true });
-        console.error("Nexus: failed to load calendar settings:", loadError);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [profileId]);
-
-  async function write(next: CalendarSettings, confirmation: string): Promise<void> {
-    setBusy(true);
-    setMessage(null);
-    try {
-      adopt(await window.nexus.setCalendarSettings(profileId, next));
-      setMessage({ text: confirmation, failed: false });
-    } catch (saveError) {
-      setMessage({ text: s.error, failed: true });
-      console.error("Nexus: failed to save calendar settings:", saveError);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
-    if (busy) return;
-    // The date inputs yield "" or a real day, so emptiness is the only
-    // half-pair this form can produce; the order rule is the other thing worth
-    // saying HERE, before main and the store refuse it less kindly.
-    if (startDraft === "" || endDraft === "") {
-      setMessage({ text: s.invalidPair, failed: true });
-      return;
-    }
-    if (startDraft > endDraft) {
-      setMessage({ text: s.invalidOrder, failed: true });
-      return;
-    }
-    await write({ semesterStart: startDraft, semesterEnd: endDraft }, s.saved);
-  }
-
-  if (settings === null) {
-    return message !== null ? (
-      <p className="set__error">{message.text}</p>
-    ) : (
-      <p className="app__muted">{strings.app.loading}</p>
-    );
-  }
-
-  const termStored = settings.semesterStart !== null && settings.semesterEnd !== null;
-
-  return (
-    <>
-      <p className="set__section-caption">{s.caption}</p>
-      <p className={labelClass("set__section-caption", hits.has("calendar-semester-dates"))}>
-        {s.datesLabel}
-      </p>
-      <form className="set__calendar-form" onSubmit={(event) => void submit(event)}>
-        <TextField
-          type="date"
-          label={s.startLabel}
-          value={startDraft}
-          onChange={(event) => setStartDraft(event.target.value)}
-        />
-        <TextField
-          type="date"
-          label={s.endLabel}
-          value={endDraft}
-          onChange={(event) => setEndDraft(event.target.value)}
-        />
-        <div className="set__calendar-actions">
-          <Button type="submit" size="sm" variant="primary" disabled={busy}>
-            {s.save}
-          </Button>
-          {termStored && (
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={busy}
-              onClick={() => void write({ semesterStart: null, semesterEnd: null }, s.cleared)}
-            >
-              {s.clear}
-            </Button>
-          )}
-        </div>
-      </form>
-      {message !== null && (
-        <p className={message.failed ? "set__error" : "set__section-caption"}>{message.text}</p>
-      )}
-    </>
-  );
-}
-
 /** A settings-form result line: green-ish caption on success, `.set__error` on failure — same idiom as `ProfileSection`/`BackupSection`, just shared across the two Sigurnost sub-forms. */
 interface SecurityMessage {
   text: string;
@@ -4678,108 +4182,6 @@ function SecuritySection({ autoLockMinutes, onAutoLockChange, hits }: SecuritySe
           ))}
         </select>
       </div>
-    </>
-  );
-}
-
-interface PrivSettingsSectionProps {
-  profileId: string;
-  /** SET-014 hit ids — the two control labels highlight under their entry ids. */
-  hits: ReadonlySet<string>;
-}
-
-/**
- * Privatne beleške card (PRIV v1 / ADR-057): the two lock preferences and the
- * Recovery Kit status line. `priv:status` and `priv:set-lock-prefs` answer
- * FACTS, never contents, so this card is safe while the section is locked —
- * which is exactly when its auto-lock knob matters most. Before setup there is
- * nothing to configure and the card says so instead of drawing dead controls.
- */
-function PrivSettingsSection({ profileId, hits }: PrivSettingsSectionProps) {
-  const s = strings.settings.priv;
-  const [status, setStatus] = useState<PrivStatus | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    void (async () => {
-      try {
-        const next = await window.nexus.privStatus(profileId);
-        if (active) setStatus(next);
-      } catch (loadError) {
-        if (active) setError(s.loadError);
-        console.error("Nexus: failed to read the private section's status:", loadError);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [profileId, s.loadError]);
-
-  async function savePrefs(autoLockMinutes: number, lockOnMinimize: boolean): Promise<void> {
-    setError(null);
-    try {
-      setStatus(await window.nexus.privSetLockPrefs(profileId, autoLockMinutes, lockOnMinimize));
-    } catch (saveError) {
-      setError(s.saveError);
-      console.error("Nexus: failed to save private lock preferences:", saveError);
-    }
-  }
-
-  if (status === null) {
-    return error != null ? (
-      <p className="set__error">{error}</p>
-    ) : (
-      <p className="app__muted">{strings.app.loading}</p>
-    );
-  }
-  if (!status.setUp) {
-    return (
-      <>
-        <p className="set__section-caption">{s.caption}</p>
-        <p className="set__section-caption">{s.notSetUp}</p>
-      </>
-    );
-  }
-
-  return (
-    <>
-      <p className={labelClass("set__section-caption", hits.has("priv-kit-status"))}>{s.caption}</p>
-      <div className="set__security-block">
-        <h3 className={labelClass("set__module-group-title", hits.has("priv-auto-lock"))}>
-          {s.autoLockLabel}
-        </h3>
-        <p className="set__section-caption">{s.autoLockHint}</p>
-        <select
-          className="set__select"
-          value={status.autoLockMinutes}
-          aria-label={s.autoLockLabel}
-          onChange={(event) => void savePrefs(Number(event.target.value), status.lockOnMinimize)}
-        >
-          {/* The store's whole 1..60 range (migration 045's CHECK) — the select IS the domain, not a curated subset of it. */}
-          {Array.from({ length: 60 }, (_, index) => index + 1).map((minutes) => (
-            <option key={minutes} value={minutes}>
-              {`${s.autoLockOptionPrefix} ${minutes} ${s.minuteUnit}`}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="set__module-row">
-        <div className="set__module-info">
-          <span className={labelClass("set__module-name", hits.has("priv-lock-minimize"))}>
-            {s.lockOnMinimizeLabel}
-          </span>
-        </div>
-        <Checkbox
-          checked={status.lockOnMinimize}
-          aria-label={s.lockOnMinimizeLabel}
-          onChange={(event) => void savePrefs(status.autoLockMinutes, event.target.checked)}
-        />
-      </div>
-      <p className="set__section-caption">
-        {status.hasRecoveryKit ? s.kitStatusSet : s.kitStatusMissing}
-      </p>
-      {error != null && <p className="set__error">{error}</p>}
     </>
   );
 }
@@ -4986,14 +4388,20 @@ export interface SettingsPageProps {
 }
 
 /**
- * SET (lite): profile rename, theme preference (Sistemski/Dan/Noć), the accent
- * palette, the first day of the week (PRD 04 §5), the module gallery
- * (per-category enable/disable, SET-007), NTF-008's appetite presets over the
- * shared quiet-hours/source controls, and a read-only "O aplikaciji" info
- * panel. Every write goes through IPC methods that already exist
- * (`renameProfile`, `setFlag`, `setNotificationSourceEnabled`, …) or through
- * the localStorage helpers the shell already uses for the theme and accent —
- * this page is renderer-only wiring, no DB/IPC/main changes.
+ * SET: the SHELL's own settings — profile rename, theme preference
+ * (Sistemski/Dan/Noć), the accent palette, the first day of the week (PRD 04
+ * §5), the account's passcode and Recovery Kit, keyboard shortcuts, the module
+ * gallery (per-category enable/disable, SET-007), NTF-008's appetite presets
+ * over the shared quiet-hours/source controls, backup/restore/import, and a
+ * read-only "O aplikaciji" info panel.
+ *
+ * Every card a MODULE owns is NOT here: it is declared in that module's
+ * manifest (`SettingsPanel`) and drawn by its own component
+ * (`moduleSettingsPanels.tsx`), and this page composes whatever the registry
+ * publishes, in registry order, skipping a module the profile switched off.
+ * Adding a module's settings therefore does not touch this file — which is the
+ * whole point of the split, and the reason the two kinds of settings are named
+ * apart rather than merged (see `SettingsPanel`'s own comment).
  *
  * SET-014 layers a filter on top: the field below the title narrows the page to
  * the sections that answer the query (`settingsSearch.ts` owns what is
@@ -5032,26 +4440,23 @@ export function SettingsPage({
     profiles.find((profile) => profile.id === profileId)?.kind ?? "personal";
   const [accent, setAccent] = useState<AccentId>(() => readStoredAccent(profileId, activeKind));
   const [weekStart, setWeekStart] = useState<WeekStartPreference>(() => readStoredWeekStart());
-  /** ADR-049: whether blocked tasks appear in the „Danas“ / „Sledećih 7 dana“ views. A device preference, exactly like the week start above. */
-  const [blockedInToday, setBlockedInToday] = useState<BlockedInToday>(() =>
-    readStoredBlockedInToday(),
-  );
   /** CAL §5, beside the week start and read the same way: how long a seeded event runs, and which clock the calendar draws. */
   const [eventDuration, setEventDuration] = useState<EventDurationMinutes>(() =>
     readStoredEventDuration(),
   );
   const [clock, setClock] = useState<ClockPreference>(() => readStoredClock());
   /** SET §5: which card's „Vrati na podrazumevano“ is currently being confirmed, or `null`. */
-  const [resetting, setResetting] = useState<ResettableSection | null>(null);
+  const [resetting, setResetting] = useState<ResetTarget | null>(null);
+  /**
+   * How many times each module card has been reset. It is a REMOUNT key, not
+   * data: a panel reads its device preferences in `useState` initializers, so
+   * bumping this is what makes it start over from what storage now says —
+   * without the page knowing which preferences the panel even has.
+   */
+  const [resetCounts, setResetCounts] = useState<Record<string, number>>({});
   // SET-014: the raw query. Empty means "render everything exactly as before" —
   // the filter is additive, it never becomes the page's normal state.
   const [query, setQuery] = useState("");
-  // ADR-036. Both are device preferences read straight out of localStorage,
-  // exactly like `accent` above — no IPC, no profile row, no loading state.
-  const [noteWidth, setNoteWidth] = useState<NoteWidth>(() => readStoredNoteWidth());
-  const [markdownShortcuts, setMarkdownShortcuts] = useState(() =>
-    readStoredNoteMarkdownShortcuts(),
-  );
   const [modulesError, setModulesError] = useState<string | null>(null);
   const [notificationSources, setNotificationSources] = useState<NotificationSource[] | null>(null);
   const [presetError, setPresetError] = useState<string | null>(null);
@@ -5107,13 +4512,18 @@ export function SettingsPage({
    * re-reads every one of them, so the controls show the defaults live rather
    * than only after a reload.
    *
-   * The theme is the single value here this page does not own: App holds it and
-   * drives `<html data-theme>` and the whole shell, so it is reset through the
-   * very channel every other theme change goes through, handed `theme.ts`'s own
-   * default — which is exactly what an absent `nexus.theme` reads back as.
+   * „Izgled“ is the shell's own arm, and the theme is the single value in it
+   * this page does not own: App holds it and drives `<html data-theme>` and the
+   * whole shell, so it is reset through the very channel every other theme
+   * change goes through, handed `theme.ts`'s own default — which is exactly
+   * what an absent `nexus.theme` reads back as.
+   *
+   * Every other card is a MODULE's. Its renderer knows which keys are its own
+   * (`resetDevice`) and the remount that follows is what re-reads them, so this
+   * page needs to know neither.
    */
-  function runReset(section: ResettableSection): void {
-    if (section === "appearance") {
+  function runReset(sectionId: string): void {
+    if (sectionId === "appearance") {
       onPreferenceChange(DEFAULT_THEME_PREFERENCE);
       clearStoredAccent(profileId, activeKind);
       clearStoredWeekStart();
@@ -5122,13 +4532,9 @@ export function SettingsPage({
       setWeekStart(readStoredWeekStart());
       setEventDuration(readStoredEventDuration());
       setClock(readStoredClock());
-    } else if (section === "tasks") {
-      clearStoredTaskPreferences();
-      setBlockedInToday(readStoredBlockedInToday());
     } else {
-      clearStoredNotePreferences();
-      setNoteWidth(readStoredNoteWidth());
-      setMarkdownShortcuts(readStoredNoteMarkdownShortcuts());
+      MODULE_SETTINGS_PANELS[sectionId]?.resetDevice?.();
+      setResetCounts((counts) => ({ ...counts, [sectionId]: (counts[sectionId] ?? 0) + 1 }));
     }
     setResetting(null);
   }
@@ -5141,8 +4547,11 @@ export function SettingsPage({
   // SET-014: the searchable index is a function of the registry alone, so it is
   // built once per registry rather than on every keystroke; the match itself is
   // a dozen string comparisons and needs no memo of its own.
-  const searchEntries = useMemo(() => buildSettingsSearchEntries(registry), [registry]);
-  const { sections, hits } = matchSettings(searchEntries, foldSettingsQuery(query));
+  const searchIndex = useMemo(() => buildSettingsIndex(registry), [registry]);
+  const { sections, hits } = matchSettings(searchIndex, foldSettingsQuery(query));
+  // The module cards this build draws, in registry order and gated by SET-007's
+  // flags — the page composes them, it does not know them.
+  const moduleCards = useMemo(() => moduleSettingsCards(registry, flags), [registry, flags]);
   const a = strings.settings.appearance;
 
   return (
@@ -5295,94 +4704,46 @@ export function SettingsPage({
           ))}
         </select>
         <p className="set__section-caption">{a.clockHint}</p>
-        <ResetLink onClick={() => setResetting("appearance")} />
+        <ResetLink
+          onClick={() =>
+            setResetting({ id: "appearance", title: strings.settings.sectionTitle.appearance })
+          }
+        />
       </Card>
 
-      {/* Zadaci (ADR-049). Its own card rather than a row under „Izgled“, on the
-          Beleške precedent below: a preference that describes how ONE module
-          reads belongs to that module. The page reads it on mount, so a change
-          here shows the next time Zadaci is opened. */}
-      <Card title={strings.settings.sectionTitle.tasks} className={sectionClass(sections.has("tasks"))}>
-        <p className={labelClass("set__section-caption", hits.has("tasks-blocked-today"))}>
-          {strings.settings.tasks.blockedInTodayLabel}
-        </p>
-        <div
-          className="set__segmented"
-          role="group"
-          aria-label={strings.settings.tasks.blockedInTodayLabel}
-        >
-          {BLOCKED_IN_TODAY_OPTIONS.map((option) => (
-            <Button
-              key={option}
-              size="sm"
-              variant={blockedInToday === option ? "primary" : "ghost"}
-              aria-pressed={blockedInToday === option}
-              onClick={() => {
-                persistBlockedInToday(option);
-                setBlockedInToday(option);
-              }}
-            >
-              {strings.settings.tasks.blockedInTodayOptions[option]}
-            </Button>
-          ))}
-        </div>
-        <p className="set__section-caption">{strings.settings.tasks.blockedInTodayCaption}</p>
-        <ResetLink onClick={() => setResetting("tasks")} />
-      </Card>
+      {/* Every card a MODULE owns, composed from the registry in registry order
+          (`manifest.settings`). Nothing is drawn for a module the profile has
+          switched off — a card for a section the sidebar does not show would be
+          a dangling control, which is the rule PRIV's card already followed and
+          all of them now do. A declaration this build has no renderer for draws
+          nothing, exactly as an unknown dashboard placement does. */}
+      {moduleCards.map((card) => {
+        const Body = MODULE_SETTINGS_PANELS[card.moduleId]?.Body;
+        if (Body === undefined) return null;
+        return (
+          <Card
+            key={card.moduleId}
+            title={card.title}
+            className={sectionClass(sections.has(card.moduleId))}
+          >
+            {/* The reset count is a remount key: a cleared preference is re-read
+                by the body's own initializers, so the page never learns what
+                the panel stores. */}
+            <Body key={resetCounts[card.moduleId] ?? 0} profileId={profileId} hits={hits} />
+            {/* „Vrati na podrazumevano“ is the DECLARATION's decision, not a
+                list here: a card offers it when every value it holds lives on
+                this machine (SET §5). */}
+            {isDeviceOnlyPanel(card.panel) && (
+              <ResetLink onClick={() => setResetting({ id: card.moduleId, title: card.title })} />
+            )}
+          </Card>
+        );
+      })}
 
-      <Card title={strings.settings.sectionTitle.notes} className={sectionClass(sections.has("notes"))}>
-        <p className={labelClass("set__section-caption", hits.has("note-width"))}>
-          {strings.settings.notes.widthLabel}
-        </p>
-        <div className="set__segmented" role="group" aria-label={strings.settings.notes.widthLabel}>
-          {NOTE_WIDTHS.map((width) => (
-            <Button
-              key={width}
-              size="sm"
-              variant={noteWidth === width ? "primary" : "ghost"}
-              aria-pressed={noteWidth === width}
-              onClick={() => {
-                persistNoteWidth(width);
-                setNoteWidth(width);
-              }}
-            >
-              {strings.settings.notes.widthNames[width] ?? width}
-            </Button>
-          ))}
-        </div>
-        <div className="set__module-row">
-          <div className="set__module-info">
-            <span className={labelClass("set__module-name", hits.has("note-markdown-shortcuts"))}>
-              {strings.settings.notes.markdownLabel}
-            </span>
-            <span className="set__module-desc">{strings.settings.notes.markdownCaption}</span>
-          </div>
-          <Checkbox
-            checked={markdownShortcuts}
-            aria-label={strings.settings.notes.markdownLabel}
-            onChange={(event) => {
-              persistNoteMarkdownShortcuts(event.target.checked);
-              setMarkdownShortcuts(event.target.checked);
-            }}
-          />
-        </div>
-        <ResetLink onClick={() => setResetting("notes")} />
-      </Card>
-
-      {/* PRIV v1 (ADR-057): only while the „Privatno" module is enabled — a
-          card for a section the sidebar does not show would be a dangling
-          control. The flag read mirrors the gallery's own (defaultEnabled is
-          false, so an absent flag means off). */}
-      {(flags["priv"] ?? false) && (
-        <Card
-          title={strings.settings.sectionTitle.priv}
-          className={sectionClass(sections.has("priv"))}
-        >
-          <PrivSettingsSection profileId={profileId} hits={hits} />
-        </Card>
-      )}
-
-      <Card title={strings.settings.sectionTitle.shortcuts} className={sectionClass(sections.has("shortcuts"))}>
+      <Card
+        title={strings.settings.sectionTitle.shortcuts}
+        className={sectionClass(sections.has("shortcuts"))}
+      >
         <ShortcutsSection
           overrides={shortcutOverrides}
           onChange={onShortcutOverridesChange}
@@ -5390,27 +4751,6 @@ export function SettingsPage({
           globalTaken={globalShortcutTaken}
           hits={hits}
         />
-      </Card>
-
-      <Card
-        title={strings.settings.sectionTitle.dashboard}
-        className={sectionClass(sections.has("dashboard"))}
-      >
-        <DashboardSection profileId={profileId} hits={hits} />
-      </Card>
-
-      <Card
-        title={strings.settings.sectionTitle.study}
-        className={sectionClass(sections.has("study"))}
-      >
-        <StudySection profileId={profileId} hits={hits} />
-      </Card>
-
-      <Card
-        title={strings.settings.sectionTitle.calendar}
-        className={sectionClass(sections.has("calendar"))}
-      >
-        <CalendarSection profileId={profileId} hits={hits} />
       </Card>
 
       <Card title={strings.settings.sectionTitle.modules} className={sectionClass(sections.has("modules"))}>
@@ -5549,12 +4889,12 @@ export function SettingsPage({
         )}
       </Card>
 
-      {/* One dialog for all three cards — the question is the same question,
-          and only the card it names differs (SET §5). */}
+      {/* One dialog for every resettable card — the question is the same
+          question, and only the card it names differs (SET §5). */}
       {resetting !== null && (
         <SettingsResetDialog
-          sectionTitle={strings.settings.sectionTitle[resetting]}
-          onConfirm={() => runReset(resetting)}
+          sectionTitle={resetting.title}
+          onConfirm={() => runReset(resetting.id)}
           onCancel={() => setResetting(null)}
         />
       )}

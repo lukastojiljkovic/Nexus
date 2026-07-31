@@ -1,6 +1,7 @@
 import {
   ModuleRegistry,
   type ModuleManifest,
+  type SettingsPanel,
   type WidgetConfigField,
   type WidgetContract,
 } from "@nexus/core";
@@ -165,6 +166,182 @@ const STUDY_WIDGETS: WidgetContract[] = [
 ];
 
 /**
+ * The settings card each module owns (`SettingsPanel`). Until this slice every
+ * one of them was hand-written into `SettingsPage.tsx` — card, controls, and a
+ * twin list of search entries in `settingsSearch.ts` that had to be kept in
+ * step by hand. They are declarations now: the page composes the cards from the
+ * registry in registry order, and the filter index derives its entries from the
+ * SAME declaration, so the two can no longer drift.
+ *
+ * What is NOT here is the point as much as what is: the shell's own cards —
+ * Izgled, Profil, Sigurnost, Prečice, Moduli, Obaveštenja, Rezervna kopija,
+ * Podaci i privatnost, O aplikaciji — stay hand-composed in the page, because
+ * they are the app's settings rather than any module's. See `SettingsPanel`'s
+ * own comment for why that boundary is deliberate.
+ *
+ * Two calendar preferences are the honest exception: „Trajanje događaja" and
+ * „Prikaz vremena" are CAL's, but they are drawn in the shell's „Izgled" card
+ * (they say how this MACHINE reads a calendar) and are cleared by that card's
+ * „Vrati na podrazumevano". Moving them here would move them on screen, which
+ * is a change to what the user sees — so they stay where they are, declared
+ * with the shell's other appearance entries.
+ *
+ * `labelKey`/`titleKey` are strings KEY paths, never Serbian text, exactly as
+ * `WidgetContract.title` is; `keywords` are folded ASCII search keys that
+ * nothing renders. Every `key` below, qualified as `moduleId:key`, is the id
+ * the panel highlights its own label by (SET-014).
+ */
+const TASKS_SETTINGS: SettingsPanel = {
+  titleKey: "settings.sectionTitle.tasks",
+  controls: [
+    // ADR-049. „blokirani" and „danas" already sit in the label, so the
+    // keywords carry what someone would type instead — the concept
+    // („zavisnost") and the view; the two answers ride the options.
+    {
+      kind: "choice",
+      key: "blocked-today",
+      labelKey: "settings.tasks.blockedInTodayLabel",
+      storage: "device",
+      options: [
+        { id: "sakrij", labelKey: "settings.tasks.blockedInTodayOptions.sakrij" },
+        { id: "prikazi", labelKey: "settings.tasks.blockedInTodayOptions.prikazi" },
+      ],
+      keywords: ["zadaci", "zavisnost", "pregled"],
+    },
+  ],
+};
+
+/** ADR-036: both of NOTE's editor preferences live on this machine, which is why „Beleške" offers a reset. */
+const NOTES_SETTINGS: SettingsPanel = {
+  titleKey: "settings.sectionTitle.notes",
+  controls: [
+    {
+      kind: "choice",
+      key: "width",
+      labelKey: "settings.notes.widthLabel",
+      storage: "device",
+      options: [
+        { id: "uska", labelKey: "settings.notes.widthNames.uska" },
+        { id: "normalna", labelKey: "settings.notes.widthNames.normalna" },
+        { id: "siroka", labelKey: "settings.notes.widthNames.siroka" },
+      ],
+      keywords: ["beleske", "editor", "sirina", "mera", "kolona"],
+    },
+    {
+      kind: "toggle",
+      key: "markdown",
+      labelKey: "settings.notes.markdownLabel",
+      storage: "device",
+      keywords: ["beleske", "markdown", "precice", "formatiranje", "naslov", "lista", "slash"],
+    },
+  ],
+};
+
+/**
+ * PRIV v1 (ADR-057). Every value is a PROFILE fact answered by `priv:status`,
+ * so this card offers no reset — „vrati na podrazumevano" here would be a write
+ * about the user's private section, not about this machine.
+ *
+ * The card renders only while the module is enabled, but its entries are
+ * indexed either way: a hit can steer to a section that is not on the page —
+ * the same honest gap a disabled module's own gallery row already has.
+ */
+const PRIV_SETTINGS: SettingsPanel = {
+  titleKey: "settings.sectionTitle.priv",
+  controls: [
+    {
+      kind: "value",
+      key: "auto-lock",
+      labelKey: "settings.priv.autoLockLabel",
+      storage: "profile",
+      keywords: ["privatno", "privatne", "beleske", "zakljucavanje", "neaktivnost", "minuti"],
+    },
+    {
+      kind: "toggle",
+      key: "lock-minimize",
+      labelKey: "settings.priv.lockOnMinimizeLabel",
+      storage: "profile",
+      keywords: ["privatno", "privatne", "beleske", "minimizovanje", "prozor", "zakljucaj"],
+    },
+    // The Recovery Kit line states a fact and offers nothing to set.
+    {
+      kind: "fact",
+      key: "kit-status",
+      labelKey: "settings.priv.caption",
+      keywords: ["privatno", "privatne", "beleske", "oporavak", "kod", "sifrovanje", "tajno"],
+    },
+  ],
+};
+
+/** SET-006 (ADR-041): the dashboard's background image and the dim behind the widgets — both profile rows. */
+const DASHBOARD_SETTINGS: SettingsPanel = {
+  titleKey: "settings.sectionTitle.dashboard",
+  controls: [
+    {
+      kind: "value",
+      key: "background",
+      labelKey: "settings.dashboard.pick",
+      storage: "profile",
+      keywords: ["pozadina", "slika", "kontrolna", "tabla", "izgled"],
+    },
+    {
+      kind: "value",
+      key: "dim",
+      labelKey: "settings.dashboard.dimLabel",
+      storage: "profile",
+      keywords: ["zatamnjenje", "pozadina", "kontrolna", "tabla"],
+    },
+  ],
+};
+
+/**
+ * STUDY-007. „Ciljana zapamćenost" is a closed row on screen but a `value`
+ * here: its options are probabilities formatted into percents, so there is no
+ * strings key an option could name — declaring three would be inventing copy
+ * that does not exist.
+ */
+const STUDY_SETTINGS: SettingsPanel = {
+  titleKey: "settings.sectionTitle.study",
+  controls: [
+    {
+      kind: "value",
+      key: "retention",
+      labelKey: "settings.study.retentionLabel",
+      storage: "profile",
+      keywords: ["ucenje", "kartice", "fsrs", "zapamcenost", "retencija", "raspored", "interval"],
+    },
+    {
+      kind: "value",
+      key: "new-per-day",
+      labelKey: "settings.study.newPerDayLabel",
+      storage: "profile",
+      keywords: ["ucenje", "kartice", "nove", "dnevno", "limit", "ogranicenje"],
+    },
+    {
+      kind: "value",
+      key: "review-cap",
+      labelKey: "settings.study.reviewCapLabel",
+      storage: "profile",
+      keywords: ["ucenje", "ponavljanje", "dnevno", "limit", "ogranicenje", "kapa"],
+    },
+  ],
+};
+
+/** CAL-010 (ADR-054): the semester's fixed dates — one control for the card's one date pair. */
+const CALENDAR_SETTINGS: SettingsPanel = {
+  titleKey: "settings.sectionTitle.calendar",
+  controls: [
+    {
+      kind: "value",
+      key: "semester-dates",
+      labelKey: "settings.calendar.datesLabel",
+      storage: "profile",
+      keywords: ["semestar", "kalendar", "datumi", "pocetak", "kraj", "pregled"],
+    },
+  ],
+};
+
+/**
  * The v0 module set (roadmap "v0 — Founder Build"), as ADR-008 manifests.
  *
  * Lives in `shared/` (moved from the renderer, ADR-058 §5) because BOTH
@@ -186,18 +363,64 @@ const STUDY_WIDGETS: WidgetContract[] = [
  * A module's manifest is added here in the same slice that ships its page.
  */
 const V0_MODULES: ModuleManifest[] = [
-  { id: "dashboard", prefix: "DASH", category: "Core experience", defaultEnabled: true },
-  { id: "tasks", prefix: "TASK", category: "Core experience", defaultEnabled: true, widgets: TASKS_WIDGETS },
-  { id: "calendar", prefix: "CAL", category: "Core experience", defaultEnabled: true, widgets: CALENDAR_WIDGETS },
+  {
+    id: "dashboard",
+    prefix: "DASH",
+    category: "Core experience",
+    defaultEnabled: true,
+    settings: DASHBOARD_SETTINGS,
+  },
+  {
+    id: "tasks",
+    prefix: "TASK",
+    category: "Core experience",
+    defaultEnabled: true,
+    widgets: TASKS_WIDGETS,
+    settings: TASKS_SETTINGS,
+  },
+  {
+    id: "calendar",
+    prefix: "CAL",
+    category: "Core experience",
+    defaultEnabled: true,
+    widgets: CALENDAR_WIDGETS,
+    settings: CALENDAR_SETTINGS,
+  },
+  // SET itself publishes no settings card: the page it renders IS the surface,
+  // and a „Podešavanja" card inside Podešavanja would be a mirror facing a
+  // mirror. The shell's cards are the ones it hand-composes.
   { id: "settings", prefix: "SET", category: "Core experience", defaultEnabled: true },
-  { id: "notes", prefix: "NOTE", category: "Content & knowledge", defaultEnabled: true, widgets: NOTES_WIDGETS },
+  {
+    id: "notes",
+    prefix: "NOTE",
+    category: "Content & knowledge",
+    defaultEnabled: true,
+    widgets: NOTES_WIDGETS,
+    settings: NOTES_SETTINGS,
+  },
   // Private notes (ADR-057): OFF by default — first enabled from the Moduli
   // gallery, deliberately. It contributes NO widgets and NO searchIndexers:
   // while the section is locked nothing of it may render anywhere — no
   // dashboard card, no palette hit, no titles — and a contract slot filled
-  // here would be exactly such a surface.
-  { id: "priv", prefix: "PRIV", category: "Content & knowledge", defaultEnabled: false },
-  { id: "study", prefix: "STUDY", category: "Life hubs", defaultEnabled: true, widgets: STUDY_WIDGETS },
+  // here would be exactly such a surface. `settings` IS filled, and is the one
+  // exception the ADR already makes: `priv:status` answers FACTS and never
+  // contents, so the lock preferences are configurable precisely when the
+  // section is locked — which is when they matter most.
+  {
+    id: "priv",
+    prefix: "PRIV",
+    category: "Content & knowledge",
+    defaultEnabled: false,
+    settings: PRIV_SETTINGS,
+  },
+  {
+    id: "study",
+    prefix: "STUDY",
+    category: "Life hubs",
+    defaultEnabled: true,
+    widgets: STUDY_WIDGETS,
+    settings: STUDY_SETTINGS,
+  },
 ];
 
 /**

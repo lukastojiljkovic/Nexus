@@ -30,10 +30,14 @@ export type {
   WidgetConfigValue,
 } from "./contracts/widgetConfig.js";
 export type {
-  SettingDefinition,
-  SettingScope,
-  SettingsSection,
-  SettingType,
+  SettingsChoiceControl,
+  SettingsChoiceOption,
+  SettingsControl,
+  SettingsFactControl,
+  SettingsPanel,
+  SettingsStorage,
+  SettingsToggleControl,
+  SettingsValueControl,
 } from "./contracts/settings.js";
 export type { SearchIndexer } from "./contracts/search.js";
 export type { StatsContribution } from "./contracts/stats.js";

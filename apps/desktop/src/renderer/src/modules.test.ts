@@ -8,6 +8,9 @@ import { DEFAULT_DASHBOARD_LAYOUT } from "@nexus/db";
 import { describe, expect, it } from "vitest";
 
 import { DASHBOARD_WIDGETS } from "./dashboardWidgets.js";
+import { MODULE_SETTINGS_PANELS } from "./moduleSettingsPanels.js";
+import { NOTE_WIDTHS } from "./notePrefs.js";
+import { BLOCKED_IN_TODAY_OPTIONS } from "./taskPrefs.js";
 import { createModuleRegistry } from "../../shared/modules.js";
 import { strings } from "./strings.js";
 
@@ -101,6 +104,114 @@ describe("createModuleRegistry", () => {
     // a widget contract or a search indexer would be exactly such a surface.
     expect(registry.widgetsOf("priv")).toEqual([]);
     expect(registry.all().find((manifest) => manifest.id === "priv")?.searchIndexers).toBeUndefined();
+  });
+});
+
+describe("the settings each v0 module publishes (SettingsPanel)", () => {
+  const registry = createModuleRegistry();
+  const declared = registry.all().flatMap((manifest) =>
+    manifest.settings ? [[manifest.id, manifest.settings] as const] : [],
+  );
+  const lookup = (path: string): unknown =>
+    path
+      .split(".")
+      .reduce<unknown>(
+        (node, key) =>
+          typeof node === "object" && node !== null
+            ? (node as Record<string, unknown>)[key]
+            : undefined,
+        strings,
+      );
+
+  it("declares a card for exactly the modules that have one, and none for SET itself", () => {
+    // „Podešavanja" hand-composes the shell's cards; a settings card inside
+    // Settings would be a mirror facing a mirror.
+    expect(declared.map(([moduleId]) => moduleId)).toEqual([
+      "dashboard",
+      "tasks",
+      "calendar",
+      "notes",
+      "priv",
+      "study",
+    ]);
+  });
+
+  it("pairs every declaration with a renderer, and every renderer with a declaration", () => {
+    // The pairing the page rests on, exactly as `DASHBOARD_WIDGETS` does: a
+    // declaration with no renderer is an empty card, a renderer with no
+    // declaration is a card the page never asks for. Neither fails loudly in
+    // the app, which is why it is pinned here.
+    expect(declared.map(([moduleId]) => moduleId).sort()).toEqual(
+      Object.keys(MODULE_SETTINGS_PANELS).sort(),
+    );
+  });
+
+  it("names a string that really exists for every card title and every control label", () => {
+    for (const [moduleId, panel] of declared) {
+      expect(typeof lookup(panel.titleKey), panel.titleKey).toBe("string");
+      // A module's card IS its own section, so its title is the very heading
+      // `strings.settings.sectionTitle` already carries for it.
+      expect(lookup(panel.titleKey), moduleId).toBe(
+        strings.settings.sectionTitle[moduleId as keyof typeof strings.settings.sectionTitle],
+      );
+      for (const control of panel.controls) {
+        expect(typeof lookup(control.labelKey), control.labelKey).toBe("string");
+        if (control.kind === "choice") {
+          for (const option of control.options) {
+            expect(typeof lookup(option.labelKey), option.labelKey).toBe("string");
+          }
+        }
+      }
+    }
+  });
+
+  it("keeps every control key an ASCII slug, unique within its panel", () => {
+    for (const [moduleId, panel] of declared) {
+      const keys = panel.controls.map((control) => control.key);
+      expect(new Set(keys).size, moduleId).toBe(keys.length);
+      for (const key of keys) {
+        // A key is qualified into `moduleId:key` as a filter entry id, so it is
+        // a key and never a label — no diacritics and no colon of its own.
+        expect(key, moduleId).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+      }
+    }
+  });
+
+  it("gives every stored control a storage, and every fact none", () => {
+    for (const [moduleId, panel] of declared) {
+      for (const control of panel.controls) {
+        if (control.kind === "fact") continue;
+        expect(["device", "profile"], `${moduleId}:${control.key}`).toContain(control.storage);
+      }
+    }
+  });
+
+  it("declares choice options that are exactly the value sets their panels render", () => {
+    // The one place a declaration could silently drift from the control it
+    // describes: the option ids ARE the preference module's own value sets.
+    const optionIds = (moduleId: string, key: string) => {
+      const control = declared
+        .find(([id]) => id === moduleId)?.[1]
+        .controls.find((candidate) => candidate.key === key);
+      return control?.kind === "choice" ? control.options.map((option) => option.id) : undefined;
+    };
+    expect(optionIds("tasks", "blocked-today")).toEqual([...BLOCKED_IN_TODAY_OPTIONS]);
+    expect(optionIds("notes", "width")).toEqual([...NOTE_WIDTHS]);
+  });
+
+  it("keeps every card's storage honest: the two device cards, and four the profile owns", () => {
+    const storages = (moduleId: string) =>
+      new Set(
+        declared
+          .find(([id]) => id === moduleId)?.[1]
+          .controls.flatMap((control) => (control.kind === "fact" ? [] : [control.storage])),
+      );
+    expect(storages("tasks")).toEqual(new Set(["device"]));
+    expect(storages("notes")).toEqual(new Set(["device"]));
+    expect(storages("dashboard")).toEqual(new Set(["profile"]));
+    expect(storages("study")).toEqual(new Set(["profile"]));
+    expect(storages("calendar")).toEqual(new Set(["profile"]));
+    expect(storages("priv")).toEqual(new Set(["profile"]));
   });
 });
 

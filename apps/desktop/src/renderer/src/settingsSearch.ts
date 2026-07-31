@@ -1,4 +1,7 @@
 import { foldSearchText, type ModuleRegistry } from "@nexus/core";
+
+import { lookupString } from "./dashboardLayout.js";
+import { moduleSettingsDeclarations, settingsEntryId } from "./moduleSettings.js";
 import { strings } from "./strings.js";
 
 /**
@@ -6,6 +9,11 @@ import { strings } from "./strings.js";
  * section cards has no store to query, so what is searchable is declared here
  * once — one entry per control the user could plausibly be looking for, each
  * naming the section it lives in.
+ *
+ * "Hand-composed" now means the SHELL's cards only. Every card a module owns is
+ * declared in its manifest (`SettingsPanel`, `shared/modules.ts`) and its
+ * entries are DERIVED from that declaration below, so the page and the index
+ * read one source instead of two lists somebody has to keep in step.
  *
  * Matching is Serbian-folding-aware on BOTH sides (`foldSearchText`, the very
  * helper the search palette and the FTS index share), so "noc" finds "Noć" and
@@ -19,8 +27,16 @@ import { strings } from "./strings.js";
  * filter, not a mis-hit.
  */
 
-/** The section cards, in the order the page renders them — `strings.settings.sectionTitle`'s own key set. */
-export type SettingsSectionId = keyof typeof strings.settings.sectionTitle;
+/** The SHELL's own cards — `strings.settings.sectionTitle`'s key set, and the only section ids written by hand. */
+export type ShellSettingsSectionId = keyof typeof strings.settings.sectionTitle;
+
+/**
+ * A card on the page: one of the shell's ids above, or a MODULE's registry id
+ * for the card that module publishes. Open by construction, because the set of
+ * modules is: a section is only a real one if the index says so, which
+ * `buildSettingsIndex` is what pins.
+ */
+export type SettingsSectionId = string;
 
 export interface SettingsSearchEntry {
   /** Stable id; the page looks a rendered label up by it to decide on the hit highlight. */
@@ -37,15 +53,45 @@ export interface SettingsSearchEntry {
   readonly keywords: readonly string[];
 }
 
+/** A shell entry, whose section is checked against the hand-written card list — the module-derived ones cannot be. */
+interface ShellSettingsSearchEntry extends SettingsSearchEntry {
+  readonly section: ShellSettingsSectionId;
+}
+
 const s = strings.settings;
 
 /**
- * Every searchable control on the page, in render order. Entries whose label
- * is a heading, field label or caption the page actually draws get the hit
- * highlight; the rest (an export button, the notification presets) still steer
- * which section stays visible, which is the part a filter is for.
+ * SET-014 hit styling: a matched control label goes gold + semibold, exactly
+ * like every other active state in the app. Never a background wash or a glow.
+ *
+ * It lives beside the index rather than in the page because every module panel
+ * needs it too, and a panel may not import the page that renders it.
  */
-const ENTRIES: readonly SettingsSearchEntry[] = [
+export function labelClass(base: string, hit: boolean): string {
+  return hit ? `${base} set__hit` : base;
+}
+
+/**
+ * SET-014 section visibility: a filtered-out card hides with CSS instead of
+ * unmounting, so in-progress state — a restore preview holding its archive
+ * open, a half-typed passcode, unsaved quiet-hours edits — survives a
+ * keystroke in the filter box.
+ */
+export function sectionClass(visible: boolean): string {
+  return visible ? "set__section" : "set__section set__section--hidden";
+}
+
+/**
+ * Every searchable control on the SHELL's cards, in render order. Entries whose
+ * label is a heading, field label or caption the page actually draws get the
+ * hit highlight; the rest (an export button, the notification presets) still
+ * steer which section stays visible, which is the part a filter is for.
+ *
+ * A module's controls are deliberately absent: they arrive from the registry
+ * (`moduleSettingsEntries`), which is what stops this list and the page from
+ * drifting apart the way two hand-written lists do.
+ */
+const ENTRIES: readonly ShellSettingsSearchEntry[] = [
   {
     id: "profile-name",
     section: "profile",
@@ -116,6 +162,9 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
   // CAL §5's two preferences. They live in the „Izgled“ card beside the week
   // start, so they are filed under that section — but the words somebody types
   // hunting for them are the calendar's, which is what the keywords carry.
+  // They stay hand-written here for the same reason they stay in that card:
+  // they are drawn by the shell, and CAL's own declaration covers the card CAL
+  // actually owns (see `shared/modules.ts`).
   {
     id: "calendar-event-duration",
     section: "appearance",
@@ -138,55 +187,6 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
       "am",
       "pm",
     ],
-  },
-  // ADR-049: the one TASK device preference. „blokirani“ and „danas“ already
-  // sit in the label, so the keywords carry what someone would type instead —
-  // the concept („zavisnost“) and the two answers.
-  {
-    id: "tasks-blocked-today",
-    section: "tasks",
-    label: s.tasks.blockedInTodayLabel,
-    keywords: [
-      s.tasks.blockedInTodayOptions.sakrij,
-      s.tasks.blockedInTodayOptions.prikazi,
-      "zadaci",
-      "zavisnost",
-      "pregled",
-    ],
-  },
-  {
-    id: "note-width",
-    section: "notes",
-    label: s.notes.widthLabel,
-    keywords: ["beleske", "editor", "sirina", "mera", "uska", "normalna", "siroka", "kolona"],
-  },
-  {
-    id: "note-markdown-shortcuts",
-    section: "notes",
-    label: s.notes.markdownLabel,
-    keywords: ["beleske", "markdown", "precice", "formatiranje", "naslov", "lista", "slash"],
-  },
-  // PRIV v1 (ADR-057): the „Privatne beleške" card's three surfaces. The card
-  // renders only while the module is enabled, so a hit can steer to a section
-  // that is not on the page — the same honest gap a disabled module's own
-  // gallery row already has.
-  {
-    id: "priv-auto-lock",
-    section: "priv",
-    label: s.priv.autoLockLabel,
-    keywords: ["privatno", "privatne", "beleske", "zakljucavanje", "neaktivnost", "minuti"],
-  },
-  {
-    id: "priv-lock-minimize",
-    section: "priv",
-    label: s.priv.lockOnMinimizeLabel,
-    keywords: ["privatno", "privatne", "beleske", "minimizovanje", "prozor", "zakljucaj"],
-  },
-  {
-    id: "priv-kit-status",
-    section: "priv",
-    label: s.priv.caption,
-    keywords: ["privatno", "privatne", "beleske", "oporavak", "kod", "sifrovanje", "tajno"],
   },
   // One entry per remappable action (ADR-040) — a user hunting for "novi
   // unos" or "zakljucaj" should land on the exact row that rebinds it — plus
@@ -212,48 +212,6 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
     section: "shortcuts",
     label: strings.shortcuts.showAll,
     keywords: ["precice", "tastatura", "spisak", "pomoc"],
-  },
-  // SET-006 (ADR-041): the background picker steers the section; the dim
-  // label is a drawn control label, so it also earns the highlight.
-  {
-    id: "dashboard-background",
-    section: "dashboard",
-    label: strings.settings.dashboard.pick,
-    keywords: ["pozadina", "slika", "kontrolna", "tabla", "izgled"],
-  },
-  {
-    id: "dashboard-dim",
-    section: "dashboard",
-    label: strings.settings.dashboard.dimLabel,
-    keywords: ["zatamnjenje", "pozadina", "kontrolna", "tabla"],
-  },
-  // STUDY-007: three controls, three entries — each is a drawn control label, so
-  // each earns the hit highlight as well as steering the section.
-  {
-    id: "study-retention",
-    section: "study",
-    label: s.study.retentionLabel,
-    keywords: ["ucenje", "kartice", "fsrs", "zapamcenost", "retencija", "raspored", "interval"],
-  },
-  {
-    id: "study-new-per-day",
-    section: "study",
-    label: s.study.newPerDayLabel,
-    keywords: ["ucenje", "kartice", "nove", "dnevno", "limit", "ogranicenje"],
-  },
-  {
-    id: "study-review-cap",
-    section: "study",
-    label: s.study.reviewCapLabel,
-    keywords: ["ucenje", "ponavljanje", "dnevno", "limit", "ogranicenje", "kapa"],
-  },
-  // CAL-010 (ADR-054): the semester's fixed dates — one entry for the card's
-  // one control group; the label is drawn, so it earns the hit highlight.
-  {
-    id: "calendar-semester-dates",
-    section: "calendar",
-    label: s.calendar.datesLabel,
-    keywords: ["semestar", "kalendar", "datumi", "pocetak", "kraj", "pregled"],
   },
   {
     // ADR-065 §5: the row that reopens the questionnaire. Filed under „Moduli“
@@ -413,21 +371,86 @@ export function shortcutEntryId(actionId: string): string {
 }
 
 /**
- * The full index: the fixed entries above plus one per registered module, so
- * "beleske" or "ucenje" lands on the gallery row that switches that module off
- * rather than only on the section card. A module's one-line description doubles
- * as its keywords — copy that already exists and already says what it is for.
+ * One entry per control a module DECLARES (`SettingsPanel`), filed under that
+ * module's own card. The label is the declared strings key resolved, and a
+ * closed choice contributes its option labels as keywords — which is how „Uska“
+ * or „Sakrij“ keep finding their control without anyone writing them twice.
+ *
+ * Flags are deliberately not consulted: a switched-off module's controls stay
+ * indexed, so a hit can steer to a card that is not on the page — the same
+ * honest gap a disabled module's own gallery row already has.
  */
-export function buildSettingsSearchEntries(registry: ModuleRegistry): SettingsSearchEntry[] {
-  const modules: SettingsSearchEntry[] = [...registry.byCategory()].flatMap(([, members]) =>
+function moduleSettingsEntries(registry: ModuleRegistry): SettingsSearchEntry[] {
+  return moduleSettingsDeclarations(registry).flatMap(({ moduleId, panel }) =>
+    panel.controls.map((control) => ({
+      id: settingsEntryId(moduleId, control.key),
+      section: moduleId,
+      label: lookupString(strings, control.labelKey) ?? control.labelKey,
+      keywords: [
+        ...(control.keywords ?? []),
+        ...(control.kind === "choice"
+          ? control.options.map((option) => lookupString(strings, option.labelKey) ?? option.id)
+          : []),
+      ],
+    })),
+  );
+}
+
+/**
+ * One entry per registered module, so "beleske" or "ucenje" lands on the
+ * gallery row that switches that module off rather than only on the section
+ * card. A module's one-line description doubles as its keywords — copy that
+ * already exists and already says what it is for.
+ */
+function moduleGalleryEntries(registry: ModuleRegistry): SettingsSearchEntry[] {
+  return [...registry.byCategory()].flatMap(([, members]) =>
     members.map((manifest) => ({
       id: moduleEntryId(manifest.id),
-      section: "modules" as const,
+      section: "modules",
       label: strings.modules[manifest.id] ?? manifest.id,
       keywords: [s.moduleDescriptions[manifest.id] ?? ""],
     })),
   );
-  return [...ENTRIES, ...modules];
+}
+
+/** A card the filter can keep or hide: its id, and the title a query is matched against. */
+export interface SettingsSectionDescriptor {
+  readonly id: SettingsSectionId;
+  readonly title: string;
+}
+
+/** Everything the filter needs about one build of the app: which cards exist, and what is searchable inside them. */
+export interface SettingsIndex {
+  /** In render order: the shell's cards, then each module's, in registry order. */
+  readonly sections: readonly SettingsSectionDescriptor[];
+  readonly entries: readonly SettingsSearchEntry[];
+}
+
+const SHELL_SECTION_IDS = Object.keys(s.sectionTitle) as ShellSettingsSectionId[];
+
+/**
+ * The whole index for one registry: the shell's hand-written cards and entries,
+ * plus everything the registered modules declare.
+ *
+ * A shell section id a module has CLAIMED is dropped from the shell half —
+ * every module card's title still lives in `strings.settings.sectionTitle`, and
+ * the module's declaration is what names it, so listing it twice would be one
+ * card counted as two.
+ */
+export function buildSettingsIndex(registry: ModuleRegistry): SettingsIndex {
+  const moduleSections = moduleSettingsDeclarations(registry).map(({ moduleId, panel }) => ({
+    id: moduleId,
+    title: lookupString(strings, panel.titleKey) ?? moduleId,
+  }));
+  const claimed = new Set(moduleSections.map((section) => section.id));
+  const shellSections = SHELL_SECTION_IDS.filter((id) => !claimed.has(id)).map((id) => ({
+    id,
+    title: s.sectionTitle[id],
+  }));
+  return {
+    sections: [...shellSections, ...moduleSections],
+    entries: [...ENTRIES, ...moduleSettingsEntries(registry), ...moduleGalleryEntries(registry)],
+  };
 }
 
 /** Splits a raw query into folded, non-empty terms. An all-whitespace query yields none, which every entry then matches. */
@@ -455,26 +478,24 @@ export interface SettingsSearchResult {
  * a user typing "sigurnost" wants the whole card, not an empty one.
  */
 export function matchSettings(
-  entries: readonly SettingsSearchEntry[],
+  index: SettingsIndex,
   terms: readonly string[],
 ): SettingsSearchResult {
-  const sectionIds = Object.keys(s.sectionTitle).filter(isSettingsSectionId);
   if (terms.length === 0) {
-    return { sections: new Set(sectionIds), hits: new Set() };
+    return { sections: new Set(index.sections.map((section) => section.id)), hits: new Set() };
   }
 
-  const hits = new Set(entries.filter((entry) => matchesEntry(entry, terms)).map((entry) => entry.id));
+  const hits = new Set(
+    index.entries.filter((entry) => matchesEntry(entry, terms)).map((entry) => entry.id),
+  );
   const sections = new Set(
-    sectionIds.filter((sectionId) => {
-      const title = foldSearchText(s.sectionTitle[sectionId]);
-      if (terms.every((term) => title.includes(term))) return true;
-      return entries.some((entry) => entry.section === sectionId && hits.has(entry.id));
-    }),
+    index.sections
+      .filter((section) => {
+        const title = foldSearchText(section.title);
+        if (terms.every((term) => title.includes(term))) return true;
+        return index.entries.some((entry) => entry.section === section.id && hits.has(entry.id));
+      })
+      .map((section) => section.id),
   );
   return { sections, hits };
-}
-
-/** Narrowing helper over `Object.keys`, which types its result as plain `string[]`. */
-function isSettingsSectionId(value: string): value is SettingsSectionId {
-  return Object.prototype.hasOwnProperty.call(s.sectionTitle, value);
 }

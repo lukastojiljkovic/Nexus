@@ -2,11 +2,14 @@ import { foldSearchText } from "@nexus/core";
 import { describe, expect, it } from "vitest";
 
 import { createModuleRegistry } from "../../shared/modules.js";
+import { moduleSettingsDeclarations, settingsEntryId } from "./moduleSettings.js";
 import {
-  buildSettingsSearchEntries,
+  buildSettingsIndex,
   foldSettingsQuery,
+  labelClass,
   matchSettings,
   moduleEntryId,
+  sectionClass,
   shortcutEntryId,
   type SettingsSearchEntry,
   type SettingsSectionId,
@@ -16,21 +19,24 @@ import { strings } from "./strings.js";
 /**
  * SET-014's filter index. Everything here is pure — no storage, no clock, no
  * IPC — so the only setup is the real module registry, which is what the page
- * itself hands `buildSettingsSearchEntries`.
+ * itself hands `buildSettingsIndex`.
  *
  * Serbian copy is never re-spelled: every query is derived from `strings.ts`
  * through `foldSettingsQuery`, which is also what pins the folding contract
  * („Noć" must be reachable by typing "noc") without this file owning a second
- * copy of the words.
+ * copy of the words. The same discipline now covers the module cards, whose
+ * entries are DERIVED from each module's `SettingsPanel` declaration — so what
+ * is asserted below is the derivation, never a hand-copied twin of it.
  */
 
 const s = strings.settings;
-const ENTRIES = buildSettingsSearchEntries(createModuleRegistry());
+const INDEX = buildSettingsIndex(createModuleRegistry());
+const ENTRIES = INDEX.entries;
 const SECTION_IDS = Object.keys(s.sectionTitle) as SettingsSectionId[];
 
 /** The page's own call shape: a raw string in, a result out. */
 function search(query: string): ReturnType<typeof matchSettings> {
-  return matchSettings(ENTRIES, foldSettingsQuery(query));
+  return matchSettings(INDEX, foldSettingsQuery(query));
 }
 
 function entryById(id: string): SettingsSearchEntry {
@@ -63,7 +69,7 @@ describe("foldSettingsQuery", () => {
 
 describe("matchSettings with nothing typed", () => {
   it("keeps every section and highlights nothing", () => {
-    const result = matchSettings(ENTRIES, []);
+    const result = matchSettings(INDEX, []);
     expect([...result.sections].sort()).toEqual([...SECTION_IDS].sort());
     expect(result.hits.size).toBe(0);
   });
@@ -80,7 +86,7 @@ describe("matchSettings with nothing typed", () => {
 describe("matchSettings", () => {
   it("highlights the entry whose own label matched, and keeps its section", () => {
     const result = search(s.notes.widthLabel);
-    expect(result.hits.has("note-width")).toBe(true);
+    expect(result.hits.has(settingsEntryId("notes", "width"))).toBe(true);
     expect([...result.sections]).toEqual(["notes"]);
   });
 
@@ -107,6 +113,13 @@ describe("matchSettings", () => {
     expect(securityEntries.some((entry) => result.hits.has(entry.id))).toBe(false);
   });
 
+  it("keeps a MODULE's card by its declared title, which is that card's own heading", () => {
+    // The module cards' titles come from the manifest's `titleKey` now, so this
+    // is what pins that the declaration still resolves to the drawn heading.
+    const result = search(s.sectionTitle.study);
+    expect(result.sections.has("study")).toBe(true);
+  });
+
   it("drops every section that neither matched itself nor holds a match", () => {
     const result = search("preimenuj");
     for (const sectionId of SECTION_IDS) {
@@ -124,10 +137,10 @@ describe("matchSettings", () => {
   it("requires EVERY term, so extra words narrow rather than widen", () => {
     const wide = search("beleske");
     const narrow = search("beleske markdown");
-    expect(wide.hits.has("note-width")).toBe(true);
-    expect(wide.hits.has("note-markdown-shortcuts")).toBe(true);
-    expect(narrow.hits.has("note-markdown-shortcuts")).toBe(true);
-    expect(narrow.hits.has("note-width")).toBe(false);
+    expect(wide.hits.has(settingsEntryId("notes", "width"))).toBe(true);
+    expect(wide.hits.has(settingsEntryId("notes", "markdown"))).toBe(true);
+    expect(narrow.hits.has(settingsEntryId("notes", "markdown"))).toBe(true);
+    expect(narrow.hits.has(settingsEntryId("notes", "width"))).toBe(false);
   });
 
   it("matches on a plain substring, not on a word prefix", () => {
@@ -135,7 +148,7 @@ describe("matchSettings", () => {
     const label = foldSearchText(s.notes.widthLabel);
     const middle = label.slice(2, 6);
     expect(middle.length).toBeGreaterThan(0);
-    expect(search(middle).hits.has("note-width")).toBe(true);
+    expect(search(middle).hits.has(settingsEntryId("notes", "width"))).toBe(true);
   });
 
   it("finds a module gallery row by the name the sidebar prints", () => {
@@ -149,6 +162,19 @@ describe("matchSettings", () => {
     expect(result.hits.has(shortcutEntryId("lock"))).toBe(true);
     expect(result.sections.has("shortcuts")).toBe(true);
   });
+
+  it("finds a declared CHOICE by one of its option labels, which nobody wrote twice", () => {
+    // „Široka" is a `SettingsChoiceOption`'s copy, folded into the control's
+    // keywords by the builder — the exact duplication this refactor removed.
+    const folded = search("siroka");
+    expect(folded.hits.has(settingsEntryId("notes", "width"))).toBe(true);
+    expect(folded.sections.has("notes")).toBe(true);
+    expect(
+      search(s.tasks.blockedInTodayOptions.sakrij).hits.has(
+        settingsEntryId("tasks", "blocked-today"),
+      ),
+    ).toBe(true);
+  });
 });
 
 // --- entry ids ----------------------------------------------------------------
@@ -161,21 +187,47 @@ describe("entry id helpers", () => {
     expect(shortcutEntryId("shortcutsHelp")).toBe("shortcut-shortcutsHelp");
   });
 
-  it("cannot collide across the two namespaces", () => {
+  it("cannot collide across the three namespaces", () => {
     expect(moduleEntryId("x")).not.toBe(shortcutEntryId("x"));
+    expect(settingsEntryId("x", "y")).not.toBe(moduleEntryId("x"));
+    expect(settingsEntryId("x", "y")).not.toBe(shortcutEntryId("x"));
+  });
+
+  it("qualifies a declared control exactly as a stored widget id is qualified", () => {
+    expect(settingsEntryId("notes", "width")).toBe("notes:width");
+    expect(settingsEntryId("priv", "auto-lock")).toBe("priv:auto-lock");
   });
 });
 
-// --- buildSettingsSearchEntries ----------------------------------------------
+// --- the hit / visibility class helpers --------------------------------------
 
-describe("buildSettingsSearchEntries", () => {
+describe("labelClass and sectionClass", () => {
+  it("marks a matched label typographically and leaves an unmatched one untouched", () => {
+    expect(labelClass("set__module-name", true)).toBe("set__module-name set__hit");
+    expect(labelClass("set__module-name", false)).toBe("set__module-name");
+  });
+
+  it("hides a filtered-out card with a modifier rather than by unmounting it", () => {
+    // The folding-but-MOUNTED rule: a hidden section keeps `set__section` and
+    // only adds the modifier, so the card is still in the tree with its state —
+    // a restore preview, a half-typed passcode, an unsaved edit — intact.
+    expect(sectionClass(true)).toBe("set__section");
+    expect(sectionClass(false)).toBe("set__section set__section--hidden");
+    expect(sectionClass(false).split(" ")).toContain("set__section");
+  });
+});
+
+// --- buildSettingsIndex -------------------------------------------------------
+
+describe("buildSettingsIndex", () => {
   it("gives every entry a unique id", () => {
     expect(new Set(ENTRIES.map((entry) => entry.id)).size).toBe(ENTRIES.length);
   });
 
   it("files every entry under a section the page actually renders", () => {
+    const sectionIds = new Set(INDEX.sections.map((section) => section.id));
     for (const entry of ENTRIES) {
-      expect(SECTION_IDS, entry.id).toContain(entry.section);
+      expect([...sectionIds], entry.id).toContain(entry.section);
     }
   });
 
@@ -185,13 +237,24 @@ describe("buildSettingsSearchEntries", () => {
     }
   });
 
+  it("lists exactly the cards `sectionTitle` names, each with its drawn title", () => {
+    // The shell's cards and the modules' together are the whole page: a module
+    // card CLAIMS its shell id rather than adding a seventeenth section.
+    const sections = INDEX.sections;
+    expect(new Set(sections.map((section) => section.id)).size).toBe(sections.length);
+    expect([...sections.map((section) => section.id)].sort()).toEqual([...SECTION_IDS].sort());
+    for (const section of sections) {
+      expect(section.title, section.id).toBe(s.sectionTitle[section.id as keyof typeof s.sectionTitle]);
+    }
+  });
+
   it("covers every registered module, in the gallery's own grouping order", () => {
     const registry = createModuleRegistry();
     const expected = [...registry.byCategory()].flatMap(([, members]) =>
       members.map((manifest) => moduleEntryId(manifest.id)),
     );
-    const actual = buildSettingsSearchEntries(registry)
-      .filter((entry) => entry.section === "modules")
+    const actual = buildSettingsIndex(registry)
+      .entries.filter((entry) => entry.section === "modules")
       .map((entry) => entry.id);
     // The „Moduli“ card also holds ADR-065's „ponovo pokreni upitnik“ row,
     // which is a control rather than a module of its own; it is a fixed entry,
@@ -222,26 +285,76 @@ describe("buildSettingsSearchEntries", () => {
     expect(entryById("shortcuts-reference").label).toBe(strings.shortcuts.showAll);
   });
 
-  it("carries both dashboard-background controls (SET-006)", () => {
-    expect(entryById("dashboard-background").label).toBe(s.dashboard.pick);
-    expect(entryById("dashboard-dim").label).toBe(s.dashboard.dimLabel);
-    expect(entryById("dashboard-background").section).toBe("dashboard");
-    expect(entryById("dashboard-dim").section).toBe("dashboard");
+  it("derives one entry per declared control, in registry then declaration order", () => {
+    const registry = createModuleRegistry();
+    const expected = moduleSettingsDeclarations(registry).flatMap(({ moduleId, panel }) =>
+      panel.controls.map((control) => settingsEntryId(moduleId, control.key)),
+    );
+    const declaredSections = new Set(
+      moduleSettingsDeclarations(registry).map((declaration) => declaration.moduleId),
+    );
+    const actual = ENTRIES.filter((entry) => declaredSections.has(entry.section)).map(
+      (entry) => entry.id,
+    );
+    expect(actual).toEqual(expected);
+    // Today's set, spelled out — the controls that used to be hand-written here.
+    expect(actual).toEqual([
+      "dashboard:background",
+      "dashboard:dim",
+      "tasks:blocked-today",
+      "calendar:semester-dates",
+      "notes:width",
+      "notes:markdown",
+      "priv:auto-lock",
+      "priv:lock-minimize",
+      "priv:kit-status",
+      "study:retention",
+      "study:new-per-day",
+      "study:review-cap",
+    ]);
+  });
+
+  it("labels a derived entry with the control's own drawn label", () => {
+    expect(entryById(settingsEntryId("notes", "width")).label).toBe(s.notes.widthLabel);
+    expect(entryById(settingsEntryId("study", "review-cap")).label).toBe(s.study.reviewCapLabel);
+    expect(entryById(settingsEntryId("dashboard", "background")).label).toBe(s.dashboard.pick);
+    expect(entryById(settingsEntryId("dashboard", "dim")).label).toBe(s.dashboard.dimLabel);
+    expect(entryById(settingsEntryId("calendar", "semester-dates")).label).toBe(s.calendar.datesLabel);
+    expect(entryById(settingsEntryId("priv", "kit-status")).label).toBe(s.priv.caption);
+  });
+
+  it("folds a choice's option labels into its keywords, so nobody spells them twice", () => {
+    const width = entryById(settingsEntryId("notes", "width"));
+    expect(width.keywords).toContain(s.notes.widthNames.siroka);
+    expect(width.keywords).toContain(s.notes.widthNames.uska);
+    const blocked = entryById(settingsEntryId("tasks", "blocked-today"));
+    expect(blocked.keywords).toContain(s.tasks.blockedInTodayOptions.sakrij);
+    expect(blocked.keywords).toContain(s.tasks.blockedInTodayOptions.prikazi);
+  });
+
+  it("indexes a switched-off module's controls all the same — the flags are the page's question, not the filter's", () => {
+    // PRIV ships disabled, and its card is still reachable by search: a hit may
+    // steer to a section that is not on the page, exactly as a disabled
+    // module's own gallery row already does.
+    expect(ENTRIES.some((entry) => entry.section === "priv")).toBe(true);
   });
 
   it("leaves no section without at least one entry — a card must be reachable by search", () => {
-    for (const sectionId of SECTION_IDS) {
+    for (const section of INDEX.sections) {
       expect(
-        ENTRIES.some((entry) => entry.section === sectionId),
-        sectionId,
+        ENTRIES.some((entry) => entry.section === section.id),
+        section.id,
       ).toBe(true);
     }
   });
 
   it("is rebuilt per call, so the registry it was given is the one it describes", () => {
-    const first = buildSettingsSearchEntries(createModuleRegistry());
-    const second = buildSettingsSearchEntries(createModuleRegistry());
+    const first = buildSettingsIndex(createModuleRegistry());
+    const second = buildSettingsIndex(createModuleRegistry());
     expect(first).not.toBe(second);
-    expect(first.map((entry) => entry.id)).toEqual(second.map((entry) => entry.id));
+    expect(first.entries.map((entry) => entry.id)).toEqual(second.entries.map((entry) => entry.id));
+    expect(first.sections.map((section) => section.id)).toEqual(
+      second.sections.map((section) => section.id),
+    );
   });
 });

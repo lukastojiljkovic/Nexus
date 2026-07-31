@@ -1,5 +1,5 @@
 import type { WidgetContract } from "../contracts/widgets.js";
-import type { SettingsSection } from "../contracts/settings.js";
+import type { SettingsPanel } from "../contracts/settings.js";
 import type { SearchIndexer } from "../contracts/search.js";
 import type { StatsContribution } from "../contracts/stats.js";
 import type { AutomationCatalog } from "../contracts/automation.js";
@@ -37,7 +37,8 @@ export interface ModuleManifest {
   defaultEnabled: boolean;
 
   widgets?: WidgetContract[];
-  settings?: SettingsSection;
+  /** The module's own settings card (SET), composed from this declaration rather than hand-written into the page. */
+  settings?: SettingsPanel;
   searchIndexers?: SearchIndexer[];
   statsContributions?: StatsContribution[];
   automation?: AutomationCatalog;
