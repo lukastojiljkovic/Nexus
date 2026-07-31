@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  ATTACHMENT_TEXT_MAX_CHARS,
   MAX_TASK_ATTACHMENT_BYTES,
   NexusDatabase,
   TaskAttachmentNotFoundError,
@@ -337,5 +338,155 @@ describe("TaskAttachmentStore — soft-delete / hard-delete interaction", () => 
 
     db.raw.prepare("DELETE FROM tasks WHERE id = ?").run(task.id);
     expect(attachments.refCount(SHA_A)).toBe(0);
+  });
+});
+
+describe("TaskAttachmentStore — attachment text index (SRCH-008 / migration 048)", () => {
+  /** The 1 MiB text-preview cap the real caller passes (`DOC_TEXT_PREVIEW_MAX_BYTES`). */
+  const CAP = 1_048_576;
+
+  const textOf = (id: string): string | null =>
+    (
+      db.raw.prepare("SELECT extracted_text FROM task_attachments WHERE id = ?").get(id) as {
+        extracted_text: string | null;
+      }
+    ).extracted_text;
+
+  it("offers a freshly added text attachment as a candidate, with everything main needs", () => {
+    const { attachments, tasks } = fixture();
+    const task = tasks.create({ title: "A" });
+    const row = attachments.add(
+      task.id,
+      { fileName: "beleske.txt", mime: "text/plain", sizeBytes: 42, sha256: SHA_A },
+      T1,
+    );
+
+    expect(attachments.listTextIndexCandidates(10, CAP)).toEqual([
+      { id: row.id, fileName: "beleske.txt", mime: "text/plain", sizeBytes: 42, sha256: SHA_A },
+    ]);
+  });
+
+  it("narrows to the two mimes that could qualify, and to rows within the size cap", () => {
+    const { attachments, tasks } = fixture();
+    const task = tasks.create({ title: "A" });
+    const text = attachments.add(
+      task.id,
+      { fileName: "a.txt", mime: "text/plain", sizeBytes: 10, sha256: SHA_A },
+      T1,
+    );
+    const legacy = attachments.add(
+      task.id,
+      { fileName: "b.md", mime: "application/octet-stream", sizeBytes: 10, sha256: SHA_B },
+      T1,
+    );
+    attachments.add(
+      task.id,
+      { fileName: "c.png", mime: "image/png", sizeBytes: 10, sha256: "c".repeat(64) },
+      T1,
+    );
+    attachments.add(
+      task.id,
+      { fileName: "d.txt", mime: "text/plain", sizeBytes: CAP + 1, sha256: "d".repeat(64) },
+      T1,
+    );
+
+    // Compared as a SET: `ORDER BY id` is millisecond-granular (uuidv7 carries
+    // no intra-millisecond counter), so two rows minted in the same tick have
+    // no guaranteed order and the property under test is WHICH rows qualify.
+    expect(new Set(attachments.listTextIndexCandidates(10, CAP).map((row) => row.id))).toEqual(
+      new Set([text.id, legacy.id]),
+    );
+  });
+
+  it("drops a row out of the candidate set the moment its text is recorded — empty string included", () => {
+    const { attachments, tasks } = fixture();
+    const task = tasks.create({ title: "A" });
+    const kept = attachments.add(
+      task.id,
+      { fileName: "a.txt", mime: "text/plain", sizeBytes: 10, sha256: SHA_A },
+      T1,
+    );
+    const attempted = attachments.add(
+      task.id,
+      { fileName: "b.txt", mime: "text/plain", sizeBytes: 10, sha256: SHA_B },
+      T1,
+    );
+
+    // The empty string is the "attempted, nothing there" sentinel: an
+    // unreadable blob must never come back as a candidate on the next pass.
+    attachments.setExtractedText(attempted.id, "");
+    expect(attachments.listTextIndexCandidates(10, CAP).map((row) => row.id)).toEqual([kept.id]);
+    expect(textOf(attempted.id)).toBe("");
+
+    attachments.setExtractedText(kept.id, "sadržaj");
+    expect(attachments.listTextIndexCandidates(10, CAP)).toEqual([]);
+    expect(textOf(kept.id)).toBe("sadržaj");
+  });
+
+  it("honours the limit, and the next pass picks up what the last one left", () => {
+    const { attachments, tasks } = fixture();
+    const task = tasks.create({ title: "A" });
+    const a = attachments.add(
+      task.id,
+      { fileName: "a.txt", mime: "text/plain", sizeBytes: 10, sha256: SHA_A },
+      T1,
+    );
+    const b = attachments.add(
+      task.id,
+      { fileName: "b.txt", mime: "text/plain", sizeBytes: 10, sha256: SHA_B },
+      T1,
+    );
+
+    const firstPass = attachments.listTextIndexCandidates(1, CAP);
+    expect(firstPass).toHaveLength(1);
+    attachments.setExtractedText(firstPass[0]!.id, "prvi");
+
+    // Whichever of the two the bounded pass took, the other is what remains —
+    // the property that makes an interrupted backfill safe to resume.
+    const remaining = [a.id, b.id].filter((id) => id !== firstPass[0]!.id);
+    expect(attachments.listTextIndexCandidates(1, CAP).map((row) => row.id)).toEqual(remaining);
+  });
+
+  it("still offers a SOFT-deleted task's attachments — the task's entry comes back on restore", () => {
+    const { attachments, tasks } = fixture();
+    const task = tasks.create({ title: "A" });
+    const row = attachments.add(
+      task.id,
+      { fileName: "a.txt", mime: "text/plain", sizeBytes: 10, sha256: SHA_A },
+      T1,
+    );
+    tasks.softDelete(task.id);
+
+    expect(attachments.listTextIndexCandidates(10, CAP).map((candidate) => candidate.id)).toEqual([
+      row.id,
+    ]);
+  });
+
+  it("cuts the stored text to the projection's own body cap", () => {
+    const { attachments, tasks } = fixture();
+    const task = tasks.create({ title: "A" });
+    const row = attachments.add(
+      task.id,
+      { fileName: "a.txt", mime: "text/plain", sizeBytes: 10, sha256: SHA_A },
+      T1,
+    );
+
+    attachments.setExtractedText(row.id, "x".repeat(ATTACHMENT_TEXT_MAX_CHARS + 500));
+    expect(textOf(row.id)).toHaveLength(ATTACHMENT_TEXT_MAX_CHARS);
+  });
+
+  it("never reaches another profile's row, in either direction", () => {
+    const mine = fixture();
+    const theirs = fixture();
+    const theirTask = theirs.tasks.create({ title: "Njihov" });
+    const theirRow = theirs.attachments.add(
+      theirTask.id,
+      { fileName: "a.txt", mime: "text/plain", sizeBytes: 10, sha256: SHA_A },
+      T1,
+    );
+
+    expect(mine.attachments.listTextIndexCandidates(10, CAP)).toEqual([]);
+    mine.attachments.setExtractedText(theirRow.id, "ukradeno");
+    expect(textOf(theirRow.id)).toBeNull();
   });
 });

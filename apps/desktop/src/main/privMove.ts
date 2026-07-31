@@ -1,6 +1,7 @@
 import { mergeNoteState, remapNoteState } from "@nexus/core";
 import { MAX_NOTE_UPDATE_BYTES } from "@nexus/db";
 import type { CardStore, NoteAttachmentStore, NoteStore } from "@nexus/db";
+import { extractAttachmentText } from "./attachmentText.js";
 import { compactNow } from "./notes.js";
 import {
   privAddAttachment,
@@ -222,6 +223,12 @@ export async function movePrivateNoteOut(
       { fileName: ref.fileName, mime: deps.sniffMime(bytes), sizeBytes: bytes.byteLength, sha256 },
       nowIso,
     );
+    // The note is PUBLIC from here on and indexed like any other, its files
+    // included (SRCH-008) — extracted here, where the decrypted bytes are
+    // already in hand, rather than left for the next unlock's backfill. The
+    // reverse direction needs no counterpart: moving IN hard-deletes the note,
+    // which cascades these rows and their text away with it.
+    attachments.setExtractedText(row.id, extractAttachmentText(row, bytes));
     idMap.set(ref.id, row.id);
   }
 

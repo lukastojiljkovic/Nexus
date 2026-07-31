@@ -139,6 +139,12 @@ export function SearchPage({
                 {renderHighlighted(result.snippet, result.snippetRanges)}
               </span>
             )}
+            {/* The match was inside an attached file, not in anything above
+                (SRCH-008). Said out loud rather than left to look like a row
+                that matched nothing. */}
+            {result.fromAttachment && (
+              <span className="searchpage__row-source">{strings.search.fromAttachment}</span>
+            )}
           </span>
         </span>
         {/* The kind's own date when it has one (due/start/expiry/exam), and

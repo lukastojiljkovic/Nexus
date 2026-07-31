@@ -446,6 +446,12 @@ export function SearchPalette({
                 {renderHighlighted(result.snippet, result.snippetRanges)}
               </div>
             )}
+            {/* The match was inside an attached file, not in anything above
+                (SRCH-008). Said out loud rather than left to look like a row
+                that matched nothing. */}
+            {result.fromAttachment && (
+              <div className="search__row-source">{strings.search.fromAttachment}</div>
+            )}
           </div>
         </div>
         {result.contextDate !== null && (

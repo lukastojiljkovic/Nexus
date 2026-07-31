@@ -17,6 +17,7 @@ import {
   SearchStore,
   SearchValidationError,
   SubjectStore,
+  TaskAttachmentStore,
   TaskListStore,
   TaskStore,
   openDatabase,
@@ -363,6 +364,40 @@ describe("rebuildSearchIndex", () => {
     const before = allEntries();
     expect(before).toHaveLength(1);
     expect(before[0]!.body).toBe("Opis ugovor.pdf");
+
+    rebuildSearchIndex(db.raw);
+
+    expect(allEntries()).toEqual(before);
+  });
+
+  it("reproduces the attachment TEXT the triggers indexed, in both places it rides (migration 048)", () => {
+    // Same reasoning as the filenames above, one migration on: the rebuild
+    // reads `search_source_task`/`search_source_attachment` by name, so it
+    // widens for free — and "for free" is exactly the claim worth pinning,
+    // because a rebuild that dropped the file contents would leave the repair
+    // tool producing a WEAKER index than the one it replaced.
+    const profileId = createProfile();
+    const task = new TaskStore(db.raw, profileId).create({ title: "Prijava" });
+    const taskAttachments = new TaskAttachmentStore(db.raw, profileId);
+    const onTask = taskAttachments.add(
+      task.id,
+      { fileName: "beleske.txt", mime: "text/plain", sizeBytes: 64, sha256: "a".repeat(64) },
+      "2026-07-26T10:00:00.000Z",
+    );
+    taskAttachments.setExtractedText(onTask.id, "rok je petnaesti septembar");
+
+    const notes = new NoteStore(db.raw, profileId);
+    const note = notes.create("2026-07-26T10:00:00.000Z");
+    const noteAttachments = new NoteAttachmentStore(db.raw, profileId);
+    const onNote = noteAttachments.add(
+      note.id,
+      { fileName: "zapisnik.md", mime: "text/plain", sizeBytes: 64, sha256: "b".repeat(64) },
+      "2026-07-26T10:00:00.000Z",
+    );
+    noteAttachments.setExtractedText(onNote.id, "sastanak o kvartalu");
+
+    const before = allEntries();
+    expect(before).toHaveLength(3); // the task, the note, the note's attachment
 
     rebuildSearchIndex(db.raw);
 

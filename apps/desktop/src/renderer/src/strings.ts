@@ -3583,6 +3583,15 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     operatorHint: "#oznaka · rok:danas / sutra / nedelja / 2026-08-15",
     /** The palette's bottom row, which hands the current query to the full page (ADR-039 §5). */
     showAllResults: "Prikaži sve rezultate",
+    /**
+     * Marks a result whose match landed inside an attached file's CONTENTS
+     * rather than in anything the row shows (SRCH-008). Without it the row
+     * would appear to match nothing at all — the one thing a result must never
+     * do. Deliberately says „u sadržaju priloga", not „u prilogu": the file's
+     * NAME is already searchable and already highlights, so what this reports
+     * is specifically the text inside it.
+     */
+    fromAttachment: "poklapanje u sadržaju priloga",
     kindSingular: {
       task: "Zadatak",
       event: "Događaj",

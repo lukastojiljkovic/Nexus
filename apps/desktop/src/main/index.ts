@@ -294,6 +294,11 @@ import {
   stopBackupScheduler,
   type BackupRunnerDeps,
 } from "./backup.js";
+import {
+  backfillAttachmentText,
+  extractAttachmentText,
+  type AttachmentTextTarget,
+} from "./attachmentText.js";
 import { localToday } from "./clock.js";
 import {
   decodePreviewText,
@@ -2980,6 +2985,16 @@ const SEARCH_CANDIDATE_FACTOR = 3;
 const TITLE_SNIPPET_RADIUS = 120;
 
 /**
+ * The two kinds whose INDEXED body carries text their result row does not show
+ * (migration 048): a task, which matches on its attached files' contents behind
+ * their names, and a note attachment, whose own file's contents ride its entry.
+ * Every other kind's `body_folded` is exactly `nx_fold(body)`, so a match on one
+ * of those is always visible in the snippet — which is what makes the
+ * "highlighted nothing" test below sound rather than a guess.
+ */
+const ATTACHMENT_TEXT_KINDS: ReadonlySet<SearchKind> = new Set<SearchKind>(["task", "attachment"]);
+
+/**
  * Maps one store hit to the wire shape. Reusing `buildSearchSnippet` for the
  * TITLE too is deliberate: it is the same operation as for the body — find
  * the matched span, return the surrounding text plus highlight ranges — and
@@ -2987,8 +3002,27 @@ const TITLE_SNIPPET_RADIUS = 120;
  * and `snippet`/`snippetRanges` are each internally consistent (the ranges
  * index into their own returned string), never into the source entity's full
  * text.
+ *
+ * `fromAttachment` is read off those same ranges rather than fetched: a hit
+ * that came back from FTS with terms typed, and yet highlights nothing in
+ * either string, matched something indexed but not displayed — and after
+ * migration 048 the only such text in the whole index is an attachment's
+ * extracted contents, on exactly the two kinds above. Costs no extra query and
+ * no extra column; the alternative would be re-reading every result's
+ * attachment rows to compare strings against them.
+ *
+ * `matchedByFts` is what makes that reasoning sound, and is stated by the
+ * caller rather than inferred from `terms`: rows sourced from `recent` never
+ * matched anything at all, so "highlights nothing" says nothing about them —
+ * and the browse paths really can carry terms (a query whose every term is
+ * unusable as an FTS expression falls through to `recent` with those terms
+ * still in hand).
  */
-function toSearchResult(hit: SearchHit, terms: readonly string[]): SearchResult {
+function toSearchResult(
+  hit: SearchHit,
+  terms: readonly string[],
+  matchedByFts: boolean,
+): SearchResult {
   const title = buildSearchSnippet(hit.title, terms, { radius: TITLE_SNIPPET_RADIUS });
   const snippet = buildSearchSnippet(hit.body, terms);
   return {
@@ -3001,6 +3035,12 @@ function toSearchResult(hit: SearchHit, terms: readonly string[]): SearchResult 
     snippetRanges: [...snippet.ranges],
     contextDate: hit.contextDate,
     updatedAt: hit.updatedAt,
+    fromAttachment:
+      matchedByFts &&
+      terms.length > 0 &&
+      title.ranges.length === 0 &&
+      snippet.ranges.length === 0 &&
+      ATTACHMENT_TEXT_KINDS.has(hit.kind),
   };
 }
 
@@ -3051,7 +3091,7 @@ async function runRecentSearch(
   const enabled = await enabledModuleIdsFor(profileId);
   return filterSearchHitsByModules(recentHits(profileId, MAX_SEARCH_LIMIT, kinds), enabled)
     .slice(0, limit)
-    .map((hit) => toSearchResult(hit, []));
+    .map((hit) => toSearchResult(hit, [], false));
 }
 
 /** Every entity id carrying a tag whose `foldSearchTag` form starts with `token`, for one `#` token and one module. */
@@ -3164,7 +3204,7 @@ async function runSearchQuery(
     );
     return applySearchOperators(hits, filters)
       .slice(0, limit)
-      .map((hit) => toSearchResult(hit, []));
+      .map((hit) => toSearchResult(hit, [], false));
   }
 
   const store = searchStore(profileId);
@@ -3189,7 +3229,7 @@ async function runSearchQuery(
   const filtered = filters === null ? gated : applySearchOperators(gated, filters);
 
   const ranked = rankSearchResults(filtered, { now: new Date().toISOString(), query: parsed });
-  return ranked.slice(0, limit).map((hit) => toSearchResult(hit, parsed.terms));
+  return ranked.slice(0, limit).map((hit) => toSearchResult(hit, parsed.terms, true));
 }
 
 /**
@@ -3292,7 +3332,7 @@ async function runSearchPage(profileId: string, rawQuery: string): Promise<Searc
   return {
     hits: ordered
       .slice(0, SEARCH_PAGE_MAX_RESULTS)
-      .map((hit) => toSearchResult(hit, parsed.terms)),
+      .map((hit) => toSearchResult(hit, parsed.terms, match !== null)),
     total: ordered.length,
     truncated,
     kindCounts: kindCounts.map(({ kind, count }) => ({ kind, count })),
@@ -3421,10 +3461,86 @@ function startUnlockedServices(): void {
     );
   });
 
+  // The attachment-text backfill (SRCH-008): everything attached before this
+  // feature existed has no extracted text, and the migration could not produce
+  // it — the bytes are encrypted outside the database. One bounded pass here,
+  // on the same unawaited terms as the sweep above.
+  scheduleAttachmentTextBackfill();
+
   // Scheduled backups (ADR-056): the immediate check inside is the catch-up —
   // a slot missed while locked or powered off runs now, at unlock, exactly
   // when the data key exists again.
   startBackupScheduler(backupRunnerDeps());
+}
+
+/**
+ * Every attachment table whose file names the search index already carries, for
+ * every profile — `note_attachments` and `task_attachments`, and deliberately
+ * NOT `subject_attachments`, whose names are not projected either (migration
+ * 035). Private attachments are absent by construction: they live in their own
+ * sealed tables with no projection at all, and this feature must not become the
+ * exception to that.
+ */
+function attachmentTextTargets(session: NexusDatabase): AttachmentTextTarget[] {
+  return listProfiles(session).flatMap((profile) => [
+    noteAttachmentStore(profile.id),
+    taskAttachmentStore(profile.id),
+  ]);
+}
+
+/**
+ * Records what a freshly attached file contributes to the search index, right
+ * where its bytes are already in hand (SRCH-008) — so a text file is findable
+ * by its contents the moment it lands, not after the next unlock.
+ *
+ * Every row this build inserts is CLAIMED: a file that is not indexable text
+ * stores the empty string, migration 048's "attempted, nothing there" value, so
+ * the backfill only ever deals with rows that predate this feature or arrived
+ * through a restore.
+ *
+ * A failure here is logged and swallowed rather than propagated: the file IS
+ * attached at this point, and failing the user's action over index bookkeeping
+ * would be the wrong trade — the row simply stays pending, which is exactly the
+ * state the backfill exists to resolve.
+ */
+function indexAttachmentText(
+  store: AttachmentTextTarget,
+  row: { id: string; fileName: string; mime: string; sizeBytes: number },
+  bytes: Uint8Array,
+): void {
+  try {
+    store.setExtractedText(row.id, extractAttachmentText(row, bytes));
+  } catch (error) {
+    console.error(`Indexing attachment "${row.id}"'s text failed (left for the backfill):`, error);
+  }
+}
+
+/**
+ * Starts ONE bounded attachment-text pass and does not wait for it — an unlock
+ * (or a restore) must never block on housekeeping. Called at unlock and at the
+ * end of every restore/import apply and undo: the extracted text deliberately
+ * does not travel in an archive (it is derived from bytes that already do), so
+ * rows those flows write arrive with nothing extracted, and this is what covers
+ * them without waiting for a relaunch.
+ *
+ * Identity, not null-ness, is "still this session", exactly as `healNotes`
+ * reads it: `performLock` sets `db = null` and a later unlock installs a NEW
+ * instance, so the pass stops both on lock and when a newer session has
+ * superseded it.
+ */
+function scheduleAttachmentTextBackfill(): void {
+  const session = requireDb();
+  backfillAttachmentText({
+    targets: attachmentTextTargets(session),
+    readBytes: (sha256) => readBlob(blobStorePathsFor(), requireBlobKeys(), sha256),
+    stillThisSession: () => db === session,
+  }).catch((error: unknown) => {
+    console.error(
+      `Attachment text backfill failed (will resume on the next unlock): ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  });
 }
 
 // --- Security notifications (NTF-007) ---------------------------------------
@@ -4927,11 +5043,12 @@ function registerIpc(): void {
         const mime = sniffMime(file.bytes);
         const { sha256 } = await saveBlob(blobStorePathsFor(), requireBlobKeys(), file.bytes);
         try {
-          store.add(
+          const row = store.add(
             id,
             { fileName: file.fileName, mime, sizeBytes: file.bytes.byteLength, sha256 },
             new Date().toISOString(),
           );
+          indexAttachmentText(store, row, file.bytes);
           added += 1;
         } catch (error) {
           await deleteBlobIfOrphaned(
@@ -6649,11 +6766,13 @@ function registerIpc(): void {
     const mime = sniffMime(bytes);
     const { sha256 } = await saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes);
     try {
-      return store.add(
+      const row = store.add(
         id,
         { fileName, mime, sizeBytes: bytes.byteLength, sha256 },
         new Date().toISOString(),
       );
+      indexAttachmentText(store, row, bytes);
+      return row;
     } catch (error) {
       // The blob was already written (write-if-absent); if the row failed to
       // insert (e.g. an unknown/soft-deleted note), GC it so a failed add
@@ -7028,13 +7147,23 @@ function registerIpc(): void {
     return previewRestore(restoreDeps(), profileId, passphrase);
   });
 
-  ipcMain.handle(IpcChannel.imexRestoreApply, (event, payload): Promise<RestoreApplyResult> => {
-    assertTrustedSender(event);
-    const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const token = asRestoreToken(body.token, "token");
-    return applyRestore(restoreDeps(), profileId, token);
-  });
+  ipcMain.handle(
+    IpcChannel.imexRestoreApply,
+    async (event, payload): Promise<RestoreApplyResult> => {
+      assertTrustedSender(event);
+      const body = asRecord(payload);
+      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const token = asRestoreToken(body.token, "token");
+      const result = await applyRestore(restoreDeps(), profileId, token);
+      // An archive carries an attachment's BYTES but not the text derived from
+      // them (SRCH-008: derived data that can go stale is not worth the weight),
+      // so restored rows land with nothing extracted. Covered here rather than
+      // left for the next relaunch — bounded and unawaited, so the restore's own
+      // reply is not held up by it.
+      scheduleAttachmentTextBackfill();
+      return result;
+    },
+  );
 
   ipcMain.handle(IpcChannel.imexRestoreUndo, async (event, payload): Promise<RestoreUndoResult> => {
     assertTrustedSender(event);
@@ -7045,6 +7174,10 @@ function registerIpc(): void {
     // search index says about them is no longer true (the apply's own half of
     // this is inside `privResealForRestore`).
     privMarkIndexStale();
+    // The public half of the same fact: the snapshot the undo replayed carries
+    // the attachment INDEX rows, not the text extracted from their bytes, so
+    // the rows it put back have nothing extracted again (SRCH-008).
+    scheduleAttachmentTextBackfill();
     return result;
   });
 
@@ -7090,13 +7223,20 @@ function registerIpc(): void {
     return replanImport(restoreDeps(), profileId, token, choices);
   });
 
-  ipcMain.handle(IpcChannel.imexImportApply, (event, payload): Promise<ImportApplyResult> => {
-    assertTrustedSender(event);
-    const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const token = asRestoreToken(body.token, "token");
-    return applyImport(restoreDeps(), profileId, token);
-  });
+  ipcMain.handle(
+    IpcChannel.imexImportApply,
+    async (event, payload): Promise<ImportApplyResult> => {
+      assertTrustedSender(event);
+      const body = asRecord(payload);
+      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const token = asRestoreToken(body.token, "token");
+      const result = await applyImport(restoreDeps(), profileId, token);
+      // Same reason as `imex:restore-apply`: imported attachment rows arrive
+      // with nothing extracted, and this covers them without a relaunch.
+      scheduleAttachmentTextBackfill();
+      return result;
+    },
+  );
 
   ipcMain.handle(IpcChannel.imexImportCancel, (event): Promise<void> => {
     assertTrustedSender(event);
@@ -8060,9 +8200,82 @@ async function runSmokeSearchRehearsal(): Promise<void> {
     if (!afterRebuild.some((result) => result.entityId === task.id)) {
       throw new Error("expected the task to still be findable after rebuildSearchIndex");
     }
+
+    await rehearseAttachmentTextSearch(profile.id, task.id);
   } finally {
     taskStore(profile.id).softDelete(task.id);
   }
+}
+
+/**
+ * The attachment-content half of the search rehearsal (SRCH-008), against the
+ * real encrypted blob store and this connection's own `nx_fold`.
+ *
+ * The row is written WITHOUT its text on purpose — the state every file
+ * attached before this feature existed, and every file a restore brings in — so
+ * what is proved here is the BACKFILL: bytes that only exist encrypted on disk
+ * are decrypted, decoded, stored and projected into the owning task's entry.
+ * Then the honesty marker, which is the whole reason the projection splits
+ * matchable from displayed text: a word only the FILE contains finds the task
+ * and reports itself as an attachment match, while a word the task's own title
+ * contains highlights normally and does not.
+ */
+async function rehearseAttachmentTextSearch(profileId: string, taskId: string): Promise<void> {
+  const bytes = Buffer.from("Zapisnik: kvartalni izvestaj o naplati.", "utf8");
+  if (sniffMime(bytes) !== "text/plain") {
+    throw new Error("expected the fixture text file to sniff as text/plain");
+  }
+
+  const store = taskAttachmentStore(profileId);
+  const { sha256 } = await saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes);
+  const attachment = store.add(
+    taskId,
+    { fileName: "zapisnik.txt", mime: "text/plain", sizeBytes: bytes.byteLength, sha256 },
+    new Date().toISOString(),
+  );
+
+  const beforeBackfill = await runSearchQuery(profileId, "naplati", 10);
+  if (beforeBackfill.some((result) => result.entityId === taskId)) {
+    throw new Error("expected the file's contents to be unsearchable before the backfill runs");
+  }
+
+  const session = requireDb();
+  const claimed = await backfillAttachmentText({
+    targets: attachmentTextTargets(session),
+    readBytes: (hash) => readBlob(blobStorePathsFor(), requireBlobKeys(), hash),
+    stillThisSession: () => db === session,
+  });
+  if (claimed < 1) {
+    throw new Error(`expected the backfill to claim at least the fixture row, claimed ${claimed}`);
+  }
+
+  const byContent = (await runSearchQuery(profileId, "naplati", 10)).find(
+    (result) => result.entityId === taskId,
+  );
+  if (!byContent) {
+    throw new Error("expected a word only the attached FILE contains to find its task");
+  }
+  if (byContent.snippetRanges.length > 0 || byContent.titleRanges.length > 0) {
+    throw new Error("expected an attachment-content match to highlight nothing the row displays");
+  }
+  if (!byContent.fromAttachment) {
+    throw new Error("expected an attachment-content match to be reported as one");
+  }
+
+  const byTitle = (await runSearchQuery(profileId, "resenje", 10)).find(
+    (result) => result.entityId === taskId,
+  );
+  if (!byTitle || byTitle.titleRanges.length === 0 || byTitle.fromAttachment) {
+    throw new Error("expected a title match to highlight normally and NOT claim an attachment");
+  }
+
+  store.remove(taskId, attachment.id);
+  await deleteBlobIfOrphaned(
+    blobStorePathsFor(),
+    requireBlobKeys(),
+    sha256,
+    blobRefCount(profileId, sha256),
+  );
 }
 
 /**

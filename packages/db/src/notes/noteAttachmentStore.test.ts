@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  ATTACHMENT_TEXT_MAX_CHARS,
   MAX_NOTE_ATTACHMENT_BYTES,
   NexusDatabase,
   NoteAttachmentNotFoundError,
@@ -293,5 +294,131 @@ describe("NoteAttachmentStore — soft-delete / hard-delete interaction", () => 
 
     db.raw.prepare("DELETE FROM notes WHERE id = ?").run(note.id);
     expect(attachments.refCount(SHA_A)).toBe(0);
+  });
+});
+
+describe("NoteAttachmentStore — attachment text index (SRCH-008 / migration 048)", () => {
+  /** The 1 MiB text-preview cap the real caller passes (`DOC_TEXT_PREVIEW_MAX_BYTES`). */
+  const CAP = 1_048_576;
+
+  const textOf = (id: string): string | null =>
+    (
+      db.raw.prepare("SELECT extracted_text FROM note_attachments WHERE id = ?").get(id) as {
+        extracted_text: string | null;
+      }
+    ).extracted_text;
+
+  it("offers a freshly added text attachment as a candidate, with everything main needs", () => {
+    const { attachments, notes } = fixture();
+    const note = notes.create(T0);
+    const row = attachments.add(
+      note.id,
+      { fileName: "zapisnik.md", mime: "text/plain", sizeBytes: 42, sha256: SHA_A },
+      T0,
+    );
+
+    expect(attachments.listTextIndexCandidates(10, CAP)).toEqual([
+      { id: row.id, fileName: "zapisnik.md", mime: "text/plain", sizeBytes: 42, sha256: SHA_A },
+    ]);
+  });
+
+  it("narrows to the two mimes that could qualify, and to rows within the size cap", () => {
+    const { attachments, notes } = fixture();
+    const note = notes.create(T0);
+    const text = attachments.add(
+      note.id,
+      { fileName: "a.txt", mime: "text/plain", sizeBytes: 10, sha256: SHA_A },
+      T0,
+    );
+    const legacy = attachments.add(
+      note.id,
+      { fileName: "b.md", mime: "application/octet-stream", sizeBytes: 10, sha256: SHA_B },
+      T0,
+    );
+    attachments.add(
+      note.id,
+      { fileName: "c.pdf", mime: "application/pdf", sizeBytes: 10, sha256: "c".repeat(64) },
+      T0,
+    );
+    attachments.add(
+      note.id,
+      { fileName: "d.txt", mime: "text/plain", sizeBytes: CAP + 1, sha256: "d".repeat(64) },
+      T0,
+    );
+
+    // Compared as a SET: `ORDER BY id` is millisecond-granular (uuidv7 carries
+    // no intra-millisecond counter), so two rows minted in the same tick have
+    // no guaranteed order and the property under test is WHICH rows qualify.
+    expect(new Set(attachments.listTextIndexCandidates(10, CAP).map((row) => row.id))).toEqual(
+      new Set([text.id, legacy.id]),
+    );
+  });
+
+  it("drops a row out of the candidate set the moment its text is recorded — empty string included", () => {
+    const { attachments, notes } = fixture();
+    const note = notes.create(T0);
+    const kept = attachments.add(
+      note.id,
+      { fileName: "a.txt", mime: "text/plain", sizeBytes: 10, sha256: SHA_A },
+      T0,
+    );
+    const attempted = attachments.add(
+      note.id,
+      { fileName: "b.txt", mime: "text/plain", sizeBytes: 10, sha256: SHA_B },
+      T0,
+    );
+
+    // The empty string is the "attempted, nothing there" sentinel: an
+    // unreadable blob must never come back as a candidate on the next pass.
+    attachments.setExtractedText(attempted.id, "");
+    expect(attachments.listTextIndexCandidates(10, CAP).map((row) => row.id)).toEqual([kept.id]);
+    expect(textOf(attempted.id)).toBe("");
+
+    attachments.setExtractedText(kept.id, "sadržaj");
+    expect(attachments.listTextIndexCandidates(10, CAP)).toEqual([]);
+    expect(textOf(kept.id)).toBe("sadržaj");
+  });
+
+  it("still offers a SOFT-deleted note's attachments — its entries come back on restore", () => {
+    const { attachments, notes } = fixture();
+    const note = notes.create(T0);
+    const row = attachments.add(
+      note.id,
+      { fileName: "a.txt", mime: "text/plain", sizeBytes: 10, sha256: SHA_A },
+      T0,
+    );
+    notes.softDelete(note.id, T1);
+
+    expect(attachments.listTextIndexCandidates(10, CAP).map((candidate) => candidate.id)).toEqual([
+      row.id,
+    ]);
+  });
+
+  it("cuts the stored text to the projection's own body cap", () => {
+    const { attachments, notes } = fixture();
+    const note = notes.create(T0);
+    const row = attachments.add(
+      note.id,
+      { fileName: "a.txt", mime: "text/plain", sizeBytes: 10, sha256: SHA_A },
+      T0,
+    );
+
+    attachments.setExtractedText(row.id, "x".repeat(ATTACHMENT_TEXT_MAX_CHARS + 500));
+    expect(textOf(row.id)).toHaveLength(ATTACHMENT_TEXT_MAX_CHARS);
+  });
+
+  it("never reaches another profile's row, in either direction", () => {
+    const mine = fixture();
+    const theirs = fixture();
+    const theirNote = theirs.notes.create(T0);
+    const theirRow = theirs.attachments.add(
+      theirNote.id,
+      { fileName: "a.txt", mime: "text/plain", sizeBytes: 10, sha256: SHA_A },
+      T0,
+    );
+
+    expect(mine.attachments.listTextIndexCandidates(10, CAP)).toEqual([]);
+    mine.attachments.setExtractedText(theirRow.id, "ukradeno");
+    expect(textOf(theirRow.id)).toBeNull();
   });
 });

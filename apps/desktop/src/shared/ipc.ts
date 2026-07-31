@@ -3708,6 +3708,16 @@ export interface SearchResult {
   snippetRanges: SearchHighlight[];
   contextDate: string | null;
   updatedAt: string;
+  /**
+   * This row matched inside an ATTACHED FILE's contents rather than in anything
+   * shown here (SRCH-008 / migration 048). Set only when the query had terms
+   * and neither `titleRanges` nor `snippetRanges` came back with one — which,
+   * after migration 048, can mean exactly one thing: the match landed in the
+   * one piece of text this index carries but never displays, an attachment's
+   * extracted contents. Both surfaces say so out loud, because a result row
+   * that appears to match nothing is a result row that lies.
+   */
+  fromAttachment: boolean;
 }
 
 export interface SearchQueryRequest {

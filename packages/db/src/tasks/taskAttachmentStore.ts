@@ -1,4 +1,9 @@
 import type Database from "better-sqlite3-multiple-ciphers";
+import {
+  ATTACHMENT_TEXT_CANDIDATE_MIMES,
+  ATTACHMENT_TEXT_MAX_CHARS,
+  type AttachmentTextCandidate,
+} from "../attachmentText.js";
 import { TaskAttachmentNotFoundError, TaskAttachmentValidationError, TaskNotFoundError } from "../errors.js";
 import { uuidv7 } from "../ids.js";
 
@@ -47,7 +52,23 @@ interface TaskAttachmentCountRow {
   n: number;
 }
 
+interface AttachmentTextCandidateRow {
+  id: string;
+  file_name: string;
+  mime: string;
+  size_bytes: number;
+  sha256: string;
+}
+
 const COLUMNS = "id, task_id, file_name, mime, size_bytes, sha256, created_at";
+
+/**
+ * `?` placeholders for `ATTACHMENT_TEXT_CANDIDATE_MIMES`. Only the COUNT is
+ * interpolated, and it comes from a code-level constant array — never from a
+ * caller — while the mime strings themselves are bound as ordinary parameters
+ * below, the same split `SearchStore` uses for its kind IN-lists.
+ */
+const CANDIDATE_MIME_PLACEHOLDERS = ATTACHMENT_TEXT_CANDIDATE_MIMES.map(() => "?").join(", ");
 
 const MAX_FILE_NAME_LENGTH = 255;
 const MAX_MIME_LENGTH = 100;
@@ -94,6 +115,8 @@ export class TaskAttachmentStore {
   private readonly countBySha: Database.Statement;
   private readonly selectMimeBySha: Database.Statement;
   private readonly selectCountsByTask: Database.Statement;
+  private readonly selectTextCandidates: Database.Statement;
+  private readonly updateExtractedText: Database.Statement;
 
   constructor(
     private readonly db: DatabaseHandle,
@@ -132,6 +155,34 @@ export class TaskAttachmentStore {
        WHERE t.profile_id = ? AND t.deleted_at IS NULL
        GROUP BY ta.task_id
        ORDER BY ta.task_id`,
+    );
+    // The attachment-text backfill's candidate query (SRCH-008 / migration
+    // 048). `extracted_text IS NULL` is spelled literally so the partial index
+    // migration 048 creates on exactly that predicate can serve it, which is
+    // what keeps a pass over an already-indexed profile from scanning the
+    // table. Deliberately NOT filtered on `t.deleted_at`: a soft-deleted task's
+    // attachments still exist and its entry comes back the moment it is
+    // restored, so extracting now is what makes the restored task complete
+    // rather than half-indexed.
+    this.selectTextCandidates = db.prepare(
+      `SELECT ta.id AS id, ta.file_name AS file_name, ta.mime AS mime,
+              ta.size_bytes AS size_bytes, ta.sha256 AS sha256
+       FROM task_attachments ta
+       JOIN tasks t ON t.id = ta.task_id
+       WHERE t.profile_id = ?
+         AND ta.extracted_text IS NULL
+         AND ta.size_bytes <= ?
+         AND ta.mime IN (${CANDIDATE_MIME_PLACEHOLDERS})
+       ORDER BY ta.id
+       LIMIT ?`,
+    );
+    // Scoped through the owning task exactly as every other statement here is:
+    // an id alone never reaches a row of another profile.
+    this.updateExtractedText = db.prepare(
+      `UPDATE task_attachments
+          SET extracted_text = ?
+        WHERE id = ?
+          AND task_id IN (SELECT id FROM tasks WHERE profile_id = ?)`,
     );
   }
 
@@ -198,6 +249,45 @@ export class TaskAttachmentStore {
     return rows.map((row) => ({ taskId: row.task_id, count: row.n }));
   }
 
+  /**
+   * Up to `limit` of this profile's attachment rows whose text has never been
+   * attempted (SRCH-008 / migration 048), oldest first. Narrowed here only by
+   * what SQL can decide cheaply — the size cap and the two mimes that could
+   * possibly qualify (`ATTACHMENT_TEXT_CANDIDATE_MIMES`, a coarse superset);
+   * the eligibility RULE itself is main's, applied to what this returns.
+   *
+   * Deliberately not a "list everything pending" method: the pass that consumes
+   * it is bounded by design, and a method that could hand back an entire
+   * library's worth of rows would invite the caller to be unbounded too.
+   */
+  listTextIndexCandidates(limit: number, maxSizeBytes: number): AttachmentTextCandidate[] {
+    const rows = this.selectTextCandidates.all(
+      this.profileId,
+      maxSizeBytes,
+      ...ATTACHMENT_TEXT_CANDIDATE_MIMES,
+      limit,
+    ) as AttachmentTextCandidateRow[];
+    return rows.map(toAttachmentTextCandidate);
+  }
+
+  /**
+   * Records one attachment's extracted text, cut to `ATTACHMENT_TEXT_MAX_CHARS`
+   * (the projection's own body cap — storing more would be text the index can
+   * never reach). Writing the EMPTY string is a first-class outcome, not a
+   * failure: it marks the row as attempted, which is what stops a file that is
+   * not really text, or whose blob has gone missing, from being retried on
+   * every unlock for the rest of its life. An id that names no row of this
+   * profile writes nothing and says nothing — the backfill reads its own
+   * candidates, so a miss means the row was deleted underneath it.
+   */
+  setExtractedText(attachmentId: string, text: string): void {
+    this.updateExtractedText.run(
+      text.slice(0, ATTACHMENT_TEXT_MAX_CHARS),
+      attachmentId,
+      this.profileId,
+    );
+  }
+
   /** Confirms an active task exists in this profile or throws — the gate every method above goes through. */
   private requireActiveTask(id: string): void {
     const row = this.selectActiveTaskById.get(id, this.profileId);
@@ -205,6 +295,16 @@ export class TaskAttachmentStore {
       throw new TaskNotFoundError(`No active task "${id}" in this profile.`);
     }
   }
+}
+
+function toAttachmentTextCandidate(row: AttachmentTextCandidateRow): AttachmentTextCandidate {
+  return {
+    id: row.id,
+    fileName: row.file_name,
+    mime: row.mime,
+    sizeBytes: row.size_bytes,
+    sha256: row.sha256,
+  };
 }
 
 function toTaskAttachment(row: TaskAttachmentRow): TaskAttachment {

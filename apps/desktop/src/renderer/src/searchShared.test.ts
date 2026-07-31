@@ -221,6 +221,7 @@ function hit(kind: SearchKind, entityId: string): SearchResult {
     snippetRanges: [],
     contextDate: null,
     updatedAt: "2026-07-30T10:00:00.000Z",
+    fromAttachment: false,
   };
 }
 

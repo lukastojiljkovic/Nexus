@@ -7,6 +7,12 @@ export {
 export type { OpenDatabaseOptions } from "./database.js";
 
 export {
+  ATTACHMENT_TEXT_CANDIDATE_MIMES,
+  ATTACHMENT_TEXT_MAX_CHARS,
+} from "./attachmentText.js";
+export type { AttachmentTextCandidate } from "./attachmentText.js";
+
+export {
   BackupSettingsValidationError,
   PrivateNoteNotFoundError,
   PrivateNoteValidationError,

@@ -266,7 +266,8 @@ export interface ExportTaskTagLink {
  * `ExportNoteAttachment` is, with the bytes declared as a binary entry and
  * content-addressed by `sha256`. The two tables share ONE `blobs/<sha256>`
  * namespace in the archive, because they share one blob store on disk — a file
- * attached to both a task and a note travels once.
+ * attached to both a task and a note travels once. Its `extracted_text` does not
+ * travel either; see `ExportNoteAttachment` for why.
  */
 export interface ExportTaskAttachment {
   id: string;
@@ -865,7 +866,21 @@ export interface ExportNoteTemplate {
   updatedAt: string;
 }
 
-/** The index row only; the bytes are declared as a binary entry, content-addressed by `sha256`. */
+/**
+ * The index row only; the bytes are declared as a binary entry,
+ * content-addressed by `sha256`.
+ *
+ * Deliberately WITHOUT the row's `extracted_text` (SRCH-008 / migration 048),
+ * and the same goes for `ExportTaskAttachment`. That column is *derived* from
+ * the very bytes travelling beside it in `blobs/`, so carrying it would ship a
+ * second copy of content the archive already holds — one that can disagree with
+ * the first, since an older writer's extraction restored into a newer reader is
+ * a stale answer nothing would ever recompute. A restored row therefore arrives
+ * with nothing extracted, which is exactly the honest "not attempted yet" state
+ * the column's NULL means, and main runs a bounded extraction pass at the end
+ * of every restore and import apply. Nothing to add to the schema version:
+ * neither the reader nor the writer gains or loses a field.
+ */
 export interface ExportNoteAttachment {
   id: string;
   noteId: string;

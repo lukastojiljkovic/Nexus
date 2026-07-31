@@ -22,8 +22,8 @@ import { CardStore, MIGRATIONS, NexusDatabase, openDatabase, runMigrations } fro
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 47 (cloze deletion numbers), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(47);
+  it("is at version 48 (attachment text search), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(48);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -5692,6 +5692,182 @@ describe("migration 047 — cloze deletion numbers (ADR-068)", () => {
           }
         ).n,
       ).toBe(1);
+    } finally {
+      raw.close();
+    }
+  });
+});
+
+describe("migration 048 — attachment text search (SRCH-008)", () => {
+  const T = "2026-01-01T00:00:00.000Z";
+  type Handle = Database.Database;
+
+  const columnNames = (raw: Handle, table: string): string[] =>
+    (raw.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((row) => row.name);
+
+  const indexNames = (raw: Handle, table: string): string[] =>
+    (raw.prepare(`PRAGMA index_list(${table})`).all() as { name: string }[]).map((row) => row.name);
+
+  const sqlOf = (raw: Handle, name: string): string =>
+    (raw.prepare("SELECT sql FROM sqlite_master WHERE name = ?").get(name) as { sql: string }).sql;
+
+  /**
+   * A database migrated to `through` and seeded with a task and a note that
+   * each carry one attachment — the two tables this migration widens. Opened
+   * the two-stage way every data-migration test here opens one: `nx_fold` has
+   * to exist on the connection before migration 017's views are created.
+   */
+  function seeded(name: string, through: number): Handle {
+    const raw = new Database(join(dir, name));
+    raw.pragma("journal_mode = WAL");
+    raw.pragma("foreign_keys = ON");
+    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
+      typeof value === "string" ? foldSearchText(value) : null,
+    );
+    runMigrations(raw, MIGRATIONS.slice(0, through));
+    raw
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES ('p1', 'personal', 'P', ?)")
+      .run(T);
+    raw
+      .prepare(
+        `INSERT INTO task_lists (id, profile_id, parent_id, name, is_inbox, position, created_at, updated_at)
+         VALUES ('l1', 'p1', NULL, 'Inbox', 1, 'a', ?, ?)`,
+      )
+      .run(T, T);
+    raw
+      .prepare(
+        `INSERT INTO tasks (id, profile_id, list_id, title, description, status, priority, position, created_at, updated_at)
+         VALUES ('t1', 'p1', 'l1', 'Prijava', 'Opis', 'todo', 'none', 'a', ?, ?)`,
+      )
+      .run(T, T);
+    raw
+      .prepare(
+        `INSERT INTO task_attachments (id, task_id, file_name, mime, size_bytes, sha256, created_at)
+         VALUES ('ta1', 't1', 'beleske.txt', 'text/plain', 40, ?, ?)`,
+      )
+      .run("a".repeat(64), T);
+    raw
+      .prepare(
+        `INSERT INTO notes (id, profile_id, title, created_at, updated_at)
+         VALUES ('n1', 'p1', 'Beleška', ?, ?)`,
+      )
+      .run(T, T);
+    raw
+      .prepare(
+        `INSERT INTO note_attachments (id, note_id, file_name, mime, size_bytes, sha256, created_at)
+         VALUES ('na1', 'n1', 'zapisnik.md', 'text/plain', 40, ?, ?)`,
+      )
+      .run("b".repeat(64), T);
+    return raw;
+  }
+
+  /**
+   * The projected columns, never `search_entries.id`: every refresh is a
+   * delete-then-reinsert (migration 017 — a contentless FTS5 row cannot be
+   * updated in place), so the surrogate rowid moves whenever a trigger fires
+   * even when nothing about the projection changed. What must not move is the
+   * projection.
+   */
+  const entries = (raw: Handle): unknown[] =>
+    raw
+      .prepare(
+        `SELECT kind, entity_id, profile_id, parent_id, title, body,
+                title_folded, body_folded, context_date, updated_at
+         FROM search_entries ORDER BY kind, entity_id`,
+      )
+      .all();
+
+  it("adds a nullable extracted_text to both projected attachment tables, and to no other", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    expect(columnNames(db.raw, "note_attachments")).toContain("extracted_text");
+    expect(columnNames(db.raw, "task_attachments")).toContain("extracted_text");
+    // Subject materials are deliberately NOT projected into the index at all
+    // (migration 035), so their contents are not indexed either.
+    expect(columnNames(db.raw, "subject_attachments")).not.toContain("extracted_text");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("creates the pending-queue partial index on each widened table", () => {
+    const db = openDatabase({ path: join(dir, "indexes.db") });
+    expect(indexNames(db.raw, "note_attachments")).toContain("note_attachments_text_pending");
+    expect(indexNames(db.raw, "task_attachments")).toContain("task_attachments_text_pending");
+    expect(sqlOf(db.raw, "task_attachments_text_pending")).toContain("WHERE extracted_text IS NULL");
+    db.close();
+  });
+
+  it("names extracted_text in the task attachment trigger's UPDATE OF narrowing", () => {
+    // Migration 025 narrowed the trigger so a `mime`/`size_bytes` correction
+    // does not re-project the task. A column that DOES change the projection
+    // has to be named there, or the first extraction never reaches the index.
+    const db = openDatabase({ path: join(dir, "trigger.db") });
+    expect(sqlOf(db.raw, "task_attachments_search_au")).toContain(
+      "AFTER UPDATE OF file_name, extracted_text",
+    );
+    db.close();
+  });
+
+  it("leaves every already-written search entry byte-for-byte alone (no re-projection needed)", () => {
+    // The claim the migration makes instead of shipping a backfill statement:
+    // with every extracted_text still NULL, both widened views produce exactly
+    // what the old ones produced, so rewriting the entries would change nothing.
+    const raw = seeded("upgrade.db", 47);
+    try {
+      const before = entries(raw);
+      expect(before).toHaveLength(3); // the task, the note, and the note's attachment
+      runMigrations(raw, MIGRATIONS);
+      expect(entries(raw)).toEqual(before);
+    } finally {
+      raw.close();
+    }
+  });
+
+  it("indexes a task's attachment text without putting it in the displayed body", () => {
+    const raw = seeded("task-text.db", 48);
+    try {
+      raw
+        .prepare("UPDATE task_attachments SET extracted_text = ? WHERE id = 'ta1'")
+        .run("kvartalni izveštaj o prodaji");
+      const row = raw.prepare("SELECT * FROM search_entries WHERE kind = 'task'").get() as {
+        body: string;
+        body_folded: string;
+      };
+      expect(row.body).toBe("Opis beleske.txt");
+      expect(row.body_folded).toBe(foldSearchText("Opis beleske.txt kvartalni izveštaj o prodaji"));
+    } finally {
+      raw.close();
+    }
+  });
+
+  it("indexes a note attachment's text as its own entry's matchable body, display body still empty", () => {
+    const raw = seeded("note-text.db", 48);
+    try {
+      raw
+        .prepare("UPDATE note_attachments SET extracted_text = ? WHERE id = 'na1'")
+        .run("Đorđe je vodio zapisnik");
+      const row = raw.prepare("SELECT * FROM search_entries WHERE kind = 'attachment'").get() as {
+        title: string;
+        body: string;
+        body_folded: string;
+      };
+      expect(row.title).toBe("zapisnik.md");
+      expect(row.body).toBe("");
+      expect(row.body_folded).toBe(foldSearchText("Đorđe je vodio zapisnik"));
+    } finally {
+      raw.close();
+    }
+  });
+
+  it("treats an empty extracted_text exactly as a NULL one: nothing added to either body", () => {
+    // The sentinel that marks a row as ATTEMPTED must not leak a separator or a
+    // stray space into the index — an unreadable file has to index as though it
+    // had never been looked at.
+    const raw = seeded("attempted.db", 48);
+    try {
+      const before = entries(raw);
+      raw.prepare("UPDATE task_attachments SET extracted_text = '' WHERE id = 'ta1'").run();
+      raw.prepare("UPDATE note_attachments SET extracted_text = '' WHERE id = 'na1'").run();
+      expect(entries(raw)).toEqual(before);
     } finally {
       raw.close();
     }

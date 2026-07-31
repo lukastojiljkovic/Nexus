@@ -15,6 +15,7 @@ import {
   NoteAttachmentStore,
   NoteStore,
   SubjectStore,
+  TaskAttachmentStore,
   TaskListStore,
   TaskStore,
   openDatabase,
@@ -746,5 +747,161 @@ describe("task attachment names inside the task's search entry (migration 025)",
     expect(ftsRow.n).toBe(1);
 
     rawDb.close();
+  });
+});
+
+/**
+ * Migration 048 (SRCH-008). The CONTENTS of a text attachment become matchable
+ * — through the task's own entry for a task attachment (migration 025's
+ * arrangement, widened) and through the attachment's own entry for a note one —
+ * while the DISPLAYED body of both stays exactly what it was. The divergence is
+ * deliberate: a snippet is supposed to show the record, not a paragraph lifted
+ * out of a file it happens to carry, and the search surface reads a hit that
+ * highlights nothing as "this matched inside an attachment".
+ *
+ * Rows go in through the real stores here, because unlike migration 025 there
+ * IS a store method under test (`setExtractedText`) and the trigger it has to
+ * fire is the point.
+ */
+describe("attachment CONTENT inside the search index (migration 048)", () => {
+  it("makes a note attachment's text matchable through its own entry, display body still empty", () => {
+    const profileId = createProfile();
+    const notes = new NoteStore(db.raw, profileId);
+    const attachments = new NoteAttachmentStore(db.raw, profileId);
+    const note = notes.create(NOW);
+    const row = attachments.add(
+      note.id,
+      { fileName: "zapisnik.md", mime: "text/plain", sizeBytes: 64, sha256: "a".repeat(64) },
+      NOW,
+    );
+
+    attachments.setExtractedText(row.id, "Sastanak sa Đorđem o kvartalnom izveštaju");
+
+    const indexed = entry("attachment", row.id);
+    expect(indexed?.title).toBe("zapisnik.md");
+    expect(indexed?.body).toBe(""); // never the file's innards
+    expect(indexed?.body_folded).toBe(foldSearchText("Sastanak sa Đorđem o kvartalnom izveštaju"));
+    // Matchable as typed and through the Serbian fold, like every other body.
+    expect(ftsMatchEntities('"kvartalnom"*')).toEqual([{ kind: "attachment", entity_id: row.id }]);
+    expect(ftsMatchEntities('"djordjem"*')).toEqual([{ kind: "attachment", entity_id: row.id }]);
+    expect(ftsCount()).toBe(entryCount());
+  });
+
+  it("makes a task attachment's text matchable through the TASK, behind the file's own name", () => {
+    const profileId = createProfile();
+    const task = new TaskStore(db.raw, profileId).create({
+      title: "Prijava",
+      description: "Opis zadatka",
+    });
+    const attachments = new TaskAttachmentStore(db.raw, profileId);
+    const row = attachments.add(
+      task.id,
+      { fileName: "beleske.txt", mime: "text/plain", sizeBytes: 64, sha256: "a".repeat(64) },
+      NOW,
+    );
+
+    attachments.setExtractedText(row.id, "rok je petnaesti septembar");
+
+    const indexed = entry("task", task.id);
+    expect(indexed?.body).toBe("Opis zadatka beleske.txt");
+    expect(indexed?.body_folded).toBe(
+      foldSearchText("Opis zadatka beleske.txt rok je petnaesti septembar"),
+    );
+    expect(ftsMatchEntities('"septembar"*')).toEqual([{ kind: "task", entity_id: task.id }]);
+    // No entry of its own: a task attachment is still not a kind (migration 025).
+    expect(entryCount()).toBe(1);
+    expect(ftsCount()).toBe(1);
+  });
+
+  it("keeps the trigger's column narrowing honest: size_bytes does not re-project, extracted_text does", () => {
+    // Probed by hand-poisoning the stored entry: a re-projection overwrites the
+    // poison from the view, a narrowed-away write leaves it standing. Reading
+    // `search_entries.id` instead would prove nothing — the refresh is a
+    // delete-then-reinsert into a plain INTEGER PRIMARY KEY, which hands the
+    // freed rowid straight back when the table holds one row.
+    const profileId = createProfile();
+    const task = new TaskStore(db.raw, profileId).create({ title: "Narrowing" });
+    const attachments = new TaskAttachmentStore(db.raw, profileId);
+    const row = attachments.add(
+      task.id,
+      { fileName: "a.txt", mime: "text/plain", sizeBytes: 64, sha256: "a".repeat(64) },
+      NOW,
+    );
+    const poison = (): void => {
+      db.raw
+        .prepare("UPDATE search_entries SET body_folded = 'poison' WHERE kind = 'task' AND entity_id = ?")
+        .run(task.id);
+    };
+
+    poison();
+    db.raw.prepare("UPDATE task_attachments SET size_bytes = 99 WHERE id = ?").run(row.id);
+    expect(entry("task", task.id)?.body_folded).toBe("poison");
+
+    poison();
+    attachments.setExtractedText(row.id, "sadržaj priloga");
+    expect(entry("task", task.id)?.body_folded).toBe(foldSearchText("a.txt sadržaj priloga"));
+    expect(ftsMatchCount('"sadrzaj"*')).toBe(1);
+  });
+
+  it("takes the text out of the index with the attachment row", () => {
+    const profileId = createProfile();
+    const task = new TaskStore(db.raw, profileId).create({ title: "Brisanje" });
+    const attachments = new TaskAttachmentStore(db.raw, profileId);
+    const row = attachments.add(
+      task.id,
+      { fileName: "a.txt", mime: "text/plain", sizeBytes: 64, sha256: "a".repeat(64) },
+      NOW,
+    );
+    attachments.setExtractedText(row.id, "poverljivo");
+    expect(ftsMatchCount('"poverljivo"*')).toBe(1);
+
+    attachments.remove(task.id, row.id);
+
+    expect(ftsMatchCount('"poverljivo"*')).toBe(0);
+    expect(ftsCount()).toBe(entryCount());
+  });
+
+  it("takes a soft-deleted note's attachment text out of the index and brings it back on restore", () => {
+    const profileId = createProfile();
+    const notes = new NoteStore(db.raw, profileId);
+    const attachments = new NoteAttachmentStore(db.raw, profileId);
+    const note = notes.create(NOW);
+    const row = attachments.add(
+      note.id,
+      { fileName: "a.md", mime: "text/plain", sizeBytes: 64, sha256: "a".repeat(64) },
+      NOW,
+    );
+    attachments.setExtractedText(row.id, "tajni sastanak");
+    expect(ftsMatchCount('"tajni"*')).toBe(1);
+
+    notes.softDelete(note.id, LATER);
+    expect(ftsMatchCount('"tajni"*')).toBe(0);
+
+    notes.restore(note.id, LATER);
+    expect(ftsMatchCount('"tajni"*')).toBe(1);
+    expect(ftsCount()).toBe(entryCount());
+  });
+
+  it("caps a task's whole body at 8000 characters, extracted text included", () => {
+    // One cap over the whole body, exactly as migration 025 fixed it: a long
+    // description crowds the file's text out of the index the same way it
+    // already crowds out the file's name.
+    const profileId = createProfile();
+    const longText = "lorem ipsum ".repeat(700); // 8400 ASCII characters
+    const task = new TaskStore(db.raw, profileId).create({
+      title: "Dugačak opis",
+      description: longText,
+    });
+    const attachments = new TaskAttachmentStore(db.raw, profileId);
+    const row = attachments.add(
+      task.id,
+      { fileName: "a.txt", mime: "text/plain", sizeBytes: 64, sha256: "a".repeat(64) },
+      NOW,
+    );
+
+    attachments.setExtractedText(row.id, "jedinstvenarec");
+
+    expect(entry("task", task.id)?.body_folded.length).toBe(8000);
+    expect(ftsMatchCount('"jedinstvenarec"*')).toBe(0);
   });
 });

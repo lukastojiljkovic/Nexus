@@ -7635,6 +7635,17 @@ button.cal__grid-event--dragging {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* "matched inside an attached file" (SRCH-008). Quieter than the snippet it
+   sits under — caption size, muted, no colour of its own — because it is a
+   note about the row rather than part of it. */
+.search__row-source,
+.searchpage__row-source {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .search__row-date,
 .search__row-hint {
   flex: none;

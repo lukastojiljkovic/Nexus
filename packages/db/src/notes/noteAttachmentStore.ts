@@ -1,4 +1,9 @@
 import type Database from "better-sqlite3-multiple-ciphers";
+import {
+  ATTACHMENT_TEXT_CANDIDATE_MIMES,
+  ATTACHMENT_TEXT_MAX_CHARS,
+  type AttachmentTextCandidate,
+} from "../attachmentText.js";
 import { NoteAttachmentNotFoundError, NoteAttachmentValidationError, NoteNotFoundError } from "../errors.js";
 import { uuidv7 } from "../ids.js";
 
@@ -36,7 +41,23 @@ interface NoteAttachmentRow {
   created_at: string;
 }
 
+interface AttachmentTextCandidateRow {
+  id: string;
+  file_name: string;
+  mime: string;
+  size_bytes: number;
+  sha256: string;
+}
+
 const COLUMNS = "id, note_id, file_name, mime, size_bytes, sha256, created_at";
+
+/**
+ * `?` placeholders for `ATTACHMENT_TEXT_CANDIDATE_MIMES`. Only the COUNT is
+ * interpolated, and it comes from a code-level constant array — never from a
+ * caller — while the mime strings themselves are bound as ordinary parameters
+ * below.
+ */
+const CANDIDATE_MIME_PLACEHOLDERS = ATTACHMENT_TEXT_CANDIDATE_MIMES.map(() => "?").join(", ");
 
 const MAX_FILE_NAME_LENGTH = 255;
 const MAX_MIME_LENGTH = 100;
@@ -84,6 +105,8 @@ export class NoteAttachmentStore {
   private readonly deleteAttachment: Database.Statement;
   private readonly countBySha: Database.Statement;
   private readonly selectMimeBySha: Database.Statement;
+  private readonly selectTextCandidates: Database.Statement;
+  private readonly updateExtractedText: Database.Statement;
 
   constructor(
     private readonly db: DatabaseHandle,
@@ -111,6 +134,33 @@ export class NoteAttachmentStore {
     );
     this.selectMimeBySha = db.prepare(
       `SELECT mime FROM note_attachments WHERE sha256 = ? LIMIT 1`,
+    );
+    // The attachment-text backfill's candidate query (SRCH-008 / migration
+    // 048). `extracted_text IS NULL` is spelled literally so the partial index
+    // migration 048 creates on exactly that predicate can serve it, which is
+    // what keeps a pass over an already-indexed profile from scanning the
+    // table. Deliberately NOT filtered on `n.deleted_at`: a soft-deleted note's
+    // attachments still exist and come back into the index the moment the note
+    // is restored, so extracting now is what makes the restored note complete.
+    this.selectTextCandidates = db.prepare(
+      `SELECT a.id AS id, a.file_name AS file_name, a.mime AS mime,
+              a.size_bytes AS size_bytes, a.sha256 AS sha256
+       FROM note_attachments a
+       JOIN notes n ON n.id = a.note_id
+       WHERE n.profile_id = ?
+         AND a.extracted_text IS NULL
+         AND a.size_bytes <= ?
+         AND a.mime IN (${CANDIDATE_MIME_PLACEHOLDERS})
+       ORDER BY a.id
+       LIMIT ?`,
+    );
+    // Scoped through the owning note exactly as every other statement here is:
+    // an id alone never reaches a row of another profile.
+    this.updateExtractedText = db.prepare(
+      `UPDATE note_attachments
+          SET extracted_text = ?
+        WHERE id = ?
+          AND note_id IN (SELECT id FROM notes WHERE profile_id = ?)`,
     );
   }
 
@@ -166,6 +216,45 @@ export class NoteAttachmentStore {
     return row ? row.mime : null;
   }
 
+  /**
+   * Up to `limit` of this profile's attachment rows whose text has never been
+   * attempted (SRCH-008 / migration 048), oldest first. Narrowed here only by
+   * what SQL can decide cheaply — the size cap and the two mimes that could
+   * possibly qualify (`ATTACHMENT_TEXT_CANDIDATE_MIMES`, a coarse superset);
+   * the eligibility RULE itself is main's, applied to what this returns.
+   *
+   * Deliberately not a "list everything pending" method: the pass that consumes
+   * it is bounded by design, and a method that could hand back an entire
+   * library's worth of rows would invite the caller to be unbounded too.
+   */
+  listTextIndexCandidates(limit: number, maxSizeBytes: number): AttachmentTextCandidate[] {
+    const rows = this.selectTextCandidates.all(
+      this.profileId,
+      maxSizeBytes,
+      ...ATTACHMENT_TEXT_CANDIDATE_MIMES,
+      limit,
+    ) as AttachmentTextCandidateRow[];
+    return rows.map(toAttachmentTextCandidate);
+  }
+
+  /**
+   * Records one attachment's extracted text, cut to `ATTACHMENT_TEXT_MAX_CHARS`
+   * (the projection's own body cap — storing more would be text the index can
+   * never reach). Writing the EMPTY string is a first-class outcome, not a
+   * failure: it marks the row as attempted, which is what stops a file that is
+   * not really text, or whose blob has gone missing, from being retried on
+   * every unlock for the rest of its life. An id that names no row of this
+   * profile writes nothing and says nothing — the backfill reads its own
+   * candidates, so a miss means the row was deleted underneath it.
+   */
+  setExtractedText(attachmentId: string, text: string): void {
+    this.updateExtractedText.run(
+      text.slice(0, ATTACHMENT_TEXT_MAX_CHARS),
+      attachmentId,
+      this.profileId,
+    );
+  }
+
   /** Confirms an active note exists in this profile or throws — the gate every method above goes through. */
   private requireActiveNote(id: string): void {
     const row = this.selectActiveNoteById.get(id, this.profileId);
@@ -173,6 +262,16 @@ export class NoteAttachmentStore {
       throw new NoteNotFoundError(`No active note "${id}" in this profile.`);
     }
   }
+}
+
+function toAttachmentTextCandidate(row: AttachmentTextCandidateRow): AttachmentTextCandidate {
+  return {
+    id: row.id,
+    fileName: row.file_name,
+    mime: row.mime,
+    sizeBytes: row.size_bytes,
+    sha256: row.sha256,
+  };
 }
 
 function toNoteAttachment(row: NoteAttachmentRow): NoteAttachment {
