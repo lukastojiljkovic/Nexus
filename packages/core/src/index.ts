@@ -507,6 +507,19 @@ export type {
 } from "./tasks/taskViewConfig.js";
 
 export {
+  PrivSealError,
+  derivePrivBlobKey,
+  openPrivBlob,
+  openPrivNote,
+  sealPrivBlob,
+  sealPrivNote,
+} from "./priv/privEnvelope.js";
+export type { PrivAttachmentRef, PrivNoteEnvelope } from "./priv/privEnvelope.js";
+
+export { buildPrivIndex, searchPrivIndex } from "./priv/privIndex.js";
+export type { PrivIndex, PrivIndexEntry, PrivIndexNote } from "./priv/privIndex.js";
+
+export {
   chordAccelerator,
   chordFromEvent,
   findChordConflict,

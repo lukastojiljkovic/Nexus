@@ -53,3 +53,15 @@ export {
 export type { BlobKeys } from "./blobCrypto.js";
 
 export { unwrapBackupPassphrase, wrapBackupPassphrase } from "./backupPassphrase.js";
+
+// The PRIV key chain (ADR-057) lives in `priv/` but exports through THIS
+// subpath: `derivePrivCredentialKey` runs Argon2id, which has no business in
+// the `.` barrel's bundle — the same rule that put keyChain.ts here.
+export {
+  derivePrivCredentialKey,
+  generatePrivDek,
+  unwrapPrivDek,
+  unwrapPrivDekWithKit,
+  wrapPrivDek,
+  wrapPrivDekWithKit,
+} from "../priv/privKeys.js";
