@@ -175,6 +175,27 @@ export const strings = {
       dan: "Dobar dan",
       vece: "Dobro veče",
     },
+    /**
+     * The compact day strip (DASH-009) — the one muted line under the date
+     * carrying the day's live essentials. A header element, not a widget: it
+     * has no title and no empty state, because a strip with nothing to say is
+     * simply not drawn.
+     */
+    strip: {
+      /**
+       * Stands in for the hour on an event that has none left to name — an
+       * all-day event, or a multi-day one that began before today: „danas ·
+       * Godišnjica". Lower-case, like the widget's own `taskTag`/`personTag`
+       * leads, because it is a label and not the start of a sentence.
+       */
+      dayLong: "danas",
+      /**
+       * A focus timer is running right now. „Fokus u toku" alone under the
+       * first minute; „Fokus u toku: 25 min" once there is a duration worth
+       * naming (`formatDurationMinutes` appends it).
+       */
+      focusRunning: "Fokus u toku",
+    },
     /** Danas widget — today's events, birthdays, and tasks due today. */
     today: {
       title: "Danas",

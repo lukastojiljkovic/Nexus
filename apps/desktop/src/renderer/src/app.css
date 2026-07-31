@@ -2473,6 +2473,23 @@ button.cal__grid-event--dragging {
   text-transform: uppercase;
 }
 
+/* The compact day strip (DASH-009): one quiet line under the date carrying the
+   day's live essentials — the next event still ahead, the running focus timer.
+   A step below the date on the type scale, so the header reads top-down as
+   name → day → what is next, and never competes with the cards. It is drawn
+   only when it has something to say, so there is no empty-state rule here.
+   A long title is truncated rather than allowed to stretch the header away
+   from the edit affordances sharing its row. */
+.dash__strip {
+  margin: var(--nx-space-1) 0 0;
+  max-width: 60ch;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+}
+
 /* Quiet page-level lines: a layout read that failed (with its retry), a write
    that did not land, and the one thing the store does that a user could not
    predict — the default arrangement coming back. Never a dialog. */

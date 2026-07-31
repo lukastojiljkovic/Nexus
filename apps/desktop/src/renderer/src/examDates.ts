@@ -33,9 +33,13 @@ export function daysUntilExam(examDate: string): number {
  * The local calendar day as a bare "YYYY-MM-DD" key — the same wall-clock
  * y/m/d read `daysUntilExam` uses for "today" (and main's `localToday`), so
  * every study-planner range query agrees with the countdown math.
+ *
+ * `now` defaults to this instant. A caller that already holds the reading it is
+ * drawing against passes it in — the dashboard's day strip ticks a clock of its
+ * own (DASH-009), and the day key has to be that clock's day rather than one
+ * read a moment later, or the two disagree for a minute across midnight.
  */
-export function localTodayKey(): string {
-  const now = new Date();
+export function localTodayKey(now: Date = new Date()): string {
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
   return `${now.getFullYear()}-${month}-${day}`;

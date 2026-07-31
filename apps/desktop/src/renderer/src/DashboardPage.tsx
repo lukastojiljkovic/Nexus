@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ComponentType, CSSProperties, DragEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { ModuleRegistry, WidgetContract } from "@nexus/core";
@@ -8,9 +8,14 @@ import type {
   DashboardSettings,
   DashboardWidgetInstance,
   DashboardWidgetSize,
+  Event,
+  RunningFocusSession,
 } from "../../shared/ipc.js";
+import { buildCalendarItems, type CalendarSource } from "./calendarItems.js";
 import { lookupString, moveNeighbours, type LayoutNeighbours } from "./dashboardLayout.js";
+import { dayStripLine } from "./dashboardStrip.js";
 import { DASHBOARD_WIDGETS, type DashboardWidgetBodyProps } from "./dashboardWidgets.js";
+import { localTodayKey } from "./examDates.js";
 import { NotePopover } from "./notePopover.js";
 import { strings } from "./strings.js";
 
@@ -21,6 +26,18 @@ function greeting(name: string, hour: number): string {
   const trimmed = name.trim();
   return trimmed.length > 0 ? `${salutation}, ${trimmed}` : salutation;
 }
+
+/**
+ * The day strip reads events and NOTHING else (DASH-009): a birthday or a task
+ * is „Danas"'s business, and a line meant to say what is next must not be spent
+ * on something that is not. Events go through the calendar merge all the same,
+ * because a recurring series is one stored row that only the merge knows how to
+ * expand into the occurrence falling today (ADR-024).
+ */
+const STRIP_SOURCES: ReadonlySet<CalendarSource> = new Set<CalendarSource>(["events"]);
+
+/** How often the header re-reads the clock — the strip's whole refresh (DASH-009). */
+const STRIP_TICK_MS = 60_000;
 
 /** The Serbian name of a widget, from the strings KEY its contract publishes. */
 function widgetTitle(contract: WidgetContract): string {
@@ -308,6 +325,18 @@ export function DashboardPage({
   // the layout below: it is decoration, and decoration must never be able to
   // hold up — or fail — the data the page exists to show.
   const [dashboardSettings, setDashboardSettings] = useState<DashboardSettings | null>(null);
+  // The day strip's own small read (DASH-009), and the clock it is drawn
+  // against. `now` is state rather than a fresh `new Date()` per render for one
+  // reason: the strip has to change as the day moves under it, and a value the
+  // header re-derives only when something else happens to re-render would be
+  // stale exactly when nobody is touching the page. Everything else in the
+  // header — the salutation, the date line — rides the same tick and is now
+  // correct across noon and midnight for free.
+  const [now, setNow] = useState(() => new Date());
+  const [strip, setStrip] = useState<{
+    events: readonly Event[];
+    focus: RunningFocusSession | null;
+  } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -323,6 +352,49 @@ export function DashboardPage({
       active = false;
     };
   }, [profileId]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), STRIP_TICK_MS);
+    return () => window.clearInterval(id);
+  }, []);
+
+  // Read into booleans first, the idiom every widget's `load` follows:
+  // `enabledModules` is a fresh `Set` on each of App's renders, so an effect
+  // depending on it directly would re-read on every one of them.
+  const calendarOn = enabledModules.has("calendar");
+  const studyOn = enabledModules.has("study");
+
+  // Read ONCE per profile, not on the tick: the events do not change while the
+  // page is open, and the running timer can only be started from STUDY — which
+  // means leaving this page and coming back to it. What the tick recomputes is
+  // the READING of that data: which event is still ahead, how long the timer
+  // has run.
+  //
+  // The strip does NOT ride the „Danas" card's fetch: the page holds no widget
+  // data at all (ADR-045 section 4), and reaching into a card's read to feed
+  // the header is precisely the coupling that boundary exists to prevent. The
+  // price is one extra `listEvents` per open, a local SQLite call away.
+  //
+  // Decoration-adjacent, like the background above: a failure here renders
+  // NOTHING and never a message. The header must not grow a red line because a
+  // caption could not be drawn.
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const [events, focus] = await Promise.all([
+          calendarOn ? window.nexus.listEvents(profileId) : [],
+          studyOn ? window.nexus.focusStatus(profileId) : null,
+        ]);
+        if (active) setStrip({ events, focus });
+      } catch (error) {
+        console.error("Nexus: failed to load the dashboard day strip:", error);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profileId, calendarOn, studyOn]);
 
   useEffect(() => {
     let active = true;
@@ -455,12 +527,39 @@ export function DashboardPage({
     endDrag();
   }
 
-  const now = new Date();
   const dateLine = new Intl.DateTimeFormat("sr-Latn", {
     weekday: "long",
     day: "numeric",
     month: "long",
   }).format(now);
+
+  // Today's day key comes off the SAME reading the strip is drawn against, so
+  // the two can never disagree for a minute across midnight.
+  const todayKey = localTodayKey(now);
+  // Merged once per read, not once per tick: expanding the recurring masters is
+  // the only real work here, and it depends on the events and the day — never
+  // on the minute. What the tick then costs is one pass over the result.
+  const stripItems = useMemo(
+    () =>
+      strip === null
+        ? []
+        : buildCalendarItems(
+            { events: strip.events, tasks: [], exams: [], blocks: [], subjects: [], people: [] },
+            STRIP_SOURCES,
+            { from: todayKey, to: todayKey },
+          ),
+    [strip, todayKey],
+  );
+  const stripLine =
+    strip === null
+      ? null
+      : dayStripLine({
+          items: stripItems,
+          todayKey,
+          nowMinutes: now.getHours() * 60 + now.getMinutes(),
+          nowMs: now.getTime(),
+          focus: strip.focus,
+        });
 
   // Two layers behind the content when a background is set (ADR-041 section 5):
   // the image itself, cover/centered, and a scrim whose fill IS the theme's own
@@ -502,6 +601,10 @@ export function DashboardPage({
         <header className="dash__greeting">
           <h1 className="dash__hello">{greeting(profileName, now.getHours())}</h1>
           <p className="dash__date">{dateLine}</p>
+          {/* Nothing to say ⇒ no element at all (DASH-009). A caption that
+              persists to announce its own emptiness is an empty state, and the
+              strip is not one. */}
+          {stripLine !== null && <p className="dash__strip">{stripLine}</p>}
         </header>
         <div className="dash__tools">
           {editing ? (
