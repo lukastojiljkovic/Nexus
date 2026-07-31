@@ -321,6 +321,24 @@ export const IpcChannel = {
   imexImportCsvMap: "imex:import-csv-map",
   imexImportCsvApply: "imex:import-csv-apply",
   imexImportCsvCancel: "imex:import-csv-cancel",
+  // A calendar file straight into CAL (ADR-061). Its OWN four channels, on the
+  // reasoning that gave the `.apkg` its own: an `.ics` is somebody else's
+  // calendar in a line-oriented text format, read by a different reader under a
+  // different cap, and a shared channel would be one validated field away from
+  // letting a request for one produce the other. The pick/preview/apply/cancel
+  // SHAPE is deliberately identical, though — same one-slot undo, same named
+  // skips, same token — because the user is doing the same thing.
+  //
+  // No replan channel: the one answer an `.ics` preview can change is the
+  // event duplicate group (ADR-051), and that rides on the preview request —
+  // re-previewing under the other answer re-plans the events main already
+  // parsed, exactly as a changed `.apkg` subject re-plans the collection main
+  // already read. The raw text is dropped the moment it is parsed; only the
+  // parsed events live in the pending session.
+  imexImportIcsPick: "imex:import-ics-pick",
+  imexImportIcsPreview: "imex:import-ics-preview",
+  imexImportIcsApply: "imex:import-ics-apply",
+  imexImportIcsCancel: "imex:import-ics-cancel",
   // The LLM-assisted import (IMEX-005). Four channels, not five: there is no
   // FILE to pick — the "source" is text the user pasted out of their own chat,
   // which travels with the preview request. The prompt itself needs no channel
@@ -3927,9 +3945,10 @@ export interface RestoreUndoResult {
  * is about an Anki deck, not about a Nexus archive — and `"llm"` (IMEX-005) is
  * its own for the same one, since what it undoes came out of a chat window.
  * `"csv"` (ADR-062) joins on identical terms: the sentence that names it is
- * about somebody's spreadsheet.
+ * about somebody's spreadsheet — and `"ics"` (ADR-061) likewise, since what
+ * it undoes came out of a calendar file.
  */
-export type RestoreUndoKind = "restore" | "import" | "apkg" | "llm" | "csv";
+export type RestoreUndoKind = "restore" | "import" | "apkg" | "llm" | "csv" | "ics";
 
 export interface RestoreStatus {
   undo: {
@@ -4599,6 +4618,62 @@ export type CsvImportPickResult =
   | { canceled: true }
   | { canceled: false; path: string; fileName: string };
 
+// --- Calendar .ics import (ADR-061) ------------------------------------------
+
+/**
+ * The one bound `main/icsReader.ts` enforces on an `.ics`, declared here beside
+ * the `.apkg` caps because this file is where every limit the app is willing to
+ * state lives. A calendar is line-oriented text somebody's app wrote — twenty
+ * mebibytes is years of a busy calendar, and past it the file is not a calendar,
+ * it is a payload. One cap and not seven, unlike the `.apkg`'s: there is no zip
+ * to walk, no SQLite image to hold resident and no per-field blob — the text IS
+ * the whole cost, and it is read once and dropped the moment it is parsed.
+ */
+export const ICS_IMPORT_MAX_FILE_BYTES = 20_971_520; // 20 MiB
+
+/**
+ * Why an `.ics` could not be read at all. Two members, not six: a text file has
+ * exactly two ways to be unreadable — bigger than the cap, or not a calendar
+ * once the parser looks (no `VCALENDAR` anywhere in it). Anything else the file
+ * carries is a per-event skip, named in the preview, never a refusal of the
+ * whole file.
+ */
+export type IcsImportReadErrorCode = "too-large" | "not-a-calendar";
+
+/**
+ * Why something a VEVENT carried is not (or not wholly) in the plan. Mirrors
+ * `@nexus/core`'s `IcsImportSkipCode` exactly — redeclared here like every
+ * other closed domain in this file, so `main`'s assignment of a core value to
+ * this type turns a code added in core into a compile error rather than a line
+ * the screen cannot label.
+ */
+export type IcsImportSkipCode =
+  | "invalid-start"
+  | "unknown-timezone"
+  | "empty-summary"
+  | "invalid-end"
+  | "invalid-exdate"
+  | "recurrence-unmappable"
+  | "detached-override"
+  | "categories-dropped";
+
+/** One named, counted group of things that will not (wholly) arrive. */
+export interface IcsImportSkip {
+  code: IcsImportSkipCode;
+  count: number;
+}
+
+/** One component the file carried and the import does not read — a VTODO, a VALARM, anything unknown — counted by its own name, because a loss with no name is a loss nobody agreed to. */
+export interface IcsImportSkippedComponent {
+  name: string;
+  count: number;
+}
+
+/** The outcome of the native "pick an .ics" dialog — structurally the `.apkg`'s, for the same reason: a plain text file has no `encrypted` flag to carry. */
+export type IcsImportPickResult =
+  | { canceled: true }
+  | { canceled: false; path: string; fileName: string };
+
 /**
  * Picking (`imex:import-csv-pick`) and dropping the pick
  * (`imex:import-csv-cancel`) carry no payload — main holds the pick. The
@@ -4614,6 +4689,78 @@ export interface ImexImportCsvPreviewRequest {
 
 /** `token` names the exact plan being confirmed — main refuses any other value. */
 export interface ImexImportCsvApplyRequest {
+  profileId: string;
+  token: string;
+}
+
+/**
+ * A dry run of a real `.ics` import: the file really read, really parsed and
+ * really planned against this profile — never an estimate.
+ *
+ * Two reports, answering two different questions, exactly as the `.apkg`
+ * preview's do. `modules` is `planForeignImport`'s own per-module arithmetic —
+ * what the plan will insert, with the duplicate rule already applied — and only
+ * CAL is ever non-zero for an `.ics`. `components` and `skips` are the
+ * PARSER's: everything in the file this import does not carry, named and
+ * counted, from the VTODOs beside the events to the recurrence rule that
+ * outgrew the six shapes.
+ */
+export interface IcsImportPreview {
+  /** Identifies this exact read-and-plan. The apply refuses any other value, so a stale screen can never write a plan the user did not see. */
+  token: string;
+  fileName: string;
+  /** VEVENTs the file carried, refused ones included. */
+  sourceEvents: number;
+  /** Events the plan will insert. */
+  plannedEvents: number;
+  /**
+   * Events the planner RECOGNISED as ones this profile already holds (ADR-051
+   * — an event's identity is its title, start and all-day flag). Reported
+   * whichever way the current choice points — skipped by default, imported
+   * after a re-preview said so — because the screen must always be able to
+   * offer the other answer.
+   */
+  duplicates: number;
+  /** `planForeignImport`'s own arithmetic, per archive module. */
+  modules: Record<ArchiveModuleName, ImportModuleCounts>;
+  components: IcsImportSkippedComponent[];
+  skips: IcsImportSkip[];
+}
+
+/**
+ * `"no-file"` when nothing has been picked yet; `"unreadable"` when the file
+ * could not be read at all; `"ready"` is the only state the apply accepts.
+ * There is no `"invalid"` arm, for the `.apkg`'s reason: an `.ics` carries no
+ * manifest to be wrong and no checksum to mismatch.
+ */
+export type IcsImportPreviewResult =
+  | { status: "no-file" }
+  | { status: "unreadable"; code: IcsImportReadErrorCode }
+  | { status: "ready"; preview: IcsImportPreview };
+
+/** What a completed `.ics` import wrote. The same shape every archive operation reports, because it is undone through the same one slot and shown through the same one banner. */
+export type IcsImportApplyResult = RestoreApplyResult;
+
+/**
+ * Picking a file (`imex:import-ics-pick`) and dropping the picked one
+ * (`imex:import-ics-cancel`) carry no payload — main holds the pick — and so
+ * declare no request shape. Undo and status have none either: one slot, one
+ * banner, `imex:restore-undo`/`imex:restore-status` for every operation.
+ *
+ * The duplicate answer rides on the preview request rather than on a replan
+ * channel of its own, because it is the only answer this flow has to carry —
+ * ADR-051's one group an `.ics` can produce. Re-previewing under the other
+ * answer re-plans the events main already parsed, on the `.apkg` subject's
+ * exact precedent: changing an answer must not cost what opening the file cost.
+ */
+export interface ImexImportIcsPreviewRequest {
+  profileId: string;
+  /** `true` plans the recognised duplicates as new rows; `false` — the default the first preview always uses — skips them (ADR-051). */
+  importDuplicates: boolean;
+}
+
+/** `token` names the exact plan being confirmed — main refuses any other value. */
+export interface ImexImportIcsApplyRequest {
   profileId: string;
   token: string;
 }
@@ -5550,6 +5697,28 @@ export interface NexusApi {
   applyCsvImport(profileId: string, token: string): Promise<CsvImportApplyResult>;
   /** Drops the picked CSV without applying it — what it releases is the file's text and parsed cells in main's memory. */
   cancelCsvImport(): Promise<void>;
+  /**
+   * Opens the native "pick an .ics" dialog (ADR-061). Its own pick, held apart
+   * from the three picks beside it for the reason they are held apart from each
+   * other: nothing on one surface may ever reach another's file.
+   */
+  pickIcsFile(): Promise<IcsImportPickResult>;
+  /**
+   * Dry-runs the `.ics` import by really reading the file, really parsing it
+   * and really planning it against this profile — never an estimate. Calling it
+   * again with the other `importDuplicates` answer re-plans the events main
+   * already parsed, at the cost of a re-plan rather than a re-read; the raw
+   * text was dropped the moment the first preview parsed it.
+   */
+  previewIcsImport(profileId: string, importDuplicates: boolean): Promise<IcsImportPreviewResult>;
+  /**
+   * Confirms the plan `token` names, ADDING its events to this profile.
+   * Undoable through `undoRestore`, which every import shares. The renderer is
+   * reloaded shortly AFTER this resolves.
+   */
+  applyIcsImport(profileId: string, token: string): Promise<IcsImportApplyResult>;
+  /** Drops the picked `.ics` and the parsed events main is holding for it. No file handle is involved — the reader closed the file before the preview answered. */
+  cancelIcsImport(): Promise<void>;
   /**
    * Dry-runs the LLM import (IMEX-005) by really parsing the pasted answer and
    * really planning it against this profile. No file and no dialog: the source

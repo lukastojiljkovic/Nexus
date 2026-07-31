@@ -311,11 +311,13 @@ import { pickProfilePicture } from "./profilePicture.js";
 import {
   applyApkgImport,
   applyCsvImport,
+  applyIcsImport,
   applyImport,
   applyLlmImport,
   applyRestore,
   cancelApkgImport,
   cancelCsvImport,
+  cancelIcsImport,
   cancelImport,
   cancelLlmImport,
   cancelRestore,
@@ -323,10 +325,12 @@ import {
   mapCsvImport,
   pickApkgFile,
   pickCsvFile,
+  pickIcsFile,
   pickImportFile,
   pickRestoreFile,
   previewApkgImport,
   previewCsvImport,
+  previewIcsImport,
   previewImport,
   previewLlmImport,
   previewRestore,
@@ -376,6 +380,9 @@ import {
   type ApkgImportPickResult,
   type ApkgImportPreviewResult,
   type ApkgImportSubjectChoice,
+  type IcsImportApplyResult,
+  type IcsImportPickResult,
+  type IcsImportPreviewResult,
   type AppInfo,
   type CardKind,
   type AuthResult,
@@ -3766,6 +3773,20 @@ function restoreDeps(): ImportDeps {
         : await dialog.showOpenDialog(options);
       return canceled ? null : (filePaths[0] ?? null);
     },
+    // ADR-061's picker, on the exact terms of the one above — its own
+    // injection, so no surface can open another's dialog. The filter name is
+    // the ICS export dialog's, because it is the same kind of file going the
+    // other way.
+    pickIcsFile: async () => {
+      const options: OpenDialogOptions = {
+        properties: ["openFile"],
+        filters: [{ name: "Kalendar (iCalendar)", extensions: ["ics"] }],
+      };
+      const { canceled, filePaths } = mainWindow
+        ? await dialog.showOpenDialog(mainWindow, options)
+        : await dialog.showOpenDialog(options);
+      return canceled ? null : (filePaths[0] ?? null);
+    },
     // The renderer comes back UNLOCKED: main keeps the open database and the
     // data key across this reload (ADR-023 section 7) — all it discards is the
     // renderer's own view of a profile that just changed under it.
@@ -6843,6 +6864,43 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.imexImportCsvCancel, (event): void => {
     assertTrustedSender(event);
     cancelCsvImport();
+  });
+
+  // The calendar `.ics` import (ADR-061): its own pick, its own preview and its
+  // own apply, on the same four-step shape and sharing the same one undo slot.
+  // The renderer never supplies a filesystem path here either —
+  // `imex:import-ics-pick` is the sole source of one (SEC-EL).
+  ipcMain.handle(IpcChannel.imexImportIcsPick, (event): Promise<IcsImportPickResult> => {
+    assertTrustedSender(event);
+    return pickIcsFile(restoreDeps());
+  });
+
+  // The DUPLICATE answer rides here rather than on a replan channel, because it
+  // is the one answer this flow carries (ADR-051's event group) — re-previewing
+  // under the other answer re-plans the events main already parsed, exactly as
+  // a changed `.apkg` subject re-plans the collection main already read.
+  ipcMain.handle(
+    IpcChannel.imexImportIcsPreview,
+    (event, payload): Promise<IcsImportPreviewResult> => {
+      assertTrustedSender(event);
+      const body = asRecord(payload);
+      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const importDuplicates = asBoolean(body.importDuplicates, "importDuplicates");
+      return previewIcsImport(restoreDeps(), profileId, importDuplicates);
+    },
+  );
+
+  ipcMain.handle(IpcChannel.imexImportIcsApply, (event, payload): Promise<IcsImportApplyResult> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const token = asRestoreToken(body.token, "token");
+    return applyIcsImport(restoreDeps(), profileId, token);
+  });
+
+  ipcMain.handle(IpcChannel.imexImportIcsCancel, (event): void => {
+    assertTrustedSender(event);
+    cancelIcsImport();
   });
 
   // The LLM-assisted import (IMEX-005): no pick, because there is no file — the

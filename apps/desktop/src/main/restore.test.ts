@@ -81,16 +81,19 @@ import type {
 import * as apkgReaderModule from "./apkgReader.js";
 import * as archiveReaderModule from "./archiveReader.js";
 import * as csvReaderModule from "./csvReader.js";
+import * as icsReaderModule from "./icsReader.js";
 import { deriveRestoredNotes, gatherProfileData } from "./profileData.js";
 import type { ProfileDataDeps } from "./profileData.js";
 import {
   applyApkgImport,
   applyCsvImport,
+  applyIcsImport,
   applyImport,
   applyLlmImport,
   applyRestore,
   cancelApkgImport,
   cancelCsvImport,
+  cancelIcsImport,
   cancelImport,
   cancelLlmImport,
   cancelRestore,
@@ -98,10 +101,12 @@ import {
   mapCsvImport,
   pickApkgFile,
   pickCsvFile,
+  pickIcsFile,
   pickImportFile,
   pickRestoreFile,
   previewApkgImport,
   previewCsvImport,
+  previewIcsImport,
   previewImport,
   previewLlmImport,
   previewRestore,
@@ -238,6 +243,7 @@ function makeTestDeps(
   filePath: string | null,
   apkgPath: string | null = null,
   csvPath: string | null = null,
+  icsPath: string | null = null,
 ): TestDepsHandle {
   const blobs = new Map<string, Uint8Array>();
   const cancelFocusCalls: string[] = [];
@@ -271,6 +277,8 @@ function makeTestDeps(
     pickApkgFile: async () => apkgPath,
     // ADR-062's picker, on the same terms again.
     pickCsvFile: async () => csvPath,
+    // ADR-061's picker, on the same terms.
+    pickIcsFile: async () => icsPath,
     reloadRenderer: () => {
       reloadCount += 1;
     },
@@ -2594,6 +2602,205 @@ describe("Anki .apkg import", () => {
     await expect(
       previewApkgImport(deps, profileB, { existingSubjectId: null, newSubjectName: "S" }),
     ).resolves.toEqual({ status: "no-file" });
+  });
+});
+
+// --- Calendar .ics import (ADR-061) ------------------------------------------
+
+/**
+ * A small real calendar on disk. The ORCHESTRATION is what these tests are
+ * about — the pick, the parse held in the session, the duplicate answer on the
+ * preview request, the token and the shared undo — so the file is kept to the
+ * smallest thing that exercises an imported event, a counted component and a
+ * counted trim; the format itself is `icsImport.test.ts`'s job.
+ */
+async function writeIcsFixture(fileName: string): Promise<string> {
+  const text = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "BEGIN:VTODO",
+    "SUMMARY:Obaveza",
+    "END:VTODO",
+    "BEGIN:VEVENT",
+    "UID:a",
+    "DTSTAMP:20260731T000000Z",
+    "SUMMARY:Sastanak",
+    "DTSTART:20260812T100000",
+    "DTEND:20260812T113000",
+    "LOCATION:Sala 3",
+    "END:VEVENT",
+    "BEGIN:VEVENT",
+    "UID:b",
+    "DTSTAMP:20260731T000000Z",
+    "SUMMARY:Koncert",
+    "DTSTART:20260812T200000",
+    "RRULE:FREQ=HOURLY",
+    "END:VEVENT",
+    "END:VCALENDAR",
+    "",
+  ].join("\r\n");
+  const filePath = fixturePath(fileName);
+  await writeFile(filePath, text, "utf8");
+  return filePath;
+}
+
+describe("Calendar .ics import", () => {
+  it("imports the file's events, names every loss, and undoes them away completely", async () => {
+    const filePath = await writeIcsFixture("kalendar.ics");
+    const profileB = createProfile(dbB, "B");
+    const { deps, getReloadCount } = makeTestDeps(dbB, null, null, null, filePath);
+
+    const picked = await pickIcsFile(deps);
+    expect(picked).toEqual({ canceled: false, path: filePath, fileName: "kalendar.ics" });
+
+    const previewed = await previewIcsImport(deps, profileB, false);
+    if (previewed.status !== "ready") unreachable();
+    const preview = previewed.preview;
+    expect(preview).toMatchObject({
+      fileName: "kalendar.ics",
+      sourceEvents: 2,
+      plannedEvents: 2,
+      duplicates: 0,
+      components: [{ name: "VTODO", count: 1 }],
+      skips: [{ code: "recurrence-unmappable", count: 1 }],
+    });
+    // The plan's own arithmetic, straight off `planForeignImport`.
+    expect(preview.modules.calendar).toEqual({ parsed: 2, imported: 2, merged: 0, skipped: 0 });
+    // Nothing has been written yet: a preview is a dry run.
+    expect(new EventStore(dbB.raw, profileB).listActive()).toHaveLength(0);
+
+    const applied = await applyIcsImport(deps, profileB, preview.token);
+    expect(applied.rowsWritten).toBe(2);
+    expect(applied.blobsAdded).toBe(0);
+    expect(applied.missingBlobs).toBe(0);
+
+    const events = new EventStore(dbB.raw, profileB).listActive();
+    expect(events.map((event) => event.title)).toEqual(["Sastanak", "Koncert"]);
+    expect(events[0]).toMatchObject({
+      startAt: "2026-08-12T10:00",
+      endAt: "2026-08-12T11:30",
+      allDay: false,
+      location: "Sala 3",
+      reminderOffsets: [],
+    });
+    // The HOURLY master arrived as the one-off the preview promised.
+    expect(events[1]).toMatchObject({ startAt: "2026-08-12T20:00", recurrence: null });
+
+    // The shared banner, naming this operation as its own kind.
+    expect(restoreStatus(profileB).undo?.kind).toBe("ics");
+    await flushSetTimeout();
+    expect(getReloadCount()).toBe(1);
+
+    await undoRestore(deps, profileB);
+    expect(new EventStore(dbB.raw, profileB).listActive()).toHaveLength(0);
+    expect(restoreStatus(profileB).undo).toBeNull();
+  });
+
+  it("skips an event this profile already has by default, and re-previews the other answer without reading the file again (ADR-051)", async () => {
+    const filePath = await writeIcsFixture("dupli.ics");
+    const profileB = createProfile(dbB, "B");
+    new EventStore(dbB.raw, profileB).create({
+      title: "Sastanak",
+      startAt: "2026-08-12T10:00",
+      allDay: false,
+    });
+    const { deps } = makeTestDeps(dbB, null, null, null, filePath);
+
+    await pickIcsFile(deps);
+    const readSpy = vi.spyOn(icsReaderModule, "readIcsText");
+
+    const first = await previewIcsImport(deps, profileB, false);
+    if (first.status !== "ready") unreachable();
+    expect(readSpy).toHaveBeenCalledTimes(1);
+    expect(first.preview).toMatchObject({ sourceEvents: 2, plannedEvents: 1, duplicates: 1 });
+    expect(first.preview.modules.calendar).toEqual({
+      parsed: 2,
+      imported: 1,
+      merged: 0,
+      skipped: 1,
+    });
+
+    const second = await previewIcsImport(deps, profileB, true);
+    if (second.status !== "ready") unreachable();
+    // The file was read ONCE: changing the answer costs a re-plan against the
+    // parsed events main already holds, never a second read.
+    expect(readSpy).toHaveBeenCalledTimes(1);
+    expect(second.preview).toMatchObject({ plannedEvents: 2, duplicates: 1 });
+    // A fresh token, and the old plan gone with it.
+    expect(second.preview.token).not.toBe(first.preview.token);
+    await expect(applyIcsImport(deps, profileB, first.preview.token)).rejects.toThrow(/stale/);
+
+    await applyIcsImport(deps, profileB, second.preview.token);
+    // „Uvezi svejedno“ plans a second, independent row (ADR-051).
+    const titles = new EventStore(dbB.raw, profileB).listActive().map((event) => event.title);
+    expect(titles.filter((title) => title === "Sastanak")).toHaveLength(2);
+  });
+
+  it("refuses a stale token, a foreign profile and a second apply of the same plan", async () => {
+    const filePath = await writeIcsFixture("guards.ics");
+    const profileB = createProfile(dbB, "B");
+    const otherProfile = createProfile(dbB, "Drugi");
+    const { deps } = makeTestDeps(dbB, null, null, null, filePath);
+
+    await pickIcsFile(deps);
+    const previewed = await previewIcsImport(deps, profileB, false);
+    if (previewed.status !== "ready") unreachable();
+    const token = previewed.preview.token;
+
+    await expect(applyIcsImport(deps, profileB, "not-the-token")).rejects.toThrow(/stale/);
+    await expect(applyIcsImport(deps, otherProfile, token)).rejects.toThrow(/different profile/);
+
+    await applyIcsImport(deps, profileB, token);
+    await expect(applyIcsImport(deps, profileB, token)).rejects.toThrow(/No \.ics preview/);
+  });
+
+  it("reports an unreadable file by code rather than rejecting", async () => {
+    const filePath = fixturePath("nope.ics");
+    await writeFile(filePath, "ovo nije kalendar", "utf8");
+    const profileB = createProfile(dbB, "B");
+    const { deps } = makeTestDeps(dbB, null, null, null, filePath);
+
+    await pickIcsFile(deps);
+    await expect(previewIcsImport(deps, profileB, false)).resolves.toEqual({
+      status: "unreadable",
+      code: "not-a-calendar",
+    });
+  });
+
+  it("keeps its pick apart from the Anki pick and refuses a token across the surfaces", async () => {
+    const icsPath = await writeIcsFixture("apart.ics");
+    const apkgPath = await writeApkgFixture("apart-uz-ics.apkg");
+    const profileB = createProfile(dbB, "B");
+    const { deps } = makeTestDeps(dbB, null, apkgPath, null, icsPath);
+
+    await pickApkgFile(deps);
+    await pickIcsFile(deps);
+    // Picking an `.ics` did not disturb the `.apkg` pick, and vice versa.
+    const apkgPreview = await previewApkgImport(deps, profileB, {
+      existingSubjectId: null,
+      newSubjectName: "S",
+    });
+    if (apkgPreview.status !== "ready") unreachable();
+    const icsPreview = await previewIcsImport(deps, profileB, false);
+    if (icsPreview.status !== "ready") unreachable();
+
+    // Neither surface will honour the other's token.
+    await expect(applyIcsImport(deps, profileB, apkgPreview.preview.token)).rejects.toThrow(/stale/);
+    await expect(applyApkgImport(deps, profileB, icsPreview.preview.token)).rejects.toThrow(/stale/);
+  });
+
+  it("drops the pick on cancel and on lock", async () => {
+    const filePath = await writeIcsFixture("drop.ics");
+    const profileB = createProfile(dbB, "B");
+    const { deps } = makeTestDeps(dbB, null, null, null, filePath);
+
+    await pickIcsFile(deps);
+    cancelIcsImport();
+    await expect(previewIcsImport(deps, profileB, false)).resolves.toEqual({ status: "no-file" });
+
+    await pickIcsFile(deps);
+    clearRestoreState();
+    await expect(previewIcsImport(deps, profileB, false)).resolves.toEqual({ status: "no-file" });
   });
 });
 

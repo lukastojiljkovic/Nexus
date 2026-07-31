@@ -41,6 +41,9 @@ import type {
   CsvImportPreview,
   DashboardSettings,
   FlagState,
+  IcsImportPreview,
+  IcsImportSkip,
+  IcsImportSkippedComponent,
   ImportDuplicateChoice,
   ImportDuplicateChoices,
   ImportDuplicateGroup,
@@ -1935,6 +1938,376 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
 
           {state.phase === "applying" && <p className="app__muted">{s.applying}</p>}
           {replanning && <p className="app__muted">{shared.previewRunning}</p>}
+          {state.phase === "ready" && state.error != null && <p className="set__error">{state.error}</p>}
+        </>
+      )}
+
+      {state.phase === "applied" && <p className="set__section-caption">{s.applied}</p>}
+    </div>
+  );
+}
+
+/**
+ * The `.ics` flow's state (ADR-061). The same machine `ApkgState` is — no
+ * passphrase (an `.ics` is plain text) and no `"invalid"` (it carries no
+ * manifest to be wrong about) — and one step shorter than even that: there is
+ * no choice to make before the preview, so a successful pick previews itself
+ * on the spot.
+ */
+type IcsState =
+  | { phase: "idle"; error: string | null }
+  | { phase: "picked"; fileName: string; busy: boolean; error: string | null }
+  | { phase: "ready"; fileName: string; preview: IcsImportPreview; busy: boolean; error: string | null }
+  | { phase: "applying"; fileName: string; preview: IcsImportPreview }
+  | { phase: "applied" };
+
+/** One named group of things the calendar file carried and this import does not: its Serbian reason, then how many. */
+function IcsSkipRow({ skip }: { skip: IcsImportSkip }) {
+  const s = strings.settings.icsImport;
+  return (
+    <li className="set__import-skip">
+      {s.skips[skip.code]} <span className="set__import-skip-meta">{skip.count}</span>
+    </li>
+  );
+}
+
+/** One kind of component the file carried that Nexus does not read — named by the FILE's own word for it (VTODO, VALARM…), which is why this is a sentence around a name rather than a closed copy map. */
+function IcsComponentRow({ component }: { component: IcsImportSkippedComponent }) {
+  const s = strings.settings.icsImport;
+  return (
+    <li className="set__import-skip">
+      {s.componentPrefix} {component.name} {s.componentSuffix}{" "}
+      <span className="set__import-skip-meta">{component.count}</span>
+    </li>
+  );
+}
+
+interface IcsImportSectionProps {
+  profileId: string;
+  /** SET-014 search hits; the section reads only its own entry id out of it. */
+  hits: ReadonlySet<string>;
+}
+
+/**
+ * Uvoz kalendara (.ics) — ADR-061.
+ *
+ * Deliberately the `.apkg` section's twin minus its one extra step: pick →
+ * preview → confirm, the same busy and error states, the same `set__` recipes,
+ * the same shared undo banner afterwards. An `.ics` needs no destination
+ * choice — its events land in the calendar — so the only question left on the
+ * screen is ADR-051's duplicate one, asked with the import block's own
+ * „Preskoči / Uvezi svejedno" pair (the LLM block's recipe, since both flows
+ * carry exactly the one event group). Answering it re-previews: main re-plans
+ * the events it already parsed, never re-reading the file.
+ *
+ * Two tables, answering two different questions, exactly as the `.apkg`'s do:
+ * what the file holds and how much of it arrives, then the plan's own
+ * per-module arithmetic from the same planner the archive import uses —
+ * narrowed to the modules that carry anything, which for an `.ics` is only
+ * Kalendar. Below them, every named loss, counted: the components Nexus does
+ * not read, then the per-event trims.
+ */
+function IcsImportSection({ profileId, hits }: IcsImportSectionProps) {
+  const s = strings.settings.icsImport;
+  // The half of the flow that is identical to a restore's, read from where it
+  // is already spelled rather than spelled a second time.
+  const shared = strings.settings.restore;
+
+  const [state, setState] = useState<IcsState>({ phase: "idle", error: null });
+  // The duplicate answer the plan on screen was computed under (ADR-051) —
+  // committed only once main has actually re-planned on it, never
+  // optimistically, exactly as the import block's choices are.
+  const [importDuplicates, setImportDuplicates] = useState(false);
+  // Read by the unmount cleanup only. An apply in flight must never be
+  // cancelled from here: main is writing the very plan `cancelIcsImport` would
+  // drop.
+  const applying = useRef(false);
+
+  // Releasing the pick on unmount matters for the reason the `.apkg`'s does:
+  // main is holding somebody's whole parsed calendar until it is told to let go.
+  useEffect(() => {
+    return () => {
+      if (applying.current) return;
+      void window.nexus.cancelIcsImport().catch((error: unknown) => {
+        console.error("Nexus: failed to release the picked .ics:", error);
+      });
+    };
+  }, []);
+
+  async function runPreview(fileName: string, next: boolean): Promise<void> {
+    try {
+      const result = await window.nexus.previewIcsImport(profileId, next);
+      switch (result.status) {
+        case "ready":
+          setImportDuplicates(next);
+          setState({ phase: "ready", fileName, preview: result.preview, busy: false, error: null });
+          return;
+        case "unreadable":
+          setState({ phase: "picked", fileName, busy: false, error: s.unreadable[result.code] });
+          return;
+        case "no-file":
+          setState({ phase: "idle", error: s.noFileError });
+          return;
+      }
+    } catch (previewError) {
+      setState({ phase: "picked", fileName, busy: false, error: s.readError });
+      console.error("Nexus: failed to preview an .ics:", previewError);
+    }
+  }
+
+  /** Picking from any phase starts over — main drops the superseded pick itself. A fresh pick always previews on the safe default (duplicates skipped). */
+  async function choose(): Promise<void> {
+    setState({ phase: "idle", error: null });
+    setImportDuplicates(false);
+    try {
+      const picked = await window.nexus.pickIcsFile();
+      if (picked.canceled) return;
+      setState({ phase: "picked", fileName: picked.fileName, busy: true, error: null });
+      await runPreview(picked.fileName, false);
+    } catch (pickError) {
+      setState({ phase: "idle", error: s.readError });
+      console.error("Nexus: failed to pick an .ics:", pickError);
+    }
+  }
+
+  /**
+   * Re-previews under the other duplicate answer (ADR-051) and swaps in the
+   * fresh preview — and, with it, the fresh token, since the plan the old one
+   * named no longer exists. Main re-uses the events it already parsed, so this
+   * costs a re-plan, never a re-read; a rejected re-preview leaves the plan,
+   * the token and the buttons exactly as they were.
+   */
+  async function chooseDuplicates(
+    fileName: string,
+    preview: IcsImportPreview,
+    next: boolean,
+  ): Promise<void> {
+    setState({ phase: "ready", fileName, preview, busy: true, error: null });
+    try {
+      const result = await window.nexus.previewIcsImport(profileId, next);
+      if (result.status === "ready") {
+        setImportDuplicates(next);
+        setState({ phase: "ready", fileName, preview: result.preview, busy: false, error: null });
+        return;
+      }
+      setState({
+        phase: "ready",
+        fileName,
+        preview,
+        busy: false,
+        error: strings.settings.import.duplicateError,
+      });
+    } catch (replanError) {
+      setState({
+        phase: "ready",
+        fileName,
+        preview,
+        busy: false,
+        error: strings.settings.import.duplicateError,
+      });
+      console.error("Nexus: failed to re-plan an .ics import:", replanError);
+    }
+  }
+
+  async function apply(fileName: string, preview: IcsImportPreview): Promise<void> {
+    applying.current = true;
+    setState({ phase: "applying", fileName, preview });
+    try {
+      await window.nexus.applyIcsImport(profileId, preview.token);
+      // Main reloads this renderer moments after the reply lands, so the success
+      // line simply stands until the whole screen is replaced.
+      setState({ phase: "applied" });
+    } catch (applyError) {
+      // A failed apply leaves the plan — and the token main accepts — untouched,
+      // so the screen goes back to it rather than to idle.
+      setState({ phase: "ready", fileName, preview, busy: false, error: s.error });
+      console.error("Nexus: failed to apply an .ics import:", applyError);
+    } finally {
+      applying.current = false;
+    }
+  }
+
+  async function cancel(): Promise<void> {
+    setState({ phase: "idle", error: null });
+    try {
+      await window.nexus.cancelIcsImport();
+    } catch (cancelError) {
+      console.error("Nexus: failed to release the picked .ics:", cancelError);
+    }
+  }
+
+  const previewing = state.phase === "ready" || state.phase === "applying";
+  // A re-preview is replacing the token this screen holds (ADR-051), so nothing
+  // that would spend it — least of all the apply — may fire meanwhile.
+  const replanning = state.phase === "ready" && state.busy;
+
+  return (
+    <div className="set__import-block">
+      <h3 className={labelClass("set__module-group-title", hits.has("backup-ics"))}>{s.title}</h3>
+      <p className="app__muted">{s.description}</p>
+
+      {!previewing && state.phase !== "applied" && (
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={state.phase === "picked" && state.busy}
+          onClick={() => void choose()}
+        >
+          {s.pickButton}
+        </Button>
+      )}
+
+      {state.phase === "idle" && state.error != null && <p className="set__error">{state.error}</p>}
+
+      {state.phase === "picked" && (
+        <>
+          <p className="set__section-caption">
+            {shared.pickedPrefix} <span className="app__path">{state.fileName}</span>
+          </p>
+          {state.busy && <p className="app__muted">{s.previewRunning}</p>}
+          {state.error != null && <p className="set__error">{state.error}</p>}
+        </>
+      )}
+
+      {previewing && (
+        <>
+          <div className="set__restore-head">
+            <span className="app__path">{state.preview.fileName}</span>
+          </div>
+
+          <table className="set__restore-table">
+            <thead>
+              <tr>
+                {/* The row-header column's own corner cell: a row name needs no heading. */}
+                <td />
+                <th scope="col">{s.columnSource}</th>
+                <th scope="col">{s.columnPlanned}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">{s.rowEvents}</th>
+                <td>{state.preview.sourceEvents}</td>
+                <td>{state.preview.plannedEvents}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {/* The plan's OWN arithmetic, from the same planner the archive import
+              uses, narrowed to the modules that carry anything — an `.ics`
+              touches only Kalendar, and five rows of zeros would say nothing. */}
+          <table className="set__restore-table set__import-table">
+            <thead>
+              <tr>
+                <td />
+                <th scope="col">{strings.settings.import.columnParsed}</th>
+                <th scope="col">{strings.settings.import.columnImported}</th>
+                <th scope="col">{strings.settings.import.columnMerged}</th>
+                <th scope="col">{strings.settings.import.columnSkipped}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ARCHIVE_MODULES.filter((key) => state.preview.modules[key].parsed > 0).map((key) => {
+                const counts = state.preview.modules[key];
+                return (
+                  <tr key={key}>
+                    <th scope="row">{shared.modules[key]}</th>
+                    <td>{counts.parsed}</td>
+                    <td>{counts.imported}</td>
+                    <td>{counts.merged}</td>
+                    <td>{counts.skipped}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {/* ADR-051: the one part of the preview the user can still CHANGE.
+              The sentence says which way the plan currently goes; the answer
+              is the import block's own two-state pair, so the flows read as
+              siblings. */}
+          {state.preview.duplicates > 0 && (
+            <div className="set__llm-duplicates">
+              <p className="set__section-caption">
+                {s.duplicatesPrefix} {state.preview.duplicates}{" "}
+                {countUnit(
+                  state.preview.duplicates,
+                  s.duplicatesUnitOne,
+                  s.duplicatesUnitFew,
+                  s.duplicatesUnitMany,
+                )}{" "}
+                {importDuplicates ? s.duplicatesSuffixImported : s.duplicatesSuffix}
+              </p>
+              <span
+                className="set__llm-duplicate-choice"
+                role="group"
+                aria-label={strings.settings.import.duplicateChoiceLabel}
+              >
+                {DUPLICATE_CHOICES.map((option) => (
+                  <Button
+                    key={option}
+                    size="sm"
+                    className={
+                      (option === "import") === importDuplicates
+                        ? "set__import-choice set__import-choice--active"
+                        : "set__import-choice"
+                    }
+                    aria-pressed={(option === "import") === importDuplicates}
+                    disabled={state.phase === "applying" || replanning}
+                    onClick={() =>
+                      void chooseDuplicates(state.fileName, state.preview, option === "import")
+                    }
+                  >
+                    {option === "skip"
+                      ? strings.settings.import.duplicateSkipButton
+                      : strings.settings.import.duplicateImportButton}
+                  </Button>
+                ))}
+              </span>
+            </div>
+          )}
+
+          {(state.preview.components.length > 0 || state.preview.skips.length > 0) && (
+            <>
+              <h4 className="set__module-group-title">{s.skipsTitle}</h4>
+              <ul className="set__restore-problems">
+                {state.preview.components.map((component) => (
+                  <IcsComponentRow key={component.name} component={component} />
+                ))}
+                {state.preview.skips.map((skip) => (
+                  <IcsSkipRow key={skip.code} skip={skip} />
+                ))}
+              </ul>
+            </>
+          )}
+
+          {state.preview.plannedEvents === 0 && (
+            <p className="set__section-caption">{s.nothingToImport}</p>
+          )}
+
+          <div className="set__restore-actions">
+            {state.preview.plannedEvents > 0 && (
+              <Button
+                size="sm"
+                variant="primary"
+                disabled={state.phase === "applying" || replanning}
+                onClick={() => void apply(state.fileName, state.preview)}
+              >
+                {s.applyButton}
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={state.phase === "applying" || replanning}
+              onClick={() => void cancel()}
+            >
+              {shared.cancelButton}
+            </Button>
+          </div>
+
+          {state.phase === "applying" && <p className="app__muted">{s.applying}</p>}
+          {replanning && <p className="app__muted">{s.previewRunning}</p>}
           {state.phase === "ready" && state.error != null && <p className="set__error">{state.error}</p>}
         </>
       )}
@@ -5106,6 +5479,7 @@ export function SettingsPage({
         <CalendarExportSection profileId={profileId} hits={hits} />
         <RestoreSection profileId={profileId} hits={hits} />
         <ImportSection profileId={profileId} hits={hits} />
+        <IcsImportSection profileId={profileId} hits={hits} />
         <ApkgImportSection profileId={profileId} hits={hits} />
         <CsvImportSection profileId={profileId} hits={hits} />
         <LlmImportSection profileId={profileId} hits={hits} />

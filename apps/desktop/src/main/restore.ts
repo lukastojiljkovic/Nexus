@@ -5,6 +5,7 @@ import {
   documentDuplicateKey,
   eventDuplicateKey,
   parseCsv,
+  parseIcsCalendar,
   parseImportArchive,
   parseLlmAnswer,
   personDuplicateKey,
@@ -14,6 +15,7 @@ import {
   suggestCsvMapping,
   translateApkg,
   translateCsvTasks,
+  translateIcsEvents,
   translateLlmRecords,
   type ApkgSkip as CoreApkgSkip,
   type CsvColumnRole as CoreCsvColumnRole,
@@ -25,6 +27,9 @@ import {
   type ExportSettings,
   type ForeignImportPlan,
   type ForeignImportTarget,
+  type IcsImportSkip as CoreIcsImportSkip,
+  type IcsParsedCalendar,
+  type IcsSkippedComponent as CoreIcsSkippedComponent,
   type ImportDuplicateChoices as CoreImportDuplicateChoices,
   type ImportDuplicateGroup as CoreImportDuplicateGroup,
   type ImportPlanReport as CoreImportPlanReport,
@@ -50,6 +55,7 @@ import type {
 import { ApkgReadError, readApkg } from "./apkgReader.js";
 import { ArchiveReadError, inspectArchiveFile, openArchive, type OpenedArchive } from "./archiveReader.js";
 import { CsvReadError, readCsvText } from "./csvReader.js";
+import { IcsReadError, readIcsText } from "./icsReader.js";
 import { cancelIdleCompactions } from "./notes.js";
 import type { PrivResealOutcome } from "./priv.js";
 import {
@@ -78,6 +84,14 @@ import type {
   CsvImportPlanPreview,
   CsvImportPreviewResult,
   CsvImportRowDrop,
+  IcsImportApplyResult,
+  IcsImportPickResult,
+  IcsImportPreview,
+  IcsImportPreviewResult,
+  IcsImportReadErrorCode,
+  IcsImportSkip,
+  IcsImportSkipCode,
+  IcsImportSkippedComponent,
   ImportApplyResult,
   ImportDuplicateChoices,
   ImportDuplicateGroup,
@@ -111,13 +125,15 @@ import { CSV_IMPORT_MAX_COLUMNS, CSV_IMPORT_SAMPLE_ROWS } from "../shared/ipc.js
 /**
  * The orchestrator for every way a FILE can enter a profile: IMEX RESTORE
  * (ADR-023, slice 3c), which replaces a profile preserving ids; FOREIGN IMPORT
- * (ADR-043), which merges an archive into a profile that already has data; and
- * the ANKI `.apkg` IMPORT (ADR-052), which merges somebody else's flashcard
- * collection into it. Each is the seam between an untrusted-input reader
- * (`archiveReader.ts` or `apkgReader.ts`), the pure validator/planner
- * (`@nexus/core`'s `parseImportArchive` / `translateApkg`, and, for both
- * imports, `planForeignImport`), and the write (`@nexus/db`'s
- * `RestoreStore.replaceProfileData` or `ForeignImportStore.insertPlanned`).
+ * (ADR-043), which merges an archive into a profile that already has data; the
+ * ANKI `.apkg` IMPORT (ADR-052), which merges somebody else's flashcard
+ * collection into it; and the CALENDAR `.ics` IMPORT (ADR-061), which merges a
+ * calendar file's events into it. Each is the seam between an untrusted-input
+ * reader (`archiveReader.ts`, `apkgReader.ts` or `icsReader.ts`), the pure
+ * validator/planner (`@nexus/core`'s `parseImportArchive` / `translateApkg` /
+ * `parseIcsCalendar`, and, for every import, `planForeignImport`), and the
+ * write (`@nexus/db`'s `RestoreStore.replaceProfileData` or
+ * `ForeignImportStore.insertPlanned`).
  * Nothing here parses a byte of file content itself and nothing here writes SQL
  * itself — this module's whole job is sequencing those pieces the way each
  * operation's safety model requires: a preview that is a real dry run rather
@@ -154,6 +170,12 @@ import { CSV_IMPORT_MAX_COLUMNS, CSV_IMPORT_SAMPLE_ROWS } from "../shared/ipc.js
  *   of it. No handle is held here — `readApkg` closes the file before it
  *   returns — but the collection IS, so that previewing again under a different
  *   subject costs a re-translate and a re-plan rather than a second read.
+ * - `pendingIcs`: the calendar file picked, plus the PARSED events a preview
+ *   read out of it — never the file's raw text, which is dropped the moment
+ *   the parse returns. Re-previewing under the other duplicate answer then
+ *   costs a re-plan, never a second read.
+ * - `pendingLlm`: the plan a pasted LLM answer produced (IMEX-005), with the
+ *   parsed records a re-plan re-uses — never the paste itself.
  * - `undo`: the pre-restore snapshot of the last COMPLETED restore, gathered
  *   with the exact same `gatherProfileData`/`gatherProfileSettings` the
  *   exporter itself gathers with (`profileData.ts`), so the undo snapshot and
@@ -237,7 +259,7 @@ interface ReadyImport {
  */
 interface RestoreUndo {
   /** Which operation this snapshot was taken for — carried onto the wire so the banner can name what it is offering to undo. */
-  kind: "restore" | "import" | "apkg" | "llm" | "csv";
+  kind: "restore" | "import" | "apkg" | "llm" | "csv" | "ics";
   profileId: string;
   snapshot: {
     profileName: string;
@@ -295,6 +317,8 @@ export interface RestoreDeps extends ProfileDataDeps {
   pickApkgFile(): Promise<string | null>;
   /** And with the `.csv`/`.txt` filter (ADR-062), on the same terms: its own injection, so no surface can open another's dialog. */
   pickCsvFile(): Promise<string | null>;
+  /** The same dialog with the `.ics` filter (ADR-061), its own injection on the same terms: no surface can open another's picker. */
+  pickIcsFile(): Promise<string | null>;
   /** Reloads the renderer once a restore or an undo has landed. */
   reloadRenderer(): void;
   /** Discards this profile's in-memory focus timer. */
@@ -348,7 +372,9 @@ let pending: PendingRestore | null = null;
 let pendingImport: PendingImport | null = null;
 /** The Anki `.apkg` the user picked, its collection once read, and the plan once a preview has succeeded. A third variable, on the same terms the second is: the three picks never touch. */
 let pendingApkg: PendingApkg | null = null;
-/** The plan a pasted LLM answer produced (IMEX-005). A fourth variable, on the same terms: no surface here can reach another's source. */
+/** The calendar `.ics` the user picked, its parsed events once read, and the plan once a preview has succeeded (ADR-061). A fourth variable, on the same terms: no surface here can reach another's file. */
+let pendingIcs: PendingIcs | null = null;
+/** The plan a pasted LLM answer produced (IMEX-005). A fifth variable, on the same terms: no surface here can reach another's source. */
 let pendingLlm: ReadyLlm | null = null;
 /** The CSV the user picked, its text and parse once a preview has read it, and the plan once a mapping has been confirmed (ADR-062). A fifth variable, on the terms of the other four. */
 let pendingCsv: PendingCsv | null = null;
@@ -983,6 +1009,9 @@ export function clearRestoreState(): void {
   // returns) but it DOES hold somebody's whole collection in memory, which must
   // no more outlive a lock than a decrypted archive does.
   pendingApkg = null;
+  // The calendar pick holds no handle either, but it holds somebody's whole
+  // parsed calendar. Same rule.
+  pendingIcs = null;
   // Nor does the LLM plan, and it holds what the user pasted out of their own
   // chat — their content, in plaintext, in main's heap. Same rule.
   pendingLlm = null;
@@ -1703,6 +1732,260 @@ export async function applyApkgImport(
  */
 export function cancelApkgImport(): void {
   pendingApkg = null;
+}
+
+// --- Calendar .ics import (ADR-061) -----------------------------------------
+
+/**
+ * The `.ics` the user picked, its PARSED calendar once a preview has read it,
+ * and the plan once one has succeeded — `PendingApkg`'s shape, for its reason.
+ *
+ * `source` holds parsed events, never the file's text: `readIcsText`'s answer
+ * lives only inside the preview call that parses it, so the pending session
+ * carries rows rather than a file's worth of somebody's prose. Previewing again
+ * under the other duplicate answer then costs a re-plan against the live
+ * profile, never a re-read of the file.
+ */
+interface PendingIcs {
+  filePath: string;
+  fileName: string;
+  /** The parsed calendar, read once. Null until the first preview succeeds. */
+  source: IcsParsedCalendar | null;
+  ready: ReadyIcs | null;
+}
+
+/**
+ * One successful `.ics` preview, held exactly as `applyIcsImport` needs it: the
+ * plan — already translated, remapped, stamped and counted, so applying writes
+ * precisely what the user was shown — the parser's own report on the wire's
+ * shape, and the token proving an apply is confirming THIS plan.
+ */
+interface ReadyIcs {
+  token: string;
+  /** The profile this plan was computed against — the apply refuses any other, mirroring the token check. */
+  profileId: string;
+  plan: ForeignImportPlan;
+  sourceEvents: number;
+  plannedEvents: number;
+  /** Events the planner recognised as already present (ADR-051), whichever way the answer this plan was computed under points. */
+  duplicates: number;
+  components: IcsImportSkippedComponent[];
+  skips: IcsImportSkip[];
+}
+
+/**
+ * Maps one core `IcsImportSkip` onto the wire. The annotated `code` assignment
+ * is the drift check every other wire→core hand-off in this file makes: a skip
+ * code added in `@nexus/core` and forgotten in `shared/ipc.ts` stops this file
+ * compiling, rather than reaching a renderer that has no sentence for it.
+ */
+function toIcsSkip(skip: CoreIcsImportSkip): IcsImportSkip {
+  const code: IcsImportSkipCode = skip.code;
+  return { code, count: skip.count };
+}
+
+/** Maps one core `IcsSkippedComponent` onto the wire — copied rather than passed through, because the wire shape is mutable and core's is readonly. */
+function toIcsComponent(component: CoreIcsSkippedComponent): IcsImportSkippedComponent {
+  return { name: component.name, count: component.count };
+}
+
+/**
+ * Picks an `.ics` to import, replacing whatever was picked for one before. The
+ * three picks beside it are untouched: four surfaces, four pieces of state, and
+ * nothing on any of them can reach another's file.
+ */
+export async function pickIcsFile(deps: ImportDeps): Promise<IcsImportPickResult> {
+  pendingIcs = null;
+
+  const filePath = await deps.pickIcsFile();
+  if (filePath === null) return { canceled: true };
+
+  pendingIcs = { filePath, fileName: basename(filePath), source: null, ready: null };
+  return { canceled: false, path: filePath, fileName: basename(filePath) };
+}
+
+/**
+ * Reads and parses the picked `.ics` (once), translates it and really plans it
+ * against this profile under `importDuplicates` — which is what makes the
+ * preview a dry run rather than an estimate, on all three counts.
+ *
+ * Called again with the other duplicate answer, it re-uses the calendar it
+ * already parsed: only the translation and the plan are redone, against the
+ * profile as it is NOW. That is ADR-051's re-plan precedent in the form this
+ * flow takes (the `.apkg` subject's own), and the file's raw text is not even
+ * available to re-read — it was dropped inside the first preview.
+ */
+export async function previewIcsImport(
+  deps: ImportDeps,
+  profileId: string,
+  importDuplicates: boolean,
+): Promise<IcsImportPreviewResult> {
+  // Bound to a local for exactly the reason `previewApkgImport` binds its own:
+  // `pendingIcs` can be replaced across the await below.
+  const picked = pendingIcs;
+  if (picked === null) return { status: "no-file" };
+
+  let source = picked.source;
+  if (source === null) {
+    let text: string;
+    try {
+      text = await readIcsText(picked.filePath);
+    } catch (error) {
+      if (error instanceof IcsReadError) return { status: "unreadable", code: error.code };
+      throw error;
+    }
+    // Re-checked AFTER the await, where this can change out from under us: the
+    // renderer is untrusted and nothing stops it firing a second pick while
+    // this read is in flight. No handle to leak — the reader closed the file —
+    // so the stale read is simply dropped.
+    if (pendingIcs !== picked) return { status: "no-file" };
+    const parsed = parseIcsCalendar(text);
+    if (parsed.status === "failed") {
+      // The drift check, in the one direction this hand-off runs: a problem
+      // code added in core stops this line compiling.
+      const code: IcsImportReadErrorCode = parsed.code;
+      return { status: "unreadable", code };
+    }
+    source = parsed.calendar;
+    // The parsed events are what the session keeps; `text` dies with this
+    // block, which is the "raw text is dropped after parsing" the channel
+    // comment promises.
+    picked.source = source;
+  }
+
+  // The target is read as late as possible — immediately before planning
+  // against it — for `previewImport`'s reason: every identity question the
+  // planner answers is answered about the profile as it is NOW. `choices`
+  // narrows to the one duplicate group an `.ics` can produce: events (ADR-051).
+  const translated = translateIcsEvents(source, { profileId, now: new Date().toISOString() });
+  const plan = planForeignImport(
+    { data: translated, dropped: [], profilePicture: null, privateNotes: { notes: 0, versions: 0 } },
+    importTargetFor(deps, profileId),
+    uuidv7,
+    { event: importDuplicates ? "import" : "skip" },
+  );
+
+  const token = randomBytes(16).toString("hex");
+  picked.ready = {
+    token,
+    profileId,
+    plan,
+    sourceEvents: source.sourceEvents,
+    // Counted off the PLAN rather than off the parse, so the number on screen
+    // is what will actually be inserted — the duplicate rule's verdict included.
+    plannedEvents: plan.data.events.length,
+    duplicates: plan.report.duplicates.reduce((total, group) => total + group.count, 0),
+    components: source.components.map(toIcsComponent),
+    skips: source.skips.map(toIcsSkip),
+  };
+
+  return { status: "ready", preview: icsPreviewOf(picked.fileName, picked.ready, plan) };
+}
+
+/** One `.ics` preview on the wire, from the plan and the report that produced it. */
+function icsPreviewOf(
+  fileName: string,
+  ready: ReadyIcs,
+  plan: ForeignImportPlan,
+): IcsImportPreview {
+  return {
+    token: ready.token,
+    fileName,
+    sourceEvents: ready.sourceEvents,
+    plannedEvents: ready.plannedEvents,
+    duplicates: ready.duplicates,
+    // The planner's own per-module arithmetic, reused verbatim. Its `skips` are
+    // deliberately NOT carried, for the `.apkg` preview's reason: the only
+    // by-design line it produces here is the manifest-settings one, and an
+    // `.ics` has no settings — the honest account of what does not arrive is
+    // the parser's, which `components` and `skips` hold.
+    modules: plan.report.modules,
+    components: ready.components,
+    skips: ready.skips,
+  };
+}
+
+/**
+ * Applies the ready plan identified by `token`. The import half of
+ * `applyApkgImport`, minus nothing at all: an `.ics` names no attachment, so
+ * `blobNames` is empty by construction and there is no pre-transaction copy
+ * loop — the same shape, for the same reason.
+ *
+ * Everything else is identical, deliberately: the undo snapshot is taken before
+ * a single row is added, the insert is one transaction, the snapshot lands in
+ * the SAME one slot every archive operation shares, and the renderer reload is
+ * scheduled on `setTimeout(…, 0)` so this call's reply reaches it first.
+ */
+export async function applyIcsImport(
+  deps: ImportDeps,
+  profileId: string,
+  token: string,
+): Promise<IcsImportApplyResult> {
+  const ready = pendingIcs?.ready;
+  if (ready === undefined || ready === null) {
+    throw new Error("No .ics preview is ready to apply.");
+  }
+  if (ready.token !== token) {
+    throw new Error("This .ics preview is stale; re-run the preview before applying.");
+  }
+  if (ready.profileId !== profileId) {
+    throw new Error("This .ics preview was computed for a different profile.");
+  }
+
+  const currentProfile = deps.getProfile(profileId);
+  const undoSettings = await gatherProfileSettings(deps, profileId);
+  const undoData = gatherProfileData(deps, profileId);
+  const undoDerived = deriveRestoredNotes(undoData.notes);
+
+  const now = new Date().toISOString();
+  const derived = deriveRestoredNotes(ready.plan.data.notes);
+  const rowsWritten = deps
+    .foreignImportStore(profileId)
+    .insertPlanned(ready.plan.data, derived, now);
+
+  const summary: IcsImportApplyResult = {
+    restored: countProfileModules(ready.plan.data),
+    rowsWritten,
+    blobsAdded: 0,
+    // An `.ics` names no attachment row at all, so there is no blob that could
+    // be missing.
+    missingBlobs: 0,
+  };
+
+  undo = {
+    kind: "ics",
+    profileId,
+    snapshot: {
+      profileName: currentProfile.name,
+      profilePicture: currentProfile.picture,
+      settings: undoSettings,
+      data: undoData,
+      derived: undoDerived,
+    },
+    // An import never touches the private tables (ADR-057 §6), so its undo
+    // must not either — null is precisely that instruction.
+    privateSealed: null,
+    addedPrivateBlobs: [],
+    addedBlobs: [],
+    appliedAt: now,
+    summary,
+  };
+
+  pendingIcs = null;
+
+  setTimeout(() => deps.reloadRenderer(), 0);
+
+  return summary;
+}
+
+/**
+ * Drops the picked `.ics` — what the UI calls when the user backs out before
+ * applying. No file handle is released (the reader closed the file before the
+ * preview answered), but the parsed calendar is, which on a busy calendar is
+ * years of somebody's appointments sitting in main's memory.
+ */
+export function cancelIcsImport(): void {
+  pendingIcs = null;
 }
 
 // --- LLM-assisted import (IMEX-005) -----------------------------------------

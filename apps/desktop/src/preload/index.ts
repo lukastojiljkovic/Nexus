@@ -482,6 +482,12 @@ const api: NexusApi = {
   applyCsvImport: (profileId, token) =>
     ipcRenderer.invoke(IpcChannel.imexImportCsvApply, { profileId, token }),
   cancelCsvImport: () => ipcRenderer.invoke(IpcChannel.imexImportCsvCancel),
+  pickIcsFile: () => ipcRenderer.invoke(IpcChannel.imexImportIcsPick),
+  previewIcsImport: (profileId, importDuplicates) =>
+    ipcRenderer.invoke(IpcChannel.imexImportIcsPreview, { profileId, importDuplicates }),
+  applyIcsImport: (profileId, token) =>
+    ipcRenderer.invoke(IpcChannel.imexImportIcsApply, { profileId, token }),
+  cancelIcsImport: () => ipcRenderer.invoke(IpcChannel.imexImportIcsCancel),
   previewLlmImport: (profileId, kind, text, deck) =>
     ipcRenderer.invoke(IpcChannel.imexImportLlmPreview, { profileId, kind, text, deck }),
   replanLlmImport: (profileId, token, importDuplicates) =>

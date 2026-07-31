@@ -372,6 +372,18 @@ export type {
   IcsSkipReason,
 } from "./imex/icsExport.js";
 
+export { ICS_IMPORT_SKIP_CODES, parseIcsCalendar, translateIcsEvents } from "./imex/icsImport.js";
+export type {
+  IcsCalendarProblem,
+  IcsImportSkip,
+  IcsImportSkipCode,
+  IcsParseResult,
+  IcsParsedCalendar,
+  IcsParsedEvent,
+  IcsSkippedComponent,
+  IcsTranslateTarget,
+} from "./imex/icsImport.js";
+
 export {
   MAX_ARCHIVE_PASSPHRASE_LENGTH,
   MIN_ARCHIVE_PASSPHRASE_LENGTH,

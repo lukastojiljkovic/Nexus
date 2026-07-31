@@ -279,13 +279,14 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
     label: s.autoBackup.title,
     keywords: ["automatski", "backup", "rezervna", "raspored", "dnevno", "nedeljno", "fascikla"],
   },
-  // The "Rezervna kopija" card holds five blocks — export, calendar, restore,
-  // archive import, Anki import, markdown import — so each gets its own entry
-  // inside that one section rather than a section of its own: they are one
-  // subject, and splitting the card would hide the contrast the archive flows
-  // are meant to be read against. „uvoz“ is shared by the three import entries,
-  // which are then told apart by the words that name what each one reads; the
-  // restore entry answers to the words that describe what IT does.
+  // The "Rezervna kopija" card's blocks — export, calendar export, restore,
+  // archive import, calendar import, Anki import, AI import, markdown import —
+  // each get their own entry inside that one section rather than a section of
+  // their own: they are one subject, and splitting the card would hide the
+  // contrast the archive flows are meant to be read against. „uvoz“ is shared
+  // by the import entries, which are then told apart by the words that name
+  // what each one reads; the restore entry answers to the words that describe
+  // what IT does.
   {
     // „kalendar“ and „ics“ are the words someone actually types looking for
     // this; „izvoz“ is deliberately NOT repeated from `backup-export`, which
@@ -306,6 +307,17 @@ const ENTRIES: readonly SettingsSearchEntry[] = [
     section: "backup",
     label: s.import.title,
     keywords: ["uvoz", "uvezi", "spajanje", "dodaj", "arhiva"],
+  },
+  {
+    // ADR-061. The words are the SOURCE's, exactly as the Anki entry's are:
+    // somebody looking for this types „ics“ or „google“, never „uvoz iz
+    // arhive“. „ics“ and „kalendar“ ARE shared with `backup-calendar` above on
+    // purpose — a user typing either is as likely to want the import as the
+    // export, and both blocks answering is the honest result.
+    id: "backup-ics",
+    section: "backup",
+    label: s.icsImport.title,
+    keywords: ["ics", "icalendar", "kalendar", "google", "outlook", "dogadjaji", "uvoz"],
   },
   {
     // ADR-052. The words are the SOURCE's, not the flow's — somebody looking for

@@ -12,6 +12,8 @@ import type {
   CsvImportReadErrorCode,
   CsvImportRowDropCode,
   DashboardPickErrorCode,
+  IcsImportReadErrorCode,
+  IcsImportSkipCode,
   ImportDuplicateType,
   ImportSkipCode,
   LlmImportAnswerProblem,
@@ -3019,6 +3021,93 @@ export const strings = {
       nothingToImport: "Iz ove tabele nema šta da se uveze — razlozi su izlistani iznad.",
       /** The post-reload banner (App.tsx) when the undo slot holds a CSV import. */
       undoBanner: "Zadaci su uvezeni iz CSV tabele.",
+    },
+    /**
+     * Uvoz kalendara (.ics) — ADR-061, the block beside „Uvoz iz Anki" and
+     * deliberately its sibling in shape: pick → preview → confirm, the same
+     * undo banner afterwards. One step SHORTER than the Anki flow — an `.ics`
+     * needs no subject choice, its events land straight in the calendar — so
+     * the only question left on the screen is ADR-051's duplicate one, asked
+     * with the import block's own „Preskoči / Uvezi svejedno" pair.
+     *
+     * The copy's whole job is honesty about what a calendar file cannot carry:
+     * reminders (alarms are counted and left behind), a repeat rule Nexus does
+     * not have (the first occurrence arrives, said per line), and any zone a
+     * foreign calendar wrote (times land on THIS računar's clock). `skips` and
+     * `unreadable` are typed against the wire's own closed domains, so a code
+     * added in `shared/ipc.ts` is a compile error here rather than a silently
+     * missing sentence.
+     */
+    icsImport: {
+      title: "Uvoz kalendara (.ics)",
+      description:
+        "Uvezi događaje iz .ics fajla — iz Google kalendara, Outlooka ili bilo koje druge aplikacije koja ga izveze. Uvoz ništa ne briše: događaji dolaze pored onih koje već imaš. Podsetnici se ne prenose, a vreme zapisano u drugoj vremenskoj zoni preračunava se na sat ovog računara. Sve što ne stigne piše, komad po komad, u pregledu pre uvoza. Uvoz možeš opozvati jednim klikom, ali samo dok ne zaključaš ili ne zatvoriš aplikaciju.",
+      pickButton: "Izaberi .ics fajl…",
+      previewRunning: "Čitanje kalendara…",
+      /** The preview's two columns: what the file holds, and how much of it arrives. */
+      columnSource: "U fajlu",
+      columnPlanned: "Uvozi se",
+      rowEvents: "Događaji",
+      skipsTitle: "Šta se ne uvozi",
+      /**
+       * One sentence per `IcsImportSkipCode`, each saying what was lost and —
+       * where it is not obvious — why this app cannot carry it. The wording
+       * never blames the user's calendar for a difference between two programs.
+       */
+      skips: {
+        "invalid-start": "Događaj nema ispravan početak (DTSTART), pa se preskače.",
+        "unknown-timezone":
+          "Događaj navodi vremensku zonu koju ovaj računar ne poznaje, pa se preskače — pogađanje pomeraja pomerilo bi ga za više sati.",
+        "empty-summary": "Događaj nema naslov, pa se preskače.",
+        "invalid-end": "Kraj događaja nije ispravan — događaj se uvozi bez trajanja.",
+        "invalid-exdate": "Izuzeti datum ponavljanja nije ispravan, pa se izostavlja.",
+        "recurrence-unmappable":
+          "Pravilo ponavljanja ne postoji u Nexusu — uvozi se samo prvi termin, kao jednokratan događaj.",
+        "detached-override":
+          "Pojedinačno pomeren termin tuđe serije uvozi se kao zaseban, jednokratan događaj.",
+        "categories-dropped": "Događaj ima više kategorija — prenosi se prva.",
+      } satisfies Record<IcsImportSkipCode, string>,
+      /**
+       * The lead-in of one component line: „Sadržaj vrste VTODO se ne uvozi —
+       * 3“. The NAME between the two halves is the file's own (VTODO, VALARM,
+       * X-…), which no closed map could label — and the honest sentence is the
+       * same for all of them: Nexus reads events out of a calendar, nothing
+       * else.
+       */
+      componentPrefix: "Sadržaj vrste",
+      componentSuffix: "se ne uvozi — Nexus iz kalendara čita samo događaje.",
+      /** One sentence per `IcsImportReadErrorCode`: the file could not be read at all. */
+      unreadable: {
+        "too-large": "Fajl prelazi bezbednosna ograničenja i zato je odbijen.",
+        "not-a-calendar": "Ovaj fajl nije iCalendar (.ics) kalendar.",
+      } satisfies Record<IcsImportReadErrorCode, string>,
+      /**
+       * Shown only when the planner recognised events this profile already has
+       * (ADR-051). The sentence says which way the plan currently goes, and the
+       * choice beside it — the import block's own „Preskoči / Uvezi svejedno"
+       * pair, read from `settings.import` so the flows cannot drift — is how
+       * the user says otherwise.
+       */
+      duplicatesPrefix: "Već imaš",
+      duplicatesUnitOne: "događaj",
+      duplicatesUnitFew: "događaja",
+      duplicatesUnitMany: "događaja",
+      duplicatesSuffix: "iz ovog fajla — oni se ne uvoze ponovo.",
+      /** The same sentence's other ending, once a re-preview said „uvezi svejedno": nothing merges, the rows arrive as new. */
+      duplicatesSuffixImported: "iz ovog fajla — ipak se uvoze, kao novi događaji.",
+      applyButton: "Uvezi",
+      applying: "Uvoz u toku…",
+      applied: "Događaji su uvezeni. Aplikacija se osvežava…",
+      /** A rejected pick/preview call (not one of the typed statuses above). */
+      readError: "Čitanje kalendara nije uspelo. Pokušaj ponovo.",
+      /** A rejected apply call; the preview itself stays valid, so this invites a retry. */
+      error: "Uvoz nije uspeo. Pokušaj ponovo.",
+      /** `{ status: "no-file" }`: main no longer holds the pick this screen was showing. */
+      noFileError: "Fajl više nije izabran. Izaberi ga ponovo.",
+      /** Shown when the file translates to nothing at all — the „Uvezi" button is hidden, because there is nothing to confirm. */
+      nothingToImport: "Iz ovog fajla nema šta da se uvede — razlozi su izlistani iznad.",
+      /** The post-reload banner (App.tsx) when the undo slot holds an .ics import. */
+      undoBanner: "Događaji su uvezeni iz kalendara (.ics).",
     },
     /**
      * Uvoz preko AI asistenta (IMEX-005) — the one block in this card whose
