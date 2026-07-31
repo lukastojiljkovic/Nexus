@@ -3,9 +3,11 @@ import type { ChangeEvent, FormEvent, KeyboardEvent } from "react";
 import { Button, Checkbox, Chip, EmptyState, ListRow, TextField } from "@nexus/ui";
 import { isValidDayKey, monthKeyOf, shiftDayKey, shiftMonthKey, weekDayKeys } from "@nexus/core";
 import type { WeekStart } from "@nexus/core";
+import { MAX_EVENT_TEMPLATE_NAME_LENGTH } from "../../shared/ipc.js";
 import type {
   Event,
   EventFieldChanges,
+  EventTemplate,
   Exam,
   NewEventFields,
   Person,
@@ -32,6 +34,7 @@ import type {
   EventOccurrence,
   TimedEventItem,
 } from "./calendarItems.js";
+import { NotePopover } from "./notePopover.js";
 import { RecurrenceMark, RecurrencePicker } from "./RecurrencePicker.js";
 import { RecurrenceScopeDialog } from "./RecurrenceScopeDialog.js";
 import type { RecurrenceScope } from "./RecurrenceScopeDialog.js";
@@ -67,6 +70,9 @@ function readStoredView(profileId: string): CalendarView {
 function persistView(profileId: string, view: CalendarView): void {
   localStorage.setItem(VIEW_KEY_PREFIX + profileId, view);
 }
+
+/** Serbian Latin tailoring — plain `"sr"` mis-orders š/č/ć (the house pattern every alphabetical list here follows). */
+const collator = new Intl.Collator(["sr-Latn", "sr"]);
 
 const SOURCE_LABEL: Record<CalendarSource, string> = {
   events: strings.calendar.sourceEvents,
@@ -466,6 +472,20 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
   const [pendingSeries, setPendingSeries] = useState<PendingSeries | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
 
+  // Šabloni (CAL-009). Both ends of the feature hang off the ONE form this page
+  // already has, because that form is the only per-event surface every view
+  // reaches: a click on a bar in Mesec/Nedelja/Dan and the ✎ in Agenda all end
+  // in `startEdit`, so an action placed there is available from all four, while
+  // one placed on an agenda row would exist in exactly one of them.
+  //  - creating (`editingId === null`) → „Šabloni“, which applies onto the day
+  //    the form names;
+  //  - editing an existing event → the „⋯“ that captures it.
+  // They are mutually exclusive because the form's own mode is.
+  const [templates, setTemplates] = useState<EventTemplate[]>([]);
+  const [templateNaming, setTemplateNaming] = useState(false);
+  const [templateDraft, setTemplateDraft] = useState("");
+  const [templateFailed, setTemplateFailed] = useState(false);
+
   useEffect(() => {
     let active = true;
     void (async () => {
@@ -474,19 +494,27 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
         // `missed` when the agenda/grid reads them.
         await window.nexus.syncAllPlans(profileId);
         const today = localTodayKey();
-        const [nextEvents, nextTasks, nextSubjects, nextExams, nextBlocks, nextPeople] =
-          await Promise.all([
-            window.nexus.listEvents(profileId),
-            window.nexus.listTasks(profileId),
-            window.nexus.listSubjects(profileId),
-            window.nexus.listExams(profileId),
-            window.nexus.listBlocksInRange(
-              profileId,
-              shiftDayKey(today, -BLOCKS_PAST_DAYS),
-              shiftDayKey(today, BLOCKS_FUTURE_DAYS),
-            ),
-            window.nexus.listPeople(profileId),
-          ]);
+        const [
+          nextEvents,
+          nextTasks,
+          nextSubjects,
+          nextExams,
+          nextBlocks,
+          nextPeople,
+          nextTemplates,
+        ] = await Promise.all([
+          window.nexus.listEvents(profileId),
+          window.nexus.listTasks(profileId),
+          window.nexus.listSubjects(profileId),
+          window.nexus.listExams(profileId),
+          window.nexus.listBlocksInRange(
+            profileId,
+            shiftDayKey(today, -BLOCKS_PAST_DAYS),
+            shiftDayKey(today, BLOCKS_FUTURE_DAYS),
+          ),
+          window.nexus.listPeople(profileId),
+          window.nexus.listEventTemplates(profileId),
+        ]);
         if (!active) return;
         setEvents(nextEvents);
         setTasks(nextTasks);
@@ -494,6 +522,7 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
         setExams(nextExams);
         setBlocks(nextBlocks);
         setPeople(nextPeople);
+        setTemplates(nextTemplates);
       } catch (error) {
         if (active) setFailed(true);
         console.error("Nexus: failed to load events:", error);
@@ -531,6 +560,10 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
     setRecurrence(null);
     setReminderOffsets([]);
     setFormError(null);
+    // The capture prompt belongs to the event the form was holding; leaving edit
+    // mode leaves it too, rather than offering to name a template for nothing.
+    setTemplateNaming(false);
+    setTemplateDraft("");
   }
 
   /** Adds or removes one lead time; the store owns ordering, so the set is kept as picked. */
@@ -671,6 +704,74 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
 
   async function reload(): Promise<void> {
     setEvents(await window.nexus.listEvents(profileId));
+  }
+
+  // --- Šabloni (CAL-009) ----------------------------------------------------
+
+  /**
+   * The day a template lands on. A template carries no date at all, so this is
+   * the one thing the UI must supply — and the honest answer is what the form
+   * itself already names: the date field, which every way into this form fills
+   * in (a click on a month cell, a drag over an hour slot, an event opened for
+   * editing). Only when the field is empty or half-typed does it fall back to
+   * `anchorKey`, the single day every grid view derives from and „Danas“ resets
+   * — which is the day the user is looking at.
+   */
+  const templateDay = isValidDayKey(date) ? date : anchorKey;
+
+  function beginSaveTemplate(currentTitle: string): void {
+    setTemplateFailed(false);
+    // Prefilled with the event's own title, the way TASK-010's prompt is: most
+    // templates are named after the thing they make, and the rest is one edit.
+    setTemplateDraft(currentTitle);
+    setTemplateNaming(true);
+  }
+
+  function closeTemplatePrompt(): void {
+    setTemplateNaming(false);
+    setTemplateDraft("");
+  }
+
+  async function submitSaveTemplate(eventId: string, close: () => void): Promise<void> {
+    const name = templateDraft.trim();
+    if (name.length === 0) return;
+    try {
+      setTemplateFailed(false);
+      await window.nexus.captureEventTemplate(profileId, eventId, name);
+      setTemplates(await window.nexus.listEventTemplates(profileId));
+      closeTemplatePrompt();
+      close();
+    } catch (error) {
+      console.error("Nexus: failed to save the event template:", error);
+      setTemplateFailed(true);
+    }
+  }
+
+  async function applyTemplate(template: EventTemplate, close: () => void): Promise<void> {
+    try {
+      setTemplateFailed(false);
+      await window.nexus.applyEventTemplate(profileId, template.id, templateDay);
+      // Move to the day it landed on before re-reading: the form's date can name
+      // a day no view is currently showing, and an event the user cannot see is
+      // indistinguishable from one that was never created.
+      setAnchorKey(templateDay);
+      await reload();
+      close();
+    } catch (error) {
+      console.error("Nexus: failed to apply the event template:", error);
+      setTemplateFailed(true);
+    }
+  }
+
+  async function deleteTemplate(id: string): Promise<void> {
+    try {
+      setTemplateFailed(false);
+      await window.nexus.deleteEventTemplate(profileId, id);
+      setTemplates(await window.nexus.listEventTemplates(profileId));
+    } catch (error) {
+      console.error("Nexus: failed to delete the event template:", error);
+      setTemplateFailed(true);
+    }
   }
 
   async function submitForm(formEvent: FormEvent<HTMLFormElement>): Promise<void> {
@@ -994,6 +1095,9 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
     blocks === null ||
     people === null;
   const todayKey = localTodayKey();
+  // The store orders by SQLite's binary collation, which mis-tailors Serbian
+  // Latin script; the popover re-sorts, as every alphabetical list here does.
+  const sortedTemplates = templates.slice().sort((a, b) => collator.compare(a.name, b.name));
 
   // Every grid view derives from the one anchor day; cheap to compute both
   // unconditionally rather than branch on `view` twice below.
@@ -1181,6 +1285,127 @@ export function CalendarPage({ profileId, intent, onIntentHandled }: CalendarPag
               <Button type="button" className="cal__cancel" onClick={resetForm}>
                 {strings.calendar.cancel}
               </Button>
+            )}
+            {/* Šabloni (CAL-009), in the form's own action row because the form
+                IS this page's per-event surface: creating offers the list, and
+                an event open for editing offers to become one. Nothing inside
+                either panel is a `<form>` or a submit button — they sit inside
+                this one, and a nested form is not a thing HTML has. */}
+            {editingId === null ? (
+              <NotePopover
+                label={strings.calendar.templates.menuLabel}
+                triggerClassName="cal__templates-trigger"
+                triggerContent={strings.calendar.templates.title}
+              >
+                {(close) => (
+                  <>
+                    <span className="note__menu-label">{strings.calendar.templates.title}</span>
+                    {/* A template carries no date, so the day it lands on is
+                        named out loud rather than left to be discovered. */}
+                    <p className="note__menu-caption">
+                      {strings.calendar.templates.applyDayLabel}: {formatDay(templateDay)}
+                    </p>
+                    {sortedTemplates.length === 0 ? (
+                      <p className="note__menu-caption">{strings.calendar.templates.empty}</p>
+                    ) : (
+                      sortedTemplates.map((template) => (
+                        <div key={template.id} className="cal__template-row">
+                          <button
+                            className="note__menu-item cal__template-apply"
+                            role="menuitem"
+                            type="button"
+                            title={strings.calendar.templates.applyTitle}
+                            onClick={() => void applyTemplate(template, close)}
+                          >
+                            {template.name}
+                          </button>
+                          <button
+                            className="cal__template-delete"
+                            type="button"
+                            aria-label={strings.calendar.templates.delete}
+                            onClick={() => void deleteTemplate(template.id)}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))
+                    )}
+                    {templateFailed && (
+                      <p className="note__menu-caption" role="status">
+                        {strings.calendar.templates.actionError}
+                      </p>
+                    )}
+                  </>
+                )}
+              </NotePopover>
+            ) : (
+              <NotePopover
+                label={strings.calendar.templates.saveMenuLabel}
+                triggerClassName="cal__template-menu"
+              >
+                {(close) => (
+                  <>
+                    <span className="note__menu-label">{strings.calendar.templates.title}</span>
+                    {templateNaming ? (
+                      <>
+                        <div className="cal__template-form">
+                          <TextField
+                            value={templateDraft}
+                            placeholder={strings.calendar.templates.namePlaceholder}
+                            aria-label={strings.calendar.templates.nameLabel}
+                            maxLength={MAX_EVENT_TEMPLATE_NAME_LENGTH}
+                            autoFocus
+                            onChange={(field) => setTemplateDraft(field.target.value)}
+                            onKeyDown={(key: KeyboardEvent<HTMLInputElement>) => {
+                              // This line lives INSIDE the event form, so Enter
+                              // would otherwise submit that form instead of
+                              // naming the template.
+                              if (key.key === "Enter") {
+                                key.preventDefault();
+                                void submitSaveTemplate(editingId, close);
+                              } else if (key.key === "Escape") {
+                                key.preventDefault();
+                                closeTemplatePrompt();
+                              }
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="primary"
+                            onClick={() => void submitSaveTemplate(editingId, close)}
+                          >
+                            {strings.calendar.save}
+                          </Button>
+                          <Button type="button" size="sm" onClick={closeTemplatePrompt}>
+                            {strings.calendar.cancel}
+                          </Button>
+                        </div>
+                        {/* Said before the fact: saving under a name that exists
+                            is how a template is EDITED, not an accident to warn
+                            about afterwards (the ADR-016 wording precedent). */}
+                        <p className="note__menu-caption">
+                          {strings.calendar.templates.overwriteNote}
+                        </p>
+                      </>
+                    ) : (
+                      <button
+                        className="note__menu-item"
+                        role="menuitem"
+                        type="button"
+                        onClick={() => beginSaveTemplate(title)}
+                      >
+                        {strings.calendar.templates.saveAs}
+                      </button>
+                    )}
+                    {templateFailed && (
+                      <p className="note__menu-caption" role="status">
+                        {strings.calendar.templates.actionError}
+                      </p>
+                    )}
+                  </>
+                )}
+              </NotePopover>
             )}
             {formError != null && (
               <p className="cal__form-error" role="alert">

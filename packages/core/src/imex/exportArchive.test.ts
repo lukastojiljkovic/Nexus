@@ -36,6 +36,7 @@ function emptyInput(): ExportArchiveInput {
       taskTemplates: [],
       taskDependencies: [],
       events: [],
+      eventTemplates: [],
       documents: [],
       renewals: [],
       people: [],
@@ -235,7 +236,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.14.0");
+      expect(manifest.schemaVersion).toBe("1.15.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       expect(manifest.profile).toEqual({ id: "profile1", name: "Luka" });
@@ -888,6 +889,16 @@ describe("buildExportArchive", () => {
         events: [
           { id: "e1", profileId: "p1", title: "E", description: null, startAt: t, endAt: null, allDay: false, location: null, category: null, createdAt: t, updatedAt: t, recurrence: null, recurrenceExdates: [], reminderOffsets: [] },
         ],
+        eventTemplates: [
+          {
+            id: "etpl1", profileId: "p1", name: "Šablon", createdAt: t, updatedAt: t,
+            payload: {
+              title: "E", allDay: false, startTime: "18:30", durationMinutes: 90,
+              location: null, description: null, category: null,
+              reminderOffsets: [], recurrence: null,
+            },
+          },
+        ],
         documents: [
           { id: "d1", profileId: "p1", docType: "licna_karta", label: "D", expiryDate: "2030-01-01", reminderOffsets: [], notes: null, createdAt: t, updatedAt: t },
         ],
@@ -967,7 +978,7 @@ describe("buildExportArchive", () => {
       const data = populatedData();
       expect(countProfileModules(data)).toEqual({
         tasks: 9, // 2 tasks + 1 list + 1 section + 1 tag + 1 tag link + 1 attachment + 1 template + 1 dependency
-        calendar: 4, // 1 event + 1 document + 1 renewal + 1 person
+        calendar: 5, // 1 event + 1 event template + 1 document + 1 renewal + 1 person
         study: 11, // 1 each of subject/material/note-link/exam/deck/card/review/plan/block/focus-session + the settings row
         notifications: 1,
         notes: 7, // 1 each of note/folder/tag/tag-link/template/attachment/version

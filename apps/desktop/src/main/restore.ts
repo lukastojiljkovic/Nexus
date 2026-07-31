@@ -716,6 +716,7 @@ function importTargetFor(deps: ProfileDataDeps, profileId: string): ForeignImpor
     noteTags: org.listTags(),
     taskTags: deps.taskTagStore(profileId).listTags(),
     taskTemplateNames: deps.taskTemplateStore(profileId).list().map((template) => template.name),
+    eventTemplateNames: deps.eventTemplateStore(profileId).list().map((template) => template.name),
     claimsCaptureDefault: org.listFolders().some((folder) => folder.isCaptureDefault),
   };
 }

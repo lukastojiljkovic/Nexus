@@ -18,6 +18,7 @@ import {
   DeckStore,
   DocumentStore,
   EventStore,
+  EventTemplateStore,
   ExamStore,
   FocusStore,
   ForeignImportStore,
@@ -95,6 +96,7 @@ function emptyProfileData(): ProfileData {
     taskTemplates: [],
     taskDependencies: [],
     events: [],
+    eventTemplates: [],
     documents: [],
     renewals: [],
     people: [],
@@ -266,6 +268,7 @@ function gather(profileId: string): ProfileData {
     taskTemplates: new TaskTemplateStore(db.raw, profileId).list(),
     taskDependencies: new TaskDependencyStore(db.raw, profileId).listLinks(),
     events: new EventStore(db.raw, profileId).listActive(),
+    eventTemplates: new EventTemplateStore(db.raw, profileId).list(),
     documents: activeDocuments,
     renewals: activeDocuments.flatMap((document) => documents.listRenewals(document.id)),
     people: new PeopleStore(db.raw, profileId).listActive(),
@@ -299,6 +302,7 @@ function targetFor(profileId: string): ForeignImportTarget {
     noteTags: org.listTags(),
     taskTags: new TaskTagStore(db.raw, profileId).listTags(),
     taskTemplateNames: new TaskTemplateStore(db.raw, profileId).list().map((row) => row.name),
+    eventTemplateNames: new EventTemplateStore(db.raw, profileId).list().map((row) => row.name),
     claimsCaptureDefault: org.listFolders().some((folder) => folder.isCaptureDefault),
   };
 }

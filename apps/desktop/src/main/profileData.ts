@@ -34,6 +34,7 @@ import type {
   DeckStore,
   DocumentStore,
   EventStore,
+  EventTemplateStore,
   ExamStore,
   FocusStore,
   NoteAttachmentStore,
@@ -70,6 +71,7 @@ export interface ProfileDataDeps {
   taskTemplateStore(profileId: string): TaskTemplateStore;
   taskDependencyStore(profileId: string): TaskDependencyStore;
   eventStore(profileId: string): EventStore;
+  eventTemplateStore(profileId: string): EventTemplateStore;
   peopleStore(profileId: string): PeopleStore;
   documentStore(profileId: string): DocumentStore;
   subjectStore(profileId: string): SubjectStore;
@@ -214,6 +216,10 @@ export function gatherProfileData(deps: ProfileDataDeps, profileId: string): Pro
     // of what the profile currently IS, which is what an export carries.
     taskDependencies: deps.taskDependencyStore(profileId).listLinks(),
     events: deps.eventStore(profileId).listActive(),
+    // A plain profile-wide read (migration 036), like the task templates above:
+    // a template hangs off no event and points at no day, so there is nothing to
+    // fan out over.
+    eventTemplates: deps.eventTemplateStore(profileId).list(),
     documents,
     renewals: documents.flatMap((document) => documentsStore.listRenewals(document.id)),
     people: deps.peopleStore(profileId).listActive(),

@@ -16,8 +16,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 35 (subject materials), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(35);
+  it("is at version 36 (event templates), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(36);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -3877,6 +3877,70 @@ describe("migration 035 — subject materials and linked notes", () => {
     ).map((row) => row.name);
     expect(triggers.filter((name) => name.includes("subject_attachment"))).toEqual([]);
     expect(triggers.filter((name) => name.includes("subject_note_link"))).toEqual([]);
+    db.close();
+  });
+});
+
+describe("migration 036 — event templates", () => {
+  const now = () => new Date().toISOString();
+
+  const insertTemplate = (db: NexusDatabase, id: string, profileId: string, name: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO event_templates (id, profile_id, name, payload, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, profileId, name, '{"title":"x"}', now(), now());
+
+  it("creates the event_templates table and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh-036.db") });
+    expect(tableNames(db)).toContain("event_templates");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("creates the event_templates_profile_name unique index", () => {
+    const db = openDatabase({ path: join(dir, "index-036.db") });
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("event_templates_profile_name");
+    db.close();
+  });
+
+  it("enforces UNIQUE(profile_id, name) — the name IS the template's identity", () => {
+    const db = openDatabase({ path: join(dir, "unique-name-036.db") });
+    insertProfile(db, "p1");
+    insertProfile(db, "p2");
+    insertTemplate(db, "etpl1", "p1", "Trening");
+    // The same name in the same profile collides — which is what makes
+    // `saveByName` an upsert rather than a second row.
+    expect(() => insertTemplate(db, "etpl2", "p1", "Trening")).toThrow();
+    // The same name in a different profile is fine.
+    expect(() => insertTemplate(db, "etpl3", "p2", "Trening")).not.toThrow();
+    db.close();
+  });
+
+  it("cascades templates when the owning profile is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade-036.db") });
+    insertProfile(db, "p1");
+    insertTemplate(db, "etpl1", "p1", "Trening");
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM event_templates").get() as { n: number }).n,
+    ).toBe(0);
+    db.close();
+  });
+
+  it("has no deleted_at column — deleting a template is final, as for task_templates", () => {
+    const db = openDatabase({ path: join(dir, "no-soft-delete-036.db") });
+    const columns = (
+      db.raw.prepare("PRAGMA table_info(event_templates)").all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(columns).toEqual(["id", "profile_id", "name", "payload", "created_at", "updated_at"]);
     db.close();
   });
 });

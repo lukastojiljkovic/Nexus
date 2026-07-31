@@ -172,6 +172,24 @@ export class EventValidationError extends DatabaseError {}
 export class EventNotFoundError extends DatabaseError {}
 
 /**
+ * Thrown when an event template's name or payload breaks a rule the UI should
+ * have caught (CAL-009) — an empty name, a payload field outside its domain, a
+ * time of day on an all-day template, a duration that would carry the event past
+ * the end of its own day. Raised on the way IN (an untrusted caller, SEC-EL-02)
+ * and equally on the way OUT, where it reports a stored row that no longer
+ * parses — corruption, never something to coerce, exactly as
+ * `TaskTemplateValidationError` is used one module over.
+ */
+export class EventTemplateValidationError extends DatabaseError {}
+
+/**
+ * Thrown when an event-template operation targets an id that is not a template
+ * in the store's own profile — unknown or owned by another profile (the
+ * `TaskTemplateNotFoundError` arrangement).
+ */
+export class EventTemplateNotFoundError extends DatabaseError {}
+
+/**
  * Thrown when a person write is rejected at the store boundary because its
  * input breaks a domain rule the UI is expected to have caught already — an
  * empty name, an unknown kind, a malformed `now`, a birth year outside the

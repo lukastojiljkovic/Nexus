@@ -51,7 +51,7 @@ function emptyProfileData(): ProfileData {
   return {
     tasks: [], taskLists: [], taskSections: [], taskTags: [], taskTagLinks: [],
     taskAttachments: [], taskTemplates: [], taskDependencies: [],
-    events: [], documents: [], renewals: [], people: [],
+    events: [], eventTemplates: [], documents: [], renewals: [], people: [],
     subjects: [], subjectAttachments: [], subjectNoteLinks: [],
     exams: [], decks: [], cards: [], reviewLog: [], plans: [], blocks: [],
     focusSessions: [], studySettings: [], notifications: [],
@@ -91,6 +91,16 @@ function foreignProfileData(): ProfileData {
     ],
     events: [
       { id: "src-e1", profileId: "src", title: "Sastanak", description: null, startAt: "2026-07-10T09:00:00.000Z", endAt: null, allDay: false, location: null, category: null, createdAt: T0, updatedAt: T0, recurrence: null, recurrenceExdates: [], reminderOffsets: [30] },
+    ],
+    eventTemplates: [
+      {
+        id: "src-et1", profileId: "src", name: "Trening", createdAt: T0, updatedAt: T0,
+        payload: {
+          title: "Trening", allDay: false, startTime: "18:30", durationMinutes: 90,
+          location: "Teretana", description: null, category: null,
+          reminderOffsets: [10], recurrence: null,
+        },
+      },
     ],
     documents: [
       { id: "src-d1", profileId: "src", docType: "pasos", label: "Pasoš", expiryDate: "2030-01-01", reminderOffsets: [30], notes: null, createdAt: T0, updatedAt: T0 },
@@ -165,6 +175,7 @@ function emptyTarget(overrides: Partial<ForeignImportTarget> = {}): ForeignImpor
     noteTags: [],
     taskTags: [],
     taskTemplateNames: [],
+    eventTemplateNames: [],
     claimsCaptureDefault: false,
     ...overrides,
   };
@@ -556,9 +567,10 @@ describe("planForeignImport — the report adds up", () => {
     ];
     const { report } = plan(foreignProfileData(), emptyTarget(), dropped);
 
-    // 1 event + 1 document + 1 renewal + 1 person survived, 2 events dropped.
-    expect(report.modules.calendar.parsed).toBe(6);
-    expect(report.modules.calendar.imported).toBe(4);
+    // 1 event + 1 event template + 1 document + 1 renewal + 1 person survived,
+    // 2 events dropped.
+    expect(report.modules.calendar.parsed).toBe(7);
+    expect(report.modules.calendar.imported).toBe(5);
     expect(report.modules.calendar.skipped).toBe(2);
   });
 
@@ -695,6 +707,46 @@ describe("planForeignImport — task attachments, templates, dependencies, dashb
     expect(result.report.skips).toContainEqual({
       code: "template-name-taken", module: "tasks", type: "task-template", count: 2,
     });
+  });
+
+  // CAL-009: the same rule, the same skip code, a different table — and the two
+  // name spaces are genuinely separate, which is the second half of this test.
+  it("skips an EVENT template whose name the target holds, counted against the calendar module", () => {
+    const data = {
+      ...withTaskExtras(),
+      eventTemplates: [
+        ...foreignProfileData().eventTemplates,
+        {
+          id: "src-et2", profileId: "src", name: "Zauzeto ime", createdAt: T0, updatedAt: T0,
+          payload: {
+            title: "E", allDay: true, startTime: null, durationMinutes: null,
+            location: null, description: null, category: null,
+            reminderOffsets: [], recurrence: null,
+          },
+        },
+      ],
+    };
+    const result = plan(
+      data,
+      emptyTarget({ taskTemplateNames: ["Zauzeto ime"], eventTemplateNames: ["Zauzeto ime"] }),
+    );
+
+    expect(result.data.eventTemplates.map((row) => row.name)).toEqual(["Trening"]);
+    expect(result.report.skips).toContainEqual({
+      code: "template-name-taken", module: "calendar", type: "event-template", count: 1,
+    });
+    // The task-module line is still its own, separately counted one.
+    expect(result.report.skips).toContainEqual({
+      code: "template-name-taken", module: "tasks", type: "task-template", count: 2,
+    });
+  });
+
+  it("imports an event template under a minted id, its payload untouched", () => {
+    const result = plan(withTaskExtras());
+    const [template] = result.data.eventTemplates;
+    expect(template?.id).not.toBe("src-et1");
+    expect(template?.profileId).toBe("target-profile");
+    expect(template?.payload).toEqual(foreignProfileData().eventTemplates[0]?.payload);
   });
 
   it("never imports dashboard settings and says so", () => {

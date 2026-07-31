@@ -1,5 +1,6 @@
 import * as Y from "yjs";
 
+import { TIME_GRID_MAX_END_MINUTES, TIME_GRID_MIN_EVENT_MINUTES } from "../calendar/timeGridDrag.js";
 import { validateRecurrenceRule } from "../recurrence/recurrence.js";
 import type { RecurrenceRule } from "../recurrence/recurrence.js";
 import { renderClozeCard } from "../study/clozeText.js";
@@ -12,6 +13,8 @@ import type {
   ExportDeck,
   ExportDocument,
   ExportEvent,
+  ExportEventTemplate,
+  ExportEventTemplatePayload,
   ExportExam,
   ExportFocusSession,
   ExportNote,
@@ -176,10 +179,13 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.14.0` added the
- * `subject-attachment` and `subject-note-link` record types — a subject's
- * materials and the notes filed under it (STUDY-001, migration 035), both riding
- * in the data file the STUDY module already had — after `1.13.0` added the
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.15.0` added the
+ * `event-template` record type — a saved SHAPE of one event (CAL-009, migration
+ * 036), riding in the data file the CAL module already had — after `1.14.0`
+ * added the `subject-attachment` and `subject-note-link` record types — a
+ * subject's materials and the notes filed under it (STUDY-001, migration 035),
+ * both riding in the data file the STUDY module already had — after `1.13.0`
+ * added the
  * `study-settings` record type — one profile's FSRS target retention and its
  * two daily caps (STUDY-007, migration 034), riding in that same file — after
  * `1.12.0` added a
@@ -210,8 +216,9 @@ export interface ImportArchiveResult {
  * indistinguishable from a profile that had no dependencies — or, at `1.9.0`,
  * from one that never chose a dashboard background, or, at `1.11.0`, from one
  * that never rearranged its dashboard, or, at `1.13.0`, from one that never
- * touched its study preferences, or, at `1.14.0`, from one whose subjects carry
- * neither materials nor linked notes — while a NEWER archive
+ * touched its study preferences, at `1.14.0` from one whose subjects carry
+ * neither materials nor linked notes, or, at `1.15.0`, from one that never
+ * saved an event as a template — while a NEWER archive
  * never reaches a parser at all, because the gate above refuses it. Era flags
  * exist only for the "this row is missing a field it now must have" question,
  * which a whole absent type never asks — and which an OPTIONAL-with-a-default
@@ -224,14 +231,8 @@ export interface ImportArchiveResult {
  * major forward from — a migration framework for a major that has never
  * shipped would be speculative machinery with nothing to exercise it.
  *
- * SUPERVISOR NOTE: `1.11.0` belongs to the sibling lane (dashboard layout) and
- * is not in this worktree; the `1.12.0` lane wrote its version directly, the
- * `1.13.0` lane wrote its own on top, and this one writes `1.14.0` — leaving the
- * gap for the supervisor to reconcile at merge. The too-new refusal fixtures in
- * `importArchive.test.ts` moved to `1.15.0` for the same reason — `1.14.0` is no
- * longer "strictly ahead of this build".
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.14.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.15.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -604,6 +605,22 @@ function nullableHhmm(value: unknown, field: string): string | null {
   return value === null ? null : hhmm(value, field);
 }
 
+/**
+ * A field whose only legal value in THIS shape is absence: an all-day event
+ * template's `startTime`. Written as its own validator rather than an `if`, so
+ * a violation is the same named `invalid-record` detail every other field
+ * produces rather than a differently-worded refusal.
+ */
+function nullOnly(value: unknown, field: string): null {
+  if (value === null || value === undefined) return null;
+  throw new InvalidFieldError(field);
+}
+
+/** `HH:MM` as minutes from midnight. Only ever called on a value `hhmm` has already accepted. */
+function clockMinutes(clock: string): number {
+  return Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3, 5));
+}
+
 /** `content` is a JSON-encoded ProseMirror document (ADR-016) — valid JSON, and specifically a JSON *object*, not an array/string/number. */
 function jsonObjectString(value: unknown, field: string): string {
   const s = nonEmptyStr(value, field);
@@ -736,6 +753,20 @@ const MAX_TASK_TEMPLATE_TAGS = 20;
 const MAX_TASK_TEMPLATE_SUBTASKS = 30;
 const MAX_TASK_TAG_NAME_LENGTH = 50;
 
+/**
+ * Mirrors `MAX_EVENT_TEMPLATE_NAME_LENGTH` in `@nexus/db`'s
+ * `events/eventTemplateStore.ts` (copied, not imported — `@nexus/core` must not
+ * depend on `@nexus/db`), for the reason the task-template caps above are:
+ * nothing in migration 036 can CHECK a JSON column, so an archive is the one way
+ * a payload could reach that column having passed nobody's validator.
+ *
+ * The two span bounds are NOT copies: `TIME_GRID_MIN_EVENT_MINUTES` and
+ * `TIME_GRID_MAX_END_MINUTES` live in THIS package (`calendar/timeGridDrag.ts`)
+ * and the store re-exports them, so both sides genuinely share one constant and
+ * the usual copy-drift risk does not arise.
+ */
+const MAX_EVENT_TEMPLATE_NAME_LENGTH = 80;
+
 // --- Record type discriminants ----------------------------------------------
 
 /** Every record type the interchange carries, spelled exactly as the `type` discriminant on an NDJSON row. Exported because `ImportDrop` names one. */
@@ -749,6 +780,7 @@ export type ArchiveRecordType =
   | "task-template"
   | "task-dependency"
   | "event"
+  | "event-template"
   | "document"
   | "renewal"
   | "person"
@@ -784,6 +816,7 @@ const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "task-template",
   "task-dependency",
   "event",
+  "event-template",
   "document",
   "renewal",
   "person",
@@ -824,7 +857,7 @@ const FILE_RECORD_TYPES: Record<DataFilePath, readonly ArchiveRecordType[]> = {
     "task-template",
     "task-dependency",
   ],
-  "data/calendar.ndjson": ["event", "document", "renewal", "person"],
+  "data/calendar.ndjson": ["event", "document", "renewal", "person", "event-template"],
   "data/study.ndjson": [
     "study-settings",
     "subject",
@@ -1139,6 +1172,86 @@ function parseEvent(raw: Record<string, unknown>, era: ArchiveEra): ExportEvent 
     id, profileId, title, description, startAt, endAt, allDay, location, category,
     createdAt, updatedAt, recurrence, recurrenceExdates, reminderOffsets,
   };
+}
+
+/**
+ * `EventTemplateStore.validatePayload`'s twin (CAL-009). Every field is
+ * revalidated rather than passed through, because a payload lives in a JSON
+ * column no `CHECK` can reach: this parser and that store's own validator are
+ * between them the ONLY two gates the value ever passes, and they must agree.
+ *
+ * Nested, so the field paths a problem names read `payload.startTime`,
+ * `payload.reminderOffsets` — the row's own structure, which is what makes an
+ * `invalid-record` detail something a person can go and fix.
+ */
+function parseEventTemplatePayload(
+  value: unknown,
+  field: string,
+): ExportEventTemplatePayload {
+  const raw = expectRecord(value, field);
+
+  const title = trimmedNonEmptyStr(raw.title, `${field}.title`);
+  const allDay = bool(raw.allDay, `${field}.allDay`);
+  // The store's pair rule, both ways round: a timed template MUST name the
+  // minute it starts at, and an all-day one must not — an all-day event's start
+  // is a bare day key, with no clock part to put one in.
+  const startTime = allDay
+    ? nullOnly(raw.startTime, `${field}.startTime`)
+    : hhmm(raw.startTime, `${field}.startTime`);
+  const durationMinutes =
+    raw.durationMinutes === null || raw.durationMinutes === undefined
+      ? null
+      : intInRange(
+          raw.durationMinutes,
+          `${field}.durationMinutes`,
+          TIME_GRID_MIN_EVENT_MINUTES,
+          TIME_GRID_MAX_END_MINUTES,
+        );
+  const location = nullableStr(raw.location, `${field}.location`);
+  const description = nullableStr(raw.description, `${field}.description`);
+  const category = nullableStr(raw.category, `${field}.category`);
+  const reminderOffsets = boundedIntArray(
+    raw.reminderOffsets,
+    `${field}.reminderOffsets`,
+    MAX_EVENT_REMINDER_MINUTES,
+    MAX_EVENT_REMINDERS,
+  );
+  // No anchor check on the rule, unlike an `event` row's: a template carries no
+  // start day at all, and apply supplies a real one.
+  const recurrence = nullableRecurrenceRule(raw.recurrence, `${field}.recurrence`);
+
+  // The store's two cross-field rules. A duration belongs to a span of clock
+  // time, so an all-day template cannot carry one; and the span has to END
+  // inside its own day, because a timed event's end lives on its start's day
+  // (`TIME_GRID_MAX_END_MINUTES` is 23:59 for exactly that reason).
+  if (durationMinutes !== null) {
+    if (startTime === null) throw new InvalidFieldError(`${field}.durationMinutes`);
+    if (clockMinutes(startTime) + durationMinutes > TIME_GRID_MAX_END_MINUTES) {
+      throw new InvalidFieldError(`${field}.durationMinutes`);
+    }
+  }
+
+  return {
+    title,
+    allDay,
+    startTime,
+    durationMinutes,
+    location,
+    description,
+    category,
+    reminderOffsets,
+    recurrence,
+  };
+}
+
+function parseEventTemplate(raw: Record<string, unknown>): ExportEventTemplate {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const name = trimmedNonEmptyStr(raw.name, "name", MAX_EVENT_TEMPLATE_NAME_LENGTH);
+  const payload = parseEventTemplatePayload(raw.payload, "payload");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, profileId, name, payload, createdAt, updatedAt };
 }
 
 function parseDocument(raw: Record<string, unknown>): ExportDocument {
@@ -1728,6 +1841,7 @@ interface Collections {
   taskTemplates: Bucket<ExportTaskTemplate>;
   taskDependencies: Bucket<ExportTaskDependency>;
   events: Bucket<ExportEvent>;
+  eventTemplates: Bucket<ExportEventTemplate>;
   documents: Bucket<ExportDocument>;
   renewals: Bucket<ExportRenewal>;
   people: Bucket<ExportPerson>;
@@ -1759,7 +1873,8 @@ function newCollections(): Collections {
     tasks: newBucket(), taskLists: newBucket(), taskSections: newBucket(),
     taskTags: newBucket(), taskTagLinks: newBucket(), taskAttachments: newBucket(),
     taskTemplates: newBucket(), taskDependencies: newBucket(),
-    events: newBucket(), documents: newBucket(), renewals: newBucket(),
+    events: newBucket(), eventTemplates: newBucket(),
+    documents: newBucket(), renewals: newBucket(),
     people: newBucket(), subjects: newBucket(),
     subjectAttachments: newBucket(), subjectNoteLinks: newBucket(),
     exams: newBucket(), decks: newBucket(), cards: newBucket(),
@@ -1838,6 +1953,11 @@ function dispatchRecord(
     case "event": {
       const row = parseEvent(raw, era);
       pushRow(collections.events, row.id, row, type, path, line, ctx);
+      return;
+    }
+    case "event-template": {
+      const row = parseEventTemplate(raw);
+      pushRow(collections.eventTemplates, row.id, row, type, path, line, ctx);
       return;
     }
     case "document": {
@@ -3143,6 +3263,10 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         taskTemplates: rowsOf(collections.taskTemplates),
         taskDependencies: rowsOf(collections.taskDependencies),
         events: rowsOf(collections.events),
+        // Empty both for a pre-1.15.0 archive and for a profile that never saved
+        // an event as a template — indistinguishable on purpose, because they
+        // mean the same thing: this profile has no event templates.
+        eventTemplates: rowsOf(collections.eventTemplates),
         documents: rowsOf(collections.documents),
         renewals: rowsOf(collections.renewals),
         people: rowsOf(collections.people),

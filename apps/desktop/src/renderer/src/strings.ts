@@ -922,6 +922,37 @@ export const strings = {
       /** Trailing word of every non-zero lead time; the day form takes `dayUnit`. */
       before: "ranije",
     },
+    /**
+     * Šabloni (CAL-009) — a saved event shape, captured from the form while an
+     * event is open in it and applied from that same form's toolbar onto the day
+     * the form names. Worded field for field like `tasks.templates`, since it is
+     * the same idea one module over; only the two sentences that mention what is
+     * created differ, because one makes a task and this one makes a „događaj“.
+     * The block already says „šablon“, so nothing inside it repeats the word.
+     */
+    templates: {
+      /** The toolbar button, and the heading inside both popovers. */
+      title: "Šabloni",
+      /** Accessible name of the toolbar button's menu. */
+      menuLabel: "Šabloni događaja",
+      /** Shown in place of the list when the profile has no templates yet. */
+      empty: "Još nemaš šablone događaja.",
+      /** The action in the „⋯“ menu beside the open event's form. */
+      saveAs: "Sačuvaj kao šablon",
+      /** Accessible name of that „⋯“ menu — the surface it belongs to, said in full. */
+      saveMenuLabel: "Šablon ovog događaja",
+      namePlaceholder: "Naziv šablona",
+      /** Accessible name of the name field — the action in full, like `tasks.templates.nameLabel`. */
+      nameLabel: "Sačuvaj događaj kao šablon",
+      /** Said BEFORE the fact, not after: saving under an existing name is how a template is edited. */
+      overwriteNote: "Postojeći naziv se zamenjuje.",
+      /** Tooltip on a template's name in the list — the click applies it. */
+      applyTitle: "Napravi događaj od ovog šablona",
+      /** Caption above the list: a template carries no date, so the day it lands on is worth naming out loud. */
+      applyDayLabel: "Primenjuje se na",
+      delete: "Obriši šablon",
+      actionError: "Radnja nad šablonom nije uspela. Pokušaj ponovo.",
+    },
     /** Tag chip on a read-only task row in the agenda (ADR-020). */
     taskTag: "Zadatak",
     /** Grid navigation (ADR-020): prev/today/next — one pair of labels shared by Mesec/Nedelja/Dan, since each shifts by its own period. */

@@ -53,6 +53,7 @@ export class ForeignImportStore {
   private readonly insertTaskDependency: Database.Statement;
   private readonly insertTaskTemplate: Database.Statement;
   private readonly insertEvent: Database.Statement;
+  private readonly insertEventTemplate: Database.Statement;
   private readonly insertPerson: Database.Statement;
   private readonly insertDocument: Database.Statement;
   private readonly insertRenewal: Database.Statement;
@@ -121,6 +122,10 @@ export class ForeignImportStore {
           location, category, created_at, updated_at, recurrence, recurrence_exdates,
           reminder_offsets, deleted_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    this.insertEventTemplate = db.prepare(
+      `INSERT INTO event_templates (id, profile_id, name, payload, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
     );
     this.insertPerson = db.prepare(
       `INSERT INTO people
@@ -361,6 +366,18 @@ export class ForeignImportStore {
           event.allDay ? 1 : 0, event.location, event.category, event.createdAt, event.updatedAt,
           recurrenceText(event.recurrence), exdatesText(event.recurrenceExdates),
           offsetsText(event.reminderOffsets),
+        );
+        written += 1;
+      }
+
+      // The task templates' treatment, one module over (CAL-009): re-serialized
+      // from the archive's nested object, and a template whose name the target
+      // already uses is not in the plan at all (ADR-043 §2), so migration 036's
+      // `(profile_id, name)` UNIQUE is never in play here.
+      for (const template of planned.eventTemplates) {
+        this.insertEventTemplate.run(
+          template.id, this.profileId, template.name, JSON.stringify(template.payload),
+          template.createdAt, template.updatedAt,
         );
         written += 1;
       }

@@ -25,6 +25,7 @@ import {
   DeckStore,
   DocumentStore,
   EventStore,
+  EventTemplateStore,
   ExamStore,
   FocusStore,
   ForeignImportStore,
@@ -151,6 +152,7 @@ function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
     taskTemplateStore: (profileId) => new TaskTemplateStore(handle.raw, profileId),
     taskDependencyStore: (profileId) => new TaskDependencyStore(handle.raw, profileId),
     eventStore: (profileId) => new EventStore(handle.raw, profileId),
+    eventTemplateStore: (profileId) => new EventTemplateStore(handle.raw, profileId),
     peopleStore: (profileId) => new PeopleStore(handle.raw, profileId),
     documentStore: (profileId) => new DocumentStore(handle.raw, profileId),
     subjectStore: (profileId) => new SubjectStore(handle.raw, profileId),
@@ -321,6 +323,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   const taskAttachmentStore = new TaskAttachmentStore(handle.raw, profileId);
   const taskDependencyStore = new TaskDependencyStore(handle.raw, profileId);
   const eventStore = new EventStore(handle.raw, profileId);
+  const eventTemplateStore = new EventTemplateStore(handle.raw, profileId);
   const peopleStore = new PeopleStore(handle.raw, profileId);
   const subjectStore = new SubjectStore(handle.raw, profileId);
   const subjectAttachmentStore = new SubjectAttachmentStore(handle.raw, profileId);
@@ -395,6 +398,9 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   );
 
   const event = eventStore.create({ title: `${label} event`, startAt: "2026-03-01T10:00:00.000Z" });
+  // CAL-009: captured FROM that event, so the fixture's second nested payload is
+  // one a real store produced rather than one written by hand here.
+  eventTemplateStore.captureFromEvent(event.id, `${label} event template`, t0);
   // A leap-day birthday (CAL-007): the pair migration 020's CHECKs cannot vet,
   // so it is the person shape worth pushing through a whole zip round trip.
   const person = peopleStore.create(
@@ -481,6 +487,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     taskTemplates: taskTemplateStore.list(),
     taskDependencies: taskDependencyStore.listLinks(),
     events: eventStore.listActive(),
+    eventTemplates: eventTemplateStore.list(),
     documents: [],
     renewals: [],
     people: peopleStore.listActive(),

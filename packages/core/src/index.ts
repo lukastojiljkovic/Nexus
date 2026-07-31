@@ -126,6 +126,8 @@ export type {
   ExportDeck,
   ExportDocument,
   ExportEvent,
+  ExportEventTemplate,
+  ExportEventTemplatePayload,
   ExportExam,
   ExportFocusSession,
   ExportNote,

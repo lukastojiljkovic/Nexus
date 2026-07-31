@@ -55,6 +55,10 @@ export const RESTORE_WIPE_TABLES = [
   "subject_note_links",
   "subjects",
   "events",
+  // Beside the events, and free to sit anywhere for migration 027's reason one
+  // module over: a template hangs off nothing but `profiles` and nothing hangs
+  // off it (migration 036 — its payload names no row at all).
+  "event_templates",
   "people",
   "notifications",
   // The tag links, attachments and dependency edges first, then the tasks they
@@ -186,6 +190,7 @@ export class RestoreStore {
   private readonly insertRenewal: Database.Statement;
   private readonly insertTask: Database.Statement;
   private readonly insertEvent: Database.Statement;
+  private readonly insertEventTemplate: Database.Statement;
   private readonly insertPerson: Database.Statement;
   private readonly insertNotification: Database.Statement;
   private readonly insertPlan: Database.Statement;
@@ -309,6 +314,10 @@ export class RestoreStore {
           location, category, created_at, updated_at, recurrence, recurrence_exdates,
           reminder_offsets, deleted_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    this.insertEventTemplate = db.prepare(
+      `INSERT INTO event_templates (id, profile_id, name, payload, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
     );
     this.insertPerson = db.prepare(
       `INSERT INTO people
@@ -652,6 +661,19 @@ export class RestoreStore {
           event.allDay ? 1 : 0, event.location, event.category, event.createdAt, event.updatedAt,
           recurrenceText(event.recurrence), exdatesText(event.recurrenceExdates),
           offsetsText(event.reminderOffsets),
+        );
+        written += 1;
+      }
+
+      // Re-serialized rather than carried as text, exactly as the task templates
+      // above are and for the same reason: the archive carries the payload as a
+      // nested JSON OBJECT (`ExportEventTemplatePayload`) while the column holds
+      // JSON text, and `parseImportArchive` already returned it in the canonical
+      // form `EventTemplateStore` writes.
+      for (const template of input.data.eventTemplates) {
+        this.insertEventTemplate.run(
+          template.id, this.profileId, template.name, JSON.stringify(template.payload),
+          template.createdAt, template.updatedAt,
         );
         written += 1;
       }

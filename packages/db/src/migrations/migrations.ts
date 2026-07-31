@@ -35,6 +35,7 @@ import { migration032 } from "./032-dashboard-widgets.js";
 import { migration033 } from "./033-problem-cards.js";
 import { migration034 } from "./034-study-settings.js";
 import { migration035 } from "./035-subject-materials.js";
+import { migration036 } from "./036-event-templates.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -81,6 +82,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration033,
   migration034,
   migration035,
+  migration036,
 ];
 
 /**

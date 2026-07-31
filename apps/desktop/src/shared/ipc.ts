@@ -79,6 +79,10 @@ export const IpcChannel = {
   tasksCompleteOccurrence: "tasks:complete-occurrence",
   eventsAddRecurrenceExdate: "events:add-recurrence-exdate",
   eventsSplitRecurrence: "events:split-recurrence",
+  eventTemplatesList: "event-templates:list",
+  eventTemplatesCapture: "event-templates:capture",
+  eventTemplatesApply: "event-templates:apply",
+  eventTemplatesDelete: "event-templates:delete",
   peopleList: "people:list",
   peopleCreate: "people:create",
   peopleUpdate: "people:update",
@@ -1132,6 +1136,90 @@ export interface EventsSplitRecurrenceRequest {
   profileId: string;
   id: string;
   occurrenceDate: string;
+}
+
+/**
+ * Longest event-template name after trimming. Mirrors
+ * `MAX_EVENT_TEMPLATE_NAME_LENGTH` in `@nexus/db` — redeclared here, exactly as
+ * `MAX_TASK_TEMPLATE_NAME_LENGTH` above is, so the save prompt can bound what a
+ * user types without importing DB code, and so main can bound the wire without
+ * waiting for the store to refuse. The store stays authoritative.
+ */
+export const MAX_EVENT_TEMPLATE_NAME_LENGTH = 80;
+
+/**
+ * The event-shaped body a template carries (CAL-009), as the renderer sees it —
+ * mirrors `@nexus/db`'s `EventTemplatePayload` via the store's mapping.
+ * Redeclared here so the renderer never imports DB code.
+ *
+ * The renderer never CONSTRUCTS one of these, exactly as it never constructs a
+ * `TaskTemplatePayload`: a template is captured from an existing event by main
+ * and applied by main, so this type is read-only from the UI's side — which is
+ * why there is no "create a template by hand" channel and no validator for one.
+ * What the renderer sends is a name, an id and a day key, nothing more.
+ *
+ * Nothing here is a date. A template says "18:30, for ninety minutes, weekly";
+ * the DAY comes from wherever it is applied.
+ */
+export interface EventTemplatePayload {
+  title: string;
+  allDay: boolean;
+  /** Wall-clock `HH:MM` the created event starts at; null on an all-day template. */
+  startTime: string | null;
+  /** Whole minutes the created event lasts, or null for one with no end. Timed templates only. */
+  durationMinutes: number | null;
+  location: string | null;
+  description: string | null;
+  category: string | null;
+  /** Whole minutes before the created event's start at which to remind (CAL-006), ascending. */
+  reminderOffsets: number[];
+  /** The rule the created event's series runs on (ADR-024), or null. Phased from the day the template is applied to. */
+  recurrence: RecurrenceRule | null;
+}
+
+/** An event template as seen by the renderer (mirrors the `event_templates` table, migration 036 / CAL-009). */
+export interface EventTemplate {
+  id: string;
+  profileId: string;
+  name: string;
+  payload: EventTemplatePayload;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EventTemplatesListRequest {
+  profileId: string;
+}
+
+/**
+ * Captures an existing event as a template under `name` (CAL-009). Main reads
+ * the event and relativizes it itself — the renderer names only WHICH event and
+ * WHAT to call it, so there is no event-shaped payload on the wire to validate
+ * or to get wrong. Saving under a name that already exists REPLACES that
+ * template, which is the edit mechanism.
+ */
+export interface EventTemplatesCaptureRequest {
+  profileId: string;
+  eventId: string;
+  name: string;
+}
+
+/**
+ * Creates an event from a template, on `dayKey` (a bare `YYYY-MM-DD`). The day
+ * is the caller's, never the template's: a template is applied where the user is
+ * standing, and one that carried its own date would rot the moment that date
+ * passed.
+ */
+export interface EventTemplatesApplyRequest {
+  profileId: string;
+  templateId: string;
+  dayKey: string;
+}
+
+/** Deleting a template is final — nothing references one (migration 036). */
+export interface EventTemplatesDeleteRequest {
+  profileId: string;
+  id: string;
 }
 
 /** Closed person-kind domain (mirrors `PERSON_KINDS` in `@nexus/db`; redeclared so the renderer never imports DB code). */
@@ -3138,6 +3226,7 @@ export type ImportRecordType =
   | "task-template"
   | "task-dependency"
   | "event"
+  | "event-template"
   | "document"
   | "renewal"
   | "person"
@@ -3492,6 +3581,14 @@ export interface NexusApi {
    * are all this one call plus whatever the caller does next.
    */
   splitEventRecurrence(profileId: string, id: string, occurrenceDate: string): Promise<Event>;
+  /** This profile's event templates, alphabetical by name (the popover re-sorts with `Intl.Collator(["sr-Latn","sr"])`). */
+  listEventTemplates(profileId: string): Promise<EventTemplate[]>;
+  /** Captures `eventId`'s SHAPE — its time of day, length, reminders, rule and text — as a template called `name`. An existing name is REPLACED. */
+  captureEventTemplate(profileId: string, eventId: string, name: string): Promise<EventTemplate>;
+  /** Creates an event from a template on `dayKey` (a bare `YYYY-MM-DD`), returning the created row. */
+  applyEventTemplate(profileId: string, templateId: string, dayKey: string): Promise<Event>;
+  /** Deletes a template; no event created from it is touched. */
+  deleteEventTemplate(profileId: string, id: string): Promise<void>;
   /** This profile's people, name-ordered by SQLite's binary collation (CAL-007); the renderer re-sorts with `Intl.Collator(["sr-Latn","sr"])`. */
   listPeople(profileId: string): Promise<Person[]>;
   createPerson(profileId: string, person: NewPersonFields): Promise<Person>;

@@ -20,6 +20,8 @@ export {
   DocumentNotFoundError,
   DocumentValidationError,
   EventNotFoundError,
+  EventTemplateNotFoundError,
+  EventTemplateValidationError,
   EventValidationError,
   ExamNotFoundError,
   ExamValidationError,
@@ -147,6 +149,14 @@ export {
   MAX_EVENT_REMINDER_MINUTES,
 } from "./events/eventStore.js";
 export type { CreateEventInput, Event, UpdateEventFields } from "./events/eventStore.js";
+
+export {
+  EventTemplateStore,
+  MAX_EVENT_TEMPLATE_END_MINUTES,
+  MAX_EVENT_TEMPLATE_NAME_LENGTH,
+  MIN_EVENT_TEMPLATE_DURATION_MINUTES,
+} from "./events/eventTemplateStore.js";
+export type { EventTemplate, EventTemplatePayload } from "./events/eventTemplateStore.js";
 
 export { PeopleStore, PERSON_KINDS } from "./people/peopleStore.js";
 export type {

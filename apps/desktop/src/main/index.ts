@@ -47,6 +47,7 @@ import {
   DocumentStore,
   encryptDatabaseInPlace,
   EventStore,
+  EventTemplateStore,
   EXAM_TYPES,
   ExamStore,
   FocusStore,
@@ -122,6 +123,7 @@ import {
   type DocumentType,
   type DueQueueOptions,
   type Event,
+  type EventTemplate,
   type Exam,
   type ExamType,
   type FocusSession,
@@ -248,6 +250,7 @@ import {
   MAX_REVIEWS_PER_DAY,
   MAX_TARGET_RETENTION,
   MIN_TARGET_RETENTION,
+  MAX_EVENT_TEMPLATE_NAME_LENGTH,
   MAX_TASK_TAG_NAME_LENGTH,
   MAX_TASK_TEMPLATE_NAME_LENGTH,
   NOTE_CARD_DISPOSITIONS,
@@ -1071,6 +1074,29 @@ function asTaskTemplateName(value: unknown, field: string): string {
   if (trimmed.length === 0 || trimmed.length > MAX_TASK_TEMPLATE_NAME_LENGTH) {
     throw new Error(
       `Invalid IPC payload: "${field}" must be 1-${MAX_TASK_TEMPLATE_NAME_LENGTH} characters after trimming.`,
+    );
+  }
+  return trimmed;
+}
+
+/**
+ * An event-template name (CAL-009): `asTaskTemplateName`'s rule against the CAL
+ * module's own cap. `EventTemplateStore` trims and re-checks regardless, and
+ * stays authoritative (SEC-EL-02).
+ *
+ * This and a day key are the ONLY template fields that ever cross the wire: a
+ * template's payload is derived from a stored event by
+ * `EventTemplateStore.captureFromEvent`, so there is no renderer-supplied event
+ * shape here to validate — the same arrangement ADR-035 chose for tasks.
+ */
+function asEventTemplateName(value: unknown, field: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`Invalid IPC payload: "${field}" must be a string.`);
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || trimmed.length > MAX_EVENT_TEMPLATE_NAME_LENGTH) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be 1-${MAX_EVENT_TEMPLATE_NAME_LENGTH} characters after trimming.`,
     );
   }
   return trimmed;
@@ -1904,6 +1930,10 @@ function eventStore(profileId: string): EventStore {
   return new EventStore(requireDb().raw, profileId);
 }
 
+function eventTemplateStore(profileId: string): EventTemplateStore {
+  return new EventTemplateStore(requireDb().raw, profileId);
+}
+
 function peopleStore(profileId: string): PeopleStore {
   return new PeopleStore(requireDb().raw, profileId);
 }
@@ -2719,6 +2749,7 @@ function restoreDeps(): ImportDeps {
     taskTemplateStore,
     taskDependencyStore,
     eventStore,
+    eventTemplateStore,
     peopleStore,
     documentStore,
     subjectStore,
@@ -3534,6 +3565,57 @@ function registerIpc(): void {
     const id = asNonEmptyString(body.id, "id");
     const occurrenceDate = asBareDate(body.occurrenceDate, "occurrenceDate");
     return eventStore(profileId).splitRecurrence(id, occurrenceDate, new Date().toISOString());
+  });
+
+  // --- Event templates (migration 036 / CAL-009) ---------------------------
+  //
+  // Four channels, and deliberately no "create a template from these fields"
+  // among them — ADR-035's shape, one module over: a template is captured FROM
+  // an event and applied ONTO a day, so the only things the renderer ever sends
+  // are two ids, a name and a day key. That is what keeps the payload — the one
+  // value here a store cannot re-derive — out of an untrusted process entirely.
+  // SEC-EL-02 as everywhere: sender checked first, every field through an `as*`
+  // validator, and both clocks stamped by main.
+
+  ipcMain.handle(IpcChannel.eventTemplatesList, (event, payload): EventTemplate[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return eventTemplateStore(profileId).list();
+  });
+
+  ipcMain.handle(IpcChannel.eventTemplatesCapture, (event, payload): EventTemplate => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const eventId = asNonEmptyString(body.eventId, "eventId");
+    const name = asEventTemplateName(body.name, "name");
+    // The read and the write are one act inside the store, which does both over
+    // the same handle — unlike a task capture, no second store is involved, so
+    // there is no transaction to open here.
+    return eventTemplateStore(profileId).captureFromEvent(
+      eventId,
+      name,
+      new Date().toISOString(),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.eventTemplatesApply, (event, payload): Event => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const templateId = asNonEmptyString(body.templateId, "templateId");
+    // A real calendar day, so `2026-02-30` is refused here rather than becoming
+    // an event nothing can expand. The store re-checks it regardless.
+    const dayKey = asBareDate(body.dayKey, "dayKey");
+    return eventTemplateStore(profileId).apply(templateId, dayKey);
+  });
+
+  ipcMain.handle(IpcChannel.eventTemplatesDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    eventTemplateStore(profileId).delete(id);
   });
 
   // CAL-007 (ADR-026). `PeopleStore` takes `now` from its caller rather than
@@ -4926,6 +5008,7 @@ function registerIpc(): void {
         taskTemplateStore,
         taskDependencyStore,
         eventStore,
+        eventTemplateStore,
         peopleStore,
         documentStore,
         subjectStore,

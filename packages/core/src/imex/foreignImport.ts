@@ -50,6 +50,16 @@ export interface ForeignImportTarget {
    */
   taskTemplateNames: readonly string[];
   /**
+   * The target's existing EVENT template names (CAL-009 / migration 036), by
+   * exactly the rule above — a template's name is its user-facing identity, a
+   * foreign import never updates a pre-existing row, so a source template whose
+   * name is taken is SKIPPED and the target's wins. Declared separately from
+   * `taskTemplateNames` rather than merged into one list because the two live in
+   * different tables under different UNIQUE indexes: a task template called
+   * „Trening“ does not stop an event template of the same name from importing.
+   */
+  eventTemplateNames: readonly string[];
+  /**
    * Whether the target already claims a quick-capture folder (migration 028's
    * partial unique index allows exactly one). When true, an imported folder's
    * own claim is cleared — the target's choice wins (ADR-043 §2).
@@ -138,6 +148,33 @@ interface PlanContext {
   inboxCollapsed: number;
   /** Task templates skipped because their name is taken — by the target, or by an earlier source row (see `ForeignImportTarget.taskTemplateNames`). */
   skippedTaskTemplateIds: Set<string>;
+  /** Event templates skipped for the same reason, against the CAL module's own name space (CAL-009). */
+  skippedEventTemplateIds: Set<string>;
+}
+
+/**
+ * The one name-is-identity rule both template modules share (ADR-043 §2): a
+ * source template whose name the target already uses is not planned at all — no
+ * row, no id mapping to leave behind — and neither is a second source template
+ * that claims a name an earlier one just took. First writer wins within the
+ * source, the target wins over both. Extracted so the two modules cannot drift:
+ * they are the same decision about two tables.
+ */
+function mintTemplates(
+  sourceTemplates: readonly { id: string; name: string }[],
+  targetNames: readonly string[],
+  skipped: Set<string>,
+  ctx: PlanContext,
+): void {
+  const taken = new Set(targetNames);
+  for (const template of sourceTemplates) {
+    if (taken.has(template.name)) {
+      skipped.add(template.id);
+      continue;
+    }
+    taken.add(template.name);
+    mint(template.id, ctx);
+  }
 }
 
 /**
@@ -167,19 +204,14 @@ const ID_MINTERS: Record<keyof ProfileData, (data: ProfileData, ctx: PlanContext
   taskTagLinks: NO_IDS,
   taskAttachments: (data, ctx) => mintAll(data.taskAttachments, ctx),
   // A template's name is its identity and nothing references a task template
-  // by id, so a name-taken row is simply not planned — no mapping to leave
-  // behind. First writer wins within the source, the target wins over both.
-  taskTemplates: (data, ctx) => {
-    const taken = new Set(ctx.target.taskTemplateNames);
-    for (const template of data.taskTemplates) {
-      if (taken.has(template.name)) {
-        ctx.skippedTaskTemplateIds.add(template.id);
-        continue;
-      }
-      taken.add(template.name);
-      mint(template.id, ctx);
-    }
-  },
+  // by id, so a name-taken row is simply not planned — see `mintTemplates`.
+  taskTemplates: (data, ctx) =>
+    mintTemplates(
+      data.taskTemplates,
+      ctx.target.taskTemplateNames,
+      ctx.skippedTaskTemplateIds,
+      ctx,
+    ),
   // A dependency's identity is its (blocker, blocked) pair — both task ids,
   // both already minted.
   taskDependencies: NO_IDS,
@@ -196,6 +228,15 @@ const ID_MINTERS: Record<keyof ProfileData, (data: ProfileData, ctx: PlanContext
     for (const widget of data.dashboardWidgets) mint(widget.instanceId, ctx);
   },
   events: (data, ctx) => mintAll(data.events, ctx),
+  // The same name-is-identity rule as the task templates above, against the CAL
+  // module's own name space (CAL-009).
+  eventTemplates: (data, ctx) =>
+    mintTemplates(
+      data.eventTemplates,
+      ctx.target.eventTemplateNames,
+      ctx.skippedEventTemplateIds,
+      ctx,
+    ),
   documents: (data, ctx) => mintAll(data.documents, ctx),
   renewals: (data, ctx) => mintAll(data.renewals, ctx),
   people: (data, ctx) => mintAll(data.people, ctx),
@@ -349,6 +390,7 @@ export function planForeignImport(
     merged: zeroPerModule(),
     inboxCollapsed: 0,
     skippedTaskTemplateIds: new Set(),
+    skippedEventTemplateIds: new Set(),
   };
 
   // Pass 1: every id in the archive gets its answer before any reference is
@@ -428,6 +470,15 @@ export function planForeignImport(
       id: mapped(row.id, ctx),
       profileId: target.profileId,
     })),
+    eventTemplates: source.eventTemplates
+      .filter((row) => !ctx.skippedEventTemplateIds.has(row.id))
+      .map((row) => ({
+        ...row,
+        id: mapped(row.id, ctx),
+        profileId: target.profileId,
+        // The payload names no row at all (CAL-009: a time of day, a length, a
+        // rule), so nothing inside it needs the id map.
+      })),
     documents: source.documents.map((row) => ({
       ...row,
       id: mapped(row.id, ctx),
@@ -632,6 +683,10 @@ function buildReport(
   // What this planner skips by design.
   note("source-inbox-collapsed", "tasks", "task-list", ctx.inboxCollapsed);
   note("template-name-taken", "tasks", "task-template", ctx.skippedTaskTemplateIds.size);
+  // The same code against the CAL module: `note` groups by (code, module, type),
+  // so the two modules' skips stay two named, separately-counted lines rather
+  // than one number nobody can act on.
+  note("template-name-taken", "calendar", "event-template", ctx.skippedEventTemplateIds.size);
   note("notifications-not-imported", "notifications", "notification", source.notifications.length);
   note(
     "dashboard-settings-not-imported",

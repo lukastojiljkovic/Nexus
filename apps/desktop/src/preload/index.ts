@@ -130,6 +130,14 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.eventsAddRecurrenceExdate, { profileId, id, date }),
   splitEventRecurrence: (profileId, id, occurrenceDate) =>
     ipcRenderer.invoke(IpcChannel.eventsSplitRecurrence, { profileId, id, occurrenceDate }),
+  listEventTemplates: (profileId) =>
+    ipcRenderer.invoke(IpcChannel.eventTemplatesList, { profileId }),
+  captureEventTemplate: (profileId, eventId, name) =>
+    ipcRenderer.invoke(IpcChannel.eventTemplatesCapture, { profileId, eventId, name }),
+  applyEventTemplate: (profileId, templateId, dayKey) =>
+    ipcRenderer.invoke(IpcChannel.eventTemplatesApply, { profileId, templateId, dayKey }),
+  deleteEventTemplate: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.eventTemplatesDelete, { profileId, id }),
   listPeople: (profileId) => ipcRenderer.invoke(IpcChannel.peopleList, { profileId }),
   createPerson: (profileId, person) =>
     ipcRenderer.invoke(IpcChannel.peopleCreate, { profileId, person }),

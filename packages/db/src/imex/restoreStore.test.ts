@@ -22,6 +22,7 @@ import {
   DeckStore,
   DocumentStore,
   EventStore,
+  EventTemplateStore,
   ExamStore,
   FocusStore,
   NexusDatabase,
@@ -55,6 +56,7 @@ import type {
   Card,
   Deck,
   Event,
+  EventTemplate,
   Exam,
   FocusSession,
   NoteFolder,
@@ -130,6 +132,7 @@ function emptyProfileData(): ProfileData {
     taskAttachments: [],
     taskDependencies: [],
     events: [],
+    eventTemplates: [],
     documents: [],
     renewals: [],
     people: [],
@@ -202,6 +205,7 @@ interface FixtureIds {
   neverEditedNote: NoteMeta;
   template: NoteTemplate;
   taskTemplate: TaskTemplate;
+  eventTemplate: EventTemplate;
 }
 
 interface Fixture {
@@ -245,6 +249,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   const attachmentStore = new NoteAttachmentStore(handle.raw, profileId);
   const templateStore = new NoteTemplateStore(handle.raw, profileId);
   const taskTemplateStore = new TaskTemplateStore(handle.raw, profileId);
+  const eventTemplateStore = new EventTemplateStore(handle.raw, profileId);
   const dashboardStore = new DashboardSettingsStore(handle.raw, profileId);
   const dashboardWidgetStore = new DashboardWidgetStore(handle.raw, profileId);
   const studySettingsStore = new StudySettingsStore(handle.raw, profileId);
@@ -313,6 +318,16 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     startAt: "2026-03-01T10:00:00.000Z",
     reminderOffsets: [15, 1440],
   });
+
+  // An event template with every payload field set (CAL-009) — the second nested
+  // payload in this fixture, and the second value a restore has to re-serialize
+  // rather than copy. Captured FROM the event above, so the relativizing is real
+  // rather than a hand-built payload nobody's store ever produced.
+  const eventTemplate = eventTemplateStore.captureFromEvent(
+    event.id,
+    `${name} event template`,
+    t0,
+  );
 
   // A leap-day birthday with a known year: the shape whose (month, day) pair
   // no SQL CHECK can vet, so a restore that wrote it back wrong would be
@@ -424,6 +439,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     taskTemplates: taskTemplateStore.list(),
     taskDependencies: taskDependencyStore.listLinks(),
     events: eventStore.listActive(),
+    eventTemplates: eventTemplateStore.list(),
     documents: documentStore.listActive(),
     renewals: documentStore.listRenewals(document.id),
     people: peopleStore.listActive(),
@@ -488,6 +504,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
       neverEditedNote,
       template,
       taskTemplate,
+      eventTemplate,
     },
   };
 }
@@ -545,6 +562,16 @@ function freshArchiveData(): ProfileData {
         },
       },
     ],
+    eventTemplates: [
+      {
+        id: uuidv7(), profileId: "ignored", name: "Fresh event template", ...timestamps,
+        payload: {
+          title: "Fresh", allDay: false, startTime: "18:30", durationMinutes: 90,
+          location: null, description: null, category: null,
+          reminderOffsets: [], recurrence: null,
+        },
+      },
+    ],
   };
 }
 
@@ -593,6 +620,11 @@ function assertModulesMatch(
     fixture.data.taskDependencies,
   );
   expect(new EventStore(handle.raw, readProfileId).listActive()).toEqual(remap(fixture.data.events));
+  // Read back through the store, which re-parses the JSON column — the same
+  // reason the task-template assertion above goes through its own store.
+  expect(new EventTemplateStore(handle.raw, readProfileId).list()).toEqual(
+    remap(fixture.data.eventTemplates),
+  );
   expect(new PeopleStore(handle.raw, readProfileId).listActive()).toEqual(remap(fixture.data.people));
   // Stripped on BOTH sides: `seedFixture` gathers documents through
   // `listActive()`, so at runtime `fixture.data.documents` carries the derived

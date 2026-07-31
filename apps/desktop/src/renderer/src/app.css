@@ -1348,6 +1348,67 @@ body {
   color: var(--nx-text);
 }
 
+/* „Šabloni“ (CAL-009) — the TASK page's own template recipe applied to the
+   event form. The apply trigger is a NAMED button rather than the row-level "⋯"
+   glyph (a bare "⋯" beside „Dodaj“ would say nothing about what it opens),
+   while the capture trigger IS that glyph, because it belongs to the one event
+   the form is holding. */
+.cal__templates-trigger {
+  /* Only the WIDTH opens up: the trigger keeps its 24px height and its grid
+     centring, so the word sits on the same baseline as the buttons beside it. */
+  width: auto;
+  padding: 0 var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+}
+.cal__templates-trigger[aria-expanded="true"],
+.cal__template-menu[aria-expanded="true"] {
+  color: var(--nx-text);
+}
+/* One template in the popover list: its name applies it, the × removes it. */
+.cal__template-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.cal__template-apply {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cal__template-delete {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  font: inherit;
+  line-height: 1;
+  color: var(--nx-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-sm);
+  cursor: pointer;
+}
+.cal__template-delete:hover {
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+}
+/* The capture prompt lives INSIDE the "⋯" panel, which is far narrower than the
+   form row: its buttons would squeeze the field to nothing on one line, so the
+   field takes the full width and the pair wraps beneath it. */
+.cal__template-form {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1);
+  padding: var(--nx-space-1) var(--nx-space-2);
+}
+.cal__template-form .nx-textfield {
+  flex-basis: 100%;
+}
+
 /* Delete + undo: inline, token-styled undo bar (mirrors the tasks pattern). */
 .cal__undo {
   display: flex;

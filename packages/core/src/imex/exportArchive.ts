@@ -38,9 +38,11 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
  *
- * `1.14.0` adds the `subject-attachment` and `subject-note-link` record types —
- * a subject's materials and the notes filed under it (STUDY-001, migration 035)
- * — after `1.13.0` added the `study-settings` record
+ * `1.15.0` adds the `event-template` record type — a saved SHAPE of one event
+ * (CAL-009, migration 036), riding in the data file the CAL module already had —
+ * after `1.14.0` added the `subject-attachment` and `subject-note-link` record
+ * types — a subject's materials and the notes filed under it (STUDY-001,
+ * migration 035) — after `1.13.0` added the `study-settings` record
  * type — the profile's FSRS target retention and its two daily caps (STUDY-007,
  * migration 034) — after `1.12.0` added a card's `problemSteps` —
  * the worked solution a problem card's `back` is derived from (ADR-046) —
@@ -57,10 +59,10 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * `reminderOffsets` (ADR-028) and `1.1.0` the `person` record type (CAL-007 /
  * ADR-026). Additive, so a MINOR bump by the same honesty each of those made
  * one: an archive this build writes is refused by an older reader, which would
- * otherwise restore a profile whose course materials are simply missing — every
- * scanned skripta left out of the zip with nothing in the manifest to say it
- * existed, and every note the user had filed under a subject unfiled; the same
- * honesty `1.13.0` owed the profile's study preferences, `1.12.0` owed every
+ * otherwise restore a profile with every event template simply gone and every
+ * course material missing — shapes their owner built by hand and files nothing
+ * else in the archive can reconstruct; the same honesty `1.14.0` owed the
+ * subject materials, `1.13.0` owed the study preferences, `1.12.0` owed every
  * problem card's steps, `1.11.0` owed the arranged dashboard and `1.10.0` owed
  * every cloze template. Kept in step
  * with `INTERCHANGE_SCHEMA_VERSION` (`importArchive.ts`) — two constants
@@ -68,12 +70,8 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * and the cycle would be worse than the duplication; `importArchive.test.ts`
  * pins them equal.
  *
- * SUPERVISOR NOTE: `1.11.0` belongs to the sibling lane (dashboard layout) and
- * is not in this worktree; the `1.12.0` lane wrote its version directly, the
- * `1.13.0` lane wrote its own on top, and this one writes `1.14.0` — leaving the
- * gap for the supervisor to reconcile at merge.
  */
-const SCHEMA_VERSION = "1.14.0";
+const SCHEMA_VERSION = "1.15.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -281,6 +279,61 @@ export interface ExportEvent {
    * than a quiet omission.
    */
   reminderOffsets: number[];
+}
+
+/**
+ * The event-shaped body a template carries (CAL-009) — the interchange twin of
+ * `@nexus/db`'s `EventTemplatePayload`, declared structurally here for the
+ * reason every row shape in this file is (see the file header).
+ *
+ * A nested object rather than nine flattened `payload*` keys, exactly as
+ * `ExportTaskTemplatePayload` is: the payload is one value in one column, it is
+ * validated as a unit on both sides, and flattening it would put nine event-ish
+ * field names at the top level of a row that is NOT an event — where the next
+ * reader would reasonably expect `startTime` to be an instant and a duration to
+ * be an end.
+ */
+export interface ExportEventTemplatePayload {
+  title: string;
+  allDay: boolean;
+  /**
+   * Wall-clock `HH:MM` the created event starts at, or null on an all-day
+   * template. Relative on purpose, like every field here: a template carries a
+   * time of day and a length, never a date — an absolute start rots the morning
+   * after it is saved (CAL-009).
+   */
+  startTime: string | null;
+  /** Whole minutes the created event lasts, or null for one with no end. Timed templates only, and always ending inside its own day. */
+  durationMinutes: number | null;
+  location: string | null;
+  description: string | null;
+  category: string | null;
+  /** Whole minutes before the created event's start at which to remind (CAL-006), ascending. */
+  reminderOffsets: number[];
+  /** The rule the created event's series runs on (ADR-024), or null. UNANCHORED — apply phases it from the day the template is applied to. */
+  recurrence: RecurrenceRule | null;
+}
+
+/**
+ * An event template (migration 036 / CAL-009). Rides in
+ * `data/calendar.ndjson`, deliberately last among the CAL types there: it
+ * references nothing — not an event, not a person — so it constrains no
+ * ordering, and putting it after the rows that DO reference each other keeps the
+ * "everything a row points at came before it" reading of that file intact. The
+ * same placement `task-template` has in `data/tasks.ndjson`.
+ *
+ * No `tables/*.csv` mirror, for `ExportTaskTemplate`'s reason: those are a
+ * curated subset for a human with a spreadsheet, and a nested payload is
+ * precisely what a flat table cannot show. The NDJSON is the lossless layer
+ * (ADR-009).
+ */
+export interface ExportEventTemplate {
+  id: string;
+  profileId: string;
+  name: string;
+  payload: ExportEventTemplatePayload;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /** Only the persisted fields — `status`/`daysUntilExpiry` are derived at read time, never stored, so they are not part of the interchange row. */
@@ -706,6 +759,11 @@ export interface ProfileData {
   // "do this first" is gone with nothing on screen to say so.
   taskDependencies: readonly ExportTaskDependency[];
   events: readonly ExportEvent[];
+  // Required, for `taskTemplates`' reason exactly (CAL-009): a template is the
+  // only record of a shape the user built by hand, and nothing else in the
+  // archive can be used to reconstruct it — an export that quietly omitted them
+  // would restore a profile whose event templates are simply gone.
+  eventTemplates: readonly ExportEventTemplate[];
   documents: readonly ExportDocument[];
   renewals: readonly ExportRenewal[];
   people: readonly ExportPerson[];
@@ -847,8 +905,15 @@ export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, 
       data.taskAttachments.length +
       data.taskTemplates.length +
       data.taskDependencies.length,
+    // Event templates are CAL module rows, so they count into the calendar
+    // bucket beside the events themselves — the same way a task template counts
+    // into tasks.
     calendar:
-      data.events.length + data.documents.length + data.renewals.length + data.people.length,
+      data.events.length +
+      data.eventTemplates.length +
+      data.documents.length +
+      data.renewals.length +
+      data.people.length,
     // The scheduling-preferences row (zero or one) counts into STUDY beside the
     // rows it governs, for the reason the dashboard's background row counts into
     // its own module: a restore preview that showed one number too few would be
@@ -912,6 +977,10 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     ...input.data.documents.map((row) => ({ type: "document", ...row })),
     ...input.data.renewals.map((row) => ({ type: "renewal", ...row })),
     ...input.data.people.map((row) => ({ type: "person", ...row })),
+    // Last, for the reason `task-template` is last in the tasks file: a template
+    // points at no row here, so it constrains nothing and sits after everything
+    // that does.
+    ...input.data.eventTemplates.map((row) => ({ type: "event-template", ...row })),
   ]);
   // The preferences row leads, then the rows themselves in dependency order —
   // the shape `data/dashboard.ndjson` already has. It points at nothing, so

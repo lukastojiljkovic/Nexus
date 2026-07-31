@@ -60,6 +60,7 @@ function emptyExportInput(): ExportArchiveInput {
       taskTemplates: [],
       taskDependencies: [],
       events: [],
+      eventTemplates: [],
       documents: [],
       renewals: [],
       people: [],
@@ -196,6 +197,36 @@ function richProfileData(): ProfileData {
         recurrence: { freq: { kind: "weekly", interval: 1, days: [5] }, end: { kind: "until", date: "2026-12-31" } },
         recurrenceExdates: ["2026-07-18", "2026-08-15"],
         reminderOffsets: [10, 1440],
+      },
+    ],
+    // Two templates, and the pair is the point: one carrying every field a
+    // payload has — a time of day, a duration, the three text fields, a ladder
+    // and a rule — and one all-day carrying only a title, which is the other
+    // legal extreme (an all-day template may hold neither clock nor duration).
+    eventTemplates: [
+      {
+        id: "etpl-training", profileId: "profile1", name: "Trening",
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-02T00:00:00.000Z",
+        payload: {
+          title: "Trening",
+          allDay: false,
+          startTime: "18:30",
+          durationMinutes: 90,
+          location: "Teretana",
+          description: "Noge i leđa",
+          category: "zdravlje",
+          reminderOffsets: [10, 60],
+          recurrence: { freq: { kind: "weekly", interval: 1, days: [1, 3] }, end: { kind: "never" } },
+        },
+      },
+      {
+        id: "etpl-holiday", profileId: "profile1", name: "Slobodan dan",
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+        payload: {
+          title: "Slobodan dan", allDay: true, startTime: null, durationMinutes: null,
+          location: null, description: null, category: null,
+          reminderOffsets: [], recurrence: null,
+        },
       },
     ],
     documents: [
@@ -623,12 +654,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.15.0`: the nearest minor strictly ahead of this build's `1.14.0`.
+  // `1.16.0`: the nearest minor strictly ahead of this build's `1.15.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.15.0" });
+    const files = baseFiles({ schemaVersion: "1.16.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.15.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.16.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -2255,8 +2286,8 @@ describe("parseImportArchive — note folder preferences (the 1.7.0 era gate)", 
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.14.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.14.0");
+  it("is 1.15.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.15.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -2391,17 +2422,27 @@ describe("parseImportArchive — schema version", () => {
     expect(result.data).toMatchObject({ subjectAttachments: [], subjectNoteLinks: [] });
   });
 
+  // And for the one CAL-009's templates superseded: a 1.14 archive carries no
+  // `event-template` row at all, which is exactly what a profile that never
+  // saved an event as a template looks like — a whole absent record type, so
+  // again no era flag.
+  it("accepts an older minor — a 1.14 archive still parses here, the templates empty", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.14.0" })));
+    expect(result.problems).toEqual([]);
+    expect(result.data).toMatchObject({ eventTemplates: [] });
+  });
+
   it("accepts a newer patch", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.14.7" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.15.7" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
 
-  // `1.15.0`: the nearest minor strictly ahead of this build's `1.14.0`.
+  // `1.16.0`: the nearest minor strictly ahead of this build's `1.15.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.15.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.16.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.15.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.16.0" },
     ]);
     expect(result.data).toBeNull();
   });
