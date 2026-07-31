@@ -3,7 +3,17 @@ import { zstdDecompressSync } from "node:zlib";
 import Database from "better-sqlite3-multiple-ciphers";
 import { fromRandomAccessReaderPromise, type Entry, type ZipFile } from "yauzl";
 
-import type { ApkgCard, ApkgDeck, ApkgNote, ApkgNotetype, ParsedApkg } from "@nexus/core";
+import {
+  ankiNotetypeKind,
+  ProtoWalkError,
+  walkProtoFields,
+  type ApkgCard,
+  type ApkgDeck,
+  type ApkgNote,
+  type ApkgNotetype,
+  type ParsedApkg,
+  type ProtoField,
+} from "@nexus/core";
 
 import {
   ByteSourceRandomAccessReader,
@@ -40,20 +50,27 @@ import {
  * `collection.anki2` (whichever is present, in Anki's own precedence) and the
  * `media` manifest. Every other entry — every media FILE, every `meta`, and
  * anything a hostile zip adds — is skipped WITHOUT EVER OPENING A READ STREAM,
- * exactly as `archiveReader.ts` skips a human mirror. v1 imports no media at
- * all, so the manifest is read only to COUNT what is being left behind; not one
- * media byte is decompressed.
+ * exactly as `archiveReader.ts` skips a human mirror. `meta` (a
+ * `PackageMetadata` protobuf, proto/anki/import_export.proto) stays unopened on
+ * purpose: its version enum only restates which collection entry the zip
+ * carries, and says less than the collection's own `col.ver`, which is read
+ * anyway. v1 imports no media at all, so the manifest is read only to COUNT
+ * what is being left behind; not one media byte is decompressed.
  *
- * WHICH SCHEMAS. Schema 11 — what Anki writes when „Support older Anki
- * versions" is on — keeps its notetypes and decks as JSON in the `col` row, and
- * is read completely. Schema 18 (`collection.anki21b`) moved them into
- * `notetypes`/`decks` TABLES whose configuration is a protobuf blob, and the
- * one fact this import cannot do without — is a notetype BASIC or CLOZE — lives
- * only in that blob. The names, templates and fields of an 18 are read (see
- * `describeSchema18`, whose findings go into the refusal), and then the file is
- * refused BY NAME rather than half-parsed: a cloze note imported as a basic one
- * arrives as a card whose front is raw `{{c1::…}}` text, which is worse than an
- * honest "export it the other way".
+ * WHICH SCHEMAS. Both versions Anki itself exports are read completely. Schema
+ * 11 — what „Support older Anki versions" writes — keeps its notetypes and
+ * decks as JSON in the `col` row. Schema 18 (`collection.anki21b`, the whole
+ * file one zstd frame) moved them into `notetypes`/`decks` TABLES
+ * (rslib/src/storage/upgrades/schema15_upgrade.sql), and the one fact those
+ * columns do not state — is a notetype BASIC or CLOZE — is read out of the
+ * notetype's `config` protobuf with core's `ankiNotetypeKind`; the `notes` and
+ * `cards` tables are column-for-column what schema 11 has (no upgrade between
+ * 11 and 18 touches either), so both schemas feed ONE query path. Anything
+ * else is refused BY NAME rather than half-parsed: a schema newer than 18
+ * (Anki's own SCHEMA_MAX_VERSION today), one of the in-place upgrade steps
+ * 12–17 no exporter writes, or something older than 11 — a guessed read of any
+ * of them could put a `{{c1::…}}` template on the front of a "basic" card,
+ * which is worse than an honest refusal.
  *
  * Deliberately Electron-free, like `archiveReader.ts` and `restore.ts` — no
  * `import "electron"`, directly or transitively — so the whole path is
@@ -107,8 +124,12 @@ export const DEFAULT_APKG_LIMITS: ApkgLimits = {
 /**
  * The collection entries, in Anki's OWN precedence: when a file carries more
  * than one, `.anki21b` is the authoritative copy and the legacy ones are the
- * downgraded mirrors it was written beside. Reading a mirror in preference to
- * the real thing would import stale data.
+ * downgraded mirrors it was written beside. The order is load-bearing, not
+ * cosmetic: a modern export ALWAYS writes a stub `collection.anki2` next to the
+ * real `.anki21b` — a one-note schema-11 placeholder telling an old client to
+ * update (rslib/src/import_export/package/colpkg/export.rs) — and reading the
+ * stub in preference to the real thing would import that one junk note as the
+ * whole deck.
  */
 const COLLECTION_ENTRIES = ["collection.anki21b", "collection.anki21", "collection.anki2"] as const;
 
@@ -129,67 +150,34 @@ export interface ApkgMediaEntry {
   sizeBytes: number;
 }
 
-/** Reads one protobuf varint at `offset`. Returns the value and the offset just past it. Refuses a varint longer than 10 bytes or one that runs off the end — both are malformed, and both would otherwise loop or read past the buffer. */
-function readVarint(bytes: Uint8Array, offset: number): { value: number; next: number } {
-  let value = 0;
-  let shift = 0;
-  let cursor = offset;
-  while (cursor < bytes.length) {
-    const byte = bytes[cursor] ?? 0;
-    cursor += 1;
-    // `2 ** shift` rather than `<< shift`: JavaScript's bitwise operators are
-    // 32-bit, and a media file's size can exceed that.
-    value += (byte & 0x7f) * 2 ** shift;
-    if ((byte & 0x80) === 0) return { value, next: cursor };
-    shift += 7;
-    if (shift > 63) break;
-  }
-  throw new ApkgReadError("damaged", "The media manifest holds a malformed varint.");
-}
-
-/** Skips one field's payload, given its wire type, and answers the offset just past it. */
-function skipField(bytes: Uint8Array, offset: number, wireType: number): number {
-  switch (wireType) {
-    case 0:
-      return readVarint(bytes, offset).next;
-    case 1:
-      return bounded(bytes, offset + 8);
-    case 2: {
-      const { value, next } = readVarint(bytes, offset);
-      return bounded(bytes, next + value);
+/**
+ * Core's wire walker, with its failure translated into this reader's refusal.
+ * A GENERATOR wrapping a generator, so a hostile message is still walked
+ * lazily — the entry cap below fires at the cap, not after millions of fields
+ * were materialized first.
+ */
+function* walkProtoOr(bytes: Uint8Array, what: string): Generator<ProtoField, void, undefined> {
+  try {
+    yield* walkProtoFields(bytes);
+  } catch (error) {
+    if (error instanceof ProtoWalkError) {
+      throw new ApkgReadError("damaged", `The ${what} is not readable protobuf.`, { cause: error });
     }
-    case 5:
-      return bounded(bytes, offset + 4);
-    default:
-      // 3/4 are the removed group encoding; 6/7 do not exist. Neither appears in
-      // anything Anki writes, and guessing at one would be reading a format
-      // nobody defined.
-      throw new ApkgReadError(
-        "damaged",
-        `The media manifest uses protobuf wire type ${wireType}, which this reader does not accept.`,
-      );
+    throw error;
   }
-}
-
-/** `next`, or a refusal — a length that runs past the buffer is the classic malformed-protobuf read. */
-function bounded(bytes: Uint8Array, next: number): number {
-  if (next > bytes.length || next < 0) {
-    throw new ApkgReadError("damaged", "The media manifest declares a length past its own end.");
-  }
-  return next;
 }
 
 /**
  * The new-format `media` manifest: a protobuf `MediaEntries { repeated
  * MediaEntry entries = 1 }`, each entry `{ string name = 1; uint32 size = 2;
- * bytes sha1 = 3 }`.
+ * bytes sha1 = 3 }` (proto/anki/import_export.proto).
  *
- * Hand-rolled rather than pulled in as a dependency, and that is proportionate:
- * the whole grammar needed here is "tag varint, then a payload whose length
- * depends on the wire type", and the only two fields read are a length-delimited
- * string and a varint. Everything else — the sha1, any field a future Anki adds
- * — is SKIPPED by length without being interpreted, which is exactly what
- * protobuf's wire format is designed to allow.
+ * Read with core's `walkProtoFields` — the same forty-line walker the schema-18
+ * notetype config goes through — rather than a protobuf dependency, and that is
+ * proportionate: the only two fields read are a length-delimited string and a
+ * varint. Everything else — the sha1, any field a future Anki adds — is walked
+ * past by size without being interpreted, which is exactly what protobuf's wire
+ * format is designed to allow.
  *
  * Pure and exported so it can be driven straight from a test with truncated
  * varints, lengths past the end, unknown field numbers and group wire types,
@@ -200,52 +188,29 @@ export function parseMediaEntriesProto(
   maxEntries: number,
 ): readonly ApkgMediaEntry[] {
   const entries: ApkgMediaEntry[] = [];
-  let offset = 0;
-  while (offset < bytes.length) {
-    const tag = readVarint(bytes, offset);
-    const fieldNumber = Math.floor(tag.value / 8);
-    const wireType = tag.value % 8;
-    if (fieldNumber !== 1 || wireType !== 2) {
-      offset = skipField(bytes, tag.next, wireType);
-      continue;
-    }
-    const length = readVarint(bytes, tag.next);
-    const end = bounded(bytes, length.next + length.value);
+  for (const field of walkProtoOr(bytes, "media manifest")) {
+    if (field.fieldNumber !== 1 || field.wireType !== 2) continue;
     if (entries.length >= maxEntries) {
       throw new ApkgReadError(
         "too-large",
         `The media manifest declares more than ${maxEntries} entries.`,
       );
     }
-    entries.push(parseMediaEntry(bytes.subarray(length.next, end)));
-    offset = end;
+    entries.push(parseMediaEntry(field.bytes));
   }
   return entries;
 }
 
-/** One `MediaEntry` submessage: its name and size, everything else skipped by length. */
+/** One `MediaEntry` submessage: its name and size, everything else walked past by size. */
 function parseMediaEntry(bytes: Uint8Array): ApkgMediaEntry {
   let name = "";
   let sizeBytes = 0;
-  let offset = 0;
-  while (offset < bytes.length) {
-    const tag = readVarint(bytes, offset);
-    const fieldNumber = Math.floor(tag.value / 8);
-    const wireType = tag.value % 8;
-    if (fieldNumber === 1 && wireType === 2) {
-      const length = readVarint(bytes, tag.next);
-      const end = bounded(bytes, length.next + length.value);
-      name = Buffer.from(bytes.subarray(length.next, end)).toString("utf8");
-      offset = end;
-      continue;
+  for (const field of walkProtoOr(bytes, "media manifest")) {
+    if (field.fieldNumber === 1 && field.wireType === 2) {
+      name = Buffer.from(field.bytes).toString("utf8");
+    } else if (field.fieldNumber === 2 && field.wireType === 0) {
+      sizeBytes = field.value;
     }
-    if (fieldNumber === 2 && wireType === 0) {
-      const value = readVarint(bytes, tag.next);
-      sizeBytes = value.value;
-      offset = value.next;
-      continue;
-    }
-    offset = skipField(bytes, tag.next, wireType);
   }
   return { name, sizeBytes };
 }
@@ -287,7 +252,7 @@ function parseMediaManifest(bytes: Buffer, limits: ApkgLimits): readonly ApkgMed
     : bytes;
   // A JSON object is the only thing that can start with `{`, and a protobuf
   // message never does (its first byte is a tag whose low three bits are a wire
-  // type — `{` is 0x7b, wire type 3, which `skipField` refuses anyway).
+  // type — `{` is 0x7b, wire type 3, which the walker refuses anyway).
   const first = plain[0];
   if (first === 0x7b) return parseMediaEntriesJson(plain.toString("utf8"), limits.maxMediaEntries);
   return parseMediaEntriesProto(plain, limits.maxMediaEntries);
@@ -528,8 +493,17 @@ function openCollection(bytes: Buffer): Database.Database {
   return db;
 }
 
-/** The schema version this build reads completely. Anki writes it whenever „Support older Anki versions" is on. */
-const SUPPORTED_SCHEMA = 11;
+/**
+ * The two schema versions an Anki export can carry, and the ONLY two this build
+ * reads — which is not a subset, it is the whole set: Anki's exporter writes 11
+ * with „Support older Anki versions" on and its current schema otherwise, and
+ * 12–17 are in-place upgrade steps no exporter ever writes
+ * (rslib/src/storage/upgrades/mod.rs: SCHEMA_MIN_VERSION 11, SCHEMA_MAX_VERSION
+ * 18). A version past 18 is a FUTURE Anki, refused by name below exactly as 18
+ * itself was refused before this build could read it.
+ */
+const LEGACY_SCHEMA = 11;
+const LATEST_SCHEMA = 18;
 
 /** One `notes` row, exactly as the fixed SQL below selects it. */
 interface NoteRow {
@@ -549,9 +523,22 @@ interface CardRow {
   queue: number;
 }
 
-/** Every row-producing statement is capped one past its limit, so "too many" is detected rather than silently truncated. */
+/**
+ * Every row-producing statement is capped one past its limit, so "too many" is
+ * detected rather than silently truncated — and a statement the collection
+ * cannot even PREPARE (a schema-18 `col.ver` over a database missing the
+ * schema-18 tables, say) is damage by name, not a bare SqliteError at the
+ * caller.
+ */
 function selectAll<T>(db: Database.Database, sql: string, limit: number, what: string): T[] {
-  const rows = db.prepare<[number], T>(sql).all(limit + 1);
+  let rows: T[];
+  try {
+    rows = db.prepare<[number], T>(sql).all(limit + 1);
+  } catch (error) {
+    throw new ApkgReadError("damaged", `The collection's ${what} could not be read.`, {
+      cause: error instanceof Error ? error : undefined,
+    });
+  }
   if (rows.length > limit) {
     throw new ApkgReadError("too-large", `The collection holds more than ${limit} ${what}.`);
   }
@@ -559,36 +546,80 @@ function selectAll<T>(db: Database.Database, sql: string, limit: number, what: s
 }
 
 /**
- * What a schema-18 collection DOES yield to fixed SQL, gathered so the refusal
- * can say what was found rather than merely that something was wrong.
+ * Schema 18's notetypes and decks, from the TABLES that replaced the `col`
+ * row's JSON (rslib/src/storage/upgrades/schema15_upgrade.sql): `notetypes(id,
+ * name, config)`, `templates(ntid, ord, …)` counted per notetype, `decks(id,
+ * name)` with `\x1f` path separators. The `fields` table is deliberately not
+ * read — a note's own `flds` split says how many fields it has, which is all
+ * the translator asks.
  *
- * All four of these read cleanly: `notetypes(id, name)`, `decks(id, name)`,
- * `templates(ntid, ord, name)` and `fields(ntid, ord, name)` are plain columns.
- * What is NOT readable is `notetypes.config` — a protobuf blob holding, among
- * everything else, the notetype's `kind`. That single flag decides whether a
- * note's text is a question or a `{{c1::…}}` template, and there is no other
- * column, table or join in schema 18 that states it. Inferring it (one template
- * plus a card with `ord > 0` implies cloze) is a guess that is wrong precisely
- * for the note that has only `{{c1::…}}` — so it is not made.
+ * The one non-column fact — basic or cloze — comes out of `config` through
+ * core's `ankiNotetypeKind`. Its two failure modes get the two different
+ * refusals they deserve: a MALFORMED blob is damage (real Anki never writes
+ * one), while a WELL-FORMED kind this build does not know is a future Anki's
+ * notetype — that one drops the notetype from the answer, so its notes surface
+ * in the preview as counted `unknown-notetype` skips instead of arriving as
+ * guessed cards, and a single strange notetype never refuses the whole file.
+ *
+ * All three reads share the `maxNotes` cap: none of these tables can honestly
+ * outnumber the notes of a real collection, and a hand-built file that makes
+ * them is refused as too large rather than walked.
  */
-function describeSchema18(db: Database.Database, limits: ApkgLimits): string {
-  const count = (sql: string): number | string => {
-    try {
-      const rows = db.prepare<[number], { n: number }>(sql).all(limits.maxNotes + 1);
-      return rows[0]?.n ?? 0;
-    } catch {
-      return "?";
+function readSchema18Tables(
+  db: Database.Database,
+  limits: ApkgLimits,
+): { notetypes: ApkgNotetype[]; decks: ApkgDeck[] } {
+  const templateCounts = new Map<number, number>();
+  for (const row of selectAll<{ ntid: number }>(
+    db,
+    "SELECT ntid FROM templates ORDER BY ntid, ord LIMIT ?",
+    limits.maxNotes,
+    "templates",
+  )) {
+    templateCounts.set(row.ntid, (templateCounts.get(row.ntid) ?? 0) + 1);
+  }
+
+  const notetypes: ApkgNotetype[] = [];
+  for (const row of selectAll<{ id: number; name: string; config: unknown }>(
+    db,
+    "SELECT id, name, config FROM notetypes ORDER BY id LIMIT ?",
+    limits.maxNotes,
+    "notetypes",
+  )) {
+    // SQLite is dynamically typed: a hostile file can hold TEXT in a `blob NOT
+    // NULL` column, and real Anki cannot. Not-a-blob is therefore damage, on
+    // the same terms a malformed protobuf inside a real blob is.
+    if (!(row.config instanceof Uint8Array)) {
+      throw new ApkgReadError("damaged", "A notetype's config is not a blob.");
     }
-  };
-  const notetypes = count("SELECT count(*) AS n FROM notetypes LIMIT ?");
-  const decks = count("SELECT count(*) AS n FROM decks LIMIT ?");
-  const templates = count("SELECT count(*) AS n FROM templates LIMIT ?");
-  const fields = count("SELECT count(*) AS n FROM fields LIMIT ?");
-  return (
-    `schema 18: read ${notetypes} notetype name(s), ${decks} deck name(s), ` +
-    `${templates} template name(s) and ${fields} field name(s); a notetype's ` +
-    "basic/cloze kind lives only in its protobuf config and is not readable here"
-  );
+    let kind: "basic" | "cloze" | null;
+    try {
+      kind = ankiNotetypeKind(row.config);
+    } catch (error) {
+      if (error instanceof ProtoWalkError) {
+        throw new ApkgReadError("damaged", "A notetype's config is not readable protobuf.", {
+          cause: error,
+        });
+      }
+      throw error;
+    }
+    if (kind === null) continue;
+    notetypes.push({
+      id: row.id,
+      name: row.name,
+      kind,
+      templateCount: Math.max(1, templateCounts.get(row.id) ?? 0),
+    });
+  }
+
+  const decks = selectAll<{ id: number; name: string }>(
+    db,
+    "SELECT id, name FROM decks ORDER BY id LIMIT ?",
+    limits.maxNotes,
+    "decks",
+  ).map((row) => ({ id: row.id, name: row.name.split(FIELD_SEPARATOR).join("::") }));
+
+  return { notetypes, decks };
 }
 
 /** Anki's `models` JSON: `{ "<id>": { name, type, tmpls: [...] } }`, where `type` is 0 for a standard notetype and 1 for a cloze one. */
@@ -621,8 +652,10 @@ function parseDecks(json: string): ApkgDeck[] {
     const id = numberOf(deck.id) ?? Number.parseInt(key, 10);
     if (!Number.isFinite(id)) continue;
     const name = typeof deck.name === "string" ? deck.name : "";
-    // Schema 18 writes the path with `\x1f`; schema 11 with `::`. Normalised to
-    // one separator here so `translateApkg` has exactly one shape to flatten.
+    // A schema-11 deck name is already `::`-separated; the split is belt and
+    // braces, so an `\x1f` smuggled into the JSON reads exactly as
+    // `readSchema18Tables` reads the native separator and never reaches a
+    // screen raw.
     decks.push({ id, name: name.split(FIELD_SEPARATOR).join("::") });
   }
   return decks;
@@ -683,17 +716,26 @@ export async function readApkg(
     if (col === undefined) {
       throw new ApkgReadError("damaged", "The collection's `col` table is empty.");
     }
-    if (col.ver !== SUPPORTED_SCHEMA) {
+    // The one fork between the two schemas this build reads: where notetypes
+    // and decks live. Notes and cards are identical in both and are read below
+    // by one set of statements.
+    let notetypes: ApkgNotetype[];
+    let decks: ApkgDeck[];
+    if (col.ver === LEGACY_SCHEMA) {
+      notetypes = parseNotetypes(col.models);
+      decks = parseDecks(col.decks);
+    } else if (col.ver === LATEST_SCHEMA) {
+      ({ notetypes, decks } = readSchema18Tables(db, limits));
+    } else {
       throw new ApkgReadError(
         "unsupported-schema",
-        col.ver > SUPPORTED_SCHEMA
-          ? `This collection is Anki schema ${col.ver} (${describeSchema18(db, limits)}).`
-          : `This collection is Anki schema ${col.ver}, which predates anything this build reads.`,
+        col.ver > LATEST_SCHEMA
+          ? `This collection is Anki schema ${col.ver}, newer than the ${LATEST_SCHEMA} this build reads — refused rather than guessed at.`
+          : col.ver > LEGACY_SCHEMA
+            ? `This collection is Anki schema ${col.ver}, an in-place upgrade step Anki itself never exports.`
+            : `This collection is Anki schema ${col.ver}, which predates anything this build reads.`,
       );
     }
-
-    const notetypes = parseNotetypes(col.models);
-    const decks = parseDecks(col.decks);
 
     const noteRows = selectAll<NoteRow>(
       db,

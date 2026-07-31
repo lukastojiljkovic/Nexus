@@ -115,13 +115,49 @@ function buildSchema11(fixture: Fixture): Buffer {
   return bytes;
 }
 
+interface Fixture18Notetype {
+  id: number;
+  name: string;
+  config: Buffer;
+  /** How many `templates` rows to write for this notetype. */
+  templates?: number;
+}
+
+interface Fixture18 {
+  /** `col.ver` — defaults to 18; overridden to build the too-new and in-between refusal fixtures. */
+  ver?: number;
+  notetypes?: Fixture18Notetype[];
+  decks?: ReadonlyArray<{ id: number; name: string }>;
+  notes?: FixtureNote[];
+  cards?: FixtureCard[];
+}
+
 /**
- * A schema-18 collection: `col` with EMPTY `models`/`decks`, and the four tables
- * that replaced them. Everything the reader claims to read off an 18 is here —
- * and `notetypes.config`, the protobuf blob it deliberately does not read, is
- * here too, so the refusal is provably a refusal and not a missing table.
+ * A real (tiny) `Notetype.Config` (proto/anki/notetypes.proto): `kind` is
+ * field 1, a varint, and is OMITTED when zero — exactly as Anki's own proto3
+ * writer omits every default — so the basic notetype here proves absence reads
+ * as KIND_NORMAL. A `css` string (field 3) rides along so the reader provably
+ * walks past what it does not read.
  */
-function buildSchema18(): Buffer {
+function notetypeConfig(kind: 0 | 1): Buffer {
+  const css = Buffer.from(".card { font-family: arial }", "utf8");
+  return Buffer.concat([
+    ...(kind === 0 ? [] : [Buffer.from([0x08, kind])]),
+    Buffer.from([0x1a, css.length]),
+    css,
+  ]);
+}
+
+/**
+ * A schema-18 collection, as a modern Anki export writes one: `col` with EMPTY
+ * `models`/`decks` columns, and the tables that replaced them
+ * (rslib/src/storage/upgrades/schema15_upgrade.sql) — `notetypes` whose
+ * basic/cloze kind lives in a protobuf `config` blob, `templates` counted per
+ * notetype, `decks` whose path separator is `\x1f`. The `notes` and `cards`
+ * DDL is byte-for-byte the schema-11 builder's, because no upgrade between 11
+ * and 18 touches either table.
+ */
+function buildSchema18(fixture: Fixture18 = {}): Buffer {
   const db = new Database(":memory:");
   db.exec(`
     CREATE TABLE col (
@@ -160,29 +196,43 @@ function buildSchema18(): Buffer {
       flags integer NOT NULL, data text NOT NULL
     );
   `);
-  db.exec("INSERT INTO col VALUES (1, 1700000000, 0, 0, 18, 0, 0, 0, '', '', '', '', '')");
-  // `config` here is a real (tiny) NotetypeConfig: field 1 (`kind`) = 1, i.e.
-  // CLOZE. It is READABLE as bytes and completely opaque without a protobuf
-  // schema — which is exactly the fact the refusal exists for.
-  db.prepare("INSERT INTO notetypes VALUES (?, ?, 0, 0, ?)").run(
-    20,
-    "Cloze",
-    Buffer.from([0x08, 0x01]),
+  db.prepare("INSERT INTO col VALUES (1, 1700000000, 0, 0, ?, 0, 0, 0, '', '', '', '', '')").run(
+    fixture.ver ?? 18,
   );
-  db.prepare("INSERT INTO notetypes VALUES (?, ?, 0, 0, ?)").run(
-    10,
-    "Basic",
-    Buffer.from([0x08, 0x00]),
+
+  const notetypes = fixture.notetypes ?? [
+    { id: 10, name: "Basic", config: notetypeConfig(0) },
+    { id: 20, name: "Cloze", config: notetypeConfig(1) },
+  ];
+  const insertNotetype = db.prepare("INSERT INTO notetypes VALUES (?, ?, 0, 0, ?)");
+  const insertTemplate = db.prepare("INSERT INTO templates VALUES (?, ?, ?, 0, 0, ?)");
+  const insertField = db.prepare("INSERT INTO fields VALUES (?, ?, ?, ?)");
+  for (const notetype of notetypes) {
+    insertNotetype.run(notetype.id, notetype.name, notetype.config);
+    for (let ord = 0; ord < (notetype.templates ?? 1); ord += 1) {
+      insertTemplate.run(notetype.id, ord, `Card ${ord + 1}`, Buffer.alloc(0));
+    }
+    // The reader never opens `fields`; the rows are here because a real 18 has
+    // them, and a fixture that quietly lacked a table could hide a stray read.
+    insertField.run(notetype.id, 0, "Front", Buffer.alloc(0));
+    insertField.run(notetype.id, 1, "Back", Buffer.alloc(0));
+  }
+
+  const insertDeck = db.prepare("INSERT INTO decks VALUES (?, ?, 0, 0, ?, ?)");
+  for (const deck of fixture.decks ?? [{ id: 1, name: `Fakultet${US}Biologija` }]) {
+    insertDeck.run(deck.id, deck.name, Buffer.alloc(0), Buffer.alloc(0));
+  }
+
+  const insertNote = db.prepare("INSERT INTO notes VALUES (?, ?, ?, 0, 0, ?, ?, '', 0, 0, '')");
+  for (const note of fixture.notes ?? []) {
+    insertNote.run(note.id, `guid-${note.id}`, note.mid, note.tags ?? "", note.fields.join(US));
+  }
+  const insertCard = db.prepare(
+    "INSERT INTO cards VALUES (?, ?, ?, ?, 0, 0, 0, ?, 0, 0, 0, ?, 0, 0, 0, ?, 0, '')",
   );
-  db.prepare("INSERT INTO templates VALUES (?, 0, ?, 0, 0, ?)").run(10, "Card 1", Buffer.alloc(0));
-  db.prepare("INSERT INTO fields VALUES (?, 0, ?, ?)").run(10, "Front", Buffer.alloc(0));
-  db.prepare("INSERT INTO fields VALUES (?, 1, ?, ?)").run(10, "Back", Buffer.alloc(0));
-  db.prepare("INSERT INTO decks VALUES (?, ?, 0, 0, ?, ?)").run(
-    1,
-    `Fakultet${US}Biologija`,
-    Buffer.alloc(0),
-    Buffer.alloc(0),
-  );
+  for (const card of fixture.cards ?? []) {
+    insertCard.run(card.id, card.nid, card.did, card.ord, card.queue ?? 0, card.reps ?? 0, card.odid ?? 0);
+  }
   const bytes = db.serialize();
   db.close();
   return bytes;
@@ -369,11 +419,108 @@ describe("apkgReader", () => {
     });
   });
 
-  describe("a schema-18 collection", () => {
-    it("is refused BY NAME, having read everything schema 18 does yield", async () => {
-      const path = await writeApkg([
-        { path: "collection.anki21b", content: Buffer.from(zstdCompressSync(buildSchema18())) },
+  describe("a modern (schema 18) collection", () => {
+    async function writeModern(fixture: Fixture18 = {}, extraEntries: ReadonlyArray<{ path: string; content: Buffer }> = []): Promise<string> {
+      return writeApkg([
+        { path: "collection.anki21b", content: Buffer.from(zstdCompressSync(buildSchema18(fixture))) },
+        ...extraEntries,
       ]);
+    }
+
+    it("reads decks, notetypes, notes and cards — the basic/cloze kind out of the config protobuf", async () => {
+      const path = await writeModern({
+        notetypes: [
+          // Two templates on Basic, so `templateCount` provably comes from the
+          // `templates` table and not from a constant.
+          { id: 10, name: "Basic", config: notetypeConfig(0), templates: 2 },
+          { id: 20, name: "Cloze", config: notetypeConfig(1) },
+        ],
+        decks: [
+          { id: 1, name: `Fakultet${US}Biologija` },
+          { id: 2, name: "Prazan" },
+        ],
+        notes: [
+          { id: 100, mid: 10, fields: ["<b>Prednja</b>", "Zadnja"], tags: " ispit biologija " },
+          { id: 200, mid: 20, fields: ["Reka je {{c1::Sava}}.", ""] },
+        ],
+        cards: [
+          { id: 1000, nid: 100, ord: 0, did: 1, reps: 4, queue: 2 },
+          { id: 1001, nid: 200, ord: 0, did: 1, queue: -1 },
+        ],
+      });
+      const parsed = await readApkg(path);
+
+      expect(parsed.decks).toEqual([
+        { id: 1, name: "Fakultet::Biologija" },
+        { id: 2, name: "Prazan" },
+      ]);
+      expect(parsed.notetypes).toEqual([
+        { id: 10, name: "Basic", kind: "basic", templateCount: 2 },
+        { id: 20, name: "Cloze", kind: "cloze", templateCount: 1 },
+      ]);
+      expect(parsed.notes[0]).toEqual({
+        id: 100,
+        notetypeId: 10,
+        fields: ["<b>Prednja</b>", "Zadnja"],
+        tags: ["ispit", "biologija"],
+      });
+      expect(parsed.notes[1]?.fields).toEqual(["Reka je {{c1::Sava}}.", ""]);
+      expect(parsed.cards).toEqual([
+        { noteId: 100, ord: 0, deckId: 1, reps: 4, suspended: false },
+        { noteId: 200, ord: 0, deckId: 1, reps: 0, suspended: true },
+      ]);
+    });
+
+    it("prefers the real .anki21b over the stub collection.anki2 a modern export writes beside it", async () => {
+      // Anki's own packaging (rslib/src/import_export/package/colpkg/export.rs)
+      // always writes a one-note schema-11 placeholder telling an old client to
+      // update. Reading the stub would import that junk note as the whole deck.
+      const stub = buildSchema11({
+        notes: [{ id: 1, mid: 10, fields: ["Please update to the latest Anki version.", ""] }],
+        cards: [{ id: 1, nid: 1, ord: 0, did: 1 }],
+      });
+      const path = await writeModern({}, [{ path: "collection.anki2", content: stub }]);
+      const parsed = await readApkg(path);
+      expect(parsed.decks[0]?.name).toBe("Fakultet::Biologija");
+      expect(parsed.notes).toHaveLength(0);
+    });
+
+    it("reads the zstd-compressed protobuf media manifest a modern export writes", async () => {
+      const manifest = Buffer.from(
+        zstdCompressSync(
+          mediaEntriesBytes([
+            { name: "cell.jpg", size: 12 },
+            { name: "beat.mp3", size: 34 },
+          ]),
+        ),
+      );
+      const path = await writeModern({}, [{ path: "media", content: manifest }]);
+      expect((await readApkg(path)).mediaCount).toBe(2);
+    });
+
+    it("leaves out a notetype whose kind this build does not know, never guessing at its notes", async () => {
+      const path = await writeModern({
+        notetypes: [
+          { id: 10, name: "Basic", config: notetypeConfig(0) },
+          // A well-formed config declaring kind 2 — a future Anki's notetype.
+          { id: 30, name: "Budući tip", config: Buffer.from([0x08, 0x02]) },
+        ],
+      });
+      const parsed = await readApkg(path);
+      // Its notes surface downstream as counted `unknown-notetype` skips.
+      expect(parsed.notetypes.map((notetype) => notetype.id)).toEqual([10]);
+    });
+
+    it("refuses a notetype whose config is not readable protobuf", async () => {
+      const path = await writeModern({
+        // 0x80 sets the continuation bit and then the blob ends.
+        notetypes: [{ id: 10, name: "Basic", config: Buffer.from([0x80]) }],
+      });
+      await expectApkgError(() => readApkg(path), "damaged");
+    });
+
+    it("refuses a schema newer than 18 BY NAME, exactly as 18 was refused before this build read it", async () => {
+      const path = await writeModern({ ver: 19 });
       let caught: unknown;
       try {
         await readApkg(path);
@@ -383,14 +530,38 @@ describe("apkgReader", () => {
       expect(caught).toBeInstanceOf(ApkgReadError);
       const error = caught as ApkgReadError;
       expect(error.code).toBe("unsupported-schema");
-      // The refusal states what WAS readable — two notetype names, one deck
-      // name, one template, two fields — and why that is still not enough.
-      expect(error.message).toContain("schema 18");
-      expect(error.message).toContain("2 notetype name(s)");
-      expect(error.message).toContain("1 deck name(s)");
-      expect(error.message).toContain("1 template name(s)");
-      expect(error.message).toContain("2 field name(s)");
-      expect(error.message).toContain("protobuf config");
+      expect(error.message).toContain("schema 19");
+      expect(error.message).toContain("newer");
+    });
+
+    it("refuses the in-place upgrade schemas (12–17) Anki itself never exports", async () => {
+      const path = await writeModern({ ver: 14 });
+      let caught: unknown;
+      try {
+        await readApkg(path);
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(ApkgReadError);
+      const error = caught as ApkgReadError;
+      expect(error.code).toBe("unsupported-schema");
+      expect(error.message).toContain("schema 14");
+    });
+
+    it("refuses a collection whose zstd frame is corrupt", async () => {
+      // The zstd magic, followed by bytes that are not a frame.
+      const bogus = Buffer.concat([Buffer.from([0x28, 0xb5, 0x2f, 0xfd]), Buffer.alloc(64, 0x42)]);
+      const path = await writeApkg([{ path: "collection.anki21b", content: bogus }]);
+      await expectApkgError(() => readApkg(path), "damaged");
+    });
+
+    it("refuses more notetypes than the shared row cap, and reads the same file under the defaults", async () => {
+      const path = await writeModern();
+      await expectApkgError(
+        () => readApkg(path, { ...DEFAULT_APKG_LIMITS, maxNotes: 1 }),
+        "too-large",
+      );
+      await expect(readApkg(path, DEFAULT_APKG_LIMITS)).resolves.toBeDefined();
     });
   });
 

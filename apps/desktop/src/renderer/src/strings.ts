@@ -2375,7 +2375,7 @@ export const strings = {
        */
       skips: {
         "unknown-notetype":
-          "Beleška koristi tip kartice koji špil ne opisuje — bez njega se ne zna šta je pitanje, a šta odgovor.",
+          "Beleška koristi tip kartice koji špil ne opisuje ili koji ova verzija ne ume da pročita — bez njega se ne zna šta je pitanje, a šta odgovor.",
         "unknown-deck": "Kartica pripada špilu kog u fajlu nema.",
         "empty-note": "Beleška nema teksta na prednjoj strani.",
         "empty-deck": "Prazan špil se ne pravi — u njemu nije ostala nijedna kartica.",
@@ -2401,7 +2401,7 @@ export const strings = {
         "not-an-apkg": "Ovaj fajl nije Anki špil.",
         "no-collection": "U ovom fajlu nema Anki kolekcije — nije .apkg špil.",
         "unsupported-schema":
-          "Špil je izvezen u novijem Anki formatu koji ova verzija ne čita. Izvezi ga ponovo iz Ankija sa uključenom opcijom „Support older Anki versions“.",
+          "Špil je u verziji Anki baze koju ova verzija ne čita — verovatno je iz novijeg Ankija. Čitaju se i najnoviji format i izvoz sa opcijom „Support older Anki versions“, pa špil izvezi ponovo iz Ankija i pokušaj opet.",
         "zstd-unavailable": "Ovo izdanje ne može da otvori zstd sažimanje koje ovaj špil koristi.",
         damaged: "Špil je oštećen i ne može se pročitati.",
         "too-large": "Špil prelazi bezbednosna ograničenja i zato je odbijen.",

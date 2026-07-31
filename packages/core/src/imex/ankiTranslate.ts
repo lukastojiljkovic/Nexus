@@ -1,5 +1,6 @@
 import { findClozeRuns, renderClozeCard } from "../study/clozeText.js";
 import type { ExportCard, ExportDeck, ExportSubject, ProfileData } from "./exportArchive.js";
+import { walkProtoFields } from "./protoWalk.js";
 
 /**
  * The pure half of the Anki `.apkg` import (ADR-052 / STUDY-011): somebody
@@ -317,6 +318,38 @@ export function canonicalizeCloze(
   if (braceRuns !== runs.length * 2) return { ok: false, reason: "cloze-unrepresentable" };
 
   return { ok: true, value: { template, positionByAnkiNumber, hintsDropped } };
+}
+
+// --- Schema 18's notetype kind ----------------------------------------------
+
+/**
+ * The one fact a schema-18 collection keeps ONLY in a protobuf blob: whether a
+ * notetype is basic or cloze. `Notetype.Config`'s field 1 is `Kind kind`
+ * (varint; `KIND_NORMAL = 0`, `KIND_CLOZE = 1` — verified against Anki's
+ * proto/anki/notetypes.proto). Everything else in the blob is walked past by
+ * size and never interpreted, because everything else the import needs comes
+ * from real table columns.
+ *
+ * Two proto3 rules are load-bearing here, both the format's own:
+ *
+ *  - A zero enum is OMITTED from the wire, so a config with no field 1 at all
+ *    IS a normal notetype — absence is the common case, not an error.
+ *  - When a non-repeated scalar appears twice, the LAST occurrence wins.
+ *
+ * `null` — never a guess — for a kind value this build does not know: a note
+ * whose type we cannot name is a note whose text we cannot honestly call a
+ * question or a cloze template. A malformed blob throws `ProtoWalkError`
+ * instead, because "this build does not know it" and "the bytes are damaged"
+ * deserve different refusals, and only the caller knows both vocabularies.
+ */
+export function ankiNotetypeKind(config: Uint8Array): "basic" | "cloze" | null {
+  let kind = 0;
+  for (const field of walkProtoFields(config)) {
+    if (field.fieldNumber === 1 && field.wireType === 0) kind = field.value;
+  }
+  if (kind === 0) return "basic";
+  if (kind === 1) return "cloze";
+  return null;
 }
 
 // --- Translation -------------------------------------------------------------

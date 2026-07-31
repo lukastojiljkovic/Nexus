@@ -3773,10 +3773,12 @@ export const APKG_IMPORT_MAX_FIELD_BYTES = 262_144; // 256 KiB
  * of.
  *
  * `unsupported-schema` is the honest name for a collection this build will not
- * GUESS about: Anki's schema 18 keeps a notetype's kind (basic vs cloze) in a
- * protobuf blob, and a cloze note imported as a basic one would arrive as a
- * card whose front is raw `{{c1::…}}` text. Exporting with „Support older Anki
- * versions" produces a schema this build reads completely.
+ * GUESS about. Both versions Anki itself exports are read completely — schema
+ * 11 („Support older Anki versions") and schema 18 (`collection.anki21b`) — so
+ * what remains is a schema NEWER than 18 (a future Anki), one of the in-place
+ * upgrade steps 12–17 no exporter writes, or something older than 11. A
+ * guessed read could put a cloze note's raw `{{c1::…}}` text on the front of a
+ * "basic" card, so all three are refused by name instead.
  */
 export type ApkgReadErrorCode =
   | "not-an-apkg"

@@ -228,6 +228,7 @@ export type {
 } from "./imex/foreignImport.js";
 
 export {
+  ankiNotetypeKind,
   APKG_SKIP_CODES,
   APKG_SUBJECT_SOURCE_ID,
   canonicalizeCloze,
@@ -251,6 +252,9 @@ export type {
   ClozeCanonicalRefusal,
   ParsedApkg,
 } from "./imex/ankiTranslate.js";
+
+export { ProtoWalkError, walkProtoFields } from "./imex/protoWalk.js";
+export type { ProtoField } from "./imex/protoWalk.js";
 
 export {
   buildLlmPrompt,

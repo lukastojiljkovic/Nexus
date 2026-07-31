@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { findClozeRuns, renderClozeCard } from "../study/clozeText.js";
 import {
+  ankiNotetypeKind,
   APKG_SKIP_CODES,
   APKG_SUBJECT_SOURCE_ID,
   canonicalizeCloze,
@@ -10,6 +11,7 @@ import {
   type ApkgSkipCode,
   type ParsedApkg,
 } from "./ankiTranslate.js";
+import { ProtoWalkError } from "./protoWalk.js";
 
 /** Every skip the report names, as a plain map — the shape assertions read against. */
 function skipMap(skips: readonly { code: ApkgSkipCode; count: number }[]): Record<string, number> {
@@ -190,6 +192,42 @@ describe("canonicalizeCloze", () => {
     for (let position = 0; position < runs.length; position += 1) {
       expect(renderClozeCard(result.value.template, position)).not.toBeNull();
     }
+  });
+});
+
+describe("ankiNotetypeKind", () => {
+  it("reads KIND_CLOZE from the config's field 1", () => {
+    // Tag 0x08 = field 1, wire type 0; varint 1 = KIND_CLOZE.
+    expect(ankiNotetypeKind(Uint8Array.from([0x08, 0x01]))).toBe("cloze");
+  });
+
+  it("reads an absent kind as KIND_NORMAL — proto3 omits a zero enum from the wire", () => {
+    expect(ankiNotetypeKind(new Uint8Array(0))).toBe("basic");
+  });
+
+  it("reads an explicit zero as KIND_NORMAL all the same", () => {
+    expect(ankiNotetypeKind(Uint8Array.from([0x08, 0x00]))).toBe("basic");
+  });
+
+  it("finds the kind among the config's other fields, skipping what it does not read", () => {
+    // A realistic Config: sort_field_idx (field 2, varint), css (field 3,
+    // length-delimited), THEN kind — out of Anki's own order on purpose, to
+    // prove position carries no meaning.
+    const css = Uint8Array.from(Buffer.from(".card { }", "utf8"));
+    const config = Uint8Array.from([0x10, 0x01, 0x1a, css.length, ...css, 0x08, 0x01]);
+    expect(ankiNotetypeKind(config)).toBe("cloze");
+  });
+
+  it("lets the last occurrence win, as proto3's own merge rule does", () => {
+    expect(ankiNotetypeKind(Uint8Array.from([0x08, 0x01, 0x08, 0x00]))).toBe("basic");
+  });
+
+  it("answers null for a kind value this build does not know, rather than guessing", () => {
+    expect(ankiNotetypeKind(Uint8Array.from([0x08, 0x02]))).toBeNull();
+  });
+
+  it("lets a malformed config's walk error through — the reader decides what refusal that is", () => {
+    expect(() => ankiNotetypeKind(Uint8Array.from([0x80]))).toThrow(ProtoWalkError);
   });
 });
 
