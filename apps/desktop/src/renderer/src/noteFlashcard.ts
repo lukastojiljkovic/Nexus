@@ -106,8 +106,15 @@ function cardKeyPlugin(): Plugin {
  * attachment images) occupy positions but contribute no text, so they are
  * skipped rather than mapped — `parseCardBlock`'s offsets and this map both
  * describe the same `text`, and the two must stay consistent.
+ *
+ * Exported because in-note find (`noteFindBar.tsx`) needs the identical walk:
+ * both features turn "a textblock's plain text" into document ranges, and a
+ * second copy of this would be a second place for the atom rule to drift.
  */
-function blockTextAndPositions(node: ProseMirrorNode, pos: number): { text: string; positions: number[] } {
+export function blockTextAndPositions(
+  node: ProseMirrorNode,
+  pos: number,
+): { text: string; positions: number[] } {
   const positions: number[] = [];
   let text = "";
   node.forEach((child, offset) => {

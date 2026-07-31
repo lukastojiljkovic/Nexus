@@ -38,12 +38,20 @@ import { strings } from "./strings.js";
  * derives, caches or snapshots any part of the document.
  */
 
-/** The node names, used by the keyboard handler and the insert helper below — one spelling, checked by the compiler nowhere else. */
-const TOGGLE = "toggle";
+/**
+ * The node names, used by the keyboard handler and the insert helper below —
+ * one spelling, checked by the compiler nowhere else. The block's own name is
+ * exported because in-note find (`noteFindBar.tsx`) must recognise a collapsed
+ * toggle around a match in order to open it, and a magic `"toggle"` string
+ * over there would be exactly the drift this constant exists to prevent.
+ */
+export const TOGGLE_NODE_NAME = "toggle";
+/** The folded half — the summary above it stays visible either way, which is what in-note find keys off. */
+export const TOGGLE_CONTENT_NODE_NAME = "toggleContent";
 const TOGGLE_SUMMARY = "toggleSummary";
 
 export const Toggle = Node.create({
-  name: TOGGLE,
+  name: TOGGLE_NODE_NAME,
   group: "block",
   content: "toggleSummary toggleContent",
   defining: true,
@@ -105,7 +113,7 @@ export const ToggleSummary = Node.create({
 });
 
 export const ToggleContent = Node.create({
-  name: "toggleContent",
+  name: TOGGLE_CONTENT_NODE_NAME,
   content: "block+",
   defining: true,
   selectable: false,
@@ -154,11 +162,11 @@ export function insertToggle(editor: Editor, range: Range): void {
     .focus()
     .deleteRange(range)
     .insertContent({
-      type: TOGGLE,
+      type: TOGGLE_NODE_NAME,
       attrs: { collapsed: false },
       content: [
         { type: TOGGLE_SUMMARY },
-        { type: "toggleContent", content: [{ type: "paragraph" }] },
+        { type: TOGGLE_CONTENT_NODE_NAME, content: [{ type: "paragraph" }] },
       ],
     })
     .run();
@@ -175,7 +183,7 @@ export function insertToggle(editor: Editor, range: Range): void {
 function focusSummaryOfEnclosingToggle(editor: Editor): void {
   const { $from } = editor.state.selection;
   for (let depth = $from.depth; depth > 0; depth -= 1) {
-    if ($from.node(depth).type.name !== TOGGLE) continue;
+    if ($from.node(depth).type.name !== TOGGLE_NODE_NAME) continue;
     editor.commands.setTextSelection($from.before(depth) + 2);
     return;
   }

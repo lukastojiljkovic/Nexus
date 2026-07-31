@@ -983,6 +983,36 @@ export const strings = {
     },
     /** The undo bar after „Obriši i kartice“ — it took more than the note, and says so. */
     deletedWithCardsNotice: "Beleška i kartice obrisane",
+    /**
+     * „Pronađi u belešci“ (NOTE-005): the Ctrl+F bar docked above the open
+     * note. Its own copy, deliberately not borrowed from the global search
+     * palette — that one searches everything the profile holds, this one
+     * searches the note on screen, and telling the two apart is the whole
+     * point of naming the note in the placeholder.
+     */
+    find: {
+      /** Names the bar for a screen reader, and doubles as the query field's placeholder. */
+      regionLabel: "Pronađi u belešci",
+      placeholder: "Pronađi u belešci",
+      /** The counter slot's own name — it announces „3/17“, which says nothing on its own. */
+      countLabel: "Rezultati u belešci",
+      /** Stands in the counter slot when the query matches nothing. Quiet: a full stop, no exclamation, no icon. */
+      noResults: "Nema rezultata.",
+      previous: "Prethodno",
+      next: "Sledeće",
+      /** The case toggle reads „Aa“; what it does is in its title, since two letters cannot say it. */
+      caseLabel: "Aa",
+      caseTitle: "Razlikuj velika i mala slova",
+      /**
+       * Reveals the replace row. A NOUN („Zamena“) rather than the verb, so it
+       * can never be mistaken for the „Zameni“ button it uncovers.
+       */
+      replaceToggle: "Zamena",
+      replacePlaceholder: "Zameni sa",
+      replace: "Zameni",
+      replaceAll: "Zameni sve",
+      close: "Zatvori",
+    },
   },
 
   calendar: {
@@ -2338,6 +2368,7 @@ export const strings = {
       calendar: "Kalendar",
       study: "Učenje",
       notes: "Beleške",
+      notesFind: "Pretraga u belešci",
     },
     /** The reserved Ctrl+1…Ctrl+9 family: positional, so it is described rather than named. */
     moduleNavLabel: "Prelazak na modul po redosledu",
@@ -2346,6 +2377,8 @@ export const strings = {
       calendar: "Dok je mreža kalendara u fokusu.",
       study: "Tokom učenja kartica.",
       notes: "Na početku reda u editoru beleški.",
+      /** The find bar's keys work anywhere in the note, unlike the markdown shortcuts above them — hence a group of its own. */
+      notesFind: "Dok je otvorena beleška; pretražuje samo nju.",
     },
     reference: {
       paletteMove: "Kretanje kroz rezultate",
@@ -2368,6 +2401,9 @@ export const strings = {
       notesSlash: "Meni komandi za blokove",
       notesLink: "Veza ka drugoj belešci",
       notesHistory: "Opozovi i ponovi izmenu",
+      notesFindOpen: "Otvori traku za pretragu u belešci",
+      notesFindStep: "Sledeći ili prethodni rezultat",
+      notesFindClose: "Zatvori traku i vrati kursor na rezultat",
     },
   },
 } as const;

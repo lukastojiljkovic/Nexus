@@ -29,7 +29,7 @@ describe("SHORTCUT_REFERENCE", () => {
   it("gives every group a unique id", () => {
     const ids = SHORTCUT_REFERENCE.map((group) => group.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids).toEqual(["palette", "tasks", "calendar", "study", "notes"]);
+    expect(ids).toEqual(["palette", "tasks", "calendar", "study", "notes", "notesFind"]);
   });
 
   it("titles every group from the shared group copy", () => {
@@ -67,7 +67,7 @@ describe("SHORTCUT_REFERENCE", () => {
     const captioned = SHORTCUT_REFERENCE.filter((group) => group.caption !== undefined).map(
       (group) => group.id,
     );
-    expect(captioned).toEqual(["calendar", "study", "notes"]);
+    expect(captioned).toEqual(["calendar", "study", "notes", "notesFind"]);
     for (const group of SHORTCUT_REFERENCE) {
       if (group.caption !== undefined) expect(group.caption.length, group.id).toBeGreaterThan(0);
     }
@@ -132,5 +132,28 @@ describe("the Beleške group", () => {
 
   it("says where the markdown rules apply, rather than implying they are global", () => {
     expect(groupById("notes").caption).toBe(strings.shortcuts.captions.notes);
+  });
+});
+
+describe("the Pretraga u belešci group", () => {
+  it("documents opening the bar, stepping through hits, and closing it", () => {
+    const rows = groupById("notesFind").rows;
+    expect(rows.map((row) => row.description)).toEqual([
+      r.notesFindOpen,
+      r.notesFindStep,
+      r.notesFindClose,
+    ]);
+  });
+
+  it("prints Ctrl+F for opening, and all four stepping keys on the one row that means stepping", () => {
+    const rows = groupById("notesFind").rows;
+    expect(rows[0]?.keys).toEqual(["Ctrl+F"]);
+    expect(rows[1]?.keys).toEqual(["Enter", "Shift+Enter", "F3", "Shift+F3"]);
+    expect(rows[2]?.keys).toEqual(["Esc"]);
+  });
+
+  it("keeps its own caption — its keys work anywhere in the note, unlike the markdown group's", () => {
+    expect(groupById("notesFind").caption).toBe(strings.shortcuts.captions.notesFind);
+    expect(groupById("notesFind").caption).not.toBe(strings.shortcuts.captions.notes);
   });
 });

@@ -85,4 +85,20 @@ export const SHORTCUT_REFERENCE: readonly ShortcutReferenceGroup[] = [
       { keys: ["Ctrl+Z", "Ctrl+Y"], description: r.notesHistory },
     ],
   },
+  {
+    // Its own group rather than three more rows in „Beleške": that group's
+    // caption promises "at the start of a line", which is true of every
+    // markdown shortcut in it and of none of these.
+    id: "notesFind",
+    title: strings.shortcuts.groups.notesFind,
+    caption: strings.shortcuts.captions.notesFind,
+    rows: [
+      { keys: ["Ctrl+F"], description: r.notesFindOpen },
+      // One row, four chips: Enter/Shift+Enter (from the query field) and
+      // F3/Shift+F3 (from anywhere in the note) are the same two actions
+      // reached from two places, not four things to learn.
+      { keys: ["Enter", "Shift+Enter", "F3", "Shift+F3"], description: r.notesFindStep },
+      { keys: ["Esc"], description: r.notesFindClose },
+    ],
+  },
 ];

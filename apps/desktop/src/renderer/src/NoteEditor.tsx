@@ -34,6 +34,7 @@ import {
 } from "../../shared/ipc.js";
 import { AttachmentImage, NoteAttachmentProvider } from "./noteAttachmentImage.js";
 import { Callout } from "./noteCallout.js";
+import { createNoteFindExtension, NoteFindBar } from "./noteFindBar.js";
 import { countEditorCards, NoteFlashcard } from "./noteFlashcard.js";
 import { NoteLink, NoteLinkProvider } from "./noteLink.js";
 import { createNoteLinkExtension, NoteLinkMenu, type NoteLinkRenderState } from "./noteLinkMenu.js";
@@ -1010,6 +1011,19 @@ function EditorCanvas({
   const [linkMenu, setLinkMenu] = useState<NoteLinkRenderState | null>(null);
   const linkMenuKeydownRef = useRef<((event: KeyboardEvent) => boolean) | null>(null);
 
+  // „Pronađi u belešci" (NOTE-005): whether the find bar is docked above the
+  // canvas, and a counter that re-arms its query field on every Ctrl+F. The
+  // ref is what lets the extension — built once, below — read the current
+  // value from inside a closure that can never be rebuilt, the same discipline
+  // `templatesRef` follows.
+  const [findOpen, setFindOpen] = useState(false);
+  const [findFocusNonce, setFindFocusNonce] = useState(0);
+  const findOpenRef = useRef(false);
+  useEffect(() => {
+    findOpenRef.current = findOpen;
+  }, [findOpen]);
+  const closeFind = useCallback(() => setFindOpen(false), []);
+
   // The slash extension's `getTemplates` closure reads this ref, never the
   // `templates` prop directly: `useEditor`'s dep array below is `[doc]`, so
   // an extension array that changed identity on every template edit would
@@ -1060,6 +1074,23 @@ function EditorCanvas({
       ToggleSummary,
       ToggleContent,
       NoteTableOfContents,
+      // In-note find/replace (NOTE-005). Its handlers close over nothing but
+      // state setters and the ref above, so this extension — built once per
+      // note like every other one here — stays correct for the life of the
+      // editor.
+      createNoteFindExtension({
+        onOpen: () => {
+          setFindOpen(true);
+          setFindFocusNonce((nonce) => nonce + 1);
+        },
+        // Escape reaches here only when focus is already in the editor (the
+        // bar handles its own), so there is nothing to hand focus back to.
+        onEscape: () => {
+          if (!findOpenRef.current) return false;
+          setFindOpen(false);
+          return true;
+        },
+      }),
       createSlashExtension(
         {
           onStart: setSlash,
@@ -1144,6 +1175,9 @@ function EditorCanvas({
     <NoteAttachmentProvider value={{ byId: attachmentsById }}>
       <NoteLinkProvider value={{ titles, onOpenNote }}>
         <div className="note__editor">
+          {findOpen && editor !== null && (
+            <NoteFindBar editor={editor} focusNonce={findFocusNonce} onClose={closeFind} />
+          )}
           <EditorContent editor={editor} />
           {slash !== null && (
             <SlashMenu

@@ -6369,6 +6369,107 @@ button.cal__grid-event--dragging {
   outline-offset: 2px;
 }
 
+/* „Pronađi u belešci“ (NOTE-005): the Ctrl+F bar docked at the top of the
+   editor pane — a bar, not a dialog, so the note stays readable under it.
+   Quiet paper with a hairline and nothing else: no shadow, no glow. Sticky
+   against .note__editor-pane (the scrolling ancestor), which is why the fill
+   has to be opaque — hits scroll underneath it. */
+.note__find {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin-bottom: var(--nx-space-4);
+  padding: var(--nx-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.note__find-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+/* The .nx-textfield__input recipe, compacted: the bar is a toolbar row, not a
+   form, so the fields sit tighter than a labelled field would. */
+.note__find-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  padding: 5px 10px;
+  transition: border-color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__find-input::placeholder {
+  color: var(--nx-text-muted);
+}
+.note__find-input:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+/* „3/17“, or „Nema rezultata.“ in the same slot — one place for the bar to
+   answer from, so the eye never has to look for the answer in two spots.
+   Tabular figures keep the counter from twitching as the numbers change. */
+.note__find-count {
+  flex-shrink: 0;
+  min-width: 6ch;
+  text-align: right;
+  font-size: var(--nx-font-size-caption);
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text-muted);
+}
+/* Every control on the bar: the .note__attach quiet-text recipe with a hit
+   area, since these sit in a row rather than beside a heading. Active states
+   are typographic (gold + weight) — never a fill, border or glow. */
+.note__find-button {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-sm);
+  cursor: pointer;
+  transition: color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__find-button:hover:not(:disabled) {
+  color: var(--nx-text);
+}
+.note__find-button:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+.note__find-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.note__find-button[aria-pressed="true"],
+.note__find-button[aria-expanded="true"] {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+/* The matches themselves — DECORATIONS over the document, never marks in it.
+   Every hit gets the quiet surface tint; the active one gets accent-soft +
+   accent text. Deliberately NOT the browser's selection colour: the caret's
+   own selection also lives in this editor, and „the one I am on“ has to stay
+   distinguishable from „the text I have selected“. */
+.note__find-hit {
+  background: var(--nx-surface-alt);
+  border-radius: var(--nx-radius-sm);
+}
+.note__find-hit--active {
+  background: var(--nx-accent-soft);
+  color: var(--nx-accent-strong);
+}
+
 /* Attachment image blocks (NOTE-003b): a block atom resolved live from the
    attachment id — a removed row falls back to a muted inline placeholder,
    never breaking layout. Selection is a 2px accent outline on ProseMirror's
