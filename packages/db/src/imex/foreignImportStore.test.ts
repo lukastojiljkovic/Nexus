@@ -688,10 +688,11 @@ describe("ForeignImportStore", () => {
       expect(new DashboardSettingsStore(db.raw, target).get().backgroundHash).toBeNull();
     });
 
-    // The LAYOUT is the one dashboard thing that DOES import (ADR-045): a
-    // placement is content, so it arrives additively beside whatever the target
-    // already had, `widget_id` and `config` copied verbatim.
-    it("does write the dashboard layout, additively and under this profile", () => {
+    // The store executes whatever the plan carries — `planForeignImport` plans
+    // this member EMPTY by design (founder, 2026-07-31), so no real import
+    // reaches this statement today, but the executor stays total over
+    // `ProfileData` and is pinned here on its own terms.
+    it("writes a planned dashboard placement, additively and under this profile", () => {
       const target = createProfile("Odredište");
       const t = "2026-01-01T00:00:00.000Z";
       const planned: ProfileData = {

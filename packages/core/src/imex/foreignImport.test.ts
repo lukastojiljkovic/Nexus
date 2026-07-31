@@ -815,9 +815,10 @@ describe("planForeignImport — task attachments, templates, dependencies, dashb
     expect(result.report.modules.dashboard).toEqual({ parsed: 1, imported: 0, merged: 0, skipped: 1 });
   });
 
-  // The LAYOUT is content, unlike the background above: a placement is a row
-  // among rows, so it imports additively with a fresh instance id (ADR-045).
-  it("imports the layout under minted instance ids, copying widget id and config verbatim", () => {
+  // The layout is NOT imported (founder, 2026-07-31): an arrangement of the
+  // dashboard is the target user's own decoration, exactly as the background
+  // above is — an import must never rearrange their tabla.
+  it("never imports the dashboard layout and says so", () => {
     const t = "2026-07-01T00:00:00.000Z";
     const data = {
       ...withTaskExtras(),
@@ -834,21 +835,15 @@ describe("planForeignImport — task attachments, templates, dependencies, dashb
     };
     const result = plan(data);
 
-    expect(result.data.dashboardWidgets).toHaveLength(2);
-    for (const row of result.data.dashboardWidgets) {
-      expect(row.instanceId).not.toBe("src-dw1");
-      expect(row.instanceId).not.toBe("src-dw2");
-      expect(row.profileId).toBe("target-profile");
-    }
-    // Nothing INSIDE a placement is remapped: `widgetId` names a code constant
-    // and `config` is opaque, so both cross unchanged — as does `position`.
-    expect(result.data.dashboardWidgets.map((row) => [row.widgetId, row.size, row.position, row.config])).toEqual([
-      ["calendar:danas", "L", 1024, '{"limit":3}'],
-      ["finance:budzet", "S", 2048, null],
-    ]);
-    expect(result.report.modules.dashboard).toEqual({
-      parsed: 2, imported: 2, merged: 0, skipped: 0,
+    expect(result.data.dashboardWidgets).toEqual([]);
+    expect(result.report.skips).toContainEqual({
+      code: "dashboard-widgets-not-imported", module: "dashboard", type: "dashboard-widget", count: 2,
     });
+    expect(result.report.modules.dashboard).toEqual({ parsed: 2, imported: 0, merged: 0, skipped: 2 });
+    // And every module still balances with both dashboard members skipped by design.
+    for (const counts of Object.values(result.report.modules)) {
+      expect(counts.parsed).toBe(counts.imported + counts.merged + counts.skipped);
+    }
   });
 
   it("remaps a folder's default template and clears its capture claim exactly when the target already claims one", () => {

@@ -209,13 +209,15 @@ export interface ForeignImportSource {
 /**
  * Why a row the archive carried is not in the plan. Either salvage mode could
  * not read it (an `ImportDropReason`) or this planner skips it BY DESIGN — the
- * archive's settings, the notification ledger, the source's own Inbox row.
+ * archive's settings, the notification ledger, the dashboard, the source's own
+ * Inbox row.
  */
 export type ImportSkipCode =
   | ImportDropReason
   | "settings-not-imported"
   | "notifications-not-imported"
   | "dashboard-settings-not-imported"
+  | "dashboard-widgets-not-imported"
   | "study-settings-not-imported"
   | "profile-picture-not-imported"
   | "template-name-taken"
@@ -489,15 +491,11 @@ const ID_MINTERS: Record<keyof ProfileData, (data: ProfileData, ctx: PlanContext
   // Not imported (the remap literal plans an empty array): the dashboard
   // background and dim are the TARGET user's preferences, not the archive's.
   dashboardSettings: NO_IDS,
-  // The layout, unlike the background, IS content: a placement is a row among
-  // rows, so it imports on the same additive terms as everything else — a fresh
-  // instance id each, appended to whatever the target already had. Nothing
-  // INSIDE a placement is remapped: `widgetId` names a code constant published
-  // by a module manifest (migration 032 declares no foreign key for it), and
-  // `config` is opaque JSON no part of this build interprets.
-  dashboardWidgets: (data, ctx) => {
-    for (const widget of data.dashboardWidgets) mint(widget.instanceId, ctx);
-  },
+  // Not imported either (founder, 2026-07-31): the layout is the target user's
+  // own arrangement of their tabla, exactly as the background above is, so an
+  // import must not rearrange it. No row is planned, so no id is minted — and
+  // nothing references a placement, so there is nothing to dangle.
+  dashboardWidgets: NO_IDS,
   // ADR-051: `(title, startAt, allDay)` is what the calendar itself treats as
   // "the same appointment", so an event the target already has is a duplicate.
   events: (data, ctx) => mintUnlessDuplicate(data.events, EVENT_DUPLICATES, ctx),
@@ -980,16 +978,10 @@ export function planForeignImport(
     // ADR-043: the dashboard background and dim are the TARGET user's own
     // preferences — an import must not redecorate their home.
     dashboardSettings: [],
-    // The layout imports, minted and re-stamped like every other row. Its
-    // `position` rides along unchanged: a position is a sort key relative to
-    // its own scope, and the target's existing placements keep theirs, so the
-    // two runs interleave by number rather than one landing on top of the
-    // other. `widgetId` and `config` are copied verbatim — see `ID_MINTERS`.
-    dashboardWidgets: source.dashboardWidgets.map((row) => ({
-      ...row,
-      instanceId: mapped(row.instanceId, ctx),
-      profileId: target.profileId,
-    })),
+    // Nor rearrange it (founder, 2026-07-31): the layout stays the target's
+    // own, so the archive's placements are skipped by design — named below,
+    // like every other by-design skip.
+    dashboardWidgets: [],
   };
 
   return {
@@ -1071,6 +1063,12 @@ function buildReport(
     "dashboard",
     "dashboard-settings",
     source.dashboardSettings.length,
+  );
+  note(
+    "dashboard-widgets-not-imported",
+    "dashboard",
+    "dashboard-widget",
+    source.dashboardWidgets.length,
   );
   note("study-settings-not-imported", "study", "study-settings", source.studySettings.length);
   // The manifest's settings section — the target's flags and notification

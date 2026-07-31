@@ -1152,15 +1152,17 @@ export const strings = {
      * ISO week numbers (CAL-010) — the quiet gutter label down the left of the
      * month grid, and the week view's header corner.
      *
-     * „sed.“ (sedmica), never „ned.“: in Serbian „nedelja“ is both „week“ and
-     * „Sunday“, and this label sits directly beside a row of weekday shorts
-     * that ends in „ned“ — one letter away from reading as a weekday column.
+     * „ned.“ (nedelja) — the founder's choice (2026-07-31) over „sed.“
+     * (sedmica). „Nedelja“ is also „Sunday“, and the label sits beside a row
+     * of weekday shorts ending in „ned“; the lower-case styling with the
+     * trailing dot is what keeps it reading as a different kind of label, and
+     * the hover title says in full which reading is meant.
      */
     weekNumber: {
       /** Header above the gutter, and the prefix in the week view's corner. */
-      abbrev: "sed.",
+      abbrev: "ned.",
       /** Hover text — says out loud which of the several week numberings this is. */
-      title: "Sedmica u godini (ISO 8601)",
+      title: "Nedelja u godini (ISO 8601)",
     },
     /**
      * Semestar (CAL-010) — four months at once: the month the calendar is on
@@ -2235,7 +2237,7 @@ export const strings = {
       /**
        * One sentence per `ImportSkipCode`. The first seven are rows salvage
        * mode could not read — the „oštećen red“ family, worded so it is clear
-       * the ARCHIVE is at fault and the rest of it still arrives. The last six
+       * the ARCHIVE is at fault and the rest of it still arrives. The rest
        * are skipped BY DESIGN, and each says whose choice wins and why.
        *
        * The default task list is deliberately never named („Inbox“): it is a
@@ -2256,6 +2258,8 @@ export const strings = {
           "Zabeležena obaveštenja se ne uvoze — taj spisak pripada profilu u kom je nastao.",
         "dashboard-settings-not-imported":
           "Pozadina kontrolne table se ne uvozi — izgled tvoje table ostaje tvoj.",
+        "dashboard-widgets-not-imported":
+          "Raspored kontrolne table se ne uvozi — tvoja tabla ostaje kakva jeste.",
         "study-settings-not-imported":
           "Podešavanja učenja iz arhive se ne uvoze — tvoja ciljana zapamćenost i dnevni limiti ostaju tvoji.",
         "profile-picture-not-imported":

@@ -1795,7 +1795,7 @@ button.tasks__cal-chip:active {
    absolutely positioned, so no column of any grid — is pushed off the gutter
    by the same width. */
 .cal__month-grid--weeknum {
-  /* Wide enough for the „sed.“ header at label size + its tracking; the numbers
+  /* Wide enough for the „ned.“ header at label size + its tracking; the numbers
      under it are never more than two digits. */
   --cal-weeknum-w: 36px;
 }
@@ -1814,7 +1814,7 @@ button.tasks__cal-chip:active {
 .cal__month-grid--weeknum .cal__month-collapse {
   grid-column: 1 / -1;
 }
-/* Lower case where the weekday shorts beside it are upper — „sed.“ has to read
+/* Lower case where the weekday shorts beside it are upper — „ned.“ has to read
    as a different kind of label than „PON … NED“, not as an eighth weekday. */
 .cal__month-weeknum-head {
   padding: var(--nx-space-1);

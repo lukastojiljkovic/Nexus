@@ -377,7 +377,7 @@ describe("StatsStore", () => {
   });
 
   describe("blockTotals", () => {
-    it("counts done and missed blocks joined through active plans", () => {
+    it("counts done and missed blocks joined through active plans of active exams", () => {
       const { stats, profileId, subjectId } = fixture();
       const examId = insertExam(profileId, subjectId, "2026-08-01");
       const planId = insertPlan(profileId, examId);
@@ -395,6 +395,30 @@ describe("StatsStore", () => {
       insertBlock(profileId, planId, "2026-07-08", "done", "2026-07-08T12:00:00.000Z");
 
       expect(stats.blockTotals("2026-07-01", "2026-07-31")).toEqual({ done: 0, missed: 0 });
+    });
+
+    it("excludes blocks whose exam is soft-deleted, agreeing with planAdherence", () => {
+      const { stats, profileId, subjectId } = fixture();
+      // A withdrawn exam whose plan was left active — deleting an exam does not
+      // soft-delete its plan — used to be the one case the two block reads
+      // disagreed on. Both now read through ACTIVE exams.
+      const examId = insertExam(
+        profileId,
+        subjectId,
+        "2026-08-01",
+        uuidv7(),
+        "2026-07-10T12:00:00.000Z",
+      );
+      const planId = insertPlan(profileId, examId);
+      insertBlock(profileId, planId, "2026-07-08", "done", "2026-07-08T12:00:00.000Z");
+      insertBlock(profileId, planId, "2026-07-09", "missed", "2026-07-09T12:00:00.000Z");
+
+      expect(stats.blockTotals("2026-07-01", "2026-07-31")).toEqual({ done: 0, missed: 0 });
+      expect(stats.planAdherence("2026-07-01", "2026-07-31")).toEqual({
+        done: 0,
+        missed: 0,
+        ratio: null,
+      });
     });
 
     it("filters on the block_date range", () => {

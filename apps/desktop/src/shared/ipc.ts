@@ -3549,6 +3549,7 @@ export type ImportSkipCode =
   | "settings-not-imported"
   | "notifications-not-imported"
   | "dashboard-settings-not-imported"
+  | "dashboard-widgets-not-imported"
   | "study-settings-not-imported"
   | "profile-picture-not-imported"
   | "template-name-taken"

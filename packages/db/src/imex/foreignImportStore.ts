@@ -600,12 +600,11 @@ export class ForeignImportStore {
         written += 1;
       }
 
-      // The dashboard LAYOUT (ADR-045), unlike the background the planner
-      // deliberately drops: a placement is content, and it arrives additively
-      // like everything else — new instance ids, the target's `profile_id`, and
-      // the source's own `position` kept so the imported run stays in its own
-      // order. `widget_id` is copied verbatim: it names a code constant, not a
-      // row, so there is nothing in it to remap (migration 032).
+      // The dashboard LAYOUT. The planner plans this member EMPTY by design
+      // (founder, 2026-07-31: an import must not rearrange the target's tabla),
+      // so this loop writes nothing today — it stays because this store is the
+      // plan's faithful executor over every `ProfileData` member, and POLICY
+      // about what a plan carries lives in `planForeignImport`, not here.
       for (const widget of planned.dashboardWidgets) {
         this.insertDashboardWidget.run(
           this.profileId, widget.instanceId, widget.widgetId, widget.size,

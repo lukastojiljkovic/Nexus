@@ -15,7 +15,7 @@ export interface ReviewCounts {
   perDay: Array<{ day: string; count: number }>;
 }
 
-/** Done/missed study-block counts in a range, over blocks of active plans. */
+/** Done/missed study-block counts in a range, over blocks of active plans of active exams. */
 export interface BlockTotals {
   done: number;
   missed: number;
@@ -181,10 +181,10 @@ export class StatsStore {
   private readonly activityDaysFocusSessions: Database.Statement;
   private readonly activityDaysStudyBlocks: Database.Statement;
   private readonly reviewCountsStatement: Database.Statement;
+  /** Serves `blockTotals` AND `planAdherence` — one statement, so the two metrics read one rule (see its SQL's own note). */
   private readonly blockTotalsStatement: Database.Statement;
   private readonly maturedInRangeStatement: Database.Statement;
   private readonly maturedTotalStatement: Database.Statement;
-  private readonly planAdherenceStatement: Database.Statement;
   private readonly logReviews: Database.Statement;
   private readonly logFocusSessions: Database.Statement;
   private readonly logBlocks: Database.Statement;
@@ -246,6 +246,13 @@ export class StatsStore {
        ORDER BY day ASC
     `);
 
+    // Both hops active, the join discipline `BLOCK_SUBJECT_JOIN` and every
+    // user-facing plan read (`PlanStore.listPlans`, `listBlocksInRange`) already
+    // keep. Deleting an exam does not soft-delete its plan, so without the exam
+    // hop a withdrawn exam's blocks would go on being counted as obligations.
+    // ONE statement serves both `blockTotals` and `planAdherence` (founder,
+    // 2026-07-31): the two metrics read the same population by construction,
+    // so they can never again disagree about whose blocks count.
     this.blockTotalsStatement = db.prepare(`
       SELECT
         SUM(CASE WHEN b.status = 'done' THEN 1 ELSE 0 END) AS done,
@@ -253,6 +260,8 @@ export class StatsStore {
         FROM study_blocks b
         JOIN study_plans p
           ON p.id = b.plan_id AND p.profile_id = b.profile_id AND p.deleted_at IS NULL
+        JOIN exams e
+          ON e.id = p.exam_id AND e.profile_id = b.profile_id AND e.deleted_at IS NULL
        WHERE b.profile_id = ?
          AND b.block_date BETWEEN ? AND ?
     `);
@@ -276,25 +285,6 @@ export class StatsStore {
       SELECT COUNT(*) AS total
         FROM cards
        WHERE profile_id = ? AND deleted_at IS NULL AND scheduled_days >= ?
-    `);
-
-    // Same shape as `blockTotalsStatement`, with one hop more: the plan's exam
-    // must be active too, the join discipline `BLOCK_SUBJECT_JOIN` and every
-    // user-facing plan read (`PlanStore.listPlans`, `listBlocksInRange`) already
-    // keep. Deleting an exam does not soft-delete its plan, so without this hop
-    // a withdrawn exam's blocks would go on being counted as obligations —
-    // adherence would be measured against a plan the user can no longer see.
-    this.planAdherenceStatement = db.prepare(`
-      SELECT
-        SUM(CASE WHEN b.status = 'done' THEN 1 ELSE 0 END) AS done,
-        SUM(CASE WHEN b.status = 'missed' THEN 1 ELSE 0 END) AS missed
-        FROM study_blocks b
-        JOIN study_plans p
-          ON p.id = b.plan_id AND p.profile_id = b.profile_id AND p.deleted_at IS NULL
-        JOIN exams e
-          ON e.id = p.exam_id AND e.profile_id = b.profile_id AND e.deleted_at IS NULL
-       WHERE b.profile_id = ?
-         AND b.block_date BETWEEN ? AND ?
     `);
 
     // --- The per-subject study log (STUDY-014) ------------------------------
@@ -402,7 +392,7 @@ export class StatsStore {
     return { total, perDay: rows.map((row) => ({ day: row.day, count: row.count })) };
   }
 
-  /** Done/missed study-block counts joined through active plans, ranged on `block_date`. */
+  /** Done/missed study-block counts joined through active plans of active exams, ranged on `block_date` — the same population `planAdherence` reads. */
   blockTotals(fromDate: string, toDate: string): BlockTotals {
     const validFrom = validateBareDate(fromDate, "fromDate");
     const validTo = validateBareDate(toDate, "toDate");
@@ -480,18 +470,17 @@ export class StatsStore {
    * you had none of" is not "perfectly". The raw fraction is returned unrounded;
    * turning it into a percentage is the caller's business.
    *
-   * **Where this can disagree with `blockTotals`.** `blockTotals` stops at the
-   * plan and never checks the exam, so the one case the two read differently is
-   * a plan whose exam was soft-deleted while the plan itself was left active —
-   * counted there, ignored here. Tightening `blockTotals` to match would change
-   * a number the hub and dashboard already show, so it is left alone until the
-   * founder decides; this method takes the stricter reading because "adherence"
-   * is a claim about obligations the user still has.
+   * **One rule with `blockTotals`, by construction.** Both metrics read the
+   * very same prepared statement: blocks of ACTIVE plans of ACTIVE exams
+   * (founder, 2026-07-31 — `blockTotals` used to stop at the plan and count a
+   * withdrawn exam's blocks that this method ignored). A block only counts as
+   * an obligation while the exam it serves still exists, and the hub and the
+   * dashboard now say so with one voice.
    */
   planAdherence(fromDay: string, toDay: string): PlanAdherence {
     const from = validateBareDate(fromDay, "fromDay");
     const to = validateBareDate(toDay, "toDay");
-    const row = this.planAdherenceStatement.get(this.profileId, from, to) as {
+    const row = this.blockTotalsStatement.get(this.profileId, from, to) as {
       done: number | null;
       missed: number | null;
     };

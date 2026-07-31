@@ -497,7 +497,7 @@ export function CalendarTimeGrid({
         {/* The week's ISO number, in the one corner this grid has spare
             (CAL-010). Read off the row's fourth day, so a Sunday-first week
             takes the number six of its seven days belong to — the month
-            grid's own rule. Written out with „sed.“ rather than left as a
+            grid's own rule. Written out with „ned.“ rather than left as a
             bare number: alone above the hour gutter it would read as a time.
             The day view has no week to name, so it shows nothing here. */}
         <div className="cal__grid-gutter-spacer">
