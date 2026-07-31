@@ -40,6 +40,8 @@ function emptyInput(): ExportArchiveInput {
       renewals: [],
       people: [],
       subjects: [],
+      subjectAttachments: [],
+      subjectNoteLinks: [],
       exams: [],
       decks: [],
       cards: [],
@@ -233,7 +235,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.13.0");
+      expect(manifest.schemaVersion).toBe("1.14.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       expect(manifest.profile).toEqual({ id: "profile1", name: "Luka" });
@@ -896,6 +898,10 @@ describe("buildExportArchive", () => {
         subjects: [
           { id: "s1", profileId: "p1", name: "S", color: "jade", semester: null, archived: false, createdAt: t, updatedAt: t },
         ],
+        subjectAttachments: [
+          { id: "satt1", subjectId: "s1", fileName: "skripta.pdf", mime: "application/pdf", sizeBytes: 40, sha256: "d".repeat(64), createdAt: t },
+        ],
+        subjectNoteLinks: [{ subjectId: "s1", noteId: "note1", createdAt: t }],
         exams: [
           { id: "ex1", profileId: "p1", subjectId: "s1", examType: "pismeni", examDate: "2030-01-01", scope: null, createdAt: t, updatedAt: t },
         ],
@@ -962,7 +968,7 @@ describe("buildExportArchive", () => {
       expect(countProfileModules(data)).toEqual({
         tasks: 9, // 2 tasks + 1 list + 1 section + 1 tag + 1 tag link + 1 attachment + 1 template + 1 dependency
         calendar: 4, // 1 event + 1 document + 1 renewal + 1 person
-        study: 9, // 1 each of subject/exam/deck/card/review/plan/block/focus-session + the settings row
+        study: 11, // 1 each of subject/material/note-link/exam/deck/card/review/plan/block/focus-session + the settings row
         notifications: 1,
         notes: 7, // 1 each of note/folder/tag/tag-link/template/attachment/version
         dashboard: 2, // the one settings row a profile can ever have + 1 placed widget

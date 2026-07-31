@@ -39,6 +39,8 @@ import {
   RestoreStore,
   SqliteFlagStore,
   StudySettingsStore,
+  SubjectAttachmentStore,
+  SubjectNoteLinkStore,
   SubjectStore,
   TaskAttachmentStore,
   TaskDependencyStore,
@@ -152,6 +154,8 @@ function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
     peopleStore: (profileId) => new PeopleStore(handle.raw, profileId),
     documentStore: (profileId) => new DocumentStore(handle.raw, profileId),
     subjectStore: (profileId) => new SubjectStore(handle.raw, profileId),
+    subjectAttachmentStore: (profileId) => new SubjectAttachmentStore(handle.raw, profileId),
+    subjectNoteLinkStore: (profileId) => new SubjectNoteLinkStore(handle.raw, profileId),
     examStore: (profileId) => new ExamStore(handle.raw, profileId),
     deckStore: (profileId) => new DeckStore(handle.raw, profileId),
     cardStore: (profileId) => new CardStore(handle.raw, profileId),
@@ -223,6 +227,7 @@ function makeTestDeps(handle: NexusDatabase, filePath: string | null): TestDepsH
     blobRefCount: (profileId, sha256) =>
       new NoteAttachmentStore(handle.raw, profileId).refCount(sha256) +
       new TaskAttachmentStore(handle.raw, profileId).refCount(sha256) +
+      new SubjectAttachmentStore(handle.raw, profileId).refCount(sha256) +
       new DashboardSettingsStore(handle.raw, profileId).refCount(sha256),
     deleteBlobIfOrphaned: async (sha256, refCount) => {
       if (refCount === 0) blobs.delete(sha256);
@@ -291,6 +296,8 @@ interface SeededFixture {
     attachmentSha: string;
     /** The blob referenced ONLY by the task attachment — the one whose survival proves the GC union (migration 024). */
     taskAttachmentSha: string;
+    /** The blob referenced ONLY by the subject material — the same proof, for the union's fourth member (migration 035). */
+    subjectAttachmentSha: string;
     /** The dashboard background's own hash (ADR-041) — a SECOND, independent member of the archive's `blobs/` union. */
     backgroundSha: string;
   };
@@ -316,6 +323,8 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   const eventStore = new EventStore(handle.raw, profileId);
   const peopleStore = new PeopleStore(handle.raw, profileId);
   const subjectStore = new SubjectStore(handle.raw, profileId);
+  const subjectAttachmentStore = new SubjectAttachmentStore(handle.raw, profileId);
+  const subjectNoteLinkStore = new SubjectNoteLinkStore(handle.raw, profileId);
   const examStore = new ExamStore(handle.raw, profileId);
   const deckStore = new DeckStore(handle.raw, profileId);
   const cardStore = new CardStore(handle.raw, profileId);
@@ -393,6 +402,21 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     t0,
   );
   const subject = subjectStore.create({ name: `${label} subject` });
+  // A real material on that subject (migration 035), with bytes of its own so
+  // the zip round trip carries a THIRD blob no other table references — the
+  // member of `blobRefCount`'s union this lane added.
+  const subjectAttachmentBytes = new TextEncoder().encode(`${label} subject material content`);
+  const subjectAttachmentSha = sha256OfBytes(subjectAttachmentBytes);
+  subjectAttachmentStore.add(
+    subject.id,
+    {
+      fileName: "skripta.pdf",
+      mime: "application/pdf",
+      sizeBytes: subjectAttachmentBytes.length,
+      sha256: subjectAttachmentSha,
+    },
+    "2026-01-01T00:02:00.000Z",
+  );
   const exam = examStore.create({ subjectId: subject.id, examType: "pismeni", examDate: "2030-01-01" });
   const deck = deckStore.create({ subjectId: subject.id, name: `${label} deck` });
   const card = cardStore.create({ deckId: deck.id, front: "Q", back: "A" }, t0);
@@ -428,6 +452,10 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   const merged = mergeNoteState(null, [update]);
   noteStore.compact(note.id, merged.snapshot, merged.plaintext, 1, "2026-01-01T00:03:00.000Z");
 
+  // That note filed under the subject (migration 035): a cross-MODULE edge whose
+  // two ends live in two different NDJSON files.
+  subjectNoteLinkStore.linkNote(subject.id, note.id, "2026-01-01T00:03:00.000Z");
+
   const template = templateStore.save(`${label} template`, JSON.stringify({ type: "doc", content: [] }), t0);
 
   // A dashboard background with its OWN blob (ADR-041): a second, independent
@@ -457,6 +485,8 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     renewals: [],
     people: peopleStore.listActive(),
     subjects: subjectStore.listActive(),
+    subjectAttachments: subjectAttachmentStore.list(subject.id),
+    subjectNoteLinks: subjectNoteLinkStore.listLinks(),
     exams: examStore.listActive(),
     decks: deckStore.listActive(),
     cards: cardStore.listByDeck(deck.id),
@@ -497,6 +527,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   const blobBytes = new Map<string, Uint8Array>([
     [attachmentSha, attachmentBytes],
     [taskAttachmentSha, taskAttachmentBytes],
+    [subjectAttachmentSha, subjectAttachmentBytes],
     [backgroundSha, backgroundBytes],
   ]);
 
@@ -505,7 +536,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     derived,
     settings,
     blobBytes,
-    ids: { task, list, section, taskTag, event, person, subject, exam, deck, card, notification, note, linkedNote, folder, tag, template, attachmentSha, taskAttachmentSha, backgroundSha },
+    ids: { task, list, section, taskTag, event, person, subject, exam, deck, card, notification, note, linkedNote, folder, tag, template, attachmentSha, taskAttachmentSha, subjectAttachmentSha, backgroundSha },
   };
 }
 
@@ -617,11 +648,13 @@ describe("restore", () => {
 
       const result = await applyRestore(deps, profileB, preview.preview.token);
       expect(result.rowsWritten).toBeGreaterThan(0);
-      // Three: the note attachment's blob, the task attachment's, and the
-      // dashboard background's (ADR-041) — every member of the one `blobs/`
-      // union had to be written before the transaction.
-      expect(result.blobsAdded).toBe(3);
+      // Four: the note attachment's blob, the task attachment's, the subject
+      // material's (migration 035) and the dashboard background's (ADR-041) —
+      // every member of the one `blobs/` union had to be written before the
+      // transaction.
+      expect(result.blobsAdded).toBe(4);
       expect(blobs.has(fixtureA.ids.taskAttachmentSha)).toBe(true);
+      expect(blobs.has(fixtureA.ids.subjectAttachmentSha)).toBe(true);
       expect(blobs.has(fixtureA.ids.backgroundSha)).toBe(true);
       expect(result.missingBlobs).toBe(0);
       expect(result.restored).toEqual(countProfileModules(fixtureA.data));
@@ -863,6 +896,25 @@ describe("restore", () => {
         },
         "2026-01-01T00:05:00.000Z",
       );
+      // And a bystander SUBJECT whose material is the only thing left naming the
+      // archive's subject blob once the undo has run — the fourth member of the
+      // union (migration 035), on exactly the terms the task one above states:
+      // neither attachment table nor the dashboard row references this hash at
+      // any point, so a count blind to `subject_attachments` would read 0 and
+      // delete a course file the user still has.
+      const bystanderSubject = new SubjectStore(dbB.raw, profileBystander).create({
+        name: "Bystander subject",
+      });
+      new SubjectAttachmentStore(dbB.raw, profileBystander).add(
+        bystanderSubject.id,
+        {
+          fileName: "shared-skripta.pdf",
+          mime: "application/pdf",
+          sizeBytes: fixtureSource.blobBytes.get(fixtureSource.ids.subjectAttachmentSha)?.length ?? 0,
+          sha256: fixtureSource.ids.subjectAttachmentSha,
+        },
+        "2026-01-01T00:05:00.000Z",
+      );
 
       // The restore target: one pre-existing row the restore will wipe.
       const profileTarget = createProfile(dbB, "Target");
@@ -873,14 +925,16 @@ describe("restore", () => {
       const preview = await previewRestore(deps, profileTarget, null);
       if (preview.status !== "ready") unreachable();
 
-      // Four distinct blobs: the shared note one, the private note one, the
-      // task one (which no note attachment anywhere references), and the
-      // dashboard background (ADR-041) — one union, four distinct hashes.
+      // Five distinct blobs: the shared note one, the private note one, the
+      // task one (which no note attachment anywhere references), the subject
+      // material (which nothing else references either), and the dashboard
+      // background (ADR-041) — one union, five distinct hashes.
       const applyResult = await applyRestore(deps, profileTarget, preview.preview.token);
-      expect(applyResult.blobsAdded).toBe(4);
+      expect(applyResult.blobsAdded).toBe(5);
       expect(blobs.has(fixtureSource.ids.attachmentSha)).toBe(true);
       expect(blobs.has(privateSha)).toBe(true);
       expect(blobs.has(fixtureSource.ids.taskAttachmentSha)).toBe(true);
+      expect(blobs.has(fixtureSource.ids.subjectAttachmentSha)).toBe(true);
       expect(blobs.has(fixtureSource.ids.backgroundSha)).toBe(true);
 
       const afterApply = new TaskStore(dbB.raw, profileTarget).listActive();
@@ -904,6 +958,9 @@ describe("restore", () => {
       expect(blobs.has(privateSha)).toBe(false);
       // And the blob only a TASK attachment names survives too — the union.
       expect(blobs.has(fixtureSource.ids.taskAttachmentSha)).toBe(true);
+      // As does the one only a SUBJECT MATERIAL names (migration 035): the
+      // union's newest member, proved by exactly the same undo.
+      expect(blobs.has(fixtureSource.ids.subjectAttachmentSha)).toBe(true);
       expect(blobs.has(fixtureSource.ids.backgroundSha)).toBe(false);
       expect(undoResult.blobsRemoved).toBe(2);
     });
@@ -935,10 +992,11 @@ describe("restore", () => {
       );
 
       const result = await applyRestore(deps, profileB, preview.preview.token);
-      // Exactly the one blob the zip lacks is reported; the task's own file was
-      // present and restored, so a lost file costs that file and nothing else.
+      // Exactly the one blob the zip lacks is reported; the task's own file and
+      // the subject's material were present and restored, so a lost file costs
+      // that file and nothing else.
       expect(result.missingBlobs).toBe(1);
-      expect(result.blobsAdded).toBe(1);
+      expect(result.blobsAdded).toBe(2);
       expect(blobs.has(fixtureA.ids.attachmentSha)).toBe(false);
       expect(blobs.has(fixtureA.ids.taskAttachmentSha)).toBe(true);
 
@@ -1283,11 +1341,13 @@ describe("foreign import", () => {
 
       const result = await applyImport(deps, profileB, preview.preview.token);
       expect(result.rowsWritten).toBeGreaterThan(0);
-      // The note attachment's blob and the task attachment's. NOT the dashboard
-      // background: an import never carries the archive's decoration.
-      expect(result.blobsAdded).toBe(2);
+      // The note attachment's blob, the task attachment's and the subject
+      // material's. NOT the dashboard background: an import never carries the
+      // archive's decoration.
+      expect(result.blobsAdded).toBe(3);
       expect(blobs.has(fixtureA.ids.attachmentSha)).toBe(true);
       expect(blobs.has(fixtureA.ids.taskAttachmentSha)).toBe(true);
+      expect(blobs.has(fixtureA.ids.subjectAttachmentSha)).toBe(true);
       expect(blobs.has(fixtureA.ids.backgroundSha)).toBe(false);
       expect(result.missingBlobs).toBe(0);
 
@@ -1332,7 +1392,7 @@ describe("foreign import", () => {
       expect(getReloadCount()).toBe(1);
 
       const undoResult = await undoRestore(deps, profileB);
-      expect(undoResult.blobsRemoved).toBe(2);
+      expect(undoResult.blobsRemoved).toBe(3);
       expect(blobs.size).toBe(0);
       expect(gatherProfileData(deps, profileB)).toEqual(before);
       // Every imported note is gone, so no edge can name one anymore. Asserted

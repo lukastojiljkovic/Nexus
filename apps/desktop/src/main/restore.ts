@@ -502,13 +502,18 @@ export async function applyRestore(
   const undoDerived = deriveRestoredNotes(undoData.notes);
 
   // Every distinct blob the restored rows reference AND the archive actually
-  // carries (a missing one is counted below, never fetched). BOTH attachment
-  // tables, since both name the same `blobs/` namespace — a task's file left
-  // unwritten here would restore as a row pointing at nothing. One at a time —
-  // never all resident together — mirroring `handleExport`'s own attachment loop.
-  // A dashboard background (ADR-041) is a referrer on the same terms as an
-  // attachment, so it joins the same set and a hash both name is written once.
-  const restoredAttachments = [...ready.data.noteAttachments, ...ready.data.taskAttachments];
+  // carries (a missing one is counted below, never fetched). ALL THREE
+  // attachment tables, since all three name the same `blobs/` namespace — a
+  // task's file or a subject's material left unwritten here would restore as a
+  // row pointing at nothing. One at a time — never all resident together —
+  // mirroring `handleExport`'s own attachment loop. A dashboard background
+  // (ADR-041) is a referrer on the same terms as an attachment, so it joins the
+  // same set and a hash several of them name is written once.
+  const restoredAttachments = [
+    ...ready.data.noteAttachments,
+    ...ready.data.taskAttachments,
+    ...ready.data.subjectAttachments,
+  ];
   const shasToWrite = new Set<string>();
   for (const attachment of restoredAttachments) {
     if (ready.archive.blobNames.has(attachment.sha256)) shasToWrite.add(attachment.sha256);
@@ -884,6 +889,7 @@ export async function applyImport(
   const importedAttachments = [
     ...ready.plan.data.noteAttachments,
     ...ready.plan.data.taskAttachments,
+    ...ready.plan.data.subjectAttachments,
   ];
   const summary: ImportApplyResult = {
     restored: countProfileModules(ready.plan.data),

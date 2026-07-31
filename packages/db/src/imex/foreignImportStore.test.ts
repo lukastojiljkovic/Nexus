@@ -99,6 +99,8 @@ function emptyProfileData(): ProfileData {
     renewals: [],
     people: [],
     subjects: [],
+    subjectAttachments: [],
+    subjectNoteLinks: [],
     exams: [],
     decks: [],
     cards: [],

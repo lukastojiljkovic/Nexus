@@ -38,6 +38,8 @@ import {
   RESTORE_WIPE_TABLES,
   SqliteFlagStore,
   StudySettingsStore,
+  SubjectAttachmentStore,
+  SubjectNoteLinkStore,
   SubjectStore,
   TASK_ORDER_GAP,
   TaskAttachmentStore,
@@ -132,6 +134,8 @@ function emptyProfileData(): ProfileData {
     renewals: [],
     people: [],
     subjects: [],
+    subjectAttachments: [],
+    subjectNoteLinks: [],
     exams: [],
     decks: [],
     cards: [],
@@ -228,6 +232,8 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   const peopleStore = new PeopleStore(handle.raw, profileId);
   const documentStore = new DocumentStore(handle.raw, profileId);
   const subjectStore = new SubjectStore(handle.raw, profileId);
+  const subjectAttachmentStore = new SubjectAttachmentStore(handle.raw, profileId);
+  const subjectNoteLinkStore = new SubjectNoteLinkStore(handle.raw, profileId);
   const examStore = new ExamStore(handle.raw, profileId);
   const deckStore = new DeckStore(handle.raw, profileId);
   const cardStore = new CardStore(handle.raw, profileId);
@@ -324,6 +330,14 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   documentStore.renew(document.id, "2028-01-01");
 
   const subject = subjectStore.create({ name: `${name} subject` });
+  // A real material on a real subject (migration 035), with a hash of its own —
+  // "c"×64 is the task's file and "a"×64 the note's, so all three tables' blobs
+  // stay distinguishable in every assertion.
+  subjectAttachmentStore.add(
+    subject.id,
+    { fileName: "skripta.pdf", mime: "application/pdf", sizeBytes: 40, sha256: "d".repeat(64) },
+    t2,
+  );
   const exam = examStore.create({ subjectId: subject.id, examType: "pismeni", examDate: "2030-01-01" });
   const deck = deckStore.create({ subjectId: subject.id, name: `${name} deck` });
   const createdCard = cardStore.create({ deckId: deck.id, front: "Q", back: "A" }, t0);
@@ -369,6 +383,10 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   // only ever existed in the test's imagination.
   noteStore.compact(editedNote.id, editedSnapshot, editedPlaintext, 1, t3);
 
+  // The edited note filed under the subject (migration 035): a cross-MODULE
+  // edge, so a restore that wrote the two modules independently would drop it.
+  subjectNoteLinkStore.linkNote(subject.id, editedNote.id, t3);
+
   const neverEditedNote = noteStore.create("2026-01-01T00:04:00.000Z");
 
   const template = templateStore.save(
@@ -410,6 +428,8 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     renewals: documentStore.listRenewals(document.id),
     people: peopleStore.listActive(),
     subjects: subjectStore.listActive(),
+    subjectAttachments: subjectAttachmentStore.list(subject.id),
+    subjectNoteLinks: subjectNoteLinkStore.listLinks(),
     exams: examStore.listActive(),
     decks: deckStore.listActive(),
     cards: cardStore.listByDeck(deck.id),
@@ -781,6 +801,8 @@ describe("RestoreStore", () => {
       "task_tag_links",
       "task_attachments",
       "task_dependencies",
+      "subject_attachments",
+      "subject_note_links",
       "note_versions",
       "note_attachments",
       "note_tag_links",

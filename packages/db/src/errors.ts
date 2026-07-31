@@ -225,6 +225,39 @@ export class SubjectValidationError extends DatabaseError {}
 export class SubjectNotFoundError extends DatabaseError {}
 
 /**
+ * Thrown when a subject-material write is rejected at the store boundary
+ * because its input breaks a domain rule the caller is expected to have caught
+ * already — an empty, over-255-character, or path-separator-carrying
+ * `fileName`, a malformed or over-100-character `mime`, a `sizeBytes` that is
+ * not a positive integer within `MAX_SUBJECT_ATTACHMENT_BYTES`, a malformed
+ * `sha256`, or a malformed `now` (migration 035). The rules are
+ * `TaskAttachmentValidationError`'s verbatim, because a subject material is the
+ * NOTE-003 feature applied to subjects. The store revalidates because renderer
+ * input is untrusted (SEC-EL-02).
+ */
+export class SubjectAttachmentValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a subject-material operation targets a subject that is not active
+ * in the store's own profile (unknown, soft-deleted, or owned by another
+ * profile — surfaced as `SubjectNotFoundError`), or when `remove` targets a
+ * material id that is not a row of that subject (unknown, or belonging to a
+ * different subject). The `TaskAttachmentNotFoundError` arrangement, one module
+ * over.
+ */
+export class SubjectAttachmentNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a subject↔note link write carries a malformed `now` (migration
+ * 035). Deliberately the only rule this class covers: both ends of a link are
+ * ROWS, so an id that does not resolve in this profile is already
+ * `SubjectNotFoundError` or `NoteNotFoundError`, unlinking something that is not
+ * there is a silent no-op (`removeDependency`'s rule), and a link has no graph
+ * to keep acyclic — nothing else here needs a name of its own.
+ */
+export class SubjectNoteLinkValidationError extends DatabaseError {}
+
+/**
  * Thrown when an exam write is rejected at the store boundary because its input
  * breaks a domain rule the UI is expected to have caught already — an unknown
  * exam type, a malformed exam date, or a `subjectId` that does not resolve to a

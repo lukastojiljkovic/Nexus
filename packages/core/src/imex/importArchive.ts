@@ -30,6 +30,8 @@ import type {
   ExportStudyPlan,
   ExportStudySettings,
   ExportSubject,
+  ExportSubjectAttachment,
+  ExportSubjectNoteLink,
   ExportTask,
   ExportTaskAttachment,
   ExportTaskDependency,
@@ -174,10 +176,13 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.13.0` added the
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.14.0` added the
+ * `subject-attachment` and `subject-note-link` record types — a subject's
+ * materials and the notes filed under it (STUDY-001, migration 035), both riding
+ * in the data file the STUDY module already had — after `1.13.0` added the
  * `study-settings` record type — one profile's FSRS target retention and its
- * two daily caps (STUDY-007, migration 034), riding in the data file the STUDY
- * module already had — after `1.12.0` added a
+ * two daily caps (STUDY-007, migration 034), riding in that same file — after
+ * `1.12.0` added a
  * card's `problemSteps` — the worked solution its `back` is derived from
  * (ADR-046) — after `1.11.0` added the `dashboard-widget` record type — the
  * profile's dashboard layout (DASH-002 / ADR-045, migration 032) — riding in
@@ -205,7 +210,8 @@ export interface ImportArchiveResult {
  * indistinguishable from a profile that had no dependencies — or, at `1.9.0`,
  * from one that never chose a dashboard background, or, at `1.11.0`, from one
  * that never rearranged its dashboard, or, at `1.13.0`, from one that never
- * touched its study preferences — while a NEWER archive
+ * touched its study preferences, or, at `1.14.0`, from one whose subjects carry
+ * neither materials nor linked notes — while a NEWER archive
  * never reaches a parser at all, because the gate above refuses it. Era flags
  * exist only for the "this row is missing a field it now must have" question,
  * which a whole absent type never asks — and which an OPTIONAL-with-a-default
@@ -219,13 +225,13 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  * SUPERVISOR NOTE: `1.11.0` belongs to the sibling lane (dashboard layout) and
- * is not in this worktree; the `1.12.0` lane wrote its version directly and this
- * one writes `1.13.0` on top, leaving the gap for the supervisor to reconcile at
- * merge. The too-new refusal fixtures in `importArchive.test.ts` moved to
- * `1.14.0` for the same reason — `1.13.0` is no longer "strictly ahead of this
- * build".
+ * is not in this worktree; the `1.12.0` lane wrote its version directly, the
+ * `1.13.0` lane wrote its own on top, and this one writes `1.14.0` — leaving the
+ * gap for the supervisor to reconcile at merge. The too-new refusal fixtures in
+ * `importArchive.test.ts` moved to `1.15.0` for the same reason — `1.14.0` is no
+ * longer "strictly ahead of this build".
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.13.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.14.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -747,6 +753,8 @@ export type ArchiveRecordType =
   | "renewal"
   | "person"
   | "subject"
+  | "subject-attachment"
+  | "subject-note-link"
   | "exam"
   | "deck"
   | "card"
@@ -780,6 +788,8 @@ const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "renewal",
   "person",
   "subject",
+  "subject-attachment",
+  "subject-note-link",
   "exam",
   "deck",
   "card",
@@ -818,6 +828,8 @@ const FILE_RECORD_TYPES: Record<DataFilePath, readonly ArchiveRecordType[]> = {
   "data/study.ndjson": [
     "study-settings",
     "subject",
+    "subject-attachment",
+    "subject-note-link",
     "exam",
     "deck",
     "card",
@@ -1193,6 +1205,32 @@ function parseSubject(raw: Record<string, unknown>): ExportSubject {
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
   return { id, profileId, name, color, semester, archived, createdAt, updatedAt };
+}
+
+/** `parseTaskAttachment`'s twin, and deliberately identical: migration 035's `subject_attachments` is migration 024's `task_attachments` with a subject on the other end. `sizeBytes` is `positiveInt` because both tables CHECK it. */
+function parseSubjectAttachment(raw: Record<string, unknown>): ExportSubjectAttachment {
+  const id = nonEmptyStr(raw.id, "id");
+  const subjectId = nonEmptyStr(raw.subjectId, "subjectId");
+  const fileName = nonEmptyStr(raw.fileName, "fileName");
+  const mime = nonEmptyStr(raw.mime, "mime");
+  const sizeBytes = positiveInt(raw.sizeBytes, "sizeBytes");
+  const sha256 = nonEmptyStr(raw.sha256, "sha256");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  return { id, subjectId, fileName, mime, sizeBytes, sha256, createdAt };
+}
+
+/**
+ * One subject↔note link (migration 035). `parseTaskDependency`'s shape plus the
+ * timestamp the row actually carries; there is no self-edge to refuse here,
+ * because the two ends are different KINDS of row — a subject can no more be its
+ * own note than a tag can be its own task. Both references are checked in the
+ * cross-reference pass below, exactly as a dependency's are.
+ */
+function parseSubjectNoteLink(raw: Record<string, unknown>): ExportSubjectNoteLink {
+  const subjectId = nonEmptyStr(raw.subjectId, "subjectId");
+  const noteId = nonEmptyStr(raw.noteId, "noteId");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  return { subjectId, noteId, createdAt };
 }
 
 function parseExam(raw: Record<string, unknown>): ExportExam {
@@ -1694,6 +1732,8 @@ interface Collections {
   renewals: Bucket<ExportRenewal>;
   people: Bucket<ExportPerson>;
   subjects: Bucket<ExportSubject>;
+  subjectAttachments: Bucket<ExportSubjectAttachment>;
+  subjectNoteLinks: Bucket<ExportSubjectNoteLink>;
   exams: Bucket<ExportExam>;
   decks: Bucket<ExportDeck>;
   cards: Bucket<ExportCard>;
@@ -1720,7 +1760,9 @@ function newCollections(): Collections {
     taskTags: newBucket(), taskTagLinks: newBucket(), taskAttachments: newBucket(),
     taskTemplates: newBucket(), taskDependencies: newBucket(),
     events: newBucket(), documents: newBucket(), renewals: newBucket(),
-    people: newBucket(), subjects: newBucket(), exams: newBucket(), decks: newBucket(), cards: newBucket(),
+    people: newBucket(), subjects: newBucket(),
+    subjectAttachments: newBucket(), subjectNoteLinks: newBucket(),
+    exams: newBucket(), decks: newBucket(), cards: newBucket(),
     reviewLog: newBucket(), plans: newBucket(), blocks: newBucket(), focusSessions: newBucket(),
     studySettings: newBucket(),
     notifications: newBucket(), noteFolders: newBucket(), noteTags: newBucket(), notes: newBucket(),
@@ -1816,6 +1858,26 @@ function dispatchRecord(
     case "subject": {
       const row = parseSubject(raw);
       pushRow(collections.subjects, row.id, row, type, path, line, ctx);
+      return;
+    }
+    case "subject-attachment": {
+      const row = parseSubjectAttachment(raw);
+      pushRow(collections.subjectAttachments, row.id, row, type, path, line, ctx);
+      return;
+    }
+    // Migration 035's PRIMARY KEY is the pair, so that composite is what
+    // `duplicate-id` keys on — `task-tag-link`'s rule, and `task-dependency`'s.
+    case "subject-note-link": {
+      const row = parseSubjectNoteLink(raw);
+      pushRow(
+        collections.subjectNoteLinks,
+        `subjectId=${row.subjectId},noteId=${row.noteId}`,
+        row,
+        type,
+        path,
+        line,
+        ctx,
+      );
       return;
     }
     case "exam": {
@@ -2447,6 +2509,42 @@ function referenceRules(collections: Collections): ReferenceRule[] {
       onDangling: "drop",
     }),
     referenceRule({
+      bucket: collections.subjectAttachments,
+      type: "subject-attachment",
+      field: "subjectId",
+      ref: (row) => row.subjectId,
+      resolver: () => {
+        const ids = subjectIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    // A link's two ends live in two different NDJSON files, so both are checked
+    // here rather than by the writer's ordering — the same treatment a card's
+    // `sourceNoteId` gets, one file over.
+    referenceRule({
+      bucket: collections.subjectNoteLinks,
+      type: "subject-note-link",
+      field: "subjectId",
+      ref: (row) => row.subjectId,
+      resolver: () => {
+        const ids = subjectIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    referenceRule({
+      bucket: collections.subjectNoteLinks,
+      type: "subject-note-link",
+      field: "noteId",
+      ref: (row) => row.noteId,
+      resolver: () => {
+        const ids = noteIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    referenceRule({
       bucket: collections.decks,
       type: "deck",
       field: "subjectId",
@@ -2979,16 +3077,18 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
   }
 
   // --- Blobs (rule 8): a missing blob is a warning — the row still restores.
-  // Both attachment tables are checked, because both name the same `blobs/`
-  // namespace: a task's file is as lost as a note's when the archive omits it,
-  // and a warning raised for only one of them would under-report the damage the
-  // restore preview shows the user. A dashboard background is a blob on the
-  // same terms (ADR-041, checked just below): its row restores either way, and
-  // the dashboard simply comes back without a picture rather than the whole
-  // archive being refused over one lost image.
+  // ALL THREE attachment tables are checked, because all three name the same
+  // `blobs/` namespace: a task's file, a subject's material and a note's
+  // attachment are equally lost when the archive omits them, and a warning
+  // raised for only some of them would under-report the damage the restore
+  // preview shows the user. A dashboard background is a blob on the same terms
+  // (ADR-041, checked just below): its row restores either way, and the
+  // dashboard simply comes back without a picture rather than the whole archive
+  // being refused over one lost image.
   for (const entry of [
     ...collections.noteAttachments.entries,
     ...collections.taskAttachments.entries,
+    ...collections.subjectAttachments.entries,
   ]) {
     const attachment = entry.row;
     if (!input.blobNames.has(attachment.sha256)) {
@@ -3047,6 +3147,8 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         renewals: rowsOf(collections.renewals),
         people: rowsOf(collections.people),
         subjects: rowsOf(collections.subjects),
+        subjectAttachments: rowsOf(collections.subjectAttachments),
+        subjectNoteLinks: rowsOf(collections.subjectNoteLinks),
         exams: rowsOf(collections.exams),
         decks: rowsOf(collections.decks),
         cards: rowsOf(collections.cards),

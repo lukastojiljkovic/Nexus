@@ -46,7 +46,10 @@ export {
   SchemaVersionError,
   SearchValidationError,
   StudySettingsValidationError,
+  SubjectAttachmentNotFoundError,
+  SubjectAttachmentValidationError,
   SubjectNotFoundError,
+  SubjectNoteLinkValidationError,
   SubjectValidationError,
   TaskAttachmentNotFoundError,
   TaskAttachmentValidationError,
@@ -174,6 +177,19 @@ export type {
   SubjectColor,
   UpdateSubjectFields,
 } from "./study/subjectStore.js";
+
+export {
+  SubjectAttachmentStore,
+  MAX_SUBJECT_ATTACHMENT_BYTES,
+} from "./study/subjectAttachmentStore.js";
+export type {
+  AddSubjectAttachmentInput,
+  SubjectAttachment,
+  SubjectAttachmentCount,
+} from "./study/subjectAttachmentStore.js";
+
+export { SubjectNoteLinkStore } from "./study/subjectNoteLinkStore.js";
+export type { LinkedNote, SubjectNoteLink } from "./study/subjectNoteLinkStore.js";
 
 export { ExamStore, EXAM_TYPES } from "./study/examStore.js";
 export type {

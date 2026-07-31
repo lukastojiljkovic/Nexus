@@ -159,6 +159,34 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.subjectsDelete, { profileId, id }),
   restoreSubject: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.subjectsRestore, { profileId, id }),
+  listSubjectAttachments: (profileId, subjectId) =>
+    ipcRenderer.invoke(IpcChannel.subjectAttachmentsList, { profileId, id: subjectId }),
+  attachSubjectFiles: (profileId, subjectId) =>
+    ipcRenderer.invoke(IpcChannel.subjectAttachmentsAdd, { profileId, id: subjectId }),
+  removeSubjectAttachment: (profileId, subjectId, attachmentId) =>
+    ipcRenderer.invoke(IpcChannel.subjectAttachmentsRemove, {
+      profileId,
+      id: subjectId,
+      attachmentId,
+    }),
+  openSubjectAttachment: (profileId, subjectId, attachmentId) =>
+    ipcRenderer.invoke(IpcChannel.subjectAttachmentsOpen, {
+      profileId,
+      id: subjectId,
+      attachmentId,
+    }),
+  saveSubjectAttachmentAs: (profileId, subjectId, attachmentId) =>
+    ipcRenderer.invoke(IpcChannel.subjectAttachmentsSaveAs, {
+      profileId,
+      id: subjectId,
+      attachmentId,
+    }),
+  listSubjectLinkedNotes: (profileId, subjectId) =>
+    ipcRenderer.invoke(IpcChannel.subjectNotesLinked, { profileId, id: subjectId }),
+  linkSubjectNote: (profileId, subjectId, noteId) =>
+    ipcRenderer.invoke(IpcChannel.subjectNotesLink, { profileId, id: subjectId, noteId }),
+  unlinkSubjectNote: (profileId, subjectId, noteId) =>
+    ipcRenderer.invoke(IpcChannel.subjectNotesUnlink, { profileId, id: subjectId, noteId }),
   listExams: (profileId) => ipcRenderer.invoke(IpcChannel.examsList, { profileId }),
   createExam: (profileId, exam) =>
     ipcRenderer.invoke(IpcChannel.examsCreate, { profileId, exam }),

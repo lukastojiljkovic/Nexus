@@ -200,6 +200,9 @@ const ID_MINTERS: Record<keyof ProfileData, (data: ProfileData, ctx: PlanContext
   renewals: (data, ctx) => mintAll(data.renewals, ctx),
   people: (data, ctx) => mintAll(data.people, ctx),
   subjects: (data, ctx) => mintAll(data.subjects, ctx),
+  subjectAttachments: (data, ctx) => mintAll(data.subjectAttachments, ctx),
+  // A link's identity is its (subject, note) pair — both ids already minted.
+  subjectNoteLinks: NO_IDS,
   exams: (data, ctx) => mintAll(data.exams, ctx),
   decks: (data, ctx) => mintAll(data.decks, ctx),
   cards: (data, ctx) => mintAll(data.cards, ctx),
@@ -445,6 +448,18 @@ export function planForeignImport(
       id: mapped(row.id, ctx),
       profileId: target.profileId,
     })),
+    subjectAttachments: source.subjectAttachments.map((row) => ({
+      ...row,
+      id: mapped(row.id, ctx),
+      subjectId: mapped(row.subjectId, ctx),
+      // `sha256` is content addressing, exactly as on the other two attachment
+      // tables: the same bytes are the same blob in any profile.
+    })),
+    subjectNoteLinks: source.subjectNoteLinks.map((row) => ({
+      ...row,
+      subjectId: mapped(row.subjectId, ctx),
+      noteId: mapped(row.noteId, ctx),
+    })),
     exams: source.exams.map((row) => ({
       ...row,
       id: mapped(row.id, ctx),
@@ -565,6 +580,7 @@ export function planForeignImport(
     blobNames: new Set([
       ...data.noteAttachments.map((row) => row.sha256),
       ...data.taskAttachments.map((row) => row.sha256),
+      ...data.subjectAttachments.map((row) => row.sha256),
     ]),
     report: buildReport(source, parsed.dropped, data, ctx),
   };

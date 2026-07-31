@@ -38,7 +38,9 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
  *
- * `1.13.0` adds the `study-settings` record
+ * `1.14.0` adds the `subject-attachment` and `subject-note-link` record types —
+ * a subject's materials and the notes filed under it (STUDY-001, migration 035)
+ * — after `1.13.0` added the `study-settings` record
  * type — the profile's FSRS target retention and its two daily caps (STUDY-007,
  * migration 034) — after `1.12.0` added a card's `problemSteps` —
  * the worked solution a problem card's `back` is derived from (ADR-046) —
@@ -55,22 +57,23 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * `reminderOffsets` (ADR-028) and `1.1.0` the `person` record type (CAL-007 /
  * ADR-026). Additive, so a MINOR bump by the same honesty each of those made
  * one: an archive this build writes is refused by an older reader, which would
- * otherwise restore a profile onto the library-default retention and the
- * built-in daily caps — silently undoing a decision about how hard its owner
- * had chosen to study; the same honesty `1.12.0` owed every problem card's
- * steps, `1.11.0` owed the arranged dashboard and `1.10.0` owed every cloze
- * template. Kept in step
+ * otherwise restore a profile whose course materials are simply missing — every
+ * scanned skripta left out of the zip with nothing in the manifest to say it
+ * existed, and every note the user had filed under a subject unfiled; the same
+ * honesty `1.13.0` owed the profile's study preferences, `1.12.0` owed every
+ * problem card's steps, `1.11.0` owed the arranged dashboard and `1.10.0` owed
+ * every cloze template. Kept in step
  * with `INTERCHANGE_SCHEMA_VERSION` (`importArchive.ts`) — two constants
  * rather than one import, since the reader already imports from this module
  * and the cycle would be worse than the duplication; `importArchive.test.ts`
  * pins them equal.
  *
  * SUPERVISOR NOTE: `1.11.0` belongs to the sibling lane (dashboard layout) and
- * is not in this worktree; the `1.12.0` lane wrote its version directly and
- * this one writes `1.13.0` on top, leaving the gap for the supervisor to
- * reconcile at merge.
+ * is not in this worktree; the `1.12.0` lane wrote its version directly, the
+ * `1.13.0` lane wrote its own on top, and this one writes `1.14.0` — leaving the
+ * gap for the supervisor to reconcile at merge.
  */
-const SCHEMA_VERSION = "1.13.0";
+const SCHEMA_VERSION = "1.14.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -333,6 +336,39 @@ export interface ExportSubject {
   archived: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * A file hanging off a subject (STUDY-001, migration 035): the index row only,
+ * exactly as `ExportTaskAttachment` and `ExportNoteAttachment` are, with the
+ * bytes declared as a binary entry and content-addressed by `sha256`. All three
+ * tables share ONE `blobs/<sha256>` namespace in the archive, because they share
+ * one blob store on disk — a file attached to a subject, a task AND a note
+ * travels once. Rides in `data/study.ndjson` after the subjects it hangs off.
+ */
+export interface ExportSubjectAttachment {
+  id: string;
+  subjectId: string;
+  fileName: string;
+  mime: string;
+  sizeBytes: number;
+  sha256: string;
+  createdAt: string;
+}
+
+/**
+ * One subject↔note link (STUDY-001, migration 035): the pair, plus when it was
+ * made — the order the subject panel lists its notes in, and the only field a
+ * pair-keyed row has of its own. `ExportTaskDependency`'s shape with a
+ * timestamp, and pair-identified for the same reason (migration 035's PRIMARY
+ * KEY). Rides in `data/study.ndjson` after the subjects, and needs the NOTES of
+ * `data/notes.ndjson` too — which the reader resolves across files, since
+ * nothing here constrains the writing order of the other file.
+ */
+export interface ExportSubjectNoteLink {
+  subjectId: string;
+  noteId: string;
+  createdAt: string;
 }
 
 export interface ExportExam {
@@ -674,6 +710,15 @@ export interface ProfileData {
   renewals: readonly ExportRenewal[];
   people: readonly ExportPerson[];
   subjects: readonly ExportSubject[];
+  // Required, for `taskAttachments`' sharpest-of-reasons: a material row is the
+  // ONLY thing that names its blob, so an archive that forgot them would not
+  // merely lose the index — it would leave the user's course files out of the
+  // zip entirely, with nothing in the manifest to say they ever existed.
+  subjectAttachments: readonly ExportSubjectAttachment[];
+  // Required like every field around it: a link is which note belongs to which
+  // course, and an archive that dropped it would restore a subject panel whose
+  // notes are simply gone with nothing on screen to say so.
+  subjectNoteLinks: readonly ExportSubjectNoteLink[];
   exams: readonly ExportExam[];
   decks: readonly ExportDeck[];
   cards: readonly ExportCard[];
@@ -810,6 +855,8 @@ export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, 
     // telling the user something untrue about what is about to change.
     study:
       data.subjects.length +
+      data.subjectAttachments.length +
+      data.subjectNoteLinks.length +
       data.exams.length +
       data.decks.length +
       data.cards.length +
@@ -872,6 +919,12 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   const studyNdjson = toNdjson([
     ...input.data.studySettings.map((row) => ({ type: "study-settings", ...row })),
     ...input.data.subjects.map((row) => ({ type: "subject", ...row })),
+    // Straight after the subjects they hang off, exactly as `task-attachment`
+    // follows its tasks. The links' other end is a NOTE, which lives in a
+    // different file entirely — so their position here is readability, and the
+    // reader resolves that reference across files rather than in order.
+    ...input.data.subjectAttachments.map((row) => ({ type: "subject-attachment", ...row })),
+    ...input.data.subjectNoteLinks.map((row) => ({ type: "subject-note-link", ...row })),
     ...input.data.exams.map((row) => ({ type: "exam", ...row })),
     ...input.data.decks.map((row) => ({ type: "deck", ...row })),
     ...input.data.cards.map((row) => ({ type: "card", ...row })),
@@ -956,7 +1009,11 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     blobSizeBySha.set(sha256, sizeBytes);
     binaries.push({ kind: "attachment", path: `blobs/${sha256}`, sha256, sizeBytes });
   };
-  for (const attachment of [...noteAttachments, ...input.data.taskAttachments]) {
+  for (const attachment of [
+    ...noteAttachments,
+    ...input.data.taskAttachments,
+    ...input.data.subjectAttachments,
+  ]) {
     declareBlob(attachment.sha256, attachment.sizeBytes);
   }
   for (const dashboard of input.data.dashboardSettings) {

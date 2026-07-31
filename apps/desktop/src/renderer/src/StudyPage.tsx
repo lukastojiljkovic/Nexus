@@ -23,11 +23,13 @@ import type {
   ExamFieldChanges,
   ExamType,
   FocusSession,
+  LinkedNote,
   NewCardFields,
   NewDeckFields,
   NewExamFields,
   NewPlanFields,
   NewSubjectFields,
+  NoteMeta,
   PlanFieldChanges,
   PreviewIntervals,
   ReviewQueueScope,
@@ -38,6 +40,7 @@ import type {
   StudyPlan,
   StudyStats,
   Subject,
+  SubjectAttachment,
   SubjectColor,
   SubjectFieldChanges,
 } from "../../shared/ipc.js";
@@ -52,6 +55,7 @@ import {
 } from "./examDates.js";
 import { focusSessionMinutes, formatDurationMinutes, formatElapsed, formatFocusSessionWhen } from "./focusFormat.js";
 import { MathText } from "./MathText.js";
+import { NotePopover } from "./notePopover.js";
 import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
 import { intervalLabel, isDueWithinSession } from "./reviewIntervals.js";
 import { countUnit, dayUnit, strings } from "./strings.js";
@@ -71,6 +75,32 @@ const SUBJECT_COLORS: readonly SubjectColor[] = [
   "graphite",
 ];
 const EXAM_TYPES: readonly ExamType[] = ["pismeni", "usmeni", "kolokvijum"];
+
+// --- Materijali (migration 035 / STUDY-001) ---------------------------------
+
+/** Locale-aware one-decimal formatter for the KB/MB branches of `formatBytes` — the NOTE/TASK panels' own. */
+const BYTES_FORMATTER = new Intl.NumberFormat("sr-Latn", { maximumFractionDigits: 1 });
+
+/**
+ * Human-readable file size for the Materijali rows: whole bytes under 1 KB,
+ * otherwise KB/MB with at most one decimal. Copied from `TasksPage.tsx` (which
+ * copied it from `NoteEditor.tsx`) rather than imported, on the reason that file
+ * already states: the panels live in different pages with no shared module
+ * between them, and a formatting helper is not worth a fourth one.
+ */
+function formatBytes(sizeBytes: number): string {
+  if (sizeBytes < 1024) return `${sizeBytes} B`;
+  const kb = sizeBytes / 1024;
+  if (kb < 1024) return `${BYTES_FORMATTER.format(kb)} KB`;
+  return `${BYTES_FORMATTER.format(kb / 1024)} MB`;
+}
+
+/** sr-Latn collation for the link picker's note titles — plain "sr" mis-tailors Latin š/č/ć. */
+const NOTE_TITLE_COLLATOR = new Intl.Collator(["sr-Latn", "sr"]);
+
+/** Shared empty lists, so a subject with neither materials nor linked notes allocates nothing per render. */
+const NO_MATERIALS: readonly SubjectAttachment[] = [];
+const NO_LINKED_NOTES: readonly LinkedNote[] = [];
 
 /**
  * Which FORM the card editor is showing — deliberately NOT `CardKind` (ADR-046).
@@ -436,6 +466,25 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   const [examScope, setExamScope] = useState("");
   const [pendingUndoExamId, setPendingUndoExamId] = useState<string | null>(null);
 
+  // Materijali + Povezane beleške (STUDY-001, migration 035). Both are kept
+  // loaded for every ACTIVE subject, exactly as `blocksByPlan` is for every
+  // plan: the hub draws each subject's panel inline, so a lazy per-subject fetch
+  // would only mean the two sections flickering in under a card already on
+  // screen. `profileNotes` backs the link picker — the profile's notes, read
+  // once, re-read after a link changes nothing about them (a link is not a
+  // note). One shared error line per section, cleared on the next attempt; the
+  // study page has no toast slot for a panel.
+  const [materialsBySubject, setMaterialsBySubject] = useState<
+    Record<string, SubjectAttachment[]>
+  >({});
+  const [linkedNotesBySubject, setLinkedNotesBySubject] = useState<Record<string, LinkedNote[]>>(
+    {},
+  );
+  const [profileNotes, setProfileNotes] = useState<NoteMeta[]>([]);
+  const [materialError, setMaterialError] = useState<"generic" | "tooLarge" | null>(null);
+  const [linkedNoteError, setLinkedNoteError] = useState(false);
+  const [attaching, setAttaching] = useState(false);
+
   // The deck form mirrors the exam form's idiom exactly (inline reveal, one
   // subject at a time).
   const [deckFormSubjectId, setDeckFormSubjectId] = useState<string | null>(null);
@@ -557,11 +606,38 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
           window.nexus.studyStats(profileId, shiftDayKey(today, -29), today),
           window.nexus.listFocusRange(profileId, shiftDayKey(today, -6), today),
         ]);
-        const blockLists = await Promise.all(
-          nextPlans.map((plan) => window.nexus.listBlocksByPlan(profileId, plan.id)),
-        );
+        // Both fan-outs wait on the list they key off — plans for their blocks,
+        // active subjects for their materials and linked notes (STUDY-001).
+        // Archived subjects are skipped: the hub draws them as flat rows with no
+        // panel, so their two sections have nowhere to appear.
+        const openSubjects = nextSubjects.filter((subject) => !subject.archived);
+        const [blockLists, materialLists, linkedLists, nextNotes] = await Promise.all([
+          Promise.all(nextPlans.map((plan) => window.nexus.listBlocksByPlan(profileId, plan.id))),
+          Promise.all(
+            openSubjects.map((subject) =>
+              window.nexus.listSubjectAttachments(profileId, subject.id),
+            ),
+          ),
+          Promise.all(
+            openSubjects.map((subject) =>
+              window.nexus.listSubjectLinkedNotes(profileId, subject.id),
+            ),
+          ),
+          window.nexus.listNotes(profileId),
+        ]);
         if (!active) return;
         setSubjects(nextSubjects);
+        setMaterialsBySubject(
+          Object.fromEntries(
+            openSubjects.map((subject, index) => [subject.id, materialLists[index] ?? []]),
+          ),
+        );
+        setLinkedNotesBySubject(
+          Object.fromEntries(
+            openSubjects.map((subject, index) => [subject.id, linkedLists[index] ?? []]),
+          ),
+        );
+        setProfileNotes(nextNotes);
         setExams(nextExams);
         setDecks(nextDecks);
         setDeckCounts(nextCounts);
@@ -730,8 +806,35 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     };
   }, [profileId, activeDeckId]);
 
+  /**
+   * The subject list plus the two panels that hang off it. Both are re-read
+   * because the only caller is the delete-undo: a restored subject comes back
+   * still carrying its materials and its note links (migration 035 keeps both
+   * through a soft delete), and a list refresh alone would draw it with two
+   * empty sections.
+   */
   async function reloadSubjects(): Promise<void> {
-    setSubjects(await window.nexus.listSubjects(profileId));
+    const nextSubjects = await window.nexus.listSubjects(profileId);
+    setSubjects(nextSubjects);
+    const openSubjects = nextSubjects.filter((subject) => !subject.archived);
+    const [materialLists, linkedLists] = await Promise.all([
+      Promise.all(
+        openSubjects.map((subject) => window.nexus.listSubjectAttachments(profileId, subject.id)),
+      ),
+      Promise.all(
+        openSubjects.map((subject) => window.nexus.listSubjectLinkedNotes(profileId, subject.id)),
+      ),
+    ]);
+    setMaterialsBySubject(
+      Object.fromEntries(
+        openSubjects.map((subject, index) => [subject.id, materialLists[index] ?? []]),
+      ),
+    );
+    setLinkedNotesBySubject(
+      Object.fromEntries(
+        openSubjects.map((subject, index) => [subject.id, linkedLists[index] ?? []]),
+      ),
+    );
   }
 
   async function reloadExams(): Promise<void> {
@@ -801,6 +904,13 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
         archived: !subject.archived,
       });
       setSubjects((prev) => prev && prev.map((s) => (s.id === updated.id ? updated : s)));
+      // Coming BACK from the archive needs its two panels, which the initial
+      // load deliberately skipped (an archived subject draws none) — without
+      // this the restored card would show empty sections for a subject that
+      // actually holds materials and linked notes.
+      if (!updated.archived) {
+        await Promise.all([reloadMaterials(updated.id), reloadLinkedNotes(updated.id)]);
+      }
     } catch (error) {
       console.error("Nexus: failed to (un)archive subject:", error);
     }
@@ -833,6 +943,96 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
       await reloadSubjects();
     } catch (error) {
       console.error("Nexus: failed to restore subject:", error);
+    }
+  }
+
+  // --- Materijali + Povezane beleške (STUDY-001, migration 035) -------------
+  //
+  // The TASK page's „Prilozi" recipe, one module over: every write is
+  // await-then-refetch (the house style) and MAIN owns the file dialog — the
+  // renderer never sees a path or a byte. Only the touched subject is re-read,
+  // since nothing a write here does can change another subject's rows.
+
+  async function reloadMaterials(subjectId: string): Promise<void> {
+    const rows = await window.nexus.listSubjectAttachments(profileId, subjectId);
+    setMaterialsBySubject((prev) => ({ ...prev, [subjectId]: rows }));
+  }
+
+  async function reloadLinkedNotes(subjectId: string): Promise<void> {
+    const rows = await window.nexus.listSubjectLinkedNotes(profileId, subjectId);
+    setLinkedNotesBySubject((prev) => ({ ...prev, [subjectId]: rows }));
+  }
+
+  /**
+   * Opens the native picker and attaches whatever comes back. A canceled dialog
+   * changes nothing and says nothing; files refused for size are reported, since
+   * a picker that silently dropped one would look like a bug.
+   */
+  async function attachMaterials(subjectId: string): Promise<void> {
+    if (attaching) return;
+    setAttaching(true);
+    setMaterialError(null);
+    try {
+      const result = await window.nexus.attachSubjectFiles(profileId, subjectId);
+      if (result.canceled) return;
+      if (result.skippedTooLarge > 0) setMaterialError("tooLarge");
+      await reloadMaterials(subjectId);
+    } catch (error) {
+      setMaterialError("generic");
+      console.error("Nexus: failed to attach subject materials:", error);
+    } finally {
+      setAttaching(false);
+    }
+  }
+
+  async function openMaterial(subjectId: string, attachmentId: string): Promise<void> {
+    try {
+      await window.nexus.openSubjectAttachment(profileId, subjectId, attachmentId);
+    } catch (error) {
+      setMaterialError("generic");
+      console.error("Nexus: failed to open subject material:", error);
+    }
+  }
+
+  async function saveMaterialAs(subjectId: string, attachmentId: string): Promise<void> {
+    try {
+      await window.nexus.saveSubjectAttachmentAs(profileId, subjectId, attachmentId);
+    } catch (error) {
+      setMaterialError("generic");
+      console.error("Nexus: failed to save subject material:", error);
+    }
+  }
+
+  async function removeMaterial(subjectId: string, attachmentId: string): Promise<void> {
+    setMaterialError(null);
+    try {
+      await window.nexus.removeSubjectAttachment(profileId, subjectId, attachmentId);
+      await reloadMaterials(subjectId);
+    } catch (error) {
+      setMaterialError("generic");
+      console.error("Nexus: failed to remove subject material:", error);
+    }
+  }
+
+  async function linkNote(subjectId: string, noteId: string): Promise<void> {
+    setLinkedNoteError(false);
+    try {
+      await window.nexus.linkSubjectNote(profileId, subjectId, noteId);
+      await reloadLinkedNotes(subjectId);
+    } catch (error) {
+      setLinkedNoteError(true);
+      console.error("Nexus: failed to link note to subject:", error);
+    }
+  }
+
+  async function unlinkNote(subjectId: string, noteId: string): Promise<void> {
+    setLinkedNoteError(false);
+    try {
+      await window.nexus.unlinkSubjectNote(profileId, subjectId, noteId);
+      await reloadLinkedNotes(subjectId);
+    } catch (error) {
+      setLinkedNoteError(true);
+      console.error("Nexus: failed to unlink note from subject:", error);
     }
   }
 
@@ -1869,6 +2069,193 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     );
   }
 
+  /**
+   * The „Materijali" section of one subject's panel: the „Dodaj materijal"
+   * button, then one row per file — the name, a human-readable size, and the
+   * open/save-as/remove menu. The TASK form's „Prilozi" recipe verbatim, with
+   * one difference the hub imposes: it carries an empty state, because a subject
+   * panel is always on screen and a section that vanished when it held nothing
+   * would read as a missing feature rather than an empty one.
+   *
+   * No thumbnail: a subject's materials are skripte and slides rather than
+   * inline images, and a panel that sometimes grew a picture row would make the
+   * subject cards jump about at different heights for no information gained.
+   */
+  function renderMaterials(subjectId: string) {
+    const copy = strings.study.materials;
+    const rows = materialsBySubject[subjectId] ?? NO_MATERIALS;
+    return (
+      <div className="study__materials">
+        <div className="study__materials-header">
+          <h3 className="study__materials-title">
+            {copy.title}
+            {rows.length > 0 ? ` (${rows.length})` : ""}
+          </h3>
+          <Button
+            size="sm"
+            className="study__add-material"
+            disabled={attaching}
+            onClick={() => void attachMaterials(subjectId)}
+          >
+            {copy.add}
+          </Button>
+        </div>
+        {materialError !== null && (
+          <p className="study__material-error" role="status">
+            {materialError === "tooLarge" ? copy.tooLarge : copy.actionError}
+          </p>
+        )}
+        {rows.length === 0 ? (
+          <p className="study__materials-empty">{copy.empty}</p>
+        ) : (
+          rows.map((material) => (
+            <div key={material.id} className="study__material">
+              <span className="study__material-name">{material.fileName}</span>
+              <span className="study__material-size">{formatBytes(material.sizeBytes)}</span>
+              <NotePopover label={copy.menuLabel} triggerClassName="study__material-menu">
+                {(close) => (
+                  <>
+                    <button
+                      type="button"
+                      className="note__menu-item"
+                      role="menuitem"
+                      onClick={() => {
+                        void openMaterial(subjectId, material.id);
+                        close();
+                      }}
+                    >
+                      {copy.open}
+                    </button>
+                    <button
+                      type="button"
+                      className="note__menu-item"
+                      role="menuitem"
+                      onClick={() => {
+                        void saveMaterialAs(subjectId, material.id);
+                        close();
+                      }}
+                    >
+                      {copy.saveAs}
+                    </button>
+                    <div className="note__menu-sep" role="separator" />
+                    <button
+                      type="button"
+                      className="note__menu-item note__menu-item--danger"
+                      role="menuitem"
+                      onClick={() => {
+                        void removeMaterial(subjectId, material.id);
+                        close();
+                      }}
+                    >
+                      {copy.remove}
+                    </button>
+                  </>
+                )}
+              </NotePopover>
+            </div>
+          ))
+        )}
+      </div>
+    );
+  }
+
+  /**
+   * The „Povezane beleške" section: one chip per linked note, each opening it
+   * through the SAME `onOpenNote` route a note-generated card's source control
+   * uses (ADR-017 / STUDY-008) — one way into Beleške from STUDY, not two. A
+   * page mounted without `onOpenNote` draws plain muted titles rather than
+   * buttons that go nowhere, exactly as `cardSourceControl` does.
+   *
+   * The add-picker is a `NotePopover` rather than a dialog: the choice is one
+   * item from a list with nothing to type and nothing to confirm, and a modal
+   * would take the whole screen away from a panel the user is reading. The
+   * already-linked notes are filtered out — offering one that changes nothing
+   * (the store's insert is an idempotent no-op) would be a dead menu item.
+   */
+  function renderLinkedNotes(subjectId: string) {
+    const copy = strings.study.linkedNotes;
+    const rows = linkedNotesBySubject[subjectId] ?? NO_LINKED_NOTES;
+    const linkedIds = new Set(rows.map((row) => row.id));
+    const candidates = profileNotes
+      .filter((note) => !linkedIds.has(note.id))
+      .sort((a, b) => NOTE_TITLE_COLLATOR.compare(a.title, b.title));
+
+    return (
+      <div className="study__linked-notes">
+        <div className="study__linked-header">
+          <h3 className="study__linked-title">
+            {copy.title}
+            {rows.length > 0 ? ` (${rows.length})` : ""}
+          </h3>
+          <NotePopover
+            label={copy.pickerLabel}
+            triggerClassName="study__link-note"
+            triggerContent={copy.add}
+          >
+            {(close) =>
+              candidates.length === 0 ? (
+                <p className="study__linked-picker-empty">{copy.pickerEmpty}</p>
+              ) : (
+                candidates.map((note) => (
+                  <button
+                    key={note.id}
+                    type="button"
+                    className="note__menu-item"
+                    role="menuitem"
+                    onClick={() => {
+                      void linkNote(subjectId, note.id);
+                      close();
+                    }}
+                  >
+                    {note.title || strings.notes.untitled}
+                  </button>
+                ))
+              )
+            }
+          </NotePopover>
+        </div>
+        {linkedNoteError && (
+          <p className="study__linked-error" role="status">
+            {copy.actionError}
+          </p>
+        )}
+        {rows.length === 0 ? (
+          <p className="study__linked-empty">{copy.empty}</p>
+        ) : (
+          <div className="study__linked-list">
+            {rows.map((note) => (
+              <span key={note.id} className="study__linked-chip">
+                {onOpenNote ? (
+                  <button
+                    type="button"
+                    className="study__linked-open"
+                    title={copy.openLabel}
+                    onClick={() => onOpenNote(note.id)}
+                  >
+                    {note.title || strings.notes.untitled}
+                  </button>
+                ) : (
+                  <span className="study__linked-open study__linked-open--inert">
+                    {note.title || strings.notes.untitled}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className="study__linked-unlink"
+                  aria-label={copy.unlink}
+                  title={copy.unlink}
+                  onClick={() => void unlinkNote(subjectId, note.id)}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // --- Hub route (subjects, exams, decks) -------------------------------------
   return (
     <div className="study">
@@ -2158,6 +2545,9 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                       {strings.study.addExam}
                     </Button>
                   )}
+
+                  {renderMaterials(subject.id)}
+                  {renderLinkedNotes(subject.id)}
 
                   <div className="study__decks">
                     <div className="study__decks-header">

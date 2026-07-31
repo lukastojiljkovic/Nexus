@@ -96,6 +96,14 @@ export const IpcChannel = {
   subjectsUpdate: "subjects:update",
   subjectsDelete: "subjects:delete",
   subjectsRestore: "subjects:restore",
+  subjectAttachmentsList: "subject-attachments:list",
+  subjectAttachmentsAdd: "subject-attachments:add",
+  subjectAttachmentsRemove: "subject-attachments:remove",
+  subjectAttachmentsOpen: "subject-attachments:open",
+  subjectAttachmentsSaveAs: "subject-attachments:save-as",
+  subjectNotesLink: "subjects:notes-link",
+  subjectNotesUnlink: "subjects:notes-unlink",
+  subjectNotesLinked: "subjects:notes-linked",
   examsList: "exams:list",
   examsCreate: "exams:create",
   examsUpdate: "exams:update",
@@ -1349,6 +1357,96 @@ export interface SubjectsDeleteRequest {
 export interface SubjectsRestoreRequest {
   profileId: string;
   id: string;
+}
+
+/**
+ * A subject material's index row as seen by the renderer (mirrors the
+ * `subject_attachments` table via `SubjectAttachmentStore`'s mapping, migration
+ * 035). `TaskAttachment` above is the same shape on a different entity,
+ * deliberately, and the same rule holds here: the material's BYTES never cross
+ * this boundary at all — main opens the native picker and reads the file itself,
+ * so every reference is by `sha256` alone (e.g. an `nx-blob://<sha256>` URL for
+ * a thumbnail). Redeclared here so the renderer never imports DB code.
+ */
+export interface SubjectAttachment {
+  id: string;
+  subjectId: string;
+  fileName: string;
+  mime: string;
+  sizeBytes: number;
+  sha256: string;
+  createdAt: string;
+}
+
+export interface SubjectAttachmentsListRequest {
+  profileId: string;
+  id: string;
+}
+
+/**
+ * Attaches one or more files to a subject. Carries NO file data and no path:
+ * main opens the native "pick files" dialog itself, reads what the user chose,
+ * sniffs each file's real MIME type from its bytes (SEC-FILE-02) and stamps
+ * `createdAt` from its own clock — `task-attachments:add`'s arrangement,
+ * verbatim, and for its reason (the renderer never names a filesystem path).
+ */
+export interface SubjectAttachmentsAddRequest {
+  profileId: string;
+  id: string;
+}
+
+/** The outcome of that dialog — `TaskAttachmentsAddResult`'s shape, with the same meaning for `skippedTooLarge`. */
+export type SubjectAttachmentsAddResult =
+  | { canceled: true }
+  | { canceled: false; added: number; skippedTooLarge: number };
+
+export interface SubjectAttachmentsRemoveRequest {
+  profileId: string;
+  id: string;
+  attachmentId: string;
+}
+
+export interface SubjectAttachmentsOpenRequest {
+  profileId: string;
+  id: string;
+  attachmentId: string;
+}
+
+export interface SubjectAttachmentsSaveAsRequest {
+  profileId: string;
+  id: string;
+  attachmentId: string;
+}
+
+/**
+ * A note filed under a subject, as the subject panel draws it (migration 035):
+ * enough to render one row and open it through the existing note reveal, and
+ * deliberately nothing more — the note's body never comes through here.
+ */
+export interface LinkedNote {
+  id: string;
+  title: string;
+  updatedAt: string;
+  /** When the link was made — the order the section lists them in. */
+  linkedAt: string;
+}
+
+export interface SubjectNotesLinkedRequest {
+  profileId: string;
+  id: string;
+}
+
+/** Files a live note under a live subject. `now` is stamped by main, never sent. */
+export interface SubjectNotesLinkRequest {
+  profileId: string;
+  id: string;
+  noteId: string;
+}
+
+export interface SubjectNotesUnlinkRequest {
+  profileId: string;
+  id: string;
+  noteId: string;
 }
 
 /** Closed exam-type domain (mirrors `@nexus/db`; redeclared so the renderer never imports DB code). */
@@ -3044,6 +3142,8 @@ export type ImportRecordType =
   | "renewal"
   | "person"
   | "subject"
+  | "subject-attachment"
+  | "subject-note-link"
   | "exam"
   | "deck"
   | "card"
@@ -3414,6 +3514,26 @@ export interface NexusApi {
   updateSubject(profileId: string, id: string, changes: SubjectFieldChanges): Promise<Subject>;
   deleteSubject(profileId: string, id: string): Promise<void>;
   restoreSubject(profileId: string, id: string): Promise<void>;
+  /** One active subject's materials, oldest first (STUDY-001 / migration 035). */
+  listSubjectAttachments(profileId: string, subjectId: string): Promise<SubjectAttachment[]>;
+  /** Opens the native picker in MAIN and attaches whatever comes back — no bytes and no path cross the bridge. */
+  attachSubjectFiles(profileId: string, subjectId: string): Promise<SubjectAttachmentsAddResult>;
+  removeSubjectAttachment(
+    profileId: string,
+    subjectId: string,
+    attachmentId: string,
+  ): Promise<void>;
+  /** Hands the decrypted file to the OS through a temp copy — `openTaskAttachment`'s route, one module over. */
+  openSubjectAttachment(profileId: string, subjectId: string, attachmentId: string): Promise<void>;
+  saveSubjectAttachmentAs(
+    profileId: string,
+    subjectId: string,
+    attachmentId: string,
+  ): Promise<SaveAttachmentResult>;
+  /** The live notes filed under one live subject (STUDY-001 / migration 035). */
+  listSubjectLinkedNotes(profileId: string, subjectId: string): Promise<LinkedNote[]>;
+  linkSubjectNote(profileId: string, subjectId: string, noteId: string): Promise<void>;
+  unlinkSubjectNote(profileId: string, subjectId: string, noteId: string): Promise<void>;
   listExams(profileId: string): Promise<Exam[]>;
   createExam(profileId: string, exam: NewExamFields): Promise<Exam>;
   updateExam(profileId: string, id: string, changes: ExamFieldChanges): Promise<Exam>;

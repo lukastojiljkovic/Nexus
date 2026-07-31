@@ -64,6 +64,8 @@ function emptyExportInput(): ExportArchiveInput {
       renewals: [],
       people: [],
       subjects: [],
+      subjectAttachments: [],
+      subjectNoteLinks: [],
       exams: [],
       decks: [],
       cards: [],
@@ -225,6 +227,19 @@ function richProfileData(): ProfileData {
         id: "subj-1", profileId: "profile1", name: "Analiza", color: "jade", semester: null,
         archived: false, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z",
       },
+    ],
+    // One material and one linked note (STUDY-001): the material's bytes join
+    // the same `blobs/` namespace the two attachment tables above already share,
+    // and the link's other end lives in `data/notes.ndjson` — a reference the
+    // reader has to resolve ACROSS files.
+    subjectAttachments: [
+      {
+        id: "satt-1", subjectId: "subj-1", fileName: "skripta.pdf", mime: "application/pdf",
+        sizeBytes: 40, sha256: "d".repeat(64), createdAt: "2026-07-01T00:00:00.000Z",
+      },
+    ],
+    subjectNoteLinks: [
+      { subjectId: "subj-1", noteId: "note-1", createdAt: "2026-07-02T00:00:00.000Z" },
     ],
     exams: [
       {
@@ -608,12 +623,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.14.0`: the nearest minor strictly ahead of this build's `1.13.0`.
+  // `1.15.0`: the nearest minor strictly ahead of this build's `1.14.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.14.0" });
+    const files = baseFiles({ schemaVersion: "1.15.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.14.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.15.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -2240,8 +2255,8 @@ describe("parseImportArchive — note folder preferences (the 1.7.0 era gate)", 
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.13.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.13.0");
+  it("is 1.14.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.14.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -2253,7 +2268,9 @@ describe("parseImportArchive — schema version", () => {
   });
 
   it("accepts the exact current version", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.12.0" })));
+    const result = parseImportArchive(
+      emptyInputWith(baseFiles({ schemaVersion: INTERCHANGE_SCHEMA_VERSION })),
+    );
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
@@ -2364,17 +2381,27 @@ describe("parseImportArchive — schema version", () => {
     expect(result.data).toMatchObject({ studySettings: [] });
   });
 
+  // And for the one STUDY-001's materials superseded: a 1.13 archive carries
+  // neither a `subject-attachment` nor a `subject-note-link` row, which is
+  // exactly what a profile whose subjects hold no files and no filed notes looks
+  // like — two whole absent record types, so again no era flag.
+  it("accepts an older minor — a 1.13 archive still parses here, both new types empty", () => {
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.13.0" })));
+    expect(result.problems).toEqual([]);
+    expect(result.data).toMatchObject({ subjectAttachments: [], subjectNoteLinks: [] });
+  });
+
   it("accepts a newer patch", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.13.7" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.14.7" })));
     expect(result.problems).toEqual([]);
     expect(result.data).not.toBeNull();
   });
 
-  // `1.14.0`: the nearest minor strictly ahead of this build's `1.13.0`.
+  // `1.15.0`: the nearest minor strictly ahead of this build's `1.14.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.14.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.15.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.14.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.15.0" },
     ]);
     expect(result.data).toBeNull();
   });

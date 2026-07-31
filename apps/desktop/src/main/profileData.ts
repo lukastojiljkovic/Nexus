@@ -45,6 +45,8 @@ import type {
   PlanStore,
   SqliteFlagStore,
   StudySettingsStore,
+  SubjectAttachmentStore,
+  SubjectNoteLinkStore,
   SubjectStore,
   TaskAttachmentStore,
   TaskDependencyStore,
@@ -71,6 +73,8 @@ export interface ProfileDataDeps {
   peopleStore(profileId: string): PeopleStore;
   documentStore(profileId: string): DocumentStore;
   subjectStore(profileId: string): SubjectStore;
+  subjectAttachmentStore(profileId: string): SubjectAttachmentStore;
+  subjectNoteLinkStore(profileId: string): SubjectNoteLinkStore;
   examStore(profileId: string): ExamStore;
   deckStore(profileId: string): DeckStore;
   cardStore(profileId: string): CardStore;
@@ -189,6 +193,12 @@ export function gatherProfileData(deps: ProfileDataDeps, profileId: string): Pro
   const tasks = deps.taskStore(profileId).listActive();
   const taskAttachmentsStore = deps.taskAttachmentStore(profileId);
 
+  // Subject materials are read one subject at a time too (migration 035's store
+  // is scoped through its subject, exactly as the task one is through its task),
+  // so the live subject list is read once and reused for the fan-out below.
+  const subjects = deps.subjectStore(profileId).listActive();
+  const subjectAttachmentsStore = deps.subjectAttachmentStore(profileId);
+
   return {
     tasks,
     taskLists,
@@ -207,7 +217,12 @@ export function gatherProfileData(deps: ProfileDataDeps, profileId: string): Pro
     documents,
     renewals: documents.flatMap((document) => documentsStore.listRenewals(document.id)),
     people: deps.peopleStore(profileId).listActive(),
-    subjects: deps.subjectStore(profileId).listActive(),
+    subjects,
+    subjectAttachments: subjects.flatMap((subject) => subjectAttachmentsStore.list(subject.id)),
+    // A profile-wide read (migration 035), and filtered to live BOTH ends by the
+    // store itself — a link running through a trashed note or subject is not
+    // part of what the profile currently IS, which is what an export carries.
+    subjectNoteLinks: deps.subjectNoteLinkStore(profileId).listLinks(),
     exams: deps.examStore(profileId).listActive(),
     decks,
     cards: decks.flatMap((deck) => cardsStore.listByDeck(deck.id)),

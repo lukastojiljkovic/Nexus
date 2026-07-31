@@ -1088,6 +1088,46 @@ export const strings = {
     dashboardStudyTitle: "Učenje",
     dashboardFocusTodayLabel: "Fokus danas",
 
+    // --- Materials (Materijali), under each subject (STUDY-001) -------------
+    /**
+     * A subject's own files — the scanned skripta, the slides, last year's
+     * paper. The wording follows the TASK page's „Prilozi" block field for
+     * field; only the noun changes, because a file hanging off a course is
+     * called a material and not an attachment.
+     */
+    materials: {
+      title: "Materijali",
+      add: "Dodaj materijal",
+      empty: "Nema materijala za ovaj predmet.",
+      open: "Otvori",
+      saveAs: "Sačuvaj kao…",
+      remove: "Ukloni materijal",
+      /** The per-material „⋯“ menu, mirroring `tasks.attachments.menuLabel`. */
+      menuLabel: "Radnje nad materijalom",
+      /** Shown when the picker refused one or more files for size. The 50 MB bound is the store's own (`MAX_SUBJECT_ATTACHMENT_BYTES`). */
+      tooLarge: "Datoteke veće od 50 MB se ne mogu priložiti.",
+      actionError: "Radnja nad materijalom nije uspela. Pokušaj ponovo.",
+    },
+
+    // --- Linked notes (Povezane beleške), under each subject (STUDY-001) ----
+    /**
+     * The notes a user has filed under a course. „Povezane" rather than
+     * „Priložene": nothing is copied here — the note stays in Beleške and this
+     * section only points at it, which is exactly what opening one does.
+     */
+    linkedNotes: {
+      title: "Povezane beleške",
+      add: "Poveži belešku",
+      empty: "Nema povezanih beleški za ovaj predmet.",
+      /** Accessible label on a chip: the chip itself shows only the title. */
+      openLabel: "Otvori belešku",
+      unlink: "Ukloni vezu",
+      /** The picker's own empty state — the profile has no note left to link. */
+      pickerEmpty: "Nema beleški za povezivanje.",
+      pickerLabel: "Izaberi belešku",
+      actionError: "Povezivanje beleške nije uspelo. Pokušaj ponovo.",
+    },
+
     // --- Decks (Špilovi), under each subject --------------------------------
     decksTitle: "Špilovi",
     noDecks: "Nema špilova za ovaj predmet.",

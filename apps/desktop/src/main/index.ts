@@ -61,6 +61,7 @@ import {
   MAX_QUEUE_DECK_IDS,
   MAX_SEARCH_BROWSE_LIMIT,
   MAX_SEARCH_LIMIT,
+  MAX_SUBJECT_ATTACHMENT_BYTES,
   MAX_TASK_ATTACHMENT_BYTES,
   MAX_TASK_BULK_IDS,
   MAX_TASK_LIST_NAME_LENGTH,
@@ -87,6 +88,9 @@ import {
   STUDY_BLOCK_STATUSES,
   StudySettingsStore,
   SUBJECT_COLORS,
+  SubjectAttachmentNotFoundError,
+  SubjectAttachmentStore,
+  SubjectNoteLinkStore,
   SubjectStore,
   TaskAttachmentNotFoundError,
   TaskAttachmentStore,
@@ -121,6 +125,7 @@ import {
   type Exam,
   type ExamType,
   type FocusSession,
+  type LinkedNote,
   type NexusDatabase,
   type NotificationRecord,
   type NotificationSettings,
@@ -139,6 +144,7 @@ import {
   type StudyBlockWithExam,
   type StudyPlan,
   type Subject,
+  type SubjectAttachment,
   type SubjectColor,
   type Task,
   type TaskAttachment,
@@ -286,6 +292,7 @@ import {
   type SearchResult,
   type SnoozePreset,
   type StudyStats,
+  type SubjectAttachmentsAddResult,
   type TaskAttachmentsAddResult,
   type TaskListsSnapshot,
 } from "../shared/ipc.js";
@@ -1909,6 +1916,14 @@ function subjectStore(profileId: string): SubjectStore {
   return new SubjectStore(requireDb().raw, profileId);
 }
 
+function subjectAttachmentStore(profileId: string): SubjectAttachmentStore {
+  return new SubjectAttachmentStore(requireDb().raw, profileId);
+}
+
+function subjectNoteLinkStore(profileId: string): SubjectNoteLinkStore {
+  return new SubjectNoteLinkStore(requireDb().raw, profileId);
+}
+
 function examStore(profileId: string): ExamStore {
   return new ExamStore(requireDb().raw, profileId);
 }
@@ -1988,7 +2003,24 @@ function requireTaskAttachment(profileId: string, taskId: string, attachmentId: 
   return found;
 }
 
-// --- Blob reference counting (ADR-014/ADR-019 + migrations 024/030) ---------
+/** `requireTaskAttachment`'s twin for subjects, and for the same reason: `SubjectAttachmentStore.list` is already scoped to an active subject of this profile, so resolving through it keeps that gate intact. */
+function requireSubjectAttachment(
+  profileId: string,
+  subjectId: string,
+  attachmentId: string,
+): SubjectAttachment {
+  const found = subjectAttachmentStore(profileId)
+    .list(subjectId)
+    .find((attachment) => attachment.id === attachmentId);
+  if (!found) {
+    throw new SubjectAttachmentNotFoundError(
+      `No material "${attachmentId}" on subject "${subjectId}".`,
+    );
+  }
+  return found;
+}
+
+// --- Blob reference counting (ADR-014/ADR-019 + migrations 024/030/035) -----
 //
 // THE place that enumerates every table naming a blob. One on-disk store is
 // shared by every module that lets a user hang bytes off a row, so a blob is
@@ -2008,6 +2040,7 @@ function blobRefCount(profileId: string, sha256: string): number {
   return (
     noteAttachmentStore(profileId).refCount(sha256) +
     taskAttachmentStore(profileId).refCount(sha256) +
+    subjectAttachmentStore(profileId).refCount(sha256) +
     dashboardSettingsStore(profileId).refCount(sha256)
   );
 }
@@ -2017,6 +2050,7 @@ function blobMimeForHash(profileId: string, sha256: string): string | null {
   return (
     noteAttachmentStore(profileId).mimeForHash(sha256) ??
     taskAttachmentStore(profileId).mimeForHash(sha256) ??
+    subjectAttachmentStore(profileId).mimeForHash(sha256) ??
     dashboardSettingsStore(profileId).mimeForHash(sha256)
   );
 }
@@ -2688,6 +2722,8 @@ function restoreDeps(): ImportDeps {
     peopleStore,
     documentStore,
     subjectStore,
+    subjectAttachmentStore,
+    subjectNoteLinkStore,
     examStore,
     deckStore,
     cardStore,
@@ -3634,6 +3670,146 @@ function registerIpc(): void {
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const id = asNonEmptyString(body.id, "id");
     subjectStore(profileId).restore(id);
+  });
+
+  // --- Subject materials (migration 035 / STUDY-001) ------------------------
+  //
+  // The `task-attachments:*` surface, one module over, verbatim: `add` takes no
+  // bytes and no path — main opens the native picker, reads the chosen files
+  // itself, sniffs each one's real mime from its bytes (SEC-FILE-02) and stamps
+  // `now` from its own clock — so a subject's files never cross the bridge in
+  // either direction, and the size cap is the store's own
+  // (`MAX_SUBJECT_ATTACHMENT_BYTES`, imported, never respelled here).
+  //
+  // Deliberately no `counts` twin of `task-attachments:counts`: STUDY draws
+  // every subject's panel at once and already holds each one's list, so a
+  // separate per-subject count would be a second answer to a question the rows
+  // on screen have already answered.
+
+  ipcMain.handle(IpcChannel.subjectAttachmentsList, (event, payload): SubjectAttachment[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return subjectAttachmentStore(profileId).list(id);
+  });
+
+  /**
+   * Attaches every file the native picker returns, one at a time — the task
+   * handler's loop, and its failure rule: a per-file failure after the blob is
+   * written GCs that blob (only when nothing else references it, `blobRefCount`)
+   * and then propagates, because a row that would not insert means the subject
+   * itself is gone or not this profile's.
+   */
+  ipcMain.handle(
+    IpcChannel.subjectAttachmentsAdd,
+    async (event, payload): Promise<SubjectAttachmentsAddResult> => {
+      assertTrustedSender(event);
+      const body = asRecord(payload);
+      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const id = asNonEmptyString(body.id, "id");
+
+      const picked = await pickAttachmentFiles(mainWindow, MAX_SUBJECT_ATTACHMENT_BYTES);
+      if (picked.canceled) return { canceled: true };
+
+      const store = subjectAttachmentStore(profileId);
+      let added = 0;
+      for (const file of picked.files) {
+        const mime = sniffMime(file.bytes);
+        const { sha256 } = await saveBlob(blobStorePathsFor(), requireBlobKeys(), file.bytes);
+        try {
+          store.add(
+            id,
+            { fileName: file.fileName, mime, sizeBytes: file.bytes.byteLength, sha256 },
+            new Date().toISOString(),
+          );
+          added += 1;
+        } catch (error) {
+          await deleteBlobIfOrphaned(
+            blobStorePathsFor(),
+            requireBlobKeys(),
+            sha256,
+            blobRefCount(profileId, sha256),
+          );
+          throw error;
+        }
+      }
+      return { canceled: false, added, skippedTooLarge: picked.skippedTooLarge };
+    },
+  );
+
+  ipcMain.handle(IpcChannel.subjectAttachmentsRemove, async (event, payload): Promise<void> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
+
+    const removed = subjectAttachmentStore(profileId).remove(id, attachmentId);
+    await deleteBlobIfOrphaned(
+      blobStorePathsFor(),
+      requireBlobKeys(),
+      removed.sha256,
+      blobRefCount(profileId, removed.sha256),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.subjectAttachmentsOpen, async (event, payload): Promise<void> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
+
+    const attachment = requireSubjectAttachment(profileId, id, attachmentId);
+    await openExternally(blobStorePathsFor(), requireBlobKeys(), tmpOpenDirPath(), attachment);
+  });
+
+  ipcMain.handle(
+    IpcChannel.subjectAttachmentsSaveAs,
+    (event, payload): Promise<SaveAttachmentResult> => {
+      assertTrustedSender(event);
+      const body = asRecord(payload);
+      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const id = asNonEmptyString(body.id, "id");
+      const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
+
+      const attachment = requireSubjectAttachment(profileId, id, attachmentId);
+      return saveAttachmentAs(mainWindow, blobStorePathsFor(), requireBlobKeys(), attachment);
+    },
+  );
+
+  // --- Subject↔note links (migration 035 / STUDY-001) -----------------------
+  //
+  // `task-dependencies:*`'s three channels with one end in another module. Both
+  // ids are plain strings on the wire and the store resolves each against a LIVE
+  // row of this profile (SEC-EL-02's usual split: shape here, semantics there);
+  // `now` is stamped by main, never accepted from the renderer.
+
+  ipcMain.handle(IpcChannel.subjectNotesLinked, (event, payload): LinkedNote[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return subjectNoteLinkStore(profileId).listLinkedNotes(id);
+  });
+
+  ipcMain.handle(IpcChannel.subjectNotesLink, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const noteId = asNonEmptyString(body.noteId, "noteId");
+    subjectNoteLinkStore(profileId).linkNote(id, noteId, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.subjectNotesUnlink, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const noteId = asNonEmptyString(body.noteId, "noteId");
+    subjectNoteLinkStore(profileId).unlinkNote(id, noteId);
   });
 
   ipcMain.handle(IpcChannel.examsList, (event, payload): Exam[] => {
@@ -4753,6 +4929,8 @@ function registerIpc(): void {
         peopleStore,
         documentStore,
         subjectStore,
+        subjectAttachmentStore,
+        subjectNoteLinkStore,
         examStore,
         deckStore,
         cardStore,

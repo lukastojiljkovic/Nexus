@@ -30,12 +30,13 @@ export interface RestoreProfileInput {
  * CASCADE` to reach a row (a future migration's table would silently survive
  * a restore if it relied on cascade alone — see `restoreStore.test.ts`'s
  * guard test, which reads `sqlite_master` and fails until a new table is
- * either added here or explicitly allow-listed as exempt). Ten tables carry no
- * `profile_id` of their own and are scoped through their parent instead
+ * either added here or explicitly allow-listed as exempt). Twelve tables carry
+ * no `profile_id` of their own and are scoped through their parent instead
  * (`document_renewals` through `tracked_documents`; `task_sections` through
  * `task_lists`; `task_tag_links`, `task_attachments` and `task_dependencies`
- * through `tasks`; the six `note_*` child tables through `notes`) — see
- * `wipeSqlFor` below.
+ * through `tasks`; `subject_attachments` and `subject_note_links` through
+ * `subjects`; the six `note_*` child tables through `notes`) — see `wipeSqlFor`
+ * below.
  */
 export const RESTORE_WIPE_TABLES = [
   "document_renewals",
@@ -47,6 +48,11 @@ export const RESTORE_WIPE_TABLES = [
   "study_plans",
   "focus_sessions",
   "tracked_documents",
+  // A subject's materials and its note links, before the subjects they hang off
+  // — the arrangement the TASK group below has, and for its reason: children
+  // before parents, never leaning on `ON DELETE CASCADE` to reach a row.
+  "subject_attachments",
+  "subject_note_links",
   "subjects",
   "events",
   "people",
@@ -109,6 +115,12 @@ const SCOPED_THROUGH_PARENT: Partial<Record<WipeTable, string>> = {
   // any other pair, and the archive parser reference-checks both ends against
   // the archive's own tasks — so naming the blocker names the whole edge.
   task_dependencies: `DELETE FROM task_dependencies WHERE blocker_id IN (SELECT id FROM tasks WHERE profile_id = ?)`,
+  subject_attachments: `DELETE FROM subject_attachments WHERE subject_id IN (SELECT id FROM subjects WHERE profile_id = ?)`,
+  // Scoped through the SUBJECT end alone, on `task_dependencies`' terms: both
+  // ends of a link always belong to one profile — `SubjectNoteLinkStore` refuses
+  // any other pair, and the archive parser reference-checks both ends against
+  // the archive's own rows — so naming the subject names the whole edge.
+  subject_note_links: `DELETE FROM subject_note_links WHERE subject_id IN (SELECT id FROM subjects WHERE profile_id = ?)`,
   note_tag_links: `DELETE FROM note_tag_links WHERE note_id IN (SELECT id FROM notes WHERE profile_id = ?)`,
   note_links: `DELETE FROM note_links WHERE source_note_id IN (SELECT id FROM notes WHERE profile_id = ?)`,
   note_attachments: `DELETE FROM note_attachments WHERE note_id IN (SELECT id FROM notes WHERE profile_id = ?)`,
@@ -163,6 +175,8 @@ export class RestoreStore {
   private readonly insertNoteFolder: Database.Statement;
   private readonly insertNoteTag: Database.Statement;
   private readonly insertSubject: Database.Statement;
+  private readonly insertSubjectAttachment: Database.Statement;
+  private readonly insertSubjectNoteLink: Database.Statement;
   private readonly insertExam: Database.Statement;
   private readonly insertDeck: Database.Statement;
   private readonly insertNote: Database.Statement;
@@ -238,6 +252,13 @@ export class RestoreStore {
       `INSERT INTO subjects
          (id, profile_id, name, color, semester, archived, created_at, updated_at, deleted_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    this.insertSubjectAttachment = db.prepare(
+      `INSERT INTO subject_attachments (id, subject_id, file_name, mime, size_bytes, sha256, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    );
+    this.insertSubjectNoteLink = db.prepare(
+      `INSERT INTO subject_note_links (subject_id, note_id, created_at) VALUES (?, ?, ?)`,
     );
     this.insertExam = db.prepare(
       `INSERT INTO exams
@@ -446,6 +467,27 @@ export class RestoreStore {
           subject.id, this.profileId, subject.name, subject.color, subject.semester,
           subject.archived ? 1 : 0, subject.createdAt, subject.updatedAt,
         );
+        written += 1;
+      }
+
+      // The index rows for the files hanging off those subjects, on exactly the
+      // terms the task-attachment loop above states: only the rows, because the
+      // BYTES are written to the blob store before this transaction ever opens
+      // (`main/restore.ts`).
+      for (const material of input.data.subjectAttachments) {
+        this.insertSubjectAttachment.run(
+          material.id, material.subjectId, material.fileName, material.mime,
+          material.sizeBytes, material.sha256, material.createdAt,
+        );
+        written += 1;
+      }
+
+      // And the note links, beside the dependency edges above and for the same
+      // reason: a link is nothing but its ordered pair plus the moment it was
+      // made, and both ends were preserved. Foreign keys are deferred for this
+      // whole transaction, so a link may be written before the note it names.
+      for (const link of input.data.subjectNoteLinks) {
+        this.insertSubjectNoteLink.run(link.subjectId, link.noteId, link.createdAt);
         written += 1;
       }
 

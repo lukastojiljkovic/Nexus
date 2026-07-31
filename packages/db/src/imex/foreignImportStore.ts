@@ -57,6 +57,8 @@ export class ForeignImportStore {
   private readonly insertDocument: Database.Statement;
   private readonly insertRenewal: Database.Statement;
   private readonly insertSubject: Database.Statement;
+  private readonly insertSubjectAttachment: Database.Statement;
+  private readonly insertSubjectNoteLink: Database.Statement;
   private readonly insertExam: Database.Statement;
   private readonly insertDeck: Database.Statement;
   private readonly insertPlan: Database.Statement;
@@ -139,6 +141,13 @@ export class ForeignImportStore {
       `INSERT INTO subjects
          (id, profile_id, name, color, semester, archived, created_at, updated_at, deleted_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    this.insertSubjectAttachment = db.prepare(
+      `INSERT INTO subject_attachments (id, subject_id, file_name, mime, size_bytes, sha256, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    );
+    this.insertSubjectNoteLink = db.prepare(
+      `INSERT INTO subject_note_links (subject_id, note_id, created_at) VALUES (?, ?, ?)`,
     );
     this.insertExam = db.prepare(
       `INSERT INTO exams
@@ -388,6 +397,16 @@ export class ForeignImportStore {
         written += 1;
       }
 
+      // The index rows for a subject's materials, on the terms the task
+      // attachments above state: rows here, bytes already in the blob store.
+      for (const material of planned.subjectAttachments) {
+        this.insertSubjectAttachment.run(
+          material.id, material.subjectId, material.fileName, material.mime,
+          material.sizeBytes, material.sha256, material.createdAt,
+        );
+        written += 1;
+      }
+
       for (const exam of planned.exams) {
         this.insertExam.run(
           exam.id, this.profileId, exam.subjectId, exam.examType, exam.examDate,
@@ -525,6 +544,14 @@ export class ForeignImportStore {
           this.insertNoteLink.run(note.id, target);
           written += 1;
         }
+      }
+
+      // Subject↔note links come AFTER the notes, unlike in a restore: foreign
+      // keys stay enforced here, so both ends must already exist. The subjects
+      // were written far above; the notes, just now.
+      for (const link of planned.subjectNoteLinks) {
+        this.insertSubjectNoteLink.run(link.subjectId, link.noteId, link.createdAt);
+        written += 1;
       }
 
       for (const card of planned.cards) {

@@ -16,8 +16,8 @@ import { MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 34 (study settings), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(34);
+  it("is at version 35 (subject materials), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(35);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -3665,6 +3665,218 @@ describe("migration 034 — study settings", () => {
     expect(
       (db.raw.prepare("SELECT count(*) AS n FROM study_settings").get() as { n: number }).n,
     ).toBe(0);
+    db.close();
+  });
+});
+
+describe("migration 035 — subject materials and linked notes", () => {
+  const now = () => new Date().toISOString();
+
+  const insertSubject = (db: NexusDatabase, id: string, profileId: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO subjects (id, profile_id, name, color, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, profileId, `Predmet ${id}`, "jade", now(), now());
+
+  const insertNote = (db: NexusDatabase, id: string, profileId: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO notes (id, profile_id, title, created_at, updated_at, deleted_at)
+         VALUES (?, ?, '', ?, ?, NULL)`,
+      )
+      .run(id, profileId, now(), now());
+
+  const insertMaterial = (
+    db: NexusDatabase,
+    id: string,
+    subjectId: string,
+    sizeBytes = 100,
+    sha256 = "b".repeat(64),
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO subject_attachments (id, subject_id, file_name, mime, size_bytes, sha256, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, subjectId, "skripta.pdf", "application/pdf", sizeBytes, sha256, now());
+
+  const insertLink = (db: NexusDatabase, subjectId: string, noteId: string) =>
+    db.raw
+      .prepare(`INSERT INTO subject_note_links (subject_id, note_id, created_at) VALUES (?, ?, ?)`)
+      .run(subjectId, noteId, now());
+
+  const countOf = (db: NexusDatabase, table: string): number =>
+    (db.raw.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n;
+
+  it("creates both tables and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh-035.db") });
+    const names = tableNames(db);
+    expect(names).toContain("subject_attachments");
+    expect(names).toContain("subject_note_links");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("creates the subject_attachments_subject and subject_attachments_sha indexes", () => {
+    const db = openDatabase({ path: join(dir, "index-035.db") });
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("subject_attachments_subject");
+    expect(indexes).toContain("subject_attachments_sha");
+    db.close();
+  });
+
+  it("creates the subject_note_links_note reverse-lookup index", () => {
+    const db = openDatabase({ path: join(dir, "index-links-035.db") });
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("subject_note_links_note");
+    db.close();
+  });
+
+  it("rejects a size_bytes of 0 with a CHECK", () => {
+    const db = openDatabase({ path: join(dir, "check-size-035.db") });
+    insertProfile(db, "p1");
+    insertSubject(db, "s1", "p1");
+    expect(() => insertMaterial(db, "m1", "s1", 0)).toThrow();
+    expect(() => insertMaterial(db, "m2", "s1", 1)).not.toThrow();
+    db.close();
+  });
+
+  it("refuses a material pointing at no subject", () => {
+    const db = openDatabase({ path: join(dir, "fk-subject-035.db") });
+    insertProfile(db, "p1");
+    expect(() => insertMaterial(db, "m1", "ghost")).toThrow();
+    db.close();
+  });
+
+  it("cascades materials when the owning subject is hard-deleted", () => {
+    const db = openDatabase({ path: join(dir, "cascade-subject-035.db") });
+    insertProfile(db, "p1");
+    insertSubject(db, "s1", "p1");
+    insertMaterial(db, "m1", "s1");
+
+    db.raw.prepare("DELETE FROM subjects WHERE id = ?").run("s1");
+    expect(countOf(db, "subject_attachments")).toBe(0);
+    db.close();
+  });
+
+  it("cascades materials when the owning profile is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade-profile-035.db") });
+    insertProfile(db, "p1");
+    insertSubject(db, "s1", "p1");
+    insertMaterial(db, "m1", "s1");
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    expect(countOf(db, "subject_attachments")).toBe(0);
+    db.close();
+  });
+
+  it("leaves a soft-deleted subject's materials standing — only a HARD delete prunes them", () => {
+    const db = openDatabase({ path: join(dir, "soft-delete-035.db") });
+    insertProfile(db, "p1");
+    insertSubject(db, "s1", "p1");
+    insertMaterial(db, "m1", "s1");
+
+    db.raw.prepare("UPDATE subjects SET deleted_at = ? WHERE id = ?").run(now(), "s1");
+    expect(countOf(db, "subject_attachments")).toBe(1);
+    db.close();
+  });
+
+  it("carries no profile column on subject_attachments — scoping rides the subject", () => {
+    const db = openDatabase({ path: join(dir, "no-profile-035.db") });
+    const columns = (
+      db.raw.prepare("PRAGMA table_info(subject_attachments)").all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(columns).toEqual([
+      "id",
+      "subject_id",
+      "file_name",
+      "mime",
+      "size_bytes",
+      "sha256",
+      "created_at",
+    ]);
+    db.close();
+  });
+
+  it("enforces PRIMARY KEY (subject_id, note_id) on subject_note_links", () => {
+    const db = openDatabase({ path: join(dir, "unique-link-035.db") });
+    insertProfile(db, "p1");
+    insertSubject(db, "s1", "p1");
+    insertNote(db, "n1", "p1");
+    insertLink(db, "s1", "n1");
+    expect(() => insertLink(db, "s1", "n1")).toThrow();
+    db.close();
+  });
+
+  it("refuses a link pointing at no subject or no note", () => {
+    const db = openDatabase({ path: join(dir, "fk-link-035.db") });
+    insertProfile(db, "p1");
+    insertSubject(db, "s1", "p1");
+    insertNote(db, "n1", "p1");
+    expect(() => insertLink(db, "ghost", "n1")).toThrow();
+    expect(() => insertLink(db, "s1", "ghost")).toThrow();
+    db.close();
+  });
+
+  it("cascades links from either end when a subject or a note is hard-deleted", () => {
+    const db = openDatabase({ path: join(dir, "cascade-link-035.db") });
+    insertProfile(db, "p1");
+    insertSubject(db, "s1", "p1");
+    insertSubject(db, "s2", "p1");
+    insertNote(db, "n1", "p1");
+    insertNote(db, "n2", "p1");
+    insertLink(db, "s1", "n1");
+    insertLink(db, "s2", "n2");
+
+    db.raw.prepare("DELETE FROM subjects WHERE id = ?").run("s1");
+    expect(countOf(db, "subject_note_links")).toBe(1);
+    db.raw.prepare("DELETE FROM notes WHERE id = ?").run("n2");
+    expect(countOf(db, "subject_note_links")).toBe(0);
+    db.close();
+  });
+
+  it("leaves a link standing when EITHER end is soft-deleted — ADR-037's edge philosophy", () => {
+    const db = openDatabase({ path: join(dir, "soft-delete-link-035.db") });
+    insertProfile(db, "p1");
+    insertSubject(db, "s1", "p1");
+    insertNote(db, "n1", "p1");
+    insertLink(db, "s1", "n1");
+
+    db.raw.prepare("UPDATE subjects SET deleted_at = ? WHERE id = ?").run(now(), "s1");
+    expect(countOf(db, "subject_note_links")).toBe(1);
+    db.raw.prepare("UPDATE notes SET deleted_at = ? WHERE id = ?").run(now(), "n1");
+    expect(countOf(db, "subject_note_links")).toBe(1);
+    db.close();
+  });
+
+  it("carries no profile column on subject_note_links — scoping rides both ends", () => {
+    const db = openDatabase({ path: join(dir, "no-profile-link-035.db") });
+    const columns = (
+      db.raw.prepare("PRAGMA table_info(subject_note_links)").all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(columns).toEqual(["subject_id", "note_id", "created_at"]);
+    db.close();
+  });
+
+  it("adds nothing to the search index — a material's name is not searchable in this slice", () => {
+    const db = openDatabase({ path: join(dir, "search-untouched-035.db") });
+    const triggers = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'trigger'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(triggers.filter((name) => name.includes("subject_attachment"))).toEqual([]);
+    expect(triggers.filter((name) => name.includes("subject_note_link"))).toEqual([]);
     db.close();
   });
 });

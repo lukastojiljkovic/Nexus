@@ -3003,6 +3003,149 @@ button.cal__grid-event--dragging {
   min-width: 160px;
 }
 
+/* Materijali + Povezane beleške under a subject (STUDY-001, migration 035) —
+   the decks section's idiom (heading opposite one action, a muted empty line),
+   with the row treatment lifted from the TASK form's „Prilozi" block. Both stay
+   quiet: no borders of their own, no glow, the "⋯" only on hover. --------- */
+.study__materials,
+.study__linked-notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.study__materials-header,
+.study__linked-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
+}
+.study__materials-title,
+.study__linked-title {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.study__materials-empty,
+.study__linked-empty {
+  margin: 0;
+  padding: var(--nx-space-2) 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+/* Same recipe as .tasks__attachment-error, scoped to these panels' channels. */
+.study__material-error,
+.study__linked-error {
+  margin: 0;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+  border-radius: var(--nx-radius-md);
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__material {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-1) var(--nx-space-2);
+  border-radius: var(--nx-radius-md);
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.study__material:hover {
+  background: var(--nx-surface-alt);
+}
+.study__material-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__material-size {
+  flex-shrink: 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+/* The "⋯" stays quiet until its row is hovered or the menu is open — the
+   .tasks__attachment-menu treatment, on a panel row. */
+.study__material-menu {
+  opacity: 0;
+}
+.study__material:hover .study__material-menu,
+.study__material-menu[aria-expanded="true"],
+.study__material-menu:focus-visible {
+  opacity: 1;
+}
+/* „Poveži belešku" names itself instead of showing the bare "⋯": it is a
+   section-level action, and the glyph reads as "more actions on THIS row" only
+   when it sits on a row (see NotePopover's own note). */
+.study__link-note.note__menu-trigger {
+  width: auto;
+  padding: 2px var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__linked-picker-empty {
+  margin: 0;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+  white-space: nowrap;
+}
+.study__linked-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1);
+  padding: var(--nx-space-1) 0;
+}
+/* Outlined, like .tasks__tag-chip: which notes a subject is filed with is
+   metadata about the subject, not a state of it. */
+.study__linked-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  padding: 1px 4px 1px 8px;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-round);
+  font-size: var(--nx-font-size-caption);
+}
+.study__linked-open {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: var(--nx-text);
+  cursor: pointer;
+}
+.study__linked-open:hover {
+  color: var(--nx-accent);
+}
+.study__linked-open--inert {
+  color: var(--nx-text-muted);
+  cursor: default;
+}
+.study__linked-unlink {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  padding: 0 2px;
+  font: inherit;
+  line-height: 1;
+  color: var(--nx-text-muted);
+  cursor: pointer;
+}
+.study__linked-unlink:hover {
+  color: var(--nx-danger);
+}
+
 /* Study plans (Planovi učenja, STUDY piece 3b) — a top-level hub section: a
    "Danas za učenje" strip, one card per active plan (countdown chip via the
    shared exam-date math), and the inline plan form (exam-form idiom). Done

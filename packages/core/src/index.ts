@@ -144,6 +144,8 @@ export type {
   ExportStudyPlan,
   ExportStudySettings,
   ExportSubject,
+  ExportSubjectAttachment,
+  ExportSubjectNoteLink,
   ExportTask,
   ExportTaskAttachment,
   ExportTaskDependency,
