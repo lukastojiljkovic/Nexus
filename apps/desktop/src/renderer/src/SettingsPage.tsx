@@ -999,6 +999,88 @@ function AutoBackupSection({ profileId, hits }: AutoBackupSectionProps) {
   );
 }
 
+interface SearchHistorySectionProps {
+  profileId: string;
+  hits: ReadonlySet<string>;
+}
+
+/**
+ * „Istorija pretrage" (SRCH-009), inside the „Podaci i privatnost" card —
+ * beside the five sentences that say what is stored, because this is the one
+ * stored thing a user can actually erase. It is a SHELL control, hand-composed
+ * here and registered by hand in `settingsSearch.ts`: search is not a module
+ * (no manifest, no gallery row, no feature flag), so routing it through the
+ * per-module settings contract would be exactly the boundary violation that
+ * contract's own doc comment warns against.
+ *
+ * The count is read once on mount and re-read after a clear, so the button
+ * states a real number rather than an assumption — and disables itself at zero
+ * instead of offering to erase nothing. No confirmation dialog: what is being
+ * discarded is a list of things the user typed, which the app can rebuild the
+ * next time they search, and a modal over it would overstate the stakes.
+ */
+function SearchHistorySection({ profileId, hits }: SearchHistorySectionProps) {
+  const s = strings.settings.privacy.searchHistory;
+
+  const [count, setCount] = useState<number | null>(null);
+  const [clearing, setClearing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void window.nexus
+      .searchHistory(profileId)
+      .then((entries) => {
+        if (!cancelled) setCount(entries.length);
+      })
+      .catch((loadError: unknown) => {
+        console.error("Nexus: loading the search history failed:", loadError);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [profileId]);
+
+  async function clearHistory(): Promise<void> {
+    if (clearing) return;
+    setError(null);
+    setClearing(true);
+    try {
+      await window.nexus.clearSearchHistory(profileId);
+      setCount(0);
+    } catch (clearError) {
+      setError(s.error);
+      console.error("Nexus: clearing the search history failed:", clearError);
+    } finally {
+      setClearing(false);
+    }
+  }
+
+  return (
+    <div className="set__restore-block">
+      <h3 className={labelClass("set__module-group-title", hits.has("privacy-search-history"))}>
+        {s.title}
+      </h3>
+      <p className="app__muted">{s.caption}</p>
+      <Button
+        size="sm"
+        disabled={clearing || count === null || count === 0}
+        onClick={() => void clearHistory()}
+      >
+        {s.clear}
+      </Button>
+      {count !== null && (
+        <p className="set__section-caption">
+          {count === 0
+            ? s.empty
+            : `${count} ${countUnit(count, s.countOne, s.countFew, s.countMany)}`}
+        </p>
+      )}
+      {error != null && <p className="set__error">{error}</p>}
+    </div>
+  );
+}
+
 interface CalendarExportSectionProps {
   profileId: string;
   hits: ReadonlySet<string>;
@@ -4843,10 +4925,13 @@ export function SettingsPage({
         <MarkdownImportSection profileId={profileId} hits={hits} />
       </Card>
 
-      {/* SET-010, local half. Five statements of fact and nothing to operate:
-          no toggle, no link, no „saznaj više“. Every sentence is checkable in
-          the source — see the copy block's own comment, which names the file
-          each one is true because of. */}
+      {/* SET-010, local half. Five statements of fact — no toggle, no link, no
+          „saznaj više“ on any of them. Every sentence is checkable in the
+          source; see the copy block's own comment, which names the file each
+          one is true because of. Below them, the one thing on this card that
+          IS operable (SRCH-009): the search history is the only place the app
+          stores something about how you used it rather than what you made, so
+          the card that lists what is stored is where you erase it. */}
       <Card
         title={strings.settings.sectionTitle.privacy}
         className={sectionClass(sections.has("privacy"))}
@@ -4856,6 +4941,7 @@ export function SettingsPage({
         <p className="set__section-caption">{strings.settings.privacy.offline}</p>
         <p className="set__section-caption">{strings.settings.privacy.exports}</p>
         <p className="set__section-caption">{strings.settings.privacy.deletion}</p>
+        <SearchHistorySection profileId={profileId} hits={hits} />
       </Card>
 
       <Card title={strings.settings.sectionTitle.about} className={sectionClass(sections.has("about"))}>

@@ -485,6 +485,13 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.searchPage, { profileId, query }),
   rebuildSearchIndex: (profileId) =>
     ipcRenderer.invoke(IpcChannel.searchRebuild, { profileId }),
+  searchHistory: (profileId) => ipcRenderer.invoke(IpcChannel.searchHistory, { profileId }),
+  recordSearchHistory: (profileId, query) =>
+    ipcRenderer.invoke(IpcChannel.searchHistoryRecord, { profileId, query }),
+  removeSearchHistory: (profileId, query) =>
+    ipcRenderer.invoke(IpcChannel.searchHistoryRemove, { profileId, query }),
+  clearSearchHistory: (profileId) =>
+    ipcRenderer.invoke(IpcChannel.searchHistoryClear, { profileId }),
   exportData: (profileId, passphrase, modules) =>
     ipcRenderer.invoke(IpcChannel.imexExport, { profileId, passphrase, modules }),
   exportCalendarIcs: (profileId) => ipcRenderer.invoke(IpcChannel.imexExportIcs, { profileId }),

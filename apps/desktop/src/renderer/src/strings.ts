@@ -3541,10 +3541,10 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      * „Podaci i privatnost“ (SET-010, local half): five plain sentences, each
      * one a fact about how this build is put together rather than a promise.
      *
-     * There is deliberately NOTHING to operate here — no toggle, no link, no
-     * „saznaj više“. A privacy panel with a switch on it is a panel about a
-     * setting; this one is about what is already true, and every sentence is
-     * checkable in the source:
+     * The five sentences have deliberately nothing to operate — no toggle, no
+     * link, no „saznaj više“. A privacy panel with a switch on it is a panel
+     * about a setting; those are about what is already true, and every
+     * sentence is checkable in the source:
      *
      *  - `storage`   — `packages/db/src/database.ts` opens every profile
      *                  database through SQLCipher (`PRAGMA cipher`/`key`), and
@@ -3565,6 +3565,15 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      *  - `deletion`  — `main/accounts.ts`'s `deleteAccount` erases the
      *                  account's directory, key chain included; there is no
      *                  undo and no grace period.
+     *
+     * The ONE thing to operate is `searchHistory` (SRCH-009), and it belongs
+     * here rather than anywhere else: it is the only place in the app where
+     * something is stored *about how you used it* instead of *what you made*,
+     * so the card that lists what is stored is where a user goes to erase it.
+     * Search is a SHELL surface, not a module (no manifest, no gallery row, no
+     * flag), so its control is hand-composed on this page — never routed
+     * through the per-module settings contract, which is for modules and says
+     * so in as many words.
      */
     privacy: {
       storage:
@@ -3577,6 +3586,24 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         "Izvoz je običan fajl: ti biraš gde se čuva, a arhivu možeš zaštititi lozinkom pri pravljenju.",
       deletion:
         "Brisanje naloga trajno uništava njegove podatke, zajedno sa ključem kojim su šifrovani. Nema opoziva i nema perioda čekanja.",
+      /**
+       * SRCH-009. The caption states the three facts a user would otherwise
+       * have to trust: what is kept, where it stays, and that it never rides
+       * in an izvoz — each one true of migration 050 by construction, not by
+       * a filter somebody remembered to write.
+       */
+      searchHistory: {
+        title: "Istorija pretrage",
+        caption:
+          "Nexus pamti poslednjih 20 pretraga ovog profila, da bi mogao brzo da ih ponoviš. Ostaju u šifrovanoj bazi na ovom uređaju, ne prelaze u drugi profil i ne ulaze u izvoz ni u rezervnu kopiju.",
+        clear: "Obriši istoriju pretrage",
+        /** Below the button: how many entries are there right now, or that there are none. */
+        empty: "Nema sačuvanih pretraga.",
+        countOne: "sačuvana pretraga",
+        countFew: "sačuvane pretrage",
+        countMany: "sačuvanih pretraga",
+        error: "Brisanje istorije pretrage nije uspelo. Pokušaj ponovo.",
+      },
     },
     about: {
       version: "Verzija",
@@ -3603,6 +3630,22 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     commandsGroup: "Komande",
     emptyResults: "Nema rezultata.",
     hint: "↑↓ kretanje · Enter otvori · Esc zatvori",
+    /**
+     * SRCH-009: the profile's remembered QUERIES, which are a different list
+     * from „Nedavno" above — that one shows what you opened, this one what you
+     * looked for. The heading says „pretrage" precisely so the two groups can
+     * never be read as one.
+     */
+    historyGroup: "Nedavne pretrage",
+    /** The „×" on a history row — a label, since the glyph alone says nothing to a screen reader. */
+    historyRemove: "Ukloni iz istorije",
+    /**
+     * Replaces the key hints while a history row is the active one: Enter
+     * FILLS the box here instead of opening something (the query must be
+     * visible before it runs — no surface may silently execute a search the
+     * user cannot see), and Delete forgets the row.
+     */
+    historyHint: "↑↓ kretanje · Enter popuni · Delete ukloni · Esc zatvori",
     /**
      * The operator grammar, named quietly in the footer beside the key hints —
      * `#oznaka` filters by tag (zadaci i beleške), `rok:`/`due:` by date. The

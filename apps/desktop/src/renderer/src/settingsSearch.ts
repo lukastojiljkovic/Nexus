@@ -343,6 +343,18 @@ const ENTRIES: readonly ShellSettingsSearchEntry[] = [
     ],
   },
   {
+    // SRCH-009: the one operable control on the privacy card, so — unlike the
+    // five sentences above it — this entry does get a highlight. Its own entry
+    // rather than more keywords on `privacy-practices`, because somebody
+    // hunting for it is after a BUTTON, not a paragraph. A hand-composed SHELL
+    // entry on purpose: search is not a module, so nothing about it may come
+    // through the per-module settings contract.
+    id: "privacy-search-history",
+    section: "privacy",
+    label: s.privacy.searchHistory.clear,
+    keywords: ["pretraga", "istorija", "upiti", "obrisi", "zaboravi", "privatnost"],
+  },
+  {
     // The panel is one read-only block of facts, so it is one entry: splitting
     // it per row would highlight "Verzija" for a user who typed "chromium".
     id: "about-facts",

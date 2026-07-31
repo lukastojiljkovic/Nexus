@@ -8,6 +8,7 @@ import {
   buildEffectiveQuery,
   formatContextDate,
   groupByKind,
+  isRecordableQuery,
   KIND_QUERY_PREFIX,
   renderHighlighted,
   SEARCH_DEBOUNCE_MS,
@@ -205,6 +206,37 @@ describe("buildEffectiveQuery", () => {
     // "z: " rather than "z:". Harmless — every consumer re-parses — but pinned
     // so a change to the joining is a deliberate one.
     expect(buildEffectiveQuery("", new Set<SearchKind>(["task"]), [])).toBe("z: ");
+  });
+});
+
+// --- isRecordableQuery --------------------------------------------------------
+
+describe("isRecordableQuery", () => {
+  it("refuses what an UNUSED search box contains — nothing, or only whitespace", () => {
+    for (const query of ["", " ", "   ", "\t", "\n", " \t\n "]) {
+      expect(isRecordableQuery(query)).toBe(false);
+    }
+  });
+
+  it("accepts an ordinary query, and one made of operators alone", () => {
+    // „#posao" or „rok:danas" with no words behind it is a real search a user
+    // runs on purpose — a history that dropped it would forget the searches
+    // its own grammar was built for.
+    for (const query of ["ispit", "#posao", "rok:danas", "z: b:", "  ispit  "]) {
+      expect(isRecordableQuery(query)).toBe(true);
+    }
+  });
+
+  it("agrees with what the palette actually hands it for a chip-only search", () => {
+    // A chips-only palette state carries no typed text at all, and
+    // `buildEffectiveQuery` turns it into a real token — which must be
+    // recordable, or picking „Prikaži sve rezultate" from a chip-only palette
+    // would remember nothing.
+    expect(isRecordableQuery(buildEffectiveQuery("", new Set<SearchKind>(["task"]), []))).toBe(
+      true,
+    );
+    // And the genuinely empty browse state is not.
+    expect(isRecordableQuery(buildEffectiveQuery("", new Set(), []))).toBe(false);
   });
 });
 

@@ -46,6 +46,7 @@ import {
   PrivateNoteStore,
   ProfileStore,
   RestoreStore,
+  SearchHistoryStore,
   SqliteFlagStore,
   StudySettingsStore,
   SubjectAttachmentStore,
@@ -83,7 +84,7 @@ import * as apkgReaderModule from "./apkgReader.js";
 import * as archiveReaderModule from "./archiveReader.js";
 import * as csvReaderModule from "./csvReader.js";
 import * as icsReaderModule from "./icsReader.js";
-import { deriveRestoredNotes, gatherProfileData } from "./profileData.js";
+import { deriveRestoredNotes, gatherProfileData, gatherProfileSettings } from "./profileData.js";
 import type { ProfileDataDeps } from "./profileData.js";
 import {
   applyApkgImport,
@@ -1753,6 +1754,63 @@ describe("private notes through a restore (ADR-057 §6)", () => {
     const applied = await applyImport(deps, profileB, preview.preview.token);
     expect(applied.rowsWritten).toBeGreaterThan(0);
     expect(new PrivateNoteStore(dbB.raw, profileB).list()).toEqual([]);
+  });
+});
+
+describe("the search history never travels (SRCH-009 / migration 050)", () => {
+  /**
+   * The guard that would catch it silently starting to travel. `ProfileData`
+   * is what an archive carries AND what a restore's undo captures — one shape,
+   * one gather (`profileData.ts`'s own module header) — so a `searchHistory`
+   * field added to either would put a person's queries into every archive they
+   * ever hand to somebody else. It is not enough that nobody wrote that field
+   * today: this asserts the FULL gathered payload carries no trace of a
+   * recorded query, so adding one fails here rather than in a support ticket.
+   */
+  const SECRET_QUERY = "#zdravlje nalaz krvne slike";
+
+  it("gathers nothing of it — not in the rows, not in the settings", async () => {
+    const profile = createProfile(dbB, "B");
+    seedProfile(dbB, profile, "B");
+    new SearchHistoryStore(dbB.raw, profile).record(SECRET_QUERY, "2026-01-15T09:00:00.000Z");
+    const deps = profileDataDeps(dbB);
+
+    // Seeded, readable, and genuinely in the file the gather reads from — so a
+    // pass below means "the gather does not carry it", never "there was
+    // nothing to carry".
+    expect(new SearchHistoryStore(dbB.raw, profile).list()).toEqual([
+      { query: SECRET_QUERY, usedAt: "2026-01-15T09:00:00.000Z" },
+    ]);
+
+    expect(JSON.stringify(gatherProfileData(deps, profile))).not.toContain("zdravlje");
+    expect(JSON.stringify(await gatherProfileSettings(deps, profile))).not.toContain("zdravlje");
+  });
+
+  it("survives a restore of the profile it belongs to — a replace is not an erasure", async () => {
+    const profileA = createProfile(dbA, "A");
+    const fixtureA = seedProfile(dbA, profileA, "A");
+    const zipBytes = await buildArchiveZip(
+      buildArchiveFor(fixtureA, profileA, "A"),
+      fixtureA.blobBytes,
+    );
+    const filePath = fixturePath("history.nexus.zip");
+    await writeFile(filePath, zipBytes);
+
+    const profileB = createProfile(dbB, "B-target");
+    const history = new SearchHistoryStore(dbB.raw, profileB);
+    history.record(SECRET_QUERY, "2026-01-15T09:00:00.000Z");
+    const { deps } = makeTestDeps(dbB, filePath);
+
+    await pickRestoreFile(deps);
+    const preview = await previewRestore(deps, profileB, null);
+    if (preview.status !== "ready") unreachable();
+    await applyRestore(deps, profileB, preview.preview.token);
+
+    // The archive carried no queries to write, and the wipe list does not name
+    // the table — so what this device's user typed is exactly what it was.
+    expect(history.list()).toEqual([
+      { query: SECRET_QUERY, usedAt: "2026-01-15T09:00:00.000Z" },
+    ]);
   });
 });
 

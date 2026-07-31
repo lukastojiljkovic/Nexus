@@ -22,8 +22,8 @@ import { CardStore, MIGRATIONS, NexusDatabase, openDatabase, runMigrations } fro
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 49 (note categories), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(49);
+  it("is at version 50 (search history), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(50);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -6015,6 +6015,117 @@ describe("migration 049 — note categories (NOTE-002)", () => {
         category_id: string | null;
       };
       expect(row.category_id).toBeNull();
+    } finally {
+      raw.close();
+    }
+  });
+});
+
+describe("migration 050 — search history (SRCH-009)", () => {
+  const T = "2026-01-01T00:00:00.000Z";
+
+  const insertQuery = (db: NexusDatabase, profileId: string, query: string, usedAt = T) =>
+    db.raw
+      .prepare("INSERT INTO search_history (profile_id, query, used_at) VALUES (?, ?, ?)")
+      .run(profileId, query, usedAt);
+
+  it("creates the search_history table and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fresh.db") });
+    expect(tableNames(db)).toContain("search_history");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("carries three columns and nothing else — a query, when it was used, and whose it is", () => {
+    const db = openDatabase({ path: join(dir, "columns.db") });
+    expect(
+      (db.raw.prepare("PRAGMA table_info(search_history)").all() as { name: string }[]).map(
+        (row) => row.name,
+      ),
+    ).toEqual(["profile_id", "query", "used_at"]);
+    db.close();
+  });
+
+  it("makes a duplicate query unrepresentable per profile, while two profiles keep their own", () => {
+    const db = openDatabase({ path: join(dir, "dedupe.db") });
+    insertProfile(db, "p1");
+    insertProfile(db, "p2");
+    insertQuery(db, "p1", "#posao rok:danas");
+    expect(() => insertQuery(db, "p1", "#posao rok:danas")).toThrow();
+    // Another profile's identical search is a different row — one person's
+    // history must never surface in another profile on the same install.
+    expect(() => insertQuery(db, "p2", "#posao rok:danas")).not.toThrow();
+    db.close();
+  });
+
+  it("compares queries as SQLite compares TEXT: „Ispit“ and „ispit“ are two entries", () => {
+    const db = openDatabase({ path: join(dir, "case.db") });
+    insertProfile(db, "p1");
+    insertQuery(db, "p1", "Ispit");
+    expect(() => insertQuery(db, "p1", "ispit")).not.toThrow();
+    db.close();
+  });
+
+  it("refuses an empty or whitespace-only query — an unused search box is not a search", () => {
+    const db = openDatabase({ path: join(dir, "empty.db") });
+    insertProfile(db, "p1");
+    expect(() => insertQuery(db, "p1", "")).toThrow();
+    expect(() => insertQuery(db, "p1", "   ")).toThrow();
+    db.close();
+  });
+
+  it("refuses a query longer than the palette's own input cap", () => {
+    const db = openDatabase({ path: join(dir, "long.db") });
+    insertProfile(db, "p1");
+    expect(() => insertQuery(db, "p1", "b".repeat(500))).not.toThrow();
+    expect(() => insertQuery(db, "p1", "c".repeat(501))).toThrow();
+    db.close();
+  });
+
+  it("creates the search_history_profile_used index", () => {
+    const db = openDatabase({ path: join(dir, "index.db") });
+    const indexes = (
+      db.raw.prepare("SELECT name FROM sqlite_master WHERE type = 'index'").all() as {
+        name: string;
+      }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("search_history_profile_used");
+    db.close();
+  });
+
+  it("cascades a profile's history when the profile is removed", () => {
+    const db = openDatabase({ path: join(dir, "cascade.db") });
+    insertProfile(db, "p1");
+    insertQuery(db, "p1", "beleške");
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = 'p1'").run();
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM search_history").get() as { n: number }).n,
+    ).toBe(0);
+    db.close();
+  });
+
+  it("leaves an older database with an empty history — nothing to backfill from", () => {
+    const raw = new Database(join(dir, "upgrade.db"));
+    try {
+      raw.pragma("journal_mode = WAL");
+      raw.pragma("foreign_keys = ON");
+      raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
+        typeof value === "string" ? foldSearchText(value) : null,
+      );
+      runMigrations(raw, MIGRATIONS.slice(0, 49));
+      raw
+        .prepare(
+          "INSERT INTO profiles (id, kind, name, created_at) VALUES ('p1', 'personal', 'P', ?)",
+        )
+        .run(T);
+
+      runMigrations(raw, MIGRATIONS);
+
+      expect(raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+      expect(
+        (raw.prepare("SELECT count(*) AS n FROM search_history").get() as { n: number }).n,
+      ).toBe(0);
     } finally {
       raw.close();
     }

@@ -15,6 +15,7 @@ import {
   ProfileNotFoundError,
   ProfileStore,
   ProfileValidationError,
+  SearchHistoryStore,
   SqliteFlagStore,
   SubjectAttachmentStore,
   SubjectStore,
@@ -333,6 +334,12 @@ describe("ProfileStore.delete", () => {
     );
     new DashboardSetStore(db.raw, profileId).create("Tabla", NOW);
     new DashboardSettingsStore(db.raw, profileId).setBackground("f".repeat(64), "image/png", 4, NOW);
+    // The device-local search history (SRCH-009 / migration 050) — seeded so
+    // the schema-driven audit below actually has something to prove about it.
+    // Deleting a profile DOES take its remembered queries: they are excluded
+    // from an archive and from a restore's wipe, never from the profile they
+    // belong to ceasing to exist.
+    new SearchHistoryStore(db.raw, profileId).record("#posao rok:danas", NOW);
     // A flag row is the one profile-referencing row migration 001 gave no ON
     // DELETE CASCADE — the delete must clear it explicitly or fail on the FK.
     db.raw

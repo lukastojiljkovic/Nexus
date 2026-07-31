@@ -122,6 +122,7 @@ import {
   ProfileStore,
   rebuildSearchIndex,
   RestoreStore,
+  SearchHistoryStore,
   SearchStore,
   SqliteFlagStore,
   StatsStore,
@@ -478,6 +479,7 @@ import {
   type RestoreUndoResult,
   type RunningFocusSession,
   type SaveAttachmentResult,
+  type SearchHistoryEntry,
   type SearchPageResult,
   type SearchResult,
   type SnoozePreset,
@@ -2841,6 +2843,10 @@ function noteTemplateStore(profileId: string): NoteTemplateStore {
 
 function searchStore(profileId: string): SearchStore {
   return new SearchStore(requireDb().raw, profileId);
+}
+
+function searchHistoryStore(profileId: string): SearchHistoryStore {
+  return new SearchHistoryStore(requireDb().raw, profileId);
 }
 
 /**
@@ -7168,6 +7174,60 @@ function registerIpc(): void {
     return rebuildSearchIndex(requireDb().raw);
   });
 
+  /**
+   * The search HISTORY (SRCH-009 / migration 050): the profile's remembered
+   * queries, which are a different list from `search:recent`'s entities and
+   * never replace them.
+   *
+   * All four channels are ordinary profile-scoped store calls — no ranking, no
+   * index, no module gate: a query is text the user typed, not a row that
+   * belongs to a module, so a disabled module cannot make one of them
+   * unshowable. `now` comes from MAIN's clock, like every other timestamp on
+   * this wire — the renderer never gets to say when something happened
+   * (SEC-EL).
+   *
+   * The three mutations answer with the resulting list rather than `void`, so
+   * a surface that just changed the history repaints from what main actually
+   * holds instead of from its own guess at it — `dash:*`'s arrangement. Clear
+   * is the exception: it can only ever leave an empty list, so the useful
+   * answer is how many entries went.
+   */
+  ipcMain.handle(IpcChannel.searchHistory, (event, payload): SearchHistoryEntry[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return searchHistoryStore(profileId).list();
+  });
+
+  ipcMain.handle(IpcChannel.searchHistoryRecord, (event, payload): SearchHistoryEntry[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const query = asCappedString(body.query, "query", SEARCH_QUERY_MAX_BYTES);
+    const store = searchHistoryStore(profileId);
+    // The store re-validates the semantics this boundary cannot (SEC-EL-02):
+    // an empty or whitespace-only query is REFUSED there rather than quietly
+    // dropped here, because a renderer that sends one is a renderer that lost
+    // track of what its user did — and a silent no-op would hide that.
+    store.record(query, new Date().toISOString());
+    return store.list();
+  });
+
+  ipcMain.handle(IpcChannel.searchHistoryRemove, (event, payload): SearchHistoryEntry[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const query = asCappedString(body.query, "query", SEARCH_QUERY_MAX_BYTES);
+    const store = searchHistoryStore(profileId);
+    store.remove(query);
+    return store.list();
+  });
+
+  ipcMain.handle(IpcChannel.searchHistoryClear, (event, payload): number => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return searchHistoryStore(profileId).clear();
+  });
+
   // IMEX slice a1 (PRD 14 IMEX-001, extended by ADR-022): gathers this
   // profile's data and streams it to a path the native save dialog returns —
   // never a path the renderer supplies (SEC-EL) — either as a plain
@@ -8282,8 +8342,45 @@ async function runSmokeSearchRehearsal(): Promise<void> {
     }
 
     await rehearseAttachmentTextSearch(profile.id, task.id);
+    rehearseSearchHistory(profile.id);
   } finally {
     taskStore(profile.id).softDelete(task.id);
+  }
+}
+
+/**
+ * The search HISTORY (SRCH-009 / migration 050) against the packaged app's own
+ * encrypted connection: that the table is there, that the upsert-plus-eviction
+ * transaction runs, and that a re-used query moves rather than duplicates.
+ * Ends by clearing, so the smoke account is left exactly as it was found.
+ */
+function rehearseSearchHistory(profileId: string): void {
+  const history = searchHistoryStore(profileId);
+  if (history.list().length !== 0) {
+    throw new Error("expected a fresh smoke profile to have no search history");
+  }
+
+  history.record("#posao rok:danas", "2026-01-01T09:00:00.000Z");
+  history.record("resenje", "2026-01-01T09:01:00.000Z");
+  history.record("#posao rok:danas", "2026-01-01T09:02:00.000Z");
+
+  const entries = history.list();
+  if (entries.length !== 2) {
+    throw new Error(
+      `expected a re-used query to move rather than duplicate, got ${JSON.stringify(entries)}`,
+    );
+  }
+  // Stored as typed, operators included, and back on top.
+  if (entries[0]?.query !== "#posao rok:danas") {
+    throw new Error(`expected the re-used query on top, got ${JSON.stringify(entries)}`);
+  }
+
+  history.remove("resenje");
+  if (history.list().length !== 1) {
+    throw new Error("expected removing one history entry to leave exactly one");
+  }
+  if (history.clear() !== 1) {
+    throw new Error("expected clearing the history to report the one remaining entry");
   }
 }
 

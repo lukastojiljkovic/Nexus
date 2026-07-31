@@ -163,6 +163,21 @@ describe("matchSettings", () => {
     expect(result.sections.has("shortcuts")).toBe(true);
   });
 
+  it("finds the search-history control (SRCH-009) on the privacy card, by its label and by its words", () => {
+    // A hand-composed SHELL entry: search is not a module, so this control can
+    // never arrive through `moduleSettingsEntries` — the assertion on its
+    // section is what would fail if somebody moved it there.
+    const byLabel = search(s.privacy.searchHistory.clear);
+    expect(byLabel.hits.has("privacy-search-history")).toBe(true);
+    expect(byLabel.sections.has("privacy")).toBe(true);
+    expect(entryById("privacy-search-history").section).toBe("privacy");
+    expect(search("istorija").hits.has("privacy-search-history")).toBe(true);
+    // And it is a real hit on its own, not a side effect of the card's
+    // sentences — those live on `privacy-practices`, which has no label to
+    // highlight.
+    expect(search("istorija").hits.has("privacy-practices")).toBe(false);
+  });
+
   it("finds a declared CHOICE by one of its option labels, which nobody wrote twice", () => {
     // „Široka" is a `SettingsChoiceOption`'s copy, folded into the control's
     // keywords by the builder — the exact duplication this refactor removed.

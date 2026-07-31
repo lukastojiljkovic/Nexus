@@ -385,6 +385,13 @@ export {
 } from "./search/searchStore.js";
 export type { RecentOptions, SearchOptions } from "./search/searchStore.js";
 
+export {
+  MAX_SEARCH_HISTORY_ENTRIES,
+  MAX_SEARCH_HISTORY_QUERY_LENGTH,
+  SearchHistoryStore,
+} from "./search/searchHistoryStore.js";
+export type { SearchHistoryEntry } from "./search/searchHistoryStore.js";
+
 export { MAX_PRIVATE_NOTE_VERSIONS, PrivateNoteStore } from "./priv/privateNoteStore.js";
 export type { PrivateNoteMeta, PrivateNoteVersionMeta } from "./priv/privateNoteStore.js";
 

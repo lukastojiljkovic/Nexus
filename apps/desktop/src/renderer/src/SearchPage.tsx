@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { parseSearchQuery } from "@nexus/core";
 import { Button, Chip, EmptyState } from "@nexus/ui";
-import type { SearchPageResult, SearchResult } from "../../shared/ipc.js";
+import type { SearchHistoryEntry, SearchPageResult, SearchResult } from "../../shared/ipc.js";
 import {
   SEARCH_DEBOUNCE_MS,
   formatContextDate,
   groupByKind,
+  isRecordableQuery,
   renderHighlighted,
   toggleKindInQuery,
   toggleTagInQuery,
@@ -27,6 +28,13 @@ import { dayUnit, strings } from "./strings.js";
  * their active state back out of the query. It also means a query carried in
  * from the palette needs no translation, and one carried back out would mean
  * the same thing there.
+ *
+ * Browse mode shows two lists (SRCH-009), exactly as the palette's empty box
+ * does: „Nedavne pretrage" — the queries this profile typed — above the
+ * recent entities it opened. Picking a query fills the box rather than running
+ * anything, and each row can be forgotten on its own; the „Obriši istoriju
+ * pretrage" that empties the whole list lives in Settings' „Podaci i
+ * privatnost" card, beside the other statements about what is stored.
  */
 
 /** How many hits are revealed per "Prikaži još" press. No virtualization: a chunked list is enough for a 500-result ceiling. */
@@ -66,6 +74,8 @@ export function SearchPage({
   const [query, setQuery] = useState("");
   const [data, setData] = useState<SearchPageResult>(EMPTY_RESULT);
   const [visible, setVisible] = useState(RESULT_CHUNK);
+  /** The profile's remembered QUERIES (SRCH-009), shown in browse mode beside the recent entities — never instead of them. */
+  const [history, setHistory] = useState<readonly SearchHistoryEntry[]>([]);
   const requestIdRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -88,6 +98,25 @@ export function SearchPage({
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  // The remembered queries, read once on arrival. Every later change to them
+  // is this component's own write, and each of those hands back the fresh list
+  // (the `search:history-*` channels answer with the result), so there is
+  // nothing here to poll.
+  useEffect(() => {
+    let cancelled = false;
+    void window.nexus
+      .searchHistory(profileId)
+      .then((entries) => {
+        if (!cancelled) setHistory(entries);
+      })
+      .catch((error: unknown) => {
+        console.error("Nexus: loading the search history failed:", error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [profileId]);
 
   // Debounced fetch with a stale-response guard, the same two-layer scheme the
   // palette uses: the timer debounces keystrokes, while the request id guards
@@ -120,13 +149,43 @@ export function SearchPage({
   const flat = parsed.kinds.length === 1;
   const groups = flat ? [] : groupByKind(shown);
 
+  /**
+   * SRCH-009: a query is remembered when the user COMMITTED to it, which on
+   * this page means opening a result it found (`isRecordableQuery` carries the
+   * rest of the rule). The query string IS this page's whole search state —
+   * chips edit the text itself — so what is stored is exactly what is in the
+   * box, operators included. A failure is never worth a message: the search
+   * worked and the user is already on their way somewhere.
+   */
+  function rememberQuery(): void {
+    if (!isRecordableQuery(query)) return;
+    void window.nexus
+      .recordSearchHistory(profileId, query)
+      .then(setHistory)
+      .catch((error: unknown) => {
+        console.error("Nexus: recording the search history failed:", error);
+      });
+  }
+
+  function forgetQuery(text: string): void {
+    void window.nexus
+      .removeSearchHistory(profileId, text)
+      .then(setHistory)
+      .catch((error: unknown) => {
+        console.error("Nexus: forgetting a search history entry failed:", error);
+      });
+  }
+
   function renderRow(result: SearchResult): ReactNode {
     return (
       <button
         key={`${result.kind}-${result.entityId}`}
         type="button"
         className="searchpage__row"
-        onClick={() => onOpenResult(result)}
+        onClick={() => {
+          rememberQuery();
+          onOpenResult(result);
+        }}
       >
         <span className="searchpage__row-main">
           <Chip className="searchpage__row-kind">{strings.search.kindSingular[result.kind]}</Chip>
@@ -267,6 +326,40 @@ export function SearchPage({
       </div>
 
       {data.truncated && <p className="searchpage__truncated">{strings.search.page.truncatedNote}</p>}
+
+      {/* SRCH-009. Browse mode only — the moment anything is typed, that text
+          is a better answer than a list of earlier ones — and above the recent
+          ENTITIES rather than merged with them: one list is what you looked
+          for, the other what you opened. Picking a row fills the box; it does
+          not open anything, so nothing runs out of sight. */}
+      {isBrowsing && history.length > 0 && (
+        <div className="searchpage__group">
+          <div className="searchpage__group-heading">{strings.search.historyGroup}</div>
+          {history.map((entry) => (
+            <div className="searchpage__history" key={entry.query}>
+              <button
+                type="button"
+                className="searchpage__row searchpage__history-run"
+                onClick={() => {
+                  setQuery(entry.query);
+                  inputRef.current?.focus();
+                }}
+              >
+                <span className="searchpage__row-title">{entry.query}</span>
+              </button>
+              <button
+                type="button"
+                className="searchpage__history-remove"
+                aria-label={strings.search.historyRemove}
+                title={strings.search.historyRemove}
+                onClick={() => forgetQuery(entry.query)}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {data.hits.length === 0 ? (
         !isBrowsing && (

@@ -109,6 +109,31 @@ export function toggleKindInQuery(query: string, kind: SearchKind): string {
   return [`${KIND_QUERY_PREFIX[kind]}:`, ...all].join(" ");
 }
 
+/**
+ * Whether a query is one the history may remember (SRCH-009). The two surfaces
+ * share it for the reason everything else in this file is shared: what counts
+ * as a recordable query must mean the same thing on both, or the palette and
+ * the page would build two different histories of the same person's searching.
+ *
+ * WHEN a query is offered to this function is the load-bearing half of the
+ * rule, and it lives at the call sites because only they know it: a query is
+ * offered when the user COMMITTED to it — opened a result it found, or carried
+ * it to the full page — never when it merely ran. Both surfaces query on a
+ * debounce, so "it returned something" would record „b", „be", „bel", „bele"
+ * beside the word actually meant, and a history full of prefixes is worse than
+ * no history at all.
+ *
+ * What is left for this function is the one refusal that holds regardless of
+ * how it was reached: an empty or whitespace-only query is what an UNUSED
+ * search box contains. The store refuses it too (that is the real gate,
+ * SEC-EL-02); this keeps the renderer from making a round trip it knows will
+ * be refused — which is exactly what a palette in browse mode would do on
+ * every single result it opens.
+ */
+export function isRecordableQuery(query: string): boolean {
+  return query.trim().length > 0;
+}
+
 /** Adds or removes a `#token` in the query text — the tag-facet half of the same rule. */
 export function toggleTagInQuery(query: string, token: string): string {
   const all = words(query);

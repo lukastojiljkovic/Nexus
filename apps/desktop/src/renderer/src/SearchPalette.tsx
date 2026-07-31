@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { foldSearchTag, parseSearchQuery, SEARCH_KINDS } from "@nexus/core";
 import type { SearchKind } from "@nexus/core";
 import { Button, Chip } from "@nexus/ui";
-import type { NoteTag, SearchResult, TaskTag } from "../../shared/ipc.js";
+import type { NoteTag, SearchHistoryEntry, SearchResult, TaskTag } from "../../shared/ipc.js";
 import { REBUILD_COMMAND_ID, matchCommands } from "./searchCommands.js";
 import type { SearchCommand } from "./searchCommands.js";
 import {
@@ -12,6 +12,7 @@ import {
   buildEffectiveQuery,
   formatContextDate,
   groupByKind,
+  isRecordableQuery,
   renderHighlighted,
 } from "./searchShared.js";
 import { strings } from "./strings.js";
@@ -27,6 +28,12 @@ import { strings } from "./strings.js";
  * both. Selection styling mirrors `suggestionMenu.tsx` exactly (gold text +
  * weight over a soft surface, no glow, no inset bar); the DOM shape does
  * not, deliberately — see the row-role comment below.
+ *
+ * Over an EMPTY box it shows two lists, never one (SRCH-009): „Nedavne
+ * pretrage" — the queries this profile typed, remembered by `rememberQuery`
+ * below — above „Nedavno", the entities it opened. They answer different
+ * questions and are deliberately not merged; picking a query FILLS the input
+ * rather than running anything, so nothing ever executes out of sight.
  */
 
 const SEARCH_PAGE_SIZE = 30;
@@ -34,6 +41,14 @@ const SEARCH_PAGE_SIZE = 30;
 const STATUS_MESSAGE_DISPLAY_MS = 1400;
 /** Tag suggestions offered while a `#` token is being typed — a short list to pick from, not a tag browser. */
 const TAG_SUGGESTION_LIMIT = 6;
+/**
+ * How many remembered queries the OVERLAY offers (SRCH-009). The store keeps
+ * twenty; an overlay that showed all of them would push the recent entities —
+ * which this list is beside, never instead of — off the first screen. Five is
+ * the handful a user actually re-runs; the full twenty live on the search
+ * page, which has the room for them.
+ */
+const HISTORY_ROW_LIMIT = 5;
 
 const collator = new Intl.Collator(["sr-Latn", "sr"]);
 
@@ -48,6 +63,9 @@ interface TagOption {
 
 /** One shared empty list, so "no `#` token is being typed" keeps a stable identity across keystrokes instead of resetting the effects that depend on the suggestion set. */
 const NO_TAG_SUGGESTIONS: readonly TagOption[] = [];
+
+/** The same trick for the history rows: "the box is not empty" must keep one identity across keystrokes. */
+const NO_HISTORY: readonly SearchHistoryEntry[] = [];
 
 /**
  * Both modules' tags as one list — a `#` token filters tasks and notes alike,
@@ -92,6 +110,7 @@ export interface SearchPaletteProps {
 }
 
 type PaletteRow =
+  | { readonly id: string; readonly kind: "history"; readonly entry: SearchHistoryEntry }
   | { readonly id: string; readonly kind: "tag"; readonly tag: TagOption }
   | { readonly id: string; readonly kind: "result"; readonly result: SearchResult }
   | { readonly id: string; readonly kind: "command"; readonly command: SearchCommand }
@@ -105,6 +124,10 @@ function commandRowId(command: SearchCommand): string {
 }
 function tagRowId(tag: TagOption): string {
   return `search-row-tag-${tag.key}`;
+}
+/** Percent-encoded, since a remembered query is free text and a DOM id may not carry spaces. */
+function historyRowId(entry: SearchHistoryEntry): string {
+  return `search-row-history-${encodeURIComponent(entry.query)}`;
 }
 
 export function SearchPalette({
@@ -132,6 +155,8 @@ export function SearchPalette({
   const [chipKinds, setChipKinds] = useState<ReadonlySet<SearchKind>>(new Set());
   const [results, setResults] = useState<SearchResult[]>([]);
   const [tagOptions, setTagOptions] = useState<TagOption[]>([]);
+  /** The profile's remembered QUERIES (SRCH-009) — a different list from `results`, which holds the entities it touched. */
+  const [history, setHistory] = useState<readonly SearchHistoryEntry[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const requestIdRef = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -169,6 +194,18 @@ export function SearchPalette({
       .slice(0, TAG_SUGGESTION_LIMIT);
   }, [activeTag, tagOptions]);
 
+  /**
+   * Remembered queries are offered only over the EMPTY box — the one moment
+   * they are an answer to the question on screen. The instant a character is
+   * typed, that character is a better filter than a list of what was typed
+   * before it, and command mode (">") is about commands, not searches.
+   */
+  const historyRows = useMemo(
+    (): readonly SearchHistoryEntry[] =>
+      isRecent && !parsed.commandsOnly ? history.slice(0, HISTORY_ROW_LIMIT) : NO_HISTORY,
+    [isRecent, parsed.commandsOnly, history],
+  );
+
   // Opening resets every bit of the palette's own transient state and
   // remembers what had focus so it can be restored; closing hands focus back
   // rather than leaving it stranded wherever the portal happened to sit.
@@ -188,23 +225,32 @@ export function SearchPalette({
     return undefined;
   }, [open]);
 
-  // The profile's tag vocabulary, loaded once per opening through the existing
-  // list bridges — the `#` suggestions are the only thing that needs it, and a
-  // palette session is short enough that re-fetching per keystroke would be
-  // two IPC round trips for a list that cannot change while it is on screen.
+  // The profile's tag vocabulary and its remembered queries, loaded once per
+  // opening through the existing list bridges — the `#` suggestions and the
+  // history group are the only things that need them, and a palette session is
+  // short enough that re-fetching per keystroke would be three IPC round trips
+  // for lists that cannot change while they are on screen. The two exceptions
+  // are this component's own writes (recording a query, forgetting one), which
+  // hand back the fresh list rather than triggering a reload.
   useEffect(() => {
     if (!open) return undefined;
     let cancelled = false;
     void (async () => {
       try {
-        const [noteTags, taskTags] = await Promise.all([
+        const [noteTags, taskTags, entries] = await Promise.all([
           window.nexus.listNoteTags(profileId),
           window.nexus.listTaskTags(profileId),
+          window.nexus.searchHistory(profileId),
         ]);
-        if (!cancelled) setTagOptions(mergeTagOptions(noteTags, taskTags));
+        if (cancelled) return;
+        setTagOptions(mergeTagOptions(noteTags, taskTags));
+        setHistory(entries);
       } catch (error) {
-        console.error("Nexus: loading search tag suggestions failed:", error);
-        if (!cancelled) setTagOptions([]);
+        console.error("Nexus: loading the palette's tag suggestions and history failed:", error);
+        if (!cancelled) {
+          setTagOptions([]);
+          setHistory([]);
+        }
       }
     })();
     return () => {
@@ -276,8 +322,18 @@ export function SearchPalette({
 
   // Tag suggestions come first: while a `#` token is being typed, completing
   // it is the likelier intent than opening whatever the half-typed token
-  // currently matches.
+  // currently matches. Remembered queries sit in that same leading position —
+  // the two can never both be present (one needs a `#` token typed, the other
+  // an empty box) — and for the same reason: over an EMPTY box, "run that
+  // search again" is the likelier intent, and the row only fills the input, so
+  // Enter on it is visible and reversible rather than a navigation nobody
+  // asked for.
   const rows: PaletteRow[] = [
+    ...historyRows.map((entry) => ({
+      id: historyRowId(entry),
+      kind: "history" as const,
+      entry,
+    })),
     ...tagSuggestions.map((tag) => ({ id: tagRowId(tag), kind: "tag" as const, tag })),
     ...results.map((result) => ({ id: resultRowId(result), kind: "result" as const, result })),
     ...matchedCommands.map((command) => ({
@@ -295,7 +351,7 @@ export function SearchPalette({
   // Fresh row set -> back to the top, mirroring suggestionMenu.tsx's own rule.
   useEffect(() => {
     setActiveIndex(0);
-  }, [results, matchedCommands, tagSuggestions]);
+  }, [results, matchedCommands, tagSuggestions, historyRows]);
 
   // Keeps the keyboard-active row inside the list's own scroll window,
   // copying suggestionMenu.tsx's manual-scrollTop approach and its reasoning
@@ -321,7 +377,7 @@ export function SearchPalette({
       container.scrollTop = activeBottom - container.clientHeight;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIndex, results, matchedCommands, tagSuggestions]);
+  }, [activeIndex, results, matchedCommands, tagSuggestions, historyRows]);
 
   function toggleChip(kind: SearchKind): void {
     setChipKinds((previous) => {
@@ -346,8 +402,59 @@ export function SearchPalette({
     onClose();
   }
 
+  /**
+   * SRCH-009: remembers a query the user COMMITTED to. Both moments that count
+   * as a commitment are below — `activateResult` and `activateShowAll` — and
+   * `isRecordableQuery` carries the rest of the rule with its reasoning.
+   *
+   * The EFFECTIVE query is what is stored (chips spliced in as the tokens a
+   * user could have typed), because that is the string the search ran with —
+   * picking the row back out of the history has to reproduce the same search,
+   * filters included. Everything else is verbatim, operators included.
+   *
+   * Failing to remember a query is never worth a message: the search itself
+   * succeeded, and the user is already on their way somewhere.
+   */
+  function rememberQuery(text: string): void {
+    if (!isRecordableQuery(text)) return;
+    void window.nexus
+      .recordSearchHistory(profileId, text)
+      .then(setHistory)
+      .catch((error: unknown) => {
+        console.error("Nexus: recording the search history failed:", error);
+      });
+  }
+
+  function forgetQuery(text: string): void {
+    void window.nexus
+      .removeSearchHistory(profileId, text)
+      .then(setHistory)
+      .catch((error: unknown) => {
+        console.error("Nexus: forgetting a search history entry failed:", error);
+      });
+  }
+
   function activateResult(result: SearchResult): void {
+    rememberQuery(buildEffectiveQuery(query, chipKinds, parsed.kinds));
     leaveFor(() => onOpenResult(result));
+  }
+
+  /**
+   * Puts a remembered query back in the box — deliberately NOT a navigation
+   * and NOT an immediate search: the palette stays open, the caret returns to
+   * the input, and the user sees the query that is about to run before it
+   * runs. A history row that silently executed something the user cannot read
+   * would be the one thing a privacy surface must never do.
+   *
+   * The chip Set is cleared with it: the remembered query already carries
+   * whatever kind filters were active as their typed tokens (that is what
+   * `rememberQuery` stores), so leaving chips on would layer a second,
+   * invisible filter over one the input is showing in full.
+   */
+  function replayQuery(entry: SearchHistoryEntry): void {
+    setQuery(entry.query);
+    setChipKinds(new Set());
+    inputRef.current?.focus();
   }
 
   function activateCommand(command: SearchCommand): void {
@@ -379,12 +486,18 @@ export function SearchPalette({
 
   /** The page must mean exactly what the palette currently shows, so chip filters ride along as their typed tokens rather than being dropped. */
   function activateShowAll(): void {
-    leaveFor(() => onOpenPage(buildEffectiveQuery(query, chipKinds, parsed.kinds)));
+    const effective = buildEffectiveQuery(query, chipKinds, parsed.kinds);
+    // Carrying a query to the full page is the other thing that counts as
+    // using it (see `rememberQuery`): the user asked for this exact search to
+    // continue somewhere else, which no half-typed prefix ever is.
+    rememberQuery(effective);
+    leaveFor(() => onOpenPage(effective));
   }
 
   function activateRow(row: PaletteRow | undefined): void {
     if (!row) return;
-    if (row.kind === "tag") completeTag(row.tag);
+    if (row.kind === "history") replayQuery(row.entry);
+    else if (row.kind === "tag") completeTag(row.tag);
     else if (row.kind === "result") activateResult(row.result);
     else if (row.kind === "command") activateCommand(row.command);
     else activateShowAll();
@@ -397,6 +510,16 @@ export function SearchPalette({
       return;
     }
     if (rows.length === 0) return;
+    const activeRow = rows[activeIndex];
+    // Forgetting the active remembered query, the keyboard half of its „×"
+    // (SRCH-009). Guarded on a genuinely EMPTY box rather than on `isRecent`:
+    // Delete is forward-delete in a text field, and a box holding only spaces
+    // still has something for it to delete.
+    if (event.key === "Delete" && query.length === 0 && activeRow?.kind === "history") {
+      event.preventDefault();
+      forgetQuery(activeRow.entry.query);
+      return;
+    }
     if (event.key === "ArrowDown") {
       event.preventDefault();
       setActiveIndex((index) => (index + 1) % rows.length);
@@ -457,6 +580,55 @@ export function SearchPalette({
         {result.contextDate !== null && (
           <div className="search__row-date">{formatContextDate(result.contextDate)}</div>
         )}
+      </div>
+    );
+  }
+
+  /**
+   * One remembered query (SRCH-009). The row's accessible name is set
+   * explicitly to the query alone: the „×" inside it is real interactive
+   * content, and without this the option would announce itself as the query
+   * plus that button's label. The button is `tabIndex={-1}` because this is a
+   * combobox composite where the input holds focus throughout — Delete on the
+   * active row is its keyboard equivalent (see `handleInputKeyDown`).
+   */
+  function renderHistoryRow(entry: SearchHistoryEntry): ReactNode {
+    const id = historyRowId(entry);
+    const isActive = rowIndexById.get(id) === activeIndex;
+    return (
+      <div
+        key={id}
+        id={id}
+        role="option"
+        aria-selected={isActive}
+        aria-label={entry.query}
+        className={isActive ? "search__row search__row--active" : "search__row"}
+        onMouseEnter={() => {
+          const index = rowIndexById.get(id);
+          if (index !== undefined) setActiveIndex(index);
+        }}
+        onMouseDown={(event) => {
+          event.preventDefault();
+          replayQuery(entry);
+        }}
+      >
+        <span className="search__row-title">{entry.query}</span>
+        <button
+          type="button"
+          tabIndex={-1}
+          className="search__row-remove"
+          aria-label={strings.search.historyRemove}
+          title={strings.search.historyRemove}
+          onMouseDown={(event) => {
+            // Stops the row's own mousedown from also replaying the query the
+            // user is in the middle of deleting.
+            event.preventDefault();
+            event.stopPropagation();
+            forgetQuery(entry.query);
+          }}
+        >
+          ×
+        </button>
       </div>
     );
   }
@@ -578,6 +750,16 @@ export function SearchPalette({
         </div>
 
         <div className="search__list" role="listbox" id={listboxId} ref={listRef}>
+          {/* Its own group above „Nedavno", never merged into it: one list is
+              what you looked FOR, the other what you opened, and a single
+              heading over both would say neither. */}
+          {historyRows.length > 0 && (
+            <div className="search__group">
+              <div className="search__group-heading">{strings.search.historyGroup}</div>
+              {historyRows.map((entry) => renderHistoryRow(entry))}
+            </div>
+          )}
+
           {tagSuggestions.length > 0 && (
             <div className="search__group">
               {/* The NOTE module's own label, reused rather than reworded: this
@@ -641,7 +823,14 @@ export function SearchPalette({
         <div className="search__footer">
           {statusMessage ?? (
             <>
-              <span>{strings.search.hint}</span>
+              {/* The keys change meaning on a history row — Enter fills the box
+                  instead of opening something, and Delete forgets the row — so
+                  the hint changes with them rather than printing a lie. */}
+              <span>
+                {rows[activeIndex]?.kind === "history"
+                  ? strings.search.historyHint
+                  : strings.search.hint}
+              </span>
               <span className="search__footer-operators">{strings.search.operatorHint}</span>
             </>
           )}

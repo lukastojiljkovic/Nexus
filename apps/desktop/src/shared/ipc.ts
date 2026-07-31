@@ -284,6 +284,16 @@ export const IpcChannel = {
   searchRecent: "search:recent",
   searchPage: "search:page",
   searchRebuild: "search:rebuild",
+  // The profile's remembered QUERIES (SRCH-009 / migration 050) — a different
+  // list from `search:recent`, which answers with the ENTITIES the profile
+  // touched. Four channels rather than one with a mode field: recording,
+  // forgetting one and forgetting all are three different powers over a
+  // privacy surface, and a shared channel would be one validated field away
+  // from letting a request to read the history erase it.
+  searchHistory: "search:history",
+  searchHistoryRecord: "search:history-record",
+  searchHistoryRemove: "search:history-remove",
+  searchHistoryClear: "search:history-clear",
   imexExport: "imex:export",
   // The calendar alone, as an RFC 5545 `.ics` (CAL-008). Its own channel rather
   // than a mode on `imex:export`: it writes a different file, in a different
@@ -3859,6 +3869,53 @@ export interface SearchPageResult {
 }
 
 /**
+ * The profile's search HISTORY (SRCH-009 / migration 050) — the queries it
+ * typed, not the entities it opened. Deliberately not folded into the channels
+ * above: `searchRecent` answers "what did you touch", this answers "what did
+ * you look for", and the two lists appear side by side without one standing in
+ * for the other.
+ *
+ * Stored per profile in the encrypted database and **excluded from the export
+ * archive and from the restore wipe alike** — the `backup_settings` shape (see
+ * migration 050's doc comment). Nothing here rides in an archive, so no
+ * interchange version accompanies it.
+ */
+
+/** One remembered search: the query exactly as it was typed, operators included, and when it was last used. */
+export interface SearchHistoryEntry {
+  query: string;
+  usedAt: string;
+}
+
+/** Reads this profile's remembered queries, newest first. Bounded by the store's own cap — the renderer never negotiates a size for a list this short. */
+export interface SearchHistoryRequest {
+  profileId: string;
+}
+
+/**
+ * Remembers one query as USED. The renderer calls this only at a moment the
+ * user committed to a query — opening a result found by it, or carrying it to
+ * the full search page — never per keystroke: a debounced box would otherwise
+ * store „b", „be", „bel", „bele", which is a worse history than none.
+ * `query` is capped exactly like `searchQuery`'s.
+ */
+export interface SearchHistoryRecordRequest {
+  profileId: string;
+  query: string;
+}
+
+/** Forgets one remembered query — the „×" on a history row. */
+export interface SearchHistoryRemoveRequest {
+  profileId: string;
+  query: string;
+}
+
+/** Forgets everything this profile searched for — Settings' „Obriši istoriju pretrage". */
+export interface SearchHistoryClearRequest {
+  profileId: string;
+}
+
+/**
  * `passphrase` is renderer-declared like every other explicit user choice on
  * this wire (SEC-EL-02: untrusted input, re-validated in main) — `null` is
  * the explicitly-confirmed plaintext export, a non-null string is re-checked
@@ -5988,6 +6045,20 @@ export interface NexusApi {
   searchPage(profileId: string, query: string): Promise<SearchPageResult>;
   /** Rebuilds the ENTIRE file's search index from scratch (corruption recovery, not a per-profile operation); returns the resulting row count. */
   rebuildSearchIndex(profileId: string): Promise<number>;
+  /** This profile's remembered QUERIES, newest first (SRCH-009) — the list beside `searchRecent`'s entities, never a replacement for it. */
+  searchHistory(profileId: string): Promise<SearchHistoryEntry[]>;
+  /**
+   * Remembers `query` as used just now, deduped and capped by the store, and
+   * answers with the resulting list — so the surface that recorded it needs no
+   * second round trip to show what changed. Called only when a query was
+   * COMMITTED to (a result opened from it, or it carried to the full page),
+   * never per keystroke.
+   */
+  recordSearchHistory(profileId: string, query: string): Promise<SearchHistoryEntry[]>;
+  /** Forgets one remembered query, answering with what is left. Removing something already gone is done, not an error. */
+  removeSearchHistory(profileId: string, query: string): Promise<SearchHistoryEntry[]>;
+  /** Forgets every remembered query, returning how many went — what Settings' „Obriši istoriju pretrage" reports. */
+  clearSearchHistory(profileId: string): Promise<number>;
   /**
    * Full-data export (IMEX slice a1, extended by ADR-022). `passphrase` seals
    * the archive under a passphrase-derived key (an `.nexus` `NXA1`

@@ -42,6 +42,7 @@ import {
   RestoreStore,
   RestoreValidationError,
   RESTORE_WIPE_TABLES,
+  SearchHistoryStore,
   SqliteFlagStore,
   StudySettingsStore,
   SubjectAttachmentStore,
@@ -988,6 +989,15 @@ describe("RestoreStore", () => {
     //    restore may ever touch: destroying it would destroy the only paths to
     //    the DEK that opens the rows the conditional replace just preserved
     //    (or wrote).
+    //  - search_history (migration 050 / SRCH-009): deliberately DEVICE-LOCAL,
+    //    on `backup_settings`' exact terms — excluded from the export archive
+    //    and from the wipe alike. What this device's user searched for is a
+    //    fact about how the machine was USED, not content the profile
+    //    contains: an archive must not carry a person's queries to whoever
+    //    they hand it to, and replacing a profile's rows does not change what
+    //    was typed into this install's search box. A restore that wiped it
+    //    would be answering a question nobody asked; one that FILLED it would
+    //    be a privacy leak in the other direction.
     const allowlist = new Set<string>([
       "meta",
       "profiles",
@@ -1001,6 +1011,7 @@ describe("RestoreStore", () => {
       "private_notes",
       "private_note_versions",
       "private_settings",
+      "search_history",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);
@@ -1045,6 +1056,26 @@ describe("RestoreStore", () => {
     const store = new PrivateNoteStore(db.raw, profileA);
     expect(new Uint8Array(store.readSealed("priv-1"))).toEqual(seeded.note);
     expect(new Uint8Array(store.readVersion("priv-1", 1))).toEqual(seeded.version);
+  });
+
+  it("T3b2: leaves the DEVICE-LOCAL search history standing across a whole-profile replace (SRCH-009)", () => {
+    // The other half of migration 050's promise. The T3 guard above proves the
+    // wipe list does not NAME `search_history`; this proves what that means in
+    // practice — a restore neither erases the queries this device's user typed
+    // nor invents any, because an archive carries none to invent them from.
+    const profileA = createProfile(db, "A");
+    const fixtureA = seedFixture(db, profileA, "A");
+    const history = new SearchHistoryStore(db.raw, profileA);
+    history.record("#posao rok:danas", "2026-01-15T09:00:00.000Z");
+
+    new RestoreStore(db.raw, profileA).replaceProfileData(
+      { profileName: "A", profilePicture: null, settings: emptySettings(), data: fixtureA.data, derived: fixtureA.derived },
+      NOW,
+    );
+
+    expect(history.list()).toEqual([
+      { query: "#posao rok:danas", usedAt: "2026-01-15T09:00:00.000Z" },
+    ]);
   });
 
   it("T3c: wipes and refills the private tables byte-for-byte when privateSealed IS supplied, counting the rows written", () => {

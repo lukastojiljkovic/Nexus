@@ -544,6 +544,15 @@ export class NoteTemplateNotFoundError extends DatabaseError {}
  * well-formed expression from `toFtsMatchExpression` (`@nexus/core`) can
  * never trigger the last case, but the store's boundary does not get to
  * assume its caller built one correctly.
+ *
+ * Shared with `SearchHistoryStore` (SRCH-009), whose refusals are the same
+ * kind of thing about the same feature: an empty or whitespace-only query —
+ * what an UNUSED search box contains, and remembering it would be remembering
+ * nothing — one past `MAX_SEARCH_HISTORY_QUERY_LENGTH`, a non-integer or
+ * non-positive read limit, or a malformed `now`. One error class rather than
+ * two, because a renderer that mishandles one mishandles the other
+ * identically: both mean "the search surface sent something a search surface
+ * never sends".
  */
 export class SearchValidationError extends DatabaseError {}
 
