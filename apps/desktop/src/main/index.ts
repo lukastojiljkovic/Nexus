@@ -535,7 +535,7 @@ import {
   type TaskAttachmentsAddResult,
   type TaskListsSnapshot,
 } from "../shared/ipc.js";
-import { createModuleRegistry } from "../shared/modules.js";
+import { businessProfileFlags, createModuleRegistry } from "../shared/modules.js";
 
 const isSmoke = process.argv.includes("--smoke");
 
@@ -911,28 +911,10 @@ function seedFirstRunProfile(database: NexusDatabase): void {
 }
 
 /**
- * What a fresh BUSINESS profile's `feature_flags` rows spell (ADR-058,
- * founder-approved): the four work modules on, STUDY off. Written as explicit
- * rows — not left to `defaultEnabled` — so the preset is a stored fact of the
- * profile rather than an accident of this build's manifests. The `settings`
- * module is deliberately NOT here: it is locked (`LOCKED_MODULE_IDS`,
- * `shared/modules.ts`) and its absent row falls back to `defaultEnabled: true`,
- * exactly as the gallery expects — a personal profile gets no rows at all,
- * since the defaults already say all-on.
- */
-const BUSINESS_DEFAULT_FLAGS: readonly { moduleId: string; enabled: boolean }[] = [
-  { moduleId: "dashboard", enabled: true },
-  { moduleId: "tasks", enabled: true },
-  { moduleId: "calendar", enabled: true },
-  { moduleId: "notes", enabled: true },
-  { moduleId: "study", enabled: false },
-];
-
-/**
  * `profiles:create` (ADR-058): the store mints the row, then main seeds what
  * the profile STARTS WITH — its Inbox (the `seedFirstRunProfile` precedent:
  * `TaskStore` refuses to place a task without one) and, for a business
- * profile, the module preset above. The seed order is deliberate: the Inbox
+ * profile, `businessProfileFlags` (`shared/modules.ts`). The seed order is deliberate: the Inbox
  * first, because a profile without one is broken while a profile without flag
  * rows merely runs on defaults.
  */
@@ -943,7 +925,7 @@ async function handleProfilesCreate(kind: ProfileKind, name: string): Promise<Pr
   new TaskListStore(database.raw, created.id).ensureInbox(now);
   if (kind === "business") {
     const flags = new SqliteFlagStore(database.raw, created.id);
-    for (const { moduleId, enabled } of BUSINESS_DEFAULT_FLAGS) {
+    for (const { moduleId, enabled } of businessProfileFlags(moduleRegistry)) {
       await flags.set(moduleId, enabled);
     }
   }

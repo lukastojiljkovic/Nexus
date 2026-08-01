@@ -581,3 +581,41 @@ export function createModuleRegistry(): ModuleRegistry {
   }
   return registry;
 }
+
+/**
+ * The modules a fresh BUSINESS profile turns OFF (ADR-058, founder-approved).
+ * STUDY, and nothing else: a business profile is where exam planning is noise.
+ */
+export const BUSINESS_DISABLED_MODULE_IDS: ReadonlySet<string> = new Set(["study"]);
+
+/**
+ * The `feature_flags` rows a fresh business profile is seeded with — one per
+ * unlocked module, `defaultEnabled` unless the set above says otherwise.
+ *
+ * **Derived rather than listed, and that is a repair.** This was a hand-written
+ * list of five modules in `main/index.ts` whose comment claimed the preset was
+ * „a stored fact of the profile rather than an accident of this build's
+ * manifests" — while FIN, PRIV and DOC, every one of which shipped after it was
+ * written, were never added to it and so fell through to exactly that accident.
+ * A list every future module must remember to edit is a list that will be wrong
+ * again; a derivation can only be wrong once.
+ *
+ * The stored-fact property survives, because this runs ONCE, at creation, and
+ * the rows are written then: a later build that changes a `defaultEnabled` does
+ * not reach back into a profile that already exists.
+ *
+ * Locked modules are skipped — they cannot be switched off anywhere, so a row
+ * for one would be a fact nobody can act on. A PERSONAL profile still gets no
+ * rows at all, since the defaults already say what it needs.
+ */
+export function businessProfileFlags(
+  registry: ModuleRegistry,
+): { moduleId: string; enabled: boolean }[] {
+  return registry
+    .all()
+    .filter((manifest) => !LOCKED_MODULE_IDS.has(manifest.id))
+    .map((manifest) => ({
+      moduleId: manifest.id,
+      enabled: !BUSINESS_DISABLED_MODULE_IDS.has(manifest.id) && manifest.defaultEnabled,
+    }));
+}

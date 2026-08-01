@@ -12,7 +12,12 @@ import { FILE_VIEWS } from "./filePrefs.js";
 import { MODULE_SETTINGS_PANELS } from "./moduleSettingsPanels.js";
 import { NOTE_WIDTHS } from "./notePrefs.js";
 import { BLOCKED_IN_TODAY_OPTIONS } from "./taskPrefs.js";
-import { createModuleRegistry } from "../../shared/modules.js";
+import {
+  BUSINESS_DISABLED_MODULE_IDS,
+  LOCKED_MODULE_IDS,
+  businessProfileFlags,
+  createModuleRegistry,
+} from "../../shared/modules.js";
 import { strings } from "./strings.js";
 
 /**
@@ -421,5 +426,44 @@ describe("the per-widget configuration declarations (DASH-004 / ADR-059)", () =>
         }
       }
     }
+  });
+});
+
+/**
+ * ADR-058's business preset. It used to be a hand-written list of five module
+ * ids in `main/index.ts`, and FIN, PRIV and DOC — every module that shipped
+ * after it was written — were never added to it, so they quietly fell back to
+ * `defaultEnabled`, which is precisely what its own comment said the list
+ * existed to prevent. It is derived now, and these are the tests that keep it
+ * honest: the first fails the day a module is registered without one.
+ */
+describe("businessProfileFlags — the seeded preset covers every module there is", () => {
+  const registry = createModuleRegistry();
+  const flags = businessProfileFlags(registry);
+
+  it("writes exactly one row per unlocked module, and none for a locked one", () => {
+    const rowIds = flags.map((flag) => flag.moduleId);
+    expect(new Set(rowIds).size).toBe(rowIds.length);
+    expect([...rowIds].sort()).toEqual(
+      registry
+        .all()
+        .map((manifest) => manifest.id)
+        .filter((id) => !LOCKED_MODULE_IDS.has(id))
+        .sort(),
+    );
+  });
+
+  it("turns off exactly the disabled set and otherwise repeats the module's own default", () => {
+    for (const { moduleId, enabled } of flags) {
+      const manifest = registry.get(moduleId);
+      expect(manifest, moduleId).toBeDefined();
+      expect(enabled, moduleId).toBe(
+        !BUSINESS_DISABLED_MODULE_IDS.has(moduleId) && manifest!.defaultEnabled,
+      );
+    }
+  });
+
+  it("keeps STUDY off — the one thing a business profile does not do", () => {
+    expect(flags.find((flag) => flag.moduleId === "study")?.enabled).toBe(false);
   });
 });
