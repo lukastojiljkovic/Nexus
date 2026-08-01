@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatChord, matchesChord, moduleNavPosition, resolveEnabled } from "@nexus/core";
+import type { CanvasRef } from "@nexus/core";
 import { Button, EmptyState, NavItem } from "@nexus/ui";
 import type { ThemeName } from "@nexus/tokens";
 import type {
@@ -794,6 +795,28 @@ export function App() {
   }
 
   /**
+   * Follows a card on „Tabla" to the object it points at (CANV slice c).
+   *
+   * `openAttachmentOwner`'s arrangement exactly, and for its stated reason: the
+   * SAME intents (021-e) reached from a third direction. A card is a pointer at
+   * a note, a task or an event, and this app has one way into each of those
+   * from elsewhere — a canvas does not get a second one.
+   */
+  function openCanvasRef(ref: CanvasRef): void {
+    switch (ref.kind) {
+      case "note":
+        openNote(ref.id);
+        return;
+      case "task":
+        dispatchIntent({ module: "tasks", intent: { kind: "reveal", taskId: ref.id } });
+        return;
+      case "event":
+        dispatchIntent({ module: "calendar", intent: { kind: "reveal-event", eventId: ref.id } });
+        return;
+    }
+  }
+
+  /**
    * Runs one of the remappable core actions (ADR-040). Every action dismisses
    * the overlays it is not itself opening: these actions navigate or put a new
    * surface up, and landing underneath one that is still on screen is not what
@@ -1323,13 +1346,20 @@ export function App() {
             // discard when the active profile changes.
             <ToolsPage enabledModules={enabledIds} />
           ) : effectiveId === "canvas" && activeProfile ? (
-            // `theme` rather than an `intent` pair: CANV publishes no
-            // quick-create command (`searchCommands.ts`'s `CreatableModuleId` is
-            // untouched — a board is made on the page, from a name), but the
-            // embedded editor needs to be told which theme it is drawing in,
-            // because its own ~209 CSS variables are scoped to `.excalidraw`
-            // and never see `<html data-theme>`.
-            <CanvasPage key={activeProfile.id} profileId={activeProfile.id} theme={theme} />
+            // No `intent` pair, and that is still true in slice c: CANV
+            // publishes no quick-create command (`searchCommands.ts`'s
+            // `CreatableModuleId` is untouched — a board is made on the page,
+            // from a name) and nothing deep-links INTO a board. The two props
+            // it does take are both outbound — `theme`, because the embedded
+            // editor's ~209 CSS variables are scoped to `.excalidraw` and never
+            // see `<html data-theme>`, and `onOpenRef`, because a card is a
+            // pointer and following one is a cross-module intent App owns.
+            <CanvasPage
+              key={activeProfile.id}
+              profileId={activeProfile.id}
+              theme={theme}
+              onOpenRef={openCanvasRef}
+            />
           ) : effectiveId === SEARCH_PAGE_ID && activeProfile ? (
             <SearchPage
               key={activeProfile.id}

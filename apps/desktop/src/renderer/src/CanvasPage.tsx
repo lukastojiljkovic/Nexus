@@ -4,9 +4,12 @@
 // might one day reach it. See `excalidrawAssets.ts` for the whole story.
 import "./excalidrawAssets.js";
 import {
+  CaptureUpdateAction,
   Excalidraw,
   MainMenu,
+  ROUNDNESS,
   convertToExcalidrawElements,
+  newElementWith,
   restore,
   serializeAsJSON,
 } from "@excalidraw/excalidraw";
@@ -17,12 +20,29 @@ import type {
 } from "@excalidraw/excalidraw/types";
 import "@excalidraw/excalidraw/index.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isCanvasRefText } from "@nexus/core";
+import type { CanvasRef } from "@nexus/core";
 import type { ThemeName } from "@nexus/tokens";
 import { Button, EmptyState, TextField } from "@nexus/ui";
 import { MAX_CANVAS_BOARD_NAME_LENGTH, MAX_CANVAS_SCENE_LENGTH } from "../../shared/ipc.js";
-import type { CanvasBoard } from "../../shared/ipc.js";
+import type { CanvasBoard, CanvasRefCard } from "../../shared/ipc.js";
 import { boardAfterDelete, looksLikeMermaid, resolveActiveBoard } from "./canvasBoards.js";
+import { CanvasCard } from "./CanvasCard.js";
+import { CanvasCardPicker } from "./CanvasCardPicker.js";
 import { CanvasToolbar } from "./CanvasToolbar.js";
+import {
+  CANVAS_CARD_HEIGHT,
+  CANVAS_CARD_WIDTH,
+  canvasCardElement,
+  canvasCardInteraction,
+  canvasCardMap,
+  canvasCardView,
+  canvasDropOrigin,
+  canvasSceneRefs,
+  sameCanvasRefs,
+  type CanvasPickerRow,
+  type CanvasSceneElement,
+} from "./canvasCards.js";
 import {
   canvasToolbarStateOf,
   sameCanvasToolbarState,
@@ -87,6 +107,23 @@ import { strings } from "./strings.js";
  * defaults a NEW shape gets are not CSS at all but scene values, so they are
  * read off the computed tokens at mount (`elementDefaults`) rather than written
  * as literals anywhere.
+ *
+ * **Cards (slice c).** A Nexus object goes on a board as an *embeddable* whose
+ * `link` is a `nexus://kind/uuid` reference, and this page draws it itself:
+ * `validateEmbeddable` admits exactly `isCanvasRefText` and nothing else, and
+ * `renderEmbeddable` returns a `CanvasCard` on every path there is. Both halves
+ * matter — the editor falls through to a REAL IFRAME on a nullish render, and it
+ * skips the overlay entirely for a link that failed validation. `canvasCards.ts`
+ * holds every decision either one makes, `CanvasCard.tsx` the drawing, and
+ * neither adds a migration or an interchange version: a scene with cards is the
+ * same stored column as a scene without.
+ *
+ * **Resolution is a batch against the SET of references, not against the
+ * scene.** `onChange` fires per pointer move, and moving a card changes the
+ * document without changing what is on it — so the references are collected,
+ * compared as a set (`sameCanvasRefs`) and only then resolved in one round trip,
+ * the same cheap-comparison-in-front-of-expensive-work shape the autosave's
+ * `getSceneVersion` guard has.
  */
 
 /**
@@ -107,10 +144,20 @@ type RestoreInput = NonNullable<Parameters<typeof restore>[0]>;
 type RestoreElements = Exclude<RestoreInput["elements"], undefined>;
 type RestoreFiles = Exclude<RestoreInput["files"], undefined>;
 
+/** No board has cards yet, or the one open has none — one frozen empty map rather than a new one per render. */
+const NO_CARDS: ReadonlyMap<string, CanvasRefCard> = new Map();
+
 export interface CanvasPageProps {
   profileId: string;
   /** The resolved theme (`App` owns the preference) — Excalidraw takes „dan"/„noć" as `light`/`dark`. */
   theme: ThemeName;
+  /**
+   * Follows a card to the object it points at (slice c). `App` owns this
+   * because opening a note, a task or an event is a cross-module deep link and
+   * this app has exactly one mechanism for those — the 021-e intents that
+   * global search, the palette and „Otvori prilog" all already ride.
+   */
+  onOpenRef: (ref: CanvasRef) => void;
 }
 
 /**
@@ -146,7 +193,7 @@ interface CanvasState {
   activeId: string | null;
 }
 
-export function CanvasPage({ profileId, theme }: CanvasPageProps) {
+export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
   const s = strings.canvas;
 
   const [state, setState] = useState<CanvasState>({ boards: null, activeId: null });
@@ -162,6 +209,15 @@ export function CanvasPage({ profileId, theme }: CanvasPageProps) {
    * and kept in step by `onChange` after that.
    */
   const [toolbar, setToolbar] = useState<CanvasToolbarState | null>(null);
+  /**
+   * The references the open board currently carries, as a set. Replaced only
+   * when that set genuinely changes (`sameCanvasRefs`), which is what keeps the
+   * resolve effect below off the pointer-move path.
+   */
+  const [refs, setRefs] = useState<string[]>([]);
+  /** What those references resolve to, keyed by the reference text a card reads itself up by. */
+  const [cards, setCards] = useState<ReadonlyMap<string, CanvasRefCard>>(NO_CARDS);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const api = useRef<ExcalidrawImperativeAPI | null>(null);
   /**
@@ -224,7 +280,42 @@ export function CanvasPage({ profileId, theme }: CanvasPageProps) {
     if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
     saveTimer.current = null;
     savedVersion.current = -1;
+    // The cards go with the board, for the same reason: the incoming board's
+    // first `onChange` must not find the outgoing one's references still
+    // standing, or a card would draw the previous board's title for a frame.
+    setRefs([]);
+    setCards(NO_CARDS);
   }, [activeId]);
+
+  /**
+   * What the references on this board currently point at — ONE round trip for
+   * the whole board, re-run only when the set of references changes.
+   *
+   * A failure is SAID rather than retried: a card with no answer draws
+   * „Učitavanje…", and a spinner that never resolves is exactly the kind of
+   * quiet lie the autosave's own error handling exists to avoid. Nothing is at
+   * risk here — the drawing is fine and only the titles are missing — which is
+   * why it is its own sentence and not `saveError`.
+   */
+  useEffect(() => {
+    if (refs.length === 0) {
+      setCards(NO_CARDS);
+      return;
+    }
+    let active = true;
+    void (async () => {
+      try {
+        const resolved = await window.nexus.resolveCanvasRefs(profileId, refs);
+        if (active) setCards(canvasCardMap(refs, resolved));
+      } catch (error) {
+        if (active) setActionError(s.cardsError);
+        console.error("Nexus: failed to resolve canvas card references:", error);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profileId, refs, s.cardsError]);
 
   /**
    * The board's stored scene, as the promise `initialData` accepts.
@@ -313,7 +404,7 @@ export function CanvasPage({ profileId, theme }: CanvasPageProps) {
    */
   const onChange = useCallback(
     (
-      elements: readonly { version: number }[],
+      elements: readonly (CanvasSceneElement & { version: number })[],
       appState: CanvasToolbarAppState & { openSidebar: SidebarState },
     ) => {
       closeLibrarySidebar(api.current, appState.openSidebar);
@@ -321,6 +412,13 @@ export function CanvasPage({ profileId, theme }: CanvasPageProps) {
       setToolbar((previous) =>
         previous !== null && sameCanvasToolbarState(previous, snapshot) ? previous : snapshot,
       );
+      // The SAME guard shape once more, over a different question: which
+      // objects are on this board. Dragging a card fires this callback on every
+      // pointer move and changes none of them, so the previous array is
+      // returned unless the set really moved — and the resolve effect above,
+      // which depends on it, then does not re-run.
+      const sceneRefs = canvasSceneRefs(elements);
+      setRefs((previous) => (sameCanvasRefs(previous, sceneRefs) ? previous : sceneRefs));
       if (activeId === null) return;
       const version = sceneVersionOf(elements);
       if (version === savedVersion.current) return;
@@ -381,22 +479,18 @@ export function CanvasPage({ profileId, theme }: CanvasPageProps) {
     if (typeof text !== "string" || !looksLikeMermaid(text)) return true;
     const editor = api.current;
     if (editor === null) return true;
-    const appState = editor.getAppState();
+    // A zero-sized box, which is what „centre this" means for an element whose
+    // size the editor works out from its own content. The arithmetic itself is
+    // shared with „Dodaj karticu" (`canvasDropOrigin`), so the two cannot drift
+    // on where the middle of the screen is.
+    const origin = canvasDropOrigin(viewportOf(editor.getAppState()), 0, 0);
     editor.updateScene({
       elements: [
         // INCLUDING deleted: `updateScene` replaces the element list outright,
         // so handing back only the live ones would drop the tombstones an undo
         // of a delete stands on.
         ...editor.getSceneElementsIncludingDeleted(),
-        ...convertToExcalidrawElements([
-          {
-            type: "text",
-            // The centre of what is on screen, in scene coordinates.
-            x: -appState.scrollX + appState.width / 2 / appState.zoom.value,
-            y: -appState.scrollY + appState.height / 2 / appState.zoom.value,
-            text,
-          },
-        ]),
+        ...convertToExcalidrawElements([{ type: "text", x: origin.x, y: origin.y, text }]),
       ],
     });
     return false;
@@ -406,6 +500,92 @@ export function CanvasPage({ profileId, theme }: CanvasPageProps) {
   const openMermaid = useCallback(() => {
     api.current?.updateScene({ appState: { openDialog: { name: "ttd", tab: "mermaid" } } });
   }, []);
+
+  /**
+   * Puts the picked object on the board, at the middle of what is on screen.
+   *
+   * The element is COMPLETE before `convertToExcalidrawElements` sees it —
+   * that helper passes an embeddable skeleton through verbatim rather than
+   * building one, which `canvasCardElement` says at length. What it does do,
+   * and what this call is for, is mint the id and sync the fractional index the
+   * scene orders by.
+   *
+   * `IMMEDIATELY` because putting a card on a board is an edit somebody expects
+   * Ctrl+Z to take back, exactly as the toolbar's colour changes are.
+   */
+  const addCard = useCallback((row: CanvasPickerRow) => {
+    setPickerOpen(false);
+    const editor = api.current;
+    if (editor === null) return;
+    // Read live, never written as literals — `elementDefaults()`'s rule: these
+    // are scene VALUES, and a colour literal here would be a raw hex in the
+    // app's own source.
+    const styles = getComputedStyle(document.documentElement);
+    const origin = canvasDropOrigin(
+      viewportOf(editor.getAppState()),
+      CANVAS_CARD_WIDTH,
+      CANVAS_CARD_HEIGHT,
+    );
+    const element = canvasCardElement({
+      ref: { kind: row.kind, id: row.id },
+      id: crypto.randomUUID(),
+      x: origin.x,
+      y: origin.y,
+      strokeColor: styles.getPropertyValue("--nx-border").trim(),
+      backgroundColor: styles.getPropertyValue("--nx-surface").trim(),
+      roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS },
+      seed: Math.floor(Math.random() * 2 ** 31),
+      updated: Date.now(),
+    });
+    editor.updateScene({
+      elements: [...editor.getSceneElementsIncludingDeleted(), ...convertToExcalidrawElements([element])],
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+  }, []);
+
+  /**
+   * Takes one card off the board — the affordance a „missing" card carries, and
+   * the only thing that ever removes one.
+   *
+   * A TOMBSTONE rather than a splice, which is what makes Ctrl+Z bring it back:
+   * `isDeleted` is how the editor deletes everything else, and the whole list
+   * (deleted included) has to go back into `updateScene` because it replaces
+   * the element array outright.
+   */
+  const removeCard = useCallback((elementId: string) => {
+    const editor = api.current;
+    if (editor === null) return;
+    editor.updateScene({
+      elements: editor
+        .getSceneElementsIncludingDeleted()
+        .map((element) =>
+          element.id === elementId ? newElementWith(element, { isDeleted: true }) : element,
+        ),
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+  }, []);
+
+  /**
+   * The card the editor asks us to draw. It NEVER answers with nothing: a
+   * nullish return here falls through to a real `<iframe>` pointed at the
+   * element's link (see `CanvasCard.tsx` for the call site, verbatim), and
+   * `canvasCardView` is total over every link a scene can carry.
+   */
+  const renderEmbeddable = useCallback(
+    (
+      element: { readonly id: string; readonly link: string | null },
+      appState: { readonly activeEmbeddable: { element: { id: string }; state: string } | null },
+    ) => (
+      <CanvasCard
+        elementId={element.id}
+        view={canvasCardView(element.link, cards)}
+        interaction={canvasCardInteraction(element.id, appState.activeEmbeddable)}
+        onOpen={onOpenRef}
+        onRemove={removeCard}
+      />
+    ),
+    [cards, onOpenRef, removeCard],
+  );
 
   /**
    * The board's stored drawing, read ONCE per board rather than once per render.
@@ -574,7 +754,19 @@ export function CanvasPage({ profileId, theme }: CanvasPageProps) {
       ) : (
         <>
           {toolbar !== null && (
-            <CanvasToolbar editor={api} state={toolbar} onMermaid={openMermaid} />
+            <CanvasToolbar
+              editor={api}
+              state={toolbar}
+              onMermaid={openMermaid}
+              onAddCard={() => setPickerOpen(true)}
+            />
+          )}
+          {pickerOpen && (
+            <CanvasCardPicker
+              profileId={profileId}
+              onPick={addCard}
+              onCancel={() => setPickerOpen(false)}
+            />
           )}
           <div className="canv__surface">
             <Excalidraw
@@ -592,6 +784,14 @@ export function CanvasPage({ profileId, theme }: CanvasPageProps) {
               initialData={initialData}
               onChange={onChange}
               onPaste={onPaste}
+              // The two halves of a card (slice c), and neither works without
+              // the other. The predicate is `isCanvasRefText` and NOTHING else:
+              // every string it admits is a string this app has promised to
+              // draw itself, because the editor's fall-through for one it
+              // admits is a real iframe. The renderer honours that promise on
+              // every path — see `CanvasCard.tsx`.
+              validateEmbeddable={isCanvasRefText}
+              renderEmbeddable={renderEmbeddable}
               theme={theme === "noc" ? "dark" : "light"}
               // English, and stated rather than papered over: Excalidraw ships 54
               // locales, Serbian is not one of them, and it cannot be added — the
@@ -641,6 +841,28 @@ export function CanvasPage({ profileId, theme }: CanvasPageProps) {
       )}
     </div>
   );
+}
+
+/**
+ * The five `appState` fields a drop position is computed from, lifted out of
+ * whatever else the editor is carrying — `canvasDropOrigin`'s input, spelled
+ * once so the two callers (a mermaid paste and a new card) read the same
+ * fields.
+ */
+function viewportOf(appState: {
+  scrollX: number;
+  scrollY: number;
+  width: number;
+  height: number;
+  zoom: { value: number };
+}) {
+  return {
+    scrollX: appState.scrollX,
+    scrollY: appState.scrollY,
+    width: appState.width,
+    height: appState.height,
+    zoom: appState.zoom.value,
+  };
 }
 
 /** Whatever `appState.openSidebar` is — a name and an optional tab, or nothing open. */

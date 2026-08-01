@@ -72,6 +72,13 @@ export interface CanvasToolbarProps {
    * that story — and this bar only draws the button.
    */
   onMermaid: () => void;
+  /**
+   * „Dodaj karticu" (slice c): opens the picker over this profile's beleške,
+   * zadaci and događaji. Here rather than in the board bar above for the reason
+   * „Mermaid dijagram" is here — it puts something on the CANVAS, and that bar
+   * is about boards.
+   */
+  onAddCard: () => void;
 }
 
 /**
@@ -86,7 +93,7 @@ type CanvasStyleChange =
   | { readonly channel: "background"; readonly value: string }
   | { readonly channel: "strokeWidth"; readonly value: number };
 
-export function CanvasToolbar({ editor, state, onMermaid }: CanvasToolbarProps) {
+export function CanvasToolbar({ editor, state, onMermaid, onAddCard }: CanvasToolbarProps) {
   const s = strings.canvas.toolbar;
   const colourNames = strings.settings.appearance.accentNames;
 
@@ -262,17 +269,29 @@ export function CanvasToolbar({ editor, state, onMermaid }: CanvasToolbarProps) 
         })}
       </div>
 
-      {/* A drawing action, so it sits with the drawing controls rather than
-          with the view ones — the zoom cluster below is the bar's right end. */}
-      <Button
-        size="sm"
-        className="canv__tool"
-        title={strings.canvas.mermaidTitle}
-        onMouseDown={keepEditorFocus}
-        onClick={onMermaid}
-      >
-        {strings.canvas.mermaid}
-      </Button>
+      {/* Two actions that PUT something on the canvas, so they sit with the
+          drawing controls rather than with the view ones — the zoom cluster
+          below is the bar's right end. */}
+      <div className="canv__tool-group" role="group" aria-label={s.addCard}>
+        <Button
+          size="sm"
+          className="canv__tool"
+          title={s.addCardTitle}
+          onMouseDown={keepEditorFocus}
+          onClick={onAddCard}
+        >
+          {s.addCard}
+        </Button>
+        <Button
+          size="sm"
+          className="canv__tool"
+          title={strings.canvas.mermaidTitle}
+          onMouseDown={keepEditorFocus}
+          onClick={onMermaid}
+        >
+          {strings.canvas.mermaid}
+        </Button>
+      </div>
 
       <div className="canv__tool-group canv__tool-group--end" role="group" aria-label={s.zoomLabel}>
         <Button

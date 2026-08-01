@@ -155,6 +155,147 @@ describe("the chrome our CSS removes", () => {
   });
 });
 
+/**
+ * The embeddable machinery a CARD stands on (CANV slice c).
+ *
+ * Every one of these is an upstream fact `canvasCards.ts` and `CanvasPage`
+ * depend on and cannot re-derive: what a nullish `renderEmbeddable` return
+ * becomes, when the host renderer is called at all, what
+ * `convertToExcalidrawElements` does with an embeddable skeleton, and which
+ * elements `onChange` is handed. Each is read out of the SHIPPED bundle, and
+ * each is pinned structurally — identifier names are minified and mangle
+ * differently on every build, so the regexes below bind the SHAPE and let the
+ * names be whatever they are.
+ */
+describe("the embeddable contract cards are built on", () => {
+  const bundle = readFileSync(join(distProd(), "index.js"), "utf8");
+  const chunks = bundleFiles();
+
+  /**
+   * The reason `renderEmbeddable` may never return nothing, and the reason
+   * `validateEmbeddable` is `isCanvasRefText` and nothing else.
+   *
+   * Upstream, in substance:
+   *   `(isEmbeddable(el) ? renderEmbeddable?.(el, state) : null) ?? <iframe src={el.link} …>`
+   *
+   * — so a nullish return is a live iframe inside a sandboxed renderer, pointed
+   * at whatever string the element carries.
+   */
+  it("falls through to a REAL IFRAME when the host renderer answers with nothing", () => {
+    expect(
+      /\(\w+\((\w+)\)\?this\.props\.renderEmbeddable\?\.\(\1,this\.state\):null\)\?\?\w+\("iframe"/.test(
+        bundle,
+      ),
+      "the embeddable render is `(isEmbeddable(el) ? renderEmbeddable?.(el, state) : null) ?? <iframe>`",
+    ).toBe(true);
+  });
+
+  /**
+   * The other half, and the one that makes the „foreign" card defence in depth
+   * rather than the ordinary case: the overlay is mounted only for an
+   * embeddable whose validation status is already `true`, so a link our
+   * predicate refused is never handed to us AND never becomes an iframe.
+   */
+  it("mounts an overlay only for an embeddable that PASSED validation", () => {
+    expect(
+      /renderEmbeddables\(\)\{[^]{0,600}embedsValidationStatus\.get\(\w+\.id\)===!0/.test(bundle),
+      "renderEmbeddables filters on embedsValidationStatus === true",
+    ).toBe(true);
+  });
+
+  /**
+   * …and that status is computed ONCE per element id and cached, which is the
+   * narrow window the „foreign" arm exists for. If this ever became a per-link
+   * check, that arm would be unreachable and could be reconsidered.
+   */
+  it("computes that status once per element id, and caches it", () => {
+    expect(
+      /!this\.embedsValidationStatus\.has\(\w+\.id\)\)\{/.test(bundle),
+      "validation is asked for only when the id has no cached answer",
+    ).toBe(true);
+  });
+
+  /** A boolean from a function validator short-circuits — our `false` is final, not a hint. */
+  it("lets a function validator's boolean decide, without falling back to its own allowlist", () => {
+    const found = chunks.some(({ text }) =>
+      /typeof \w+=="function"\)\{let (\w+)=\w+\(\w+\);if\(typeof \1=="boolean"\)return \1\}/.test(
+        text,
+      ),
+    );
+    expect(found, "embeddableURLValidator returns the host predicate's boolean verbatim").toBe(true);
+  });
+
+  /**
+   * `convertToExcalidrawElements` builds a rectangle, a text and an image from a
+   * partial skeleton — and passes an embeddable through UNTOUCHED. That is why
+   * `canvasCardElement` returns a complete element rather than a sketch of one.
+   */
+  it("does not construct an embeddable — the skeleton is used verbatim", () => {
+    expect(
+      /case"freedraw":case"iframe":case"embeddable":\{\w+=\w+;break\}/.test(bundle),
+      "the transform's embeddable arm assigns the skeleton straight through",
+    ).toBe(true);
+    // …while the shapes beside it genuinely go through a factory, which is what
+    // makes the line above a decision rather than an accident.
+    expect(bundle).toMatch(/case"rectangle":case"ellipse":case"diamond":\{/);
+  });
+
+  /**
+   * `onChange` is handed `getElementsIncludingDeleted()`, which is why
+   * `canvasSceneRefs` skips tombstones: without that, a card the user just
+   * deleted would stay in every resolve request for the life of the board.
+   */
+  it("hands `onChange` the elements INCLUDING deleted", () => {
+    expect(
+      /componentDidUpdate\(\w+,\w+\)\{this\.updateEmbeddables\(\);let (\w+)=this\.scene\.getElementsIncludingDeleted\(\)[^]{0,4000}this\.props\.onChange\?\.\(\1,this\.state,this\.files\)/.test(
+        bundle,
+      ),
+      "componentDidUpdate reports the including-deleted element list",
+    ).toBe(true);
+  });
+
+  /**
+   * The two-step gesture a card is followed through, which is the editor's and
+   * not ours: the DOM overlay takes pointer events only while this element is
+   * the „active" one, and a short click inside the middle third is what makes
+   * it so.
+   */
+  it("keeps a card's DOM inert until a click in its middle third arms it", () => {
+    expect(bundle).toMatch(/pointerEvents:\w+\?\w+\.enabled:\w+\.disabled/);
+    expect(
+      /isIframeLikeElementCenter\(\w+,\w+,\w+,\w+\)\{[^]{0,400}\.width\/3/.test(bundle),
+      "the interaction target is the element's middle third",
+    ).toBe(true);
+    expect(bundle).toContain("handleEmbeddableCenterClick");
+  });
+
+  /**
+   * The English hint `app.css` hides, and the class it hangs off. Excalidraw
+   * ships no Serbian, so `CanvasCard` draws its own sentence off the same
+   * `activeEmbeddable` state — a rename upstream must fail here rather than put
+   * English back on top of a Nexus card.
+   */
+  it("still draws its own interaction hint under the class our CSS removes", () => {
+    expect(bundle).toContain('className:"excalidraw__embeddable-hint"');
+    expect(bundle).toContain("buttons.embeddableInteractionButton");
+  });
+
+  /**
+   * A stored scene goes through `restore` on every board open, and that
+   * normalizes each element's `link`. An embeddable survives it with its base
+   * properties restored rather than being dropped — which is what makes a board
+   * with cards reloadable at all, and what lets slice c ship with no migration.
+   */
+  it("restores an embeddable, normalizing its link rather than discarding it", () => {
+    const restored = chunks.some(({ text }) =>
+      /case"ellipse":case"rectangle":case"diamond":case"iframe":case"embeddable":return/.test(text),
+    );
+    expect(restored, "restoreElement handles embeddable through the base restorer").toBe(true);
+    const normalized = chunks.some(({ text }) => /link:\w+\.link\?\w+\(\w+\.link\):null/.test(text));
+    expect(normalized, "the restored link goes through the link normalizer").toBe(true);
+  });
+});
+
 describe("the shipped font assets", () => {
   /**
    * The families the build leaves out, read from the build's own declaration

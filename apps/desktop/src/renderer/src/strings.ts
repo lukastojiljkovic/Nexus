@@ -3533,6 +3533,68 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       zoomReset: "Vrati uvećanje na 100%",
       zoomFit: "Uklopi",
       zoomFitTitle: "Uklopi ceo crtež u prozor",
+      /** „Dodaj karticu" (CANV slice c) — a drawing action, so it sits with them. */
+      addCard: "Dodaj karticu",
+      addCardTitle: "Stavi belešku, zadatak ili događaj na tablu kao karticu.",
+    },
+    /**
+     * Kartice (CANV slice c) — a Nexus object pinned to a board.
+     *
+     * The KIND of a card („Beleška", „Zadatak", „Događaj") is not written here:
+     * it is `strings.search.kindSingular`, the same three words the search row
+     * beside it uses, so an object is called one thing in this product.
+     */
+    card: {
+      /** A note that was never named. The store hands back the empty title the row really has; the fallback is the surface's job. */
+      untitled: "Bez naslova",
+      /** The action every resolved card carries — it opens the object on its own module's page. */
+      open: "Otvori",
+      /**
+       * Replaces Excalidraw's own English „Click to interact" hint, which
+       * `app.css` hides.
+       *
+       * It says the FIRST of the two clicks, because that is the one nobody
+       * expects: the editor keeps a card's DOM inert until a click in its
+       * middle arms it, so a person who clicks „Otvori" straight away gets
+       * nothing and has no way to know why.
+       */
+      hint: "Klikni na karticu da je aktiviraš",
+      /**
+       * The object is gone — deleted, or another profile's. Said plainly, and
+       * with the removal offered rather than performed: a note being deleted is
+       * not a reason for Nexus to quietly take something off somebody's board.
+       */
+      missingTitle: "Objekta više nema",
+      missingBody: "Kartica ostaje na tabli dok je ne ukloniš.",
+      remove: "Ukloni karticu",
+      /**
+       * The card points at something that is not a Nexus object at all — a
+       * hand-edited scene file, or an element pasted in from elsewhere. Nexus
+       * draws this instead of loading it, and says so rather than showing an
+       * empty frame.
+       */
+      foreignTitle: "Nepoznata kartica",
+      foreignBody: "Ova kartica ne pokazuje ni na šta u Nexusu, pa se ne otvara.",
+    },
+    /** The resolve failed, so the cards on screen have no titles to show. Named separately from `saveError`: nothing is at risk here, only unreadable. */
+    cardsError: "Kartice nisu učitane, pa im se ne vide naslovi.",
+    /**
+     * „Dodaj karticu"'s picker (CANV slice c) — the profile's beleške, zadaci
+     * and događaji, over the search channels the palette already uses.
+     *
+     * It reuses `strings.search.recentGroup`, `strings.search.emptyResults` and
+     * `strings.search.kindSingular` outright: this is the same list of objects
+     * the palette shows, narrowed to the three kinds a card can point at, and
+     * a second set of words for it would be a second surface pretending to be
+     * a different one.
+     */
+    picker: {
+      title: "Dodaj karticu",
+      description: "Izaberi belešku, zadatak ili događaj — kartica ide na sredinu table.",
+      searchLabel: "Pretraga objekata",
+      placeholder: "Pretraži beleške, zadatke i događaje…",
+      /** The search itself failed. The picker stays open with an empty list rather than closing under the user. */
+      error: "Pretraga nije uspela. Pokušaj ponovo.",
     },
   },
 
