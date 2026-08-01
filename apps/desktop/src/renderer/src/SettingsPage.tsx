@@ -115,6 +115,11 @@ import {
   readStoredLlmPromptLanguage,
 } from "./llmImportPrefs.js";
 import { FinCsvImportSection } from "./FinCsvImport.js";
+// Type-only, and that is load-bearing: a value import would pull ~650 KB of
+// notice text into the eager renderer chunk. `LicencesSection` reaches for the
+// data with `import()` instead. A type import is erased, so this line costs
+// nothing at runtime.
+import type { LicenceEntry } from "./licences.js";
 import { countUnit, dayUnit, strings } from "./strings.js";
 
 /** Sidebar/page display name for a module id; mirrors App.tsx's private helper (kept local — App renders this page, so importing it back would be circular). */
@@ -4442,6 +4447,183 @@ function ShortcutsSection({
   );
 }
 
+interface LicenceGroupProps {
+  title: string;
+  /** The one sentence this group needs said before the list — it stays visible whether the list is open or not. */
+  caption: string;
+  entries: readonly LicenceEntry[];
+  defaultOpen: boolean;
+}
+
+/**
+ * One group of notices — the libraries, or the fonts — behind the card's own
+ * disclosure idiom.
+ *
+ * **Why the list is collapsible at all.** The library group is three hundred
+ * rows. Every card on this page stays MOUNTED while filtered out (SET-014), so
+ * an always-open list of that size would sit in the tree for the whole session
+ * to serve a screen almost nobody opens twice. The fonts are eight rows and open
+ * by default: they are the group the user was most likely looking for, and the
+ * sentence about them being bundled is the thing worth reading without a click.
+ *
+ * **One notice open at a time.** An accordion rather than a set of toggles —
+ * a licence is thousands of characters, and two of them open at once would turn
+ * the card into a scroll the width of the page rather than a thing being read.
+ */
+function LicenceGroup({ title, caption, entries, defaultOpen }: LicenceGroupProps) {
+  const s = strings.settings.licences;
+  const [open, setOpen] = useState(defaultOpen);
+  const [openEntry, setOpenEntry] = useState<string | null>(null);
+
+  return (
+    <div className="set__licence-group">
+      <button
+        type="button"
+        className="set__disclosure"
+        aria-expanded={open}
+        onClick={() => setOpen((wasOpen) => !wasOpen)}
+      >
+        <span className="set__disclosure-mark" aria-hidden="true" />
+        {title}
+        <span className="set__disclosure-summary">{entries.length}</span>
+      </button>
+      <p className="set__section-caption">{caption}</p>
+      {open && (
+        <ul className="set__licence-list">
+          {entries.map((entry) => {
+            const expanded = openEntry === entry.id;
+            return (
+              <li key={entry.id} className="set__licence-item">
+                {/* No aria-label: the row's own text IS its accessible name
+                    (name, version, licence — all three worth announcing), and
+                    `aria-expanded` is what states whether it is open. */}
+                <button
+                  type="button"
+                  className="set__licence-toggle"
+                  aria-expanded={expanded}
+                  title={expanded ? s.collapse : s.expand}
+                  onClick={() => setOpenEntry(expanded ? null : entry.id)}
+                >
+                  <span className="set__disclosure-mark" aria-hidden="true" />
+                  <span className="set__licence-name">{entry.name}</span>
+                  <span className="set__licence-meta">
+                    {entry.version} ·{" "}
+                    {entry.licence === "UNKNOWN" ? s.unknownLicence : entry.licence}
+                  </span>
+                </button>
+                {expanded && (
+                  <div className="set__licence-body">
+                    {/* The gap is stated where the text would have been, never
+                        papered over: a package that ships no licence file and a
+                        font whose licence could not be established are two
+                        different facts, and both are the user's to know. */}
+                    {entry.status === "declared-only" && (
+                      <p className="set__section-caption">{s.declaredOnly}</p>
+                    )}
+                    {entry.status === "unknown" && (
+                      <p className="set__section-caption">{s.notEstablished}</p>
+                    )}
+                    {/* A named, focusable region — the same treatment the AI
+                        import's prompt block gets: the notice scrolls, and a
+                        scroll container nothing can put focus into is one a
+                        keyboard cannot read. */}
+                    {entry.notice.length > 0 && (
+                      <pre
+                        className="set__licence-notice"
+                        role="region"
+                        aria-label={`${s.noticeLabel}: ${entry.name}`}
+                        tabIndex={0}
+                      >
+                        {entry.notice}
+                      </pre>
+                    )}
+                    <p className="set__section-caption set__licence-source">
+                      {s.source}: {entry.source}
+                    </p>
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** Both groups of notices, once they have arrived. */
+interface LoadedLicences {
+  packages: readonly LicenceEntry[];
+  fonts: readonly LicenceEntry[];
+}
+
+/**
+ * „Licence" (the card): the notices Nexus owes for the code and the fonts it
+ * ships. No IPC and nothing to save — the only state is which row is open and
+ * whether the data has arrived.
+ *
+ * **The notices are fetched, not imported, and that is the whole point.**
+ * `data/licences.json` is ~650 KB of licence text — three hundred packages'
+ * worth. A static import puts every character of it in the eager renderer
+ * chunk, paid at startup by every session that ever runs, to serve a card most
+ * people open once. `import()` makes it a chunk of its own that is read when
+ * this card first mounts — that is, when somebody opens Settings, not when they
+ * open Nexus. The module it reaches for is the same one `licences.test.ts`
+ * imports directly, so the gate on the data is unaffected.
+ *
+ * It is deliberately NOT deferred until a group is expanded: the two disclosure
+ * buttons show how many entries each holds, and a count is the one thing this
+ * card says that is worth reading without a click.
+ */
+function LicencesSection() {
+  const s = strings.settings.licences;
+  const [loaded, setLoaded] = useState<LoadedLicences | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void import("./licences.js")
+      .then((module) => {
+        if (active) setLoaded({ packages: module.LICENCE_PACKAGES, fonts: module.LICENCE_FONTS });
+      })
+      .catch((error: unknown) => {
+        if (active) setFailed(true);
+        console.error("Nexus: failed to load the third-party licences:", error);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return (
+    <>
+      <p className="app__muted">{s.caption}</p>
+      {failed && (
+        <p className="set__section-caption" role="alert">
+          {s.loadError}
+        </p>
+      )}
+      {!failed && loaded === null && <p className="set__section-caption">{s.loading}</p>}
+      {loaded !== null && (
+        <>
+          <LicenceGroup
+            title={s.packagesTitle}
+            caption={s.chromium}
+            entries={loaded.packages}
+            defaultOpen={false}
+          />
+          <LicenceGroup
+            title={s.fontsTitle}
+            caption={s.fontsCaption}
+            entries={loaded.fonts}
+            defaultOpen
+          />
+        </>
+      )}
+    </>
+  );
+}
+
 export interface SettingsPageProps {
   profileId: string;
   profileName: string;
@@ -4985,6 +5167,16 @@ export function SettingsPage({
         ) : (
           <p className="app__muted">{strings.app.loading}</p>
         )}
+      </Card>
+
+      {/* The notices this product owes for other people's work. Last on the
+          page and after „O aplikaciji" on purpose: it is about the app rather
+          than about the user, and it is the longest thing here. */}
+      <Card
+        title={strings.settings.sectionTitle.licences}
+        className={sectionClass(sections.has("licences"))}
+      >
+        <LicencesSection />
       </Card>
 
       {/* One dialog for every resettable card — the question is the same

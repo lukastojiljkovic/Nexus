@@ -5911,6 +5911,116 @@ button.cal__grid-event--dragging {
   flex-wrap: wrap;
 }
 
+/* „Licence": the third-party notices, in two groups behind the card's own
+   disclosure idiom. Nothing here is a control, so nothing here is a bordered
+   button — a notice list is read, and a row that looked clickable-as-an-action
+   would misdescribe what opening it does. */
+.set__licence-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.set__licence-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* The hairline-separated row rhythm of `.set__shortcut-item`, so the two long
+   lists on this page read as the same kind of list. */
+.set__licence-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) 0;
+  /* min-width:0 on a flex child is what lets the notice below scroll inside
+     itself instead of stretching the card — see .set__licence-notice. */
+  min-width: 0;
+}
+.set__licence-item + .set__licence-item {
+  border-top: 1px solid var(--nx-border);
+}
+/* The row itself: the same muted triangle-and-label as .set__disclosure, laid
+   out so the name takes the width and the version · licence pair sits at the end. */
+.set__licence-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--nx-radius-xs);
+  background: transparent;
+  color: var(--nx-text-muted);
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.set__licence-toggle:hover {
+  color: var(--nx-text);
+}
+.set__licence-toggle:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.set__licence-toggle[aria-expanded="true"] > .set__disclosure-mark {
+  transform: rotate(90deg);
+}
+/* The open row is marked typographically — accent text plus weight, the app's
+   one active-state recipe. Never a background wash and never a glow. */
+.set__licence-toggle[aria-expanded="true"] > .set__licence-name {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.set__licence-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.set__licence-meta {
+  flex-shrink: 0;
+  font-size: var(--nx-font-size-caption);
+}
+.set__licence-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  min-width: 0;
+  padding-left: var(--nx-space-4);
+}
+/* A licence is several thousand characters of pre-formatted text, so it scrolls
+   inside its own box: the page's width is set by the card, never by the longest
+   line of somebody else's disclaimer. `anywhere` covers the URLs that have no
+   break opportunity at all. The recipe is `.set__llm-prompt`'s, unchanged — both
+   are somebody else's verbatim text quoted inside a card. */
+.set__licence-notice {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-surface-alt);
+  color: var(--nx-text-muted);
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-caption);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.set__licence-notice:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+/* Provenance is a file path, which has no break opportunity of its own. */
+.set__licence-source {
+  overflow-wrap: anywhere;
+}
+
 /* Notes (NOTE page, slice a2) ------------------------------------------ */
 /* Two panes fill the main column: a fixed note list on the left, the block
    editor on the right. Each pane scrolls internally so the page never grows. */

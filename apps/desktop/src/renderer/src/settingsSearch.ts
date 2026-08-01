@@ -365,6 +365,30 @@ const ENTRIES: readonly ShellSettingsSearchEntry[] = [
     keywords: ["pretraga", "istorija", "upiti", "obrisi", "zaboravi", "privatnost"],
   },
   {
+    // One entry for a card that is one long read-only list. Nothing in it is
+    // operable beyond the disclosures, so it only ever steers visibility — and
+    // the words are the ones somebody hunting for a notice types („licenca",
+    // „otvoreni kod", or the name of a licence family), not the card's own.
+    id: "licences-notices",
+    section: "licences",
+    label: s.sectionTitle.licences,
+    keywords: [
+      "licenca",
+      "licence",
+      "otvoreni",
+      "izvorni",
+      "biblioteke",
+      "fontovi",
+      "autorska",
+      "prava",
+      "mit",
+      "apache",
+      "bsd",
+      "ofl",
+      "obavestenja",
+    ],
+  },
+  {
     // The panel is one read-only block of facts, so it is one entry: splitting
     // it per row would highlight "Verzija" for a user who typed "chromium".
     id: "about-facts",

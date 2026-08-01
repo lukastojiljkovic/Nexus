@@ -59,19 +59,38 @@ function rendererHardening(): Plugin {
  * `node_modules` and re-committing it on every Excalidraw upgrade. Emitting them
  * at build time keeps exactly one copy of the fonts in the repository: none.
  *
- * **Xiaolai is DROPPED, and that is the whole reason this is a filter rather
- * than a directory copy.** It is a CJK fallback family — 209 of the package's
- * 234 font files and 12.37 MB of its 12.50 MB — that a Serbian product's users
- * will never see a glyph of. Excalidraw registers it lazily (its FontFaces are
- * only fetched when a scene actually contains CJK characters), so its absence
- * costs nothing but the CJK fallback itself. Dropped HERE, in the copy step,
- * rather than by patching the package: a patch would have to be re-applied on
- * every upgrade and would silently stop matching, while a missing directory is
- * simply a directory that is not there.
+ * **Two families are DROPPED, and that is the whole reason this is a filter
+ * rather than a directory copy.**
+ *
+ * *Xiaolai* is a CJK fallback family — 209 of the package's 234 font files and
+ * 12.37 MB of its 12.50 MB — that a Serbian product's users will never see a
+ * glyph of. Excalidraw registers it lazily (its FontFaces are only fetched when
+ * a scene actually contains CJK characters), so its absence costs nothing but
+ * the CJK fallback itself.
+ *
+ * *Liberation Sans* is dropped for a different reason, and the stronger one:
+ * **its licence could not be established from anything that ships.** The file's
+ * own `name` table says only „subject to the license agreement under which you
+ * accepted the Liberation font software" and points at a dead Ascender URL;
+ * Excalidraw ships no licence file for it and neither does its upstream repo at
+ * this tag. The version string is the Ascender-era `1.05` line, whose terms are
+ * NOT the OFL that Liberation 2.x carries — so writing today's licence onto a
+ * 2009 binary would be a guess, and this product does not ship guessed notices.
+ * It also costs nothing at all to leave out: the package's own metadata marks
+ * the family `serverSide: true`, and the font picker filters exactly those out
+ * (`!metadata.serverSide && !metadata.fallback`), so no element can ever be set
+ * to it. A font no user can select and no notice can be written for is a font
+ * with no reason to be in the installer.
+ *
+ * Both are dropped HERE, in the copy step, rather than by patching the package:
+ * a patch would have to be re-applied on every upgrade and would silently stop
+ * matching, while a missing directory is simply a directory that is not there.
+ * `scripts/generate-licences.mjs` reads this very set, so the notices always
+ * describe what the build actually copied.
  */
 function excalidrawFonts(): Plugin {
-  /** The one family left out — see the plugin's own doc. */
-  const DROPPED_FAMILIES = new Set(["Xiaolai"]);
+  /** The families left out — see the plugin's own doc for why each one is. */
+  const DROPPED_FAMILIES = new Set(["Xiaolai", "Liberation"]);
   const require = createRequire(import.meta.url);
 
   function walk(dir: string, out: string[]): string[] {

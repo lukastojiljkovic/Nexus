@@ -3514,6 +3514,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       backup: "Rezervna kopija",
       privacy: "Podaci i privatnost",
       about: "O aplikaciji",
+      licences: "Licence",
     },
     /**
      * SET §5: the per-card „Vrati na podrazumevano“. One block of copy for
@@ -5069,6 +5070,67 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       chromium: "Chromium",
       node: "Node",
       dataLocation: "Lokacija podataka",
+    },
+    /**
+     * „Licence": the notices this product owes for other people's code.
+     *
+     * The copy states what the card IS and never thanks anybody: MIT, BSD,
+     * Apache-2.0 and the OFL each require the notice to travel with the
+     * distribution, so this is an obligation being discharged, not a courtesy.
+     * Every sentence is true of `data/licences.json` by construction — the
+     * generator reads each notice off disk and `licences.test.ts` refuses a file
+     * where an entry claims a text it does not carry.
+     *
+     * The three status lines are the honest half. A user who opens a package
+     * with no licence text must be told that is what happened, in the same
+     * place they went looking for the text — an empty panel would read as a
+     * bug, and a silently substituted notice would be a lie.
+     */
+    licences: {
+      caption:
+        "Nexus je napravljen i na tuđem radu — na bibliotekama otvorenog koda i na fontovima. Njihove licence traže jedno: da obaveštenje o autorstvu putuje zajedno sa programom. Ovde je, doslovno i u celini.",
+      packagesTitle: "Biblioteke",
+      fontsTitle: "Fontovi",
+      /**
+       * The one thing about the fonts a user could not check for themselves:
+       * they are files in the installer, not a web request that happens to be
+       * cached. „Offline" is the promise the whole app makes, so the card that
+       * lists the fonts is where it gets stated about them.
+       */
+      fontsCaption:
+        "Fontovi za crtanje isporučuju se u samoj aplikaciji i učitavaju se sa diska — nijedan se ne preuzima sa mreže.",
+      /** Per-row hint on the button that opens one entry's notice; `aria-expanded` carries the state itself. */
+      expand: "Prikaži tekst licence",
+      collapse: "Sakrij tekst licence",
+      /** Names the scrollable notice block for a screen reader — a scroll region has to be reachable and named. */
+      noticeLabel: "Tekst licence",
+      /** Above the notice: the file every character of it was read from. */
+      source: "Pročitano iz",
+      /** Shown instead of a licence id when nothing established one. */
+      unknownLicence: "nije utvrđeno",
+      /** In place of the notice, when the package names a licence but ships no copy of it. */
+      declaredOnly:
+        "Paket navodi ovu licencu u svom manifestu, ali uz sebe ne isporučuje njen tekst. Ovde stoji ono što se moglo pročitati — tekst se ne izmišlja.",
+      /** In place of a licence id, when nothing on disk establishes one. */
+      notEstablished:
+        "Licenca nije utvrđena ni iz jednog fajla koji se isporučuje. Ispod je sve što sam fajl o sebi navodi.",
+      /**
+       * The notices are ~650 KB of text and arrive as their own chunk when this
+       * card first mounts (see `LicencesSection`), so there is a moment — short,
+       * but real — with nothing to show. Said rather than left blank, because a
+       * card that renders its title and then nothing reads as broken.
+       */
+      loading: "Učitavanje licenci…",
+      loadError: "Licence nisu učitane. Zatvori i ponovo otvori Podešavanja.",
+      /**
+       * Electron is listed like any other dependency, but what it CARRIES is
+       * not: Chromium and Node.js are inside the runtime, and their own notices
+       * ship as a separate file beside the executable rather than in this list.
+       * Said once, under the library group, because a user who wonders where
+       * Chromium is would otherwise conclude it was forgotten.
+       */
+      chromium:
+        "Electron u sebi nosi Chromium i Node.js. Njihova puna obaveštenja o licencama isporučuju se uz aplikaciju, u fajlu LICENSES.chromium.html pored izvršnog fajla.",
     },
   },
 
