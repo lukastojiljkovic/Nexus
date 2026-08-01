@@ -167,11 +167,11 @@ export {
 } from "./canvas/canvasRef.js";
 export type { CanvasRef, CanvasRefKind } from "./canvas/canvasRef.js";
 
-// --- FIT (the nutrition module, migration 058) ------------------------------
+// --- FIT (the nutrition and training module, migration 058) -----------------
 //
-// The catalogue is APP-SHIPPED read-only data rather than database rows, and a
-// logged meal snapshots the macros it used — the two decisions the whole module
-// rests on. `catalogue.ts` and `food.ts` carry the reasoning; `@nexus/db`
+// Both catalogues are APP-SHIPPED read-only data rather than database rows, and
+// a logged meal snapshots the macros it used — the two decisions the whole
+// module rests on. `catalogue.ts` and `food.ts` carry the reasoning; `@nexus/db`
 // deliberately reads neither.
 export {
   EMPTY_MACROS,
@@ -197,7 +197,60 @@ export type {
   RecipeComponent,
   SearchableFood,
 } from "./fitness/food.js";
-export { catalogueFood, FOOD_CATALOGUE } from "./fitness/catalogue.js";
+// An exercise entry declares what one SET of it records (`metric`), which is
+// what lets the arithmetic below refuse a plank's tonnage instead of answering
+// zero — and `assisted_reps` is a metric of its own because assistance improves
+// downward. `exercise.ts`'s header carries that reasoning.
+export {
+  EXERCISE_EQUIPMENT,
+  EXERCISE_METRICS,
+  MOVEMENT_PATTERNS,
+  MUSCLE_GROUPS,
+  validateExerciseEntry,
+} from "./fitness/exercise.js";
+export type {
+  ExerciseEntry,
+  ExerciseEntryProblem,
+  ExerciseEquipment,
+  ExerciseMetric,
+  ExerciseProblemCode,
+  MovementPattern,
+  MuscleGroup,
+} from "./fitness/exercise.js";
+// The training arithmetic and, more to the point, its refusals: no estimated
+// 1RM above ten reps (past which the two published formulas stop describing the
+// same lift), no tonnage for a metric that has none, no calorie burn and no
+// body-fat percentage at all. `training.ts`'s header says why each one is a
+// refusal rather than a gap.
+export {
+  BODY_WEIGHT_MIN_SAMPLES,
+  BODY_WEIGHT_WINDOW_DAYS,
+  countsTowardVolume,
+  estimateOneRepMax,
+  movingAverage,
+  ONE_RM_DEFAULT_FORMULA,
+  ONE_RM_FORMULAS,
+  ONE_RM_MAX_REPS,
+  sessionTonnage,
+  SET_KINDS,
+  setTonnage,
+  workingSets,
+} from "./fitness/training.js";
+export type {
+  DailyReading,
+  LoggedSet,
+  OneRepMaxEstimate,
+  OneRepMaxFormula,
+  SetKind,
+  TonnageTotal,
+  TrendPoint,
+} from "./fitness/training.js";
+export {
+  catalogueExercise,
+  catalogueFood,
+  EXERCISE_CATALOGUE,
+  FOOD_CATALOGUE,
+} from "./fitness/catalogue.js";
 
 // --- FIT: the body profile and energy expenditure (slice a2) ----------------
 //

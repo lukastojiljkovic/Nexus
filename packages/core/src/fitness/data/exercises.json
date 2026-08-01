@@ -1,0 +1,3651 @@
+[
+  {
+    "id": "potisak-sa-klupe",
+    "name": "Potisak sa klupe",
+    "nameEn": "Barbell bench press",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "prednja-ramena"
+    ],
+    "equipment": "sipka",
+    "pattern": "horizontalni-potisak",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "potisak-na-kosoj-klupi",
+    "name": "Potisak na kosoj klupi",
+    "nameEn": "Incline barbell bench press",
+    "primaryMuscles": [
+      "grudi",
+      "prednja-ramena"
+    ],
+    "secondaryMuscles": [
+      "triceps"
+    ],
+    "equipment": "sipka",
+    "pattern": "horizontalni-potisak",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "potisak-na-klupi-nadole",
+    "name": "Potisak na klupi nadole",
+    "nameEn": "Decline barbell bench press",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "triceps"
+    ],
+    "equipment": "sipka",
+    "pattern": "horizontalni-potisak",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "potisak-sa-klupe-uskim-hvatom",
+    "name": "Potisak sa klupe uskim hvatom",
+    "nameEn": "Close-grip bench press",
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "secondaryMuscles": [
+      "grudi",
+      "prednja-ramena"
+    ],
+    "equipment": "sipka",
+    "pattern": "horizontalni-potisak",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "potisak-bucicama-ravna-klupa",
+    "name": "Potisak bučicama na ravnoj klupi",
+    "nameEn": "Flat dumbbell bench press",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "prednja-ramena"
+    ],
+    "equipment": "bucice",
+    "pattern": "horizontalni-potisak",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "potisak-bucicama-kosa-klupa",
+    "name": "Potisak bučicama na kosoj klupi",
+    "nameEn": "Incline dumbbell bench press",
+    "primaryMuscles": [
+      "grudi",
+      "prednja-ramena"
+    ],
+    "secondaryMuscles": [
+      "triceps"
+    ],
+    "equipment": "bucice",
+    "pattern": "horizontalni-potisak",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "potisak-bucicama-klupa-nadole",
+    "name": "Potisak bučicama na klupi nadole",
+    "nameEn": "Decline dumbbell bench press",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "triceps"
+    ],
+    "equipment": "bucice",
+    "pattern": "horizontalni-potisak",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "potisak-bucicom-jednom-rukom",
+    "name": "Potisak bučicom jednom rukom",
+    "nameEn": "Single-arm dumbbell bench press",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "prednja-ramena",
+      "kosi-trbusni"
+    ],
+    "equipment": "bucice",
+    "pattern": "horizontalni-potisak",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "razvlacenje-bucicama",
+    "name": "Razvlačenje ruku sa bučicama",
+    "nameEn": "Dumbbell chest fly",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "prednja-ramena"
+    ],
+    "equipment": "bucice",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "razvlacenje-bucicama-kosa-klupa",
+    "name": "Razvlačenje ruku sa bučicama na kosoj klupi",
+    "nameEn": "Incline dumbbell chest fly",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "prednja-ramena"
+    ],
+    "equipment": "bucice",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "razvlacenje-leptir-sprava",
+    "name": "Razvlačenje na leptir spravi",
+    "nameEn": "Pec deck fly",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "prednja-ramena"
+    ],
+    "equipment": "sprava",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "ukrstanje-sajli",
+    "name": "Ukrštanje sajli",
+    "nameEn": "Cable crossover",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "prednja-ramena"
+    ],
+    "equipment": "kabl",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "ukrstanje-sajli-odozdo",
+    "name": "Ukrštanje sajli odozdo",
+    "nameEn": "Low-to-high cable crossover",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "prednja-ramena"
+    ],
+    "equipment": "kabl",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "ukrstanje-sajli-odozgo",
+    "name": "Ukrštanje sajli odozgo",
+    "nameEn": "High-to-low cable crossover",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "prednja-ramena"
+    ],
+    "equipment": "kabl",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "potisak-na-spravi-za-grudi",
+    "name": "Potisak na spravi za grudi",
+    "nameEn": "Machine chest press",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "prednja-ramena"
+    ],
+    "equipment": "sprava",
+    "pattern": "horizontalni-potisak",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "potisak-sa-klupe-smit",
+    "name": "Potisak sa klupe na Smit mašini",
+    "nameEn": "Smith machine bench press",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "prednja-ramena"
+    ],
+    "equipment": "smit",
+    "pattern": "horizontalni-potisak",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "sklekovi",
+    "name": "Sklekovi",
+    "nameEn": "Push-up",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "prednja-ramena",
+      "trbusnjaci"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "horizontalni-potisak",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "sklekovi-na-kolenima",
+    "name": "Sklekovi na kolenima",
+    "nameEn": "Knee push-up",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "prednja-ramena"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "horizontalni-potisak",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "sklekovi-uz-zid",
+    "name": "Sklekovi uz zid",
+    "nameEn": "Wall push-up",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "prednja-ramena"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "horizontalni-potisak",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "sklekovi-sa-uzdignutim-rukama",
+    "name": "Sklekovi sa uzdignutim rukama",
+    "nameEn": "Incline push-up",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "prednja-ramena"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "horizontalni-potisak",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "sklekovi-sa-uzdignutim-nogama",
+    "name": "Sklekovi sa uzdignutim nogama",
+    "nameEn": "Decline push-up",
+    "primaryMuscles": [
+      "grudi",
+      "prednja-ramena"
+    ],
+    "secondaryMuscles": [
+      "triceps"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "horizontalni-potisak",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "sklekovi-uskim-hvatom",
+    "name": "Sklekovi uskim hvatom",
+    "nameEn": "Diamond push-up",
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "secondaryMuscles": [
+      "grudi",
+      "prednja-ramena"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "horizontalni-potisak",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "sklekovi-sa-pljeskom",
+    "name": "Sklekovi sa pljeskom",
+    "nameEn": "Clap push-up",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "prednja-ramena"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "horizontalni-potisak",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "sklekovi-na-jednoj-ruci",
+    "name": "Sklekovi na jednoj ruci",
+    "nameEn": "One-arm push-up",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "prednja-ramena",
+      "kosi-trbusni"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "horizontalni-potisak",
+    "unilateral": true,
+    "metric": "reps"
+  },
+  {
+    "id": "sklekovi-sa-tegom",
+    "name": "Sklekovi sa tegom",
+    "nameEn": "Weighted push-up",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "prednja-ramena"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "horizontalni-potisak",
+    "unilateral": false,
+    "metric": "weighted_reps"
+  },
+  {
+    "id": "sklekovi-na-karikama",
+    "name": "Sklekovi na karikama",
+    "nameEn": "Ring push-up",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "prednja-ramena",
+      "trbusnjaci"
+    ],
+    "equipment": "karike",
+    "pattern": "horizontalni-potisak",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "sklekovi-na-trx-u",
+    "name": "Sklekovi na TRX-u",
+    "nameEn": "TRX push-up",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "prednja-ramena",
+      "trbusnjaci"
+    ],
+    "equipment": "trx",
+    "pattern": "horizontalni-potisak",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "sklekovi-sa-gumom",
+    "name": "Sklekovi sa gumom",
+    "nameEn": "Band-resisted push-up",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "prednja-ramena"
+    ],
+    "equipment": "guma",
+    "pattern": "horizontalni-potisak",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "potisak-sa-gumom",
+    "name": "Potisak sa gumom",
+    "nameEn": "Band chest press",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "prednja-ramena"
+    ],
+    "equipment": "guma",
+    "pattern": "horizontalni-potisak",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "bacanje-medicinke-od-grudi",
+    "name": "Bacanje medicinke od grudi",
+    "nameEn": "Medicine ball chest pass",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "prednja-ramena"
+    ],
+    "equipment": "medicinka",
+    "pattern": "horizontalni-potisak",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "propadanja-u-pretklonu",
+    "name": "Propadanja u pretklonu",
+    "nameEn": "Chest dip",
+    "primaryMuscles": [
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "prednja-ramena"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "vertikalni-potisak",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "prenosenje-bucice-iza-glave",
+    "name": "Prenošenje bučice iza glave",
+    "nameEn": "Dumbbell pullover",
+    "primaryMuscles": [
+      "latovi"
+    ],
+    "secondaryMuscles": [
+      "grudi",
+      "triceps"
+    ],
+    "equipment": "bucice",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "zgibovi-nathvatom",
+    "name": "Zgibovi nathvatom",
+    "nameEn": "Pull-up",
+    "primaryMuscles": [
+      "latovi"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "romboidi",
+      "zadnja-ramena"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "vertikalno-privlacenje",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "zgibovi-pothvatom",
+    "name": "Zgibovi pothvatom",
+    "nameEn": "Chin-up",
+    "primaryMuscles": [
+      "latovi",
+      "biceps"
+    ],
+    "secondaryMuscles": [
+      "romboidi"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "vertikalno-privlacenje",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "zgibovi-sirokim-hvatom",
+    "name": "Zgibovi širokim hvatom",
+    "nameEn": "Wide-grip pull-up",
+    "primaryMuscles": [
+      "latovi"
+    ],
+    "secondaryMuscles": [
+      "romboidi",
+      "zadnja-ramena",
+      "biceps"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "vertikalno-privlacenje",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "zgibovi-neutralnim-hvatom",
+    "name": "Zgibovi neutralnim hvatom",
+    "nameEn": "Neutral-grip pull-up",
+    "primaryMuscles": [
+      "latovi"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "romboidi"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "vertikalno-privlacenje",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "zgibovi-sa-tegom",
+    "name": "Zgibovi sa tegom",
+    "nameEn": "Weighted pull-up",
+    "primaryMuscles": [
+      "latovi"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "romboidi"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "vertikalno-privlacenje",
+    "unilateral": false,
+    "metric": "weighted_reps"
+  },
+  {
+    "id": "zgibovi-na-spravi-za-pomoc",
+    "name": "Zgibovi na spravi za pomoć",
+    "nameEn": "Assisted pull-up",
+    "primaryMuscles": [
+      "latovi"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "romboidi"
+    ],
+    "equipment": "sprava",
+    "pattern": "vertikalno-privlacenje",
+    "unilateral": false,
+    "metric": "assisted_reps"
+  },
+  {
+    "id": "zgibovi-sa-gumom",
+    "name": "Zgibovi sa gumom",
+    "nameEn": "Band-assisted pull-up",
+    "primaryMuscles": [
+      "latovi"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "romboidi"
+    ],
+    "equipment": "guma",
+    "pattern": "vertikalno-privlacenje",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "zgibovi-na-karikama",
+    "name": "Zgibovi na karikama",
+    "nameEn": "Ring pull-up",
+    "primaryMuscles": [
+      "latovi"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "romboidi"
+    ],
+    "equipment": "karike",
+    "pattern": "vertikalno-privlacenje",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "negativni-zgibovi",
+    "name": "Negativni zgibovi",
+    "nameEn": "Negative pull-up",
+    "primaryMuscles": [
+      "latovi"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "romboidi"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "vertikalno-privlacenje",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "muscle-up",
+    "name": "Muscle up",
+    "nameEn": "Muscle-up",
+    "primaryMuscles": [
+      "latovi"
+    ],
+    "secondaryMuscles": [
+      "grudi",
+      "triceps",
+      "romboidi"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "vertikalno-privlacenje",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "povlacenje-lat-masina-nathvat",
+    "name": "Povlačenje na lat mašini nathvatom",
+    "nameEn": "Lat pulldown",
+    "primaryMuscles": [
+      "latovi"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "romboidi"
+    ],
+    "equipment": "kabl",
+    "pattern": "vertikalno-privlacenje",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "povlacenje-lat-masina-pothvat",
+    "name": "Povlačenje na lat mašini pothvatom",
+    "nameEn": "Underhand lat pulldown",
+    "primaryMuscles": [
+      "latovi",
+      "biceps"
+    ],
+    "secondaryMuscles": [
+      "romboidi"
+    ],
+    "equipment": "kabl",
+    "pattern": "vertikalno-privlacenje",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "povlacenje-lat-masina-neutralni",
+    "name": "Povlačenje na lat mašini neutralnim hvatom",
+    "nameEn": "Neutral-grip lat pulldown",
+    "primaryMuscles": [
+      "latovi"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "romboidi"
+    ],
+    "equipment": "kabl",
+    "pattern": "vertikalno-privlacenje",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "povlacenje-lat-masina-jednom-rukom",
+    "name": "Povlačenje na lat mašini jednom rukom",
+    "nameEn": "Single-arm lat pulldown",
+    "primaryMuscles": [
+      "latovi"
+    ],
+    "secondaryMuscles": [
+      "biceps"
+    ],
+    "equipment": "kabl",
+    "pattern": "vertikalno-privlacenje",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "povlacenje-lat-masina-iza-vrata",
+    "name": "Povlačenje na lat mašini iza vrata",
+    "nameEn": "Behind-the-neck lat pulldown",
+    "primaryMuscles": [
+      "latovi"
+    ],
+    "secondaryMuscles": [
+      "romboidi",
+      "biceps"
+    ],
+    "equipment": "kabl",
+    "pattern": "vertikalno-privlacenje",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "privlacenje-sajle-pravim-rukama",
+    "name": "Privlačenje sajle pravim rukama",
+    "nameEn": "Straight-arm pulldown",
+    "primaryMuscles": [
+      "latovi"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "trbusnjaci"
+    ],
+    "equipment": "kabl",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "veslanje-u-pretklonu",
+    "name": "Veslanje u pretklonu",
+    "nameEn": "Barbell bent-over row",
+    "primaryMuscles": [
+      "latovi",
+      "romboidi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-ramena",
+      "biceps",
+      "donja-ledja"
+    ],
+    "equipment": "sipka",
+    "pattern": "horizontalno-privlacenje",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "veslanje-u-pretklonu-pothvatom",
+    "name": "Veslanje u pretklonu pothvatom",
+    "nameEn": "Underhand barbell row",
+    "primaryMuscles": [
+      "latovi",
+      "romboidi"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "donja-ledja"
+    ],
+    "equipment": "sipka",
+    "pattern": "horizontalno-privlacenje",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "veslanje-bucicom-jednom-rukom",
+    "name": "Veslanje bučicom jednom rukom",
+    "nameEn": "One-arm dumbbell row",
+    "primaryMuscles": [
+      "latovi",
+      "romboidi"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "zadnja-ramena"
+    ],
+    "equipment": "bucice",
+    "pattern": "horizontalno-privlacenje",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "veslanje-sa-dve-bucice",
+    "name": "Veslanje sa dve bučice u pretklonu",
+    "nameEn": "Two-arm dumbbell row",
+    "primaryMuscles": [
+      "latovi",
+      "romboidi"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "zadnja-ramena"
+    ],
+    "equipment": "bucice",
+    "pattern": "horizontalno-privlacenje",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "veslanje-sa-t-sipkom",
+    "name": "Veslanje sa T-šipkom",
+    "nameEn": "T-bar row",
+    "primaryMuscles": [
+      "latovi",
+      "romboidi"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "zadnja-ramena",
+      "donja-ledja"
+    ],
+    "equipment": "t-sipka",
+    "pattern": "horizontalno-privlacenje",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "veslanje-na-sajli-sedeci",
+    "name": "Veslanje na sajli sedeći",
+    "nameEn": "Seated cable row",
+    "primaryMuscles": [
+      "latovi",
+      "romboidi"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "zadnja-ramena"
+    ],
+    "equipment": "kabl",
+    "pattern": "horizontalno-privlacenje",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "veslanje-na-sajli-jednom-rukom",
+    "name": "Veslanje na sajli jednom rukom",
+    "nameEn": "Single-arm cable row",
+    "primaryMuscles": [
+      "latovi",
+      "romboidi"
+    ],
+    "secondaryMuscles": [
+      "biceps"
+    ],
+    "equipment": "kabl",
+    "pattern": "horizontalno-privlacenje",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "veslanje-na-spravi",
+    "name": "Veslanje na spravi",
+    "nameEn": "Machine row",
+    "primaryMuscles": [
+      "latovi",
+      "romboidi"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "zadnja-ramena"
+    ],
+    "equipment": "sprava",
+    "pattern": "horizontalno-privlacenje",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "veslanje-na-spravi-jednom-rukom",
+    "name": "Veslanje na spravi jednom rukom",
+    "nameEn": "Single-arm machine row",
+    "primaryMuscles": [
+      "latovi",
+      "romboidi"
+    ],
+    "secondaryMuscles": [
+      "biceps"
+    ],
+    "equipment": "sprava",
+    "pattern": "horizontalno-privlacenje",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "veslanje-sa-osloncem-za-grudi",
+    "name": "Veslanje na spravi sa osloncem za grudi",
+    "nameEn": "Chest-supported row",
+    "primaryMuscles": [
+      "latovi",
+      "romboidi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-ramena",
+      "biceps"
+    ],
+    "equipment": "sprava",
+    "pattern": "horizontalno-privlacenje",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "veslanje-girjom",
+    "name": "Veslanje girjom jednom rukom",
+    "nameEn": "One-arm kettlebell row",
+    "primaryMuscles": [
+      "latovi",
+      "romboidi"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "zadnja-ramena"
+    ],
+    "equipment": "girja",
+    "pattern": "horizontalno-privlacenje",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "veslanje-sa-gumom",
+    "name": "Veslanje sa gumom",
+    "nameEn": "Band row",
+    "primaryMuscles": [
+      "latovi",
+      "romboidi"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "zadnja-ramena"
+    ],
+    "equipment": "guma",
+    "pattern": "horizontalno-privlacenje",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "australijski-zgibovi",
+    "name": "Australijski zgibovi",
+    "nameEn": "Inverted row",
+    "primaryMuscles": [
+      "latovi",
+      "romboidi"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "zadnja-ramena"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "horizontalno-privlacenje",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "veslanje-na-trx-u",
+    "name": "Veslanje na TRX-u",
+    "nameEn": "TRX row",
+    "primaryMuscles": [
+      "latovi",
+      "romboidi"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "zadnja-ramena"
+    ],
+    "equipment": "trx",
+    "pattern": "horizontalno-privlacenje",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "veslanje-na-karikama",
+    "name": "Veslanje na karikama",
+    "nameEn": "Ring row",
+    "primaryMuscles": [
+      "latovi",
+      "romboidi"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "zadnja-ramena"
+    ],
+    "equipment": "karike",
+    "pattern": "horizontalno-privlacenje",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "mrtvo-dizanje",
+    "name": "Mrtvo dizanje",
+    "nameEn": "Deadlift",
+    "primaryMuscles": [
+      "zadnja-loza",
+      "gluteusi",
+      "donja-ledja"
+    ],
+    "secondaryMuscles": [
+      "trapez",
+      "latovi",
+      "kvadriceps",
+      "podlaktica"
+    ],
+    "equipment": "sipka",
+    "pattern": "pregib-kuka",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "sumo-mrtvo-dizanje",
+    "name": "Sumo mrtvo dizanje",
+    "nameEn": "Sumo deadlift",
+    "primaryMuscles": [
+      "gluteusi",
+      "kvadriceps",
+      "donja-ledja"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza",
+      "adduktori",
+      "trapez"
+    ],
+    "equipment": "sipka",
+    "pattern": "pregib-kuka",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "rumunsko-mrtvo-dizanje",
+    "name": "Rumunsko mrtvo dizanje",
+    "nameEn": "Romanian deadlift",
+    "primaryMuscles": [
+      "zadnja-loza",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "donja-ledja",
+      "podlaktica"
+    ],
+    "equipment": "sipka",
+    "pattern": "pregib-kuka",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "rumunsko-mrtvo-dizanje-bucice",
+    "name": "Rumunsko mrtvo dizanje sa bučicama",
+    "nameEn": "Dumbbell Romanian deadlift",
+    "primaryMuscles": [
+      "zadnja-loza",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "donja-ledja"
+    ],
+    "equipment": "bucice",
+    "pattern": "pregib-kuka",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "rumunsko-mrtvo-dizanje-girjom",
+    "name": "Rumunsko mrtvo dizanje sa girjom",
+    "nameEn": "Kettlebell Romanian deadlift",
+    "primaryMuscles": [
+      "zadnja-loza",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "donja-ledja"
+    ],
+    "equipment": "girja",
+    "pattern": "pregib-kuka",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "rumunsko-mrtvo-dizanje-jedna-noga",
+    "name": "Rumunsko mrtvo dizanje na jednoj nozi",
+    "nameEn": "Single-leg Romanian deadlift",
+    "primaryMuscles": [
+      "zadnja-loza",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "donja-ledja"
+    ],
+    "equipment": "bucice",
+    "pattern": "pregib-kuka",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "mrtvo-dizanje-sa-girjom",
+    "name": "Mrtvo dizanje sa girjom",
+    "nameEn": "Kettlebell deadlift",
+    "primaryMuscles": [
+      "zadnja-loza",
+      "gluteusi",
+      "donja-ledja"
+    ],
+    "secondaryMuscles": [
+      "kvadriceps",
+      "podlaktica"
+    ],
+    "equipment": "girja",
+    "pattern": "pregib-kuka",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "pretklon-sa-sipkom",
+    "name": "Pretklon sa šipkom",
+    "nameEn": "Good morning",
+    "primaryMuscles": [
+      "zadnja-loza",
+      "donja-ledja"
+    ],
+    "secondaryMuscles": [
+      "gluteusi"
+    ],
+    "equipment": "sipka",
+    "pattern": "pregib-kuka",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "hiperekstenzije",
+    "name": "Hiperekstenzije",
+    "nameEn": "Back extension",
+    "primaryMuscles": [
+      "donja-ledja"
+    ],
+    "secondaryMuscles": [
+      "gluteusi",
+      "zadnja-loza"
+    ],
+    "equipment": "sprava",
+    "pattern": "pregib-kuka",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "hiperekstenzije-sa-tegom",
+    "name": "Hiperekstenzije sa tegom",
+    "nameEn": "Weighted back extension",
+    "primaryMuscles": [
+      "donja-ledja"
+    ],
+    "secondaryMuscles": [
+      "gluteusi",
+      "zadnja-loza"
+    ],
+    "equipment": "sprava",
+    "pattern": "pregib-kuka",
+    "unilateral": false,
+    "metric": "weighted_reps"
+  },
+  {
+    "id": "sleganje-ramenima-sipka",
+    "name": "Sleganje ramenima sa šipkom",
+    "nameEn": "Barbell shrug",
+    "primaryMuscles": [
+      "trapez"
+    ],
+    "secondaryMuscles": [
+      "podlaktica"
+    ],
+    "equipment": "sipka",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "sleganje-ramenima-bucice",
+    "name": "Sleganje ramenima sa bučicama",
+    "nameEn": "Dumbbell shrug",
+    "primaryMuscles": [
+      "trapez"
+    ],
+    "secondaryMuscles": [
+      "podlaktica"
+    ],
+    "equipment": "bucice",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "sleganje-ramenima-sprava",
+    "name": "Sleganje ramenima na spravi",
+    "nameEn": "Machine shrug",
+    "primaryMuscles": [
+      "trapez"
+    ],
+    "secondaryMuscles": [
+      "podlaktica"
+    ],
+    "equipment": "sprava",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "sleganje-ramenima-smit",
+    "name": "Sleganje ramenima na Smit mašini",
+    "nameEn": "Smith machine shrug",
+    "primaryMuscles": [
+      "trapez"
+    ],
+    "secondaryMuscles": [
+      "podlaktica"
+    ],
+    "equipment": "smit",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "vuca-sipke-ka-bradi",
+    "name": "Vuča šipke ka bradi",
+    "nameEn": "Upright row",
+    "primaryMuscles": [
+      "bocna-ramena",
+      "trapez"
+    ],
+    "secondaryMuscles": [
+      "biceps"
+    ],
+    "equipment": "sipka",
+    "pattern": "vertikalno-privlacenje",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "face-pull",
+    "name": "Face pull",
+    "nameEn": "Face pull",
+    "primaryMuscles": [
+      "zadnja-ramena",
+      "romboidi"
+    ],
+    "secondaryMuscles": [
+      "trapez"
+    ],
+    "equipment": "kabl",
+    "pattern": "horizontalno-privlacenje",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "vojnicki-potisak",
+    "name": "Vojnički potisak",
+    "nameEn": "Standing barbell overhead press",
+    "primaryMuscles": [
+      "prednja-ramena"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "bocna-ramena",
+      "trbusnjaci"
+    ],
+    "equipment": "sipka",
+    "pattern": "vertikalni-potisak",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "potisak-sipkom-iznad-glave-sedeci",
+    "name": "Potisak šipkom iznad glave sedeći",
+    "nameEn": "Seated barbell overhead press",
+    "primaryMuscles": [
+      "prednja-ramena"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "bocna-ramena"
+    ],
+    "equipment": "sipka",
+    "pattern": "vertikalni-potisak",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "vojnicki-potisak-iza-vrata",
+    "name": "Vojnički potisak iza vrata",
+    "nameEn": "Behind-the-neck press",
+    "primaryMuscles": [
+      "prednja-ramena",
+      "bocna-ramena"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "trapez"
+    ],
+    "equipment": "sipka",
+    "pattern": "vertikalni-potisak",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "potisak-bucicama-iznad-glave-sedeci",
+    "name": "Potisak bučicama iznad glave sedeći",
+    "nameEn": "Seated dumbbell shoulder press",
+    "primaryMuscles": [
+      "prednja-ramena"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "bocna-ramena"
+    ],
+    "equipment": "bucice",
+    "pattern": "vertikalni-potisak",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "potisak-bucicama-iznad-glave-stojeci",
+    "name": "Potisak bučicama iznad glave stojeći",
+    "nameEn": "Standing dumbbell shoulder press",
+    "primaryMuscles": [
+      "prednja-ramena"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "bocna-ramena",
+      "trbusnjaci"
+    ],
+    "equipment": "bucice",
+    "pattern": "vertikalni-potisak",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "arnoldov-potisak",
+    "name": "Arnoldov potisak",
+    "nameEn": "Arnold press",
+    "primaryMuscles": [
+      "prednja-ramena"
+    ],
+    "secondaryMuscles": [
+      "bocna-ramena",
+      "triceps"
+    ],
+    "equipment": "bucice",
+    "pattern": "vertikalni-potisak",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "potisak-na-spravi-za-ramena",
+    "name": "Potisak na spravi za ramena",
+    "nameEn": "Machine shoulder press",
+    "primaryMuscles": [
+      "prednja-ramena"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "bocna-ramena"
+    ],
+    "equipment": "sprava",
+    "pattern": "vertikalni-potisak",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "potisak-iznad-glave-smit",
+    "name": "Potisak iznad glave na Smit mašini",
+    "nameEn": "Smith machine shoulder press",
+    "primaryMuscles": [
+      "prednja-ramena"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "bocna-ramena"
+    ],
+    "equipment": "smit",
+    "pattern": "vertikalni-potisak",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "potisak-sa-odrazom",
+    "name": "Potisak sa odrazom",
+    "nameEn": "Push press",
+    "primaryMuscles": [
+      "prednja-ramena"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "kvadriceps",
+      "gluteusi"
+    ],
+    "equipment": "sipka",
+    "pattern": "vertikalni-potisak",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "potisak-girjom-iznad-glave",
+    "name": "Potisak girjom iznad glave",
+    "nameEn": "Single-arm kettlebell overhead press",
+    "primaryMuscles": [
+      "prednja-ramena"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "kosi-trbusni"
+    ],
+    "equipment": "girja",
+    "pattern": "vertikalni-potisak",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "sklekovi-u-stoju-na-rukama",
+    "name": "Sklekovi u stoju na rukama",
+    "nameEn": "Handstand push-up",
+    "primaryMuscles": [
+      "prednja-ramena"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "trapez"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "vertikalni-potisak",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "stoj-na-rukama-uz-zid",
+    "name": "Stoj na rukama uz zid",
+    "nameEn": "Wall handstand hold",
+    "primaryMuscles": [
+      "prednja-ramena"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "trapez",
+      "trbusnjaci"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "vertikalni-potisak",
+    "unilateral": false,
+    "metric": "time"
+  },
+  {
+    "id": "bocno-podizanje-bucicama",
+    "name": "Bočno podizanje ruku sa bučicama",
+    "nameEn": "Dumbbell lateral raise",
+    "primaryMuscles": [
+      "bocna-ramena"
+    ],
+    "secondaryMuscles": [
+      "trapez"
+    ],
+    "equipment": "bucice",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "bocno-podizanje-na-sajli",
+    "name": "Bočno podizanje ruke na sajli",
+    "nameEn": "Cable lateral raise",
+    "primaryMuscles": [
+      "bocna-ramena"
+    ],
+    "secondaryMuscles": [
+      "trapez"
+    ],
+    "equipment": "kabl",
+    "pattern": "izolacija",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "bocno-podizanje-na-spravi",
+    "name": "Bočno podizanje ruku na spravi",
+    "nameEn": "Machine lateral raise",
+    "primaryMuscles": [
+      "bocna-ramena"
+    ],
+    "secondaryMuscles": [
+      "trapez"
+    ],
+    "equipment": "sprava",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "bocno-podizanje-sa-gumom",
+    "name": "Bočno podizanje ruku sa gumom",
+    "nameEn": "Band lateral raise",
+    "primaryMuscles": [
+      "bocna-ramena"
+    ],
+    "secondaryMuscles": [
+      "trapez"
+    ],
+    "equipment": "guma",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "prednje-podizanje-bucicama",
+    "name": "Prednje podizanje ruku sa bučicama",
+    "nameEn": "Dumbbell front raise",
+    "primaryMuscles": [
+      "prednja-ramena"
+    ],
+    "secondaryMuscles": [
+      "bocna-ramena"
+    ],
+    "equipment": "bucice",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "prednje-podizanje-sipke",
+    "name": "Prednje podizanje šipke",
+    "nameEn": "Barbell front raise",
+    "primaryMuscles": [
+      "prednja-ramena"
+    ],
+    "secondaryMuscles": [
+      "bocna-ramena"
+    ],
+    "equipment": "sipka",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "razvlacenje-u-pretklonu-bucice",
+    "name": "Razvlačenje ruku u pretklonu sa bučicama",
+    "nameEn": "Bent-over dumbbell rear delt fly",
+    "primaryMuscles": [
+      "zadnja-ramena"
+    ],
+    "secondaryMuscles": [
+      "romboidi",
+      "trapez"
+    ],
+    "equipment": "bucice",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "razvlacenje-sajli-zadnja-ramena",
+    "name": "Razvlačenje sajli za zadnja ramena",
+    "nameEn": "Cable rear delt fly",
+    "primaryMuscles": [
+      "zadnja-ramena"
+    ],
+    "secondaryMuscles": [
+      "romboidi",
+      "trapez"
+    ],
+    "equipment": "kabl",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "zadnja-ramena-leptir-sprava",
+    "name": "Zadnja ramena na leptir spravi",
+    "nameEn": "Reverse pec deck",
+    "primaryMuscles": [
+      "zadnja-ramena"
+    ],
+    "secondaryMuscles": [
+      "romboidi",
+      "trapez"
+    ],
+    "equipment": "sprava",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "pregib-biceps-sipka",
+    "name": "Pregib za biceps sa šipkom",
+    "nameEn": "Barbell curl",
+    "primaryMuscles": [
+      "biceps"
+    ],
+    "secondaryMuscles": [
+      "podlaktica"
+    ],
+    "equipment": "sipka",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "pregib-biceps-ez-sipka",
+    "name": "Pregib za biceps sa EZ šipkom",
+    "nameEn": "EZ-bar curl",
+    "primaryMuscles": [
+      "biceps"
+    ],
+    "secondaryMuscles": [
+      "podlaktica"
+    ],
+    "equipment": "ez-sipka",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "pregib-biceps-bucice",
+    "name": "Pregib za biceps sa bučicama",
+    "nameEn": "Dumbbell curl",
+    "primaryMuscles": [
+      "biceps"
+    ],
+    "secondaryMuscles": [
+      "podlaktica"
+    ],
+    "equipment": "bucice",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "pregib-biceps-bucice-naizmenicno",
+    "name": "Pregib za biceps sa bučicama naizmenično",
+    "nameEn": "Alternating dumbbell curl",
+    "primaryMuscles": [
+      "biceps"
+    ],
+    "secondaryMuscles": [
+      "podlaktica"
+    ],
+    "equipment": "bucice",
+    "pattern": "izolacija",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "cekic-pregib",
+    "name": "Čekić pregib sa bučicama",
+    "nameEn": "Hammer curl",
+    "primaryMuscles": [
+      "biceps",
+      "podlaktica"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "bucice",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "pregib-biceps-skot-klupa",
+    "name": "Pregib za biceps na Skot klupi",
+    "nameEn": "Preacher curl",
+    "primaryMuscles": [
+      "biceps"
+    ],
+    "secondaryMuscles": [
+      "podlaktica"
+    ],
+    "equipment": "ez-sipka",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "koncentrisani-pregib",
+    "name": "Koncentrisani pregib za biceps",
+    "nameEn": "Concentration curl",
+    "primaryMuscles": [
+      "biceps"
+    ],
+    "secondaryMuscles": [
+      "podlaktica"
+    ],
+    "equipment": "bucice",
+    "pattern": "izolacija",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "pregib-biceps-kosa-klupa",
+    "name": "Pregib za biceps na kosoj klupi",
+    "nameEn": "Incline dumbbell curl",
+    "primaryMuscles": [
+      "biceps"
+    ],
+    "secondaryMuscles": [
+      "podlaktica"
+    ],
+    "equipment": "bucice",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "pregib-biceps-sajla",
+    "name": "Pregib za biceps na sajli",
+    "nameEn": "Cable curl",
+    "primaryMuscles": [
+      "biceps"
+    ],
+    "secondaryMuscles": [
+      "podlaktica"
+    ],
+    "equipment": "kabl",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "pregib-biceps-sajla-iznad-glave",
+    "name": "Pregib za biceps na sajli iznad glave",
+    "nameEn": "High cable curl",
+    "primaryMuscles": [
+      "biceps"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "kabl",
+    "pattern": "izolacija",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "pregib-biceps-nathvatom",
+    "name": "Pregib za biceps nathvatom",
+    "nameEn": "Reverse curl",
+    "primaryMuscles": [
+      "podlaktica",
+      "biceps"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "ez-sipka",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "pregib-biceps-sprava",
+    "name": "Pregib za biceps na spravi",
+    "nameEn": "Machine curl",
+    "primaryMuscles": [
+      "biceps"
+    ],
+    "secondaryMuscles": [
+      "podlaktica"
+    ],
+    "equipment": "sprava",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "pregib-biceps-guma",
+    "name": "Pregib za biceps sa gumom",
+    "nameEn": "Band curl",
+    "primaryMuscles": [
+      "biceps"
+    ],
+    "secondaryMuscles": [
+      "podlaktica"
+    ],
+    "equipment": "guma",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "francuski-potisak",
+    "name": "Francuski potisak",
+    "nameEn": "Lying EZ-bar triceps extension",
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "ez-sipka",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "francuski-potisak-bucice",
+    "name": "Francuski potisak sa bučicama",
+    "nameEn": "Lying dumbbell triceps extension",
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "bucice",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "ekstenzija-tricepsa-iznad-glave-bucica",
+    "name": "Ekstenzija tricepsa iznad glave sa bučicom",
+    "nameEn": "Overhead dumbbell triceps extension",
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "bucice",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "ekstenzija-tricepsa-iznad-glave-sajla",
+    "name": "Ekstenzija tricepsa iznad glave na sajli",
+    "nameEn": "Overhead cable triceps extension",
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "kabl",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "ekstenzija-tricepsa-na-sajli",
+    "name": "Ekstenzija tricepsa na sajli",
+    "nameEn": "Cable triceps pushdown",
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "kabl",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "ekstenzija-tricepsa-sajla-uze",
+    "name": "Ekstenzija tricepsa na sajli sa užetom",
+    "nameEn": "Rope triceps pushdown",
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "kabl",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "ekstenzija-tricepsa-jednom-rukom-sajla",
+    "name": "Ekstenzija tricepsa jednom rukom na sajli",
+    "nameEn": "Single-arm cable pushdown",
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "kabl",
+    "pattern": "izolacija",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "ekstenzija-tricepsa-na-spravi",
+    "name": "Ekstenzija tricepsa na spravi",
+    "nameEn": "Machine triceps extension",
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "sprava",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "ekstenzija-tricepsa-guma",
+    "name": "Ekstenzija tricepsa sa gumom",
+    "nameEn": "Band triceps extension",
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "guma",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "zabacivanje-podlaktice",
+    "name": "Zabacivanje podlaktice sa bučicom",
+    "nameEn": "Dumbbell triceps kickback",
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "bucice",
+    "pattern": "izolacija",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "propadanja",
+    "name": "Propadanja",
+    "nameEn": "Dip",
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "secondaryMuscles": [
+      "grudi",
+      "prednja-ramena"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "vertikalni-potisak",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "propadanja-sa-tegom",
+    "name": "Propadanja sa tegom",
+    "nameEn": "Weighted dip",
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "secondaryMuscles": [
+      "grudi",
+      "prednja-ramena"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "vertikalni-potisak",
+    "unilateral": false,
+    "metric": "weighted_reps"
+  },
+  {
+    "id": "propadanja-na-spravi-za-pomoc",
+    "name": "Propadanja na spravi za pomoć",
+    "nameEn": "Assisted dip",
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "secondaryMuscles": [
+      "grudi",
+      "prednja-ramena"
+    ],
+    "equipment": "sprava",
+    "pattern": "vertikalni-potisak",
+    "unilateral": false,
+    "metric": "assisted_reps"
+  },
+  {
+    "id": "propadanja-sa-gumom",
+    "name": "Propadanja sa gumom",
+    "nameEn": "Band-assisted dip",
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "secondaryMuscles": [
+      "grudi",
+      "prednja-ramena"
+    ],
+    "equipment": "guma",
+    "pattern": "vertikalni-potisak",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "propadanja-izmedju-klupa",
+    "name": "Propadanja između klupa",
+    "nameEn": "Bench dip",
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "secondaryMuscles": [
+      "prednja-ramena"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "vertikalni-potisak",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "propadanja-na-karikama",
+    "name": "Propadanja na karikama",
+    "nameEn": "Ring dip",
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "secondaryMuscles": [
+      "grudi",
+      "prednja-ramena"
+    ],
+    "equipment": "karike",
+    "pattern": "vertikalni-potisak",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "pregib-sake-sipka",
+    "name": "Pregib šake sa šipkom",
+    "nameEn": "Barbell wrist curl",
+    "primaryMuscles": [
+      "podlaktica"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "sipka",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "pregib-sake-nathvatom",
+    "name": "Pregib šake nathvatom sa šipkom",
+    "nameEn": "Reverse barbell wrist curl",
+    "primaryMuscles": [
+      "podlaktica"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "sipka",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "pregib-sake-bucice",
+    "name": "Pregib šake sa bučicama",
+    "nameEn": "Dumbbell wrist curl",
+    "primaryMuscles": [
+      "podlaktica"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "bucice",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "vis-na-sipci",
+    "name": "Vis na šipci",
+    "nameEn": "Dead hang",
+    "primaryMuscles": [
+      "podlaktica"
+    ],
+    "secondaryMuscles": [
+      "latovi"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "time"
+  },
+  {
+    "id": "cucanj",
+    "name": "Čučanj",
+    "nameEn": "Back squat",
+    "primaryMuscles": [
+      "kvadriceps",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza",
+      "donja-ledja",
+      "adduktori"
+    ],
+    "equipment": "sipka",
+    "pattern": "cucanj",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "prednji-cucanj",
+    "name": "Prednji čučanj",
+    "nameEn": "Front squat",
+    "primaryMuscles": [
+      "kvadriceps"
+    ],
+    "secondaryMuscles": [
+      "gluteusi",
+      "donja-ledja",
+      "trbusnjaci"
+    ],
+    "equipment": "sipka",
+    "pattern": "cucanj",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "cucanj-na-smit-masini",
+    "name": "Čučanj na Smit mašini",
+    "nameEn": "Smith machine squat",
+    "primaryMuscles": [
+      "kvadriceps",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza",
+      "adduktori"
+    ],
+    "equipment": "smit",
+    "pattern": "cucanj",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "cucanj-na-hek-spravi",
+    "name": "Čučanj na hek spravi",
+    "nameEn": "Hack squat",
+    "primaryMuscles": [
+      "kvadriceps"
+    ],
+    "secondaryMuscles": [
+      "gluteusi",
+      "adduktori"
+    ],
+    "equipment": "sprava",
+    "pattern": "cucanj",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "goblet-cucanj",
+    "name": "Goblet čučanj",
+    "nameEn": "Goblet squat",
+    "primaryMuscles": [
+      "kvadriceps",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "adduktori",
+      "trbusnjaci"
+    ],
+    "equipment": "girja",
+    "pattern": "cucanj",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "cucanj-sa-dve-girje",
+    "name": "Čučanj sa dve girje",
+    "nameEn": "Double kettlebell front squat",
+    "primaryMuscles": [
+      "kvadriceps",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "trbusnjaci",
+      "adduktori"
+    ],
+    "equipment": "girja",
+    "pattern": "cucanj",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "cucanj-sa-bucicama",
+    "name": "Čučanj sa bučicama",
+    "nameEn": "Dumbbell squat",
+    "primaryMuscles": [
+      "kvadriceps",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza",
+      "adduktori"
+    ],
+    "equipment": "bucice",
+    "pattern": "cucanj",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "cucanj-sopstvenom-tezinom",
+    "name": "Čučanj sopstvenom težinom",
+    "nameEn": "Bodyweight squat",
+    "primaryMuscles": [
+      "kvadriceps",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "cucanj",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "cucanj-sa-gumom",
+    "name": "Čučanj sa gumom",
+    "nameEn": "Band squat",
+    "primaryMuscles": [
+      "kvadriceps",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza"
+    ],
+    "equipment": "guma",
+    "pattern": "cucanj",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "cucanj-uz-zid",
+    "name": "Čučanj uz zid",
+    "nameEn": "Wall sit",
+    "primaryMuscles": [
+      "kvadriceps"
+    ],
+    "secondaryMuscles": [
+      "gluteusi"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "cucanj",
+    "unilateral": false,
+    "metric": "time"
+  },
+  {
+    "id": "cucanj-na-jednoj-nozi",
+    "name": "Čučanj na jednoj nozi",
+    "nameEn": "Pistol squat",
+    "primaryMuscles": [
+      "kvadriceps",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza",
+      "trbusnjaci"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "cucanj",
+    "unilateral": true,
+    "metric": "reps"
+  },
+  {
+    "id": "cucanj-sa-potiskom",
+    "name": "Čučanj sa potiskom iznad glave",
+    "nameEn": "Thruster",
+    "primaryMuscles": [
+      "kvadriceps",
+      "prednja-ramena"
+    ],
+    "secondaryMuscles": [
+      "gluteusi",
+      "triceps"
+    ],
+    "equipment": "sipka",
+    "pattern": "cucanj",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "potisak-nogama",
+    "name": "Potisak nogama na spravi",
+    "nameEn": "Leg press",
+    "primaryMuscles": [
+      "kvadriceps",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza",
+      "adduktori"
+    ],
+    "equipment": "sprava",
+    "pattern": "cucanj",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "potisak-nogama-jednom-nogom",
+    "name": "Potisak nogama jednom nogom",
+    "nameEn": "Single-leg press",
+    "primaryMuscles": [
+      "kvadriceps",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza"
+    ],
+    "equipment": "sprava",
+    "pattern": "cucanj",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "skok-na-sanduk",
+    "name": "Skok na sanduk",
+    "nameEn": "Box jump",
+    "primaryMuscles": [
+      "kvadriceps",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "listovi",
+      "zadnja-loza"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "cucanj",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "cucanj-sa-skokom",
+    "name": "Čučanj sa skokom",
+    "nameEn": "Jump squat",
+    "primaryMuscles": [
+      "kvadriceps",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "listovi",
+      "zadnja-loza"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "cucanj",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "skok-u-dalj-iz-mesta",
+    "name": "Skok u dalj iz mesta",
+    "nameEn": "Standing broad jump",
+    "primaryMuscles": [
+      "gluteusi",
+      "kvadriceps"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza",
+      "listovi"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "cucanj",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "bugarski-cucanj",
+    "name": "Bugarski čučanj",
+    "nameEn": "Bulgarian split squat",
+    "primaryMuscles": [
+      "kvadriceps",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza",
+      "adduktori"
+    ],
+    "equipment": "bucice",
+    "pattern": "iskorak",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "iskorak",
+    "name": "Iskorak",
+    "nameEn": "Lunge",
+    "primaryMuscles": [
+      "kvadriceps",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza",
+      "adduktori"
+    ],
+    "equipment": "bucice",
+    "pattern": "iskorak",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "iskorak-sa-sipkom",
+    "name": "Iskorak sa šipkom",
+    "nameEn": "Barbell lunge",
+    "primaryMuscles": [
+      "kvadriceps",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza",
+      "adduktori"
+    ],
+    "equipment": "sipka",
+    "pattern": "iskorak",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "iskoraci-u-hodu",
+    "name": "Iskoraci u hodu",
+    "nameEn": "Walking lunge",
+    "primaryMuscles": [
+      "kvadriceps",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza",
+      "adduktori"
+    ],
+    "equipment": "bucice",
+    "pattern": "iskorak",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "iskoraci-u-hodu-sa-sipkom",
+    "name": "Iskoraci u hodu sa šipkom",
+    "nameEn": "Barbell walking lunge",
+    "primaryMuscles": [
+      "kvadriceps",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza",
+      "adduktori"
+    ],
+    "equipment": "sipka",
+    "pattern": "iskorak",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "iskorak-unazad",
+    "name": "Iskorak unazad",
+    "nameEn": "Reverse lunge",
+    "primaryMuscles": [
+      "gluteusi",
+      "kvadriceps"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza"
+    ],
+    "equipment": "bucice",
+    "pattern": "iskorak",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "bocni-iskorak",
+    "name": "Bočni iskorak",
+    "nameEn": "Lateral lunge",
+    "primaryMuscles": [
+      "kvadriceps",
+      "adduktori"
+    ],
+    "secondaryMuscles": [
+      "gluteusi"
+    ],
+    "equipment": "bucice",
+    "pattern": "iskorak",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "penjanje-na-klupu",
+    "name": "Penjanje na klupu",
+    "nameEn": "Step-up",
+    "primaryMuscles": [
+      "kvadriceps",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza",
+      "listovi"
+    ],
+    "equipment": "bucice",
+    "pattern": "iskorak",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "iskorak-na-trx-u",
+    "name": "Iskorak na TRX-u",
+    "nameEn": "TRX lunge",
+    "primaryMuscles": [
+      "kvadriceps",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza"
+    ],
+    "equipment": "trx",
+    "pattern": "iskorak",
+    "unilateral": true,
+    "metric": "reps"
+  },
+  {
+    "id": "opruzanje-potkolenica",
+    "name": "Opružanje potkolenica na spravi",
+    "nameEn": "Leg extension",
+    "primaryMuscles": [
+      "kvadriceps"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "sprava",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "pregib-potkolenica-lezeci",
+    "name": "Pregib potkolenica na spravi ležeći",
+    "nameEn": "Lying leg curl",
+    "primaryMuscles": [
+      "zadnja-loza"
+    ],
+    "secondaryMuscles": [
+      "listovi"
+    ],
+    "equipment": "sprava",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "pregib-potkolenica-sedeci",
+    "name": "Pregib potkolenica na spravi sedeći",
+    "nameEn": "Seated leg curl",
+    "primaryMuscles": [
+      "zadnja-loza"
+    ],
+    "secondaryMuscles": [
+      "listovi"
+    ],
+    "equipment": "sprava",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "pregib-potkolenica-trx",
+    "name": "Pregib potkolenica na TRX-u",
+    "nameEn": "TRX leg curl",
+    "primaryMuscles": [
+      "zadnja-loza"
+    ],
+    "secondaryMuscles": [
+      "gluteusi"
+    ],
+    "equipment": "trx",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "nordijski-pregib",
+    "name": "Nordijski pregib",
+    "nameEn": "Nordic hamstring curl",
+    "primaryMuscles": [
+      "zadnja-loza"
+    ],
+    "secondaryMuscles": [
+      "gluteusi"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "potisak-kukovima",
+    "name": "Potisak kukovima",
+    "nameEn": "Barbell hip thrust",
+    "primaryMuscles": [
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza",
+      "kvadriceps"
+    ],
+    "equipment": "sipka",
+    "pattern": "pregib-kuka",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "potisak-kukovima-bucicom",
+    "name": "Potisak kukovima sa bučicom",
+    "nameEn": "Dumbbell hip thrust",
+    "primaryMuscles": [
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza"
+    ],
+    "equipment": "bucice",
+    "pattern": "pregib-kuka",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "potisak-kukovima-sprava",
+    "name": "Potisak kukovima na spravi",
+    "nameEn": "Machine hip thrust",
+    "primaryMuscles": [
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza"
+    ],
+    "equipment": "sprava",
+    "pattern": "pregib-kuka",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "podizanje-karlice",
+    "name": "Podizanje karlice",
+    "nameEn": "Glute bridge",
+    "primaryMuscles": [
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "pregib-kuka",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "podizanje-karlice-jedna-noga",
+    "name": "Podizanje karlice na jednoj nozi",
+    "nameEn": "Single-leg glute bridge",
+    "primaryMuscles": [
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "pregib-kuka",
+    "unilateral": true,
+    "metric": "reps"
+  },
+  {
+    "id": "zabacivanje-noge-na-sajli",
+    "name": "Zabacivanje noge na sajli",
+    "nameEn": "Cable glute kickback",
+    "primaryMuscles": [
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza"
+    ],
+    "equipment": "kabl",
+    "pattern": "izolacija",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "provlacenje-sajle",
+    "name": "Provlačenje sajle između nogu",
+    "nameEn": "Cable pull-through",
+    "primaryMuscles": [
+      "gluteusi",
+      "zadnja-loza"
+    ],
+    "secondaryMuscles": [
+      "donja-ledja"
+    ],
+    "equipment": "kabl",
+    "pattern": "pregib-kuka",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "odvodjenje-nogu-na-spravi",
+    "name": "Odvođenje nogu na spravi",
+    "nameEn": "Hip abduction machine",
+    "primaryMuscles": [
+      "abduktori"
+    ],
+    "secondaryMuscles": [
+      "gluteusi"
+    ],
+    "equipment": "sprava",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "primicanje-nogu-na-spravi",
+    "name": "Primicanje nogu na spravi",
+    "nameEn": "Hip adduction machine",
+    "primaryMuscles": [
+      "adduktori"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "sprava",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "odvodjenje-kukova-sa-gumom",
+    "name": "Odvođenje kukova sa gumom",
+    "nameEn": "Band hip abduction",
+    "primaryMuscles": [
+      "abduktori"
+    ],
+    "secondaryMuscles": [
+      "gluteusi"
+    ],
+    "equipment": "guma",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "zamah-girjom",
+    "name": "Zamah girjom",
+    "nameEn": "Kettlebell swing",
+    "primaryMuscles": [
+      "gluteusi",
+      "zadnja-loza"
+    ],
+    "secondaryMuscles": [
+      "donja-ledja",
+      "trbusnjaci"
+    ],
+    "equipment": "girja",
+    "pattern": "pregib-kuka",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "zamah-girjom-jednom-rukom",
+    "name": "Zamah girjom jednom rukom",
+    "nameEn": "Single-arm kettlebell swing",
+    "primaryMuscles": [
+      "gluteusi",
+      "zadnja-loza"
+    ],
+    "secondaryMuscles": [
+      "donja-ledja",
+      "kosi-trbusni"
+    ],
+    "equipment": "girja",
+    "pattern": "pregib-kuka",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "podizanje-na-prste-stojeci-sipka",
+    "name": "Podizanje na prste stojeći sa šipkom",
+    "nameEn": "Standing barbell calf raise",
+    "primaryMuscles": [
+      "listovi"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "sipka",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "podizanje-na-prste-stojeci-sprava",
+    "name": "Podizanje na prste stojeći na spravi",
+    "nameEn": "Standing calf raise machine",
+    "primaryMuscles": [
+      "listovi"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "sprava",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "podizanje-na-prste-sedeci",
+    "name": "Podizanje na prste sedeći na spravi",
+    "nameEn": "Seated calf raise",
+    "primaryMuscles": [
+      "listovi"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "sprava",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "podizanje-na-prste-potisak-nogama",
+    "name": "Podizanje na prste na spravi za potisak nogama",
+    "nameEn": "Leg press calf raise",
+    "primaryMuscles": [
+      "listovi"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "sprava",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "podizanje-na-prste-smit",
+    "name": "Podizanje na prste na Smit mašini",
+    "nameEn": "Smith machine calf raise",
+    "primaryMuscles": [
+      "listovi"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "smit",
+    "pattern": "izolacija",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "podizanje-na-prste-jedna-noga",
+    "name": "Podizanje na prste na jednoj nozi",
+    "nameEn": "Single-leg calf raise",
+    "primaryMuscles": [
+      "listovi"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "sopstvena-tezina",
+    "pattern": "izolacija",
+    "unilateral": true,
+    "metric": "reps"
+  },
+  {
+    "id": "trzaj",
+    "name": "Trzaj",
+    "nameEn": "Snatch",
+    "primaryMuscles": [
+      "gluteusi",
+      "zadnja-loza",
+      "trapez"
+    ],
+    "secondaryMuscles": [
+      "kvadriceps",
+      "prednja-ramena",
+      "donja-ledja"
+    ],
+    "equipment": "sipka",
+    "pattern": "olimpijski",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "trzaj-iz-visa",
+    "name": "Trzaj iz visa",
+    "nameEn": "Hang snatch",
+    "primaryMuscles": [
+      "gluteusi",
+      "zadnja-loza",
+      "trapez"
+    ],
+    "secondaryMuscles": [
+      "kvadriceps",
+      "prednja-ramena"
+    ],
+    "equipment": "sipka",
+    "pattern": "olimpijski",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "nabacaj",
+    "name": "Nabačaj",
+    "nameEn": "Power clean",
+    "primaryMuscles": [
+      "gluteusi",
+      "zadnja-loza",
+      "trapez"
+    ],
+    "secondaryMuscles": [
+      "kvadriceps",
+      "prednja-ramena",
+      "donja-ledja"
+    ],
+    "equipment": "sipka",
+    "pattern": "olimpijski",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "nabacaj-iz-visa",
+    "name": "Nabačaj iz visa",
+    "nameEn": "Hang clean",
+    "primaryMuscles": [
+      "gluteusi",
+      "zadnja-loza",
+      "trapez"
+    ],
+    "secondaryMuscles": [
+      "kvadriceps",
+      "prednja-ramena"
+    ],
+    "equipment": "sipka",
+    "pattern": "olimpijski",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "nabacaj-i-izbacaj",
+    "name": "Nabačaj i izbačaj",
+    "nameEn": "Clean and jerk",
+    "primaryMuscles": [
+      "gluteusi",
+      "kvadriceps",
+      "prednja-ramena"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza",
+      "trapez",
+      "triceps"
+    ],
+    "equipment": "sipka",
+    "pattern": "olimpijski",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "nabacaj-girjom",
+    "name": "Nabačaj girjom",
+    "nameEn": "Kettlebell clean",
+    "primaryMuscles": [
+      "gluteusi",
+      "zadnja-loza"
+    ],
+    "secondaryMuscles": [
+      "trapez",
+      "podlaktica"
+    ],
+    "equipment": "girja",
+    "pattern": "olimpijski",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "farmerski-hod",
+    "name": "Farmerski hod",
+    "nameEn": "Farmer's walk",
+    "primaryMuscles": [
+      "podlaktica",
+      "trapez"
+    ],
+    "secondaryMuscles": [
+      "trbusnjaci",
+      "kvadriceps"
+    ],
+    "equipment": "bucice",
+    "pattern": "nosenje",
+    "unilateral": false,
+    "metric": "weight_time"
+  },
+  {
+    "id": "farmerski-hod-girjama",
+    "name": "Farmerski hod sa girjama",
+    "nameEn": "Kettlebell farmer's walk",
+    "primaryMuscles": [
+      "podlaktica",
+      "trapez"
+    ],
+    "secondaryMuscles": [
+      "trbusnjaci",
+      "kvadriceps"
+    ],
+    "equipment": "girja",
+    "pattern": "nosenje",
+    "unilateral": false,
+    "metric": "weight_time"
+  },
+  {
+    "id": "hod-sa-tegom-iznad-glave",
+    "name": "Hod sa tegom iznad glave",
+    "nameEn": "Overhead carry",
+    "primaryMuscles": [
+      "prednja-ramena",
+      "trbusnjaci"
+    ],
+    "secondaryMuscles": [
+      "trapez",
+      "kosi-trbusni"
+    ],
+    "equipment": "girja",
+    "pattern": "nosenje",
+    "unilateral": true,
+    "metric": "weight_time"
+  },
+  {
+    "id": "hod-sa-tegom-u-jednoj-ruci",
+    "name": "Hod sa tegom u jednoj ruci",
+    "nameEn": "Suitcase carry",
+    "primaryMuscles": [
+      "kosi-trbusni",
+      "podlaktica"
+    ],
+    "secondaryMuscles": [
+      "trapez",
+      "trbusnjaci"
+    ],
+    "equipment": "bucice",
+    "pattern": "nosenje",
+    "unilateral": true,
+    "metric": "weight_time"
+  },
+  {
+    "id": "drzanje-tegova",
+    "name": "Držanje tegova",
+    "nameEn": "Static weight hold",
+    "primaryMuscles": [
+      "podlaktica"
+    ],
+    "secondaryMuscles": [
+      "trapez"
+    ],
+    "equipment": "bucice",
+    "pattern": "nosenje",
+    "unilateral": false,
+    "metric": "weight_time"
+  },
+  {
+    "id": "plank",
+    "name": "Plank",
+    "nameEn": "Plank",
+    "primaryMuscles": [
+      "trbusnjaci"
+    ],
+    "secondaryMuscles": [
+      "kosi-trbusni",
+      "prednja-ramena"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "trup",
+    "unilateral": false,
+    "metric": "time"
+  },
+  {
+    "id": "bocni-plank",
+    "name": "Bočni plank",
+    "nameEn": "Side plank",
+    "primaryMuscles": [
+      "kosi-trbusni"
+    ],
+    "secondaryMuscles": [
+      "trbusnjaci",
+      "abduktori"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "trup",
+    "unilateral": true,
+    "metric": "time"
+  },
+  {
+    "id": "camac",
+    "name": "Čamac",
+    "nameEn": "Hollow body hold",
+    "primaryMuscles": [
+      "trbusnjaci"
+    ],
+    "secondaryMuscles": [
+      "fleksori-kuka"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "trup",
+    "unilateral": false,
+    "metric": "time"
+  },
+  {
+    "id": "l-sed",
+    "name": "L-sed",
+    "nameEn": "L-sit",
+    "primaryMuscles": [
+      "trbusnjaci",
+      "fleksori-kuka"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "kvadriceps"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "trup",
+    "unilateral": false,
+    "metric": "time"
+  },
+  {
+    "id": "supermen",
+    "name": "Supermen",
+    "nameEn": "Superman hold",
+    "primaryMuscles": [
+      "donja-ledja"
+    ],
+    "secondaryMuscles": [
+      "gluteusi"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "trup",
+    "unilateral": false,
+    "metric": "time"
+  },
+  {
+    "id": "pregib-trupa",
+    "name": "Pregib trupa",
+    "nameEn": "Crunch",
+    "primaryMuscles": [
+      "trbusnjaci"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "sopstvena-tezina",
+    "pattern": "trup",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "podizanje-trupa",
+    "name": "Podizanje trupa",
+    "nameEn": "Sit-up",
+    "primaryMuscles": [
+      "trbusnjaci"
+    ],
+    "secondaryMuscles": [
+      "fleksori-kuka"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "trup",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "pregib-trupa-sa-uvrtanjem",
+    "name": "Pregib trupa sa uvrtanjem",
+    "nameEn": "Bicycle crunch",
+    "primaryMuscles": [
+      "kosi-trbusni"
+    ],
+    "secondaryMuscles": [
+      "trbusnjaci",
+      "fleksori-kuka"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "trup",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "pregib-trupa-na-sajli",
+    "name": "Pregib trupa na sajli",
+    "nameEn": "Cable crunch",
+    "primaryMuscles": [
+      "trbusnjaci"
+    ],
+    "secondaryMuscles": [
+      "kosi-trbusni"
+    ],
+    "equipment": "kabl",
+    "pattern": "trup",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "pregib-trupa-na-spravi",
+    "name": "Pregib trupa na spravi",
+    "nameEn": "Machine crunch",
+    "primaryMuscles": [
+      "trbusnjaci"
+    ],
+    "secondaryMuscles": [
+      "kosi-trbusni"
+    ],
+    "equipment": "sprava",
+    "pattern": "trup",
+    "unilateral": false,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "podizanje-nogu-lezeci",
+    "name": "Podizanje nogu ležeći",
+    "nameEn": "Lying leg raise",
+    "primaryMuscles": [
+      "trbusnjaci",
+      "fleksori-kuka"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "sopstvena-tezina",
+    "pattern": "trup",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "podizanje-nogu-u-visu",
+    "name": "Podizanje nogu u visu",
+    "nameEn": "Hanging leg raise",
+    "primaryMuscles": [
+      "trbusnjaci",
+      "fleksori-kuka"
+    ],
+    "secondaryMuscles": [
+      "podlaktica"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "trup",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "podizanje-kolena-u-visu",
+    "name": "Podizanje kolena u visu",
+    "nameEn": "Hanging knee raise",
+    "primaryMuscles": [
+      "trbusnjaci",
+      "fleksori-kuka"
+    ],
+    "secondaryMuscles": [
+      "podlaktica"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "trup",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "podizanje-nogu-na-razboju",
+    "name": "Podizanje nogu na razboju",
+    "nameEn": "Captain's chair leg raise",
+    "primaryMuscles": [
+      "trbusnjaci",
+      "fleksori-kuka"
+    ],
+    "secondaryMuscles": [
+      "kosi-trbusni"
+    ],
+    "equipment": "sprava",
+    "pattern": "trup",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "rusko-uvrtanje",
+    "name": "Rusko uvrtanje",
+    "nameEn": "Russian twist",
+    "primaryMuscles": [
+      "kosi-trbusni"
+    ],
+    "secondaryMuscles": [
+      "trbusnjaci"
+    ],
+    "equipment": "medicinka",
+    "pattern": "trup",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "drvoseca-na-sajli",
+    "name": "Drvoseča na sajli",
+    "nameEn": "Cable woodchopper",
+    "primaryMuscles": [
+      "kosi-trbusni"
+    ],
+    "secondaryMuscles": [
+      "trbusnjaci",
+      "prednja-ramena"
+    ],
+    "equipment": "kabl",
+    "pattern": "trup",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "palof-potisak",
+    "name": "Palof potisak",
+    "nameEn": "Pallof press",
+    "primaryMuscles": [
+      "kosi-trbusni"
+    ],
+    "secondaryMuscles": [
+      "trbusnjaci"
+    ],
+    "equipment": "kabl",
+    "pattern": "trup",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "bocni-pretklon-sa-bucicom",
+    "name": "Bočni pretklon sa bučicom",
+    "nameEn": "Dumbbell side bend",
+    "primaryMuscles": [
+      "kosi-trbusni"
+    ],
+    "secondaryMuscles": [
+      "donja-ledja"
+    ],
+    "equipment": "bucice",
+    "pattern": "trup",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "kotrljanje-tockom-na-kolenima",
+    "name": "Kotrljanje točkom na kolenima",
+    "nameEn": "Kneeling ab wheel rollout",
+    "primaryMuscles": [
+      "trbusnjaci"
+    ],
+    "secondaryMuscles": [
+      "kosi-trbusni",
+      "latovi"
+    ],
+    "equipment": "tocak",
+    "pattern": "trup",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "kotrljanje-tockom-stojeci",
+    "name": "Kotrljanje točkom stojeći",
+    "nameEn": "Standing ab wheel rollout",
+    "primaryMuscles": [
+      "trbusnjaci"
+    ],
+    "secondaryMuscles": [
+      "kosi-trbusni",
+      "latovi"
+    ],
+    "equipment": "tocak",
+    "pattern": "trup",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "bacanje-medicinke-o-zid",
+    "name": "Bacanje medicinke o zid",
+    "nameEn": "Medicine ball wall throw",
+    "primaryMuscles": [
+      "kosi-trbusni"
+    ],
+    "secondaryMuscles": [
+      "prednja-ramena",
+      "kvadriceps"
+    ],
+    "equipment": "medicinka",
+    "pattern": "trup",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "bacanje-medicinke-iznad-glave",
+    "name": "Bacanje medicinke iznad glave",
+    "nameEn": "Overhead medicine ball slam",
+    "primaryMuscles": [
+      "trbusnjaci"
+    ],
+    "secondaryMuscles": [
+      "latovi",
+      "prednja-ramena"
+    ],
+    "equipment": "medicinka",
+    "pattern": "trup",
+    "unilateral": false,
+    "metric": "reps"
+  },
+  {
+    "id": "tursko-ustajanje",
+    "name": "Tursko ustajanje",
+    "nameEn": "Turkish get-up",
+    "primaryMuscles": [
+      "trbusnjaci",
+      "prednja-ramena"
+    ],
+    "secondaryMuscles": [
+      "kosi-trbusni",
+      "gluteusi",
+      "kvadriceps"
+    ],
+    "equipment": "girja",
+    "pattern": "trup",
+    "unilateral": true,
+    "metric": "weight_reps"
+  },
+  {
+    "id": "trcanje",
+    "name": "Trčanje",
+    "nameEn": "Running",
+    "primaryMuscles": [
+      "kvadriceps",
+      "zadnja-loza"
+    ],
+    "secondaryMuscles": [
+      "gluteusi",
+      "listovi"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "kardio",
+    "unilateral": false,
+    "metric": "distance_time"
+  },
+  {
+    "id": "trcanje-na-traci",
+    "name": "Trčanje na traci",
+    "nameEn": "Treadmill running",
+    "primaryMuscles": [
+      "kvadriceps",
+      "zadnja-loza"
+    ],
+    "secondaryMuscles": [
+      "gluteusi",
+      "listovi"
+    ],
+    "equipment": "traka-za-trcanje",
+    "pattern": "kardio",
+    "unilateral": false,
+    "metric": "distance_time"
+  },
+  {
+    "id": "sprint",
+    "name": "Sprint",
+    "nameEn": "Sprint",
+    "primaryMuscles": [
+      "zadnja-loza",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "kvadriceps",
+      "listovi"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "kardio",
+    "unilateral": false,
+    "metric": "distance_time"
+  },
+  {
+    "id": "hodanje",
+    "name": "Hodanje",
+    "nameEn": "Walking",
+    "primaryMuscles": [
+      "kvadriceps",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza",
+      "listovi"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "kardio",
+    "unilateral": false,
+    "metric": "distance_time"
+  },
+  {
+    "id": "hodanje-uzbrdo-na-traci",
+    "name": "Hodanje uzbrdo na traci",
+    "nameEn": "Incline treadmill walk",
+    "primaryMuscles": [
+      "gluteusi",
+      "kvadriceps"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza",
+      "listovi"
+    ],
+    "equipment": "traka-za-trcanje",
+    "pattern": "kardio",
+    "unilateral": false,
+    "metric": "distance_time"
+  },
+  {
+    "id": "voznja-bicikla",
+    "name": "Vožnja bicikla",
+    "nameEn": "Cycling",
+    "primaryMuscles": [
+      "kvadriceps"
+    ],
+    "secondaryMuscles": [
+      "gluteusi",
+      "zadnja-loza",
+      "listovi"
+    ],
+    "equipment": "bicikl",
+    "pattern": "kardio",
+    "unilateral": false,
+    "metric": "distance_time"
+  },
+  {
+    "id": "voznja-sobnog-bicikla",
+    "name": "Vožnja sobnog bicikla",
+    "nameEn": "Stationary cycling",
+    "primaryMuscles": [
+      "kvadriceps"
+    ],
+    "secondaryMuscles": [
+      "gluteusi",
+      "zadnja-loza",
+      "listovi"
+    ],
+    "equipment": "bicikl",
+    "pattern": "kardio",
+    "unilateral": false,
+    "metric": "distance_time"
+  },
+  {
+    "id": "veslanje-na-veslacu",
+    "name": "Veslanje na veslaču",
+    "nameEn": "Rowing ergometer",
+    "primaryMuscles": [
+      "latovi",
+      "kvadriceps"
+    ],
+    "secondaryMuscles": [
+      "romboidi",
+      "gluteusi",
+      "biceps"
+    ],
+    "equipment": "veslac",
+    "pattern": "kardio",
+    "unilateral": false,
+    "metric": "distance_time"
+  },
+  {
+    "id": "elipticna-sprava",
+    "name": "Eliptična sprava",
+    "nameEn": "Elliptical trainer",
+    "primaryMuscles": [
+      "kvadriceps",
+      "gluteusi"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza",
+      "listovi"
+    ],
+    "equipment": "elipticna",
+    "pattern": "kardio",
+    "unilateral": false,
+    "metric": "distance_time"
+  },
+  {
+    "id": "stepper",
+    "name": "Stepper",
+    "nameEn": "Stair climber",
+    "primaryMuscles": [
+      "gluteusi",
+      "kvadriceps"
+    ],
+    "secondaryMuscles": [
+      "zadnja-loza",
+      "listovi"
+    ],
+    "equipment": "stepper",
+    "pattern": "kardio",
+    "unilateral": false,
+    "metric": "distance_time"
+  },
+  {
+    "id": "preskakanje-vijace",
+    "name": "Preskakanje vijače",
+    "nameEn": "Jump rope",
+    "primaryMuscles": [
+      "listovi"
+    ],
+    "secondaryMuscles": [
+      "kvadriceps",
+      "podlaktica"
+    ],
+    "equipment": "vijaca",
+    "pattern": "kardio",
+    "unilateral": false,
+    "metric": "time"
+  },
+  {
+    "id": "visoki-skip",
+    "name": "Visoki skip",
+    "nameEn": "High knees",
+    "primaryMuscles": [
+      "fleksori-kuka",
+      "kvadriceps"
+    ],
+    "secondaryMuscles": [
+      "listovi",
+      "trbusnjaci"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "kardio",
+    "unilateral": false,
+    "metric": "time"
+  },
+  {
+    "id": "plivanje",
+    "name": "Plivanje",
+    "nameEn": "Swimming",
+    "primaryMuscles": [
+      "latovi",
+      "prednja-ramena"
+    ],
+    "secondaryMuscles": [
+      "trbusnjaci",
+      "kvadriceps",
+      "trapez"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "kardio",
+    "unilateral": false,
+    "metric": "distance_time"
+  },
+  {
+    "id": "burpee",
+    "name": "Burpee",
+    "nameEn": "Burpee",
+    "primaryMuscles": [
+      "kvadriceps",
+      "grudi"
+    ],
+    "secondaryMuscles": [
+      "gluteusi",
+      "triceps",
+      "trbusnjaci"
+    ],
+    "equipment": "sopstvena-tezina",
+    "pattern": "kardio",
+    "unilateral": false,
+    "metric": "reps"
+  }
+]
