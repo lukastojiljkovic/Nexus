@@ -24,6 +24,9 @@ const { runNotificationCheck } = await import("./notifications.js");
  */
 function makeDeps(profileIds: readonly string[], activeId: string | null) {
   const checkedProfiles: string[] = [];
+  // Reached only AFTER the finance reads, so it is the one witness that a check
+  // ran to the end rather than dying in the middle and being logged away.
+  const completedProfiles: string[] = [];
   const emptySettings = {
     quietFrom: null,
     quietTo: null,
@@ -41,8 +44,11 @@ function makeDeps(profileIds: readonly string[], activeId: string | null) {
       },
       listBlocksInRange: () => [],
     }),
-    notificationStore: () => ({
-      getSettings: () => emptySettings,
+    notificationStore: (profileId: string) => ({
+      getSettings: () => {
+        completedProfiles.push(profileId);
+        return emptySettings;
+      },
       listLedgerKeys: () => [],
       dueSnoozed: () => [],
     }),
@@ -51,16 +57,32 @@ function makeDeps(profileIds: readonly string[], activeId: string | null) {
     examStore: () => ({ listActive: () => [] }),
     subjectStore: () => ({ listActive: () => [] }),
     taskStore: () => ({ listActive: () => [] }),
+    // FIN slice d's two stores are stubbed for a reason worth stating: without
+    // them `checkProfile` threw at its first finance read, `logCheckFailure`
+    // swallowed it, and the three assertions below still passed — because
+    // `syncAll` runs BEFORE that line. Every one of them was measuring a
+    // profile loop that never reached the end of a check. A missing stub must
+    // fail a test, not go quiet in a log.
+    finRecurringStore: () => ({ generateDue: () => 0, listActive: () => [], upcoming: () => [] }),
+    finAccountStore: () => ({ listActive: () => [] }),
     getMainWindow: () => null,
   } as unknown as NotificationSchedulerDeps;
-  return { deps, checkedProfiles };
+  return { deps, checkedProfiles, completedProfiles };
 }
 
 describe("runNotificationCheck — ADR-058 active-profile gating", () => {
   it("checks the active profile and ONLY the active profile", () => {
-    const { deps, checkedProfiles } = makeDeps(["personal", "business"], "business");
+    const { deps, checkedProfiles, completedProfiles } = makeDeps(
+      ["personal", "business"],
+      "business",
+    );
     runNotificationCheck(deps);
     expect(checkedProfiles).toEqual(["business"]);
+    // `checkProfile` catches and LOGS its own failures, so „the loop entered
+    // this profile" and „the check finished" are two different claims. Both are
+    // made here, or a dependency that goes missing later would leave these
+    // assertions passing over a check that dies on its first line.
+    expect(completedProfiles).toEqual(["business"]);
   });
 
   it("follows the active id when it changes between checks — the switch landing's restart serves the entered profile", () => {
