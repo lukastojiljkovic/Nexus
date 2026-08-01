@@ -556,6 +556,33 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.habitsClearEntry, { profileId, habitId, day }),
   habitEntries: (profileId, range) =>
     ipcRenderer.invoke(IpcChannel.habitsEntries, { profileId, range }),
+  fitFoodSearch: (profileId, query, limit) =>
+    ipcRenderer.invoke(IpcChannel.fitFoodSearch, { profileId, query, limit }),
+  fitDay: (profileId, day) => ipcRenderer.invoke(IpcChannel.fitDay, { profileId, day }),
+  // The reference and the weight, and nothing else: the label and the seven
+  // per-100 g numbers are main's answer, never this side's claim
+  // (`FitItemAddRequest`).
+  fitAddItem: (profileId, day, slot, foodRef, grams) =>
+    ipcRenderer.invoke(IpcChannel.fitItemAdd, { profileId, day, slot, foodRef, grams }),
+  // The changes are SPREAD rather than nested, so a caller that omits one sends
+  // an absent KEY rather than an explicit `undefined` — `startFocus`'s spelling,
+  // and what lets main read „not said" as „leave it alone".
+  fitUpdateItem: (profileId, id, changes) =>
+    ipcRenderer.invoke(IpcChannel.fitItemUpdate, { profileId, id, ...changes }),
+  fitRemoveItem: (profileId, id) => ipcRenderer.invoke(IpcChannel.fitItemRemove, { profileId, id }),
+  fitRestoreItem: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.fitItemRestore, { profileId, id }),
+  fitFoods: (profileId) => ipcRenderer.invoke(IpcChannel.fitFoodsList, { profileId }),
+  fitCreateFood: (profileId, food) =>
+    ipcRenderer.invoke(IpcChannel.fitFoodCreate, { profileId, food }),
+  fitUpdateFood: (profileId, id, changes) =>
+    ipcRenderer.invoke(IpcChannel.fitFoodUpdate, { profileId, id, changes }),
+  fitDeleteFood: (profileId, id) => ipcRenderer.invoke(IpcChannel.fitFoodDelete, { profileId, id }),
+  fitRestoreFood: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.fitFoodRestore, { profileId, id }),
+  fitTargets: (profileId) => ipcRenderer.invoke(IpcChannel.fitTargets, { profileId }),
+  fitSaveTargets: (profileId, goals) =>
+    ipcRenderer.invoke(IpcChannel.fitTargetsSave, { profileId, goals }),
   searchQuery: (profileId, query, limit) =>
     ipcRenderer.invoke(IpcChannel.searchQuery, { profileId, query, limit }),
   searchRecent: (profileId, limit) =>

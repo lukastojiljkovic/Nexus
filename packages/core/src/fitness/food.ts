@@ -537,6 +537,12 @@ const FOOD_COLLATOR = new Intl.Collator(["sr-Latn", "sr"]);
 const RANK_PREFIX = 0;
 const RANK_SUBSTRING = 1;
 
+/** The least a thing must be for `searchFoods` to rank it: a name to match, and an id to break a tie by. */
+export interface SearchableFood {
+  readonly id: string;
+  readonly name: string;
+}
+
 /**
  * The foods whose names match `query`, best first, at most `limit` of them.
  *
@@ -557,17 +563,26 @@ const RANK_SUBSTRING = 1;
  * A blank query answers NOTHING rather than everything. A picker with an empty
  * box has nothing to rank, and handing back the first `limit` foods alphabetically
  * would dress „the top of the catalogue" up as „your best matches".
+ *
+ * **Generic over anything with an id and a name, and that is what makes the
+ * picker possible** (FIT slice b). A food picker ranks ONE list assembled from
+ * two sources — the catalogue that ships in the app and the profile's own
+ * `fit_foods` — and those are different types by construction: a user's food has
+ * no `source`, deliberately (`FitFoodStore`). Two ranked lists merged by the
+ * caller would be a SECOND definition of „best match", and the day it drifted
+ * the picker would start ordering results by where the food happened to live.
+ * So the caller hands this whatever pool it has and gets one ranking back.
  */
-export function searchFoods(
-  entries: readonly FoodEntry[],
+export function searchFoods<T extends SearchableFood>(
+  entries: readonly T[],
   query: string,
   limit: number,
-): readonly FoodEntry[] {
+): readonly T[] {
   const needle = foldSearchText(query.trim());
   const cap = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0;
   if (needle.length === 0 || cap === 0) return [];
 
-  const hits: { entry: FoodEntry; rank: number }[] = [];
+  const hits: { entry: T; rank: number }[] = [];
   for (const entry of entries) {
     const folded = foldSearchText(entry.name);
     if (folded.startsWith(needle)) {

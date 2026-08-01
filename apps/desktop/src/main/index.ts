@@ -18,13 +18,19 @@ import {
   ARCHIVE_MODULE_IDS,
   buildSearchSnippet,
   buildSearchTagFacets,
+  catalogueFood,
   chordAccelerator,
   countSearchKinds,
   foldSearchTag,
+  foodRefText,
+  FOOD_CATALOGUE,
+  FOOD_CATEGORIES,
   normalizeChordKey,
   dayKeyToUtcMs,
   FOCUS_PHASE_KINDS,
   isValidDayKey,
+  parseFoodRef,
+  searchFoods,
   phaseProgress,
   MAX_ARCHIVE_PASSPHRASE_LENGTH,
   isInlineImageMime,
@@ -43,7 +49,16 @@ import {
   validateTaskViewConfig,
   validateWidgetConfig,
 } from "@nexus/core";
-import type { FocusOutcome, FocusPhaseKind, HabitSchedule, TaskViewConfig } from "@nexus/core";
+import type {
+  FocusOutcome,
+  FocusPhaseKind,
+  FoodCategory,
+  FoodEntry,
+  FoodMacros,
+  FoodServing,
+  HabitSchedule,
+  TaskViewConfig,
+} from "@nexus/core";
 import type {
   ArchiveModuleId,
   ArchiveProfilePicture,
@@ -102,6 +117,17 @@ import {
   MAX_FOCUS_CYCLE_INDEX,
   MAX_FOCUS_LABEL_LENGTH,
   MAX_FOCUS_PLANNED_MINUTES,
+  MAX_FIT_FOOD_NAME_LENGTH,
+  MAX_FIT_FOOD_NOTES_LENGTH,
+  MAX_FIT_FOOD_QUERY_LENGTH,
+  MAX_FIT_FOOD_RESULTS,
+  MAX_FIT_FOOD_SERVINGS,
+  MAX_FIT_NUTRIENT,
+  MAX_FIT_SERVING_GRAMS,
+  MAX_FIT_SERVING_LABEL_LENGTH,
+  MAX_FIT_TARGET,
+  MAX_MEAL_ITEM_GRAMS,
+  MEAL_SLOTS,
   MAX_HABIT_COUNT,
   MAX_EVENT_REMINDERS,
   MAX_EVENT_REMINDER_MINUTES,
@@ -214,6 +240,13 @@ import {
   type HabitDayRange,
   type HabitEntry,
   type UpdateHabitFields,
+  type CreateFitFoodInput,
+  type FitFood,
+  type FitMealItem,
+  type FitTargetGoals,
+  type FitTargets,
+  type MealSlot,
+  type UpdateFitFoodFields,
   type FocusSession,
   type LinkedNote,
   type NexusDatabase,
@@ -499,6 +532,8 @@ import {
   type DashboardWidgetInstance,
   type DashboardWidgetSize,
   type ExportResult,
+  type FitDay,
+  type FitFoodOption,
   type FlagState,
   type GlobalShortcutChord,
   type GlobalShortcutResult,
@@ -3327,6 +3362,236 @@ function asHabitDayRange(value: unknown): HabitDayRange {
   return {
     from: asBareDate(range.from, "range.from"),
     to: asBareDate(range.to, "range.to"),
+  };
+}
+
+// --- Ishrana (FIT slice b, migration 058) validators -------------------------
+//
+// SEC-EL-02 as everywhere else: structural checks here, semantics in the store.
+// Two things about this block are worth naming, because neither is ordinary.
+//
+// **The caps are counted in CHARACTERS, through `asCappedChars`.** Every FIT cap
+// is defined in `@nexus/db` with `.length` — `MAX_FIT_FOOD_NAME_LENGTH`,
+// `MAX_FIT_SERVING_LABEL_LENGTH`, `MAX_FIT_FOOD_NOTES_LENGTH`,
+// `MAX_FIT_FOOD_QUERY_LENGTH` — and this is a Serbian food catalogue, where
+// „šargarepa", „ćurka" and „đuveč" each carry two-byte letters. Byte-capping any
+// of them would make the wire stricter than the store it claims to mirror, and
+// stricter *only for text written in the product's own language*. See
+// `asCappedChars`' own doc for the defect that rule was written from.
+//
+// **`resolveLoggedFood` is the module's security boundary, not a convenience.**
+// The renderer names a food and says how much; main looks the food up and writes
+// the snapshot. A wire that accepted macros beside a reference would let a
+// compromised renderer log a 0-kcal čokolada under a real food's name — and the
+// whole point of the snapshot (migration 058) is that it records what was
+// actually eaten.
+
+/** One of the five slots — assigned into the store's own `MealSlot`, so a member added on one side and not the other is a compile error. */
+function asFitMealSlot(value: unknown, field: string): MealSlot {
+  for (const slot of MEAL_SLOTS) {
+    if (slot === value) return slot;
+  }
+  throw new Error(`Invalid IPC payload: "${field}" must be one of the five meal slots.`);
+}
+
+/**
+ * The day a meal is being logged FOR. A real bare calendar day, and never one
+ * after `localToday()`.
+ *
+ * `asHabitEntryDay`'s reasoning exactly, and for the same reason: a day the user
+ * named with the page's own navigation is INPUT, not a claim about the clock —
+ * correcting yesterday's lunch is the ordinary use of a food diary. What main
+ * still owns is the clock, which is what makes the one refusal enforceable: a
+ * meal is a fact about a day that happened, and tomorrow has not.
+ */
+function asFitDay(value: unknown, field: string): string {
+  const day = asBareDate(value, field);
+  if (day > localToday()) {
+    throw new Error(`Invalid IPC payload: "${field}" must not be in the future.`);
+  }
+  return day;
+}
+
+/** A finite number in `[0, max]`. NOT an integer: 0,72 g of carbohydrate per 100 g is what a real source publishes (contrast HABIT's counts). */
+function asFitAmount(value: unknown, field: string, max: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > max) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be a finite number between 0 and ${max}.`,
+    );
+  }
+  return value;
+}
+
+/** A logged portion: strictly positive, because an item weighing nothing is the absence of an item. */
+function asFitGrams(value: unknown, field: string): number {
+  const grams = asFitAmount(value, field, MAX_MEAL_ITEM_GRAMS);
+  if (grams <= 0) {
+    throw new Error(`Invalid IPC payload: "${field}" must be above 0.`);
+  }
+  return grams;
+}
+
+/** The catalogue's own closed list of shelves, checked against it rather than respelled. */
+function asFoodCategory(value: unknown, field: string): FoodCategory {
+  for (const category of FOOD_CATEGORIES) {
+    if (category === value) return category;
+  }
+  throw new Error(`Invalid IPC payload: "${field}" must be a food category.`);
+}
+
+/** The seven per-100 g numbers, each finite, non-negative and bounded. */
+function asFoodMacros(value: unknown, field: string): FoodMacros {
+  const macros = asRecord(value);
+  const read = (key: keyof FoodMacros): number =>
+    asFitAmount(macros[key], `${field}.${key}`, MAX_FIT_NUTRIENT);
+  return {
+    kcal: read("kcal"),
+    protein: read("protein"),
+    carbs: read("carbs"),
+    fat: read("fat"),
+    fiber: read("fiber"),
+    sugar: read("sugar"),
+    sodiumMg: read("sodiumMg"),
+  };
+}
+
+/** The household measures. An EMPTY list is a legitimate answer — brašno is weighed, and inventing „1 komad" for it would be inventing data. */
+function asFoodServings(value: unknown, field: string): FoodServing[] {
+  if (!Array.isArray(value) || value.length > MAX_FIT_FOOD_SERVINGS) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be an array of at most ${MAX_FIT_FOOD_SERVINGS} servings.`,
+    );
+  }
+  return value.map((serving: unknown, index) => {
+    const record = asRecord(serving);
+    return {
+      label: asCappedChars(
+        record.label,
+        `${field}[${index}].label`,
+        MAX_FIT_SERVING_LABEL_LENGTH,
+      ),
+      grams: asFitAmount(record.grams, `${field}[${index}].grams`, MAX_FIT_SERVING_GRAMS),
+    };
+  });
+}
+
+/** Validates a `NewFitFoodFields` payload into a store input; only present keys are carried. */
+function asNewFitFoodInput(value: unknown): CreateFitFoodInput {
+  const food = asRecord(value);
+  const input: CreateFitFoodInput = {
+    name: asCappedChars(food.name, "food.name", MAX_FIT_FOOD_NAME_LENGTH),
+    category: asFoodCategory(food.category, "food.category"),
+    per100g: asFoodMacros(food.per100g, "food.per100g"),
+  };
+  if (food.servings !== undefined) {
+    input.servings = asFoodServings(food.servings, "food.servings");
+  }
+  if (food.notes !== undefined) {
+    input.notes = asCappedChars(food.notes, "food.notes", MAX_FIT_FOOD_NOTES_LENGTH);
+  }
+  return input;
+}
+
+/** Validates a `FitFoodFieldChanges` payload into a store patch; an omitted key stays omitted. */
+function asFitFoodChanges(value: unknown): UpdateFitFoodFields {
+  const changes = asRecord(value);
+  const patch: UpdateFitFoodFields = {};
+  if (changes.name !== undefined) {
+    patch.name = asCappedChars(changes.name, "changes.name", MAX_FIT_FOOD_NAME_LENGTH);
+  }
+  if (changes.category !== undefined) {
+    patch.category = asFoodCategory(changes.category, "changes.category");
+  }
+  if (changes.per100g !== undefined) {
+    patch.per100g = asFoodMacros(changes.per100g, "changes.per100g");
+  }
+  if (changes.servings !== undefined) {
+    patch.servings = asFoodServings(changes.servings, "changes.servings");
+  }
+  if (changes.notes !== undefined) {
+    patch.notes = asCappedChars(changes.notes, "changes.notes", MAX_FIT_FOOD_NOTES_LENGTH);
+  }
+  return patch;
+}
+
+/** One daily goal: `null` is „no goal" and passes through untouched, never coerced to zero — and zero is never coerced to it. */
+function asFitTargetGoal(value: unknown, field: string): number | null {
+  return value === null ? null : asFitAmount(value, field, MAX_FIT_TARGET);
+}
+
+/** All four goals, every time — `FitTargetStore.save` has no patch, deliberately. */
+function asFitTargetGoals(value: unknown): FitTargetGoals {
+  const goals = asRecord(value);
+  return {
+    kcal: asFitTargetGoal(goals.kcal, "goals.kcal"),
+    proteinG: asFitTargetGoal(goals.proteinG, "goals.proteinG"),
+    carbsG: asFitTargetGoal(goals.carbsG, "goals.carbsG"),
+    fatG: asFitTargetGoal(goals.fatG, "goals.fatG"),
+  };
+}
+
+/**
+ * Turns the reference the renderer sent into the label and the seven numbers the
+ * item will be stamped with. **The module's security boundary** — see the block
+ * comment above.
+ *
+ * `catalogue:<id>` is looked up in the app's own shipped data; an id this build
+ * no longer ships is refused rather than logged as a name with no numbers.
+ * `user:<uuid>` goes through the food store, which answers only for a LIVE food
+ * in THIS profile — so a soft-deleted food cannot be logged afresh, while every
+ * item already logged with it stays exactly as it was.
+ */
+function resolveLoggedFood(
+  profileId: string,
+  reference: unknown,
+): { foodRef: string; label: string; per100g: FoodMacros } {
+  if (typeof reference !== "string") {
+    throw new Error(`Invalid IPC payload: "foodRef" must be a string.`);
+  }
+  const parsed = parseFoodRef(reference);
+  if (parsed === null) {
+    throw new Error(`Invalid IPC payload: "foodRef" must be "catalogue:<id>" or "user:<id>".`);
+  }
+  if (parsed.kind === "catalogue") {
+    const food = catalogueFood(parsed.id);
+    if (food === undefined) {
+      throw new Error(`Invalid IPC payload: "foodRef" names no food this build ships.`);
+    }
+    return { foodRef: reference, label: food.name, per100g: food.per100g };
+  }
+  const food = fitFoodStore(profileId).get(parsed.id);
+  return { foodRef: reference, label: food.name, per100g: food.per100g };
+}
+
+/** One catalogue entry as the picker reads it — its provenance rides along, which is the reason the catalogue was built the way it was. */
+function catalogueOption(food: FoodEntry): FitFoodOption {
+  return {
+    ref: foodRefText({ kind: "catalogue", id: food.id }),
+    name: food.name,
+    category: food.category,
+    per100g: food.per100g,
+    servings: [...food.servings],
+    notes: food.notes,
+    source: food.source,
+  };
+}
+
+/**
+ * One of the profile's own foods as the picker reads it. `source` is null, and
+ * the absence is deliberate: a catalogue entry must cite something anyone can
+ * re-check because the APP asserts the number, while somebody's own food is
+ * their claim about their own food — demanding a citation for it would be asking
+ * them to prove something to their own diary.
+ */
+function userFoodOption(food: FitFood): FitFoodOption {
+  return {
+    ref: foodRefText({ kind: "user", id: food.id }),
+    name: food.name,
+    category: food.category,
+    per100g: food.per100g,
+    servings: food.servings,
+    notes: food.notes,
+    source: null,
   };
 }
 
@@ -8440,6 +8705,183 @@ function registerIpc(): void {
     const body = asRecord(payload);
     const profileId = asNonEmptyString(body.profileId, "profileId");
     return habitStore(profileId).listAllEntries(asHabitDayRange(body.range));
+  });
+
+  // Ishrana (FIT slice b, migration 058). SEC-EL-02 as everywhere: trusted
+  // sender, `asRecord`, one `as*` per field, and the store re-validates all of
+  // it. `now` is main's clock on every write, and so is the bound on which DAY a
+  // meal may be logged for.
+  //
+  // The merged food search. ONE ranked list over both sources, through core's
+  // own `searchFoods` — the catalogue that ships in the app and this profile's
+  // `fit_foods`, told apart only by the reference each hit carries. Two lists
+  // ranked separately and merged here would be a SECOND definition of „best
+  // match", and the day it drifted the picker would start ordering results by
+  // where the food happened to live.
+  //
+  // The pool is deliberately light: a candidate is an id and a name, and only
+  // the hits are built into full options — a screen's worth of objects rather
+  // than the whole catalogue's, on every keystroke.
+  ipcMain.handle(IpcChannel.fitFoodSearch, (event, payload): FitFoodOption[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const query = asCappedChars(body.query, "query", MAX_FIT_FOOD_QUERY_LENGTH);
+    const limit = Math.min(asPositiveInteger(body.limit, "limit"), MAX_FIT_FOOD_RESULTS);
+
+    type Candidate =
+      | { id: string; name: string; catalogue: FoodEntry }
+      | { id: string; name: string; user: FitFood };
+    const pool: Candidate[] = [
+      ...FOOD_CATALOGUE.map((food) => ({
+        id: foodRefText({ kind: "catalogue", id: food.id }),
+        name: food.name,
+        catalogue: food,
+      })),
+      ...fitFoodStore(profileId)
+        .list()
+        .map((food) => ({
+          id: foodRefText({ kind: "user", id: food.id }),
+          name: food.name,
+          user: food,
+        })),
+    ];
+    return searchFoods(pool, query, limit).map((hit) =>
+      "catalogue" in hit ? catalogueOption(hit.catalogue) : userFoodOption(hit.user),
+    );
+  });
+
+  // One day of the diary: the five slots and the total the SAME rows add up to,
+  // in one answer. Both halves together for the page's sake — a render holding
+  // the rows but not their total would show a figure that no longer follows from
+  // the list above it — and the total is the store's own `sumMacros`, never a
+  // second arithmetic here.
+  ipcMain.handle(IpcChannel.fitDay, (event, payload): FitDay => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const day = asFitDay(body.day, "day");
+    const store = fitMealStore(profileId);
+    return { day, slots: store.listDay(day), totals: store.dayTotals(day) };
+  });
+
+  // The resolve-then-snapshot boundary (see `resolveLoggedFood`): the renderer
+  // names a food and says how much, main looks the food up and stamps the seven
+  // numbers it found. Nothing on this wire lets a caller supply macros for a
+  // food it named.
+  ipcMain.handle(IpcChannel.fitItemAdd, (event, payload): FitMealItem => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const resolved = resolveLoggedFood(profileId, body.foodRef);
+    return fitMealStore(profileId).addItem(
+      {
+        date: asFitDay(body.day, "day"),
+        slot: asFitMealSlot(body.slot, "slot"),
+        grams: asFitGrams(body.grams, "grams"),
+        ...resolved,
+      },
+      new Date().toISOString(),
+    );
+  });
+
+  // Only the weight and the slot. The snapshot is untouched by construction —
+  // the store has no statement that could reach it — because re-reading the food
+  // here would silently restate the row under today's numbers, which is the
+  // exact failure the snapshot exists to prevent.
+  ipcMain.handle(IpcChannel.fitItemUpdate, (event, payload): FitMealItem => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const changes: { grams?: number; slot?: MealSlot } = {};
+    if (body.grams !== undefined) changes.grams = asFitGrams(body.grams, "grams");
+    if (body.slot !== undefined) changes.slot = asFitMealSlot(body.slot, "slot");
+    return fitMealStore(profileId).updateItem(id, changes, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.fitItemRemove, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    fitMealStore(profileId).removeItem(id, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.fitItemRestore, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    fitMealStore(profileId).restoreItem(id, new Date().toISOString());
+  });
+
+  // The profile's OWN foods. The catalogue has no CRUD anywhere on this wire,
+  // because it is not a table — see migration 058.
+  ipcMain.handle(IpcChannel.fitFoodsList, (event, payload): FitFood[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return fitFoodStore(profileId).list();
+  });
+
+  ipcMain.handle(IpcChannel.fitFoodCreate, (event, payload): FitFood => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return fitFoodStore(profileId).create(
+      asNewFitFoodInput(body.food),
+      new Date().toISOString(),
+    );
+  });
+
+  // Correcting a food changes what you log from now on and leaves last Tuesday
+  // exactly as it was — every logged item carries its own snapshot.
+  ipcMain.handle(IpcChannel.fitFoodUpdate, (event, payload): FitFood => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return fitFoodStore(profileId).update(
+      id,
+      asFitFoodChanges(body.changes),
+      new Date().toISOString(),
+    );
+  });
+
+  // A soft delete: everything already logged with this food stays readable, and
+  // the undo beside it puts the food back under the very same id.
+  ipcMain.handle(IpcChannel.fitFoodDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    fitFoodStore(profileId).softDelete(id, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.fitFoodRestore, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    fitFoodStore(profileId).restore(id, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.fitTargets, (event, payload): FitTargets => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return fitTargetStore(profileId).get();
+  });
+
+  // All four goals in one write. `null` is „no goal" and `0` is „a goal of zero"
+  // — the two are different claims and nothing here collapses them.
+  ipcMain.handle(IpcChannel.fitTargetsSave, (event, payload): FitTargets => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return fitTargetStore(profileId).save(
+      asFitTargetGoals(body.goals),
+      new Date().toISOString(),
+    );
   });
 
   // Global search (ADR-021 / PRD 08 SRCH-001/002): `runSearchQuery`/

@@ -13,6 +13,7 @@ import {
 } from "@nexus/core";
 import type { WidgetContract } from "@nexus/core";
 import { Button, Checkbox, Chip, ListRow } from "@nexus/ui";
+import { FIT_MEAL_SLOTS } from "../../shared/ipc.js";
 import type { DocumentStatus, Event, Exam, Subject } from "../../shared/ipc.js";
 import { buildCalendarItems } from "./calendarItems.js";
 import type { CalendarItem, CalendarSource } from "./calendarItems.js";
@@ -33,6 +34,7 @@ import {
   localTodayKey,
   shiftDayKey,
 } from "./examDates.js";
+import { formatKcal, macroGoals } from "./fitDay.js";
 import { focusSessionMinutes, formatDurationMinutes, formatPhaseClock } from "./focusFormat.js";
 import {
   habitStartDay,
@@ -1037,6 +1039,87 @@ function FocusWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps) {
   );
 }
 
+/**
+ * „Ishrana danas" (FIT slice b) — the day's calories, against the calorie goal
+ * when there is one.
+ *
+ * **Read-only, like every card but „Navike danas".** That one ticks in place
+ * because a habit tick is ONE BIT and the entire interaction the module has;
+ * logging a meal is a food, an amount and a slot — a form, with a picker behind
+ * it — and a dashboard card that tried to be one would be a second, worse
+ * version of the page's own. The row opens „Ishrana".
+ *
+ * **The goal is drawn only when there IS one, and the card never invents a
+ * number.** With no goal set it shows the figure and nothing else — no
+ * recommended intake, no verdict, and no bar against a line nobody drew. Past a
+ * goal it says „Preko cilja" and stops, in the page's own visual grammar.
+ *
+ * The figures are `macroGoals`', the page's own — so a card and its page can
+ * never report two different days.
+ */
+function FitnessTodayWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps) {
+  const load = useCallback(async () => {
+    const today = localTodayKey();
+    const [day, targets] = await Promise.all([
+      window.nexus.fitDay(profileId, today),
+      window.nexus.fitTargets(profileId),
+    ]);
+    return { day, targets };
+  }, [profileId]);
+  const { state, retry } = useWidgetData(load);
+  const s = strings.dashboard.fitnessToday;
+  const t = strings.fitness.totals;
+
+  return (
+    <WidgetData state={state} retry={retry}>
+      {({ day, targets }) => {
+        const [kcal] = macroGoals(day.totals, targets);
+        if (kcal === undefined) return <p className="dash__empty">{s.empty}</p>;
+        const logged = FIT_MEAL_SLOTS.some((slot) => day.slots[slot].length > 0);
+        if (!logged) return <p className="dash__empty">{s.empty}</p>;
+        const figure = `${formatKcal(kcal.value)} ${t.unitKcal}`;
+        return (
+          <div className="dash__list">
+            <DashRow
+              onClick={() => onOpenModule("fitness")}
+              leading={<span className="dash__time dash__time--tag">{s.todayLabel}</span>}
+              trailing={
+                kcal.target !== null && kcal.over ? (
+                  <Chip variant="danger">{s.overGoal}</Chip>
+                ) : undefined
+              }
+            >
+              <span className="dash__fit">
+                <span className="dash__row-title">{figure}</span>
+                {kcal.target !== null && (
+                  <span className="dash__fit-goal">
+                    {`${s.ofGoalPrefix} ${formatKcal(kcal.target)} ${t.unitKcal}`}
+                  </span>
+                )}
+              </span>
+            </DashRow>
+            {kcal.target !== null && (
+              <span
+                className="fit__bar-track dash__fit-track"
+                role="img"
+                aria-label={`${t.macro.kcal}: ${figure} / ${formatKcal(kcal.target)} ${t.unitKcal}${
+                  kcal.over ? `, ${t.over}` : ""
+                }`}
+              >
+                <span
+                  className={kcal.over ? "fit__bar-fill fit__bar-fill--over" : "fit__bar-fill"}
+                  style={{ width: `${kcal.valueRatio * 100}%` }}
+                />
+                <span className="fit__bar-goal" style={{ left: `${kcal.targetRatio * 100}%` }} />
+              </span>
+            )}
+          </div>
+        );
+      }}
+    </WidgetData>
+  );
+}
+
 // --- The registry-driven map (ADR-045 section 3) ----------------------------
 
 /** How the page draws one placement: the body, and whether it draws at all. */
@@ -1079,4 +1162,5 @@ export const DASHBOARD_WIDGETS: Record<string, DashboardWidgetRenderer> = {
   },
   "habits:danas": { Body: HabitsTodayWidget, visible: (enabled) => enabled.has("habits") },
   "focus:fokus": { Body: FocusWidget, visible: (enabled) => enabled.has("focus") },
+  "fitness:danas": { Body: FitnessTodayWidget, visible: (enabled) => enabled.has("fitness") },
 };

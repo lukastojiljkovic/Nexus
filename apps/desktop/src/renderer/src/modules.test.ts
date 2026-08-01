@@ -42,6 +42,7 @@ describe("createModuleRegistry", () => {
       "study",
       "finance",
       "habits",
+      "fitness",
       "focus",
     ]);
   });
@@ -86,10 +87,14 @@ describe("createModuleRegistry", () => {
       "priv",
       "files",
     ]);
+    // „Ishrana" joins the three subjects somebody HAS rather than the tools
+    // they use on them: what you eat is an area of a life in the plainest sense
+    // the group has.
     expect(grouped.get("Life hubs")?.map((manifest) => manifest.id)).toEqual([
       "study",
       "finance",
       "habits",
+      "fitness",
     ]);
     // „Fokus" is the first module in „Profesionalno i alati", and the category
     // is the honest one: „Životni centri" holds three subjects somebody HAS,
@@ -122,6 +127,7 @@ describe("createModuleRegistry", () => {
       "study",
       "finance",
       "habits",
+      "fitness",
       "focus",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
@@ -205,6 +211,38 @@ describe("createModuleRegistry", () => {
     expect(fokus?.sizes).toEqual(["S", "M"]);
     expect(fokus?.deepLink).toBe("focus");
   });
+
+  it("keeps FIT's searchIndexer slot empty while slice b fills the other two", () => {
+    const registry = createModuleRegistry();
+    const fitness = registry.all().find((manifest) => manifest.id === "fitness");
+    // No indexer, and not merely „not yet": the catalogue is APP-shipped data
+    // (migration 058), so indexing it would put four hundred rows nobody wrote
+    // into the palette — and a user's own food is a name and seven numbers,
+    // with no body to match and nothing a query would find that the page does
+    // not already show.
+    expect(fitness?.searchIndexers).toBeUndefined();
+    expect(registry.widgetsOf("fitness").map((widget) => widget.id)).toEqual(["danas"]);
+    // Four goals, and no fifth: `fit_targets` holds exactly these (migration
+    // 058), so a control for fibre would edit a column that does not exist.
+    expect(fitness?.settings?.controls.map((control) => control.key)).toEqual([
+      "kcal-goal",
+      "protein-goal",
+      "carbs-goal",
+      "fat-goal",
+    ]);
+  });
+
+  it("gives the fitness card no config either, and keeps it out of the default layout", () => {
+    const registry = createModuleRegistry();
+    const [danas] = registry.widgetsOf("fitness");
+    // „Fokus"'s reasoning exactly: every knob narrows a LIST, and this card
+    // draws one figure and at most one track.
+    expect(danas?.configFields).toBeUndefined();
+    expect(danas?.sizes).toEqual(["S", "M"]);
+    expect(danas?.deepLink).toBe("fitness");
+    // Gallery-only, like every card added after the original five (DASH-003).
+    expect(DEFAULT_DASHBOARD_LAYOUT.map((entry) => entry.widgetId)).not.toContain("fitness:danas");
+  });
 });
 
 describe("the settings each v0 module publishes (SettingsPanel)", () => {
@@ -236,6 +274,7 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       "study",
       "finance",
       "habits",
+      "fitness",
       "focus",
     ]);
   });
@@ -304,7 +343,7 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
     expect(optionIds("files", "view")).toEqual([...FILE_VIEWS]);
   });
 
-  it("keeps every card's storage honest: the six device cards, and four the profile owns", () => {
+  it("keeps every card's storage honest: the six device cards, and five the profile owns", () => {
     const storages = (moduleId: string) =>
       new Set(
         declared
@@ -334,6 +373,12 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
     expect(storages("study")).toEqual(new Set(["profile"]));
     expect(storages("calendar")).toEqual(new Set(["profile"]));
     expect(storages("priv")).toEqual(new Set(["profile"]));
+    // FIT's four are a PROFILE row (`fit_targets`, migration 058) and travel in
+    // every export — unlike HABIT's and UTIL's, which describe this machine's
+    // forms. Which is also why this is the one module card with no „Vrati na
+    // podrazumevano": there is no default to go back to, and a reset would be a
+    // write about somebody's own data.
+    expect(storages("fitness")).toEqual(new Set(["profile"]));
   });
 });
 

@@ -93,6 +93,7 @@ describe("moduleSettingsDeclarations", () => {
       "study",
       "finance",
       "habits",
+      "fitness",
       "focus",
     ]);
   });
@@ -120,6 +121,7 @@ describe("moduleSettingsCards", () => {
       "study",
       "finance",
       "habits",
+      "fitness",
       "focus",
     ]);
     expect(cards.map((card) => card.title)).toEqual([
@@ -131,6 +133,7 @@ describe("moduleSettingsCards", () => {
       s.sectionTitle.study,
       s.sectionTitle.finance,
       s.sectionTitle.habits,
+      s.sectionTitle.fitness,
       s.sectionTitle.focus,
     ]);
   });

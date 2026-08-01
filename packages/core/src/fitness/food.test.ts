@@ -400,6 +400,30 @@ describe("searchFoods", () => {
   it("answers nothing when nothing matches", () => {
     expect(searchFoods(ENTRIES, "kivi", 10)).toEqual([]);
   });
+
+  it("ranks a MERGED pool as one list, whatever each half is (FIT slice b's picker)", () => {
+    // The picker draws the catalogue and the profile's own foods together, and
+    // a user's food is a different type by construction — it carries no
+    // `source`, deliberately. Two ranked lists merged by the caller would be a
+    // second definition of „best match"; this is the one ranking, over whatever
+    // pool it is handed.
+    const pool = [
+      { id: "catalogue:sarma", name: "Sarma" },
+      { id: "user:0197c3d5-0000-7000-8000-000000000001", name: "Sarma po maminom" },
+      { id: "catalogue:kisela-sargarepa", name: "Kisela šargarepa" },
+    ];
+    expect(searchFoods(pool, "sar", 10).map((food) => food.id)).toEqual([
+      "catalogue:sarma",
+      "user:0197c3d5-0000-7000-8000-000000000001",
+      "catalogue:kisela-sargarepa",
+    ]);
+  });
+
+  it("hands back the pool's OWN objects, so a caller can carry whatever it needs on them", () => {
+    const mine = { id: "user:a", name: "Ajvar", mine: true };
+    const [hit] = searchFoods([mine], "ajv", 10);
+    expect(hit).toBe(mine);
+  });
 });
 
 describe("food references", () => {

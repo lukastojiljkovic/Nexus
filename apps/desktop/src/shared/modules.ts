@@ -560,6 +560,82 @@ const FOCUS_SETTINGS: SettingsPanel = {
 };
 
 /**
+ * FIT slice b's one card: „Ishrana danas" — the day's calories against the
+ * calorie goal, or, with no goal set, the plain figure.
+ *
+ * **Deliberately NO `configFields`**, on „Fokus"'s reasoning rather than for
+ * want of a field. Every knob the other cards carry narrows a LIST — a row cap
+ * picks the front of a queue, a horizon narrows a window — and this card draws
+ * no list at all: one figure, and one bar when there is a goal to draw it
+ * against. There is nothing here to cap and nothing to narrow, and the
+ * „Podesi…" affordance appears only where a choice exists.
+ *
+ * `sizes` stops at M, honestly: the card is a label, a figure and at most one
+ * track under it, so a full-width version would be mostly empty space.
+ */
+const FITNESS_WIDGETS: WidgetContract[] = [
+  {
+    id: "danas",
+    title: "dashboard.fitnessToday.title",
+    sizes: ["S", "M"],
+    deepLink: "fitness",
+  },
+];
+
+/**
+ * FIT slice b. FOUR controls, and the count is the point in the same way UTIL's
+ * is: `fit_targets` holds four independently nullable goals (migration 058) and
+ * collapsing them into presets („mršavljenje", „održavanje") would be inventing
+ * a curated list exactly as FIN refused to for ISO-4217 — and, worse than there,
+ * it would be the app deciding what somebody should eat.
+ *
+ * `value` rather than `choice` on all four for that reason and one more: the
+ * domains are ranges, and enumerating a range means picking which of its members
+ * are „sensible" on the user's behalf. Nexus does not have an opinion about
+ * anybody's calorie goal; it holds the number they set.
+ *
+ * `profile`, unlike HABIT's and UTIL's cards — and that is why this one carries
+ * NO „Vrati na podrazumevano". A goal is a fact of the profile, stored in
+ * `fit_targets` and carried in every export; a reset here would be a WRITE about
+ * somebody's own data rather than a forgetting on this machine. There is also no
+ * default to go back to: absent is the shipped state, and clearing all four is
+ * something the card already offers by emptying its fields.
+ */
+const FITNESS_SETTINGS: SettingsPanel = {
+  titleKey: "settings.sectionTitle.fitness",
+  controls: [
+    {
+      kind: "value",
+      key: "kcal-goal",
+      labelKey: "settings.fitness.kcalLabel",
+      storage: "profile",
+      keywords: ["ishrana", "kalorije", "cilj", "dnevni", "unos", "kcal"],
+    },
+    {
+      kind: "value",
+      key: "protein-goal",
+      labelKey: "settings.fitness.proteinLabel",
+      storage: "profile",
+      keywords: ["ishrana", "proteini", "belancevine", "cilj", "grami"],
+    },
+    {
+      kind: "value",
+      key: "carbs-goal",
+      labelKey: "settings.fitness.carbsLabel",
+      storage: "profile",
+      keywords: ["ishrana", "ugljeni", "hidrati", "uh", "cilj", "grami"],
+    },
+    {
+      kind: "value",
+      key: "fat-goal",
+      labelKey: "settings.fitness.fatLabel",
+      storage: "profile",
+      keywords: ["ishrana", "masti", "cilj", "grami"],
+    },
+  ],
+};
+
+/**
  * The v0 module set (roadmap "v0 — Founder Build"), as ADR-008 manifests.
  *
  * Lives in `shared/` (moved from the renderer, ADR-058 §5) because BOTH
@@ -715,6 +791,31 @@ const V0_MODULES: ModuleManifest[] = [
     defaultEnabled: true,
     widgets: HABITS_WIDGETS,
     settings: HABITS_SETTINGS,
+  },
+  // Ishrana (FIT slice b, migration 058). „Life hubs" beside Učenje, Finansije
+  // and Navike, and the category is the honest one: what somebody eats is an
+  // AREA of their life, in the plainest sense the group has — not a tool you
+  // use on one („Profesionalno i alati", where Fokus sits) and not content to
+  // handle („Sadržaj i znanje").
+  //
+  // ON by default, like every built module except PRIV: the module writes
+  // nothing at all until the user logs a first meal, and a life-management app
+  // whose food diary had to be switched on first would be hiding one of the
+  // things it is for.
+  //
+  // ONE contract slot stays empty, and not merely „not yet": there are NO
+  // `searchIndexers`. The catalogue is app-shipped data rather than the user's
+  // (see migration 058), so indexing it would put four hundred rows nobody
+  // wrote into the palette; and a user's own „mamin ajvar" is a name and seven
+  // numbers, with no body to match and nothing a query would find that the page
+  // does not already show.
+  {
+    id: "fitness",
+    prefix: "FIT",
+    category: "Life hubs",
+    defaultEnabled: true,
+    widgets: FITNESS_WIDGETS,
+    settings: FITNESS_SETTINGS,
   },
   // Fokus (UTIL slice b, ADR-077). The first module in „Profesionalno i alati",
   // and the category is the honest one: this is a TOOL rather than an area of a

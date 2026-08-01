@@ -32,6 +32,7 @@ import { StudyPage, type StudyIntent } from "./StudyPage.js";
 import { FinancePage, type FinanceIntent } from "./FinancePage.js";
 import { HabitsPage } from "./HabitsPage.js";
 import { FocusPage } from "./FocusPage.js";
+import { FitnessPage } from "./FitnessPage.js";
 import { SettingsPage, formatArchiveInstant } from "./SettingsPage.js";
 import { NotificationCenter } from "./NotificationCenter.js";
 import { NotificationAppetiteDialog } from "./NotificationAppetiteDialog.js";
@@ -1290,6 +1291,13 @@ export function App() {
             // slice (`searchCommands.ts`'s `CreatableModuleId` is untouched), so
             // there is nothing pending for this page to consume.
             <HabitsPage key={activeProfile.id} profileId={activeProfile.id} />
+          ) : effectiveId === "fitness" && activeProfile ? (
+            // No `intent` pair, on HABIT's terms exactly: FIT publishes no
+            // quick-create command (`searchCommands.ts`'s `CreatableModuleId` is
+            // untouched) — logging a meal needs a food, an amount and a slot, and
+            // a palette line that opened an empty picker would be a command that
+            // only ever means „open the page".
+            <FitnessPage key={activeProfile.id} profileId={activeProfile.id} />
           ) : effectiveId === "focus" && activeProfile ? (
             // `enabledModules` rather than an `intent` pair: UTIL publishes no
             // quick-create command (`searchCommands.ts`'s `CreatableModuleId` is

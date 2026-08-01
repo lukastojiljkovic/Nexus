@@ -165,6 +165,7 @@ export type {
   FoodServing,
   FoodSource,
   RecipeComponent,
+  SearchableFood,
 } from "./fitness/food.js";
 export { catalogueFood, FOOD_CATALOGUE } from "./fitness/catalogue.js";
 

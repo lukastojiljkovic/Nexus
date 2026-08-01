@@ -43,6 +43,7 @@ export const ESSENTIALS_MODULE_PRESET: ModulePreset = {
   finance: true,
   habits: true,
   focus: true,
+  fitness: true,
 };
 
 /**
@@ -80,6 +81,14 @@ export const ESSENTIALS_MODULE_PRESET: ModulePreset = {
  * differently for a student and a founder, and the module holds nothing at all
  * until somebody presses start. It is also the one module a role answer could
  * not sensibly drop without also dropping STUDY, since the two share the timer.
+ *
+ * FIT („Ishrana“) is true in every row on HABIT's argument exactly: „Uloga“ asks
+ * how somebody's DAY is shaped, and eating is shaped the same way for a student,
+ * an employee, a founder and somebody who fits none of those. Dropping it for
+ * any of the four would invent a difference the question never asked about — and
+ * it would be an invented difference ABOUT SOMEBODY'S BODY, which is the last
+ * thing a role question has any standing to guess at. It costs nothing to leave
+ * on: the module holds nothing until the user logs a first meal.
  */
 export const OCCUPATION_MODULE_PRESETS: Readonly<Record<OnboardingOccupation, ModulePreset>> = {
   student: ESSENTIALS_MODULE_PRESET,
@@ -93,6 +102,7 @@ export const OCCUPATION_MODULE_PRESETS: Readonly<Record<OnboardingOccupation, Mo
     finance: true,
     habits: true,
     focus: true,
+    fitness: true,
   },
   preduzetnik: {
     tasks: true,
@@ -104,6 +114,7 @@ export const OCCUPATION_MODULE_PRESETS: Readonly<Record<OnboardingOccupation, Mo
     finance: true,
     habits: true,
     focus: true,
+    fitness: true,
   },
   drugo: ESSENTIALS_MODULE_PRESET,
 };

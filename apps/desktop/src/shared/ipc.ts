@@ -18,7 +18,22 @@
 // naming a phase the database would refuse to store. Every other shape here
 // stays redeclared — those are flat records and one-off unions, where a copy
 // costs nothing and cannot drift silently.
-import type { FocusOutcome, FocusPhaseKind, TaskViewConfig } from "@nexus/core";
+//
+// FIT's four (slice b) join on the FIRST of those grounds, not the second:
+// `FoodMacros`/`FoodServing`/`FoodSource` are the nested grammar the catalogue,
+// the two stores and the archive reader already share, and `FoodCategory` is a
+// seventeen-member closed list the food store validates against. A redeclared
+// copy of any of them would be a second answer to „what is a food" — which is
+// exactly the drift `TaskViewConfig` is imported to avoid.
+import type {
+  FocusOutcome,
+  FocusPhaseKind,
+  FoodCategory,
+  FoodMacros,
+  FoodServing,
+  FoodSource,
+  TaskViewConfig,
+} from "@nexus/core";
 
 /** The only channels the preload bridge and the main handlers agree on. */
 export const IpcChannel = {
@@ -384,6 +399,41 @@ export const IpcChannel = {
   // streaks all read the same window, and an N+1 per habit is the obvious wrong
   // shape for a page that draws a grid.
   habitsEntries: "habits:entries",
+  // Ishrana (FIT slice b, migration 058). One channel per store operation, on
+  // the `fin-*:*`/`habits:*` rule — and one channel here carries a power none of
+  // the others do.
+  //
+  // **`fit:item-add` takes a REFERENCE and a weight, never macros.** Main
+  // resolves the reference — `catalogue:<id>` against `@nexus/core`'s shipped
+  // catalogue, `user:<uuid>` against this profile's own `fit_foods` — and writes
+  // the snapshot from what it found. A wire that let the renderer name a food AND
+  // supply its calories could log a 0-kcal čokolada, and the entire point of the
+  // snapshot (migration 058) is that it records what was actually eaten. So the
+  // resolve happens on the trusted side, once, and the item's `label` and
+  // `per100g` are main's answer rather than the caller's claim.
+  //
+  // The search is ONE channel over BOTH sources, for the same reason `habits:
+  // entries` is one call: the picker draws a single ranked list, and two calls
+  // the renderer merged itself would be a second definition of „best match".
+  fitFoodSearch: "fit:food-search",
+  fitDay: "fit:day",
+  fitItemAdd: "fit:item-add",
+  fitItemUpdate: "fit:item-update",
+  fitItemRemove: "fit:item-remove",
+  fitItemRestore: "fit:item-restore",
+  // The user's OWN foods (`fit_foods`) — the catalogue is not a table and has no
+  // CRUD at all, which is why these four say `food` and the search above says
+  // neither.
+  fitFoodsList: "fit:foods-list",
+  fitFoodCreate: "fit:food-create",
+  fitFoodUpdate: "fit:food-update",
+  fitFoodDelete: "fit:food-delete",
+  fitFoodRestore: "fit:food-restore",
+  // The four daily goals, read and written whole (`FitTargetStore.save`): with
+  // `null` already spoken for as „no goal", a patch would need a third value that
+  // reads identically in JSON on this wire — see the store's own doc.
+  fitTargets: "fit:targets",
+  fitTargetsSave: "fit:targets-save",
   searchQuery: "search:query",
   searchRecent: "search:recent",
   searchPage: "search:page",
@@ -4659,6 +4709,276 @@ export interface HabitsEntriesRequest {
   range: HabitDayRange;
 }
 
+// --- Ishrana (FIT slice b, migration 058) ------------------------------------
+//
+// The module's whole wire, and two of slice a's decisions run through every
+// shape below rather than being restated by any of them.
+//
+// **A logged item carries a SNAPSHOT, and main is what takes it.** The seven
+// per-100 g numbers are copied in when the item is logged and never re-read
+// afterwards: the catalogue ships inside the app and changes between builds, a
+// user's own food can be corrected at any moment, and a log that silently
+// rewrote yesterday's calories would be a lying log. Which is why
+// `FitItemAddRequest` carries a REFERENCE and a weight and nothing else — see
+// the channel block's own comment.
+//
+// **The catalogue is not a table.** `FitFoodOption` is what a merged search
+// answers with: a catalogue entry and one of the profile's own foods, side by
+// side, told apart only by their `ref`. There is no create/update/delete for a
+// catalogue food anywhere on this wire, because there is no row to touch.
+
+/** Mirrors `MAX_FIT_FOOD_NAME_LENGTH` in `@nexus/db` — CHARACTERS, so the field can cap its own input; the store stays authoritative. */
+export const MAX_FIT_FOOD_NAME_LENGTH = 80;
+/** Mirrors `MAX_FIT_FOOD_NOTES_LENGTH` — the sentence a user writes about their own food. */
+export const MAX_FIT_FOOD_NOTES_LENGTH = 500;
+/** Mirrors `MAX_FIT_FOOD_SERVINGS` — past a dozen a shortcut list stops being a shortcut. */
+export const MAX_FIT_FOOD_SERVINGS = 12;
+/** Mirrors `MAX_FIT_SERVING_LABEL_LENGTH` — „1 kašika", „1 kriška". */
+export const MAX_FIT_SERVING_LABEL_LENGTH = 40;
+/** Mirrors `MAX_FIT_FOOD_QUERY_LENGTH` — a picker's box, not a document. */
+export const MAX_FIT_FOOD_QUERY_LENGTH = 100;
+/** Mirrors `MAX_FIT_FOOD_RESULTS` — how many foods one search answers with, catalogue and user foods together. */
+export const MAX_FIT_FOOD_RESULTS = 50;
+/** Mirrors `MAX_FIT_NUTRIENT` — the ceiling on any single per-100 g figure. */
+export const MAX_FIT_NUTRIENT = 100_000;
+/** Mirrors `MAX_FIT_SERVING_GRAMS` — a serving weighs something a person eats. */
+export const MAX_FIT_SERVING_GRAMS = 10_000;
+/** Mirrors `MAX_MEAL_ITEM_GRAMS` — one logged portion; ten kilograms is not a portion. */
+export const MAX_MEAL_ITEM_GRAMS = 10_000;
+/** Mirrors `MAX_FIT_TARGET` — the ceiling on a daily goal a progress bar divides by. */
+export const MAX_FIT_TARGET = 100_000;
+
+/**
+ * The seven per-100 g numbers, the household measures, the seventeen shelves and
+ * the provenance union — `@nexus/core`'s own, re-exported so a page reads the
+ * whole food vocabulary off this one contract. See the import at the top of this
+ * file for why these four are imported rather than redeclared.
+ */
+export type { FoodCategory, FoodMacros, FoodServing, FoodSource };
+
+/**
+ * The five slots a Serbian day is eaten in, in the order a day happens. Mirrors
+ * `MEAL_SLOTS` in `@nexus/db` AND migration 058's own CHECK — main assigns this
+ * type into the store's `MealSlot`, so a member added on one side and not the
+ * other is a compile error rather than a row the database refuses at runtime.
+ */
+export const FIT_MEAL_SLOTS = ["dorucak", "uzina1", "rucak", "uzina2", "vecera"] as const;
+
+export type FitMealSlot = (typeof FIT_MEAL_SLOTS)[number];
+
+/**
+ * One food a picker may offer — a catalogue entry or one of the profile's own,
+ * in one shape, told apart by `ref`.
+ *
+ * `ref` is `catalogue:<id>` or `user:<uuid>` and is the ONLY thing the renderer
+ * ever sends back to log this food: main resolves it and takes the snapshot, so
+ * the numbers below are what the user was shown AND what gets recorded, without
+ * the renderer being trusted with either.
+ *
+ * `source` is null for a user's own food, and that absence is deliberate rather
+ * than missing data — a catalogue entry must cite something anyone can re-check
+ * because the APP is asserting the number, while somebody's own „mamin ajvar" is
+ * their claim about their own food. Everything else carries its provenance so
+ * the page can answer „odakle ovaj broj", and a `stated` entry carries its
+ * uncertainty in `basis`/`range` for the same reason.
+ */
+export interface FitFoodOption {
+  ref: string;
+  name: string;
+  category: FoodCategory;
+  per100g: FoodMacros;
+  servings: FoodServing[];
+  notes: string;
+  /** Where the number came from, or null for a food the user typed themselves. */
+  source: FoodSource | null;
+}
+
+/** One of the profile's own foods, as the „Moje namirnice" list reads it. */
+export interface FitFood {
+  id: string;
+  profileId: string;
+  name: string;
+  category: FoodCategory;
+  per100g: FoodMacros;
+  servings: FoodServing[];
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Fields for a new user food; an absent optional key means „none". */
+export interface NewFitFoodFields {
+  name: string;
+  category: FoodCategory;
+  per100g: FoodMacros;
+  servings?: FoodServing[];
+  notes?: string;
+}
+
+/** A partial edit. An omitted key is untouched; `servings` and `notes` are replaced wholesale when given. */
+export interface FitFoodFieldChanges {
+  name?: string;
+  category?: FoodCategory;
+  per100g?: FoodMacros;
+  servings?: FoodServing[];
+  notes?: string;
+}
+
+/**
+ * One logged item, snapshot included. `foodRef` is provenance rather than a key
+ * — the food it names may be a catalogue entry this build no longer ships, or a
+ * user food since deleted, and `label` plus `per100g` are what keep the row
+ * readable either way.
+ */
+export interface FitMealItem {
+  id: string;
+  profileId: string;
+  /** The bare local day, `YYYY-MM-DD`. */
+  date: string;
+  slot: FitMealSlot;
+  foodRef: string;
+  label: string;
+  grams: number;
+  per100g: FoodMacros;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One day of the food diary: the five slots and the day's own total, in ONE
+ * answer. Both halves come back together because the page draws them together —
+ * a render holding the rows but not the total they add up to would show a figure
+ * that no longer follows from the list above it.
+ *
+ * Every slot is present; an unused one is an empty array, so the page draws five
+ * sections without asking which exist.
+ */
+export interface FitDay {
+  day: string;
+  slots: Record<FitMealSlot, FitMealItem[]>;
+  /** The day's total, summed by the store from the same rows — never a second arithmetic. */
+  totals: FoodMacros;
+}
+
+/**
+ * The profile's daily goals. Every one is independently nullable and NULL means
+ * „no goal" — never zero: „nisam postavio cilj kalorija" and „moj cilj je nula"
+ * are different claims, and the schema, the store and this wire all keep them
+ * apart. `updatedAt` is null EXACTLY when no row exists, which is how „nikad
+ * nisam ni gledao" is told from „postavio pa obrisao".
+ */
+export interface FitTargets {
+  kcal: number | null;
+  proteinG: number | null;
+  carbsG: number | null;
+  fatG: number | null;
+  updatedAt: string | null;
+}
+
+/** What „Sačuvaj" sends: all four goals, every time — see `FitTargetStore.save` for why there is no patch. */
+export type FitTargetGoals = Omit<FitTargets, "updatedAt">;
+
+/** A merged search over the catalogue and this profile's own foods. A blank query answers NOTHING rather than everything. */
+export interface FitFoodSearchRequest {
+  profileId: string;
+  query: string;
+  limit: number;
+}
+
+/**
+ * One day of the diary. `day` is DATA — a day the user named with the page's own
+ * navigation, exactly as a habit's corrected tick is (`HabitsSetEntryRequest`) —
+ * and main validates it as a real bare date.
+ */
+export interface FitDayRequest {
+  profileId: string;
+  day: string;
+}
+
+/**
+ * Logs one item. Carries the REFERENCE and the weight, and deliberately neither
+ * the label nor the macros: main resolves the reference and writes the snapshot
+ * from what it resolved. See the channel block for why that boundary is the
+ * module's, not a courtesy.
+ *
+ * `day` may be any past day — correcting yesterday's lunch is the ordinary use —
+ * but never one after today: a meal is a fact about a day that happened, and
+ * main's clock is what makes that refusal meaningful.
+ */
+export interface FitItemAddRequest {
+  profileId: string;
+  day: string;
+  slot: FitMealSlot;
+  /** `catalogue:<id>` or `user:<uuid>`; main refuses one it cannot resolve. */
+  foodRef: string;
+  grams: number;
+}
+
+/**
+ * Corrects how much, or which meal it belonged to. Never the food, its label or
+ * its snapshot — swapping those would be logging a different thing while keeping
+ * this row's identity, and „obriši pa dodaj" says that honestly.
+ */
+export interface FitItemUpdateRequest {
+  profileId: string;
+  id: string;
+  grams?: number;
+  slot?: FitMealSlot;
+}
+
+/** A soft delete, with the undo every other list in this app has. */
+export interface FitItemRemoveRequest {
+  profileId: string;
+  id: string;
+}
+
+/** Undo of that delete — the item comes back exactly as it was logged, snapshot, day and slot included. */
+export interface FitItemRestoreRequest {
+  profileId: string;
+  id: string;
+}
+
+export interface FitFoodsListRequest {
+  profileId: string;
+}
+
+export interface FitFoodCreateRequest {
+  profileId: string;
+  food: NewFitFoodFields;
+}
+
+export interface FitFoodUpdateRequest {
+  profileId: string;
+  id: string;
+  changes: FitFoodFieldChanges;
+}
+
+/**
+ * Soft-deletes one of the profile's own foods. Everything already LOGGED with it
+ * is untouched and stays readable — `food_ref` is text with no foreign key, and
+ * the item's own label and snapshot are what make it legible. Deleting „mamin
+ * ajvar" is a statement about the food list, never about what was eaten.
+ */
+export interface FitFoodDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
+export interface FitFoodRestoreRequest {
+  profileId: string;
+  id: string;
+}
+
+export interface FitTargetsRequest {
+  profileId: string;
+}
+
+/** Writes all four goals at once; clearing is a save of four nulls. */
+export interface FitTargetsSaveRequest {
+  profileId: string;
+  goals: FitTargetGoals;
+}
+
 /**
  * Global search (ADR-021 / PRD 08 SRCH-001/002). The index itself (migration
  * 017) and its read-only store already exist; these three channels are the
@@ -7336,6 +7656,49 @@ export interface NexusApi {
   clearHabitEntry(profileId: string, habitId: string, day: string): Promise<void>;
   /** EVERY live habit's ticks over one inclusive day span, in one call — the today list, the grid and the streaks all read this one window. */
   habitEntries(profileId: string, range: HabitDayRange): Promise<HabitEntry[]>;
+  /**
+   * The foods whose names match `query` — the app's catalogue and this profile's
+   * own foods, merged and ranked ONCE (prefix matches first, then sr-Latn, with
+   * „djuvec" reaching „Đuveč" through the app's one folding table).
+   *
+   * A blank query answers an empty list rather than everything: a picker with an
+   * empty box has nothing to rank, and the front of the catalogue dressed up as
+   * „your best matches" is a different claim.
+   */
+  fitFoodSearch(profileId: string, query: string, limit: number): Promise<FitFoodOption[]>;
+  /** One day of the diary: the five slots, and the total the same rows add up to. */
+  fitDay(profileId: string, day: string): Promise<FitDay>;
+  /**
+   * Logs one item. The caller names the food by REFERENCE and says how much;
+   * main resolves it and records the snapshot — a renderer able to supply macros
+   * for a food it named could log a 0-kcal čokolada.
+   */
+  fitAddItem(
+    profileId: string,
+    day: string,
+    slot: FitMealSlot,
+    foodRef: string,
+    grams: number,
+  ): Promise<FitMealItem>;
+  /** Corrects the weight and/or the slot. The snapshot is never touched. */
+  fitUpdateItem(
+    profileId: string,
+    id: string,
+    changes: { grams?: number; slot?: FitMealSlot },
+  ): Promise<FitMealItem>;
+  fitRemoveItem(profileId: string, id: string): Promise<void>;
+  fitRestoreItem(profileId: string, id: string): Promise<void>;
+  /** This profile's own foods, sr-Latn alphabetical. The catalogue is not in here — it is not a table. */
+  fitFoods(profileId: string): Promise<FitFood[]>;
+  fitCreateFood(profileId: string, food: NewFitFoodFields): Promise<FitFood>;
+  /** Editing a food changes what you log FROM NOW ON; everything already logged keeps the numbers it was logged with. */
+  fitUpdateFood(profileId: string, id: string, changes: FitFoodFieldChanges): Promise<FitFood>;
+  fitDeleteFood(profileId: string, id: string): Promise<void>;
+  fitRestoreFood(profileId: string, id: string): Promise<void>;
+  /** The four daily goals — four nulls while nothing has been set, which is the ordinary case. */
+  fitTargets(profileId: string): Promise<FitTargets>;
+  /** Writes all four at once; `null` clears one, and `0` is a goal of zero rather than none. */
+  fitSaveTargets(profileId: string, goals: FitTargetGoals): Promise<FitTargets>;
   /** Runs the query pipeline (parse -> FTS match -> bm25 candidates -> rank), falling back to `searchRecent`'s order when the query has no matchable terms (ADR-021). */
   searchQuery(profileId: string, query: string, limit: number): Promise<SearchResult[]>;
   /** The profile's most recently touched entries, already in their final order — no ranking pass, unlike `searchQuery`. */

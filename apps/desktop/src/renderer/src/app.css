@@ -10341,3 +10341,499 @@ button.cal__grid-event--dragging {
   background: var(--nx-surface-alt);
   color: var(--nx-danger);
 }
+
+/* Ishrana (FIT page) ---------------------------------------------------------
+
+   The day, its five meals, its four figures and the user's own foods. Two
+   things about this block are deliberate rather than incidental.
+
+   The BARS are the FIN month report's grammar to the pixel: one track per
+   macro, a fill on a scale of max(value, goal), and the goal as a tick standing
+   taller than the track on both sides. Over the goal takes `--nx-danger`,
+   exactly as an overspent envelope does — one visual vocabulary for „past the
+   line you drew", never a second one invented for food. Nothing glows, nothing
+   animates, and no hue is minted here.
+
+   A macro with NO goal draws an empty, quieter track and says „bez cilja" in
+   words: the row keeps the grid so four rows still line up, and it invents no
+   proportion, because there is nothing to be a proportion of. */
+.fit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-6);
+}
+.fit__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  align-items: flex-start;
+}
+.fit__heading {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+.fit__note {
+  margin: 0;
+  max-width: 64ch;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+/* The one place a `stated` figure's uncertainty is spelled out. Accent, not
+   danger: an estimate is a fact about the number, not a fault in it. */
+.fit__note--stated {
+  color: var(--nx-accent-strong);
+}
+.fit__error {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-danger);
+}
+.fit__quiet.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.fit__quiet.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.fit__list {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+}
+
+/* The single-slot undo bar — the HABIT/FIN/TASK recipe outright. */
+.fit__undo {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.fit__undo-text {
+  flex: 1;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+
+/* The day strip: which day is open, and the walk backwards through history. */
+.fit__daybar {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  align-self: stretch;
+}
+.fit__day-name {
+  flex: 1;
+  font-size: var(--nx-font-size-title);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.fit__day-name::first-letter {
+  text-transform: uppercase;
+}
+.fit__day-step.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.fit__day-step.nx-button:hover:not(:disabled) {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+
+/* The day's four figures, on the FIN report's scale-and-tick grammar. */
+.fit__bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  align-self: stretch;
+}
+.fit__bar-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 160px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--nx-space-3);
+}
+.fit__bar-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+.fit__bar-track {
+  position: relative;
+  height: 10px;
+  border-radius: var(--nx-radius-round);
+  background: var(--nx-surface-alt);
+}
+/* No goal: the track keeps the row's grid so four rows still line up, and says
+   nothing — there is no proportion to draw. */
+.fit__bar-track--empty {
+  opacity: 0.4;
+}
+.fit__bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--nx-data);
+}
+/* Past a goal meant as a CEILING takes the semantic colour this app already uses
+   for an overspent envelope. Only the bars that ARE over change. */
+.fit__bar-fill--over {
+  background: var(--nx-danger);
+}
+/* Past a goal meant as a FLOOR — protein — is the goal being MET, so it takes
+   the data-secondary jade rather than the danger hue. Same fact, read the way
+   the user meant the goal: nobody sets a protein target hoping to stay under it,
+   and painting that red would be the scold this page is not allowed to be. */
+.fit__bar-fill--reached {
+  background: var(--nx-success);
+}
+/* The goal, as a tick on the same scale — taller than the track on both sides,
+   so it stays legible over an empty track and a full one alike. */
+.fit__bar-goal {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--nx-text);
+}
+.fit__bar-value {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: var(--nx-space-1);
+  font-size: var(--nx-font-size-body-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.fit__bar-figure {
+  color: var(--nx-text);
+}
+.fit__bar-figure--over {
+  color: var(--nx-danger);
+  font-weight: var(--nx-font-weight-medium);
+}
+/* A floor goal that has been reached: the same emphasis, the success semantic
+   rather than the danger one. */
+.fit__bar-figure--reached {
+  color: var(--nx-success);
+  font-weight: var(--nx-font-weight-medium);
+}
+.fit__bar-goal-text {
+  color: var(--nx-text-muted);
+}
+/* Never a number — a macro with no goal has none, and this page invents none. */
+.fit__bar-nogoal {
+  color: var(--nx-text-muted);
+  font-variant-numeric: normal;
+}
+
+/* The five meals. Always five, so the day keeps its shape whatever is in it. */
+.fit__slots {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+  align-self: stretch;
+}
+.fit__slot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  align-items: flex-start;
+  align-self: stretch;
+}
+.fit__slot-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+  align-self: stretch;
+}
+.fit__slot-name {
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.fit__slot-total {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A logged row, and „Moje namirnice"' rows — one recipe, since both are a name
+   with facts under it and the same quiet actions on the right. */
+.fit__row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.fit__row-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--nx-font-weight-medium);
+}
+.fit__row-meta {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.fit__chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.fit__row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.fit__row-action.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 6px;
+}
+.fit__row-action.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.fit__row-delete.nx-button:hover {
+  color: var(--nx-danger);
+}
+.fit__grams-field {
+  width: 9ch;
+}
+
+/* The picker: a query, a ranked list over both sources, then one food's own
+   numbers and the amount. A panel rather than a dialog — it belongs to the meal
+   it is filling, and a modal over five sections would lose which one that is. */
+.fit__picker,
+.fit__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  align-self: stretch;
+  align-items: flex-start;
+  padding: var(--nx-space-4);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+}
+.fit__form-title {
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.fit__form-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.fit__results {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.fit__result-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.fit__result-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--nx-font-weight-medium);
+}
+.fit__chosen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  align-self: stretch;
+  align-items: flex-start;
+}
+.fit__chosen-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+  align-self: stretch;
+}
+.fit__chosen-figures {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  align-self: stretch;
+}
+.fit__figures-heading {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+.fit__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+}
+.fit__fact {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.fit__fact-label {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.fit__fact-value {
+  font-size: var(--nx-font-size-body-sm);
+  font-variant-numeric: tabular-nums;
+}
+/* The food's own household measures, as one-tap amounts beside the gram field. */
+.fit__servings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1);
+}
+.fit__serving.nx-button {
+  font-variant-numeric: tabular-nums;
+}
+
+/* „Odakle ovaj broj" — every food can answer it, and a `stated` one must. */
+.fit__source {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  align-self: stretch;
+  padding: var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border-radius: var(--nx-radius-md);
+}
+.fit__source-heading {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+.fit__source-kind {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  font-weight: var(--nx-font-weight-medium);
+}
+.fit__source-line {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+/* The citation address, as text: this app opens no external links yet, so it is
+   monospaced to be read and copied rather than styled to be clicked. */
+.fit__source-url {
+  margin: 0;
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+  overflow-wrap: anywhere;
+}
+.fit__recipe {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fit__recipe-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: var(--nx-font-size-caption);
+}
+.fit__recipe-grams {
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* „Moje namirnice" and its form. */
+.fit__food {
+  display: flex;
+  flex-direction: column;
+}
+.fit__food-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-3) 0 var(--nx-space-4);
+}
+.fit__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.fit__field-label {
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-medium);
+  color: var(--nx-text-muted);
+}
+.fit__field-hint {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.fit__select {
+  padding: 6px 10px;
+  background: var(--nx-surface);
+  color: var(--nx-text);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-sm);
+  font-family: inherit;
+  font-size: var(--nx-font-size-body-sm);
+}
+/* The seven per-100 g fields. A grid rather than a column: they are read
+   together, off one label in the hand. */
+.fit__macro-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--nx-space-2);
+  align-self: stretch;
+}
+.fit__serving-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--nx-space-2);
+  align-self: stretch;
+}
+
+/* „Ishrana danas" on the dashboard: the figure, the goal under it, and the same
+   track the page draws — one bar grammar, never a second one for a card. */
+.dash__fit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.dash__fit-goal {
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.dash__fit-track {
+  display: block;
+  margin: var(--nx-space-1) var(--nx-space-2) 0;
+}

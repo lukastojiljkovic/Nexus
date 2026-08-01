@@ -296,6 +296,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     finance: "Finansije",
     habits: "Navike",
     focus: "Fokus",
+    fitness: "Ishrana",
   } as Record<string, string>,
 
   dashboard: {
@@ -400,6 +401,22 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       tick: "Označi kao urađeno",
       /** The compact niz chip. The counted noun rides along (`habitFormat.ts`) — „Niz: 3" cannot say three WHAT, and for a quota habit it is weeks. */
       streakLabel: "Niz",
+    },
+    /**
+     * FIT slice b's card: today's calories, against the calorie goal when there
+     * is one. Read-only — logging a meal takes a food, an amount and a slot,
+     * which is a form rather than the one bit „Navike danas" ticks in place.
+     */
+    fitnessToday: {
+      title: "Ishrana danas",
+      /** Nothing logged today. An invitation, and deliberately not a reminder that you have not eaten. */
+      empty: "Danas još nema upisanih obroka",
+      /** Leads the figure: „Danas · 1.480 kcal". */
+      todayLabel: "Danas",
+      /** Under the figure when a calorie goal is set — „od 2.000 kcal". */
+      ofGoalPrefix: "od",
+      /** The chip on a day past its calorie goal. States a fact; there is no advice anywhere on this card. */
+      overGoal: "Preko cilja",
     },
     /**
      * A single widget's own boundary (ADR-045 section 4): each card loads and
@@ -3000,6 +3017,234 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     },
   },
 
+  /**
+   * Ishrana (FIT slice b). Two rules run through every line below.
+   *
+   * **Nothing here advises.** There is no recommended intake, no „trebalo bi",
+   * no verdict on a day. The goals are whatever the user set in „Podešavanja",
+   * the totals are whatever was logged, and a day past a goal says „preko cilja"
+   * — a fact about two numbers — and stops there.
+   *
+   * **Nothing here is a health claim.** `referenceOnly` is the one sentence the
+   * page says about what these numbers are, said once and calmly, and it is the
+   * honest one: a food diary is a record, not a nutritionist.
+   */
+  fitness: {
+    loadErrorTitle: "Ishrana nije učitana",
+    loadError: "Učitavanje dnevnika ishrane nije uspelo. Zatvori i ponovo otvori stranicu.",
+    actionError: "Radnja nije uspela. Pokušaj ponovo.",
+    undo: "Opozovi",
+    dismiss: "Zatvori",
+    /**
+     * PRD FIT: said ONCE, under the day's totals, where the numbers it is about
+     * actually are. It states what the data is and what it is not, and asks for
+     * nothing.
+     */
+    referenceOnly:
+      "Vrednosti su informativne — preuzete iz javnih tabela sastava namirnica ili unete ručno. Nisu medicinski savet.",
+    /** The day strip above everything: which day is open, and how to walk. */
+    day: {
+      previous: "Prethodni dan",
+      next: "Sledeći dan",
+      today: "Danas",
+      /** Said in place of „Sledeći dan" at the end of the walk: there is no tomorrow to record. */
+      noFuture: "Dnevnik se vodi unazad — sutrašnji obrok još nije obrok.",
+    },
+    /**
+     * The five slots, in the order a day happens. „Užina" appears twice in life
+     * and would appear twice on screen, so each says WHICH one it is — the
+     * stored values are `uzina1`/`uzina2` and the labels have to carry the
+     * difference the keys do.
+     */
+    slot: {
+      dorucak: "Doručak",
+      uzina1: "Prepodnevna užina",
+      rucak: "Ručak",
+      uzina2: "Popodnevna užina",
+      vecera: "Večera",
+    },
+    /** The day's four figures, against whatever goals are set. */
+    totals: {
+      heading: "Ukupno za dan",
+      /** The four macros the goals cover, named once and used everywhere. */
+      macro: {
+        kcal: "Kalorije",
+        protein: "Proteini",
+        carbs: "Ugljeni hidrati",
+        fat: "Masti",
+      },
+      /** The three that ride every snapshot but have no goal — shown as plain figures where a food is inspected. */
+      extra: {
+        fiber: "Vlakna",
+        sugar: "Šećeri",
+        sodiumMg: "Natrijum",
+      },
+      unitKcal: "kcal",
+      unitGram: "g",
+      unitMilligram: "mg",
+      /** A macro with no goal set. No number is invented for it — the figure stands alone. */
+      noGoal: "bez cilja",
+      /** A macro past a goal meant as a CEILING (kcal, UH, masti). A fact about two numbers, never a warning. */
+      over: "preko cilja",
+      /**
+       * A macro past a goal meant as a FLOOR — protein, the one goal people set
+       * in order to REACH it. Saying „preko cilja" there, in the same colour an
+       * overspent envelope wears, would turn eating enough protein into a
+       * warning; this is the same fact read the way the user meant the goal.
+       */
+      reached: "cilj ispunjen",
+      /** Nothing has been logged for this day at all. */
+      emptyDay: "Za ovaj dan još nema ničega.",
+      /** Points at the one place goals are set, once, under the bars. */
+      setGoals: "Dnevne ciljeve postavljaš u Podešavanjima, u kartici „Ishrana”.",
+    },
+    /** Adding something to a meal: the search, the amount, and what the food says about itself. */
+    picker: {
+      add: "Dodaj namirnicu",
+      cancel: "Otkaži",
+      searchLabel: "Pretraži namirnice",
+      searchPlaceholder: "npr. jaje, hleb, jogurt…",
+      /** Nothing matched. The next sentence is the way out, and it is a real one. */
+      noResults: "Nema namirnice sa tim imenom.",
+      noResultsHint: "Dodaj je u „Moje namirnice” ispod — sa brojevima sa deklaracije.",
+      /** Before anything is typed: the box has nothing to rank, and says so. */
+      idle: "Upiši ime namirnice.",
+      /** The chosen food's own line: the amount, and its household measures beside it. */
+      amountLabel: "Količina (g)",
+      amountPlaceholder: "100",
+      /** The one-tap amounts a food carries. Absent for foods that are weighed — brašno has no „1 komad”. */
+      servingsLabel: "Uobičajene mere",
+      /** On a result row: takes you to the amount, and does not log anything yet. */
+      choose: "Izaberi",
+      /** Out of the chosen food, back to the list — a different act from closing the picker, so a different word. */
+      back: "Nazad na listu",
+      submit: "Upiši",
+      /** Per-100 g preview above the amount field, so the number is seen before it is logged. */
+      per100gLabel: "Na 100 g",
+      /** What the chosen amount actually comes to — the same arithmetic the day total uses. */
+      portionLabel: "Ova količina",
+      /** The chip on a food the user added themselves. */
+      mine: "Moja namirnica",
+    },
+    /**
+     * Where a number came from. Every food can answer this, which is the reason
+     * the catalogue was built the way it was — and one kind must answer it
+     * louder than the rest.
+     */
+    source: {
+      heading: "Odakle ovaj broj",
+      usda: "USDA FoodData Central",
+      official: "Zvanična tabela sastava",
+      derived: "Izračunato iz recepta",
+      /** A founder-decided figure where no public source pins one down. It never pretends to be measured. */
+      stated: "Procena",
+      /** The label in front of the citation's own reference. */
+      refLabel: "Oznaka",
+      /**
+       * The citation address. Shown as TEXT rather than as a link: this app
+       * opens no external links yet (see `setWindowOpenHandler`), and a link
+       * that did nothing would be worse than an address that can be copied.
+       */
+      urlLabel: "Adresa",
+      /** A derived food's working: what went in, and how much of it. */
+      recipeLabel: "Recept",
+      yieldLabel: "Daje",
+      /**
+       * A food the user added. It cites nothing, and the absence is the honest
+       * one: the app asserts a catalogue number and must be able to prove it,
+       * while this is somebody's claim about their own food.
+       */
+      userFood: "Tvoja namirnica — vrednosti su unete ručno.",
+      /** A `stated` food's two mandatory fields — the uncertainty ships WITH the value. */
+      basisLabel: "Osnov",
+      rangeLabel: "Objavljeni raspon",
+      /** Said beside a `stated` food wherever it is picked or reviewed, so a decided number never looks measured. */
+      statedNote:
+        "Za ovu namirnicu ne postoji javni izvor — broj je procena i stvarna vrednost varira. Ako je izmeriš, upiši je kao svoju namirnicu.",
+      /** The food's own sentence about itself: what it covers, how it was prepared, why a drink is logged in grams. */
+      notesLabel: "Napomena",
+    },
+    /** One logged row: what, how much, and what it came to. */
+    item: {
+      /** Row actions, quiet until hover, exactly as every other list in this app. */
+      edit: "Izmeni količinu",
+      remove: "Ukloni",
+      removedNotice: "Stavka je uklonjena.",
+      save: "Sačuvaj",
+      cancel: "Otkaži",
+      /** A meal with nothing in it. Five sections are always drawn; four of them are usually this. */
+      emptySlot: "Prazno",
+      /** The per-meal figure beside a slot's heading. */
+      slotTotal: "Ukupno",
+    },
+    /** „Moje namirnice": what the catalogue does not have, in the user's own words and numbers. */
+    foods: {
+      heading: "Moje namirnice",
+      caption:
+        "Ono čega nema u ugrađenoj listi — „mamin ajvar”, domaći brend, dodatak ishrani. Brojeve prepiši sa deklaracije, na 100 g.",
+      newFood: "Nova namirnica",
+      edit: "Izmeni",
+      delete: "Obriši",
+      deletedNotice: "Namirnica je obrisana.",
+      /** Deleting a food says nothing about what was eaten — the log keeps its own numbers. */
+      deleteNote: "Već upisani obroci ostaju netaknuti.",
+      emptyTitle: "Još nema tvojih namirnica",
+      emptyDescription:
+        "Ugrađena lista pokriva veći deo svakodnevne ishrane. Ovde dodaješ ono čega u njoj nema.",
+      expand: "Prikaži detalje",
+      collapse: "Sakrij detalje",
+    },
+    /** The one form, serving both a new food and an edit — the FIN rail's shape. */
+    form: {
+      newTitle: "Nova namirnica",
+      editTitle: "Izmena namirnice",
+      nameLabel: "Naziv",
+      namePlaceholder: "Mamin ajvar",
+      categoryLabel: "Grupa",
+      /** The header above the seven numbers. Per 100 g, because that is the basis every label already agrees on. */
+      macrosLabel: "Na 100 g",
+      /** Said under the seven fields: a packet in the hand beats any table. */
+      macrosHint: "Prepiši sa deklaracije. Za pića se 100 ml upisuje kao 100 g.",
+      notesLabel: "Napomena",
+      notesPlaceholder: "Šta tačno je ovo, kako je pripremljeno…",
+      /** The household measures the picker offers as one-tap amounts. */
+      servingsLabel: "Uobičajene mere",
+      servingsHint: "Nije obavezno. Brašno se meri, a ne broji.",
+      servingLabelPlaceholder: "1 kašika",
+      servingGramsPlaceholder: "15",
+      addServing: "Dodaj meru",
+      removeServing: "Ukloni meru",
+      save: "Sačuvaj",
+      cancel: "Otkaži",
+      /** Refusals, in the vocabulary the store speaks. */
+      invalidName: "Naziv je obavezan.",
+      invalidCategory: "Izaberi grupu.",
+      invalidNumber: "Upiši broj — najviše dve decimale, bez tačke za hiljade.",
+      invalidServing: "Mera treba naziv i težinu u gramima.",
+      notFound: "Ova namirnica više ne postoji.",
+    },
+    /** The seventeen shelves, as the catalogue's own Serbian keys name them. */
+    category: {
+      zitarice: "Žitarice",
+      pekarsko: "Pekarski proizvodi",
+      testenina: "Testenine",
+      mahunarke: "Mahunarke",
+      povrce: "Povrće",
+      voce: "Voće",
+      meso: "Meso",
+      riba: "Riba i plodovi mora",
+      jaja: "Jaja",
+      mlecno: "Mlečni proizvodi",
+      orasasti: "Orašasti plodovi i semenke",
+      masti: "Masti i ulja",
+      slatkisi: "Slatkiši",
+      grickalice: "Grickalice",
+      pica: "Pića",
+      jela: "Gotova jela",
+      zacini: "Začini",
+    },
+  },
+
   settings: {
     // The page title reuses `strings.modules.settings` — no duplicate copy.
     /**
@@ -3025,6 +3270,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       finance: "Finansije",
       habits: "Navike",
       focus: "Fokus",
+      fitness: "Ishrana",
       modules: "Moduli",
       notifications: "Obaveštenja",
       backup: "Rezervna kopija",
@@ -3355,6 +3601,31 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       /** The one refusal, pointed at the field the engine named — never a generic „nešto nije u redu". */
       invalid: "Vrednost je van dozvoljenog opsega.",
     },
+    /**
+     * FIT slice b's card — the four daily goals, and NOTHING that reads like
+     * advice. The caption says three things in order, each of which a user would
+     * otherwise have to guess: the goals are theirs, an empty field means there
+     * is no goal (which is different from a goal of zero), and nothing on any
+     * screen turns a goal into a verdict.
+     *
+     * This is the one module card with a PROFILE storage and therefore no „Vrati
+     * na podrazumevano": there is no default to go back to — absent is what the
+     * app ships with, and emptying the fields is already how you get there.
+     */
+    fitness: {
+      caption:
+        "Dnevni ciljevi za „Ishranu”. Svaki je zaseban i nijedan nije obavezan — prazno polje znači da cilja nema. Nexus ne predlaže vrednosti i ne ocenjuje dan.",
+      kcalLabel: "Kalorije (kcal)",
+      proteinLabel: "Proteini (g)",
+      carbsLabel: "Ugljeni hidrati (g)",
+      fatLabel: "Masti (g)",
+      /** Says what „prazno" means, once, where the fields are — because 0 and absent are different claims. */
+      hint: "Ostavi prazno za „bez cilja”. Nula je cilj, prazno polje nije.",
+      saved: "Ciljevi su sačuvani.",
+      invalid: "Upiši broj — najviše dve decimale, bez tačke za hiljade.",
+      loadError: "Ciljevi se ne mogu učitati.",
+      saveError: "Čuvanje ciljeva nije uspelo. Pokušaj ponovo.",
+    },
     /** One-line module descriptions for the gallery, keyed by module id. */
     moduleDescriptions: {
       dashboard: "Pregled dana na jednom mestu — obaveze, zadaci i dokumenta koja ističu.",
@@ -3368,6 +3639,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       finance: "Računi, transakcije i prenosi — stanje se računa iz onoga što upišeš.",
       habits: "Dnevne i nedeljne navike — niz, istorija i ono što se danas očekuje.",
       focus: "Pomodoro tajmer i istorija fokusa — isti tajmer koji „Učenje“ koristi.",
+      fitness: "Dnevnik ishrane — obroci po danu, ugrađena lista namirnica i dnevni ciljevi.",
     } as Record<string, string>,
     /** Category-group headings above the module gallery, keyed by registry category. */
     moduleCategories: {

@@ -13,9 +13,12 @@ import {
 import type {
   CalendarSettings,
   DashboardSettings,
+  FitTargetGoals,
+  FitTargets,
   PrivStatus,
   StudySettings,
 } from "../../shared/ipc.js";
+import { gramsInputValue, parseAmountInput } from "./fitDay.js";
 import {
   FILE_VIEWS,
   clearStoredFilePreferences,
@@ -1065,6 +1068,166 @@ function FocusSettingsPanel({ hits }: SettingsPanelProps) {
   );
 }
 
+// --- FIT ----------------------------------------------------------------------
+
+/** The four goals, in the order the card draws them, each with its `FitTargets` field, its filter entry and its label. */
+const FITNESS_GOALS: ReadonlyArray<{
+  key: keyof FitTargetGoals;
+  entry: string;
+  label: keyof typeof strings.settings.fitness;
+}> = [
+  { key: "kcal", entry: "kcal-goal", label: "kcalLabel" },
+  { key: "proteinG", entry: "protein-goal", label: "proteinLabel" },
+  { key: "carbsG", entry: "carbs-goal", label: "carbsLabel" },
+  { key: "fatG", entry: "fat-goal", label: "fatLabel" },
+];
+
+/**
+ * Ishrana (FIT slice b): the four daily goals — the first module card whose
+ * values are a PROFILE row (`fit_targets`, migration 058) and whose whole subject
+ * is a number the app must never suggest.
+ *
+ * **An EMPTY field is „no goal", and it commits.** That is the one thing this
+ * card must get right, and it is the opposite of „Novih kartica dnevno" one card
+ * up, where an empty field is an unfinished edit: `null` and `0` are different
+ * claims here — „nisam postavio cilj" against „moj cilj je nula" — and the
+ * schema, the store and the wire all keep them apart, so a card that read a
+ * cleared field as 0 would quietly assert a goal the user never set. It reads
+ * like „Maksimalno ponavljanja dnevno", whose empty field is also a real value.
+ *
+ * **All four are written together, every time.** `FitTargetStore.save` has no
+ * patch, deliberately (with `null` spoken for as „no goal", a patch would need a
+ * third value that reads identically in JSON across IPC) — so this card holds
+ * all four and sends all four.
+ *
+ * The draft is TEXT for `FocusSettingsPanel`'s reason: a numeric input bound to a
+ * number cannot represent a cleared field, which is precisely the state that
+ * means something here. Parsing is `parseAmountInput`'s — the page's own grammar,
+ * so a goal is typed exactly as a portion is.
+ */
+function FitnessSettingsPanel({ profileId, hits }: SettingsPanelProps) {
+  const s = strings.settings.fitness;
+  const [targets, setTargets] = useState<FitTargets | null>(null);
+  const [draft, setDraft] = useState<Record<keyof FitTargetGoals, string>>({
+    kcal: "",
+    proteinG: "",
+    carbsG: "",
+    fatG: "",
+  });
+  const [invalidField, setInvalidField] = useState<keyof FitTargetGoals | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const latest = useRef<FitTargetGoals | null>(null);
+
+  function adopt(next: FitTargets): void {
+    setTargets(next);
+    setDraft({
+      kcal: next.kcal === null ? "" : gramsInputValue(next.kcal),
+      proteinG: next.proteinG === null ? "" : gramsInputValue(next.proteinG),
+      carbsG: next.carbsG === null ? "" : gramsInputValue(next.carbsG),
+      fatG: next.fatG === null ? "" : gramsInputValue(next.fatG),
+    });
+  }
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const next = await window.nexus.fitTargets(profileId);
+        if (active) adopt(next);
+      } catch (loadError) {
+        if (active) setError(strings.settings.fitness.loadError);
+        console.error("Nexus: failed to load nutrition targets:", loadError);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profileId]);
+
+  async function save(goals: FitTargetGoals): Promise<void> {
+    latest.current = goals;
+    setError(null);
+    try {
+      const stored = await window.nexus.fitSaveTargets(profileId, goals);
+      if (latest.current === goals) {
+        setTargets(stored);
+        setSaved(true);
+      }
+    } catch (saveError) {
+      setError(s.saveError);
+      console.error("Nexus: failed to save nutrition targets:", saveError);
+    }
+  }
+
+  if (targets === null) {
+    return error != null ? (
+      <p className="set__error">{error}</p>
+    ) : (
+      <p className="app__muted">{strings.app.loading}</p>
+    );
+  }
+
+  function commit(key: keyof FitTargetGoals, text: string): void {
+    const next = { ...draft, [key]: text };
+    setDraft(next);
+    setSaved(false);
+
+    const goals = {} as FitTargetGoals;
+    for (const field of FITNESS_GOALS) {
+      const raw = next[field.key].trim();
+      if (raw === "") {
+        // The whole point of this card: cleared IS a value, and it is „no goal".
+        goals[field.key] = null;
+        continue;
+      }
+      const parsed = parseAmountInput(raw);
+      if (parsed === null) {
+        // The field that is actually unreadable, never the one being typed:
+        // pointing the refusal at the wrong input is how a form starts scolding
+        // somebody for something they did not just do.
+        setInvalidField(field.key);
+        return;
+      }
+      goals[field.key] = parsed;
+    }
+    setInvalidField(null);
+    void save(goals);
+  }
+
+  return (
+    <>
+      <p className="set__section-caption">{s.caption}</p>
+      <div className="set__study-fields">
+        {FITNESS_GOALS.map((field) => (
+          <label key={field.key} className="set__study-field">
+            <span
+              className={labelClass(
+                "set__study-label",
+                hits.has(settingsEntryId("fitness", field.entry)),
+              )}
+            >
+              {s[field.label]}
+            </span>
+            <input
+              className="nx-textfield__input set__focus-input"
+              value={draft[field.key]}
+              inputMode="decimal"
+              aria-label={s[field.label]}
+              aria-invalid={invalidField === field.key}
+              onChange={(event) => commit(field.key, event.target.value)}
+            />
+            {invalidField === field.key && <span className="set__error">{s.invalid}</span>}
+          </label>
+        ))}
+      </div>
+      <p className="set__section-caption">{s.hint}</p>
+      {error != null && <p className="set__error">{error}</p>}
+      {saved && error == null && <p className="set__section-caption">{s.saved}</p>}
+    </>
+  );
+}
+
 // --- The registry-driven map --------------------------------------------------
 
 /**
@@ -1085,4 +1248,9 @@ export const MODULE_SETTINGS_PANELS: Record<string, SettingsPanelRenderer> = {
   finance: { Body: FinanceSettingsPanel, resetDevice: clearStoredFinancePreferences },
   habits: { Body: HabitsSettingsPanel, resetDevice: clearStoredHabitPreferences },
   focus: { Body: FocusSettingsPanel, resetDevice: clearStoredFocusPreferences },
+  // NO `resetDevice`, and the absence is the declaration's: every goal here is a
+  // PROFILE row, so „vrati na podrazumevano" would be a write about somebody's
+  // own data rather than a forgetting on this machine — and there is no default
+  // to go back to, since absent is what the app ships with.
+  fitness: { Body: FitnessSettingsPanel },
 };

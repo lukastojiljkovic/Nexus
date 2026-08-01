@@ -129,6 +129,15 @@ describe("OCCUPATION_MODULE_PRESETS", () => {
     }
   });
 
+  // HABIT's argument, with one more reason on top: a role question has no
+  // standing whatsoever to guess something about somebody's body, so „Uloga"
+  // decides nothing here. The module holds nothing until a first meal is logged.
+  it("pre-checks FIT for every answer — eating is shaped the same whoever is doing it", () => {
+    for (const occupation of ONBOARDING_OCCUPATIONS) {
+      expect(OCCUPATION_MODULE_PRESETS[occupation]["fitness"], occupation).toBe(true);
+    }
+  });
+
   it("answers „Nešto drugo“ with the neutral preset rather than an invented one", () => {
     expect(OCCUPATION_MODULE_PRESETS.drugo).toEqual(ESSENTIALS_MODULE_PRESET);
   });
@@ -145,6 +154,7 @@ describe("resolveModuleSelection", () => {
       study: false,
       finance: true,
       habits: true,
+      fitness: true,
       focus: true,
     });
   });
@@ -172,6 +182,7 @@ describe("moduleFlagWrites", () => {
       { moduleId: "study", enabled: true },
       { moduleId: "finance", enabled: true },
       { moduleId: "habits", enabled: true },
+      { moduleId: "fitness", enabled: true },
       { moduleId: "focus", enabled: true },
     ]);
   });
