@@ -1062,30 +1062,37 @@ export function App() {
       </header>
 
       <div className="app__body">
+        {/* Two regions, not one column. The module list scrolls; the foot below
+            it is pinned. Before the split every row lived in one flex column
+            whose height is pinned to the window, so at the shipped default size
+            the last rows painted OUTSIDE the sidebar — see `.app__nav-scroll`
+            in `app.css` for the measurement. */}
         <nav className="app__sidebar" aria-label={strings.app.navLabel}>
-          {[...registry.byCategory()].map(([category, members]) => {
-            const visible = members.filter((manifest) => enabledIds.has(manifest.id));
-            if (visible.length === 0) return null;
-            return (
-              <div key={category} className="app__nav-group">
-                {visible.map((manifest) => (
-                  <NavItem
-                    key={manifest.id}
-                    href="#"
-                    active={manifest.id === effectiveId}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      setActiveId(manifest.id);
-                    }}
-                  >
-                    {moduleName(manifest.id)}
-                  </NavItem>
-                ))}
-              </div>
-            );
-          })}
+          <div className="app__nav-scroll">
+            {[...registry.byCategory()].map(([category, members]) => {
+              const visible = members.filter((manifest) => enabledIds.has(manifest.id));
+              if (visible.length === 0) return null;
+              return (
+                <div key={category} className="app__nav-group">
+                  {visible.map((manifest) => (
+                    <NavItem
+                      key={manifest.id}
+                      href="#"
+                      active={manifest.id === effectiveId}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        setActiveId(manifest.id);
+                      }}
+                    >
+                      {moduleName(manifest.id)}
+                    </NavItem>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
           {activeProfile && (
-            <>
+            <div className="app__sidebar-foot">
               {/* SET-001: the one place in the shell that says WHOSE data this
                   is. It sits directly above the two actions that leave the
                   profile („Promeni nalog“, „Zaključaj“), which is where a reader
@@ -1211,7 +1218,7 @@ export function App() {
               >
                 {strings.auth.lockAction}
               </NavItem>
-            </>
+            </div>
           )}
         </nav>
 

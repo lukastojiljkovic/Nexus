@@ -9928,6 +9928,17 @@ function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1120,
     height: 720,
+    // A floor, so the pinned sidebar foot is structurally guaranteed to fit.
+    // These are OUTER dimensions — `useContentSize` is not set — and a Windows
+    // frame costs ~39 px, which is how a 720-high window ends up with a 681 px
+    // viewport. The sidebar's own content measures ~677 px.
+    minWidth: 900,
+    minHeight: 600,
+    // No `backgroundColor` here on purpose. It would have to be a literal
+    // colour, and this app allows none outside `packages/tokens` — the theme is
+    // a CSS variable the main process cannot read. The white base it would have
+    // covered is already handled where it belongs: `body` now carries
+    // `--nx-bg` (`app.css`), and the window is only shown on `ready-to-show`.
     show: false, // shown on ready-to-show to avoid a blank-white first paint
     icon: iconPath,
     webPreferences: {

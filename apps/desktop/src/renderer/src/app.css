@@ -13,8 +13,18 @@ body,
   height: 100%;
 }
 
+/* The CANVAS background, and it has to live here rather than on `.nx-app`.
+   `.nx-app` paints `--nx-bg` on a `100vh` div, which leaves every pixel outside
+   that div — an overscroll, a stray document scroll, the frame mid-resize — on
+   Chromium's base colour, and the BrowserWindow sets no `backgroundColor`, so
+   that base is WHITE. Per CSS Backgrounds 2.11.2 the canvas takes its background
+   from the root element and, failing that, from `body`; declaring it here makes
+   „white never appears" true by construction instead of true only while nothing
+   happens to overflow. This is what the founder saw as „malo puca boja kad se
+   skroluje app": a pure white strip against Noć's blue-black. */
 body {
   margin: 0;
+  background: var(--nx-bg);
 }
 
 /* Global "you found it" mark for a global-search reveal (021-e), applied by
@@ -72,6 +82,12 @@ body {
   flex-direction: column;
   height: 100vh;
   min-height: 0;
+  /* The DOCUMENT never scrolls: the shell is a fixed frame and the two panes
+     inside it own every scrollbar. Safe for the overlays — the palette, the
+     dialogs and the popovers are `position: fixed`, and `.app` sets no
+     transform, filter or containment, so it is not their containing block and
+     cannot clip them. */
+  overflow: hidden;
 }
 /* Full-window centered states (loading, startup failure). */
 .app--center {
@@ -111,9 +127,25 @@ body {
   min-height: 0;
   display: flex;
 }
+/* Two regions, and the split is the whole point: the module list scrolls, the
+   foot — whose data this is, „Pretraga", the bell, the profile switcher and the
+   two ways out — is pinned.
+
+   A stretched flex item takes exactly its line's cross size, so this column's
+   border box is pinned to the window height however tall its content is. With
+   `overflow: visible` and no split, the surplus simply PAINTED past the bottom
+   border: at the shipped default window (1120×720 outer ≈ 681 inner) the
+   content measures ~677 px against ~637 px available, which is precisely the
+   ghosted „Profil: Luka" and half a „Zaključaj" hanging outside the sidebar in
+   the founder's screenshot — and the document scrollbar that came with it.
+
+   Deliberately NO `overflow` on the sidebar or on the foot: `.ntf__panel` is
+   absolutely positioned inside the foot and is 360 px wide against a 220 px
+   column, so a clip here would cut the notification centre in half. */
 .app__sidebar {
   flex: none;
   width: 220px;
+  min-height: 0;
   padding: var(--nx-space-4) var(--nx-space-3);
   border-right: 1px solid var(--nx-border);
   background: var(--nx-surface);
@@ -121,10 +153,39 @@ body {
   flex-direction: column;
   gap: var(--nx-space-1);
 }
+/* The only part of the shell chrome that scrolls. `min-height: 0` is what lets
+   it shrink UNDER the foot instead of pushing it out — a flex item's automatic
+   minimum size is content-based, and that rule is exactly what broke this
+   column. */
+.app__nav-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+/* Pinned, and a SIBLING of the scroller rather than an auto-margined item in
+   the same column — so the nav shrinks around it and the two can never overlap,
+   at any window height. */
+.app__sidebar-foot {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
 .app__main {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  /* The scroller owns its own paint. Inheriting the background from `.app` left
+     the scrolling-contents layer non-opaque, so Chromium re-rastered the strip
+     every frame instead of blitting it — visible as a colour seam over the
+     dashboard's cover image and its opacity scrim. */
+  background: var(--nx-bg);
   padding: var(--nx-space-6);
   display: flex;
   flex-direction: column;
@@ -5004,9 +5065,14 @@ button.cal__grid-event--dragging {
 /* Notifications (NTF bell + center panel, piece a3) --------------------- */
 /* Sidebar footer: pinned to the bottom of the nav column (flex auto-margin),
    a hairline separator above it, and the anchor for the overlay panel. */
+/* The bell's block inside the pinned foot. It used to pin ITSELF with
+   `margin-top: auto`, which was wrong twice over: it pinned only the bell —
+   the switcher and the two ways out render after it and hung below — and at
+   exactly the window heights where it mattered there was no free space left,
+   so it resolved to 0 and pinned nothing at all. `.app__sidebar-foot` pins the
+   whole group instead. */
 .app__sidebar-footer {
   position: relative;
-  margin-top: auto;
   padding-top: var(--nx-space-2);
   border-top: 1px solid var(--nx-border);
 }
