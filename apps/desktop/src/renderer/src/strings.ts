@@ -2309,6 +2309,12 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     actionError: "Radnja nije uspela. Pokušaj ponovo.",
     undo: "Opozovi",
     dismiss: "Zatvori",
+    /** The two halves of the page: the book you write into, and the month you read back. */
+    pages: {
+      label: "Prikaz",
+      ledger: "Knjiga",
+      report: "Izveštaj",
+    },
     accounts: {
       heading: "Računi",
       /** The rail's "no account filter" row — a view over every account, not an account. */
@@ -2363,13 +2369,70 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         income: "Prihod",
         expense: "Rashod",
       },
-      rename: "Preimenuj",
       delete: "Obriši",
       /** Stated on the delete affordance itself: what survives matters more than what goes. */
       deleteHint: "Transakcije ostaju — samo gube kategoriju.",
       empty: "Još nema kategorija.",
       duplicate: "Kategorija sa tim imenom već postoji.",
       invalidName: "Ime kategorije ne može biti prazno.",
+      /** The chip opens the editor, which does both things — hence „Uredi" rather than „Preimenuj". */
+      edit: "Uredi",
+      editHint: "Preimenuj kategoriju ili joj postavi budžet.",
+    },
+    /**
+     * Budžeti (FIN slice c). Edited where categories are edited, because a
+     * budget IS a category's monthly limit and has no life of its own.
+     *
+     * The copy states the two things the user would otherwise have to guess:
+     * a limit is per currency (there is no kurs to fold two into one), and it
+     * belongs only to a rashod category — a prihod category would want a
+     * target, which compares the other way around.
+     */
+    budgets: {
+      heading: "Budžet",
+      /** On a category chip that carries one — a word, never an amount: one category can hold one limit per currency. */
+      marker: "limit",
+      hint: "Mesečni limit, po valuti — Nexus nema kurs, pa se limiti u različitim valutama nikada ne sabiraju.",
+      incomeOnly: "Budžet ima samo rashodna kategorija: limit ograničava trošak.",
+      currencyLabel: "Valuta",
+      amountLabel: "Mesečni limit",
+      set: "Postavi",
+      /** On the × beside one currency's allowance. */
+      clearHint: "Uklanja limit samo u ovoj valuti.",
+      none: "Nema postavljen limit.",
+      needsAccount: "Prvo dodaj račun — limit se postavlja u valuti nekog tvog računa.",
+      invalidAmount: "Limit mora biti iznos veći od nule. Ako ga ne želiš, ukloni ga.",
+    },
+    /**
+     * Izveštaj (FIN slice c) — what ONE month held, and nothing beyond it.
+     *
+     * The copy is bound by the honesty rule the whole module is built on: the
+     * report states what happened. There is no prognoza, no procena, no „ovim
+     * tempom ćeš…" anywhere in this table, because there is no such number
+     * anywhere in the code that fills it.
+     */
+    report: {
+      previousMonth: "Prethodni mesec",
+      nextMonth: "Sledeći mesec",
+      thisMonth: "Ovaj mesec",
+      income: "Prihod",
+      expense: "Rashod",
+      /** Under a section's head, only when something in it actually has a limit — otherwise the mark has nothing to explain. */
+      barsCaption: "Traka je potrošeno, crta je limit.",
+      noBudget: "nema limita",
+      over: "preko limita",
+      /** A currency that only saw income this month — its own fact, not an empty page. */
+      noSpending: "Nema rashoda u ovoj valuti ovog meseca.",
+      /** Shown only when some line actually went negative: the minus is a fact, not a bug. */
+      refundNote: "Minus znači da su povraćaji tog meseca bili veći od troška.",
+      /** The caption the whole report stands on — said out loud so nobody waits for a prediction that will never come. */
+      caption:
+        "Samo ovaj mesec i samo po valuti. Nexus ne predviđa potrošnju i ne procenjuje limit umesto tebe.",
+      emptyTitle: "Ovaj mesec je prazan",
+      emptyDescription:
+        "Nema ni prihoda ni rashoda u ovom mesecu. Prenos između tvojih računa se ovde ne računa — to nije ni prihod ni rashod.",
+      loadErrorTitle: "Izveštaj nije učitan",
+      loadError: "Učitavanje izveštaja nije uspelo. Izaberi mesec ponovo.",
     },
     ledger: {
       emptyTitle: "Još nema transakcija",
@@ -2434,6 +2497,9 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       transferCurrency:
         "Prenos ne može da pređe iz jedne valute u drugu — Nexus nema kurs. Upiši dve obične transakcije.",
       transferCategory: "Prenos nema kategoriju: to nije ni prihod ni rashod.",
+      /** The store's refusal to put a limit on an income category, said in Serbian. */
+      budgetOnIncome: "Budžet ide samo na rashodnu kategoriju — prihod se ne ograničava.",
+      budgetAmount: "Limit mora biti iznos veći od nule.",
       notFound: "Taj zapis više ne postoji. Osveži stranicu.",
     },
   },

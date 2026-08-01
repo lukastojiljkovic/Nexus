@@ -306,11 +306,26 @@ export const IpcChannel = {
   finCategoriesCreate: "fin-categories:create",
   finCategoriesRename: "fin-categories:rename",
   finCategoriesDelete: "fin-categories:delete",
+  // Budgets (FIN slice c) — their OWN table, so their own prefix, on the same
+  // rule that splits accounts from categories from transactions. A budget is
+  // one standing allowance per (category, currency): per currency because
+  // „30000" says nothing without saying of what, and there is no rate that
+  // could fold two currencies into one figure.
+  finBudgetsList: "fin-budgets:list",
+  finBudgetsSet: "fin-budgets:set",
+  finBudgetsClear: "fin-budgets:clear",
   finTransactionsList: "fin-transactions:list",
   finTransactionsCreate: "fin-transactions:create",
   finTransactionsUpdate: "fin-transactions:update",
   finTransactionsDelete: "fin-transactions:delete",
   finTransactionsRestore: "fin-transactions:restore",
+  // The month report's two aggregate reads (FIN slice c), both over
+  // `fin_flows` — the transfer-free view — and both answering PER CURRENCY.
+  // Two channels rather than one report channel: they are two different
+  // questions with two different shapes, and a combined one would have to
+  // invent a container that could hold a cross-currency total.
+  finTransactionsSpend: "fin-transactions:spend",
+  finTransactionsIncome: "fin-transactions:income",
   searchQuery: "search:query",
   searchRecent: "search:recent",
   searchPage: "search:page",
@@ -3864,6 +3879,50 @@ export interface FinCategory {
 }
 
 /**
+ * One category's standing monthly allowance in ONE currency (FIN slice c).
+ * Per currency because there is no FX to fold two of them with, and only ever
+ * on an EXPENSE category: a budget is a LIMIT, while income would want a
+ * TARGET, which compares the opposite way. The store refuses the income case by
+ * name.
+ */
+export interface FinBudget {
+  id: string;
+  profileId: string;
+  categoryId: string;
+  currency: string;
+  /** Minor units, INTEGER, always positive — an allowance of nothing is `clearFinBudget`, not a zero. */
+  amount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** What „Postavi budžet" sends: which category, in which currency, how much. */
+export interface NewFinBudgetFields {
+  categoryId: string;
+  currency: string;
+  amount: number;
+}
+
+/** An inclusive span of local days — the shape both report reads are asked over. */
+export interface FinPeriod {
+  from: string;
+  to: string;
+}
+
+/**
+ * What one category cost over a period, in ONE currency. `categoryId` null is
+ * the uncategorized line: real money the user has not labelled, reported rather
+ * than folded into anything. `minorUnits` is POSITIVE for ordinary spending and
+ * NEGATIVE when the period's refunds outweighed its purchases — the page says
+ * so in words rather than clamping it into a lie.
+ */
+export interface FinCategorySpend {
+  categoryId: string | null;
+  currency: string;
+  minorUnits: number;
+}
+
+/**
  * One movement of money. A TRANSFER between the user's own accounts is this
  * SAME row with `counterAccountId` filled — never a pair of rows: `amount` is
  * signed from `accountId`'s point of view, so the counter account receives
@@ -3958,6 +4017,23 @@ export interface FinCategoriesDeleteRequest {
   id: string;
 }
 
+export interface FinBudgetsListRequest {
+  profileId: string;
+}
+
+/** Sets or re-sets one allowance. An existing one for the same `(category, currency)` keeps its id and takes the new amount — re-setting a limit is not a new limit. */
+export interface FinBudgetsSetRequest {
+  profileId: string;
+  budget: NewFinBudgetFields;
+}
+
+/** Clears ONE currency's allowance on a category, leaving any allowance it has in another currency standing. */
+export interface FinBudgetsClearRequest {
+  profileId: string;
+  categoryId: string;
+  currency: string;
+}
+
 export interface FinTransactionsListRequest {
   profileId: string;
 }
@@ -3981,6 +4057,17 @@ export interface FinTransactionsDeleteRequest {
 export interface FinTransactionsRestoreRequest {
   profileId: string;
   id: string;
+}
+
+/** Both report reads take the same inclusive day span; `from` after `to` is refused by the store. */
+export interface FinTransactionsSpendRequest {
+  profileId: string;
+  period: FinPeriod;
+}
+
+export interface FinTransactionsIncomeRequest {
+  profileId: string;
+  period: FinPeriod;
 }
 
 /**
@@ -6328,6 +6415,16 @@ export interface NexusApi {
   renameFinCategory(profileId: string, id: string, name: string): Promise<FinCategory>;
   /** Deletes a category. Its transactions are NOT deleted — they simply become uncategorized. */
   deleteFinCategory(profileId: string, id: string): Promise<void>;
+  /** This profile's standing allowances, ordered by currency then by the category's own name. */
+  listFinBudgets(profileId: string): Promise<FinBudget[]>;
+  /**
+   * Sets one category's allowance in one currency. `amount` is minor units, a
+   * positive integer. Refused by name on an INCOME category: a budget is a
+   * limit, and a target compares the opposite way.
+   */
+  setFinBudget(profileId: string, budget: NewFinBudgetFields): Promise<FinBudget>;
+  /** Clears ONE currency's allowance; the category's allowances in other currencies stand. */
+  clearFinBudget(profileId: string, categoryId: string, currency: string): Promise<void>;
   /** This profile's live transactions, newest day first — the ledger's own order, which the views engine then leaves untouched. */
   listFinTransactions(profileId: string): Promise<FinTransaction[]>;
   /** Creates a transaction — or a transfer, when `counterAccountId` is given. `amount` is minor units, an integer, signed from `accountId`'s point of view. */
@@ -6343,6 +6440,20 @@ export interface NexusApi {
   /** Soft-deletes a transaction; the balance derivation stops counting it immediately. */
   deleteFinTransaction(profileId: string, id: string): Promise<void>;
   restoreFinTransaction(profileId: string, id: string): Promise<void>;
+  /**
+   * What each EXPENSE category cost over an inclusive span of local days, PER
+   * CURRENCY, plus one line for the uncategorized spending. Transfers are
+   * absent by construction — the store reads a view they are not in — so money
+   * moved between the user's own accounts can never surface here as spending.
+   */
+  finSpendByCategory(profileId: string, period: FinPeriod): Promise<FinCategorySpend[]>;
+  /**
+   * What arrived over the same span, PER CURRENCY — a list, never a number, for
+   * `finCurrencyTotals`' reason. Income categories only: an unlabelled arrival
+   * belongs to `finSpendByCategory`'s uncategorized line, so the two reads
+   * partition the period rather than overlapping on it.
+   */
+  finIncomeByCurrency(profileId: string, period: FinPeriod): Promise<FinCurrencyTotal[]>;
   /** Runs the query pipeline (parse -> FTS match -> bm25 candidates -> rank), falling back to `searchRecent`'s order when the query has no matchable terms (ADR-021). */
   searchQuery(profileId: string, query: string, limit: number): Promise<SearchResult[]>;
   /** The profile's most recently touched entries, already in their final order — no ranking pass, unlike `searchQuery`. */

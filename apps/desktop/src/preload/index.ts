@@ -496,6 +496,11 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.finCategoriesRename, { profileId, id, name }),
   deleteFinCategory: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.finCategoriesDelete, { profileId, id }),
+  listFinBudgets: (profileId) => ipcRenderer.invoke(IpcChannel.finBudgetsList, { profileId }),
+  setFinBudget: (profileId, budget) =>
+    ipcRenderer.invoke(IpcChannel.finBudgetsSet, { profileId, budget }),
+  clearFinBudget: (profileId, categoryId, currency) =>
+    ipcRenderer.invoke(IpcChannel.finBudgetsClear, { profileId, categoryId, currency }),
   listFinTransactions: (profileId) =>
     ipcRenderer.invoke(IpcChannel.finTransactionsList, { profileId }),
   createFinTransaction: (profileId, transaction) =>
@@ -506,6 +511,10 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.finTransactionsDelete, { profileId, id }),
   restoreFinTransaction: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.finTransactionsRestore, { profileId, id }),
+  finSpendByCategory: (profileId, period) =>
+    ipcRenderer.invoke(IpcChannel.finTransactionsSpend, { profileId, period }),
+  finIncomeByCurrency: (profileId, period) =>
+    ipcRenderer.invoke(IpcChannel.finTransactionsIncome, { profileId, period }),
   searchQuery: (profileId, query, limit) =>
     ipcRenderer.invoke(IpcChannel.searchQuery, { profileId, query, limit }),
   searchRecent: (profileId, limit) =>

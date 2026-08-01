@@ -6,7 +6,13 @@ import {
   FinTransactionValidationError,
 } from "../errors.js";
 import { uuidv7 } from "../ids.js";
-import { FIN_COLLATOR, isBareDate, isDateTime, isMinorUnits } from "./money.js";
+import {
+  FIN_COLLATOR,
+  isBareDate,
+  isDateTime,
+  isMinorUnits,
+  type FinCurrencyTotal,
+} from "./money.js";
 import type { FinCategoryKind } from "./categoryStore.js";
 
 type DatabaseHandle = Database.Database;
@@ -99,6 +105,11 @@ interface SpendRow {
   minor_units: number;
 }
 
+interface IncomeRow {
+  currency: string;
+  minor_units: number;
+}
+
 const COLUMNS =
   "id, profile_id, account_id, counter_account_id, category_id, tx_date, amount, " +
   "payee, note, created_at, updated_at";
@@ -111,11 +122,12 @@ const COLUMNS =
  * pointing at another profile's account.
  *
  * **A transfer is one row, excluded from income/expense aggregates by
- * construction.** `spendByCategory` reads `fin_flows` (migration 051), a view of
- * the live, non-transfer rows that does not project `counter_account_id` at all
- * — so this store cannot filter transfers wrongly, cannot forget to, and cannot
- * even ask. The raw table is read only by CRUD and by the balance derivation
- * (`FinAccountStore`), which is the one read that genuinely wants both sides.
+ * construction.** `spendByCategory` and `incomeByCurrency` read `fin_flows`
+ * (migration 051), a view of the live, non-transfer rows that does not project
+ * `counter_account_id` at all — so this store cannot filter transfers wrongly,
+ * cannot forget to, and cannot even ask. The raw table is read only by CRUD and
+ * by the balance derivation (`FinAccountStore`), which is the one read that
+ * genuinely wants both sides.
  *
  * **Money is an INTEGER in minor units**, here as everywhere: `amount` is
  * validated as a non-zero safe integer, every aggregate is an integer sum of
@@ -135,6 +147,7 @@ export class FinTransactionStore {
   private readonly selectAccount: Database.Statement;
   private readonly selectCategory: Database.Statement;
   private readonly selectSpend: Database.Statement;
+  private readonly selectIncome: Database.Statement;
   /** Category names, for ordering `spendByCategory`'s answer the way a Serbian reader expects. */
   private readonly selectCategoryNames: Database.Statement;
 
@@ -190,6 +203,20 @@ export class FinTransactionStore {
         WHERE f.profile_id = ? AND f.tx_date >= ? AND f.tx_date <= ?
           AND (f.category_id IS NULL OR c.kind = 'expense')
         GROUP BY f.category_id, a.currency`,
+    );
+    // The mirror, over the same view: income categories, `+SUM`. The join to
+    // `fin_categories` is INNER on purpose — a row with no category belongs to
+    // the spending side, which `spendByCategory` already reports as the
+    // uncategorized line. Between them the two reads PARTITION the view: every
+    // live non-transfer row is counted exactly once, by exactly one of them.
+    this.selectIncome = db.prepare(
+      `SELECT a.currency AS currency, SUM(f.amount) AS minor_units
+         FROM fin_flows f
+         JOIN fin_accounts a ON a.id = f.account_id
+         JOIN fin_categories c ON c.id = f.category_id
+        WHERE f.profile_id = ? AND f.tx_date >= ? AND f.tx_date <= ?
+          AND c.kind = 'income'
+        GROUP BY a.currency`,
     );
     this.selectCategoryNames = db.prepare(
       `SELECT id, name FROM fin_categories WHERE profile_id = ?`,
@@ -288,16 +315,11 @@ export class FinTransactionStore {
    * ordinary period is positive and one whose refunds outweighed its purchases
    * is negative and says so, rather than being clamped into a lie.
    *
-   * The income side is this method's exact mirror (income categories,
-   * `+SUM(amount)`) and lands with the slice that has a screen to draw it on;
-   * writing it now would be a read nothing calls.
+   * The income side is `incomeByCurrency`, this method's exact mirror; the two
+   * partition the view between them (see that method).
    */
   spendByCategory(period: FinPeriod): FinCategorySpend[] {
-    const from = validatePeriodDay(period.from, "from");
-    const to = validatePeriodDay(period.to, "to");
-    if (from > to) {
-      throw new FinTransactionValidationError(`"from" must not be after "to".`);
-    }
+    const { from, to } = validatePeriod(period);
 
     const rows = this.selectSpend.all(this.profileId, from, to) as SpendRow[];
     const nameOf = new Map(
@@ -321,6 +343,32 @@ export class FinTransactionStore {
             nameOf.get(b.categoryId ?? "") ?? "",
           ),
       );
+  }
+
+  /**
+   * What ARRIVED over an inclusive span of local days, per currency — the exact
+   * mirror of `spendByCategory`, and a LIST rather than a number for the reason
+   * `totalsByCurrency` is one: there is no exchange rate, so a cross-currency
+   * total could only be invented, and no method here can produce one.
+   *
+   * Transfers are absent by construction (`fin_flows` again), and only INCOME
+   * categories count: a row with no category is the spending side's
+   * uncategorized line, so the two reads partition the view rather than
+   * overlapping on it. A clawback nets off the income it was taken from — the
+   * same rule as a refund on the spending side, since the kind classifies and
+   * the sign carries direction.
+   *
+   * Per currency and NOT per category: the month report states income as one
+   * figure per currency, and a breakdown nothing draws would be a read nobody
+   * calls.
+   */
+  incomeByCurrency(period: FinPeriod): FinCurrencyTotal[] {
+    const { from, to } = validatePeriod(period);
+
+    const rows = this.selectIncome.all(this.profileId, from, to) as IncomeRow[];
+    return rows
+      .map((row) => ({ currency: row.currency, minorUnits: row.minor_units }))
+      .sort((a, b) => a.currency.localeCompare(b.currency));
   }
 
   /** Reads a live transaction in this profile or throws. */
@@ -435,6 +483,16 @@ function validateDate(value: string): string {
     throw new FinTransactionValidationError(`"date" must be a real bare date (YYYY-MM-DD).`);
   }
   return value;
+}
+
+/** The ONE period check both aggregates go through, so neither can drift on what a span may be. */
+function validatePeriod(period: FinPeriod): FinPeriod {
+  const from = validatePeriodDay(period.from, "from");
+  const to = validatePeriodDay(period.to, "to");
+  if (from > to) {
+    throw new FinTransactionValidationError(`"from" must not be after "to".`);
+  }
+  return { from, to };
 }
 
 function validatePeriodDay(value: string, field: string): string {

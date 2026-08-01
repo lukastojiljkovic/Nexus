@@ -180,10 +180,14 @@ import {
   type FinAccount,
   type FinAccountBalance,
   type FinAccountKind,
+  type FinBudget,
   type FinCategory,
   type FinCategoryKind,
+  type FinCategorySpend,
   type FinCurrencyTotal,
+  type FinPeriod,
   type FinTransaction,
+  type SetFinBudgetInput,
   type UpdateFinAccountFields,
   type UpdateFinTransactionFields,
   type FocusSession,
@@ -2698,6 +2702,34 @@ function asFinAccountFieldChanges(value: unknown): UpdateFinAccountFields {
     patch.archived = asBoolean(changes.archived, "changes.archived");
   }
   return patch;
+}
+
+/**
+ * Validates a `NewFinBudgetFields` payload into a store input. The POSITIVITY
+ * of the amount and the "only on an expense category" refusal both stay with
+ * `FinCategoryStore.setBudget` — the second needs the category LOOKED UP, which
+ * is a database question, and splitting the first away from it would leave two
+ * places to keep in step.
+ */
+function asSetFinBudgetInput(value: unknown): SetFinBudgetInput {
+  const budget = asRecord(value);
+  return {
+    categoryId: asNonEmptyString(budget.categoryId, "budget.categoryId"),
+    currency: asCurrencyCode(budget.currency, "budget.currency"),
+    amount: asMinorUnits(budget.amount, "budget.amount"),
+  };
+}
+
+/**
+ * Validates a `FinPeriod` payload — two real calendar days. That `from` may not
+ * be after `to` is the store's own refusal, kept there so one rule has one home.
+ */
+function asFinPeriod(value: unknown): FinPeriod {
+  const period = asRecord(value);
+  return {
+    from: asBareDate(period.from, "period.from"),
+    to: asBareDate(period.to, "period.to"),
+  };
 }
 
 /**
@@ -7401,6 +7433,36 @@ function registerIpc(): void {
     finCategoryStore(profileId).delete(id);
   });
 
+  // Budgets (FIN slice c). Their own three channels because they are their own
+  // table; the amount crosses as an integer of minor units like every other
+  // amount on this wire.
+  ipcMain.handle(IpcChannel.finBudgetsList, (event, payload): FinBudget[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return finCategoryStore(profileId).listBudgets();
+  });
+
+  ipcMain.handle(IpcChannel.finBudgetsSet, (event, payload): FinBudget => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return finCategoryStore(profileId).setBudget(
+      asSetFinBudgetInput(body.budget),
+      new Date().toISOString(),
+    );
+  });
+
+  // One CURRENCY's allowance, never the category's whole set: an allowance in
+  // another currency is a different fact and survives this call.
+  ipcMain.handle(IpcChannel.finBudgetsClear, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const categoryId = asNonEmptyString(body.categoryId, "categoryId");
+    const currency = asCurrencyCode(body.currency, "currency");
+    finCategoryStore(profileId).clearBudget(categoryId, currency);
+  });
+
   ipcMain.handle(IpcChannel.finTransactionsList, (event, payload): FinTransaction[] => {
     assertTrustedSender(event);
     const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
@@ -7443,6 +7505,24 @@ function registerIpc(): void {
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const id = asNonEmptyString(body.id, "id");
     finTransactionStore(profileId).restore(id, new Date().toISOString());
+  });
+
+  // The month report's two reads. Both go over `fin_flows`, the transfer-free
+  // view, so a transfer between the user's own accounts cannot reach either
+  // answer — and both answer PER CURRENCY, which is why there are two lists
+  // here and no channel anywhere returning a single figure.
+  ipcMain.handle(IpcChannel.finTransactionsSpend, (event, payload): FinCategorySpend[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return finTransactionStore(profileId).spendByCategory(asFinPeriod(body.period));
+  });
+
+  ipcMain.handle(IpcChannel.finTransactionsIncome, (event, payload): FinCurrencyTotal[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return finTransactionStore(profileId).incomeByCurrency(asFinPeriod(body.period));
   });
 
   // Global search (ADR-021 / PRD 08 SRCH-001/002): `runSearchQuery`/

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { currencyMinorDigits, formatMoney, moneyInputValue, parseMoneyInput } from "./money.js";
+import {
+  currencyMinorDigits,
+  formatMoney,
+  formatMoneyPlain,
+  moneyInputValue,
+  parseMoneyInput,
+} from "./money.js";
 
 /**
  * The FIN module's display edge (FIN slice b) — the ONE place a decimal point
@@ -83,6 +89,28 @@ describe("formatMoney", () => {
     // the unit has to be unmistakable — "US$" and "$" are not.
     expect(formatMoney(100, "USD")).toContain("USD");
     expect(formatMoney(100, "EUR")).toContain("EUR");
+  });
+});
+
+describe("formatMoneyPlain", () => {
+  it("formats exactly as formatMoney does, minus the code", () => {
+    expect(formatMoneyPlain(123456789, "RSD")).toBe("1.234.567,89");
+    expect(formatMoneyPlain(0, "RSD")).toBe("0,00");
+    // The currency still decides the fraction digits — it is only the CODE that
+    // is left off, never the currency's own shape.
+    expect(formatMoneyPlain(1234, "JPY")).toBe("1.234");
+    expect(formatMoneyPlain(1234, "KWD")).toBe("1,234");
+  });
+
+  it("keeps the locale's own minus sign, exactly as formatMoney does", () => {
+    expect(formatMoneyPlain(-1234, "RSD")).toBe("-12,34");
+    // The two agree on everything but the code, which is what makes it safe to
+    // use inside a column that names its currency once at the top.
+    expect(formatMoney(-1234, "RSD")).toBe(`${formatMoneyPlain(-1234, "RSD")}${NBSP}RSD`);
+  });
+
+  it("is exact at the store's own upper bound, for the same reason", () => {
+    expect(formatMoneyPlain(Number.MAX_SAFE_INTEGER, "RSD")).toBe("90.071.992.547.409,91");
   });
 });
 

@@ -8819,6 +8819,81 @@ button.cal__grid-event--dragging {
   color: var(--nx-danger);
 }
 
+/* Budžet, inside the category editor — the one place a limit is set, because a
+   limit IS a category's monthly amount. Separated from the rename above it by a
+   hairline, since the two are different acts with different submits. */
+.fin__category-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.fin__budget {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  margin-top: var(--nx-space-2);
+  padding-top: var(--nx-space-2);
+  border-top: 1px solid var(--nx-border);
+}
+.fin__budget-heading {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+.fin__budget-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* One standing allowance, in one currency. Its × removes THAT currency's limit
+   and nothing else, which the title on it says out loud. */
+.fin__budget-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-1);
+}
+.fin__budget-amount {
+  font-size: var(--nx-font-size-body-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text);
+}
+.fin__budget-clear {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  font: inherit;
+  line-height: 1;
+  color: var(--nx-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-round);
+  cursor: pointer;
+}
+.fin__budget-clear:hover {
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+}
+.fin__budget-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.fin__budget-currency {
+  flex: none;
+  padding: 6px 8px;
+}
+.fin__budget-input.nx-textfield__input {
+  flex: 1;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 /* The entry form: the kind row, then the amount/description line — which alone
    is still the quick add, type and press Enter — then the detail fields. */
 .fin__form {
@@ -8923,6 +8998,184 @@ button.cal__grid-event--dragging {
 .fin__view--active.nx-button {
   color: var(--nx-accent-strong);
   font-weight: var(--nx-font-weight-semibold);
+}
+
+/* „Knjiga" | „Izveštaj" — the page's two halves. Same typographic active state
+   as the ledger's view toggle: gold text and weight, no bar and no glow. */
+.fin__pages {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  align-self: flex-start;
+}
+.fin__page.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.fin__page.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
+}
+.fin__page--active.nx-button {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+/* Izveštaj (FIN slice c) — ONE month, one section per currency. Nothing here
+   adds two sections together, and nothing anywhere predicts a third. */
+.fin__report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+.fin__report-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.fin__report-month {
+  font-size: var(--nx-font-size-title);
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-text);
+  min-width: 9ch;
+  text-align: center;
+}
+.fin__report-caption {
+  margin: calc(var(--nx-space-3) * -1) 0 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.fin__report-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-4);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+}
+/* The currency names itself once, at the head — which is what lets the column
+   beneath it drop the code from every row without becoming ambiguous. */
+.fin__report-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-4);
+  flex-wrap: wrap;
+  padding-bottom: var(--nx-space-2);
+  border-bottom: 1px solid var(--nx-border);
+}
+.fin__report-currency {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: 0.04em;
+  color: var(--nx-text-muted);
+}
+.fin__report-figure {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+}
+.fin__report-figure-label {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.fin__report-figure-value {
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text);
+}
+/* Income takes the data colour (jade), exactly as it does on a ledger row. The
+   expense figure keeps the ordinary text colour — a month with expenses in it
+   is an ordinary month, not a warning. */
+.fin__report-figure-value--in {
+  color: var(--nx-data);
+}
+.fin__report-note {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+
+/* The bars: one row per category, all drawn against the SECTION's single scale,
+   so two of them can be compared by eye. Data, not decoration — no gradient, no
+   animation, no glow. */
+.fin__bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.fin__bar-row {
+  display: grid;
+  grid-template-columns: minmax(80px, 140px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--nx-space-3);
+}
+.fin__bar-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+/* „Bez kategorije" is a real line and stays visible — quieter, because it is
+   the leftover rather than a category. */
+.fin__bar-label--muted {
+  color: var(--nx-text-muted);
+}
+.fin__bar-track {
+  position: relative;
+  height: 10px;
+  border-radius: var(--nx-radius-round);
+  background: var(--nx-surface-alt);
+}
+.fin__bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--nx-data);
+}
+/* Over the limit takes the semantic danger colour, which is this app's warning
+   state — no hue is invented for it, and only the bars that ARE over change. */
+.fin__bar-fill--over {
+  background: var(--nx-danger);
+}
+/* The limit, as a tick on the same scale. Taller than the track on both sides,
+   so it stays legible over an empty track and over a full one alike. */
+.fin__bar-limit {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--nx-text);
+}
+.fin__bar-value {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: var(--nx-space-1);
+  font-size: var(--nx-font-size-body-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.fin__bar-spent {
+  color: var(--nx-text);
+}
+.fin__bar-spent--over {
+  color: var(--nx-danger);
+  font-weight: var(--nx-font-weight-medium);
+}
+.fin__bar-budget,
+.fin__bar-nobudget {
+  color: var(--nx-text-muted);
+}
+/* Never an amount — a category with no limit has none, and this page invents
+   none for it. */
+.fin__bar-nobudget {
+  font-variant-numeric: normal;
 }
 
 /* The undo bar — the tasks page's own recipe, because it is the same promise. */

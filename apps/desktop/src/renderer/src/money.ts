@@ -106,6 +106,41 @@ export function formatMoney(minorUnits: number, currency: string): string {
   return formatterFor(currency).format(decimalLiteral(minorUnits, currencyMinorDigits(currency)));
 }
 
+/** The code-free formatters, one per currency — the currency still decides the fraction digits. */
+const plainFormatters = new Map<string, Intl.NumberFormat>();
+
+function plainFormatterFor(currency: string): Intl.NumberFormat {
+  const existing = plainFormatters.get(currency);
+  if (existing !== undefined) return existing;
+  const digits = currencyMinorDigits(currency);
+  const created = new Intl.NumberFormat(MONEY_LOCALE, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+  plainFormatters.set(currency, created);
+  return created;
+}
+
+/**
+ * The same amount WITHOUT its currency code — „1.234.567,89", „-12,34". For a
+ * column that already names the money it is in exactly once, at its head: the
+ * month report's per-currency sections, where repeating „RSD" down eight rows
+ * would be noise rather than information.
+ *
+ * Everything else is identical to `formatMoney` — the same grouping, the same
+ * decimal comma, the same locale-placed minus sign, and the same exact integer
+ * split — so the two can never disagree about an amount. The currency argument
+ * stays REQUIRED, and that is the point: this module has no way to render an
+ * amount without being told which money it is, so a figure summed across two
+ * currencies could only be drawn by naming one of them for money that is not
+ * all in it.
+ */
+export function formatMoneyPlain(minorUnits: number, currency: string): string {
+  return plainFormatterFor(currency).format(
+    decimalLiteral(minorUnits, currencyMinorDigits(currency)),
+  );
+}
+
 /**
  * The amount as the amount FIELD holds it: the decimal comma, no grouping and
  * no currency — „12,34", „-1234". Exactly `parseMoneyInput`'s input language,

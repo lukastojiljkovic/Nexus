@@ -334,6 +334,27 @@ describe("FinTransactionStore — spend per category, per currency", () => {
     ]);
   });
 
+  /**
+   * The invariant the whole module leans on, tested ALONE rather than as one
+   * row among others: a transfer carries NO category, so the only thing keeping
+   * it out of the uncategorized line is `fin_flows` — the view it is absent
+   * from. A later change that pointed either aggregate at `fin_transactions`
+   * would still pass every other test in this file and quietly turn every
+   * transfer into spending.
+   */
+  it("never counts a transfer as spending — not even as an uncategorized line", () => {
+    const f = fixture();
+    f.transactions.create(
+      { accountId: f.rsd, counterAccountId: f.savings, date: "2026-02-15", amount: -500_00 },
+      NOW,
+    );
+
+    const period = { from: "2026-02-01", to: "2026-02-28" };
+    expect(f.transactions.spendByCategory(period)).toEqual([]);
+    // Nor as income on the receiving side, which the same view forecloses.
+    expect(f.transactions.incomeByCurrency(period)).toEqual([]);
+  });
+
   it("puts the uncategorized line last within its currency", () => {
     const f = fixture();
     f.transactions.create({ accountId: f.rsd, date: "2026-02-02", amount: -7_00 }, NOW);
@@ -376,5 +397,92 @@ describe("FinTransactionStore — spend per category, per currency", () => {
 
     expect(other.listActive()).toEqual([]);
     expect(other.spendByCategory({ from: "2026-02-01", to: "2026-02-28" })).toEqual([]);
+    expect(other.incomeByCurrency({ from: "2026-02-01", to: "2026-02-28" })).toEqual([]);
+  });
+});
+
+describe("FinTransactionStore — income per currency", () => {
+  it("sums a period's income per currency and answers with a LIST, never one number", () => {
+    const f = fixture();
+    const eurIncome = f.categories.create({ name: "Honorar", kind: "income" }, NOW).id;
+
+    f.transactions.create(
+      { accountId: f.rsd, categoryId: f.plata, date: "2026-02-05", amount: 1000_00 },
+      NOW,
+    );
+    f.transactions.create(
+      { accountId: f.rsd, categoryId: f.plata, date: "2026-02-25", amount: 200_00 },
+      NOW,
+    );
+    f.transactions.create(
+      { accountId: f.eur, categoryId: eurIncome, date: "2026-02-10", amount: 300_00 },
+      NOW,
+    );
+    // Outside the window, and an expense: neither is this month's income.
+    f.transactions.create(
+      { accountId: f.rsd, categoryId: f.plata, date: "2026-03-05", amount: 999_00 },
+      NOW,
+    );
+    f.transactions.create(
+      { accountId: f.rsd, categoryId: f.hrana, date: "2026-02-02", amount: -12_00 },
+      NOW,
+    );
+
+    expect(f.transactions.incomeByCurrency({ from: "2026-02-01", to: "2026-02-28" })).toEqual([
+      { currency: "EUR", minorUnits: 30000 },
+      { currency: "RSD", minorUnits: 120000 },
+    ]);
+  });
+
+  /**
+   * The partition this method and `spendByCategory` make between them: an
+   * income category is income, everything else on the view — an expense
+   * category or NO category — is the spending side. Nothing is counted twice
+   * and nothing falls between them.
+   */
+  it("leaves the uncategorized rows to the spending side rather than claiming them", () => {
+    const f = fixture();
+    f.transactions.create({ accountId: f.rsd, date: "2026-02-02", amount: 40_00 }, NOW);
+
+    const period = { from: "2026-02-01", to: "2026-02-28" };
+    expect(f.transactions.incomeByCurrency(period)).toEqual([]);
+    // Sign carries direction: an unlabelled arrival nets OFF the uncategorized
+    // spending line, exactly as a refund does on its own category.
+    expect(f.transactions.spendByCategory(period)).toEqual([
+      { categoryId: null, currency: "RSD", minorUnits: -4000 },
+    ]);
+  });
+
+  it("nets a clawback off the income it was clawed back from", () => {
+    const f = fixture();
+    f.transactions.create(
+      { accountId: f.rsd, categoryId: f.plata, date: "2026-02-05", amount: 1000_00 },
+      NOW,
+    );
+    f.transactions.create(
+      { accountId: f.rsd, categoryId: f.plata, date: "2026-02-20", amount: -150_00 },
+      NOW,
+    );
+
+    expect(f.transactions.incomeByCurrency({ from: "2026-02-01", to: "2026-02-28" })).toEqual([
+      { currency: "RSD", minorUnits: 85000 },
+    ]);
+  });
+
+  it("ignores soft-deleted rows and refuses a backwards or malformed period", () => {
+    const f = fixture();
+    const tx = f.transactions.create(
+      { accountId: f.rsd, categoryId: f.plata, date: "2026-02-05", amount: 1000_00 },
+      NOW,
+    );
+    f.transactions.softDelete(tx.id, NOW);
+
+    expect(f.transactions.incomeByCurrency({ from: "2026-02-01", to: "2026-02-28" })).toEqual([]);
+    expect(() => f.transactions.incomeByCurrency({ from: "2026-02-28", to: "2026-02-01" })).toThrow(
+      FinTransactionValidationError,
+    );
+    expect(() => f.transactions.incomeByCurrency({ from: "juce", to: "2026-02-01" })).toThrow(
+      FinTransactionValidationError,
+    );
   });
 });
