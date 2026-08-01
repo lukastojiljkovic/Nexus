@@ -199,6 +199,77 @@ export type {
 } from "./fitness/food.js";
 export { catalogueFood, FOOD_CATALOGUE } from "./fitness/catalogue.js";
 
+// --- FIT: the body profile and energy expenditure (slice a2) ----------------
+//
+// A profile (sex, birth date, height, activity) and a measurement (weight and
+// whatever a scale reported that day) are different kinds of thing, and age is
+// DERIVED from the birth date on a reference day rather than stored. Three
+// tiers of expenditure — measured from the user's own intake and weight trend,
+// Katch–McArdle off a measured body-fat percentage, Mifflin–St Jeor otherwise —
+// and `energyTiers` reports which one the data supports and what the others are
+// missing. `body.ts`'s header carries the reasoning, including what this module
+// refuses to compute (no body-fat estimation, no workout calorie burn) and why
+// nothing here writes `fit_targets`.
+export {
+  ACTIVITY_FACTORS,
+  ACTIVITY_LEVELS,
+  BODY_SEXES,
+  ENERGY_METHODS,
+  KCAL_PER_KG_BODY_MASS,
+  MAX_CIRCUMFERENCE_CM,
+  MAX_HEIGHT_CM,
+  MAX_WEIGHT_KG,
+  MEASURED_MIN_INTAKE_COVERAGE,
+  MEASURED_MIN_TREND_READINGS,
+  MEASURED_MIN_WINDOW_DAYS,
+  MEASURED_TREND_DAYS,
+  MIN_HEIGHT_CM,
+  NO_CIRCUMFERENCES,
+  WEIGHT_GOALS,
+  ageOnDay,
+  bmiFor,
+  energyTiers,
+  katchMcArdleBmr,
+  leanBodyMassKg,
+  measuredEnergy,
+  mifflinStJeorBmr,
+  muscleMassKg,
+  restingEnergy,
+  suggestDailyEnergy,
+  totalEnergy,
+  validateBodyMeasurement,
+  validateBodyProfile,
+} from "./fitness/body.js";
+export type {
+  ActivityLevel,
+  BmiCaveat,
+  BmiReading,
+  BodyCircumferences,
+  BodyMeasurement,
+  BodyProblem,
+  BodyProblemCode,
+  BodyProfile,
+  BodySex,
+  EnergyAssumption,
+  EnergyEstimate,
+  EnergyGap,
+  EnergyMethod,
+  EnergyRequirement,
+  EnergyTierInput,
+  EnergyTierReport,
+  IntakeDay,
+  MeasuredEnergyDetail,
+  MeasuredEnergyInput,
+  MeasuredEnergyRefusal,
+  MeasuredEnergyRefusalCode,
+  MeasuredEnergyResult,
+  MuscleReading,
+  SuggestedEnergyTarget,
+  WeightGoal,
+  WeightReading,
+} from "./fitness/body.js";
+// --- end FIT slice a2 -------------------------------------------------------
+
 // --- UTIL (the tool drawer's arithmetic) ------------------------------------
 //
 // Pure conversion and calculation, with no surface of their own. Two decisions
