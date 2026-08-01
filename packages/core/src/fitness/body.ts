@@ -32,10 +32,13 @@
  *  - **No body-fat estimation.** Navy-tape and BMI-derived estimates carry
  *    roughly ±4 percentage points — more than a year of real change — so an
  *    „estimate" would move more from its own error than from the user's
- *    training. The circumferences below are RECORDED and consumed by nothing;
- *    neck is deliberately not among them, because tracking a neck is not a thing
- *    people do for its own sake — it is the Navy formula's input, and offering
- *    the field would be offering the formula.
+ *    training. The circumferences below are RECORDED and consumed by nothing —
+ *    **including the neck**, which the founder asked for on 2026-08-02 („pa može
+ *    kao opciona stvar") after it had been left out precisely because it is the
+ *    Navy formula's third input. Recording a tape measurement is not the same as
+ *    computing from it, and the refusal is unchanged: nothing in this module
+ *    reads a circumference. A user who measures their neck gets a number they
+ *    can watch, not a body-fat estimate wearing a measurement's clothes.
  *  - **No calorie burn for a workout.** No heart rate, no VO2, no accelerometer,
  *    no MET table. A MET figure's error bar is wider than the meal it would
  *    offset, and „you earned 400 kcal" is the single most misleading number a
@@ -146,10 +149,12 @@ export type MuscleReading =
 /**
  * Tape measurements, in centimetres, each null when not taken.
  *
- * Recorded and consumed by nothing — see the file header on why there is no
- * `neck` field and no body-fat estimate derived from any of these.
+ * Recorded and consumed by nothing — see the file header, including on why
+ * `neck` being present here does not reopen the body-fat estimate it is an
+ * input to.
  */
 export interface BodyCircumferences {
+  readonly neck: number | null;
   readonly waist: number | null;
   readonly hip: number | null;
   readonly chest: number | null;
@@ -157,14 +162,31 @@ export interface BodyCircumferences {
   readonly upperArm: number | null;
 }
 
-/** All five untaken. One shared value; nothing here mutates a `BodyCircumferences`. */
+/** All six untaken. One shared value; nothing here mutates a `BodyCircumferences`. */
 export const NO_CIRCUMFERENCES: BodyCircumferences = Object.freeze({
+  neck: null,
   waist: null,
   hip: null,
   chest: null,
   thigh: null,
   upperArm: null,
 });
+
+/**
+ * The tape sites, in the order a surface draws them — head to foot, which is the
+ * order somebody measures in. One list, so the type, the validator and the form
+ * cannot drift on which sites exist.
+ */
+export const CIRCUMFERENCE_SITES = [
+  "neck",
+  "chest",
+  "upperArm",
+  "waist",
+  "hip",
+  "thigh",
+] as const;
+
+export type CircumferenceSite = (typeof CIRCUMFERENCE_SITES)[number];
 
 /**
  * One observation, on one day.
@@ -1157,7 +1179,9 @@ function circumferenceProblems(value: unknown): BodyProblem[] {
   if (!isRecord(value)) return [{ field: "circumferences", code: "shape" }];
 
   const problems: BodyProblem[] = [];
-  for (const field of ["waist", "hip", "chest", "thigh", "upperArm"] as const) {
+  // The one list (`CIRCUMFERENCE_SITES`), so a site added to the type but
+  // forgotten here cannot ship unvalidated.
+  for (const field of CIRCUMFERENCE_SITES) {
     const raw = value[field];
     if (raw === null) continue;
     if (typeof raw !== "number") {

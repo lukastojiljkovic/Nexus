@@ -11,6 +11,7 @@ import {
   MEASURED_MIN_TREND_READINGS,
   MEASURED_MIN_WINDOW_DAYS,
   MEASURED_TREND_DAYS,
+  CIRCUMFERENCE_SITES,
   NO_CIRCUMFERENCES,
   WEIGHT_GOALS,
   ageOnDay,
@@ -229,11 +230,37 @@ describe("validateBodyMeasurement", () => {
           bodyFatPercent: 18.4,
           muscle: { unit: "kg", value: 35.2 },
           waterPercent: 57.1,
-          circumferences: { waist: 84, hip: 98, chest: 102, thigh: 56, upperArm: 33 },
+          circumferences: { neck: 38, waist: 84, hip: 98, chest: 102, thigh: 56, upperArm: 33 },
         }),
         TODAY,
       ),
     ).toEqual([]);
+  });
+
+  /**
+   * The neck is recorded on the founder's instruction (2026-08-02) after being
+   * left out for being the Navy formula's third input. Recording it and
+   * computing from it are different things, and this pins the second half: the
+   * module exports no function that reads a circumference at all.
+   */
+  it("records a neck and still derives nothing from any tape reading", () => {
+    expect(
+      validateBodyMeasurement(
+        measurement({ circumferences: { ...NO_CIRCUMFERENCES, neck: 38.5 } }),
+        TODAY,
+      ),
+    ).toEqual([]);
+    expect(
+      measurementCodes(measurement({ circumferences: { ...NO_CIRCUMFERENCES, neck: 0 } })),
+    ).toEqual(["circumferences.neck:range"]);
+  });
+
+  it("validates every declared tape site — none may be added to the type and forgotten", () => {
+    for (const site of CIRCUMFERENCE_SITES) {
+      expect(
+        measurementCodes(measurement({ circumferences: { ...NO_CIRCUMFERENCES, [site]: -1 } })),
+      ).toEqual([`circumferences.${site}:range`]);
+    }
   });
 
   it("refuses a weigh-in dated after the reference day", () => {
