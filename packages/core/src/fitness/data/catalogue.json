@@ -10619,6 +10619,36 @@
     "notes": ""
   },
   {
+    "id": "kajmak",
+    "name": "Kajmak, mladi",
+    "category": "mlecno",
+    "per100g": {
+      "kcal": 480,
+      "protein": 6,
+      "carbs": 1.5,
+      "fat": 50,
+      "fiber": 0,
+      "sugar": 1.5,
+      "sodiumMg": 450
+    },
+    "servings": [
+      {
+        "label": "kašika",
+        "grams": 15
+      },
+      {
+        "label": "kašičica",
+        "grams": 5
+      }
+    ],
+    "source": {
+      "kind": "stated",
+      "basis": "Odluka osnivača (2026-08-01): mast postavljena na 50%, sredina objavljenog raspona za mladi kajmak. Belančevine (~6 g) i laktoza (~1,5 g) prate taj nivo masti, ostatak je voda, a energija je izračunata po Atwateru iz te tri vrednosti — nije je niko objavio.",
+      "range": "Mladi kajmak 40–55% masti, zreo 60–70%. Pravilnik propisuje samo donje granice, pa jedan broj ne može da opiše sve što se prodaje pod ovim imenom."
+    },
+    "notes": "Sadržaj masti je POSTAVLJENA vrednost, ne merenje: kajmak varira 40–55% masti kad je mlad i 60–70% kad je zreo, a nijedan javni izvor ga ne meri. Broj je sredina raspona za mladi kajmak. Ako meriš svoj, unesi ga kao sopstvenu namirnicu — biće tačniji od svakog proseka."
+  },
+  {
     "id": "mlacenica",
     "name": "Mlaćenica, fermentisana, posna",
     "category": "mlecno",

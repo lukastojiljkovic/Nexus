@@ -126,14 +126,34 @@ export interface RecipeComponent {
 }
 
 /**
- * Where a food's numbers came from. Two shapes, because there are exactly two
- * honest ways to have them: somebody measured this food (`usda`/`official`, and
- * the url is the row they published), or somebody computed it from foods that
- * were measured (`derived`, and the recipe plus every component's own url is the
+ * Where a food's numbers came from. Three shapes, and the third is a documented
+ * exception rather than a loophole.
+ *
+ * The two ordinary ones: somebody measured this food (`usda`/`official`, and the
+ * url is the row they published), or somebody computed it from foods that were
+ * measured (`derived`, and the recipe plus every component's own url is the
  * working).
  *
- * There is no third kind and deliberately no „estimate": a number nobody can
- * re-check is a number this app does not ship (the founder's standing rule).
+ * **`stated` is a number the founder decided to ship where no public source
+ * pins one down**, and it exists because of one food. Kajmak appears in no
+ * public-domain composition table; published Serbian figures span 40–55% fat
+ * young and 60–70% ripened, the standard sets only floors, and kajmak is
+ * neither sour cream nor butter, so there is nothing honest to substitute. The
+ * data lane's correct answer was to DROP it, and it did. The founder overruled
+ * that — „stavi da je kajmak 50% masti uz napomenu da varira" — because a food
+ * this common being simply absent serves the user worse than a labelled
+ * midpoint does.
+ *
+ * The standing rule („a number nobody can re-check is a number this app does not
+ * ship") is not weakened by this, because a `stated` food does not pretend to be
+ * measured: it carries no url to imply one, and it must declare `basis` (who
+ * decided, on what) and `range` (the published spread the single figure sits
+ * inside). **The uncertainty is a FIELD, not a footnote** — the same principle
+ * that made provenance a field. A `stated` entry is a prompt to the user to
+ * enter their own if they weigh it, which the module already supports.
+ *
+ * Adding a `stated` food is a founder decision each time, never a lane's
+ * shortcut when sourcing turns out to be hard.
  *
  * A USDA `url` is the `fdc.nal.usda.gov/food-details/{id}/nutrients` form, which
  * opens correctly in a browser but answers a SOFT 404 to a plain HTTP client
@@ -148,9 +168,16 @@ export type FoodSource =
       /** What the recipe yields, in grams — cooked, since that is what gets eaten and weighed. */
       readonly yieldGrams: number;
       readonly recipe: readonly RecipeComponent[];
+    }
+  | {
+      readonly kind: "stated";
+      /** Who decided this figure and on what basis — never blank. */
+      readonly basis: string;
+      /** The published spread the figure sits inside, so the uncertainty ships with the value. */
+      readonly range: string;
     };
 
-const SOURCE_KINDS: readonly string[] = ["usda", "official", "derived"];
+const SOURCE_KINDS: readonly string[] = ["usda", "official", "derived", "stated"];
 
 /**
  * One catalogue food.
@@ -426,6 +453,22 @@ function sourceProblems(value: unknown): FoodEntryProblem[] {
   if (!isRecord(value) || typeof value["kind"] !== "string" || !SOURCE_KINDS.includes(value["kind"])) {
     return [{ field: "source.kind", code: "shape" }];
   }
+  // A `stated` food has no url by design — inventing one would be the very
+  // pretence the kind exists to avoid. What it must carry instead is BOTH the
+  // basis and the published range, each non-empty: a stated number with its
+  // uncertainty stripped off is indistinguishable from a measured one, which is
+  // the only way this kind could become the loophole its doc says it is not.
+  if (value["kind"] === "stated") {
+    const problems: FoodEntryProblem[] = [];
+    for (const field of ["basis", "range"] as const) {
+      const text = value[field];
+      if (typeof text !== "string" || text.trim().length === 0) {
+        problems.push({ field: `source.${field}`, code: "shape" });
+      }
+    }
+    return problems;
+  }
+
   if (value["kind"] !== "derived") {
     const problems: FoodEntryProblem[] = [];
     if (typeof value["ref"] !== "string" || value["ref"].trim().length === 0) {

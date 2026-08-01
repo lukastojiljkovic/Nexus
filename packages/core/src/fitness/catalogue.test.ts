@@ -51,6 +51,10 @@ describe("the shipped food catalogue", () => {
   it("cites an openable source for every entry, components included", () => {
     const bad: string[] = [];
     for (const food of FOOD_CATALOGUE) {
+      // A `stated` food carries no url on purpose — it is a founder-decided
+      // figure where no public source exists, and a url would imply a
+      // measurement nobody made. It is held to its own requirement below.
+      if (food.source.kind === "stated") continue;
       const urls =
         food.source.kind === "derived"
           ? food.source.recipe.map((component) => component.url)
@@ -60,6 +64,27 @@ describe("the shipped food catalogue", () => {
       }
     }
     expect(bad).toEqual([]);
+  });
+
+  // The `stated` kind is the one place the catalogue ships a number nobody
+  // published, so it is the one place the uncertainty has to travel WITH the
+  // value. Stripped of its basis or its range, a stated food is indistinguishable
+  // from a measured one — which is exactly how an exception becomes a loophole.
+  it("makes every stated food declare its basis, its range, and its variance in the note", () => {
+    const stated = FOOD_CATALOGUE.filter((food) => food.source.kind === "stated");
+    // Kajmak is the only one, and a second arriving without a founder decision
+    // behind it should make somebody read this test before changing the number.
+    expect(stated.map((food) => food.id)).toEqual(["kajmak"]);
+    for (const food of stated) {
+      if (food.source.kind !== "stated") continue;
+      expect(food.source.basis.trim().length).toBeGreaterThan(0);
+      expect(food.source.range.trim().length).toBeGreaterThan(0);
+      // The user has to be told on the screen, not only in the type.
+      expect(food.notes).toMatch(/varira|postavljena/i);
+      // And it must carry no url: a citation here would claim a measurement
+      // that does not exist, which is the whole thing this kind refuses to do.
+      expect("url" in food.source).toBe(false);
+    }
   });
 
   it("resolves every one of its own ids, and nothing else", () => {

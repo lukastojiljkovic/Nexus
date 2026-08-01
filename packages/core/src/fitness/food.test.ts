@@ -240,6 +240,38 @@ describe("validateFoodEntry — source", () => {
     );
   });
 
+  // `stated` is the founder-decided kind for a food no public table measures
+  // (kajmak, and so far only kajmak). It carries no url on purpose — inventing
+  // one would be the pretence the kind exists to avoid — so what it must carry
+  // instead is the basis and the published range. A stated number with its
+  // uncertainty stripped off is indistinguishable from a measured one, which is
+  // the only way this exception could quietly become a loophole.
+  it("accepts a stated source that declares both its basis and its range", () => {
+    expect(
+      validateFoodEntry(
+        entry({
+          source: { kind: "stated", basis: "Odluka osnivača: 50% masti.", range: "40–55% mlad." },
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  it("refuses a stated source missing either half of its uncertainty", () => {
+    expect(codes(entry({ source: { kind: "stated", basis: "", range: "40–55%" } }))).toEqual([
+      "source.basis:shape",
+    ]);
+    expect(codes(entry({ source: { kind: "stated", basis: "Odluka.", range: "   " } }))).toEqual([
+      "source.range:shape",
+    ]);
+    // Neither half present: not even a well-typed `stated` source, so it goes in
+    // untyped the way the unknown-kind case above does.
+    expect(codes({ ...CARROT, source: { kind: "stated" } })).toEqual([
+      "source.basis:shape",
+      "source.range:shape",
+    ]);
+  });
+
+
   it("accepts a derived source whose components each carry their own numbers and url", () => {
     expect(
       validateFoodEntry(
