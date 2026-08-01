@@ -294,6 +294,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     priv: "Privatno",
     files: "Datoteke",
     finance: "Finansije",
+    habits: "Navike",
   } as Record<string, string>,
 
   dashboard: {
@@ -2684,6 +2685,150 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     },
   },
 
+  /**
+   * Navike (HABIT slice b). The copy states the module's two structural rules
+   * wherever the user could otherwise be surprised: a niz breaks only after a
+   * period that is OVER, and every figure is a fraction of what the schedule
+   * actually asked for — there is no percentage anywhere on this page, because a
+   * percentage invites the reading that something was measured continuously.
+   *
+   * Nothing here is a number: the fractions are built from what the store
+   * returned, and the unit of a measured habit („čaša", „km") is the user's own
+   * word, printed exactly as typed rather than inflected — Nexus does not know
+   * how to decline a word it was handed.
+   */
+  habits: {
+    loadErrorTitle: "Navike nisu učitane",
+    loadError: "Učitavanje navika nije uspelo. Zatvori i ponovo otvori stranicu.",
+    /** The one line every failed write falls back to when `habitErrorMessage` recognizes nothing more specific. */
+    actionError: "Radnja nije uspela. Pokušaj ponovo.",
+    undo: "Opozovi",
+    dismiss: "Zatvori",
+    today: {
+      heading: "Danas",
+      /**
+       * Said above the list, because the mix is otherwise puzzling: a habit with
+       * fixed days shows up on those days, while one with a weekly quota shows
+       * up every day — any day counts towards its week.
+       */
+      caption: "Navike koje se danas očekuju. One sa nedeljnom kvotom stoje ovde svaki dan.",
+      /** The compact niz beside a row — the full pair lives in the habit's own details. */
+      streakLabel: "Niz",
+      /** The quota row's week progress, e.g. „2/3 ove nedelje". */
+      thisWeek: "ove nedelje",
+      /** Nothing is scheduled for today — a different fact from having no habits at all. */
+      emptyTitle: "Danas nema ničega",
+      emptyDescription:
+        "Nijedna navika se danas ne očekuje. Sve što imaš stoji ispod, u „Sve navike“.",
+    },
+    all: {
+      heading: "Sve navike",
+      /** The row's disclosure — one verb each way, since the row itself is the label. */
+      expand: "Prikaži detalje",
+      collapse: "Sakrij detalje",
+      /** The invitation a profile with no habits sees — never a sample habit. */
+      emptyTitle: "Još nema navika",
+      emptyDescription:
+        "Dodaj prvu naviku — reci koliko često je radiš i Nexus vodi niz i istoriju umesto tebe.",
+      newHabit: "Nova navika",
+      edit: "Izmeni",
+      archive: "Arhiviraj",
+      unarchive: "Vrati iz arhive",
+      delete: "Obriši",
+      /** The chip on an archived row: a statement about the navika, never a warning. */
+      archivedChip: "Arhivirano",
+      archivedChipTitle: "Više se ne očekuje. Istorija i statistika ostaju.",
+      deletedNotice: "Navika je obrisana, zajedno sa svojom istorijom.",
+    },
+    /** The habit's own details, under an expanded row. */
+    detail: {
+      /**
+       * Opens both „Poslednjih N …" headings — the history grid's weeks and the
+       * completion figure's days. The NUMBER is never written here: it comes
+       * from the constant that actually governs the span (`HISTORY_WEEKS`,
+       * `HABIT_WINDOW_DAYS`), so a heading cannot outlive the window it names,
+       * and the counted noun inflects through `countUnit`/`dayUnit` beside it.
+       */
+      windowPrefix: "Poslednjih",
+      /** The legend names the grid's three states, so a colour never has to be guessed. */
+      legendDone: "Urađeno",
+      legendMissed: "Propušteno",
+      legendOff: "Nije se očekivalo",
+      streakCurrent: "Trenutni niz",
+      streakBest: "Najduži",
+      /** Trailing noun of the fraction, agreeing with the number of periods (`countUnit` / `dayUnit`). */
+      dayUnitOne: "dan",
+      dayUnitMany: "dana",
+      weekUnitOne: "nedelja",
+      weekUnitFew: "nedelje",
+      weekUnitMany: "nedelja",
+      /** What „11/13 dana" is a fraction OF — said out loud, because the denominator is not „30". */
+      windowDaysCaption: "Od dana koje raspored očekuje. Dan koji još traje se ne računa.",
+      windowWeeksCaption: "Od nedelja sa kvotom. Nedelja koja još traje se ne računa.",
+      /** A habit with nothing behind it yet: no niz, no fraction, and no invented zero. */
+      noHistory: "Još nema upisanih dana.",
+    },
+    /** How a habit's schedule reads on a row. */
+    schedule: {
+      everyDay: "Svaki dan",
+      /** Prefix of the quota reading, e.g. „3× nedeljno". */
+      perWeekSuffix: "× nedeljno",
+      /** Short weekday names, ISO order (1 = ponedeljak), for the picker and the row summary. */
+      weekdayShort: ["Pon", "Uto", "Sre", "Čet", "Pet", "Sub", "Ned"],
+      weekdayLong: [
+        "ponedeljak",
+        "utorak",
+        "sreda",
+        "četvrtak",
+        "petak",
+        "subota",
+        "nedelja",
+      ],
+    },
+    form: {
+      newTitle: "Nova navika",
+      editTitle: "Izmena navike",
+      nameLabel: "Naziv",
+      namePlaceholder: "Voda",
+      colorLabel: "Boja",
+      noColor: "Bez boje",
+      /** The Dani/Kvota switch — the module's two kinds, and there is no third. */
+      kindLabel: "Raspored",
+      kindDays: "Dani",
+      kindQuota: "Kvota",
+      kindDaysHint: "Očekuje se tačno onih dana koje izabereš.",
+      kindQuotaHint: "Bilo koji dani u nedelji — bitno je koliko puta, ne koji dan.",
+      weekdaysLabel: "Dani u nedelji",
+      everyDay: "Svaki dan",
+      perWeekLabel: "Puta nedeljno",
+      /** The optional pair. Clearing the target clears the unit, because the store refuses a unit with nothing to count. */
+      targetLabel: "Dnevni cilj",
+      targetPlaceholder: "8",
+      targetHint: "Ostavi prazno za naviku koja se samo čekira.",
+      unitLabel: "Jedinica",
+      unitPlaceholder: "čaša",
+      unitHint: "Jedinica ide uz cilj — bez cilja se briše.",
+      save: "Sačuvaj",
+      cancel: "Otkaži",
+      invalidName: "Upiši naziv navike.",
+      invalidWeekdays: "Izaberi bar jedan dan u nedelji.",
+      invalidTarget: "Dnevni cilj mora biti ceo broj veći od nule.",
+      /** Its own line, because „nije ceo broj" would be a lie about a number that simply exceeds the store's ceiling. */
+      targetTooLarge: "Dnevni cilj je prevelik.",
+      invalidUnit: "Jedinica je predugačka.",
+      invalidSchedule: "Raspored nije ispravan.",
+      unitNeedsTarget: "Jedinica bez cilja nema šta da meri — upiši cilj ili obriši jedinicu.",
+      notFound: "Ta navika više nije tu. Osveži stranicu.",
+    },
+    /** The measured habit's stepper in „Danas". */
+    stepper: {
+      increase: "Dodaj jedan",
+      decrease: "Oduzmi jedan",
+      /** The binary habit's tick, as a label for a screen reader. */
+      check: "Označi kao urađeno",
+    },
+  },
+
   settings: {
     // The page title reuses `strings.modules.settings` — no duplicate copy.
     /**
@@ -3013,6 +3158,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       priv: "Šifrovane privatne beleške — otključavaju se posebno i ne pojavljuju se u pretrazi.",
       files: "Sve datoteke priložene uz beleške, zadatke i predmete, na jednom mestu.",
       finance: "Računi, transakcije i prenosi — stanje se računa iz onoga što upišeš.",
+      habits: "Dnevne i nedeljne navike — niz, istorija i ono što se danas očekuje.",
     } as Record<string, string>,
     /** Category-group headings above the module gallery, keyed by registry category. */
     moduleCategories: {

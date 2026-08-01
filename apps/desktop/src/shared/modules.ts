@@ -558,6 +558,27 @@ const V0_MODULES: ModuleManifest[] = [
     widgets: FINANCE_WIDGETS,
     settings: FINANCE_SETTINGS,
   },
+  // Navike (HABIT slice b, migration 055). „Life hubs" beside Učenje and
+  // Finansije: those three are areas of a life rather than tools for handling
+  // content, and a habit tracker is the plainest example of the category.
+  // ON by default, like every built module except PRIV — nothing about keeping
+  // habits asks to be opted into, and the module writes nothing until the user
+  // creates one.
+  //
+  // THREE contract slots are deliberately empty, and each for its own reason:
+  //
+  // - NO `searchIndexers`, and not merely „not yet". A habit is a name and a
+  //   schedule; there is no body to match and nothing a query would find that
+  //   the sidebar does not already show. Indexing „Voda" would put a row in the
+  //   palette that answers a question nobody asked it.
+  // - NO `widgets` in this slice. The card „Danas" would draw is the page's own
+  //   „Danas" section, and it must be tickable to be worth anything — that is
+  //   slice c's, together with the reminders it belongs beside.
+  // - NO `settings` in this slice, for the same reason: the only preference a
+  //   habit has is its `reminder_time`, which does nothing until slice c wires
+  //   the notification source. A card offering a control that changes nothing
+  //   is worse than an absent card.
+  { id: "habits", prefix: "HABIT", category: "Life hubs", defaultEnabled: true },
 ];
 
 /**

@@ -532,6 +532,23 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.finRecurringPause, { profileId, id }),
   resumeFinRecurring: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.finRecurringResume, { profileId, id }),
+  listHabits: (profileId) => ipcRenderer.invoke(IpcChannel.habitsList, { profileId }),
+  createHabit: (profileId, habit) =>
+    ipcRenderer.invoke(IpcChannel.habitsCreate, { profileId, habit }),
+  updateHabit: (profileId, id, changes) =>
+    ipcRenderer.invoke(IpcChannel.habitsUpdate, { profileId, id, changes }),
+  deleteHabit: (profileId, id) => ipcRenderer.invoke(IpcChannel.habitsDelete, { profileId, id }),
+  restoreHabit: (profileId, id) => ipcRenderer.invoke(IpcChannel.habitsRestore, { profileId, id }),
+  archiveHabit: (profileId, id) => ipcRenderer.invoke(IpcChannel.habitsArchive, { profileId, id }),
+  unarchiveHabit: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.habitsUnarchive, { profileId, id }),
+  // No day travels with either: main stamps it (`HabitsSetEntryRequest`).
+  setHabitEntry: (profileId, habitId, value) =>
+    ipcRenderer.invoke(IpcChannel.habitsSetEntry, { profileId, habitId, value }),
+  clearHabitEntry: (profileId, habitId) =>
+    ipcRenderer.invoke(IpcChannel.habitsClearEntry, { profileId, habitId }),
+  habitEntries: (profileId, range) =>
+    ipcRenderer.invoke(IpcChannel.habitsEntries, { profileId, range }),
   searchQuery: (profileId, query, limit) =>
     ipcRenderer.invoke(IpcChannel.searchQuery, { profileId, query, limit }),
   searchRecent: (profileId, limit) =>

@@ -41,6 +41,7 @@ describe("createModuleRegistry", () => {
       "files",
       "study",
       "finance",
+      "habits",
     ]);
   });
 
@@ -79,7 +80,11 @@ describe("createModuleRegistry", () => {
       "priv",
       "files",
     ]);
-    expect(grouped.get("Life hubs")?.map((manifest) => manifest.id)).toEqual(["study", "finance"]);
+    expect(grouped.get("Life hubs")?.map((manifest) => manifest.id)).toEqual([
+      "study",
+      "finance",
+      "habits",
+    ]);
   });
 
   it("is constructed per call, never a shared singleton (ADR-008)", () => {
@@ -104,6 +109,7 @@ describe("createModuleRegistry", () => {
       "files",
       "study",
       "finance",
+      "habits",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -126,6 +132,21 @@ describe("createModuleRegistry", () => {
     // is where you find the thing they belong to.
     expect(registry.all().find((manifest) => manifest.id === "files")?.searchIndexers).toBeUndefined();
     expect(registry.widgetsOf("files")).toEqual([]);
+  });
+
+  it("keeps HABIT's three contract slots empty in slice b, each for its own stated reason", () => {
+    const registry = createModuleRegistry();
+    const habits = registry.all().find((manifest) => manifest.id === "habits");
+    // No indexer, and not merely „not yet": a habit is a name and a schedule,
+    // with no body to match and nothing a query would find that the sidebar does
+    // not already show.
+    expect(habits?.searchIndexers).toBeUndefined();
+    // The widget and the settings card both land in slice c, beside the
+    // reminders they belong to — a „Danas" card must be tickable to be worth
+    // anything, and the only preference a habit has (`reminder_time`) changes
+    // nothing until that slice reads it.
+    expect(registry.widgetsOf("habits")).toEqual([]);
+    expect(habits?.settings).toBeUndefined();
   });
 });
 

@@ -9657,3 +9657,358 @@ button.cal__grid-event--dragging {
 .doc__card > .note__menu {
   align-self: flex-end;
 }
+
+/* --- Navike (HABIT slice b) ----------------------------------------------
+   Two stacked sections rather than a rail and a body: „Danas“ is a short list
+   that is done with in seconds, and „Sve navike“ is the reference underneath it
+   — a sidebar would give a page with one subject two columns to look at.
+
+   Every colour a habit wears is its own `--nx-swatch-*` (the folder palette,
+   reused rather than respelled); nothing here mints a second vocabulary, and
+   there is no glow anywhere — a picked weekday is an accent border, and the
+   history grid's three states differ by fill and outline alone. */
+.hab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-6);
+}
+.hab__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  align-items: flex-start;
+}
+.hab__heading {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+.hab__note {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.hab__error {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-danger);
+}
+/* Every quiet ghost on this page — cancel, dismiss, „Svaki dan“. */
+.hab__quiet.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.hab__quiet.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.hab__list {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+}
+
+/* The single-slot undo bar, the FIN/TASK recipe outright: one offer at a time,
+   above both sections, because a deleted habit is gone from each of them. */
+.hab__undo {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.hab__undo-text {
+  flex: 1;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+
+/* A row: the habit's swatch dot in the leading slot, then its name and chips;
+   the actions sit in the trailing slot and stay quiet until hover — the ledger
+   row's own treatment. */
+.hab__dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--nx-radius-round);
+  border: 1px solid var(--nx-border);
+}
+.hab__row-body {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.hab__name {
+  font-size: var(--nx-font-size-body);
+  color: var(--nx-text);
+}
+.hab__chips {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1);
+}
+/* An ARCHIVED habit stays in the one alphabetical list — splitting it would make
+   „koje navike imam“ two questions — and says so by going quiet instead of by
+   moving. The chip is the tasks page's „Blokiran“ recipe outright (outlined,
+   muted, no fill, no glow), for its reason: being finished with something is a
+   fact about the habit, not a warning about it. */
+.hab__archived-chip.nx-chip {
+  background: transparent;
+  border: 1px solid var(--nx-border);
+  padding: 1px 8px;
+  color: var(--nx-text-muted);
+}
+.hab__row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.hab .nx-list-row:hover .hab__row-actions,
+.hab__row-actions:focus-within {
+  opacity: 1;
+}
+.hab__row-action.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 6px;
+}
+.hab__row-action.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.hab__row-delete.nx-button:hover {
+  color: var(--nx-danger);
+}
+
+/* „Danas“'s tick for a MEASURED habit: − value/target + . The figure is tabular
+   so a stepper does not shift under its own buttons, and it goes accent-coloured
+   the moment the day counts — the one piece of feedback the control owes. */
+.hab__stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.hab__step.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.hab__step.nx-button:hover:not(:disabled) {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.hab__count {
+  min-width: 84px;
+  text-align: center;
+  font-size: var(--nx-font-size-body-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text-muted);
+  white-space: nowrap;
+}
+.hab__count--done {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+/* The expanded row's own block, under the row it belongs to. */
+.hab__item {
+  display: flex;
+  flex-direction: column;
+}
+.hab__detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-3) var(--nx-space-3) var(--nx-space-4);
+  border-bottom: 1px solid var(--nx-border);
+}
+.hab__history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.hab__history-heading {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+
+/* The 12-week calendar: one row per week, one cell per day, in the DEVICE's own
+   weekday order. Three quiet states and nothing else — a satisfied cell is
+   filled with the habit's own swatch, a missed one is an outline (the day was
+   asked for and is empty), and a day the schedule never asked for is a faint
+   block that accuses nobody. A cell with no verdict to give — before the habit
+   existed, after today, or today while it is still running — draws nothing at
+   all, which keeps the grid rectangular without inventing a fourth state. */
+.hab__grid {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.hab__grid-week {
+  display: flex;
+  gap: 3px;
+}
+.hab__cell {
+  width: 13px;
+  height: 13px;
+  border-radius: var(--nx-radius-xs);
+  border: 1px solid transparent;
+}
+/* The fill is the habit's own swatch, set inline. The accent stands in when the
+   habit was given no colour — without it a satisfied cell would be an empty box
+   with a border, which is exactly what a MISSED one is. */
+.hab__cell--satisfied {
+  background: var(--nx-accent);
+  border-color: var(--nx-border);
+}
+.hab__cell--missed {
+  border-color: var(--nx-border);
+  background: transparent;
+}
+.hab__cell--unexpected {
+  background: var(--nx-surface-alt);
+}
+.hab__cell--unjudged {
+  background: transparent;
+}
+.hab__legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.hab__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+
+/* The habit's numbers. Each one is a label, a figure, and — where the figure is
+   a fraction — a line saying what its denominator IS, because a fraction whose
+   bottom half nobody explained is a fraction nobody can trust. */
+.hab__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-5);
+}
+.hab__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.hab__stat-label {
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+}
+.hab__stat-value {
+  font-size: var(--nx-font-size-title);
+  font-weight: var(--nx-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text);
+}
+.hab__stat-caption {
+  max-width: 32ch;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+
+/* The one form, serving create and edit. */
+.hab__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  align-self: stretch;
+  padding: var(--nx-space-3);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+}
+.hab__form-title {
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-text);
+}
+.hab__form-actions {
+  display: flex;
+  gap: var(--nx-space-2);
+}
+.hab__pair {
+  display: flex;
+  gap: var(--nx-space-3);
+  flex-wrap: wrap;
+}
+.hab__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  align-items: flex-start;
+}
+.hab__field-label {
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+}
+.hab__field-hint {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.hab__select {
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  padding: 7px 13px;
+  transition: border-color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.hab__select:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.hab__segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  align-self: flex-start;
+}
+
+/* The weekday multi-select. A picked day is an ACCENT BORDER plus accent text —
+   the drop-target rule applied to a toggle: never a fill that competes with the
+   primary button beside it, and never a glow. */
+.hab__weekdays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1);
+}
+.hab__weekday.nx-button {
+  background: transparent;
+  border-color: var(--nx-border);
+  color: var(--nx-text-muted);
+  padding: 4px 10px;
+}
+.hab__weekday.nx-button:hover {
+  color: var(--nx-text);
+}
+.hab__weekday--picked.nx-button {
+  border-color: var(--nx-accent);
+  background: var(--nx-accent-soft);
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}

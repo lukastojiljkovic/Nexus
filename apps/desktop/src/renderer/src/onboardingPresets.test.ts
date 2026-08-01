@@ -112,6 +112,12 @@ describe("OCCUPATION_MODULE_PRESETS", () => {
     }
   });
 
+  it("pre-checks HABIT for every answer — a day's habits are shaped the same whoever is having the day", () => {
+    for (const occupation of ONBOARDING_OCCUPATIONS) {
+      expect(OCCUPATION_MODULE_PRESETS[occupation]["habits"], occupation).toBe(true);
+    }
+  });
+
   it("answers „Nešto drugo“ with the neutral preset rather than an invented one", () => {
     expect(OCCUPATION_MODULE_PRESETS.drugo).toEqual(ESSENTIALS_MODULE_PRESET);
   });
@@ -127,6 +133,7 @@ describe("resolveModuleSelection", () => {
       files: true,
       study: false,
       finance: true,
+      habits: true,
     });
   });
 
@@ -152,6 +159,7 @@ describe("moduleFlagWrites", () => {
       { moduleId: "files", enabled: true },
       { moduleId: "study", enabled: true },
       { moduleId: "finance", enabled: true },
+      { moduleId: "habits", enabled: true },
     ]);
   });
 

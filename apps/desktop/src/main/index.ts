@@ -36,11 +36,12 @@ import {
   sniffMime,
   toFtsMatchExpression,
   validateArchivePassphrase,
+  validateHabitSchedule,
   validateRecurrenceRule,
   validateTaskViewConfig,
   validateWidgetConfig,
 } from "@nexus/core";
-import type { TaskViewConfig } from "@nexus/core";
+import type { HabitSchedule, TaskViewConfig } from "@nexus/core";
 import type {
   ArchiveModuleId,
   ArchiveProfilePicture,
@@ -93,6 +94,7 @@ import {
   ForeignImportStore,
   HabitStore,
   isPlaintextDatabase,
+  MAX_HABIT_COUNT,
   MAX_EVENT_REMINDERS,
   MAX_EVENT_REMINDER_MINUTES,
   MAX_NOTE_ATTACHMENT_BYTES,
@@ -199,6 +201,11 @@ import {
   type UpdateFinAccountFields,
   type UpdateFinRecurringFields,
   type UpdateFinTransactionFields,
+  type CreateHabitInput,
+  type Habit,
+  type HabitDayRange,
+  type HabitEntry,
+  type UpdateHabitFields,
   type FocusSession,
   type LinkedNote,
   type NexusDatabase,
@@ -2963,6 +2970,100 @@ function asFinRenewalWindow(value: unknown): FinRenewalWindow {
   return {
     from: asBareDate(window.from, "window.from"),
     to: asBareDate(window.to, "window.to"),
+  };
+}
+
+// --- Navike (HABIT slice b) validators ---------------------------------------
+//
+// SEC-EL-02 as everywhere else: structural checks here, semantics in the store.
+// The one that earns its place is `asHabitSchedule` — a schedule reaches the
+// column as JSON, so an UNVALIDATED one on this wire is exactly the hole the
+// two-kind vocabulary exists to close. It runs core's own validator, the very
+// function the store runs, rather than a second reading of what a schedule may
+// be.
+
+/**
+ * A `HabitSchedule` from an untrusted caller, through HABIT's OWN validator —
+ * so an ADR-024 recurrence rule offered here is refused at the wire rather than
+ * at the column. Returns the CANONICAL form (sorted, deduplicated weekdays),
+ * which is what the store then re-validates and serializes.
+ */
+function asHabitSchedule(value: unknown, field: string): HabitSchedule {
+  const schedule = validateHabitSchedule(value);
+  if (schedule === null) {
+    throw new Error(`Invalid IPC payload: "${field}" is not a valid habit schedule.`);
+  }
+  return schedule;
+}
+
+/** A whole positive count — a `target` or a day's `value`. Never a float: „pola čaše" is not something this module records. */
+function asHabitCount(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1 || value > MAX_HABIT_COUNT) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be a whole number between 1 and ${MAX_HABIT_COUNT}.`,
+    );
+  }
+  return value;
+}
+
+/** A `target`: null for a binary habit, otherwise a count. */
+function asNullableHabitCount(value: unknown, field: string): number | null {
+  return value === null ? null : asHabitCount(value, field);
+}
+
+/**
+ * Validates a `NewHabitFields` payload into a store input; only present keys are
+ * carried. That a `unit` needs a `target` to be the unit OF stays the store's
+ * refusal — it is a rule about the whole habit rather than about any one field,
+ * and the store re-checks the merged row on an update too, which nothing here
+ * could see.
+ */
+function asNewHabitInput(value: unknown): CreateHabitInput {
+  const habit = asRecord(value);
+  const input: CreateHabitInput = {
+    name: asNonEmptyString(habit.name, "habit.name"),
+    schedule: asHabitSchedule(habit.schedule, "habit.schedule"),
+  };
+  if (habit.color !== undefined) {
+    input.color = asNullableNoteFolderColor(habit.color, "habit.color");
+  }
+  if (habit.target !== undefined) {
+    input.target = asNullableHabitCount(habit.target, "habit.target");
+  }
+  if (habit.unit !== undefined) input.unit = asNullableString(habit.unit, "habit.unit");
+  if (habit.reminderTime !== undefined) {
+    input.reminderTime = asNullableString(habit.reminderTime, "habit.reminderTime");
+  }
+  return input;
+}
+
+/** Validates a `HabitFieldChanges` payload into a store patch; an omitted key stays omitted and an explicit `null` clears. */
+function asHabitFieldChanges(value: unknown): UpdateHabitFields {
+  const changes = asRecord(value);
+  const patch: UpdateHabitFields = {};
+  if (changes.name !== undefined) patch.name = asNonEmptyString(changes.name, "changes.name");
+  if (changes.color !== undefined) {
+    patch.color = asNullableNoteFolderColor(changes.color, "changes.color");
+  }
+  if (changes.schedule !== undefined) {
+    patch.schedule = asHabitSchedule(changes.schedule, "changes.schedule");
+  }
+  if (changes.target !== undefined) {
+    patch.target = asNullableHabitCount(changes.target, "changes.target");
+  }
+  if (changes.unit !== undefined) patch.unit = asNullableString(changes.unit, "changes.unit");
+  if (changes.reminderTime !== undefined) {
+    patch.reminderTime = asNullableString(changes.reminderTime, "changes.reminderTime");
+  }
+  return patch;
+}
+
+/** Validates a `HabitDayRange` payload — two real calendar days; that `from` may not be after `to` stays the store's own refusal. */
+function asHabitDayRange(value: unknown): HabitDayRange {
+  const range = asRecord(value);
+  return {
+    from: asBareDate(range.from, "range.from"),
+    to: asBareDate(range.to, "range.to"),
   };
 }
 
@@ -7818,6 +7919,101 @@ function registerIpc(): void {
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const id = asNonEmptyString(body.id, "id");
     finRecurringStore(profileId).resume(id, new Date().toISOString(), localToday());
+  });
+
+  // Navike (HABIT slice b, migration 055). SEC-EL-02 as everywhere else:
+  // `assertTrustedSender` first, `asRecord` on the payload, one `as*` validator
+  // per field — and the store re-validates all of it, because a store is never
+  // the place that assumes its caller did. `now` is main's clock on every write,
+  // and so is the DAY a tick lands on: „danas" is decided here, by the same
+  // `localToday()` slice c's reminder check will read.
+  ipcMain.handle(IpcChannel.habitsList, (event, payload): Habit[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return habitStore(profileId).listActive();
+  });
+
+  ipcMain.handle(IpcChannel.habitsCreate, (event, payload): Habit => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return habitStore(profileId).create(asNewHabitInput(body.habit), new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.habitsUpdate, (event, payload): Habit => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return habitStore(profileId).update(
+      id,
+      asHabitFieldChanges(body.changes),
+      new Date().toISOString(),
+    );
+  });
+
+  // A soft delete: the entries are UNTOUCHED, so the undo beside it brings the
+  // habit back with every tick it ever had.
+  ipcMain.handle(IpcChannel.habitsDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    habitStore(profileId).softDelete(id, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.habitsRestore, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    habitStore(profileId).restore(id, new Date().toISOString());
+  });
+
+  // Archiving (migration 055): „gotov sam s ovim", which is a different act from
+  // throwing it away — the habit leaves „Danas" and keeps every day it recorded.
+  ipcMain.handle(IpcChannel.habitsArchive, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    habitStore(profileId).archive(id, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.habitsUnarchive, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    habitStore(profileId).unarchive(id, new Date().toISOString());
+  });
+
+  // Today's tick. The day is `localToday()` and never the payload's — see
+  // `HabitsSetEntryRequest` for why this wire carries none.
+  ipcMain.handle(IpcChannel.habitsSetEntry, (event, payload): HabitEntry => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const habitId = asNonEmptyString(body.habitId, "habitId");
+    const value = asHabitCount(body.value, "value");
+    return habitStore(profileId).setEntry(habitId, localToday(), value, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.habitsClearEntry, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const habitId = asNonEmptyString(body.habitId, "habitId");
+    habitStore(profileId).clearEntry(habitId, localToday());
+  });
+
+  // Every live habit's ticks over one window, in ONE query — the page's today
+  // list, its history grid and its streaks are all read off this single answer.
+  ipcMain.handle(IpcChannel.habitsEntries, (event, payload): HabitEntry[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return habitStore(profileId).listAllEntries(asHabitDayRange(body.range));
   });
 
   // Global search (ADR-021 / PRD 08 SRCH-001/002): `runSearchQuery`/

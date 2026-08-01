@@ -30,6 +30,7 @@ import { PrivPage, PRIV_LOCKED_EVENT } from "./PrivPage.js";
 import { FilesPage } from "./FilesPage.js";
 import { StudyPage, type StudyIntent } from "./StudyPage.js";
 import { FinancePage, type FinanceIntent } from "./FinancePage.js";
+import { HabitsPage } from "./HabitsPage.js";
 import { SettingsPage, formatArchiveInstant } from "./SettingsPage.js";
 import { NotificationCenter } from "./NotificationCenter.js";
 import { NotificationAppetiteDialog } from "./NotificationAppetiteDialog.js";
@@ -1283,6 +1284,11 @@ export function App() {
               intent={pending?.module === "finance" ? pending.intent : null}
               onIntentHandled={clearIntent}
             />
+          ) : effectiveId === "habits" && activeProfile ? (
+            // No `intent` pair: HABIT publishes no quick-create command in this
+            // slice (`searchCommands.ts`'s `CreatableModuleId` is untouched), so
+            // there is nothing pending for this page to consume.
+            <HabitsPage key={activeProfile.id} profileId={activeProfile.id} />
           ) : effectiveId === SEARCH_PAGE_ID && activeProfile ? (
             <SearchPage
               key={activeProfile.id}

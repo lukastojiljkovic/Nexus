@@ -41,6 +41,7 @@ export const ESSENTIALS_MODULE_PRESET: ModulePreset = {
   files: true,
   study: true,
   finance: true,
+  habits: true,
 };
 
 /**
@@ -65,6 +66,13 @@ export const ESSENTIALS_MODULE_PRESET: ModulePreset = {
  * nothing of its own. „Datoteke“ is a way of LOOKING at files the other modules
  * already carry, so switching it off for a role would not spare anybody a
  * feature — it would only hide one view of what they have.
+ *
+ * HABIT is true in every row on FIN's argument exactly: „Uloga“ asks how
+ * somebody's DAY is shaped, and „vežbaj, pij vodu, čitaj“ is shaped the same way
+ * for a student, an employee, a founder and somebody who fits none of those.
+ * Dropping it for any of the four would invent a difference the question never
+ * asked about. It also costs nothing to leave on — the module holds nothing at
+ * all until the user names a first habit.
  */
 export const OCCUPATION_MODULE_PRESETS: Readonly<Record<OnboardingOccupation, ModulePreset>> = {
   student: ESSENTIALS_MODULE_PRESET,
@@ -76,6 +84,7 @@ export const OCCUPATION_MODULE_PRESETS: Readonly<Record<OnboardingOccupation, Mo
     files: true,
     study: false,
     finance: true,
+    habits: true,
   },
   preduzetnik: {
     tasks: true,
@@ -85,6 +94,7 @@ export const OCCUPATION_MODULE_PRESETS: Readonly<Record<OnboardingOccupation, Mo
     files: true,
     study: false,
     finance: true,
+    habits: true,
   },
   drugo: ESSENTIALS_MODULE_PRESET,
 };

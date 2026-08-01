@@ -348,6 +348,32 @@ export const IpcChannel = {
   // half the time — and a field a handler ignores is a field nobody validates.
   finRecurringPause: "fin-recurring:pause",
   finRecurringResume: "fin-recurring:resume",
+  // Navike (HABIT slice b, migration 055). One channel per store operation, on
+  // the `fin-*:*` rule: a habit and a day's TICK are two different things to be
+  // wrong about, and a shared channel would be one validated field away from
+  // letting a request to record a glass of water rewrite the habit's schedule.
+  //
+  // Archiving is its OWN pair rather than a field on `habits:update`, exactly as
+  // pausing a subscription is (ADR-074): `archived_at` and `deleted_at` are
+  // independent facts (migration 055), and a boolean on the patch would put
+  // „gotov sam s ovim" behind the same validator that renames a habit.
+  habitsList: "habits:list",
+  habitsCreate: "habits:create",
+  habitsUpdate: "habits:update",
+  habitsDelete: "habits:delete",
+  habitsRestore: "habits:restore",
+  habitsArchive: "habits:archive",
+  habitsUnarchive: "habits:unarchive",
+  // A day's tick and its removal, two channels rather than one nullable value:
+  // the store has no zero row (an untick is a DELETE), so a shared channel would
+  // have to read „obriši" out of a value field nobody else may send.
+  habitsSetEntry: "habits:set-entry",
+  habitsClearEntry: "habits:clear-entry",
+  // EVERY live habit's ticks over one day range, in ONE call (`listAllEntries`).
+  // Deliberately not per habit: the „Danas" list, the history grid and the
+  // streaks all read the same window, and an N+1 per habit is the obvious wrong
+  // shape for a page that draws a grid.
+  habitsEntries: "habits:entries",
   searchQuery: "search:query",
   searchRecent: "search:recent",
   searchPage: "search:page",
@@ -4332,6 +4358,203 @@ export interface FinRecurringResumeRequest {
   id: string;
 }
 
+// --- Navike (HABIT slice b, migration 055) -----------------------------------
+//
+// Every shape below mirrors `@nexus/db`'s habit store and `@nexus/core`'s
+// schedule vocabulary, redeclared here so the renderer never imports either —
+// the rule this whole file follows.
+//
+// **A habit carries NO recurrence rule, and that is the module's central
+// decision rather than an omission.** `RecurrenceRule` above answers „when does
+// this next occur"; a habit needs „was this period satisfied", and the rule
+// language can express schedules over which a streak is undefinable (`until`,
+// `count`, „every 3rd Tuesday"). `packages/core/src/habits/habitSchedule.ts`
+// carries the argument in full. Two kinds here, and there will not be a third.
+
+/** Mirrors `HABIT_MIN_WEEKDAY` in `@nexus/core`: ISO-8601 weekdays, 1 = Monday … 7 = Sunday — deliberately NOT `RecurrenceWeekday`'s 0-based index. */
+export const HABIT_MIN_WEEKDAY = 1;
+/** Mirrors `HABIT_MAX_WEEKDAY` in `@nexus/core`. */
+export const HABIT_MAX_WEEKDAY = 7;
+/** Mirrors `HABIT_MAX_PER_WEEK` — seven, because an eighth day does not exist. */
+export const HABIT_MAX_PER_WEEK = 7;
+/** Mirrors `MAX_HABIT_NAME_LENGTH` in `@nexus/db`, so the field can cap its own input; the store stays authoritative. */
+export const MAX_HABIT_NAME_LENGTH = 60;
+/** Mirrors `MAX_HABIT_UNIT_LENGTH` in `@nexus/db` — „čaša", „km", „strana": a unit is a word, not a sentence. */
+export const MAX_HABIT_UNIT_LENGTH = 16;
+/** Mirrors `MAX_HABIT_COUNT` in `@nexus/db` — the ceiling on a `target` and on a day's `value`. */
+export const MAX_HABIT_COUNT = 100_000;
+
+/**
+ * When a habit is expected. Mirrors `@nexus/core`'s `HabitSchedule` exactly,
+ * redeclared for `RecurrenceRule`'s reason — main runs core's
+ * `validateHabitSchedule` over the wire payload and assigns the result into the
+ * store's input, so drift in either direction is a compile error rather than a
+ * wire that quietly carries a schedule no streak can be computed over.
+ *
+ * `days` — the listed ISO weekdays, sorted and unique. „Svaki dan" is all seven
+ * spelled out, not a kind of its own. `quota` — any `perWeek` days inside a
+ * week, whichever ones; the week's boundaries are the DEVICE's first-day
+ * preference, which is why nothing computing over this type ever guesses them.
+ */
+export type HabitSchedule =
+  | { kind: "days"; weekdays: number[] }
+  | { kind: "quota"; perWeek: number };
+
+/**
+ * One habit as the renderer sees it.
+ *
+ * `target` null is a BINARY habit whose tick is worth 1; a non-null target makes
+ * a day count once its entry reaches it — one nullable field is what makes
+ * „teretana" and „8 čaša vode" the same model. `unit` names what the target
+ * counts and is meaningless without one, which both the schema and the store
+ * refuse.
+ *
+ * `archivedAt` and `deletedAt` are INDEPENDENT (migration 055): a habit you have
+ * finished with is not one you threw away — its history is the point. So an
+ * archived habit is still on this list, still editable, and simply stays out of
+ * „Danas". There is no `deletedAt` here at all, because a deleted habit is not
+ * returned.
+ *
+ * `reminderTime` rides this wire and is deliberately NOT offered by any form in
+ * this slice: nothing reads it until slice c wires the notification source, and
+ * a control that silently does nothing is worse than an absent one.
+ */
+export interface Habit {
+  id: string;
+  profileId: string;
+  name: string;
+  /** A `note_folders` swatch key, reused rather than respelled — the app has exactly one palette. */
+  color: NoteFolderColor | null;
+  schedule: HabitSchedule;
+  /** Whole units a day must reach to count, or null for a binary habit. */
+  target: number | null;
+  /** What `target` counts, or null. Never set without a target. */
+  unit: string | null;
+  /** Wall-clock `HH:MM`, or null. Read by slice c's notification source; no form in this slice writes it. */
+  reminderTime: string | null;
+  /** When the user finished with this habit, or null while it is current. */
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One day's tick. At most one per habit per day — that is the SCHEMA's promise
+ * (`UNIQUE (habit_id, entry_date)`), not a guard anybody has to remember.
+ * `value` is never zero: an untick is `habits:clear-entry`, not a zero row.
+ */
+export interface HabitEntry {
+  id: string;
+  habitId: string;
+  /** The bare local day, `YYYY-MM-DD`. */
+  date: string;
+  /** Whole units done that day; 1 for a binary habit. */
+  value: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Fields for a new habit; an absent optional key means null. */
+export interface NewHabitFields {
+  name: string;
+  color?: NoteFolderColor | null;
+  schedule: HabitSchedule;
+  target?: number | null;
+  unit?: string | null;
+  reminderTime?: string | null;
+}
+
+/**
+ * A partial edit; an omitted key is untouched, an explicit `null` clears a
+ * nullable field. Changing the SCHEDULE leaves every entry exactly where it is
+ * — a tick is a fact about a day that happened, and re-reading the old days
+ * under the new schedule is what makes the streak recompute correctly.
+ */
+export interface HabitFieldChanges {
+  name?: string;
+  color?: NoteFolderColor | null;
+  schedule?: HabitSchedule;
+  target?: number | null;
+  unit?: string | null;
+  reminderTime?: string | null;
+}
+
+/** An inclusive span of local days — the window `habits:entries` answers over. */
+export interface HabitDayRange {
+  from: string;
+  to: string;
+}
+
+export interface HabitsListRequest {
+  profileId: string;
+}
+
+export interface HabitsCreateRequest {
+  profileId: string;
+  habit: NewHabitFields;
+}
+
+export interface HabitsUpdateRequest {
+  profileId: string;
+  id: string;
+  changes: HabitFieldChanges;
+}
+
+/** A soft delete. The entries are UNTOUCHED, so a restore brings the habit back with every tick it ever had. */
+export interface HabitsDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
+/** Undo of that delete — and a habit thrown away while archived comes back archived, because the archiving was never about whether it was on screen. */
+export interface HabitsRestoreRequest {
+  profileId: string;
+  id: string;
+}
+
+/** „Gotov sam s ovim": the habit leaves „Danas" and keeps its history. Main stamps the moment. */
+export interface HabitsArchiveRequest {
+  profileId: string;
+  id: string;
+}
+
+export interface HabitsUnarchiveRequest {
+  profileId: string;
+  id: string;
+}
+
+/**
+ * Records what was done TODAY, replacing whatever today said before. `value` is
+ * 1 for a binary habit and the count for a measured one; whether the day COUNTS
+ * is read off the habit's own `target` and never stored, so a target the user
+ * later raises re-judges the days already recorded.
+ *
+ * **There is deliberately no `day` field.** The store takes any day, but this
+ * channel ticks today and only today, and which day that is is MAIN's to say —
+ * `localToday()`, the very function slice c's reminder check will read its day
+ * from, so „danas" cannot mean two different days inside one app. A surface that
+ * ever needs to correct a past day states the day it is correcting, on a field
+ * of its own with a validator of its own; until then, a day nobody validates is
+ * a day nobody should be able to send.
+ */
+export interface HabitsSetEntryRequest {
+  profileId: string;
+  habitId: string;
+  value: number;
+}
+
+/** Un-ticks today, on exactly the terms above. Removing a tick that is not there is not an error; naming a habit this profile does not have still is. */
+export interface HabitsClearEntryRequest {
+  profileId: string;
+  habitId: string;
+}
+
+/** Every live habit's ticks over one inclusive day span; `from` after `to` is refused by the store. */
+export interface HabitsEntriesRequest {
+  profileId: string;
+  range: HabitDayRange;
+}
+
 /**
  * Global search (ADR-021 / PRD 08 SRCH-001/002). The index itself (migration
  * 017) and its read-only store already exist; these three channels are the
@@ -6960,6 +7183,30 @@ export interface NexusApi {
   pauseFinRecurring(profileId: string, id: string): Promise<void>;
   /** Starts it charging again from the first occurrence on or after today; the months it was paused for are never back-charged. */
   resumeFinRecurring(profileId: string, id: string): Promise<void>;
+  /**
+   * This profile's live habits, sr-Latn alphabetical — ARCHIVED ones included
+   * and flagged by their own `archivedAt`. The caller decides what to show:
+   * „Danas" wants only the current ones, while the history grid and the stats
+   * want the archived ones too, and a read that had already dropped them would
+   * make the second view impossible without a second call.
+   */
+  listHabits(profileId: string): Promise<Habit[]>;
+  /** Creates a habit; the schedule is validated against HABIT's own two-kind vocabulary before it reaches the store. */
+  createHabit(profileId: string, habit: NewHabitFields): Promise<Habit>;
+  /** Applies a partial patch. An ARCHIVED habit is editable — archiving says „ne pitaj me više za ovo", never „ne diraj me". */
+  updateHabit(profileId: string, id: string, changes: HabitFieldChanges): Promise<Habit>;
+  /** Soft-deletes a habit. Its entries stay exactly where they are, so the undo brings back the whole history. */
+  deleteHabit(profileId: string, id: string): Promise<void>;
+  restoreHabit(profileId: string, id: string): Promise<void>;
+  /** Marks a habit as finished with: out of „Danas", still in the list, still answering the stats. */
+  archiveHabit(profileId: string, id: string): Promise<void>;
+  unarchiveHabit(profileId: string, id: string): Promise<void>;
+  /** Records TODAY's value for one habit — main decides which day that is (`HabitsSetEntryRequest`). */
+  setHabitEntry(profileId: string, habitId: string, value: number): Promise<HabitEntry>;
+  /** Removes today's tick, on the same terms. */
+  clearHabitEntry(profileId: string, habitId: string): Promise<void>;
+  /** EVERY live habit's ticks over one inclusive day span, in one call — the today list, the grid and the streaks all read this one window. */
+  habitEntries(profileId: string, range: HabitDayRange): Promise<HabitEntry[]>;
   /** Runs the query pipeline (parse -> FTS match -> bm25 candidates -> rank), falling back to `searchRecent`'s order when the query has no matchable terms (ADR-021). */
   searchQuery(profileId: string, query: string, limit: number): Promise<SearchResult[]>;
   /** The profile's most recently touched entries, already in their final order — no ranking pass, unlike `searchQuery`. */
