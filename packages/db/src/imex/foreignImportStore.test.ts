@@ -601,6 +601,37 @@ describe("ForeignImportStore", () => {
       }
     });
 
+    it("brings a PAUSED subscription in still paused (ADR-074)", () => {
+      const source = createProfile("Izvor");
+      seedProfile(source, "S");
+      const target = createProfile("Odredište");
+      seedProfile(target, "T");
+
+      const sourceSubscriptions = new FinRecurringStore(db.raw, source);
+      const subscription = sourceSubscriptions.listActive()[0];
+      expect(subscription).toBeDefined();
+      sourceSubscriptions.pause(subscription!.id, "2026-03-01T09:00:00.000Z");
+
+      const plan = planForeignImport(
+        { data: gather(source), dropped: [], profilePicture: null, privateNotes: { notes: 0, versions: 0 } },
+        targetFor(target),
+        uuidv7,
+      );
+      new ForeignImportStore(db.raw, target).insertPlanned(plan.data, new Map(), NOW);
+
+      // Whether a subscription charges is a fact about the ROW, not a reference
+      // into the source profile, so the planner remaps around it and it arrives
+      // untouched: the target's own is still charging, the imported one is still
+      // paused. Crossing a profile boundary is no reason to start taking
+      // somebody's money again.
+      const after = new FinRecurringStore(db.raw, target).listActive();
+      expect(after).toHaveLength(2);
+      expect(after.map((row) => row.pausedAt).sort()).toEqual([
+        "2026-03-01T09:00:00.000Z",
+        null,
+      ]);
+    });
+
     it("carries a cloze card's deletion NUMBER through the merge untouched (ADR-068)", () => {
       // The planner re-mints ids and nothing else; this store writes what it is
       // handed. A labelled deletion's number is not a position, so anything

@@ -369,16 +369,20 @@ export class RestoreStore {
       `INSERT INTO fin_categories (id, profile_id, name, kind, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
     );
+    // `paused_at` included (migration 054): a restore that dropped it would put
+    // back a subscription its owner had stopped and start charging it again on
+    // the very next generation pass — the one field here whose loss costs money
+    // rather than a label.
+    this.insertFinRecurring = db.prepare(
+      `INSERT INTO fin_recurring
+         (id, profile_id, account_id, category_id, name, amount, payee, note, recurrence,
+          anchor_date, next_run, reminder_days, paused_at, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
     // `import_key` included (migration 052): a restore that dropped the
     // fingerprints would hand the restored profile a ledger that re-imports the
     // same bank statement as a second copy of itself — which is the one thing
     // the fingerprint exists to prevent, so it travels or the guarantee does not.
-    this.insertFinRecurring = db.prepare(
-      `INSERT INTO fin_recurring
-         (id, profile_id, account_id, category_id, name, amount, payee, note, recurrence,
-          anchor_date, next_run, reminder_days, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
-    );
     this.insertFinTransaction = db.prepare(
       `INSERT INTO fin_transactions
          (id, profile_id, account_id, counter_account_id, category_id, tx_date, amount,
@@ -1178,13 +1182,15 @@ export class RestoreStore {
       // back at the beginning would claim a year of them are still outstanding.
       // The rule is written as the archive's canonical JSON — `parseImportArchive`
       // ran it through `validateRecurrenceRule` and returned the canonical form,
-      // so nothing here re-validates it.
+      // so nothing here re-validates it. `pausedAt` is reproduced for the
+      // cursor's own reason (ADR-074): a subscription its owner paused must come
+      // back paused, or the restore starts taking their money again.
       for (const subscription of input.data.finRecurring) {
         this.insertFinRecurring.run(
           subscription.id, this.profileId, subscription.accountId, subscription.categoryId,
           subscription.name, subscription.amount, subscription.payee, subscription.note,
           requiredRecurrenceText(subscription.recurrence), subscription.startDate,
-          subscription.nextRun, subscription.reminderDays,
+          subscription.nextRun, subscription.reminderDays, subscription.pausedAt,
           subscription.createdAt, subscription.updatedAt,
         );
         written += 1;

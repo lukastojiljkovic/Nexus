@@ -233,7 +233,26 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.30.0` adds FIN
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.31.0` adds the
+ * SUBSCRIPTION PAUSE (ADR-074, migration 054): one nullable `pausedAt` on
+ * `fin-recurring`, validated as a full ISO-8601 instant like every other
+ * timestamp here.
+ *
+ * No `ArchiveEra` flag, and for a stronger reason than the ADR-028 rule alone:
+ * an archive written before this bump carries no `pausedAt`, an ABSENT one is
+ * read as `null`, and `null` IS „not paused". That is the CORRECT reading of an
+ * older archive rather than a lossy guess about it — before the pause existed,
+ * every subscription in every archive was charging. Nothing is inferred and
+ * nothing is lost, which is exactly the test an era flag would otherwise have to
+ * be introduced to pass.
+ *
+ * The bump is owed for the field rather than a record type, as `1.29.0`'s was:
+ * a `1.30.0` reader handed this archive would drop the pause and restore a
+ * subscription that starts charging again — silently, monthly, and against an
+ * explicit decision its owner made. The version gate turns that into one honest
+ * sentence about the build.
+ *
+ * `1.30.0` adds FIN
  * SUBSCRIPTIONS (FIN slice d, migration 053): the `fin-recurring` record type in
  * `data/finance.ndjson`, plus an OPTIONAL `recurringId` on `fin-transaction`.
  * Neither needs an `ArchiveEra` flag: the whole-absent-type rule below covers
@@ -440,7 +459,7 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.30.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.31.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -2392,7 +2411,9 @@ function parseFinTransaction(raw: Record<string, unknown>): ExportFinTransaction
  * migration 053's CHECK refuses a zero and a float, so a restore can never abort
  * halfway on a row this reader called fine. `nextRun` is nullable because a
  * series past its own end has no next occurrence, and `reminderDays` is null or
- * a whole 0..365, the column's own domain restated.
+ * a whole 0..365, the column's own domain restated. `pausedAt` (ADR-074) is the
+ * moment the charging was stopped, or null — see `INTERCHANGE_SCHEMA_VERSION`
+ * for why its absence needs no era flag.
  *
  * A subscription is never a transfer, so there is no `counterAccountId` to read
  * and none to write — a writer that invented one would simply have it ignored,
@@ -2418,11 +2439,17 @@ function parseFinRecurring(raw: Record<string, unknown>): ExportFinRecurring {
     raw.reminderDays === null
       ? null
       : intInRange(raw.reminderDays, "reminderDays", 0, MAX_FIN_REMINDER_DAYS);
+  // Optional with a default (ADR-074), so no era flag — and here the default is
+  // not a fallback but the right answer: a pre-`1.31.0` archive carries no pause
+  // because nothing in it could have been paused, and „not paused" is what those
+  // subscriptions were. A PRESENT value is validated strictly, in every era.
+  const pausedAt =
+    raw.pausedAt === undefined ? null : nullableIsoDateTime(raw.pausedAt, "pausedAt");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
   return {
     id, profileId, accountId, categoryId, name, amount, payee, note, recurrence,
-    startDate, nextRun, reminderDays, createdAt, updatedAt,
+    startDate, nextRun, reminderDays, pausedAt, createdAt, updatedAt,
   };
 }
 

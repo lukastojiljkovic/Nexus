@@ -470,6 +470,22 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     t0,
   );
   finRecurringStore.generateDue(t0, "2026-02-20");
+  // …and a second one that is PAUSED (ADR-074). It sorts after „Netflix" under
+  // sr-Latn, so it never disturbs the cursor assertion on the first. A pause is
+  // the one field whose loss in transit would make the restored profile start
+  // charging somebody again, so the round trip has to carry a paused row.
+  const pausedSubscription = finRecurringStore.create(
+    {
+      accountId: finAccount.id,
+      name: `${name} Teretana`,
+      amount: -30_00,
+      recurrence: { freq: { kind: "monthly-date", interval: 1, day: 8 }, end: { kind: "never" } },
+      startDate: "2026-02-08",
+      reminderDays: null,
+    },
+    t0,
+  );
+  finRecurringStore.pause(pausedSubscription.id, "2026-02-25T10:00:00.000Z");
 
   const session = focusStore.create(
     { subjectId: subject.id, startedAt: "2026-01-01T09:00:00.000Z", endedAt: "2026-01-01T09:30:00.000Z" },
@@ -866,6 +882,10 @@ function assertModulesMatch(
   const finRecurringRead = new FinRecurringStore(handle.raw, readProfileId).listActive();
   expect(finRecurringRead).toEqual(remap(fixture.data.finRecurring));
   expect(finRecurringRead[0]?.nextRun).toBe("2026-03-05");
+  expect(finRecurringRead[0]?.pausedAt).toBeNull();
+  // ADR-074: the paused one comes back paused — the restore reproduces the
+  // decision rather than resuming the billing.
+  expect(finRecurringRead[1]?.pausedAt).toBe("2026-02-25T10:00:00.000Z");
   const finTransactionsRead = new FinTransactionStore(handle.raw, readProfileId).listActive();
   expect(finTransactionsRead).toEqual(remap(fixture.data.finTransactions));
   expect(finTransactionsRead.filter((row) => row.counterAccountId !== null)).toHaveLength(1);

@@ -197,13 +197,16 @@ function foreignProfileData(): ProfileData {
       { id: "src-fc2", profileId: "src", name: "Plata", kind: "income", createdAt: T0, updatedAt: T0 },
     ],
     // FIN slice d: one subscription and the charge it already made, so the remap
-    // has both ends of the provenance link to move.
+    // has both ends of the provenance link to move. PAUSED (ADR-074), because
+    // that is the state a remap must NOT touch: whether a subscription charges
+    // is a fact about the row, not a reference into the source profile.
     finRecurring: [
       {
         id: "src-fr1", profileId: "src", accountId: "src-fa1", categoryId: "src-fc1",
         name: "Netflix", amount: -11_90, payee: null, note: null,
         recurrence: { freq: { kind: "monthly-date", interval: 1, day: 5 }, end: { kind: "never" } },
         startDate: "2026-07-05", nextRun: "2026-08-05", reminderDays: 2,
+        pausedAt: "2026-07-25T09:00:00.000Z",
         createdAt: T0, updatedAt: T0,
       },
     ],

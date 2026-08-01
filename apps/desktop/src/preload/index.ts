@@ -526,6 +526,10 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.finRecurringDelete, { profileId, id }),
   restoreFinRecurring: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.finRecurringRestore, { profileId, id }),
+  pauseFinRecurring: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.finRecurringPause, { profileId, id }),
+  resumeFinRecurring: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.finRecurringResume, { profileId, id }),
   searchQuery: (profileId, query, limit) =>
     ipcRenderer.invoke(IpcChannel.searchQuery, { profileId, query, limit }),
   searchRecent: (profileId, limit) =>

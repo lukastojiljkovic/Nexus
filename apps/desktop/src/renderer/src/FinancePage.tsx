@@ -182,6 +182,10 @@ function financeErrorMessage(error: unknown): string {
     message.includes("No category") ||
     message.includes("No active transaction") ||
     message.includes("No active subscription") ||
+    // ADR-074's two: pausing something already paused, or resuming something
+    // that is running, are the same „taj red više nije takav" as the four above.
+    message.includes("No unpaused subscription") ||
+    message.includes("No paused subscription") ||
     message.includes("budget on category")
   ) {
     return copy.notFound;
@@ -865,6 +869,34 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
     }
   }
 
+  /**
+   * „Pauziraj" / „Nastavi" (ADR-074) — one handler, because the row offers
+   * whichever of the two applies and its own `pausedAt` is what decides.
+   *
+   * No undo offer, unlike the delete beside it: the row stays exactly where it
+   * is wearing „Pauzirano", and the button that put it there now says „Nastavi"
+   * — an offer to undo would be a second copy of a control already on screen.
+   *
+   * Await-then-refetch like every other write on this page: the pause decides
+   * both what the row says and what „Predstojeće naplate" holds, and an
+   * optimistic patch could leave a renewal on screen that the store has just
+   * stopped placing.
+   */
+  async function togglePause(subscription: FinRecurring): Promise<void> {
+    setSubError(null);
+    try {
+      if (subscription.pausedAt === null) {
+        await window.nexus.pauseFinRecurring(profileId, subscription.id);
+      } else {
+        await window.nexus.resumeFinRecurring(profileId, subscription.id);
+      }
+      await reload();
+    } catch (error) {
+      setSubError(financeErrorMessage(error));
+      console.error("Nexus: failed to pause or resume the subscription:", error);
+    }
+  }
+
   // --- What this render draws ------------------------------------------------
 
   /**
@@ -1263,22 +1295,43 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
    * charge falls, and how much. The next charge comes from the row's own CURSOR
    * — the first occurrence not yet written — so the line says what will happen
    * rather than what has; a spent series says so in words.
+   *
+   * A PAUSED one (ADR-074) stays in this one alphabetical list rather than being
+   * moved to a section of its own: it is still the user's subscription, and
+   * splitting the list would make „koje pretplate imam" two questions. It reads
+   * muted, wears „Pauzirano", and the date column says „Bez naplate" — because
+   * while it is paused its cursor names a day that will not happen, and printing
+   * that day would be the one thing this row must never do.
    */
   function renderSubscriptionRow(subscription: FinRecurring): ReactNode {
     const account = accountById.get(subscription.accountId);
     const currency = account?.currency ?? "";
     const category =
       subscription.categoryId === null ? null : categoryById.get(subscription.categoryId);
+    const paused = subscription.pausedAt !== null;
     return (
       <ListRow
         key={subscription.id}
+        muted={paused}
+        className={paused ? "fin__subs-row--paused" : undefined}
         leading={
           <span className="fin__date">
-            {subscription.nextRun ?? s.subscriptions.finished}
+            {paused
+              ? s.subscriptions.pausedNext
+              : (subscription.nextRun ?? s.subscriptions.finished)}
           </span>
         }
         trailing={
           <span className="fin__row-actions">
+            <Button
+              size="sm"
+              className="fin__row-action"
+              aria-label={`${paused ? s.subscriptions.resume : s.subscriptions.pause}: ${subscription.name}`}
+              title={paused ? s.subscriptions.resume : s.subscriptions.pause}
+              onClick={() => void togglePause(subscription)}
+            >
+              {paused ? "▷" : "‖"}
+            </Button>
             <Button
               size="sm"
               className="fin__row-action"
@@ -1303,6 +1356,11 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
           <div className="fin__chips">
             <Chip>{account?.name ?? ""}</Chip>
             {category != null && <Chip variant="accent">{category.name}</Chip>}
+            {paused && (
+              <Chip className="fin__paused-chip" title={s.subscriptions.pausedChipTitle}>
+                {s.subscriptions.pausedChip}
+              </Chip>
+            )}
             {subscription.reminderDays !== null && (
               <Chip variant="data">
                 {`${s.subscriptions.reminderChip}: ${reminderLabel(subscription.reminderDays)}`}

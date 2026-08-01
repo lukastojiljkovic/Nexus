@@ -227,17 +227,22 @@ export class ForeignImportStore {
       `INSERT INTO fin_categories (id, profile_id, name, kind, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
     );
+    // `paused_at` rides along unremapped (migration 054): whether a subscription
+    // is being charged is a FACT ABOUT THE ROW, not a reference into the source
+    // profile, so an imported subscription arrives exactly as paused — or as
+    // running — as it was. Anything else would silently start charging the
+    // target's account for something nobody restarted.
+    this.insertFinRecurring = db.prepare(
+      `INSERT INTO fin_recurring
+         (id, profile_id, account_id, category_id, name, amount, payee, note, recurrence,
+          anchor_date, next_run, reminder_days, paused_at, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
     // `import_key` rides along (migration 052): a merge that dropped the
     // fingerprints would let the merged profile re-import the very statement
     // those rows came from. The planner remapped the ACCOUNT around each key
     // rather than touching it, which is exactly what the key naming no account
     // buys.
-    this.insertFinRecurring = db.prepare(
-      `INSERT INTO fin_recurring
-         (id, profile_id, account_id, category_id, name, amount, payee, note, recurrence,
-          anchor_date, next_run, reminder_days, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
-    );
     this.insertFinTransaction = db.prepare(
       `INSERT INTO fin_transactions
          (id, profile_id, account_id, counter_account_id, category_id, tx_date, amount,
@@ -760,7 +765,7 @@ export class ForeignImportStore {
           subscription.id, this.profileId, subscription.accountId, subscription.categoryId,
           subscription.name, subscription.amount, subscription.payee, subscription.note,
           requiredRecurrenceText(subscription.recurrence), subscription.startDate,
-          subscription.nextRun, subscription.reminderDays,
+          subscription.nextRun, subscription.reminderDays, subscription.pausedAt,
           subscription.createdAt, subscription.updatedAt,
         );
         written += 1;

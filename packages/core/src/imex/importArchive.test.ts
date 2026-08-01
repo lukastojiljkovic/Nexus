@@ -585,7 +585,10 @@ function richProfileData(): ProfileData {
       },
     ],
     // FIN slice d: a subscription with an ADR-024 rule, a cursor already past
-    // its first charge, and a reminder lead.
+    // its first charge, and a reminder lead. PAUSED (ADR-074) rather than
+    // running, on this fixture's usual discipline: a round trip over the default
+    // would pass even if the field were dropped on the way out — and the field
+    // dropped here is the one whose loss makes a restore charge somebody again.
     finRecurring: [
       {
         id: "fin-rec-1", profileId: "profile1", accountId: "fin-acc-1", categoryId: "fin-cat-1",
@@ -595,6 +598,7 @@ function richProfileData(): ProfileData {
           end: { kind: "never" },
         },
         startDate: "2026-07-05", nextRun: "2026-08-05", reminderDays: 2,
+        pausedAt: "2026-07-20T09:00:00.000Z",
         createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-05T09:00:00.000Z",
       },
     ],
@@ -1022,12 +1026,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.31.0`: the nearest minor strictly ahead of this build's `1.30.0`.
+  // `1.32.0`: the nearest minor strictly ahead of this build's `1.31.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.31.0" });
+    const files = baseFiles({ schemaVersion: "1.32.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.31.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.32.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -3396,11 +3400,42 @@ describe("parseImportArchive — FIN subscriptions (FIN slice d / 1.30.0)", () =
       {
         id: "fr1", profileId: "profile1", accountId: "fa1", categoryId: "fc1", name: "Netflix",
         amount: -1190, payee: null, note: null, recurrence: MONTHLY,
-        startDate: "2026-07-05", nextRun: "2026-08-05", reminderDays: 2,
+        startDate: "2026-07-05", nextRun: "2026-08-05", reminderDays: 2, pausedAt: null,
         createdAt: T, updatedAt: T,
       },
     ]);
     expect(result.data?.finTransactions[0]?.recurringId).toBe("fr1");
+  });
+
+  /**
+   * ADR-074 / `1.31.0`. The fixture above carries no `pausedAt` at all, which is
+   * exactly the shape a pre-`1.31.0` archive has — and it reads back as `null`,
+   * the correct statement about it rather than a guess: before the pause
+   * existed, every subscription that existed was charging. That is why the field
+   * needs no `ArchiveEra` flag.
+   */
+  it("carries the pause, reads an archive written before it as not-paused, and refuses a bad one", () => {
+    const paused = parseFinanceFile([
+      ACCOUNT,
+      CATEGORY,
+      { ...SUBSCRIPTION, pausedAt: "2026-08-01T09:00:00.000Z" },
+    ]);
+    expect(paused.problems).toEqual([]);
+    expect(paused.data?.finRecurring[0]?.pausedAt).toBe("2026-08-01T09:00:00.000Z");
+
+    // Explicit null and absent are the same subscription, which is what makes
+    // the older archive readable without a flag.
+    for (const row of [{ ...SUBSCRIPTION, pausedAt: null }, SUBSCRIPTION]) {
+      const result = parseFinanceFile([ACCOUNT, CATEGORY, row]);
+      expect(result.problems).toEqual([]);
+      expect(result.data?.finRecurring[0]?.pausedAt).toBeNull();
+    }
+
+    // Present means validated, in every era: a pause is a timestamp, and a
+    // string that is not one is corruption rather than input to be coerced.
+    expect(
+      invalidDetails(parseFinanceFile([ACCOUNT, { ...SUBSCRIPTION, pausedAt: "juče" }])),
+    ).toEqual(["pausedAt"]);
   });
 
   it("runs the rule through ADR-024's own validator, canonical form and all", () => {
@@ -3650,8 +3685,8 @@ describe("parseImportArchive — note categories (NOTE-002 / 1.27.0)", () => {
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.30.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.30.0");
+  it("is 1.31.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.31.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -3841,11 +3876,11 @@ describe("parseImportArchive — schema version", () => {
     expect(result.manifest?.profile.kind).toBe("personal");
   });
 
-  // `1.31.0`: the nearest minor strictly ahead of this build's `1.30.0`.
+  // `1.32.0`: the nearest minor strictly ahead of this build's `1.31.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.31.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.32.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.31.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.32.0" },
     ]);
     expect(result.data).toBeNull();
   });

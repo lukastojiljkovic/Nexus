@@ -2569,6 +2569,20 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       edit: "Izmeni",
       delete: "Obriši",
       deletedNotice: "Pretplata je obrisana.",
+      /**
+       * Pauza (ADR-074) — „zadrži pretplatu, ali me ne naplaćuj". A state of its
+       * own beside brisanje: the row stays in the list, stays izmenjiva, and
+       * simply stops being charged. „Nastavi“ pokreće naplatu od prve naredne po
+       * pravilu — meseci provedeni na pauzi se nikada ne naplaćuju unazad, što je
+       * cela razlika u odnosu na „obriši pa napravi ponovo“.
+       */
+      pause: "Pauziraj",
+      resume: "Nastavi",
+      /** The chip on a paused row — a statement about the pretplata, never a warning: ništa nije odbijeno. */
+      pausedChip: "Pauzirano",
+      pausedChipTitle: "Naplata je zaustavljena. „Nastavi“ je pokreće od prve naredne.",
+      /** What stands where the next charge's date would be, on a row that will not be charged. */
+      pausedNext: "Bez naplate",
       /** The row's own next-charge line; „—" when the series has run out. */
       nextLabel: "Sledeća naplata",
       /** A series past its `until`/`count` end: nothing more will be charged. */

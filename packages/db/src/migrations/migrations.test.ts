@@ -22,8 +22,8 @@ import { CardStore, MIGRATIONS, NexusDatabase, openDatabase, runMigrations } fro
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 53 (finance subscriptions), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(53);
+  it("is at version 54 (pausing a subscription), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(54);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -6717,6 +6717,8 @@ describe("migration 053 — FIN subscriptions (recurring charges, FIN slice d)",
       "created_at",
       "updated_at",
       "deleted_at",
+      // Appended by migration 054's ADD COLUMN, which is where SQLite puts one.
+      "paused_at",
     ]);
     expect(columnNames(db, "fin_transactions")).toContain("recurring_id");
     expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
@@ -6943,6 +6945,104 @@ describe("migration 053 — FIN subscriptions (recurring charges, FIN slice d)",
       expect(indexes).toContain("notifications_profile_status_updated");
       expect(indexes).toContain("fin_recurring_profile_active");
       expect(indexes).toContain("fin_transactions_recurring_occurrence");
+    } finally {
+      raw.close();
+    }
+  });
+});
+
+describe("migration 054 — pausing a subscription (ADR-074)", () => {
+  const T = "2026-01-01T00:00:00.000Z";
+  const MONTHLY = JSON.stringify({
+    freq: { kind: "monthly-date", interval: 1, day: 5 },
+    end: { kind: "never" },
+  });
+
+  it("adds paused_at as a nullable column and stamps the latest user_version", () => {
+    const db = openDatabase({ path: join(dir, "pause-fresh.db") });
+    const column = (
+      db.raw.prepare("PRAGMA table_info(fin_recurring)").all() as {
+        name: string;
+        notnull: number;
+        dflt_value: string | null;
+      }[]
+    ).find((row) => row.name === "paused_at");
+    expect(column).toMatchObject({ notnull: 0, dflt_value: null });
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  /**
+   * The ADR-042 hazard, checked where it would actually bite: `fin_recurring` is
+   * a referenced PARENT (`fin_transactions.recurring_id`), so a rebuild of it
+   * would fire that reference's `ON DELETE SET NULL` inside the migration's own
+   * transaction — where `PRAGMA foreign_keys` cannot be switched off — and every
+   * generated charge would come out of migration 054 no longer knowing what made
+   * it. An `ALTER TABLE … ADD COLUMN` touches no row, and this is what says so.
+   */
+  it("keeps every generated charge attached to its subscription — no rebuild of a referenced parent", () => {
+    const raw = new Database(join(dir, "pause-upgrade.db"));
+    try {
+      raw.pragma("journal_mode = WAL");
+      raw.pragma("foreign_keys = ON");
+      raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
+        typeof value === "string" ? foldSearchText(value) : null,
+      );
+      runMigrations(
+        raw,
+        MIGRATIONS.filter((migration) => migration.version < 54),
+      );
+      raw
+        .prepare(
+          "INSERT INTO profiles (id, kind, name, created_at) VALUES ('p1', 'personal', 'P', ?)",
+        )
+        .run(T);
+      raw
+        .prepare(
+          `INSERT INTO fin_accounts
+             (id, profile_id, name, kind, currency, opening_balance, archived,
+              created_at, updated_at, deleted_at)
+           VALUES ('a1', 'p1', 'Tekući', 'current', 'RSD', 100000, 0, ?, ?, NULL)`,
+        )
+        .run(T, T);
+      raw
+        .prepare(
+          `INSERT INTO fin_recurring
+             (id, profile_id, account_id, category_id, name, amount, payee, note,
+              recurrence, anchor_date, next_run, reminder_days, created_at, updated_at, deleted_at)
+           VALUES ('r1', 'p1', 'a1', NULL, 'Netflix', -1190, NULL, NULL, ?,
+                   '2026-01-05', '2026-04-05', 2, ?, ?, NULL)`,
+        )
+        .run(MONTHLY, T, T);
+      const charge = raw.prepare(
+        `INSERT INTO fin_transactions
+           (id, profile_id, account_id, counter_account_id, category_id, tx_date, amount,
+            payee, note, created_at, updated_at, deleted_at, recurring_id)
+         VALUES (?, 'p1', 'a1', NULL, NULL, ?, -1190, 'Netflix', NULL, ?, ?, NULL, 'r1')`,
+      );
+      for (const [id, date] of [
+        ["t1", "2026-01-05"],
+        ["t2", "2026-02-05"],
+        ["t3", "2026-03-05"],
+      ] as const) {
+        charge.run(id, date, T, T);
+      }
+
+      runMigrations(raw, MIGRATIONS);
+
+      expect(raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+      expect(
+        raw.prepare("SELECT id, recurring_id FROM fin_transactions ORDER BY id").all(),
+      ).toEqual([
+        { id: "t1", recurring_id: "r1" },
+        { id: "t2", recurring_id: "r1" },
+        { id: "t3", recurring_id: "r1" },
+      ]);
+      // The subscription itself is untouched, and reads back as what it was: a
+      // subscription nobody has ever paused.
+      expect(raw.prepare("SELECT next_run, paused_at FROM fin_recurring WHERE id = 'r1'").get()).toEqual(
+        { next_run: "2026-04-05", paused_at: null },
+      );
     } finally {
       raw.close();
     }

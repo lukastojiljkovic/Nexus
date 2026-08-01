@@ -9062,6 +9062,26 @@ button.cal__grid-event--dragging {
   display: flex;
   flex-direction: column;
 }
+/* A PAUSED subscription (ADR-074) stays in the one alphabetical list — splitting
+   it in two would turn „koje pretplate imam“ into two questions — and says so by
+   going quiet instead of by moving. `ListRow`'s own `muted` takes the whole
+   content down; the AMOUNT is the one thing it cannot reach, because that
+   element sets its own colour (jade for a priliv). A paused row is not stating a
+   direction its money is currently going in.
+
+   The chip is the tasks page's „Blokiran“ recipe outright — outlined, muted
+   text, no fill, no glow — for exactly its reason: a pause is a fact about the
+   subscription, not a warning about it. Nothing is refused, and one click on the
+   row's own „Nastavi“ undoes it. */
+.fin__subs-row--paused .fin__amount {
+  color: var(--nx-text-muted);
+}
+.fin__paused-chip.nx-chip {
+  background: transparent;
+  border: 1px solid var(--nx-border);
+  padding: 1px 8px;
+  color: var(--nx-text-muted);
+}
 .fin__subs-upcoming {
   display: flex;
   flex-direction: column;

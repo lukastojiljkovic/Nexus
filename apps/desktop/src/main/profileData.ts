@@ -342,7 +342,12 @@ function gatherFinance(
     // charges it has already generated are in this same archive, so a restore
     // that reset the cursor would re-charge every one of them (migration 053's
     // unique index would refuse the duplicates, but the balance would still be
-    // a lie about which occurrences are outstanding).
+    // a lie about which occurrences are outstanding). Its `pausedAt` travels for
+    // the sharper version of the same reason (ADR-074): a restore that dropped
+    // it would resume somebody's billing.
+    //
+    // `listActive` is the right read here even so — a PAUSED subscription is a
+    // live row, and it is precisely the one the archive must not lose.
     finRecurring: deps.finRecurringStore(profileId).listActive(),
     finTransactions: deps.finTransactionStore(profileId).listActive(),
     finBudgets: categories.listBudgets(),

@@ -55,6 +55,14 @@ export interface FinRecurring {
   nextRun: string | null;
   /** Whole days before a charge to remind, or null for „ne podsećaj me". */
   reminderDays: number | null;
+  /**
+   * When the user paused this subscription (ADR-074), or null while it charges.
+   * Independent of `deleted_at`: a pause is a fact about the CHARGING, a delete
+   * a fact about the visibility, so a paused subscription that is soft-deleted
+   * and restored comes back still paused. While it is non-null `nextRun` means
+   * nothing — see `pause`.
+   */
+  pausedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -124,13 +132,14 @@ interface FinRecurringRow {
   anchor_date: string;
   next_run: string | null;
   reminder_days: number | null;
+  paused_at: string | null;
   created_at: string;
   updated_at: string;
 }
 
 const COLUMNS =
   "id, profile_id, account_id, category_id, name, amount, payee, note, recurrence, " +
-  "anchor_date, next_run, reminder_days, created_at, updated_at";
+  "anchor_date, next_run, reminder_days, paused_at, created_at, updated_at";
 
 /**
  * Finance subscriptions — recurring charges — for a single profile, over
@@ -167,6 +176,16 @@ const COLUMNS =
  * fails loudly. A cursor the code maintains has to be right every time; an index
  * has to be right once.
  *
+ * **A PAUSE is not a delete** (ADR-074, migration 054). `paused_at` stops the
+ * charging and nothing else: `generateDue` skips the row and `upcoming`
+ * contributes nothing for it — which is what silences the calendar's „Pretplate"
+ * source, the dashboard's renewals card and the renewal reminders all three at
+ * once, since all three are built from `upcoming` and none has a second path to
+ * a renewal — while `listActive` still returns it and `update` still edits it.
+ * Keeping the subscription is the whole point: throwing it away was already
+ * possible, and that is exactly what „može pauza" was asking for an alternative
+ * to.
+ *
  * `now` and `today` are supplied by the caller and validated here — main stamps
  * the clock, the renderer never does.
  */
@@ -174,11 +193,14 @@ export class FinRecurringStore {
   private readonly insert: Database.Statement;
   private readonly selectActive: Database.Statement;
   private readonly selectActiveById: Database.Statement;
+  private readonly selectPausedById: Database.Statement;
   private readonly selectDue: Database.Statement;
   private readonly updateFields: Database.Statement;
   private readonly updateCursor: Database.Statement;
   private readonly markDeleted: Database.Statement;
   private readonly markRestored: Database.Statement;
+  private readonly markPaused: Database.Statement;
+  private readonly markResumed: Database.Statement;
   private readonly selectAccount: Database.Statement;
   private readonly selectCategory: Database.Statement;
   private readonly insertCharge: Database.Statement;
@@ -190,8 +212,8 @@ export class FinRecurringStore {
     this.insert = db.prepare(
       `INSERT INTO fin_recurring
          (id, profile_id, account_id, category_id, name, amount, payee, note, recurrence,
-          anchor_date, next_run, reminder_days, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+          anchor_date, next_run, reminder_days, created_at, updated_at, deleted_at, paused_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)`,
     );
     this.selectActive = db.prepare(
       `SELECT ${COLUMNS} FROM fin_recurring
@@ -201,11 +223,20 @@ export class FinRecurringStore {
       `SELECT ${COLUMNS} FROM fin_recurring
        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
     );
-    // The generator's own read: the live subscriptions whose cursor has already
-    // arrived. A NULL cursor is a spent series and is out by construction.
+    // `resume` needs the row's own rule and anchor to recompute the cursor, so
+    // it reads before it writes — and this read IS its refusal: no paused row,
+    // nothing to resume.
+    this.selectPausedById = db.prepare(
+      `SELECT ${COLUMNS} FROM fin_recurring
+       WHERE id = ? AND profile_id = ? AND deleted_at IS NULL AND paused_at IS NOT NULL`,
+    );
+    // The generator's own read: the live, UNPAUSED subscriptions whose cursor
+    // has already arrived. A NULL cursor is a spent series and is out by
+    // construction; a paused one is out because pausing is what „ne naplaćuj me"
+    // means, and this one clause is the whole of that promise on the write side.
     this.selectDue = db.prepare(
       `SELECT ${COLUMNS} FROM fin_recurring
-       WHERE profile_id = ? AND deleted_at IS NULL
+       WHERE profile_id = ? AND deleted_at IS NULL AND paused_at IS NULL
          AND next_run IS NOT NULL AND next_run <= ?
        ORDER BY next_run, id`,
     );
@@ -223,9 +254,20 @@ export class FinRecurringStore {
       `UPDATE fin_recurring SET deleted_at = ?, updated_at = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
     );
+    // Neither touches `paused_at`, deliberately: a subscription thrown away
+    // while paused comes back paused, because the pause was never about whether
+    // the row was on screen.
     this.markRestored = db.prepare(
       `UPDATE fin_recurring SET deleted_at = NULL, updated_at = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NOT NULL`,
+    );
+    this.markPaused = db.prepare(
+      `UPDATE fin_recurring SET paused_at = ?, updated_at = ?
+       WHERE id = ? AND profile_id = ? AND deleted_at IS NULL AND paused_at IS NULL`,
+    );
+    this.markResumed = db.prepare(
+      `UPDATE fin_recurring SET paused_at = NULL, next_run = ?, updated_at = ?
+       WHERE id = ? AND profile_id = ? AND deleted_at IS NULL AND paused_at IS NOT NULL`,
     );
     this.selectAccount = db.prepare(
       `SELECT id, currency FROM fin_accounts
@@ -269,7 +311,11 @@ export class FinRecurringStore {
       reminderDays: input.reminderDays ?? null,
     });
     const id = uuidv7();
-    const nextRun = firstOccurrence(resolved.recurrence, resolved.startDate);
+    const nextRun = occurrenceOnOrAfter(
+      resolved.recurrence,
+      resolved.startDate,
+      resolved.startDate,
+    );
 
     this.insert.run(
       id, this.profileId, resolved.accountId, resolved.categoryId, resolved.name, resolved.amount,
@@ -278,7 +324,7 @@ export class FinRecurringStore {
     );
 
     return {
-      id, profileId: this.profileId, ...resolved, nextRun,
+      id, profileId: this.profileId, ...resolved, nextRun, pausedAt: null,
       createdAt: validNow, updatedAt: validNow,
     };
   }
@@ -289,6 +335,11 @@ export class FinRecurringStore {
    * different schedule is a different series, and keeping a position inside one
    * that no longer exists would charge dates the new rule never names. Charges
    * already generated are untouched, because they are money that already moved.
+   *
+   * A PAUSED subscription is edited on exactly these terms — `requireActive`
+   * filters on `deleted_at` alone, and that is right: the pause says „ne
+   * naplaćuj me", never „ne diraj me", and being unable to correct the price of
+   * something you paused would be a strange thing to enforce.
    */
   update(id: string, fields: UpdateFinRecurringFields, now: string): FinRecurring {
     const validNow = validateNow(now);
@@ -309,7 +360,7 @@ export class FinRecurringStore {
 
     const rescheduled = fields.startDate !== undefined || fields.recurrence !== undefined;
     const nextRun = rescheduled
-      ? firstOccurrence(resolved.recurrence, resolved.startDate)
+      ? occurrenceOnOrAfter(resolved.recurrence, resolved.startDate, resolved.startDate)
       : current.nextRun;
 
     this.updateFields.run(
@@ -340,6 +391,71 @@ export class FinRecurringStore {
         `No deleted subscription "${id}" to restore in this profile.`,
       );
     }
+  }
+
+  /**
+   * Stops charging a subscription without giving it up (ADR-074). The row stays
+   * in `listActive`, stays editable, and contributes nothing to `upcoming` — so
+   * the calendar, the dashboard card and the renewal reminders go quiet about it
+   * together.
+   *
+   * `next_run` is left exactly where it was, and while paused it means NOTHING:
+   * nothing reads it (`selectDue` filters the row out first) and `resume`
+   * recomputes it from scratch rather than trusting it. Leaving it alone is
+   * simply cheaper than winding it somewhere honest, and a stale cursor that
+   * nothing can act on is not a lie anyone can be told.
+   */
+  pause(id: string, now: string): void {
+    const validNow = validateNow(now);
+    const { changes } = this.markPaused.run(validNow, validNow, id, this.profileId);
+    if (changes === 0) {
+      throw new FinRecurringNotFoundError(
+        `No unpaused subscription "${id}" to pause in this profile.`,
+      );
+    }
+  }
+
+  /**
+   * Resumes a paused subscription and RE-ANCHORS its cursor to the first
+   * occurrence the rule places on or after `today` — the phase kept from
+   * `anchor_date`, so „mesečno 5-og" paused on 10 March and resumed on 20 April
+   * next charges 5 May, not 20 April.
+   *
+   * **It does not back-charge, and that is what makes a pause different from
+   * deleting and re-creating.** Freezing the cursor across the pause would hand
+   * the very next generation pass every occurrence the user paused specifically
+   * to avoid — the March and April charges, posted the moment they came back —
+   * and migration 053's index would happily let them through, because they are
+   * occurrences that genuinely were never charged. Recomputing from `today` is
+   * the only reading of „nastavi" that does not bill for the months nobody was
+   * subscribed.
+   *
+   * Resuming ON a day the rule names charges that day on the next pass: „bill me
+   * again from now", and today's occurrence is now.
+   *
+   * A series already spent stays spent — the recomputation returns null because
+   * the engine's own `until`/`count` bounds still apply, so a pause is never a
+   * way to buy an extra charge out of a finished series.
+   */
+  resume(id: string, now: string, today: string): void {
+    const validNow = validateNow(now);
+    const validToday = validateDay(today, "today");
+    // `restore`'s refusal, expressed against the row this operation has to read
+    // anyway: it needs the rule and the anchor to recompute the cursor, and a
+    // row that is not there or is not paused is nothing to resume.
+    const row = this.selectPausedById.get(id, this.profileId) as FinRecurringRow | undefined;
+    if (!row) {
+      throw new FinRecurringNotFoundError(
+        `No paused subscription "${id}" to resume in this profile.`,
+      );
+    }
+    const subscription = this.toFinRecurring(row);
+    this.markResumed.run(
+      occurrenceOnOrAfter(subscription.recurrence, subscription.startDate, validToday),
+      validNow,
+      id,
+      this.profileId,
+    );
   }
 
   /**
@@ -396,8 +512,11 @@ export class FinRecurringStore {
    * the calendar's „Pretplate" source and the dashboard's upcoming-renewals card
    * draw, and it is why nothing is ever posted ahead of time.
    *
-   * A soft-deleted subscription contributes nothing, and a series' own
-   * `until`/`count` end bounds it exactly as it bounds a recurring event.
+   * A soft-deleted subscription contributes nothing, a PAUSED one contributes
+   * nothing (ADR-074 — and since all three surfaces above draw from here, that
+   * one skip is what makes „pauziraj" mean the same thing on every one of them),
+   * and a series' own `until`/`count` end bounds it exactly as it bounds a
+   * recurring event.
    */
   upcoming(window: FinRenewalWindow): FinUpcomingRenewal[] {
     const from = validateDay(window.from, "from");
@@ -408,6 +527,7 @@ export class FinRecurringStore {
 
     const renewals: FinUpcomingRenewal[] = [];
     for (const subscription of this.listActive()) {
+      if (subscription.pausedAt !== null) continue;
       const account = this.selectAccount.get(subscription.accountId, this.profileId) as
         | { id: string; currency: string }
         | undefined;
@@ -465,7 +585,10 @@ export class FinRecurringStore {
     recurrence: RecurrenceRule;
     startDate: string;
     reminderDays: number | null;
-  }): Omit<FinRecurring, "id" | "profileId" | "nextRun" | "createdAt" | "updatedAt"> {
+  }): Omit<
+    FinRecurring,
+    "id" | "profileId" | "nextRun" | "pausedAt" | "createdAt" | "updatedAt"
+  > {
     return {
       accountId: this.requireAccount(fields.accountId).id,
       categoryId:
@@ -514,6 +637,7 @@ export class FinRecurringStore {
       startDate: row.anchor_date,
       nextRun: row.next_run,
       reminderDays: row.reminder_days,
+      pausedAt: row.paused_at,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -521,26 +645,37 @@ export class FinRecurringStore {
 }
 
 /**
- * Where a fresh cursor opens: the first date the rule ACTUALLY places on or
- * after the start date — not the start date itself.
+ * Where a cursor opens: the first date the rule ACTUALLY places on or after
+ * `from` — not `from` itself. The ONE function every cursor in this store is
+ * opened with, so a fresh series (`from` = the start date) and a resumed one
+ * (`from` = today) cannot drift on what „the next charge" means.
  *
- * The distinction is the whole of it. ADR-024's engine treats the anchor as a
- * candidate like any other, so „prva naplata 10. aprila, mesečno 5-og" opens on
- * 5 May, not on 10 April: the April period's own date is behind the anchor and
- * is dropped, exactly as it would be for a recurring event. Seeding the cursor
- * with the raw start date would have charged a day the schedule never names —
- * and, because `generateDue` walks forward from wherever the cursor is, that
- * phantom charge would have been indistinguishable from a real one afterwards.
+ * The distinction between "the rule's next date" and the requested day is the
+ * whole of it. ADR-024's engine treats the anchor as a candidate like any other,
+ * so „prva naplata 10. aprila, mesečno 5-og" opens on 5 May, not on 10 April:
+ * the April period's own date is behind the anchor and is dropped, exactly as it
+ * would be for a recurring event. Seeding the cursor with the raw day would have
+ * charged a date the schedule never names — and, because `generateDue` walks
+ * forward from wherever the cursor is, that phantom charge would have been
+ * indistinguishable from a real one afterwards.
  *
- * `null` when the rule places nothing at all (an `until` before the anchor):
- * a series spent before it began, which is what a null cursor means everywhere
- * else too.
+ * `null` when the rule places nothing on or after `from`: a series spent before
+ * it began (an `until` behind the anchor), or one whose `count` has run out,
+ * which is what a null cursor means everywhere else too.
  */
-function firstOccurrence(rule: RecurrenceRule, startDate: string): string | null {
+function occurrenceOnOrAfter(
+  rule: RecurrenceRule,
+  anchorDate: string,
+  from: string,
+): string | null {
+  // A `from` behind the anchor is clamped to it: a series does not exist before
+  // its own first possible charge, so scanning back to it could only produce
+  // periods the engine must then discard.
+  const start = from > anchorDate ? from : anchorDate;
   // "Strictly after the day before" IS "on or after", and it is the only
   // formulation that needs no upper bound — the engine's own scan cap decides
   // how far it looks.
-  return nextOccurrenceDate(rule, startDate, shiftDayKey(startDate, -1));
+  return nextOccurrenceDate(rule, anchorDate, shiftDayKey(start, -1));
 }
 
 /**

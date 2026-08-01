@@ -340,6 +340,14 @@ export const IpcChannel = {
   finRecurringUpdate: "fin-recurring:update",
   finRecurringDelete: "fin-recurring:delete",
   finRecurringRestore: "fin-recurring:restore",
+  // Pausing a subscription (ADR-074) — „zadrži je, ali me ne naplaćuj", which is
+  // a different act from throwing it away and needs its own pair. TWO channels
+  // rather than one `set-paused` boolean, deliberately: resuming carries a
+  // `today` that main stamps and re-anchors the cursor to, and pausing carries
+  // nothing of the sort, so a shared channel would have to ignore that field
+  // half the time — and a field a handler ignores is a field nobody validates.
+  finRecurringPause: "fin-recurring:pause",
+  finRecurringResume: "fin-recurring:resume",
   searchQuery: "search:query",
   searchRecent: "search:recent",
   searchPage: "search:page",
@@ -4016,6 +4024,15 @@ export interface FinRecurring {
   nextRun: string | null;
   /** Whole days before a charge to remind, or null for „ne podsećaj me". */
   reminderDays: number | null;
+  /**
+   * When its owner paused the charging (ADR-074), or null while it charges. A
+   * paused subscription is still LISTED and still editable — that is the whole
+   * difference from deleting it — but it generates nothing and places no renewal
+   * in `finUpcomingRenewals`, so the calendar, the dashboard card and the
+   * reminders go quiet about it together. Written only by the two channels
+   * below, never by an update payload.
+   */
+  pausedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -4224,8 +4241,25 @@ export interface FinRecurringDeleteRequest {
   id: string;
 }
 
-/** Undo of a soft delete. The cursor is where it was, so the next check catches up whatever came due meanwhile. */
+/** Undo of a soft delete. The cursor is where it was, so the next check catches up whatever came due meanwhile — and a subscription deleted while PAUSED comes back paused. */
 export interface FinRecurringRestoreRequest {
+  profileId: string;
+  id: string;
+}
+
+/** Stops the charging without giving the subscription up (ADR-074). Main stamps the moment. */
+export interface FinRecurringPauseRequest {
+  profileId: string;
+  id: string;
+}
+
+/**
+ * Starts the charging again, re-anchoring the cursor to the first occurrence the
+ * rule places on or after TODAY — main's local day, never the renderer's, like
+ * every other clock on this wire. The occurrences the pause skipped are not
+ * back-charged: that is the whole difference between pausing and deleting.
+ */
+export interface FinRecurringResumeRequest {
   profileId: string;
   id: string;
 }
@@ -6842,6 +6876,10 @@ export interface NexusApi {
   /** Soft-deletes a subscription; generation skips it immediately and the charges it already made stay. */
   deleteFinRecurring(profileId: string, id: string): Promise<void>;
   restoreFinRecurring(profileId: string, id: string): Promise<void>;
+  /** Stops charging a subscription while KEEPING it (ADR-074) — it stays listed and editable, and stops placing renewals. */
+  pauseFinRecurring(profileId: string, id: string): Promise<void>;
+  /** Starts it charging again from the first occurrence on or after today; the months it was paused for are never back-charged. */
+  resumeFinRecurring(profileId: string, id: string): Promise<void>;
   /** Runs the query pipeline (parse -> FTS match -> bm25 candidates -> rank), falling back to `searchRecent`'s order when the query has no matchable terms (ADR-021). */
   searchQuery(profileId: string, query: string, limit: number): Promise<SearchResult[]>;
   /** The profile's most recently touched entries, already in their final order — no ranking pass, unlike `searchQuery`. */

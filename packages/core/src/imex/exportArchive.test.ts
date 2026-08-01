@@ -268,8 +268,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.30.0");
-      expect(manifest.schemaVersion).toBe("1.30.0");
+      expect(manifest.schemaVersion).toBe("1.31.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       // `picture: null` is written out loud rather than omitted: the manifest is
@@ -1163,7 +1162,7 @@ describe("buildExportArchive", () => {
             id: "fr1", profileId: "p1", accountId: "fa1", categoryId: "fc1", name: "Netflix",
             amount: -11_90, payee: null, note: null,
             recurrence: { freq: { kind: "monthly-date", interval: 1, day: 5 }, end: { kind: "never" } },
-            startDate: "2026-01-05", nextRun: "2026-02-05", reminderDays: 2,
+            startDate: "2026-01-05", nextRun: "2026-02-05", reminderDays: 2, pausedAt: null,
             createdAt: t, updatedAt: t,
           },
         ],

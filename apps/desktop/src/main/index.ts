@@ -7767,6 +7767,27 @@ function registerIpc(): void {
     finRecurringStore(profileId).restore(id, new Date().toISOString());
   });
 
+  // Pausing (ADR-074): „ne naplaćuj me, ali zadrži pretplatu". Stops generation
+  // and every renewal the schedule would have placed, and nothing else.
+  ipcMain.handle(IpcChannel.finRecurringPause, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    finRecurringStore(profileId).pause(id, new Date().toISOString());
+  });
+
+  // Resuming re-anchors the cursor to the first occurrence on or after today —
+  // `localToday()`, the very function the generation pass reads its day from, so
+  // „danas" cannot mean two different days inside one app.
+  ipcMain.handle(IpcChannel.finRecurringResume, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    finRecurringStore(profileId).resume(id, new Date().toISOString(), localToday());
+  });
+
   // Global search (ADR-021 / PRD 08 SRCH-001/002): `runSearchQuery`/
   // `runRecentSearch` own the actual pipeline (see their doc comments) so the
   // smoke rehearsal can call the exact same code the renderer does.

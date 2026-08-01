@@ -499,3 +499,179 @@ describe("FinRecurringStore — upcoming renewals (read from the RULE, never fro
     );
   });
 });
+
+describe("FinRecurringStore — pause and resume (ADR-074)", () => {
+  it("creates every subscription unpaused, and pausing stamps the moment", () => {
+    const f = fixture();
+    const created = netflix(f);
+    expect(created.pausedAt).toBeNull();
+
+    f.recurring.pause(created.id, "2026-03-10T08:00:00.000Z");
+    const paused = f.recurring.listActive()[0];
+    // The whole point of a pause: the subscription is STILL THERE.
+    expect(paused).toMatchObject({ id: created.id, pausedAt: "2026-03-10T08:00:00.000Z" });
+    // And its cursor is untouched — while paused it means nothing, and `resume`
+    // recomputes it rather than reading it.
+    expect(paused?.nextRun).toBe("2026-01-05");
+  });
+
+  it("stops generation dead, and resumes it without back-charging what the pause skipped", () => {
+    const f = fixture();
+    const created = netflix(f);
+
+    expect(f.recurring.generateDue(NOW, "2026-02-20")).toBe(2); // 05.01, 05.02
+    f.recurring.pause(created.id, "2026-03-10T08:00:00.000Z");
+    // March, April and May come and go: not one charge, however many passes run.
+    expect(f.recurring.generateDue(NOW, "2026-03-20")).toBe(0);
+    expect(f.recurring.generateDue(NOW, "2026-05-20")).toBe(0);
+    expect(f.transactions.listActive()).toHaveLength(2);
+
+    // Resumed on 20 April, the cursor re-anchors to the first occurrence the
+    // RULE places on or after that day — 5 May, with the phase kept from the
+    // anchor date. The 5th of March and the 5th of April are gone for good,
+    // which is exactly what the user paused to achieve.
+    f.recurring.resume(created.id, "2026-04-20T08:00:00.000Z", "2026-04-20");
+    const resumed = f.recurring.listActive()[0];
+    expect(resumed).toMatchObject({ pausedAt: null, nextRun: "2026-05-05" });
+    expect(f.recurring.generateDue(NOW, "2026-04-30")).toBe(0);
+    expect(f.recurring.generateDue(NOW, "2026-05-10")).toBe(1);
+    expect(f.transactions.listActive().map((row) => row.date)).toEqual([
+      "2026-05-05",
+      "2026-02-05",
+      "2026-01-05",
+    ]);
+  });
+
+  it("charges the day itself when the rule names it — resuming means „naplaćuj me od sada“", () => {
+    const f = fixture();
+    const created = netflix(f);
+    f.recurring.pause(created.id, "2026-02-10T08:00:00.000Z");
+
+    f.recurring.resume(created.id, "2026-05-05T08:00:00.000Z", "2026-05-05");
+    expect(f.recurring.listActive()[0]?.nextRun).toBe("2026-05-05");
+    expect(f.recurring.generateDue(NOW, "2026-05-05")).toBe(1);
+  });
+
+  it("leaves a series that is already spent spent — the engine's own bounds still apply", () => {
+    const f = fixture();
+    const created = netflix(f, {
+      name: "Kurs",
+      recurrence: {
+        freq: { kind: "monthly-date", interval: 1, day: 5 },
+        end: { kind: "count", total: 2 },
+      },
+    });
+    expect(f.recurring.generateDue(NOW, "2026-06-01")).toBe(2);
+    expect(f.recurring.listActive()[0]?.nextRun).toBeNull();
+
+    f.recurring.pause(created.id, "2026-06-02T08:00:00.000Z");
+    f.recurring.resume(created.id, "2026-07-01T08:00:00.000Z", "2026-07-01");
+    // A pause is not a way to buy a third charge out of a two-charge series.
+    expect(f.recurring.listActive()[0]).toMatchObject({ pausedAt: null, nextRun: null });
+    expect(f.recurring.generateDue(NOW, "2027-01-01")).toBe(0);
+  });
+
+  it("keeps a paused subscription editable — a pause is about charging, not about touching", () => {
+    const f = fixture();
+    const created = netflix(f);
+    f.recurring.pause(created.id, "2026-03-10T08:00:00.000Z");
+
+    const renamed = f.recurring.update(created.id, { name: "Netflix Standard" }, NOW);
+    expect(renamed).toMatchObject({ name: "Netflix Standard", pausedAt: "2026-03-10T08:00:00.000Z" });
+    // Re-scheduling a paused row still re-anchors the cursor, and still charges
+    // nothing until it is resumed.
+    const moved = f.recurring.update(created.id, { startDate: "2026-04-10" }, NOW);
+    expect(moved).toMatchObject({ nextRun: "2026-05-05", pausedAt: "2026-03-10T08:00:00.000Z" });
+    expect(f.recurring.generateDue(NOW, "2026-06-20")).toBe(0);
+  });
+
+  it("survives a soft delete and comes back STILL paused — the pause is not about visibility", () => {
+    const f = fixture();
+    const created = netflix(f);
+    f.recurring.pause(created.id, "2026-03-10T08:00:00.000Z");
+
+    f.recurring.softDelete(created.id, NOW);
+    expect(f.recurring.listActive()).toEqual([]);
+    f.recurring.restore(created.id, NOW);
+    expect(f.recurring.listActive()[0]).toMatchObject({
+      id: created.id,
+      pausedAt: "2026-03-10T08:00:00.000Z",
+    });
+    expect(f.recurring.generateDue(NOW, "2026-06-20")).toBe(0);
+  });
+
+  it("refuses a second pause, a resume of something running, and either for another profile's row", () => {
+    const f = fixture();
+    const other = fixture();
+    const created = netflix(f);
+
+    expect(() => f.recurring.resume(created.id, NOW, "2026-03-01")).toThrow(
+      FinRecurringNotFoundError,
+    );
+    expect(() => other.recurring.pause(created.id, NOW)).toThrow(FinRecurringNotFoundError);
+    f.recurring.pause(created.id, NOW);
+    expect(() => f.recurring.pause(created.id, NOW)).toThrow(FinRecurringNotFoundError);
+    expect(() => other.recurring.resume(created.id, NOW, "2026-03-01")).toThrow(
+      FinRecurringNotFoundError,
+    );
+
+    // A soft-deleted subscription is not there to pause either: „obrisano“ and
+    // „pauzirano“ are independent facts, but the delete still hides the row.
+    f.recurring.resume(created.id, NOW, "2026-03-01");
+    f.recurring.softDelete(created.id, NOW);
+    expect(() => f.recurring.pause(created.id, NOW)).toThrow(FinRecurringNotFoundError);
+  });
+
+  it("refuses a `now` that is not an instant and a `today` that is not a real day", () => {
+    const f = fixture();
+    const created = netflix(f);
+    expect(() => f.recurring.pause(created.id, "juče")).toThrow(FinRecurringValidationError);
+    f.recurring.pause(created.id, NOW);
+    expect(() => f.recurring.resume(created.id, "juče", "2026-03-01")).toThrow(
+      FinRecurringValidationError,
+    );
+    expect(() => f.recurring.resume(created.id, NOW, "2026-02-30")).toThrow(
+      FinRecurringValidationError,
+    );
+  });
+
+  /**
+   * `upcoming` is the ONE read the calendar's „Pretplate" source
+   * (`calendarItems.ts` via `CalendarPage`'s `finUpcomingRenewals`), the
+   * dashboard's „Predstojeće naplate" card (`dashboardWidgets.tsx`) and the
+   * renewal REMINDERS (`main/notifications.ts`) are all built from — verified
+   * against all three, none of which has a second path to a renewal. So a pause
+   * silencing this read silences all three at once, with no per-surface special
+   * case, and the three windows below are the exact spans those three ask over.
+   */
+  it("contributes nothing to `upcoming` — which is what silences the calendar, the widget and the reminders", () => {
+    const f = fixture();
+    const created = netflix(f);
+    const gym = netflix(f, {
+      name: "Teretana",
+      recurrence: { freq: { kind: "monthly-date", interval: 1, day: 3 }, end: { kind: "never" } },
+      startDate: "2026-01-03",
+    });
+    f.recurring.pause(created.id, "2026-03-01T08:00:00.000Z");
+
+    for (const window of [
+      { from: "2026-03-01", to: "2026-03-08" }, // the reminders' lead-time horizon
+      { from: "2026-03-01", to: "2026-03-31" }, // the calendar's visible month
+      { from: "2026-03-01", to: "2026-06-01" }, // the dashboard's renewal horizon
+    ]) {
+      const named = new Set(f.recurring.upcoming(window).map((row) => row.recurringId));
+      expect(named.has(created.id)).toBe(false);
+      // The subscription beside it still draws, so this is a pause rather than
+      // an empty read.
+      expect(named.has(gym.id)).toBe(true);
+    }
+
+    // …and it is back the moment it is resumed.
+    f.recurring.resume(created.id, "2026-04-20T08:00:00.000Z", "2026-04-20");
+    expect(
+      f.recurring
+        .upcoming({ from: "2026-04-21", to: "2026-05-31" })
+        .map((row) => `${row.date} ${row.name}`),
+    ).toEqual(["2026-05-03 Teretana", "2026-05-05 Netflix"]);
+  });
+});

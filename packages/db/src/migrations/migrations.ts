@@ -53,6 +53,7 @@ import { migration050 } from "./050-search-history.js";
 import { migration051 } from "./051-finance.js";
 import { migration052 } from "./052-finance-import-key.js";
 import { migration053 } from "./053-finance-recurring.js";
+import { migration054 } from "./054-finance-recurring-pause.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -116,11 +117,8 @@ export const MIGRATIONS: readonly Migration[] = [
   migration050,
   migration051,
   migration052,
-  // 052 belongs to a sibling lane (FIN slice d was written against a base that
-  // did not carry it). The list is ordered by version and `runMigrations` walks
-  // it in order applying anything above `user_version`, so the gap costs
-  // nothing: 052 slots in above this line when its lane lands.
   migration053,
+  migration054,
 ];
 
 /**

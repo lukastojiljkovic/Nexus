@@ -44,6 +44,25 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
  *
+ * `1.31.0` adds the SUBSCRIPTION PAUSE (ADR-074, migration 054): one nullable
+ * `pausedAt` on `fin-recurring`, the moment its owner said „ne naplaćuj me" —
+ * null while it charges. It travels for the sharpest reason any field here
+ * does: a `1.30.0` reader handed this archive would drop the pause, and a
+ * restore would then start charging a subscription its owner had deliberately
+ * stopped, silently and monthly. Losing a label is salvage; resuming somebody's
+ * billing is not.
+ *
+ * No `ArchiveEra` flag, and not merely by the ADR-028 rule: an archive written
+ * before this bump carries no `pausedAt`, an absent one parses to `null`, and
+ * `null` IS „not paused". That is the CORRECT reading of an older archive rather
+ * than a lossy guess about it — a subscription that existed before the pause
+ * existed was, in every sense the app had, charging.
+ *
+ * `pausedAt` and the row's soft delete stay two independent facts here exactly
+ * as they are two independent columns (migration 054): a restore of a paused
+ * subscription puts back a paused subscription, and nothing in the interchange
+ * has to arbitrate between them.
+ *
  * `1.30.0` adds FIN SUBSCRIPTIONS (FIN slice d, migration 053): the
  * `fin-recurring` record type — one row per recurring charge, riding in
  * `data/finance.ndjson` AFTER the accounts and categories it points at and
@@ -280,7 +299,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.30.0";
+const SCHEMA_VERSION = "1.31.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -1204,6 +1223,11 @@ export interface ExportFinTransaction {
  * Nullable: a series past its `until`/`count` end has no next one, and a
  * sentinel date would sort into the middle of real ones.
  *
+ * `pausedAt` (`1.31.0`) is the moment its owner stopped the charging, null while
+ * it charges — a fact about the subscription, independent of the soft delete it
+ * outlives, and the one field here whose loss would make a restore start taking
+ * somebody's money again.
+ *
  * There is no `counterAccountId`: a subscription is never a transfer.
  */
 export interface ExportFinRecurring {
@@ -1224,6 +1248,8 @@ export interface ExportFinRecurring {
   nextRun: string | null;
   /** Whole days before a charge to remind, or null for no reminder. */
   reminderDays: number | null;
+  /** When the charging was paused (ADR-074), or null while it charges. */
+  pausedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
