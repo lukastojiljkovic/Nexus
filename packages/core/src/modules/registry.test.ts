@@ -32,10 +32,27 @@ describe("ModuleRegistry", () => {
     );
   });
 
-  it("rejects a duplicate prefix", () => {
+  /**
+   * The registry deliberately ALLOWS a shared prefix, and this pins that it is
+   * a decision rather than an oversight.
+   *
+   * A prefix is traceability to a PRD entry, and one PRD entry can legitimately
+   * be implemented by more than one app module — UTIL („Utility Belt") is that
+   * case in the shipping app, where „Fokus" and „Alatke" are one PRD section
+   * but two sidebar entries and two toggles. The check that used to live here
+   * was backed by a `byPrefix` map nothing ever read (there is no
+   * `getByPrefix`), so it guaranteed only itself; what it genuinely caught — a
+   * copy-pasted manifest whose prefix nobody changed — is now an explicit
+   * prefix→ids mapping in the desktop app's `modules.test.ts`, where the
+   * intended sharing is written down and any other duplicate still fails.
+   */
+  it("allows two modules to share a PRD prefix, while both stay reachable by id", () => {
     const reg = new ModuleRegistry();
-    reg.register(mod("tasks", "TASK", "Core experience"));
-    expect(() => reg.register(mod("todo", "TASK", "Life hubs"))).toThrow(/TASK/);
+    reg.register(mod("focus", "UTIL", "Professional & utilities"));
+    expect(() => reg.register(mod("tools", "UTIL", "Professional & utilities"))).not.toThrow();
+    expect(reg.all().map((m) => m.id)).toEqual(["focus", "tools"]);
+    expect(reg.get("focus")?.prefix).toBe("UTIL");
+    expect(reg.get("tools")?.prefix).toBe("UTIL");
   });
 
   it("returns manifests in registration order from all()", () => {

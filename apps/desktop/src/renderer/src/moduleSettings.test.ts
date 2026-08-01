@@ -95,6 +95,7 @@ describe("moduleSettingsDeclarations", () => {
       "habits",
       "fitness",
       "focus",
+      "tools",
     ]);
   });
 
@@ -123,6 +124,7 @@ describe("moduleSettingsCards", () => {
       "habits",
       "fitness",
       "focus",
+      "tools",
     ]);
     expect(cards.map((card) => card.title)).toEqual([
       s.sectionTitle.dashboard,
@@ -135,6 +137,7 @@ describe("moduleSettingsCards", () => {
       s.sectionTitle.habits,
       s.sectionTitle.fitness,
       s.sectionTitle.focus,
+      s.sectionTitle.tools,
     ]);
   });
 
@@ -170,7 +173,7 @@ describe("isDeviceOnlyPanel", () => {
     const deviceOnly = [...declarations]
       .filter(([, panel]) => isDeviceOnlyPanel(panel))
       .map(([moduleId]) => moduleId);
-    expect(deviceOnly).toEqual(["tasks", "notes", "files", "finance", "habits", "focus"]);
+    expect(deviceOnly).toEqual(["tasks", "notes", "files", "finance", "habits", "focus", "tools"]);
   });
 
   it("is false for a panel holding a profile row — a reset there would be a write about the user's data", () => {

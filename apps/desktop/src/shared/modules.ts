@@ -2,6 +2,7 @@ import {
   ModuleRegistry,
   type ModuleManifest,
   type SettingsPanel,
+  type ToolRegistration,
   type WidgetConfigField,
   type WidgetContract,
 } from "@nexus/core";
@@ -560,6 +561,126 @@ const FOCUS_SETTINGS: SettingsPanel = {
 };
 
 /**
+ * UTIL slice c's tools — the eleven „Alatke" ships with, declared through the
+ * very contract a foreign module would use. The drawer has no privileged path
+ * to its own tools: it collects `manifest.tools` across the registry and looks
+ * each id up in `TOOL_SURFACES`, so these arrive exactly as somebody else's
+ * would.
+ *
+ * **There is no currency converter, and there is no seam for one.** Nexus does
+ * not convert money between currencies (founder decision): each currency is
+ * tracked on its own terms, because a rate an offline app cannot verify is a
+ * number that silently misstates money — which is why FIN holds no rate at all
+ * and says „Nexus nema kurs" to the user. What these seven convert are physical
+ * quantities, where a metre is a metre everywhere and on every day.
+ *
+ * `keywords` are spelled ALREADY FOLDED (plain ASCII), the `SettingsControl`
+ * convention exactly: the title carries the orthography, these carry the
+ * synonyms somebody would really type — „tezina" for mass, „popust" for
+ * percentage, „anuitet" for the loan.
+ */
+const TOOLS_TOOLS: ToolRegistration[] = [
+  {
+    id: "duzina",
+    titleKey: "tools.name.duzina",
+    category: "conversion",
+    keywords: ["duzina", "rastojanje", "metar", "kilometar", "milja", "inc", "stopa", "jard"],
+  },
+  {
+    id: "masa",
+    titleKey: "tools.name.masa",
+    category: "conversion",
+    keywords: ["masa", "tezina", "gram", "kilogram", "tona", "funta", "unca"],
+  },
+  {
+    id: "zapremina",
+    titleKey: "tools.name.zapremina",
+    category: "conversion",
+    keywords: ["zapremina", "litar", "mililitar", "galon", "kubni", "decilitar"],
+  },
+  {
+    id: "temperatura",
+    titleKey: "tools.name.temperatura",
+    category: "conversion",
+    keywords: ["temperatura", "celzijus", "farenhajt", "kelvin", "stepen"],
+  },
+  {
+    id: "povrsina",
+    titleKey: "tools.name.povrsina",
+    category: "conversion",
+    keywords: ["povrsina", "kvadratni", "hektar", "ar", "aker", "plac"],
+  },
+  {
+    id: "brzina",
+    titleKey: "tools.name.brzina",
+    category: "conversion",
+    keywords: ["brzina", "cvor", "milja na sat", "kilometar na sat"],
+  },
+  {
+    id: "podaci",
+    titleKey: "tools.name.podaci",
+    category: "conversion",
+    keywords: ["podaci", "bajt", "bit", "kilobajt", "megabajt", "gigabajt", "terabajt", "disk", "memorija"],
+  },
+  {
+    id: "procenat",
+    titleKey: "tools.name.procenat",
+    category: "calculation",
+    keywords: ["procenat", "posto", "popust", "povecanje", "smanjenje", "promena"],
+  },
+  {
+    id: "pdv",
+    titleKey: "tools.name.pdv",
+    category: "calculation",
+    keywords: ["pdv", "porez", "osnovica", "racun", "faktura", "stopa"],
+  },
+  {
+    id: "kredit",
+    titleKey: "tools.name.kredit",
+    category: "calculation",
+    keywords: ["kredit", "rata", "anuitet", "kamata", "zajam", "pozajmica", "nks"],
+  },
+  {
+    id: "jedinicna-cena",
+    titleKey: "tools.name.jedinicna-cena",
+    category: "calculation",
+    keywords: ["cena", "pakovanje", "jeftinije", "poredjenje", "kilogram", "litar"],
+  },
+];
+
+/**
+ * UTIL slice c's card. ONE control, and the restraint is FIN's and DOC's
+ * exactly: the drawer has no preferences to speak of — it stores nothing, reads
+ * nothing and computes everything from what is typed into it — so the only
+ * thing left for a settings card to decide is which rate „PDV" opens on.
+ *
+ * `choice` rather than FIN's `value`, and the difference is real: ISO-4217 is a
+ * domain Nexus would have to invent a subset of, while the PDV rates are a
+ * closed pair the law fixes. Enumerating a closed domain decides nothing on the
+ * user's behalf.
+ *
+ * `device`, honestly: it changes no stored row, it is read by one field, and
+ * forgetting it changes nothing that already exists — which is what earns this
+ * card the „Vrati na podrazumevano" link every profile-stored card is denied.
+ */
+const TOOLS_SETTINGS: SettingsPanel = {
+  titleKey: "settings.sectionTitle.tools",
+  controls: [
+    {
+      kind: "choice",
+      key: "default-vat-rate",
+      labelKey: "settings.tools.defaultVatLabel",
+      storage: "device",
+      options: [
+        { id: "20", labelKey: "tools.pdv.rateStandard" },
+        { id: "10", labelKey: "tools.pdv.rateReduced" },
+      ],
+      keywords: ["alatke", "pdv", "porez", "stopa", "racun"],
+    },
+  ],
+};
+
+/**
  * FIT slice b's one card: „Ishrana danas" — the day's calories against the
  * calorie goal, or, with no goal set, the plain figure.
  *
@@ -845,6 +966,38 @@ const V0_MODULES: ModuleManifest[] = [
     defaultEnabled: true,
     widgets: FOCUS_WIDGETS,
     settings: FOCUS_SETTINGS,
+  },
+  // Alatke (UTIL slice c) — the tool drawer, and the utilities HOST the
+  // `ToolRegistration` contract was reserved for („resolved when the UTIL tool
+  // host lands"). Second module in „Profesionalno i alati", beside „Fokus".
+  //
+  // **It SHARES the UTIL prefix with „Fokus", on purpose.** A prefix is
+  // traceability to a PRD entry, and PRD 29 („Utility Belt") is one entry that
+  // two app modules implement: a timer and a drawer are separate things to
+  // reach for and separate things to switch off, so they are separate sidebar
+  // entries with separate toggles. `ModuleRegistry` no longer forbids this —
+  // its `byPrefix` map was write-only, guaranteeing nothing but itself — and
+  // the invariant it did earn (a copy-pasted manifest whose prefix nobody
+  // changed) now lives in `modules.test.ts` as an explicit prefix→ids map,
+  // where THIS sharing is stated on purpose and any other duplicate still
+  // fails.
+  //
+  // ON by default, like every built module except PRIV: a converter writes
+  // nothing anywhere — the drawer has no storage at all beyond one device
+  // preference — so there is nothing to opt into.
+  //
+  // TWO contract slots stay empty, and neither merely „not yet". No `widgets`:
+  // a dashboard card draws a FACT about the profile, and this module holds no
+  // facts — a card showing an empty converter would be a form on a surface
+  // meant for answers. No `searchIndexers`: there is nothing here a query could
+  // find, because the module stores nothing a user wrote.
+  {
+    id: "tools",
+    prefix: "UTIL",
+    category: "Professional & utilities",
+    defaultEnabled: true,
+    settings: TOOLS_SETTINGS,
+    tools: TOOLS_TOOLS,
   },
 ];
 

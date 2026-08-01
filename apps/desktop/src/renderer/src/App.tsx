@@ -32,6 +32,7 @@ import { StudyPage, type StudyIntent } from "./StudyPage.js";
 import { FinancePage, type FinanceIntent } from "./FinancePage.js";
 import { HabitsPage } from "./HabitsPage.js";
 import { FocusPage } from "./FocusPage.js";
+import { ToolsPage } from "./ToolsPage.js";
 import { FitnessPage } from "./FitnessPage.js";
 import { SettingsPage, formatArchiveInstant } from "./SettingsPage.js";
 import { NotificationCenter } from "./NotificationCenter.js";
@@ -1309,6 +1310,17 @@ export function App() {
               profileId={activeProfile.id}
               enabledModules={enabledIds}
             />
+          ) : effectiveId === "tools" && activeProfile ? (
+            // `enabledModules` on „Fokus"'s reasoning, for a different purpose:
+            // the drawer is the utilities HOST, so it collects tools from every
+            // module's `tools` declaration — and a tool published by a module
+            // this profile has switched off must go with it, exactly as that
+            // module's page and widgets do.
+            //
+            // No `key={activeProfile.id}`: the drawer reads nothing profile-
+            // shaped and stores nothing, so there is no per-profile state to
+            // discard when the active profile changes.
+            <ToolsPage enabledModules={enabledIds} />
           ) : effectiveId === SEARCH_PAGE_ID && activeProfile ? (
             <SearchPage
               key={activeProfile.id}

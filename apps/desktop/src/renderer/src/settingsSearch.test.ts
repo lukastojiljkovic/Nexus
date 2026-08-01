@@ -337,6 +337,7 @@ describe("buildSettingsIndex", () => {
       "focus:short-break-minutes",
       "focus:long-break-minutes",
       "focus:cycles",
+      "tools:default-vat-rate",
     ]);
   });
 

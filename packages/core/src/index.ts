@@ -47,7 +47,8 @@ export type {
   AutomationTrigger,
 } from "./contracts/automation.js";
 export type { ImexHandler } from "./contracts/imex.js";
-export type { ToolRegistration } from "./contracts/tools.js";
+export { TOOL_CATEGORIES } from "./contracts/tools.js";
+export type { ToolCategory, ToolRegistration } from "./contracts/tools.js";
 
 export type {
   CollectionSchema,
@@ -168,6 +169,51 @@ export type {
   SearchableFood,
 } from "./fitness/food.js";
 export { catalogueFood, FOOD_CATALOGUE } from "./fitness/catalogue.js";
+
+// --- UTIL (the tool drawer's arithmetic) ------------------------------------
+//
+// Pure conversion and calculation, with no surface of their own. Two decisions
+// carry the module: a unit is a FUNCTION PAIR rather than a scale factor (a
+// factor table is silently wrong for temperature, which has an offset), and the
+// ambiguous data units are offered under BOTH conventions rather than resolved
+// by guessing — kB and KiB are different quantities. Nothing here rounds;
+// `roundForDisplay` is the surface's own explicit step.
+export {
+  DATA_CONVENTIONS,
+  TOOL_DISPLAY_PRECISION,
+  UNIT_KINDS,
+  convertUnit,
+  findUnit,
+  isRatioUnit,
+  roundForDisplay,
+  unitsOfKind,
+} from "./tools/units.js";
+export type { DataConvention, UnitDef, UnitKind } from "./tools/units.js";
+export {
+  PDV_RATE_REDUCED,
+  PDV_RATE_STANDARD,
+  PDV_RATES,
+  addVat,
+  annuityPlan,
+  applyPercentChange,
+  compareUnitPrices,
+  extractVat,
+  percentChange,
+  percentOf,
+  whatPercent,
+} from "./tools/calculators.js";
+export type {
+  LoanPlan,
+  LoanTerms,
+  PackageOffer,
+  UnitPriceRow,
+  VatBreakdown,
+} from "./tools/calculators.js";
+export {
+  TOOL_MAX_DECIMALS,
+  parseToolNumber,
+  toolNumberInputValue,
+} from "./tools/numberInput.js";
 
 export {
   ALWAYS_ON_SOURCES,

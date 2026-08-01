@@ -1,4 +1,11 @@
-import { MODULE_CATEGORIES, parseWidgetConfig, resolveEnabled } from "@nexus/core";
+import {
+  MODULE_CATEGORIES,
+  TOOL_CATEGORIES,
+  UNIT_KINDS,
+  parseWidgetConfig,
+  resolveEnabled,
+  unitsOfKind,
+} from "@nexus/core";
 // The one place a renderer file names `@nexus/db`, and it is a TEST: the
 // default dashboard layout is a db constant (`DashboardWidgetStore`) whose
 // entries name widgets these manifests publish, and nothing else in the build
@@ -12,6 +19,7 @@ import { FILE_VIEWS } from "./filePrefs.js";
 import { MODULE_SETTINGS_PANELS } from "./moduleSettingsPanels.js";
 import { NOTE_WIDTHS } from "./notePrefs.js";
 import { BLOCKED_IN_TODAY_OPTIONS } from "./taskPrefs.js";
+import { TOOL_SURFACES } from "./toolSurfaces.js";
 import {
   BUSINESS_DISABLED_MODULE_IDS,
   LOCKED_MODULE_IDS,
@@ -44,16 +52,60 @@ describe("createModuleRegistry", () => {
       "habits",
       "fitness",
       "focus",
+      "tools",
     ]);
   });
 
-  it("gives every module a unique id and a unique PRD prefix", () => {
+  it("gives every module a unique id", () => {
     const manifests = createModuleRegistry().all();
+    // The id IS load-bearing — `get(id)` is how every consumer resolves a
+    // manifest — and the registry still throws on a duplicate.
     expect(new Set(manifests.map((manifest) => manifest.id)).size).toBe(manifests.length);
-    expect(new Set(manifests.map((manifest) => manifest.prefix)).size).toBe(manifests.length);
     for (const manifest of manifests) {
       expect(manifest.prefix, manifest.id).toMatch(/^[A-Z]+$/);
     }
+  });
+
+  /**
+   * **The prefix invariant, and why it lives here rather than in the registry.**
+   *
+   * `ModuleRegistry` used to throw on a duplicate prefix, enforced by a
+   * `byPrefix` map that nothing ever read: there is no `getByPrefix` and no
+   * consumer, so the rule guaranteed only itself. What it genuinely caught is
+   * worth keeping — a copy-pasted manifest whose prefix somebody forgot to
+   * change — but a runtime throw could only ever say „already registered",
+   * which is exactly the wrong answer when the sharing is deliberate.
+   *
+   * So the mapping is stated instead. A prefix is traceability to a PRD entry,
+   * and ONE PRD entry can legitimately be implemented by more than one app
+   * module: UTIL („Utility Belt", PRD 29) is that case — „Fokus" and „Alatke"
+   * are one PRD section but two sidebar entries and two toggles, because a
+   * timer and a tool drawer are separate things to reach for and separate
+   * things to switch off.
+   *
+   * Any prefix sharing NOT written down here still fails, and the failure names
+   * the modules involved rather than merely forbidding the second one.
+   */
+  it("maps every PRD prefix to exactly the modules meant to implement it", () => {
+    const byPrefix = new Map<string, string[]>();
+    for (const manifest of createModuleRegistry().all()) {
+      byPrefix.set(manifest.prefix, [...(byPrefix.get(manifest.prefix) ?? []), manifest.id]);
+    }
+    expect(Object.fromEntries(byPrefix)).toEqual({
+      DASH: ["dashboard"],
+      TASK: ["tasks"],
+      CAL: ["calendar"],
+      SET: ["settings"],
+      NOTE: ["notes"],
+      PRIV: ["priv"],
+      DOC: ["files"],
+      STUDY: ["study"],
+      FIN: ["finance"],
+      HABIT: ["habits"],
+      FIT: ["fitness"],
+      // The one deliberate sharing — see this test's own comment.
+      UTIL: ["focus", "tools"],
+    });
   });
 
   it("only uses canonical categories, and every registered module except PRIV is on by default", () => {
@@ -99,8 +151,11 @@ describe("createModuleRegistry", () => {
     // „Fokus" is the first module in „Profesionalno i alati", and the category
     // is the honest one: „Životni centri" holds three subjects somebody HAS,
     // while a Pomodoro timer is a TOOL you use on whichever of them you are at.
+    // Two modules now, one PRD section: „Fokus" is a timer you run, „Alatke" is
+    // a drawer you open — separate entries because they are separate errands.
     expect(grouped.get("Professional & utilities")?.map((manifest) => manifest.id)).toEqual([
       "focus",
+      "tools",
     ]);
   });
 
@@ -129,6 +184,7 @@ describe("createModuleRegistry", () => {
       "habits",
       "fitness",
       "focus",
+      "tools",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -276,6 +332,7 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       "habits",
       "fitness",
       "focus",
+      "tools",
     ]);
   });
 
@@ -369,6 +426,11 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
     // restates nothing about yesterday, which is exactly what made
     // `study_settings` a profile row and makes these not.
     expect(storages("focus")).toEqual(new Set(["device"]));
+    // „Alatke"'s one control says which rate the PDV field OPENS on — never
+    // what any figure is computed at, since every result names the rate it
+    // used. The module stores nothing else anywhere: a converter is arithmetic,
+    // not data.
+    expect(storages("tools")).toEqual(new Set(["device"]));
     expect(storages("dashboard")).toEqual(new Set(["profile"]));
     expect(storages("study")).toEqual(new Set(["profile"]));
     expect(storages("calendar")).toEqual(new Set(["profile"]));
@@ -558,6 +620,108 @@ describe("the per-widget configuration declarations (DASH-004 / ADR-059)", () =>
             }
           }
         }
+      }
+    }
+  });
+});
+
+/**
+ * UTIL slice c: the tools the registry publishes (`ToolRegistration`), and the
+ * pairing „Alatke" rests on.
+ *
+ * The drawer is a HOST — it collects `manifest.tools` across the registry and
+ * renders whatever it finds — so it has no list of tools of its own and no
+ * `switch`. That is only safe if the two halves agree, which is what these
+ * pin: a declaration with no surface is a row that opens onto nothing, a
+ * surface with no declaration is a tool nobody can reach. Neither fails loudly
+ * in the app.
+ */
+describe("the tools the registry publishes (PRD 29 UTIL)", () => {
+  const registry = createModuleRegistry();
+  const declared = registry.all().flatMap((manifest) => manifest.tools ?? []);
+  const lookup = (path: string): unknown =>
+    path
+      .split(".")
+      .reduce<unknown>(
+        (node, key) =>
+          typeof node === "object" && node !== null
+            ? (node as Record<string, unknown>)[key]
+            : undefined,
+        strings,
+      );
+
+  it("publishes the drawer's eleven tools, and only „Alatke“ publishes any", () => {
+    expect(declared.map((tool) => tool.id)).toEqual([
+      "duzina",
+      "masa",
+      "zapremina",
+      "temperatura",
+      "povrsina",
+      "brzina",
+      "podaci",
+      "procenat",
+      "pdv",
+      "kredit",
+      "jedinicna-cena",
+    ]);
+    // Nothing else contributes yet — but the drawer reads the whole registry,
+    // so the day something does, it appears without the drawer being edited.
+    for (const manifest of registry.all()) {
+      if (manifest.id === "tools") continue;
+      expect(manifest.tools, manifest.id).toBeUndefined();
+    }
+  });
+
+  /**
+   * There is NO currency converter, and this pins its absence on purpose.
+   *
+   * Nexus does not convert money between currencies (founder decision): each
+   * currency is tracked on its own terms, because a rate an offline app cannot
+   * verify is a number that silently misstates money — which is why FIN holds
+   * no rate at all and tells the user „Nexus nema kurs". This is a settled
+   * product decision, not an unbuilt slice, so there is no placeholder, no
+   * disabled entry and no seam awaiting one.
+   */
+  it("publishes no currency tool, and the conversions are all of physical quantities", () => {
+    for (const tool of declared) {
+      expect(tool.id, tool.id).not.toMatch(/valut|kurs|currency|devi/i);
+    }
+    expect(declared.map((tool) => tool.id)).not.toContain("valuta");
+  });
+
+  it("pairs every declared tool with a surface, and every surface with a declaration", () => {
+    expect(declared.map((tool) => tool.id).sort()).toEqual(Object.keys(TOOL_SURFACES).sort());
+  });
+
+  it("keeps every tool id an ASCII slug, unique across the registry", () => {
+    const ids = declared.map((tool) => tool.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const id of ids) expect(id, id).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+  });
+
+  it("names a string that really exists for every tool title, and a canonical category", () => {
+    for (const tool of declared) {
+      // `titleKey` is a strings KEY path, not Serbian copy (`ToolRegistration`).
+      expect(tool.titleKey, tool.id).toMatch(/^[a-zA-Z]+(?:\.[a-zA-Z-]+)+$/);
+      expect(typeof lookup(tool.titleKey), tool.titleKey).toBe("string");
+      expect(TOOL_CATEGORIES, tool.id).toContain(tool.category);
+    }
+  });
+
+  it("gives every tool folded, lowercase keywords — they are search keys, never labels", () => {
+    for (const tool of declared) {
+      for (const keyword of tool.keywords ?? []) {
+        expect(keyword, `${tool.id}:${keyword}`).toMatch(/^[a-z0-9 ]+$/);
+      }
+    }
+  });
+
+  it("names a unit string for every unit the converters can offer", () => {
+    // A missing name would render the raw id in a dropdown — the one place the
+    // drawer would look unfinished.
+    for (const kind of UNIT_KINDS) {
+      for (const unit of unitsOfKind(kind)) {
+        expect(typeof strings.tools.unit[unit.id], unit.id).toBe("string");
       }
     }
   });

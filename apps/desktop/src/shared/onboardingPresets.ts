@@ -44,6 +44,7 @@ export const ESSENTIALS_MODULE_PRESET: ModulePreset = {
   habits: true,
   focus: true,
   fitness: true,
+  tools: true,
 };
 
 /**
@@ -82,6 +83,13 @@ export const ESSENTIALS_MODULE_PRESET: ModulePreset = {
  * until somebody presses start. It is also the one module a role answer could
  * not sensibly drop without also dropping STUDY, since the two share the timer.
  *
+ * UTIL („Alatke“) is true in every row on the same argument taken one step
+ * further: the drawer holds NOTHING, ever. A converter and a percentage sum are
+ * arithmetic, not data — the module writes no row for anybody — so there is no
+ * clutter to spare a user by dropping it, and „koliko je ovo u inčima“ is not a
+ * question shaped differently for a student and a founder. It is the one module
+ * whose presence costs a profile literally nothing.
+ *
  * FIT („Ishrana“) is true in every row on HABIT's argument exactly: „Uloga“ asks
  * how somebody's DAY is shaped, and eating is shaped the same way for a student,
  * an employee, a founder and somebody who fits none of those. Dropping it for
@@ -103,6 +111,7 @@ export const OCCUPATION_MODULE_PRESETS: Readonly<Record<OnboardingOccupation, Mo
     habits: true,
     focus: true,
     fitness: true,
+    tools: true,
   },
   preduzetnik: {
     tasks: true,
@@ -115,6 +124,7 @@ export const OCCUPATION_MODULE_PRESETS: Readonly<Record<OnboardingOccupation, Mo
     habits: true,
     focus: true,
     fitness: true,
+    tools: true,
   },
   drugo: ESSENTIALS_MODULE_PRESET,
 };

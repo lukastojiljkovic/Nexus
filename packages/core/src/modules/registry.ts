@@ -15,19 +15,33 @@ const NO_WIDGETS: readonly WidgetContract[] = [];
  */
 export class ModuleRegistry {
   private readonly byId = new Map<string, ModuleManifest>();
-  private readonly byPrefix = new Map<string, ModuleManifest>();
   private readonly order: ModuleManifest[] = [];
 
-  /** Registers a module. Throws on a duplicate id or a duplicate prefix. */
+  /**
+   * Registers a module. Throws on a duplicate id — that one is load-bearing,
+   * because `get(id)` is how every consumer resolves a manifest and a second
+   * registration would shadow the first.
+   *
+   * **There is deliberately no duplicate-PREFIX check.** A prefix is traceability
+   * to a PRD entry, and one PRD entry can legitimately be implemented by more
+   * than one app module: UTIL („Utility Belt") is exactly that case — „Fokus"
+   * and „Alatke" are one PRD section but two sidebar entries and two toggles,
+   * because a timer and a tool drawer are separate things to reach for and
+   * separate things to switch off.
+   *
+   * The rule this replaces was enforced by a `byPrefix` map that nothing ever
+   * read: there is no `getByPrefix` and no consumer, so it guaranteed only
+   * itself. What it genuinely caught — a copy-pasted manifest whose prefix
+   * nobody changed — is now pinned in `modules.test.ts` as an explicit
+   * prefix→ids mapping, where the intended sharing is stated on purpose and any
+   * OTHER duplicate still fails. A test that names the intent documents it;
+   * a throw reading „already registered" only forbids it.
+   */
   register(manifest: ModuleManifest): void {
     if (this.byId.has(manifest.id)) {
       throw new Error(`Module id "${manifest.id}" is already registered.`);
     }
-    if (this.byPrefix.has(manifest.prefix)) {
-      throw new Error(`Module prefix "${manifest.prefix}" is already registered.`);
-    }
     this.byId.set(manifest.id, manifest);
-    this.byPrefix.set(manifest.prefix, manifest);
     this.order.push(manifest);
   }
 

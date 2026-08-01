@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ComponentType, FormEvent } from "react";
-import { validateFocusConfig } from "@nexus/core";
+import { PDV_RATES, validateFocusConfig } from "@nexus/core";
 import type { FocusConfig } from "@nexus/core";
 import { Button, Checkbox, TextField } from "@nexus/ui";
 import {
@@ -54,6 +54,11 @@ import {
   type NoteWidth,
 } from "./notePrefs.js";
 import { labelClass } from "./settingsSearch.js";
+import {
+  clearStoredToolPreferences,
+  persistDefaultVatRate,
+  readStoredDefaultVatRate,
+} from "./toolPrefs.js";
 import {
   BLOCKED_IN_TODAY_OPTIONS,
   clearStoredTaskPreferences,
@@ -1228,6 +1233,54 @@ function FitnessSettingsPanel({ profileId, hits }: SettingsPanelProps) {
   );
 }
 
+// --- UTIL slice c -------------------------------------------------------------
+
+/**
+ * Alatke (UTIL slice c): the rate „PDV" opens on. `FilesSettingsPanel`'s recipe
+ * verbatim — a closed segmented row over a device preference — because it is
+ * the same kind of thing, and the domain really is closed: the law has two
+ * rates, so enumerating them decides nothing on the user's behalf.
+ *
+ * The tool itself carries the same selector for the current calculation, which
+ * is why the label says „Podrazumevana": this card decides what the field opens
+ * ON, never what a figure is computed at — every result names the rate it used.
+ */
+function ToolsSettingsPanel({ hits }: SettingsPanelProps) {
+  const s = strings.settings.tools;
+  const [rate, setRate] = useState<number>(() => readStoredDefaultVatRate());
+
+  return (
+    <>
+      <p className="set__section-caption">{s.caption}</p>
+      <p
+        className={labelClass(
+          "set__section-caption",
+          hits.has(settingsEntryId("tools", "default-vat-rate")),
+        )}
+      >
+        {s.defaultVatLabel}
+      </p>
+      <div className="set__segmented" role="group" aria-label={s.defaultVatLabel}>
+        {PDV_RATES.map((option) => (
+          <Button
+            key={option}
+            size="sm"
+            variant={rate === option ? "primary" : "ghost"}
+            aria-pressed={rate === option}
+            onClick={() => {
+              persistDefaultVatRate(option);
+              setRate(option);
+            }}
+          >
+            {option === 10 ? strings.tools.pdv.rateReduced : strings.tools.pdv.rateStandard}
+          </Button>
+        ))}
+      </div>
+      <p className="set__section-caption">{s.hint}</p>
+    </>
+  );
+}
+
 // --- The registry-driven map --------------------------------------------------
 
 /**
@@ -1253,4 +1306,5 @@ export const MODULE_SETTINGS_PANELS: Record<string, SettingsPanelRenderer> = {
   // own data rather than a forgetting on this machine — and there is no default
   // to go back to, since absent is what the app ships with.
   fitness: { Body: FitnessSettingsPanel },
+  tools: { Body: ToolsSettingsPanel, resetDevice: clearStoredToolPreferences },
 };

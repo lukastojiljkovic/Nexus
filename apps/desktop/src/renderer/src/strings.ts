@@ -297,6 +297,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     habits: "Navike",
     focus: "Fokus",
     fitness: "Ishrana",
+    tools: "Alatke",
   } as Record<string, string>,
 
   dashboard: {
@@ -3018,6 +3019,184 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
   },
 
   /**
+   * Alatke (UTIL slice c) — the tool drawer.
+   *
+   * **Every tool here converts a PHYSICAL quantity or works something out from
+   * numbers the user typed.** There is no currency converter and there will not
+   * be one: Nexus does not convert money between currencies, because a rate an
+   * offline app cannot verify is a number that silently misstates money. Each
+   * currency is tracked on its own terms instead — which is what „Finansije"
+   * already tells the user („Nexus nema kurs").
+   *
+   * **`loanCaveat` is the one line in this group that is not a label.** An
+   * annuity figure that does not say what it assumed cannot be checked, and a
+   * user comparing it to a bank's offer will find the bank's number higher. The
+   * caveat says why, on screen, in the calm register the rest of the app uses.
+   */
+  tools: {
+    title: "Alatke",
+    searchLabel: "Pretraži alatke",
+    searchPlaceholder: "Pretraži alatke…",
+    /** Nothing matched what was typed. Says what to do, and does not scold. */
+    noMatches: "Nijedna alatka ne odgovara pretrazi.",
+    clearSearch: "Poništi pretragu",
+    /** The two halves of the drawer — `ToolCategory` in Serbian. */
+    category: {
+      conversion: "Pretvaranje",
+      calculation: "Računanje",
+    },
+    /** The invitation before a tool is picked — the drawer is a list, not a dashboard. */
+    empty: "Izaberi alatku sa liste.",
+    /** Shared by every converter surface. */
+    convert: {
+      valueLabel: "Vrednost",
+      fromLabel: "Iz",
+      toLabel: "U",
+      swap: "Zameni mesta",
+      /** The one refusal a converter has: the text is not a number this grammar admits. */
+      invalid: "Upiši broj — decimale sa zarezom, bez tačke za hiljade.",
+    },
+    /** Tool display names, keyed by tool id — `ToolRegistration.titleKey` points at these. */
+    name: {
+      duzina: "Dužina",
+      masa: "Masa",
+      zapremina: "Zapremina",
+      temperatura: "Temperatura",
+      povrsina: "Površina",
+      brzina: "Brzina",
+      podaci: "Podaci",
+      procenat: "Procenat",
+      pdv: "PDV",
+      kredit: "Kredit",
+      "jedinicna-cena": "Cena po jedinici",
+    } as Record<string, string>,
+    /**
+     * Unit names, keyed by `UnitDef.id`.
+     *
+     * The data units spell their factor out — „kB (1000 B)" against „KiB
+     * (1024 B)" — because those two are different quantities that look like the
+     * same word, and a drawer that offered one „kilobajt" would be wrong for
+     * whoever meant the other. The US volume units name their country for the
+     * same reason: an imperial gallon is not a US one.
+     */
+    unit: {
+      mm: "milimetar (mm)",
+      cm: "centimetar (cm)",
+      dm: "decimetar (dm)",
+      m: "metar (m)",
+      km: "kilometar (km)",
+      in: "inč (in)",
+      ft: "stopa (ft)",
+      yd: "jard (yd)",
+      mi: "milja (mi)",
+      nmi: "nautička milja (nmi)",
+      mg: "miligram (mg)",
+      g: "gram (g)",
+      dag: "dekagram (dag)",
+      kg: "kilogram (kg)",
+      t: "tona (t)",
+      oz: "unca (oz)",
+      lb: "funta (lb)",
+      ml: "mililitar (ml)",
+      cl: "centilitar (cl)",
+      dl: "decilitar (dl)",
+      l: "litar (l)",
+      hl: "hektolitar (hl)",
+      m3: "kubni metar (m³)",
+      "floz-us": "tečna unca (SAD)",
+      "gal-us": "galon (SAD)",
+      degc: "stepen Celzijusa (°C)",
+      degf: "stepen Farenhajta (°F)",
+      k: "kelvin (K)",
+      mm2: "kvadratni milimetar (mm²)",
+      cm2: "kvadratni centimetar (cm²)",
+      m2: "kvadratni metar (m²)",
+      ar: "ar (a)",
+      ha: "hektar (ha)",
+      km2: "kvadratni kilometar (km²)",
+      ft2: "kvadratna stopa (ft²)",
+      ac: "aker (ac)",
+      ms: "metar u sekundi (m/s)",
+      kmh: "kilometar na sat (km/h)",
+      mph: "milja na sat (mi/h)",
+      kn: "čvor (kn)",
+      bit: "bit (b)",
+      byte: "bajt (B)",
+      "kb-dec": "kilobajt — kB (1000 B)",
+      "mb-dec": "megabajt — MB (1000 kB)",
+      "gb-dec": "gigabajt — GB (1000 MB)",
+      "tb-dec": "terabajt — TB (1000 GB)",
+      kib: "kibibajt — KiB (1024 B)",
+      mib: "mebibajt — MiB (1024 KiB)",
+      gib: "gibibajt — GiB (1024 MiB)",
+      tib: "tebibajt — TiB (1024 GiB)",
+    } as Record<string, string>,
+    /** „Podaci" says the thing its two conventions exist for, once, above the fields. */
+    dataNote:
+      "kB i KiB nisu ista količina — kB je 1000 bajtova, KiB je 1024. Obe konvencije su na listi, pa izaberi onu koju tvoj izvor koristi.",
+    percent: {
+      ofTitle: "Koliko je P% od X",
+      ofPercent: "P (%)",
+      ofValue: "X",
+      whatTitle: "X je koliko % od Y",
+      whatPart: "X",
+      whatWhole: "Y",
+      applyTitle: "X uvećano ili umanjeno za P%",
+      applyValue: "X",
+      applyPercent: "P (%) — negativno za umanjenje",
+      changeTitle: "Promena sa X na Y, u procentima",
+      changeFrom: "X (staro)",
+      changeTo: "Y (novo)",
+    },
+    pdv: {
+      amountLabel: "Iznos",
+      rateLabel: "Stopa",
+      /** The two rates the law has — `PDV_RATES` in Serbian. */
+      rateStandard: "Opšta (20%)",
+      rateReduced: "Posebna (10%)",
+      directionLabel: "Smer",
+      /** „Dodaj" takes a net price up; „Izdvoji" takes the PDV out of a price that already includes it. */
+      directionAdd: "Dodaj PDV na iznos bez PDV-a",
+      directionExtract: "Izdvoji PDV iz iznosa sa PDV-om",
+      netLabel: "Osnovica (bez PDV-a)",
+      vatLabel: "PDV",
+      grossLabel: "Ukupno (sa PDV-om)",
+      /** Says why „izdvoji" is not „20% od ukupnog" — the everyday mistake this tool prevents. */
+      note: "Izdvajanje nije 20% od ukupnog iznosa: PDV je obračunat na osnovicu, pa se ukupno deli sa 1,20 (odnosno 1,10).",
+    },
+    loan: {
+      principalLabel: "Iznos kredita",
+      rateLabel: "Nominalna kamatna stopa (% godišnje)",
+      monthsLabel: "Broj rata (meseci)",
+      paymentLabel: "Mesečna rata",
+      totalPaidLabel: "Ukupno plaćeno",
+      totalInterestLabel: "Ukupna kamata",
+      /**
+       * The caveat, on screen rather than only in a comment. Three facts in the
+       * order they matter: which rate this is, what is not counted, and what
+       * that means for the number a bank will quote.
+       */
+      caveat:
+        "Računato po nominalnoj kamatnoj stopi (NKS), sa mesečnim pripisom i jednakim ratama koje dospevaju na kraju meseca. Naknade, osiguranje i drugi troškovi nisu uračunati — ovo zato nije efektivna kamatna stopa (EKS), pa će ponuda banke po pravilu biti viša.",
+      invalid: "Upiši iznos veći od nule, stopu od nule naviše i ceo broj meseci.",
+    },
+    unitPrice: {
+      packageLabel: "Pakovanje",
+      priceLabel: "Cena",
+      quantityLabel: "Količina",
+      add: "Dodaj pakovanje",
+      remove: "Ukloni",
+      unitPriceLabel: "Cena po jedinici",
+      cheapest: "Najjeftinije",
+      /** How much dearer per unit than the cheapest row — never „ušteda", which would imply a purchase. */
+      premium: "skuplje po jedinici",
+      /** Says the one thing this tool does NOT do, so „500 g" and „1 kg" are not compared as 500 and 1. */
+      note: "Uporedi pakovanja izražena u istoj jedinici. Ako su različite, prvo ih pretvori alatkama „Masa” i „Zapremina”.",
+      invalid: "Svako pakovanje treba cenu i količinu veće od nule.",
+    },
+  },
+
+  /**
    * Ishrana (FIT slice b). Two rules run through every line below.
    *
    * **Nothing here advises.** There is no recommended intake, no „trebalo bi",
@@ -3271,6 +3450,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       habits: "Navike",
       focus: "Fokus",
       fitness: "Ishrana",
+      tools: "Alatke",
       modules: "Moduli",
       notifications: "Obaveštenja",
       backup: "Rezervna kopija",
@@ -3626,6 +3806,23 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       loadError: "Ciljevi se ne mogu učitati.",
       saveError: "Čuvanje ciljeva nije uspelo. Pokušaj ponovo.",
     },
+    /**
+     * UTIL slice c's card — ONE control, and the restraint is FIN's and DOC's
+     * exactly: the drawer has no preferences to speak of, only the rate its PDV
+     * tool opens on. A shopkeeper works at one rate nearly always, and opening
+     * on theirs saves a click every single time.
+     *
+     * `choice` rather than `value` here, unlike FIN's currency field, because
+     * the domain really is closed: the law has two rates, so enumerating them
+     * decides nothing on the user's behalf.
+     */
+    tools: {
+      caption:
+        "Stopa na koju se „PDV” otvara. Menja samo početnu vrednost polja — svaki račun možeš prebaciti na drugu stopu.",
+      defaultVatLabel: "Podrazumevana stopa PDV-a",
+      hint: "Važi samo na ovom uređaju.",
+      saved: "Podrazumevana stopa je sačuvana.",
+    },
     /** One-line module descriptions for the gallery, keyed by module id. */
     moduleDescriptions: {
       dashboard: "Pregled dana na jednom mestu — obaveze, zadaci i dokumenta koja ističu.",
@@ -3640,6 +3837,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       habits: "Dnevne i nedeljne navike — niz, istorija i ono što se danas očekuje.",
       focus: "Pomodoro tajmer i istorija fokusa — isti tajmer koji „Učenje“ koristi.",
       fitness: "Dnevnik ishrane — obroci po danu, ugrađena lista namirnica i dnevni ciljevi.",
+      tools: "Pretvarači jedinica i svakodnevni računi — procenat, PDV, kredit i cena po jedinici.",
     } as Record<string, string>,
     /** Category-group headings above the module gallery, keyed by registry category. */
     moduleCategories: {

@@ -156,6 +156,7 @@ describe("resolveModuleSelection", () => {
       habits: true,
       fitness: true,
       focus: true,
+      tools: true,
     });
   });
 
@@ -184,6 +185,7 @@ describe("moduleFlagWrites", () => {
       { moduleId: "habits", enabled: true },
       { moduleId: "fitness", enabled: true },
       { moduleId: "focus", enabled: true },
+      { moduleId: "tools", enabled: true },
     ]);
   });
 
