@@ -27,6 +27,12 @@ import {
   persistPrimaryCurrency,
   readStoredPrimaryCurrency,
 } from "./financePrefs.js";
+import {
+  clearStoredHabitPreferences,
+  isReminderTime,
+  persistDefaultReminder,
+  readStoredDefaultReminder,
+} from "./habitPrefs.js";
 import { settingsEntryId } from "./moduleSettings.js";
 import {
   clearStoredNotePreferences,
@@ -885,6 +891,61 @@ function FilesSettingsPanel({ hits }: SettingsPanelProps) {
   );
 }
 
+// --- HABIT --------------------------------------------------------------------
+
+/**
+ * Navike (HABIT slice c): the hour a reminder is filled in with when one is
+ * switched on. `FilesSettingsPanel`'s recipe with a native time input instead of
+ * a segmented row — the domain is 1440 minutes, which is neither enumerable into
+ * a select nor invented into a curated list of „sensible" hours.
+ *
+ * It commits on every valid change, which a `type="time"` input makes total: the
+ * control can only ever produce a real HH:MM or the empty string, and the empty
+ * string is a half-typed value rather than a choice, so it is simply not stored.
+ * That is what a `choice` gives for free elsewhere and what FIN's currency field
+ * has to earn with a refusal message.
+ */
+function HabitsSettingsPanel({ hits }: SettingsPanelProps) {
+  const s = strings.settings.habits;
+  const [time, setTime] = useState(() => readStoredDefaultReminder());
+  const [saved, setSaved] = useState(false);
+
+  return (
+    <>
+      <p className="set__section-caption">{s.caption}</p>
+      <div className="set__study-fields">
+        <label className="set__study-field">
+          <span
+            className={labelClass(
+              "set__study-label",
+              hits.has(settingsEntryId("habits", "default-reminder")),
+            )}
+          >
+            {s.defaultReminderLabel}
+          </span>
+          <input
+            type="time"
+            className="nx-textfield__input set__time-input"
+            value={time}
+            aria-label={s.defaultReminderLabel}
+            onChange={(event) => {
+              const next = event.target.value;
+              setTime(next);
+              // An empty field is the picker mid-edit, not a preference; the
+              // stored value simply stays where it was until a real time lands.
+              if (!isReminderTime(next)) return;
+              persistDefaultReminder(next);
+              setSaved(true);
+            }}
+          />
+          <span className="set__section-caption">{s.defaultReminderHint}</span>
+        </label>
+      </div>
+      {saved && <p className="set__section-caption">{s.saved}</p>}
+    </>
+  );
+}
+
 // --- The registry-driven map --------------------------------------------------
 
 /**
@@ -903,4 +964,5 @@ export const MODULE_SETTINGS_PANELS: Record<string, SettingsPanelRenderer> = {
   files: { Body: FilesSettingsPanel, resetDevice: clearStoredFilePreferences },
   study: { Body: StudySettingsPanel },
   finance: { Body: FinanceSettingsPanel, resetDevice: clearStoredFinancePreferences },
+  habits: { Body: HabitsSettingsPanel, resetDevice: clearStoredHabitPreferences },
 };

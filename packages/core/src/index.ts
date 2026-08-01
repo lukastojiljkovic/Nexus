@@ -109,6 +109,11 @@ export {
 export type { HabitSchedule } from "./habits/habitSchedule.js";
 export { computeHabitStreak } from "./habits/habitStreak.js";
 export type { HabitStreakResult } from "./habits/habitStreak.js";
+// THE „urađeno" rule (slice c): moved out of the renderer once main needed the
+// same sentence for the reminder source, so there is still exactly one of it.
+export { countsAsDone } from "./habits/habitDone.js";
+export { habitReminderInputs } from "./habits/habitReminder.js";
+export type { HabitReminderSource } from "./habits/habitReminder.js";
 
 export {
   ALWAYS_ON_SOURCES,
@@ -122,6 +127,7 @@ export type {
   DocumentReminderInput,
   EventReminderInput,
   ExamReminderInput,
+  HabitReminderInput,
   NotificationCandidate,
   NotificationPriority,
   NotificationSource,

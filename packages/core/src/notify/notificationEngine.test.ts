@@ -13,6 +13,7 @@ const ALL_SOURCES = [
   "event",
   "task",
   "subscription",
+  "habit",
 ] as const;
 
 describe("deriveNotificationCandidates", () => {
@@ -25,6 +26,7 @@ describe("deriveNotificationCandidates", () => {
         studyDays: [],
         tasks: [],
         subscriptions: [],
+        habits: [],
         enabledSources: ALL_SOURCES,
         today: "2026-07-27", // 2026-08-10 - 14 days
         nowLocalTime: "08:00",
@@ -50,6 +52,7 @@ describe("deriveNotificationCandidates", () => {
         studyDays: [],
         tasks: [],
         subscriptions: [],
+        habits: [],
         enabledSources: ALL_SOURCES,
         today: "2026-08-03", // offset 7's fire date; offset 30's (2026-07-11) is already past
         nowLocalTime: "08:00",
@@ -71,6 +74,7 @@ describe("deriveNotificationCandidates", () => {
         studyDays: [],
         tasks: [],
         subscriptions: [],
+        habits: [],
         enabledSources: ALL_SOURCES,
         today: "2026-08-11", // the day after expiry; the offset-90 fire date is long past
         nowLocalTime: "08:00",
@@ -90,6 +94,7 @@ describe("deriveNotificationCandidates", () => {
         studyDays: [],
         tasks: [],
         subscriptions: [],
+        habits: [],
         enabledSources: ALL_SOURCES,
         today: "2026-08-31", // d-1's fire date; d-0's (2026-09-01) is still in the future
         nowLocalTime: "07:59",
@@ -104,6 +109,7 @@ describe("deriveNotificationCandidates", () => {
         studyDays: [],
         tasks: [],
         subscriptions: [],
+        habits: [],
         enabledSources: ALL_SOURCES,
         today: "2026-08-31",
         nowLocalTime: "08:00",
@@ -122,6 +128,7 @@ describe("deriveNotificationCandidates", () => {
         studyDays: [],
         tasks: [],
         subscriptions: [],
+        habits: [],
         enabledSources: ALL_SOURCES,
         today: "2026-09-01",
         nowLocalTime: "09:00",
@@ -143,6 +150,7 @@ describe("deriveNotificationCandidates", () => {
         studyDays: [],
         tasks: [],
         subscriptions: [],
+        habits: [],
         enabledSources: ALL_SOURCES,
         today: "2026-09-02",
         nowLocalTime: "09:00",
@@ -162,6 +170,7 @@ describe("deriveNotificationCandidates", () => {
         studyDays: [{ date: "2026-07-11", blockCount: 2, totalMinutes: 60 }],
         tasks: [],
         subscriptions: [],
+        habits: [],
         enabledSources: ALL_SOURCES,
         today: "2026-07-11",
         nowLocalTime: "08:00",
@@ -181,6 +190,7 @@ describe("deriveNotificationCandidates", () => {
         studyDays: [{ date: "2026-07-11", blockCount: 2, totalMinutes: 60 }],
         tasks: [],
         subscriptions: [],
+        habits: [],
         enabledSources: ALL_SOURCES,
         today: "2026-07-12",
         nowLocalTime: "08:00",
@@ -207,6 +217,7 @@ describe("deriveNotificationCandidates", () => {
         studyDays: [],
         tasks: [],
         subscriptions: [],
+        habits: [],
         enabledSources: ALL_SOURCES,
         today,
         nowLocalTime,
@@ -292,6 +303,7 @@ describe("deriveNotificationCandidates", () => {
         studyDays: [],
         tasks: [],
         subscriptions: [],
+        habits: [],
         enabledSources: ["document", "exam", "study-day"],
         today: "2026-08-01",
         nowLocalTime: "09:50",
@@ -313,6 +325,7 @@ describe("deriveNotificationCandidates", () => {
         studyDays: [{ date: "2026-08-03", blockCount: 1, totalMinutes: 30 }],
         tasks: [],
         subscriptions: [],
+        habits: [],
         enabledSources: ALL_SOURCES,
         today: "2026-08-03",
         nowLocalTime: "09:56", // past both of ev-b's fire instants (09:30 and 09:55), before its 10:00 start
@@ -347,6 +360,7 @@ describe("deriveNotificationCandidates", () => {
         studyDays: [],
         tasks: [{ id: "task1", dueDate, reminderOffsets }],
         subscriptions: [],
+        habits: [],
         enabledSources: ALL_SOURCES,
         today,
         nowLocalTime,
@@ -411,6 +425,7 @@ describe("deriveNotificationCandidates", () => {
         studyDays: [],
         tasks: [{ id: "task1", dueDate: "2026-08-10", reminderOffsets: [0] }],
         subscriptions: [],
+        habits: [],
         enabledSources: ["document", "exam", "study-day", "event"],
         today: "2026-08-10",
         nowLocalTime: "08:00",
@@ -430,6 +445,7 @@ describe("deriveNotificationCandidates", () => {
           { id: "task-a", dueDate: "2026-08-03", reminderOffsets: [0] },
         ],
         subscriptions: [],
+        habits: [],
         enabledSources: ALL_SOURCES,
         today: "2026-08-03",
         nowLocalTime: "08:00",
@@ -462,6 +478,7 @@ describe("deriveNotificationCandidates", () => {
         studyDays: [],
         tasks: [],
         subscriptions: [{ id: "sub1", renewalDate, reminderDays }],
+        habits: [],
         enabledSources: ALL_SOURCES,
         today,
         nowLocalTime,
@@ -521,10 +538,91 @@ describe("deriveNotificationCandidates", () => {
         studyDays: [],
         tasks: [],
         subscriptions: [{ id: "sub1", renewalDate: "2026-08-10", reminderDays: 0 }],
+        habits: [],
         enabledSources: ["document", "exam", "study-day", "event", "task"],
         today: "2026-08-10",
         nowLocalTime: "08:00",
         morningHour: "08:00",
+      });
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe("habits (HABIT slice c)", () => {
+    /** Everything but the habits, so each case below states only what it is about. */
+    const base = {
+      documents: [],
+      exams: [],
+      events: [],
+      studyDays: [],
+      tasks: [],
+      subscriptions: [],
+      enabledSources: ALL_SOURCES,
+      morningHour: "08:00",
+    };
+
+    it("fires at the habit's own wall-clock hour, keyed by the day it is about", () => {
+      const result = deriveNotificationCandidates({
+        ...base,
+        habits: [{ id: "hab1", reminderTime: "20:00" }],
+        today: "2026-08-03",
+        nowLocalTime: "20:00",
+      });
+
+      expect(result).toEqual([
+        {
+          source: "habit",
+          entityId: "hab1",
+          occurrenceKey: "2026-08-03",
+          fireDate: "2026-08-03",
+          priority: "normal",
+        },
+      ]);
+    });
+
+    it("is not due before its hour — the morning hour has no say over a minute-granular source", () => {
+      const result = deriveNotificationCandidates({
+        ...base,
+        habits: [{ id: "hab1", reminderTime: "20:00" }],
+        today: "2026-08-03",
+        nowLocalTime: "19:59",
+      });
+      expect(result).toEqual([]);
+    });
+
+    it("still fires later the same evening — a nudge missed while the app was closed is not lost", () => {
+      const result = deriveNotificationCandidates({
+        ...base,
+        habits: [{ id: "hab1", reminderTime: "20:00" }],
+        today: "2026-08-03",
+        nowLocalTime: "23:45",
+      });
+      expect(result.map((candidate) => candidate.entityId)).toEqual(["hab1"]);
+    });
+
+    it("gives two habits two occurrences under the same day key — the key identifies the DAY, the entity the habit", () => {
+      const result = deriveNotificationCandidates({
+        ...base,
+        habits: [
+          { id: "hab-b", reminderTime: "07:00" },
+          { id: "hab-a", reminderTime: "07:00" },
+        ],
+        today: "2026-08-03",
+        nowLocalTime: "07:30",
+      });
+      expect(result.map((candidate) => candidate.entityId)).toEqual(["hab-a", "hab-b"]);
+      expect(new Set(result.map((candidate) => candidate.occurrenceKey))).toEqual(
+        new Set(["2026-08-03"]),
+      );
+    });
+
+    it("contributes nothing when the profile has switched the source off", () => {
+      const result = deriveNotificationCandidates({
+        ...base,
+        habits: [{ id: "hab1", reminderTime: "20:00" }],
+        enabledSources: ["document", "exam", "study-day", "event", "task", "subscription"],
+        today: "2026-08-03",
+        nowLocalTime: "20:00",
       });
       expect(result).toEqual([]);
     });
@@ -539,6 +637,7 @@ describe("deriveNotificationCandidates", () => {
         studyDays: [{ date: "2026-08-03", blockCount: 1, totalMinutes: 30 }],
         tasks: [],
         subscriptions: [],
+        habits: [],
         enabledSources: ["exam"],
         today: "2026-08-03",
         nowLocalTime: "08:00",
@@ -563,6 +662,7 @@ describe("deriveNotificationCandidates", () => {
         studyDays: [{ date: "2026-08-03", blockCount: 1, totalMinutes: 30 }],
         tasks: [],
         subscriptions: [],
+        habits: [],
         enabledSources: ALL_SOURCES,
         today: "2026-08-03",
         nowLocalTime: "08:00",
@@ -587,6 +687,7 @@ describe("deriveNotificationCandidates", () => {
         studyDays: [],
         tasks: [],
         subscriptions: [],
+        habits: [],
         enabledSources: [...ALL_SOURCES, "security"],
         today: "2026-08-03",
         nowLocalTime: "08:00",

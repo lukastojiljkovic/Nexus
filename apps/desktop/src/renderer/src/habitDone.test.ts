@@ -5,7 +5,9 @@ import {
   countsAsDone,
   habitDayStates,
   habitWindowScore,
+  habitsExpectedToday,
   indexHabitEntries,
+  isEditableDayState,
   quotaWeekProgress,
   satisfiedDaysOf,
   valueOn,
@@ -314,5 +316,51 @@ describe("habitWindowScore — the honest 30-day figure", () => {
         MONDAY_START,
       ),
     ).toEqual({ kind: "weeks", done: 0, expected: 0 });
+  });
+});
+
+describe("habitsExpectedToday", () => {
+  /** 2026-07-29 is a WEDNESDAY (ISO 3); 2026-07-28 the Tuesday before it. */
+  const WEDNESDAY = "2026-07-29";
+  const TUESDAY = "2026-07-28";
+
+  it("keeps a `days` habit only on one of its own weekdays", () => {
+    const gym = habit({ id: "gym", schedule: MON_WED_FRI });
+    expect(habitsExpectedToday([gym], WEDNESDAY).map((row) => row.id)).toEqual(["gym"]);
+    expect(habitsExpectedToday([gym], TUESDAY)).toEqual([]);
+  });
+
+  it("keeps EVERY quota habit, whichever day it is — any day counts towards the week", () => {
+    const run = habit({ id: "run", schedule: THREE_A_WEEK });
+    expect(habitsExpectedToday([run], WEDNESDAY).map((row) => row.id)).toEqual(["run"]);
+    expect(habitsExpectedToday([run], TUESDAY).map((row) => row.id)).toEqual(["run"]);
+  });
+
+  it("drops an archived habit — today does not expect something you have finished with", () => {
+    const done = habit({ id: "old", archivedAt: "2026-07-01T00:00:00.000Z" });
+    expect(habitsExpectedToday([done], WEDNESDAY)).toEqual([]);
+  });
+
+  it("keeps the caller's order, so the page and the widget draw the same list the same way round", () => {
+    const rows = [
+      habit({ id: "a", schedule: DAILY }),
+      habit({ id: "b", schedule: MON_WED_FRI }),
+      habit({ id: "c", schedule: THREE_A_WEEK }),
+    ];
+    expect(habitsExpectedToday(rows, WEDNESDAY).map((row) => row.id)).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("isEditableDayState", () => {
+  it("lets a click change exactly the two cells that ARE a verdict", () => {
+    expect(isEditableDayState("satisfied")).toBe(true);
+    expect(isEditableDayState("missed")).toBe(true);
+  });
+
+  it("leaves a day the schedule never asked for, and one with nothing to say, inert", () => {
+    // Nothing to record about a day the schedule never asked for; nothing to say
+    // about a day before the habit existed or one that has not happened yet.
+    expect(isEditableDayState("unexpected")).toBe(false);
+    expect(isEditableDayState("unjudged")).toBe(false);
   });
 });

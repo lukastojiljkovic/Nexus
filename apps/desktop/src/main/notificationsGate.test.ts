@@ -24,8 +24,12 @@ const { runNotificationCheck } = await import("./notifications.js");
  */
 function makeDeps(profileIds: readonly string[], activeId: string | null) {
   const checkedProfiles: string[] = [];
-  // Reached only AFTER the finance reads, so it is the one witness that a check
-  // ran to the end rather than dying in the middle and being logged away.
+  // Reached only AFTER every source read and the derivation itself, so it is the
+  // one witness that a check ran to the end rather than dying in the middle and
+  // being logged away. It sits on `listLedgerKeys` deliberately: `getSettings`
+  // used to carry it and runs BEFORE the source reads, which meant a dep that
+  // went missing later (FIN's, then HABIT's) could throw into
+  // `logCheckFailure` with these assertions still green.
   const completedProfiles: string[] = [];
   const emptySettings = {
     quietFrom: null,
@@ -45,11 +49,11 @@ function makeDeps(profileIds: readonly string[], activeId: string | null) {
       listBlocksInRange: () => [],
     }),
     notificationStore: (profileId: string) => ({
-      getSettings: () => {
+      getSettings: () => emptySettings,
+      listLedgerKeys: () => {
         completedProfiles.push(profileId);
-        return emptySettings;
+        return [];
       },
-      listLedgerKeys: () => [],
       dueSnoozed: () => [],
     }),
     documentStore: () => ({ listActive: () => [] }),
@@ -65,6 +69,10 @@ function makeDeps(profileIds: readonly string[], activeId: string | null) {
     // fail a test, not go quiet in a log.
     finRecurringStore: () => ({ generateDue: () => 0, listActive: () => [], upcoming: () => [] }),
     finAccountStore: () => ({ listActive: () => [] }),
+    // HABIT slice c's store, stubbed for exactly the reason FIN's two are: an
+    // absent dep makes `checkProfile` throw at its first habit read, and
+    // `logCheckFailure` would swallow it while these assertions still passed.
+    habitStore: () => ({ listActive: () => [], listAllEntries: () => [] }),
     getMainWindow: () => null,
   } as unknown as NotificationSchedulerDeps;
   return { deps, checkedProfiles, completedProfiles };

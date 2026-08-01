@@ -16,7 +16,8 @@ import { strings } from "./strings.js";
  * Settings — the page holding the PIN, the Recovery Kit and the account list,
  * which is where every one of those events can actually be acted on. A renewal
  * reminder (FIN slice d) opens Finansije, where the subscription lives and
- * where the charge will land.
+ * where the charge will land. A habit nudge (HABIT slice c) opens Navike, where
+ * „Danas" is — the one screen on which the thing it is asking for can be ticked.
  */
 const SOURCE_MODULE: Record<NotificationSource, string> = {
   document: "calendar",
@@ -26,6 +27,7 @@ const SOURCE_MODULE: Record<NotificationSource, string> = {
   task: "tasks",
   security: "settings",
   subscription: "finance",
+  habit: "habits",
 };
 
 export interface NotificationCenterProps {

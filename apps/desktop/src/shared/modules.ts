@@ -357,6 +357,66 @@ const FINANCE_WIDGETS: WidgetContract[] = [
 ];
 
 /**
+ * HABIT slice c's one card: „Navike danas" — what today expects, with the very
+ * tick the page offers and the current niz beside it.
+ *
+ * **Deliberately NO `configFields`, and the reason is not „none fit".** The
+ * obvious knob is `ROW_CAP`, and a cap is exactly the wrong thing here: every
+ * other capped card („Predstojeći zadaci", „Nedavno", „Predstojeće naplate")
+ * draws from a list that can run to hundreds, where the cap picks the front of a
+ * queue. This card draws what today ASKS FOR — a handful of rows, all of which
+ * are the point — so a cap would hide an expectation, which is the one thing the
+ * card exists to state. „Učenje" makes the same call for the same reason: no
+ * knob is worth turning, and the „Podesi…" affordance appears only where a
+ * choice exists.
+ *
+ * `sizes` stops at M, honestly. A row here is a swatch, a name, a schedule chip
+ * and a tick — the „nedavno"/„hitno-kasni" shape, not the „Danas" one — and a
+ * full-width card would be mostly empty space.
+ */
+const HABITS_WIDGETS: WidgetContract[] = [
+  {
+    id: "danas",
+    title: "dashboard.habitsToday.title",
+    sizes: ["S", "M"],
+    deepLink: "habits",
+  },
+];
+
+/**
+ * HABIT slice c. ONE control, and the restraint is the point in exactly FIN's
+ * way: a reminder is a fact of each HABIT (`reminder_time`, migration 055), so
+ * the only thing left for a settings card to decide is which hour the „Nova
+ * navika" form fills in at the moment a reminder is switched on.
+ *
+ * It does not turn reminders on. A habit ships silent and keeps shipping silent
+ * — the form's switch starts off whatever this says — so this is the hour you
+ * land on once you decide to set one, and never a reminder you did not ask for.
+ * That is the whole difference between a default and a policy.
+ *
+ * `device`, honestly: it changes no stored row, it is read by one form, and
+ * forgetting it changes nothing that already exists — which is also what earns
+ * this card the „Vrati na podrazumevano" link that every profile-stored card is
+ * deliberately denied.
+ *
+ * `value` rather than `choice` because the domain is 1440 minutes: enumerating it
+ * would mean inventing a curated list of „sensible" hours, which is the same
+ * fabrication FIN refused for ISO-4217.
+ */
+const HABITS_SETTINGS: SettingsPanel = {
+  titleKey: "settings.sectionTitle.habits",
+  controls: [
+    {
+      kind: "value",
+      key: "default-reminder",
+      labelKey: "settings.habits.defaultReminderLabel",
+      storage: "device",
+      keywords: ["navike", "podsetnik", "vreme", "sat", "obavestenje", "nudge"],
+    },
+  ],
+};
+
+/**
  * FIN slice b. ONE control, and the restraint is the point: a currency is a
  * fact of each ACCOUNT (migration 051's no-FX design), so the only thing left
  * for a settings card to decide is which code the „Novi račun" form opens on.
@@ -565,20 +625,24 @@ const V0_MODULES: ModuleManifest[] = [
   // habits asks to be opted into, and the module writes nothing until the user
   // creates one.
   //
-  // THREE contract slots are deliberately empty, and each for its own reason:
+  // ONE contract slot stays empty, and not merely „not yet": there are NO
+  // `searchIndexers`. A habit is a name and a schedule; there is no body to
+  // match and nothing a query would find that the sidebar does not already
+  // show. Indexing „Voda" would put a row in the palette that answers a
+  // question nobody asked it.
   //
-  // - NO `searchIndexers`, and not merely „not yet". A habit is a name and a
-  //   schedule; there is no body to match and nothing a query would find that
-  //   the sidebar does not already show. Indexing „Voda" would put a row in the
-  //   palette that answers a question nobody asked it.
-  // - NO `widgets` in this slice. The card „Danas" would draw is the page's own
-  //   „Danas" section, and it must be tickable to be worth anything — that is
-  //   slice c's, together with the reminders it belongs beside.
-  // - NO `settings` in this slice, for the same reason: the only preference a
-  //   habit has is its `reminder_time`, which does nothing until slice c wires
-  //   the notification source. A card offering a control that changes nothing
-  //   is worse than an absent card.
-  { id: "habits", prefix: "HABIT", category: "Life hubs", defaultEnabled: true },
+  // The other two arrived in slice c, each once it had something true to say: a
+  // „Navike danas" card is worth drawing only because it is tickable, and a
+  // settings card is worth offering only because `reminder_time` finally does
+  // something (migration 056).
+  {
+    id: "habits",
+    prefix: "HABIT",
+    category: "Life hubs",
+    defaultEnabled: true,
+    widgets: HABITS_WIDGETS,
+    settings: HABITS_SETTINGS,
+  },
 ];
 
 /**

@@ -134,19 +134,34 @@ describe("createModuleRegistry", () => {
     expect(registry.widgetsOf("files")).toEqual([]);
   });
 
-  it("keeps HABIT's three contract slots empty in slice b, each for its own stated reason", () => {
+  it("keeps HABIT's searchIndexer slot empty while slice c fills the other two", () => {
     const registry = createModuleRegistry();
     const habits = registry.all().find((manifest) => manifest.id === "habits");
     // No indexer, and not merely „not yet": a habit is a name and a schedule,
     // with no body to match and nothing a query would find that the sidebar does
     // not already show.
     expect(habits?.searchIndexers).toBeUndefined();
-    // The widget and the settings card both land in slice c, beside the
-    // reminders they belong to — a „Danas" card must be tickable to be worth
-    // anything, and the only preference a habit has (`reminder_time`) changes
-    // nothing until that slice reads it.
-    expect(registry.widgetsOf("habits")).toEqual([]);
-    expect(habits?.settings).toBeUndefined();
+    // The other two arrived in slice c, each once it had something true to say:
+    // the „Navike danas" card is worth drawing because it is TICKABLE, and the
+    // settings card is worth offering because `reminder_time` finally does
+    // something (migration 056).
+    expect(registry.widgetsOf("habits").map((widget) => widget.id)).toEqual(["danas"]);
+    expect(habits?.settings?.controls.map((control) => control.key)).toEqual([
+      "default-reminder",
+    ]);
+  });
+
+  it("gives the habits card no config, on the study streak card's reasoning rather than for want of a field", () => {
+    const registry = createModuleRegistry();
+    const [danas] = registry.widgetsOf("habits");
+    // A row cap is the obvious knob and the wrong one: every other capped card
+    // picks the front of a queue that can run to hundreds, while this card draws
+    // what today ASKS FOR — so a cap would hide an expectation, which is the one
+    // thing the card exists to state.
+    expect(danas?.configFields).toBeUndefined();
+    // Capped at M for „nedavno"'s reason: a row is a name, a tick and one chip.
+    expect(danas?.sizes).toEqual(["S", "M"]);
+    expect(danas?.deepLink).toBe("habits");
   });
 });
 
@@ -178,6 +193,7 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       "files",
       "study",
       "finance",
+      "habits",
     ]);
   });
 
@@ -245,7 +261,7 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
     expect(optionIds("files", "view")).toEqual([...FILE_VIEWS]);
   });
 
-  it("keeps every card's storage honest: the four device cards, and four the profile owns", () => {
+  it("keeps every card's storage honest: the five device cards, and four the profile owns", () => {
     const storages = (moduleId: string) =>
       new Set(
         declared
@@ -262,6 +278,10 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
     // It stores nothing about the profile — and the module writes nothing at
     // all, which is why this is the only preference it has.
     expect(storages("files")).toEqual(new Set(["device"]));
+    // HABIT's one control decides which hour the form FILLS IN when a reminder
+    // is switched on — a fact about this machine's form, never about the
+    // profile's habits, whose reminders live on their own rows.
+    expect(storages("habits")).toEqual(new Set(["device"]));
     expect(storages("dashboard")).toEqual(new Set(["profile"]));
     expect(storages("study")).toEqual(new Set(["profile"]));
     expect(storages("calendar")).toEqual(new Set(["profile"]));

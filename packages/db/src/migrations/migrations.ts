@@ -55,6 +55,7 @@ import { migration052 } from "./052-finance-import-key.js";
 import { migration053 } from "./053-finance-recurring.js";
 import { migration054 } from "./054-finance-recurring-pause.js";
 import { migration055 } from "./055-habits.js";
+import { migration056 } from "./056-habit-reminders.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -121,6 +122,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration053,
   migration054,
   migration055,
+  migration056,
 ];
 
 /**

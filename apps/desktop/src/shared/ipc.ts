@@ -2870,7 +2870,7 @@ export interface StudyLogRequest {
 /**
  * The source kinds a notification row can carry (mirrors `@nexus/core`'s
  * `NotificationSource`; redeclared here so the renderer never imports core/DB
- * code). The first five are reminders the user can switch on and off;
+ * code). All but one are reminders the user can switch on and off;
  * `"security"` (NTF-007) is recorded by main when a security-relevant event
  * actually happens and can never be switched off.
  */
@@ -2881,7 +2881,8 @@ export type NotificationSource =
   | "event"
   | "task"
   | "security"
-  | "subscription";
+  | "subscription"
+  | "habit";
 
 /** Closed ledger-status domain (mirrors `@nexus/db`'s `NotificationStatus`). Dismissal is terminal. */
 export type NotificationStatus = "delivered" | "snoozed" | "dismissed";
@@ -4524,29 +4525,45 @@ export interface HabitsUnarchiveRequest {
 }
 
 /**
- * Records what was done TODAY, replacing whatever today said before. `value` is
- * 1 for a binary habit and the count for a measured one; whether the day COUNTS
- * is read off the habit's own `target` and never stored, so a target the user
- * later raises re-judges the days already recorded.
+ * Records what was done on one DAY, replacing whatever that day said before.
+ * `value` is 1 for a binary habit and the count for a measured one; whether the
+ * day COUNTS is read off the habit's own `target` and never stored, so a target
+ * the user later raises re-judges the days already recorded.
  *
- * **There is deliberately no `day` field.** The store takes any day, but this
- * channel ticks today and only today, and which day that is is MAIN's to say —
- * `localToday()`, the very function slice c's reminder check will read its day
- * from, so „danas" cannot mean two different days inside one app. A surface that
- * ever needs to correct a past day states the day it is correcting, on a field
- * of its own with a validator of its own; until then, a day nobody validates is
- * a day nobody should be able to send.
+ * **`day` is DATA, and that is not a weakening of the clock rule (slice c).**
+ * Slice b carried no day at all and let main stamp `localToday()`, which read as
+ * the stricter design and was in fact a missing feature: a user who forgot to
+ * tick yesterday could not fix it, while the history grid sat right there showing
+ * the miss. The rule main's stamping actually protects is „the renderer may not
+ * lie about NOW" — and it still holds, because nothing here asks what today is.
+ * A day the user deliberately names by clicking a cell in their own history is
+ * input, exactly as a FIN transaction's `tx_date` is: chosen by the user,
+ * validated by main, and never taken as a claim about the clock.
+ *
+ * So main validates it as a real bare `YYYY-MM-DD` and refuses two kinds of day
+ * outright: one AFTER `localToday()` — the future is not a fact about a habit,
+ * and the clock main reads is what makes that refusal meaningful — and one before
+ * the habit's own `createdAt`, because the grid draws those as unjudged for a
+ * reason and a tick there would invent history for a period the habit did not
+ * exist in.
+ *
+ * The „Danas" controls send today, and now say so explicitly rather than relying
+ * on main to guess what they meant.
  */
 export interface HabitsSetEntryRequest {
   profileId: string;
   habitId: string;
+  /** The bare local day this tick is FOR (`YYYY-MM-DD`) — never after today, never before the habit. */
+  day: string;
   value: number;
 }
 
-/** Un-ticks today, on exactly the terms above. Removing a tick that is not there is not an error; naming a habit this profile does not have still is. */
+/** Un-ticks one day, on exactly the terms above. Removing a tick that is not there is not an error; naming a habit this profile does not have still is. */
 export interface HabitsClearEntryRequest {
   profileId: string;
   habitId: string;
+  /** The bare local day being un-ticked, validated exactly as `HabitsSetEntryRequest.day` is. */
+  day: string;
 }
 
 /** Every live habit's ticks over one inclusive day span; `from` after `to` is refused by the store. */
@@ -7201,10 +7218,10 @@ export interface NexusApi {
   /** Marks a habit as finished with: out of „Danas", still in the list, still answering the stats. */
   archiveHabit(profileId: string, id: string): Promise<void>;
   unarchiveHabit(profileId: string, id: string): Promise<void>;
-  /** Records TODAY's value for one habit — main decides which day that is (`HabitsSetEntryRequest`). */
-  setHabitEntry(profileId: string, habitId: string, value: number): Promise<HabitEntry>;
-  /** Removes today's tick, on the same terms. */
-  clearHabitEntry(profileId: string, habitId: string): Promise<void>;
+  /** Records one DAY's value for a habit. The day is named by the caller and validated by main — never after today, never before the habit (`HabitsSetEntryRequest`). */
+  setHabitEntry(profileId: string, habitId: string, day: string, value: number): Promise<HabitEntry>;
+  /** Removes one day's tick, on the same terms. */
+  clearHabitEntry(profileId: string, habitId: string, day: string): Promise<void>;
   /** EVERY live habit's ticks over one inclusive day span, in one call — the today list, the grid and the streaks all read this one window. */
   habitEntries(profileId: string, range: HabitDayRange): Promise<HabitEntry[]>;
   /** Runs the query pipeline (parse -> FTS match -> bm25 candidates -> rank), falling back to `searchRecent`'s order when the query has no matchable terms (ADR-021). */

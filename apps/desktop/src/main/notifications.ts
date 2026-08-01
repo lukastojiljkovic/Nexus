@@ -4,6 +4,7 @@ import {
   coalesceDeliveries,
   deriveNotificationCandidates,
   emptyDeliveryWindow,
+  habitReminderInputs,
   isDeliverable,
   isValidDayKey,
   isWithinQuietHours,
@@ -13,11 +14,13 @@ import {
 import type {
   DeliveryWindow,
   EventReminderInput,
+  HabitReminderSource,
   NotificationCandidate,
   NotificationSource,
   StudyDayReminderInput,
   SubscriptionReminderInput,
   TaskReminderInput,
+  WeekStart,
 } from "@nexus/core";
 import type {
   DocumentStore,
@@ -29,6 +32,9 @@ import type {
   FinRecurring,
   FinRecurringStore,
   FinUpcomingRenewal,
+  Habit,
+  HabitEntry,
+  HabitStore,
   NotificationStore,
   PlanStore,
   SubjectStore,
@@ -44,6 +50,7 @@ import {
   eventNotificationCopy,
   examNotificationCopy,
   groupedDigestCopy,
+  habitNotificationCopy,
   securityNotificationCopy,
   studyDayNotificationCopy,
   subscriptionNotificationCopy,
@@ -79,6 +86,8 @@ export interface NotificationSchedulerDeps {
   finRecurringStore(profileId: string): FinRecurringStore;
   /** The accounts, for the one thing a renewal reminder cannot state without them: which currency the amount is in. */
   finAccountStore(profileId: string): FinAccountStore;
+  /** HABIT slice c: the habits this check reminds about, and the ticks that tell it which of them are already done. */
+  habitStore(profileId: string): HabitStore;
   notificationStore(profileId: string): NotificationStore;
   getMainWindow(): BrowserWindow | null;
 }
@@ -99,6 +108,7 @@ export type SecurityNotificationDeps = Pick<
 const CHECK_INTERVAL_MS = 60_000;
 
 const MINUTES_PER_DAY = 1_440;
+const DAYS_PER_WEEK = 7;
 
 /** One notification as the toast path handles it: what it is about, and the exact text that was recorded for it. */
 interface ToastItem {
@@ -379,6 +389,69 @@ function subscriptionReminderInputs(
 }
 
 /**
+ * Which day a habit's quota WEEK opens on, as far as the scheduler is concerned
+ * (HABIT slice c).
+ *
+ * Ponedeljak, unconditionally — and it is worth saying why rather than leaving a
+ * bare constant. Week start is a DEVICE preference (`weekStart.ts`), living in
+ * the renderer's `localStorage`, and main has no access to it and no business
+ * asking the renderer for one: a preference the renderer supplied would be a
+ * value main validates against nothing. Nothing profile-side stores it either.
+ *
+ * The cost of choosing here is bounded and small. The week boundary is read by
+ * exactly ONE rule — „has this quota habit already met its week" — and never by
+ * the rule that matters more, „is it already done today", which is a fact about a
+ * single day and needs no week at all. So a Sunday-first reader can, on one
+ * boundary day, get one nudge more or one fewer than the page's own „2/3 ove
+ * nedelje" chip would imply. Nobody is ever told something false about a day.
+ *
+ * Monday is also the app's own default and the Serbian norm (`weekStart.ts`),
+ * which makes this the same week the overwhelming majority of profiles are
+ * already reading.
+ */
+const SCHEDULER_WEEK_START: WeekStart = 1;
+
+/**
+ * One profile's habits in the reminder filter's shape (HABIT slice c). Two reads
+ * and one grouping pass: the habits themselves, and every tick inside the week
+ * `today` falls in — which is the widest window `habitReminderInputs` can ask
+ * about, since „already done today" reads one day of it and „is the quota met"
+ * reads the other six.
+ *
+ * WHY a habit does or does not remind is decided in `@nexus/core` and not here
+ * (`habitReminderInputs`), for the reason every other rule lives there: it is a
+ * decision, it is testable without a database, and „already done" must mean the
+ * same thing to this scheduler as it does to the page.
+ *
+ * A soft-deleted habit never appears — `listActive` drops it, and drops its
+ * entries with it. An ARCHIVED one appears here and is filtered out by the rule
+ * itself, which is the honest split: the store's job is „does this row exist",
+ * the rule's is „is this row expected".
+ */
+function habitReminderRows(
+  habits: readonly Habit[],
+  entries: readonly HabitEntry[],
+): HabitReminderSource[] {
+  const byHabit = new Map<string, Map<string, number>>();
+  for (const entry of entries) {
+    let days = byHabit.get(entry.habitId);
+    if (days === undefined) {
+      days = new Map<string, number>();
+      byHabit.set(entry.habitId, days);
+    }
+    days.set(entry.date, entry.value);
+  }
+  return habits.map((habit) => ({
+    id: habit.id,
+    reminderTime: habit.reminderTime,
+    schedule: habit.schedule,
+    target: habit.target,
+    archivedAt: habit.archivedAt,
+    entries: byHabit.get(habit.id) ?? new Map<string, number>(),
+  }));
+}
+
+/**
  * One profile's worth of the check: sync plans, generate the subscription
  * charges that have come due, derive candidates, fire/record survivors, re-fire
  * or dismiss snoozed rows — unless this is the profile's first visible reminder
@@ -434,6 +507,18 @@ function checkProfile(
     subscriptionLeads.size === 0
       ? []
       : finRecurring.upcoming({ from: today, to: shiftDayKey(today, renewalHorizon) });
+  // HABIT slice c. A trailing SEVEN days, which is exactly what the filter can
+  // ask about and never more: the most recent week opening is at most six days
+  // back whichever day a week starts on, so this window always covers the whole
+  // of the current one, and the days of it that fall in the previous week are
+  // simply days the filter never looks at.
+  const habitStore = deps.habitStore(profileId);
+  const habits = habitStore.listActive();
+  const habitRows = habitReminderRows(
+    habits,
+    habitStore.listAllEntries({ from: shiftDayKey(today, -(DAYS_PER_WEEK - 1)), to: today }),
+  );
+
   const todaysBlocks = plans
     .listBlocksInRange(today, today)
     .filter((block) => block.status === "planned");
@@ -460,6 +545,7 @@ function checkProfile(
     studyDays,
     tasks: taskReminderInputs(tasks),
     subscriptions: subscriptionReminderInputs(renewals, subscriptionLeads),
+    habits: habitReminderInputs(habitRows, today, SCHEDULER_WEEK_START),
     enabledSources: settings.enabledSources,
     today,
     nowLocalTime: nowTime,
@@ -516,6 +602,7 @@ function checkProfile(
   const subjectNameById = new Map(subjects.map((subject) => [subject.id, subject.name]));
   const studyDaysByDate = new Map(studyDays.map((day) => [day.date, day]));
   const subscriptionsById = new Map(subscriptions.map((row) => [row.id, row]));
+  const habitsById = new Map(habits.map((row) => [row.id, row]));
   // The currency an amount is stated in lives on the ACCOUNT (migration 051's
   // no-FX design), so the copy joins through it — a figure with no code beside
   // it is a number, not money.
@@ -536,6 +623,7 @@ function checkProfile(
       studyDaysByDate,
       subscriptionsById,
       accountCurrencyById,
+      habitsById,
       today,
     });
     if (!copy) continue; // entity vanished between the reads above and here — skip, never crash
@@ -598,6 +686,7 @@ interface CopyContext {
   studyDaysByDate: Map<string, StudyDayReminderInput>;
   subscriptionsById: Map<string, FinRecurring>;
   accountCurrencyById: Map<string, string>;
+  habitsById: Map<string, Habit>;
   today: string;
 }
 
@@ -664,6 +753,14 @@ function composeCopy(candidate: NotificationCandidate, ctx: CopyContext): Notifi
       currency,
       Number(leadDays),
     );
+  }
+  if (candidate.source === "habit") {
+    const habit = ctx.habitsById.get(candidate.entityId);
+    if (!habit) return null;
+    // Nothing is read back out of the key here, unlike the three branches above:
+    // a habit occurrence is keyed by its own day and there is no offset, no
+    // series and no moving anchor — „u 20:00, danas" is the whole occurrence.
+    return habitNotificationCopy(habit.name, habit.schedule, habit.target, habit.unit);
   }
   const day = ctx.studyDaysByDate.get(candidate.entityId);
   if (!day) return null;

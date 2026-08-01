@@ -26,15 +26,18 @@
  * time part (documents/exams may, per their stores' ISO-8601 columns) are
  * reduced to their bare "YYYY-MM-DD" prefix before any comparison or math.
  *
- * Five of the six sources are day-granular: they fire at the profile's
+ * Five of the seven sources are day-granular: they fire at the profile's
  * `morningHour` on a bare `fireDate`. Task reminders (ADR-028) and subscription
  * renewals (FIN slice d) are the newest of those five and deliberately the
  * document model, days-before-the-day and all, because a due date and a charge
- * date are themselves bare days. Event reminders (CAL-006, ADR-025) are the one
- * exception — "15 minutes before" is meaningless rounded to a day — so a timed
- * occurrence carries a fire INSTANT instead, and the same UTC math is simply
- * carried down to the minute. Both live in one `Occurrence` shape and one
- * `isDue`, so the day-granular sources' behaviour is untouched.
+ * date are themselves bare days. TWO sources are minute-granular instead, and
+ * both for the same reason: the moment is the point. Event reminders (CAL-006,
+ * ADR-025) came first — "15 minutes before" is meaningless rounded to a day — and
+ * habit reminders (HABIT slice c) join them, because „u 20:00" IS the reminder:
+ * a habit has no deadline to count back from, only an hour its owner picked. Both
+ * carry a fire INSTANT, and the same UTC math is simply carried down to the
+ * minute. Every source lives in one `Occurrence` shape and one `isDue`, so the
+ * day-granular ones' behaviour is untouched.
  */
 
 const MS_PER_DAY = 86_400_000;
@@ -59,7 +62,8 @@ export type NotificationSource =
   | "event"
   | "task"
   | "security"
-  | "subscription";
+  | "subscription"
+  | "habit";
 
 /** `max` bypasses quiet hours (the PRD's "final warning" exception); everything else is `normal`. */
 export type NotificationPriority = "normal" | "max";
@@ -113,7 +117,7 @@ export interface NotificationCandidate {
   source: NotificationSource;
   /** Document id / exam id / the bare study date, depending on `source`. */
   entityId: string;
-  /** A deterministic per-occurrence key: the offset (documents), "d-1"/"d-0" (exams), "day" (study days), or "<date> <offset>" — the occurrence's own date for an event, the due date for a task. */
+  /** A deterministic per-occurrence key: the offset (documents), "d-1"/"d-0" (exams), "day" (study days), the bare day itself (habits — one nudge per habit per day), or "<date> <offset>" — the occurrence's own date for an event, the due date for a task. */
   occurrenceKey: string;
   /** Bare "YYYY-MM-DD" the occurrence belongs to. */
   fireDate: string;
@@ -184,6 +188,23 @@ export interface SubscriptionReminderInput {
   reminderDays: number;
 }
 
+/**
+ * One habit that should remind TODAY (HABIT slice c), and the wall-clock hour it
+ * reminds at. WHY it should is not this engine's question: `habitReminderInputs`
+ * in `@nexus/core`'s habits folder decides it — the schedule expects today, and
+ * the habit is not already done — exactly as the caller decides which tasks and
+ * which renewals are worth passing down.
+ *
+ * There is no offset and no ladder, deliberately. A habit has no deadline to
+ * count back from: „u 20:00" is the whole reminder, which is also why this is one
+ * of the two minute-granular sources.
+ */
+export interface HabitReminderInput {
+  id: string;
+  /** Wall-clock "HH:MM" on `today` (mirrors `HabitStore`'s `reminderTime`). */
+  reminderTime: string;
+}
+
 export interface DeriveNotificationCandidatesInput {
   documents: ReadonlyArray<DocumentReminderInput>;
   exams: ReadonlyArray<ExamReminderInput>;
@@ -191,6 +212,7 @@ export interface DeriveNotificationCandidatesInput {
   studyDays: ReadonlyArray<StudyDayReminderInput>;
   tasks: ReadonlyArray<TaskReminderInput>;
   subscriptions: ReadonlyArray<SubscriptionReminderInput>;
+  habits: ReadonlyArray<HabitReminderInput>;
   enabledSources: ReadonlyArray<NotificationSource>;
   /** Bare "YYYY-MM-DD", the caller's local today. */
   today: string;
@@ -252,13 +274,13 @@ function utcInstantKey(ms: number): string {
 }
 
 /**
- * Derives every due notification occurrence across the six derived sources,
+ * Derives every due notification occurrence across the seven derived sources,
  * deterministically ordered by source, then entity id, then occurrence key.
  * An occurrence is due when it is still relevant to its entity's current
- * state AND its fire moment has arrived — for the four day-granular sources
+ * state AND its fire moment has arrived — for the day-granular sources
  * that means its fire date has already passed (came due while the app was off)
- * or it fires today at/after `morningHour`; for a timed event reminder it
- * means its fire instant is at or before now ("HH:MM" and the fixed-width
+ * or it fires today at/after `morningHour`; for a timed event or habit reminder
+ * it means its fire instant is at or before now ("HH:MM" and the fixed-width
  * instants both compare lexicographically). Sources absent from
  * `enabledSources` contribute nothing. Pure: no clock reads, no mutation of
  * the input.
@@ -277,6 +299,7 @@ export function deriveNotificationCandidates(
     ...(enabled.has("subscription")
       ? subscriptionOccurrences(input.subscriptions, input.today)
       : []),
+    ...(enabled.has("habit") ? habitOccurrences(input.habits, input.today) : []),
   ];
 
   const due = occurrences.filter((occurrence) =>
@@ -504,10 +527,49 @@ function subscriptionOccurrences(
 }
 
 /**
+ * One occurrence per habit that should remind today, at the wall-clock hour its
+ * owner picked — the second minute-granular source (see the file header). Keyed
+ * by the DAY it is about, which is the whole identity a habit reminder has: one
+ * nudge per habit per day, made unrepresentable rather than deduplicated by the
+ * ledger's own `UNIQUE (profile_id, source, entity_id, occurrence_key)`.
+ *
+ * `relevant` is unconditionally true, and that is not a shortcut. The two
+ * conditions an event's `relevant` carries do not exist here: there is no start
+ * instant to stay relevant until, and every reason a habit should NOT remind —
+ * archived, not expected today, already done — has already removed it from this
+ * list (`habitReminderInputs`). What remains is exactly „this habit wants a
+ * nudge today", and the fire instant alone decides when.
+ *
+ * That also settles the catch-up question in the only honest way: the occurrence
+ * belongs to TODAY, so one missed while the app was closed still fires when the
+ * app opens later that evening, and one missed by a whole day is never derived
+ * at all. A nudge about yesterday's habit is noise, not information — the same
+ * reading `studyDayOccurrences` makes about a stale study day.
+ *
+ * Priority is always `normal`: the quiet-hours "final warning" exception belongs
+ * to expiring documents, where the deadline is external and unmovable. A habit's
+ * hour is one the user chose and can move.
+ */
+function habitOccurrences(
+  habits: ReadonlyArray<HabitReminderInput>,
+  today: string,
+): Occurrence[] {
+  return habits.map((habit) => ({
+    source: "habit",
+    entityId: habit.id,
+    occurrenceKey: today,
+    fireDate: today,
+    priority: "normal",
+    relevant: true,
+    fireInstant: `${today}T${habit.reminderTime}`,
+  }));
+}
+
+/**
  * Due = relevant AND its fire moment has arrived. A minute-granular occurrence
- * (an event reminder) compares its fire instant against `now`; a day-granular
- * one is due once its fire date is past — missed while the app was off — or
- * once it is today and the morning hour has come.
+ * (an event or habit reminder) compares its fire instant against `now`; a
+ * day-granular one is due once its fire date is past — missed while the app was
+ * off — or once it is today and the morning hour has come.
  */
 function isDue(
   occurrence: Occurrence,

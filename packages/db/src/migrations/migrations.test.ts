@@ -22,8 +22,8 @@ import { CardStore, MIGRATIONS, NexusDatabase, openDatabase, runMigrations } fro
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 55 (habits), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(55);
+  it("is at version 56 (habit reminders), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(56);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -7184,5 +7184,168 @@ describe("migration 055 — habits (HABIT slice a)", () => {
     db.raw.prepare("DELETE FROM habits WHERE id = 'h1'").run();
     expect(db.raw.prepare("SELECT COUNT(*) AS n FROM habit_entries").get()).toEqual({ n: 0 });
     db.close();
+  });
+});
+
+describe("migration 056 — the habit reminder as a notification source (HABIT slice c)", () => {
+  const T = "2026-01-01T00:00:00.000Z";
+  /** Every source the CHECK allowed BEFORE this migration — the fixture's whole point. */
+  const SOURCES_AT_55 = [
+    "document",
+    "exam",
+    "study-day",
+    "event",
+    "task",
+    "security",
+    "subscription",
+  ] as const;
+  /** The narrower settings domain at 55: the same list minus the one that cannot be silenced. */
+  const TOGGLEABLE_AT_55 = SOURCES_AT_55.filter((source) => source !== "security");
+
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "nexus-migrations-"));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const insertProfile = (db: NexusDatabase, id: string) =>
+    db.raw
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, 'personal', ?, ?)")
+      .run(id, id, T);
+
+  it("widens both notification CHECKs to 'habit', security still unsilenceable", () => {
+    const db = openDatabase({ path: join(dir, "habit-sources.db") });
+    insertProfile(db, "p1");
+    const ledger = (source: string) =>
+      db.raw
+        .prepare(
+          `INSERT INTO notifications
+             (id, profile_id, source, entity_id, occurrence_key, title, body, status,
+              snoozed_until, delivered_at, created_at, updated_at)
+           VALUES (?, 'p1', ?, 'e1', 'k1', 't', 'b', 'delivered', NULL, ?, ?, ?)`,
+        )
+        .run(`n-${source}`, source, T, T, T);
+    const toggle = (source: string) =>
+      db.raw
+        .prepare(`INSERT INTO ntf_source_settings (profile_id, source, enabled) VALUES ('p1', ?, 0)`)
+        .run(source);
+
+    expect(() => ledger("habit")).not.toThrow();
+    expect(() => ledger("izmisljeno")).toThrow();
+    // A habit nudge IS silenceable — „podseti me u 20:00" is a preference
+    // somebody set and may unset, unlike migration 037's `'security'`.
+    expect(() => toggle("habit")).not.toThrow();
+    expect(() => toggle("security")).toThrow();
+    db.close();
+  });
+
+  it("keeps one nudge per habit per day unrepresentable — the ledger's UNIQUE comes back with the table", () => {
+    const db = openDatabase({ path: join(dir, "habit-unique.db") });
+    insertProfile(db, "p1");
+    const record = (id: string, entityId: string, occurrenceKey: string) =>
+      db.raw
+        .prepare(
+          `INSERT INTO notifications
+             (id, profile_id, source, entity_id, occurrence_key, title, body, status,
+              snoozed_until, delivered_at, created_at, updated_at)
+           VALUES (?, 'p1', 'habit', ?, ?, 't', 'b', 'delivered', NULL, ?, ?, ?)`,
+        )
+        .run(id, entityId, occurrenceKey, T, T, T);
+
+    expect(() => record("n1", "h1", "2026-01-05")).not.toThrow();
+    // The same habit, the same day — the schema refuses it rather than a guard.
+    expect(() => record("n2", "h1", "2026-01-05")).toThrow();
+    // Another day, and another habit on the same day, are different occurrences.
+    expect(() => record("n3", "h1", "2026-01-06")).not.toThrow();
+    expect(() => record("n4", "h2", "2026-01-05")).not.toThrow();
+    db.close();
+  });
+
+  it("loses NO row to the two table rebuilds — the ADR-042 hazard, re-checked at version 55", () => {
+    const raw = new Database(join(dir, "habit-rebuild.db"));
+    try {
+      raw.pragma("journal_mode = WAL");
+      raw.pragma("foreign_keys = ON");
+      raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
+        typeof value === "string" ? foldSearchText(value) : null,
+      );
+      runMigrations(
+        raw,
+        MIGRATIONS.filter((migration) => migration.version < 56),
+      );
+      raw
+        .prepare(
+          "INSERT INTO profiles (id, kind, name, created_at) VALUES ('p1', 'personal', 'P', ?)",
+        )
+        .run(T);
+      // EVERY source the old CHECK allowed, so a rebuild that dropped one would
+      // be caught by name rather than by a count that happened to match.
+      for (const source of SOURCES_AT_55) {
+        raw
+          .prepare(
+            `INSERT INTO notifications
+               (id, profile_id, source, entity_id, occurrence_key, title, body, status,
+                snoozed_until, delivered_at, created_at, updated_at)
+             VALUES (?, 'p1', ?, 'e1', 'k1', 'Naslov', 'Telo', 'delivered', NULL, ?, ?, ?)`,
+          )
+          .run(`n-${source}`, source, T, T, T);
+      }
+      for (const source of TOGGLEABLE_AT_55) {
+        raw
+          .prepare(
+            `INSERT INTO ntf_source_settings (profile_id, source, enabled) VALUES ('p1', ?, 0)`,
+          )
+          .run(source);
+      }
+      raw
+        .prepare(
+          `INSERT INTO ntf_settings (profile_id, morning_hour, created_at, updated_at)
+           VALUES ('p1', '08:00', ?, ?)`,
+        )
+        .run(T, T);
+
+      runMigrations(raw, MIGRATIONS);
+
+      expect(raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+      expect(
+        (
+          raw.prepare("SELECT source FROM notifications ORDER BY source").all() as {
+            source: string;
+          }[]
+        ).map((row) => row.source),
+      ).toEqual([...SOURCES_AT_55].sort());
+      expect(
+        (
+          raw
+            .prepare("SELECT source, enabled FROM ntf_source_settings ORDER BY source")
+            .all() as { source: string; enabled: number }[]
+        ).map((row) => row.source),
+      ).toEqual([...TOGGLEABLE_AT_55].sort());
+      // The appetite the profile actually chose, not a default the rebuild reset.
+      expect(
+        (
+          raw.prepare("SELECT count(*) AS n FROM ntf_source_settings WHERE enabled = 0").get() as {
+            n: number;
+          }
+        ).n,
+      ).toBe(TOGGLEABLE_AT_55.length);
+      expect((raw.prepare("SELECT count(*) AS n FROM ntf_settings").get() as { n: number }).n).toBe(
+        1,
+      );
+      // Dropped with the old table and re-created by hand; the UNIQUE came back
+      // with the declaration, which the case above proves behaviourally.
+      const indexes = (
+        raw.prepare("SELECT name FROM sqlite_master WHERE type = 'index'").all() as {
+          name: string;
+        }[]
+      ).map((row) => row.name);
+      expect(indexes).toContain("notifications_profile_status_updated");
+    } finally {
+      raw.close();
+    }
   });
 });

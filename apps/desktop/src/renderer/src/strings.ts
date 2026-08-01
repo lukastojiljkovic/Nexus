@@ -365,6 +365,16 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       title: "Predstojeće naplate",
       empty: "Nema naplata u ovom periodu",
     },
+    /** HABIT slice c's card: today's expected habits, tickable in place. */
+    habitsToday: {
+      title: "Navike danas",
+      /** Nothing is expected today — which is a fact about the schedule, not a scolding. */
+      empty: "Danas se ne očekuje nijedna navika",
+      /** The row's tick, as a label for a screen reader — the page's own wording. */
+      tick: "Označi kao urađeno",
+      /** The compact niz chip. The counted noun rides along (`habitFormat.ts`) — „Niz: 3" cannot say three WHAT, and for a quota habit it is weeks. */
+      streakLabel: "Niz",
+    },
     /**
      * A single widget's own boundary (ADR-045 section 4): each card loads and
      * fails alone, so this copy is per-card and deliberately says nothing about
@@ -2332,6 +2342,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       task: "Zadatak",
       security: "Bezbednost",
       subscription: "Pretplata",
+      habit: "Navika",
     },
     /** Snooze preset button labels, keyed by SnoozePreset value. */
     snoozePreset: {
@@ -2370,6 +2381,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         task: "Zadaci",
         security: "Bezbednost",
         subscription: "Pretplate",
+        habit: "Navike",
       },
       /** NTF-007: why the „Bezbednost“ toggle is on and greyed out. */
       alwaysOnCaption: "Bezbednosna obaveštenja se ne mogu isključiti.",
@@ -2767,6 +2779,21 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       windowWeeksCaption: "Od nedelja sa kvotom. Nedelja koja još traje se ne računa.",
       /** A habit with nothing behind it yet: no niz, no fraction, and no invented zero. */
       noHistory: "Još nema upisanih dana.",
+      /**
+       * Slice c: what a click on a history cell does, as the cell's own label
+       * after the date („sreda, 8. jul 2026.: označi kao urađeno"). Two verbs and
+       * no third, because the cell has exactly two states a click can move it
+       * between.
+       */
+      cellMark: "označi kao urađeno",
+      cellUnmark: "poništi kao urađeno",
+      /**
+       * Why some squares respond and some do not — said out loud, because „this
+       * one is inert" is not something a colour can express. Both refusals are
+       * the same refusal main makes (`asHabitEntryDay`).
+       */
+      gridHint:
+        "Klikni na dan da ga ispraviš. Dani koje raspored nije tražio, kao i dani pre nego što je navika napravljena, ne mogu se upisati.",
     },
     /** How a habit's schedule reads on a row. */
     schedule: {
@@ -2808,6 +2835,17 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       unitLabel: "Jedinica",
       unitPlaceholder: "čaša",
       unitHint: "Jedinica ide uz cilj — bez cilja se briše.",
+      /**
+       * Slice c: the hour a habit nudges at, or nothing at all — which is what
+       * every habit ships with. The hint states the two rules that keep the
+       * reminder from becoming noise, because a user who knows them will trust
+       * it enough to set one.
+       */
+      reminderLabel: "Podseti me",
+      /** The time field that appears once the switch is on — its own label, because the switch's says something else. */
+      reminderTimeLabel: "Vreme podsetnika",
+      reminderHint:
+        "Stiže samo onim danima kada se navika očekuje, i samo ako do tada nije urađena.",
       save: "Sačuvaj",
       cancel: "Otkaži",
       invalidName: "Upiši naziv navike.",
@@ -2852,6 +2890,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       study: "Učenje",
       calendar: "Kalendar",
       finance: "Finansije",
+      habits: "Navike",
       modules: "Moduli",
       notifications: "Obaveštenja",
       backup: "Rezervna kopija",
@@ -3146,6 +3185,19 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       primaryCurrencyHint: "Troslovna oznaka po ISO 4217, na primer RSD ili EUR.",
       invalidCurrency: "Upiši troslovnu oznaku valute, na primer RSD.",
       saved: "Podrazumevana valuta je sačuvana.",
+    },
+    /**
+     * HABIT slice c's card. The caption says what the control does NOT do first,
+     * because „podrazumevani podsetnik" reads like a switch that turns reminders
+     * on for everything, and it is the opposite: nothing reminds until a habit is
+     * given a time of its own.
+     */
+    habits: {
+      caption:
+        "Podsetnik se postavlja po navici. Ovo je samo vreme koje se upiše kada uključiš podsetnik na nekoj navici — postojeće navike se ne diraju.",
+      defaultReminderLabel: "Podrazumevano vreme podsetnika",
+      defaultReminderHint: "Važi samo na ovom uređaju.",
+      saved: "Podrazumevano vreme je sačuvano.",
     },
     /** One-line module descriptions for the gallery, keyed by module id. */
     moduleDescriptions: {

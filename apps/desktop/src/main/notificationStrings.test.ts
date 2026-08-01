@@ -87,6 +87,7 @@ describe("digest counts", () => {
       "event",
       "task",
       "subscription",
+      "habit",
     ]);
   });
 

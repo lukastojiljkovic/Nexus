@@ -237,7 +237,14 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.32.0` adds the HABIT
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.33.0` widens ONE
+ * enum in two places (HABIT slice c, migration 056): `"habit"` joins
+ * `notification.source` and the manifest's `settings.notifications.enabledSources`.
+ * No new record type, no new field, and a MINOR bump all the same — see
+ * `SCHEMA_VERSION`'s own `1.33.0` entry for why a widened domain is exactly as
+ * breaking as a new field to a reader that has to refuse what it does not know.
+ *
+ * `1.32.0` adds the HABIT
  * module (HABIT slice a, migration 055): the record types `habit` and
  * `habit-entry`, riding in their own `data/habits.ndjson` (a new `DATA_FILES`
  * entry the checksum walk's union absorbs unchanged), plus a new `habits` archive
@@ -500,7 +507,7 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.32.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.33.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -949,10 +956,11 @@ const MAX_EXAM_TOPIC_NAME_LENGTH = 200;
 const WEEKDAY_VECTOR_LENGTH = 7;
 const MAX_WEEKDAY_MINUTES = 480;
 /**
- * Mirrors the `notifications.source` CHECK as migration 053 leaves it — the
+ * Mirrors the `notifications.source` CHECK as migration 056 leaves it — the
  * LEDGER's domain, which includes `"security"` (NTF-007) because a recorded
- * security event is history like any other row, and `"subscription"` (FIN slice
- * d) because a renewal reminder is an ordinary derived one.
+ * security event is history like any other row, `"subscription"` (FIN slice d)
+ * because a renewal reminder is an ordinary derived one, and `"habit"` (HABIT
+ * slice c) for the same reason.
  */
 const NOTIFICATION_SOURCES = [
   "document",
@@ -962,14 +970,15 @@ const NOTIFICATION_SOURCES = [
   "task",
   "security",
   "subscription",
+  "habit",
 ] as const;
 
 /**
  * Mirrors the narrower `ntf_source_settings.source` CHECK, which migration 037
- * deliberately leaves alone while 053 widens it with the rest: `"security"` is
- * not a preference, so it can never appear in a settings row — or in the
- * `enabledSources` list one is written from — while a renewal reminder is one
- * like any other and can be switched off.
+ * deliberately leaves alone while 053 and 056 widen it with the rest:
+ * `"security"` is not a preference, so it can never appear in a settings row —
+ * or in the `enabledSources` list one is written from — while a renewal or a
+ * habit reminder is one like any other and can be switched off.
  */
 const TOGGLEABLE_NOTIFICATION_SOURCES = [
   "document",
@@ -978,6 +987,7 @@ const TOGGLEABLE_NOTIFICATION_SOURCES = [
   "event",
   "task",
   "subscription",
+  "habit",
 ] as const;
 
 /**

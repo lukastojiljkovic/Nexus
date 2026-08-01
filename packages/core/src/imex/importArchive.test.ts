@@ -1076,12 +1076,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.33.0`: the nearest minor strictly ahead of this build's `1.32.0`.
+  // `1.34.0`: the nearest minor strictly ahead of this build's `1.33.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.33.0" });
+    const files = baseFiles({ schemaVersion: "1.34.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.33.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.34.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -3911,8 +3911,8 @@ describe("parseImportArchive — note categories (NOTE-002 / 1.27.0)", () => {
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.32.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.32.0");
+  it("is 1.33.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.33.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -4102,11 +4102,11 @@ describe("parseImportArchive — schema version", () => {
     expect(result.manifest?.profile.kind).toBe("personal");
   });
 
-  // `1.33.0`: the nearest minor strictly ahead of this build's `1.32.0`.
+  // `1.34.0`: the nearest minor strictly ahead of this build's `1.33.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.33.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.34.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.33.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.34.0" },
     ]);
     expect(result.data).toBeNull();
   });

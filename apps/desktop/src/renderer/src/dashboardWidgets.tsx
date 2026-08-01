@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 import {
+  computeHabitStreak,
   computeStreak,
+  countsAsDone,
   matchesSmartList,
   parseWidgetConfig,
   widgetChoice,
@@ -9,7 +11,7 @@ import {
   widgetTaskLists,
 } from "@nexus/core";
 import type { WidgetContract } from "@nexus/core";
-import { Button, Chip, ListRow } from "@nexus/ui";
+import { Button, Checkbox, Chip, ListRow } from "@nexus/ui";
 import type { DocumentStatus, Event, Exam, Subject } from "../../shared/ipc.js";
 import { buildCalendarItems } from "./calendarItems.js";
 import type { CalendarItem, CalendarSource } from "./calendarItems.js";
@@ -31,9 +33,18 @@ import {
   shiftDayKey,
 } from "./examDates.js";
 import { focusSessionMinutes, formatDurationMinutes } from "./focusFormat.js";
+import {
+  habitStartDay,
+  habitsExpectedToday,
+  indexHabitEntries,
+  satisfiedDaysOf,
+  valueOn,
+} from "./habitDone.js";
+import { habitPeriodPhrase } from "./habitFormat.js";
 import { formatMoney } from "./money.js";
 import { formatNotificationWhen } from "./notificationFormat.js";
 import { dayUnit, strings } from "./strings.js";
+import { readStoredWeekStart, toWeekStart } from "./weekStart.js";
 
 /** The widest window „Predstojeće naplate" ever fetches — its largest horizon option. */
 const MAX_RENEWAL_HORIZON_DAYS = 90;
@@ -142,19 +153,31 @@ type WidgetState<T> = { status: "loading" } | { status: "ready"; data: T } | { s
  *
  * `load` must be a `useCallback` over the profile and whichever module flags it
  * reads, which is what makes the dependency list here an honest array literal:
- * a re-fetch happens when the query really changed, or when „Pokušaj ponovo"
- * bumps `attempt`.
+ * a re-fetch happens when the query really changed, or when either of the two
+ * seams below bumps `attempt`.
  */
 function useWidgetData<T>(load: () => Promise<T>): {
   state: WidgetState<T>;
+  /** „Pokušaj ponovo": re-runs the read and shows the skeleton while it does. */
   retry: () => void;
+  /**
+   * Re-runs the read WITHOUT the skeleton — for the one card that writes
+   * („Navike danas", HABIT slice c) and must show the result of its own tick.
+   * Blanking a list because one checkbox changed is a flicker, not feedback;
+   * a retry has nothing on screen worth keeping and so keeps the skeleton.
+   */
+  refresh: () => void;
 } {
   const [state, setState] = useState<WidgetState<T>>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
+  // A ref rather than state: it decides how the NEXT run presents itself, and a
+  // second piece of state would be one the effect could race against.
+  const silent = useRef(false);
 
   useEffect(() => {
     let active = true;
-    setState({ status: "loading" });
+    if (!silent.current) setState({ status: "loading" });
+    silent.current = false;
     void (async () => {
       try {
         const data = await load();
@@ -169,7 +192,14 @@ function useWidgetData<T>(load: () => Promise<T>): {
     };
   }, [load, attempt]);
 
-  return { state, retry: () => setAttempt((value) => value + 1) };
+  return {
+    state,
+    retry: () => setAttempt((value) => value + 1),
+    refresh: () => {
+      silent.current = true;
+      setAttempt((value) => value + 1);
+    },
+  };
 }
 
 /** The quiet placeholder a widget shows while its own read is in flight. */
@@ -779,6 +809,132 @@ function UpcomingRenewalsWidget({ profileId, contract, config, onOpenModule }: D
   );
 }
 
+/**
+ * „Navike danas" (HABIT slice c) — what today expects, with the very tick the
+ * page offers and the current niz beside it.
+ *
+ * **The one widget on this dashboard that WRITES**, and the exception is the
+ * whole reason it exists. Every other card here is read-only on purpose (see the
+ * file header): a row names a thing and the click goes to the module that owns
+ * it. A habit tick is different in kind — it is one bit, it is the entire
+ * interaction the module has, and a card that could only SAY „you have not drunk
+ * water today" while sending you elsewhere to admit it would be a card that
+ * nags. So this one ticks in place and re-reads afterwards.
+ *
+ * It re-reads rather than patching a row locally for `HabitsPage`'s reason
+ * exactly: the niz is DERIVED from the ticks, so a card that updated the
+ * checkbox and left the streak alone would be showing a number that no longer
+ * follows from the day beside it.
+ *
+ * Which habits are „today's" is `habitsExpectedToday`, the page's own rule, and
+ * „urađeno" is `countsAsDone`, the module's one definition — neither is
+ * re-derived here, because a card and its page disagreeing about what today asks
+ * for is precisely the drift a shared module prevents.
+ */
+function HabitsTodayWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps) {
+  const load = useCallback(async () => {
+    const today = localTodayKey();
+    const habits = await window.nexus.listHabits(profileId);
+    const expected = habitsExpectedToday(habits, today);
+    if (expected.length === 0) return { expected, index: indexHabitEntries([]), today };
+    // The window opens at the EARLIEST expected habit's first day rather than at
+    // a fixed horizon, exactly as the page's own read does: „Niz" is a claim
+    // about the whole history, and a window would quietly make it „niz u
+    // poslednjih N nedelja".
+    const from = expected.reduce(
+      (earliest, habit) => (habitStartDay(habit) < earliest ? habitStartDay(habit) : earliest),
+      today,
+    );
+    const entries = await window.nexus.habitEntries(profileId, { from, to: today });
+    return { expected, index: indexHabitEntries(entries), today };
+  }, [profileId]);
+  // A tick re-reads through `refresh` — the same `load`, without the skeleton,
+  // so there is one way back into this card's data and ticking a habit does not
+  // blank the list it is in.
+  const { state, retry, refresh } = useWidgetData(load);
+  const s = strings.dashboard.habitsToday;
+
+  return (
+    <WidgetData state={state} retry={retry}>
+      {({ expected, index, today }) => {
+        if (expected.length === 0) return <p className="dash__empty">{s.empty}</p>;
+        return (
+          <div className="dash__list">
+            {expected.map((habit) => {
+              const value = valueOn(index, habit.id, today);
+              const done = countsAsDone(habit.target, value);
+              const streak = computeHabitStreak(
+                habit.schedule,
+                satisfiedDaysOf(habit, index),
+                today,
+                toWeekStart(readStoredWeekStart()),
+              );
+              return (
+                <ListRow
+                  key={habit.id}
+                  leading={
+                    <Checkbox
+                      checked={done}
+                      aria-label={`${s.tick}: ${habit.name}`}
+                      onChange={(event) => {
+                        // Read off the event BEFORE the await: what the user did
+                        // is a fact of this moment, not of whenever the write
+                        // resolves.
+                        const ticked = event.target.checked;
+                        void (async () => {
+                          try {
+                            if (ticked) {
+                              await window.nexus.setHabitEntry(
+                                profileId,
+                                habit.id,
+                                today,
+                                // A measured habit ticked from here goes straight
+                                // to its target: the card has no stepper and
+                                // „delimično" is not a state a checkbox can mean.
+                                // The exact count still has „Danas" on the page.
+                                habit.target ?? 1,
+                              );
+                            } else {
+                              await window.nexus.clearHabitEntry(profileId, habit.id, today);
+                            }
+                          } catch (error) {
+                            console.error("Nexus: a habit tick from the dashboard failed:", error);
+                          }
+                          // Re-read either way: a failed write must not leave the
+                          // card showing a tick the store never took.
+                          refresh();
+                        })();
+                      }}
+                    />
+                  }
+                  trailing={
+                    streak.current > 0 ? (
+                      <Chip variant="accent">
+                        {`${s.streakLabel}: ${habitPeriodPhrase(
+                          streak.current,
+                          habit.schedule.kind,
+                        )}`}
+                      </Chip>
+                    ) : undefined
+                  }
+                >
+                  <button
+                    type="button"
+                    className="dash__row-link"
+                    onClick={() => onOpenModule("habits")}
+                  >
+                    <span className="dash__row-title">{habit.name}</span>
+                  </button>
+                </ListRow>
+              );
+            })}
+          </div>
+        );
+      }}
+    </WidgetData>
+  );
+}
+
 // --- The registry-driven map (ADR-045 section 3) ----------------------------
 
 /** How the page draws one placement: the body, and whether it draws at all. */
@@ -819,4 +975,5 @@ export const DASHBOARD_WIDGETS: Record<string, DashboardWidgetRenderer> = {
     Body: UpcomingRenewalsWidget,
     visible: (enabled) => enabled.has("finance"),
   },
+  "habits:danas": { Body: HabitsTodayWidget, visible: (enabled) => enabled.has("habits") },
 };

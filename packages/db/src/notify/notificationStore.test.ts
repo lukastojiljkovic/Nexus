@@ -69,7 +69,7 @@ describe("NotificationStore", () => {
         quietFrom: null,
         quietTo: null,
         morningHour: "08:00",
-        enabledSources: ["document", "exam", "study-day", "event", "task", "subscription"],
+        enabledSources: ["document", "exam", "study-day", "event", "task", "subscription", "habit"],
         snoozeDefault: "10m",
         appetiteAsked: false,
       });
@@ -93,7 +93,7 @@ describe("NotificationStore", () => {
         quietFrom: "22:00",
         quietTo: "07:00",
         morningHour: "09:00",
-        enabledSources: ["document", "exam", "study-day", "event", "task", "subscription"],
+        enabledSources: ["document", "exam", "study-day", "event", "task", "subscription", "habit"],
         snoozeDefault: "10m",
         appetiteAsked: false,
       });
@@ -146,7 +146,7 @@ describe("NotificationStore", () => {
         quietFrom: "22:00",
         quietTo: "07:00",
         morningHour: "09:00",
-        enabledSources: ["document", "exam", "study-day", "event", "task", "subscription"],
+        enabledSources: ["document", "exam", "study-day", "event", "task", "subscription", "habit"],
         snoozeDefault: "10m",
         appetiteAsked: false,
       });
@@ -232,7 +232,7 @@ describe("NotificationStore", () => {
         quietFrom: null,
         quietTo: null,
         morningHour: "08:00",
-        enabledSources: ["document", "exam", "study-day", "event", "task", "subscription"],
+        enabledSources: ["document", "exam", "study-day", "event", "task", "subscription", "habit"],
         snoozeDefault: "10m",
         appetiteAsked: true,
       });
@@ -246,7 +246,7 @@ describe("NotificationStore", () => {
         quietFrom: "22:00",
         quietTo: "07:00",
         morningHour: "09:00",
-        enabledSources: ["document", "exam", "study-day", "event", "task", "subscription"],
+        enabledSources: ["document", "exam", "study-day", "event", "task", "subscription", "habit"],
         snoozeDefault: "10m",
         appetiteAsked: true,
       });
@@ -292,10 +292,10 @@ describe("NotificationStore", () => {
     it("disables and re-enables a source, reflected in getSettings().enabledSources", () => {
       const { notify } = fixture();
       notify.setSourceEnabled("exam", false, NOW);
-      expect(notify.getSettings().enabledSources).toEqual(["document", "study-day", "event", "task", "subscription"]);
+      expect(notify.getSettings().enabledSources).toEqual(["document", "study-day", "event", "task", "subscription", "habit"]);
 
       notify.setSourceEnabled("exam", true, NOW);
-      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day", "event", "task", "subscription"]);
+      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day", "event", "task", "subscription", "habit"]);
     });
 
     it("upserts rather than duplicating on repeated toggles", () => {
@@ -303,7 +303,7 @@ describe("NotificationStore", () => {
       notify.setSourceEnabled("document", false, NOW);
       notify.setSourceEnabled("document", false, NOW);
       notify.setSourceEnabled("document", true, NOW);
-      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day", "event", "task", "subscription"]);
+      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day", "event", "task", "subscription", "habit"]);
     });
 
     it("rejects a source outside the closed set", () => {
@@ -316,19 +316,19 @@ describe("NotificationStore", () => {
     it("toggles the event source added by migration 019 (CAL-006) like any other", () => {
       const { notify } = fixture();
       notify.setSourceEnabled("event", false, NOW);
-      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day", "task", "subscription"]);
+      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day", "task", "subscription", "habit"]);
 
       notify.setSourceEnabled("event", true, NOW);
-      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day", "event", "task", "subscription"]);
+      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day", "event", "task", "subscription", "habit"]);
     });
 
     it("toggles the task source added by migration 021 (ADR-028) like any other", () => {
       const { notify } = fixture();
       notify.setSourceEnabled("task", false, NOW);
-      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day", "event", "subscription"]);
+      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day", "event", "subscription", "habit"]);
 
       notify.setSourceEnabled("task", true, NOW);
-      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day", "event", "task", "subscription"]);
+      expect(notify.getSettings().enabledSources).toEqual(["document", "exam", "study-day", "event", "task", "subscription", "habit"]);
     });
 
     it("refuses the always-on security source in BOTH directions (NTF-007)", () => {
@@ -348,6 +348,7 @@ describe("NotificationStore", () => {
         "event",
         "task",
         "subscription",
+        "habit",
       ]);
     });
   });
@@ -363,6 +364,7 @@ describe("NotificationStore", () => {
         "event",
         "task",
         "subscription",
+        "habit",
       ]);
     });
 

@@ -542,11 +542,12 @@ const api: NexusApi = {
   archiveHabit: (profileId, id) => ipcRenderer.invoke(IpcChannel.habitsArchive, { profileId, id }),
   unarchiveHabit: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.habitsUnarchive, { profileId, id }),
-  // No day travels with either: main stamps it (`HabitsSetEntryRequest`).
-  setHabitEntry: (profileId, habitId, value) =>
-    ipcRenderer.invoke(IpcChannel.habitsSetEntry, { profileId, habitId, value }),
-  clearHabitEntry: (profileId, habitId) =>
-    ipcRenderer.invoke(IpcChannel.habitsClearEntry, { profileId, habitId }),
+  // The day travels and is validated by main (`HabitsSetEntryRequest`): it is
+  // DATA the user named by clicking their own history, never a claim about now.
+  setHabitEntry: (profileId, habitId, day, value) =>
+    ipcRenderer.invoke(IpcChannel.habitsSetEntry, { profileId, habitId, day, value }),
+  clearHabitEntry: (profileId, habitId, day) =>
+    ipcRenderer.invoke(IpcChannel.habitsClearEntry, { profileId, habitId, day }),
   habitEntries: (profileId, range) =>
     ipcRenderer.invoke(IpcChannel.habitsEntries, { profileId, range }),
   searchQuery: (profileId, query, limit) =>

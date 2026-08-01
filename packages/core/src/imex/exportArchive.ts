@@ -45,6 +45,25 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
  *
+ * `1.33.0` widens ONE enum, in the two places the interchange spells it (HABIT
+ * slice c, migration 056): `"habit"` joins `notification.source` and the
+ * manifest's `settings.notifications.enabledSources`. Nothing was added to any
+ * row's SHAPE — no record type, no field — and the bump is owed all the same,
+ * for the reason `1.26.0`'s was when a field only changed MEANING: a domain is
+ * part of the contract, and a reader's whole job at an enum is to refuse what it
+ * does not recognise. A `1.32.0` reader handed this archive would accept the
+ * manifest, then throw one `invalid-record` per delivered habit reminder in
+ * somebody's ledger and refuse their whole notification appetite besides — a
+ * pile of baffling line-errors over a perfectly honest file. The version gate
+ * turns that into one true sentence about the build, which is the entire reason
+ * it exists.
+ *
+ * Deliberately NOT an `ArchiveEra` flag. An era flag answers „what did an older
+ * WRITER mean by this", and an older writer meant nothing by `"habit"` — it
+ * could not produce one. The absence of habit notifications in a pre-`1.33.0`
+ * archive is not ambiguous: that profile had no habit reminders, which is the
+ * same thing a profile that keeps none has today.
+ *
  * `1.32.0` adds the HABIT module (HABIT slice a, migration 055): two record
  * types — `habit` and `habit-entry` — riding in their OWN `data/habits.ndjson`, a
  * new `DATA_FILES` entry checksummed like the eight before it, plus a new
@@ -337,7 +356,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.32.0";
+const SCHEMA_VERSION = "1.33.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 

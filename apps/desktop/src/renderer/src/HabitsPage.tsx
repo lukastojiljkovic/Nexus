@@ -25,7 +25,9 @@ import {
   habitDayStates,
   habitStartDay,
   habitWindowScore,
+  habitsExpectedToday,
   indexHabitEntries,
+  isEditableDayState,
   quotaWeekProgress,
   satisfiedDaysOf,
   shiftDay,
@@ -33,11 +35,13 @@ import {
   weekStartKey,
   type HabitEntryIndex,
 } from "./habitDone.js";
-import { countUnit, dayUnit, strings } from "./strings.js";
+import { habitDayPhrase, habitPeriodPhrase, habitWeekPhrase } from "./habitFormat.js";
+import { readStoredDefaultReminder } from "./habitPrefs.js";
+import { strings } from "./strings.js";
 import { readStoredWeekStart, toWeekStart } from "./weekStart.js";
 
 /**
- * Navike (HABIT slice b) — the module's page. Slice a shipped the storage
+ * Navike (HABIT slices b and c) — the module's page. Slice a shipped the storage
  * (migration 055), the two-kind schedule vocabulary and the streak engine; this
  * page is bound by every one of them and revisits none:
  *
@@ -62,9 +66,18 @@ import { readStoredWeekStart, toWeekStart } from "./weekStart.js";
  *   the 30-day fraction — `computeHabitStreak`'s own gentleness, restated on
  *   every surface that could contradict it.
  *
- * `reminder_time` exists in the schema and rides the wire, and no control here
- * offers it: nothing reads it until slice c wires the notification source, and a
- * control that silently does nothing is worse than an absent one.
+ * Slice c adds the two things slice b deliberately left for it:
+ *
+ * - **A past day can be corrected.** The history grid's cells are buttons
+ *   wherever a day carries a verdict, and a click toggles that day through the
+ *   very same one-entry-per-day path „Danas" writes on. Slice b let main stamp
+ *   the day, which read as strict and was in fact a missing feature: the grid sat
+ *   there showing yesterday's miss and the app had no way to be told otherwise.
+ *   The day now travels and main validates BOTH its bounds (`asHabitEntryDay`) —
+ *   a day the user names is data, exactly as a FIN transaction's date is.
+ * - **„Podsetnik" is offered**, now that `reminder_time` does something: HABIT is
+ *   a notification source from slice c, and a control that changes nothing is the
+ *   only reason it was withheld.
  */
 
 /** How many weeks of history the grid draws. Twelve: a season, which is about as far back as „da li mi ovo ide" is a real question. */
@@ -105,34 +118,31 @@ function habitErrorMessage(error: unknown): string {
   return strings.habits.actionError;
 }
 
+/**
+ * A grid cell's day in words — „sreda, 8. jul 2026." The WEEKDAY is in it and
+ * that is the point: the cell is a 13px square in a lattice of eighty-four, so
+ * the one thing a person aiming at it needs confirmed is which column they are
+ * in. UTC-parsed, like every bare date in this house, so it never slides a day.
+ */
+function formatCellDate(day: string): string {
+  const date = new Date(`${day}T00:00:00Z`);
+  return Number.isNaN(date.getTime())
+    ? day
+    : new Intl.DateTimeFormat("sr-Latn", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        timeZone: "UTC",
+      }).format(date);
+}
+
 /** A schedule in words, for the row that carries it — the same reading in „Danas" and in „Sve navike". */
 function scheduleLabel(schedule: HabitSchedule): string {
   const s = strings.habits.schedule;
   if (schedule.kind === "quota") return `${schedule.perWeek}${s.perWeekSuffix}`;
   if (schedule.weekdays.length === DAYS_PER_WEEK) return s.everyDay;
   return schedule.weekdays.map((iso) => s.weekdayShort[iso - 1] ?? "").join(" · ");
-}
-
-/**
- * A streak, counted in the period the habit is KEPT in — days for a `days`
- * habit, weeks for a `quota` one, which is what `HabitStreakResult` already
- * says. The noun goes through the house's own agreement helpers: two forms for
- * „dan"/„dana", three for „nedelja"/„nedelje"/„nedelja".
- */
-function periodPhrase(count: number, kind: ScheduleKind): string {
-  return kind === "quota" ? weekPhrase(count) : dayPhrase(count);
-}
-
-/** „12 nedelja" — three forms (1 / 2–4 / 5+), which „nedelja" genuinely needs. */
-function weekPhrase(count: number): string {
-  const s = strings.habits.detail;
-  return `${count} ${countUnit(count, s.weekUnitOne, s.weekUnitFew, s.weekUnitMany)}`;
-}
-
-/** „30 dana" — two forms are enough here, exactly as `dayUnit`'s own comment has it. */
-function dayPhrase(count: number): string {
-  const s = strings.habits.detail;
-  return `${count} ${dayUnit(count, s.dayUnitOne, s.dayUnitMany)}`;
 }
 
 /**
@@ -201,6 +211,8 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
   const [perWeekDraft, setPerWeekDraft] = useState(3);
   const [targetDraft, setTargetDraft] = useState("");
   const [unitDraft, setUnitDraft] = useState("");
+  // „HH:MM", or "" for no reminder — which is what every habit ships with.
+  const [reminderDraft, setReminderDraft] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
   // Read once per render rather than held in state: it is a device preference
@@ -254,6 +266,7 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
     setNameDraft("");
     setTargetDraft("");
     setUnitDraft("");
+    setReminderDraft("");
     setFormError(null);
   }
 
@@ -266,6 +279,10 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
     setPerWeekDraft(3);
     setTargetDraft("");
     setUnitDraft("");
+    // Silent, always: the switch starts off and a new habit reminds about
+    // nothing. This machine's default hour (the „Navike" settings card) is what
+    // the field is FILLED with once the switch is turned on, never before.
+    setReminderDraft("");
     setFormError(null);
     setEditing({ mode: "new" });
   }
@@ -282,6 +299,7 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
     setPerWeekDraft(habit.schedule.kind === "quota" ? habit.schedule.perWeek : 3);
     setTargetDraft(habit.target === null ? "" : String(habit.target));
     setUnitDraft(habit.unit ?? "");
+    setReminderDraft(habit.reminderTime ?? "");
     setFormError(null);
     setEditing({ mode: "edit", id: habit.id });
   }
@@ -326,7 +344,11 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
       kindDraft === "quota"
         ? { kind: "quota", perWeek: perWeekDraft }
         : { kind: "days", weekdays: [...weekdaysDraft].sort((a, b) => a - b) };
-    const fields = { name, color: colorDraft, schedule, target, unit };
+    // An empty time is „bez podsetnika", which is null on the wire — the store
+    // refuses anything that is not a wall-clock HH:MM, and `<input type="time">`
+    // is what makes „" the only other thing this field can hold.
+    const reminderTime = reminderDraft.trim() === "" ? null : reminderDraft;
+    const fields = { name, color: colorDraft, schedule, target, unit, reminderTime };
 
     setFormError(null);
     try {
@@ -363,35 +385,53 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
   }
 
   /**
-   * Sets or clears TODAY's tick. Zero is not a value this store holds — an
+   * Sets or clears ONE day's tick — the single write path for both surfaces that
+   * record anything: „Danas"'s controls, which pass today, and a history cell,
+   * which passes the day it draws. Zero is not a value this store holds — an
    * untick is a delete — so a stepper walked down to nothing calls
    * `habits:clear-entry` rather than writing a zero row.
+   *
+   * The day is always stated rather than left to main, which is the whole of
+   * slice c's change here: „Danas" says today because it means today, not
+   * because main would otherwise have guessed right.
    */
-  async function setToday(habit: Habit, value: number): Promise<void> {
+  async function setDay(habit: Habit, day: string, value: number): Promise<void> {
     await run(async () => {
       if (value < 1) {
-        await window.nexus.clearHabitEntry(profileId, habit.id);
+        await window.nexus.clearHabitEntry(profileId, habit.id, day);
       } else {
-        await window.nexus.setHabitEntry(profileId, habit.id, value);
+        await window.nexus.setHabitEntry(profileId, habit.id, day, value);
       }
     });
+  }
+
+  /**
+   * Flips one past (or present) day between done and not — what a click on a
+   * history cell does.
+   *
+   * A measured habit's corrected day is set to its TARGET rather than opened as a
+   * stepper. A stepper per grid cell would be a second editor for the same fact,
+   * eighty-four of them on one screen, in 13px squares — and „I did do my eight
+   * glasses that Tuesday" is the correction people actually make. The exact
+   * count for TODAY still has its own stepper in „Danas", where there is room to
+   * mean something by it.
+   */
+  async function toggleDay(habit: Habit, day: string, done: boolean): Promise<void> {
+    await setDay(habit, day, done ? 0 : (habit.target ?? 1));
   }
 
   // --- What this render draws ------------------------------------------------
 
   const habitList = habits ?? [];
   const index: HabitEntryIndex = indexHabitEntries(entries);
-  const todayIso = ((new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % DAYS_PER_WEEK) + 1;
 
   /**
-   * What is expected today: a `days` habit whose set holds today's weekday, and
-   * EVERY `quota` habit — any day counts towards its week, so a quota habit is
-   * always something you could do today. Archived ones never appear.
+   * What is expected today. The rule lives in `habitDone.ts` rather than here
+   * since slice c: the „Navike danas" widget draws this same list, and two
+   * inline copies is how a card and its page start disagreeing about what today
+   * asks for.
    */
-  const todayHabits = habitList.filter((habit) => {
-    if (habit.archivedAt !== null) return false;
-    return habit.schedule.kind === "quota" || habit.schedule.weekdays.includes(todayIso);
-  });
+  const todayHabits = habitsExpectedToday(habitList, today);
 
   /** The grid's columns, in the device's own week order; the rows are the last 12 weeks, oldest first. */
   const gridWeekdays = weekdayOrder(weekStart);
@@ -442,8 +482,9 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
 
   /**
    * „Danas"'s tick control: a checkbox for a binary habit, a stepper plus the
-   * target for a measured one. Both write through `setToday`, so „urađeno"
-   * reaches the store as the same act either way.
+   * target for a measured one. Both write through `setDay` with TODAY stated
+   * outright, so „urađeno" reaches the store as the same act either way — and as
+   * the same act a history cell performs on a past day.
    */
   function renderTick(habit: Habit): ReactNode {
     const value = valueOn(index, habit.id, today);
@@ -452,7 +493,7 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
         <Checkbox
           checked={value > 0}
           aria-label={`${s.stepper.check}: ${habit.name}`}
-          onChange={(event) => void setToday(habit, event.target.checked ? 1 : 0)}
+          onChange={(event) => void setDay(habit, today, event.target.checked ? 1 : 0)}
         />
       );
     }
@@ -463,7 +504,7 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
           className="hab__step"
           aria-label={`${s.stepper.decrease}: ${habit.name}`}
           disabled={value === 0}
-          onClick={() => void setToday(habit, value - 1)}
+          onClick={() => void setDay(habit, today, value - 1)}
         >
           −
         </Button>
@@ -474,7 +515,7 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
           size="sm"
           className="hab__step"
           aria-label={`${s.stepper.increase}: ${habit.name}`}
-          onClick={() => void setToday(habit, value + 1)}
+          onClick={() => void setDay(habit, today, value + 1)}
         >
           +
         </Button>
@@ -506,7 +547,7 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
             )}
             {streak.current > 0 && (
               <Chip variant="accent">
-                {`${s.today.streakLabel}: ${periodPhrase(streak.current, habit.schedule.kind)}`}
+                {`${s.today.streakLabel}: ${habitPeriodPhrase(streak.current, habit.schedule.kind)}`}
               </Chip>
             )}
           </div>
@@ -520,20 +561,24 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
    * own weekday order — and a SATISFIED cell takes the habit's own swatch, so
    * the page holds one colour vocabulary rather than a second one invented for
    * a grid.
+   *
+   * Since slice c the cells that carry a VERDICT are real buttons: a click
+   * toggles that day through the same one-entry-per-day path „Danas" writes on.
+   * The other two states stay inert `<span>`s and neither is an oversight — see
+   * `isEditableDayState`. So the grid stops being a picture that only ever
+   * accuses and becomes the place the accusation is answered, which is why it is
+   * no longer `role="img"`: it is a group of controls, and each one announces
+   * which day it is about and what pressing it will do.
    */
   function renderHistory(habit: Habit): ReactNode {
     const legend = s.detail;
     // Built from `HISTORY_WEEKS` rather than written out, so the heading cannot
     // outlive the span it names.
-    const heading = `${legend.windowPrefix} ${weekPhrase(HISTORY_WEEKS)}`;
+    const heading = `${legend.windowPrefix} ${habitWeekPhrase(HISTORY_WEEKS)}`;
     return (
       <div className="hab__history">
         <div className="hab__history-heading">{heading}</div>
-        {/* A picture, and said to be one: the numbers underneath are the text
-            version of it, so eighty-four announced cells would be the same
-            information a third time. Each cell still carries its own date as a
-            title, which is what a pointer wants. */}
-        <div className="hab__grid" role="img" aria-label={heading}>
+        <div className="hab__grid" role="group" aria-label={`${heading}: ${habit.name}`}>
           {historyWeeks.map((weekOpens) => {
             // The week opens on the DEVICE's first day, so column `n` is the
             // n-th weekday in that same order — the grid and the picker read a
@@ -542,14 +587,40 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
             const states = habitDayStates(habit, index, days, today);
             return (
               <div key={weekOpens} className="hab__grid-week">
-                {days.map((day, column) => (
-                  <span
-                    key={day}
-                    className={`hab__cell hab__cell--${states[column] ?? "unjudged"}`}
-                    style={states[column] === "satisfied" ? swatchStyle(habit.color) : undefined}
-                    title={day}
-                  />
-                ))}
+                {days.map((day, column) => {
+                  const state = states[column] ?? "unjudged";
+                  const className = `hab__cell hab__cell--${state}`;
+                  const fill = state === "satisfied" ? swatchStyle(habit.color) : undefined;
+                  if (!isEditableDayState(state)) {
+                    return <span key={day} className={className} style={fill} title={day} />;
+                  }
+                  const done = state === "satisfied";
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      className={`${className} hab__cell--editable`}
+                      style={fill}
+                      // Both halves out loud: WHICH day, and what the press does
+                      // to it. „Ćelija 3" would be a control nobody can aim.
+                      //
+                      // Deliberately NO `aria-pressed` beside a label that
+                      // already changes with the state. The two are alternative
+                      // conventions, not complementary ones — a constant label
+                      // plus a pressed state (the swatch row above), or an action
+                      // label that says what happens next. Both at once has a
+                      // reader announcing „označi kao urađeno, nije pritisnuto",
+                      // which states the same fact twice and in two directions.
+                      aria-label={`${formatCellDate(day)}: ${
+                        done ? legend.cellUnmark : legend.cellMark
+                      }`}
+                      title={`${formatCellDate(day)} · ${
+                        done ? legend.cellUnmark : legend.cellMark
+                      }`}
+                      onClick={() => void toggleDay(habit, day, done)}
+                    />
+                  );
+                })}
               </div>
             );
           })}
@@ -570,6 +641,10 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
             {legend.legendOff}
           </span>
         </div>
+        {/* Said once, quietly, rather than discovered: two of the four cell
+            kinds are clickable and the other two are not, which is not
+            something a colour can express. */}
+        <p className="hab__note">{legend.gridHint}</p>
       </div>
     );
   }
@@ -592,21 +667,21 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
       <div className="hab__stats">
         <span className="hab__stat">
           <span className="hab__stat-label">{d.streakCurrent}</span>
-          <span className="hab__stat-value">{periodPhrase(streak.current, kind)}</span>
+          <span className="hab__stat-value">{habitPeriodPhrase(streak.current, kind)}</span>
         </span>
         <span className="hab__stat">
           <span className="hab__stat-label">{d.streakBest}</span>
-          <span className="hab__stat-value">{periodPhrase(streak.best, kind)}</span>
+          <span className="hab__stat-value">{habitPeriodPhrase(streak.best, kind)}</span>
         </span>
         <span className="hab__stat">
           {/* „Poslednjih 30 dana", with the 30 coming from the constant the
               window is actually measured over. */}
           <span className="hab__stat-label">
-            {`${d.windowPrefix} ${dayPhrase(HABIT_WINDOW_DAYS)}`}
+            {`${d.windowPrefix} ${habitDayPhrase(HABIT_WINDOW_DAYS)}`}
           </span>
           <span className="hab__stat-value">
             {`${score.done}/${
-              score.kind === "weeks" ? weekPhrase(score.expected) : dayPhrase(score.expected)
+              score.kind === "weeks" ? habitWeekPhrase(score.expected) : habitDayPhrase(score.expected)
             }`}
           </span>
           {/* What the denominator IS — it is not thirty, and a fraction whose
@@ -883,6 +958,38 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
             </div>
             <span className="hab__field-hint">{s.form.targetHint}</span>
             <span className="hab__field-hint">{s.form.unitHint}</span>
+
+            {/* „Podsetnik" (slice c): a switch, and — only once it is on — a
+                time. Two controls rather than one for a concrete reason: an
+                empty `<input type="time">` has no answer to „what hour would you
+                like", so a bare field could never open on this machine's usual
+                one. The switch is what asks the question, and turning it on fills
+                the field with the „Navike" card's default (`habitPrefs.ts`);
+                turning it off clears the time, because „bez podsetnika" IS the
+                absent value and not a second flag to keep in step.
+                A habit still ships silent — the switch starts off. */}
+            <div className="hab__field">
+              <Checkbox
+                checked={reminderDraft !== ""}
+                onChange={(event) =>
+                  setReminderDraft(event.target.checked ? readStoredDefaultReminder() : "")
+                }
+              >
+                {s.form.reminderLabel}
+              </Checkbox>
+              {reminderDraft !== "" && (
+                <span className="hab__reminder">
+                  <input
+                    type="time"
+                    className="nx-textfield__input hab__time"
+                    value={reminderDraft}
+                    aria-label={s.form.reminderTimeLabel}
+                    onChange={(event) => setReminderDraft(event.target.value)}
+                  />
+                </span>
+              )}
+            </div>
+            <span className="hab__field-hint">{s.form.reminderHint}</span>
 
             {formError !== null && (
               <p className="hab__error" role="alert">

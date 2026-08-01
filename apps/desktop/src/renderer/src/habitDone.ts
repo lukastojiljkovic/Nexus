@@ -1,3 +1,4 @@
+import { countsAsDone } from "@nexus/core";
 import type { WeekStart } from "@nexus/core";
 
 import type { Habit, HabitEntry } from "../../shared/ipc.js";
@@ -109,13 +110,13 @@ export function habitStartDay(habit: Habit): string {
 }
 
 /**
- * THE rule. `value` is 0 when the day has no entry at all, which is why a binary
- * habit reads `> 0` rather than „an entry exists": the two say the same thing
- * and only one of them needs the caller to hold the entry.
+ * THE rule — re-exported, not restated. It moved to `@nexus/core`'s
+ * `habits/habitDone.ts` in slice c, when the notification scheduler needed the
+ * same sentence and main cannot import the renderer. Every caller and every test
+ * here keeps reading it from this module, and there is still exactly one
+ * definition of „done" in the build.
  */
-export function countsAsDone(target: number | null, value: number): boolean {
-  return target === null ? value > 0 : value >= target;
-}
+export { countsAsDone };
 
 /**
  * The flat `habits:entries` answer, grouped by habit and day. One pass, so the
@@ -145,6 +146,45 @@ function expectsDay(habit: Habit, day: string): boolean {
   return (
     habit.schedule.kind === "days" && habit.schedule.weekdays.includes(isoWeekday(utcDayMs(day)))
   );
+}
+
+/**
+ * What „Danas" is: a `days` habit whose set holds today's weekday, and EVERY
+ * `quota` habit — any day counts towards its week, so a quota habit is always
+ * something you could do today. Archived ones never appear; a habit you have
+ * finished with is not one today expects.
+ *
+ * Exported because TWO surfaces draw this same list since slice c — the page's
+ * „Danas" section and the „Navike danas" dashboard widget — and a widget that
+ * re-derived it inline is exactly how the card and the page would start
+ * disagreeing about what today asks for. The order the caller handed in is kept
+ * (the store's sr-Latn one).
+ *
+ * NOT the same question the reminder asks: `habitReminderInputs` also drops a
+ * quota habit whose week is already met, because a NUDGE about a finished week
+ * is nagging, while a ROW for it is just a row you may still tick.
+ */
+export function habitsExpectedToday(habits: readonly Habit[], today: string): Habit[] {
+  return habits.filter(
+    (habit) =>
+      habit.archivedAt === null && (habit.schedule.kind === "quota" || expectsDay(habit, today)),
+  );
+}
+
+/**
+ * Whether a history cell can carry a verdict the user may change (slice c).
+ *
+ * Exactly the two states that ARE a verdict: `satisfied` (it counted) and
+ * `missed` (the schedule asked and the day is over and empty). The other two are
+ * inert on purpose and neither is an oversight — `unexpected` is a day the
+ * schedule never asked for, so there is nothing to record about it, and
+ * `unjudged` is a day before the habit existed or one that has not happened yet,
+ * neither of which has anything to say. Main refuses both bounds anyway
+ * (`asHabitEntryDay`); this is the same rule stated where the click is, so the
+ * refusal is never something the user has to discover.
+ */
+export function isEditableDayState(state: HabitDayState): boolean {
+  return state === "satisfied" || state === "missed";
 }
 
 /**

@@ -6,7 +6,7 @@
  */
 import type { NotificationSource, SnoozePreset } from "../../shared/ipc.js";
 
-/** The six toggleable NTF sources, in the fixed order every source list/loop uses. */
+/** The seven toggleable NTF sources, in the fixed order every source list/loop uses. */
 export const ALL_NOTIFICATION_SOURCES: NotificationSource[] = [
   "document",
   "exam",
@@ -14,6 +14,7 @@ export const ALL_NOTIFICATION_SOURCES: NotificationSource[] = [
   "event",
   "task",
   "subscription",
+  "habit",
 ];
 
 /**
@@ -44,7 +45,7 @@ export interface NotificationPreset {
 }
 
 /**
- * NTF-008: minimalno/normalno/sve map onto growing subsets of the six sources.
+ * NTF-008: minimalno/normalno/sve map onto growing subsets of the seven sources.
  * An event reminder is in every preset, minimalno included — it is the least
  * noisy kind there is, since the user attached it to that one event by hand. A
  * task reminder (ADR-028) joins every tier for exactly the same reason: it
@@ -56,15 +57,34 @@ export interface NotificationPreset {
  * leaving an account, which is the one thing nobody wants to find out
  * afterwards.
  *
+ * A HABIT reminder (slice c) is in every tier too, on that same argument and
+ * against the one objection worth answering. The argument first: a habit ships
+ * with NO reminder — `reminder_time` is empty until somebody types an hour into
+ * it — so the only habit that ever fires is one whose owner named the habit, the
+ * schedule AND the minute. Leaving it out of „minimalno" would mean silently
+ * ignoring a time the user typed, which is the exact failure „it only fires
+ * because the user set it by hand" exists to prevent.
+ *
+ * The objection: unlike a task's ladder, a habit reminder RECURS — potentially
+ * every day — and „minimalno" ought to mean almost nothing. What answers it is
+ * that this is the only source in the app that switches itself off: it does not
+ * fire on a day the schedule never asked for, and it does not fire once the
+ * habit is done (`habitReminderInputs`). So a habit kept is a habit that stops
+ * nagging, and the daily case only persists while the user is genuinely not
+ * doing the thing they asked to be reminded about.
+ *
  * Lives here, beside `ALL_NOTIFICATION_SOURCES`, because two surfaces now write
  * these exact sets: the Settings page's preset row and the one-time appetite
  * dialog (ADR-033). Picking "Normalno" must mean the identical thing in both,
  * and a second copy is precisely how it would stop doing so.
  */
 export const NOTIFICATION_PRESETS: NotificationPreset[] = [
-  { key: "minimal", sources: ["document", "event", "task", "subscription"] },
-  { key: "normal", sources: ["document", "exam", "event", "task", "subscription"] },
-  { key: "all", sources: ["document", "exam", "study-day", "event", "task", "subscription"] },
+  { key: "minimal", sources: ["document", "event", "task", "subscription", "habit"] },
+  { key: "normal", sources: ["document", "exam", "event", "task", "subscription", "habit"] },
+  {
+    key: "all",
+    sources: ["document", "exam", "study-day", "event", "task", "subscription", "habit"],
+  },
 ];
 
 function isSameLocalDay(a: Date, b: Date): boolean {

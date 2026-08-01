@@ -3426,6 +3426,30 @@ button.cal__grid-event--dragging {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* „Navike danas" is the one card whose row already holds a control (the tick),
+   so its deep link cannot be the whole row the way `.dash__row` is everywhere
+   else — a button inside a button is not a thing. The NAME carries it instead:
+   the same underline-on-hover a text link has, and nothing else, so the row
+   still reads as a row rather than as two competing affordances. */
+.dash__row-link {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.dash__row-link:hover .dash__row-title {
+  text-decoration: underline;
+}
+.dash__row-link:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+  border-radius: var(--nx-radius-sm);
+}
 
 /* Danas: a fixed leading gutter — a time for events, a quiet tag for tasks. */
 .dash__time {
@@ -9367,6 +9391,14 @@ button.cal__grid-event--dragging {
   text-transform: uppercase;
 }
 
+/* Navike (HABIT): the default reminder hour. Sized to its own content like the
+   currency code beside it, rather than stretching a four-character value across
+   a card. */
+.set__time-input {
+  width: 132px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* --- Datoteke (DOC) ------------------------------------------------------
    The browse page over every attachment in the profile. Its header, chips and
    meta line are the search page's (.searchpage__*) arrangement — the two are
@@ -9866,6 +9898,25 @@ button.cal__grid-event--dragging {
   border-radius: var(--nx-radius-xs);
   border: 1px solid transparent;
 }
+/* A cell that carries a verdict is a real button (slice c), so the element's own
+   chrome has to be reset before the square above survives. Only the two states a
+   click can move between get this — the inert ones stay spans, and a pointer
+   that changes shape over exactly the squares that respond is the honest way to
+   say which those are. The focus ring is the app's own, never a glow. */
+.hab__cell--editable {
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  cursor: pointer;
+  appearance: none;
+}
+.hab__cell--editable:hover {
+  border-color: var(--nx-accent);
+}
+.hab__cell--editable:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
 /* The fill is the habit's own swatch, set inline. The accent stands in when the
    habit was given no colour — without it a satisfied cell would be an empty box
    with a border, which is exactly what a MISSED one is. */
@@ -9890,6 +9941,16 @@ button.cal__grid-event--dragging {
   gap: var(--nx-space-3);
   font-size: var(--nx-font-size-caption);
   color: var(--nx-text-muted);
+}
+/* „Podsetnik": the time field and the clear beside it, on one line. */
+.hab__reminder {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.hab__time {
+  width: auto;
+  font-variant-numeric: tabular-nums;
 }
 .hab__legend-item {
   display: inline-flex;

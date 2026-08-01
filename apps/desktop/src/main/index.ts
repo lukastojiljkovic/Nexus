@@ -3058,6 +3058,49 @@ function asHabitFieldChanges(value: unknown): UpdateHabitFields {
   return patch;
 }
 
+/**
+ * The day a tick is being recorded FOR (HABIT slice c). A real bare calendar
+ * day, and never one after `localToday()`.
+ *
+ * **This reads like a weakening of the clock rule and is the opposite of one.**
+ * Slice b let main stamp `localToday()` and carried no day at all; the rule that
+ * protected is „the renderer may not lie about NOW", and it still holds — nothing
+ * on this wire asks what today is. A day the user named by clicking a cell of
+ * their own history is INPUT, exactly as a FIN transaction's `tx_date` is: chosen
+ * by the user, validated here, never taken as a claim about the clock. What main
+ * still owns is the clock itself, which is precisely what makes the refusal below
+ * enforceable: the future is not a fact about a habit, and only main can say
+ * where the future starts.
+ *
+ * The other bound — a day before the habit's own `createdAt` — needs the row and
+ * so lives in `assertHabitExisted`.
+ */
+function asHabitEntryDay(value: unknown, field: string): string {
+  const day = asBareDate(value, field);
+  if (day > localToday()) {
+    throw new Error(`Invalid IPC payload: "${field}" must not be in the future.`);
+  }
+  return day;
+}
+
+/**
+ * Refuses a tick on a day BEFORE the habit existed. The history grid draws those
+ * days as `unjudged` for a reason — a habit made on Wednesday must not show
+ * eleven weeks of misses behind it — and a write there would create history for a
+ * period the habit was not in.
+ *
+ * A habit this profile does not have is deliberately left to the store: `setEntry`
+ * and `clearEntry` both resolve it themselves, and their „No live habit" is the
+ * message the page already maps to Serbian copy.
+ */
+function assertHabitExisted(store: HabitStore, habitId: string, day: string): void {
+  const habit = store.listActive().find((row) => row.id === habitId);
+  if (habit === undefined) return;
+  if (day < habit.createdAt.slice(0, 10)) {
+    throw new Error(`Invalid IPC payload: "day" is before the habit existed.`);
+  }
+}
+
 /** Validates a `HabitDayRange` payload — two real calendar days; that `from` may not be after `to` stays the store's own refusal. */
 function asHabitDayRange(value: unknown): HabitDayRange {
   const range = asRecord(value);
@@ -3964,6 +4007,9 @@ function notificationSchedulerDeps(): NotificationSchedulerDeps {
     // accounts, for the currency a reminder's amount is stated in.
     finRecurringStore,
     finAccountStore,
+    // HABIT slice c: the habits that carry a `reminder_time`, and the week of
+    // ticks that says which of them are already done.
+    habitStore,
     notificationStore,
     getMainWindow: () => mainWindow,
   };
@@ -7988,15 +8034,19 @@ function registerIpc(): void {
     habitStore(profileId).unarchive(id, new Date().toISOString());
   });
 
-  // Today's tick. The day is `localToday()` and never the payload's — see
-  // `HabitsSetEntryRequest` for why this wire carries none.
+  // One day's tick — today's, or a past one the user is correcting from the
+  // history grid. The day is validated here on both bounds; see
+  // `asHabitEntryDay` for why a named day is data rather than a clock claim.
   ipcMain.handle(IpcChannel.habitsSetEntry, (event, payload): HabitEntry => {
     assertTrustedSender(event);
     const body = asRecord(payload);
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const habitId = asNonEmptyString(body.habitId, "habitId");
+    const day = asHabitEntryDay(body.day, "day");
     const value = asHabitCount(body.value, "value");
-    return habitStore(profileId).setEntry(habitId, localToday(), value, new Date().toISOString());
+    const store = habitStore(profileId);
+    assertHabitExisted(store, habitId, day);
+    return store.setEntry(habitId, day, value, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.habitsClearEntry, (event, payload): void => {
@@ -8004,7 +8054,10 @@ function registerIpc(): void {
     const body = asRecord(payload);
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const habitId = asNonEmptyString(body.habitId, "habitId");
-    habitStore(profileId).clearEntry(habitId, localToday());
+    const day = asHabitEntryDay(body.day, "day");
+    const store = habitStore(profileId);
+    assertHabitExisted(store, habitId, day);
+    store.clearEntry(habitId, day);
   });
 
   // Every live habit's ticks over one window, in ONE query — the page's today

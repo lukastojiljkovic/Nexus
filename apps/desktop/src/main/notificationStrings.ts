@@ -1,4 +1,4 @@
-import type { NotificationSource } from "@nexus/core";
+import type { HabitSchedule, NotificationSource } from "@nexus/core";
 
 /**
  * Serbian copy for OS notifications, fired only from the main process (NTF
@@ -302,6 +302,44 @@ export function securityNotificationCopy(notice: SecurityNotice): NotificationCo
   }
 }
 
+/**
+ * Habit reminder copy (HABIT slice c). Fires at the hour its owner picked, on a
+ * day the schedule expects, and only while the habit is NOT yet done — every one
+ * of those is decided upstream (`habitReminderInputs`), so this text can say the
+ * one thing it is always entitled to say: what is left to do.
+ *
+ * The body is what the habit ASKS FOR, and nothing else. No streak („niz: 12"
+ * would turn a nudge into something to lose), no progress figure („3/8" reads as
+ * a scoreboard on a reminder), no encouragement — the app's tone is informative,
+ * and a habit tracker that cheers is a habit tracker people mute. A binary habit
+ * has nothing to state beyond the schedule; a measured one states its target,
+ * because „8 čaša" is the actual ask and „uradi ovo" is not.
+ *
+ * The schedule reading is the page's own, restated here rather than imported:
+ * main cannot reach the renderer's `strings.ts` (see this file's header), which
+ * is exactly why this module exists.
+ */
+export function habitNotificationCopy(
+  name: string,
+  schedule: HabitSchedule,
+  target: number | null,
+  unit: string | null,
+): NotificationCopy {
+  const parts = [habitScheduleLabel(schedule)];
+  if (target !== null) parts.push(`cilj: ${target}${unit === null ? "" : ` ${unit}`}`);
+  return { title: `Navika: ${name}`, body: parts.join(" · ") };
+}
+
+/** Short weekday names in ISO order (1 = ponedeljak) — mirrors `strings.habits.schedule.weekdayShort`. */
+const HABIT_WEEKDAY_SHORT = ["Pon", "Uto", "Sre", "Čet", "Pet", "Sub", "Ned"] as const;
+
+/** A habit's schedule in words — „Svaki dan", „Pon · Sre · Pet", „3× nedeljno". */
+function habitScheduleLabel(schedule: HabitSchedule): string {
+  if (schedule.kind === "quota") return `${schedule.perWeek}× nedeljno`;
+  if (schedule.weekdays.length === HABIT_WEEKDAY_SHORT.length) return "Svaki dan";
+  return schedule.weekdays.map((iso) => HABIT_WEEKDAY_SHORT[iso - 1] ?? "").join(" · ");
+}
+
 /** Today's study-day reminder copy: how many blocks are planned and their total length. */
 export function studyDayNotificationCopy(blockCount: number, totalMinutes: number): NotificationCopy {
   const blockPhrase = pluralize(blockCount, "blok", "bloka", "blokova");
@@ -317,7 +355,7 @@ export function studyDayNotificationCopy(blockCount: number, totalMinutes: numbe
  */
 export type FoldableNotificationSource = Exclude<NotificationSource, "security">;
 
-/** Per-source counts for a digest, in the fixed order documents/exams/study-days/events/tasks/subscriptions. */
+/** Per-source counts for a digest, in the fixed order documents/exams/study-days/events/tasks/subscriptions/habits. */
 export type DigestCounts = Record<FoldableNotificationSource, number>;
 
 /**
@@ -346,6 +384,9 @@ function digestBody(counts: DigestCounts): string {
     parts.push(
       `${counts.subscription} ${pluralize(counts.subscription, "pretplata", "pretplate", "pretplata")}`,
     );
+  }
+  if (counts.habit > 0) {
+    parts.push(`${counts.habit} ${pluralize(counts.habit, "navika", "navike", "navika")}`);
   }
   return parts.join(" · ");
 }
@@ -400,5 +441,5 @@ export function catchUpDigestCopy(total: number, counts: DigestCounts): Notifica
  * it its own toast, always (NTF-007 / NTF-009).
  */
 export function emptyDigestCounts(): DigestCounts {
-  return { document: 0, exam: 0, "study-day": 0, event: 0, task: 0, subscription: 0 };
+  return { document: 0, exam: 0, "study-day": 0, event: 0, task: 0, subscription: 0, habit: 0 };
 }

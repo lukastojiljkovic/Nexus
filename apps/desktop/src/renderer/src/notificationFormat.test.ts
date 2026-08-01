@@ -29,7 +29,7 @@ function pinNoon(): void {
 }
 
 describe("ALL_NOTIFICATION_SOURCES", () => {
-  it("is the six toggleable NTF sources, in their fixed order and without duplicates", () => {
+  it("is the seven toggleable NTF sources, in their fixed order and without duplicates", () => {
     expect(ALL_NOTIFICATION_SOURCES).toEqual([
       "document",
       "exam",
@@ -37,6 +37,7 @@ describe("ALL_NOTIFICATION_SOURCES", () => {
       "event",
       "task",
       "subscription",
+      "habit",
     ]);
     expect(new Set(ALL_NOTIFICATION_SOURCES).size).toBe(ALL_NOTIFICATION_SOURCES.length);
   });
@@ -71,6 +72,12 @@ describe("NOTIFICATION_PRESETS (NTF-008 appetite tiers)", () => {
   it("puts a subscription renewal in EVERY tier — it fires only where a lead was set by hand", () => {
     for (const preset of NOTIFICATION_PRESETS) {
       expect(preset.sources, preset.key).toContain("subscription");
+    }
+  });
+
+  it("puts a habit reminder in EVERY tier — a habit ships with no reminder, and the one it gets is silenced by doing it", () => {
+    for (const preset of NOTIFICATION_PRESETS) {
+      expect(preset.sources, preset.key).toContain("habit");
     }
   });
 
