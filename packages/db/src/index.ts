@@ -17,6 +17,7 @@ export {
   PrivateNoteNotFoundError,
   PrivateNoteValidationError,
   PrivateSettingsValidationError,
+  AttachmentIndexValidationError,
   CalendarOverlayValidationError,
   CalendarSettingsValidationError,
   CardNotFoundError,
@@ -383,6 +384,23 @@ export type { AddNoteAttachmentInput, NoteAttachment } from "./notes/noteAttachm
 
 export { NoteTemplateStore, MAX_NOTE_TEMPLATE_BYTES } from "./notes/noteTemplateStore.js";
 export type { NoteTemplate } from "./notes/noteTemplateStore.js";
+
+// --- DOC („Datoteke") -------------------------------------------------------
+//
+// A read over the three attachment tables above, owning none of them: the store
+// that writes a file is still the store that removes it.
+
+export {
+  AttachmentIndexStore,
+  MAX_ATTACHMENT_INDEX_ENTRIES,
+  MAX_ATTACHMENT_QUERY_LENGTH,
+} from "./files/attachmentIndexStore.js";
+export type {
+  AttachmentIndexEntry,
+  AttachmentIndexFilter,
+  AttachmentIndexPage,
+  AttachmentOwnerKind,
+} from "./files/attachmentIndexStore.js";
 
 // --- FIN (migration 051) ----------------------------------------------------
 //

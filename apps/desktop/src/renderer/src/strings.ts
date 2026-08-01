@@ -292,6 +292,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     notes: "Beleške",
     study: "Učenje",
     priv: "Privatno",
+    files: "Datoteke",
     finance: "Finansije",
   } as Record<string, string>,
 
@@ -1741,6 +1742,86 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     },
   },
 
+  /**
+   * Datoteke (DOC) — the one place every file in the profile is listed, however
+   * it got there. The copy follows the three attachment panels it reads from
+   * („Pregledaj" / „Otvori" are their words, not new ones), with two additions
+   * this surface needs and they do not.
+   *
+   * „Idi na…" is the first: a browse list has to say where a file LIVES, and
+   * the answer is a link to the note, task or subject that carries it — which
+   * is also the page's answer to „obriši", deliberately. Removing a file
+   * belongs to the surface that owns it, where its undo already lives.
+   *
+   * The second is the summary, and every word of it is a number the page
+   * derived from the rows it is drawing. `truncatedNote` exists because the
+   * read stops at a cap: past it the count is a FLOOR and the sentence says so,
+   * rather than implying a total nothing measured.
+   */
+  files: {
+    title: "Datoteke",
+    caption: "Sve datoteke priložene uz beleške, zadatke i predmete.",
+    searchPlaceholder: "Pretraži po nazivu datoteke ili nosiocu…",
+    searchLabel: "Pretraga datoteka",
+    /** Owner-kind chips; „Sve" clears the filter rather than being a filter of its own. */
+    ownerFilterLabel: "Gde je priložena",
+    owners: {
+      all: "Sve",
+      note: "Beleške",
+      task: "Zadaci",
+      subject: "Predmeti",
+    },
+    /** Mime-family chips, keyed by `MIME_FAMILIES`. */
+    familyFilterLabel: "Vrsta datoteke",
+    families: {
+      slika: "Slike",
+      pdf: "PDF",
+      tekst: "Tekst",
+      ostalo: "Ostalo",
+    },
+    familyAll: "Sve vrste",
+    /** The list/grid toggle — the same two shapes the Settings card names. */
+    viewLabel: "Prikaz",
+    views: {
+      lista: "Lista",
+      mreza: "Mreža",
+    },
+    /** Column headings for the dense list. */
+    columns: {
+      name: "Naziv",
+      owner: "Gde je",
+      size: "Veličina",
+      date: "Dodato",
+    },
+    /** The „⋯" menu on a row or a card, mirroring `study.materials.menuLabel`. */
+    menuLabel: "Radnje nad datotekom",
+    preview: "Pregledaj",
+    open: "Otvori",
+    goTo: "Idi na…",
+    /** What a note with no title is called here — the same word Beleške uses for it. */
+    untitledOwner: "Bez naslova",
+    /** Alt text for a grid thumbnail is the file name; this labels the typographic mark a non-image gets instead. */
+    fileMarkLabel: "Datoteka",
+    /** The summary line: „N datoteka · X" (or „N+ datoteka · najmanje X" when the read was capped). */
+    summaryUnitOne: "datoteka",
+    summaryUnitFew: "datoteke",
+    summaryUnitMany: "datoteka",
+    summaryAtLeast: "najmanje",
+    truncatedNote:
+      "Prikazano je prvih 500 datoteka. Suzi pretragu ili filtere da vidiš ostale.",
+    /** Two different situations, two different sentences — one of them would be a lie about the other. */
+    emptyTitle: "Nema priloženih datoteka",
+    emptyDescription:
+      "Datoteke se ovde pojavljuju kada ih priložiš uz belešku, zadatak ili predmet.",
+    noMatchTitle: "Nema datoteka po ovim filterima",
+    noMatchDescription: "Promeni pretragu ili isključi neki filter.",
+    clearFilters: "Poništi filtere",
+    /** The isolated failure of this one read, with the way to ask again — the dashboard widgets' recipe. */
+    error: "Datoteke se trenutno ne mogu učitati.",
+    retry: "Pokušaj ponovo",
+    actionError: "Radnja nad datotekom nije uspela. Pokušaj ponovo.",
+  },
+
   study: {
     title: "Predmeti",
     nameLabel: "Naziv predmeta",
@@ -2620,6 +2701,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       tasks: "Zadaci",
       notes: "Beleške",
       priv: "Privatne beleške",
+      files: "Datoteke",
       shortcuts: "Prečice",
       dashboard: "Kontrolna tabla",
       study: "Učenje",
@@ -2827,6 +2909,20 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       loadError: "Podešavanja privatnih beležaka se trenutno ne mogu učitati.",
     },
     /**
+     * Datoteke card (DOC): the shape „Datoteke" opens in. The caption says the
+     * one thing this card could otherwise be feared to do — nothing here
+     * touches a file, and the page it configures cannot delete one either.
+     */
+    files: {
+      caption: "Odnosi se samo na ovaj uređaj — datoteke se ovde ne menjaju.",
+      viewLabel: "Podrazumevani prikaz",
+      viewNames: {
+        lista: "Lista",
+        mreza: "Mreža",
+      } as Record<string, string>,
+      viewHint: "Prikaz se može promeniti i na samoj stranici, za tekuće gledanje.",
+    },
+    /**
      * Kontrolna tabla section (SET-006 / ADR-041): the dashboard's own
      * background image and how far it is dimmed behind the widgets.
      */
@@ -2915,6 +3011,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       notes: "Beleške sa blok-editorom — markdown prečice i „/” meni za formatiranje.",
       study: "Predmeti, ispiti, kartice za učenje i planovi pripreme za ispite.",
       priv: "Šifrovane privatne beleške — otključavaju se posebno i ne pojavljuju se u pretrazi.",
+      files: "Sve datoteke priložene uz beleške, zadatke i predmete, na jednom mestu.",
       finance: "Računi, transakcije i prenosi — stanje se računa iz onoga što upišeš.",
     } as Record<string, string>,
     /** Category-group headings above the module gallery, keyed by registry category. */

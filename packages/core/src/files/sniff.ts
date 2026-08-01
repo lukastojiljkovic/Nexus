@@ -155,3 +155,34 @@ export function isInlineImageMime(mime: string): boolean {
 export function isPreviewableMime(mime: string): boolean {
   return isInlineImageMime(mime) || mime === "application/pdf" || mime === "text/plain";
 }
+
+/**
+ * The coarse buckets „Datoteke" filters by (DOC). Serbian slugs, the way
+ * `SMART_LIST_IDS` are: they are ids a filter is expressed in, never copy — the
+ * chip labels live in `strings.ts` like every other label in the app.
+ */
+export const MIME_FAMILIES = ["slika", "pdf", "tekst", "ostalo"] as const;
+
+export type MimeFamily = (typeof MIME_FAMILIES)[number];
+
+/**
+ * Which bucket a stored mime falls in. Deliberately wider than
+ * `isInlineImageMime`/`isPreviewableMime` above, and the difference is the
+ * point: those two answer "may the app RENDER this", while this one answers
+ * "what KIND of file is this" — so an `image/avif` nothing here can draw is
+ * still a picture to somebody narrowing the page down to their screenshots,
+ * and offering it under „Ostalo" would be the surface lying about what it holds.
+ *
+ * It is the one definition of the four families: `AttachmentIndexStore` filters
+ * by the same rule in SQL (`FAMILY_PREDICATES`, pinned against this function by
+ * that store's own test), so the chips and the query can never disagree about
+ * what a family means. Type-prefix matching is case-SENSITIVE here where the
+ * SQL's `LIKE` is not, which costs nothing: every stored mime is lower-case by
+ * the attachment stores' own validators.
+ */
+export function mimeFamily(mime: string): MimeFamily {
+  if (mime.startsWith("image/")) return "slika";
+  if (mime === "application/pdf") return "pdf";
+  if (mime.startsWith("text/")) return "tekst";
+  return "ostalo";
+}

@@ -38,6 +38,7 @@ export const ESSENTIALS_MODULE_PRESET: ModulePreset = {
   calendar: true,
   notes: true,
   priv: false,
+  files: true,
   study: true,
   finance: true,
 };
@@ -59,6 +60,11 @@ export const ESSENTIALS_MODULE_PRESET: ModulePreset = {
  * subject here that is shaped the same way for a student, an employee, a
  * founder and somebody who fits none of those. Dropping it for any of the four
  * would be inventing a difference the question never asked about.
+ *
+ * DOC is true in every row on a stronger version of the same argument: it holds
+ * nothing of its own. „Datoteke“ is a way of LOOKING at files the other modules
+ * already carry, so switching it off for a role would not spare anybody a
+ * feature — it would only hide one view of what they have.
  */
 export const OCCUPATION_MODULE_PRESETS: Readonly<Record<OnboardingOccupation, ModulePreset>> = {
   student: ESSENTIALS_MODULE_PRESET,
@@ -67,6 +73,7 @@ export const OCCUPATION_MODULE_PRESETS: Readonly<Record<OnboardingOccupation, Mo
     calendar: true,
     notes: true,
     priv: false,
+    files: true,
     study: false,
     finance: true,
   },
@@ -75,6 +82,7 @@ export const OCCUPATION_MODULE_PRESETS: Readonly<Record<OnboardingOccupation, Mo
     calendar: true,
     notes: true,
     priv: false,
+    files: true,
     study: false,
     finance: true,
   },

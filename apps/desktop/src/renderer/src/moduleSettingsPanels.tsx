@@ -15,6 +15,13 @@ import type {
   StudySettings,
 } from "../../shared/ipc.js";
 import {
+  FILE_VIEWS,
+  clearStoredFilePreferences,
+  persistFileView,
+  readStoredFileView,
+  type FileView,
+} from "./filePrefs.js";
+import {
   clearStoredFinancePreferences,
   normalizeCurrencyInput,
   persistPrimaryCurrency,
@@ -835,6 +842,49 @@ function FinanceSettingsPanel({ hits }: SettingsPanelProps) {
   );
 }
 
+// --- DOC ----------------------------------------------------------------------
+
+/**
+ * Datoteke (DOC): the shape the page opens in. `TasksSettingsPanel`'s recipe
+ * verbatim — a closed segmented row over a device preference — because it is
+ * the same kind of thing: how THIS machine draws one module, changing no stored
+ * row.
+ *
+ * The page carries the same toggle for the current visit, which is why the
+ * label here says „Podrazumevani": this card decides what it opens ON, not what
+ * it must stay in.
+ */
+function FilesSettingsPanel({ hits }: SettingsPanelProps) {
+  const s = strings.settings.files;
+  const [view, setView] = useState<FileView>(() => readStoredFileView());
+
+  return (
+    <>
+      <p className="set__section-caption">{s.caption}</p>
+      <p className={labelClass("set__section-caption", hits.has(settingsEntryId("files", "view")))}>
+        {s.viewLabel}
+      </p>
+      <div className="set__segmented" role="group" aria-label={s.viewLabel}>
+        {FILE_VIEWS.map((option) => (
+          <Button
+            key={option}
+            size="sm"
+            variant={view === option ? "primary" : "ghost"}
+            aria-pressed={view === option}
+            onClick={() => {
+              persistFileView(option);
+              setView(option);
+            }}
+          >
+            {s.viewNames[option] ?? option}
+          </Button>
+        ))}
+      </div>
+      <p className="set__section-caption">{s.viewHint}</p>
+    </>
+  );
+}
+
 // --- The registry-driven map --------------------------------------------------
 
 /**
@@ -850,6 +900,7 @@ export const MODULE_SETTINGS_PANELS: Record<string, SettingsPanelRenderer> = {
   calendar: { Body: CalendarSettingsPanel },
   notes: { Body: NotesSettingsPanel, resetDevice: clearStoredNotePreferences },
   priv: { Body: PrivSettingsPanel },
+  files: { Body: FilesSettingsPanel, resetDevice: clearStoredFilePreferences },
   study: { Body: StudySettingsPanel },
   finance: { Body: FinanceSettingsPanel, resetDevice: clearStoredFinancePreferences },
 };

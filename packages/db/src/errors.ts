@@ -557,6 +557,17 @@ export class NoteTemplateNotFoundError extends DatabaseError {}
 export class SearchValidationError extends DatabaseError {}
 
 /**
+ * Thrown when „Datoteke"'s browse read is handed a filter no filter bar can
+ * produce (DOC): an owner kind outside the three PUBLIC attachment surfaces, a
+ * mime family outside `MIME_FAMILIES`, or a query longer than
+ * `MAX_ATTACHMENT_QUERY_LENGTH`. The store revalidates because renderer input
+ * is untrusted (SEC-EL-02), and the owner-kind refusal in particular is the one
+ * that matters: a fourth kind arriving here would be a request for a table this
+ * union deliberately does not read.
+ */
+export class AttachmentIndexValidationError extends DatabaseError {}
+
+/**
  * Thrown when an archive-apply store — `RestoreStore.replaceProfileData`
  * (ADR-023) or `ForeignImportStore.insertPlanned` (ADR-043) — is given a
  * `ProfileData` that is internally inconsistent in a way `@nexus/core`'s

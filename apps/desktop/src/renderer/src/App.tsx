@@ -5,6 +5,7 @@ import type { ThemeName } from "@nexus/tokens";
 import type {
   AppInfo,
   AuthStatus,
+  DocAttachmentModule,
   FlagState,
   Profile,
   RestoreUndoKind,
@@ -26,6 +27,7 @@ import { TasksPage, type TasksIntent } from "./TasksPage.js";
 import { CalendarPage, type CalendarIntent } from "./CalendarPage.js";
 import { NotesPage, type NotesIntent } from "./NotesPage.js";
 import { PrivPage, PRIV_LOCKED_EVENT } from "./PrivPage.js";
+import { FilesPage } from "./FilesPage.js";
 import { StudyPage, type StudyIntent } from "./StudyPage.js";
 import { FinancePage, type FinanceIntent } from "./FinancePage.js";
 import { SettingsPage, formatArchiveInstant } from "./SettingsPage.js";
@@ -763,6 +765,30 @@ export function App() {
   }
 
   /**
+   * „Datoteke"'s „Idi na…" (DOC): opens the record a file hangs off. It is
+   * `onSearchResult`'s three attachment-carrying branches, reached from the
+   * other direction — the SAME intents (021-e), deliberately, because there is
+   * one way into a note or a task from elsewhere in this app and a browse page
+   * does not get a second one.
+   */
+  function openAttachmentOwner(ownerKind: DocAttachmentModule, ownerId: string): void {
+    switch (ownerKind) {
+      case "note":
+        openNote(ownerId);
+        return;
+      case "task":
+        dispatchIntent({ module: "tasks", intent: { kind: "reveal", taskId: ownerId } });
+        return;
+      case "subject":
+        dispatchIntent({
+          module: "study",
+          intent: { kind: "reveal", entity: "subject", id: ownerId, parentId: null },
+        });
+        return;
+    }
+  }
+
+  /**
    * Runs one of the remappable core actions (ADR-040). Every action dismisses
    * the overlays it is not itself opening: these actions navigate or put a new
    * surface up, and landing underneath one that is still on screen is not what
@@ -1236,6 +1262,12 @@ export function App() {
             />
           ) : effectiveId === "priv" && activeProfile ? (
             <PrivPage key={activeProfile.id} profileId={activeProfile.id} />
+          ) : effectiveId === "files" && activeProfile ? (
+            <FilesPage
+              key={activeProfile.id}
+              profileId={activeProfile.id}
+              onOpenOwner={openAttachmentOwner}
+            />
           ) : effectiveId === "study" && activeProfile ? (
             <StudyPage
               key={activeProfile.id}

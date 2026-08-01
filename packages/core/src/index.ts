@@ -253,7 +253,14 @@ export type {
   CsvFinanceTranslation,
 } from "./imex/csvFinance.js";
 
-export { isInlineImageMime, isPreviewableMime, sniffMime } from "./files/sniff.js";
+export {
+  isInlineImageMime,
+  isPreviewableMime,
+  MIME_FAMILIES,
+  mimeFamily,
+  sniffMime,
+} from "./files/sniff.js";
+export type { MimeFamily } from "./files/sniff.js";
 export { centerSquareCrop, PROFILE_PICTURE_SIZE } from "./files/squareCrop.js";
 export type { CropRect } from "./files/squareCrop.js";
 

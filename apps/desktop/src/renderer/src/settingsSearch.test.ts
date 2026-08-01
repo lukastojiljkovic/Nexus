@@ -323,6 +323,7 @@ describe("buildSettingsIndex", () => {
       "priv:auto-lock",
       "priv:lock-minimize",
       "priv:kit-status",
+      "files:view",
       "study:retention",
       "study:new-per-day",
       "study:review-cap",

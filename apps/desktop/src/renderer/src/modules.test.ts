@@ -8,6 +8,7 @@ import { DEFAULT_DASHBOARD_LAYOUT } from "@nexus/db";
 import { describe, expect, it } from "vitest";
 
 import { DASHBOARD_WIDGETS } from "./dashboardWidgets.js";
+import { FILE_VIEWS } from "./filePrefs.js";
 import { MODULE_SETTINGS_PANELS } from "./moduleSettingsPanels.js";
 import { NOTE_WIDTHS } from "./notePrefs.js";
 import { BLOCKED_IN_TODAY_OPTIONS } from "./taskPrefs.js";
@@ -32,6 +33,7 @@ describe("createModuleRegistry", () => {
       "settings",
       "notes",
       "priv",
+      "files",
       "study",
       "finance",
     ]);
@@ -70,6 +72,7 @@ describe("createModuleRegistry", () => {
     expect(grouped.get("Content & knowledge")?.map((manifest) => manifest.id)).toEqual([
       "notes",
       "priv",
+      "files",
     ]);
     expect(grouped.get("Life hubs")?.map((manifest) => manifest.id)).toEqual(["study", "finance"]);
   });
@@ -93,6 +96,7 @@ describe("createModuleRegistry", () => {
       "calendar",
       "settings",
       "notes",
+      "files",
       "study",
       "finance",
     ]);
@@ -106,6 +110,17 @@ describe("createModuleRegistry", () => {
     // a widget contract or a search indexer would be exactly such a surface.
     expect(registry.widgetsOf("priv")).toEqual([]);
     expect(registry.all().find((manifest) => manifest.id === "priv")?.searchIndexers).toBeUndefined();
+  });
+
+  it("keeps DOC a pure browse surface: no widgets, and no second index over file names", () => {
+    const registry = createModuleRegistry();
+    // An attachment's file name already rides its owning row's indexed body
+    // (migrations 025/048). An indexer here would put every file into the
+    // palette a second time, competing with the note that carries it — see the
+    // manifest's own comment. „Datoteke" is where you browse files; the palette
+    // is where you find the thing they belong to.
+    expect(registry.all().find((manifest) => manifest.id === "files")?.searchIndexers).toBeUndefined();
+    expect(registry.widgetsOf("files")).toEqual([]);
   });
 });
 
@@ -134,6 +149,7 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       "calendar",
       "notes",
       "priv",
+      "files",
       "study",
       "finance",
     ]);
@@ -200,9 +216,10 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
     };
     expect(optionIds("tasks", "blocked-today")).toEqual([...BLOCKED_IN_TODAY_OPTIONS]);
     expect(optionIds("notes", "width")).toEqual([...NOTE_WIDTHS]);
+    expect(optionIds("files", "view")).toEqual([...FILE_VIEWS]);
   });
 
-  it("keeps every card's storage honest: the three device cards, and four the profile owns", () => {
+  it("keeps every card's storage honest: the four device cards, and four the profile owns", () => {
     const storages = (moduleId: string) =>
       new Set(
         declared
@@ -215,6 +232,10 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
     // on — a fact about this machine's form, never about the profile's money,
     // which lives on each account instead.
     expect(storages("finance")).toEqual(new Set(["device"]));
+    // DOC's one control decides the shape „Datoteke" opens in on THIS machine.
+    // It stores nothing about the profile — and the module writes nothing at
+    // all, which is why this is the only preference it has.
+    expect(storages("files")).toEqual(new Set(["device"]));
     expect(storages("dashboard")).toEqual(new Set(["profile"]));
     expect(storages("study")).toEqual(new Set(["profile"]));
     expect(storages("calendar")).toEqual(new Set(["profile"]));

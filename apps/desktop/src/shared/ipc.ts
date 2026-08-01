@@ -552,6 +552,17 @@ export const IpcChannel = {
   // as bytes — stays exactly as it was.
   docPreview: "doc:preview",
   docReadText: "doc:read-text",
+  // „Datoteke"'s one read (DOC): every file the profile's three public surfaces
+  // carry, as one filtered list. Its own channel rather than a mode on the pair
+  // above, because it asks a different question of a different store — those
+  // two resolve ONE row through the module that owns it, this one reads across
+  // all three and owns nothing — and a shared channel would be one validated
+  // field away from letting a browse request open a window.
+  //
+  // Read-only by design: the page offers no delete, so there is no write
+  // channel to widen. Removing a file stays with the surface that owns it,
+  // where its undo already lives.
+  docListAttachments: "doc:list-attachments",
   // ADR-040's OS-level half (TASK-002). The chord lives in the renderer's
   // `localStorage` (a device preference, never profile data), so the renderer
   // is the only side that knows it — it tells main at boot and on every remap,
@@ -3587,6 +3598,63 @@ export const DOC_TEXT_PREVIEW_MAX_BYTES = 1_048_576;
 export interface DocTextContent {
   name: string;
   text: string;
+}
+
+/**
+ * The coarse buckets „Datoteke" filters by. Redeclared here rather than
+ * imported, on this file's own rule (see the header): it is a string union, and
+ * a copy of one cannot drift silently — `filePrefs.test.ts` pins this array
+ * against `@nexus/core`'s `MIME_FAMILIES`, which is the definition both the
+ * page's chips and the store's SQL read.
+ */
+export const DOC_MIME_FAMILIES = ["slika", "pdf", "tekst", "ostalo"] as const;
+
+export type DocMimeFamily = (typeof DOC_MIME_FAMILIES)[number];
+
+/**
+ * `doc:list-attachments`' filter. Every field nullable and every combination
+ * legal; they compose as AND. `query` is matched, Serbian-folded, against the
+ * file name AND the owner's title — a file is as findable by what carries it as
+ * by what it is called.
+ */
+export interface DocAttachmentFilter {
+  ownerKind: DocAttachmentModule | null;
+  family: DocMimeFamily | null;
+  query: string;
+}
+
+/**
+ * One row of „Datoteke": the attachment's own index row plus the title of
+ * whatever carries it. `ownerKind`/`ownerId` are what „Idi na…" deep-links
+ * with — the page never navigates by anything it did not get from main.
+ *
+ * `ownerTitle` may be the empty string (an untitled note has no title, and
+ * inventing one here would be the wire making copy); the page draws its own
+ * „Bez naslova" for that case.
+ */
+export interface DocAttachmentEntry {
+  id: string;
+  ownerKind: DocAttachmentModule;
+  ownerId: string;
+  ownerTitle: string;
+  fileName: string;
+  mime: string;
+  sizeBytes: number;
+  sha256: string;
+  createdAt: string;
+}
+
+/**
+ * The browse cap „Datoteke" stops at — the search page's own
+ * (`MAX_SEARCH_BROWSE_LIMIT`), not a second number. Declared on the wire so the
+ * page can word its "N+" floor without guessing what main did.
+ */
+export const DOC_ATTACHMENT_LIST_LIMIT = 500;
+
+/** What `doc:list-attachments` answers. `truncated` means there were MORE than the cap: the page must then state its count as a floor, never as a total. */
+export interface DocAttachmentList {
+  entries: DocAttachmentEntry[];
+  truncated: boolean;
 }
 
 /**
@@ -6691,6 +6759,14 @@ export interface NexusApi {
     id: string,
     attachmentId: string,
   ): Promise<DocTextContent>;
+  /**
+   * Every file the profile's three public attachment surfaces carry, newest
+   * first, narrowed by `filter` (DOC / „Datoteke"). Capped at
+   * `DOC_ATTACHMENT_LIST_LIMIT` with `truncated` saying so. Never writes, and
+   * the private section is not merely filtered out but structurally absent —
+   * a sealed note's files live in its envelope, not in a table this reads.
+   */
+  listAttachments(profileId: string, filter: DocAttachmentFilter): Promise<DocAttachmentList>;
   /** This profile's dashboard background and dim, defaults already applied (SET-006 / ADR-041). Never writes. */
   dashboardSettings(profileId: string): Promise<DashboardSettings>;
   /**

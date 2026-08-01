@@ -63,6 +63,7 @@ import {
   type BlobKeys,
 } from "@nexus/core/auth";
 import {
+  AttachmentIndexStore,
   BackupSettingsStore,
   CalendarOverlayStore,
   CalendarSettingsStore,
@@ -156,6 +157,7 @@ import {
   TOGGLEABLE_NOTIFICATION_SOURCES,
   uuidv7,
   type Card,
+  type AttachmentIndexFilter,
   type CardRating,
   type CreateCardInput,
   type CreateDeckInput,
@@ -411,6 +413,7 @@ import {
   FIN_CSV_IMPORT_COLUMN_ROLES,
   FIN_CSV_IMPORT_SIGN_CONVENTIONS,
   DASHBOARD_SET_NAME_MAX_LENGTH,
+  DOC_MIME_FAMILIES,
   DOC_TEXT_PREVIEW_MAX_BYTES,
   IMPORT_DUPLICATE_TYPES,
   IpcChannel,
@@ -468,7 +471,9 @@ import {
   type FinCsvImportSignConvention,
   type DashboardPickResult,
   type DashboardSettings,
+  type DocAttachmentList,
   type DocAttachmentModule,
+  type DocMimeFamily,
   type DocTextContent,
   type DashboardSetsCreated,
   type DashboardSetsState,
@@ -1933,6 +1938,39 @@ function asDocAttachmentModule(value: unknown, field: string): DocAttachmentModu
   throw new Error(`Invalid IPC payload: "${field}" must be "note", "task" or "subject".`);
 }
 
+/** One of `DOC_MIME_FAMILIES`, or `null` for „no family filter" — the browse bar's own vocabulary, checked against the wire's closed list. */
+function asDocMimeFamily(value: unknown, field: string): DocMimeFamily | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "string" && (DOC_MIME_FAMILIES as readonly string[]).includes(value)) {
+    return value as DocMimeFamily;
+  }
+  throw new Error(
+    `Invalid IPC payload: "${field}" must be one of ${DOC_MIME_FAMILIES.join(", ")} or null.`,
+  );
+}
+
+/**
+ * „Datoteke"'s filter, field by field. Each of the three is optional on the
+ * wire but explicit here: an absent owner kind means "every surface", never
+ * "whichever one main felt like", and the query is a plain string this side
+ * only length-checks — the folding and the refusal past
+ * `MAX_ATTACHMENT_QUERY_LENGTH` are the store's, which is where the same rule
+ * protects every other caller too.
+ */
+function asDocAttachmentFilter(value: unknown): AttachmentIndexFilter {
+  const filter = asRecord(value);
+  return {
+    ownerKind:
+      filter.ownerKind === undefined || filter.ownerKind === null
+        ? null
+        : asDocAttachmentModule(filter.ownerKind, "filter.ownerKind"),
+    family: asDocMimeFamily(filter.family, "filter.family"),
+    query: filter.query === undefined || filter.query === null
+      ? null
+      : asString(filter.query, "filter.query"),
+  };
+}
+
 /** Validates a `TaskFieldChanges` payload into a store patch; an omitted key stays omitted. */
 function asTaskFieldChanges(value: unknown): UpdateTaskFields {
   const changes = asRecord(value);
@@ -3173,6 +3211,11 @@ function noteOrgStore(profileId: string): NoteOrgStore {
 
 function noteAttachmentStore(profileId: string): NoteAttachmentStore {
   return new NoteAttachmentStore(requireDb().raw, profileId);
+}
+
+/** „Datoteke"'s read across the three attachment tables (DOC) — it writes nothing, so no handler above ever reaches for it. */
+function attachmentIndexStore(profileId: string): AttachmentIndexStore {
+  return new AttachmentIndexStore(requireDb().raw, profileId);
 }
 
 function noteTemplateStore(profileId: string): NoteTemplateStore {
@@ -8604,6 +8647,19 @@ function registerIpc(): void {
       throw new Error(`Attachment "${attachmentId}" exceeds the text-preview cap.`);
     }
     return { name: attachment.fileName, text: decodePreviewText(bytes) };
+  });
+
+  // „Datoteke"'s one read (DOC). Every value the renderer sends is a FILTER —
+  // there is no id here at all — so the whole of the gate is the profile and
+  // the closed vocabularies each field is checked against; the store then
+  // scopes every branch of its union through the owning record's own
+  // `profile_id`, exactly as the per-module stores do.
+  ipcMain.handle(IpcChannel.docListAttachments, (event, payload): DocAttachmentList => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const filter: AttachmentIndexFilter = asDocAttachmentFilter(body.filter);
+    return attachmentIndexStore(profileId).list(filter);
   });
 
   // ADR-040 / TASK-002. The renderer owns the chord (it lives in this device's

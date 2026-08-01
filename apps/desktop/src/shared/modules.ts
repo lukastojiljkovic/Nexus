@@ -383,6 +383,35 @@ const FINANCE_SETTINGS: SettingsPanel = {
   ],
 };
 
+/**
+ * DOC („Datoteke"). ONE control, and — like FIN's — the restraint says
+ * something: the page has no preferences to speak of, only a shape it opens in.
+ *
+ * `device`, honestly: it decides how THIS machine draws a list, it changes no
+ * stored row, and forgetting it changes nothing that exists — which is what
+ * earns the card its „Vrati na podrazumevano".
+ *
+ * A `choice` rather than FIN's `value`, because the domain here really is
+ * closed and really is enumerable: a list or a grid, and there is no third
+ * shape to invent.
+ */
+const FILES_SETTINGS: SettingsPanel = {
+  titleKey: "settings.sectionTitle.files",
+  controls: [
+    {
+      kind: "choice",
+      key: "view",
+      labelKey: "settings.files.viewLabel",
+      storage: "device",
+      options: [
+        { id: "lista", labelKey: "settings.files.viewNames.lista" },
+        { id: "mreza", labelKey: "settings.files.viewNames.mreza" },
+      ],
+      keywords: ["datoteke", "prilozi", "fajlovi", "prikaz", "lista", "mreza", "slike"],
+    },
+  ],
+};
+
 /** CAL-010 (ADR-054): the semester's fixed dates — one control for the card's one date pair. */
 const CALENDAR_SETTINGS: SettingsPanel = {
   titleKey: "settings.sectionTitle.calendar",
@@ -479,6 +508,28 @@ const V0_MODULES: ModuleManifest[] = [
     category: "Content & knowledge",
     defaultEnabled: false,
     settings: PRIV_SETTINGS,
+  },
+  // Datoteke (DOC). Filed beside Beleške and Privatno rather than under „Life
+  // hubs": a file is content, and this module's whole subject is the content
+  // the other modules already hold. ON by default, like every built module
+  // except PRIV — there is nothing here to opt into, only somewhere to look.
+  //
+  // NO `searchIndexers`, and deliberately: an attachment's file name already
+  // rides its owning row's indexed body (migrations 025/048), so an indexer
+  // here would put every file into the palette a second time, under a second
+  // entry, competing with the note that carries it. „Datoteke" is where you
+  // BROWSE files; the palette is where you find the thing they belong to. Do
+  // not add one.
+  //
+  // NO `widgets` in v1 either: „the N newest files" is a card that answers a
+  // question nobody has — a file matters where it is attached, and the surfaces
+  // that own them already say so.
+  {
+    id: "files",
+    prefix: "DOC",
+    category: "Content & knowledge",
+    defaultEnabled: true,
+    settings: FILES_SETTINGS,
   },
   {
     id: "study",

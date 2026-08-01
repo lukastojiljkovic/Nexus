@@ -106,6 +106,12 @@ describe("OCCUPATION_MODULE_PRESETS", () => {
     }
   });
 
+  it("pre-checks DOC for every answer — it holds nothing of its own, so switching it off spares nobody anything", () => {
+    for (const occupation of ONBOARDING_OCCUPATIONS) {
+      expect(OCCUPATION_MODULE_PRESETS[occupation]["files"], occupation).toBe(true);
+    }
+  });
+
   it("answers „Nešto drugo“ with the neutral preset rather than an invented one", () => {
     expect(OCCUPATION_MODULE_PRESETS.drugo).toEqual(ESSENTIALS_MODULE_PRESET);
   });
@@ -118,6 +124,7 @@ describe("resolveModuleSelection", () => {
       calendar: true,
       notes: true,
       priv: true,
+      files: true,
       study: false,
       finance: true,
     });
@@ -142,6 +149,7 @@ describe("moduleFlagWrites", () => {
       { moduleId: "calendar", enabled: true },
       { moduleId: "notes", enabled: true },
       { moduleId: "priv", enabled: false },
+      { moduleId: "files", enabled: true },
       { moduleId: "study", enabled: true },
       { moduleId: "finance", enabled: true },
     ]);

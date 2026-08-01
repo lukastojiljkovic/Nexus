@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { isInlineImageMime, isPreviewableMime, sniffMime, TEXT_SNIFF_SCAN_BYTES } from "./sniff.js";
+import {
+  isInlineImageMime,
+  isPreviewableMime,
+  MIME_FAMILIES,
+  mimeFamily,
+  sniffMime,
+  TEXT_SNIFF_SCAN_BYTES,
+} from "./sniff.js";
 
 function bytes(...values: number[]): Uint8Array {
   return new Uint8Array(values);
@@ -162,5 +169,36 @@ describe("isPreviewableMime", () => {
     expect(isPreviewableMime("image/svg+xml")).toBe(false);
     expect(isPreviewableMime("text/html")).toBe(false);
     expect(isPreviewableMime("text/markdown")).toBe(false);
+  });
+});
+
+describe("mimeFamily", () => {
+  it("families every mime the sniffer can return, so the browse filter covers its own corpus", () => {
+    expect(mimeFamily("image/png")).toBe("slika");
+    expect(mimeFamily("image/jpeg")).toBe("slika");
+    expect(mimeFamily("image/gif")).toBe("slika");
+    expect(mimeFamily("image/webp")).toBe("slika");
+    expect(mimeFamily("application/pdf")).toBe("pdf");
+    expect(mimeFamily("text/plain")).toBe("tekst");
+    expect(mimeFamily("application/zip")).toBe("ostalo");
+    expect(mimeFamily("application/octet-stream")).toBe("ostalo");
+  });
+
+  it("families by TYPE rather than by an allowlist, so a mime the sniffer never returns still lands somewhere", () => {
+    // Deliberately wider than `isInlineImageMime`: somebody filtering „Slike"
+    // means pictures, and a raster this build cannot render inline is still
+    // one. What the row may DO with it stays that predicate's decision.
+    expect(mimeFamily("image/svg+xml")).toBe("slika");
+    expect(mimeFamily("image/avif")).toBe("slika");
+    expect(mimeFamily("text/markdown")).toBe("tekst");
+    expect(mimeFamily("text/html")).toBe("tekst");
+    expect(mimeFamily("audio/mpeg")).toBe("ostalo");
+    expect(mimeFamily("")).toBe("ostalo");
+  });
+
+  it("answers with a member of MIME_FAMILIES and nothing else", () => {
+    for (const mime of ["image/png", "application/pdf", "text/plain", "video/mp4", "x/y"]) {
+      expect(MIME_FAMILIES, mime).toContain(mimeFamily(mime));
+    }
   });
 });

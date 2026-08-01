@@ -436,6 +436,8 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.docPreview, { profileId, module, id, attachmentId }),
   readAttachmentText: (profileId, module, id, attachmentId) =>
     ipcRenderer.invoke(IpcChannel.docReadText, { profileId, module, id, attachmentId }),
+  listAttachments: (profileId, filter) =>
+    ipcRenderer.invoke(IpcChannel.docListAttachments, { profileId, filter }),
   dashboardSettings: (profileId) =>
     ipcRenderer.invoke(IpcChannel.dashboardGetSettings, { profileId }),
   pickDashboardBackground: (profileId) =>

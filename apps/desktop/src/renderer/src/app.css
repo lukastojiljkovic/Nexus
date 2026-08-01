@@ -9366,3 +9366,294 @@ button.cal__grid-event--dragging {
   width: 96px;
   text-transform: uppercase;
 }
+
+/* --- Datoteke (DOC) ------------------------------------------------------
+   The browse page over every attachment in the profile. Its header, chips and
+   meta line are the search page's (.searchpage__*) arrangement — the two are
+   the app's only browse surfaces, and they should read as one idea — with the
+   list/grid pair the page adds. */
+.doc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+.doc__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+  flex-wrap: wrap;
+}
+.doc__heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  min-width: 0;
+}
+.doc__title {
+  margin: 0;
+  font-size: var(--nx-font-size-title);
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-text);
+}
+.doc__caption {
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+}
+.doc__view {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex-shrink: 0;
+}
+.doc__filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.doc__search {
+  width: 100%;
+}
+.doc__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+/* Typographic selection, never a wash: an inactive chip is quiet text, the
+   active one is gold and heavier. */
+.doc__chip.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.doc__chip.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
+}
+.doc__chip--active.nx-button {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.doc__meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-3);
+  flex-wrap: wrap;
+  padding-bottom: var(--nx-space-2);
+  border-bottom: 1px solid var(--nx-border);
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+}
+.doc__count {
+  font-variant-numeric: tabular-nums;
+}
+.doc__truncated {
+  margin: 0;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+}
+.doc__action-error {
+  margin: 0;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-danger);
+}
+/* The page's ONE read, with the dashboard widgets' isolated boundary: a quiet
+   placeholder while it is in flight, and a failure that offers to ask again
+   rather than an EmptyState claiming there is nothing here. */
+.doc__skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-1) 0;
+}
+.doc__skeleton-line {
+  height: 10px;
+  border-radius: var(--nx-radius-xs);
+  background: var(--nx-surface-alt);
+}
+.doc__skeleton-line:nth-child(2) {
+  width: 82%;
+}
+.doc__skeleton-line:nth-child(3) {
+  width: 64%;
+}
+.doc__failure {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nx-space-2);
+}
+.doc__error {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+/* --- Lista --------------------------------------------------------------- */
+/* One grid template for the head and every row, so the columns line up without
+   a table: name takes the slack, the three facts are sized to their content,
+   and the menu keeps the 24px square every row-level "⋯" sits in. */
+.doc__list {
+  display: flex;
+  flex-direction: column;
+}
+.doc__list-head,
+.doc__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 240px) 88px 112px 24px;
+  align-items: center;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-1) var(--nx-space-2);
+}
+.doc__list-head {
+  font-size: var(--nx-font-size-caption);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+  border-bottom: 1px solid var(--nx-border);
+}
+.doc__row {
+  border-radius: var(--nx-radius-md);
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.doc__row:hover {
+  background: var(--nx-surface-alt);
+}
+.doc__row-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body-sm);
+}
+/* The owner is a link in everything but its chrome: it is the row's „Idi na…",
+   reachable without opening the menu. */
+.doc__row-owner {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-1);
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--nx-text-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.doc__row-owner:hover {
+  color: var(--nx-accent-strong);
+}
+.doc__row-owner:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+  border-radius: var(--nx-radius-xs);
+}
+.doc__row-owner-kind {
+  flex-shrink: 0;
+  font-size: var(--nx-font-size-caption);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+}
+.doc__row-owner-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body-sm);
+}
+.doc__row-size,
+.doc__row-date {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Mreža --------------------------------------------------------------- */
+.doc__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--nx-space-3);
+}
+.doc__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  padding: var(--nx-space-2);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  background: var(--nx-surface);
+  min-width: 0;
+}
+.doc__card-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 92px;
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-surface-alt);
+  overflow: hidden;
+}
+.doc__card-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* The house file-type mark: the file's own extension, set in the UI face —
+   never a pictogram, because this app draws none. */
+.doc__card-mark {
+  font-size: var(--nx-font-size-body-sm);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+}
+.doc__card-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body-sm);
+}
+.doc__card-owner {
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--nx-text-muted);
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.doc__card-owner:hover {
+  color: var(--nx-accent-strong);
+}
+.doc__card-owner:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+  border-radius: var(--nx-radius-xs);
+}
+.doc__card-meta {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+/* The "⋯" stays quiet until its row/card is hovered or the menu is open — the
+   .study__material-menu treatment. */
+.doc__menu {
+  opacity: 0;
+}
+.doc__row:hover .doc__menu,
+.doc__card:hover .doc__menu,
+.doc__menu[aria-expanded="true"],
+.doc__menu:focus-visible {
+  opacity: 1;
+}
+/* On a card the menu goes to the trailing edge rather than into a column of
+   its own: a card is a column, not a row. */
+.doc__card > .note__menu {
+  align-self: flex-end;
+}
