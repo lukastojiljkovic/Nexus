@@ -697,13 +697,17 @@ export function DashboardPage({
   // `enabledModules` is a fresh `Set` on each of App's renders, so an effect
   // depending on it directly would re-read on every one of them.
   const calendarOn = enabledModules.has("calendar");
-  const studyOn = enabledModules.has("study");
+  // The one timer has TWO owning modules since UTIL slice b, so the strip reads
+  // it when either is on. Gating on STUDY alone would have hidden a running
+  // Pomodoro from somebody who switched „Učenje" off — which is exactly the
+  // profile most likely to be running one.
+  const focusOn = enabledModules.has("study") || enabledModules.has("focus");
 
   // Read ONCE per profile, not on the tick: the events do not change while the
-  // page is open, and the running timer can only be started from STUDY — which
-  // means leaving this page and coming back to it. What the tick recomputes is
-  // the READING of that data: which event is still ahead, how long the timer
-  // has run.
+  // page is open, and the running phase can only be started from „Fokus" or
+  // „Učenje" — either of which means leaving this page and coming back to it.
+  // What the tick recomputes is the READING of that data: which event is still
+  // ahead, how long the phase has run.
   //
   // The strip does NOT ride the „Danas" card's fetch: the page holds no widget
   // data at all (ADR-045 section 4), and reaching into a card's read to feed
@@ -719,7 +723,7 @@ export function DashboardPage({
       try {
         const [events, focus] = await Promise.all([
           calendarOn ? window.nexus.listEvents(profileId) : [],
-          studyOn ? window.nexus.focusStatus(profileId) : null,
+          focusOn ? window.nexus.focusStatus(profileId) : null,
         ]);
         if (active) setStrip({ events, focus });
       } catch (error) {
@@ -729,7 +733,7 @@ export function DashboardPage({
     return () => {
       active = false;
     };
-  }, [profileId, calendarOn, studyOn]);
+  }, [profileId, calendarOn, focusOn]);
 
   useEffect(() => {
     let active = true;

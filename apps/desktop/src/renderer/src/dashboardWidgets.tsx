@@ -6,6 +6,7 @@ import {
   countsAsDone,
   matchesSmartList,
   parseWidgetConfig,
+  phaseProgress,
   widgetChoice,
   widgetCount,
   widgetTaskLists,
@@ -32,7 +33,7 @@ import {
   localTodayKey,
   shiftDayKey,
 } from "./examDates.js";
-import { focusSessionMinutes, formatDurationMinutes } from "./focusFormat.js";
+import { focusSessionMinutes, formatDurationMinutes, formatPhaseClock } from "./focusFormat.js";
 import {
   habitStartDay,
   habitsExpectedToday,
@@ -935,6 +936,107 @@ function HabitsTodayWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps
   );
 }
 
+/**
+ * „Fokus" (UTIL slice b) — the phase running right now, or, when nothing is,
+ * how much focus today has actually held.
+ *
+ * **Two states and no third**, because those are the only two true things a card
+ * about a timer can say. A running phase is a live fact and reads as one: the
+ * clock ticks, a paused one says „Pauzirano" beside a frozen figure, and one
+ * past its plan says „Prekoračeno" with a `+` rather than resting at 00:00 — the
+ * same rule the page keeps, for the same reason (nothing ends by itself).
+ *
+ * **Read-only, unlike „Navike danas".** That card ticks in place because a habit
+ * tick is one bit and the entire interaction the module has. A timer is not:
+ * pausing, stopping and starting are four decisions with a phase's whole shape
+ * behind them, and a dashboard card that could stop somebody's Pomodoro by a
+ * misclick is a card that costs more than it gives. The row opens „Fokus".
+ *
+ * The idle figure is ATTENTION, through `focusSessionMinutes` — the one
+ * definition the whole app sums focus with, so this card and the page can never
+ * report two different days.
+ */
+function FocusWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps) {
+  const load = useCallback(async () => {
+    const today = localTodayKey();
+    const [running, sessions] = await Promise.all([
+      window.nexus.focusStatus(profileId),
+      window.nexus.listFocusRange(profileId, today, today),
+    ]);
+    return { running, sessions };
+  }, [profileId]);
+  const { state, retry } = useWidgetData(load);
+  const s = strings.dashboard.focus;
+
+  /**
+   * One reading of the clock, advanced once a second and ONLY while a phase is
+   * actually running — the widget's own tick rather than the page's, because
+   * ADR-045 section 4 makes a card responsible for its own liveness.
+   * `phaseProgress` derives everything from it, so a slept-through phase reads
+   * honestly rather than showing a count that kept going.
+   *
+   * The card does NOT re-fetch on that tick, and it does not need to: nothing
+   * ends a phase by itself (the alarm announces the planned end and leaves the
+   * phase running), so the only thing that can change what this card reads is a
+   * click on „Fokus" or „Učenje" — which means leaving this page and coming back
+   * to it. The day strip above rests on exactly the same fact.
+   */
+  const isRunning = state.status === "ready" && state.data.running !== null;
+  const [nowIso, setNowIso] = useState(() => new Date().toISOString());
+  useEffect(() => {
+    if (!isRunning) return;
+    const id = window.setInterval(() => setNowIso(new Date().toISOString()), 1000);
+    return () => window.clearInterval(id);
+  }, [isRunning]);
+
+  return (
+    <WidgetData state={state} retry={retry}>
+      {({ running, sessions }) => {
+        if (running !== null) {
+          const progress = phaseProgress(running, nowIso);
+          const label = progress.isPaused
+            ? s.pausedLabel
+            : progress.overrunSeconds > 0
+              ? s.overrunLabel
+              : s.runningLabel;
+          return (
+            <div className="dash__list">
+              <DashRow
+                onClick={() => onOpenModule("focus")}
+                leading={<span className="dash__time dash__time--tag">{label}</span>}
+                trailing={
+                  <Chip variant={running.kind === "work" ? "accent" : "data"}>
+                    {strings.focus.kind[running.kind]}
+                  </Chip>
+                }
+              >
+                <span className="dash__row-title dash__focus-clock">
+                  {formatPhaseClock(progress, running.plannedMinutes)}
+                </span>
+              </DashRow>
+            </div>
+          );
+        }
+        const minutes = sessions.reduce(
+          (total, session) => total + focusSessionMinutes(session),
+          0,
+        );
+        if (minutes === 0) return <p className="dash__empty">{s.empty}</p>;
+        return (
+          <div className="dash__list">
+            <DashRow
+              onClick={() => onOpenModule("focus")}
+              leading={<span className="dash__time dash__time--tag">{s.todayLabel}</span>}
+            >
+              <span className="dash__row-title">{formatDurationMinutes(minutes)}</span>
+            </DashRow>
+          </div>
+        );
+      }}
+    </WidgetData>
+  );
+}
+
 // --- The registry-driven map (ADR-045 section 3) ----------------------------
 
 /** How the page draws one placement: the body, and whether it draws at all. */
@@ -976,4 +1078,5 @@ export const DASHBOARD_WIDGETS: Record<string, DashboardWidgetRenderer> = {
     visible: (enabled) => enabled.has("finance"),
   },
   "habits:danas": { Body: HabitsTodayWidget, visible: (enabled) => enabled.has("habits") },
+  "focus:fokus": { Body: FocusWidget, visible: (enabled) => enabled.has("focus") },
 };

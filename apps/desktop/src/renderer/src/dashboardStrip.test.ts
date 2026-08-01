@@ -239,34 +239,59 @@ describe("dayStripLine", () => {
     expect(line(events, at(10, 0), null)).toBe("danas · Godišnjica");
   });
 
-  it("carries the running focus timer on its own, in whole elapsed minutes", () => {
-    const focus: RunningFocusSession = {
+  /** A running phase in STUDY's own shape — open-ended, subject-scoped, never paused. */
+  function started(ms: number, extra: Partial<RunningFocusSession> = {}): RunningFocusSession {
+    return {
       subjectId: "s1",
-      startedAt: new Date(noon - 45 * 60_000).toISOString(),
+      startedAt: new Date(noon - ms).toISOString(),
+      kind: "work",
+      plannedMinutes: null,
+      cycleIndex: 0,
+      taskId: null,
+      label: null,
+      pausedAt: null,
+      pausedSeconds: 0,
+      ...extra,
     };
-    expect(line([], at(12, 0), focus)).toBe("Fokus u toku: 45 min");
+  }
+
+  it("carries the running focus timer on its own, in whole elapsed minutes", () => {
+    expect(line([], at(12, 0), started(45 * 60_000))).toBe("Fokus u toku: 45 min");
   });
 
   it("leaves the duration off under the first minute, and floors it after", () => {
-    const started = (ms: number): RunningFocusSession => ({
-      subjectId: "s1",
-      startedAt: new Date(noon - ms).toISOString(),
-    });
     expect(line([], at(12, 0), started(30_000))).toBe("Fokus u toku");
     expect(line([], at(12, 0), started(119_000))).toBe("Fokus u toku: 1 min");
     expect(line([], at(12, 0), started(3_660_000))).toBe("Fokus u toku: 1 h 1 min");
   });
 
+  // UTIL slice b: the phase can be PAUSED now, and its clock is frozen at
+  // `pausedAt`. The strip says „pauziran" rather than „u toku" because the
+  // figure beside it has stopped moving — a growing number under the word
+  // „u toku" is the one lie a still header can tell.
+  it("says a paused phase is paused, and freezes its figure at the pause", () => {
+    const paused = started(45 * 60_000, {
+      pausedAt: new Date(noon - 20 * 60_000).toISOString(),
+    });
+    expect(line([], at(12, 0), paused)).toBe("Fokus je pauziran: 25 min");
+    // An hour later it still reads 25 — the pause is not attention.
+    expect(line([], at(13, 0), paused, noon + 3_600_000)).toBe("Fokus je pauziran: 25 min");
+  });
+
+  it("takes finished pauses off the elapsed figure", () => {
+    expect(line([], at(12, 0), started(45 * 60_000, { pausedSeconds: 900 }))).toBe(
+      "Fokus u toku: 30 min",
+    );
+  });
+
   it("still says the timer is on when its start instant is unreadable", () => {
-    expect(line([], at(12, 0), { subjectId: "s1", startedAt: "not-a-date" })).toBe("Fokus u toku");
+    expect(line([], at(12, 0), { ...started(0), startedAt: "not-a-date" })).toBe("Fokus u toku");
   });
 
   it("joins both segments with the house separator", () => {
     const events = [makeEvent({ id: "a", startAt: `${TODAY}T14:00`, title: "Sastanak" })];
-    const focus: RunningFocusSession = {
-      subjectId: "s1",
-      startedAt: new Date(noon - 25 * 60_000).toISOString(),
-    };
-    expect(line(events, at(10, 0), focus)).toBe("14:00 · Sastanak · Fokus u toku: 25 min");
+    expect(line(events, at(10, 0), started(25 * 60_000))).toBe(
+      "14:00 · Sastanak · Fokus u toku: 25 min",
+    );
   });
 });

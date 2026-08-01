@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ComponentType, FormEvent } from "react";
+import { validateFocusConfig } from "@nexus/core";
+import type { FocusConfig } from "@nexus/core";
 import { Button, Checkbox, TextField } from "@nexus/ui";
 import {
   DEFAULT_TARGET_RETENTION,
@@ -27,6 +29,11 @@ import {
   persistPrimaryCurrency,
   readStoredPrimaryCurrency,
 } from "./financePrefs.js";
+import {
+  clearStoredFocusPreferences,
+  persistFocusConfig,
+  readStoredFocusConfig,
+} from "./focusPrefs.js";
 import {
   clearStoredHabitPreferences,
   isReminderTime,
@@ -946,6 +953,118 @@ function HabitsSettingsPanel({ hits }: SettingsPanelProps) {
   );
 }
 
+// --- UTIL ---------------------------------------------------------------------
+
+/** The four fields, in the order the card draws them, each with the config key it edits and the strings key it is labelled by. */
+const FOCUS_FIELDS: ReadonlyArray<{ key: keyof FocusConfig; entry: string; label: keyof typeof strings.settings.focus }> = [
+  { key: "workMinutes", entry: "work-minutes", label: "workLabel" },
+  { key: "shortBreakMinutes", entry: "short-break-minutes", label: "shortBreakLabel" },
+  { key: "longBreakMinutes", entry: "long-break-minutes", label: "longBreakLabel" },
+  { key: "cyclesBeforeLongBreak", entry: "cycles", label: "cyclesLabel" },
+];
+
+/**
+ * Fokus (UTIL slice b): the Pomodoro shape — four numbers, on the FIN/HABIT
+ * device-preference recipe (`localStorage`, no IPC). `focusPrefs.ts` carries the
+ * argument for why these live on the machine rather than in the profile.
+ *
+ * **Validation is `validateFocusConfig`'s, and the reason it is worth routing
+ * through the engine is the `field` it returns.** A boolean answer would leave
+ * this card saying „nešto nije u redu" over four inputs; naming the offending
+ * one lets the refusal appear under the input that caused it, which is the whole
+ * difference between a form that teaches and a form that scolds. The bounds
+ * themselves are never restated here — they belong to the module that owns them.
+ *
+ * The draft is TEXT rather than numbers, deliberately: a `<input type="number">`
+ * bound to a number cannot represent „the user has cleared the field", and a
+ * cleared field silently becoming 0 is exactly the state the engine then refuses
+ * for reasons the user did not cause. So the whole quartet is validated on every
+ * keystroke, saved when it is valid, and left alone — with the field named —
+ * when it is not.
+ */
+function FocusSettingsPanel({ hits }: SettingsPanelProps) {
+  const s = strings.settings.focus;
+  const [draft, setDraft] = useState<Record<keyof FocusConfig, string>>(() => {
+    const config = readStoredFocusConfig();
+    return {
+      workMinutes: String(config.workMinutes),
+      shortBreakMinutes: String(config.shortBreakMinutes),
+      longBreakMinutes: String(config.longBreakMinutes),
+      cyclesBeforeLongBreak: String(config.cyclesBeforeLongBreak),
+    };
+  });
+  /** Which field the engine refused, or null — `null` from a whole-shape refusal cannot point anywhere, so it points nowhere. */
+  const [invalidField, setInvalidField] = useState<keyof FocusConfig | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  function commit(key: keyof FocusConfig, text: string): void {
+    const next = { ...draft, [key]: text };
+    setDraft(next);
+    setSaved(false);
+    // `Number("")` is 0 and `Number("x")` is NaN; both are values the engine
+    // refuses by name, so neither needs a guard of its own here.
+    const result = validateFocusConfig({
+      workMinutes: Number(next.workMinutes),
+      shortBreakMinutes: Number(next.shortBreakMinutes),
+      longBreakMinutes: Number(next.longBreakMinutes),
+      cyclesBeforeLongBreak: Number(next.cyclesBeforeLongBreak),
+    });
+    if (!result.ok) {
+      setInvalidField(result.field);
+      return;
+    }
+    setInvalidField(null);
+    persistFocusConfig(result.config);
+    setSaved(true);
+  }
+
+  return (
+    <>
+      <p className="set__section-caption">{s.caption}</p>
+      <div className="set__study-fields">
+        {FOCUS_FIELDS.map((field) => (
+          <label key={field.key} className="set__study-field">
+            <span
+              className={labelClass(
+                "set__study-label",
+                hits.has(settingsEntryId("focus", field.entry)),
+              )}
+            >
+              {s[field.label]}
+            </span>
+            <input
+              type="number"
+              className="nx-textfield__input set__focus-input"
+              value={draft[field.key]}
+              inputMode="numeric"
+              aria-label={s[field.label]}
+              aria-invalid={invalidField === field.key}
+              onChange={(event) => commit(field.key, event.target.value)}
+              // A half-typed number is not a value; blur puts the STORED one
+              // back rather than leaving the field showing something nothing
+              // holds — `FinanceSettingsPanel`'s own rule, and the reason a
+              // refusal here never survives leaving the field.
+              onBlur={() => {
+                const stored = readStoredFocusConfig();
+                setDraft({
+                  workMinutes: String(stored.workMinutes),
+                  shortBreakMinutes: String(stored.shortBreakMinutes),
+                  longBreakMinutes: String(stored.longBreakMinutes),
+                  cyclesBeforeLongBreak: String(stored.cyclesBeforeLongBreak),
+                });
+                setInvalidField(null);
+              }}
+            />
+            {invalidField === field.key && <span className="set__error">{s.invalid}</span>}
+          </label>
+        ))}
+      </div>
+      <p className="set__section-caption">{s.hint}</p>
+      {saved && <p className="set__section-caption">{s.saved}</p>}
+    </>
+  );
+}
+
 // --- The registry-driven map --------------------------------------------------
 
 /**
@@ -965,4 +1084,5 @@ export const MODULE_SETTINGS_PANELS: Record<string, SettingsPanelRenderer> = {
   study: { Body: StudySettingsPanel },
   finance: { Body: FinanceSettingsPanel, resetDevice: clearStoredFinancePreferences },
   habits: { Body: HabitsSettingsPanel, resetDevice: clearStoredHabitPreferences },
+  focus: { Body: FocusSettingsPanel, resetDevice: clearStoredFocusPreferences },
 };

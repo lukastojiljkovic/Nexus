@@ -329,6 +329,10 @@ describe("buildSettingsIndex", () => {
       "study:review-cap",
       "finance:primary-currency",
       "habits:default-reminder",
+      "focus:work-minutes",
+      "focus:short-break-minutes",
+      "focus:long-break-minutes",
+      "focus:cycles",
     ]);
   });
 

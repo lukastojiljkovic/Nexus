@@ -31,6 +31,7 @@ import { FilesPage } from "./FilesPage.js";
 import { StudyPage, type StudyIntent } from "./StudyPage.js";
 import { FinancePage, type FinanceIntent } from "./FinancePage.js";
 import { HabitsPage } from "./HabitsPage.js";
+import { FocusPage } from "./FocusPage.js";
 import { SettingsPage, formatArchiveInstant } from "./SettingsPage.js";
 import { NotificationCenter } from "./NotificationCenter.js";
 import { NotificationAppetiteDialog } from "./NotificationAppetiteDialog.js";
@@ -1289,6 +1290,17 @@ export function App() {
             // slice (`searchCommands.ts`'s `CreatableModuleId` is untouched), so
             // there is nothing pending for this page to consume.
             <HabitsPage key={activeProfile.id} profileId={activeProfile.id} />
+          ) : effectiveId === "focus" && activeProfile ? (
+            // `enabledModules` rather than an `intent` pair: UTIL publishes no
+            // quick-create command (`searchCommands.ts`'s `CreatableModuleId` is
+            // untouched — a timer is started, not created), but its attach
+            // picker draws rows from TASK and STUDY and must not offer either
+            // while the profile has it switched off.
+            <FocusPage
+              key={activeProfile.id}
+              profileId={activeProfile.id}
+              enabledModules={enabledIds}
+            />
           ) : effectiveId === SEARCH_PAGE_ID && activeProfile ? (
             <SearchPage
               key={activeProfile.id}

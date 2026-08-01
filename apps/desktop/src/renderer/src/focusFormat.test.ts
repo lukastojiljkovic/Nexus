@@ -5,6 +5,7 @@ import {
   formatDurationMinutes,
   formatElapsed,
   formatFocusSessionWhen,
+  formatPhaseClock,
 } from "./focusFormat.js";
 
 /**
@@ -33,6 +34,38 @@ describe("formatElapsed", () => {
   it("clamps negative input (clock skew) to zero rather than going backwards", () => {
     expect(formatElapsed(-1)).toBe("00:00");
     expect(formatElapsed(-3_600_000)).toBe("00:00");
+  });
+});
+
+describe("formatPhaseClock", () => {
+  const counting = { elapsedSeconds: 300, remainingSeconds: 1200, overrunSeconds: 0, isPaused: false };
+  const openEnded = { elapsedSeconds: 300, remainingSeconds: 0, overrunSeconds: 0, isPaused: false };
+  const overrun = { elapsedSeconds: 1560, remainingSeconds: 0, overrunSeconds: 60, isPaused: false };
+
+  it("counts a planned phase DOWN", () => {
+    expect(formatPhaseClock(counting, 25)).toBe("20:00");
+  });
+
+  it("counts an open-ended phase UP — there is no plan to be short of", () => {
+    expect(formatPhaseClock(openEnded, null)).toBe("05:00");
+  });
+
+  // The rule the page exists to honour: past its plan, the clock says so out
+  // loud rather than resting at 00:00 as if the phase had tidily ended. It has
+  // not — ending is a deliberate act — and „+01:00" is what says the difference.
+  it("shows OVERRUN with a leading plus rather than sitting at zero", () => {
+    expect(formatPhaseClock(overrun, 25)).toBe("+01:00");
+    expect(formatPhaseClock({ ...overrun, overrunSeconds: 3_601 }, 25)).toBe("+1:00:01");
+  });
+
+  it("shows exactly 00:00 at the planned end, before any overrun has accrued", () => {
+    expect(
+      formatPhaseClock({ elapsedSeconds: 1500, remainingSeconds: 0, overrunSeconds: 0, isPaused: false }, 25),
+    ).toBe("00:00");
+  });
+
+  it("reads a paused phase exactly as a running one — the engine froze the numbers, not the format", () => {
+    expect(formatPhaseClock({ ...counting, isPaused: true }, 25)).toBe("20:00");
   });
 });
 

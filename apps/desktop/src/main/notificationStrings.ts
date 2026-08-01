@@ -1,4 +1,4 @@
-import type { HabitSchedule, NotificationSource } from "@nexus/core";
+import type { FocusPhaseKind, HabitSchedule, NotificationSource } from "@nexus/core";
 
 /**
  * Serbian copy for OS notifications, fired only from the main process (NTF
@@ -338,6 +338,43 @@ function habitScheduleLabel(schedule: HabitSchedule): string {
   if (schedule.kind === "quota") return `${schedule.perWeek}× nedeljno`;
   if (schedule.weekdays.length === HABIT_WEEKDAY_SHORT.length) return "Svaki dan";
   return schedule.weekdays.map((iso) => HABIT_WEEKDAY_SHORT[iso - 1] ?? "").join(" · ");
+}
+
+/** What each phase kind is called when its planned end arrives — the module's own three words. */
+const FOCUS_PHASE_TITLES: Record<FocusPhaseKind, string> = {
+  work: "Fokus je gotov",
+  short_break: "Pauza je gotova",
+  long_break: "Duga pauza je gotova",
+};
+
+/**
+ * A focus phase has reached its planned end (UTIL slice b, ADR-077).
+ *
+ * **This copy is deliberately NOT part of the NTF ledger**, and the reason is
+ * structural rather than an omission. Everything else in this file describes a
+ * SCHEDULED reminder: something that must survive the app being closed, must be
+ * caught up on at the next unlock, and must not fire twice — which is what the
+ * `notifications` table, its `source` CHECK and its UNIQUE tuple exist to
+ * guarantee. A phase ending is none of that: it is an immediate event of a timer
+ * that only runs while this process runs, so there is no closed-app window to be
+ * missed in, no catch-up pass to belong to and no duplicate to guard against.
+ * Widening the source CHECKs to admit it would be a migration bought for
+ * nothing, and it would put a row in the notification centre whose „snooze" and
+ * „dismiss" could not mean anything.
+ *
+ * The body names what the phase WAS — its length, and the subject or task it
+ * carried — and says nothing about what to do next. What follows is `nextPhase`'s
+ * answer and the page's offer; a notification that told the user to take a break
+ * would be deciding for them from behind a toast.
+ */
+export function focusPhaseEndCopy(
+  kind: FocusPhaseKind,
+  plannedMinutes: number,
+  label: string | null,
+): NotificationCopy {
+  const parts = [`${plannedMinutes} min`];
+  if (label !== null && label.trim().length > 0) parts.push(label.trim());
+  return { title: FOCUS_PHASE_TITLES[kind], body: parts.join(" · ") };
 }
 
 /** Today's study-day reminder copy: how many blocks are planned and their total length. */

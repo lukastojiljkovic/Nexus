@@ -7,6 +7,7 @@ import {
   computeStreak,
   findClozeRuns,
   interleavePractice,
+  phaseProgress,
   splitClozeSegments,
   splitProblemSteps,
   withClozeDeletion,
@@ -881,19 +882,24 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     onIntentHandled?.();
   }, [intent, subjects, exams, decks, cards, route, archivedOpen, reveal, onIntentHandled]);
 
-  // Live elapsed readout for a running focus timer: ticks once a second from
-  // `startedAt`, display-only (the store never sees this value). Restarts
-  // whenever a fresh timer starts and clears on stop/unmount.
+  // Live elapsed readout for a running focus timer: ticks once a second,
+  // display-only (the store never sees this value). Restarts whenever a fresh
+  // timer starts and clears on stop/unmount.
+  //
+  // Through `phaseProgress` rather than off `startedAt` since UTIL slice b: the
+  // running phase can be PAUSED now (from „Fokus", which shares this timer), and
+  // a clock that kept climbing through a pause would be reporting attention
+  // nobody was paying. The engine freezes it at `pausedAt` for free.
   useEffect(() => {
     if (!focusRunning) {
       setFocusElapsedMs(0);
       return;
     }
-    const startedAtMs = new Date(focusRunning.startedAt).getTime();
-    setFocusElapsedMs(Date.now() - startedAtMs);
-    const id = window.setInterval(() => {
-      setFocusElapsedMs(Date.now() - startedAtMs);
-    }, 1000);
+    const read = (): void => {
+      setFocusElapsedMs(phaseProgress(focusRunning, new Date().toISOString()).elapsedSeconds * 1000);
+    };
+    read();
+    const id = window.setInterval(read, 1000);
     return () => window.clearInterval(id);
   }, [focusRunning]);
 
@@ -1734,10 +1740,22 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     );
   }
 
+  /**
+   * STUDY's timer, unchanged in BEHAVIOUR and moved onto the unified phase
+   * (UTIL slice b): an open-ended, subject-scoped `work` phase — no plan, no
+   * cycle, no label. That is exactly the shape `focus:start` had before the
+   * channel was widened, spelled out now instead of implied by the payload's
+   * silence, and it is why this page needs no other change: the same channel,
+   * the same store, the same history.
+   *
+   * There is deliberately no plan here. „Uči dok ne staneš" is what a study
+   * timer is; a Pomodoro is what „Fokus" is for, and putting a plan on this
+   * button would quietly make them the same feature with two front doors.
+   */
   async function beginFocus(subjectId: string): Promise<void> {
     if (subjectId.length === 0) return;
     try {
-      setFocusRunning(await window.nexus.startFocus(profileId, subjectId));
+      setFocusRunning(await window.nexus.startFocus(profileId, { subjectId, kind: "work" }));
     } catch (error) {
       console.error("Nexus: failed to start focus timer:", error);
     }
@@ -3812,8 +3830,15 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
               <h3 className="study__focus-heading">{strings.study.focusTitle}</h3>
               {focusRunning ? (
                 <div className="study__focus-running">
+                  {/* The running phase may now be somebody ELSE'S — „Fokus"
+                      starts subjectless phases on the same timer — so a null
+                      subject reads as „bez predmeta" rather than as an unknown
+                      one. The card still says truthfully what is running. */}
                   <span className="study__focus-subject">
-                    {subjectsById.get(focusRunning.subjectId)?.name ?? strings.study.focusUnknownSubject}
+                    {focusRunning.subjectId === null
+                      ? strings.study.focusNoSubject
+                      : (subjectsById.get(focusRunning.subjectId)?.name ??
+                        strings.study.focusUnknownSubject)}
                   </span>
                   <span className="study__focus-elapsed">{formatElapsed(focusElapsedMs)}</span>
                   <span className="study__focus-actions">

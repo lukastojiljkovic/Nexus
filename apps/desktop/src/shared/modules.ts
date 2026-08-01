@@ -487,6 +487,79 @@ const CALENDAR_SETTINGS: SettingsPanel = {
 };
 
 /**
+ * UTIL slice b's one card: „Fokus" — the phase running right now, or, when
+ * nothing runs, how much focus today has actually held.
+ *
+ * **Deliberately NO `configFields`**, on „Navike danas"'s and „Učenje"'s
+ * reasoning rather than for want of a field. Every knob the other cards carry
+ * narrows a LIST — a row cap picks the front of a queue, a horizon narrows a
+ * window — and this card draws no list at all: it states one running phase, or
+ * one figure. There is nothing here to cap and nothing to narrow, and the
+ * „Podesi…" affordance appears only where a choice exists.
+ *
+ * `sizes` stops at M, honestly: the card is a label, a clock and at most one
+ * line under it, so a full-width version would be mostly empty space.
+ */
+const FOCUS_WIDGETS: WidgetContract[] = [
+  {
+    id: "fokus",
+    title: "dashboard.focus.title",
+    sizes: ["S", "M"],
+    deepLink: "focus",
+  },
+];
+
+/**
+ * UTIL slice b. FOUR controls, and the count is the point: a Pomodoro shape IS
+ * four numbers, and collapsing them into presets („klasični", „dugi") would be
+ * inventing a curated list exactly as FIN refused to for ISO-4217.
+ *
+ * `value` rather than `choice` on all four for the same reason: the domains are
+ * ranges (1..180 minutes, 1..12 cycles), and enumerating a range means deciding
+ * which of its members are „sensible" on the user's behalf.
+ *
+ * `device`, honestly, and `focusPrefs.ts` carries the argument in full: the four
+ * numbers say how long the NEXT phase is planned for and nothing else — a
+ * finished phase records its own `planned_minutes` — so they change no stored
+ * row, are read by one page and one card, and forgetting them changes nothing
+ * that already exists. Which is also what earns this card the „Vrati na
+ * podrazumevano" link every profile-stored card is deliberately denied.
+ */
+const FOCUS_SETTINGS: SettingsPanel = {
+  titleKey: "settings.sectionTitle.focus",
+  controls: [
+    {
+      kind: "value",
+      key: "work-minutes",
+      labelKey: "settings.focus.workLabel",
+      storage: "device",
+      keywords: ["fokus", "pomodoro", "rad", "minuti", "trajanje", "tajmer"],
+    },
+    {
+      kind: "value",
+      key: "short-break-minutes",
+      labelKey: "settings.focus.shortBreakLabel",
+      storage: "device",
+      keywords: ["fokus", "pomodoro", "pauza", "odmor", "minuti"],
+    },
+    {
+      kind: "value",
+      key: "long-break-minutes",
+      labelKey: "settings.focus.longBreakLabel",
+      storage: "device",
+      keywords: ["fokus", "pomodoro", "duga", "pauza", "odmor", "minuti"],
+    },
+    {
+      kind: "value",
+      key: "cycles",
+      labelKey: "settings.focus.cyclesLabel",
+      storage: "device",
+      keywords: ["fokus", "pomodoro", "ciklus", "krug", "broj", "faza"],
+    },
+  ],
+};
+
+/**
  * The v0 module set (roadmap "v0 — Founder Build"), as ADR-008 manifests.
  *
  * Lives in `shared/` (moved from the renderer, ADR-058 §5) because BOTH
@@ -642,6 +715,35 @@ const V0_MODULES: ModuleManifest[] = [
     defaultEnabled: true,
     widgets: HABITS_WIDGETS,
     settings: HABITS_SETTINGS,
+  },
+  // Fokus (UTIL slice b, ADR-077). The first module in „Profesionalno i alati",
+  // and the category is the honest one: this is a TOOL rather than an area of a
+  // life. „Životni centri" holds Učenje, Finansije and Navike — three subjects
+  // somebody has — while a Pomodoro timer is a thing you use on whichever of
+  // them you happen to be at.
+  //
+  // (The brief for this slice named the category „Utility & tools". That string
+  // is not in `MODULE_CATEGORIES`, whose five values mirror the PRD 00 registry;
+  // the value that means it is „Professional & utilities", already labelled
+  // „Profesionalno i alati" in Serbian. Registered there rather than widening a
+  // canonical list to add a synonym.)
+  //
+  // ON by default, like every built module except PRIV: nothing about a timer
+  // asks to be opted into, and the module writes nothing until a phase is
+  // started.
+  //
+  // `searchIndexers` stays empty, and not merely „not yet": a phase is a span of
+  // time with at most a borrowed label, and the thing worth finding — the task or
+  // the subject it was attached to — is already indexed by the module that owns
+  // it. Indexing „Pisanje izveštaja" here would put a second, weaker row in the
+  // palette competing with the task itself.
+  {
+    id: "focus",
+    prefix: "UTIL",
+    category: "Professional & utilities",
+    defaultEnabled: true,
+    widgets: FOCUS_WIDGETS,
+    settings: FOCUS_SETTINGS,
   },
 ];
 

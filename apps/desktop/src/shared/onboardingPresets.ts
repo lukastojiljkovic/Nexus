@@ -42,6 +42,7 @@ export const ESSENTIALS_MODULE_PRESET: ModulePreset = {
   study: true,
   finance: true,
   habits: true,
+  focus: true,
 };
 
 /**
@@ -73,6 +74,12 @@ export const ESSENTIALS_MODULE_PRESET: ModulePreset = {
  * Dropping it for any of the four would invent a difference the question never
  * asked about. It also costs nothing to leave on — the module holds nothing at
  * all until the user names a first habit.
+ *
+ * UTIL („Fokus“) is true in every row on the strongest version of that argument:
+ * it is a TIMER. Sitting down to concentrate for half an hour is not shaped
+ * differently for a student and a founder, and the module holds nothing at all
+ * until somebody presses start. It is also the one module a role answer could
+ * not sensibly drop without also dropping STUDY, since the two share the timer.
  */
 export const OCCUPATION_MODULE_PRESETS: Readonly<Record<OnboardingOccupation, ModulePreset>> = {
   student: ESSENTIALS_MODULE_PRESET,
@@ -85,6 +92,7 @@ export const OCCUPATION_MODULE_PRESETS: Readonly<Record<OnboardingOccupation, Mo
     study: false,
     finance: true,
     habits: true,
+    focus: true,
   },
   preduzetnik: {
     tasks: true,
@@ -95,6 +103,7 @@ export const OCCUPATION_MODULE_PRESETS: Readonly<Record<OnboardingOccupation, Mo
     study: false,
     finance: true,
     habits: true,
+    focus: true,
   },
   drugo: ESSENTIALS_MODULE_PRESET,
 };

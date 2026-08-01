@@ -42,6 +42,7 @@ describe("createModuleRegistry", () => {
       "study",
       "finance",
       "habits",
+      "focus",
     ]);
   });
 
@@ -68,7 +69,12 @@ describe("createModuleRegistry", () => {
 
   it("groups the sidebar by category in canonical order, empty categories omitted", () => {
     const grouped = createModuleRegistry().byCategory();
-    expect([...grouped.keys()]).toEqual(["Core experience", "Content & knowledge", "Life hubs"]);
+    expect([...grouped.keys()]).toEqual([
+      "Core experience",
+      "Content & knowledge",
+      "Life hubs",
+      "Professional & utilities",
+    ]);
     expect(grouped.get("Core experience")?.map((manifest) => manifest.id)).toEqual([
       "dashboard",
       "tasks",
@@ -84,6 +90,12 @@ describe("createModuleRegistry", () => {
       "study",
       "finance",
       "habits",
+    ]);
+    // „Fokus" is the first module in „Profesionalno i alati", and the category
+    // is the honest one: „Životni centri" holds three subjects somebody HAS,
+    // while a Pomodoro timer is a TOOL you use on whichever of them you are at.
+    expect(grouped.get("Professional & utilities")?.map((manifest) => manifest.id)).toEqual([
+      "focus",
     ]);
   });
 
@@ -110,6 +122,7 @@ describe("createModuleRegistry", () => {
       "study",
       "finance",
       "habits",
+      "focus",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -163,6 +176,35 @@ describe("createModuleRegistry", () => {
     expect(danas?.sizes).toEqual(["S", "M"]);
     expect(danas?.deepLink).toBe("habits");
   });
+
+  it("keeps UTIL's searchIndexer slot empty while slice b fills the other two", () => {
+    const registry = createModuleRegistry();
+    const focus = registry.all().find((manifest) => manifest.id === "focus");
+    // No indexer, and not merely „not yet": a phase is a span of time with at
+    // most a BORROWED label, and the thing worth finding — the task or the
+    // subject it was attached to — is already indexed by the module that owns
+    // it. A second, weaker row would only compete with it.
+    expect(focus?.searchIndexers).toBeUndefined();
+    expect(registry.widgetsOf("focus").map((widget) => widget.id)).toEqual(["fokus"]);
+    // The Pomodoro shape IS four numbers; collapsing them into presets would be
+    // inventing a curated list exactly as FIN refused to for ISO-4217.
+    expect(focus?.settings?.controls.map((control) => control.key)).toEqual([
+      "work-minutes",
+      "short-break-minutes",
+      "long-break-minutes",
+      "cycles",
+    ]);
+  });
+
+  it("gives the focus card no config either — there is no list here to cap or narrow", () => {
+    const registry = createModuleRegistry();
+    const [fokus] = registry.widgetsOf("focus");
+    // Every knob the other cards carry narrows a LIST. This card draws no list:
+    // one running phase, or one figure. There is nothing to cap.
+    expect(fokus?.configFields).toBeUndefined();
+    expect(fokus?.sizes).toEqual(["S", "M"]);
+    expect(fokus?.deepLink).toBe("focus");
+  });
 });
 
 describe("the settings each v0 module publishes (SettingsPanel)", () => {
@@ -194,6 +236,7 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       "study",
       "finance",
       "habits",
+      "focus",
     ]);
   });
 
@@ -261,7 +304,7 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
     expect(optionIds("files", "view")).toEqual([...FILE_VIEWS]);
   });
 
-  it("keeps every card's storage honest: the five device cards, and four the profile owns", () => {
+  it("keeps every card's storage honest: the six device cards, and four the profile owns", () => {
     const storages = (moduleId: string) =>
       new Set(
         declared
@@ -282,6 +325,11 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
     // is switched on — a fact about this machine's form, never about the
     // profile's habits, whose reminders live on their own rows.
     expect(storages("habits")).toEqual(new Set(["device"]));
+    // UTIL's four say how long the NEXT phase is planned for and nothing else —
+    // a finished phase records its own `planned_minutes`, so changing them
+    // restates nothing about yesterday, which is exactly what made
+    // `study_settings` a profile row and makes these not.
+    expect(storages("focus")).toEqual(new Set(["device"]));
     expect(storages("dashboard")).toEqual(new Set(["profile"]));
     expect(storages("study")).toEqual(new Set(["profile"]));
     expect(storages("calendar")).toEqual(new Set(["profile"]));

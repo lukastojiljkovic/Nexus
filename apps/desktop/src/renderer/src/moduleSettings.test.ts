@@ -93,6 +93,7 @@ describe("moduleSettingsDeclarations", () => {
       "study",
       "finance",
       "habits",
+      "focus",
     ]);
   });
 
@@ -119,6 +120,7 @@ describe("moduleSettingsCards", () => {
       "study",
       "finance",
       "habits",
+      "focus",
     ]);
     expect(cards.map((card) => card.title)).toEqual([
       s.sectionTitle.dashboard,
@@ -129,6 +131,7 @@ describe("moduleSettingsCards", () => {
       s.sectionTitle.study,
       s.sectionTitle.finance,
       s.sectionTitle.habits,
+      s.sectionTitle.focus,
     ]);
   });
 
@@ -154,7 +157,7 @@ describe("moduleSettingsCards", () => {
 // --- which cards may be reset -------------------------------------------------
 
 describe("isDeviceOnlyPanel", () => {
-  it("is true for the five cards whose whole state is this machine's", () => {
+  it("is true for the six cards whose whole state is this machine's", () => {
     const declarations = new Map(
       moduleSettingsDeclarations(createModuleRegistry()).map((declaration) => [
         declaration.moduleId,
@@ -164,7 +167,7 @@ describe("isDeviceOnlyPanel", () => {
     const deviceOnly = [...declarations]
       .filter(([, panel]) => isDeviceOnlyPanel(panel))
       .map(([moduleId]) => moduleId);
-    expect(deviceOnly).toEqual(["tasks", "notes", "files", "finance", "habits"]);
+    expect(deviceOnly).toEqual(["tasks", "notes", "files", "finance", "habits", "focus"]);
   });
 
   it("is false for a panel holding a profile row — a reset there would be a write about the user's data", () => {

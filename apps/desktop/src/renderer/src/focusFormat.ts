@@ -1,10 +1,15 @@
 /**
- * Pure formatting helpers for the STUDY focus timer and stats (piece 4b): a
- * live elapsed readout for the running timer, a duration label shared by the
- * per-subject minute totals and the recent-sessions list, and the recent
- * session's day+time label. Mirrors reviewIntervals.ts's small-pure-helper-
- * module idiom.
+ * Pure formatting helpers for the ONE focus timer (STUDY piece 4b, widened by
+ * UTIL slice b): the live readout of a running phase, a duration label shared by
+ * the per-subject minute totals and every session list, and a session's day+time
+ * label. Mirrors reviewIntervals.ts's small-pure-helper-module idiom.
+ *
+ * Serves both surfaces — „Učenje"'s card and „Fokus"'s page — because they show
+ * the same timer, and two formatters would be two ways of writing the same
+ * minute.
  */
+
+import type { FocusPhaseProgress } from "@nexus/core";
 
 const SECOND_MS = 1000;
 const MINUTE_MS = 60 * SECOND_MS;
@@ -25,6 +30,35 @@ export function formatElapsed(elapsedMs: number): string {
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
   return hours > 0 ? `${hours}:${pad2(minutes)}:${pad2(seconds)}` : `${pad2(minutes)}:${pad2(seconds)}`;
+}
+
+/**
+ * The big readout on „Fokus" — one string covering all three things a phase's
+ * clock can be saying.
+ *
+ * - **A planned phase counts DOWN**, because what a Pomodoro is about is the
+ *   time still to give it.
+ * - **An open-ended one counts UP**, because there is nothing for it to be short
+ *   of — STUDY's timer has always read this way, and this is the same reading.
+ * - **Past the plan it counts up again, with a `+`.** That leading sign is the
+ *   whole point: `phaseProgress` pins `remainingSeconds` at 0 the moment the
+ *   plan is met and grows `overrunSeconds` instead, and a clock that showed the
+ *   pinned zero would look like a phase that had tidily ended. It has not — the
+ *   engine deliberately ends nothing, because ending is a deliberate act — so
+ *   the readout says how far past it is rather than pretending it is over.
+ *
+ * A PAUSED phase is formatted exactly like a running one, and nothing here has
+ * to know it is paused: the engine has already frozen the numbers at `pausedAt`,
+ * so a frozen 20:00 renders as 20:00. The page says „pauzirano" in words and in
+ * its styling, which is where that fact belongs.
+ */
+export function formatPhaseClock(
+  progress: FocusPhaseProgress,
+  plannedMinutes: number | null,
+): string {
+  if (plannedMinutes === null) return formatElapsed(progress.elapsedSeconds * SECOND_MS);
+  if (progress.overrunSeconds > 0) return `+${formatElapsed(progress.overrunSeconds * SECOND_MS)}`;
+  return formatElapsed(progress.remainingSeconds * SECOND_MS);
 }
 
 /**

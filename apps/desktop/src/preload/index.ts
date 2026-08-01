@@ -293,9 +293,15 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.topicsDelete, { profileId, id }),
   restoreExamTopicToPlan: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.topicsRestoreToPlan, { profileId, id }),
-  startFocus: (profileId, subjectId) =>
-    ipcRenderer.invoke(IpcChannel.focusStart, { profileId, subjectId }),
+  // The phase's own fields are spread rather than listed, so a caller that omits
+  // one sends an absent KEY rather than an explicit `undefined` — the same
+  // spelling `snoozeNotification` uses below, and what lets main's validators
+  // read „not said" as the documented default instead of as a malformed value.
+  startFocus: (profileId, phase) =>
+    ipcRenderer.invoke(IpcChannel.focusStart, { profileId, ...phase }),
   stopFocus: (profileId) => ipcRenderer.invoke(IpcChannel.focusStop, { profileId }),
+  pauseFocus: (profileId) => ipcRenderer.invoke(IpcChannel.focusPause, { profileId }),
+  resumeFocus: (profileId) => ipcRenderer.invoke(IpcChannel.focusResume, { profileId }),
   focusStatus: (profileId) => ipcRenderer.invoke(IpcChannel.focusStatus, { profileId }),
   cancelFocus: (profileId) => ipcRenderer.invoke(IpcChannel.focusCancel, { profileId }),
   listFocusRange: (profileId, fromDate, toDate) =>

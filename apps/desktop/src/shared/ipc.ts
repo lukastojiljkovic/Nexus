@@ -199,8 +199,15 @@ export const IpcChannel = {
   // plan re-sync rides on the same refresh the renderer runs after any topic
   // write.
   topicsRestoreToPlan: "topics:restore-to-plan",
+  // The ONE focus timer (UTIL slice b, ADR-077). `focus:start`/`focus:status`
+  // were WIDENED rather than twinned: STUDY's open-ended study timer and a
+  // Pomodoro phase are the same running phase with different fields, so a
+  // parallel `pomodoro:*` set would be exactly the second timer migration 057
+  // merged away. Only pause/resume are new, because only they are new acts.
   focusStart: "focus:start",
   focusStop: "focus:stop",
+  focusPause: "focus:pause",
+  focusResume: "focus:resume",
   focusStatus: "focus:status",
   focusCancel: "focus:cancel",
   focusListRange: "focus:list-range",
@@ -2209,7 +2216,17 @@ export interface DecksRestoreRequest {
  */
 export type CardState = 0 | 1 | 2 | 3;
 
-/** Maximum length of a card side — `CardStore`'s own cap, mirrored on the wire. A cloze template lives under the same cap. */
+/**
+ * Maximum length of a card side — `CardStore`'s own cap, mirrored on the wire. A
+ * cloze template lives under the same cap.
+ *
+ * **In CHARACTERS, because that is the unit the store measures in**
+ * (`trimmed.length`). Validate it with main's `asCappedChars`, never
+ * `asCappedString`: the latter counts UTF-8 bytes, and every Serbian letter with
+ * a diacritic is two of them, so a byte cap would make this wire stricter than
+ * the store it says it mirrors — and stricter *only* for text written in the
+ * product's own language. Caps meant in bytes are named `_BYTES` here.
+ */
 export const CARD_TEXT_MAX_LENGTH = 10_000;
 
 /**
@@ -2787,19 +2804,55 @@ export interface FocusSession {
 }
 
 /**
- * The in-progress focus timer for one profile, as tracked by the main process
+ * The in-progress focus PHASE for one profile, as tracked by the main process
  * in memory only — it is never a `focus_sessions` row (see that table's doc
  * comment): a crash or app restart simply loses the running timer.
+ *
+ * Widened in UTIL slice b to carry the whole phase rather than only a subject
+ * and a start, because those two fields could describe exactly one timer and
+ * the product has one timer for two callers. Everything here except the two
+ * pause fields is written verbatim onto the row when the phase ends; `pausedAt`
+ * has no column at all, because a paused phase is by definition still running.
+ *
+ * `subjectId` is nullable and `plannedMinutes` is nullable, and the two
+ * nullabilities are what make one shape serve both callers: STUDY starts a
+ * subject-scoped phase with no plan, FOKUS a planned phase usually with no
+ * subject.
  */
 export interface RunningFocusSession {
-  subjectId: string;
+  subjectId: string | null;
   startedAt: string;
+  kind: FocusPhaseKind;
+  /** Minutes the phase was set for; null for an open-ended session (STUDY's timer). */
+  plannedMinutes: number | null;
+  /** Which phase of the running cycle this is; 0 when the caller keeps no count. */
+  cycleIndex: number;
+  /** What is being worked on. No foreign key — the row outlives whatever it names. */
+  taskId: string | null;
+  /** What the phase is CALLED, snapshotted onto the row so it stays readable later. */
+  label: string | null;
+  /** When the CURRENT pause began, or null while the phase runs. Never a column. */
+  pausedAt: string | null;
+  /** Seconds of pauses that have already ENDED — the running one is `pausedAt`. */
+  pausedSeconds: number;
 }
 
-/** Starts a focus timer. `startedAt` is stamped by main, never accepted from the renderer. */
+/**
+ * Starts a focus phase. `startedAt` is stamped by main, never accepted from the
+ * renderer (SEC-EL-02) — the renderer says WHAT the phase is, main says when.
+ *
+ * Every field but `profileId` is optional, and the omitted shape is exactly what
+ * `focus:start` meant before this slice: a subjectless, unplanned, uncounted
+ * `work` phase.
+ */
 export interface FocusStartRequest {
   profileId: string;
-  subjectId: string;
+  subjectId?: string | null;
+  kind?: FocusPhaseKind;
+  plannedMinutes?: number | null;
+  cycleIndex?: number;
+  taskId?: string | null;
+  label?: string | null;
 }
 
 /** Stops the running focus timer, persisting it (unless it ended in the same instant it started). */
@@ -2807,9 +2860,22 @@ export interface FocusStopRequest {
   profileId: string;
 }
 
+/** Freezes the running phase's clock. A second pause on an already-paused phase is a no-op. */
+export interface FocusPauseRequest {
+  profileId: string;
+}
+
+/** Folds the current pause into `pausedSeconds` and restarts the clock. A no-op on a running phase. */
+export interface FocusResumeRequest {
+  profileId: string;
+}
+
 export interface FocusStatusRequest {
   profileId: string;
 }
+
+/** Mirrors `MAX_FOCUS_LABEL_LENGTH` in `@nexus/db`, so the field can cap its own input; the store stays authoritative. */
+export const MAX_FOCUS_LABEL_LENGTH = 200;
 
 /** Discards the running focus timer without saving anything. */
 export interface FocusCancelRequest {
@@ -6842,8 +6908,20 @@ export interface NexusApi {
   deleteExamTopic(profileId: string, id: string): Promise<ExamTopic[]>;
   /** „Vrati u plan": clears one topic's `cut` — the ONLY path that ever does. Answers with the exam's fresh effective list. */
   restoreExamTopicToPlan(profileId: string, id: string): Promise<ExamTopic[]>;
-  startFocus(profileId: string, subjectId: string): Promise<RunningFocusSession>;
+  /**
+   * Starts the ONE focus phase this profile may have running. `phase` omitted
+   * entirely is an open-ended, subjectless `work` phase — the shape STUDY's
+   * timer has always had.
+   */
+  startFocus(
+    profileId: string,
+    phase?: Omit<FocusStartRequest, "profileId">,
+  ): Promise<RunningFocusSession>;
   stopFocus(profileId: string): Promise<FocusSession | null>;
+  /** Freezes the running phase's clock; answers the frozen phase. A no-op if it is already paused. */
+  pauseFocus(profileId: string): Promise<RunningFocusSession>;
+  /** Restarts the clock, folding the pause just ended into `pausedSeconds`. A no-op if it is running. */
+  resumeFocus(profileId: string): Promise<RunningFocusSession>;
   focusStatus(profileId: string): Promise<RunningFocusSession | null>;
   cancelFocus(profileId: string): Promise<void>;
   listFocusRange(profileId: string, fromDate: string, toDate: string): Promise<FocusSession[]>;

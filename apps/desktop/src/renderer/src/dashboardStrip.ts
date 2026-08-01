@@ -1,3 +1,4 @@
+import { phaseProgress } from "@nexus/core";
 import type { RunningFocusSession } from "../../shared/ipc.js";
 import type { CalendarItem } from "./calendarItems.js";
 import { formatClockLabel } from "./calendarPrefs.js";
@@ -121,22 +122,28 @@ function eventSegment(next: StripEvent, clock: ClockPreference): string {
 }
 
 /**
- * „Fokus u toku: 25 min" — the running timer, in whole elapsed minutes.
+ * „Fokus u toku: 25 min" — the running phase, in whole elapsed minutes; or
+ * „Fokus je pauziran: 25 min" while it is paused.
  *
- * Minutes rather than the „mm:ss" readout STUDY's own card ticks: the strip is
- * redrawn once a minute, so a seconds field would spend most of its life wrong,
- * and a counter running in the header would be a moving thing in the one place
- * on the page that is meant to be still. Under a minute the duration is left
- * off entirely — „0 min" says less than the bare fact that a timer is on. The
+ * Minutes rather than the „mm:ss" readout the pages tick: the strip is redrawn
+ * once a minute, so a seconds field would spend most of its life wrong, and a
+ * counter running in the header would be a moving thing in the one place on the
+ * page that is meant to be still. Under a minute the duration is left off
+ * entirely — „0 min" says less than the bare fact that a timer is on. The
  * elapsed part is FLOORED, never rounded: 25 min 40 s has not been 26 minutes.
+ *
+ * The elapsed figure comes from `phaseProgress` since UTIL slice b, which is
+ * what makes the paused wording true rather than decorative: the engine freezes
+ * the clock at `pausedAt`, so a phase paused twenty minutes ago still reads the
+ * number it read when it was paused. Measuring from `startedAt` here would have
+ * put a growing figure under the word „pauziran".
  */
 function focusSegment(focus: RunningFocusSession, nowMs: number): string {
-  const label = strings.dashboard.strip.focusRunning;
-  const elapsedMs = nowMs - new Date(focus.startedAt).getTime();
-  // An unparseable `startedAt` makes this NaN, and NaN survives `Math.max`, so
-  // finiteness is decided before the clamp — the timer is still honestly on.
-  if (!Number.isFinite(elapsedMs)) return label;
-  const minutes = Math.floor(Math.max(0, elapsedMs) / MINUTE_MS);
+  const progress = phaseProgress(focus, new Date(nowMs).toISOString());
+  const label = progress.isPaused
+    ? strings.dashboard.strip.focusPaused
+    : strings.dashboard.strip.focusRunning;
+  const minutes = Math.floor((progress.elapsedSeconds * 1000) / MINUTE_MS);
   return minutes === 0 ? label : `${label}: ${formatDurationMinutes(minutes)}`;
 }
 
@@ -156,7 +163,7 @@ export interface DayStripInput {
    * than fetched out of `localStorage` half-way down a formatter.
    */
   readonly clock: ClockPreference;
-  /** The main-process focus timer, or `null` when none runs (or STUDY is switched off). */
+  /** The main-process focus phase, or `null` when none runs (or both owning modules are off). */
   readonly focus: RunningFocusSession | null;
 }
 

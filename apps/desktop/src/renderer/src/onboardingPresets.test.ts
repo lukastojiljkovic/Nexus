@@ -118,6 +118,17 @@ describe("OCCUPATION_MODULE_PRESETS", () => {
     }
   });
 
+  // The strongest version of FIN's and HABIT's argument: „Fokus" is a TIMER.
+  // Sitting down to concentrate for half an hour is not shaped differently for a
+  // student and a founder, and the module holds nothing until somebody presses
+  // start. It is also the one module no answer could sensibly drop without also
+  // dropping STUDY, since the two share the timer.
+  it("pre-checks UTIL for every answer — a timer is shaped the same for everybody", () => {
+    for (const occupation of ONBOARDING_OCCUPATIONS) {
+      expect(OCCUPATION_MODULE_PRESETS[occupation]["focus"], occupation).toBe(true);
+    }
+  });
+
   it("answers „Nešto drugo“ with the neutral preset rather than an invented one", () => {
     expect(OCCUPATION_MODULE_PRESETS.drugo).toEqual(ESSENTIALS_MODULE_PRESET);
   });
@@ -134,6 +145,7 @@ describe("resolveModuleSelection", () => {
       study: false,
       finance: true,
       habits: true,
+      focus: true,
     });
   });
 
@@ -160,6 +172,7 @@ describe("moduleFlagWrites", () => {
       { moduleId: "study", enabled: true },
       { moduleId: "finance", enabled: true },
       { moduleId: "habits", enabled: true },
+      { moduleId: "focus", enabled: true },
     ]);
   });
 

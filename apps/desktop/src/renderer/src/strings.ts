@@ -295,6 +295,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     files: "Datoteke",
     finance: "Finansije",
     habits: "Navike",
+    focus: "Fokus",
   } as Record<string, string>,
 
   dashboard: {
@@ -324,6 +325,13 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
        * naming (`formatDurationMinutes` appends it).
        */
       focusRunning: "Fokus u toku",
+      /**
+       * The same phase, paused (UTIL slice b). Its own wording rather than a
+       * suffix, because the figure beside it is FROZEN — „Fokus u toku: 25 min"
+       * on a number that has stopped moving would be the one lie the strip can
+       * tell.
+       */
+      focusPaused: "Fokus je pauziran",
     },
     /** Danas widget — today's events, birthdays, and tasks due today. */
     today: {
@@ -364,6 +372,24 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     renewals: {
       title: "Predstojeće naplate",
       empty: "Nema naplata u ovom periodu",
+    },
+    /**
+     * UTIL slice b's card: the phase running right now, or — when nothing is —
+     * how much focus today has actually held. Two states and no third, because
+     * those are the only two true things a card about a timer can say.
+     */
+    focus: {
+      title: "Fokus",
+      /** Nothing runs and nothing was focused today. An invitation, not a scolding. */
+      empty: "Danas još nema fokusa",
+      /** Leads the figure when nothing runs: „Danas · 1 h 15 min". */
+      todayLabel: "Danas",
+      /** Leads a running phase's remaining/elapsed clock. */
+      runningLabel: "U toku",
+      /** The same phase with its clock frozen. */
+      pausedLabel: "Pauzirano",
+      /** The phase is past its plan — the card says so rather than showing 00:00. */
+      overrunLabel: "Prekoračeno",
     },
     /** HABIT slice c's card: today's expected habits, tickable in place. */
     habitsToday: {
@@ -2293,6 +2319,12 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     focusDiscard: "Odbaci",
     focusNoSubjects: "Nema aktivnih predmeta — dodaj predmet da bi pokrenuo tajmer fokusa.",
     focusUnknownSubject: "Nepoznat predmet",
+    /**
+     * The running phase belongs to no subject — a Pomodoro started from „Fokus"
+     * on the same timer (UTIL slice b). Different from „Nepoznat predmet", which
+     * means a subject that WAS named and is no longer readable.
+     */
+    focusNoSubject: "Bez predmeta",
     /** Streak line — "Niz učenja: N dana" + "Najduži niz: M" building blocks. */
     streakLabel: "Niz učenja",
     streakUnitOne: "dan",
@@ -2867,6 +2899,107 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     },
   },
 
+  /**
+   * Fokus (UTIL slice b) — the ONE focus timer's own page. The copy states the
+   * module's structural rules wherever the screen could otherwise mislead:
+   *
+   * - **A phase past its plan says so.** „Prekoračeno" and a `+` clock, never a
+   *   00:00 that reads like a phase that quietly ended. Nothing ends by itself.
+   * - **A paused phase says it is paused** and its figure is frozen, so no word
+   *   here suggests time is still being counted.
+   * - **A break is named as a break.** „Pauza" and „Duga pauza" are phases with
+   *   their own rows, and today's summary states them even at zero — somebody
+   *   who never stops has to be able to see that.
+   * - Nothing here is a number and nothing is invented: every figure comes from
+   *   phases that really ran, and a day with none says so in words.
+   */
+  focus: {
+    loadErrorTitle: "Fokus nije učitan",
+    loadError: "Učitavanje fokusa nije uspelo. Zatvori i ponovo otvori stranicu.",
+    actionError: "Radnja nije uspela. Pokušaj ponovo.",
+    undo: "Opozovi",
+    dismiss: "Zatvori",
+    /** The three phase kinds, named the same way everywhere they appear. */
+    kind: {
+      work: "Rad",
+      short_break: "Pauza",
+      long_break: "Duga pauza",
+    },
+    /** The running phase, front and centre. */
+    running: {
+      /** Above the clock: „U toku · Rad". */
+      heading: "U toku",
+      pausedHeading: "Pauzirano",
+      /**
+       * Said under the clock once the plan is behind you. It states a fact and
+       * asks for nothing: the phase is still running, and closing it is yours.
+       */
+      overrun: "Prekoračeno — faza i dalje teče dok je ne završiš.",
+      /** Below the clock: what this phase is attached to, when it is attached to anything. */
+      subjectPrefix: "Predmet",
+      taskPrefix: "Zadatak",
+      /** An open-ended phase — STUDY's shape, and what „Fokus" shows if one is running. */
+      openEnded: "Bez planiranog kraja",
+      pause: "Pauziraj",
+      resume: "Nastavi",
+      stop: "Završi",
+      /** Ends the phase without recording it — the same act „Učenje" calls „Odbaci". */
+      discard: "Odbaci",
+      discardTitle: "Zatvori fazu bez upisivanja u istoriju.",
+    },
+    /** Nothing runs: what to start, and what to attach to it. */
+    idle: {
+      heading: "Sledeća faza",
+      /**
+       * Said above the start button. The cycle is what the config says, and this
+       * is where the user learns that the next phase was decided rather than
+       * chosen for them.
+       */
+      caption: "Nexus predlaže sledeću fazu po tvom ciklusu. Možeš pokrenuti bilo koju.",
+      start: "Pokreni",
+      /** The three explicit starts, when the suggestion is not what you want. */
+      startWork: "Pokreni rad",
+      startShortBreak: "Pokreni pauzu",
+      startLongBreak: "Pokreni dugu pauzu",
+      /** The optional attachment — a subject, a task, or neither, which is the ordinary case. */
+      attachLabel: "Uz šta radiš",
+      attachNone: "Ni uz šta",
+      attachTaskGroup: "Zadaci",
+      attachSubjectGroup: "Predmeti",
+      /** What a phase is CALLED — the snapshot that keeps a row readable once its task is gone. */
+      labelLabel: "Naziv faze",
+      labelPlaceholder: "Pisanje izveštaja",
+      labelHint: "Ostaje upisan uz fazu i kada zadatka više ne bude.",
+      minutesLabel: "Minuta",
+    },
+    /** Today's phases, and the week behind them. */
+    today: {
+      heading: "Danas",
+      /** Per-kind summary — „Rad: 4 faze · 1 h 40 min". Every kind is shown, zeros included. */
+      phaseUnitOne: "faza",
+      phaseUnitFew: "faze",
+      phaseUnitMany: "faza",
+      /** Said when today holds nothing at all. */
+      emptyTitle: "Danas još nema nijedne faze",
+      emptyDescription:
+        "Pokreni prvu fazu — Nexus vodi vreme, pauze i istoriju umesto tebe.",
+      /** The zero that has something to say: no break was taken all day. */
+      noBreaks: "Danas nijedna pauza.",
+    },
+    /** The short history under today — the last week, newest first. */
+    history: {
+      heading: "Poslednjih 7 dana",
+      empty: "Nema faza u poslednjih 7 dana.",
+      /** A row's action; one pending undo at a time, exactly as everywhere else. */
+      delete: "Obriši",
+      deletedNotice: "Faza je obrisana.",
+      /** The chip on a phase that ran past its plan — a fact about the row, never a warning. */
+      overrunChip: "Prekoračeno",
+      /** The chip on a phase with no plan at all — STUDY's timer, honestly labelled. */
+      openEndedChip: "Bez plana",
+    },
+  },
+
   settings: {
     // The page title reuses `strings.modules.settings` — no duplicate copy.
     /**
@@ -2891,6 +3024,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       calendar: "Kalendar",
       finance: "Finansije",
       habits: "Navike",
+      focus: "Fokus",
       modules: "Moduli",
       notifications: "Obaveštenja",
       backup: "Rezervna kopija",
@@ -3199,6 +3333,28 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       defaultReminderHint: "Važi samo na ovom uređaju.",
       saved: "Podrazumevano vreme je sačuvano.",
     },
+    /**
+     * UTIL slice b's card — the Pomodoro shape, and nothing else. The caption
+     * says what the four numbers do NOT do first, because „podešavanja fokusa"
+     * reads like something that could rewrite what already happened, and it is
+     * the opposite: a finished phase carries the length it actually ran for.
+     *
+     * Each field names its own bound, since the form refuses out of range and a
+     * refusal the user could have avoided is a refusal that should have been a
+     * hint.
+     */
+    focus: {
+      caption:
+        "Dužine faza i koliko radnih faza ide pre duge pauze. Važi za faze koje tek pokreneš — završene faze zadržavaju vreme koje su stvarno trajale.",
+      workLabel: "Rad (minuta)",
+      shortBreakLabel: "Pauza (minuta)",
+      longBreakLabel: "Duga pauza (minuta)",
+      cyclesLabel: "Radnih faza pre duge pauze",
+      hint: "Važi samo na ovom uređaju.",
+      saved: "Podešavanja fokusa su sačuvana.",
+      /** The one refusal, pointed at the field the engine named — never a generic „nešto nije u redu". */
+      invalid: "Vrednost je van dozvoljenog opsega.",
+    },
     /** One-line module descriptions for the gallery, keyed by module id. */
     moduleDescriptions: {
       dashboard: "Pregled dana na jednom mestu — obaveze, zadaci i dokumenta koja ističu.",
@@ -3211,6 +3367,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       files: "Sve datoteke priložene uz beleške, zadatke i predmete, na jednom mestu.",
       finance: "Računi, transakcije i prenosi — stanje se računa iz onoga što upišeš.",
       habits: "Dnevne i nedeljne navike — niz, istorija i ono što se danas očekuje.",
+      focus: "Pomodoro tajmer i istorija fokusa — isti tajmer koji „Učenje“ koristi.",
     } as Record<string, string>,
     /** Category-group headings above the module gallery, keyed by registry category. */
     moduleCategories: {

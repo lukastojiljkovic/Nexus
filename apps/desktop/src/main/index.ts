@@ -10,7 +10,7 @@ import {
   writeFile as writeFileAsync,
 } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { app, BrowserWindow, dialog, ipcMain, protocol, session } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Notification, protocol, session } from "electron";
 import type { IpcMainInvokeEvent, OpenDialogOptions } from "electron";
 import { autoUpdater } from "electron-updater";
 import {
@@ -23,7 +23,9 @@ import {
   foldSearchTag,
   normalizeChordKey,
   dayKeyToUtcMs,
+  FOCUS_PHASE_KINDS,
   isValidDayKey,
+  phaseProgress,
   MAX_ARCHIVE_PASSPHRASE_LENGTH,
   isInlineImageMime,
   openPrivBlob,
@@ -41,7 +43,7 @@ import {
   validateTaskViewConfig,
   validateWidgetConfig,
 } from "@nexus/core";
-import type { HabitSchedule, TaskViewConfig } from "@nexus/core";
+import type { FocusOutcome, FocusPhaseKind, HabitSchedule, TaskViewConfig } from "@nexus/core";
 import type {
   ArchiveModuleId,
   ArchiveProfilePicture,
@@ -97,6 +99,9 @@ import {
   ForeignImportStore,
   HabitStore,
   isPlaintextDatabase,
+  MAX_FOCUS_CYCLE_INDEX,
+  MAX_FOCUS_LABEL_LENGTH,
+  MAX_FOCUS_PLANNED_MINUTES,
   MAX_HABIT_COUNT,
   MAX_EVENT_REMINDERS,
   MAX_EVENT_REMINDER_MINUTES,
@@ -372,6 +377,7 @@ import {
   type SecurityNotificationDeps,
 } from "./notifications.js";
 import { filterSearchHitsByModules } from "./searchGate.js";
+import { focusPhaseEndCopy } from "./notificationStrings.js";
 import type { SecurityNotice } from "./notificationStrings.js";
 import { computeSnoozeUntil, resolveDefaultSnoozePreset } from "./snooze.js";
 import { pickProfilePicture } from "./profilePicture.js";
@@ -612,13 +618,197 @@ let blobKeys: BlobKeys | null = null;
  */
 let legacyMigrationTask: Promise<unknown> = Promise.resolve();
 
-// STUDY focus timer (piece 4a): the *running* timer is deliberately never a
-// database row (see the `focus_sessions` migration's doc comment) — it lives
-// only as this main-process runtime state, keyed by profile id, so a crash or
-// app restart simply loses the in-progress timer instead of persisting a
-// fabricated duration. Only `FocusStore.create` (on `focus:stop`) ever writes
-// a `focus_sessions` row.
-const runningFocusSessions = new Map<string, RunningFocusSession>();
+// The ONE focus timer (STUDY piece 4a, widened by UTIL slice b / ADR-077): the
+// *running* phase is deliberately never a database row (see the `focus_sessions`
+// migration's doc comment) — it lives only as this main-process runtime state,
+// keyed by profile id, so a crash or app restart simply loses the in-progress
+// phase instead of persisting a fabricated duration. Only `FocusStore.create`
+// (on `focus:stop`, or on the `before-quit` sweep) ever writes a row.
+//
+// ONE per profile, which is the invariant the whole timer rests on: a second
+// running phase would make „koliko sam danas fokusiran bio" a sum of overlapping
+// spans, and no reading of that number would be true.
+const runningFocusSessions = new Map<string, RunningFocusPhase>();
+
+/**
+ * The running phase, plus the one thing the wire does not carry: the OS-alarm
+ * handle. The timer is main's own bookkeeping and no renderer's business, so it
+ * is added here rather than widening `RunningFocusSession` — which is exactly
+ * what `focus:status` answers with, minus this field.
+ */
+interface RunningFocusPhase extends RunningFocusSession {
+  /**
+   * The `setTimeout` that fires the phase-end notification, or null when there
+   * is nothing to fire: an open-ended phase (no plan to reach), a paused one
+   * (cancelled on pause, re-armed on resume), or one already past its plan.
+   *
+   * A handle rather than a wall-clock check on a shared interval, for the
+   * reason `phaseProgress` is wall-clock: the alarm is a single scheduled event
+   * and the DISPLAY is derived arithmetic, so a machine that slept through the
+   * planned end shows the overrun honestly the moment it wakes, and the alarm
+   * that did not fire on time simply fires late rather than never.
+   */
+  timer: NodeJS.Timeout | null;
+}
+
+/** What `focus:*` answers with — the phase without main's private alarm handle. */
+function toRunningFocusSession(phase: RunningFocusPhase): RunningFocusSession {
+  const { timer: _timer, ...running } = phase;
+  return running;
+}
+
+/**
+ * Cancels a phase's pending alarm, if it has one. Called on pause, on stop, on
+ * cancel and before re-arming — a handle that outlived its phase would fire a
+ * notification about a phase nobody is running.
+ */
+function disarmFocusAlarm(phase: RunningFocusPhase): void {
+  if (phase.timer !== null) {
+    clearTimeout(phase.timer);
+    phase.timer = null;
+  }
+}
+
+/**
+ * Arms the phase-end alarm for whatever is LEFT of a planned phase, measured
+ * from the wall clock rather than from the plan: a phase resumed after a
+ * ten-minute pause has ten more minutes to run, and `phaseProgress` is the one
+ * place that arithmetic lives.
+ *
+ * Nothing is armed for an open-ended phase (there is no end to announce), for a
+ * paused one (its clock is frozen), or for one already past its plan — that
+ * last case is the honest one: the notification fired when the plan was reached
+ * and the phase is now in overrun, which the page states rather than the OS
+ * repeating.
+ *
+ * The alarm does NOT end the phase. Ending is a deliberate act (`focusSession.ts`
+ * on `phaseProgress`), so all this does is say so out loud.
+ */
+function armFocusAlarm(profileId: string, phase: RunningFocusPhase): void {
+  disarmFocusAlarm(phase);
+  if (phase.plannedMinutes === null || phase.pausedAt !== null) return;
+  const progress = phaseProgress(phase, new Date().toISOString());
+  if (progress.remainingSeconds <= 0) return;
+
+  phase.timer = setTimeout(() => {
+    const current = runningFocusSessions.get(profileId);
+    // The phase that armed this must still be the phase that is running: a stop
+    // and a fresh start inside the window would otherwise announce the end of
+    // something that already ended.
+    if (current !== phase) return;
+    current.timer = null;
+    if (!Notification.isSupported() || current.plannedMinutes === null) return;
+    const copy = focusPhaseEndCopy(current.kind, current.plannedMinutes, current.label);
+    const notification = new Notification({ title: copy.title, body: copy.body });
+    notification.on("click", () => {
+      const win = mainWindow;
+      if (!win) return;
+      if (win.isMinimized()) win.restore();
+      win.focus();
+    });
+    notification.show();
+  }, progress.remainingSeconds * 1000);
+}
+
+/**
+ * Ends the running phase and persists it, or answers `null` when there is
+ * nothing to persist — no phase, or one whose end landed in the same
+ * millisecond as its start (the store's `ended_at > started_at` CHECK, honoured
+ * here rather than caught).
+ *
+ * `outcome` is the caller's, because only the caller knows why it ended: a
+ * phase that reached its plan and was acknowledged is `completed`, everything
+ * else — a hand stop, an open-ended session, the quit sweep — is `stopped`.
+ * There is deliberately no third value (see `FOCUS_OUTCOMES`).
+ *
+ * `pausedSeconds` folds in a pause still running at the moment of the stop:
+ * stopping a paused phase must not count the pause as attention.
+ */
+function endRunningFocusPhase(
+  profileId: string,
+  outcome: FocusOutcome,
+  endedAt: string,
+): FocusSession | null {
+  const phase = runningFocusSessions.get(profileId);
+  if (!phase) return null;
+  disarmFocusAlarm(phase);
+  runningFocusSessions.delete(profileId);
+  if (endedAt <= phase.startedAt) return null; // sub-millisecond stop: discarded, not persisted
+
+  const pausedSeconds = phase.pausedSeconds + closedPauseSeconds(phase.pausedAt, endedAt);
+  return focusStore(profileId).create(
+    {
+      subjectId: phase.subjectId,
+      startedAt: phase.startedAt,
+      endedAt,
+      kind: phase.kind,
+      plannedMinutes: phase.plannedMinutes,
+      // Floored at the span itself: the store refuses more, and a clock that
+      // stepped backwards mid-pause must not turn into a refusal the user sees
+      // as „your session could not be saved".
+      pausedSeconds: Math.min(pausedSeconds, spanSeconds(phase.startedAt, endedAt)),
+      outcome,
+      cycleIndex: phase.cycleIndex,
+      taskId: phase.taskId,
+      label: phase.label,
+    },
+    endedAt,
+  );
+}
+
+/**
+ * Drops the running phase without persisting anything — `focus:cancel`, and the
+ * restore path's own discard. The alarm goes with it: a `setTimeout` left behind
+ * would announce the end of a phase that no longer exists.
+ */
+function discardRunningFocusPhase(profileId: string): void {
+  const phase = runningFocusSessions.get(profileId);
+  if (!phase) return;
+  disarmFocusAlarm(phase);
+  runningFocusSessions.delete(profileId);
+}
+
+/**
+ * Closes every running phase with a REAL end time as the app goes down
+ * (`before-quit`, which fires while the database is still open — `will-quit`
+ * closes it).
+ *
+ * This is what makes a crash and a quit different facts, and the difference is
+ * the whole reason slice a has no `abandoned` outcome: a clean quit writes an
+ * honest row ending now, so a phase that is STILL missing after a restart can
+ * only mean the process was killed — and that phase is simply gone, which is
+ * the honest outcome for time nobody witnessed the end of.
+ *
+ * Outcome `stopped`, always: quitting is not reaching a plan.
+ *
+ * Failures are swallowed, one profile at a time. The app is on its way out and
+ * a locked or half-closed database must not stop it from getting there; a lost
+ * row here is the same loss a crash would have caused anyway.
+ */
+function closeRunningFocusPhasesOnQuit(): void {
+  const endedAt = new Date().toISOString();
+  for (const profileId of [...runningFocusSessions.keys()]) {
+    try {
+      endRunningFocusPhase(profileId, "stopped", endedAt);
+    } catch (error) {
+      console.error("Nexus: a running focus phase could not be closed on quit:", error);
+      discardRunningFocusPhase(profileId);
+    }
+  }
+}
+
+/** Whole seconds of a pause that started at `pausedAt` and is closing at `until`; 0 when none was running. */
+function closedPauseSeconds(pausedAt: string | null, until: string): number {
+  if (pausedAt === null) return 0;
+  const seconds = Math.floor((Date.parse(until) - Date.parse(pausedAt)) / 1000);
+  return Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+}
+
+/** A phase's wall span in whole seconds — the ceiling `pausedSeconds` may not exceed. */
+function spanSeconds(startedAt: string, endedAt: string): number {
+  const seconds = Math.floor((Date.parse(endedAt) - Date.parse(startedAt)) / 1000);
+  return Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+}
 
 // --- Accounts (ADR-044) -----------------------------------------------------
 
@@ -1110,6 +1300,33 @@ function asCappedString(value: unknown, field: string, maxBytes: number): string
 }
 
 /**
+ * The CHARACTER-counting sibling of `asCappedString`, for the caps a store
+ * defines in characters rather than bytes.
+ *
+ * The distinction is not pedantry in this app: every Serbian letter carrying a
+ * diacritic — š, č, ć, ž, đ — is two bytes in UTF-8, so a byte cap applied to a
+ * character limit refuses legal input, and refuses it *only for text written in
+ * the product's own language*. `CARD_TEXT_MAX_LENGTH` is documented as mirroring
+ * `CardStore`'s cap, and that cap is 10 000 CHARACTERS (`trimmed.length`), so
+ * byte-capping it made the wire stricter than the store it claims to mirror and
+ * produced a „must not exceed 10000 bytes" refusal for a card the store would
+ * have taken. Found while reviewing UTIL slice b, whose `asFocusLabel` had to
+ * dodge the same trap.
+ *
+ * Rule: match the unit the STORE measures in. A cap named `_BYTES` keeps
+ * `asCappedString`; a cap the store checks with `.length` comes here.
+ */
+function asCappedChars(value: unknown, field: string, maxChars: number): string {
+  if (typeof value !== "string") {
+    throw new Error(`Invalid IPC payload: "${field}" must be a string.`);
+  }
+  if (value.length > maxChars) {
+    throw new Error(`Invalid IPC payload: "${field}" must not exceed ${maxChars} characters.`);
+  }
+  return value;
+}
+
+/**
  * An array of non-empty strings, each capped at `maxItemLength`, the array
  * itself capped at `maxItems` (structural checks only; the store owns the
  * self-link/unknown-id/cross-profile filtering, NOTE-004).
@@ -1161,15 +1378,15 @@ function asNoteCardSpecArray(value: unknown, field: string): NoteCardSpec[] {
     }
     return {
       key,
-      front: asCappedString(spec.front, `${field}[${index}].front`, CARD_TEXT_MAX_LENGTH),
-      back: asCappedString(spec.back, `${field}[${index}].back`, CARD_TEXT_MAX_LENGTH),
+      front: asCappedChars(spec.front, `${field}[${index}].front`, CARD_TEXT_MAX_LENGTH),
+      back: asCappedChars(spec.back, `${field}[${index}].back`, CARD_TEXT_MAX_LENGTH),
       // Structural again: the pair rule and "this ordinal is in this template"
       // are `CardStore`'s to enforce, exactly as `key` uniqueness is.
       kind: asCardKind(spec.kind, `${field}[${index}].kind`),
       clozeText:
         spec.clozeText === null
           ? null
-          : asCappedString(spec.clozeText, `${field}[${index}].clozeText`, CARD_TEXT_MAX_LENGTH),
+          : asCappedChars(spec.clozeText, `${field}[${index}].clozeText`, CARD_TEXT_MAX_LENGTH),
       clozeOrdinal:
         spec.clozeOrdinal === null
           ? null
@@ -2520,13 +2737,13 @@ function asCardFieldChanges(value: unknown): UpdateCardFields {
   if (changes.front !== undefined) patch.front = asNonEmptyString(changes.front, "changes.front");
   if (changes.back !== undefined) patch.back = asNonEmptyString(changes.back, "changes.back");
   if (changes.clozeText !== undefined) {
-    patch.clozeText = asCappedString(changes.clozeText, "changes.clozeText", CARD_TEXT_MAX_LENGTH);
+    patch.clozeText = asCappedChars(changes.clozeText, "changes.clozeText", CARD_TEXT_MAX_LENGTH);
   }
   if (changes.problemSteps !== undefined) {
     patch.problemSteps =
       changes.problemSteps === null
         ? null
-        : asCappedString(changes.problemSteps, "changes.problemSteps", CARD_TEXT_MAX_LENGTH);
+        : asCappedChars(changes.problemSteps, "changes.problemSteps", CARD_TEXT_MAX_LENGTH);
   }
   return patch;
 }
@@ -3111,6 +3328,66 @@ function asHabitDayRange(value: unknown): HabitDayRange {
     from: asBareDate(range.from, "range.from"),
     to: asBareDate(range.to, "range.to"),
   };
+}
+
+// --- FOCUS: the one running phase (UTIL slice b, ADR-077) --------------------
+//
+// SEC-EL-02 as everywhere: structural checks here, semantics in the store. Two
+// of these fields are load-bearing beyond the column they land in —
+// `plannedMinutes` decides how long main's own `setTimeout` sleeps for, and
+// `kind` decides which notification the user is shown — so both are bounded
+// against the store's OWN constants rather than against a second reading of
+// what a phase may be.
+//
+// Every field is optional, and an ABSENT one means what `focus:start` meant
+// before this slice: a subjectless, unplanned, uncounted `work` phase. That is
+// how STUDY's timer keeps working through a widened channel without sending a
+// single new key.
+
+/** One of the three phase kinds, defaulting to `work` when the caller says nothing. */
+function asFocusPhaseKind(value: unknown, field: string): FocusPhaseKind {
+  if (value === undefined) return "work";
+  if (typeof value !== "string" || !(FOCUS_PHASE_KINDS as readonly string[]).includes(value)) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be one of: ${FOCUS_PHASE_KINDS.join(", ")}.`,
+    );
+  }
+  return value as FocusPhaseKind;
+}
+
+/**
+ * The phase's plan in whole minutes, or null for an open-ended one (STUDY's
+ * timer). Bounded by the store's own ceiling, which is `validateFocusConfig`'s
+ * widest — a renderer that asked for a million-minute phase would otherwise
+ * arm a `setTimeout` main has to hold for two years.
+ */
+function asFocusPlannedMinutes(value: unknown, field: string): number | null {
+  if (value === undefined || value === null) return null;
+  return asBoundedInteger(value, field, 1, MAX_FOCUS_PLANNED_MINUTES);
+}
+
+/** Which phase of the cycle this is; 0 (the store's own default) when the caller keeps no count. */
+function asFocusCycleIndex(value: unknown, field: string): number {
+  if (value === undefined) return 0;
+  return asBoundedInteger(value, field, 0, MAX_FOCUS_CYCLE_INDEX);
+}
+
+/**
+ * The phase's label snapshot. Capped in CHARACTERS rather than bytes, because
+ * that is the store's own unit (`MAX_FOCUS_LABEL_LENGTH` is measured after a
+ * trim) — `asCappedString`'s byte ceiling would refuse a perfectly legal
+ * 200-character Serbian label the moment it carried enough š/č/ć to cross 200
+ * bytes. That the label TRIMS, and that a blank one collapses to null, stays the
+ * store's `validateLabel`: restating it here would be two places to change.
+ */
+function asFocusLabel(value: unknown, field: string): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string" || value.length > MAX_FOCUS_LABEL_LENGTH) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be a string of at most ${MAX_FOCUS_LABEL_LENGTH} characters.`,
+    );
+  }
+  return value;
 }
 
 function requireDb(): NexusDatabase {
@@ -4662,7 +4939,7 @@ function restoreDeps(): ImportDeps {
     // sharper reason here: the row it would have written is about to be wiped
     // by the very restore asking for this.
     cancelFocusSession: (profileId) => {
-      runningFocusSessions.delete(profileId);
+      discardRunningFocusPhase(profileId);
     },
     dashboardSettingsStore,
     dashboardWidgetStore,
@@ -6366,7 +6643,7 @@ function registerIpc(): void {
     const body = asRecord(payload);
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const deckId = asNonEmptyString(body.deckId, "deckId");
-    const text = asCappedString(body.text, "text", CARD_TEXT_MAX_LENGTH);
+    const text = asCappedChars(body.text, "text", CARD_TEXT_MAX_LENGTH);
     return cardStore(profileId).createCloze(deckId, text, new Date().toISOString());
   });
 
@@ -6378,8 +6655,8 @@ function registerIpc(): void {
     const body = asRecord(payload);
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const deckId = asNonEmptyString(body.deckId, "deckId");
-    const front = asCappedString(body.front, "front", CARD_TEXT_MAX_LENGTH);
-    const stepsText = asCappedString(body.stepsText, "stepsText", CARD_TEXT_MAX_LENGTH);
+    const front = asCappedChars(body.front, "front", CARD_TEXT_MAX_LENGTH);
+    const stepsText = asCappedChars(body.stepsText, "stepsText", CARD_TEXT_MAX_LENGTH);
     return cardStore(profileId).createProblem(deckId, front, stepsText, new Date().toISOString());
   });
 
@@ -6693,51 +6970,123 @@ function registerIpc(): void {
 
   // SEC-EL-02: `startedAt`/`endedAt`/`now` are always stamped here from the
   // main process's own clock — the renderer never supplies a timer boundary.
-  // The running timer itself lives only in `runningFocusSessions` (see its
+  // The running phase itself lives only in `runningFocusSessions` (see its
   // declaration); a crash or restart loses it honestly, never a fabricated row.
+  //
+  // ONE channel for both callers (UTIL slice b): STUDY sends only a `subjectId`
+  // and gets exactly the open-ended `work` phase it always had, while FOKUS
+  // sends a kind and a plan. A second start channel would be the second timer
+  // migration 057 merged away.
   ipcMain.handle(IpcChannel.focusStart, (event, payload): RunningFocusSession => {
     assertTrustedSender(event);
     const body = asRecord(payload);
     const profileId = asNonEmptyString(body.profileId, "profileId");
-    const subjectId = asNonEmptyString(body.subjectId, "subjectId");
     if (runningFocusSessions.has(profileId)) {
       throw new Error("A focus session is already running for this profile.");
     }
-    // Validates the subject before recording — a running timer is never
-    // started against an unknown/foreign/soft-deleted subject.
-    focusStore(profileId).resolveSubject(subjectId);
-    const running: RunningFocusSession = { subjectId, startedAt: new Date().toISOString() };
+    const rawSubjectId = body.subjectId;
+    // Validated BEFORE the phase is recorded — a running phase is never started
+    // against an unknown/foreign/soft-deleted subject. A Pomodoro phase usually
+    // names none at all, which is the ordinary case rather than the exception.
+    const subjectId =
+      rawSubjectId === undefined || rawSubjectId === null
+        ? null
+        : focusStore(profileId).resolveSubject(asNonEmptyString(rawSubjectId, "subjectId"));
+
+    const running: RunningFocusPhase = {
+      subjectId,
+      startedAt: new Date().toISOString(),
+      kind: asFocusPhaseKind(body.kind, "kind"),
+      plannedMinutes: asFocusPlannedMinutes(body.plannedMinutes, "plannedMinutes"),
+      cycleIndex: asFocusCycleIndex(body.cycleIndex, "cycleIndex"),
+      // Deliberately NOT resolved against `tasks`: a focus session is a
+      // historical fact about time somebody spent and must survive the deletion
+      // of whatever it pointed at (migration 057's note). Structural only.
+      taskId: body.taskId === undefined ? null : asNullableId(body.taskId, "taskId"),
+      label: asFocusLabel(body.label, "label"),
+      pausedAt: null,
+      pausedSeconds: 0,
+      timer: null,
+    };
     runningFocusSessions.set(profileId, running);
-    return running;
+    armFocusAlarm(profileId, running);
+    return toRunningFocusSession(running);
   });
 
+  // ONE stop channel, and the outcome is derived from the CLOCK rather than
+  // named by the caller: a phase whose plan the wall clock says was met ends
+  // `completed`, everything else `stopped`. Letting the renderer name it would
+  // let a compromised one record a twenty-second phase as a completed Pomodoro,
+  // and the outcome is the one field of a focus row nobody should be able to
+  // assert about themselves.
+  //
+  // An open-ended phase always lands on `stopped`, for the engine's own reason
+  // (`FOCUS_OUTCOMES`): it was ended by hand, because it had no planned end to
+  // reach.
   ipcMain.handle(IpcChannel.focusStop, (event, payload): FocusSession | null => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
-    const running = runningFocusSessions.get(profileId);
-    if (!running) {
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const phase = runningFocusSessions.get(profileId);
+    if (!phase) {
       throw new Error("No focus session is running for this profile.");
     }
-    runningFocusSessions.delete(profileId);
-
     const endedAt = new Date().toISOString();
-    if (endedAt <= running.startedAt) return null; // sub-millisecond stop: discarded, not persisted
-    return focusStore(profileId).create(
-      { subjectId: running.subjectId, startedAt: running.startedAt, endedAt },
-      endedAt,
-    );
+    const met =
+      phase.plannedMinutes !== null && phaseProgress(phase, endedAt).remainingSeconds === 0;
+    return endRunningFocusPhase(profileId, met ? "completed" : "stopped", endedAt);
+  });
+
+  // Pause and resume are the only genuinely NEW acts this slice adds, which is
+  // why they are the only new channels. Both are idempotent: pausing a paused
+  // phase and resuming a running one answer the phase unchanged rather than
+  // throwing, because a double-click on a button must not be an error.
+  ipcMain.handle(IpcChannel.focusPause, (event, payload): RunningFocusSession => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const phase = runningFocusSessions.get(profileId);
+    if (!phase) {
+      throw new Error("No focus session is running for this profile.");
+    }
+    if (phase.pausedAt === null) {
+      phase.pausedAt = new Date().toISOString();
+      // The alarm goes with the clock: a paused phase must not announce an end
+      // it is no longer approaching.
+      disarmFocusAlarm(phase);
+    }
+    return toRunningFocusSession(phase);
+  });
+
+  ipcMain.handle(IpcChannel.focusResume, (event, payload): RunningFocusSession => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const phase = runningFocusSessions.get(profileId);
+    if (!phase) {
+      throw new Error("No focus session is running for this profile.");
+    }
+    if (phase.pausedAt !== null) {
+      // The pause that just ENDED joins the accumulator; the one still running
+      // is never in it (`FocusPhaseTiming`'s rule).
+      phase.pausedSeconds += closedPauseSeconds(phase.pausedAt, new Date().toISOString());
+      phase.pausedAt = null;
+      // Re-armed for what is LEFT, not for the whole plan — `armFocusAlarm`
+      // measures the remainder off the wall clock.
+      armFocusAlarm(profileId, phase);
+    }
+    return toRunningFocusSession(phase);
   });
 
   ipcMain.handle(IpcChannel.focusStatus, (event, payload): RunningFocusSession | null => {
     assertTrustedSender(event);
     const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
-    return runningFocusSessions.get(profileId) ?? null;
+    const phase = runningFocusSessions.get(profileId);
+    return phase === undefined ? null : toRunningFocusSession(phase);
   });
 
   ipcMain.handle(IpcChannel.focusCancel, (event, payload): void => {
     assertTrustedSender(event);
     const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
-    runningFocusSessions.delete(profileId);
+    discardRunningFocusPhase(profileId);
   });
 
   ipcMain.handle(IpcChannel.focusListRange, (event, payload): FocusSession[] => {
@@ -9914,6 +10263,14 @@ app.whenReady().then(async () => {
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
+});
+
+// BEFORE `will-quit`, deliberately: the running phases are written through a
+// database `will-quit` is about to close, and a row cannot be inserted into a
+// closed file. See `closeRunningFocusPhasesOnQuit` for why a clean quit must
+// leave a real end time behind.
+app.on("before-quit", () => {
+  closeRunningFocusPhasesOnQuit();
 });
 
 app.on("will-quit", () => {
