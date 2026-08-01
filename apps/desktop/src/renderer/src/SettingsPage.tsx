@@ -114,6 +114,7 @@ import {
   readStoredLlmImportKind,
   readStoredLlmPromptLanguage,
 } from "./llmImportPrefs.js";
+import { FinCsvImportSection } from "./FinCsvImport.js";
 import { countUnit, dayUnit, strings } from "./strings.js";
 
 /** Sidebar/page display name for a module id; mirrors App.tsx's private helper (kept local — App renders this page, so importing it back would be circular). */
@@ -4922,6 +4923,13 @@ export function SettingsPage({
         <IcsImportSection profileId={profileId} hits={hits} />
         <ApkgImportSection profileId={profileId} hits={hits} />
         <CsvImportSection profileId={profileId} hits={hits} />
+        {/* The same component the finance page mounts (FIN slice e) — one flow,
+            two places to reach it, because a second copy of a state machine that
+            writes money is a second place for it to go wrong. */}
+        <FinCsvImportSection
+          profileId={profileId}
+          titleClassName={labelClass("set__module-group-title", hits.has("backup-fin-csv"))}
+        />
         <LlmImportSection profileId={profileId} hits={hits} />
         <MarkdownImportSection profileId={profileId} hits={hits} />
       </Card>

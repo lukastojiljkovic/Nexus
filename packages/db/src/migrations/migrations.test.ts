@@ -22,8 +22,8 @@ import { CardStore, MIGRATIONS, NexusDatabase, openDatabase, runMigrations } fro
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 51 (finance ledger), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(51);
+  it("is at version 52 (the finance import fingerprint), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(52);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -6476,6 +6476,149 @@ describe("migration 051 — the finance module's ledger (FIN slice a)", () => {
         0,
       );
       expect((raw.prepare("SELECT count(*) AS n FROM profiles").get() as { n: number }).n).toBe(1);
+    } finally {
+      raw.close();
+    }
+  });
+});
+
+describe("migration 052 — the finance import fingerprint (FIN slice e)", () => {
+  const T = "2026-01-01T00:00:00.000Z";
+
+  const seedAccounts = (db: NexusDatabase) => {
+    insertProfile(db, "p1");
+    const insert = db.raw.prepare(
+      `INSERT INTO fin_accounts
+         (id, profile_id, name, kind, currency, opening_balance, archived,
+          created_at, updated_at, deleted_at)
+       VALUES (?, 'p1', ?, ?, 'RSD', 0, 0, ?, ?, NULL)`,
+    );
+    insert.run("a1", "Tekući", "current", T, T);
+    insert.run("a2", "Štednja", "savings", T, T);
+  };
+
+  const insertKeyed = (
+    db: NexusDatabase,
+    id: string,
+    accountId: string,
+    importKey: string | null,
+    deletedAt: string | null = null,
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO fin_transactions
+           (id, profile_id, account_id, counter_account_id, category_id, tx_date, amount,
+            payee, note, created_at, updated_at, deleted_at, import_key)
+         VALUES (?, 'p1', ?, NULL, NULL, '2026-01-15', -35000, NULL, NULL, ?, ?, ?, ?)`,
+      )
+      .run(id, accountId, T, T, deletedAt, importKey);
+
+  /** One fingerprint as `finImportKey` composes it: day, signed minor units, payee, note, occurrence. */
+  const KEY = '["2026-01-15",-35000,"","KAFA",1]';
+
+  it("adds the nullable import_key column and its partial unique index", () => {
+    const db = openDatabase({ path: join(dir, "fin-key-fresh.db") });
+    const column = (
+      db.raw.prepare("PRAGMA table_info(fin_transactions)").all() as {
+        name: string;
+        notnull: number;
+      }[]
+    ).find((row) => row.name === "import_key");
+    expect(column).toMatchObject({ notnull: 0 });
+
+    const indexes = (
+      db.raw.prepare("SELECT name FROM sqlite_master WHERE type = 'index'").all() as {
+        name: string;
+      }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("fin_transactions_import_key");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("refuses a second row carrying the same key on the same account", () => {
+    const db = openDatabase({ path: join(dir, "fin-key-unique.db") });
+    seedAccounts(db);
+    expect(() => insertKeyed(db, "t1", "a1", KEY)).not.toThrow();
+    expect(() => insertKeyed(db, "t2", "a1", KEY)).toThrow();
+    db.close();
+  });
+
+  it("lets two identical rows in — ordinals 1 and 2 are two coffees, not one duplicated", () => {
+    const db = openDatabase({ path: join(dir, "fin-key-ordinal.db") });
+    seedAccounts(db);
+    expect(() => insertKeyed(db, "t1", "a1", KEY)).not.toThrow();
+    expect(() =>
+      insertKeyed(db, "t2", "a1", '["2026-01-15",-35000,"","KAFA",2]'),
+    ).not.toThrow();
+    db.close();
+  });
+
+  it("scopes uniqueness to the ACCOUNT, so one statement can land in two of them", () => {
+    const db = openDatabase({ path: join(dir, "fin-key-account.db") });
+    seedAccounts(db);
+    expect(() => insertKeyed(db, "t1", "a1", KEY)).not.toThrow();
+    expect(() => insertKeyed(db, "t2", "a2", KEY)).not.toThrow();
+    db.close();
+  });
+
+  it("keeps a SOFT-DELETED row's key indexed, so no re-import can resurrect it", () => {
+    const db = openDatabase({ path: join(dir, "fin-key-deleted.db") });
+    seedAccounts(db);
+    insertKeyed(db, "t1", "a1", KEY, T);
+    expect(() => insertKeyed(db, "t2", "a1", KEY)).toThrow();
+    db.close();
+  });
+
+  it("leaves hand-typed rows alone: a NULL key never collides with another", () => {
+    const db = openDatabase({ path: join(dir, "fin-key-null.db") });
+    seedAccounts(db);
+    expect(() => insertKeyed(db, "t1", "a1", null)).not.toThrow();
+    expect(() => insertKeyed(db, "t2", "a1", null)).not.toThrow();
+    db.close();
+  });
+
+  it("upgrades a 051 database in place, every existing transaction reading back keyless", () => {
+    const raw = new Database(join(dir, "fin-key-upgrade.db"));
+    try {
+      raw.pragma("journal_mode = WAL");
+      raw.pragma("foreign_keys = ON");
+      raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
+        typeof value === "string" ? foldSearchText(value) : null,
+      );
+      runMigrations(
+        raw,
+        MIGRATIONS.filter((migration) => migration.version < 52),
+      );
+      raw
+        .prepare(
+          "INSERT INTO profiles (id, kind, name, created_at) VALUES ('p1', 'personal', 'P', ?)",
+        )
+        .run(T);
+      raw
+        .prepare(
+          `INSERT INTO fin_accounts
+             (id, profile_id, name, kind, currency, opening_balance, archived,
+              created_at, updated_at, deleted_at)
+           VALUES ('a1', 'p1', 'Tekući', 'current', 'RSD', 0, 0, ?, ?, NULL)`,
+        )
+        .run(T, T);
+      raw
+        .prepare(
+          `INSERT INTO fin_transactions
+             (id, profile_id, account_id, counter_account_id, category_id, tx_date, amount,
+              payee, note, created_at, updated_at, deleted_at)
+           VALUES ('t1', 'p1', 'a1', NULL, NULL, '2026-01-15', -1200, NULL, NULL, ?, ?, NULL)`,
+        )
+        .run(T, T);
+
+      runMigrations(raw, MIGRATIONS);
+
+      expect(raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+      const row = raw.prepare("SELECT import_key FROM fin_transactions WHERE id = 't1'").get() as {
+        import_key: string | null;
+      };
+      expect(row.import_key).toBeNull();
     } finally {
       raw.close();
     }

@@ -359,25 +359,30 @@ import { pickProfilePicture } from "./profilePicture.js";
 import {
   applyApkgImport,
   applyCsvImport,
+  applyFinCsvImport,
   applyIcsImport,
   applyImport,
   applyLlmImport,
   applyRestore,
   cancelApkgImport,
   cancelCsvImport,
+  cancelFinCsvImport,
   cancelIcsImport,
   cancelImport,
   cancelLlmImport,
   cancelRestore,
   clearRestoreState,
   mapCsvImport,
+  mapFinCsvImport,
   pickApkgFile,
   pickCsvFile,
+  pickFinCsvFile,
   pickIcsFile,
   pickImportFile,
   pickRestoreFile,
   previewApkgImport,
   previewCsvImport,
+  previewFinCsvImport,
   previewIcsImport,
   previewImport,
   previewLlmImport,
@@ -397,6 +402,8 @@ import {
   CSV_IMPORT_COLUMN_ROLES,
   CSV_IMPORT_MAX_COLUMNS,
   CSV_IMPORT_MAX_LIST_NAME_LENGTH,
+  FIN_CSV_IMPORT_COLUMN_ROLES,
+  FIN_CSV_IMPORT_SIGN_CONVENTIONS,
   DASHBOARD_SET_NAME_MAX_LENGTH,
   DOC_TEXT_PREVIEW_MAX_BYTES,
   IMPORT_DUPLICATE_TYPES,
@@ -448,6 +455,11 @@ import {
   type CsvImportMapResult,
   type CsvImportPickResult,
   type CsvImportPreviewResult,
+  type FinCsvImportApplyResult,
+  type FinCsvImportColumnRole,
+  type FinCsvImportMapResult,
+  type FinCsvImportPreviewResult,
+  type FinCsvImportSignConvention,
   type DashboardPickResult,
   type DashboardSettings,
   type DocAttachmentModule,
@@ -1549,6 +1561,53 @@ function asCsvImportListChoice(value: unknown, field: string): CsvImportListChoi
     }
   }
   return { existingListId, newListName };
+}
+
+/**
+ * `imex:import-fin-csv-map`'s role array (FIN slice e) — `asCsvImportRoles`'
+ * twin over the statement vocabulary, minus its required-role check: what a
+ * statement's mapping must contain is a DATE column plus EITHER one signed
+ * amount column OR an outflow/inflow pair, and that rule involves three roles at
+ * once, so it is `translateCsvFinance`'s to state once rather than this edge's to
+ * restate. What is checked here is the wire's own business: a closed vocabulary,
+ * a bounded length, and no non-ignore role twice — a mapping that named a role
+ * twice would leave the decision to whichever column happened to be read first,
+ * which is not a decision anybody made.
+ */
+function asFinCsvImportRoles(value: unknown, field: string): FinCsvImportColumnRole[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > CSV_IMPORT_MAX_COLUMNS) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be an array of 1..${CSV_IMPORT_MAX_COLUMNS} roles.`,
+    );
+  }
+  const seen = new Set<FinCsvImportColumnRole>();
+  return value.map((entry, index) => {
+    const role = FIN_CSV_IMPORT_COLUMN_ROLES.find((candidate) => candidate === entry);
+    if (role === undefined) {
+      throw new Error(`Invalid IPC payload: "${field}[${index}]" is not a column role.`);
+    }
+    if (role !== "ignore") {
+      if (seen.has(role)) {
+        throw new Error(`Invalid IPC payload: "${field}" names the role "${role}" twice.`);
+      }
+      seen.add(role);
+    }
+    return role;
+  });
+}
+
+/** `imex:import-fin-csv-map`'s sign convention (FIN slice e): the closed pair the mapping dialog offers, so nothing but one of two values can decide which way somebody's money points. */
+function asFinCsvImportSignConvention(
+  value: unknown,
+  field: string,
+): FinCsvImportSignConvention {
+  const convention = FIN_CSV_IMPORT_SIGN_CONVENTIONS.find((candidate) => candidate === value);
+  if (convention === undefined) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be one of ${FIN_CSV_IMPORT_SIGN_CONVENTIONS.join(", ")}.`,
+    );
+  }
+  return convention;
 }
 
 /**
@@ -4256,6 +4315,23 @@ function restoreDeps(): ImportDeps {
       const options: OpenDialogOptions = {
         properties: ["openFile"],
         filters: [{ name: "CSV tabela", extensions: ["csv", "txt"] }],
+      };
+      const { canceled, filePaths } = mainWindow
+        ? await dialog.showOpenDialog(mainWindow, options)
+        : await dialog.showOpenDialog(options);
+      return canceled ? null : (filePaths[0] ?? null);
+    },
+    // FIN slice e's picker. The same file EXTENSIONS as the one above and still
+    // its own injection, on the standing rule: a request on one surface must
+    // never be able to open another's dialog, and „a bank statement" is a
+    // different thing to pick than „a task table" even when both end in `.csv`.
+    // The dialog's own title says which, so the user is never left guessing what
+    // the file they are choosing will be read as.
+    pickFinCsvFile: async () => {
+      const options: OpenDialogOptions = {
+        properties: ["openFile"],
+        title: "Izaberi izvod (.csv)",
+        filters: [{ name: "Izvod (CSV)", extensions: ["csv", "txt"] }],
       };
       const { canceled, filePaths } = mainWindow
         ? await dialog.showOpenDialog(mainWindow, options)
@@ -7870,6 +7946,59 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.imexImportCsvCancel, (event): void => {
     assertTrustedSender(event);
     cancelCsvImport();
+  });
+
+  // The bank-statement import (FIN slice e): the same five steps over the same
+  // session discipline, writing the FIN ledger instead of the task tables. Main
+  // owns the picker and reads the bytes — a path never crosses from the renderer
+  // (SEC-EL) — and the renderer never sends cell data back either: what
+  // `imex:import-fin-csv-map` carries is role assignments, an account id and a
+  // sign convention.
+  ipcMain.handle(IpcChannel.imexImportFinCsvPick, (event): Promise<CsvImportPickResult> => {
+    assertTrustedSender(event);
+    return pickFinCsvFile(restoreDeps());
+  });
+
+  ipcMain.handle(
+    IpcChannel.imexImportFinCsvPreview,
+    (event, payload): Promise<FinCsvImportPreviewResult> => {
+      assertTrustedSender(event);
+      const body = asRecord(payload);
+      asNonEmptyString(body.profileId, "profileId");
+      const delimiter = asCsvImportDelimiter(body.delimiter, "delimiter");
+      const hasHeader = asCsvImportHeaderFlag(body.hasHeader, "hasHeader");
+      return previewFinCsvImport(restoreDeps(), delimiter, hasHeader);
+    },
+  );
+
+  // Structurally validated below (closed roles, no repeat, a closed sign
+  // convention), semantically in `restore.ts` and in `@nexus/core`: the
+  // session's column count, the profile's live accounts and the date/amount
+  // conventions the file itself admits are facts only those sides know.
+  ipcMain.handle(IpcChannel.imexImportFinCsvMap, (event, payload): FinCsvImportMapResult => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const roles = asFinCsvImportRoles(body.roles, "roles");
+    const accountId = asNonEmptyString(body.accountId, "accountId");
+    const signConvention = asFinCsvImportSignConvention(body.signConvention, "signConvention");
+    return mapFinCsvImport(restoreDeps(), profileId, roles, accountId, signConvention);
+  });
+
+  ipcMain.handle(
+    IpcChannel.imexImportFinCsvApply,
+    (event, payload): Promise<FinCsvImportApplyResult> => {
+      assertTrustedSender(event);
+      const body = asRecord(payload);
+      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const token = asRestoreToken(body.token, "token");
+      return applyFinCsvImport(restoreDeps(), profileId, token);
+    },
+  );
+
+  ipcMain.handle(IpcChannel.imexImportFinCsvCancel, (event): void => {
+    assertTrustedSender(event);
+    cancelFinCsvImport();
   });
 
   // The calendar `.ics` import (ADR-061): its own pick, its own preview and its

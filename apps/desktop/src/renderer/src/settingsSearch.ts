@@ -305,6 +305,16 @@ const ENTRIES: readonly ShellSettingsSearchEntry[] = [
     keywords: ["csv", "tabela", "excel", "zadaci", "kolone", "todoist", "uvoz"],
   },
   {
+    // FIN slice e. The words are the DOCUMENT's and the bank's — somebody
+    // looking for this types „izvod“, „banka“ or „transakcije“, never „tabela“ —
+    // which is exactly what keeps it apart from the task CSV entry above, whose
+    // words nobody would use for their money.
+    id: "backup-fin-csv",
+    section: "backup",
+    label: s.finCsvImport.title,
+    keywords: ["izvod", "banka", "bankovni", "racun", "transakcije", "promet", "finansije", "uvoz"],
+  },
+  {
     // IMEX-005. The words are the TOOL's, not the flow's — somebody looking for
     // this types „chatgpt“ or „ai“, never „uvoz iz arhive“ — so „arhiva“ is
     // deliberately absent, exactly as it is from the two entries around it.

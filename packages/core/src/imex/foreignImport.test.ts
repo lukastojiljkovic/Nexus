@@ -197,8 +197,8 @@ function foreignProfileData(): ProfileData {
       { id: "src-fc2", profileId: "src", name: "Plata", kind: "income", createdAt: T0, updatedAt: T0 },
     ],
     finTransactions: [
-      { id: "src-ftx1", profileId: "src", accountId: "src-fa1", counterAccountId: null, categoryId: "src-fc1", date: "2026-07-02", amount: -1250, payee: "Maxi", note: null, createdAt: T0, updatedAt: T0 },
-      { id: "src-ftx2", profileId: "src", accountId: "src-fa1", counterAccountId: "src-fa2", categoryId: null, date: "2026-07-03", amount: -300_00, payee: null, note: null, createdAt: T0, updatedAt: T0 },
+      { id: "src-ftx1", profileId: "src", accountId: "src-fa1", counterAccountId: null, categoryId: "src-fc1", date: "2026-07-02", amount: -1250, payee: "Maxi", note: null, importKey: '["2026-07-02",-1250,"Maxi","",1]', createdAt: T0, updatedAt: T0 },
+      { id: "src-ftx2", profileId: "src", accountId: "src-fa1", counterAccountId: "src-fa2", categoryId: null, date: "2026-07-03", amount: -300_00, payee: null, note: null, importKey: null, createdAt: T0, updatedAt: T0 },
     ],
     finBudgets: [
       { id: "src-fb1", profileId: "src", categoryId: "src-fc1", currency: "RSD", amount: 300_00, createdAt: T0, updatedAt: T0 },

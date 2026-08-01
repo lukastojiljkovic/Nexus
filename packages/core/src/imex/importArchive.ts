@@ -411,7 +411,7 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.28.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.29.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -2203,6 +2203,22 @@ const FIN_CATEGORY_KINDS = ["income", "expense"] as const;
 const MAX_FIN_NAME_LENGTH = 60;
 const MAX_FIN_PAYEE_LENGTH = 120;
 const MAX_FIN_NOTE_LENGTH = 500;
+/**
+ * The bound on an import fingerprint (`1.29.0`). `finImportKey` composes a JSON
+ * array of a bare day, a signed integer, the two capped texts and an occurrence
+ * number, so the longest key this app can WRITE is bounded by the arithmetic:
+ * 620 text characters at JSON's worst escape (`\uXXXX`, six characters — a
+ * control character, which nothing strips out of a bank description) is 3720,
+ * plus under 60 for the day, the amount, the ordinal and the punctuation. 4096
+ * is that with room.
+ *
+ * The bound is deliberately not tighter: a key this app itself produced must
+ * never come back from its own archive as an `invalid-record`, because that
+ * would cost the restored profile a real transaction. And it is not absent
+ * either — an archive is untrusted input, and this value goes into an INDEXED
+ * column.
+ */
+const MAX_FIN_IMPORT_KEY_LENGTH = 4096;
 
 /** ISO-4217 as migration 051 stores it: exactly three upper-case ASCII letters. */
 const ISO_4217 = /^[A-Z]{3}$/;
@@ -2283,11 +2299,22 @@ function parseFinTransaction(raw: Record<string, unknown>): ExportFinTransaction
     if (counterAccountId === accountId) throw new InvalidFieldError("counterAccountId");
     if (categoryId !== null) throw new InvalidFieldError("categoryId");
   }
+  // The import fingerprint (`1.29.0`, migration 052). ABSENT means null — every
+  // row written before this bump is a row no import has ever recognised, which
+  // is exactly what those rows were, so no `ArchiveEra` flag is owed. A key that
+  // IS there is validated strictly, in every era, like every other field here:
+  // it is an opaque token composed by `finImportKey`, so the only thing this
+  // reader can honestly check about it is that it is a non-empty untrimmed-free
+  // string within a bound the column can hold.
+  const importKey =
+    raw.importKey === undefined
+      ? null
+      : nullableTrimmedStr(raw.importKey, "importKey", MAX_FIN_IMPORT_KEY_LENGTH);
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
   return {
     id, profileId, accountId, counterAccountId, categoryId, date, amount, payee, note,
-    createdAt, updatedAt,
+    importKey, createdAt, updatedAt,
   };
 }
 

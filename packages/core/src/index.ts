@@ -206,6 +206,7 @@ export {
   sniffCsvHeader,
   splitCsvTags,
   suggestCsvMapping,
+  suggestCsvRoles,
   translateCsvTasks,
 } from "./imex/csvImport.js";
 export type {
@@ -219,6 +220,37 @@ export type {
   CsvTranslateTarget,
   CsvTranslation,
 } from "./imex/csvImport.js";
+
+export {
+  CSV_FINANCE_ACCOUNT_SOURCE_ID,
+  CSV_FINANCE_COLUMN_ROLES,
+  currencyMinorDigits,
+  finImportKey,
+  readCsvFinanceAmount,
+  readCsvFinanceDate,
+  sniffCsvFinanceAmountFormat,
+  sniffCsvFinanceDateFormat,
+  suggestCsvFinanceMapping,
+  translateCsvFinance,
+} from "./imex/csvFinance.js";
+export type {
+  CsvFinanceAmountFormat,
+  CsvFinanceAmountReading,
+  CsvFinanceColumnRole,
+  CsvFinanceDateFormat,
+  CsvFinanceDateReading,
+  CsvFinanceFormats,
+  CsvFinanceRefusal,
+  CsvFinanceRefusalCode,
+  CsvFinanceReport,
+  CsvFinanceRowDrop,
+  CsvFinanceRowDropCode,
+  CsvFinanceRowSkip,
+  CsvFinanceRowSkipCode,
+  CsvFinanceSignConvention,
+  CsvFinanceTarget,
+  CsvFinanceTranslation,
+} from "./imex/csvFinance.js";
 
 export { isInlineImageMime, isPreviewableMime, sniffMime } from "./files/sniff.js";
 export { centerSquareCrop, PROFILE_PICTURE_SIZE } from "./files/squareCrop.js";

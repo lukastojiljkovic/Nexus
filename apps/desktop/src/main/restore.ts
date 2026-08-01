@@ -13,13 +13,18 @@ import {
   planForeignImport,
   sniffCsvDelimiter,
   sniffCsvHeader,
+  suggestCsvFinanceMapping,
   suggestCsvMapping,
   translateApkg,
+  translateCsvFinance,
   translateCsvTasks,
   translateIcsEvents,
   translateLlmRecords,
   type ApkgSkip as CoreApkgSkip,
   type CsvColumnRole as CoreCsvColumnRole,
+  type CsvFinanceColumnRole as CoreCsvFinanceColumnRole,
+  type CsvFinanceReport,
+  type CsvFinanceSignConvention,
   type CsvListChoice,
   type CsvTranslateReport,
   type ApkgSubjectChoice,
@@ -84,7 +89,18 @@ import type {
   CsvImportPickResult,
   CsvImportPlanPreview,
   CsvImportPreviewResult,
+  CsvImportReadErrorCode,
   CsvImportRowDrop,
+  FinCsvImportApplyResult,
+  FinCsvImportColumn,
+  FinCsvImportColumnRole,
+  FinCsvImportMapResult,
+  FinCsvImportPlanPreview,
+  FinCsvImportPreviewResult,
+  FinCsvImportRefusal,
+  FinCsvImportRowDrop,
+  FinCsvImportRowSkip,
+  FinCsvImportSignConvention,
   IcsImportApplyResult,
   IcsImportPickResult,
   IcsImportPreview,
@@ -260,7 +276,7 @@ interface ReadyImport {
  */
 interface RestoreUndo {
   /** Which operation this snapshot was taken for — carried onto the wire so the banner can name what it is offering to undo. */
-  kind: "restore" | "import" | "apkg" | "llm" | "csv" | "ics";
+  kind: "restore" | "import" | "apkg" | "llm" | "csv" | "fin-csv" | "ics";
   profileId: string;
   snapshot: {
     profileName: string;
@@ -318,6 +334,8 @@ export interface RestoreDeps extends ProfileDataDeps {
   pickApkgFile(): Promise<string | null>;
   /** And with the `.csv`/`.txt` filter (ADR-062), on the same terms: its own injection, so no surface can open another's dialog. */
   pickCsvFile(): Promise<string | null>;
+  /** The same filter again for a BANK STATEMENT (FIN slice e) — its own injection, not a parameter on the one above, so no call on the task surface can ever open the ledger's picker or the reverse. */
+  pickFinCsvFile(): Promise<string | null>;
   /** The same dialog with the `.ics` filter (ADR-061), its own injection on the same terms: no surface can open another's picker. */
   pickIcsFile(): Promise<string | null>;
   /** Reloads the renderer once a restore or an undo has landed. */
@@ -388,6 +406,8 @@ let pendingIcs: PendingIcs | null = null;
 let pendingLlm: ReadyLlm | null = null;
 /** The CSV the user picked, its text and parse once a preview has read it, and the plan once a mapping has been confirmed (ADR-062). A fifth variable, on the terms of the other four. */
 let pendingCsv: PendingCsv | null = null;
+/** The BANK STATEMENT the user picked, on exactly the same terms (FIN slice e). A sixth variable rather than a mode on the fifth: the two surfaces write different tables, and a shared pick would be one field away from letting a statement land in somebody's task list. */
+let pendingFinCsv: PendingFinCsv | null = null;
 /** The pre-operation snapshot of the last applied restore OR import — one slot, whichever ran last. */
 let undo: RestoreUndo | null = null;
 
@@ -1050,6 +1070,9 @@ export function clearRestoreState(): void {
   // Nor the CSV pick: its text and parsed cells are somebody's whole task
   // list, in plaintext, in main's heap. Same rule again.
   pendingCsv = null;
+  // Nor the statement pick, on precisely the same terms — and with more at
+  // stake, since what it holds is somebody's whole bank ledger.
+  pendingFinCsv = null;
 }
 
 // --- Foreign import (ADR-043) -----------------------------------------------
@@ -2378,6 +2401,52 @@ interface CsvTable {
 }
 
 /**
+ * One CSV text turned into the mapping step's table, under the delimiter and
+ * header choice the request named (or the sniff's own answer). Shared by BOTH
+ * CSV surfaces — the task import (ADR-062) and the bank statement (FIN slice e)
+ * — because everything up to „which column is which" is the same question about
+ * the same file, and a second copy of it would be a second set of caps to keep
+ * in step.
+ *
+ * What the two surfaces do NOT share is the role vocabulary, which is exactly
+ * why the suggestion is left to each caller: `suggestCsvRoles` takes the table,
+ * and the two tables answer different questions about the same header.
+ */
+function parseCsvTable(
+  text: string,
+  delimiter: CsvImportDelimiter | null,
+  hasHeader: boolean | null,
+):
+  | { code: CsvImportReadErrorCode }
+  | {
+      chosenDelimiter: CsvImportDelimiter;
+      withHeader: boolean;
+      columnCount: number;
+      rows: string[][];
+      headers: (string | null)[];
+    } {
+  const chosenDelimiter = delimiter ?? sniffCsvDelimiter(text);
+  const parsed = parseCsv(text, chosenDelimiter);
+  if (parsed.length === 0) return { code: "empty" };
+
+  let columnCount = 0;
+  for (const row of parsed) columnCount = Math.max(columnCount, row.length);
+  if (columnCount > CSV_IMPORT_MAX_COLUMNS) return { code: "too-many-columns" };
+
+  const headerRow = parsed[0] ?? [];
+  const withHeader = hasHeader ?? sniffCsvHeader(headerRow);
+  const rows = withHeader ? parsed.slice(1) : parsed;
+  // A header-only file has nothing to map — the same honest refusal an empty
+  // file gets, because for the user the two are the same fact.
+  if (rows.length === 0) return { code: "empty" };
+
+  const headers: (string | null)[] = Array.from({ length: columnCount }, (_, index) =>
+    withHeader ? (headerRow[index] ?? "") : null,
+  );
+  return { chosenDelimiter, withHeader, columnCount, rows, headers };
+}
+
+/**
  * One confirmed mapping's plan, held exactly as `applyCsvImport` needs it: the
  * plan — already translated, remapped and counted, so applying writes
  * precisely what the user was shown — the destination list as the preview
@@ -2450,26 +2519,10 @@ export async function previewCsvImport(
     picked.text = text;
   }
 
-  const chosenDelimiter = delimiter ?? sniffCsvDelimiter(text);
-  const parsed = parseCsv(text, chosenDelimiter);
-  if (parsed.length === 0) return { status: "unreadable", code: "empty" };
+  const parse = parseCsvTable(text, delimiter, hasHeader);
+  if ("code" in parse) return { status: "unreadable", code: parse.code };
+  const { chosenDelimiter, withHeader, columnCount, rows, headers } = parse;
 
-  let columnCount = 0;
-  for (const row of parsed) columnCount = Math.max(columnCount, row.length);
-  if (columnCount > CSV_IMPORT_MAX_COLUMNS) {
-    return { status: "unreadable", code: "too-many-columns" };
-  }
-
-  const headerRow = parsed[0] ?? [];
-  const withHeader = hasHeader ?? sniffCsvHeader(headerRow);
-  const rows = withHeader ? parsed.slice(1) : parsed;
-  // A header-only file has nothing to map — the same honest refusal an empty
-  // file gets, because for the user the two are the same fact.
-  if (rows.length === 0) return { status: "unreadable", code: "empty" };
-
-  const headers: (string | null)[] = Array.from({ length: columnCount }, (_, index) =>
-    withHeader ? (headerRow[index] ?? "") : null,
-  );
   const suggested = suggestCsvMapping(headers);
   const columns: CsvImportColumn[] = headers.map((header, index) => {
     // The drift check every core→wire hand-off in this file makes: a role
@@ -2711,4 +2764,330 @@ export async function applyCsvImport(
  */
 export function cancelCsvImport(): void {
   pendingCsv = null;
+}
+
+// --- Bank statement CSV → FIN (FIN slice e) ----------------------------------
+
+/**
+ * The statement the user picked, its TEXT once read, the PARSE the last preview
+ * produced, and the plan once a mapping has been confirmed — `PendingCsv`'s
+ * shape exactly, and for its reasons: the file is read once so a delimiter or
+ * header toggle costs nothing, and the parsed CELLS stay in main between the
+ * preview and the mapping, which is the whole point of the session (SEC-EL).
+ *
+ * Its own variable rather than a mode on `pendingCsv`: the two surfaces write
+ * different tables, and a shared pick would be one field away from letting a
+ * statement land in somebody's task list.
+ */
+interface PendingFinCsv {
+  filePath: string;
+  fileName: string;
+  /** The file's decoded text, read once. Null until the first preview reads it. */
+  text: string | null;
+  /** The parse the LAST preview produced — the rows a mapping is applied against. */
+  table: CsvTable | null;
+  ready: ReadyFinCsv | null;
+}
+
+/** One confirmed mapping's plan, held exactly as `applyFinCsvImport` needs it. */
+interface ReadyFinCsv {
+  token: string;
+  /** The profile this plan was computed against — the apply refuses any other, mirroring the token check. */
+  profileId: string;
+  plan: ForeignImportPlan;
+  accountName: string;
+  currency: string;
+  report: CsvFinanceReport;
+  amountFormat: FinCsvImportPlanPreview["amountFormat"];
+  dateFormat: FinCsvImportPlanPreview["dateFormat"];
+  signConvention: FinCsvImportSignConvention;
+}
+
+/**
+ * Picks a bank statement to import, replacing whatever was picked for one
+ * before. Every other surface's pick is untouched: six surfaces, six pieces of
+ * state, and nothing on any of them can reach another's file.
+ */
+export async function pickFinCsvFile(deps: ImportDeps): Promise<CsvImportPickResult> {
+  pendingFinCsv = null;
+
+  const filePath = await deps.pickFinCsvFile();
+  if (filePath === null) return { canceled: true };
+
+  pendingFinCsv = { filePath, fileName: basename(filePath), text: null, table: null, ready: null };
+  return { canceled: false, path: filePath, fileName: basename(filePath) };
+}
+
+/**
+ * Reads the picked statement (once) and parses it into the mapping step's
+ * columns — `previewCsvImport`'s twin over the statement role vocabulary, down
+ * to the stale-pick re-check after the await and the dropped READY plan: a
+ * plan's roles were confirmed against the parse that produced them, and a screen
+ * still holding its token must not be able to apply it over a table whose
+ * columns may no longer line up.
+ */
+export async function previewFinCsvImport(
+  deps: ImportDeps,
+  delimiter: CsvImportDelimiter | null,
+  hasHeader: boolean | null,
+): Promise<FinCsvImportPreviewResult> {
+  const picked = pendingFinCsv;
+  if (picked === null) return { status: "no-file" };
+
+  let text = picked.text;
+  if (text === null) {
+    try {
+      text = await readCsvText(picked.filePath);
+    } catch (error) {
+      if (error instanceof CsvReadError) return { status: "unreadable", code: error.code };
+      throw error;
+    }
+    // Re-checked AFTER the await, where this can change out from under us: the
+    // renderer is untrusted and nothing stops it firing a second pick while
+    // this read is in flight. No handle to leak — the file is already closed.
+    if (pendingFinCsv !== picked) return { status: "no-file" };
+    picked.text = text;
+  }
+
+  const parse = parseCsvTable(text, delimiter, hasHeader);
+  if ("code" in parse) return { status: "unreadable", code: parse.code };
+  const { chosenDelimiter, withHeader, columnCount, rows, headers } = parse;
+
+  const suggested = suggestCsvFinanceMapping(headers);
+  const columns: FinCsvImportColumn[] = headers.map((header, index) => {
+    // The drift check every core→wire hand-off in this file makes: a role added
+    // in `@nexus/core` and forgotten in `shared/ipc.ts` stops this line
+    // compiling rather than reaching a select that has no option for it.
+    const suggestedRole: FinCsvImportColumnRole = suggested[index] ?? "ignore";
+    return {
+      header,
+      samples: rows.slice(0, CSV_IMPORT_SAMPLE_ROWS).map((row) => row[index] ?? ""),
+      suggestedRole,
+    };
+  });
+
+  picked.table = { delimiter: chosenDelimiter, hasHeader: withHeader, columnCount, rows };
+  picked.ready = null;
+
+  return {
+    status: "ready",
+    preview: {
+      fileName: picked.fileName,
+      delimiter: chosenDelimiter,
+      hasHeader: withHeader,
+      columns,
+      rows: rows.length,
+    },
+  };
+}
+
+/** The translator's drops and skips on the wire — copied member by member, with the annotated codes as this surface's core→wire drift check. */
+function toFinCsvDrops(report: CsvFinanceReport): {
+  drops: FinCsvImportRowDrop[];
+  skips: FinCsvImportRowSkip[];
+} {
+  return {
+    drops: report.drops.map((drop) => {
+      const code: FinCsvImportRowDrop["code"] = drop.code;
+      return { row: drop.row, code };
+    }),
+    skips: report.skips.map((skip) => {
+      const code: FinCsvImportRowSkip["code"] = skip.code;
+      return { row: skip.row, code };
+    }),
+  };
+}
+
+/**
+ * Applies the user's CONFIRMED mapping against the rows the session already
+ * holds and really plans the result against this profile — the dry run the apply
+ * then writes verbatim. The renderer sent role assignments, an account id and a
+ * sign convention; the data never left main (SEC-EL).
+ *
+ * Synchronous on purpose, exactly as `mapCsvImport` is: no `await` anywhere
+ * below the guards, so `pendingFinCsv` cannot be replaced out from under this
+ * call. Called again with different answers, it re-plans the same rows and mints
+ * a FRESH token.
+ *
+ * The ACCOUNT is resolved against the profile as it is NOW, and its currency is
+ * what governs: the amounts are scaled by that currency's own exponent, and a
+ * statement carrying a different one is refused by name rather than converted
+ * (there is no rate anywhere in this app that could do it honestly).
+ *
+ * The already-imported check reads migration 052's fingerprints for THAT
+ * account immediately before translating, for `previewImport`'s reason: every
+ * identity question is answered about the profile as it is now.
+ */
+export function mapFinCsvImport(
+  deps: ImportDeps,
+  profileId: string,
+  roles: readonly FinCsvImportColumnRole[],
+  accountId: string,
+  signConvention: FinCsvImportSignConvention,
+): FinCsvImportMapResult {
+  const picked = pendingFinCsv;
+  const table = picked?.table ?? null;
+  if (picked === null || table === null) return { status: "no-file" };
+  if (roles.length !== table.columnCount) {
+    throw new Error(
+      `Statement mapping names ${roles.length} columns; the parsed file has ${table.columnCount}.`,
+    );
+  }
+
+  // `main/index.ts` proved the payload's shape; this proves the account it names
+  // is a LIVE account of THIS profile — `resolveCsvList`'s split, one surface
+  // over. There is no get-or-create twin here: an account carries a currency and
+  // an opening balance a statement cannot supply, so the choice is an existing
+  // account or nothing.
+  const account = deps
+    .finAccountStore(profileId)
+    .listActive()
+    .find((row) => row.id === accountId);
+  if (account === undefined) {
+    throw new Error(`No active account "${accountId}" in this profile.`);
+  }
+
+  // The drift check in the wire→core direction, `replanImport`'s own: a role
+  // added on either side alone stops this line compiling.
+  const plannerRoles: CoreCsvFinanceColumnRole[] = [...roles];
+  const convention: CsvFinanceSignConvention = signConvention;
+  const translation = translateCsvFinance(table.rows, plannerRoles, {
+    profileId,
+    now: new Date().toISOString(),
+    accountId: account.id,
+    currency: account.currency,
+    signConvention: convention,
+    knownKeys: deps.finTransactionStore(profileId).importedKeys(account.id),
+  });
+  if (translation.status === "refused") {
+    picked.ready = null;
+    const refusal: FinCsvImportRefusal = {
+      // The same drift check, on the refusal domain.
+      code: translation.refusal.code,
+      column: translation.refusal.column,
+      sample: translation.refusal.sample,
+    };
+    return { status: "refused", refusal };
+  }
+
+  const plan = planForeignImport(
+    { data: translation.data, dropped: [], profilePicture: null, privateNotes: { notes: 0, versions: 0 } },
+    { ...importTargetFor(deps, profileId), seededIds: translation.seededIds },
+    uuidv7,
+  );
+
+  const token = randomBytes(16).toString("hex");
+  picked.ready = {
+    token,
+    profileId,
+    plan,
+    accountName: account.name,
+    currency: account.currency,
+    report: translation.report,
+    amountFormat: translation.formats.amount,
+    dateFormat: translation.formats.date,
+    signConvention,
+  };
+
+  return { status: "ready", preview: finCsvPlanPreviewOf(picked.fileName, picked.ready) };
+}
+
+/** One statement plan preview on the wire, from the plan and the report that produced it. */
+function finCsvPlanPreviewOf(fileName: string, ready: ReadyFinCsv): FinCsvImportPlanPreview {
+  const { drops, skips } = toFinCsvDrops(ready.report);
+  return {
+    token: ready.token,
+    fileName,
+    accountName: ready.accountName,
+    currency: ready.currency,
+    rows: ready.report.rows,
+    transactions: ready.report.transactions,
+    blankRows: ready.report.blankRows,
+    // The planner's own per-module arithmetic, reused verbatim. Its `skips` are
+    // deliberately NOT carried, for the `.apkg` preview's reason: the honest
+    // account of what a STATEMENT loses is the translator's, above.
+    modules: ready.plan.report.modules,
+    drops,
+    skips,
+    amountFormat: ready.amountFormat,
+    dateFormat: ready.dateFormat,
+    signConvention: ready.signConvention,
+  };
+}
+
+/**
+ * Applies the ready plan identified by `token` — `applyCsvImport` verbatim, and
+ * for its reasons: a statement names no attachment, so `blobNames` is empty by
+ * construction and there is no pre-transaction copy loop. The undo snapshot is
+ * taken before a single row is added, the insert is one transaction, and the
+ * snapshot lands in the SAME one slot every archive operation shares.
+ */
+export async function applyFinCsvImport(
+  deps: ImportDeps,
+  profileId: string,
+  token: string,
+): Promise<FinCsvImportApplyResult> {
+  const ready = pendingFinCsv?.ready;
+  if (ready === undefined || ready === null) {
+    throw new Error("No statement mapping is ready to apply.");
+  }
+  if (ready.token !== token) {
+    throw new Error("This statement plan is stale; re-run the mapping before applying.");
+  }
+  if (ready.profileId !== profileId) {
+    throw new Error("This statement plan was computed for a different profile.");
+  }
+
+  const currentProfile = deps.getProfile(profileId);
+  const undoSettings = await gatherProfileSettings(deps, profileId);
+  const undoData = gatherProfileData(deps, profileId);
+  const undoDerived = deriveRestoredNotes(undoData.notes);
+
+  const now = new Date().toISOString();
+  const derived = deriveRestoredNotes(ready.plan.data.notes);
+  const rowsWritten = deps
+    .foreignImportStore(profileId)
+    .insertPlanned(ready.plan.data, derived, now);
+
+  const summary: FinCsvImportApplyResult = {
+    restored: countProfileModules(ready.plan.data),
+    rowsWritten,
+    blobsAdded: 0,
+    missingBlobs: 0,
+  };
+
+  undo = {
+    kind: "fin-csv",
+    profileId,
+    snapshot: {
+      profileName: currentProfile.name,
+      profilePicture: currentProfile.picture,
+      settings: undoSettings,
+      data: undoData,
+      derived: undoDerived,
+    },
+    // An import never touches the private tables (ADR-057 §6), so its undo must
+    // not either — null is precisely that instruction.
+    privateSealed: null,
+    addedPrivateBlobs: [],
+    addedBlobs: [],
+    appliedAt: now,
+    summary,
+  };
+
+  pendingFinCsv = null;
+
+  setTimeout(() => deps.reloadRenderer(), 0);
+
+  return summary;
+}
+
+/**
+ * Drops the picked statement — what the UI calls when the user backs out before
+ * applying. No file handle is released (the reader closed the file the moment it
+ * finished), but the text and parsed cells are, which is somebody's whole bank
+ * ledger sitting in main's memory.
+ */
+export function cancelFinCsvImport(): void {
+  pendingFinCsv = null;
 }

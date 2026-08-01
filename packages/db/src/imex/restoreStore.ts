@@ -360,11 +360,15 @@ export class RestoreStore {
       `INSERT INTO fin_categories (id, profile_id, name, kind, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
     );
+    // `import_key` included (migration 052): a restore that dropped the
+    // fingerprints would hand the restored profile a ledger that re-imports the
+    // same bank statement as a second copy of itself — which is the one thing
+    // the fingerprint exists to prevent, so it travels or the guarantee does not.
     this.insertFinTransaction = db.prepare(
       `INSERT INTO fin_transactions
          (id, profile_id, account_id, counter_account_id, category_id, tx_date, amount,
-          payee, note, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+          payee, note, import_key, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertFinBudget = db.prepare(
       `INSERT INTO fin_budgets
@@ -1155,7 +1159,8 @@ export class RestoreStore {
         this.insertFinTransaction.run(
           transaction.id, this.profileId, transaction.accountId, transaction.counterAccountId,
           transaction.categoryId, transaction.date, transaction.amount,
-          transaction.payee, transaction.note, transaction.createdAt, transaction.updatedAt,
+          transaction.payee, transaction.note, transaction.importKey,
+          transaction.createdAt, transaction.updatedAt,
         );
         written += 1;
       }

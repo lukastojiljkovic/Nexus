@@ -41,6 +41,14 @@ export interface FinTransaction {
   amount: number;
   payee: string | null;
   note: string | null;
+  /**
+   * The row's IMPORT FINGERPRINT (migration 052), or null for a row the user
+   * typed. Read-only here on purpose: it is written ONLY by an import
+   * (`ForeignImportStore` and `RestoreStore`), never by `create`, and `update`
+   * leaves it alone — editing a row an import brought in must not hand the user
+   * a second, unedited copy of it the next time that statement is read.
+   */
+  importKey: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -95,6 +103,7 @@ interface FinTransactionRow {
   amount: number;
   payee: string | null;
   note: string | null;
+  import_key: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -112,7 +121,7 @@ interface IncomeRow {
 
 const COLUMNS =
   "id, profile_id, account_id, counter_account_id, category_id, tx_date, amount, " +
-  "payee, note, created_at, updated_at";
+  "payee, note, import_key, created_at, updated_at";
 
 /**
  * Finance transactions for a single profile, over prepared, parameterized
@@ -148,6 +157,8 @@ export class FinTransactionStore {
   private readonly selectCategory: Database.Statement;
   private readonly selectSpend: Database.Statement;
   private readonly selectIncome: Database.Statement;
+  /** One account's import fingerprints (migration 052) — the re-import check, over that migration's own partial index. */
+  private readonly selectImportKeys: Database.Statement;
   /** Category names, for ordering `spendByCategory`'s answer the way a Serbian reader expects. */
   private readonly selectCategoryNames: Database.Statement;
 
@@ -221,12 +232,40 @@ export class FinTransactionStore {
     this.selectCategoryNames = db.prepare(
       `SELECT id, name FROM fin_categories WHERE profile_id = ?`,
     );
+    // Soft-deleted rows INCLUDED (see `importedKeys`): the whole point of the
+    // fingerprint is that a row the user threw away is not brought back.
+    this.selectImportKeys = db.prepare(
+      `SELECT import_key, deleted_at FROM fin_transactions
+       WHERE profile_id = ? AND account_id = ? AND import_key IS NOT NULL`,
+    );
   }
 
   /** This profile's live transactions, newest day first (soft-deleted excluded). */
   listActive(): FinTransaction[] {
     const rows = this.selectActive.all(this.profileId) as FinTransactionRow[];
     return rows.map(toFinTransaction);
+  }
+
+  /**
+   * Every IMPORT FINGERPRINT one account already carries (migration 052),
+   * mapped to whether that row is still LIVE — the read a bank-statement CSV
+   * import makes before it plans anything, so a statement read twice adds
+   * nothing and every skip can be named.
+   *
+   * SOFT-DELETED rows are included, deliberately, and that is why the answer is
+   * a boolean rather than a set: a row the user imported and then deleted must
+   * stay deleted (a re-import that resurrected it would silently undo them), and
+   * „already imported, then deleted" is a different sentence from „already
+   * here". Exactly the scope migration 052's unique index declares — one
+   * account of one profile — read through the partial index it created, so the
+   * cost is the account's own imported rows and not the ledger.
+   */
+  importedKeys(accountId: string): Map<string, boolean> {
+    const rows = this.selectImportKeys.all(this.profileId, accountId) as {
+      import_key: string;
+      deleted_at: string | null;
+    }[];
+    return new Map(rows.map((row) => [row.import_key, row.deleted_at === null]));
   }
 
   /** Inserts a transaction — or a transfer, when `counterAccountId` is given — and returns the stored row. */
@@ -248,7 +287,16 @@ export class FinTransactionStore {
       resolved.date, resolved.amount, resolved.payee, resolved.note, validNow, validNow,
     );
 
-    return { id, profileId: this.profileId, ...resolved, createdAt: validNow, updatedAt: validNow };
+    // `import_key` is left NULL by the INSERT above: a row the user typed was
+    // brought in by no import, and only an import may ever claim otherwise.
+    return {
+      id,
+      profileId: this.profileId,
+      ...resolved,
+      importKey: null,
+      createdAt: validNow,
+      updatedAt: validNow,
+    };
   }
 
   /**
@@ -393,7 +441,9 @@ export class FinTransactionStore {
     amount: number;
     payee: string | null;
     note: string | null;
-  }): Omit<FinTransaction, "id" | "profileId" | "createdAt" | "updatedAt"> {
+    // `importKey` is deliberately absent from both sides: nothing a caller may
+    // send decides a fingerprint, and nothing here may change one.
+  }): Omit<FinTransaction, "id" | "profileId" | "importKey" | "createdAt" | "updatedAt"> {
     const date = validateDate(fields.date);
     const amount = validateAmount(fields.amount);
     const payee = validateOptionalText(fields.payee, "payee", MAX_FIN_PAYEE_LENGTH);
@@ -473,6 +523,7 @@ function toFinTransaction(row: FinTransactionRow): FinTransaction {
     amount: row.amount,
     payee: row.payee,
     note: row.note,
+    importKey: row.import_key,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

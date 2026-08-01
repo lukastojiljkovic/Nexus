@@ -91,6 +91,7 @@ const RESTORE_UNDO_BANNERS: Record<RestoreUndoKind, string> = {
   apkg: strings.settings.apkgImport.undoBanner,
   llm: strings.settings.llmImport.undoBanner,
   csv: strings.settings.csvImport.undoBanner,
+  "fin-csv": strings.settings.finCsvImport.undoBanner,
   ics: strings.settings.icsImport.undoBanner,
 };
 

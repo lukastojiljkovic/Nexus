@@ -51,6 +51,7 @@ import { migration048 } from "./048-attachment-text-search.js";
 import { migration049 } from "./049-note-categories.js";
 import { migration050 } from "./050-search-history.js";
 import { migration051 } from "./051-finance.js";
+import { migration052 } from "./052-finance-import-key.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -113,6 +114,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration049,
   migration050,
   migration051,
+  migration052,
 ];
 
 /**

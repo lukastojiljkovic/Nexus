@@ -36,6 +36,8 @@
  * the same money.
  */
 
+import { currencyMinorDigits } from "@nexus/core";
+
 /** The locale every formatter in this renderer spells (`Intl.DateTimeFormat("sr-Latn", …)` and friends). */
 const MONEY_LOCALE = "sr-Latn";
 
@@ -59,22 +61,14 @@ function formatterFor(currency: string): Intl.NumberFormat {
 }
 
 /**
- * How many minor units make one major unit of `currency`, read from the
- * currency's own CLDR data rather than assumed: 2 for RSD and EUR, 0 for JPY,
- * 3 for KWD. A well-formed code the runtime has no data for answers 2, which is
- * the ISO default and is what `Intl` itself would use.
- *
- * `currency` must be a validated ISO-4217 code (three upper-case ASCII
- * letters); every code that reaches this module comes out of `fin_accounts`,
- * whose CHECK constraint is exactly that rule.
+ * How many minor units make one major unit of `currency` — ONE definition, in
+ * `@nexus/core` (`csvFinance.ts`), re-exported here because this is the module
+ * every screen asks. Reading a bank statement (FIN slice e) is this edge's exact
+ * INVERSE — text in major units becoming the integer minor units everything else
+ * in FIN speaks — so it needs the identical fact, and two spellings of "how many
+ * decimals does RSD have" would be a drift with money on the other side of it.
  */
-export function currencyMinorDigits(currency: string): number {
-  // `maximumFractionDigits` is optional in the type and always present for a
-  // CURRENCY formatter in practice — `Intl` resolves it from the currency's own
-  // data (or ISO's default of 2) before this call returns. The fallback is
-  // therefore unreachable and matches what would have been resolved anyway.
-  return formatterFor(currency).resolvedOptions().maximumFractionDigits ?? 2;
-}
+export { currencyMinorDigits };
 
 /**
  * The exact decimal `Intl` is handed. Total by construction: `minorUnits` is an

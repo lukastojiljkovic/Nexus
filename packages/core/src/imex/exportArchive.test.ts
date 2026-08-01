@@ -267,7 +267,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.28.0");
+      expect(manifest.schemaVersion).toBe("1.29.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       // `picture: null` is written out loud rather than omitted: the manifest is
@@ -1157,9 +1157,9 @@ describe("buildExportArchive", () => {
           { id: "fc1", profileId: "p1", name: "Hrana", kind: "expense", createdAt: t, updatedAt: t },
         ],
         finTransactions: [
-          { id: "ftx1", profileId: "p1", accountId: "fa1", counterAccountId: null, categoryId: "fc1", date: "2026-01-02", amount: -12_00, payee: "Maxi", note: null, createdAt: t, updatedAt: t },
+          { id: "ftx1", profileId: "p1", accountId: "fa1", counterAccountId: null, categoryId: "fc1", date: "2026-01-02", amount: -12_00, payee: "Maxi", note: null, importKey: '["2026-01-02",-1200,"Maxi","",1]', createdAt: t, updatedAt: t },
           // The transfer: ONE row, both sides, no category.
-          { id: "ftx2", profileId: "p1", accountId: "fa1", counterAccountId: "fa2", categoryId: null, date: "2026-01-03", amount: -50_00, payee: null, note: null, createdAt: t, updatedAt: t },
+          { id: "ftx2", profileId: "p1", accountId: "fa1", counterAccountId: "fa2", categoryId: null, date: "2026-01-03", amount: -50_00, payee: null, note: null, importKey: null, createdAt: t, updatedAt: t },
         ],
         finBudgets: [
           { id: "fb1", profileId: "p1", categoryId: "fc1", currency: "RSD", amount: 300_00, createdAt: t, updatedAt: t },
@@ -1259,8 +1259,8 @@ describe("buildExportArchive", () => {
         { id: "fc1", profileId: "profile1", name: "Hrana", kind: "expense", createdAt: t, updatedAt: t },
       ];
       input.data.finTransactions = [
-        { id: "ftx1", profileId: "profile1", accountId: "fa1", counterAccountId: null, categoryId: "fc1", date: "2026-01-02", amount: -12_00, payee: "Maxi", note: null, createdAt: t, updatedAt: t },
-        { id: "ftx2", profileId: "profile1", accountId: "fa1", counterAccountId: "fa2", categoryId: null, date: "2026-01-03", amount: -50_00, payee: null, note: null, createdAt: t, updatedAt: t },
+        { id: "ftx1", profileId: "profile1", accountId: "fa1", counterAccountId: null, categoryId: "fc1", date: "2026-01-02", amount: -12_00, payee: "Maxi", note: null, importKey: null, createdAt: t, updatedAt: t },
+        { id: "ftx2", profileId: "profile1", accountId: "fa1", counterAccountId: "fa2", categoryId: null, date: "2026-01-03", amount: -50_00, payee: null, note: null, importKey: null, createdAt: t, updatedAt: t },
       ];
       input.data.finBudgets = [
         { id: "fb1", profileId: "profile1", categoryId: "fc1", currency: "RSD", amount: 300_00, createdAt: t, updatedAt: t },

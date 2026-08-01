@@ -44,6 +44,20 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
  *
+ * `1.29.0` adds the IMPORT FINGERPRINT to `fin-transaction` (FIN slice e,
+ * migration 052): one nullable `importKey` field, absent on every row the user
+ * typed and present on every row a bank-statement CSV brought in. It is carried
+ * for one concrete reason — a profile restored from an archive that dropped its
+ * fingerprints would re-import the same statement as a second copy of itself,
+ * which is exactly what the fingerprint exists to prevent — so parser, restore
+ * and foreign import all agree on it or none of them does. No `ArchiveEra` flag:
+ * an archive written before this bump simply carries no key, and a row with no
+ * key is a row no import has ever recognised, which is what those rows were. The
+ * bump is owed for the field rather than a record type, unlike `1.28.0`'s: an
+ * older reader would refuse `importKey` as an unknown member of a row it
+ * otherwise understands, and the version gate turns that into one honest
+ * sentence about the build instead of one line-error per transaction.
+ *
  * `1.28.0` adds the FINANCE module (FIN slice a, migration 051): four record
  * types — `fin-account`, `fin-category`, `fin-transaction`, `fin-budget` —
  * riding in their OWN `data/finance.ndjson`, a new `DATA_FILES` entry
@@ -244,7 +258,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.28.0";
+const SCHEMA_VERSION = "1.29.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -1132,6 +1146,17 @@ export interface ExportFinTransaction {
   amount: number;
   payee: string | null;
   note: string | null;
+  /**
+   * The row's IMPORT FINGERPRINT (migration 052, `1.29.0`), or null for a row
+   * the user typed. It must travel: a profile restored from an archive whose
+   * ledger arrived without its fingerprints would re-import the very same bank
+   * statement as a second copy of itself, which is the one failure the
+   * fingerprint exists to prevent. Composed by `finImportKey` over the row's own
+   * facts — day, signed minor units, payee, note, and the occurrence number that
+   * keeps two identical coffees on one day two coffees — and deliberately NOT
+   * over the account, which the row names in a column of its own.
+   */
+  importKey: string | null;
   createdAt: string;
   updatedAt: string;
 }

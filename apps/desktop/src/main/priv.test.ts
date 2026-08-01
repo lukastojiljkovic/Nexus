@@ -970,7 +970,15 @@ describe("the unlock-time private search index", () => {
   });
 
   it("ranks title matches first and, within a tier, newest-touched first", async () => {
-    const deps = makeDeps();
+    // A STEPPING clock, not the wall one: the store orders by
+    // `updated_at DESC, id DESC`, and three writes this fast genuinely land in
+    // one millisecond — at which point „newest-touched" is decided by `uuidv7`'s
+    // random tail rather than by touch time, and the assertion below becomes a
+    // coin flip that tests nothing it claims to. Advancing the clock per write
+    // is what makes the premise („second was touched after first") a fact of the
+    // fixture, so the ranking rule is the only thing left that can fail.
+    let tick = 0;
+    const deps = makeDeps({ now: () => new Date(Date.UTC(2026, 0, 1) + (tick += 1000)) });
     await setUp(deps);
     const first = await privWrite(deps, profileId, null, envelope({ title: "Zapis", plaintext: "a" }));
     const second = await privWrite(deps, profileId, null, envelope({ title: "Zapis", plaintext: "b" }));

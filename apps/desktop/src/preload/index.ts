@@ -563,6 +563,19 @@ const api: NexusApi = {
   applyCsvImport: (profileId, token) =>
     ipcRenderer.invoke(IpcChannel.imexImportCsvApply, { profileId, token }),
   cancelCsvImport: () => ipcRenderer.invoke(IpcChannel.imexImportCsvCancel),
+  pickFinCsvFile: () => ipcRenderer.invoke(IpcChannel.imexImportFinCsvPick),
+  previewFinCsvImport: (profileId, delimiter, hasHeader) =>
+    ipcRenderer.invoke(IpcChannel.imexImportFinCsvPreview, { profileId, delimiter, hasHeader }),
+  mapFinCsvImport: (profileId, roles, accountId, signConvention) =>
+    ipcRenderer.invoke(IpcChannel.imexImportFinCsvMap, {
+      profileId,
+      roles,
+      accountId,
+      signConvention,
+    }),
+  applyFinCsvImport: (profileId, token) =>
+    ipcRenderer.invoke(IpcChannel.imexImportFinCsvApply, { profileId, token }),
+  cancelFinCsvImport: () => ipcRenderer.invoke(IpcChannel.imexImportFinCsvCancel),
   pickIcsFile: () => ipcRenderer.invoke(IpcChannel.imexImportIcsPick),
   previewIcsImport: (profileId, importDuplicates) =>
     ipcRenderer.invoke(IpcChannel.imexImportIcsPreview, { profileId, importDuplicates }),

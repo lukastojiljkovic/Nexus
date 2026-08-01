@@ -12,6 +12,13 @@ import type {
   CsvImportReadErrorCode,
   CsvImportRowDropCode,
   DashboardPickErrorCode,
+  FinCsvImportAmountFormat,
+  FinCsvImportColumnRole,
+  FinCsvImportDateFormat,
+  FinCsvImportRefusalCode,
+  FinCsvImportRowDropCode,
+  FinCsvImportRowSkipCode,
+  FinCsvImportSignConvention,
   IcsImportReadErrorCode,
   IcsImportSkipCode,
   ImportDuplicateType,
@@ -2315,6 +2322,15 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       ledger: "Knjiga",
       report: "Izveštaj",
     },
+    /**
+     * The statement importer's disclosure on this page (FIN slice e). Closed by
+     * default: importing a statement is something you do a few times a month,
+     * and the ledger is what you came here to look at.
+     */
+    importDisclosure: {
+      show: "Uvoz izvoda (.csv)…",
+      hide: "Sakrij uvoz izvoda",
+    },
     accounts: {
       heading: "Računi",
       /** The rail's "no account filter" row — a view over every account, not an account. */
@@ -3487,6 +3503,132 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       nothingToImport: "Iz ove tabele nema šta da se uveze — razlozi su izlistani iznad.",
       /** The post-reload banner (App.tsx) when the undo slot holds a CSV import. */
       undoBanner: "Zadaci su uvezeni iz CSV tabele.",
+    },
+    /**
+     * Uvoz izvoda (.csv) → Finansije — FIN slice e. The task CSV import's
+     * sibling in shape (pick → mapiranje → pregled → potvrda) and its opposite
+     * in tone: this one is about money, so every sentence here says what was
+     * READ and what was REFUSED rather than merely what arrived.
+     */
+    finCsvImport: {
+      title: "Uvoz izvoda (.csv)",
+      description:
+        "Uvezi promete iz bankarskog izvoda u jedan svoj račun. Ti kažeš koja kolona je datum, a koja iznos — i da li je iznos jedna kolona sa predznakom ili odvojene kolone za isplatu i uplatu. Format brojeva i datuma se utvrđuje nad celom kolonom; ako fajl dopušta dva čitanja, uvoz se odbija umesto da pogađa. Isti izvod možeš uvesti dva puta bez duplikata — svaki već uvezen red se preskače i piše u pregledu.",
+      pickButton: "Izaberi izvod (.csv)…",
+      reading: "Čitanje izvoda…",
+      /** Shown instead of the pick button when the profile has no account to import into. */
+      noAccounts: "Prvo napravi račun — izvod ulazi u račun koji izabereš, a račun nosi valutu koju izvod ne može da donese.",
+      mapTitle: "Mapiranje kolona izvoda",
+      mapQuestion: "Reci koja kolona je šta — predloženo je već upisano, potvrdi ili promeni.",
+      columnFallbackPrefix: "Kolona",
+      samplesLabel: "Primeri:",
+      roleLabel: "Uloga kolone",
+      /**
+       * One option label per `FinCsvImportColumnRole`. „Isplata"/„Uplata" name
+       * the two split columns by MEANING — money leaving and money arriving —
+       * because „duguje"/„potražuje" mean opposite things depending on whose
+       * books are being read.
+       */
+      roles: {
+        date: "Datum",
+        amount: "Iznos (sa predznakom)",
+        outflow: "Isplata (odliv)",
+        inflow: "Uplata (priliv)",
+        payee: "Primalac",
+        note: "Opis",
+        currency: "Valuta",
+        ignore: "Ne uvozi se",
+      } satisfies Record<FinCsvImportColumnRole, string>,
+      /** Under the column rows: why the confirm button is asleep. */
+      dateRequired: "Jedna kolona mora biti Datum.",
+      amountRequired:
+        "Iznos mora biti ili jedna kolona sa predznakom, ili kolone Isplata i/ili Uplata — nikad oboje.",
+      delimiterLabel: "Razdvajanje kolona",
+      delimiterComma: "Zapeta (,)",
+      delimiterSemicolon: "Tačka-zapeta (;)",
+      headerLabel: "Prvi red je zaglavlje",
+      /** The destination — ONE existing account for the whole file; its currency governs every amount. */
+      accountLabel: "Račun u koji izvod ulazi",
+      accountHint: "Valuta ovog računa važi za ceo izvod. Izvod u drugoj valuti se odbija — Nexus nema kurs.",
+      /** The sign convention: stated by the user, never sniffed. */
+      signLabel: "Šta znači predznak u koloni Iznos",
+      signs: {
+        "negative-is-expense": "Minus = trošak, plus = priliv",
+        "positive-is-expense": "Plus = trošak, minus = priliv",
+      } satisfies Record<FinCsvImportSignConvention, string>,
+      confirmButton: "Prikaži pregled",
+      mapError: "Mapiranje nije moglo da se primeni. Pokušaj ponovo.",
+      /** The plan preview: where it goes, how it was read, what arrives, what does not. */
+      accountPrefix: "Račun:",
+      rowRows: "Redova u izvodu",
+      rowTransactions: "Uvozi se prometa",
+      blankRowsPrefix: "Praznih redova:",
+      remapButton: "Izmeni mapiranje",
+      /** The two conventions the file was READ under — said out loud, never left to trust. */
+      formatsTitle: "Kako je fajl pročitan",
+      amountFormatLabel: "Brojevi",
+      amountFormats: {
+        "decimal-comma": "1.234,56 — zapeta je decimalna",
+        "decimal-dot": "1,234.56 — tačka je decimalna",
+      } satisfies Record<FinCsvImportAmountFormat, string>,
+      dateFormatLabel: "Datumi",
+      dateFormats: {
+        iso: "2026-08-31",
+        "dmy-dot": "31.08.2026.",
+        "dmy-slash": "31/08/2026 — dan/mesec/godina",
+        "mdy-slash": "08/31/2026 — mesec/dan/godina",
+      } satisfies Record<FinCsvImportDateFormat, string>,
+      signFormatLabel: "Predznak",
+      dropsTitle: "Šta se ne uvozi",
+      dropRowPrefix: "Red",
+      /** One sentence per `FinCsvImportRowDropCode`. Only the last one keeps the row. */
+      drops: {
+        "bad-date": "Datum nije mogao da se pročita — red se preskače.",
+        "no-amount": "Nema iznosa (ili je nula) — red se preskače.",
+        "both-amounts": "Popunjene su i Isplata i Uplata — ne pogađa se koja važi, red se preskače.",
+        "bad-amount": "Iznos nije mogao da se pročita u utvrđenom formatu — red se preskače.",
+        "text-truncated": "Opis je duži nego što ledger drži pa je skraćen — promet se uvozi.",
+      } satisfies Record<FinCsvImportRowDropCode, string>,
+      /** The re-import block: every already-imported row, named (migration 052). */
+      skipsTitle: "Već uvezeno",
+      skipsCaption:
+        "Ovi redovi su prepoznati po otisku prometa (datum, iznos, opis i redni broj među istovetnim redovima) i ne uvoze se ponovo.",
+      skips: {
+        "already-imported": "Ovaj promet već stoji u ledgeru.",
+        "already-imported-deleted": "Ovaj promet je bio uvezen pa obrisan — ostaje obrisan.",
+      } satisfies Record<FinCsvImportRowSkipCode, string>,
+      /** The FILE-level refusals: the importer could not read it CONFIDENTLY, so it read none of it. */
+      refusalTitle: "Izvod je odbijen",
+      refusalColumnPrefix: "Kolona:",
+      refusalSamplePrefix: "Sporna vrednost:",
+      refusals: {
+        "ambiguous-amount-format":
+          "Iznosi u ovoj koloni dopuštaju dva čitanja koja daju različite brojeve. Novac se ne pogađa — sredi format u fajlu (jedna decimalna oznaka za celu kolonu) pa pokušaj ponovo.",
+        "unreadable-amount-format":
+          "Nijedna vrednost u ovoj koloni ne čita se kao iznos. Verovatno je mapirana pogrešna kolona.",
+        "ambiguous-date-format":
+          "Datumi u ovoj koloni dopuštaju i dan/mesec i mesec/dan, a dva čitanja daju različite dane. Uvoz se odbija umesto da pogađa.",
+        "unreadable-date-format":
+          "Nijedna vrednost u ovoj koloni ne čita se kao datum. Verovatno je mapirana pogrešna kolona.",
+        "foreign-currency":
+          "Izvod je u drugoj valuti nego izabrani račun. Nexus ne drži kurs — nema poštenog načina da ga pretvori — pa se ovaj izvod ne uvozi u ovaj račun.",
+      } satisfies Record<FinCsvImportRefusalCode, string>,
+      unreadable: {
+        "too-large": "Izvod prelazi bezbednosna ograničenja (5 MB) i zato je odbijen.",
+        empty: "U ovom fajlu nema redova sa podacima.",
+        "too-many-columns": "Izvod ima previše kolona za mapiranje.",
+        unreadable: "Fajl nije mogao da se pročita. Pokušaj ponovo.",
+      } satisfies Record<CsvImportReadErrorCode, string>,
+      applyButton: "Uvezi",
+      applying: "Uvoz u toku…",
+      applied: "Promet je uvezen. Aplikacija se osvežava…",
+      readError: "Čitanje izvoda nije uspelo. Pokušaj ponovo.",
+      error: "Uvoz nije uspeo. Pokušaj ponovo.",
+      noFileError: "Fajl više nije izabran. Izaberi ga ponovo.",
+      /** Shown when everything was either skipped or dropped — there is nothing to confirm. */
+      nothingToImport: "Iz ovog izvoda nema šta da se uveze — razlozi su izlistani iznad.",
+      /** The post-reload banner (App.tsx) when the undo slot holds a statement import. */
+      undoBanner: "Promet je uvezen iz bankarskog izvoda.",
     },
     /**
      * Uvoz kalendara (.ics) — ADR-061, the block beside „Uvoz iz Anki" and

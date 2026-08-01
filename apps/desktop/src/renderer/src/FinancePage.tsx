@@ -23,6 +23,7 @@ import type {
   FinTransaction,
 } from "../../shared/ipc.js";
 import { localTodayKey } from "./examDates.js";
+import { FinCsvImportSection } from "./FinCsvImport.js";
 import { normalizeCurrencyInput, readStoredPrimaryCurrency } from "./financePrefs.js";
 import {
   buildFinMonthReport,
@@ -242,6 +243,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
   const [budgets, setBudgets] = useState<FinBudget[]>([]);
   const [transactions, setTransactions] = useState<FinTransaction[] | null>(null);
   const [failed, setFailed] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   // „Izveštaj": which half is on screen, which month it reads, and that month's
   // two aggregates. The month opens on the current one — the report is about
@@ -1576,6 +1578,22 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
                 </p>
               )}
             </form>
+
+            {/* Uvoz izvoda (FIN slice e) — the SAME component Settings mounts,
+                so there is one flow and two ways to reach it. Closed by
+                default: the ledger is what the page is for, and an importer
+                permanently open above it would be a form nobody asked for. */}
+            <div className="fin__import">
+              <Button
+                size="sm"
+                className="fin__quiet"
+                aria-expanded={importOpen}
+                onClick={() => setImportOpen((open) => !open)}
+              >
+                {importOpen ? s.importDisclosure.hide : s.importDisclosure.show}
+              </Button>
+              {importOpen && <FinCsvImportSection profileId={profileId} />}
+            </div>
 
             <div className="fin__view-controls">
               <div className="fin__views">

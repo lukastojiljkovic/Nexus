@@ -588,6 +588,11 @@ function richProfileData(): ProfileData {
         id: "fin-tx-1", profileId: "profile1", accountId: "fin-acc-1", counterAccountId: null,
         categoryId: "fin-cat-1", date: "2026-07-02", amount: -1250, payee: "Maxi",
         note: "nedeljna kupovina",
+        // A row a bank-statement CSV brought in (`1.29.0`, migration 052). Its
+        // fingerprint must survive the round trip verbatim: an archive that
+        // dropped it would let a restored profile re-import the very same
+        // statement as a second copy of itself.
+        importKey: '["2026-07-02",-1250,"Maxi","nedeljna kupovina",1]',
         createdAt: "2026-07-02T09:00:00.000Z", updatedAt: "2026-07-02T09:00:00.000Z",
       },
       // Uncategorized income, and a refund back onto an expense category: both
@@ -595,11 +600,13 @@ function richProfileData(): ProfileData {
       {
         id: "fin-tx-2", profileId: "profile1", accountId: "fin-acc-1", counterAccountId: null,
         categoryId: null, date: "2026-07-03", amount: 50_00, payee: null, note: null,
+        importKey: null,
         createdAt: "2026-07-03T09:00:00.000Z", updatedAt: "2026-07-03T09:00:00.000Z",
       },
       {
         id: "fin-tx-3", profileId: "profile1", accountId: "fin-acc-1", counterAccountId: null,
         categoryId: "fin-cat-1", date: "2026-07-04", amount: 300, payee: "Maxi", note: null,
+        importKey: null,
         createdAt: "2026-07-04T09:00:00.000Z", updatedAt: "2026-07-04T09:00:00.000Z",
       },
       // The transfer: ONE row, both sides named, no category, same currency.
@@ -607,6 +614,7 @@ function richProfileData(): ProfileData {
         id: "fin-tx-4", profileId: "profile1", accountId: "fin-acc-1",
         counterAccountId: "fin-acc-2", categoryId: null, date: "2026-07-05", amount: -300_00,
         payee: null, note: null,
+        importKey: null,
         createdAt: "2026-07-05T09:00:00.000Z", updatedAt: "2026-07-05T09:00:00.000Z",
       },
     ],
@@ -991,12 +999,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.29.0`: the nearest minor strictly ahead of this build's `1.28.0`.
+  // `1.30.0`: the nearest minor strictly ahead of this build's `1.29.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.29.0" });
+    const files = baseFiles({ schemaVersion: "1.30.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.29.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.30.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -3104,7 +3112,7 @@ describe("parseImportArchive — the finance ledger (FIN slice a / 1.28.0)", () 
       {
         id: "ftx1", profileId: "profile1", accountId: "fa1", counterAccountId: null,
         categoryId: "fc1", date: "2026-07-02", amount: -1250, payee: "Maxi", note: null,
-        createdAt: T, updatedAt: T,
+        importKey: null, createdAt: T, updatedAt: T,
       },
     ]);
     expect(result.data?.finBudgets).toEqual([
@@ -3455,8 +3463,8 @@ describe("parseImportArchive — note categories (NOTE-002 / 1.27.0)", () => {
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.28.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.28.0");
+  it("is 1.29.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.29.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -3646,11 +3654,11 @@ describe("parseImportArchive — schema version", () => {
     expect(result.manifest?.profile.kind).toBe("personal");
   });
 
-  // `1.29.0`: the nearest minor strictly ahead of this build's `1.28.0`.
+  // `1.30.0`: the nearest minor strictly ahead of this build's `1.29.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.29.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.30.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.29.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.30.0" },
     ]);
     expect(result.data).toBeNull();
   });

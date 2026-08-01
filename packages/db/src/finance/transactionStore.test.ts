@@ -95,6 +95,9 @@ describe("FinTransactionStore — CRUD", () => {
       amount: -1250,
       payee: "Maxi",
       note: "nedeljna kupovina",
+      // Migration 052: a row the user typed carries no import fingerprint, and
+      // `create` is the one path that cannot give it one.
+      importKey: null,
       createdAt: NOW,
       updatedAt: NOW,
     });
@@ -484,5 +487,77 @@ describe("FinTransactionStore — income per currency", () => {
     expect(() => f.transactions.incomeByCurrency({ from: "juce", to: "2026-02-01" })).toThrow(
       FinTransactionValidationError,
     );
+  });
+});
+
+describe("FinTransactionStore — the import fingerprint (migration 052)", () => {
+  /** One key as `finImportKey` composes it: day, signed minor units, payee, note, occurrence. */
+  const KEY = '["2026-02-01",-35000,"","KAFA",1]';
+
+  /** Writes a row with a fingerprint — what an IMPORT does; `create` deliberately cannot. */
+  function importRow(
+    profileId: string,
+    accountId: string,
+    importKey: string,
+    deletedAt: string | null = null,
+  ): string {
+    const id = uuidv7();
+    db.raw
+      .prepare(
+        `INSERT INTO fin_transactions
+           (id, profile_id, account_id, counter_account_id, category_id, tx_date, amount,
+            payee, note, import_key, created_at, updated_at, deleted_at)
+         VALUES (?, ?, ?, NULL, NULL, '2026-02-01', -35000, NULL, 'KAFA', ?, ?, ?, ?)`,
+      )
+      .run(id, profileId, accountId, importKey, NOW, NOW, deletedAt);
+    return id;
+  }
+
+  it("gives a hand-made transaction no fingerprint at all", () => {
+    const f = fixture();
+    const created = f.transactions.create({ accountId: f.rsd, date: "2026-02-01", amount: -1200 }, NOW);
+    expect(created.importKey).toBeNull();
+    expect(f.transactions.listActive()[0]?.importKey).toBeNull();
+  });
+
+  it("reads one account's fingerprints back, live or deleted, and nobody else's", () => {
+    const f = fixture();
+    importRow(f.profileId, f.rsd, KEY);
+    importRow(f.profileId, f.rsd, '["2026-02-01",-35000,"","KAFA",2]', NOW);
+    importRow(f.profileId, f.savings, '["2026-02-01",-35000,"","KAFA",1]');
+    f.transactions.create({ accountId: f.rsd, date: "2026-02-01", amount: -900 }, NOW);
+
+    expect(f.transactions.importedKeys(f.rsd)).toEqual(
+      new Map([
+        [KEY, true],
+        ['["2026-02-01",-35000,"","KAFA",2]', false],
+      ]),
+    );
+    expect(f.transactions.importedKeys(f.savings)).toEqual(
+      new Map([['["2026-02-01",-35000,"","KAFA",1]', true]]),
+    );
+  });
+
+  it("never reaches another profile's ledger", () => {
+    const mine = fixture();
+    const theirs = fixture();
+    importRow(theirs.profileId, theirs.rsd, KEY);
+    expect(mine.transactions.importedKeys(mine.rsd).size).toBe(0);
+  });
+
+  it("keeps a fingerprint through an edit — a corrected row must not re-import as a second copy", () => {
+    const f = fixture();
+    const id = importRow(f.profileId, f.rsd, KEY);
+    f.transactions.update(id, { payee: "Kafeterija", amount: -36000 }, NOW);
+    expect(f.transactions.importedKeys(f.rsd)).toEqual(new Map([[KEY, true]]));
+  });
+
+  it("keeps it through a delete and a restore, on the same reasoning from both sides", () => {
+    const f = fixture();
+    const id = importRow(f.profileId, f.rsd, KEY);
+    f.transactions.softDelete(id, NOW);
+    expect(f.transactions.importedKeys(f.rsd)).toEqual(new Map([[KEY, false]]));
+    f.transactions.restore(id, NOW);
+    expect(f.transactions.importedKeys(f.rsd)).toEqual(new Map([[KEY, true]]));
   });
 });

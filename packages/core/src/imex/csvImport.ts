@@ -286,22 +286,39 @@ const HEADER_ROLES: ReadonlyMap<string, CsvColumnRole> = new Map(
 );
 
 /**
- * A suggested role per column, from the header names alone. Each role is given
- * to the FIRST column whose header claims it — two „Title" columns cannot both
- * be the title, and the later one falls to `ignore` for the user to re-map. A
- * header this table cannot read, or a missing one (no header row), suggests
- * `ignore`: an unmapped column is a visible question, a mis-mapped one is a
- * silent answer.
+ * A suggested role per column, from the header names alone — the ONE rule every
+ * CSV surface's suggestion follows, parameterised by the role vocabulary and
+ * the header table that vocabulary comes with (the bank-statement import,
+ * `csvFinance.ts`, is the second caller).
+ *
+ * Each role is given to the FIRST column whose header claims it — two „Title"
+ * columns cannot both be the title, and the later one falls to `fallback` for
+ * the user to re-map. A header the table cannot read, or a missing one (no
+ * header row), suggests `fallback` too: an unmapped column is a visible
+ * question, a mis-mapped one is a silent answer.
+ *
+ * `roles` keys are already FOLDED (`foldSearchText`: lowercased, diacritics
+ * stripped) and matched EXACTLY, because a substring rule would read „Rok
+ * završetka projekta" as a due date on the strength of one word.
  */
-export function suggestCsvMapping(headers: readonly (string | null)[]): CsvColumnRole[] {
-  const taken = new Set<CsvColumnRole>();
+export function suggestCsvRoles<Role extends string>(
+  headers: readonly (string | null)[],
+  roles: ReadonlyMap<string, Role>,
+  fallback: Role,
+): Role[] {
+  const taken = new Set<Role>();
   return headers.map((header) => {
-    if (header === null) return "ignore";
-    const role = HEADER_ROLES.get(foldSearchText(header.trim()));
-    if (role === undefined || taken.has(role)) return "ignore";
+    if (header === null) return fallback;
+    const role = roles.get(foldSearchText(header.trim()));
+    if (role === undefined || taken.has(role)) return fallback;
     taken.add(role);
     return role;
   });
+}
+
+/** The task import's own suggestion: `suggestCsvRoles` over the bilingual table above. */
+export function suggestCsvMapping(headers: readonly (string | null)[]): CsvColumnRole[] {
+  return suggestCsvRoles(headers, HEADER_ROLES, "ignore");
 }
 
 // --- Cell readings -----------------------------------------------------------

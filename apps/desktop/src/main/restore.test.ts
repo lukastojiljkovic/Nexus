@@ -92,25 +92,30 @@ import type { ProfileDataDeps } from "./profileData.js";
 import {
   applyApkgImport,
   applyCsvImport,
+  applyFinCsvImport,
   applyIcsImport,
   applyImport,
   applyLlmImport,
   applyRestore,
   cancelApkgImport,
   cancelCsvImport,
+  cancelFinCsvImport,
   cancelIcsImport,
   cancelImport,
   cancelLlmImport,
   cancelRestore,
   clearRestoreState,
   mapCsvImport,
+  mapFinCsvImport,
   pickApkgFile,
   pickCsvFile,
+  pickFinCsvFile,
   pickIcsFile,
   pickImportFile,
   pickRestoreFile,
   previewApkgImport,
   previewCsvImport,
+  previewFinCsvImport,
   previewIcsImport,
   previewImport,
   previewLlmImport,
@@ -261,6 +266,8 @@ function makeTestDeps(
   apkgPath: string | null = null,
   csvPath: string | null = null,
   icsPath: string | null = null,
+  /** FIN slice e's own picker, injected separately for the reason every other one is: nothing on the task surface may open the ledger's dialog. */
+  finCsvPath: string | null = null,
 ): TestDepsHandle {
   const blobs = new Map<string, Uint8Array>();
   const cancelFocusCalls: string[] = [];
@@ -299,6 +306,8 @@ function makeTestDeps(
     pickApkgFile: async () => apkgPath,
     // ADR-062's picker, on the same terms again.
     pickCsvFile: async () => csvPath,
+    // FIN slice e's, on the same terms once more.
+    pickFinCsvFile: async () => finCsvPath,
     // ADR-061's picker, on the same terms.
     pickIcsFile: async () => icsPath,
     reloadRenderer: () => {
@@ -3768,5 +3777,333 @@ describe("CSV task import", () => {
     clearRestoreState();
     await expect(previewCsvImport(deps, null, null)).resolves.toEqual({ status: "no-file" });
     void profileB;
+  });
+});
+
+// --- Bank statement CSV → FIN (FIN slice e) ----------------------------------
+
+/**
+ * One Serbian bank statement: semicolon-separated (what Serbian-locale Excel
+ * writes, because the decimal comma has taken the comma), grouped decimals, the
+ * `dd.mm.yyyy.` norm, and a separate „Isplata"/„Uplata" pair. Two identical
+ * coffees on the last day, deliberately: that is the case a naive fingerprint
+ * silently loses.
+ */
+const FIN_CSV_FIXTURE = [
+  "Datum;Opis transakcije;Isplata;Uplata;Valuta",
+  "31.08.2026.;KUPOVINA MAXI BEOGRAD;1.234,56;0,00;RSD",
+  "01.09.2026.;PLATA AVGUST;;85.000,00;RSD",
+  "02.09.2026.;KAFA;350,00;0,00;RSD",
+  "02.09.2026.;KAFA;350,00;0,00;RSD",
+  "",
+].join("\r\n");
+
+/** The roles that fixture maps to, in column order. */
+const FIN_CSV_ROLES = ["date", "note", "outflow", "inflow", "currency"] as const;
+
+/** An RSD account to import into — the one thing a statement cannot supply. */
+function createFinAccount(db: NexusDatabase, profileId: string, currency = "RSD"): string {
+  return new FinAccountStore(db.raw, profileId).create(
+    { name: "Tekući", kind: "current", currency, openingBalance: 0 },
+    new Date().toISOString(),
+  ).id;
+}
+
+describe("bank statement CSV import (FIN slice e)", () => {
+  it("reads a Serbian statement into the chosen account, saying how it read it", async () => {
+    const filePath = await writeCsvFixture("izvod.csv", FIN_CSV_FIXTURE);
+    const profileB = createProfile(dbB, "B");
+    const accountId = createFinAccount(dbB, profileB);
+    const { deps, getReloadCount } = makeTestDeps(dbB, null, null, null, null, filePath);
+
+    const picked = await pickFinCsvFile(deps);
+    expect(picked).toEqual({ canceled: false, path: filePath, fileName: "izvod.csv" });
+
+    const previewed = await previewFinCsvImport(deps, null, null);
+    if (previewed.status !== "ready") unreachable();
+    // The semicolon is sniffed, the header is recognised, and the bilingual
+    // table suggests every one of the five columns.
+    expect(previewed.preview).toMatchObject({ delimiter: ";", hasHeader: true, rows: 4 });
+    expect(previewed.preview.columns.map((column) => column.suggestedRole)).toEqual([
+      "date",
+      "note",
+      "outflow",
+      "inflow",
+      "currency",
+    ]);
+
+    const mapped = mapFinCsvImport(
+      deps,
+      profileB,
+      [...FIN_CSV_ROLES],
+      accountId,
+      "negative-is-expense",
+    );
+    if (mapped.status !== "ready") unreachable();
+    const plan = mapped.preview;
+    expect(plan).toMatchObject({
+      accountName: "Tekući",
+      currency: "RSD",
+      rows: 4,
+      transactions: 4,
+      blankRows: 0,
+      // The two conventions, settled over whole columns and SAID rather than
+      // trusted.
+      amountFormat: "decimal-comma",
+      dateFormat: "dmy-dot",
+    });
+    expect(plan.drops).toEqual([]);
+    expect(plan.skips).toEqual([]);
+    expect(plan.modules.finance.imported).toBe(4);
+    // Nothing has been written yet: a preview is a dry run.
+    expect(new FinTransactionStore(dbB.raw, profileB).listActive()).toHaveLength(0);
+
+    const applied = await applyFinCsvImport(deps, profileB, plan.token);
+    expect(applied.blobsAdded).toBe(0);
+
+    const rows = new FinTransactionStore(dbB.raw, profileB).listActive();
+    expect(rows).toHaveLength(4);
+    // Money is exact minor units, the grouping read as grouping, the outflow
+    // negative and the inflow positive — and every row on the chosen account,
+    // uncategorized and never a transfer.
+    expect(rows.map((row) => row.amount).sort((a, b) => a - b)).toEqual([
+      -123456, -35000, -35000, 8500000,
+    ]);
+    for (const row of rows) {
+      expect(row.accountId).toBe(accountId);
+      expect(row.counterAccountId).toBeNull();
+      expect(row.categoryId).toBeNull();
+      expect(row.importKey).not.toBeNull();
+    }
+    // The two identical coffees are TWO rows with TWO different fingerprints.
+    const coffees = rows.filter((row) => row.note === "KAFA");
+    expect(coffees).toHaveLength(2);
+    expect(new Set(coffees.map((row) => row.importKey)).size).toBe(2);
+    expect(getReloadCount()).toBe(0);
+  });
+
+  it("adds nothing the second time the SAME statement is imported, naming every skip", async () => {
+    const filePath = await writeCsvFixture("izvod-opet.csv", FIN_CSV_FIXTURE);
+    const profileB = createProfile(dbB, "B");
+    const accountId = createFinAccount(dbB, profileB);
+    const { deps } = makeTestDeps(dbB, null, null, null, null, filePath);
+
+    await pickFinCsvFile(deps);
+    await previewFinCsvImport(deps, null, null);
+    const first = mapFinCsvImport(deps, profileB, [...FIN_CSV_ROLES], accountId, "negative-is-expense");
+    if (first.status !== "ready") unreachable();
+    await applyFinCsvImport(deps, profileB, first.preview.token);
+
+    // The same file again, picked afresh — which is exactly what a user who
+    // re-downloads their statement does.
+    await pickFinCsvFile(deps);
+    await previewFinCsvImport(deps, null, null);
+    const second = mapFinCsvImport(deps, profileB, [...FIN_CSV_ROLES], accountId, "negative-is-expense");
+    if (second.status !== "ready") unreachable();
+    expect(second.preview.transactions).toBe(0);
+    expect(second.preview.skips).toEqual([
+      { row: 1, code: "already-imported" },
+      { row: 2, code: "already-imported" },
+      { row: 3, code: "already-imported" },
+      { row: 4, code: "already-imported" },
+    ]);
+    expect(new FinTransactionStore(dbB.raw, profileB).listActive()).toHaveLength(4);
+  });
+
+  it("brings only the NEW rows of an overlapping statement — a third coffee is a third coffee", async () => {
+    const filePath = await writeCsvFixture("izvod-preklop.csv", FIN_CSV_FIXTURE);
+    const profileB = createProfile(dbB, "B");
+    const accountId = createFinAccount(dbB, profileB);
+    const { deps } = makeTestDeps(dbB, null, null, null, null, filePath);
+
+    await pickFinCsvFile(deps);
+    await previewFinCsvImport(deps, null, null);
+    const first = mapFinCsvImport(deps, profileB, [...FIN_CSV_ROLES], accountId, "negative-is-expense");
+    if (first.status !== "ready") unreachable();
+    await applyFinCsvImport(deps, profileB, first.preview.token);
+
+    const overlapping = await writeCsvFixture(
+      "izvod-sledeci.csv",
+      [
+        "Datum;Opis transakcije;Isplata;Uplata;Valuta",
+        "02.09.2026.;KAFA;350,00;0,00;RSD",
+        "02.09.2026.;KAFA;350,00;0,00;RSD",
+        "02.09.2026.;KAFA;350,00;0,00;RSD",
+        "03.09.2026.;RACUN ZA STRUJU;4.512,00;0,00;RSD",
+        "",
+      ].join("\r\n"),
+    );
+    const { deps: deps2 } = makeTestDeps(dbB, null, null, null, null, overlapping);
+    await pickFinCsvFile(deps2);
+    await previewFinCsvImport(deps2, null, null);
+    const second = mapFinCsvImport(deps2, profileB, [...FIN_CSV_ROLES], accountId, "negative-is-expense");
+    if (second.status !== "ready") unreachable();
+    // Ordinals 1 and 2 are recognised; the third is new, and so is the bill.
+    expect(second.preview.transactions).toBe(2);
+    expect(second.preview.skips).toEqual([
+      { row: 1, code: "already-imported" },
+      { row: 2, code: "already-imported" },
+    ]);
+    await applyFinCsvImport(deps2, profileB, second.preview.token);
+    expect(new FinTransactionStore(dbB.raw, profileB).listActive()).toHaveLength(6);
+  });
+
+  it("leaves a deleted row deleted, and says which skip that was", async () => {
+    const filePath = await writeCsvFixture("izvod-obrisan.csv", FIN_CSV_FIXTURE);
+    const profileB = createProfile(dbB, "B");
+    const accountId = createFinAccount(dbB, profileB);
+    const { deps } = makeTestDeps(dbB, null, null, null, null, filePath);
+
+    await pickFinCsvFile(deps);
+    await previewFinCsvImport(deps, null, null);
+    const first = mapFinCsvImport(deps, profileB, [...FIN_CSV_ROLES], accountId, "negative-is-expense");
+    if (first.status !== "ready") unreachable();
+    await applyFinCsvImport(deps, profileB, first.preview.token);
+
+    const store = new FinTransactionStore(dbB.raw, profileB);
+    const salary = store.listActive().find((row) => row.note === "PLATA AVGUST");
+    if (salary === undefined) unreachable();
+    store.softDelete(salary.id, new Date().toISOString());
+
+    await pickFinCsvFile(deps);
+    await previewFinCsvImport(deps, null, null);
+    const second = mapFinCsvImport(deps, profileB, [...FIN_CSV_ROLES], accountId, "negative-is-expense");
+    if (second.status !== "ready") unreachable();
+    expect(second.preview.transactions).toBe(0);
+    expect(second.preview.skips).toContainEqual({ row: 2, code: "already-imported-deleted" });
+    expect(store.listActive()).toHaveLength(3);
+  });
+
+  it("refuses a statement in another currency by name, writing nothing", async () => {
+    const filePath = await writeCsvFixture("izvod-eur.csv", FIN_CSV_FIXTURE);
+    const profileB = createProfile(dbB, "B");
+    const accountId = createFinAccount(dbB, profileB, "EUR");
+    const { deps } = makeTestDeps(dbB, null, null, null, null, filePath);
+
+    await pickFinCsvFile(deps);
+    await previewFinCsvImport(deps, null, null);
+    const mapped = mapFinCsvImport(deps, profileB, [...FIN_CSV_ROLES], accountId, "negative-is-expense");
+    expect(mapped).toEqual({
+      status: "refused",
+      refusal: { code: "foreign-currency", column: 4, sample: "RSD" },
+    });
+    expect(new FinTransactionStore(dbB.raw, profileB).listActive()).toHaveLength(0);
+  });
+
+  it("refuses a slashed date column both readings fit and disagree about", async () => {
+    const filePath = await writeCsvFixture(
+      "izvod-dvosmislen.csv",
+      ["Datum;Opis;Iznos", "01/02/2026;A;-100,00", "03/04/2026;B;-200,00", ""].join("\r\n"),
+    );
+    const profileB = createProfile(dbB, "B");
+    const accountId = createFinAccount(dbB, profileB);
+    const { deps } = makeTestDeps(dbB, null, null, null, null, filePath);
+
+    await pickFinCsvFile(deps);
+    await previewFinCsvImport(deps, null, null);
+    const mapped = mapFinCsvImport(
+      deps,
+      profileB,
+      ["date", "note", "amount"],
+      accountId,
+      "negative-is-expense",
+    );
+    expect(mapped).toEqual({
+      status: "refused",
+      refusal: { code: "ambiguous-date-format", column: 0, sample: "01/02/2026" },
+    });
+  });
+
+  it("flips every sign when the user says a POSITIVE amount is the expense", async () => {
+    const filePath = await writeCsvFixture(
+      "izvod-predznak.csv",
+      ["Datum;Opis;Iznos", "31.08.2026.;KUPOVINA;1.234,56", ""].join("\r\n"),
+    );
+    const profileB = createProfile(dbB, "B");
+    const accountId = createFinAccount(dbB, profileB);
+    const { deps } = makeTestDeps(dbB, null, null, null, null, filePath);
+
+    await pickFinCsvFile(deps);
+    await previewFinCsvImport(deps, null, null);
+    const mapped = mapFinCsvImport(
+      deps,
+      profileB,
+      ["date", "note", "amount"],
+      accountId,
+      "positive-is-expense",
+    );
+    if (mapped.status !== "ready") unreachable();
+    await applyFinCsvImport(deps, profileB, mapped.preview.token);
+    expect(new FinTransactionStore(dbB.raw, profileB).listActive()[0]?.amount).toBe(-123456);
+  });
+
+  it("undoes a statement import whole, fingerprints included", async () => {
+    const filePath = await writeCsvFixture("izvod-ponisti.csv", FIN_CSV_FIXTURE);
+    const profileB = createProfile(dbB, "B");
+    const accountId = createFinAccount(dbB, profileB);
+    const { deps } = makeTestDeps(dbB, null, null, null, null, filePath);
+
+    await pickFinCsvFile(deps);
+    await previewFinCsvImport(deps, null, null);
+    const mapped = mapFinCsvImport(deps, profileB, [...FIN_CSV_ROLES], accountId, "negative-is-expense");
+    if (mapped.status !== "ready") unreachable();
+    await applyFinCsvImport(deps, profileB, mapped.preview.token);
+    expect(restoreStatus(profileB).undo?.kind).toBe("fin-csv");
+
+    await undoRestore(deps, profileB);
+    const store = new FinTransactionStore(dbB.raw, profileB);
+    expect(store.listActive()).toHaveLength(0);
+    // And the fingerprints went with them, so the very same statement imports
+    // again in full — an undo that left the keys behind would make the import
+    // unrepeatable.
+    expect(store.importedKeys(accountId).size).toBe(0);
+  });
+
+  it("refuses an account of another profile, and a stale token", async () => {
+    const filePath = await writeCsvFixture("izvod-tudji.csv", FIN_CSV_FIXTURE);
+    const profileB = createProfile(dbB, "B");
+    const profileC = createProfile(dbB, "C");
+    const foreignAccount = createFinAccount(dbB, profileC);
+    const ownAccount = createFinAccount(dbB, profileB);
+    const { deps } = makeTestDeps(dbB, null, null, null, null, filePath);
+
+    await pickFinCsvFile(deps);
+    await previewFinCsvImport(deps, null, null);
+    expect(() =>
+      mapFinCsvImport(deps, profileB, [...FIN_CSV_ROLES], foreignAccount, "negative-is-expense"),
+    ).toThrow(/No active account/);
+
+    const mapped = mapFinCsvImport(deps, profileB, [...FIN_CSV_ROLES], ownAccount, "negative-is-expense");
+    if (mapped.status !== "ready") unreachable();
+    await expect(applyFinCsvImport(deps, profileB, "deadbeef")).rejects.toThrow(/stale/);
+    await expect(applyFinCsvImport(deps, profileC, mapped.preview.token)).rejects.toThrow(
+      /different profile/,
+    );
+  });
+
+  it("holds its pick apart from the task CSV's — one surface can never reach the other's file", async () => {
+    const taskPath = await writeCsvFixture("zadaci-odvojen.csv", "naziv\r\nZadatak\r\n");
+    const statementPath = await writeCsvFixture("izvod-odvojen.csv", FIN_CSV_FIXTURE);
+    const { deps } = makeTestDeps(dbB, null, null, taskPath, null, statementPath);
+
+    await pickCsvFile(deps);
+    await pickFinCsvFile(deps);
+    // Picking a statement did not disturb the task pick, and each preview reads
+    // its OWN file.
+    const statement = await previewFinCsvImport(deps, null, null);
+    if (statement.status !== "ready") unreachable();
+    expect(statement.preview.fileName).toBe("izvod-odvojen.csv");
+    const tasks = await previewCsvImport(deps, null, null);
+    if (tasks.status !== "ready") unreachable();
+    expect(tasks.preview.fileName).toBe("zadaci-odvojen.csv");
+  });
+
+  it("drops the pick on cancel, releasing somebody's whole ledger from main's memory", async () => {
+    const filePath = await writeCsvFixture("izvod-odustani.csv", FIN_CSV_FIXTURE);
+    const { deps } = makeTestDeps(dbB, null, null, null, null, filePath);
+
+    await pickFinCsvFile(deps);
+    cancelFinCsvImport();
+    expect(await previewFinCsvImport(deps, null, null)).toEqual({ status: "no-file" });
   });
 });

@@ -220,11 +220,16 @@ export class ForeignImportStore {
       `INSERT INTO fin_categories (id, profile_id, name, kind, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
     );
+    // `import_key` rides along (migration 052): a merge that dropped the
+    // fingerprints would let the merged profile re-import the very statement
+    // those rows came from. The planner remapped the ACCOUNT around each key
+    // rather than touching it, which is exactly what the key naming no account
+    // buys.
     this.insertFinTransaction = db.prepare(
       `INSERT INTO fin_transactions
          (id, profile_id, account_id, counter_account_id, category_id, tx_date, amount,
-          payee, note, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+          payee, note, import_key, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertFinBudget = db.prepare(
       `INSERT INTO fin_budgets
@@ -735,7 +740,8 @@ export class ForeignImportStore {
         this.insertFinTransaction.run(
           transaction.id, this.profileId, transaction.accountId, transaction.counterAccountId,
           transaction.categoryId, transaction.date, transaction.amount,
-          transaction.payee, transaction.note, transaction.createdAt, transaction.updatedAt,
+          transaction.payee, transaction.note, transaction.importKey,
+          transaction.createdAt, transaction.updatedAt,
         );
         written += 1;
       }

@@ -8387,6 +8387,16 @@ button.cal__grid-event--dragging {
 .csv-map__actions.recur-dialog__actions {
   gap: var(--nx-space-2);
 }
+/* A file-level refusal, inside the mapping dialog it is answered from (FIN
+   slice e). Set off by the same hairline the destination block uses, because it
+   is the same kind of statement: about the whole file, not about one column. */
+.csv-map__refusal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  padding-top: var(--nx-space-3);
+  border-top: 1px solid var(--nx-border);
+}
 
 /* „Pregledaj" — the in-app attachment preview (DOC tier 0, ADR-064): the house
    dialog recipe again, the shortcuts reference's own treatment — the
@@ -8979,6 +8989,15 @@ button.cal__grid-event--dragging {
   align-items: center;
   gap: var(--nx-space-2);
   flex-wrap: wrap;
+}
+/* The statement importer's disclosure (FIN slice e): a quiet button on its own
+   line, and — once opened — the same `set__import-block` the Settings mount
+   draws, so the flow looks identical wherever it is reached from. */
+.fin__import {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nx-space-2);
 }
 .fin__views {
   display: flex;

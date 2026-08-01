@@ -405,6 +405,24 @@ export const IpcChannel = {
   imexImportCsvMap: "imex:import-csv-map",
   imexImportCsvApply: "imex:import-csv-apply",
   imexImportCsvCancel: "imex:import-csv-cancel",
+  // A bank statement into the FIN ledger (FIN slice e). Its OWN five channels
+  // rather than a `mode` on the task CSV's, on exactly the reasoning that gave
+  // the `.apkg` its four: the two surfaces write different tables under
+  // different rules, and a shared channel would be one validated field away
+  // from letting a request to file somebody's tasks write into their money.
+  //
+  // The SHAPE is deliberately the task CSV's — pick, preview (columns, samples,
+  // a suggested mapping), MAP, apply, cancel, one-slot undo, one banner —
+  // because the user is doing the same thing. What differs is only what a
+  // mapping has to say: a statement's roles, the destination ACCOUNT, and the
+  // sign convention a signed amount column is read under, which is stated
+  // rather than sniffed (both conventions are common and a column of nothing
+  // but expenses looks identical under either).
+  imexImportFinCsvPick: "imex:import-fin-csv-pick",
+  imexImportFinCsvPreview: "imex:import-fin-csv-preview",
+  imexImportFinCsvMap: "imex:import-fin-csv-map",
+  imexImportFinCsvApply: "imex:import-fin-csv-apply",
+  imexImportFinCsvCancel: "imex:import-fin-csv-cancel",
   // A calendar file straight into CAL (ADR-061). Its OWN four channels, on the
   // reasoning that gave the `.apkg` its own: an `.ics` is somebody else's
   // calendar in a line-oriented text format, read by a different reader under a
@@ -4685,9 +4703,19 @@ export interface RestoreUndoResult {
  * its own for the same one, since what it undoes came out of a chat window.
  * `"csv"` (ADR-062) joins on identical terms: the sentence that names it is
  * about somebody's spreadsheet — and `"ics"` (ADR-061) likewise, since what
- * it undoes came out of a calendar file.
+ * it undoes came out of a calendar file. `"fin-csv"` (FIN slice e) is its own
+ * for the sharpest version of the same reason: undoing a bank statement is
+ * about somebody's money, and a banner that called it „uvoz zadataka" would be
+ * naming the wrong thing at the one moment naming matters.
  */
-export type RestoreUndoKind = "restore" | "import" | "apkg" | "llm" | "csv" | "ics";
+export type RestoreUndoKind =
+  | "restore"
+  | "import"
+  | "apkg"
+  | "llm"
+  | "csv"
+  | "fin-csv"
+  | "ics";
 
 export interface RestoreStatus {
   undo: {
@@ -5363,6 +5391,198 @@ export type CsvImportApplyResult = RestoreApplyResult;
 export type CsvImportPickResult =
   | { canceled: true }
   | { canceled: false; path: string; fileName: string };
+
+// --- Bank statement CSV → FIN (FIN slice e) ----------------------------------
+
+/**
+ * Mirrors `@nexus/core`'s `CsvFinanceColumnRole` exactly — redeclared here like
+ * every other closed domain in this file, so `main`'s assignment of a core value
+ * to this type turns a role added in core into a compile error rather than an
+ * option the screen cannot label.
+ *
+ * The amount side has three members because Serbian bank exports come both ways:
+ * one signed `amount` column, or a separate outflow/inflow pair. The pair is
+ * named by MEANING (money leaving, money arriving) rather than by
+ * „duguje"/„potražuje", which mean opposite things depending on whose books are
+ * being read.
+ */
+export type FinCsvImportColumnRole =
+  | "date"
+  | "amount"
+  | "outflow"
+  | "inflow"
+  | "payee"
+  | "note"
+  | "currency"
+  | "ignore";
+
+/** Every role, in the order the mapping dialog's selects offer them — and what main validates an incoming one against. */
+export const FIN_CSV_IMPORT_COLUMN_ROLES: readonly FinCsvImportColumnRole[] = [
+  "date",
+  "amount",
+  "outflow",
+  "inflow",
+  "payee",
+  "note",
+  "currency",
+  "ignore",
+];
+
+/** Which way a SIGNED amount column points — the user's answer, never a sniff. Mirrors core's `CsvFinanceSignConvention`. */
+export type FinCsvImportSignConvention = "negative-is-expense" | "positive-is-expense";
+
+/** Both conventions, in the order the mapping dialog offers them. The default is first: it is FIN's own sign rule (negative leaves the account). */
+export const FIN_CSV_IMPORT_SIGN_CONVENTIONS: readonly FinCsvImportSignConvention[] = [
+  "negative-is-expense",
+  "positive-is-expense",
+];
+
+/** Mirrors core's `CsvFinanceAmountFormat` — what the preview SAYS the file's numbers were read as, so the convention is visible rather than trusted. */
+export type FinCsvImportAmountFormat = "decimal-comma" | "decimal-dot";
+
+/** Mirrors core's `CsvFinanceDateFormat`, on the same terms. */
+export type FinCsvImportDateFormat = "iso" | "dmy-dot" | "dmy-slash" | "mdy-slash";
+
+/** Mirrors core's `CsvFinanceRefusalCode`: why the WHOLE file is refused rather than half-read. Every one is a case where reading on would mean choosing a number out of two. */
+export type FinCsvImportRefusalCode =
+  | "ambiguous-amount-format"
+  | "unreadable-amount-format"
+  | "ambiguous-date-format"
+  | "unreadable-date-format"
+  | "foreign-currency";
+
+/** A named refusal of the file, with the column it is about and the offending cell verbatim, so the user can find it in their own spreadsheet. */
+export interface FinCsvImportRefusal {
+  code: FinCsvImportRefusalCode;
+  /** 0-based column index — the screen names it from the preview's own headers. */
+  column: number;
+  sample: string;
+}
+
+/** Mirrors core's `CsvFinanceRowDropCode`. `text-truncated` is the only one that does not cost the row its place. */
+export type FinCsvImportRowDropCode =
+  | "bad-date"
+  | "no-amount"
+  | "both-amounts"
+  | "bad-amount"
+  | "text-truncated";
+
+/** One named loss, with the 1-based data-row number (header excluded). */
+export interface FinCsvImportRowDrop {
+  row: number;
+  code: FinCsvImportRowDropCode;
+}
+
+/** Mirrors core's `CsvFinanceRowSkipCode`: why a row is already in the ledger (migration 052). Two codes, because „you already have this" and „you had this and deleted it" are different sentences. */
+export type FinCsvImportRowSkipCode = "already-imported" | "already-imported-deleted";
+
+export interface FinCsvImportRowSkip {
+  row: number;
+  code: FinCsvImportRowSkipCode;
+}
+
+/** One detected column of the mapping step — `CsvImportColumn`'s twin over this surface's own role vocabulary. */
+export interface FinCsvImportColumn {
+  /** The header cell, or null when the file has no header row — the screen then names the column by position. */
+  header: string | null;
+  /** The column's first `CSV_IMPORT_SAMPLE_ROWS` data values, empty cells included. */
+  samples: string[];
+  suggestedRole: FinCsvImportColumnRole;
+}
+
+/**
+ * The columns step: the statement really read and really parsed under the
+ * delimiter and header choice the request named (or the sniff's own answer).
+ * Not a plan — counts and drops need a confirmed mapping, which is
+ * `imex:import-fin-csv-map`'s answer.
+ */
+export interface FinCsvImportPreview {
+  fileName: string;
+  delimiter: CsvImportDelimiter;
+  hasHeader: boolean;
+  columns: FinCsvImportColumn[];
+  /** Data rows under this parse, header excluded, blank lines included. */
+  rows: number;
+}
+
+export type FinCsvImportPreviewResult =
+  | { status: "no-file" }
+  | { status: "unreadable"; code: CsvImportReadErrorCode }
+  | { status: "ready"; preview: FinCsvImportPreview };
+
+/**
+ * The confirmed mapping's dry run: the session's rows really translated and
+ * really planned against this profile — never an estimate.
+ *
+ * `formats` is what makes the two conventions VISIBLE: the file's numbers and
+ * dates were settled over whole columns, and the screen says which reading won
+ * rather than asking the user to trust one.
+ */
+export interface FinCsvImportPlanPreview {
+  /** Identifies this exact mapping-and-plan. The apply refuses any other value, so a stale screen can never write a plan the user did not see. */
+  token: string;
+  fileName: string;
+  /** The destination account, by name, and its currency — the one that governed every amount read. */
+  accountName: string;
+  currency: string;
+  /** Data rows read, blank lines included. */
+  rows: number;
+  /** Ledger rows the plan will insert. */
+  transactions: number;
+  /** Rows whose every cell was empty — skipped silently, counted so the arithmetic balances. */
+  blankRows: number;
+  /** `planForeignImport`'s own arithmetic, per archive module — only FINANCE is ever non-zero for a statement. */
+  modules: Record<ArchiveModuleName, ImportModuleCounts>;
+  drops: FinCsvImportRowDrop[];
+  /** Rows migration 052's fingerprint recognised as already imported — every one named, never a bare count. */
+  skips: FinCsvImportRowSkip[];
+  amountFormat: FinCsvImportAmountFormat;
+  dateFormat: FinCsvImportDateFormat;
+  signConvention: FinCsvImportSignConvention;
+}
+
+/**
+ * `roles` names one role per detected column, in column order — its length must
+ * equal the preview's column count, and no role but `ignore` may repeat (main
+ * checks the shape; the translator checks that a date column exists and that the
+ * amount arrives as EITHER one signed column OR an outflow/inflow pair). The
+ * mapping travels; the DATA never does — the parsed cells live in main's pending
+ * session (SEC-EL).
+ */
+export interface ImexImportFinCsvMapRequest {
+  profileId: string;
+  roles: FinCsvImportColumnRole[];
+  /** An existing account of this profile. There is no „new account" option: an account carries a currency and an opening balance a statement cannot supply. */
+  accountId: string;
+  signConvention: FinCsvImportSignConvention;
+}
+
+export type FinCsvImportMapResult =
+  | { status: "no-file" }
+  /** The file could not be read CONFIDENTLY — refused whole, by name, rather than half-read (FIN slice e). */
+  | { status: "refused"; refusal: FinCsvImportRefusal }
+  | { status: "ready"; preview: FinCsvImportPlanPreview };
+
+/** What a completed statement import wrote. The same shape every archive operation reports, because it is undone through the same one slot and shown through the same one banner. */
+export type FinCsvImportApplyResult = RestoreApplyResult;
+
+/**
+ * Picking (`imex:import-fin-csv-pick`) and dropping the pick
+ * (`imex:import-fin-csv-cancel`) carry no payload — main holds the pick. The
+ * delimiter/header OVERRIDES ride on the preview request, exactly as they do on
+ * the task CSV's.
+ */
+export interface ImexImportFinCsvPreviewRequest {
+  profileId: string;
+  delimiter: CsvImportDelimiter | null;
+  hasHeader: boolean | null;
+}
+
+/** `token` names the exact plan being confirmed — main refuses any other value. */
+export interface ImexImportFinCsvApplyRequest {
+  profileId: string;
+  token: string;
+}
 
 // --- Calendar .ics import (ADR-061) ------------------------------------------
 
@@ -6597,6 +6817,43 @@ export interface NexusApi {
   applyCsvImport(profileId: string, token: string): Promise<CsvImportApplyResult>;
   /** Drops the picked CSV without applying it — what it releases is the file's text and parsed cells in main's memory. */
   cancelCsvImport(): Promise<void>;
+  /**
+   * Opens the native "pick a bank statement" dialog (FIN slice e). Its own pick,
+   * held apart from the task CSV's for the reason every import's is held apart:
+   * nothing on one surface may ever reach another's file.
+   */
+  pickFinCsvFile(): Promise<CsvImportPickResult>;
+  /**
+   * Reads and parses the picked statement into columns with headers, samples and
+   * a SUGGESTED mapping. `null` overrides mean "the sniff decides"; a value
+   * re-parses the text main already read, never the file again.
+   */
+  previewFinCsvImport(
+    profileId: string,
+    delimiter: CsvImportDelimiter | null,
+    hasHeader: boolean | null,
+  ): Promise<FinCsvImportPreviewResult>;
+  /**
+   * Applies the confirmed mapping in MAIN against the session's parsed rows and
+   * answers the real plan: what lands, what is dropped by name, and what
+   * migration 052's fingerprint recognised as already imported. The renderer
+   * sends role assignments, the account and the sign convention — never data.
+   * Answers `"refused"` when the file cannot be read CONFIDENTLY.
+   */
+  mapFinCsvImport(
+    profileId: string,
+    roles: readonly FinCsvImportColumnRole[],
+    accountId: string,
+    signConvention: FinCsvImportSignConvention,
+  ): Promise<FinCsvImportMapResult>;
+  /**
+   * Confirms the plan `token` names, ADDING its transactions to this profile
+   * through the planner's same apply path. Undoable through `undoRestore`, which
+   * every import shares. The renderer is reloaded shortly AFTER this resolves.
+   */
+  applyFinCsvImport(profileId: string, token: string): Promise<FinCsvImportApplyResult>;
+  /** Drops the picked statement without applying it — releasing somebody's whole bank ledger from main's memory. */
+  cancelFinCsvImport(): Promise<void>;
   /**
    * Opens the native "pick an .ics" dialog (ADR-061). Its own pick, held apart
    * from the three picks beside it for the reason they are held apart from each
