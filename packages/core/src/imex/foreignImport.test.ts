@@ -1236,8 +1236,8 @@ describe("planForeignImport — a folder's default template tolerates an unmappa
 describe("planForeignImport — duplicate keys are composed collision-proof", () => {
   it("never lets two different identities share one event key", () => {
     // A separator-joined key would make these two the same row.
-    expect(eventDuplicateKey({ title: "A", startAt: " B", allDay: false })).not.toBe(
-      eventDuplicateKey({ title: "A B", startAt: "", allDay: false }),
+    expect(eventDuplicateKey({ title: "A", startAt: "\u0000B", allDay: false })).not.toBe(
+      eventDuplicateKey({ title: "A\u0000B", startAt: "", allDay: false }),
     );
     expect(eventDuplicateKey({ title: "A", startAt: "S", allDay: false })).not.toBe(
       eventDuplicateKey({ title: "A", startAt: "S", allDay: true }),

@@ -297,7 +297,7 @@ export function planBlockDates(input: PlanBlockDatesInput): PlanBlockDate[] {
     for (const pass of pending) {
       if (pass.minutes <= 0 || pass.dueMs > day.ms || day.rem <= 0) continue;
       const placed = Math.min(pass.minutes, day.rem);
-      const key = `${pass.topicId} ${day.date}`;
+      const key = `${pass.topicId}\u0000${day.date}`;
       const existing = revisionAt.get(key);
       if (existing) {
         existing.minutes += placed;

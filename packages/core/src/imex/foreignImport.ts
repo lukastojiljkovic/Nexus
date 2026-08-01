@@ -690,7 +690,7 @@ const ID_MINTERS: Record<keyof ProfileData, (data: ProfileData, ctx: PlanContext
     mintPairedTags(
       data.finCategories,
       ctx.target.finCategories,
-      (row) => `${row.kind} ${row.name}`,
+      (row) => `${row.kind}\u0000${row.name}`,
       "finance",
       ctx,
     ),
