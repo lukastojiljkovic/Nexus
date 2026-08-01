@@ -1,10 +1,12 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import {
+  CANVAS_REF_KINDS,
   MAX_CANVAS_SCENE_LENGTH,
   emptyCanvasScene,
   parseCanvasScene,
   serializeCanvasScene,
 } from "@nexus/core";
+import type { CanvasRef, CanvasRefKind } from "@nexus/core";
 import { CanvasBoardNotFoundError, CanvasValidationError } from "../errors.js";
 import { uuidv7 } from "../ids.js";
 import { isDateTime } from "../finance/money.js";
@@ -13,6 +15,21 @@ type DatabaseHandle = Database.Database;
 
 /** Migration 059's own CHECK, restated so an over-long name is a named refusal rather than a raw constraint failure. */
 export const MAX_CANVAS_BOARD_NAME_LENGTH = 60;
+
+/**
+ * The most references one `resolveRefs` call may name.
+ *
+ * `MAX_TASK_BULK_IDS`/`MAX_NOTE_LINKS`' number, taken deliberately rather than
+ * invented: this is the same shape of input those two bound — a list of ids an
+ * untrusted caller puts into one `IN (…)` run — and a board with five hundred
+ * Nexus objects pinned to it is far past anything a person draws. It is headroom
+ * with a ceiling, not a limit anybody meets.
+ *
+ * Refused past the cap rather than truncated: a card silently missing from a
+ * board reads as „the object is gone", which is the one thing this read exists
+ * to say honestly.
+ */
+export const MAX_CANVAS_REF_BATCH = 500;
 
 /**
  * Serbian Latin ordering for the board list, on `HABIT_COLLATOR`'s terms: plain
@@ -57,8 +74,64 @@ interface CanvasBoardSceneRow extends CanvasBoardRow {
   scene: string;
 }
 
+/**
+ * What one card on a board needs in order to draw itself.
+ *
+ * A UNION on `missing` rather than a record with nullable fields: „the thing
+ * this card points at is gone" is a state the card must render, not a blank it
+ * can fall through, and a discriminated shape is what makes a caller say so.
+ * There is no third arm — a reference either names a live row of this profile or
+ * it does not.
+ */
+export type CanvasRefCard =
+  | {
+      kind: CanvasRefKind;
+      id: string;
+      missing: false;
+      /** The row's own `title` column, verbatim — a note that was never named carries the empty string it really has. */
+      title: string;
+      /**
+       * The one contextual line that module's own rows already carry, and no
+       * summary of our own: migration 017's `context_date` per kind — a task's
+       * `due_date`, an event's `start_at`, and nothing for a note, which has no
+       * second fact its list rows show. Raw column text; formatting it into
+       * Serbian is the renderer's job, as everywhere else.
+       */
+      detail: string | null;
+    }
+  | { kind: CanvasRefKind; id: string; missing: true };
+
+/** One resolved row, in the uniform shape the three per-kind statements project into. */
+interface CanvasRefRow {
+  id: string;
+  title: string;
+  detail: string | null;
+}
+
 const COLUMNS = "id, profile_id, name, created_at, updated_at";
 const SCENE_COLUMNS = `${COLUMNS}, scene`;
+
+/**
+ * The three reads a card can need, one per kind — each naming its own table's
+ * title column and its own `context_date` (migration 017's choice, restated so
+ * the card and the search row agree on what a task's or an event's second line
+ * is). `?` placeholders are appended by `refStatementFor`; no VALUE is ever
+ * built into this text.
+ *
+ * **`notes` is the only note table there is, and that is the private-notes
+ * gate.** Migration 045 (PRIV / ADR-057) keeps a private note in `private_notes`
+ * — sealed bytes, no title column, no FTS row, no search projection — and gives
+ * it no row in `notes` at all. So this statement CANNOT reach one: there is no
+ * flag to honour and no join to omit, because there is nothing in cleartext to
+ * read (SEC-ZK-05). A `note` reference naming a private note's id therefore
+ * resolves MISSING, exactly as it should, and this resolver never becomes a
+ * second way into the private section. `canvasStore.test.ts` pins that.
+ */
+const REF_SELECTS: Readonly<Record<CanvasRefKind, string>> = {
+  note: "SELECT id, title, NULL AS detail FROM notes",
+  task: "SELECT id, title, due_date AS detail FROM tasks",
+  event: "SELECT id, title, start_at AS detail FROM events",
+};
 
 /**
  * A profile's canvas boards, over prepared, parameterized statements
@@ -83,6 +156,14 @@ const SCENE_COLUMNS = `${COLUMNS}, scene`;
  * with a blank page. It throws naming the row instead (`FinRecurringStore`'s own
  * posture, and `parseStoredSchedule`'s).
  *
+ * **`resolveRefs` is the one read that leaves this module's table** (CANV slice
+ * b2): a card on a board points at a note, a task or an event, and drawing it
+ * needs that row's title. It is still a CanvasStore method rather than three
+ * calls the page makes for itself, because „what are the objects on this board"
+ * is one question with one answer — one read per KIND, never one per card — and
+ * because the private-notes gate it stands on (see `REF_SELECTS`) belongs
+ * somewhere a reader will find it.
+ *
  * `now` is supplied by the caller and validated here — main stamps the clock, the
  * renderer never does.
  */
@@ -96,6 +177,13 @@ export class CanvasStore {
   private readonly updateScene: Database.Statement;
   private readonly markDeleted: Database.Statement;
   private readonly markRestored: Database.Statement;
+  /**
+   * The card reads, prepared lazily and cached by `kind` and PLACEHOLDER COUNT —
+   * `SearchStore`'s arrangement, for its reason: the SQL text depends only on how
+   * many `?` the `IN (…)` needs, never on which ids are bound into it, so each
+   * distinct shape is prepared once and reused for the life of the store.
+   */
+  private readonly refStatements = new Map<string, Database.Statement>();
 
   constructor(
     private readonly db: DatabaseHandle,
@@ -227,6 +315,87 @@ export class CanvasStore {
         `No deleted canvas board "${id}" to restore in this profile.`,
       );
     }
+  }
+
+  /**
+   * What a batch of on-board references currently point at — ONE read per kind,
+   * never one per card.
+   *
+   * **Every reference asked about gets an answer, in the order it was asked**,
+   * duplicates included: a board draws its cards from this list positionally, so
+   * a resolver that compacted its output would silently reassign cards to each
+   * other's elements. A reference whose row is gone — deleted, soft-deleted, or
+   * another profile's — comes back `missing` rather than dropped, because „ovaj
+   * objekat više ne postoji" is a thing a card has to be able to say.
+   *
+   * **Nothing here is a new read path.** The three statements are the same
+   * profile-scoped, `deleted_at IS NULL` reads their own modules use, and the
+   * `IN (…)` is a run of generated `?` — the ids themselves are bound
+   * (SEC-API-03). Private notes are unreachable by construction; see
+   * `REF_SELECTS`' own comment for why that is a property of the schema rather
+   * than a check made here.
+   */
+  resolveRefs(refs: readonly CanvasRef[]): CanvasRefCard[] {
+    if (refs.length > MAX_CANVAS_REF_BATCH) {
+      throw new CanvasValidationError(
+        `"refs" must name at most ${MAX_CANVAS_REF_BATCH} references; this call names ${refs.length}.`,
+      );
+    }
+
+    // Grouped and deduplicated first: a board may carry the same object on
+    // several cards, and asking the database for it once is the whole point of a
+    // batch read.
+    const idsByKind = new Map<CanvasRefKind, Set<string>>();
+    for (const ref of refs) {
+      if (!CANVAS_REF_KINDS.includes(ref.kind)) {
+        throw new CanvasValidationError(`"refs" carries an unknown kind "${String(ref.kind)}".`);
+      }
+      const ids = idsByKind.get(ref.kind) ?? new Set<string>();
+      ids.add(ref.id);
+      idsByKind.set(ref.kind, ids);
+    }
+
+    const found = new Map<string, CanvasRefRow>();
+    for (const [kind, ids] of idsByKind) {
+      const bound = [...ids];
+      const rows = this.refStatementFor(kind, bound.length).all(
+        this.profileId,
+        ...bound,
+      ) as CanvasRefRow[];
+      for (const row of rows) {
+        found.set(`${kind}:${row.id}`, row);
+      }
+    }
+
+    return refs.map((ref) => {
+      const row = found.get(`${ref.kind}:${ref.id}`);
+      if (row === undefined) return { kind: ref.kind, id: ref.id, missing: true };
+      return { kind: ref.kind, id: ref.id, missing: false, title: row.title, detail: row.detail };
+    });
+  }
+
+  /**
+   * One kind's card read for one `IN (…)` width. The COUNT is interpolated and
+   * comes from an array length `resolveRefs` has already bounded; the kind
+   * indexes a code-level constant map. Neither is caller text, and every id
+   * below is bound (SEC-API-03).
+   *
+   * The cache cannot grow without limit — its keys are three kinds by widths
+   * `1..MAX_CANVAS_REF_BATCH` — and in practice holds one entry per kind: a
+   * board's card count is stable between edits, so the same width is asked for
+   * over and over.
+   */
+  private refStatementFor(kind: CanvasRefKind, count: number): Database.Statement {
+    const key = `${kind}:${count}`;
+    const cached = this.refStatements.get(key);
+    if (cached) return cached;
+    const statement = this.db.prepare(
+      `${REF_SELECTS[kind]}
+       WHERE profile_id = ? AND deleted_at IS NULL
+         AND id IN (${Array(count).fill("?").join(", ")})`,
+    );
+    this.refStatements.set(key, statement);
+    return statement;
   }
 
   /** Reads a live board in this profile or throws — the scope check every mutation runs first. */

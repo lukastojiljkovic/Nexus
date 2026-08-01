@@ -545,8 +545,16 @@ export type { FitTargetGoals, FitTargets } from "./fitness/nutritionTargetStore.
 // ONE store over ONE table, and the drawing is read only when somebody asks for
 // it: `listActive` never selects the scene column, which is why a board list
 // costs nothing to draw.
-export { CanvasStore, MAX_CANVAS_BOARD_NAME_LENGTH } from "./canvas/canvasStore.js";
-export type { CanvasBoard, CanvasBoardWithScene } from "./canvas/canvasStore.js";
+// `resolveRefs` is the other half: what the Nexus objects pinned to a board
+// currently ARE, one read per kind. A reference that answers nothing comes back
+// missing rather than dropped, and a private note (migration 045) can never
+// answer at all — `REF_SELECTS`' comment carries why.
+export {
+  CanvasStore,
+  MAX_CANVAS_BOARD_NAME_LENGTH,
+  MAX_CANVAS_REF_BATCH,
+} from "./canvas/canvasStore.js";
+export type { CanvasBoard, CanvasBoardWithScene, CanvasRefCard } from "./canvas/canvasStore.js";
 
 export {
   SearchStore,

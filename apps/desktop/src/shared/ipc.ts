@@ -25,7 +25,13 @@
 // seventeen-member closed list the food store validates against. A redeclared
 // copy of any of them would be a second answer to „what is a food" — which is
 // exactly the drift `TaskViewConfig` is imported to avoid.
+//
+// `CanvasRefKind` (CANV slice b2) joins on the closed-vocabulary ground: it is
+// the three-member list `parseCanvasRef` admits and the store's card reader
+// switches on, so a redeclared copy could drift into naming a kind neither of
+// them answers.
 import type {
+  CanvasRefKind,
   FocusOutcome,
   FocusPhaseKind,
   FoodCategory,
@@ -453,6 +459,12 @@ export const IpcChannel = {
   canvasSaveScene: "canvas:save-scene",
   canvasDelete: "canvas:delete",
   canvasRestore: "canvas:restore",
+  // What the Nexus objects pinned to a board currently ARE (CANV slice b2). Its
+  // own channel rather than a field on `canvas:open`, and for once that is not
+  // only the one-channel-per-operation rule: the cards must be re-resolved
+  // WITHOUT re-reading the drawing every time a title changes or an object is
+  // deleted, and the scene is the expensive half of that pair.
+  canvasResolveRefs: "canvas:resolve-refs",
   searchQuery: "search:query",
   searchRecent: "search:recent",
   searchPage: "search:page",
@@ -5096,6 +5108,45 @@ export interface CanvasRestoreRequest {
 }
 
 /**
+ * Mirrors `MAX_CANVAS_REF_BATCH` in `@nexus/db` — the most references one card
+ * resolution may name. The store stays authoritative; this copy exists so the
+ * field can cap its own input before main builds an array out of untrusted JSON.
+ */
+export const MAX_CANVAS_REF_BATCH = 500;
+
+/**
+ * Resolves the Nexus objects a board's cards point at.
+ *
+ * **`refs` crosses as TEXT — the very `nexus://<kind>/<id>` strings Excalidraw
+ * stores in an element's `link`** — rather than as parsed `{kind, id}` pairs.
+ * That is the security shape, not a convenience: the renderer holds these
+ * strings and nothing else, and main's `parseCanvasRef` is then the ONE place
+ * that decides what a legal reference is. A wire carrying a pre-split kind and
+ * id would let a caller name a kind the grammar would have refused.
+ */
+export interface CanvasResolveRefsRequest {
+  profileId: string;
+  refs: string[];
+}
+
+/**
+ * One card's answer, in the caller's own order and one per reference asked
+ * about — a reference whose object is gone comes back `missing` rather than
+ * omitted, because that is a state the card renders rather than a blank it falls
+ * through. Mirrors `@nexus/db`'s `CanvasRefCard`.
+ */
+export type CanvasRefCard =
+  | {
+      kind: CanvasRefKind;
+      id: string;
+      missing: false;
+      title: string;
+      /** The module's own context line: a task's due date, an event's start, nothing for a note. Raw column text; the renderer formats it. */
+      detail: string | null;
+    }
+  | { kind: CanvasRefKind; id: string; missing: true };
+
+/**
  * Global search (ADR-021 / PRD 08 SRCH-001/002). The index itself (migration
  * 017) and its read-only store already exist; these three channels are the
  * palette's entire main-process surface: a typed query, the recency-ordered
@@ -7839,6 +7890,13 @@ export interface NexusApi {
   /** Soft-deletes a board. The drawing stays, so the undo brings the whole thing back. */
   deleteCanvasBoard(profileId: string, id: string): Promise<void>;
   restoreCanvasBoard(profileId: string, id: string): Promise<void>;
+  /**
+   * What the objects on a board's cards currently are — titles and context
+   * lines, one answer per reference and in the order asked. `refs` are the
+   * `nexus://…` strings the elements carry; anything that is not one is refused
+   * by main, never resolved to an empty card.
+   */
+  resolveCanvasRefs(profileId: string, refs: string[]): Promise<CanvasRefCard[]>;
   /** Runs the query pipeline (parse -> FTS match -> bm25 candidates -> rank), falling back to `searchRecent`'s order when the query has no matchable terms (ADR-021). */
   searchQuery(profileId: string, query: string, limit: number): Promise<SearchResult[]>;
   /** The profile's most recently touched entries, already in their final order — no ranking pass, unlike `searchQuery`. */

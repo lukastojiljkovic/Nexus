@@ -153,6 +153,19 @@ export {
   validateCanvasScene,
 } from "./canvas/canvasScene.js";
 export type { CanvasScene } from "./canvas/canvasScene.js";
+// A card on a board is an Excalidraw EMBEDDABLE, and an embeddable whose host
+// renderer returns nothing falls through to a real iframe — so the grammar that
+// decides whether a `link` is one of ours is a security boundary, not a
+// formatting nicety. `canvasRef.ts`'s header carries that reasoning.
+export {
+  CANVAS_REF_KINDS,
+  CANVAS_REF_SCHEME,
+  MAX_CANVAS_REF_LENGTH,
+  canvasRefText,
+  isCanvasRefText,
+  parseCanvasRef,
+} from "./canvas/canvasRef.js";
+export type { CanvasRef, CanvasRefKind } from "./canvas/canvasRef.js";
 
 // --- FIT (the nutrition module, migration 058) ------------------------------
 //

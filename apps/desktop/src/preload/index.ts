@@ -598,6 +598,11 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.canvasDelete, { profileId, id }),
   restoreCanvasBoard: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.canvasRestore, { profileId, id }),
+  // The `nexus://…` strings the board's elements carry, passed through as given:
+  // deciding which of them is a reference is main's `parseCanvasRef`, and a
+  // filter here would be a second gate whose disagreement nobody would notice.
+  resolveCanvasRefs: (profileId, refs) =>
+    ipcRenderer.invoke(IpcChannel.canvasResolveRefs, { profileId, refs }),
   searchQuery: (profileId, query, limit) =>
     ipcRenderer.invoke(IpcChannel.searchQuery, { profileId, query, limit }),
   searchRecent: (profileId, limit) =>

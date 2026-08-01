@@ -242,6 +242,7 @@ import {
   type CreateHabitInput,
   type CanvasBoard,
   type CanvasBoardWithScene,
+  type CanvasRefCard,
   type Habit,
   type HabitDayRange,
   type HabitEntry,
@@ -416,6 +417,7 @@ import {
   type SecurityNotificationDeps,
 } from "./notifications.js";
 import { filterSearchHitsByModules } from "./searchGate.js";
+import { asCanvasRefs } from "./canvasRefs.js";
 import { focusPhaseEndCopy } from "./notificationStrings.js";
 import type { SecurityNotice } from "./notificationStrings.js";
 import { computeSnoozeUntil, resolveDefaultSnoozePreset } from "./snooze.js";
@@ -3648,6 +3650,10 @@ function asCanvasScene(value: unknown, field: string): string {
   }
   return value;
 }
+
+// The card batch's validator is `asCanvasRefs` in `./canvasRefs.js` rather than
+// here, and its own header says why: it is the one CANV validator whose refusals
+// are worth a test, and nothing in this file is reachable from Vitest.
 
 // --- FOCUS: the one running phase (UTIL slice b, ADR-077) --------------------
 //
@@ -9021,6 +9027,17 @@ function registerIpc(): void {
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const id = asNonEmptyString(body.id, "id");
     canvasStore(profileId).restore(id, new Date().toISOString());
+  });
+
+  // The cards on a board (CANV slice b2). The references arrive as the very
+  // `nexus://…` strings the elements carry, and `asCanvasRefs` — the grammar,
+  // not a shape check — is what decides which of them may become a query.
+  ipcMain.handle(IpcChannel.canvasResolveRefs, (event, payload): CanvasRefCard[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const refs = asCanvasRefs(body.refs, "refs");
+    return canvasStore(profileId).resolveRefs(refs);
   });
 
   // Global search (ADR-021 / PRD 08 SRCH-001/002): `runSearchQuery`/

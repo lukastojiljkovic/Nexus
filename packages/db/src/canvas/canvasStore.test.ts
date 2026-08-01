@@ -7,11 +7,18 @@ import {
   emptyCanvasScene,
   serializeCanvasScene,
 } from "@nexus/core";
+import type { CanvasRef } from "@nexus/core";
 import {
   CanvasBoardNotFoundError,
   CanvasStore,
   CanvasValidationError,
+  EventStore,
+  MAX_CANVAS_REF_BATCH,
   NexusDatabase,
+  NoteStore,
+  PrivateNoteStore,
+  TaskListStore,
+  TaskStore,
   openDatabase,
   uuidv7,
 } from "../index.js";
@@ -301,5 +308,210 @@ describe("CanvasStore.softDelete / restore", () => {
     expect(() => mine.softDelete(board.id, LATER)).toThrow(CanvasBoardNotFoundError);
     expect(() => mine.softDelete(foreign.id, LATER)).toThrow(CanvasBoardNotFoundError);
     expect(() => mine.restore(foreign.id, LATER)).toThrow(CanvasBoardNotFoundError);
+  });
+});
+
+/**
+ * The batch read a board's cards are drawn from. Everything here is about two
+ * things: that a reference which cannot be answered says so rather than
+ * vanishing, and that this read is not a way to see anything it should not.
+ */
+describe("CanvasStore.resolveRefs", () => {
+  /** A profile with the three kinds of row a card can point at, plus the stores that made them. */
+  function scope(): {
+    profileId: string;
+    boards: CanvasStore;
+    noteId: string;
+    taskId: string;
+    eventId: string;
+  } {
+    const profileId = createProfile();
+    new TaskListStore(db.raw, profileId).ensureInbox(NOW);
+
+    const notes = new NoteStore(db.raw, profileId);
+    const note = notes.create(NOW);
+    notes.appendUpdate(note.id, new Uint8Array([1, 2, 3]), "Beleška o šemi", NOW);
+
+    const task = new TaskStore(db.raw, profileId).create({
+      title: "Završiti šemu",
+      dueDate: "2026-06-10",
+    });
+    const event = new EventStore(db.raw, profileId).create({
+      title: "Sastanak",
+      startAt: "2026-06-11T10:00:00.000Z",
+    });
+
+    return {
+      profileId,
+      boards: new CanvasStore(db.raw, profileId),
+      noteId: note.id,
+      taskId: task.id,
+      eventId: event.id,
+    };
+  }
+
+  it("answers every reference with the title and the module's own context line", () => {
+    const { boards, noteId, taskId, eventId } = scope();
+    expect(
+      boards.resolveRefs([
+        { kind: "note", id: noteId },
+        { kind: "task", id: taskId },
+        { kind: "event", id: eventId },
+      ]),
+    ).toEqual([
+      { kind: "note", id: noteId, missing: false, title: "Beleška o šemi", detail: null },
+      { kind: "task", id: taskId, missing: false, title: "Završiti šemu", detail: "2026-06-10" },
+      {
+        kind: "event",
+        id: eventId,
+        missing: false,
+        title: "Sastanak",
+        detail: "2026-06-11T10:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("answers in the caller's order, whatever order the tables were read in", () => {
+    const { boards, noteId, taskId, eventId } = scope();
+    const asked: CanvasRef[] = [
+      { kind: "event", id: eventId },
+      { kind: "note", id: noteId },
+      { kind: "task", id: taskId },
+    ];
+    expect(boards.resolveRefs(asked).map((card) => [card.kind, card.id])).toEqual(
+      asked.map((ref) => [ref.kind, ref.id]),
+    );
+  });
+
+  it("answers a reference asked for twice twice — a board may carry the same card more than once", () => {
+    const { boards, noteId } = scope();
+    const cards = boards.resolveRefs([
+      { kind: "note", id: noteId },
+      { kind: "note", id: noteId },
+    ]);
+    expect(cards).toHaveLength(2);
+    expect(cards[0]).toEqual(cards[1]);
+  });
+
+  it("answers nothing for nothing, without touching the database", () => {
+    expect(scope().boards.resolveRefs([])).toEqual([]);
+  });
+
+  it("reports an id no row answers as MISSING rather than dropping it", () => {
+    const { boards, noteId } = scope();
+    const gone = uuidv7();
+    expect(
+      boards.resolveRefs([
+        { kind: "note", id: gone },
+        { kind: "note", id: noteId },
+      ]),
+    ).toEqual([
+      { kind: "note", id: gone, missing: true },
+      { kind: "note", id: noteId, missing: false, title: "Beleška o šemi", detail: null },
+    ]);
+  });
+
+  it("reports a SOFT-DELETED row as missing, for all three kinds", () => {
+    const { profileId, boards, noteId, taskId, eventId } = scope();
+    new NoteStore(db.raw, profileId).softDelete(noteId, LATER);
+    new TaskStore(db.raw, profileId).softDelete(taskId, LATER);
+    new EventStore(db.raw, profileId).softDelete(eventId);
+
+    expect(
+      boards
+        .resolveRefs([
+          { kind: "note", id: noteId },
+          { kind: "task", id: taskId },
+          { kind: "event", id: eventId },
+        ])
+        .map((card) => card.missing),
+    ).toEqual([true, true, true]);
+  });
+
+  it("reports another profile's row as missing — a reference is never a way across the boundary", () => {
+    const theirs = scope();
+    const mine = scope();
+    expect(
+      mine.boards.resolveRefs([
+        { kind: "note", id: theirs.noteId },
+        { kind: "task", id: theirs.taskId },
+        { kind: "event", id: theirs.eventId },
+      ]),
+    ).toEqual([
+      { kind: "note", id: theirs.noteId, missing: true },
+      { kind: "task", id: theirs.taskId, missing: true },
+      { kind: "event", id: theirs.eventId, missing: true },
+    ]);
+  });
+
+  it("never crosses kinds: a task's id asked for as a note does not resolve", () => {
+    const { boards, taskId } = scope();
+    expect(boards.resolveRefs([{ kind: "note", id: taskId }])).toEqual([
+      { kind: "note", id: taskId, missing: true },
+    ]);
+  });
+
+  it("answers a task with no due date, and an all-day event, without inventing a line", () => {
+    const profileId = createProfile();
+    new TaskListStore(db.raw, profileId).ensureInbox(NOW);
+    const task = new TaskStore(db.raw, profileId).create({ title: "Bez roka" });
+    const cards = new CanvasStore(db.raw, profileId).resolveRefs([{ kind: "task", id: task.id }]);
+    expect(cards).toEqual([
+      { kind: "task", id: task.id, missing: false, title: "Bez roka", detail: null },
+    ]);
+  });
+
+  it("refuses more references than one call may name, rather than truncating", () => {
+    const { boards, noteId } = scope();
+    const tooMany: CanvasRef[] = Array.from({ length: MAX_CANVAS_REF_BATCH + 1 }, () => ({
+      kind: "note" as const,
+      id: noteId,
+    }));
+    expect(() => boards.resolveRefs(tooMany)).toThrow(CanvasValidationError);
+    expect(() => boards.resolveRefs(tooMany.slice(1))).not.toThrow();
+  });
+
+  it("refuses a kind outside the closed list", () => {
+    const { boards, noteId } = scope();
+    expect(() =>
+      boards.resolveRefs([{ kind: "profile", id: noteId } as unknown as CanvasRef]),
+    ).toThrow(CanvasValidationError);
+  });
+
+  /**
+   * The most important test in this file. Migration 045 (PRIV / ADR-057) keeps a
+   * private note in its OWN table, sealed: `private_notes` has no title column,
+   * no FTS row and no projection into the search index, and a private note has
+   * no row in `notes` at all. So a `note` reference naming one can only miss —
+   * and that must stay true by construction, not by luck, because this resolver
+   * would otherwise be a brand-new way to read a private note's title.
+   */
+  it("never resolves a private note — its title is not in this table, or in any queryable one", () => {
+    const { profileId, boards, noteId } = scope();
+    const privateId = uuidv7();
+    new PrivateNoteStore(db.raw, profileId).writeSealed(
+      privateId,
+      new Uint8Array([1, 2, 3, 4]),
+      NOW,
+    );
+
+    expect(
+      boards.resolveRefs([
+        { kind: "note", id: privateId },
+        { kind: "task", id: privateId },
+        { kind: "event", id: privateId },
+        { kind: "note", id: noteId },
+      ]),
+    ).toEqual([
+      { kind: "note", id: privateId, missing: true },
+      { kind: "task", id: privateId, missing: true },
+      { kind: "event", id: privateId, missing: true },
+      { kind: "note", id: noteId, missing: false, title: "Beleška o šemi", detail: null },
+    ]);
+
+    // And the row really is there — the miss above is the gate, not an empty table.
+    expect(new PrivateNoteStore(db.raw, profileId).list().map((meta) => meta.id)).toEqual([
+      privateId,
+    ]);
   });
 });
