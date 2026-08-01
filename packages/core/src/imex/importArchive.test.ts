@@ -419,8 +419,18 @@ function richProfileData(): ProfileData {
     focusSessions: [
       {
         id: "focus-1", profileId: "profile1", subjectId: "subj-1", startedAt: "2026-07-01T10:00:00.000Z",
-        endedAt: "2026-07-01T11:00:00.000Z", createdAt: "2026-07-01T11:00:00.000Z",
-        updatedAt: "2026-07-01T11:00:00.000Z",
+        endedAt: "2026-07-01T11:00:00.000Z", kind: "work", plannedMinutes: null, pausedSeconds: 0,
+        outcome: null, cycleIndex: 0, taskId: null, label: null,
+        createdAt: "2026-07-01T11:00:00.000Z", updatedAt: "2026-07-01T11:00:00.000Z",
+      },
+      // A Pomodoro phase: no subject, a plan, a pause, a task the archive does
+      // not carry — the whole 1.34.0 shape in one row.
+      {
+        id: "focus-2", profileId: "profile1", subjectId: null, startedAt: "2026-07-01T12:00:00.000Z",
+        endedAt: "2026-07-01T12:30:00.000Z", kind: "short_break", plannedMinutes: 5,
+        pausedSeconds: 60, outcome: "stopped", cycleIndex: 2, taskId: "task-gone",
+        label: "Pisanje izveštaja",
+        createdAt: "2026-07-01T12:30:00.000Z", updatedAt: "2026-07-01T12:30:00.000Z",
       },
     ],
     // Deliberately NON-default on all three (STUDY-007): a round trip that
@@ -1076,12 +1086,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.34.0`: the nearest minor strictly ahead of this build's `1.33.0`.
+  // `1.35.0`: the nearest minor strictly ahead of this build's `1.34.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.34.0" });
+    const files = baseFiles({ schemaVersion: "1.35.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.34.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.35.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -3911,8 +3921,8 @@ describe("parseImportArchive — note categories (NOTE-002 / 1.27.0)", () => {
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.33.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.33.0");
+  it("is 1.34.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.34.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -4102,11 +4112,11 @@ describe("parseImportArchive — schema version", () => {
     expect(result.manifest?.profile.kind).toBe("personal");
   });
 
-  // `1.34.0`: the nearest minor strictly ahead of this build's `1.33.0`.
+  // `1.35.0`: the nearest minor strictly ahead of this build's `1.34.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.34.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.35.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.34.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.35.0" },
     ]);
     expect(result.data).toBeNull();
   });

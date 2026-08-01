@@ -2139,9 +2139,18 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     (statsRecent?.blocks.done ?? 0) === 0 &&
     (statsRecent?.blocks.missed ?? 0) === 0;
 
-  /** Last-7-days focus sessions joined with their subject (orphans skipped, like the plan/today joins); the store's own newest-first order is kept. */
+  /**
+   * Last-7-days focus sessions joined with their subject (orphans skipped, like
+   * the plan/today joins); the store's own newest-first order is kept.
+   *
+   * Since migration 057 one table holds every focus phase, so a subjectless
+   * Pomodoro phase reaches this list too. It is skipped by the same rule that
+   * skips an orphan: this is STUDY's page, and a row it cannot attribute to a
+   * subject has nothing to say here. The phases are not lost — they are the
+   * „Fokus" page's own history.
+   */
   const focusSessionEntries = (focusSessions ?? []).flatMap((session) => {
-    const subject = subjectsById.get(session.subjectId);
+    const subject = session.subjectId === null ? undefined : subjectsById.get(session.subjectId);
     return subject ? [{ session, subject }] : [];
   });
 

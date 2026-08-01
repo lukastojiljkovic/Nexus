@@ -41,15 +41,29 @@ export function formatDurationMinutes(totalMinutes: number): string {
 }
 
 /**
- * Whole-minute duration of a completed focus session (`endedAt` − `startedAt`),
- * rounded, with an unparseable endpoint reading as 0 like every other unusable
- * input.
+ * Whole-minute ATTENTION of a finished focus session: the wall span
+ * (`endedAt` − `startedAt`) **less the seconds it spent paused**, rounded, with
+ * an unparseable endpoint reading as 0 like every other unusable input.
+ *
+ * `pausedSeconds` is required rather than optional on purpose. Migration 057
+ * made pausing possible, and every caller here sums these minutes into a figure
+ * a user reads as „how long I focused" — so a caller that has not thought about
+ * pause time should fail to compile rather than quietly over-report it. Every
+ * pre-057 row carries 0, so no number anyone has already seen moves.
  */
-export function focusSessionMinutes(session: { startedAt: string; endedAt: string }): number {
-  const ms = new Date(session.endedAt).getTime() - new Date(session.startedAt).getTime();
+export function focusSessionMinutes(session: {
+  startedAt: string;
+  endedAt: string;
+  pausedSeconds: number;
+}): number {
+  const spanMs = new Date(session.endedAt).getTime() - new Date(session.startedAt).getTime();
   // An unparseable endpoint makes the difference NaN, and NaN escapes the clamp
   // (`Math.max(0, NaN)` is NaN), so finiteness is decided before it.
-  return Number.isFinite(ms) ? Math.max(0, Math.round(ms / MINUTE_MS)) : 0;
+  if (!Number.isFinite(spanMs)) return 0;
+  const pausedMs = Number.isFinite(session.pausedSeconds)
+    ? Math.max(0, session.pausedSeconds) * SECOND_MS
+    : 0;
+  return Math.max(0, Math.round((spanMs - pausedMs) / MINUTE_MS));
 }
 
 /**

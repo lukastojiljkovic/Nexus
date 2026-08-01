@@ -881,6 +881,24 @@ function mappedOrNull(oldId: string | null, ctx: PlanContext): string | null {
 }
 
 /**
+ * A focus session's task (migration 057) — the second reference in this planner
+ * that must tolerate an id the map cannot answer, for `mappedTemplateOrNone`'s
+ * reason: the column carries no foreign key, so an archive may perfectly well
+ * name a task it does not contain — the session outlived it, which is the whole
+ * point of storing the id without a key. `mapped` would throw and take the
+ * import down.
+ *
+ * An id the map cannot answer becomes null rather than crossing verbatim: a
+ * SOURCE id in this profile's column would name somebody else's row. The
+ * session keeps its `label`, which is the snapshot that made it readable
+ * without the task in the first place.
+ */
+function mappedTaskOrNone(oldId: string | null, ctx: PlanContext): string | null {
+  if (oldId === null) return null;
+  return ctx.ids.get(oldId) ?? null;
+}
+
+/**
  * A note folder's default template (migration 028 / ADR-036) — the ONE reference
  * in this planner that must tolerate an id the map cannot answer, and the reason
  * it exists: `mapped` used to be called here and THREW, which took down the
@@ -1188,7 +1206,17 @@ export function planForeignImport(
       ...row,
       id: mapped(row.id, ctx),
       profileId: target.profileId,
-      subjectId: mapped(row.subjectId, ctx),
+      // Nullable since 1.34.0 — a Pomodoro phase belongs to no subject, and
+      // there is nothing to map for one that does not.
+      subjectId: mappedOrNull(row.subjectId, ctx),
+      // The task must NOT be mapped with `mapped`: it carries no reference rule,
+      // so the archive may name a task it does not contain (a deleted one), and
+      // `mapped` would throw and take the whole import down — the trap
+      // `mappedTemplateOrNone` exists to document. An id the map cannot answer
+      // is a SOURCE id, and it becomes null rather than being left pointing into
+      // another profile's namespace. `label` is why that costs nothing: the
+      // snapshot is what made the row readable in the first place.
+      taskId: mappedTaskOrNone(row.taskId, ctx),
     })),
     // STUDY-007's scheduling preferences are NOT imported, for the same reason
     // the dashboard background is not: retention and the two daily caps are the

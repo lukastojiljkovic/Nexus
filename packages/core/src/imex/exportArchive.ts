@@ -25,6 +25,7 @@
  * cross-module references it repairs so nothing in a subset archive dangles.
  */
 
+import type { FocusOutcome, FocusPhaseKind } from "../focus/focusSession.js";
 import type { HabitSchedule } from "../habits/habitSchedule.js";
 import type { RecurrenceRule } from "../recurrence/recurrence.js";
 import type { TaskViewConfig } from "../tasks/taskViewConfig.js";
@@ -44,6 +45,30 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * `tables/*.csv` is for their spreadsheet, and it is checksummed by neither. An
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
+ *
+ * `1.34.0` grows the `focus-session` row into the ONE focus timer (migration
+ * 057). Seven optional fields — `kind`, `plannedMinutes`, `pausedSeconds`,
+ * `outcome`, `cycleIndex`, `taskId`, `label` — and one field that WIDENS:
+ * `subjectId` becomes nullable, because a Pomodoro phase usually belongs to no
+ * subject at all.
+ *
+ * **This is a merge, not a new record type, and that IS the contract.** The
+ * founder's rule is that the product has one timer („nećemo da imamo više
+ * tajmera, mislim da je to loše"), so a study session and a Pomodoro phase are
+ * one row shape with a `kind` — a second record type here would be the two-timer
+ * incoherence written into the interchange, where it would outlive any decision
+ * to undo it. A pre-`1.34.0` session reads as exactly what it was: a `work`
+ * phase, unplanned, unpaused, subject-scoped. No `ArchiveEra` flag is needed for
+ * that, on `block.kind`'s terms — absent means one specific thing an older
+ * writer could only have meant, and a PRESENT value is validated strictly in
+ * every era.
+ *
+ * The bump is owed for the sharpest reason on this list: `subjectId` changed
+ * DOMAIN. A `1.33.0` reader demands a non-empty string there and would throw one
+ * `invalid-record` per Pomodoro phase in somebody's history — and, worse, would
+ * silently read a break as study time if it did not, which is precisely the lie
+ * `StatsStore`'s work-only scope exists to prevent. `1.26.0`'s entry made the
+ * same argument for a field that only changed meaning.
  *
  * `1.33.0` widens ONE enum, in the two places the interchange spells it (HABIT
  * slice c, migration 056): `"habit"` joins `notification.source` and the
@@ -356,7 +381,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.33.0";
+const SCHEMA_VERSION = "1.34.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -930,12 +955,44 @@ export interface ExportStudySettings {
   maxReviewsPerDay: number | null;
 }
 
+/**
+ * One FINISHED focus session (migration 057) — the single row shape behind the
+ * one focus timer this product has. STUDY's open-ended study session and a
+ * Pomodoro phase are the same row: „a period of deliberate attention, optionally
+ * planned, optionally attached to a subject or a task."
+ *
+ * A RUNNING session is never here, because it is never a row anywhere
+ * (migration 008's decision, upheld): it lives as main-process runtime state, so
+ * a crash loses the in-progress timer honestly rather than persisting a duration
+ * nobody observed. Which is why `outcome` has no „abandoned" — every row in this
+ * file is time somebody actually spent.
+ *
+ * `subjectId` is nullable from `1.34.0`, and every field below it is new there.
+ * A pre-`1.34.0` row carries none of them and means exactly one thing: a `work`
+ * phase, unplanned, unpaused, of the subject it names.
+ *
+ * `taskId` is a bare id with NO reference rule, deliberately — the time was
+ * spent whether or not the task still exists — and `label` is what the session
+ * was CALLED at the time, so the row stays readable once its task is gone.
+ */
 export interface ExportFocusSession {
   id: string;
   profileId: string;
-  subjectId: string;
+  /** The subject studied, or null — a Pomodoro phase usually belongs to none. */
+  subjectId: string | null;
   startedAt: string;
   endedAt: string;
+  kind: FocusPhaseKind;
+  /** Minutes the phase was set for, or null for an open-ended session. */
+  plannedMinutes: number | null;
+  /** Seconds of the span that were paused; never more than the span itself. */
+  pausedSeconds: number;
+  /** How it ended, or null when nothing was recorded (every pre-`1.34.0` row). */
+  outcome: FocusOutcome | null;
+  cycleIndex: number;
+  /** What was being worked on. Never reference-checked — see the interface doc. */
+  taskId: string | null;
+  label: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -2573,7 +2630,7 @@ function blocksCsv(rows: readonly ExportStudyBlock[]): string {
 
 function focusSessionsCsv(rows: readonly ExportFocusSession[]): string {
   return toCsv(
-    ["id", "subjectId", "startedAt", "endedAt", "createdAt", "updatedAt"],
-    rows.map((row) => [row.id, row.subjectId, row.startedAt, row.endedAt, row.createdAt, row.updatedAt]),
+    ["id", "subjectId", "startedAt", "endedAt", "kind", "plannedMinutes", "pausedSeconds", "outcome", "cycleIndex", "taskId", "label", "createdAt", "updatedAt"],
+    rows.map((row) => [row.id, row.subjectId, row.startedAt, row.endedAt, row.kind, row.plannedMinutes, row.pausedSeconds, row.outcome, row.cycleIndex, row.taskId, row.label, row.createdAt, row.updatedAt]),
   );
 }

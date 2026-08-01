@@ -1,6 +1,7 @@
 import * as Y from "yjs";
 
 import { TIME_GRID_MAX_END_MINUTES, TIME_GRID_MIN_EVENT_MINUTES } from "../calendar/timeGridDrag.js";
+import { FOCUS_OUTCOMES, FOCUS_PHASE_KINDS } from "../focus/focusSession.js";
 import { validateHabitSchedule } from "../habits/habitSchedule.js";
 import type { HabitSchedule } from "../habits/habitSchedule.js";
 import { validateRecurrenceRule } from "../recurrence/recurrence.js";
@@ -237,7 +238,27 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.33.0` widens ONE
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`.
+ *
+ * `1.34.0` grows `focus-session` into the ONE focus timer (migration 057):
+ * seven optional-with-a-default fields (`kind`, `plannedMinutes`,
+ * `pausedSeconds`, `outcome`, `cycleIndex`, `taskId`, `label`) and one field
+ * that WIDENS — `subjectId` becomes nullable, because a Pomodoro phase usually
+ * belongs to no subject.
+ *
+ * A merge rather than a second record type, and that is the contract: the
+ * product has ONE timer, so a study session and a Pomodoro phase are one row
+ * shape with a `kind`. No `ArchiveEra` flag, on `block.kind`'s terms — an absent
+ * field means the one thing an older writer could have meant (a `work` phase,
+ * unplanned, unpaused, subject-scoped), and a PRESENT value is validated
+ * strictly in every era.
+ *
+ * The bump is owed because `subjectId` changed DOMAIN, which `1.26.0`'s entry
+ * already argued is as breaking as a new field: a `1.33.0` reader demands a
+ * non-empty string there and would throw one `invalid-record` per Pomodoro phase
+ * in somebody's history.
+ *
+ * `1.33.0` widens ONE
  * enum in two places (HABIT slice c, migration 056): `"habit"` joins
  * `notification.source` and the manifest's `settings.notifications.enabledSources`.
  * No new record type, no new field, and a MINOR bump all the same — see
@@ -507,7 +528,7 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.33.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.34.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -1992,10 +2013,48 @@ function parseBlock(raw: Record<string, unknown>): ExportStudyBlock {
   };
 }
 
+// --- FOCUS (migration 057) ---------------------------------------------------
+//
+// Copied, not imported, on `NOTE_FOLDER_COLORS`' terms — `@nexus/core` never
+// depends on `@nexus/db`, so the bounds `FocusStore` refuses by are restated
+// here, which is also what makes a bad archive a named `invalid-record` with a
+// line number instead of a raw SQLite error inside a restore transaction. (The
+// two VOCABULARIES are imported rather than copied: `FOCUS_PHASE_KINDS` and
+// `FOCUS_OUTCOMES` live in this package, beside the engine that defines them.)
+const MAX_FOCUS_PLANNED_MINUTES = 180;
+const MAX_FOCUS_CYCLE_INDEX = 9_999;
+const MAX_FOCUS_LABEL_LENGTH = 200;
+
+/**
+ * One finished focus session (migrations 008 + 057) — the ONE focus timer's row.
+ *
+ * **Seven fields are optional-with-a-default and `subjectId` is nullable, both
+ * from `1.34.0`.** Absent means what every pre-`1.34.0` session was and could
+ * only have been: a `work` phase, unplanned, unpaused, uncounted, of the subject
+ * it names. That is `block.kind`'s arrangement exactly, so no `ArchiveEra` flag
+ * is needed — a PRESENT value is validated strictly in every era, and an older
+ * writer had no way to mean anything else by its absence.
+ *
+ * `outcome` has no „abandoned" and never will: a running phase is never a row
+ * (migration 008's decision, upheld), so no archive can carry a session whose
+ * end nobody witnessed.
+ *
+ * `pausedSeconds` may not exceed the session's own span — the one invariant no
+ * CHECK can state, and the reason it is refused here rather than left to the
+ * store: a row whose pauses outlast its duration would report NEGATIVE
+ * attention, and a restore must not be able to make a focus total go below zero.
+ *
+ * `taskId` is deliberately NOT reference-checked, exactly as a notification's
+ * `entityId` is not: it points at a row that may legitimately be gone, because
+ * the time was spent whether or not the task survived it.
+ */
 function parseFocusSession(raw: Record<string, unknown>): ExportFocusSession {
   const id = nonEmptyStr(raw.id, "id");
   const profileId = nonEmptyStr(raw.profileId, "profileId");
-  const subjectId = nonEmptyStr(raw.subjectId, "subjectId");
+  // Nullable from 1.34.0 — a Pomodoro phase belongs to no subject. An ABSENT key
+  // is an older archive's row, which always named one, so absence is still a
+  // refusal rather than a null.
+  const subjectId = nullableNonEmptyStr(raw.subjectId, "subjectId");
   const startedAt = isoDateTime(raw.startedAt, "startedAt");
   const endedAt = isoDateTime(raw.endedAt, "endedAt");
   // Migration 008's CHECK: `ended_at > started_at` — every persisted session
@@ -2004,9 +2063,37 @@ function parseFocusSession(raw: Record<string, unknown>): ExportFocusSession {
   // precisely what the database would reject, rather than what is merely
   // backwards in wall-clock terms.
   if (!(endedAt > startedAt)) throw new InvalidFieldError("endedAt");
+  const kind = raw.kind === undefined ? "work" : enumStr(raw.kind, "kind", FOCUS_PHASE_KINDS);
+  const plannedMinutes =
+    raw.plannedMinutes === undefined || raw.plannedMinutes === null
+      ? null
+      : intInRange(raw.plannedMinutes, "plannedMinutes", 1, MAX_FOCUS_PLANNED_MINUTES);
+  const pausedSeconds =
+    raw.pausedSeconds === undefined
+      ? 0
+      : intInRange(raw.pausedSeconds, "pausedSeconds", 0, focusSpanSeconds(startedAt, endedAt));
+  const outcome =
+    raw.outcome === undefined || raw.outcome === null
+      ? null
+      : enumStr(raw.outcome, "outcome", FOCUS_OUTCOMES);
+  const cycleIndex =
+    raw.cycleIndex === undefined
+      ? 0
+      : intInRange(raw.cycleIndex, "cycleIndex", 0, MAX_FOCUS_CYCLE_INDEX);
+  const taskId = raw.taskId === undefined ? null : nullableNonEmptyStr(raw.taskId, "taskId");
+  const label =
+    raw.label === undefined ? null : nullableTrimmedStr(raw.label, "label", MAX_FOCUS_LABEL_LENGTH);
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
-  return { id, profileId, subjectId, startedAt, endedAt, createdAt, updatedAt };
+  return {
+    id, profileId, subjectId, startedAt, endedAt, kind, plannedMinutes, pausedSeconds,
+    outcome, cycleIndex, taskId, label, createdAt, updatedAt,
+  };
+}
+
+/** The session's wall span in whole seconds — the ceiling `pausedSeconds` is bounded by. */
+function focusSpanSeconds(startedAt: string, endedAt: string): number {
+  return Math.floor((Date.parse(endedAt) - Date.parse(startedAt)) / 1000);
 }
 
 function parseNotification(raw: Record<string, unknown>): ExportNotification {
@@ -3888,6 +3975,10 @@ function referenceRules(collections: Collections): ReferenceRule[] {
       },
       onDangling: { detach: (row) => ({ ...row, topicId: null }) },
     }),
+    // A NULL `subjectId` is no reference at all (1.34.0): a Pomodoro phase
+    // belongs to no subject, so there is nothing to resolve and nothing to
+    // dangle. A non-null one that resolves to nothing still DROPS the session —
+    // unchanged — because a study session is a fact about the subject it names.
     referenceRule({
       bucket: collections.focusSessions,
       type: "focus-session",

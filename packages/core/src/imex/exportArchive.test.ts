@@ -274,7 +274,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.33.0");
+      expect(manifest.schemaVersion).toBe("1.34.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       // `picture: null` is written out loud rather than omitted: the manifest is
@@ -898,7 +898,9 @@ describe("buildExportArchive", () => {
       input.data.focusSessions = [
         {
           id: "f1", profileId: "profile1", subjectId: "s1", startedAt: "2026-07-01T10:00:00.000Z",
-          endedAt: "2026-07-01T11:00:00.000Z", createdAt: "2026-07-01T11:00:00.000Z", updatedAt: "2026-07-01T11:00:00.000Z",
+          endedAt: "2026-07-01T11:00:00.000Z", kind: "work", plannedMinutes: null, pausedSeconds: 0,
+          outcome: null, cycleIndex: 0, taskId: null, label: null,
+          createdAt: "2026-07-01T11:00:00.000Z", updatedAt: "2026-07-01T11:00:00.000Z",
         },
       ];
 
@@ -1116,7 +1118,7 @@ describe("buildExportArchive", () => {
           { id: "b1", planId: "pl1", profileId: "p1", blockDate: "2026-01-02", minutes: 30, status: "planned", topicId: "top1", kind: "coverage", pinned: true, createdAt: t, updatedAt: t },
         ],
         focusSessions: [
-          { id: "f1", profileId: "p1", subjectId: "s1", startedAt: t, endedAt: t, createdAt: t, updatedAt: t },
+          { id: "f1", profileId: "p1", subjectId: "s1", startedAt: t, endedAt: t, kind: "work", plannedMinutes: null, pausedSeconds: 0, outcome: null, cycleIndex: 0, taskId: null, label: null, createdAt: t, updatedAt: t },
         ],
         studySettings: [
           { profileId: "p1", targetRetention: 0.95, newPerDay: 15, maxReviewsPerDay: 120 },
@@ -2075,7 +2077,7 @@ function everyModuleInput(): ExportArchiveInput {
     { id: "b1", planId: "p1", profileId: "profile1", blockDate: "2026-07-02", minutes: 60, status: "planned", createdAt: at, updatedAt: at },
   ];
   input.data.focusSessions = [
-    { id: "f1", profileId: "profile1", subjectId: "s1", startedAt: "2026-07-01T10:00:00.000Z", endedAt: "2026-07-01T11:00:00.000Z", createdAt: at, updatedAt: at },
+    { id: "f1", profileId: "profile1", subjectId: "s1", startedAt: "2026-07-01T10:00:00.000Z", endedAt: "2026-07-01T11:00:00.000Z", kind: "work", plannedMinutes: null, pausedSeconds: 0, outcome: null, cycleIndex: 0, taskId: null, label: null, createdAt: at, updatedAt: at },
   ];
   input.data.studySettings = [
     { profileId: "profile1", targetRetention: 0.9, newPerDay: 20, maxReviewsPerDay: null },

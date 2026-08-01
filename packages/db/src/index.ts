@@ -331,8 +331,19 @@ export type {
   UpdatePlanFields,
 } from "./study/planStore.js";
 
-export { FocusStore } from "./study/focusStore.js";
-export type { CreateFocusSessionInput, FocusSession } from "./study/focusStore.js";
+// FOCUS — the ONE focus timer (migration 057). Under `focus/` rather than
+// `study/`: it stopped being STUDY's the moment one timer served both modules.
+export {
+  FocusStore,
+  MAX_FOCUS_CYCLE_INDEX,
+  MAX_FOCUS_LABEL_LENGTH,
+  MAX_FOCUS_PLANNED_MINUTES,
+} from "./focus/focusStore.js";
+export type {
+  CreateFocusSessionInput,
+  FocusKindStats,
+  FocusSession,
+} from "./focus/focusStore.js";
 
 export { StatsStore } from "./study/statsStore.js";
 export type {

@@ -517,8 +517,9 @@ export class RestoreStore {
     );
     this.insertFocusSession = db.prepare(
       `INSERT INTO focus_sessions
-         (id, profile_id, subject_id, started_at, ended_at, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
+         (id, profile_id, subject_id, started_at, ended_at, kind, planned_minutes,
+          paused_seconds, outcome, cycle_index, task_id, label, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertReviewLog = db.prepare(
       `INSERT INTO review_log
@@ -1003,9 +1004,15 @@ export class RestoreStore {
         written += 1;
       }
 
+      // The phase fields ride with the row (migration 057). A pre-1.34.0
+      // archive's session arrives from the parser already defaulted to what it
+      // always was — a `work` phase, unplanned, unpaused — so nothing here has
+      // to guess on its behalf.
       for (const session of input.data.focusSessions) {
         this.insertFocusSession.run(
           session.id, this.profileId, session.subjectId, session.startedAt, session.endedAt,
+          session.kind, session.plannedMinutes, session.pausedSeconds, session.outcome,
+          session.cycleIndex, session.taskId, session.label,
           session.createdAt, session.updatedAt,
         );
         written += 1;

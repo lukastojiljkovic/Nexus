@@ -168,6 +168,19 @@ function localDayKey(instant: string): string | null {
  * reuse it. Date-range params are bare "YYYY-MM-DD" and validated the same way
  * as `PlanStore.listBlocksInRange`.
  *
+ * **FOCUS_WORK_ONLY — every read of `focus_sessions` here is scoped to
+ * `kind = 'work'`, and that is load-bearing.** Since migration 057 that table is
+ * the ONE focus timer this product has, so it also holds Pomodoro BREAKS. A
+ * break is not studying; without this scope every short break would silently
+ * inflate „koliko sam učio", and nothing on screen would say so. Four statements
+ * carry it (`subjectMinutes`, the activity-day probe, the per-subject log and
+ * its has-older probe) — if a fifth read of this table is ever added here, it
+ * needs the same clause, and the test named after this paragraph pins it.
+ *
+ * Minute sums additionally subtract `paused_seconds`: a phase that was paused
+ * held less attention than it lasted. Every pre-057 row carries 0 there, so no
+ * number the user has already seen moves.
+ *
  * Every query reads the user's own LOCAL calendar days, mirroring `PlanStore`'s
  * local-calendar `today` idiom — the underlying timestamps are UTC ISO-8601
  * instants. The summary reads (`subjectMinutes`, `activityDays`,
@@ -207,10 +220,19 @@ export class StatsStore {
     db: DatabaseHandle,
     private readonly profileId: string,
   ) {
+    // `kind = 'work'` and `subject_id IS NOT NULL` are BOTH load-bearing since
+    // migration 057 made `focus_sessions` the one focus timer (see FOCUS_WORK_ONLY).
+    // Without the first, every Pomodoro break would inflate study time; without
+    // the second, subjectless Pomodoro work would arrive as a phantom NULL
+    // subject the caller has no name for. `paused_seconds` comes off the span
+    // for the same honesty: a phase you paused held less attention than it lasted.
     this.subjectMinutesStatement = db.prepare(`
-      SELECT subject_id, SUM((julianday(ended_at) - julianday(started_at)) * 1440) AS minutes
+      SELECT subject_id,
+             SUM((julianday(ended_at) - julianday(started_at)) * 1440
+                 - paused_seconds / 60.0) AS minutes
         FROM focus_sessions
-       WHERE profile_id = ? AND deleted_at IS NULL
+       WHERE profile_id = ? AND deleted_at IS NULL AND kind = 'work'
+         AND subject_id IS NOT NULL
          AND date(started_at, 'localtime') BETWEEN ? AND ?
        GROUP BY subject_id
        ORDER BY minutes DESC, subject_id
@@ -226,7 +248,7 @@ export class StatsStore {
     this.activityDaysFocusSessions = db.prepare(`
       SELECT DISTINCT date(started_at, 'localtime') AS day
         FROM focus_sessions
-       WHERE profile_id = ? AND deleted_at IS NULL
+       WHERE profile_id = ? AND deleted_at IS NULL AND kind = 'work'
          AND date(started_at, 'localtime') BETWEEN ? AND ?
     `);
 
@@ -297,9 +319,9 @@ export class StatsStore {
       SELECT rl.review AS review ${REVIEW_SUBJECT_JOIN} AND rl.review >= ? AND rl.review < ?
     `);
     this.logFocusSessions = db.prepare(`
-      SELECT started_at, ended_at
+      SELECT started_at, ended_at, paused_seconds
         FROM focus_sessions
-       WHERE profile_id = ? AND subject_id = ? AND deleted_at IS NULL
+       WHERE profile_id = ? AND subject_id = ? AND deleted_at IS NULL AND kind = 'work'
          AND started_at >= ? AND started_at < ?
     `);
     this.logBlocks = db.prepare(`
@@ -323,7 +345,8 @@ export class StatsStore {
         bound: "instant",
         statement: db.prepare(`
           SELECT 1 AS x FROM focus_sessions
-           WHERE profile_id = ? AND subject_id = ? AND deleted_at IS NULL AND started_at < ?
+           WHERE profile_id = ? AND subject_id = ? AND deleted_at IS NULL AND kind = 'work'
+             AND started_at < ?
            LIMIT 1
         `),
       },
@@ -555,11 +578,17 @@ export class StatsStore {
       subjectId,
       rangeStart,
       rangeEnd,
-    ) as { started_at: string; ended_at: string }[];
+    ) as { started_at: string; ended_at: string; paused_seconds: number }[];
     for (const row of focusRows) {
       const day = localDayKey(row.started_at);
       if (day === null) continue;
-      const ms = new Date(row.ended_at).getTime() - new Date(row.started_at).getTime();
+      // The span less what was paused — the attention, not the wall time
+      // (migration 057). `paused_seconds` is 0 for every session recorded before
+      // there was anything to pause, so nothing about the old numbers moves.
+      const ms =
+        new Date(row.ended_at).getTime() -
+        new Date(row.started_at).getTime() -
+        row.paused_seconds * 1000;
       if (!Number.isFinite(ms) || ms <= 0) continue;
       focusMs.set(day, (focusMs.get(day) ?? 0) + ms);
     }

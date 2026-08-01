@@ -22,8 +22,8 @@ import { CardStore, MIGRATIONS, NexusDatabase, openDatabase, runMigrations } fro
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 56 (habit reminders), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(56);
+  it("is at version 57 (focus phases), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(57);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -7347,5 +7347,316 @@ describe("migration 056 — the habit reminder as a notification source (HABIT s
     } finally {
       raw.close();
     }
+  });
+});
+
+describe("migration 057 — the one focus timer", () => {
+  type Handle = Database.Database;
+
+  const now = () => new Date().toISOString();
+
+  const columnNames = (raw: Handle, table: string): string[] =>
+    (raw.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((row) => row.name);
+
+  const tableNamesOf = (raw: Handle): string[] =>
+    (
+      raw.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as {
+        name: string;
+      }[]
+    ).map((row) => row.name);
+
+  const seedProfile = (raw: Handle, id: string) =>
+    raw
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run(id, "personal", "P", now());
+
+  const seedSubject = (raw: Handle, id: string, profileId: string) =>
+    raw
+      .prepare(
+        `INSERT INTO subjects (id, profile_id, name, color, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, profileId, `Predmet ${id}`, "jade", now(), now());
+
+  /** A pre-057 session, exactly the shape migration 008 accepted — including its soft delete. */
+  const seedOldSession = (
+    raw: Handle,
+    id: string,
+    profileId: string,
+    subjectId: string,
+    startedAt: string,
+    endedAt: string,
+    deletedAt: string | null = null,
+  ) =>
+    raw
+      .prepare(
+        `INSERT INTO focus_sessions
+           (id, profile_id, subject_id, started_at, ended_at, created_at, updated_at, deleted_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id, profileId, subjectId, startedAt, endedAt,
+        "2026-01-01T00:00:00.000Z", "2026-01-02T00:00:00.000Z", deletedAt,
+      );
+
+  /** As every rebuild migration's own helper: a connection held at exactly `version`. */
+  function openAtVersion(path: string, version: number): Handle {
+    const raw = new Database(path);
+    raw.pragma("journal_mode = WAL");
+    raw.pragma("foreign_keys = ON");
+    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
+      typeof value === "string" ? foldSearchText(value) : null,
+    );
+    runMigrations(
+      raw,
+      MIGRATIONS.filter((migration) => migration.version <= version),
+    );
+    return raw;
+  }
+
+  /** A 056 database whose focus log holds two live sessions and a soft-deleted one. */
+  function seedFocusWorld(raw: Handle): void {
+    seedProfile(raw, "p1");
+    seedSubject(raw, "s1", "p1");
+    seedSubject(raw, "s2", "p1");
+    seedOldSession(raw, "f1", "p1", "s1", "2026-07-08T12:00:00.000Z", "2026-07-08T12:30:00.000Z");
+    seedOldSession(raw, "f2", "p1", "s2", "2026-07-09T08:00:00.000Z", "2026-07-09T09:15:00.000Z");
+    seedOldSession(
+      raw, "f3", "p1", "s1",
+      "2026-07-10T20:00:00.000Z", "2026-07-10T20:45:00.000Z", "2026-07-11T06:00:00.000Z",
+    );
+  }
+
+  it("adds the phase columns and keeps every column migration 008 declared", () => {
+    const db = openDatabase({ path: join(dir, "columns-057.db") });
+    expect(columnNames(db.raw, "focus_sessions")).toEqual([
+      "id",
+      "profile_id",
+      "subject_id",
+      "started_at",
+      "ended_at",
+      "kind",
+      "planned_minutes",
+      "paused_seconds",
+      "outcome",
+      "cycle_index",
+      "task_id",
+      "label",
+      "created_at",
+      "updated_at",
+      "deleted_at",
+    ]);
+    db.close();
+  });
+
+  it("leaves no rebuild scaffolding behind", () => {
+    const db = openDatabase({ path: join(dir, "scaffolding-057.db") });
+    expect(tableNamesOf(db.raw)).not.toContain("focus_sessions_new");
+    db.close();
+  });
+
+  it("re-creates the partial index the drop took with the table", () => {
+    const db = openDatabase({ path: join(dir, "index-057.db") });
+    const indexes = (
+      db.raw.prepare("SELECT name FROM sqlite_master WHERE type = 'index'").all() as {
+        name: string;
+      }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("focus_sessions_profile_started");
+    db.close();
+  });
+
+  it("carries every seeded 056 session through the rebuild with its values intact", () => {
+    const path = join(dir, "upgrade-057.db");
+    const before = openAtVersion(path, 56);
+    seedFocusWorld(before);
+    expect(before.pragma("user_version", { simple: true })).toBe(56);
+    before.close();
+
+    const db = openDatabase({ path });
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+
+    // Every row, every value — the COPY is what has to be proven, not the shape.
+    expect(
+      db.raw
+        .prepare(
+          `SELECT id, profile_id, subject_id, started_at, ended_at, created_at, updated_at,
+                  deleted_at, kind, planned_minutes, paused_seconds, outcome, cycle_index,
+                  task_id, label
+             FROM focus_sessions ORDER BY id`,
+        )
+        .all(),
+    ).toEqual([
+      {
+        id: "f1", profile_id: "p1", subject_id: "s1",
+        started_at: "2026-07-08T12:00:00.000Z", ended_at: "2026-07-08T12:30:00.000Z",
+        created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-02T00:00:00.000Z",
+        deleted_at: null,
+        kind: "work", planned_minutes: null, paused_seconds: 0, outcome: null,
+        cycle_index: 0, task_id: null, label: null,
+      },
+      {
+        id: "f2", profile_id: "p1", subject_id: "s2",
+        started_at: "2026-07-09T08:00:00.000Z", ended_at: "2026-07-09T09:15:00.000Z",
+        created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-02T00:00:00.000Z",
+        deleted_at: null,
+        kind: "work", planned_minutes: null, paused_seconds: 0, outcome: null,
+        cycle_index: 0, task_id: null, label: null,
+      },
+      // The soft delete survives: a session the user deleted and can still undo
+      // must not come back resurrected by a schema change.
+      {
+        id: "f3", profile_id: "p1", subject_id: "s1",
+        started_at: "2026-07-10T20:00:00.000Z", ended_at: "2026-07-10T20:45:00.000Z",
+        created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-02T00:00:00.000Z",
+        deleted_at: "2026-07-11T06:00:00.000Z",
+        kind: "work", planned_minutes: null, paused_seconds: 0, outcome: null,
+        cycle_index: 0, task_id: null, label: null,
+      },
+    ]);
+    expect(db.raw.pragma("foreign_key_check")).toEqual([]);
+    db.close();
+  });
+
+  it("keeps both cascades pointing at the REBUILT table", () => {
+    const path = join(dir, "cascade-057.db");
+    const before = openAtVersion(path, 56);
+    seedFocusWorld(before);
+    before.close();
+
+    const db = openDatabase({ path });
+    // Subject -> sessions, migration 008's chain, still live after the rename.
+    db.raw.prepare("DELETE FROM subjects WHERE id = ?").run("s2");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM focus_sessions").get() as { n: number }).n,
+    ).toBe(2);
+    // Profile -> everything.
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM focus_sessions").get() as { n: number }).n,
+    ).toBe(0);
+    db.close();
+  });
+
+  it("still refuses a subject this database does not have", () => {
+    const db = openDatabase({ path: join(dir, "fk-057.db") });
+    seedProfile(db.raw, "p1");
+    expect(() =>
+      seedOldSession(
+        db.raw, "f1", "p1", "ghost",
+        "2026-07-08T12:00:00.000Z", "2026-07-08T12:30:00.000Z",
+      ),
+    ).toThrow();
+    db.close();
+  });
+
+  it("accepts a session with no subject at all — a Pomodoro phase belongs to none", () => {
+    const db = openDatabase({ path: join(dir, "nullable-subject-057.db") });
+    seedProfile(db.raw, "p1");
+    expect(() =>
+      db.raw
+        .prepare(
+          `INSERT INTO focus_sessions
+             (id, profile_id, subject_id, started_at, ended_at, kind, planned_minutes,
+              created_at, updated_at)
+           VALUES (?, ?, NULL, ?, ?, 'short_break', 5, ?, ?)`,
+        )
+        .run("f1", "p1", "2026-07-08T12:00:00.000Z", "2026-07-08T12:05:00.000Z", now(), now()),
+    ).not.toThrow();
+    db.close();
+  });
+
+  it("keeps migration 008's ended_at > started_at CHECK", () => {
+    const db = openDatabase({ path: join(dir, "order-057.db") });
+    seedProfile(db.raw, "p1");
+    seedSubject(db.raw, "s1", "p1");
+    expect(() =>
+      seedOldSession(
+        db.raw, "f1", "p1", "s1",
+        "2026-07-08T12:00:00.000Z", "2026-07-08T12:00:00.000Z",
+      ),
+    ).toThrow();
+    expect(() =>
+      seedOldSession(
+        db.raw, "f2", "p1", "s1",
+        "2026-07-08T12:00:00.000Z", "2026-07-08T11:00:00.000Z",
+      ),
+    ).toThrow();
+    db.close();
+  });
+
+  it("closes the phase vocabulary and the outcome vocabulary with CHECKs", () => {
+    const db = openDatabase({ path: join(dir, "enums-057.db") });
+    seedProfile(db.raw, "p1");
+
+    const insert = (id: string, kind: string, outcome: string | null) =>
+      db.raw
+        .prepare(
+          `INSERT INTO focus_sessions
+             (id, profile_id, started_at, ended_at, kind, outcome, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          id, "p1", "2026-07-08T12:00:00.000Z", "2026-07-08T12:30:00.000Z",
+          kind, outcome, now(), now(),
+        );
+
+    for (const kind of ["work", "short_break", "long_break"]) {
+      expect(() => insert(`ok-${kind}`, kind, "completed")).not.toThrow();
+    }
+    expect(() => insert("bad-kind", "pause", null)).toThrow();
+    for (const outcome of ["completed", "stopped"]) {
+      expect(() => insert(`ok-${outcome}`, "work", outcome)).not.toThrow();
+    }
+    expect(() => insert("ok-null-outcome", "work", null)).not.toThrow();
+    // No 'abandoned': a running phase is never a row, so no stored phase has an
+    // end nobody witnessed.
+    expect(() => insert("bad-outcome", "work", "abandoned")).toThrow();
+    db.close();
+  });
+
+  it("refuses a fractional or non-positive number in every integer column", () => {
+    const db = openDatabase({ path: join(dir, "integers-057.db") });
+    seedProfile(db.raw, "p1");
+
+    const insert = (id: string, column: string, value: number) =>
+      db.raw
+        .prepare(
+          `INSERT INTO focus_sessions
+             (id, profile_id, started_at, ended_at, ${column}, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(id, "p1", "2026-07-08T12:00:00.000Z", "2026-07-08T12:30:00.000Z", value, now(), now());
+
+    // INTEGER affinity alone would have accepted 12.5 (migration 051's lesson).
+    expect(() => insert("pm-frac", "planned_minutes", 12.5)).toThrow();
+    expect(() => insert("pm-zero", "planned_minutes", 0)).toThrow();
+    expect(() => insert("pm-ok", "planned_minutes", 25)).not.toThrow();
+    expect(() => insert("ps-frac", "paused_seconds", 0.5)).toThrow();
+    expect(() => insert("ps-neg", "paused_seconds", -1)).toThrow();
+    expect(() => insert("ps-zero", "paused_seconds", 0)).not.toThrow();
+    expect(() => insert("ci-frac", "cycle_index", 1.5)).toThrow();
+    expect(() => insert("ci-neg", "cycle_index", -1)).toThrow();
+    expect(() => insert("ci-ok", "cycle_index", 3)).not.toThrow();
+    db.close();
+  });
+
+  it("lets a task_id outlive the task it names — no foreign key, deliberately", () => {
+    const db = openDatabase({ path: join(dir, "task-057.db") });
+    seedProfile(db.raw, "p1");
+    expect(() =>
+      db.raw
+        .prepare(
+          `INSERT INTO focus_sessions
+             (id, profile_id, started_at, ended_at, task_id, label, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          "f1", "p1", "2026-07-08T12:00:00.000Z", "2026-07-08T12:30:00.000Z",
+          "a-task-that-was-deleted", "Pisanje izveštaja", now(), now(),
+        ),
+    ).not.toThrow();
+    expect(db.raw.pragma("foreign_key_check")).toEqual([]);
+    db.close();
   });
 });

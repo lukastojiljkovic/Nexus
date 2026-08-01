@@ -115,6 +115,28 @@ export { countsAsDone } from "./habits/habitDone.js";
 export { habitReminderInputs } from "./habits/habitReminder.js";
 export type { HabitReminderSource } from "./habits/habitReminder.js";
 
+// --- FOCUS (the one focus timer) --------------------------------------------
+//
+// The pure Pomodoro rules and the wall-clock arithmetic behind a running phase.
+// One row is one PHASE, and STUDY's open-ended timer is a `work` phase with no
+// plan — there is exactly one focus timer in this product (`focusSession.ts`).
+export {
+  DEFAULT_FOCUS_CONFIG,
+  FOCUS_OUTCOMES,
+  FOCUS_PHASE_KINDS,
+  nextPhase,
+  phaseProgress,
+  validateFocusConfig,
+} from "./focus/focusSession.js";
+export type {
+  FocusConfig,
+  FocusConfigResult,
+  FocusOutcome,
+  FocusPhaseKind,
+  FocusPhaseProgress,
+  FocusPhaseTiming,
+} from "./focus/focusSession.js";
+
 export {
   ALWAYS_ON_SOURCES,
   deriveNotificationCandidates,

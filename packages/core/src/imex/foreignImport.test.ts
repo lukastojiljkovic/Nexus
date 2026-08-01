@@ -149,7 +149,7 @@ function foreignProfileData(): ProfileData {
       { id: "src-bl1", planId: "src-pl1", profileId: "src", blockDate: "2026-08-02", minutes: 60, status: "planned", topicId: "src-top1", kind: "revision", pinned: true, createdAt: T0, updatedAt: T0 },
     ],
     focusSessions: [
-      { id: "src-fs1", profileId: "src", subjectId: "src-s1", startedAt: "2026-01-02T09:00:00.000Z", endedAt: "2026-01-02T10:00:00.000Z", createdAt: T0, updatedAt: T0 },
+      { id: "src-fs1", profileId: "src", subjectId: "src-s1", startedAt: "2026-01-02T09:00:00.000Z", endedAt: "2026-01-02T10:00:00.000Z", kind: "work", plannedMinutes: null, pausedSeconds: 0, outcome: null, cycleIndex: 0, taskId: null, label: null, createdAt: T0, updatedAt: T0 },
     ],
     studySettings: [
       { profileId: "src", targetRetention: 0.95, newPerDay: 7, maxReviewsPerDay: 120 },

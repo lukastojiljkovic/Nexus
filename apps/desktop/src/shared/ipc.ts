@@ -9,13 +9,16 @@
  * revalidated in the main process (renderer input is untrusted).
  */
 
-// The one import this contract makes, and it is type-only (erased at build
-// time, so preload and main gain no runtime dependency): a task list's view
+// The only imports this contract makes, and they are type-only (erased at build
+// time, so preload and main gain no runtime dependency). A task list's view
 // config is a nested grammar shared by the store, the archive reader and this
-// wire, and the three of them must not each carry their own copy of it. Every
-// other shape here stays redeclared — those are string unions and flat records,
-// where a copy costs nothing and cannot drift silently.
-import type { TaskViewConfig } from "@nexus/core";
+// wire, and the three of them must not each carry their own copy of it. The two
+// focus unions are here for a narrower reason: they are the closed vocabularies
+// the store's CHECK constraints enforce, so a redeclared copy could drift into
+// naming a phase the database would refuse to store. Every other shape here
+// stays redeclared — those are flat records and one-off unions, where a copy
+// costs nothing and cannot drift silently.
+import type { FocusOutcome, FocusPhaseKind, TaskViewConfig } from "@nexus/core";
 
 /** The only channels the preload bridge and the main handlers agree on. */
 export const IpcChannel = {
@@ -2751,16 +2754,34 @@ export interface TopicsRestoreToPlanRequest {
 }
 
 /**
- * A completed focus (study-timer) session as seen by the renderer (mirrors the
- * `focus_sessions` table via the store's mapping, STUDY stats). Redeclared
- * here so the renderer never imports DB code.
+ * A FINISHED focus session as seen by the renderer (mirrors the `focus_sessions`
+ * table via the store's mapping). Redeclared here so the renderer never imports
+ * DB code.
+ *
+ * Since migration 057 this is the one focus session the product has: STUDY's
+ * open-ended study timer is `kind: "work"` with `plannedMinutes: null`, and a
+ * Pomodoro phase is the same row with a plan. That is why `subjectId` is now
+ * **nullable** — a Pomodoro phase usually belongs to no subject — and every
+ * reader that joined on it has to say what it does with a subjectless row.
  */
 export interface FocusSession {
   id: string;
   profileId: string;
-  subjectId: string;
+  subjectId: string | null;
   startedAt: string;
   endedAt: string;
+  kind: FocusPhaseKind;
+  /** Minutes the phase was set for; null for an open-ended session. */
+  plannedMinutes: number | null;
+  /** Seconds of the span that were paused — never more than the span itself. */
+  pausedSeconds: number;
+  /** How it ended, or null when nothing was recorded (every pre-057 row). */
+  outcome: FocusOutcome | null;
+  cycleIndex: number;
+  /** Carries no foreign key: the session outlives whatever it pointed at. */
+  taskId: string | null;
+  /** What it was CALLED at the time — a snapshot, readable after the task is gone. */
+  label: string | null;
   createdAt: string;
   updatedAt: string;
 }

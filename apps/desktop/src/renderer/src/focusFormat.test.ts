@@ -62,6 +62,7 @@ describe("focusSessionMinutes", () => {
       focusSessionMinutes({
         startedAt: "2026-07-30T10:00:00.000Z",
         endedAt: "2026-07-30T10:45:00.000Z",
+        pausedSeconds: 0,
       }),
     ).toBe(45);
     // 30 s rounds up, 29 s rounds down — the boundary either side.
@@ -69,12 +70,39 @@ describe("focusSessionMinutes", () => {
       focusSessionMinutes({
         startedAt: "2026-07-30T10:00:00.000Z",
         endedAt: "2026-07-30T10:00:30.000Z",
+        pausedSeconds: 0,
       }),
     ).toBe(1);
     expect(
       focusSessionMinutes({
         startedAt: "2026-07-30T10:00:00.000Z",
         endedAt: "2026-07-30T10:00:29.000Z",
+        pausedSeconds: 0,
+      }),
+    ).toBe(0);
+  });
+
+  // Migration 057 made pausing possible, and these minutes are summed into a
+  // figure the user reads as „how long I focused". A paused stretch is wall time
+  // that was not attention, so it comes off the span — otherwise a 45-minute
+  // session with a 15-minute interruption reports three quarters of an hour of
+  // focus that never happened.
+  it("subtracts paused seconds from the wall span", () => {
+    expect(
+      focusSessionMinutes({
+        startedAt: "2026-07-30T10:00:00.000Z",
+        endedAt: "2026-07-30T10:45:00.000Z",
+        pausedSeconds: 900,
+      }),
+    ).toBe(30);
+  });
+
+  it("clamps to zero when the whole span was paused, rather than going negative", () => {
+    expect(
+      focusSessionMinutes({
+        startedAt: "2026-07-30T10:00:00.000Z",
+        endedAt: "2026-07-30T10:10:00.000Z",
+        pausedSeconds: 6000,
       }),
     ).toBe(0);
   });
@@ -84,6 +112,7 @@ describe("focusSessionMinutes", () => {
       focusSessionMinutes({
         startedAt: "2026-07-30T10:45:00.000Z",
         endedAt: "2026-07-30T10:00:00.000Z",
+        pausedSeconds: 0,
       }),
     ).toBe(0);
   });
@@ -92,21 +121,36 @@ describe("focusSessionMinutes", () => {
     const utc = focusSessionMinutes({
       startedAt: "2026-07-30T10:00:00.000Z",
       endedAt: "2026-07-30T11:30:00.000Z",
+      pausedSeconds: 0,
     });
     const offset = focusSessionMinutes({
       startedAt: "2026-07-30T12:00:00.000+02:00",
       endedAt: "2026-07-30T13:30:00.000+02:00",
+      pausedSeconds: 0,
     });
     expect(offset).toBe(utc);
   });
 
   // NaN escapes the clamp — `Math.max(0, NaN)` is NaN — so an unparseable
   // endpoint has to be caught before it, or it would leak a NaN into a minute
-  // total instead of collapsing to the 0 every other bad input yields.
+  // total instead of collapsing to the 0 every other bad input yields. A NaN
+  // pause is caught for the same reason and on its own line, since it would
+  // otherwise poison an otherwise-valid span.
   it("clamps an unparseable endpoint to 0 rather than yielding NaN", () => {
-    expect(focusSessionMinutes({ startedAt: "not-a-date", endedAt: "2026-07-30T10:00:00.000Z" })).toBe(0);
-    expect(focusSessionMinutes({ startedAt: "2026-07-30T10:00:00.000Z", endedAt: "not-a-date" })).toBe(0);
-    expect(focusSessionMinutes({ startedAt: "", endedAt: "" })).toBe(0);
+    expect(
+      focusSessionMinutes({ startedAt: "not-a-date", endedAt: "2026-07-30T10:00:00.000Z", pausedSeconds: 0 }),
+    ).toBe(0);
+    expect(
+      focusSessionMinutes({ startedAt: "2026-07-30T10:00:00.000Z", endedAt: "not-a-date", pausedSeconds: 0 }),
+    ).toBe(0);
+    expect(focusSessionMinutes({ startedAt: "", endedAt: "", pausedSeconds: 0 })).toBe(0);
+    expect(
+      focusSessionMinutes({
+        startedAt: "2026-07-30T10:00:00.000Z",
+        endedAt: "2026-07-30T10:45:00.000Z",
+        pausedSeconds: Number.NaN,
+      }),
+    ).toBe(45);
   });
 });
 

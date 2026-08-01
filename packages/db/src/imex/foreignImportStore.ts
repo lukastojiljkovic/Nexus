@@ -200,8 +200,9 @@ export class ForeignImportStore {
     );
     this.insertFocusSession = db.prepare(
       `INSERT INTO focus_sessions
-         (id, profile_id, subject_id, started_at, ended_at, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
+         (id, profile_id, subject_id, started_at, ended_at, kind, planned_minutes,
+          paused_seconds, outcome, cycle_index, task_id, label, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertNoteTemplate = db.prepare(
       `INSERT INTO note_templates (id, profile_id, name, content, created_at, updated_at)
@@ -565,6 +566,8 @@ export class ForeignImportStore {
       for (const session of planned.focusSessions) {
         this.insertFocusSession.run(
           session.id, this.profileId, session.subjectId, session.startedAt, session.endedAt,
+          session.kind, session.plannedMinutes, session.pausedSeconds, session.outcome,
+          session.cycleIndex, session.taskId, session.label,
           session.createdAt, session.updatedAt,
         );
         written += 1;

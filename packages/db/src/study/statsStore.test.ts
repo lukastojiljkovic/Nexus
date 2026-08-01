@@ -59,6 +59,32 @@ function insertFocusSession(
   return id;
 }
 
+/**
+ * A focus row of any KIND (migration 057) — what the one focus timer writes now
+ * that it serves Pomodoro as well as STUDY. `subjectId` may be null, which is
+ * what a Pomodoro phase normally is.
+ */
+function insertFocusPhase(
+  profileId: string,
+  subjectId: string | null,
+  startedAt: string,
+  endedAt: string,
+  kind: string,
+  pausedSeconds = 0,
+): string {
+  const id = uuidv7();
+  const now = new Date().toISOString();
+  db.raw
+    .prepare(
+      `INSERT INTO focus_sessions
+         (id, profile_id, subject_id, started_at, ended_at, kind, paused_seconds,
+          created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(id, profileId, subjectId, startedAt, endedAt, kind, pausedSeconds, now, now);
+  return id;
+}
+
 function insertDeck(profileId: string, subjectId: string): string {
   const id = uuidv7();
   const now = new Date().toISOString();
@@ -976,6 +1002,84 @@ describe("StatsStore", () => {
       expect(() => stats.studyLogForSubject(subjectId, "2026-07-01", "not-a-date")).toThrow(
         FocusValidationError,
       );
+    });
+  });
+
+  /**
+   * FOCUS_WORK_ONLY (see `StatsStore`'s class doc). Since migration 057 the one
+   * focus timer writes Pomodoro BREAKS into `focus_sessions` too. A break is not
+   * studying, and nothing on screen would say so if one leaked in — so every
+   * read of that table here is pinned.
+   */
+  describe("break phases never count as study time", () => {
+    const DAY = "2026-07-08";
+
+    it("leaves subjectMinutes untouched when a break of the same subject is seeded", () => {
+      const { stats, profileId, subjectId } = fixture();
+      insertFocusPhase(profileId, subjectId, `${DAY}T12:00:00.000Z`, `${DAY}T12:25:00.000Z`, "work");
+      const before = stats.subjectMinutes(DAY, DAY);
+      expect(before).toEqual([{ subjectId, minutes: 25 }]);
+
+      // A break, and a long one, both attributed to the very same subject.
+      insertFocusPhase(profileId, subjectId, `${DAY}T12:25:00.000Z`, `${DAY}T12:30:00.000Z`, "short_break");
+      insertFocusPhase(profileId, subjectId, `${DAY}T14:00:00.000Z`, `${DAY}T14:15:00.000Z`, "long_break");
+
+      expect(stats.subjectMinutes(DAY, DAY)).toEqual(before);
+    });
+
+    it("never reports a subjectless Pomodoro phase as a phantom subject", () => {
+      const { stats, profileId } = fixture();
+      insertFocusPhase(profileId, null, `${DAY}T12:00:00.000Z`, `${DAY}T12:25:00.000Z`, "work");
+      expect(stats.subjectMinutes(DAY, DAY)).toEqual([]);
+    });
+
+    it("subtracts paused time from a subject's minutes", () => {
+      const { stats, profileId, subjectId } = fixture();
+      // 30 minutes of wall time, 10 of them paused.
+      insertFocusPhase(
+        profileId, subjectId, `${DAY}T12:00:00.000Z`, `${DAY}T12:30:00.000Z`, "work", 600,
+      );
+      expect(stats.subjectMinutes(DAY, DAY)).toEqual([{ subjectId, minutes: 20 }]);
+    });
+
+    it("does not turn a day of pure breaks into a day of study activity", () => {
+      const { stats, profileId, subjectId } = fixture();
+      insertFocusPhase(profileId, subjectId, `${DAY}T12:00:00.000Z`, `${DAY}T12:05:00.000Z`, "short_break");
+      expect(stats.activityDays(DAY, DAY)).toEqual([]);
+
+      insertFocusPhase(profileId, subjectId, `${DAY}T13:00:00.000Z`, `${DAY}T13:25:00.000Z`, "work");
+      expect(stats.activityDays(DAY, DAY)).toEqual([DAY]);
+    });
+
+    it("keeps breaks out of a subject's study log and out of its has-older probe", () => {
+      const { stats, profileId, subjectId } = fixture();
+      // A break BEFORE the window, and a break inside it — neither is studying.
+      insertFocusPhase(profileId, subjectId, "2026-06-01T12:00:00.000Z", "2026-06-01T12:05:00.000Z", "short_break");
+      insertFocusPhase(profileId, subjectId, `${DAY}T12:00:00.000Z`, `${DAY}T12:05:00.000Z`, "short_break");
+
+      const empty = stats.studyLogForSubject(subjectId, DAY, DAY);
+      expect(empty.days).toEqual([]);
+      expect(empty.hasOlder).toBe(false);
+
+      // One real work phase, and both answers change.
+      insertFocusPhase(profileId, subjectId, "2026-06-02T12:00:00.000Z", "2026-06-02T12:30:00.000Z", "work");
+      insertFocusPhase(profileId, subjectId, `${DAY}T13:00:00.000Z`, `${DAY}T13:40:00.000Z`, "work");
+
+      const log = stats.studyLogForSubject(subjectId, DAY, DAY);
+      expect(log.days).toEqual([
+        { day: DAY, reviews: 0, focusMinutes: 40, plannedMinutes: 0, examIds: [] },
+      ]);
+      expect(log.hasOlder).toBe(true);
+    });
+
+    it("subtracts paused time in the study log too", () => {
+      const { stats, profileId, subjectId } = fixture();
+      insertFocusPhase(
+        profileId, subjectId, `${DAY}T12:00:00.000Z`, `${DAY}T13:00:00.000Z`, "work", 900,
+      );
+      expect(stats.studyLogForSubject(subjectId, DAY, DAY).days).toEqual([
+        { day: DAY, reviews: 0, focusMinutes: 45, plannedMinutes: 0, examIds: [] },
+      ]);
     });
   });
 });
