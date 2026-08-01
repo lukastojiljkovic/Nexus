@@ -110,6 +110,7 @@ export type {
   NotificationPriority,
   NotificationSource,
   StudyDayReminderInput,
+  SubscriptionReminderInput,
   TaskReminderInput,
 } from "./notify/notificationEngine.js";
 
@@ -286,6 +287,7 @@ export type {
   ExportFinAccount,
   ExportFinBudget,
   ExportFinCategory,
+  ExportFinRecurring,
   ExportFinTransaction,
   ExportFocusSession,
   ExportNote,

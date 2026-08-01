@@ -16,6 +16,7 @@ import type {
   NotificationCandidate,
   NotificationSource,
   StudyDayReminderInput,
+  SubscriptionReminderInput,
   TaskReminderInput,
 } from "@nexus/core";
 import type {
@@ -24,6 +25,10 @@ import type {
   EventStore,
   Exam,
   ExamStore,
+  FinAccountStore,
+  FinRecurring,
+  FinRecurringStore,
+  FinUpcomingRenewal,
   NotificationStore,
   PlanStore,
   SubjectStore,
@@ -41,6 +46,7 @@ import {
   groupedDigestCopy,
   securityNotificationCopy,
   studyDayNotificationCopy,
+  subscriptionNotificationCopy,
   taskNotificationCopy,
   windowDigestCopy,
   type NotificationCopy,
@@ -69,6 +75,10 @@ export interface NotificationSchedulerDeps {
   subjectStore(profileId: string): SubjectStore;
   planStore(profileId: string): PlanStore;
   taskStore(profileId: string): TaskStore;
+  /** FIN slice d: the subscriptions this check both GENERATES from and reminds about. */
+  finRecurringStore(profileId: string): FinRecurringStore;
+  /** The accounts, for the one thing a renewal reminder cannot state without them: which currency the amount is in. */
+  finAccountStore(profileId: string): FinAccountStore;
   notificationStore(profileId: string): NotificationStore;
   getMainWindow(): BrowserWindow | null;
 }
@@ -341,11 +351,40 @@ function taskReminderInputs(tasks: readonly Task[]): TaskReminderInput[] {
 }
 
 /**
- * One profile's worth of the check: sync plans, derive candidates, fire/record
- * survivors, re-fire or dismiss snoozed rows — unless this is the profile's
- * first visible reminder moment and the NTF-008 appetite question is still
- * unanswered, in which case the whole cycle is held and the question is pushed
- * instead (see the block below).
+ * The upcoming renewals of one profile in the engine's reminder shape (FIN slice
+ * d). Read from each subscription's RULE — `FinRecurringStore.upcoming` expands
+ * it — never from a transaction, because a renewal that has not happened yet has
+ * no row: that is the whole of "nothing is ever generated into the future".
+ *
+ * A subscription with no lead contributes nothing: `reminderDays === null` is
+ * „ne podsećaj me", and the calendar and the dashboard still show it.
+ *
+ * The window opens at TODAY rather than in the past, unlike the calendar's own
+ * expansion: a renewal dated before today has already been charged (the
+ * generation pass above ran first, in this same check), so a reminder about it
+ * would be pointing at a row the ledger already shows — and the engine's
+ * `relevant` would drop it anyway.
+ */
+function subscriptionReminderInputs(
+  renewals: readonly FinUpcomingRenewal[],
+  leadByRecurringId: ReadonlyMap<string, number>,
+): SubscriptionReminderInput[] {
+  const rows: SubscriptionReminderInput[] = [];
+  for (const renewal of renewals) {
+    const reminderDays = leadByRecurringId.get(renewal.recurringId);
+    if (reminderDays === undefined) continue;
+    rows.push({ id: renewal.recurringId, renewalDate: renewal.date, reminderDays });
+  }
+  return rows;
+}
+
+/**
+ * One profile's worth of the check: sync plans, generate the subscription
+ * charges that have come due, derive candidates, fire/record survivors, re-fire
+ * or dismiss snoozed rows — unless this is the profile's first visible reminder
+ * moment and the NTF-008 appetite question is still unanswered, in which case
+ * the whole cycle is held and the question is pushed instead (see the block
+ * below).
  */
 function checkProfile(
   deps: NotificationSchedulerDeps,
@@ -358,6 +397,20 @@ function checkProfile(
   const plans = deps.planStore(profileId);
   plans.syncAll(nowIso, today); // keeps today's planned blocks current; idempotent, safe to re-run every check
 
+  // FIN slice d: the subscription charges that have come due, posted here for
+  // exactly the reason `plans.syncAll` is — this is the app's per-unlock and
+  // per-day-change moment, it runs on start, every minute and on resume from
+  // sleep, and it is already scoped to the ACTIVE profile. Idempotent by
+  // construction (migration 053's UNIQUE index), so re-running it costs a
+  // no-op, and it runs BEFORE the derivation below so a charge that landed
+  // today is already a row by the time anything reminds about the next one.
+  //
+  // An inactive profile's charges are not generated, and nothing is lost by
+  // that: generation is a catch-up from a cursor, so switching to that profile
+  // posts everything it missed on the first check after the switch.
+  const finRecurring = deps.finRecurringStore(profileId);
+  finRecurring.generateDue(nowIso, today);
+
   const ntf = deps.notificationStore(profileId);
   const settings = ntf.getSettings();
 
@@ -366,6 +419,21 @@ function checkProfile(
   const exams = deps.examStore(profileId).listActive();
   const subjects = deps.subjectStore(profileId).listActive();
   const tasks = deps.taskStore(profileId).listActive();
+  const subscriptions = finRecurring.listActive();
+  const subscriptionLeads = new Map(
+    subscriptions
+      .filter((row): row is typeof row & { reminderDays: number } => row.reminderDays !== null)
+      .map((row) => [row.id, row.reminderDays] as const),
+  );
+  // Read from the RULE, over exactly the window the LONGEST lead in use needs —
+  // a renewal further ahead than that cannot have a fire date on or before
+  // today, so reading it would be work with no answer in it. Empty when nothing
+  // reminds, which is the common case (no subscription ships with a lead).
+  const renewalHorizon = Math.max(0, ...subscriptionLeads.values());
+  const renewals =
+    subscriptionLeads.size === 0
+      ? []
+      : finRecurring.upcoming({ from: today, to: shiftDayKey(today, renewalHorizon) });
   const todaysBlocks = plans
     .listBlocksInRange(today, today)
     .filter((block) => block.status === "planned");
@@ -391,6 +459,7 @@ function checkProfile(
     events: eventReminderInputs(events, today),
     studyDays,
     tasks: taskReminderInputs(tasks),
+    subscriptions: subscriptionReminderInputs(renewals, subscriptionLeads),
     enabledSources: settings.enabledSources,
     today,
     nowLocalTime: nowTime,
@@ -446,6 +515,13 @@ function checkProfile(
   const tasksById = new Map(tasks.map((task) => [task.id, task]));
   const subjectNameById = new Map(subjects.map((subject) => [subject.id, subject.name]));
   const studyDaysByDate = new Map(studyDays.map((day) => [day.date, day]));
+  const subscriptionsById = new Map(subscriptions.map((row) => [row.id, row]));
+  // The currency an amount is stated in lives on the ACCOUNT (migration 051's
+  // no-FX design), so the copy joins through it — a figure with no code beside
+  // it is a number, not money.
+  const accountCurrencyById = new Map(
+    deps.finAccountStore(profileId).listActive().map((account) => [account.id, account.currency]),
+  );
 
   const toShow: ToastItem[] = [];
   let ledgerChanged = false;
@@ -458,6 +534,8 @@ function checkProfile(
       tasksById,
       subjectNameById,
       studyDaysByDate,
+      subscriptionsById,
+      accountCurrencyById,
       today,
     });
     if (!copy) continue; // entity vanished between the reads above and here — skip, never crash
@@ -518,6 +596,8 @@ interface CopyContext {
   tasksById: Map<string, Task>;
   subjectNameById: Map<string, string>;
   studyDaysByDate: Map<string, StudyDayReminderInput>;
+  subscriptionsById: Map<string, FinRecurring>;
+  accountCurrencyById: Map<string, string>;
   today: string;
 }
 
@@ -562,6 +642,28 @@ function composeCopy(candidate: NotificationCandidate, ctx: CopyContext): Notifi
     const [dueDate, offsetDays] = candidate.occurrenceKey.split(" ");
     if (dueDate === undefined || offsetDays === undefined) return null;
     return taskNotificationCopy(task.title, dueDate, ctx.today, Number(offsetDays));
+  }
+  if (candidate.source === "subscription") {
+    const subscription = ctx.subscriptionsById.get(candidate.entityId);
+    if (!subscription) return null;
+    const currency = ctx.accountCurrencyById.get(subscription.accountId);
+    // The account was soft-deleted between the reads above and here: an amount
+    // with no currency is a number, and stating one would be inventing money.
+    if (currency === undefined) return null;
+    // The engine's own documented occurrence key: "<renewalDate> <lead>". Which
+    // renewal of the series this is cannot be read off the row — the row is the
+    // rule — so it is read back out of the key that identified it, exactly as
+    // the event and task branches do.
+    const [renewalDate, leadDays] = candidate.occurrenceKey.split(" ");
+    if (renewalDate === undefined || leadDays === undefined) return null;
+    return subscriptionNotificationCopy(
+      subscription.name,
+      renewalDate,
+      ctx.today,
+      subscription.amount,
+      currency,
+      Number(leadDays),
+    );
   }
   const day = ctx.studyDaysByDate.get(candidate.entityId);
   if (!day) return null;

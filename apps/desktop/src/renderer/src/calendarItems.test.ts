@@ -166,6 +166,7 @@ const EMPTY_ROWS: CalendarSourceRows = {
   subjects: [],
   people: [],
   overlay: [],
+  renewals: [],
 };
 
 const JULY: CalendarRange = { from: "2026-07-01", to: "2026-07-31" };
@@ -243,6 +244,17 @@ describe("buildCalendarItems — source selection", () => {
     subjects: [makeSubject("s1")],
     people: [makePerson({ id: "p1", month: 7, day: 10 })],
     overlay: [makeOverlay({ id: "f1", startAt: "2026-07-10T11:00" })],
+    renewals: [
+      {
+        recurringId: "r1",
+        date: "2026-07-05",
+        name: "Netflix",
+        accountId: "a1",
+        currency: "RSD",
+        categoryId: null,
+        amount: -11_90,
+      },
+    ],
   };
 
   it("builds only the requested sources", () => {
@@ -259,12 +271,58 @@ describe("buildCalendarItems — source selection", () => {
       "blocks",
       "birthdays",
       "overlay",
+      "subscriptions",
     ]);
   });
 
   it("gives every item an id unique across sources", () => {
     const ids = build(rows).map((item) => item.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+// --- Subscriptions (FIN slice d) ----------------------------------------------
+
+describe("buildCalendarItems — subscription renewals", () => {
+  const renewal = (date: string, recurringId = "r1") => ({
+    recurringId,
+    date,
+    name: "Netflix",
+    accountId: "a1",
+    currency: "RSD",
+    categoryId: null,
+    amount: -11_90,
+  });
+
+  it("draws one all-day item per renewal, keyed by the day that separates them", () => {
+    const items = build({ renewals: [renewal("2026-07-05"), renewal("2026-07-20")] }, [
+      "subscriptions",
+    ]);
+    expect(items.map((item) => [item.id, item.startKey, item.startMinutes])).toEqual([
+      ["subscription-r1@2026-07-05", "2026-07-05", null],
+      ["subscription-r1@2026-07-20", "2026-07-20", null],
+    ]);
+    expect(items.every((item) => item.kind === "subscription")).toBe(true);
+  });
+
+  it("carries the renewal itself, amount and currency included — the row has no other source for them", () => {
+    const [item] = build({ renewals: [renewal("2026-07-05")] }, ["subscriptions"]);
+    expect(item?.kind === "subscription" ? item.renewal : null).toEqual(renewal("2026-07-05"));
+  });
+
+  it("skips a malformed day rather than throwing — one bad row never costs the calendar", () => {
+    expect(build({ renewals: [renewal("juli")] }, ["subscriptions"])).toEqual([]);
+  });
+
+  it("contributes nothing while its chip is off", () => {
+    expect(build({ renewals: [renewal("2026-07-05")] }, ["events"])).toEqual([]);
+  });
+
+  it("takes main's rows verbatim — the range bounds the EXPANSION, which already happened", () => {
+    // Main answered for the visible range; this builder never re-filters, the
+    // same contract the overlay's rows arrive under.
+    const items = build({ renewals: [renewal("2027-01-05")] }, ["subscriptions"]);
+    expect(items).toHaveLength(1);
   });
 });
 

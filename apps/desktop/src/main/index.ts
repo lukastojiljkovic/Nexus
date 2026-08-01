@@ -84,6 +84,7 @@ import {
   FIN_CATEGORY_KINDS,
   FinAccountStore,
   FinCategoryStore,
+  FinRecurringStore,
   FinTransactionStore,
   isCurrencyCode,
   isMinorUnits,
@@ -176,6 +177,7 @@ import {
   type Exam,
   type ExamType,
   type CreateFinAccountInput,
+  type CreateFinRecurringInput,
   type CreateFinTransactionInput,
   type FinAccount,
   type FinAccountBalance,
@@ -186,9 +188,13 @@ import {
   type FinCategorySpend,
   type FinCurrencyTotal,
   type FinPeriod,
+  type FinRecurring,
+  type FinRenewalWindow,
   type FinTransaction,
+  type FinUpcomingRenewal,
   type SetFinBudgetInput,
   type UpdateFinAccountFields,
+  type UpdateFinRecurringFields,
   type UpdateFinTransactionFields,
   type FocusSession,
   type LinkedNote,
@@ -2849,6 +2855,96 @@ function asFinTransactionFieldChanges(value: unknown): UpdateFinTransactionField
   return patch;
 }
 
+/**
+ * A subscription's schedule (FIN slice d): required and never null, unlike a
+ * task's or an event's — a subscription IS its rule, so there is no "no rule"
+ * reading for this field. Runs through the SAME `asRecurrenceRule` those two
+ * use, and refuses the null it would accept, so one grammar has one gate.
+ */
+function asRequiredRecurrenceRule(value: unknown, field: string): RecurrenceRule {
+  const rule = value === null ? null : asRecurrenceRule(value, field);
+  if (rule === null) {
+    throw new Error(`Invalid IPC payload: "${field}" must be a valid recurrence rule.`);
+  }
+  return rule;
+}
+
+/** A renewal reminder lead: null („ne podsećaj me") or a whole 0..365, mirroring migration 053's own CHECK. */
+function asReminderDays(value: unknown, field: string): number | null {
+  if (value === null) return null;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 365) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be null or a whole number of days between 0 and 365.`,
+    );
+  }
+  return value;
+}
+
+/**
+ * Validates a `NewFinRecurringFields` payload into a store input; only present
+ * keys are carried. Nothing here resolves an account or a category — those are
+ * database questions, and `FinRecurringStore.resolve` owns them, exactly as it
+ * owns what a valid rule is on the way into the column.
+ */
+function asNewFinRecurringInput(value: unknown): CreateFinRecurringInput {
+  const subscription = asRecord(value);
+  const input: CreateFinRecurringInput = {
+    accountId: asNonEmptyString(subscription.accountId, "subscription.accountId"),
+    name: asNonEmptyString(subscription.name, "subscription.name"),
+    amount: asMinorUnits(subscription.amount, "subscription.amount"),
+    recurrence: asRequiredRecurrenceRule(subscription.recurrence, "subscription.recurrence"),
+    startDate: asBareDate(subscription.startDate, "subscription.startDate"),
+  };
+  if (subscription.categoryId !== undefined) {
+    input.categoryId = asNullableId(subscription.categoryId, "subscription.categoryId");
+  }
+  if (subscription.payee !== undefined) {
+    input.payee = asNullableString(subscription.payee, "subscription.payee");
+  }
+  if (subscription.note !== undefined) {
+    input.note = asNullableString(subscription.note, "subscription.note");
+  }
+  if (subscription.reminderDays !== undefined) {
+    input.reminderDays = asReminderDays(subscription.reminderDays, "subscription.reminderDays");
+  }
+  return input;
+}
+
+/** Validates a `FinRecurringFieldChanges` payload into a store patch; an omitted key stays omitted and an explicit `null` clears. */
+function asFinRecurringFieldChanges(value: unknown): UpdateFinRecurringFields {
+  const changes = asRecord(value);
+  const patch: UpdateFinRecurringFields = {};
+  if (changes.accountId !== undefined) {
+    patch.accountId = asNonEmptyString(changes.accountId, "changes.accountId");
+  }
+  if (changes.categoryId !== undefined) {
+    patch.categoryId = asNullableId(changes.categoryId, "changes.categoryId");
+  }
+  if (changes.name !== undefined) patch.name = asNonEmptyString(changes.name, "changes.name");
+  if (changes.amount !== undefined) patch.amount = asMinorUnits(changes.amount, "changes.amount");
+  if (changes.payee !== undefined) patch.payee = asNullableString(changes.payee, "changes.payee");
+  if (changes.note !== undefined) patch.note = asNullableString(changes.note, "changes.note");
+  if (changes.recurrence !== undefined) {
+    patch.recurrence = asRequiredRecurrenceRule(changes.recurrence, "changes.recurrence");
+  }
+  if (changes.startDate !== undefined) {
+    patch.startDate = asBareDate(changes.startDate, "changes.startDate");
+  }
+  if (changes.reminderDays !== undefined) {
+    patch.reminderDays = asReminderDays(changes.reminderDays, "changes.reminderDays");
+  }
+  return patch;
+}
+
+/** Validates a `FinRenewalWindow` payload — two real calendar days; that `from` may not be after `to` stays the store's own refusal. */
+function asFinRenewalWindow(value: unknown): FinRenewalWindow {
+  const window = asRecord(value);
+  return {
+    from: asBareDate(window.from, "window.from"),
+    to: asBareDate(window.to, "window.to"),
+  };
+}
+
 function requireDb(): NexusDatabase {
   if (!db) throw new Error("Database is locked.");
   return db;
@@ -3245,6 +3341,10 @@ function finCategoryStore(profileId: string): FinCategoryStore {
 
 function finTransactionStore(profileId: string): FinTransactionStore {
   return new FinTransactionStore(requireDb().raw, profileId);
+}
+
+function finRecurringStore(profileId: string): FinRecurringStore {
+  return new FinRecurringStore(requireDb().raw, profileId);
 }
 
 /** The whole sets state every `dash:*-set` channel answers with (ADR-055): the named boards in board order plus the active choice. */
@@ -3728,6 +3828,11 @@ function notificationSchedulerDeps(): NotificationSchedulerDeps {
     subjectStore,
     planStore,
     taskStore,
+    // FIN slice d: the check both GENERATES the charges that have come due and
+    // reminds about the renewals ahead, so it needs the subscriptions — and the
+    // accounts, for the currency a reminder's amount is stated in.
+    finRecurringStore,
+    finAccountStore,
     notificationStore,
     getMainWindow: () => mainWindow,
   };
@@ -4369,6 +4474,7 @@ function restoreDeps(): ImportDeps {
     dashboardSetStore,
     finAccountStore,
     finCategoryStore,
+    finRecurringStore,
     finTransactionStore,
     saveBlob: (bytes) => saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes),
     // Injected rather than reached for, so `restore.ts` never has to know WHICH
@@ -4435,6 +4541,7 @@ function imexArchiveDeps(): ImexArchiveDeps {
     dashboardSetStore,
     finAccountStore,
     finCategoryStore,
+    finRecurringStore,
     finTransactionStore,
     flagStore,
     readBlob: (sha256) => readBlob(blobStorePathsFor(), requireBlobKeys(), sha256),
@@ -7599,6 +7706,65 @@ function registerIpc(): void {
     const body = asRecord(payload);
     const profileId = asNonEmptyString(body.profileId, "profileId");
     return finTransactionStore(profileId).incomeByCurrency(asFinPeriod(body.period));
+  });
+
+  // Subscriptions (FIN slice d, migration 053). There is deliberately NO
+  // „generate now" channel beside these: posting the charges that have come due
+  // is a main-process act, run from the reminder check beside `plans.syncAll`,
+  // and a renderer that could ask for it could ask twice. (It could not
+  // double-charge — the schema's unique index makes that impossible — but a
+  // write path nobody needs is a write path nobody should have.)
+  ipcMain.handle(IpcChannel.finRecurringList, (event, payload): FinRecurring[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return finRecurringStore(profileId).listActive();
+  });
+
+  // Derived from each RULE on every call — never a read of transaction rows,
+  // because a renewal that has not happened yet has none.
+  ipcMain.handle(IpcChannel.finRecurringUpcoming, (event, payload): FinUpcomingRenewal[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return finRecurringStore(profileId).upcoming(asFinRenewalWindow(body.window));
+  });
+
+  ipcMain.handle(IpcChannel.finRecurringCreate, (event, payload): FinRecurring => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return finRecurringStore(profileId).create(
+      asNewFinRecurringInput(body.subscription),
+      new Date().toISOString(),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.finRecurringUpdate, (event, payload): FinRecurring => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return finRecurringStore(profileId).update(
+      id,
+      asFinRecurringFieldChanges(body.changes),
+      new Date().toISOString(),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.finRecurringDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    finRecurringStore(profileId).softDelete(id, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.finRecurringRestore, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    finRecurringStore(profileId).restore(id, new Date().toISOString());
   });
 
   // Global search (ADR-021 / PRD 08 SRCH-001/002): `runSearchQuery`/

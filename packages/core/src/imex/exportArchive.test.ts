@@ -78,6 +78,7 @@ function emptyInput(): ExportArchiveInput {
       dashboardWidgets: [],
       finAccounts: [],
       finCategories: [],
+      finRecurring: [],
       finTransactions: [],
       finBudgets: [],
     },
@@ -267,7 +268,8 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.29.0");
+      expect(manifest.schemaVersion).toBe("1.30.0");
+      expect(manifest.schemaVersion).toBe("1.30.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       // `picture: null` is written out loud rather than omitted: the manifest is
@@ -1156,8 +1158,20 @@ describe("buildExportArchive", () => {
         finCategories: [
           { id: "fc1", profileId: "p1", name: "Hrana", kind: "expense", createdAt: t, updatedAt: t },
         ],
+        finRecurring: [
+          {
+            id: "fr1", profileId: "p1", accountId: "fa1", categoryId: "fc1", name: "Netflix",
+            amount: -11_90, payee: null, note: null,
+            recurrence: { freq: { kind: "monthly-date", interval: 1, day: 5 }, end: { kind: "never" } },
+            startDate: "2026-01-05", nextRun: "2026-02-05", reminderDays: 2,
+            createdAt: t, updatedAt: t,
+          },
+        ],
         finTransactions: [
           { id: "ftx1", profileId: "p1", accountId: "fa1", counterAccountId: null, categoryId: "fc1", date: "2026-01-02", amount: -12_00, payee: "Maxi", note: null, importKey: '["2026-01-02",-1200,"Maxi","",1]', createdAt: t, updatedAt: t },
+          // The charge that subscription already made: an ORDINARY row that
+          // merely remembers what generated it.
+          { id: "ftx3", profileId: "p1", accountId: "fa1", counterAccountId: null, categoryId: "fc1", date: "2026-01-05", amount: -11_90, payee: "Netflix", note: null, importKey: null, recurringId: "fr1", createdAt: t, updatedAt: t },
           // The transfer: ONE row, both sides, no category.
           { id: "ftx2", profileId: "p1", accountId: "fa1", counterAccountId: "fa2", categoryId: null, date: "2026-01-03", amount: -50_00, payee: null, note: null, importKey: null, createdAt: t, updatedAt: t },
         ],
@@ -1176,7 +1190,9 @@ describe("buildExportArchive", () => {
         notifications: 1,
         notes: 8, // 1 each of note/folder/tag/category/tag-link/template/attachment/version
         dashboard: 3, // the one settings row a profile can ever have + 1 named board + 1 placed widget
-        finance: 6, // 2 accounts + 1 category + 2 transactions (one of them the transfer) + 1 budget
+        // 2 accounts + 1 category + 1 subscription + 3 transactions (one of them
+        // the transfer, one of them that subscription's generated charge) + 1 budget
+        finance: 8,
       });
     });
 

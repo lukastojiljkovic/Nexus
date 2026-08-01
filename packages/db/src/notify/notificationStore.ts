@@ -17,11 +17,12 @@ export const NOTIFICATION_STATUSES: readonly NotificationStatus[] = [
 ];
 
 /**
- * Every source a LEDGER row may carry (migration 037's `notifications.source`
+ * Every source a LEDGER row may carry (migration 053's `notifications.source`
  * CHECK), in canonical order — each newcomer appended last (`"event"` by
  * migration 019 / CAL-006, `"task"` by migration 021 / ADR-028, `"security"` by
- * migration 037 / NTF-007), so the sources that came before keep the order
- * every existing list and UI already shows.
+ * migration 037 / NTF-007, `"subscription"` by migration 053 / FIN slice d), so
+ * the sources that came before keep the order every existing list and UI already
+ * shows.
  */
 export const NOTIFICATION_SOURCES: readonly NotificationSource[] = [
   "document",
@@ -30,6 +31,7 @@ export const NOTIFICATION_SOURCES: readonly NotificationSource[] = [
   "event",
   "task",
   "security",
+  "subscription",
 ];
 
 /**

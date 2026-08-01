@@ -996,6 +996,7 @@ export function translateIcsEvents(
     // other module this importer does not read.
     finAccounts: [],
     finCategories: [],
+    finRecurring: [],
     finTransactions: [],
     finBudgets: [],
   };

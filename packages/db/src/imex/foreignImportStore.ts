@@ -1,7 +1,13 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import type { ProfileData } from "@nexus/core";
 import { RestoreValidationError } from "../errors.js";
-import { exdatesText, offsetsText, recurrenceText, viewConfigText } from "./columnText.js";
+import {
+  exdatesText,
+  offsetsText,
+  recurrenceText,
+  requiredRecurrenceText,
+  viewConfigText,
+} from "./columnText.js";
 import type { RestoredNoteDerived } from "./restoreStore.js";
 
 type DatabaseHandle = Database.Database;
@@ -72,6 +78,7 @@ export class ForeignImportStore {
   private readonly insertNoteCategory: Database.Statement;
   private readonly insertFinAccount: Database.Statement;
   private readonly insertFinCategory: Database.Statement;
+  private readonly insertFinRecurring: Database.Statement;
   private readonly insertFinTransaction: Database.Statement;
   private readonly insertFinBudget: Database.Statement;
   private readonly insertNote: Database.Statement;
@@ -225,11 +232,17 @@ export class ForeignImportStore {
     // those rows came from. The planner remapped the ACCOUNT around each key
     // rather than touching it, which is exactly what the key naming no account
     // buys.
+    this.insertFinRecurring = db.prepare(
+      `INSERT INTO fin_recurring
+         (id, profile_id, account_id, category_id, name, amount, payee, note, recurrence,
+          anchor_date, next_run, reminder_days, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
     this.insertFinTransaction = db.prepare(
       `INSERT INTO fin_transactions
          (id, profile_id, account_id, counter_account_id, category_id, tx_date, amount,
-          payee, note, import_key, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+          payee, note, import_key, recurring_id, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertFinBudget = db.prepare(
       `INSERT INTO fin_budgets
@@ -736,11 +749,28 @@ export class ForeignImportStore {
         );
         written += 1;
       }
+      // The subscriptions (migration 053), between the rows they point at and
+      // the charges that point back. Every one is a NEW row — the planner never
+      // absorbs a subscription (see `ID_MINTERS.finRecurring`), because its
+      // account is always a new row too, and a schedule charging the target's
+      // bank beside charges that came out of the source's would be two rows
+      // disagreeing about whose money this is.
+      for (const subscription of planned.finRecurring) {
+        this.insertFinRecurring.run(
+          subscription.id, this.profileId, subscription.accountId, subscription.categoryId,
+          subscription.name, subscription.amount, subscription.payee, subscription.note,
+          requiredRecurrenceText(subscription.recurrence), subscription.startDate,
+          subscription.nextRun, subscription.reminderDays,
+          subscription.createdAt, subscription.updatedAt,
+        );
+        written += 1;
+      }
       for (const transaction of planned.finTransactions) {
         this.insertFinTransaction.run(
           transaction.id, this.profileId, transaction.accountId, transaction.counterAccountId,
           transaction.categoryId, transaction.date, transaction.amount,
           transaction.payee, transaction.note, transaction.importKey,
+          transaction.recurringId ?? null,
           transaction.createdAt, transaction.updatedAt,
         );
         written += 1;

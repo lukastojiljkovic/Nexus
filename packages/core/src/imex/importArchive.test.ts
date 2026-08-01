@@ -99,6 +99,7 @@ function emptyExportInput(): ExportArchiveInput {
       dashboardWidgets: [],
       finAccounts: [],
       finCategories: [],
+      finRecurring: [],
       finTransactions: [],
       finBudgets: [],
     },
@@ -583,11 +584,25 @@ function richProfileData(): ProfileData {
         createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
       },
     ],
+    // FIN slice d: a subscription with an ADR-024 rule, a cursor already past
+    // its first charge, and a reminder lead.
+    finRecurring: [
+      {
+        id: "fin-rec-1", profileId: "profile1", accountId: "fin-acc-1", categoryId: "fin-cat-1",
+        name: "Netflix", amount: -11_90, payee: null, note: null,
+        recurrence: {
+          freq: { kind: "monthly-date", interval: 1, day: 5 },
+          end: { kind: "never" },
+        },
+        startDate: "2026-07-05", nextRun: "2026-08-05", reminderDays: 2,
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-05T09:00:00.000Z",
+      },
+    ],
     finTransactions: [
       {
         id: "fin-tx-1", profileId: "profile1", accountId: "fin-acc-1", counterAccountId: null,
         categoryId: "fin-cat-1", date: "2026-07-02", amount: -1250, payee: "Maxi",
-        note: "nedeljna kupovina",
+        note: "nedeljna kupovina", recurringId: null,
         // A row a bank-statement CSV brought in (`1.29.0`, migration 052). Its
         // fingerprint must survive the round trip verbatim: an archive that
         // dropped it would let a restored profile re-import the very same
@@ -595,26 +610,34 @@ function richProfileData(): ProfileData {
         importKey: '["2026-07-02",-1250,"Maxi","nedeljna kupovina",1]',
         createdAt: "2026-07-02T09:00:00.000Z", updatedAt: "2026-07-02T09:00:00.000Z",
       },
+      // The charge that subscription generated: an ordinary row that merely
+      // remembers what made it.
+      {
+        id: "fin-tx-5", profileId: "profile1", accountId: "fin-acc-1", counterAccountId: null,
+        categoryId: "fin-cat-1", date: "2026-07-05", amount: -11_90, payee: "Netflix", note: null,
+        importKey: null,
+        recurringId: "fin-rec-1",
+        createdAt: "2026-07-05T09:00:00.000Z", updatedAt: "2026-07-05T09:00:00.000Z",
+      },
       // Uncategorized income, and a refund back onto an expense category: both
       // legitimate, both preserved sign for sign.
       {
         id: "fin-tx-2", profileId: "profile1", accountId: "fin-acc-1", counterAccountId: null,
         categoryId: null, date: "2026-07-03", amount: 50_00, payee: null, note: null,
-        importKey: null,
+        importKey: null, recurringId: null,
         createdAt: "2026-07-03T09:00:00.000Z", updatedAt: "2026-07-03T09:00:00.000Z",
       },
       {
         id: "fin-tx-3", profileId: "profile1", accountId: "fin-acc-1", counterAccountId: null,
         categoryId: "fin-cat-1", date: "2026-07-04", amount: 300, payee: "Maxi", note: null,
-        importKey: null,
+        importKey: null, recurringId: null,
         createdAt: "2026-07-04T09:00:00.000Z", updatedAt: "2026-07-04T09:00:00.000Z",
       },
       // The transfer: ONE row, both sides named, no category, same currency.
       {
         id: "fin-tx-4", profileId: "profile1", accountId: "fin-acc-1",
         counterAccountId: "fin-acc-2", categoryId: null, date: "2026-07-05", amount: -300_00,
-        payee: null, note: null,
-        importKey: null,
+        payee: null, note: null, importKey: null, recurringId: null,
         createdAt: "2026-07-05T09:00:00.000Z", updatedAt: "2026-07-05T09:00:00.000Z",
       },
     ],
@@ -999,12 +1022,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.30.0`: the nearest minor strictly ahead of this build's `1.29.0`.
+  // `1.31.0`: the nearest minor strictly ahead of this build's `1.30.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.30.0" });
+    const files = baseFiles({ schemaVersion: "1.31.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.30.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.31.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -3112,7 +3135,11 @@ describe("parseImportArchive — the finance ledger (FIN slice a / 1.28.0)", () 
       {
         id: "ftx1", profileId: "profile1", accountId: "fa1", counterAccountId: null,
         categoryId: "fc1", date: "2026-07-02", amount: -1250, payee: "Maxi", note: null,
-        importKey: null, createdAt: T, updatedAt: T,
+        // A pre-1.29.0/1.30.0 row carries neither key at all and parses to
+        // null on both — a typed transaction, which is what every one of them
+        // was.
+        importKey: null, recurringId: null,
+        createdAt: T, updatedAt: T,
       },
     ]);
     expect(result.data?.finBudgets).toEqual([
@@ -3323,9 +3350,169 @@ describe("parseImportArchive — the finance ledger (FIN slice a / 1.28.0)", () 
     expect(result.data).toMatchObject({
       finAccounts: [],
       finCategories: [],
+      finRecurring: [],
       finTransactions: [],
       finBudgets: [],
     });
+  });
+});
+
+describe("parseImportArchive — FIN subscriptions (FIN slice d / 1.30.0)", () => {
+  const T = "2026-07-01T00:00:00.000Z";
+  const MONTHLY = { freq: { kind: "monthly-date", interval: 1, day: 5 }, end: { kind: "never" } };
+  const ACCOUNT = {
+    type: "fin-account", id: "fa1", profileId: "profile1", name: "Tekući", kind: "current",
+    currency: "RSD", openingBalance: 100_00, archived: false, createdAt: T, updatedAt: T,
+  };
+  const CATEGORY = {
+    type: "fin-category", id: "fc1", profileId: "profile1", name: "Zabava", kind: "expense",
+    createdAt: T, updatedAt: T,
+  };
+  const SUBSCRIPTION = {
+    type: "fin-recurring", id: "fr1", profileId: "profile1", accountId: "fa1", categoryId: "fc1",
+    name: "Netflix", amount: -11_90, payee: null, note: null, recurrence: MONTHLY,
+    startDate: "2026-07-05", nextRun: "2026-08-05", reminderDays: 2, createdAt: T, updatedAt: T,
+  };
+  const CHARGE = {
+    type: "fin-transaction", id: "ftx1", profileId: "profile1", accountId: "fa1",
+    counterAccountId: null, categoryId: "fc1", date: "2026-07-05", amount: -11_90,
+    importKey: null,
+    payee: "Netflix", note: null, recurringId: "fr1", createdAt: T, updatedAt: T,
+  };
+
+  function parseFinanceFile(rows: readonly Record<string, unknown>[]) {
+    return parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/finance.ndjson": ndjson(rows) } })),
+    );
+  }
+
+  const invalidDetails = (result: ReturnType<typeof parseFinanceFile>): (string | undefined)[] =>
+    result.problems.filter((problem) => problem.code === "invalid-record").map((p) => p.detail);
+
+  it("carries a subscription and its generated charge through field for field", () => {
+    const result = parseFinanceFile([ACCOUNT, CATEGORY, SUBSCRIPTION, CHARGE]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.finRecurring).toEqual([
+      {
+        id: "fr1", profileId: "profile1", accountId: "fa1", categoryId: "fc1", name: "Netflix",
+        amount: -1190, payee: null, note: null, recurrence: MONTHLY,
+        startDate: "2026-07-05", nextRun: "2026-08-05", reminderDays: 2,
+        createdAt: T, updatedAt: T,
+      },
+    ]);
+    expect(result.data?.finTransactions[0]?.recurringId).toBe("fr1");
+  });
+
+  it("runs the rule through ADR-024's own validator, canonical form and all", () => {
+    const result = parseFinanceFile([
+      ACCOUNT,
+      CATEGORY,
+      {
+        ...SUBSCRIPTION,
+        recurrence: { freq: { kind: "weekly", interval: 2, days: [3, 0] }, end: { kind: "never" } },
+      },
+    ]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.finRecurring[0]?.recurrence).toEqual({
+      freq: { kind: "weekly", interval: 2, days: [0, 3] },
+      end: { kind: "never" },
+    });
+  });
+
+  it("refuses a rule that is not a rule, and a missing one — a subscription IS its schedule", () => {
+    expect(
+      invalidDetails(parseFinanceFile([ACCOUNT, { ...SUBSCRIPTION, recurrence: { freq: "svaki dan" } }])),
+    ).toEqual(["recurrence"]);
+    expect(invalidDetails(parseFinanceFile([ACCOUNT, { ...SUBSCRIPTION, recurrence: null }]))).toEqual(
+      ["recurrence"],
+    );
+  });
+
+  it("refuses a float or zero amount, and a reminder lead outside migration 053's own range", () => {
+    expect(invalidDetails(parseFinanceFile([ACCOUNT, { ...SUBSCRIPTION, amount: -11.9 }]))).toEqual([
+      "amount",
+    ]);
+    expect(invalidDetails(parseFinanceFile([ACCOUNT, { ...SUBSCRIPTION, amount: 0 }]))).toEqual([
+      "amount",
+    ]);
+    for (const reminderDays of [-1, 366, 1.5]) {
+      expect(
+        invalidDetails(parseFinanceFile([ACCOUNT, { ...SUBSCRIPTION, reminderDays }])),
+        String(reminderDays),
+      ).toEqual(["reminderDays"]);
+    }
+  });
+
+  it("accepts a spent series (a null cursor) and a subscription that never reminds", () => {
+    const result = parseFinanceFile([
+      ACCOUNT,
+      { ...SUBSCRIPTION, categoryId: null, nextRun: null, reminderDays: null },
+    ]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.finRecurring[0]).toMatchObject({ nextRun: null, reminderDays: null });
+  });
+
+  it("DROPS a subscription whose account is gone — a template with nothing to charge is not one", () => {
+    const result = parseImportArchive(
+      emptyInputWith(
+        baseFiles({ fileContents: { "data/finance.ndjson": ndjson([CATEGORY, SUBSCRIPTION]) } }),
+        { mode: "import" },
+      ),
+    );
+    expect(result.data?.finRecurring).toEqual([]);
+    expect(result.dropped.map((drop) => [drop.type, drop.module])).toEqual([
+      ["fin-recurring", "finance"],
+    ]);
+  });
+
+  it("DETACHES a subscription's lost category rather than losing the schedule", () => {
+    const result = parseImportArchive(
+      emptyInputWith(
+        baseFiles({ fileContents: { "data/finance.ndjson": ndjson([ACCOUNT, SUBSCRIPTION]) } }),
+        { mode: "import" },
+      ),
+    );
+    expect(result.data?.finRecurring[0]).toMatchObject({ id: "fr1", categoryId: null });
+  });
+
+  it("DETACHES a charge whose subscription is gone — the money moved, whatever made it", () => {
+    const result = parseImportArchive(
+      emptyInputWith(
+        baseFiles({
+          fileContents: { "data/finance.ndjson": ndjson([ACCOUNT, CATEGORY, CHARGE]) },
+        }),
+        { mode: "import" },
+      ),
+    );
+    // Dropping it would have made every balance and every total wrong in order
+    // to preserve a link nothing computes from — so the ROW survives, and the
+    // salvage is reported as the detach it is.
+    expect(result.data?.finTransactions).toEqual([
+      {
+        id: "ftx1", profileId: "profile1", accountId: "fa1", counterAccountId: null,
+        categoryId: "fc1", date: "2026-07-05", amount: -1190, payee: "Netflix", note: null,
+        importKey: null,
+        recurringId: null, createdAt: T, updatedAt: T,
+      },
+    ]);
+    expect(result.dropped.map((drop) => [drop.type, drop.detail])).toEqual([
+      ["fin-transaction", "recurringId=fr1"],
+    ]);
+  });
+
+  it("takes a charge's link with the subscription its own dangling account dropped", () => {
+    const result = parseImportArchive(
+      emptyInputWith(
+        baseFiles({
+          // No account row at all: the subscription drops, and the charge — whose
+          // own account reference also dangles — drops with it.
+          fileContents: { "data/finance.ndjson": ndjson([CATEGORY, SUBSCRIPTION, CHARGE]) },
+        }),
+        { mode: "import" },
+      ),
+    );
+    expect(result.data?.finRecurring).toEqual([]);
+    expect(result.data?.finTransactions).toEqual([]);
   });
 });
 
@@ -3463,8 +3650,8 @@ describe("parseImportArchive — note categories (NOTE-002 / 1.27.0)", () => {
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.29.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.29.0");
+  it("is 1.30.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.30.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -3654,11 +3841,11 @@ describe("parseImportArchive — schema version", () => {
     expect(result.manifest?.profile.kind).toBe("personal");
   });
 
-  // `1.30.0`: the nearest minor strictly ahead of this build's `1.29.0`.
+  // `1.31.0`: the nearest minor strictly ahead of this build's `1.30.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.30.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.31.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.30.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.31.0" },
     ]);
     expect(result.data).toBeNull();
   });

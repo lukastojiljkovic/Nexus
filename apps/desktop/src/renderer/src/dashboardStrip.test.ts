@@ -48,7 +48,7 @@ function makeEvent(fields: Partial<Event> & Pick<Event, "id" | "startAt">): Even
  */
 function itemsOf(events: readonly Event[], people: readonly Person[] = []): CalendarItem[] {
   return buildCalendarItems(
-    { events, tasks: [], exams: [], blocks: [], subjects: [], people, overlay: [] },
+    { events, tasks: [], exams: [], blocks: [], subjects: [], people, overlay: [], renewals: [] },
     new Set<CalendarSource>(["events", "birthdays"]),
     { from: TODAY, to: TODAY },
   );

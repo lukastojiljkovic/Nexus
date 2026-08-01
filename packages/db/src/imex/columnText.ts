@@ -21,6 +21,17 @@ export function recurrenceText(rule: RecurrenceRule | null): string | null {
 }
 
 /**
+ * A subscription's rule as `fin_recurring.recurrence` stores it (migration 053).
+ * `recurrenceText` without the nullable half: that column is NOT NULL, because a
+ * subscription IS its schedule — unlike a task, whose rule is genuinely
+ * optional. Same serializer, so a restored subscription is indistinguishable
+ * from one `FinRecurringStore` wrote itself.
+ */
+export function requiredRecurrenceText(rule: RecurrenceRule): string {
+  return serializeRecurrenceRule(rule);
+}
+
+/**
  * An event's recurrence exceptions as the column stores them: ascending, which
  * `EventStore` documents as the column's canonical form and its own writes
  * always produce. The parser accepts an archive that lists them in any order

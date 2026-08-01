@@ -47,6 +47,8 @@ export {
   FinBudgetValidationError,
   FinCategoryNotFoundError,
   FinCategoryValidationError,
+  FinRecurringNotFoundError,
+  FinRecurringValidationError,
   FinTransactionNotFoundError,
   FinTransactionValidationError,
   FocusNotFoundError,
@@ -429,6 +431,19 @@ export type {
   FinTransaction,
   UpdateFinTransactionFields,
 } from "./finance/transactionStore.js";
+
+export {
+  FinRecurringStore,
+  MAX_FIN_RECURRING_NAME_LENGTH,
+  MAX_FIN_REMINDER_DAYS,
+} from "./finance/recurringStore.js";
+export type {
+  CreateFinRecurringInput,
+  FinRecurring,
+  FinRenewalWindow,
+  FinUpcomingRenewal,
+  UpdateFinRecurringFields,
+} from "./finance/recurringStore.js";
 
 export {
   SearchStore,

@@ -326,6 +326,20 @@ export const IpcChannel = {
   // invent a container that could hold a cross-currency total.
   finTransactionsSpend: "fin-transactions:spend",
   finTransactionsIncome: "fin-transactions:income",
+  // Subscriptions — recurring charges (FIN slice d, migration 053). Their own
+  // table, so their own prefix. There is deliberately NO „generate now" channel:
+  // generation is a main-process act that runs at the same moment the plan sync
+  // does (the per-unlock / per-day-change reminder check), and a renderer that
+  // could ask for it could ask twice.
+  finRecurringList: "fin-recurring:list",
+  // What the SCHEDULE says is coming, expanded from each rule over a window —
+  // never a read of rows, because a charge that has not happened is not a row.
+  // The calendar source and the dashboard card are its two callers.
+  finRecurringUpcoming: "fin-recurring:upcoming",
+  finRecurringCreate: "fin-recurring:create",
+  finRecurringUpdate: "fin-recurring:update",
+  finRecurringDelete: "fin-recurring:delete",
+  finRecurringRestore: "fin-recurring:restore",
   searchQuery: "search:query",
   searchRecent: "search:recent",
   searchPage: "search:page",
@@ -2821,7 +2835,8 @@ export type NotificationSource =
   | "study-day"
   | "event"
   | "task"
-  | "security";
+  | "security"
+  | "subscription";
 
 /** Closed ledger-status domain (mirrors `@nexus/db`'s `NotificationStatus`). Dismissal is terminal. */
 export type NotificationStatus = "delivered" | "snoozed" | "dismissed";
@@ -3826,6 +3841,8 @@ export const FIN_CATEGORY_KINDS: readonly FinCategoryKind[] = ["income", "expens
 export const MAX_FIN_ACCOUNT_NAME_LENGTH = 60;
 /** Mirrors `MAX_FIN_CATEGORY_NAME_LENGTH` in `@nexus/db`. */
 export const MAX_FIN_CATEGORY_NAME_LENGTH = 60;
+/** Mirrors `MAX_FIN_RECURRING_NAME_LENGTH` in `@nexus/db` (FIN slice d). */
+export const MAX_FIN_RECURRING_NAME_LENGTH = 60;
 /** Mirrors `MAX_FIN_PAYEE_LENGTH` in `@nexus/db`. */
 export const MAX_FIN_PAYEE_LENGTH = 120;
 /** Mirrors `MAX_FIN_NOTE_LENGTH` in `@nexus/db`. */
@@ -3960,8 +3977,101 @@ export interface FinTransaction {
   amount: number;
   payee: string | null;
   note: string | null;
+  /**
+   * The subscription that generated this charge (FIN slice d), or null for a
+   * typed one. READ-ONLY on this wire: no create or update payload carries it,
+   * because only main's generation pass ever writes it — the row is otherwise an
+   * ordinary transaction, editable and deletable exactly like a typed one.
+   */
+  recurringId: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * One recurring charge (FIN slice d, migration 053): a transaction TEMPLATE plus
+ * an ADR-024 schedule — the same `RecurrenceRule` a task and an event carry, so
+ * the renderer edits it with the very `RecurrencePicker` those two use.
+ *
+ * `amount` is signed exactly as a transaction's is, and there is no
+ * `counterAccountId`: a subscription is never a transfer.
+ */
+export interface FinRecurring {
+  id: string;
+  profileId: string;
+  accountId: string;
+  categoryId: string | null;
+  name: string;
+  /** Minor units, INTEGER, never zero. Negative leaves `accountId`, positive arrives in it. */
+  amount: number;
+  payee: string | null;
+  note: string | null;
+  recurrence: RecurrenceRule;
+  /** The bare day the rule phases from, and the series' first possible charge. */
+  startDate: string;
+  /**
+   * The first occurrence NOT yet charged, or null once the series is spent. A
+   * CURSOR, not a promise: nothing is posted for it until that day has arrived.
+   */
+  nextRun: string | null;
+  /** Whole days before a charge to remind, or null for „ne podsećaj me". */
+  reminderDays: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Fields for a new subscription; `reminderDays` absent means no renewal reminder. */
+export interface NewFinRecurringFields {
+  accountId: string;
+  categoryId?: string | null;
+  name: string;
+  amount: number;
+  payee?: string | null;
+  note?: string | null;
+  recurrence: RecurrenceRule;
+  startDate: string;
+  reminderDays?: number | null;
+}
+
+/**
+ * A partial edit; an omitted key is untouched, an explicit `null` clears a
+ * nullable field. Changing `startDate` or `recurrence` re-anchors the cursor —
+ * a different schedule is a different series — while the charges already
+ * generated stay exactly where they are.
+ */
+export interface FinRecurringFieldChanges {
+  accountId?: string;
+  categoryId?: string | null;
+  name?: string;
+  amount?: number;
+  payee?: string | null;
+  note?: string | null;
+  recurrence?: RecurrenceRule;
+  startDate?: string;
+  reminderDays?: number | null;
+}
+
+/**
+ * One renewal the SCHEDULE places inside a window — derived from the rule on
+ * every read and never stored, which is exactly why nothing is posted ahead of
+ * time. Carries the account's currency, because an amount without one is a
+ * number rather than money.
+ */
+export interface FinUpcomingRenewal {
+  recurringId: string;
+  /** The bare day the charge falls on. */
+  date: string;
+  name: string;
+  accountId: string;
+  currency: string;
+  categoryId: string | null;
+  amount: number;
+}
+
+/** An inclusive span of local days — the window `fin-recurring:upcoming` answers over. */
+export interface FinRenewalWindow {
+  from: string;
+  to: string;
 }
 
 /** Fields for a new transaction; `counterAccountId` is what makes it a transfer. */
@@ -4086,6 +4196,38 @@ export interface FinTransactionsSpendRequest {
 export interface FinTransactionsIncomeRequest {
   profileId: string;
   period: FinPeriod;
+}
+
+export interface FinRecurringListRequest {
+  profileId: string;
+}
+
+/** The window the rules are expanded over; `from` after `to` is refused by the store. */
+export interface FinRecurringUpcomingRequest {
+  profileId: string;
+  window: FinRenewalWindow;
+}
+
+export interface FinRecurringCreateRequest {
+  profileId: string;
+  subscription: NewFinRecurringFields;
+}
+
+export interface FinRecurringUpdateRequest {
+  profileId: string;
+  id: string;
+  changes: FinRecurringFieldChanges;
+}
+
+export interface FinRecurringDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
+/** Undo of a soft delete. The cursor is where it was, so the next check catches up whatever came due meanwhile. */
+export interface FinRecurringRestoreRequest {
+  profileId: string;
+  id: string;
 }
 
 /**
@@ -4823,6 +4965,7 @@ export type ImportRecordType =
   | "private-note-version"
   | "fin-account"
   | "fin-category"
+  | "fin-recurring"
   | "fin-transaction"
   | "fin-budget";
 
@@ -6674,6 +6817,31 @@ export interface NexusApi {
    * partition the period rather than overlapping on it.
    */
   finIncomeByCurrency(profileId: string, period: FinPeriod): Promise<FinCurrencyTotal[]>;
+  /** This profile's live subscriptions, sr-Latn alphabetical by name (FIN slice d). */
+  listFinRecurring(profileId: string): Promise<FinRecurring[]>;
+  /**
+   * What the SCHEDULES say is coming inside `window`, soonest first — expanded
+   * from each rule on every call. Never a read of transaction rows: a renewal
+   * that has not happened yet has none, which is precisely why nothing is posted
+   * into the future.
+   */
+  finUpcomingRenewals(
+    profileId: string,
+    window: FinRenewalWindow,
+  ): Promise<FinUpcomingRenewal[]>;
+  /** Creates a subscription; its cursor opens on `startDate` and main charges it from there on the next check. */
+  createFinRecurring(
+    profileId: string,
+    subscription: NewFinRecurringFields,
+  ): Promise<FinRecurring>;
+  updateFinRecurring(
+    profileId: string,
+    id: string,
+    changes: FinRecurringFieldChanges,
+  ): Promise<FinRecurring>;
+  /** Soft-deletes a subscription; generation skips it immediately and the charges it already made stay. */
+  deleteFinRecurring(profileId: string, id: string): Promise<void>;
+  restoreFinRecurring(profileId: string, id: string): Promise<void>;
   /** Runs the query pipeline (parse -> FTS match -> bm25 candidates -> rank), falling back to `searchRecent`'s order when the query has no matchable terms (ADR-021). */
   searchQuery(profileId: string, query: string, limit: number): Promise<SearchResult[]>;
   /** The profile's most recently touched entries, already in their final order — no ranking pass, unlike `searchQuery`. */

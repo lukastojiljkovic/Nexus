@@ -49,6 +49,14 @@ export interface FinTransaction {
    * a second, unedited copy of it the next time that statement is read.
    */
   importKey: string | null;
+  /**
+   * The subscription that generated this row (FIN slice d, migration 053), or
+   * null for a typed one. READ-ONLY here: only `FinRecurringStore.generateDue`
+   * ever writes it, and this store's own `update` deliberately does not touch
+   * the column — editing a generated charge changes the money, never the fact
+   * that a subscription made it.
+   */
+  recurringId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -104,6 +112,7 @@ interface FinTransactionRow {
   payee: string | null;
   note: string | null;
   import_key: string | null;
+  recurring_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -121,7 +130,7 @@ interface IncomeRow {
 
 const COLUMNS =
   "id, profile_id, account_id, counter_account_id, category_id, tx_date, amount, " +
-  "payee, note, import_key, created_at, updated_at";
+  "payee, note, import_key, recurring_id, created_at, updated_at";
 
 /**
  * Finance transactions for a single profile, over prepared, parameterized
@@ -294,6 +303,9 @@ export class FinTransactionStore {
       profileId: this.profileId,
       ...resolved,
       importKey: null,
+      // A row this store writes is a TYPED one, always: the column is
+      // `FinRecurringStore.generateDue`'s alone (migration 053).
+      recurringId: null,
       createdAt: validNow,
       updatedAt: validNow,
     };
@@ -441,9 +453,13 @@ export class FinTransactionStore {
     amount: number;
     payee: string | null;
     note: string | null;
-    // `importKey` is deliberately absent from both sides: nothing a caller may
-    // send decides a fingerprint, and nothing here may change one.
-  }): Omit<FinTransaction, "id" | "profileId" | "importKey" | "createdAt" | "updatedAt"> {
+    // `importKey` and `recurringId` are deliberately absent from both sides:
+    // nothing a caller may send decides a fingerprint or claims a subscription,
+    // and nothing here may change either.
+  }): Omit<
+    FinTransaction,
+    "id" | "profileId" | "importKey" | "recurringId" | "createdAt" | "updatedAt"
+  > {
     const date = validateDate(fields.date);
     const amount = validateAmount(fields.amount);
     const payee = validateOptionalText(fields.payee, "payee", MAX_FIN_PAYEE_LENGTH);
@@ -524,6 +540,7 @@ function toFinTransaction(row: FinTransactionRow): FinTransaction {
     payee: row.payee,
     note: row.note,
     importKey: row.import_key,
+    recurringId: row.recurring_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

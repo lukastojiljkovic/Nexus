@@ -515,6 +515,17 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.finTransactionsSpend, { profileId, period }),
   finIncomeByCurrency: (profileId, period) =>
     ipcRenderer.invoke(IpcChannel.finTransactionsIncome, { profileId, period }),
+  listFinRecurring: (profileId) => ipcRenderer.invoke(IpcChannel.finRecurringList, { profileId }),
+  finUpcomingRenewals: (profileId, window) =>
+    ipcRenderer.invoke(IpcChannel.finRecurringUpcoming, { profileId, window }),
+  createFinRecurring: (profileId, subscription) =>
+    ipcRenderer.invoke(IpcChannel.finRecurringCreate, { profileId, subscription }),
+  updateFinRecurring: (profileId, id, changes) =>
+    ipcRenderer.invoke(IpcChannel.finRecurringUpdate, { profileId, id, changes }),
+  deleteFinRecurring: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.finRecurringDelete, { profileId, id }),
+  restoreFinRecurring: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.finRecurringRestore, { profileId, id }),
   searchQuery: (profileId, query, limit) =>
     ipcRenderer.invoke(IpcChannel.searchQuery, { profileId, query, limit }),
   searchRecent: (profileId, limit) =>

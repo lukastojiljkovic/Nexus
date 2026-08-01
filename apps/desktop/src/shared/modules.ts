@@ -328,6 +328,35 @@ const STUDY_SETTINGS: SettingsPanel = {
 };
 
 /**
+ * FIN's first dashboard card (slice d): the charges the SCHEDULES say are
+ * coming. Two knobs, both `ROW_CAP`'s and `HORIZON_DAY_OPTIONS`' existing
+ * vocabulary rather than a third one — one key, one Serbian label, one meaning
+ * (DASH-004 / ADR-059).
+ *
+ * The horizon has NO „svi" option, unlike „Ispiti" and „Isticanja", and the
+ * absence is the honest difference between the three: an exam and a document
+ * each have one final date, so „every upcoming one" is a finite list, while a
+ * subscription that never ends has infinitely many renewals ahead of it.
+ * „Sve" there would mean "the next N, whenever they fall", which the row cap
+ * already says — so the card ships on a 30-day window and offers 60 and 90.
+ *
+ * Capped at M for the reason „hitno-kasni" and „nedavno" are: a row here is a
+ * name, a day and an amount, and a full-width card would be mostly empty space.
+ */
+const FINANCE_WIDGETS: WidgetContract[] = [
+  {
+    id: "naplate",
+    title: "dashboard.renewals.title",
+    sizes: ["S", "M"],
+    deepLink: "finance",
+    configFields: [
+      ROW_CAP,
+      { kind: "choice", key: "horizon", options: HORIZON_DAY_OPTIONS, default: "30" },
+    ],
+  },
+];
+
+/**
  * FIN slice b. ONE control, and the restraint is the point: a currency is a
  * fact of each ACCOUNT (migration 051's no-FX design), so the only thing left
  * for a settings card to decide is which code the „Novi račun" form opens on.
@@ -463,15 +492,19 @@ const V0_MODULES: ModuleManifest[] = [
   // unlike PRIV: PRIV is off because it is a sealed section with a credential
   // of its own, an opt-in by nature — nothing about a ledger asks to be opted
   // into, and a life-management app whose money module had to be switched on
-  // first would be hiding one of the things it is for. It contributes no
-  // widgets and no searchIndexers yet: a dashboard card and an indexed payee
-  // are their own decisions, and a contract slot filled before the surface
-  // exists is exactly the empty-page trap the comment above describes.
+  // first would be hiding one of the things it is for.
+  //
+  // Slice d fills the `widgets` slot the earlier comment deliberately left
+  // empty, on exactly the terms it named: the surface exists now, so the
+  // contract may. `searchIndexers` stays empty — an indexed payee is its own
+  // decision, and a ledger is not something the palette should surface by
+  // accident.
   {
     id: "finance",
     prefix: "FIN",
     category: "Life hubs",
     defaultEnabled: true,
+    widgets: FINANCE_WIDGETS,
     settings: FINANCE_SETTINGS,
   },
 ];

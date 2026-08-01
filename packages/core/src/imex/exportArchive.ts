@@ -44,6 +44,28 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
  *
+ * `1.30.0` adds FIN SUBSCRIPTIONS (FIN slice d, migration 053): the
+ * `fin-recurring` record type — one row per recurring charge, riding in
+ * `data/finance.ndjson` AFTER the accounts and categories it points at and
+ * BEFORE the transactions that point back at it — plus an OPTIONAL `recurringId`
+ * on `fin-transaction` (absent means null, which is what every transaction in
+ * every earlier archive was, so no `ArchiveEra` flag: the ADR-028 rule).
+ *
+ * A subscription carries a `recurrence` in exactly the shape `task` and `event`
+ * already carry one (ADR-024's canonical JSON), which is the whole reason this
+ * bump costs one field and one type rather than a schedule grammar of its own —
+ * the reader re-runs `validateRecurrenceRule`, the same function those two rows
+ * go through. `nextRun` travels with it and is nullable: a cursor, not a
+ * promise, and a spent series says so with a null rather than a sentinel. It
+ * must travel, because a restore that reset it to the start date would re-charge
+ * a year of Netflix into a restored profile — the transactions are in the same
+ * archive, so cursor and rows have to arrive together or contradict each other.
+ *
+ * The bump is owed for the reason every one below was: an older reader handed
+ * this archive would refuse `fin-recurring` as an unrecognised type, and the
+ * version gate turns that into one honest sentence about the build instead of
+ * one baffling line-error per subscription somebody keeps.
+ *
  * `1.29.0` adds the IMPORT FINGERPRINT to `fin-transaction` (FIN slice e,
  * migration 052): one nullable `importKey` field, absent on every row the user
  * typed and present on every row a bank-statement CSV brought in. It is carried
@@ -258,7 +280,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.29.0";
+const SCHEMA_VERSION = "1.30.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -1157,6 +1179,51 @@ export interface ExportFinTransaction {
    * over the account, which the row names in a column of its own.
    */
   importKey: string | null;
+  /**
+   * The `fin-recurring` row that generated this charge (FIN slice d, migration
+   * 053), or null for a typed one. OPTIONAL with a default: absent means null,
+   * which is what every transaction in every pre-`1.30.0` archive was, so no
+   * `ArchiveEra` flag is involved (the ADR-028 rule). A dangling id DETACHES to
+   * null rather than costing the row — the charge is money that actually moved,
+   * and losing it over a lost provenance link would make every total wrong.
+   */
+  recurringId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One recurring charge — a transaction TEMPLATE plus an ADR-024 schedule
+ * (migration 053). The schedule is the SAME `recurrence` object a `task` or an
+ * `event` carries, canonical JSON and all, because FIN has no rule language of
+ * its own; the template half is the `fin-transaction` each charge will be, field
+ * for field, with `amount` signed identically.
+ *
+ * `nextRun` is a CURSOR — the first occurrence not yet charged — and it travels
+ * so a restore cannot re-charge history that is in the very same archive.
+ * Nullable: a series past its `until`/`count` end has no next one, and a
+ * sentinel date would sort into the middle of real ones.
+ *
+ * There is no `counterAccountId`: a subscription is never a transfer.
+ */
+export interface ExportFinRecurring {
+  id: string;
+  profileId: string;
+  accountId: string;
+  categoryId: string | null;
+  name: string;
+  /** Minor units, INTEGER, never zero. Negative leaves `accountId`, positive arrives in it. */
+  amount: number;
+  payee: string | null;
+  note: string | null;
+  /** ADR-024's rule, exactly as `task.recurrence` carries one. */
+  recurrence: RecurrenceRule;
+  /** The bare day the rule phases from, and the series' first possible charge. */
+  startDate: string;
+  /** The first occurrence not yet charged, or null once the series is spent. */
+  nextRun: string | null;
+  /** Whole days before a charge to remind, or null for no reminder. */
+  reminderDays: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1354,6 +1421,14 @@ export interface ProfileData {
    */
   finAccounts: readonly ExportFinAccount[];
   finCategories: readonly ExportFinCategory[];
+  /**
+   * The profile's recurring charges (FIN slice d, migration 053). Required like
+   * every field around it: a module the caller forgets must be a type error.
+   * EMPTY both for a pre-`1.30.0` archive and for a profile that keeps no
+   * subscription, indistinguishable on purpose, because they mean the same
+   * thing.
+   */
+  finRecurring: readonly ExportFinRecurring[];
   finTransactions: readonly ExportFinTransaction[];
   finBudgets: readonly ExportFinBudget[];
 }
@@ -1657,13 +1732,15 @@ export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, 
     dashboard:
       data.dashboardSettings.length + data.dashboardSets.length + data.dashboardWidgets.length,
     // The whole ledger in one bucket (migration 051): accounts, the flat
-    // categories, every transaction — transfers included, since a transfer IS a
-    // row — and the budgets. A restore preview that showed one number too few
-    // would be telling the user something untrue about what is about to change,
-    // which is the entire job of that table.
+    // categories, the subscriptions (migration 053), every transaction —
+    // transfers included, since a transfer IS a row — and the budgets. A restore
+    // preview that showed one number too few would be telling the user something
+    // untrue about what is about to change, which is the entire job of that
+    // table.
     finance:
       data.finAccounts.length +
       data.finCategories.length +
+      data.finRecurring.length +
       data.finTransactions.length +
       data.finBudgets.length,
   };
@@ -1797,12 +1874,14 @@ export function filterProfileData(
     dashboardSets: only("dashboard", data.dashboardSets),
     dashboardWidgets: only("dashboard", data.dashboardWidgets),
     // Every FIN reference has both ends inside FIN — a transaction's account,
-    // its counter account and its category; a budget's category — so the four
-    // drop as one unit with no repair rule, unlike the three genuinely
-    // cross-module references documented in the header. Nothing outside FIN
-    // points INTO it either, so dropping the module dangles nothing elsewhere.
+    // its counter account, its category and its subscription; a subscription's
+    // account and category; a budget's category — so the five drop as one unit
+    // with no repair rule, unlike the three genuinely cross-module references
+    // documented in the header. Nothing outside FIN points INTO it either, so
+    // dropping the module dangles nothing elsewhere.
     finAccounts: only("finance", data.finAccounts),
     finCategories: only("finance", data.finCategories),
+    finRecurring: only("finance", data.finRecurring),
     finTransactions: only("finance", data.finTransactions),
     finBudgets: only("finance", data.finBudgets),
   };
@@ -1925,12 +2004,14 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   // data file keeps. Absent input writes the empty file, exactly what a profile
   // with no private notes writes.
   // Dependency order, the reading every data file keeps: the accounts and the
-  // flat categories a transaction points at come first, then the transactions
-  // (a transfer names TWO accounts, both already written), then the budgets,
-  // which point only at a category.
+  // flat categories a transaction points at come first, then the subscriptions
+  // (which point at both), then the transactions (a transfer names TWO accounts
+  // and a generated charge names its subscription, all already written), then
+  // the budgets, which point only at a category.
   const financeNdjson = toNdjson([
     ...data.finAccounts.map((row) => ({ type: "fin-account", ...row })),
     ...data.finCategories.map((row) => ({ type: "fin-category", ...row })),
+    ...data.finRecurring.map((row) => ({ type: "fin-recurring", ...row })),
     ...data.finTransactions.map((row) => ({ type: "fin-transaction", ...row })),
     ...data.finBudgets.map((row) => ({ type: "fin-budget", ...row })),
   ]);

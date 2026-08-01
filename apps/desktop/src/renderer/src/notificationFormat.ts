@@ -6,13 +6,14 @@
  */
 import type { NotificationSource, SnoozePreset } from "../../shared/ipc.js";
 
-/** The five toggleable NTF sources, in the fixed order every source list/loop uses. */
+/** The six toggleable NTF sources, in the fixed order every source list/loop uses. */
 export const ALL_NOTIFICATION_SOURCES: NotificationSource[] = [
   "document",
   "exam",
   "study-day",
   "event",
   "task",
+  "subscription",
 ];
 
 /**
@@ -43,11 +44,17 @@ export interface NotificationPreset {
 }
 
 /**
- * NTF-008: minimalno/normalno/sve map onto growing subsets of the five sources.
+ * NTF-008: minimalno/normalno/sve map onto growing subsets of the six sources.
  * An event reminder is in every preset, minimalno included — it is the least
  * noisy kind there is, since the user attached it to that one event by hand. A
  * task reminder (ADR-028) joins every tier for exactly the same reason: it
- * exists only because the user set a ladder on that one task by hand.
+ * exists only because the user set a ladder on that one task by hand. And a
+ * SUBSCRIPTION renewal (FIN slice d) is in every tier on the identical
+ * argument, sharpened: a subscription reminds only when its own `reminderDays`
+ * was set by hand — the shipped value is „bez podsetnika" — so a profile on
+ * „minimalno" hears about a charge exactly when it asked to, and about money
+ * leaving an account, which is the one thing nobody wants to find out
+ * afterwards.
  *
  * Lives here, beside `ALL_NOTIFICATION_SOURCES`, because two surfaces now write
  * these exact sets: the Settings page's preset row and the one-time appetite
@@ -55,9 +62,9 @@ export interface NotificationPreset {
  * and a second copy is precisely how it would stop doing so.
  */
 export const NOTIFICATION_PRESETS: NotificationPreset[] = [
-  { key: "minimal", sources: ["document", "event", "task"] },
-  { key: "normal", sources: ["document", "exam", "event", "task"] },
-  { key: "all", sources: ["document", "exam", "study-day", "event", "task"] },
+  { key: "minimal", sources: ["document", "event", "task", "subscription"] },
+  { key: "normal", sources: ["document", "exam", "event", "task", "subscription"] },
+  { key: "all", sources: ["document", "exam", "study-day", "event", "task", "subscription"] },
 ];
 
 function isSameLocalDay(a: Date, b: Date): boolean {

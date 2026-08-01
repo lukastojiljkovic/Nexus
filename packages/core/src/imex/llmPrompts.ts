@@ -1285,6 +1285,7 @@ export function translateLlmRecords(
     // something a model may invent about somebody's money (migration 051).
     finAccounts: [],
     finCategories: [],
+    finRecurring: [],
     finTransactions: [],
     finBudgets: [],
   };

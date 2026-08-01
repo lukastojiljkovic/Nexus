@@ -1964,6 +1964,14 @@ button.tasks__cal-chip:active {
   font-weight: var(--nx-font-weight-semibold);
 }
 
+/* Subscription renewal rows (FIN slice d): read-only like every other
+   non-event source here, and drawn with the identical quiet tag chip — a
+   renewal is a fact about a day, not a new kind of thing the calendar needs a
+   colour for. */
+.cal__subscription-tag {
+  font-weight: var(--nx-font-weight-semibold);
+}
+
 /* Source-filter toggle chips (Događaji/Zadaci/Ispiti/Učenje/Rođendani, ADR-020) — same
    typographic active state as .cal__view; applies to the month grid and the
    agenda alike, so it lives beside the view toggle rather than either view. */
@@ -9039,6 +9047,38 @@ button.cal__grid-event--dragging {
 .fin__page--active.nx-button {
   color: var(--nx-accent-strong);
   font-weight: var(--nx-font-weight-semibold);
+}
+
+/* Pretplate (FIN slice d) — the charges that repeat. Nothing new visually: the
+   form is the ledger's own `.fin__form`, the rows are `ListRow`s carrying the
+   same `.fin__row-body` cluster, and the upcoming list is a plain three-column
+   line. A schedule is not a fourth kind of thing this page needs a look for. */
+.fin__subs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+.fin__subs-list {
+  display: flex;
+  flex-direction: column;
+}
+.fin__subs-upcoming {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.fin__subs-upcoming-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-1) 0;
+  border-bottom: 1px solid var(--nx-border);
+}
+.fin__subs-upcoming-row:last-child {
+  border-bottom: none;
+}
+.fin__subs-upcoming-row .fin__amount {
+  margin-left: auto;
 }
 
 /* Izveštaj (FIN slice c) — ONE month, one section per currency. Nothing here

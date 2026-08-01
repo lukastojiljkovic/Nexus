@@ -29,6 +29,7 @@ import type {
   ExportFinAccount,
   ExportFinBudget,
   ExportFinCategory,
+  ExportFinRecurring,
   ExportFinTransaction,
   ExportFocusSession,
   ExportNote,
@@ -232,7 +233,35 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.28.0` adds the
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.30.0` adds FIN
+ * SUBSCRIPTIONS (FIN slice d, migration 053): the `fin-recurring` record type in
+ * `data/finance.ndjson`, plus an OPTIONAL `recurringId` on `fin-transaction`.
+ * Neither needs an `ArchiveEra` flag: the whole-absent-type rule below covers
+ * the record, and the field is OPTIONAL-with-a-default whose absence means
+ * `null`, because a typed transaction is what every row in every earlier archive
+ * was.
+ *
+ * A subscription's `recurrence` goes through `validateRecurrenceRule` — the very
+ * function a `task`'s and an `event`'s go through, because ADR-024's rule
+ * language is the only one this app has. Its `amount` is re-validated as a
+ * non-zero integer of minor units and its `reminderDays` against migration 053's
+ * own 0..365 CHECK, in every era, for the reason the two money facts below are:
+ * they are the contract, not a convention.
+ *
+ * Three references, each with the answer its row's meaning demands. A
+ * subscription's `accountId` DROPS the subscription: a charge template with no
+ * account to charge is not a template, it is a row nothing could ever act on.
+ * Its `categoryId` DETACHES to null, exactly as a transaction's does —
+ * uncategorized is a first-class state and losing the schedule over a lost label
+ * would be the opposite of salvage. And a transaction's `recurringId` DETACHES,
+ * for the sharpest reason of the three: the charge is money that actually moved,
+ * so dropping it would make every balance and every total wrong in order to
+ * preserve a provenance link nothing computes from.
+ *
+ * The bump is owed for the reason every one below was: an older reader handed
+ * this archive would refuse `fin-recurring` as an unrecognised type.
+ *
+ * `1.28.0` adds the
  * FINANCE module (FIN slice a, migration 051): the record types `fin-account`,
  * `fin-category`, `fin-transaction` and `fin-budget`, riding in their own
  * `data/finance.ndjson` (a new `DATA_FILES` entry the checksum walk's union
@@ -411,7 +440,7 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.29.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.30.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -860,19 +889,36 @@ const MAX_EXAM_TOPIC_NAME_LENGTH = 200;
 const WEEKDAY_VECTOR_LENGTH = 7;
 const MAX_WEEKDAY_MINUTES = 480;
 /**
- * Mirrors the `notifications.source` CHECK as migration 037 leaves it — the
+ * Mirrors the `notifications.source` CHECK as migration 053 leaves it — the
  * LEDGER's domain, which includes `"security"` (NTF-007) because a recorded
- * security event is history like any other row.
+ * security event is history like any other row, and `"subscription"` (FIN slice
+ * d) because a renewal reminder is an ordinary derived one.
  */
-const NOTIFICATION_SOURCES = ["document", "exam", "study-day", "event", "task", "security"] as const;
+const NOTIFICATION_SOURCES = [
+  "document",
+  "exam",
+  "study-day",
+  "event",
+  "task",
+  "security",
+  "subscription",
+] as const;
 
 /**
  * Mirrors the narrower `ntf_source_settings.source` CHECK, which migration 037
- * deliberately leaves alone: `"security"` is not a preference, so it can never
- * appear in a settings row — or in the `enabledSources` list one is written
- * from.
+ * deliberately leaves alone while 053 widens it with the rest: `"security"` is
+ * not a preference, so it can never appear in a settings row — or in the
+ * `enabledSources` list one is written from — while a renewal reminder is one
+ * like any other and can be switched off.
  */
-const TOGGLEABLE_NOTIFICATION_SOURCES = ["document", "exam", "study-day", "event", "task"] as const;
+const TOGGLEABLE_NOTIFICATION_SOURCES = [
+  "document",
+  "exam",
+  "study-day",
+  "event",
+  "task",
+  "subscription",
+] as const;
 
 /**
  * Mirrors `SNOOZE_PRESETS` in `@nexus/db`'s `notify/notificationStore.ts` and
@@ -1047,6 +1093,7 @@ export type ArchiveRecordType =
   | "private-note-version"
   | "fin-account"
   | "fin-category"
+  | "fin-recurring"
   | "fin-transaction"
   | "fin-budget";
 
@@ -1093,6 +1140,7 @@ const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "private-note-version",
   "fin-account",
   "fin-category",
+  "fin-recurring",
   "fin-transaction",
   "fin-budget",
 ];
@@ -1146,7 +1194,13 @@ const FILE_RECORD_TYPES: Record<DataFilePath, readonly ArchiveRecordType[]> = {
   ],
   "data/dashboard.ndjson": ["dashboard-settings", "dashboard-set", "dashboard-widget"],
   "data/private-notes.ndjson": ["private-note", "private-note-version"],
-  "data/finance.ndjson": ["fin-account", "fin-category", "fin-transaction", "fin-budget"],
+  "data/finance.ndjson": [
+    "fin-account",
+    "fin-category",
+    "fin-recurring",
+    "fin-transaction",
+    "fin-budget",
+  ],
 };
 
 /**
@@ -2219,6 +2273,8 @@ const MAX_FIN_NOTE_LENGTH = 500;
  * column.
  */
 const MAX_FIN_IMPORT_KEY_LENGTH = 4096;
+/** Migration 053's `fin_recurring.reminder_days` CHECK, restated (FIN slice d). */
+const MAX_FIN_REMINDER_DAYS = 365;
 
 /** ISO-4217 as migration 051 stores it: exactly three upper-case ASCII letters. */
 const ISO_4217 = /^[A-Z]{3}$/;
@@ -2310,11 +2366,63 @@ function parseFinTransaction(raw: Record<string, unknown>): ExportFinTransaction
     raw.importKey === undefined
       ? null
       : nullableTrimmedStr(raw.importKey, "importKey", MAX_FIN_IMPORT_KEY_LENGTH);
+  // Optional with a default (FIN slice d), so no era flag — the `categoryId`
+  // reasoning at INTERCHANGE_SCHEMA_VERSION. Absent means null, which is what
+  // every transaction in every archive written before 1.30.0 actually was; a
+  // PRESENT value is validated strictly, in every era, and reference-checked
+  // against the archive's own subscriptions in the reference pass.
+  const recurringId =
+    raw.recurringId === undefined ? null : nullableNonEmptyStr(raw.recurringId, "recurringId");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
   return {
     id, profileId, accountId, counterAccountId, categoryId, date, amount, payee, note,
-    importKey, createdAt, updatedAt,
+    importKey, recurringId, createdAt, updatedAt,
+  };
+}
+
+/**
+ * One recurring charge (FIN slice d, migration 053): a transaction TEMPLATE plus
+ * an ADR-024 schedule. The rule goes through `validateRecurrenceRule`, the same
+ * function a `task`'s and an `event`'s goes through — there is one rule language
+ * in this app and this row speaks it, which is why nothing here re-spells a
+ * grammar.
+ *
+ * `amount` is a non-zero integer of minor units, exactly as a transaction's is:
+ * migration 053's CHECK refuses a zero and a float, so a restore can never abort
+ * halfway on a row this reader called fine. `nextRun` is nullable because a
+ * series past its own end has no next occurrence, and `reminderDays` is null or
+ * a whole 0..365, the column's own domain restated.
+ *
+ * A subscription is never a transfer, so there is no `counterAccountId` to read
+ * and none to write — a writer that invented one would simply have it ignored,
+ * `parseFinCategory`'s posture towards a `parentId`.
+ */
+function parseFinRecurring(raw: Record<string, unknown>): ExportFinRecurring {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const accountId = nonEmptyStr(raw.accountId, "accountId");
+  const categoryId = nullableNonEmptyStr(raw.categoryId, "categoryId");
+  const name = trimmedNonEmptyStr(raw.name, "name", MAX_FIN_NAME_LENGTH);
+  const amount = minorUnits(raw.amount, "amount");
+  if (amount === 0) throw new InvalidFieldError("amount");
+  const payee = nullableTrimmedStr(raw.payee, "payee", MAX_FIN_PAYEE_LENGTH);
+  const note = nullableTrimmedStr(raw.note, "note", MAX_FIN_NOTE_LENGTH);
+  const recurrence = nullableRecurrenceRule(raw.recurrence, "recurrence");
+  // A subscription without a schedule is not a subscription — unlike a task,
+  // whose rule is genuinely optional, this row IS its rule.
+  if (recurrence === null) throw new InvalidFieldError("recurrence");
+  const startDate = bareDate(raw.startDate, "startDate");
+  const nextRun = raw.nextRun === null ? null : bareDate(raw.nextRun, "nextRun");
+  const reminderDays =
+    raw.reminderDays === null
+      ? null
+      : intInRange(raw.reminderDays, "reminderDays", 0, MAX_FIN_REMINDER_DAYS);
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return {
+    id, profileId, accountId, categoryId, name, amount, payee, note, recurrence,
+    startDate, nextRun, reminderDays, createdAt, updatedAt,
   };
 }
 
@@ -2545,6 +2653,7 @@ interface Collections {
   privateNoteVersions: Bucket<ExportPrivateNoteVersion>;
   finAccounts: Bucket<ExportFinAccount>;
   finCategories: Bucket<ExportFinCategory>;
+  finRecurring: Bucket<ExportFinRecurring>;
   finTransactions: Bucket<ExportFinTransaction>;
   finBudgets: Bucket<ExportFinBudget>;
 }
@@ -2567,7 +2676,7 @@ function newCollections(): Collections {
     noteTagLinks: newBucket(), noteAttachments: newBucket(), noteVersions: newBucket(),
     noteTemplates: newBucket(), dashboardSettings: newBucket(), dashboardSets: newBucket(),
     dashboardWidgets: newBucket(), privateNotes: newBucket(), privateNoteVersions: newBucket(),
-    finAccounts: newBucket(), finCategories: newBucket(),
+    finAccounts: newBucket(), finCategories: newBucket(), finRecurring: newBucket(),
     finTransactions: newBucket(), finBudgets: newBucket(),
   };
 }
@@ -2844,6 +2953,11 @@ function dispatchRecord(
     case "fin-category": {
       const row = parseFinCategory(raw);
       pushRow(collections.finCategories, row.id, row, type, path, line, ctx);
+      return;
+    }
+    case "fin-recurring": {
+      const row = parseFinRecurring(raw);
+      pushRow(collections.finRecurring, row.id, row, type, path, line, ctx);
       return;
     }
     case "fin-transaction": {
@@ -3859,6 +3973,54 @@ function referenceRules(collections: Collections): ReferenceRule[] {
       },
       onDangling: "drop",
     }),
+    // --- FIN subscriptions (migration 053) ----------------------------------
+    // The account a subscription charges. DROPPED when dangling, for the reason
+    // a transaction's account is: a charge template with nothing to charge is
+    // not a template, it is a row nothing could ever act on.
+    referenceRule({
+      bucket: collections.finRecurring,
+      type: "fin-recurring",
+      field: "accountId",
+      ref: (row) => row.accountId,
+      resolver: () => {
+        const ids = finAccountIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    // What the charge is FOR — optional by construction, so it DETACHES exactly
+    // as a transaction's category does: a schedule whose label was lost is still
+    // a schedule, and losing the money over it would be the opposite of salvage.
+    referenceRule({
+      bucket: collections.finRecurring,
+      type: "fin-recurring",
+      field: "categoryId",
+      ref: (row) => row.categoryId,
+      resolver: () => {
+        const ids = finCategoryIds();
+        return (ref) => ids.has(ref);
+      },
+      onDangling: { detach: (row) => ({ ...row, categoryId: null }) },
+    }),
+    // Which subscription generated a charge. DETACHES, and this is the sharpest
+    // of the three: the row is money that actually moved, so dropping it would
+    // make every balance and every total wrong in order to preserve a provenance
+    // link nothing computes from. The charge simply becomes what it would have
+    // been if the user had typed it, which is what it already looks like on
+    // screen. It runs AFTER the two rules above deliberately: a subscription
+    // dropped for a dangling account takes its charges' link with it, rather
+    // than leaving them pointing at a row this archive no longer has.
+    referenceRule({
+      bucket: collections.finTransactions,
+      type: "fin-transaction",
+      field: "recurringId",
+      ref: (row) => row.recurringId ?? null,
+      resolver: () => {
+        const ids = idsOf(collections.finRecurring);
+        return (ref) => ids.has(ref);
+      },
+      onDangling: { detach: (row) => ({ ...row, recurringId: null }) },
+    }),
   ];
 }
 
@@ -4348,6 +4510,7 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         // ledger", which is exactly what it kept.
         finAccounts: rowsOf(collections.finAccounts),
         finCategories: rowsOf(collections.finCategories),
+        finRecurring: rowsOf(collections.finRecurring),
         finTransactions: rowsOf(collections.finTransactions),
         finBudgets: rowsOf(collections.finBudgets),
       };

@@ -890,6 +890,7 @@ export function translateCsvFinance(
     finCategories: [],
     finTransactions: transactions,
     finBudgets: [],
+    finRecurring: [],
   };
 
   return {

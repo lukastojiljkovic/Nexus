@@ -194,6 +194,56 @@ export function taskNotificationCopy(
 }
 
 /**
+ * Subscription renewal copy (FIN slice d). `renewalDate`/`today` are bare
+ * "YYYY-MM-DD" and `reminderDays` is the whole-day lead that produced this
+ * occurrence; `amount` is minor units, negative for money going out.
+ *
+ * The body states WHEN the charge falls and HOW MUCH, for the reason the task
+ * copy states the due date: a reminder that came due while the app was closed
+ * surfaces on the next check, so a countdown would be a lie exactly when it
+ * matters. The amount is what makes this notification worth having at all —
+ * „Netflix se obnavlja" says nothing a calendar could not, while the figure is
+ * the thing a person actually wants a heads-up about.
+ *
+ * Money is formatted HERE and nowhere else in main: two decimals, comma
+ * separator (Serbian), and the currency code after it — the display edge's job,
+ * done at the display edge, exactly as `money.ts` does it in the renderer. The
+ * minor-unit integer is never divided anywhere else.
+ */
+export function subscriptionNotificationCopy(
+  name: string,
+  renewalDate: string,
+  today: string,
+  amount: number,
+  currency: string,
+  reminderDays: number,
+): NotificationCopy {
+  const days = daysUntil(today, renewalDate);
+  const whenPhrase =
+    days === 0
+      ? "Naplata je danas"
+      : days === 1
+        ? "Naplata je sutra"
+        : `Naplata: ${formatDate(renewalDate)}`;
+  const parts = [whenPhrase, `${formatMinorUnits(amount)} ${currency}`];
+  if (reminderDays > 0) parts.push(dayLeadPhrase(reminderDays));
+  return { title: `Pretplata: ${name}`, body: parts.join(" · ") };
+}
+
+/**
+ * Minor units as a Serbian decimal: 1190 → „11,90". The sign is dropped because
+ * the sentence already says this is a naplata — a leading minus would read as an
+ * error rather than as direction. Integer arithmetic throughout: the whole and
+ * the fractional part are split with `Math.trunc`/`%`, never by dividing.
+ */
+function formatMinorUnits(amount: number): string {
+  const absolute = Math.abs(amount);
+  const whole = Math.trunc(absolute / 100);
+  const cents = absolute % 100;
+  return `${whole},${String(cents).padStart(2, "0")}`;
+}
+
+/**
  * One security-relevant event that actually happened on this device (NTF-007),
  * as main hands it to the notification path. `at` is the instant it happened —
  * main's own clock, never the renderer's — and doubles as the occurrence key
@@ -267,7 +317,7 @@ export function studyDayNotificationCopy(blockCount: number, totalMinutes: numbe
  */
 export type FoldableNotificationSource = Exclude<NotificationSource, "security">;
 
-/** Per-source counts for a digest, in the fixed order documents/exams/study-days/events/tasks. */
+/** Per-source counts for a digest, in the fixed order documents/exams/study-days/events/tasks/subscriptions. */
 export type DigestCounts = Record<FoldableNotificationSource, number>;
 
 /**
@@ -291,6 +341,11 @@ function digestBody(counts: DigestCounts): string {
   }
   if (counts.task > 0) {
     parts.push(`${counts.task} ${pluralize(counts.task, "zadatak", "zadatka", "zadataka")}`);
+  }
+  if (counts.subscription > 0) {
+    parts.push(
+      `${counts.subscription} ${pluralize(counts.subscription, "pretplata", "pretplate", "pretplata")}`,
+    );
   }
   return parts.join(" · ");
 }
@@ -345,5 +400,5 @@ export function catchUpDigestCopy(total: number, counts: DigestCounts): Notifica
  * it its own toast, always (NTF-007 / NTF-009).
  */
 export function emptyDigestCounts(): DigestCounts {
-  return { document: 0, exam: 0, "study-day": 0, event: 0, task: 0 };
+  return { document: 0, exam: 0, "study-day": 0, event: 0, task: 0, subscription: 0 };
 }

@@ -34,6 +34,7 @@ import {
   ExamStore,
   FinAccountStore,
   FinCategoryStore,
+  FinRecurringStore,
   FinTransactionStore,
   FocusStore,
   ForeignImportStore,
@@ -216,6 +217,7 @@ function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
     dashboardSetStore: (profileId) => new DashboardSetStore(handle.raw, profileId),
     finAccountStore: (profileId) => new FinAccountStore(handle.raw, profileId),
     finCategoryStore: (profileId) => new FinCategoryStore(handle.raw, profileId),
+    finRecurringStore: (profileId) => new FinRecurringStore(handle.raw, profileId),
     finTransactionStore: (profileId) => new FinTransactionStore(handle.raw, profileId),
   };
 }
@@ -520,6 +522,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   const finAccountStore = new FinAccountStore(handle.raw, profileId);
   const finCategoryStore = new FinCategoryStore(handle.raw, profileId);
   const finTransactionStore = new FinTransactionStore(handle.raw, profileId);
+  const finRecurringStore = new FinRecurringStore(handle.raw, profileId);
 
   // A real ledger (migration 051): two same-currency accounts so a TRANSFER
   // rides through the whole zip round trip as the one row it is, a budgeted
@@ -553,6 +556,21 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     },
     t0,
   );
+  // FIN slice d (migration 053): a subscription and one charge it generated, so
+  // the zip round trip carries the rule, the cursor and the provenance link.
+  finRecurringStore.create(
+    {
+      accountId: finCurrent.id,
+      categoryId: finCategory.id,
+      name: `${label} Netflix`,
+      amount: -11_90,
+      recurrence: { freq: { kind: "monthly-date", interval: 1, day: 5 }, end: { kind: "never" } },
+      startDate: "2026-02-05",
+      reminderDays: 2,
+    },
+    t0,
+  );
+  finRecurringStore.generateDue(t0, "2026-02-20");
 
   // A real list with a section, and the task filed inside it (TASK-004), so the
   // zip round trip carries a task's placement and not just the Inbox default.
@@ -770,6 +788,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     // `gatherProfileData` reads them.
     finAccounts: finAccountStore.listActive(),
     finCategories: finCategoryStore.list(),
+    finRecurring: finRecurringStore.listActive(),
     finTransactions: finTransactionStore.listActive(),
     finBudgets: finCategoryStore.listBudgets(),
   };
@@ -1032,11 +1051,20 @@ describe("restore", () => {
         fixtureA.data.finTransactions.map((row) => ({ ...row, profileId: profileB })),
       );
       expect(finTransactionsB.filter((row) => row.counterAccountId !== null)).toHaveLength(1);
+      // The subscription (migration 053) came back with its rule and its CURSOR
+      // where the archive left them, and the charge it made still points at it.
+      const finRecurringB = new FinRecurringStore(dbB.raw, profileB).listActive();
+      expect(finRecurringB).toEqual(
+        fixtureA.data.finRecurring.map((row) => ({ ...row, profileId: profileB })),
+      );
+      expect(finRecurringB[0]?.nextRun).toBe("2026-03-05");
+      expect(finTransactionsB.filter((row) => row.recurringId !== null)).toHaveLength(1);
       // And the DERIVED balances agree with the restored rows — nothing about
       // the money was lost, rounded, or double-counted across the transfer.
-      // 1000,00 − 12,50 − 300,00 (out) + 300,00 (in) = 987,50, in minor units.
+      // 1000,00 − 12,50 − 11,90 (the generated charge) − 300,00 (out)
+      // + 300,00 (in) = 975,60, in minor units.
       expect(finAccountsB.totalsByCurrency()).toEqual([
-        { currency: "RSD", minorUnits: 987_50 },
+        { currency: "RSD", minorUnits: 975_60 },
       ]);
 
       expect(cancelFocusCalls).toEqual([profileB]);
@@ -1083,17 +1111,18 @@ describe("restore", () => {
       const preview = await previewRestore(deps, profileB, null);
       if (preview.status !== "ready") unreachable();
 
-      // 2 accounts + 1 category + 1 budget + 2 transactions (the transfer among
-      // them, counted ONCE, because it is one row).
-      expect(preview.preview.incoming.finance).toBe(6);
-      expect(preview.preview.current.finance).toBe(6);
+      // 2 accounts + 1 category + 1 budget + 1 subscription (migration 053) + 3
+      // transactions: the two typed ones — the transfer among them counted ONCE,
+      // because it is one row — plus the charge that subscription generated.
+      expect(preview.preview.incoming.finance).toBe(8);
+      expect(preview.preview.current.finance).toBe(8);
       // And the module really rides as its own manifest entry and its own file.
       expect(archive.files.has("data/finance.ndjson")).toBe(true);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as {
         modules: { id: string; records: number }[];
         checksums: Record<string, string>;
       };
-      expect(manifest.modules).toContainEqual({ id: "finance", records: 6 });
+      expect(manifest.modules).toContainEqual({ id: "finance", records: 8 });
       expect(manifest.checksums["data/finance.ndjson"]).toBeDefined();
     });
   });

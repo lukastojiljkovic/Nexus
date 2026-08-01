@@ -26,15 +26,15 @@
  * time part (documents/exams may, per their stores' ISO-8601 columns) are
  * reduced to their bare "YYYY-MM-DD" prefix before any comparison or math.
  *
- * Four of the five sources are day-granular: they fire at the profile's
- * `morningHour` on a bare `fireDate`. Task reminders (ADR-028) are the newest
- * of those four and deliberately the document model, days-before-due and all,
- * because a task's due date is itself a bare day. Event reminders (CAL-006,
- * ADR-025) are the one exception — "15 minutes before" is meaningless rounded
- * to a day — so a timed occurrence carries a fire INSTANT instead, and the
- * same UTC math is simply carried down to the minute. Both live in one
- * `Occurrence` shape and one `isDue`, so the day-granular sources' behaviour
- * is untouched.
+ * Five of the six sources are day-granular: they fire at the profile's
+ * `morningHour` on a bare `fireDate`. Task reminders (ADR-028) and subscription
+ * renewals (FIN slice d) are the newest of those five and deliberately the
+ * document model, days-before-the-day and all, because a due date and a charge
+ * date are themselves bare days. Event reminders (CAL-006, ADR-025) are the one
+ * exception — "15 minutes before" is meaningless rounded to a day — so a timed
+ * occurrence carries a fire INSTANT instead, and the same UTC math is simply
+ * carried down to the minute. Both live in one `Occurrence` shape and one
+ * `isDue`, so the day-granular sources' behaviour is untouched.
  */
 
 const MS_PER_DAY = 86_400_000;
@@ -42,17 +42,24 @@ const MS_PER_MINUTE = 60_000;
 const MINUTES_PER_DAY = 1_440;
 
 /**
- * The source kinds a notification can carry. The first five are what this
- * engine DERIVES (NTF-001..003 / CAL-006 / ADR-028) — each has source entities
- * to look at. `"security"` (NTF-007) is deliberately not one of them: a wrong
- * passcode burst, a passcode change, a Recovery Kit reissue and an account
+ * The source kinds a notification can carry. All but one are what this engine
+ * DERIVES (NTF-001..003 / CAL-006 / ADR-028 / FIN slice d) — each has source
+ * entities to look at. `"security"` (NTF-007) is deliberately not one of them: a
+ * wrong passcode burst, a passcode change, a Recovery Kit reissue and an account
  * deletion are EVENTS, not states, so there is nothing left on disk to
  * re-derive them from a minute later. The desktop main process records those at
  * the moment they happen, which is why they never appear in any input here —
  * and why they carry the always-on exemption below instead of an appetite
  * toggle.
  */
-export type NotificationSource = "document" | "exam" | "study-day" | "event" | "task" | "security";
+export type NotificationSource =
+  | "document"
+  | "exam"
+  | "study-day"
+  | "event"
+  | "task"
+  | "security"
+  | "subscription";
 
 /** `max` bypasses quiet hours (the PRD's "final warning" exception); everything else is `normal`. */
 export type NotificationPriority = "normal" | "max";
@@ -159,12 +166,31 @@ export interface TaskReminderInput {
   reminderOffsets: readonly number[];
 }
 
+/**
+ * One UPCOMING renewal of a subscription (FIN slice d), plus the lead time its
+ * subscription carries. Like an event's, the expansion is the CALLER's job: a
+ * subscription is one stored row with an ADR-024 rule, and main passes one entry
+ * per renewal it has expanded out of that rule.
+ *
+ * `id` is the SUBSCRIPTION's id, not a charge's — a renewal that has not
+ * happened yet has no transaction row to name, which is exactly the point of
+ * never generating into the future.
+ */
+export interface SubscriptionReminderInput {
+  id: string;
+  /** Bare "YYYY-MM-DD" the charge falls on. */
+  renewalDate: string;
+  /** Whole days before the renewal to fire; 0 means the morning of. */
+  reminderDays: number;
+}
+
 export interface DeriveNotificationCandidatesInput {
   documents: ReadonlyArray<DocumentReminderInput>;
   exams: ReadonlyArray<ExamReminderInput>;
   events: ReadonlyArray<EventReminderInput>;
   studyDays: ReadonlyArray<StudyDayReminderInput>;
   tasks: ReadonlyArray<TaskReminderInput>;
+  subscriptions: ReadonlyArray<SubscriptionReminderInput>;
   enabledSources: ReadonlyArray<NotificationSource>;
   /** Bare "YYYY-MM-DD", the caller's local today. */
   today: string;
@@ -226,7 +252,7 @@ function utcInstantKey(ms: number): string {
 }
 
 /**
- * Derives every due notification occurrence across the five sources,
+ * Derives every due notification occurrence across the six derived sources,
  * deterministically ordered by source, then entity id, then occurrence key.
  * An occurrence is due when it is still relevant to its entity's current
  * state AND its fire moment has arrived — for the four day-granular sources
@@ -248,6 +274,9 @@ export function deriveNotificationCandidates(
     ...(enabled.has("study-day") ? studyDayOccurrences(input.studyDays, input.today) : []),
     ...(enabled.has("event") ? eventOccurrences(input.events, input.today, now) : []),
     ...(enabled.has("task") ? taskOccurrences(input.tasks, input.today) : []),
+    ...(enabled.has("subscription")
+      ? subscriptionOccurrences(input.subscriptions, input.today)
+      : []),
   ];
 
   const due = occurrences.filter((occurrence) =>
@@ -436,6 +465,42 @@ function taskOccurrences(
     }
   }
   return occurrences;
+}
+
+/**
+ * One occurrence per upcoming renewal: fireDate = renewalDate - reminderDays,
+ * keyed by that renewal's own date and the lead time. The date is IN the key for
+ * the reason a task's due date is — a subscription is ONE row standing for many
+ * charges (ADR-024's rule, exactly as a recurring event), so the occurrence's
+ * own day is the only thing that tells February's renewal from March's.
+ *
+ * Day-granular, like documents and tasks and unlike a timed event: a charge
+ * lands on a DAY, and "15 minutes before your card is billed" would be a
+ * precision the schedule does not have.
+ *
+ * Relevant while `today <= renewalDate`, so a reminder missed while the app was
+ * closed still fires — but only up to the day the money actually goes out, past
+ * which the charge is a row in the ledger and a reminder about it would be
+ * telling the user something they can already see. Priority is always `normal`:
+ * the quiet-hours "final warning" exception belongs to expiring documents, where
+ * the deadline is external and unmovable.
+ */
+function subscriptionOccurrences(
+  subscriptions: ReadonlyArray<SubscriptionReminderInput>,
+  today: string,
+): Occurrence[] {
+  return subscriptions.map((subscription) => {
+    const renewalDateKey = bareDate(subscription.renewalDate);
+    return {
+      source: "subscription",
+      entityId: subscription.id,
+      occurrenceKey: `${renewalDateKey} ${subscription.reminderDays}`,
+      fireDate: utcDateKey(utcDayMs(renewalDateKey) - subscription.reminderDays * MS_PER_DAY),
+      priority: "normal",
+      relevant: today <= renewalDateKey,
+      fireInstant: null,
+    };
+  });
 }
 
 /**

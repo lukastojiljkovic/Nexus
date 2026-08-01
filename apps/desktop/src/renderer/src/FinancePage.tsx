@@ -10,6 +10,7 @@ import {
   MAX_FIN_CATEGORY_NAME_LENGTH,
   MAX_FIN_NOTE_LENGTH,
   MAX_FIN_PAYEE_LENGTH,
+  MAX_FIN_RECURRING_NAME_LENGTH,
 } from "../../shared/ipc.js";
 import type {
   FinAccount,
@@ -20,9 +21,13 @@ import type {
   FinCategoryKind,
   FinCategorySpend,
   FinCurrencyTotal,
+  FinRecurring,
   FinTransaction,
+  FinUpcomingRenewal,
+  RecurrenceRule,
 } from "../../shared/ipc.js";
-import { localTodayKey } from "./examDates.js";
+import { RecurrencePicker } from "./RecurrencePicker.js";
+import { localTodayKey, shiftDayKey } from "./examDates.js";
 import { FinCsvImportSection } from "./FinCsvImport.js";
 import { normalizeCurrencyInput, readStoredPrimaryCurrency } from "./financePrefs.js";
 import {
@@ -84,10 +89,29 @@ type EntryKind = "expense" | "income" | "transfer";
 
 const ENTRY_KINDS: readonly EntryKind[] = ["expense", "income", "transfer"];
 
-/** The page's two halves, in toggle order. */
-type FinPage = "ledger" | "report";
+/** The page's three halves, in toggle order. */
+type FinPage = "ledger" | "report" | "subscriptions";
 
-const FIN_PAGES: readonly FinPage[] = ["ledger", "report"];
+const FIN_PAGES: readonly FinPage[] = ["ledger", "report", "subscriptions"];
+
+/**
+ * How far ahead „Predstojeće naplate" reads. Three months: far enough that a
+ * quarterly subscription shows up at all, near enough that the list is a
+ * heads-up rather than a projection — and it is read from the RULES, so the
+ * number costs an expansion and never a written row.
+ */
+const RENEWAL_HORIZON_DAYS = 92;
+
+/**
+ * The renewal reminder leads the form offers, in days. A closed list rather than
+ * a number field: „podseti me 137 dana ranije" is not a thing anybody means, and
+ * the four here are what a charge is actually worth hearing about. `null` is the
+ * shipped value — a subscription reminds only when its owner asks it to.
+ */
+const REMINDER_DAY_OPTIONS: readonly number[] = [0, 1, 3, 7];
+
+/** Which way a subscription's money goes; it decides the SIGN and is never a stored field. */
+type RecurringDirection = "out" | "in";
 
 /** The two shapes the ledger opens in, in toggle order. */
 type LedgerView = "list" | "cards";
@@ -124,7 +148,11 @@ const FIN_SCHEMA: CollectionSchema = {
 };
 
 /** One pending undo offer; a fresh delete replaces the previous one, exactly as on the tasks page. */
-type PendingUndo = null | { kind: "transaction"; id: string } | { kind: "account"; id: string };
+type PendingUndo =
+  | null
+  | { kind: "transaction"; id: string }
+  | { kind: "account"; id: string }
+  | { kind: "subscription"; id: string };
 
 /** Which inline rail editor is open, if any. */
 type AccountEditing = null | { mode: "new" } | { mode: "edit"; id: string };
@@ -147,15 +175,24 @@ function financeErrorMessage(error: unknown): string {
   if (message.includes("already exists in this profile")) {
     return strings.finance.categories.duplicate;
   }
+  // FIN slice d: the one refusal a subscription has that nothing else does.
+  if (message.includes("not a valid recurrence rule")) return copy.recurrenceInvalid;
   if (
     message.includes("No active account") ||
     message.includes("No category") ||
     message.includes("No active transaction") ||
+    message.includes("No active subscription") ||
     message.includes("budget on category")
   ) {
     return copy.notFound;
   }
   return strings.finance.actionError;
+}
+
+/** A renewal lead in words — the same closed list the form offers, so one number reads the same on both surfaces. */
+function reminderLabel(days: number): string {
+  const labels = strings.finance.subscriptions.reminderOptions;
+  return labels[String(days) as keyof typeof labels] ?? String(days);
 }
 
 /** What kind of movement a row IS, derived from the row itself — never a stored flag. */
@@ -178,6 +215,9 @@ interface FinanceSnapshot {
   categories: FinCategory[];
   budgets: FinBudget[];
   transactions: FinTransaction[];
+  subscriptions: FinRecurring[];
+  /** What the RULES say is coming — expanded by the store, never read off a row. */
+  renewals: FinUpcomingRenewal[];
 }
 
 /** One month's two aggregate reads, which are the only thing the report is built from. */
@@ -197,15 +237,24 @@ interface FinMonthSnapshot {
  * an-effect trap the neighbouring pages step around by duplicating the calls).
  */
 async function loadFinance(profileId: string): Promise<FinanceSnapshot> {
-  const [accounts, balances, totals, categories, budgets, transactions] = await Promise.all([
-    window.nexus.listFinAccounts(profileId),
-    window.nexus.finAccountBalances(profileId),
-    window.nexus.finCurrencyTotals(profileId),
-    window.nexus.listFinCategories(profileId),
-    window.nexus.listFinBudgets(profileId),
-    window.nexus.listFinTransactions(profileId),
-  ]);
-  return { accounts, balances, totals, categories, budgets, transactions };
+  const today = localTodayKey();
+  const [accounts, balances, totals, categories, budgets, transactions, subscriptions, renewals] =
+    await Promise.all([
+      window.nexus.listFinAccounts(profileId),
+      window.nexus.finAccountBalances(profileId),
+      window.nexus.finCurrencyTotals(profileId),
+      window.nexus.listFinCategories(profileId),
+      window.nexus.listFinBudgets(profileId),
+      window.nexus.listFinTransactions(profileId),
+      window.nexus.listFinRecurring(profileId),
+      // From TODAY forward, deliberately: a renewal before today is a charge the
+      // ledger already holds, and listing it as „predstojeće" would be false.
+      window.nexus.finUpcomingRenewals(profileId, {
+        from: today,
+        to: shiftDayKey(today, RENEWAL_HORIZON_DAYS),
+      }),
+    ]);
+  return { accounts, balances, totals, categories, budgets, transactions, subscriptions, renewals };
 }
 
 /**
@@ -242,6 +291,8 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
   const [categories, setCategories] = useState<FinCategory[]>([]);
   const [budgets, setBudgets] = useState<FinBudget[]>([]);
   const [transactions, setTransactions] = useState<FinTransaction[] | null>(null);
+  const [subscriptions, setSubscriptions] = useState<FinRecurring[]>([]);
+  const [renewals, setRenewals] = useState<FinUpcomingRenewal[]>([]);
   const [failed, setFailed] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
@@ -286,6 +337,22 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
   const [budgetAmount, setBudgetAmount] = useState("");
   const [railError, setRailError] = useState<string | null>(null);
 
+  // „Pretplate" (FIN slice d): one form, serving create and edit, exactly as the
+  // ledger's own does. The rule is edited by the SAME `RecurrencePicker` the
+  // task and event forms use — there is one schedule language in this app.
+  const [subEditingId, setSubEditingId] = useState<string | null>(null);
+  const [subFormOpen, setSubFormOpen] = useState(false);
+  const [subDirection, setSubDirection] = useState<RecurringDirection>("out");
+  const [subName, setSubName] = useState("");
+  const [subAmount, setSubAmount] = useState("");
+  const [subAccount, setSubAccount] = useState("");
+  const [subCategory, setSubCategory] = useState("");
+  const [subStart, setSubStart] = useState(localTodayKey);
+  const [subRule, setSubRule] = useState<RecurrenceRule | null>(null);
+  const [subReminder, setSubReminder] = useState<number | null>(null);
+  const [subNote, setSubNote] = useState("");
+  const [subError, setSubError] = useState<string | null>(null);
+
   const [pendingUndo, setPendingUndo] = useState<PendingUndo>(null);
   const amountRef = useRef<HTMLInputElement>(null);
   // Bumped by an arriving intent, so the focus lands in the effect AFTER the
@@ -311,6 +378,8 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
         setCategories(snapshot.categories);
         setBudgets(snapshot.budgets);
         setTransactions(snapshot.transactions);
+        setSubscriptions(snapshot.subscriptions);
+        setRenewals(snapshot.renewals);
       } catch (error) {
         if (active) setFailed(true);
         console.error("Nexus: failed to load finances:", error);
@@ -379,6 +448,8 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
     setCategories(snapshot.categories);
     setBudgets(snapshot.budgets);
     setTransactions(snapshot.transactions);
+    setSubscriptions(snapshot.subscriptions);
+    setRenewals(snapshot.renewals);
     setMonth(monthSnapshot);
     setMonthFailed(false);
   }
@@ -425,6 +496,11 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
       ? accountDraft
       : (railAccount?.archived === false ? railAccount.id : liveAccounts[0]?.id) ?? "";
   const formAccount = accountById.get(formAccountId);
+
+  /** The subscription form's account, resolved on exactly the ledger form's terms. */
+  const subAccountId =
+    subAccount !== "" && accountById.has(subAccount) ? subAccount : (liveAccounts[0]?.id ?? "");
+  const subCurrency = accountById.get(subAccountId)?.currency ?? readStoredPrimaryCurrency();
   /** Which currency the amount field is being typed in — the account's own, said out loud beside it. */
   const formCurrency = formAccount?.currency ?? readStoredPrimaryCurrency();
 
@@ -534,6 +610,8 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
     try {
       if (pending.kind === "transaction") {
         await window.nexus.restoreFinTransaction(profileId, pending.id);
+      } else if (pending.kind === "subscription") {
+        await window.nexus.restoreFinRecurring(profileId, pending.id);
       } else {
         await window.nexus.restoreFinAccount(profileId, pending.id);
       }
@@ -657,6 +735,134 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
       await window.nexus.setFinBudget(profileId, { categoryId, currency, amount });
       setBudgetAmount("");
     }, false);
+  }
+
+  // --- Pretplate (FIN slice d) -----------------------------------------------
+
+  function closeSubForm(): void {
+    setSubFormOpen(false);
+    setSubEditingId(null);
+    setSubName("");
+    setSubAmount("");
+    setSubNote("");
+    setSubError(null);
+  }
+
+  function beginNewSubscription(): void {
+    setSubEditingId(null);
+    setSubDirection("out");
+    setSubName("");
+    setSubAmount("");
+    setSubAccount("");
+    setSubCategory("");
+    setSubStart(localTodayKey());
+    // „Mesečno" is what a subscription almost always is, and a form that opened
+    // on „ne ponavlja se" would be offering to make a subscription that is not
+    // one. The picker reads it back as its own „Mesečno" preset at this anchor.
+    setSubRule({
+      freq: { kind: "monthly-date", interval: 1, day: Number(localTodayKey().slice(8, 10)) },
+      end: { kind: "never" },
+    });
+    setSubReminder(null);
+    setSubNote("");
+    setSubError(null);
+    setSubFormOpen(true);
+  }
+
+  /** Opens an existing subscription in the same form; its direction is derived from the amount's sign, never stored. */
+  function beginEditSubscription(subscription: FinRecurring): void {
+    const account = accountById.get(subscription.accountId);
+    setSubEditingId(subscription.id);
+    setSubDirection(subscription.amount > 0 ? "in" : "out");
+    setSubName(subscription.name);
+    setSubAmount(
+      account === undefined
+        ? ""
+        : moneyInputValue(Math.abs(subscription.amount), account.currency),
+    );
+    setSubAccount(subscription.accountId);
+    setSubCategory(subscription.categoryId ?? "");
+    setSubStart(subscription.startDate);
+    setSubRule(subscription.recurrence);
+    setSubReminder(subscription.reminderDays);
+    setSubNote(subscription.note ?? "");
+    setSubError(null);
+    setSubFormOpen(true);
+  }
+
+  /**
+   * Writes the subscription form. The SIGN comes from the direction and never
+   * from what was typed, exactly as the ledger form's does — „Naplata" is money
+   * leaving the named account, „Priliv" money arriving in it.
+   */
+  async function submitSubscription(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    const account = accountById.get(subAccountId);
+    if (account === undefined) {
+      setSubError(s.form.needsAccount);
+      return;
+    }
+    const name = subName.trim();
+    if (name === "") {
+      setSubError(s.subscriptions.invalidName);
+      return;
+    }
+    const magnitude = parseMoneyInput(subAmount, account.currency);
+    if (magnitude === null) {
+      setSubError(s.subscriptions.invalidAmount);
+      return;
+    }
+    const absolute = Math.abs(magnitude);
+    if (absolute === 0) {
+      setSubError(s.subscriptions.zeroAmount);
+      return;
+    }
+    if (!isValidDayKey(subStart)) {
+      setSubError(s.subscriptions.invalidStart);
+      return;
+    }
+    if (subRule === null) {
+      setSubError(s.error.recurrenceInvalid);
+      return;
+    }
+
+    const fields = {
+      accountId: account.id,
+      categoryId: subCategory === "" ? null : subCategory,
+      name,
+      amount: subDirection === "in" ? absolute : -absolute,
+      note: subNote.trim() === "" ? null : subNote.trim(),
+      recurrence: subRule,
+      startDate: subStart,
+      reminderDays: subReminder,
+    };
+
+    setSubError(null);
+    try {
+      if (subEditingId === null) {
+        await window.nexus.createFinRecurring(profileId, fields);
+      } else {
+        await window.nexus.updateFinRecurring(profileId, subEditingId, fields);
+      }
+      closeSubForm();
+      await reload();
+    } catch (error) {
+      setSubError(financeErrorMessage(error));
+      console.error("Nexus: failed to save the subscription:", error);
+    }
+  }
+
+  async function deleteSubscription(subscription: FinRecurring): Promise<void> {
+    setSubError(null);
+    try {
+      await window.nexus.deleteFinRecurring(profileId, subscription.id);
+      if (subEditingId === subscription.id) closeSubForm();
+      setPendingUndo({ kind: "subscription", id: subscription.id });
+      await reload();
+    } catch (error) {
+      setSubError(financeErrorMessage(error));
+      console.error("Nexus: failed to delete the subscription:", error);
+    }
   }
 
   // --- What this render draws ------------------------------------------------
@@ -1052,6 +1258,69 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
     );
   }
 
+  /**
+   * One subscription row: what it is, where it charges from, when the next
+   * charge falls, and how much. The next charge comes from the row's own CURSOR
+   * — the first occurrence not yet written — so the line says what will happen
+   * rather than what has; a spent series says so in words.
+   */
+  function renderSubscriptionRow(subscription: FinRecurring): ReactNode {
+    const account = accountById.get(subscription.accountId);
+    const currency = account?.currency ?? "";
+    const category =
+      subscription.categoryId === null ? null : categoryById.get(subscription.categoryId);
+    return (
+      <ListRow
+        key={subscription.id}
+        leading={
+          <span className="fin__date">
+            {subscription.nextRun ?? s.subscriptions.finished}
+          </span>
+        }
+        trailing={
+          <span className="fin__row-actions">
+            <Button
+              size="sm"
+              className="fin__row-action"
+              aria-label={`${s.subscriptions.edit}: ${subscription.name}`}
+              onClick={() => beginEditSubscription(subscription)}
+            >
+              ✎
+            </Button>
+            <Button
+              size="sm"
+              className="fin__row-action fin__row-delete"
+              aria-label={`${s.subscriptions.delete}: ${subscription.name}`}
+              onClick={() => void deleteSubscription(subscription)}
+            >
+              ×
+            </Button>
+          </span>
+        }
+      >
+        <span className="fin__row-body">
+          <span className="fin__title">{subscription.name}</span>
+          <div className="fin__chips">
+            <Chip>{account?.name ?? ""}</Chip>
+            {category != null && <Chip variant="accent">{category.name}</Chip>}
+            {subscription.reminderDays !== null && (
+              <Chip variant="data">
+                {`${s.subscriptions.reminderChip}: ${reminderLabel(subscription.reminderDays)}`}
+              </Chip>
+            )}
+          </div>
+          <span
+            className={
+              subscription.amount > 0 ? "fin__amount fin__amount--in" : "fin__amount"
+            }
+          >
+            {formatMoney(subscription.amount, currency)}
+          </span>
+        </span>
+      </ListRow>
+    );
+  }
+
   /** One account row in the rail: its name, its own DERIVED balance, and the three things that can be done to it. */
   function renderAccountRow(account: FinAccount): ReactNode {
     const balance = balanceById.get(account.id);
@@ -1362,7 +1631,11 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
               aria-pressed={page === option}
               onClick={() => setPage(option)}
             >
-              {option === "ledger" ? s.pages.ledger : s.pages.report}
+              {option === "ledger"
+                ? s.pages.ledger
+                : option === "report"
+                  ? s.pages.report
+                  : s.pages.subscriptions}
             </Button>
           ))}
         </div>
@@ -1374,7 +1647,9 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
             <span className="fin__undo-text">
               {pendingUndo.kind === "transaction"
                 ? s.ledger.deletedNotice
-                : s.accounts.deletedNotice}
+                : pendingUndo.kind === "subscription"
+                  ? s.subscriptions.deletedNotice
+                  : s.accounts.deletedNotice}
             </span>
             <Button size="sm" className="fin__undo-action" onClick={() => void undoDelete()}>
               {s.undo}
@@ -1390,7 +1665,199 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
           </div>
         )}
 
-        {page === "report" ? (
+        {page === "subscriptions" ? (
+          <div className="fin__subs">
+            {/* Said out loud, above everything: nothing here is in the balance
+                until its day arrives. A screen that showed „predstojeće" beside
+                a total would otherwise invite the reading that it already is. */}
+            <p className="fin__report-caption">{s.subscriptions.caption}</p>
+
+            {accountList.length === 0 ? (
+              <EmptyState
+                title={s.subscriptions.needsAccountTitle}
+                description={s.subscriptions.needsAccountDescription}
+                action={
+                  <Button variant="primary" onClick={beginNewAccount}>
+                    {s.accounts.newAccount}
+                  </Button>
+                }
+              />
+            ) : (
+              <>
+                {subFormOpen ? (
+                  <form className="fin__form" onSubmit={(event) => void submitSubscription(event)}>
+                    <div className="fin__segmented" role="group" aria-label={s.subscriptions.directionLabel}>
+                      {(["out", "in"] as const).map((option) => (
+                        <Button
+                          key={option}
+                          type="button"
+                          size="sm"
+                          variant={subDirection === option ? "primary" : "ghost"}
+                          aria-pressed={subDirection === option}
+                          onClick={() => setSubDirection(option)}
+                        >
+                          {option === "out"
+                            ? s.subscriptions.directionOut
+                            : s.subscriptions.directionIn}
+                        </Button>
+                      ))}
+                    </div>
+
+                    <div className="fin__quick-add">
+                      <input
+                        className="nx-textfield__input fin__payee-input"
+                        value={subName}
+                        placeholder={s.subscriptions.namePlaceholder}
+                        aria-label={s.subscriptions.nameLabel}
+                        maxLength={MAX_FIN_RECURRING_NAME_LENGTH}
+                        onChange={(event) => setSubName(event.target.value)}
+                      />
+                      <input
+                        className="nx-textfield__input fin__amount-input"
+                        value={subAmount}
+                        inputMode="decimal"
+                        placeholder={s.form.amountPlaceholder}
+                        aria-label={s.subscriptions.amountLabel}
+                        onChange={(event) => setSubAmount(event.target.value)}
+                      />
+                      <span className="fin__amount-currency">{subCurrency}</span>
+                      <Button type="submit" variant="primary">
+                        {s.subscriptions.save}
+                      </Button>
+                      <Button type="button" className="fin__quiet" onClick={closeSubForm}>
+                        {s.subscriptions.cancel}
+                      </Button>
+                    </div>
+
+                    <div className="fin__fields">
+                      <select
+                        className="fin__select"
+                        value={subAccountId}
+                        aria-label={s.subscriptions.accountLabel}
+                        onChange={(event) => setSubAccount(event.target.value)}
+                      >
+                        {accountList
+                          .filter((account) => !account.archived || account.id === subAccountId)
+                          .map((account) => (
+                            <option key={account.id} value={account.id}>
+                              {account.name}
+                            </option>
+                          ))}
+                      </select>
+                      {/* The picker offers the kind this direction can carry —
+                          the ledger form's own rule, applied to a template. */}
+                      <select
+                        className="fin__select"
+                        value={subCategory}
+                        aria-label={s.subscriptions.categoryLabel}
+                        onChange={(event) => setSubCategory(event.target.value)}
+                      >
+                        <option value="">{s.form.categoryNone}</option>
+                        {categories
+                          .filter((category) =>
+                            subDirection === "in"
+                              ? category.kind === "income"
+                              : category.kind === "expense",
+                          )
+                          .map((category) => (
+                            <option key={category.id} value={category.id}>
+                              {category.name}
+                            </option>
+                          ))}
+                      </select>
+                      <TextField
+                        type="date"
+                        value={subStart}
+                        aria-label={s.subscriptions.startLabel}
+                        onChange={(event) => setSubStart(event.target.value)}
+                      />
+                      <select
+                        className="fin__select"
+                        value={subReminder === null ? "" : String(subReminder)}
+                        aria-label={s.subscriptions.reminderLabel}
+                        onChange={(event) =>
+                          setSubReminder(event.target.value === "" ? null : Number(event.target.value))
+                        }
+                      >
+                        <option value="">{s.subscriptions.reminderNone}</option>
+                        {REMINDER_DAY_OPTIONS.map((days) => (
+                          <option key={days} value={String(days)}>
+                            {reminderLabel(days)}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        className="nx-textfield__input fin__note-input"
+                        value={subNote}
+                        placeholder={s.subscriptions.noteLabel}
+                        aria-label={s.subscriptions.noteLabel}
+                        maxLength={MAX_FIN_NOTE_LENGTH}
+                        onChange={(event) => setSubNote(event.target.value)}
+                      />
+                    </div>
+
+                    {/* ADR-024's own field, the very component the task and event
+                        forms mount: there is one schedule language in this app,
+                        and „svakog 5. u mesecu" means the same thing in all three. */}
+                    <RecurrencePicker
+                      key={subEditingId ?? "new"}
+                      value={subRule}
+                      anchor={subStart}
+                      onChange={setSubRule}
+                    />
+
+                    {subError !== null && (
+                      <p className="fin__error" role="alert">
+                        {subError}
+                      </p>
+                    )}
+                  </form>
+                ) : (
+                  <Button variant="primary" onClick={beginNewSubscription}>
+                    {s.subscriptions.newSubscription}
+                  </Button>
+                )}
+
+                {subscriptions.length === 0 ? (
+                  <EmptyState
+                    title={s.subscriptions.emptyTitle}
+                    description={s.subscriptions.emptyDescription}
+                  />
+                ) : (
+                  <div className="fin__subs-list">
+                    {subscriptions.map((subscription) => renderSubscriptionRow(subscription))}
+                  </div>
+                )}
+
+                {/* What the RULES say is coming. Not a forecast and not a
+                    balance — a reading of the schedule, which is the only thing
+                    that can honestly be said about a charge that has not
+                    happened yet. */}
+                <div className="fin__rail-heading fin__rail-heading--stacked">
+                  {s.subscriptions.upcomingHeading}
+                </div>
+                {renewals.length === 0 ? (
+                  <p className="fin__rail-note">{s.subscriptions.upcomingEmpty}</p>
+                ) : (
+                  <div className="fin__subs-upcoming">
+                    {renewals.map((renewal) => (
+                      <div
+                        key={`${renewal.recurringId}@${renewal.date}`}
+                        className="fin__subs-upcoming-row"
+                      >
+                        <span className="fin__date">{renewal.date}</span>
+                        <span className="fin__title">{renewal.name}</span>
+                        <span className="fin__amount">
+                          {formatMoney(renewal.amount, renewal.currency)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        ) : page === "report" ? (
           <div className="fin__report">
             <div className="fin__report-nav">
               <Button

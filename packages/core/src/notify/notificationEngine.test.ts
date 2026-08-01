@@ -6,7 +6,14 @@ import {
   isDeliverable,
 } from "./notificationEngine.js";
 
-const ALL_SOURCES = ["document", "exam", "study-day", "event", "task"] as const;
+const ALL_SOURCES = [
+  "document",
+  "exam",
+  "study-day",
+  "event",
+  "task",
+  "subscription",
+] as const;
 
 describe("deriveNotificationCandidates", () => {
   describe("documents", () => {
@@ -17,6 +24,7 @@ describe("deriveNotificationCandidates", () => {
         events: [],
         studyDays: [],
         tasks: [],
+        subscriptions: [],
         enabledSources: ALL_SOURCES,
         today: "2026-07-27", // 2026-08-10 - 14 days
         nowLocalTime: "08:00",
@@ -41,6 +49,7 @@ describe("deriveNotificationCandidates", () => {
         events: [],
         studyDays: [],
         tasks: [],
+        subscriptions: [],
         enabledSources: ALL_SOURCES,
         today: "2026-08-03", // offset 7's fire date; offset 30's (2026-07-11) is already past
         nowLocalTime: "08:00",
@@ -61,6 +70,7 @@ describe("deriveNotificationCandidates", () => {
         events: [],
         studyDays: [],
         tasks: [],
+        subscriptions: [],
         enabledSources: ALL_SOURCES,
         today: "2026-08-11", // the day after expiry; the offset-90 fire date is long past
         nowLocalTime: "08:00",
@@ -79,6 +89,7 @@ describe("deriveNotificationCandidates", () => {
         events: [],
         studyDays: [],
         tasks: [],
+        subscriptions: [],
         enabledSources: ALL_SOURCES,
         today: "2026-08-31", // d-1's fire date; d-0's (2026-09-01) is still in the future
         nowLocalTime: "07:59",
@@ -92,6 +103,7 @@ describe("deriveNotificationCandidates", () => {
         events: [],
         studyDays: [],
         tasks: [],
+        subscriptions: [],
         enabledSources: ALL_SOURCES,
         today: "2026-08-31",
         nowLocalTime: "08:00",
@@ -109,6 +121,7 @@ describe("deriveNotificationCandidates", () => {
         events: [],
         studyDays: [],
         tasks: [],
+        subscriptions: [],
         enabledSources: ALL_SOURCES,
         today: "2026-09-01",
         nowLocalTime: "09:00",
@@ -129,6 +142,7 @@ describe("deriveNotificationCandidates", () => {
         events: [],
         studyDays: [],
         tasks: [],
+        subscriptions: [],
         enabledSources: ALL_SOURCES,
         today: "2026-09-02",
         nowLocalTime: "09:00",
@@ -147,6 +161,7 @@ describe("deriveNotificationCandidates", () => {
         events: [],
         studyDays: [{ date: "2026-07-11", blockCount: 2, totalMinutes: 60 }],
         tasks: [],
+        subscriptions: [],
         enabledSources: ALL_SOURCES,
         today: "2026-07-11",
         nowLocalTime: "08:00",
@@ -165,6 +180,7 @@ describe("deriveNotificationCandidates", () => {
         events: [],
         studyDays: [{ date: "2026-07-11", blockCount: 2, totalMinutes: 60 }],
         tasks: [],
+        subscriptions: [],
         enabledSources: ALL_SOURCES,
         today: "2026-07-12",
         nowLocalTime: "08:00",
@@ -190,6 +206,7 @@ describe("deriveNotificationCandidates", () => {
         events: [{ id: "ev1", occurrenceDate, startTime, reminderOffsets }],
         studyDays: [],
         tasks: [],
+        subscriptions: [],
         enabledSources: ALL_SOURCES,
         today,
         nowLocalTime,
@@ -274,6 +291,7 @@ describe("deriveNotificationCandidates", () => {
         events: [{ id: "ev1", occurrenceDate: "2026-08-01", startTime: "10:00", reminderOffsets: [15] }],
         studyDays: [],
         tasks: [],
+        subscriptions: [],
         enabledSources: ["document", "exam", "study-day"],
         today: "2026-08-01",
         nowLocalTime: "09:50",
@@ -294,6 +312,7 @@ describe("deriveNotificationCandidates", () => {
         ],
         studyDays: [{ date: "2026-08-03", blockCount: 1, totalMinutes: 30 }],
         tasks: [],
+        subscriptions: [],
         enabledSources: ALL_SOURCES,
         today: "2026-08-03",
         nowLocalTime: "09:56", // past both of ev-b's fire instants (09:30 and 09:55), before its 10:00 start
@@ -327,6 +346,7 @@ describe("deriveNotificationCandidates", () => {
         events: [],
         studyDays: [],
         tasks: [{ id: "task1", dueDate, reminderOffsets }],
+        subscriptions: [],
         enabledSources: ALL_SOURCES,
         today,
         nowLocalTime,
@@ -390,6 +410,7 @@ describe("deriveNotificationCandidates", () => {
         events: [],
         studyDays: [],
         tasks: [{ id: "task1", dueDate: "2026-08-10", reminderOffsets: [0] }],
+        subscriptions: [],
         enabledSources: ["document", "exam", "study-day", "event"],
         today: "2026-08-10",
         nowLocalTime: "08:00",
@@ -408,6 +429,7 @@ describe("deriveNotificationCandidates", () => {
           { id: "task-b", dueDate: "2026-08-05", reminderOffsets: [2, 14] },
           { id: "task-a", dueDate: "2026-08-03", reminderOffsets: [0] },
         ],
+        subscriptions: [],
         enabledSources: ALL_SOURCES,
         today: "2026-08-03",
         nowLocalTime: "08:00",
@@ -425,6 +447,89 @@ describe("deriveNotificationCandidates", () => {
     });
   });
 
+  describe("subscriptions (FIN slice d)", () => {
+    /** The caller has already expanded the rule; this is what main hands over. */
+    const renewal = (
+      renewalDate: string,
+      reminderDays: number,
+      today: string,
+      nowLocalTime = "08:00",
+    ) =>
+      deriveNotificationCandidates({
+        documents: [],
+        exams: [],
+        events: [],
+        studyDays: [],
+        tasks: [],
+        subscriptions: [{ id: "sub1", renewalDate, reminderDays }],
+        enabledSources: ALL_SOURCES,
+        today,
+        nowLocalTime,
+        morningHour: "08:00",
+      });
+
+    it("fires reminderDays before the renewal, keyed by that renewal's own date", () => {
+      expect(renewal("2026-08-10", 2, "2026-08-08")).toEqual([
+        {
+          source: "subscription",
+          entityId: "sub1",
+          occurrenceKey: "2026-08-10 2",
+          fireDate: "2026-08-08",
+          priority: "normal",
+        },
+      ]);
+    });
+
+    it("holds back before the morning hour and before the fire date", () => {
+      expect(renewal("2026-08-10", 2, "2026-08-08", "07:59")).toEqual([]);
+      expect(renewal("2026-08-10", 2, "2026-08-07")).toEqual([]);
+    });
+
+    it("catches up a reminder missed while the app was closed, up to the charge day itself", () => {
+      expect(renewal("2026-08-10", 5, "2026-08-09")).toHaveLength(1);
+      expect(renewal("2026-08-10", 5, "2026-08-10")).toHaveLength(1);
+      // Past the charge the money has moved and the ledger says so; a reminder
+      // then would be telling the user something already on screen.
+      expect(renewal("2026-08-10", 5, "2026-08-11")).toEqual([]);
+    });
+
+    it("gives each renewal its own key, so one subscription never re-delivers under one name", () => {
+      // The row is the same subscription both times — a series is ONE stored
+      // row (ADR-024) — so the occurrence's own date is what has to tell
+      // August's charge from September's in the ledger.
+      expect(renewal("2026-08-05", 2, "2026-08-03")[0]?.occurrenceKey).toBe("2026-08-05 2");
+      expect(renewal("2026-09-05", 2, "2026-09-03")[0]?.occurrenceKey).toBe("2026-09-05 2");
+    });
+
+    it("treats a zero lead as 'the morning of', the document model's own reading", () => {
+      expect(renewal("2026-08-10", 0, "2026-08-10")).toEqual([
+        {
+          source: "subscription",
+          entityId: "sub1",
+          occurrenceKey: "2026-08-10 0",
+          fireDate: "2026-08-10",
+          priority: "normal",
+        },
+      ]);
+    });
+
+    it("contributes nothing when the subscription source is disabled", () => {
+      const result = deriveNotificationCandidates({
+        documents: [],
+        exams: [],
+        events: [],
+        studyDays: [],
+        tasks: [],
+        subscriptions: [{ id: "sub1", renewalDate: "2026-08-10", reminderDays: 0 }],
+        enabledSources: ["document", "exam", "study-day", "event", "task"],
+        today: "2026-08-10",
+        nowLocalTime: "08:00",
+        morningHour: "08:00",
+      });
+      expect(result).toEqual([]);
+    });
+  });
+
   describe("enabledSources", () => {
     it("omits every occurrence of a source absent from enabledSources", () => {
       const result = deriveNotificationCandidates({
@@ -433,6 +538,7 @@ describe("deriveNotificationCandidates", () => {
         events: [],
         studyDays: [{ date: "2026-08-03", blockCount: 1, totalMinutes: 30 }],
         tasks: [],
+        subscriptions: [],
         enabledSources: ["exam"],
         today: "2026-08-03",
         nowLocalTime: "08:00",
@@ -456,6 +562,7 @@ describe("deriveNotificationCandidates", () => {
         events: [],
         studyDays: [{ date: "2026-08-03", blockCount: 1, totalMinutes: 30 }],
         tasks: [],
+        subscriptions: [],
         enabledSources: ALL_SOURCES,
         today: "2026-08-03",
         nowLocalTime: "08:00",
@@ -479,6 +586,7 @@ describe("deriveNotificationCandidates", () => {
         events: [],
         studyDays: [],
         tasks: [],
+        subscriptions: [],
         enabledSources: [...ALL_SOURCES, "security"],
         today: "2026-08-03",
         nowLocalTime: "08:00",

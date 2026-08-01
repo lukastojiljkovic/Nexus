@@ -29,6 +29,7 @@ import {
   ExamStore,
   FinAccountStore,
   FinCategoryStore,
+  FinRecurringStore,
   FinTransactionStore,
   FocusStore,
   NexusDatabase,
@@ -175,6 +176,7 @@ function emptyProfileData(): ProfileData {
     dashboardWidgets: [],
     finAccounts: [],
     finCategories: [],
+    finRecurring: [],
     finTransactions: [],
     finBudgets: [],
   };
@@ -284,6 +286,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   const calendarSettingsStore = new CalendarSettingsStore(handle.raw, profileId);
   const finAccountStore = new FinAccountStore(handle.raw, profileId);
   const finCategoryStore = new FinCategoryStore(handle.raw, profileId);
+  const finRecurringStore = new FinRecurringStore(handle.raw, profileId);
   const finTransactionStore = new FinTransactionStore(handle.raw, profileId);
 
   // The merged Yjs state and derived body an export would carry for the edited
@@ -448,6 +451,25 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     },
     t0,
   );
+  // FIN slice d (migration 053): a subscription with an ADR-024 rule and a
+  // reminder lead, plus one charge it has actually generated. The round trip
+  // below is what proves both halves travel — the rule in canonical form and
+  // the `nextRun` CURSOR, which must come back where it was rather than at the
+  // start date, or a restore would re-charge history that is in the same
+  // archive.
+  finRecurringStore.create(
+    {
+      accountId: finAccount.id,
+      categoryId: finCategory.id,
+      name: `${name} Netflix`,
+      amount: -11_90,
+      recurrence: { freq: { kind: "monthly-date", interval: 1, day: 5 }, end: { kind: "never" } },
+      startDate: "2026-02-05",
+      reminderDays: 2,
+    },
+    t0,
+  );
+  finRecurringStore.generateDue(t0, "2026-02-20");
 
   const session = focusStore.create(
     { subjectId: subject.id, startedAt: "2026-01-01T09:00:00.000Z", endedAt: "2026-01-01T09:30:00.000Z" },
@@ -574,6 +596,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     dashboardWidgets: dashboardWidgetStore.listAll(),
     finAccounts: finAccountStore.listActive(),
     finCategories: finCategoryStore.list(),
+    finRecurring: finRecurringStore.listActive(),
     finTransactions: finTransactionStore.listActive(),
     finBudgets: finCategoryStore.listBudgets(),
   };
@@ -836,13 +859,26 @@ function assertModulesMatch(
   const finCategoriesRead = new FinCategoryStore(handle.raw, readProfileId);
   expect(finCategoriesRead.list()).toEqual(remap(fixture.data.finCategories));
   expect(finCategoriesRead.listBudgets()).toEqual(remap(fixture.data.finBudgets));
+  // FIN slice d (migration 053): the subscriptions come back with their rules in
+  // canonical form AND their `nextRun` cursors where the archive left them — a
+  // cursor reset to the start date would claim a charge already in this very
+  // archive is still outstanding.
+  const finRecurringRead = new FinRecurringStore(handle.raw, readProfileId).listActive();
+  expect(finRecurringRead).toEqual(remap(fixture.data.finRecurring));
+  expect(finRecurringRead[0]?.nextRun).toBe("2026-03-05");
   const finTransactionsRead = new FinTransactionStore(handle.raw, readProfileId).listActive();
   expect(finTransactionsRead).toEqual(remap(fixture.data.finTransactions));
   expect(finTransactionsRead.filter((row) => row.counterAccountId !== null)).toHaveLength(1);
+  // The generated charge is back as an ordinary row that still remembers what
+  // made it — and it points at the SUBSCRIPTION this restore just wrote.
+  expect(finTransactionsRead.filter((row) => row.recurringId !== null)).toHaveLength(1);
   // And the DERIVED balances agree with the reproduced rows — the strongest
   // statement available that nothing about the money was lost or rounded, since
   // no column stores them.
-  expect(finAccountsRead.totalsByCurrency()).toEqual([{ currency: "RSD", minorUnits: 987_50 }]);
+  // 1000,00 opening − 12,50 groceries − 11,90 the generated Netflix charge; the
+  // transfer moves money between two of the profile's own accounts and so nets
+  // to nothing across them.
+  expect(finAccountsRead.totalsByCurrency()).toEqual([{ currency: "RSD", minorUnits: 975_60 }]);
 }
 
 describe("RestoreStore", () => {

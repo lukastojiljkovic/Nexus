@@ -3,7 +3,13 @@ import type { ArchiveProfilePicture, ExportSettings, ProfileData } from "@nexus/
 import { RestoreValidationError } from "../errors.js";
 import { TOGGLEABLE_NOTIFICATION_SOURCES } from "../notify/notificationStore.js";
 import { TASK_ORDER_GAP, TaskListStore } from "../tasks/taskListStore.js";
-import { exdatesText, offsetsText, recurrenceText, viewConfigText } from "./columnText.js";
+import {
+  exdatesText,
+  offsetsText,
+  recurrenceText,
+  requiredRecurrenceText,
+  viewConfigText,
+} from "./columnText.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -165,13 +171,15 @@ export const RESTORE_WIPE_TABLES = [
   // Zero rows in the archive likewise restores a profile with only „Početna“,
   // which is not a row and so needs nothing written to exist.
   "dashboard_sets",
-  // FIN (migration 051), children before parents like everything above: the
-  // budgets, then the transactions (whose two account references and one
-  // category reference all point at rows below), then the categories, then the
-  // accounts. Migration 051's CASCADEs and its `ON DELETE SET NULL` are never
-  // leaned on to reach a row — the same rule the note group keeps.
+  // FIN (migrations 051 and 053), children before parents like everything
+  // above: the budgets, then the transactions (whose two account references, one
+  // category reference and one subscription reference all point at rows below),
+  // then the subscriptions, then the categories, then the accounts. Migration
+  // 051's CASCADEs and both `ON DELETE SET NULL`s are never leaned on to reach a
+  // row — the same rule the note group keeps.
   "fin_budgets",
   "fin_transactions",
+  "fin_recurring",
   "fin_categories",
   "fin_accounts",
 ] as const;
@@ -258,6 +266,7 @@ export class RestoreStore {
   private readonly insertNoteCategory: Database.Statement;
   private readonly insertFinAccount: Database.Statement;
   private readonly insertFinCategory: Database.Statement;
+  private readonly insertFinRecurring: Database.Statement;
   private readonly insertFinTransaction: Database.Statement;
   private readonly insertFinBudget: Database.Statement;
   private readonly insertSubject: Database.Statement;
@@ -364,11 +373,17 @@ export class RestoreStore {
     // fingerprints would hand the restored profile a ledger that re-imports the
     // same bank statement as a second copy of itself — which is the one thing
     // the fingerprint exists to prevent, so it travels or the guarantee does not.
+    this.insertFinRecurring = db.prepare(
+      `INSERT INTO fin_recurring
+         (id, profile_id, account_id, category_id, name, amount, payee, note, recurrence,
+          anchor_date, next_run, reminder_days, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
     this.insertFinTransaction = db.prepare(
       `INSERT INTO fin_transactions
          (id, profile_id, account_id, counter_account_id, category_id, tx_date, amount,
-          payee, note, import_key, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+          payee, note, import_key, recurring_id, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertFinBudget = db.prepare(
       `INSERT INTO fin_budgets
@@ -1155,11 +1170,32 @@ export class RestoreStore {
         written += 1;
       }
 
+      // The subscriptions (migration 053), after the accounts and categories
+      // they point at and before the charges that point back. The `nextRun`
+      // cursor is reproduced from the archive rather than reset to the start
+      // date, exactly as `createdAt` is reproduced rather than re-stamped: the
+      // charges it has already made are in this same archive, and a cursor put
+      // back at the beginning would claim a year of them are still outstanding.
+      // The rule is written as the archive's canonical JSON — `parseImportArchive`
+      // ran it through `validateRecurrenceRule` and returned the canonical form,
+      // so nothing here re-validates it.
+      for (const subscription of input.data.finRecurring) {
+        this.insertFinRecurring.run(
+          subscription.id, this.profileId, subscription.accountId, subscription.categoryId,
+          subscription.name, subscription.amount, subscription.payee, subscription.note,
+          requiredRecurrenceText(subscription.recurrence), subscription.startDate,
+          subscription.nextRun, subscription.reminderDays,
+          subscription.createdAt, subscription.updatedAt,
+        );
+        written += 1;
+      }
+
       for (const transaction of input.data.finTransactions) {
         this.insertFinTransaction.run(
           transaction.id, this.profileId, transaction.accountId, transaction.counterAccountId,
           transaction.categoryId, transaction.date, transaction.amount,
           transaction.payee, transaction.note, transaction.importKey,
+          transaction.recurringId ?? null,
           transaction.createdAt, transaction.updatedAt,
         );
         written += 1;

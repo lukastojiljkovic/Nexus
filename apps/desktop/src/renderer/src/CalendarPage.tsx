@@ -11,6 +11,7 @@ import type {
   EventFieldChanges,
   EventTemplate,
   Exam,
+  FinUpcomingRenewal,
   NewEventFields,
   Person,
   Profile,
@@ -63,6 +64,7 @@ import { DocumentsPanel } from "./DocumentsPanel.js";
 import { PeoplePanel } from "./PeoplePanel.js";
 import { daysUntilExam, examCountdownLabel, examCountdownVariant, localTodayKey } from "./examDates.js";
 import { readStoredWeekStart, toWeekStart } from "./weekStart.js";
+import { formatMoney } from "./money.js";
 import { dayUnit, strings } from "./strings.js";
 
 // --- Per-profile view memory (interim, mirrors TasksPage) -------------------
@@ -125,6 +127,7 @@ const SOURCE_LABEL: Record<Exclude<CalendarSource, "overlay">, string> = {
   exams: strings.calendar.sourceExams,
   blocks: strings.calendar.sourceBlocks,
   birthdays: strings.calendar.sourceBirthdays,
+  subscriptions: strings.calendar.sourceSubscriptions,
 };
 
 // --- Agenda grouping (page-level, not the views engine) ---------------------
@@ -148,6 +151,9 @@ const KIND_RANK: Record<CalendarItem["kind"], number> = {
   task: 3,
   exam: 4,
   block: 5,
+  // Last on a shared day: a renewal is a fact about money, not about what the
+  // day asks of you, so it reads as the footnote it is.
+  subscription: 6,
 };
 
 /** Calendar items bucketed by calendar day, days and rows both ascending. */
@@ -569,6 +575,8 @@ export function CalendarPage({
   // arrives rather than gating the profile's own calendar.
   const [overlay, setOverlay] = useState<CalendarOverlayEvent[]>([]);
   const [overlayFailed, setOverlayFailed] = useState(false);
+  /** FIN slice d: the renewals the subscriptions' rules place in the visible range. */
+  const [renewals, setRenewals] = useState<FinUpcomingRenewal[]>([]);
   // The origin popover a foreign item's click opens (CAL-005): the fixed
   // position derived from the clicked element's rect, or null while closed.
   // Anchored the way NotePopover anchors its panel — but state-driven, since
@@ -1385,10 +1393,41 @@ export function CalendarPage({
     };
   }, [profileId, overlayOn, expansionRange.from, expansionRange.to]);
 
+  // FIN slice d: the renewals the subscriptions' RULES place in the visible
+  // range — the same arrangement the overlay above uses, and for the same
+  // reason: main expands the rules (`FinRecurringStore.upcoming`), so the merge
+  // below only derives keys. Fetched only while the chip is ON, so a profile
+  // that keeps no subscriptions pays nothing for the source.
+  const renewalsOn = sources.has("subscriptions") && !isPanelView(view);
+  useEffect(() => {
+    if (!renewalsOn) {
+      setRenewals([]);
+      return;
+    }
+    let active = true;
+    void (async () => {
+      try {
+        const rows = await window.nexus.finUpcomingRenewals(profileId, {
+          from: expansionRange.from,
+          to: expansionRange.to,
+        });
+        if (active) setRenewals(rows);
+      } catch (error) {
+        // Quiet, unlike the overlay's own banner: a missing renewal row costs
+        // one chip's worth of information, and the ledger is where the money
+        // actually is.
+        console.error("Nexus: failed to load the upcoming renewals:", error);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profileId, renewalsOn, expansionRange.from, expansionRange.to]);
+
   const calendarItems = dataLoading
     ? []
     : buildCalendarItems(
-        { events, tasks, exams, blocks, subjects, people, overlay },
+        { events, tasks, exams, blocks, subjects, people, overlay, renewals },
         sources,
         expansionRange,
       );
@@ -1963,6 +2002,31 @@ export function CalendarPage({
                           <span className="cal__event">
                             <Chip className="cal__task-tag">{strings.calendar.taskTag}</Chip>
                             <span className="cal__event-title">{item.task.title}</span>
+                          </span>
+                        </ListRow>
+                      );
+                    }
+                    // Renewal row (FIN slice d): read-only, like every other
+                    // non-event source here — a subscription is edited on the
+                    // Finansije page, never from a calendar surface. What is
+                    // drawn comes from the RULE, so a day in the future shows
+                    // what WILL be charged rather than a row that already is.
+                    if (item.kind === "subscription") {
+                      return (
+                        <ListRow
+                          key={item.id}
+                          leading={<span className="cal__time" />}
+                          trailing={
+                            <Chip variant="data">
+                              {formatMoney(item.renewal.amount, item.renewal.currency)}
+                            </Chip>
+                          }
+                        >
+                          <span className="cal__event">
+                            <Chip className="cal__subscription-tag">
+                              {strings.calendar.subscriptionTag}
+                            </Chip>
+                            <span className="cal__event-title">{item.renewal.name}</span>
                           </span>
                         </ListRow>
                       );

@@ -801,3 +801,22 @@ export class FinBudgetValidationError extends DatabaseError {}
  * store's own profile — unknown or owned by another profile.
  */
 export class FinBudgetNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a subscription write is rejected at the store boundary (FIN slice
+ * d, migration 053): an `amount` that is not a non-zero safe INTEGER of minor
+ * units, an empty or over-long `name`, a `startDate` that is not a real calendar
+ * day, a `reminderDays` outside 0..365, a malformed `now`/`today`, or — the one
+ * worth naming out loud — a `recurrence` that is not a valid ADR-024 rule. FIN
+ * has no rule language of its own: `validateRecurrenceRule` is the same gate
+ * `TaskStore` and `EventStore` run every rule through, so a schedule that would
+ * be refused on a task is refused on a subscription for the identical reason.
+ */
+export class FinRecurringValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a subscription operation targets an id that is not an active
+ * subscription in the store's own profile — unknown, soft-deleted, or owned by
+ * another profile.
+ */
+export class FinRecurringNotFoundError extends DatabaseError {}

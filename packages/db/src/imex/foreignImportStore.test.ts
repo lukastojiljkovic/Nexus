@@ -29,6 +29,7 @@ import {
   ExamStore,
   FinAccountStore,
   FinCategoryStore,
+  FinRecurringStore,
   FinTransactionStore,
   FocusStore,
   ForeignImportStore,
@@ -138,6 +139,7 @@ function emptyProfileData(): ProfileData {
     dashboardWidgets: [],
     finAccounts: [],
     finCategories: [],
+    finRecurring: [],
     finTransactions: [],
     finBudgets: [],
   };
@@ -289,6 +291,25 @@ function seedProfile(profileId: string, label: string): void {
     { accountId: current.id, counterAccountId: savings.id, date: "2026-02-04", amount: -300_00 },
     t0,
   );
+  // FIN slice d (migration 053): a subscription and one charge it made. Its NAME
+  // is the same in both seeded profiles on purpose — the planner must MINT it
+  // anyway, because its account is minted and a schedule charging the target's
+  // bank beside charges from the source's would be two rows disagreeing about
+  // whose money this is.
+  const finRecurring = new FinRecurringStore(db.raw, profileId);
+  finRecurring.create(
+    {
+      accountId: current.id,
+      categoryId: hrana.id,
+      name: "Netflix",
+      amount: -11_90,
+      recurrence: { freq: { kind: "monthly-date", interval: 1, day: 5 }, end: { kind: "never" } },
+      startDate: "2026-02-05",
+      reminderDays: 2,
+    },
+    t0,
+  );
+  finRecurring.generateDue(t0, "2026-02-20");
 }
 
 /** One profile's rows in interchange shape — the same read `main`'s `gatherProfileData` performs, minus the Electron-side plumbing. */
@@ -349,6 +370,7 @@ function gather(profileId: string): ProfileData {
     noteAttachments: notes.list().flatMap((meta) => noteAttachments.list(meta.id)),
     finAccounts: new FinAccountStore(db.raw, profileId).listActive(),
     finCategories: finCategories.list(),
+    finRecurring: new FinRecurringStore(db.raw, profileId).listActive(),
     finTransactions: new FinTransactionStore(db.raw, profileId).listActive(),
     finBudgets: finCategories.listBudgets(),
   };

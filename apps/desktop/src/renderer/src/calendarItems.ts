@@ -9,6 +9,7 @@ import type {
   CalendarOverlayEvent,
   Event,
   Exam,
+  FinUpcomingRenewal,
   Person,
   StudyBlockWithExam,
   Subject,
@@ -42,7 +43,14 @@ import type {
  * appear.
  */
 
-export type CalendarSource = "events" | "tasks" | "exams" | "blocks" | "birthdays" | "overlay";
+export type CalendarSource =
+  | "events"
+  | "tasks"
+  | "exams"
+  | "blocks"
+  | "birthdays"
+  | "overlay"
+  | "subscriptions";
 /**
  * Chip order — and, because `persistSources` writes this order, the stored
  * format's order too. New sources are APPENDED rather than slotted in beside a
@@ -60,6 +68,11 @@ export const CALENDAR_SOURCES: readonly CalendarSource[] = [
   "blocks",
   "birthdays",
   "overlay",
+  // FIN slice d: the renewals a subscription's rule places. Appended, on the
+  // CAL-007 precedent the „overlay" comment states — a profile that stored its
+  // toggles before this source existed keeps it OFF, while a fresh profile
+  // starts it ON.
+  "subscriptions",
 ];
 
 const DAY_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -105,6 +118,15 @@ export type CalendarItem = CalendarItemBase &
      * switch over items is forced to decide what a guest row may do there.
      */
     | { kind: "foreign"; foreign: CalendarOverlayEvent }
+    /**
+     * One renewal a subscription's RULE places on a day (FIN slice d) — read
+     * from the schedule, never from a transaction, which is the whole of "a
+     * charge that has not happened is not a row". READ-ONLY here, like the study
+     * blocks in the agenda: its click opens the Finansije page, it is never
+     * draggable and never resizable, and its own kind is what forces every
+     * switch over items to decide what it may do.
+     */
+    | { kind: "subscription"; renewal: FinUpcomingRenewal }
   );
 
 export interface CalendarSourceRows {
@@ -116,6 +138,13 @@ export interface CalendarSourceRows {
   readonly people: readonly Person[];
   /** The other profile's events for the current range (CAL-005), already expanded and minimized by main; empty while the chip is off or the account has one profile. */
   readonly overlay: readonly CalendarOverlayEvent[];
+  /**
+   * The renewals this profile's subscriptions place in the current range (FIN
+   * slice d), already expanded from their rules by main — the same arrangement
+   * `overlay` uses, and for the same reason: the expansion is a store read
+   * (`FinRecurringStore.upcoming`), so this builder only derives keys.
+   */
+  readonly renewals: readonly FinUpcomingRenewal[];
 }
 
 /** The window a recurring master is expanded over — inclusive bare day keys. */
@@ -396,10 +425,44 @@ function buildForeignItems(rows: readonly CalendarOverlayEvent[]): CalendarItem[
 }
 
 /**
+ * The subscription renewals as calendar items (FIN slice d). No range parameter
+ * and no recurrence handling, exactly as `buildForeignItems` has none: main's
+ * `fin-recurring:upcoming` read already answered for the visible range with
+ * every rule expanded into concrete days, so this builder only derives keys —
+ * and the same skip-not-throw discipline on a malformed one.
+ *
+ * All-day always: a charge lands on a DAY. The ledger is where the money is;
+ * this row is what the schedule says, which is why it is drawn for past days
+ * too — looking back at a month should show when the charges fell, and looking
+ * forward should show when they will.
+ */
+function buildSubscriptionItems(renewals: readonly FinUpcomingRenewal[]): CalendarItem[] {
+  const items: CalendarItem[] = [];
+  for (const renewal of renewals) {
+    if (!isDayKey(renewal.date)) continue;
+    items.push({
+      // Renewals of one subscription share its row id, so the day is what
+      // separates them — the rule every expanded source here follows.
+      id: `subscription-${renewal.recurringId}@${renewal.date}`,
+      source: "subscriptions",
+      kind: "subscription",
+      renewal,
+      startKey: renewal.date,
+      endKey: renewal.date,
+      startMinutes: null,
+      endMinutes: null,
+      sortKey: renewal.date,
+    });
+  }
+  return items;
+}
+
+/**
  * Merges the enabled sources into one calendar stream; only requested sources
  * are built at all. `range` bounds the expansion of recurring event masters
  * and of birthday occurrences, and nothing else — see the file header. (The
- * overlay rows arrive already range-bounded by main, so they take no `range`.)
+ * overlay and renewal rows arrive already range-bounded by main, so they take
+ * no `range`.)
  */
 export function buildCalendarItems(
   rows: CalendarSourceRows,
@@ -416,6 +479,7 @@ export function buildCalendarItems(
   if (enabled.has("blocks")) items.push(...buildBlockItems(rows.blocks, examsById, subjectsById));
   if (enabled.has("birthdays")) items.push(...buildBirthdayItems(rows.people, range));
   if (enabled.has("overlay")) items.push(...buildForeignItems(rows.overlay));
+  if (enabled.has("subscriptions")) items.push(...buildSubscriptionItems(rows.renewals));
   return items;
 }
 

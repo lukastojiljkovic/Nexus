@@ -95,6 +95,10 @@ export function itemLabel(item: CalendarItem): string {
       return item.age === null ? item.person.name : `${item.person.name} (${item.age})`;
     case "foreign":
       return item.foreign.title;
+    // The subscription's own name and nothing else: the amount rides its own
+    // chip in the agenda, and a month cell has room for a word, not a figure.
+    case "subscription":
+      return item.renewal.name;
   }
 }
 

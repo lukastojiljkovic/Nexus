@@ -31,8 +31,14 @@ import {
   shiftDayKey,
 } from "./examDates.js";
 import { focusSessionMinutes, formatDurationMinutes } from "./focusFormat.js";
+import { formatMoney } from "./money.js";
 import { formatNotificationWhen } from "./notificationFormat.js";
 import { dayUnit, strings } from "./strings.js";
+
+/** The widest window „Predstojeće naplate" ever fetches — its largest horizon option. */
+const MAX_RENEWAL_HORIZON_DAYS = 90;
+/** The window that card ships on, and what an unreadable stored choice falls back to. */
+const DEFAULT_RENEWAL_HORIZON_DAYS = 30;
 
 /**
  * The dashboard's widget bodies (DASH-002 / ADR-045 slice b) — one component per
@@ -283,7 +289,18 @@ function TodayWidget({
         const items = buildCalendarItems(
           // `overlay` stays empty by design: the cross-profile read is the
           // calendar grid's alone (CAL-005) — no widget shows another profile.
-          { events, tasks: [], exams: [], blocks: [], subjects: [], people, overlay: [] },
+          // `renewals` likewise: „Danas" is about the day's appointments, and
+          // upcoming charges have their own card („Predstojeće naplate").
+          {
+            events,
+            tasks: [],
+            exams: [],
+            blocks: [],
+            subjects: [],
+            people,
+            overlay: [],
+            renewals: [],
+          },
           TODAY_SOURCES,
           { from: todayKey, to: todayKey },
         )
@@ -703,6 +720,65 @@ function StudyWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps) {
   );
 }
 
+/**
+ * „Predstojeće naplate" (FIN slice d) — what the subscriptions' RULES say is
+ * coming inside the chosen horizon, soonest first. Read from
+ * `finUpcomingRenewals`, which expands each rule on the spot: a charge that has
+ * not happened yet is not a transaction, so there is no row this card could
+ * have read instead, and that is exactly why the balance beside it is not a
+ * forecast.
+ *
+ * The amount carries its account's own currency, because there is no rate that
+ * could fold two of them — the same rule the whole module is built on, applied
+ * to a row that has to state one figure.
+ */
+function UpcomingRenewalsWidget({ profileId, contract, config, onOpenModule }: DashboardWidgetBodyProps) {
+  // The widest window any horizon option asks for; the choice narrows it below,
+  // so changing the knob never costs a second round trip.
+  const load = useCallback(() => {
+    const today = localTodayKey();
+    return window.nexus.finUpcomingRenewals(profileId, {
+      from: today,
+      to: shiftDayKey(today, MAX_RENEWAL_HORIZON_DAYS),
+    });
+  }, [profileId]);
+  const { state, retry } = useWidgetData(load);
+  const s = strings.dashboard.renewals;
+
+  return (
+    <WidgetData state={state} retry={retry}>
+      {(renewals) => {
+        const cfg = parseWidgetConfig(contract, config);
+        // Every option is a day count here (this card offers no „svi“ — an
+        // endless subscription has infinitely many renewals ahead), so the
+        // fallback is the shipped 30 rather than "no window".
+        const horizon = horizonWindowDays(widgetChoice(cfg, "horizon")) ?? DEFAULT_RENEWAL_HORIZON_DAYS;
+        const limit = shiftDayKey(localTodayKey(), horizon);
+        const rows = renewals
+          .filter((renewal) => renewal.date <= limit)
+          .slice(0, widgetCount(cfg, "count"));
+        if (rows.length === 0) return <p className="dash__empty">{s.empty}</p>;
+        return (
+          <div className="dash__list">
+            {rows.map((renewal) => (
+              <DashRow
+                key={`${renewal.recurringId}@${renewal.date}`}
+                onClick={() => onOpenModule("finance")}
+                leading={<span className="dash__time">{formatDueDate(renewal.date)}</span>}
+                trailing={
+                  <Chip variant="data">{formatMoney(renewal.amount, renewal.currency)}</Chip>
+                }
+              >
+                <span className="dash__row-title">{renewal.name}</span>
+              </DashRow>
+            ))}
+          </div>
+        );
+      }}
+    </WidgetData>
+  );
+}
+
 // --- The registry-driven map (ADR-045 section 3) ----------------------------
 
 /** How the page draws one placement: the body, and whether it draws at all. */
@@ -739,4 +815,8 @@ export const DASHBOARD_WIDGETS: Record<string, DashboardWidgetRenderer> = {
   "study:ispiti": { Body: ExamsWidget, visible: (enabled) => enabled.has("study") },
   "study:ucenje": { Body: StudyWidget, visible: (enabled) => enabled.has("study") },
   "notes:nedavno": { Body: RecentNotesWidget, visible: (enabled) => enabled.has("notes") },
+  "finance:naplate": {
+    Body: UpcomingRenewalsWidget,
+    visible: (enabled) => enabled.has("finance"),
+  },
 };

@@ -86,6 +86,7 @@ describe("digest counts", () => {
       "study-day",
       "event",
       "task",
+      "subscription",
     ]);
   });
 

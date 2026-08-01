@@ -5,6 +5,7 @@ import {
   ALWAYS_ON_NOTIFICATION_SOURCES,
   bellCountLabel,
   formatNotificationWhen,
+  NOTIFICATION_PRESETS,
   SNOOZE_PRESETS,
 } from "./notificationFormat.js";
 import { strings } from "./strings.js";
@@ -28,8 +29,15 @@ function pinNoon(): void {
 }
 
 describe("ALL_NOTIFICATION_SOURCES", () => {
-  it("is the five toggleable NTF sources, in their fixed order and without duplicates", () => {
-    expect(ALL_NOTIFICATION_SOURCES).toEqual(["document", "exam", "study-day", "event", "task"]);
+  it("is the six toggleable NTF sources, in their fixed order and without duplicates", () => {
+    expect(ALL_NOTIFICATION_SOURCES).toEqual([
+      "document",
+      "exam",
+      "study-day",
+      "event",
+      "task",
+      "subscription",
+    ]);
     expect(new Set(ALL_NOTIFICATION_SOURCES).size).toBe(ALL_NOTIFICATION_SOURCES.length);
   });
 
@@ -37,6 +45,40 @@ describe("ALL_NOTIFICATION_SOURCES", () => {
     expect(ALWAYS_ON_NOTIFICATION_SOURCES).toEqual(["security"]);
     for (const source of ALWAYS_ON_NOTIFICATION_SOURCES) {
       expect(ALL_NOTIFICATION_SOURCES).not.toContain(source);
+    }
+  });
+});
+
+describe("NOTIFICATION_PRESETS (NTF-008 appetite tiers)", () => {
+  it("gives every source a tier — a source no preset names could never be switched on from the ask", () => {
+    const namedByAnyPreset = new Set(NOTIFICATION_PRESETS.flatMap((preset) => preset.sources));
+    for (const source of ALL_NOTIFICATION_SOURCES) {
+      expect(namedByAnyPreset, source).toContain(source);
+    }
+  });
+
+  it("grows: each tier contains the one before it, and „sve“ is every source there is", () => {
+    const [minimal, normal, all] = NOTIFICATION_PRESETS;
+    for (const source of minimal?.sources ?? []) {
+      expect(normal?.sources, source).toContain(source);
+    }
+    for (const source of normal?.sources ?? []) {
+      expect(all?.sources, source).toContain(source);
+    }
+    expect(all?.sources).toEqual(ALL_NOTIFICATION_SOURCES);
+  });
+
+  it("puts a subscription renewal in EVERY tier — it fires only where a lead was set by hand", () => {
+    for (const preset of NOTIFICATION_PRESETS) {
+      expect(preset.sources, preset.key).toContain("subscription");
+    }
+  });
+
+  it("names no always-on source: those are not an appetite", () => {
+    for (const preset of NOTIFICATION_PRESETS) {
+      for (const source of ALWAYS_ON_NOTIFICATION_SOURCES) {
+        expect(preset.sources, preset.key).not.toContain(source);
+      }
     }
   });
 });

@@ -719,6 +719,7 @@ export function translateApkg(parsed: ParsedApkg, target: ApkgTranslateTarget): 
     // says.
     finAccounts: [],
     finCategories: [],
+    finRecurring: [],
     finTransactions: [],
     finBudgets: [],
   };

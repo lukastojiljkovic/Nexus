@@ -98,6 +98,8 @@ describe("FinTransactionStore — CRUD", () => {
       // Migration 052: a row the user typed carries no import fingerprint, and
       // `create` is the one path that cannot give it one.
       importKey: null,
+      // A typed row, so no subscription made it (migration 053).
+      recurringId: null,
       createdAt: NOW,
       updatedAt: NOW,
     });

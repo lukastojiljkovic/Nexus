@@ -22,6 +22,7 @@ import type {
   ExportFinAccount,
   ExportFinBudget,
   ExportFinCategory,
+  ExportFinRecurring,
   ExportFinTransaction,
   ExportNoteFolder,
   ExportNoteTag,
@@ -51,6 +52,7 @@ import type {
   ExamStore,
   FinAccountStore,
   FinCategoryStore,
+  FinRecurringStore,
   FinTransactionStore,
   FocusStore,
   NoteAttachmentStore,
@@ -113,6 +115,7 @@ export interface ProfileDataDeps {
   dashboardSetStore(profileId: string): DashboardSetStore;
   finAccountStore(profileId: string): FinAccountStore;
   finCategoryStore(profileId: string): FinCategoryStore;
+  finRecurringStore(profileId: string): FinRecurringStore;
   finTransactionStore(profileId: string): FinTransactionStore;
 }
 
@@ -303,10 +306,11 @@ export function gatherProfileData(deps: ProfileDataDeps, profileId: string): Pro
   };
 }
 
-/** Every FIN-module row `ProfileData` requires (migration 051) — `gatherFinance`'s return shape. */
+/** Every FIN-module row `ProfileData` requires (migrations 051 and 053) — `gatherFinance`'s return shape. */
 interface GatheredFinanceData {
   finAccounts: ExportFinAccount[];
   finCategories: ExportFinCategory[];
+  finRecurring: ExportFinRecurring[];
   finTransactions: ExportFinTransaction[];
   finBudgets: ExportFinBudget[];
 }
@@ -324,13 +328,22 @@ interface GatheredFinanceData {
  * read, so an archive carrying one could only ever contradict them.
  */
 function gatherFinance(
-  deps: Pick<ProfileDataDeps, "finAccountStore" | "finCategoryStore" | "finTransactionStore">,
+  deps: Pick<
+    ProfileDataDeps,
+    "finAccountStore" | "finCategoryStore" | "finRecurringStore" | "finTransactionStore"
+  >,
   profileId: string,
 ): GatheredFinanceData {
   const categories = deps.finCategoryStore(profileId);
   return {
     finAccounts: deps.finAccountStore(profileId).listActive(),
     finCategories: categories.list(),
+    // A subscription's `nextRun` cursor travels with it, deliberately: the
+    // charges it has already generated are in this same archive, so a restore
+    // that reset the cursor would re-charge every one of them (migration 053's
+    // unique index would refuse the duplicates, but the balance would still be
+    // a lie about which occurrences are outstanding).
+    finRecurring: deps.finRecurringStore(profileId).listActive(),
     finTransactions: deps.finTransactionStore(profileId).listActive(),
     finBudgets: categories.listBudgets(),
   };

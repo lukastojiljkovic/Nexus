@@ -1013,6 +1013,7 @@ export function DashboardPage({
               subjects: [],
               people: [],
               overlay: [],
+              renewals: [],
             },
             STRIP_SOURCES,
             { from: todayKey, to: todayKey },

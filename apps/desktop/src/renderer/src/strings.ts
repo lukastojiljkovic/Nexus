@@ -358,6 +358,11 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       title: "Nedavne beleške",
       empty: "Još nema beležaka",
     },
+    /** FIN slice d: what the subscriptions' rules say is coming — never a row, always the schedule. */
+    renewals: {
+      title: "Predstojeće naplate",
+      empty: "Nema naplata u ovom periodu",
+    },
     /**
      * A single widget's own boundary (ADR-045 section 4): each card loads and
      * fails alone, so this copy is per-card and deliberately says nothing about
@@ -1511,6 +1516,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     sourceExams: "Ispiti",
     sourceBlocks: "Učenje",
     sourceBirthdays: "Rođendani",
+    /** FIN slice d: the days a subscription's rule says money goes out. */
+    sourceSubscriptions: "Pretplate",
     /**
      * The cross-profile overlay chip (CAL-005 / ADR-058 §5) — labelled by what
      * it SHOWS, so the pair is kind-dependent: „Poslovni kalendar“ while the
@@ -1632,6 +1639,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     },
     /** Tag chip on a read-only task row in the agenda (ADR-020). */
     taskTag: "Zadatak",
+    /** Tag chip on a read-only renewal row in the agenda (FIN slice d). */
+    subscriptionTag: "Pretplata",
     /** Grid navigation (ADR-020): prev/today/next — one pair of labels shared by Mesec/Nedelja/Dan, since each shifts by its own period. */
     prevPeriod: "Prethodni period",
     nextPeriod: "Sledeći period",
@@ -2240,6 +2249,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       event: "Događaj",
       task: "Zadatak",
       security: "Bezbednost",
+      subscription: "Pretplata",
     },
     /** Snooze preset button labels, keyed by SnoozePreset value. */
     snoozePreset: {
@@ -2277,6 +2287,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         event: "Događaji",
         task: "Zadaci",
         security: "Bezbednost",
+        subscription: "Pretplate",
       },
       /** NTF-007: why the „Bezbednost“ toggle is on and greyed out. */
       alwaysOnCaption: "Bezbednosna obaveštenja se ne mogu isključiti.",
@@ -2316,11 +2327,12 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     actionError: "Radnja nije uspela. Pokušaj ponovo.",
     undo: "Opozovi",
     dismiss: "Zatvori",
-    /** The two halves of the page: the book you write into, and the month you read back. */
+    /** The three halves of the page: the book you write into, the month you read back, and the charges that repeat. */
     pages: {
       label: "Prikaz",
       ledger: "Knjiga",
       report: "Izveštaj",
+      subscriptions: "Pretplate",
     },
     /**
      * The statement importer's disclosure on this page (FIN slice e). Closed by
@@ -2517,6 +2529,63 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       budgetOnIncome: "Budžet ide samo na rashodnu kategoriju — prihod se ne ograničava.",
       budgetAmount: "Limit mora biti iznos veći od nule.",
       notFound: "Taj zapis više ne postoji. Osveži stranicu.",
+      /** The store's refusal of a schedule it cannot read (FIN slice d). */
+      recurrenceInvalid: "Ponavljanje nije ispravno postavljeno.",
+    },
+    /**
+     * Pretplate (FIN slice d) — the charges that repeat. The copy is bound by
+     * the same honesty the report is: what is „predstojeće" comes from the RULE,
+     * and Nexus never writes a charge before its day arrives, which is said out
+     * loud in `caption` so nobody looks for a balance that already counts it.
+     */
+    subscriptions: {
+      heading: "Pretplate",
+      newSubscription: "Nova pretplata",
+      caption:
+        "Naplata se upisuje tek onog dana kada se dogodi — do tada je ovo samo raspored. Upisana naplata je obična transakcija: možeš je izmeniti ili obrisati.",
+      emptyTitle: "Još nema pretplata",
+      emptyDescription:
+        "Dodaj ono što se naplaćuje samo od sebe — pretplatu, članarinu, ratu. Nexus će upisati svaku naplatu na njen dan.",
+      needsAccountTitle: "Prvo dodaj račun",
+      needsAccountDescription: "Pretplata se naplaćuje sa računa, pa najpre treba da postoji jedan.",
+      nameLabel: "Naziv",
+      namePlaceholder: "Netflix",
+      amountLabel: "Iznos",
+      accountLabel: "Račun",
+      categoryLabel: "Kategorija",
+      startLabel: "Prva naplata",
+      reminderLabel: "Podseti me",
+      reminderNone: "Bez podsetnika",
+      /** The lead-time options, in days — the ones a renewal is actually worth hearing about. */
+      reminderOptions: {
+        "0": "Na dan naplate",
+        "1": "Dan ranije",
+        "3": "Tri dana ranije",
+        "7": "Nedelju dana ranije",
+      },
+      noteLabel: "Beleška",
+      save: "Sačuvaj",
+      cancel: "Otkaži",
+      edit: "Izmeni",
+      delete: "Obriši",
+      deletedNotice: "Pretplata je obrisana.",
+      /** The row's own next-charge line; „—" when the series has run out. */
+      nextLabel: "Sledeća naplata",
+      /** A series past its `until`/`count` end: nothing more will be charged. */
+      finished: "Nema više naplata",
+      /** The chip on a row that reminds, beside the lead time. */
+      reminderChip: "Podsetnik",
+      /** The little list under the form: what the rule will charge next. */
+      upcomingHeading: "Predstojeće naplate",
+      upcomingEmpty: "Nema naplata u naredna tri meseca.",
+      invalidName: "Upiši naziv pretplate.",
+      invalidAmount: "Iznos nije ispravan. Upiši ga kao 1234,56.",
+      zeroAmount: "Iznos ne može biti nula.",
+      invalidStart: "Izaberi datum prve naplate.",
+      /** The one thing the form decides that the ledger form does not: which way the money goes. */
+      directionLabel: "Smer",
+      directionOut: "Naplata",
+      directionIn: "Priliv",
     },
   },
 

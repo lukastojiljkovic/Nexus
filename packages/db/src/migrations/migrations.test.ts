@@ -22,8 +22,8 @@ import { CardStore, MIGRATIONS, NexusDatabase, openDatabase, runMigrations } fro
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 52 (the finance import fingerprint), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(52);
+  it("is at version 53 (finance subscriptions), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(53);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -6619,6 +6619,330 @@ describe("migration 052 — the finance import fingerprint (FIN slice e)", () =>
         import_key: string | null;
       };
       expect(row.import_key).toBeNull();
+    } finally {
+      raw.close();
+    }
+  });
+});
+
+
+describe("migration 053 — FIN subscriptions (recurring charges, FIN slice d)", () => {
+  const T = "2026-01-01T00:00:00.000Z";
+  /** A canonical ADR-024 rule, exactly as `serializeRecurrenceRule` writes one. */
+  const MONTHLY = JSON.stringify({
+    freq: { kind: "monthly-date", interval: 1, day: 5 },
+    end: { kind: "never" },
+  });
+
+  const columnNames = (db: NexusDatabase, table: string): string[] =>
+    (db.raw.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(
+      (row) => row.name,
+    );
+
+  const insertAccount = (db: NexusDatabase, id: string, profileId: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO fin_accounts
+           (id, profile_id, name, kind, currency, opening_balance, archived,
+            created_at, updated_at, deleted_at)
+         VALUES (?, ?, 'Tekući', 'current', 'RSD', 0, 0, ?, ?, NULL)`,
+      )
+      .run(id, profileId, T, T);
+
+  const insertRecurring = (
+    db: NexusDatabase,
+    id: string,
+    profileId: string,
+    accountId: string,
+    overrides: Partial<{
+      categoryId: string | null;
+      amount: number;
+      reminderDays: number | null;
+      name: string;
+    }> = {},
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO fin_recurring
+           (id, profile_id, account_id, category_id, name, amount, payee, note,
+            recurrence, anchor_date, next_run, reminder_days, created_at, updated_at, deleted_at)
+         VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, '2026-01-05', '2026-01-05', ?, ?, ?, NULL)`,
+      )
+      .run(
+        id,
+        profileId,
+        accountId,
+        overrides.categoryId ?? null,
+        overrides.name ?? "Netflix",
+        overrides.amount ?? -1_190,
+        MONTHLY,
+        overrides.reminderDays === undefined ? 2 : overrides.reminderDays,
+        T,
+        T,
+      );
+
+  const insertCharge = (
+    db: NexusDatabase,
+    id: string,
+    profileId: string,
+    accountId: string,
+    recurringId: string | null,
+    date: string,
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO fin_transactions
+           (id, profile_id, account_id, counter_account_id, category_id, tx_date, amount,
+            payee, note, created_at, updated_at, deleted_at, recurring_id)
+         VALUES (?, ?, ?, NULL, NULL, ?, -1190, NULL, NULL, ?, ?, NULL, ?)`,
+      )
+      .run(id, profileId, accountId, date, T, T, recurringId);
+
+  it("creates fin_recurring, adds recurring_id, and stamps the latest user_version", () => {
+    const db = openDatabase({ path: join(dir, "rec-fresh.db") });
+    expect(tableNames(db)).toContain("fin_recurring");
+    expect(columnNames(db, "fin_recurring")).toEqual([
+      "id",
+      "profile_id",
+      "account_id",
+      "category_id",
+      "name",
+      "amount",
+      "payee",
+      "note",
+      "recurrence",
+      "anchor_date",
+      "next_run",
+      "reminder_days",
+      "created_at",
+      "updated_at",
+      "deleted_at",
+    ]);
+    expect(columnNames(db, "fin_transactions")).toContain("recurring_id");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("keeps `fin_flows` free of the new column — a transfer-free aggregate reads no provenance", () => {
+    const db = openDatabase({ path: join(dir, "rec-flows.db") });
+    expect(columnNames(db, "fin_flows")).toEqual([
+      "id",
+      "profile_id",
+      "account_id",
+      "category_id",
+      "tx_date",
+      "amount",
+      "payee",
+      "note",
+    ]);
+    db.close();
+  });
+
+  it("refuses a non-integer or zero amount, and a reminder lead outside 0..365", () => {
+    const db = openDatabase({ path: join(dir, "rec-checks.db") });
+    insertProfile(db, "p1");
+    insertAccount(db, "a1", "p1");
+    expect(() => insertRecurring(db, "r-float", "p1", "a1", { amount: 11.9 })).toThrow();
+    expect(() => insertRecurring(db, "r-zero", "p1", "a1", { amount: 0 })).toThrow();
+    expect(() => insertRecurring(db, "r-neg", "p1", "a1", { reminderDays: -1 })).toThrow();
+    expect(() => insertRecurring(db, "r-far", "p1", "a1", { reminderDays: 400 })).toThrow();
+    expect(() => insertRecurring(db, "r-none", "p1", "a1", { reminderDays: null })).not.toThrow();
+    expect(() => insertRecurring(db, "r-ok", "p1", "a1", { name: "Spotify" })).not.toThrow();
+    db.close();
+  });
+
+  it("holds at most ONE charge per (subscription, day) — the idempotence the schema owns", () => {
+    const db = openDatabase({ path: join(dir, "rec-unique.db") });
+    insertProfile(db, "p1");
+    insertAccount(db, "a1", "p1");
+    insertRecurring(db, "r1", "p1", "a1");
+
+    expect(() => insertCharge(db, "t1", "p1", "a1", "r1", "2026-01-05")).not.toThrow();
+    // The very row a second generation pass would try to write.
+    expect(() => insertCharge(db, "t2", "p1", "a1", "r1", "2026-01-05")).toThrow();
+    // The next occurrence is a different slot, and a hand-typed row (no
+    // subscription) is outside the index entirely — the partial WHERE is what
+    // keeps two ordinary coffees on one day two rows.
+    expect(() => insertCharge(db, "t3", "p1", "a1", "r1", "2026-02-05")).not.toThrow();
+    expect(() => insertCharge(db, "t4", "p1", "a1", null, "2026-01-05")).not.toThrow();
+    expect(() => insertCharge(db, "t5", "p1", "a1", null, "2026-01-05")).not.toThrow();
+    db.close();
+  });
+
+  it("keeps a DELETED generated charge's slot, so it cannot come back on the next pass", () => {
+    const db = openDatabase({ path: join(dir, "rec-deleted-slot.db") });
+    insertProfile(db, "p1");
+    insertAccount(db, "a1", "p1");
+    insertRecurring(db, "r1", "p1", "a1");
+    insertCharge(db, "t1", "p1", "a1", "r1", "2026-01-05");
+    db.raw.prepare("UPDATE fin_transactions SET deleted_at = ? WHERE id = 't1'").run(T);
+
+    // The index carries no `deleted_at IS NULL`: the thrown-away charge still
+    // occupies its day, which is exactly why generation cannot resurrect it.
+    expect(() => insertCharge(db, "t2", "p1", "a1", "r1", "2026-01-05")).toThrow();
+    db.close();
+  });
+
+  it("detaches a charge from a hard-deleted subscription and cascades the rest", () => {
+    const db = openDatabase({ path: join(dir, "rec-cascade.db") });
+    insertProfile(db, "p1");
+    insertAccount(db, "a1", "p1");
+    db.raw
+      .prepare(
+        `INSERT INTO fin_categories (id, profile_id, name, kind, created_at, updated_at)
+         VALUES ('c1', 'p1', 'Zabava', 'expense', ?, ?)`,
+      )
+      .run(T, T);
+    insertRecurring(db, "r1", "p1", "a1", { categoryId: "c1" });
+    insertCharge(db, "t1", "p1", "a1", "r1", "2026-01-05");
+
+    // Losing the label must never lose the schedule.
+    db.raw.prepare("DELETE FROM fin_categories WHERE id = 'c1'").run();
+    expect(
+      (
+        db.raw.prepare("SELECT category_id FROM fin_recurring WHERE id = 'r1'").get() as {
+          category_id: string | null;
+        }
+      ).category_id,
+    ).toBeNull();
+
+    // Losing the subscription must never lose the money that already moved.
+    db.raw.prepare("DELETE FROM fin_recurring WHERE id = 'r1'").run();
+    expect(
+      (
+        db.raw.prepare("SELECT recurring_id FROM fin_transactions WHERE id = 't1'").get() as {
+          recurring_id: string | null;
+        }
+      ).recurring_id,
+    ).toBeNull();
+
+    // …but losing the ACCOUNT takes both, exactly as migration 051 decided.
+    insertRecurring(db, "r2", "p1", "a1");
+    db.raw.prepare("DELETE FROM fin_accounts WHERE id = 'a1'").run();
+    for (const table of ["fin_recurring", "fin_transactions"]) {
+      const { n } = db.raw.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number };
+      expect({ table, n }).toEqual({ table, n: 0 });
+    }
+    db.close();
+  });
+
+  it("widens both notification CHECKs to 'subscription', security still unsilenceable", () => {
+    const db = openDatabase({ path: join(dir, "rec-sources.db") });
+    insertProfile(db, "p1");
+    const ledger = (source: string) =>
+      db.raw
+        .prepare(
+          `INSERT INTO notifications
+             (id, profile_id, source, entity_id, occurrence_key, title, body, status,
+              snoozed_until, delivered_at, created_at, updated_at)
+           VALUES (?, 'p1', ?, 'e1', 'k1', 't', 'b', 'delivered', NULL, ?, ?, ?)`,
+        )
+        .run(`n-${source}`, source, T, T, T);
+    const toggle = (source: string) =>
+      db.raw
+        .prepare(`INSERT INTO ntf_source_settings (profile_id, source, enabled) VALUES ('p1', ?, 0)`)
+        .run(source);
+
+    expect(() => ledger("subscription")).not.toThrow();
+    expect(() => ledger("izmisljeno")).toThrow();
+    expect(() => toggle("subscription")).not.toThrow();
+    // Migration 037's decision stands: a security notice has no off switch.
+    expect(() => toggle("security")).toThrow();
+    db.close();
+  });
+
+  it("loses NO row to the two table rebuilds — the ADR-042 hazard, re-checked here", () => {
+    const raw = new Database(join(dir, "rec-rebuild.db"));
+    try {
+      raw.pragma("journal_mode = WAL");
+      raw.pragma("foreign_keys = ON");
+      raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
+        typeof value === "string" ? foldSearchText(value) : null,
+      );
+      runMigrations(
+        raw,
+        MIGRATIONS.filter((migration) => migration.version < 53),
+      );
+      raw
+        .prepare(
+          "INSERT INTO profiles (id, kind, name, created_at) VALUES ('p1', 'personal', 'P', ?)",
+        )
+        .run(T);
+      for (const [id, source] of [
+        ["n1", "document"],
+        ["n2", "exam"],
+        ["n3", "event"],
+        ["n4", "task"],
+        ["n5", "security"],
+      ] as const) {
+        raw
+          .prepare(
+            `INSERT INTO notifications
+               (id, profile_id, source, entity_id, occurrence_key, title, body, status,
+                snoozed_until, delivered_at, created_at, updated_at)
+             VALUES (?, 'p1', ?, 'e1', 'k1', 'Naslov', 'Telo', 'delivered', NULL, ?, ?, ?)`,
+          )
+          .run(id, source, T, T, T);
+      }
+      for (const source of ["document", "exam", "study-day", "event", "task"]) {
+        raw
+          .prepare(
+            `INSERT INTO ntf_source_settings (profile_id, source, enabled) VALUES ('p1', ?, 0)`,
+          )
+          .run(source);
+      }
+      raw
+        .prepare(
+          `INSERT INTO ntf_settings (profile_id, morning_hour, created_at, updated_at)
+           VALUES ('p1', '08:00', ?, ?)`,
+        )
+        .run(T, T);
+      raw
+        .prepare(
+          `INSERT INTO fin_accounts
+             (id, profile_id, name, kind, currency, opening_balance, archived,
+              created_at, updated_at, deleted_at)
+           VALUES ('a1', 'p1', 'Tekući', 'current', 'RSD', 100000, 0, ?, ?, NULL)`,
+        )
+        .run(T, T);
+      raw
+        .prepare(
+          `INSERT INTO fin_transactions
+             (id, profile_id, account_id, counter_account_id, category_id, tx_date, amount,
+              payee, note, created_at, updated_at, deleted_at)
+           VALUES ('t1', 'p1', 'a1', NULL, NULL, '2026-01-15', -1190, NULL, NULL, ?, ?, NULL)`,
+        )
+        .run(T, T);
+
+      runMigrations(raw, MIGRATIONS);
+
+      expect(raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+      expect(raw.prepare("SELECT id, source FROM notifications ORDER BY id").all()).toEqual([
+        { id: "n1", source: "document" },
+        { id: "n2", source: "exam" },
+        { id: "n3", source: "event" },
+        { id: "n4", source: "task" },
+        { id: "n5", source: "security" },
+      ]);
+      expect(
+        (raw.prepare("SELECT count(*) AS n FROM ntf_source_settings").get() as { n: number }).n,
+      ).toBe(5);
+      expect((raw.prepare("SELECT count(*) AS n FROM ntf_settings").get() as { n: number }).n).toBe(
+        1,
+      );
+      // The existing ledger row survives the ADD COLUMN with a NULL provenance.
+      expect(raw.prepare("SELECT id, recurring_id FROM fin_transactions").all()).toEqual([
+        { id: "t1", recurring_id: null },
+      ]);
+      // And the rebuilt table's own index came back with it.
+      const indexes = (
+        raw.prepare("SELECT name FROM sqlite_master WHERE type = 'index'").all() as {
+          name: string;
+        }[]
+      ).map((row) => row.name);
+      expect(indexes).toContain("notifications_profile_status_updated");
+      expect(indexes).toContain("fin_recurring_profile_active");
+      expect(indexes).toContain("fin_transactions_recurring_occurrence");
     } finally {
       raw.close();
     }

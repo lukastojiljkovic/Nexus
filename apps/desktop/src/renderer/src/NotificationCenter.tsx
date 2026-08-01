@@ -14,7 +14,9 @@ import { strings } from "./strings.js";
  * Deep-link target module per source (NTF a3: exam/study-day → study,
  * document/event → calendar, task → tasks). A security notice (NTF-007) opens
  * Settings — the page holding the PIN, the Recovery Kit and the account list,
- * which is where every one of those events can actually be acted on.
+ * which is where every one of those events can actually be acted on. A renewal
+ * reminder (FIN slice d) opens Finansije, where the subscription lives and
+ * where the charge will land.
  */
 const SOURCE_MODULE: Record<NotificationSource, string> = {
   document: "calendar",
@@ -23,6 +25,7 @@ const SOURCE_MODULE: Record<NotificationSource, string> = {
   event: "calendar",
   task: "tasks",
   security: "settings",
+  subscription: "finance",
 };
 
 export interface NotificationCenterProps {

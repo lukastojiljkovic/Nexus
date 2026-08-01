@@ -694,6 +694,29 @@ const ID_MINTERS: Record<keyof ProfileData, (data: ProfileData, ctx: PlanContext
       "finance",
       ctx,
     ),
+  /**
+   * A SUBSCRIPTION is minted, always — never absorbed by name, never skipped,
+   * and the decision follows from one already made rather than being a new one.
+   *
+   * A subscription points at an ACCOUNT, and an account is always MINTED (see
+   * `ID_MINTERS.finAccounts`): two accounts called „Tekući" in two profiles are
+   * routinely two different accounts at two different banks, so the source's
+   * account arrives as its own new row. A subscription's account reference has
+   * to FOLLOW its account — that is what the remap below does — and once it
+   * does, absorbing the subscription onto a target row of the same name would
+   * put a schedule that charges the TARGET's bank account beside a set of
+   * charges that came out of the SOURCE's. The two would then disagree about
+   * whose money this is, in a module whose whole job is to add up.
+   *
+   * Nothing forces the question either: migration 053 puts no uniqueness on a
+   * subscription's name, so both rows fit, and „Netflix" in two profiles is
+   * routinely two people's two subscriptions — exactly the „Kupovina"/„Ideje"
+   * case `ImportDuplicateType`'s own comment refuses to guess about. The
+   * template rule (skip when the name is taken) does not apply either: a
+   * subscription is not identified by its name and things DO point at it —
+   * every charge it has already generated — so skipping would strand them.
+   */
+  finRecurring: (data, ctx) => mintAll(data.finRecurring, ctx),
   // Minted like any other content row: a transaction is an event that happened,
   // never a duplicate of somebody else's (ADR-051's certainty gate — no tuple of
   // date, payee and amount is a fact the user could check at a glance and be
@@ -1233,11 +1256,25 @@ export function planForeignImport(
       id: mapped(row.id, ctx),
       profileId: target.profileId,
     })),
+    // Minted like an account, and its two references remapped through the same
+    // maps: the account it charges (always a new row here) and the category it
+    // files under (the target's own, when that category was absorbed).
+    finRecurring: source.finRecurring.map((row) => ({
+      ...row,
+      id: mapped(row.id, ctx),
+      profileId: target.profileId,
+      accountId: mapped(row.accountId, ctx),
+      categoryId: mappedOrNull(row.categoryId, ctx),
+    })),
     finTransactions: source.finTransactions.map((row) => ({
       ...row,
       id: mapped(row.id, ctx),
       profileId: target.profileId,
       accountId: mapped(row.accountId, ctx),
+      // The subscription that generated this charge, remapped onto the new row
+      // — which is what keeps a charge and its schedule pointing at the SAME
+      // account after the import, rather than at two copies of one.
+      recurringId: mappedOrNull(row.recurringId ?? null, ctx),
       // A transfer's other side, remapped exactly as the first side is — which
       // is the whole payoff of one row: there is no second row that could be
       // remapped differently, so the two halves cannot come apart in transit.
