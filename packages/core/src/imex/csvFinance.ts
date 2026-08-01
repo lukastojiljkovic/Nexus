@@ -895,6 +895,11 @@ export function translateCsvFinance(
     // other module this importer does not read.
     habits: [],
     habitEntries: [],
+    // Nor any food log (migration 058): a bank statement records what was paid
+    // for, never what was eaten.
+    fitFoods: [],
+    fitMealItems: [],
+    fitTargets: [],
   };
 
   return {

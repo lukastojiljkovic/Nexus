@@ -52,6 +52,11 @@ export {
   FinRecurringValidationError,
   FinTransactionNotFoundError,
   FinTransactionValidationError,
+  FitFoodNotFoundError,
+  FitFoodValidationError,
+  FitMealItemNotFoundError,
+  FitMealValidationError,
+  FitTargetValidationError,
   FocusNotFoundError,
   FocusValidationError,
   HabitNotFoundError,
@@ -490,6 +495,48 @@ export type {
   HabitEntry,
   UpdateHabitFields,
 } from "./habits/habitStore.js";
+
+// --- FIT (nutrition, migration 057) -----------------------------------------
+//
+// Three stores and NO catalogue: the app-shipped food data lives as JSON in
+// `@nexus/core` and is deliberately not a table (see migration 057). A meal item
+// SNAPSHOTS the macros it was logged with, which is why none of these ever reads
+// that data.
+export {
+  FitFoodStore,
+  MAX_FIT_FOOD_NAME_LENGTH,
+  MAX_FIT_FOOD_NOTES_LENGTH,
+  MAX_FIT_FOOD_QUERY_LENGTH,
+  MAX_FIT_FOOD_RESULTS,
+  MAX_FIT_FOOD_SERVINGS,
+  MAX_FIT_NUTRIENT,
+  MAX_FIT_SERVING_GRAMS,
+  MAX_FIT_SERVING_LABEL_LENGTH,
+} from "./fitness/foodStore.js";
+export type {
+  CreateFitFoodInput,
+  FitFood,
+  UpdateFitFoodFields,
+} from "./fitness/foodStore.js";
+export {
+  FitMealStore,
+  MAX_MEAL_ITEM_GRAMS,
+  MAX_MEAL_ITEM_LABEL_LENGTH,
+  MAX_MEAL_NUTRIENT,
+  MAX_MEAL_RANGE_DAYS,
+  MEAL_SLOTS,
+} from "./fitness/mealStore.js";
+export type {
+  AddMealItemInput,
+  FitMealItem,
+  MealDay,
+  MealDayRange,
+  MealDayTotals,
+  MealSlot,
+  UpdateMealItemFields,
+} from "./fitness/mealStore.js";
+export { FitTargetStore, MAX_FIT_TARGET } from "./fitness/nutritionTargetStore.js";
+export type { FitTargetGoals, FitTargets } from "./fitness/nutritionTargetStore.js";
 
 export {
   SearchStore,

@@ -83,6 +83,9 @@ function emptyInput(): ExportArchiveInput {
       finBudgets: [],
       habits: [],
       habitEntries: [],
+      fitFoods: [],
+      fitMealItems: [],
+      fitTargets: [],
     },
     hash: sha256,
   };
@@ -225,6 +228,7 @@ describe("buildExportArchive", () => {
           "data/private-notes.ndjson",
           "data/finance.ndjson",
           "data/habits.ndjson",
+          "data/fitness.ndjson",
           "data/calendar.ics",
           "tables/tasks.csv",
           "tables/events.csv",
@@ -262,7 +266,7 @@ describe("buildExportArchive", () => {
       expect(archive.totalRecords).toBe(0);
       expect(archive.byModule).toEqual({
         tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0, dashboard: 0, finance: 0,
-        habits: 0,
+        habits: 0, fitness: 0,
       });
       expect(archive.binaries).toEqual([]);
     });
@@ -274,7 +278,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.34.0");
+      expect(manifest.schemaVersion).toBe("1.35.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       // `picture: null` is written out loud rather than omitted: the manifest is
@@ -311,6 +315,7 @@ describe("buildExportArchive", () => {
         { id: "dashboard", records: 0 },
         { id: "finance", records: 0 },
         { id: "habits", records: 0 },
+        { id: "fitness", records: 0 },
       ]);
       expect(manifest.checksums).toEqual({
         "data/tasks.ndjson": sha256(""),
@@ -322,6 +327,7 @@ describe("buildExportArchive", () => {
         "data/private-notes.ndjson": sha256(""),
         "data/finance.ndjson": sha256(""),
         "data/habits.ndjson": sha256(""),
+        "data/fitness.ndjson": sha256(""),
       });
       expect(manifest.blobs).toEqual([]);
       // The private inventory (ADR-057 §6), beside the blob list it mirrors —
@@ -1022,7 +1028,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       expect(archive.byModule).toEqual({
         tasks: 1, calendar: 0, study: 0, notifications: 1, notes: 0, dashboard: 0, finance: 0,
-        habits: 0,
+        habits: 0, fitness: 0,
       });
       expect(archive.totalRecords).toBe(2);
     });
@@ -1194,6 +1200,15 @@ describe("buildExportArchive", () => {
         habitEntries: [
           { id: "he1", habitId: "hb1", date: "2026-01-05", value: 1, createdAt: t, updatedAt: t },
         ],
+        fitFoods: [
+          { id: "ff1", profileId: "p1", name: "Mamin ajvar", category: "povrce", per100g: { kcal: 120, protein: 1.5, carbs: 9, fat: 8.5, fiber: 2.5, sugar: 5, sodiumMg: 480 }, servings: [{ label: "1 kašika", grams: 15 }], notes: "", createdAt: t, updatedAt: t },
+        ],
+        fitMealItems: [
+          { id: "fi1", profileId: "p1", date: "2026-01-05", slot: "rucak", foodRef: "user:ff1", label: "Mamin ajvar", grams: 30, per100g: { kcal: 120, protein: 1.5, carbs: 9, fat: 8.5, fiber: 2.5, sugar: 5, sodiumMg: 480 }, createdAt: t, updatedAt: t },
+        ],
+        fitTargets: [
+          { profileId: "p1", kcal: 2200, proteinG: null, carbsG: null, fatG: null, updatedAt: t },
+        ],
       };
     }
 
@@ -1210,6 +1225,9 @@ describe("buildExportArchive", () => {
         // the transfer, one of them that subscription's generated charge) + 1 budget
         finance: 8,
         habits: 2, // 1 habit + 1 day it was ticked
+        // 1 user food + 1 logged item + the goals row. The app's catalogue is
+        // counted nowhere, because it is not in the archive at all.
+        fitness: 3,
       });
     });
 
@@ -1223,7 +1241,7 @@ describe("buildExportArchive", () => {
     it("counts every bucket as zero for empty data", () => {
       expect(countProfileModules(emptyInput().data)).toEqual({
         tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0, dashboard: 0, finance: 0,
-        habits: 0,
+        habits: 0, fitness: 0,
       });
     });
   });
@@ -1807,6 +1825,7 @@ describe("buildExportArchive", () => {
         { id: "dashboard", records: archive.byModule.dashboard },
         { id: "finance", records: 0 },
         { id: "habits", records: 0 },
+        { id: "fitness", records: 0 },
       ]);
       expect(archive.byModule.notes).toBeGreaterThan(0);
       expect(archive.totalRecords).toBe(archive.byModule.notes + archive.byModule.dashboard);
@@ -2002,6 +2021,7 @@ describe("filterProfileData", () => {
       dashboard: 0,
       finance: 0,
       habits: 0,
+      fitness: 0,
     });
   });
 });

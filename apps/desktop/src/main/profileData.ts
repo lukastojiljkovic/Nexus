@@ -24,6 +24,9 @@ import type {
   ExportFinCategory,
   ExportFinRecurring,
   ExportFinTransaction,
+  ExportFitFood,
+  ExportFitMealItem,
+  ExportFitTarget,
   ExportHabit,
   ExportHabitEntry,
   ExportNoteFolder,
@@ -56,6 +59,9 @@ import type {
   FinCategoryStore,
   FinRecurringStore,
   FinTransactionStore,
+  FitFoodStore,
+  FitMealStore,
+  FitTargetStore,
   FocusStore,
   HabitStore,
   NoteAttachmentStore,
@@ -121,6 +127,9 @@ export interface ProfileDataDeps {
   finRecurringStore(profileId: string): FinRecurringStore;
   finTransactionStore(profileId: string): FinTransactionStore;
   habitStore(profileId: string): HabitStore;
+  fitFoodStore(profileId: string): FitFoodStore;
+  fitMealStore(profileId: string): FitMealStore;
+  fitTargetStore(profileId: string): FitTargetStore;
 }
 
 /** Every NOTE-module row `ProfileData` requires (ADR-022 section 3) — `gatherNotes`'s return shape. */
@@ -308,6 +317,7 @@ export function gatherProfileData(deps: ProfileDataDeps, profileId: string): Pro
     dashboardWidgets: deps.dashboardWidgetStore(profileId).listAll(),
     ...gatherFinance(deps, profileId),
     ...gatherHabits(deps, profileId),
+    ...gatherFitness(deps, profileId),
   };
 }
 
@@ -341,6 +351,58 @@ function gatherHabits(
   return {
     habits: habits.listActive(),
     habitEntries: habits.listAllEntries({ from: MIN_DAY_KEY, to: MAX_DAY_KEY }),
+  };
+}
+
+/** Every FIT-module row `ProfileData` requires (migration 058) — `gatherFitness`'s return shape. */
+interface GatheredFitnessData {
+  fitFoods: ExportFitFood[];
+  fitMealItems: ExportFitMealItem[];
+  fitTargets: ExportFitTarget[];
+}
+
+/**
+ * Gathers every FIT-module row for one profile: three profile-wide reads and no
+ * fan-out at all.
+ *
+ * **The app's food CATALOGUE is deliberately not gathered, and there is nothing
+ * here that could gather it.** Those several hundred foods ship as JSON inside
+ * `@nexus/core` rather than as rows, so `fitFoodStore.list()` answers with the
+ * user's OWN foods and nothing else — which is exactly what an archive of user
+ * data should carry. Nothing is lost by it: every logged item carries the food's
+ * label and the seven per-100 g values it was logged with, so the diary is
+ * complete on its own terms even in a build whose catalogue has moved on.
+ *
+ * `listAll` rather than a widest-window range read (HABIT's own shape one module
+ * over): the meal store's range reads are capped at `MAX_MEAL_RANGE_DAYS`
+ * because a screen asking for a decade of totals is a screen with a bug, while
+ * „every row this profile has" is precisely what a backup must not truncate.
+ *
+ * The goals row is zero or one, and which it is is a REAL fact: `updatedAt` is
+ * null exactly when the profile never saved any goals, so an absent row here
+ * says „never decided" while a row of four nulls says „decided to have none".
+ */
+function gatherFitness(
+  deps: Pick<ProfileDataDeps, "fitFoodStore" | "fitMealStore" | "fitTargetStore">,
+  profileId: string,
+): GatheredFitnessData {
+  const targets = deps.fitTargetStore(profileId).get();
+  return {
+    fitFoods: deps.fitFoodStore(profileId).list(),
+    fitMealItems: deps.fitMealStore(profileId).listAll(),
+    fitTargets:
+      targets.updatedAt === null
+        ? []
+        : [
+            {
+              profileId,
+              kcal: targets.kcal,
+              proteinG: targets.proteinG,
+              carbsG: targets.carbsG,
+              fatG: targets.fatG,
+              updatedAt: targets.updatedAt,
+            },
+          ],
   };
 }
 

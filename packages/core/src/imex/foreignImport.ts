@@ -1,3 +1,4 @@
+import { foodRefText, parseFoodRef } from "../fitness/food.js";
 import { remapNoteState } from "../notes/noteLinks.js";
 import { isBuiltinNoteTemplateId } from "../notes/noteTemplateIds.js";
 import { ARCHIVE_MODULE_IDS, countProfileModules } from "./exportArchive.js";
@@ -270,6 +271,8 @@ export type ImportSkipCode =
   | "dashboard-sets-not-imported"
   | "dashboard-widgets-not-imported"
   | "study-settings-not-imported"
+  /** A FIT goals row: the target user's own decision about their own body, never the archive author's (migration 058). Its own code rather than a fold into `study-settings-not-imported`, because a skip line reports one (code, module, type) triple and the sentence a user needs is a different one. */
+  | "fit-targets-not-imported"
   | "calendar-settings-not-imported"
   | "profile-picture-not-imported"
   | "private-notes-not-imported"
@@ -756,6 +759,23 @@ const ID_MINTERS: Record<keyof ProfileData, (data: ProfileData, ctx: PlanContext
   // Minted like any other content row, and its one reference — the habit — is
   // remapped below onto the new row that habit became.
   habitEntries: (data, ctx) => mintAll(data.habitEntries, ctx),
+  /**
+   * A USER FOOD is minted, always — never absorbed by name, for the habit's
+   * reasons at one remove. It carries CONTENT a merge would overwrite (seven
+   * per-100 g numbers), migration 058 puts no uniqueness on its name, and two
+   * „Ajvar" rows in two profiles are routinely two different recipes. Absorbing
+   * would be worse than awkward here besides: every meal already logged against
+   * the target's „Ajvar" would silently start being described by somebody
+   * else's numbers.
+   */
+  fitFoods: (data, ctx) => mintAll(data.fitFoods, ctx),
+  // Minted like any other content row. Its `foodRef` is remapped below when it
+  // names a user food — and left ALONE when it names the catalogue, which is
+  // app-shipped data both profiles already share.
+  fitMealItems: (data, ctx) => mintAll(data.fitMealItems, ctx),
+  // Nothing to mint: the row's key is the profile, and it is not imported at all
+  // (see the plan below).
+  fitTargets: NO_IDS,
   noteTagLinks: NO_IDS,
   // The same name-is-identity rule as the two template tables above, against the
   // NOTE module's own name space (migration 015's `UNIQUE (profile_id, name)`).
@@ -896,6 +916,31 @@ function mappedOrNull(oldId: string | null, ctx: PlanContext): string | null {
 function mappedTaskOrNone(oldId: string | null, ctx: PlanContext): string | null {
   if (oldId === null) return null;
   return ctx.ids.get(oldId) ?? null;
+}
+
+/**
+ * A meal item's `foodRef`, followed onto whatever its food became.
+ *
+ * `user:<id>` is remapped, so an imported meal and the imported food it names
+ * still point at each other rather than at a row in a profile this one cannot
+ * see. `catalogue:<id>` is left EXACTLY as it is: it names app-shipped data that
+ * both profiles already have, so there is nothing to remap and remapping it
+ * would be inventing a user food out of a catalogue reference.
+ *
+ * A reference this planner cannot parse — or a `user:` one whose food the archive
+ * did not carry — is kept verbatim rather than repaired or dropped. That is the
+ * ONE place here that tolerates an unresolvable id, and deliberately: the column
+ * has no foreign key (migration 058), the item's own label and snapshot are what
+ * make it readable, and dropping a meal that actually happened in order to tidy
+ * a pointer nothing computes from would be the opposite of salvage. `mapped`
+ * would have thrown and taken the whole preview down with it — the mistake
+ * `noteFolderTemplate` already exists to remember.
+ */
+function remappedFoodRef(foodRef: string, ctx: PlanContext): string {
+  const parsed = parseFoodRef(foodRef);
+  if (parsed === null || parsed.kind !== "user") return foodRef;
+  const next = ctx.ids.get(parsed.id);
+  return next === undefined ? foodRef : foodRefText({ kind: "user", id: next });
 }
 
 /**
@@ -1372,6 +1417,28 @@ export function planForeignImport(
       id: mapped(row.id, ctx),
       habitId: mapped(row.habitId, ctx),
     })),
+    // --- FIT (migration 058) ----------------------------------------------
+    // Every user food imports as its own row: nothing here absorbs one, so there
+    // is nothing to filter (see `ID_MINTERS.fitFoods`).
+    fitFoods: source.fitFoods.map((row) => ({
+      ...row,
+      id: mapped(row.id, ctx),
+      profileId: target.profileId,
+    })),
+    // The diary, snapshot and all — the numbers ride unremapped because they are
+    // a fact about the moment the item was logged rather than a reference into
+    // the source profile.
+    fitMealItems: source.fitMealItems.map((row) => ({
+      ...row,
+      id: mapped(row.id, ctx),
+      profileId: target.profileId,
+      foodRef: remappedFoodRef(row.foodRef, ctx),
+    })),
+    // NOT imported, on `studySettings`' exact terms: a calorie or macro goal is
+    // the TARGET user's own decision about their own body, keyed by their profile
+    // alone — and the import card promises DODAJE, which an upsert over their row
+    // would break. Named in the report below, like every by-design skip.
+    fitTargets: [],
   };
 
   return {
@@ -1393,7 +1460,7 @@ export function planForeignImport(
 function zeroPerModule(): Record<ArchiveModuleId, number> {
   return {
     tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0, dashboard: 0, finance: 0,
-    habits: 0,
+    habits: 0, fitness: 0,
   };
 }
 
@@ -1476,6 +1543,7 @@ function buildReport(
     source.dashboardWidgets.length,
   );
   note("study-settings-not-imported", "study", "study-settings", source.studySettings.length);
+  note("fit-targets-not-imported", "fitness", "fit-target", source.fitTargets.length);
   note(
     "calendar-settings-not-imported",
     "calendar",

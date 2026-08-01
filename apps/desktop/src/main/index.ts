@@ -88,6 +88,9 @@ import {
   FinCategoryStore,
   FinRecurringStore,
   FinTransactionStore,
+  FitFoodStore,
+  FitMealStore,
+  FitTargetStore,
   isCurrencyCode,
   isMinorUnits,
   FocusStore,
@@ -3521,6 +3524,21 @@ function habitStore(profileId: string): HabitStore {
   return new HabitStore(requireDb().raw, profileId);
 }
 
+// FIT (migration 058). Three stores and no fourth: the app's food catalogue
+// ships as JSON inside `@nexus/core` rather than as rows, so nothing here reads
+// or writes it.
+function fitFoodStore(profileId: string): FitFoodStore {
+  return new FitFoodStore(requireDb().raw, profileId);
+}
+
+function fitMealStore(profileId: string): FitMealStore {
+  return new FitMealStore(requireDb().raw, profileId);
+}
+
+function fitTargetStore(profileId: string): FitTargetStore {
+  return new FitTargetStore(requireDb().raw, profileId);
+}
+
 /** The whole sets state every `dash:*-set` channel answers with (ADR-055): the named boards in board order plus the active choice. */
 function dashboardSetsState(profileId: string): DashboardSetsState {
   const store = dashboardSetStore(profileId);
@@ -4654,6 +4672,9 @@ function restoreDeps(): ImportDeps {
     finRecurringStore,
     finTransactionStore,
     habitStore,
+    fitFoodStore,
+    fitMealStore,
+    fitTargetStore,
     saveBlob: (bytes) => saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes),
     // Injected rather than reached for, so `restore.ts` never has to know WHICH
     // tables reference a blob — that union lives in exactly one place
@@ -4722,6 +4743,9 @@ function imexArchiveDeps(): ImexArchiveDeps {
     finRecurringStore,
     finTransactionStore,
     habitStore,
+    fitFoodStore,
+    fitMealStore,
+    fitTargetStore,
     flagStore,
     readBlob: (sha256) => readBlob(blobStorePathsFor(), requireBlobKeys(), sha256),
     // A private attachment's decrypted bytes, under whatever section is open

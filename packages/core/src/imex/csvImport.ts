@@ -724,6 +724,11 @@ export function translateCsvTasks(
     // importer does not read.
     habits: [],
     habitEntries: [],
+    // Nor any food log (migration 058): empty, like every other module this
+    // importer does not read.
+    fitFoods: [],
+    fitMealItems: [],
+    fitTargets: [],
   };
 
   return {

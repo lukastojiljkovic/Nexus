@@ -84,6 +84,8 @@ export class ForeignImportStore {
   private readonly insertFinBudget: Database.Statement;
   private readonly insertHabit: Database.Statement;
   private readonly insertHabitEntry: Database.Statement;
+  private readonly insertFitFood: Database.Statement;
+  private readonly insertFitMealItem: Database.Statement;
   private readonly insertNote: Database.Statement;
   private readonly insertNoteSnapshot: Database.Statement;
   private readonly insertNoteAttachment: Database.Statement;
@@ -272,6 +274,23 @@ export class ForeignImportStore {
     this.insertHabitEntry = db.prepare(
       `INSERT INTO habit_entries (id, habit_id, entry_date, value, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    // FIT (migration 058). There is no `fit_targets` statement, deliberately:
+    // the planner never imports a goals row (a calorie target is the TARGET
+    // user's own decision about their own body — `fit-targets-not-imported`), so
+    // a statement that could write one would be a way to break that promise.
+    this.insertFitFood = db.prepare(
+      `INSERT INTO fit_foods
+         (id, profile_id, name, category, kcal, protein, carbs, fat, fiber, sugar, sodium_mg,
+          servings_json, notes, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    this.insertFitMealItem = db.prepare(
+      `INSERT INTO fit_meal_items
+         (id, profile_id, meal_date, slot, food_ref, label, grams,
+          kcal, protein, carbs, fat, fiber, sugar, sodium_mg,
+          created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertNote = db.prepare(
       `INSERT INTO notes
@@ -830,6 +849,37 @@ export class ForeignImportStore {
       for (const entry of planned.habitEntries) {
         this.insertHabitEntry.run(
           entry.id, entry.habitId, entry.date, entry.value, entry.createdAt, entry.updatedAt,
+        );
+        written += 1;
+      }
+
+      // FIT (migration 058): the user's own foods, then the diary. Every food is
+      // a NEW row on the habits' reasoning exactly — it carries seven numbers a
+      // merge would have to overwrite, and two „Ajvar" rows in two profiles are
+      // routinely two different recipes — so nothing here can collide either.
+      //
+      // `food_ref` arrives already followed onto the food it named
+      // (`remappedFoodRef`), and is written verbatim: a `catalogue:` reference
+      // needs no remapping because both profiles share the app's own catalogue,
+      // and one the planner could not resolve is kept rather than repaired,
+      // because the item's label and snapshot are what make it readable.
+      //
+      // No `fit_targets` write, by design — see the statement block above.
+      for (const food of planned.fitFoods) {
+        this.insertFitFood.run(
+          food.id, this.profileId, food.name, food.category,
+          food.per100g.kcal, food.per100g.protein, food.per100g.carbs, food.per100g.fat,
+          food.per100g.fiber, food.per100g.sugar, food.per100g.sodiumMg,
+          JSON.stringify(food.servings), food.notes, food.createdAt, food.updatedAt,
+        );
+        written += 1;
+      }
+      for (const item of planned.fitMealItems) {
+        this.insertFitMealItem.run(
+          item.id, this.profileId, item.date, item.slot, item.foodRef, item.label, item.grams,
+          item.per100g.kcal, item.per100g.protein, item.per100g.carbs, item.per100g.fat,
+          item.per100g.fiber, item.per100g.sugar, item.per100g.sodiumMg,
+          item.createdAt, item.updatedAt,
         );
         written += 1;
       }

@@ -1293,6 +1293,12 @@ export function translateLlmRecords(
     // extraction must never do.
     habits: [],
     habitEntries: [],
+    // Nor a food log (migration 058), for the habit reason exactly: a diary is a
+    // record of what somebody actually ate, and inventing meals is the one thing
+    // this extraction must never do.
+    fitFoods: [],
+    fitMealItems: [],
+    fitTargets: [],
   };
 
   return { data, seededIds, planned: tasks.length + events.length + cards.length + decks.length };

@@ -137,6 +137,37 @@ export type {
   FocusPhaseTiming,
 } from "./focus/focusSession.js";
 
+// --- FIT (the nutrition module, migration 058) ------------------------------
+//
+// The catalogue is APP-SHIPPED read-only data rather than database rows, and a
+// logged meal snapshots the macros it used — the two decisions the whole module
+// rests on. `catalogue.ts` and `food.ts` carry the reasoning; `@nexus/db`
+// deliberately reads neither.
+export {
+  EMPTY_MACROS,
+  FOOD_CATEGORIES,
+  FOOD_ENERGY_TOLERANCE,
+  foodRefText,
+  macrosFor,
+  MAX_FOOD_REF_LENGTH,
+  parseFoodRef,
+  searchFoods,
+  sumMacros,
+  validateFoodEntry,
+} from "./fitness/food.js";
+export type {
+  FoodCategory,
+  FoodEntry,
+  FoodEntryProblem,
+  FoodMacros,
+  FoodProblemCode,
+  FoodRef,
+  FoodServing,
+  FoodSource,
+  RecipeComponent,
+} from "./fitness/food.js";
+export { catalogueFood, FOOD_CATALOGUE } from "./fitness/catalogue.js";
+
 export {
   ALWAYS_ON_SOURCES,
   deriveNotificationCandidates,
@@ -340,6 +371,9 @@ export type {
   ExportFinCategory,
   ExportFinRecurring,
   ExportFinTransaction,
+  ExportFitFood,
+  ExportFitMealItem,
+  ExportFitTarget,
   ExportFocusSession,
   ExportHabit,
   ExportHabitEntry,

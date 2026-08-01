@@ -145,6 +145,9 @@ function emptyProfileData(): ProfileData {
     finBudgets: [],
     habits: [],
     habitEntries: [],
+    fitFoods: [],
+    fitMealItems: [],
+    fitTargets: [],
   };
 }
 

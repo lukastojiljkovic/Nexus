@@ -726,6 +726,11 @@ export function translateApkg(parsed: ParsedApkg, target: ApkgTranslateTarget): 
     // has nothing of that module" every collection above says.
     habits: [],
     habitEntries: [],
+    // Nor any food log (migration 058), and nor could it: a deck of cards says
+    // nothing about what anybody ate.
+    fitFoods: [],
+    fitMealItems: [],
+    fitTargets: [],
   };
 
   return {

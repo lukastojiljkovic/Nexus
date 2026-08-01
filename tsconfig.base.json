@@ -10,6 +10,12 @@
     "exactOptionalPropertyTypes": true,
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
+    // FIT's food catalogue ships as JSON inside `@nexus/core` (app data, not
+    // database rows), so every package that typechecks core's source has to be
+    // able to resolve that import — which is why this sits in the shared base
+    // rather than in one package's own config. Vite/electron-vite inline the
+    // file at build time, exactly as they do any other module.
+    "resolveJsonModule": true,
     "skipLibCheck": true,
     "declaration": true,
     "sourceMap": true

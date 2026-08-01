@@ -3442,6 +3442,11 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
        * (see the note above), and a backup that silently omitted a row it
        * actually carries would be the far worse lie. Until habits have a screen
        * the row simply reads 0 on both sides, which is true.
+       *
+       * „Ishrana“ joins on the same terms from FIT slice a, and its label names
+       * what the module actually carries: the user's own foods, their food diary
+       * and their daily goals. The app's own food catalogue is counted nowhere,
+       * because it ships inside the app rather than in the archive.
        */
       modules: {
         tasks: "Zadaci",
@@ -3452,6 +3457,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         dashboard: "Kontrolna tabla",
         finance: "Finansije",
         habits: "Navike",
+        fitness: "Ishrana",
       } satisfies Record<keyof RestoreModuleCounts, string>,
       columnCurrent: "Sada",
       columnIncoming: "Iz arhive",
@@ -3608,6 +3614,10 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
           "Raspored kontrolne table se ne uvozi — tvoja tabla ostaje kakva jeste.",
         "study-settings-not-imported":
           "Podešavanja učenja iz arhive se ne uvoze — tvoja ciljana zapamćenost i dnevni limiti ostaju tvoji.",
+        // Migration 057: kalorijski i makro ciljevi su odluka o sopstvenom telu,
+        // vezana za profil — tuđi se ne preuzimaju.
+        "fit-targets-not-imported":
+          "Ciljevi ishrane iz arhive se ne uvoze — tvoje kalorije i makronutrijenti ostaju tvoji.",
         "calendar-settings-not-imported":
           "Datumi semestra iz arhive se ne uvoze — tvoj kalendar ostaje na tvom rasporedu.",
         "profile-picture-not-imported":

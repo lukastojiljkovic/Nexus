@@ -22,8 +22,8 @@ import { CardStore, MIGRATIONS, NexusDatabase, openDatabase, runMigrations } fro
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 57 (focus phases), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(57);
+  it("is at version 58 (focus phases, then FIT nutrition), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(58);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -7657,6 +7657,208 @@ describe("migration 057 — the one focus timer", () => {
         ),
     ).not.toThrow();
     expect(db.raw.pragma("foreign_key_check")).toEqual([]);
+    db.close();
+  });
+});
+
+describe("migration 058 — FIT nutrition (FIT slice a)", () => {
+  const T = "2026-01-01T00:00:00.000Z";
+  /** „Mamin ajvar" — a plausible per-100 g row; the values matter only where a CHECK is under test. */
+  const MACROS = [120, 1.5, 9, 8.5, 2.5, 5, 480] as const;
+
+  const insertFood = (
+    db: NexusDatabase,
+    id: string,
+    profileId: string,
+    macros: readonly number[] = MACROS,
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO fit_foods
+           (id, profile_id, name, category, kcal, protein, carbs, fat, fiber, sugar, sodium_mg,
+            servings_json, notes, created_at, updated_at, deleted_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+      )
+      .run(id, profileId, "Mamin ajvar", "povrce", ...macros, "[]", "", T, T);
+
+  const insertItem = (
+    db: NexusDatabase,
+    id: string,
+    profileId: string,
+    overrides: Partial<{ slot: string; foodRef: string; label: string; grams: number }> = {},
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO fit_meal_items
+           (id, profile_id, meal_date, slot, food_ref, label, grams,
+            kcal, protein, carbs, fat, fiber, sugar, sodium_mg,
+            created_at, updated_at, deleted_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+      )
+      .run(
+        id,
+        profileId,
+        "2026-06-01",
+        overrides.slot ?? "rucak",
+        overrides.foodRef ?? "catalogue:jaje-celo-sirovo",
+        overrides.label ?? "Jaje",
+        overrides.grams ?? 50,
+        ...MACROS,
+        T,
+        T,
+      );
+
+  const insertTargetSql = `INSERT INTO fit_targets (profile_id, kcal, protein_g, carbs_g, fat_g, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`;
+
+  it("creates all three tables and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fit-fresh.db") });
+    expect(tableNames(db)).toEqual(
+      expect.arrayContaining(["fit_foods", "fit_meal_items", "fit_targets"]),
+    );
+    expect(
+      (db.raw.prepare("PRAGMA table_info(fit_meal_items)").all() as { name: string }[]).map(
+        (row) => row.name,
+      ),
+    ).toEqual([
+      "id",
+      "profile_id",
+      "meal_date",
+      "slot",
+      "food_ref",
+      "label",
+      "grams",
+      "kcal",
+      "protein",
+      "carbs",
+      "fat",
+      "fiber",
+      "sugar",
+      "sodium_mg",
+      "created_at",
+      "updated_at",
+      "deleted_at",
+    ]);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("creates NO table for the app's food catalogue, and none for meals either", () => {
+    const db = openDatabase({ path: join(dir, "fit-absent-tables.db") });
+    const names = tableNames(db);
+    // The catalogue ships as JSON inside `@nexus/core`: seeding it would put app
+    // data where user data lives, and into every export archive besides.
+    expect(names).not.toContain("fit_catalogue");
+    // A meal is a (day, slot) grouping of items, so a container row could only
+    // ever be an empty meal nothing can show and nobody can clean up.
+    expect(names).not.toContain("fit_meals");
+    db.close();
+  });
+
+  it("refuses a negative nutrient on a food", () => {
+    const db = openDatabase({ path: join(dir, "fit-food-negative.db") });
+    insertProfile(db, "p1");
+    expect(() => insertFood(db, "f1", "p1", [120, -1, 9, 8.5, 2.5, 5, 480])).toThrow(/CHECK/i);
+    expect(() => insertFood(db, "f2", "p1", [120, 1.5, 9, 8.5, 2.5, 5, -0.5])).toThrow(/CHECK/i);
+    db.close();
+  });
+
+  it("keeps FRACTIONAL nutrients — a food diary is not HABIT's integer counts", () => {
+    const db = openDatabase({ path: join(dir, "fit-food-real.db") });
+    insertProfile(db, "p1");
+    insertFood(db, "f1", "p1", [143, 12.6, 0.72, 9.51, 0, 0.37, 142]);
+    expect(
+      (db.raw.prepare("SELECT carbs FROM fit_foods WHERE id = 'f1'").get() as { carbs: number })
+        .carbs,
+    ).toBe(0.72);
+    db.close();
+  });
+
+  it("closes the slot vocabulary at five", () => {
+    const db = openDatabase({ path: join(dir, "fit-slot.db") });
+    insertProfile(db, "p1");
+    for (const slot of ["dorucak", "uzina1", "rucak", "uzina2", "vecera"]) {
+      expect(() => insertItem(db, `i-${slot}`, "p1", { slot })).not.toThrow();
+    }
+    expect(() => insertItem(db, "i-brunch", "p1", { slot: "brunch" })).toThrow(/CHECK/i);
+    db.close();
+  });
+
+  it("refuses a zero or negative gram weight, and a blank label", () => {
+    const db = openDatabase({ path: join(dir, "fit-item-guards.db") });
+    insertProfile(db, "p1");
+    expect(() => insertItem(db, "i1", "p1", { grams: 0 })).toThrow(/CHECK/i);
+    expect(() => insertItem(db, "i2", "p1", { grams: -5 })).toThrow(/CHECK/i);
+    expect(() => insertItem(db, "i3", "p1", { label: "" })).toThrow(/CHECK/i);
+    db.close();
+  });
+
+  it("lets food_ref name anything — it is text with NO foreign key", () => {
+    const db = openDatabase({ path: join(dir, "fit-item-ref.db") });
+    insertProfile(db, "p1");
+    // The catalogue is not a table, so this reference can never resolve to a row
+    // and must still be legal.
+    expect(() =>
+      insertItem(db, "i1", "p1", { foodRef: "catalogue:jaje-celo-sirovo" }),
+    ).not.toThrow();
+    // A user food hard-deleted long ago: the item stays, because its own label
+    // and snapshot are what make it readable.
+    expect(() => insertItem(db, "i2", "p1", { foodRef: "user:gone" })).not.toThrow();
+    db.close();
+  });
+
+  it("survives a food being deleted under a meal item that names it", () => {
+    const db = openDatabase({ path: join(dir, "fit-food-gone.db") });
+    insertProfile(db, "p1");
+    insertFood(db, "f1", "p1");
+    insertItem(db, "i1", "p1", { foodRef: "user:f1" });
+    db.raw.prepare("DELETE FROM fit_foods WHERE id = 'f1'").run();
+    expect(
+      (db.raw.prepare("SELECT count(*) AS n FROM fit_meal_items").get() as { n: number }).n,
+    ).toBe(1);
+    db.close();
+  });
+
+  it("holds ONE goals row per profile, every goal independently nullable and zero storable", () => {
+    const db = openDatabase({ path: join(dir, "fit-targets.db") });
+    insertProfile(db, "p1");
+    const insertTarget = db.raw.prepare(insertTargetSql);
+    // A calorie-only goal: three nulls beside it, which is the ordinary case.
+    expect(() => insertTarget.run("p1", 2200, null, null, null, T)).not.toThrow();
+    expect(() => insertTarget.run("p1", 1800, null, null, null, T)).toThrow(/UNIQUE|PRIMARY/i);
+    // Zero is a goal, and a different claim from NULL; both are storable.
+    db.raw.prepare("UPDATE fit_targets SET kcal = 0 WHERE profile_id = 'p1'").run();
+    expect(
+      (
+        db.raw.prepare("SELECT kcal FROM fit_targets WHERE profile_id = 'p1'").get() as {
+          kcal: number | null;
+        }
+      ).kcal,
+    ).toBe(0);
+    db.close();
+  });
+
+  it("refuses a negative goal", () => {
+    const db = openDatabase({ path: join(dir, "fit-target-negative.db") });
+    insertProfile(db, "p1");
+    expect(() => db.raw.prepare(insertTargetSql).run("p1", -1, null, null, null, T)).toThrow(
+      /CHECK/i,
+    );
+    db.close();
+  });
+
+  it("takes all three tables with the profile", () => {
+    const db = openDatabase({ path: join(dir, "fit-cascade.db") });
+    insertProfile(db, "p1");
+    insertFood(db, "f1", "p1");
+    insertItem(db, "i1", "p1");
+    db.raw.prepare(insertTargetSql).run("p1", 2200, null, null, null, T);
+    db.raw.prepare("DELETE FROM profiles WHERE id = 'p1'").run();
+    for (const table of ["fit_foods", "fit_meal_items", "fit_targets"]) {
+      expect((db.raw.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n).toBe(
+        0,
+      );
+    }
     db.close();
   });
 });

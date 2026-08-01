@@ -32,6 +32,9 @@ import {
   FinRecurringStore,
   FinTransactionStore,
   FocusStore,
+  FitFoodStore,
+  FitMealStore,
+  FitTargetStore,
   HabitStore,
   NexusDatabase,
   NoteAttachmentStore,
@@ -135,6 +138,26 @@ function bytes(length: number, offset = 0): Uint8Array {
   return out;
 }
 
+/**
+ * The goals row as the interchange carries it: zero rows while nothing was ever
+ * saved (`updatedAt === null`), one otherwise — `gatherProfileData`'s own
+ * mapping, restated here so the round trip exercises the same shape main builds.
+ */
+function fitTargetRows(profileId: string, store: FitTargetStore): ProfileData["fitTargets"] {
+  const targets = store.get();
+  if (targets.updatedAt === null) return [];
+  return [
+    {
+      profileId,
+      kcal: targets.kcal,
+      proteinG: targets.proteinG,
+      carbsG: targets.carbsG,
+      fatG: targets.fatG,
+      updatedAt: targets.updatedAt,
+    },
+  ];
+}
+
 function emptyProfileData(): ProfileData {
   return {
     tasks: [],
@@ -146,6 +169,9 @@ function emptyProfileData(): ProfileData {
     taskDependencies: [],
     habits: [],
     habitEntries: [],
+    fitFoods: [],
+    fitMealItems: [],
+    fitTargets: [],
     events: [],
     eventTemplates: [],
     documents: [],
@@ -292,6 +318,9 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   const finRecurringStore = new FinRecurringStore(handle.raw, profileId);
   const finTransactionStore = new FinTransactionStore(handle.raw, profileId);
   const habitStore = new HabitStore(handle.raw, profileId);
+  const fitFoodStore = new FitFoodStore(handle.raw, profileId);
+  const fitMealStore = new FitMealStore(handle.raw, profileId);
+  const fitTargetStore = new FitTargetStore(handle.raw, profileId);
 
   // The merged Yjs state and derived body an export would carry for the edited
   // note — stand-ins for real Yjs bytes (see `bytes()`), but genuinely stored
@@ -515,6 +544,49 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   habitStore.setEntry(countedHabit.id, "2026-06-02", 8, t1);
   habitStore.setEntry(archivedHabit.id, "2026-06-02", 1, t1);
 
+  // FIT (migration 058): one user food, two logged items — one naming that food
+  // and one naming the app's CATALOGUE, which is not in the archive at all — and
+  // a calorie-only goal.
+  //
+  // The catalogue-referencing item is the round trip's real subject: it survives
+  // because it carries its own label and snapshot, and a restore that tried to
+  // resolve `food_ref` against a table would have nothing to resolve it to.
+  const fitFood = fitFoodStore.create(
+    {
+      name: `${name} ajvar`,
+      category: "povrce",
+      per100g: { kcal: 120, protein: 1.5, carbs: 9, fat: 8.5, fiber: 2.5, sugar: 5, sodiumMg: 480 },
+      servings: [{ label: "1 kašika", grams: 15 }],
+      notes: "Domaći.",
+    },
+    t0,
+  );
+  fitMealStore.addItem(
+    {
+      date: "2026-06-01",
+      slot: "rucak",
+      foodRef: "catalogue:pilece-belo-meso-peceno",
+      label: "Pileće belo meso, pečeno",
+      grams: 187.5,
+      per100g: { kcal: 165, protein: 31, carbs: 0, fat: 3.57, fiber: 0, sugar: 0, sodiumMg: 74 },
+    },
+    t1,
+  );
+  fitMealStore.addItem(
+    {
+      date: "2026-06-01",
+      slot: "vecera",
+      foodRef: `user:${fitFood.id}`,
+      label: fitFood.name,
+      grams: 30,
+      per100g: fitFood.per100g,
+    },
+    t1,
+  );
+  // A calorie goal and nothing else — three nulls beside it, so a restore that
+  // read NULL as 0 (or 0 as NULL) would fail the round trip.
+  fitTargetStore.save({ kcal: 2200, proteinG: null, carbsG: null, fatG: null }, t2);
+
   const session = focusStore.create(
     { subjectId: subject.id, startedAt: "2026-01-01T09:00:00.000Z", endedAt: "2026-01-01T09:30:00.000Z" },
     "2026-01-01T09:31:00.000Z",
@@ -645,6 +717,12 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     finBudgets: finCategoryStore.listBudgets(),
     habits: habitStore.listActive(),
     habitEntries: habitStore.listAllEntries({ from: "2026-01-01", to: "2026-12-31" }),
+    fitFoods: fitFoodStore.list(),
+    // `listAll`, exactly as `gatherFitness` reads it — a hand-built order here
+    // could disagree with the store's and turn a real round-trip mismatch into
+    // a puzzle about which list was wrong.
+    fitMealItems: fitMealStore.listAll(),
+    fitTargets: fitTargetRows(profileId, fitTargetStore),
   };
 
   const derived = new Map<string, RestoredNoteDerived>([

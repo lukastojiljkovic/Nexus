@@ -190,6 +190,13 @@ export const RESTORE_WIPE_TABLES = [
   // rule the note group keeps.
   "habit_entries",
   "habits",
+  // FIT (migration 058). No parent/child order to keep: a meal item points at a
+  // food only through `food_ref` TEXT with no foreign key (the catalogue is not
+  // a table at all, and a user food may be soft-deleted while the log stays
+  // true), so all three are scoped straight by `profile_id`.
+  "fit_meal_items",
+  "fit_foods",
+  "fit_targets",
 ] as const;
 
 type WipeTable = (typeof RESTORE_WIPE_TABLES)[number];
@@ -280,6 +287,9 @@ export class RestoreStore {
   private readonly insertFinBudget: Database.Statement;
   private readonly insertHabit: Database.Statement;
   private readonly insertHabitEntry: Database.Statement;
+  private readonly insertFitFood: Database.Statement;
+  private readonly insertFitMealItem: Database.Statement;
+  private readonly insertFitTarget: Database.Statement;
   private readonly insertSubject: Database.Statement;
   private readonly insertSubjectAttachment: Database.Statement;
   private readonly insertSubjectNoteLink: Database.Statement;
@@ -417,6 +427,30 @@ export class RestoreStore {
     );
     this.insertHabitEntry = db.prepare(
       `INSERT INTO habit_entries (id, habit_id, entry_date, value, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    // FIT (migration 058). Only the USER's own foods: the app's catalogue ships
+    // as JSON inside `@nexus/core` and is not rows, so an archive carries none
+    // and there is nothing here to seed.
+    this.insertFitFood = db.prepare(
+      `INSERT INTO fit_foods
+         (id, profile_id, name, category, kcal, protein, carbs, fat, fiber, sugar, sodium_mg,
+          servings_json, notes, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    // The snapshot is written back VERBATIM — never recomputed from the food the
+    // item names, which may not exist here at all. That is the whole reason it
+    // is a column: a restore reproduces the day as it was eaten rather than as
+    // this build's catalogue would describe it now.
+    this.insertFitMealItem = db.prepare(
+      `INSERT INTO fit_meal_items
+         (id, profile_id, meal_date, slot, food_ref, label, grams,
+          kcal, protein, carbs, fat, fiber, sugar, sodium_mg,
+          created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    this.insertFitTarget = db.prepare(
+      `INSERT INTO fit_targets (profile_id, kcal, protein_g, carbs_g, fat_g, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
     );
     this.insertSubject = db.prepare(
@@ -1272,6 +1306,47 @@ export class RestoreStore {
       for (const entry of input.data.habitEntries) {
         this.insertHabitEntry.run(
           entry.id, entry.habitId, entry.date, entry.value, entry.createdAt, entry.updatedAt,
+        );
+        written += 1;
+      }
+
+      // FIT (migration 058): the goals row, the user's own foods, then the diary
+      // — the archive's own file order. Nothing here points at anything else, so
+      // the order is readability rather than a requirement: a meal item's
+      // `food_ref` is TEXT with no foreign key, and it is written verbatim
+      // whether it names the catalogue, a food restored just above, or a food
+      // this profile no longer has. The item's own `label` and snapshot are what
+      // make it readable, which is why a dangling reference is an ordinary state
+      // rather than a broken restore. EMPTY for every pre-1.35.0 archive, which
+      // restores a profile that logs no food, exactly as it logged none.
+      //
+      // A goal is written as it was, NULL included: null is "no goal set" and 0
+      // is "a goal of zero", and a restore that confused them would either invent
+      // a target or discard a decision.
+      for (const target of input.data.fitTargets) {
+        this.insertFitTarget.run(
+          this.profileId, target.kcal, target.proteinG, target.carbsG, target.fatG,
+          target.updatedAt,
+        );
+        written += 1;
+      }
+
+      for (const food of input.data.fitFoods) {
+        this.insertFitFood.run(
+          food.id, this.profileId, food.name, food.category,
+          food.per100g.kcal, food.per100g.protein, food.per100g.carbs, food.per100g.fat,
+          food.per100g.fiber, food.per100g.sugar, food.per100g.sodiumMg,
+          JSON.stringify(food.servings), food.notes, food.createdAt, food.updatedAt,
+        );
+        written += 1;
+      }
+
+      for (const item of input.data.fitMealItems) {
+        this.insertFitMealItem.run(
+          item.id, this.profileId, item.date, item.slot, item.foodRef, item.label, item.grams,
+          item.per100g.kcal, item.per100g.protein, item.per100g.carbs, item.per100g.fat,
+          item.per100g.fiber, item.per100g.sugar, item.per100g.sodiumMg,
+          item.createdAt, item.updatedAt,
         );
         written += 1;
       }

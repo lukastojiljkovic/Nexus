@@ -38,6 +38,9 @@ import {
   FinTransactionStore,
   FocusStore,
   ForeignImportStore,
+  FitFoodStore,
+  FitMealStore,
+  FitTargetStore,
   HabitStore,
   NexusDatabase,
   NoteAttachmentStore,
@@ -221,6 +224,9 @@ function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
     finRecurringStore: (profileId) => new FinRecurringStore(handle.raw, profileId),
     finTransactionStore: (profileId) => new FinTransactionStore(handle.raw, profileId),
     habitStore: (profileId) => new HabitStore(handle.raw, profileId),
+    fitFoodStore: (profileId) => new FitFoodStore(handle.raw, profileId),
+    fitMealStore: (profileId) => new FitMealStore(handle.raw, profileId),
+    fitTargetStore: (profileId) => new FitTargetStore(handle.raw, profileId),
   };
 }
 
@@ -526,6 +532,9 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   const finTransactionStore = new FinTransactionStore(handle.raw, profileId);
   const finRecurringStore = new FinRecurringStore(handle.raw, profileId);
   const habitStore = new HabitStore(handle.raw, profileId);
+  const fitFoodStore = new FitFoodStore(handle.raw, profileId);
+  const fitMealStore = new FitMealStore(handle.raw, profileId);
+  const fitTargetStore = new FitTargetStore(handle.raw, profileId);
 
   // HABIT (migration 055): one habit of each schedule kind and real days ticked
   // on both, so the zip round trip carries a streak's whole substance rather
@@ -540,6 +549,43 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   );
   habitStore.setEntry(binaryHabit.id, "2026-06-01", 1, t0);
   habitStore.setEntry(countedHabit.id, "2026-06-02", 8, t0);
+
+  // FIT (migration 058): one user food and two logged items — one naming that
+  // food, one naming the app's CATALOGUE, which never rides in an archive at
+  // all. The second is the round trip's real subject: it survives the zip
+  // because it carries its own label and snapshot.
+  const fitFood = fitFoodStore.create(
+    {
+      name: `${label} ajvar`,
+      category: "povrce",
+      per100g: { kcal: 120, protein: 1.5, carbs: 9, fat: 8.5, fiber: 2.5, sugar: 5, sodiumMg: 480 },
+      servings: [{ label: "1 kašika", grams: 15 }],
+    },
+    t0,
+  );
+  fitMealStore.addItem(
+    {
+      date: "2026-06-01",
+      slot: "rucak",
+      foodRef: "catalogue:pilece-belo-meso-peceno",
+      label: "Pileće belo meso, pečeno",
+      grams: 187.5,
+      per100g: { kcal: 165, protein: 31, carbs: 0, fat: 3.57, fiber: 0, sugar: 0, sodiumMg: 74 },
+    },
+    t0,
+  );
+  fitMealStore.addItem(
+    {
+      date: "2026-06-01",
+      slot: "vecera",
+      foodRef: `user:${fitFood.id}`,
+      label: fitFood.name,
+      grams: 30,
+      per100g: fitFood.per100g,
+    },
+    t0,
+  );
+  fitTargetStore.save({ kcal: 2200, proteinG: null, carbsG: null, fatG: null }, t0);
 
   // A real ledger (migration 051): two same-currency accounts so a TRANSFER
   // rides through the whole zip round trip as the one row it is, a budgeted
@@ -811,6 +857,10 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     // HABIT (migration 055), read the same way `gatherHabits` reads it.
     habits: habitStore.listActive(),
     habitEntries: habitStore.listAllEntries({ from: "1900-01-01", to: "9999-12-31" }),
+    // FIT (migration 058), read the same way `gatherFitness` reads it.
+    fitFoods: fitFoodStore.list(),
+    fitMealItems: fitMealStore.listAll(),
+    fitTargets: [{ profileId, kcal: 2200, proteinG: null, carbsG: null, fatG: null, updatedAt: t0 }],
   };
 
   const derived = deriveRestoredNotes(data.notes);

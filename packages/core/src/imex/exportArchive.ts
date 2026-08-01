@@ -26,6 +26,7 @@
  */
 
 import type { FocusOutcome, FocusPhaseKind } from "../focus/focusSession.js";
+import type { FoodMacros, FoodServing } from "../fitness/food.js";
 import type { HabitSchedule } from "../habits/habitSchedule.js";
 import type { RecurrenceRule } from "../recurrence/recurrence.js";
 import type { TaskViewConfig } from "../tasks/taskViewConfig.js";
@@ -46,6 +47,40 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
  *
+ * `1.35.0` adds the FIT module's nutrition half (FIT slice a, migration 058):
+ * three record types — `fit-food`, `fit-meal-item` and `fit-target` — riding in
+ * their OWN `data/fitness.ndjson`, a new `DATA_FILES` entry checksummed like the
+ * nine before it, plus a new `fitness` member in `ARCHIVE_MODULE_IDS` so the
+ * module can be counted, filtered and chosen exactly as the eight it joins. A
+ * module of its own for `1.32.0`'s reason exactly: one module↔collection mapping
+ * serves both `countProfileModules` and `filterProfileData`, and filing meals
+ * under (say) habits would make a habits-only export carry somebody's food
+ * diary.
+ *
+ * **The CATALOGUE is not exported, and that is the fact about this module a
+ * reader must not have to rediscover.** The several hundred foods the app ships
+ * with live as JSON inside `@nexus/core` (`fitness/data/catalogue.json`), not as
+ * rows — see migration 058. Exporting them would put app data in an archive of
+ * USER data and restore it as though somebody had typed it, and it would ship a
+ * copy of a dataset whose values a later build legitimately corrects. `fit-food`
+ * carries ONLY the foods the user added themselves.
+ *
+ * The archive is complete on its own terms all the same, because a `fit-meal-item`
+ * carries the food's `label` and the seven per-100 g values it was logged with
+ * IN THE ROW. A restore into a build whose catalogue has moved on — or which
+ * never had that entry — reproduces the day exactly as it was eaten, and
+ * `foodRef` rides beside as provenance rather than as something to resolve.
+ *
+ * That is also why `foodRef` gets no reference rule in `importArchive.ts`'s
+ * table: `catalogue:<id>` names something that is not a row anywhere, and
+ * `user:<uuid>` names a row the user may already have deleted while the meal
+ * stayed true. The column is text with no foreign key on purpose (migration
+ * 057), so a dangling one is an ordinary state rather than a broken archive.
+ *
+ * `fit-target` is zero or one row, `study-settings`' arrangement: four
+ * independently nullable goals where NULL is „no goal" and 0 is „a goal of
+ * zero", two claims this interchange keeps apart because collapsing them would
+ * restore a calorie goal nobody set.
  * `1.34.0` grows the `focus-session` row into the ONE focus timer (migration
  * 057). Seven optional fields — `kind`, `plannedMinutes`, `pausedSeconds`,
  * `outcome`, `cycleIndex`, `taskId`, `label` — and one field that WIDENS:
@@ -381,7 +416,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.34.0";
+const SCHEMA_VERSION = "1.35.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -956,7 +991,7 @@ export interface ExportStudySettings {
 }
 
 /**
- * One FINISHED focus session (migration 057) — the single row shape behind the
+ * One FINISHED focus session (migration 058) — the single row shape behind the
  * one focus timer this product has. STUDY's open-ended study session and a
  * Pomodoro phase are the same row: „a period of deliberate attention, optionally
  * planned, optionally attached to a subject or a task."
@@ -1458,6 +1493,93 @@ export interface ExportHabitEntry {
   updatedAt: string;
 }
 
+// --- FIT (nutrition, migration 058) -----------------------------------------
+//
+// THE CATALOGUE IS NOT HERE, and its absence is the module's first decision
+// rather than an omission — see `SCHEMA_VERSION`'s `1.35.0` entry. The several
+// hundred foods the app ships with are JSON inside `@nexus/core`, so an archive
+// carries only what the user added themselves plus what they actually logged.
+// Nothing is lost by that, because a meal item carries its own snapshot.
+
+/**
+ * One food the USER added (migration 058). Rides in `data/fitness.ndjson` ahead
+ * of the meal items, though nothing requires it: a meal item's `foodRef` is
+ * provenance rather than a reference this archive resolves.
+ *
+ * `per100g` is a nested object rather than seven flat fields, for the reason a
+ * habit's `schedule` is one: the interchange is JSON, this is one thing with
+ * seven parts, and it is the exact shape the catalogue's own file uses — so a
+ * user food and a catalogue entry read identically wherever both appear.
+ *
+ * It carries no `source`, unlike a catalogue entry, and the absence is
+ * deliberate: the app must cite a url for a number it asserts, while a user's
+ * own food is their claim about their own food.
+ */
+export interface ExportFitFood {
+  id: string;
+  profileId: string;
+  name: string;
+  /** One of `FOOD_CATEGORIES`, the same closed list the catalogue uses — re-validated by the reader. */
+  category: string;
+  per100g: FoodMacros;
+  /** Household measures, possibly empty — brašno is weighed, and inventing „1 komad" for it would be inventing data. */
+  servings: readonly FoodServing[];
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One logged item (migration 058). There is deliberately no `fit-meal` record:
+ * a meal is a `(date, slot)` grouping rather than a row, so an archive that
+ * carried meal containers would carry empty ones nothing could ever show.
+ *
+ * **`per100g` is a SNAPSHOT and it is why this archive is complete without the
+ * catalogue.** It is what the food carried at the moment it was logged — copied
+ * in then, never re-read since. A restore into a build whose catalogue has moved
+ * on reproduces the day exactly as it was eaten, which is the only honest thing
+ * a food diary can do.
+ *
+ * `label` travels for the same reason: the item must read with nothing to
+ * resolve. `foodRef` (`catalogue:<id>` or `user:<uuid>`) is provenance beside
+ * them, and the reader gives it NO reference rule — the first names something
+ * that is not a row anywhere, and the second may name a food already deleted.
+ */
+export interface ExportFitMealItem {
+  id: string;
+  profileId: string;
+  /** The LOCAL day as a bare `YYYY-MM-DD`. */
+  date: string;
+  /** One of the five slots — `dorucak`, `uzina1`, `rucak`, `uzina2`, `vecera`. */
+  slot: string;
+  foodRef: string;
+  label: string;
+  /** What was eaten, in grams; strictly positive (migration 058's CHECK) and deliberately not whole — 87.5 g is a real portion. */
+  grams: number;
+  per100g: FoodMacros;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * The profile's daily nutrition goals (migration 058) — zero or one row, the
+ * `study-settings` arrangement.
+ *
+ * All four are INDEPENDENTLY NULLABLE, and null means „no goal" rather than
+ * zero. The two are different claims: a restore that read a missing goal as 0
+ * would give somebody a calorie target of nothing, and one that read 0 as
+ * missing would quietly discard a decision. The interchange keeps them apart
+ * because the column does.
+ */
+export interface ExportFitTarget {
+  profileId: string;
+  kcal: number | null;
+  proteinG: number | null;
+  carbsG: number | null;
+  fatG: number | null;
+  updatedAt: string;
+}
+
 /**
  * Everything the manifest's "settings" section carries (founder decision #11:
  * flags + NTF settings ship with the export).
@@ -1658,6 +1780,21 @@ export interface ProfileData {
    */
   habits: readonly ExportHabit[];
   habitEntries: readonly ExportHabitEntry[];
+  /**
+   * The FIT module's three collections (migration 058). Required like every
+   * field above and for the same reason: a module the caller forgets must be a
+   * type error, not a quiet omission. EMPTY both for a pre-`1.35.0` archive and
+   * for a profile that logs no food, indistinguishable on purpose, because they
+   * mean the same thing.
+   *
+   * `fitFoods` is ONLY the user's own foods — the catalogue ships inside the app
+   * and is not rows (see `SCHEMA_VERSION`'s `1.35.0` entry). `fitMealItems` is
+   * the diary itself, each row carrying the snapshot that makes it readable
+   * without any food at all. `fitTargets` is zero or one row.
+   */
+  fitFoods: readonly ExportFitFood[];
+  fitMealItems: readonly ExportFitMealItem[];
+  fitTargets: readonly ExportFitTarget[];
 }
 
 // --- Private notes (PRIV v1, ADR-057 §6) ------------------------------------
@@ -1874,6 +2011,10 @@ export const DATA_FILES = [
   // a pre-1.32 archive neither carries it nor declares its checksum, and
   // absent-and-undeclared is nothing at all.
   "data/habits.ndjson",
+  // FIT's nutrition half (migration 058, `1.35.0`): its own file, appended on
+  // the same terms — a pre-1.34 archive neither carries it nor declares its
+  // checksum, and absent-and-undeclared is nothing at all.
+  "data/fitness.ndjson",
 ] as const;
 
 /** The manifest's module ids, in manifest order — the grouping `countProfileModules` counts by and `buildExportArchive` builds `manifest.modules` from, so the two can never disagree. */
@@ -1894,6 +2035,11 @@ export const ARCHIVE_MODULE_IDS = [
   // filter, so habits filed under somebody else's module would make a subset
   // export carry what it says it does not.
   "habits",
+  // FIT (migration 058, `1.35.0`) — its own module, on the same terms. Note what
+  // it does NOT cover: the food catalogue ships inside the app and is not rows,
+  // so this bucket counts the user's own foods, their diary and their goals, and
+  // nothing the app supplied.
+  "fitness",
 ] as const;
 export type ArchiveModuleId = (typeof ARCHIVE_MODULE_IDS)[number];
 
@@ -1985,6 +2131,12 @@ export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, 
     // a preview that showed only the habit count would tell the user almost
     // nothing about what is about to change.
     habits: data.habits.length + data.habitEntries.length,
+    // The user's own foods, every logged item and the goals row. The ITEMS are
+    // the module's substance, exactly as habit entries are — a preview showing
+    // only the food count would say almost nothing about what is about to
+    // change. The app-shipped catalogue is counted nowhere, because it is not
+    // in the archive at all.
+    fitness: data.fitFoods.length + data.fitMealItems.length + data.fitTargets.length,
   };
 }
 
@@ -2132,6 +2284,16 @@ export function filterProfileData(
     // points into it, so dropping the module dangles nothing elsewhere.
     habits: only("habits", data.habits),
     habitEntries: only("habits", data.habitEntries),
+    // FIT's three drop as one module, and its ONE pointer — a meal item's
+    // `foodRef` — is not a reference this archive resolves at all: the column is
+    // text with no foreign key (migration 058), `catalogue:<id>` names something
+    // that is not a row anywhere, and the item's own label and snapshot are what
+    // make it readable. So there is nothing here to repair even in principle,
+    // unlike the three genuinely cross-module references documented in the
+    // header.
+    fitFoods: only("fitness", data.fitFoods),
+    fitMealItems: only("fitness", data.fitMealItems),
+    fitTargets: only("fitness", data.fitTargets),
   };
 }
 
@@ -2272,6 +2434,17 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     ...data.habitEntries.map((row) => ({ type: "habit-entry", ...row })),
   ]);
 
+  // The goals row leads (the preferences-first idiom every data file keeps),
+  // then the user's own foods, then the diary. Nothing in this file points at
+  // anything in it — a meal item's `foodRef` is provenance rather than a
+  // reference (see `ExportFitMealItem`) — so this is how the file READS, not
+  // what it requires.
+  const fitnessNdjson = toNdjson([
+    ...data.fitTargets.map((row) => ({ type: "fit-target", ...row })),
+    ...data.fitFoods.map((row) => ({ type: "fit-food", ...row })),
+    ...data.fitMealItems.map((row) => ({ type: "fit-meal-item", ...row })),
+  ]);
+
   const privateNotes = input.privateNotes ?? EMPTY_PRIVATE_NOTES;
   const privateNotesNdjson = toNdjson([
     ...privateNotes.notes.map((row) => ({ type: "private-note", ...row })),
@@ -2287,6 +2460,7 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   files.set("data/private-notes.ndjson", privateNotesNdjson);
   files.set("data/finance.ndjson", financeNdjson);
   files.set("data/habits.ndjson", habitsNdjson);
+  files.set("data/fitness.ndjson", fitnessNdjson);
 
   // --- Notes: Markdown mirror + binary entries (ADR-022 section 3) -------
   const binaries: ExportBinaryEntry[] = [];

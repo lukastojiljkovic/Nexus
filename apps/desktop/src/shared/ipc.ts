@@ -5119,6 +5119,14 @@ export interface RestoreModuleCounts {
   finance: number;
   /** The habits and every day they were ticked (HABIT, migration 055) — the entries count too, because they ARE the module's substance: a streak is derived from them and nothing else. */
   habits: number;
+  /**
+   * The user's OWN foods, every logged meal item and the goals row (FIT,
+   * migration 058). The app's food catalogue is counted nowhere, because it
+   * ships as JSON inside the app rather than as rows and is never in an archive
+   * at all — a diary stays complete regardless, since every item carries the
+   * snapshot it was logged with.
+   */
+  fitness: number;
 }
 
 /** The outcome of the native "pick a restore archive" dialog (IMEX slice 3c). Mirrors `SaveAttachmentResult`'s shape, plus what a restore preview needs before it can even ask for a passphrase: the file's display name and whether it is an `NXA1` container. */
@@ -5334,7 +5342,10 @@ export type ImportRecordType =
   | "fin-transaction"
   | "fin-budget"
   | "habit"
-  | "habit-entry";
+  | "habit-entry"
+  | "fit-food"
+  | "fit-meal-item"
+  | "fit-target";
 
 /**
  * Why rows the archive carried are not in the plan. Mirrors `@nexus/core`'s
@@ -5356,6 +5367,8 @@ export type ImportSkipCode =
   | "dashboard-sets-not-imported"
   | "dashboard-widgets-not-imported"
   | "study-settings-not-imported"
+  /** A FIT goals row (migration 058): the target user's own decision about their own body, never the archive author's. Its own code, on `study-settings-not-imported`'s terms. */
+  | "fit-targets-not-imported"
   | "calendar-settings-not-imported"
   | "profile-picture-not-imported"
   | "private-notes-not-imported"

@@ -856,3 +856,38 @@ export class HabitValidationError extends DatabaseError {}
  * correctable.
  */
 export class HabitNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a USER FOOD write is rejected at the store boundary (FIT slice a,
+ * migration 057): an empty or over-long `name`, a `category` outside
+ * `FOOD_CATEGORIES`, a nutrient that is not a finite non-negative number, a
+ * serving with a blank label or a non-positive gram weight, over-long `notes`.
+ *
+ * The catalogue's own sanity gates (`validateFoodEntry`) are deliberately NOT
+ * applied here — see `FitFoodStore` for why a user copying a number off a packet
+ * must not be refused by rules written for a curated dataset.
+ */
+export class FitFoodValidationError extends DatabaseError {}
+
+/** Thrown when a user-food operation targets an id that is not a live food in the store's own profile — unknown, soft-deleted, or owned by another profile. */
+export class FitFoodNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a logged meal item is rejected at the store boundary (FIT slice a,
+ * migration 057): a `slot` outside the five, a `foodRef` that is not a legal
+ * reference (`parseFoodRef`), a blank `label`, a `grams` that is not strictly
+ * positive, a snapshot nutrient that is not a finite non-negative number, or a
+ * day/instant that is not a real date.
+ */
+export class FitMealValidationError extends DatabaseError {}
+
+/** Thrown when a meal-item operation targets an id that is not a live item in the store's own profile. */
+export class FitMealItemNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a nutrition goal is rejected at the store boundary (FIT slice a,
+ * migration 057): a goal that is not null and not a finite non-negative number.
+ * NULL is „no goal set" and is always accepted — it is the ONLY way to say that,
+ * which is why zero is never coerced into it.
+ */
+export class FitTargetValidationError extends DatabaseError {}

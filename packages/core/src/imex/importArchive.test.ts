@@ -104,6 +104,9 @@ function emptyExportInput(): ExportArchiveInput {
       finBudgets: [],
       habits: [],
       habitEntries: [],
+      fitFoods: [],
+      fitMealItems: [],
+      fitTargets: [],
     },
     hash: sha256,
   };
@@ -715,6 +718,44 @@ function richProfileData(): ProfileData {
         createdAt: "2026-07-02T22:00:00.000Z", updatedAt: "2026-07-02T22:00:00.000Z",
       },
     ],
+    // FIT (migration 058). The user's OWN food only — the app's catalogue is not
+    // in an archive at all, which is why the two meal items below point at both
+    // kinds of reference and neither is resolved by anything.
+    fitFoods: [
+      {
+        id: "fit-food-1", profileId: "profile1", name: "Mamin ajvar", category: "povrce",
+        per100g: { kcal: 120, protein: 1.5, carbs: 9, fat: 8.5, fiber: 2.5, sugar: 5, sodiumMg: 480 },
+        servings: [{ label: "1 kašika", grams: 15 }],
+        notes: "Domaći, bez šećera.",
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+    ],
+    fitMealItems: [
+      // A catalogue reference: names app-shipped data that is not a row anywhere,
+      // and rides with its own snapshot so the day reads without it.
+      {
+        id: "fit-item-1", profileId: "profile1", date: "2026-07-01", slot: "rucak",
+        foodRef: "catalogue:pilece-belo-meso-peceno", label: "Pileće belo meso, pečeno",
+        grams: 187.5,
+        per100g: { kcal: 165, protein: 31, carbs: 0, fat: 3.57, fiber: 0, sugar: 0, sodiumMg: 74 },
+        createdAt: "2026-07-01T13:00:00.000Z", updatedAt: "2026-07-01T13:00:00.000Z",
+      },
+      // A user reference, to the food above.
+      {
+        id: "fit-item-2", profileId: "profile1", date: "2026-07-01", slot: "vecera",
+        foodRef: "user:fit-food-1", label: "Mamin ajvar", grams: 30,
+        per100g: { kcal: 120, protein: 1.5, carbs: 9, fat: 8.5, fiber: 2.5, sugar: 5, sodiumMg: 480 },
+        createdAt: "2026-07-01T20:00:00.000Z", updatedAt: "2026-07-01T20:00:00.000Z",
+      },
+    ],
+    // A calorie goal and nothing else — three nulls beside it, which is the
+    // ordinary case rather than an edge one.
+    fitTargets: [
+      {
+        profileId: "profile1", kcal: 2200, proteinG: null, carbsG: null, fatG: null,
+        updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+    ],
   };
 }
 
@@ -1086,12 +1127,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.35.0`: the nearest minor strictly ahead of this build's `1.34.0`.
+  // `1.36.0`: the nearest minor strictly ahead of this build's `1.35.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.35.0" });
+    const files = baseFiles({ schemaVersion: "1.36.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.35.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.36.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -3921,8 +3962,8 @@ describe("parseImportArchive — note categories (NOTE-002 / 1.27.0)", () => {
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.34.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.34.0");
+  it("is 1.35.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.35.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -4112,11 +4153,11 @@ describe("parseImportArchive — schema version", () => {
     expect(result.manifest?.profile.kind).toBe("personal");
   });
 
-  // `1.35.0`: the nearest minor strictly ahead of this build's `1.34.0`.
+  // `1.36.0`: the nearest minor strictly ahead of this build's `1.35.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.35.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.36.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.35.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.36.0" },
     ]);
     expect(result.data).toBeNull();
   });

@@ -72,6 +72,7 @@ function emptyProfileData(): ProfileData {
     dashboardSettings: [], dashboardSets: [], dashboardWidgets: [],
     finAccounts: [], finCategories: [], finRecurring: [], finTransactions: [], finBudgets: [],
     habits: [], habitEntries: [],
+    fitFoods: [], fitMealItems: [], fitTargets: [],
   };
 }
 

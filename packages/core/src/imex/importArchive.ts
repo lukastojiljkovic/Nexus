@@ -2,6 +2,8 @@ import * as Y from "yjs";
 
 import { TIME_GRID_MAX_END_MINUTES, TIME_GRID_MIN_EVENT_MINUTES } from "../calendar/timeGridDrag.js";
 import { FOCUS_OUTCOMES, FOCUS_PHASE_KINDS } from "../focus/focusSession.js";
+import { FOOD_CATEGORIES, MAX_FOOD_REF_LENGTH, parseFoodRef } from "../fitness/food.js";
+import type { FoodMacros, FoodServing } from "../fitness/food.js";
 import { validateHabitSchedule } from "../habits/habitSchedule.js";
 import type { HabitSchedule } from "../habits/habitSchedule.js";
 import { validateRecurrenceRule } from "../recurrence/recurrence.js";
@@ -34,6 +36,9 @@ import type {
   ExportFinCategory,
   ExportFinRecurring,
   ExportFinTransaction,
+  ExportFitFood,
+  ExportFitMealItem,
+  ExportFitTarget,
   ExportFocusSession,
   ExportHabit,
   ExportHabitEntry,
@@ -239,6 +244,47 @@ export interface ImportArchiveResult {
 /**
  * The schema version this build writes and is the newest it accepts, kept in
  * step with `buildExportArchive`'s own `SCHEMA_VERSION`.
+ *
+ * `1.35.0` adds FIT's
+ * nutrition half (FIT slice a, migration 058): the record types `fit-food`,
+ * `fit-meal-item` and `fit-target`, riding in their own `data/fitness.ndjson` (a
+ * new `DATA_FILES` entry the checksum walk's union absorbs unchanged), plus a
+ * new `fitness` archive module. None of the three needs an `ArchiveEra` flag —
+ * the whole-absent-type rule below covers them, and a pre-`1.35.0` archive
+ * simply carries no food log, exactly as a profile that keeps none does.
+ *
+ * **The app's food CATALOGUE is not in the archive at all, and this reader
+ * expects none.** It ships as JSON inside `@nexus/core` rather than as rows, so
+ * `fit-food` is the user's own foods and nothing else. What makes that lossless
+ * is that a `fit-meal-item` carries its own SNAPSHOT — the food's `label` and the
+ * seven per-100 g values it was logged with — re-validated here field by field
+ * like any other row. A restore reproduces the day as it was eaten even into a
+ * build whose catalogue has since changed, which is the only honest thing a food
+ * diary can do.
+ *
+ * **`foodRef` gets NO reference rule, deliberately.** It is validated for SHAPE
+ * (`parseFoodRef`: `catalogue:<slug>` or `user:<id>`) and then left alone. A
+ * `catalogue:` reference names something that is not a row anywhere, and a
+ * `user:` one may name a food its owner deleted years ago while the meal stayed
+ * true — migration 058 makes the column text with no foreign key for exactly
+ * that reason. Dropping an item over it would delete a meal that actually
+ * happened in order to tidy a pointer nothing computes from, and detaching is
+ * not available either, since the column is NOT NULL and provenance with a hole
+ * in it is worse than provenance that is merely stale.
+ *
+ * The rest is re-validated against migration 058's own CHECKs: every nutrient a
+ * finite non-negative REAL (deliberately NOT a whole number — 0.72 g of
+ * carbohydrate per 100 g is what a real source publishes, the opposite of HABIT's
+ * integers), `grams` strictly positive, `slot` one of the five, and a `fit-target`
+ * goal either null or a finite non-negative number — where NULL is „no goal" and
+ * 0 is „a goal of zero", two claims this reader keeps apart because a restore
+ * that confused them would either invent a target or discard a decision.
+ *
+ * The catalogue's own sanity gates (`validateFoodEntry`) are deliberately NOT
+ * applied to a `fit-food`, on `FitFoodStore`'s reasoning: those rules are written
+ * for a curated dataset transcribed from USDA rows, and a user's food typed off a
+ * European packet (where carbohydrate excludes fibre) would fail them while being
+ * a correct reading of the label in their hand.
  *
  * `1.34.0` grows `focus-session` into the ONE focus timer (migration 057):
  * seven optional-with-a-default fields (`kind`, `plannedMinutes`,
@@ -528,7 +574,7 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.34.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.35.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -1188,7 +1234,10 @@ export type ArchiveRecordType =
   | "fin-transaction"
   | "fin-budget"
   | "habit"
-  | "habit-entry";
+  | "habit-entry"
+  | "fit-food"
+  | "fit-meal-item"
+  | "fit-target";
 
 const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "task",
@@ -1238,6 +1287,9 @@ const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "fin-budget",
   "habit",
   "habit-entry",
+  "fit-food",
+  "fit-meal-item",
+  "fit-target",
 ];
 
 type DataFilePath = (typeof DATA_FILES)[number];
@@ -1297,6 +1349,7 @@ const FILE_RECORD_TYPES: Record<DataFilePath, readonly ArchiveRecordType[]> = {
     "fin-budget",
   ],
   "data/habits.ndjson": ["habit", "habit-entry"],
+  "data/fitness.ndjson": ["fit-target", "fit-food", "fit-meal-item"],
 };
 
 /**
@@ -1321,6 +1374,7 @@ const MODULE_OF_DATA_FILE: Record<DataFilePath, ArchiveModuleId | null> = {
   "data/private-notes.ndjson": null,
   "data/finance.ndjson": "finance",
   "data/habits.ndjson": "habits",
+  "data/fitness.ndjson": "fitness",
 };
 
 // --- Per-record parsers, one field validator call per interface field, in --
@@ -2696,6 +2750,157 @@ function habitSchedule(value: unknown, field: string): HabitSchedule {
   return schedule;
 }
 
+// --- FIT (nutrition, migration 058) ------------------------------------------
+//
+// Copied, not imported, on `NOTE_FOLDER_COLORS`' terms — `@nexus/core` never
+// depends on `@nexus/db`, so the bounds `FitFoodStore`, `FitMealStore` and
+// `FitTargetStore` refuse by are restated here, which is also what makes a bad
+// archive a named `invalid-record` with a line number instead of a raw SQLite
+// error inside a restore transaction. `FOOD_CATEGORIES` and `parseFoodRef` are
+// NOT copies: both live in THIS package (`fitness/food.ts`) and the stores
+// import them from here, so the two sides genuinely share one definition.
+const MAX_FIT_FOOD_NAME_LENGTH = 80;
+const MAX_FIT_FOOD_NOTES_LENGTH = 500;
+const MAX_FIT_FOOD_SERVINGS = 12;
+const MAX_FIT_SERVING_LABEL_LENGTH = 40;
+const MAX_FIT_SERVING_GRAMS = 10_000;
+const MAX_MEAL_ITEM_LABEL_LENGTH = 80;
+const MAX_MEAL_ITEM_GRAMS = 10_000;
+/** The stores' ceiling on any per-100 g nutrient and on any goal — a bound on an untrusted number that every total sums. */
+const MAX_FIT_NUTRIENT = 100_000;
+const MAX_FIT_TARGET = 100_000;
+
+/** The five slots migration 058's CHECK spells, restated for the reader. */
+const MEAL_SLOTS = ["dorucak", "uzina1", "rucak", "uzina2", "vecera"] as const;
+
+/**
+ * One food the USER added (migration 058). The app's own catalogue is NOT in the
+ * archive and this parser never expects it — see `INTERCHANGE_SCHEMA_VERSION`'s
+ * `1.35.0` entry.
+ *
+ * The catalogue's sanity gates (`validateFoodEntry`) are deliberately not
+ * applied: they are written for a curated dataset transcribed from USDA rows,
+ * and a food typed off a European packet — where carbohydrate EXCLUDES fibre —
+ * would fail `fiber ≤ carbs` while being a correct reading of the label. What is
+ * enforced is what cannot be anything but wrong.
+ */
+function parseFitFood(raw: Record<string, unknown>): ExportFitFood {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const name = trimmedNonEmptyStr(raw.name, "name", MAX_FIT_FOOD_NAME_LENGTH);
+  const category = enumStr(raw.category, "category", FOOD_CATEGORIES);
+  const per100g = foodMacros(raw.per100g, "per100g");
+  const servings = foodServings(raw.servings, "servings");
+  const notes = str(raw.notes, "notes");
+  if (notes.length > MAX_FIT_FOOD_NOTES_LENGTH) throw new InvalidFieldError("notes");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, profileId, name, category, per100g, servings, notes, createdAt, updatedAt };
+}
+
+/**
+ * One logged item (migration 058). There is no `fit-meal` type to go with it: a
+ * meal is a `(date, slot)` grouping rather than a row.
+ *
+ * `foodRef` is checked for SHAPE and then left entirely alone — no reference
+ * rule anywhere resolves it. `catalogue:<slug>` names app-shipped data that is
+ * not a row, and `user:<id>` may name a food already deleted; the column is text
+ * with no foreign key precisely so both stay legal. What makes the row readable
+ * regardless is `label` plus `per100g`, the snapshot taken when it was logged —
+ * which is also why a restore never rewrites yesterday's calories to today's
+ * catalogue values.
+ */
+function parseFitMealItem(raw: Record<string, unknown>): ExportFitMealItem {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const date = bareDate(raw.date, "date");
+  const slot = enumStr(raw.slot, "slot", MEAL_SLOTS);
+  const foodRef = str(raw.foodRef, "foodRef");
+  if (foodRef.length > MAX_FOOD_REF_LENGTH || parseFoodRef(foodRef) === null) {
+    throw new InvalidFieldError("foodRef");
+  }
+  const label = trimmedNonEmptyStr(raw.label, "label", MAX_MEAL_ITEM_LABEL_LENGTH);
+  const grams = positiveReal(raw.grams, "grams", MAX_MEAL_ITEM_GRAMS);
+  const per100g = foodMacros(raw.per100g, "per100g");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, profileId, date, slot, foodRef, label, grams, per100g, createdAt, updatedAt };
+}
+
+/**
+ * The profile's daily goals (migration 058) — zero or one row.
+ *
+ * Each goal is `null` or a finite non-negative number, and the two are NOT
+ * interchangeable: null is „no goal set", 0 is „a goal of zero". A reader that
+ * coerced either into the other would restore a target nobody chose or discard
+ * one somebody did.
+ */
+function parseFitTarget(raw: Record<string, unknown>): ExportFitTarget {
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const kcal = nullableGoal(raw.kcal, "kcal");
+  const proteinG = nullableGoal(raw.proteinG, "proteinG");
+  const carbsG = nullableGoal(raw.carbsG, "carbsG");
+  const fatG = nullableGoal(raw.fatG, "fatG");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { profileId, kcal, proteinG, carbsG, fatG, updatedAt };
+}
+
+/**
+ * The seven per-100 g numbers, as a food carries them and as a meal item
+ * snapshots them. REAL and deliberately not whole — 0.72 g of carbohydrate per
+ * 100 g is what a real source publishes, the exact opposite of HABIT's integers
+ * one module over.
+ */
+function foodMacros(value: unknown, field: string): FoodMacros {
+  const root = expectRecord(value, field);
+  return {
+    kcal: nonNegativeReal(root.kcal, `${field}.kcal`, MAX_FIT_NUTRIENT),
+    protein: nonNegativeReal(root.protein, `${field}.protein`, MAX_FIT_NUTRIENT),
+    carbs: nonNegativeReal(root.carbs, `${field}.carbs`, MAX_FIT_NUTRIENT),
+    fat: nonNegativeReal(root.fat, `${field}.fat`, MAX_FIT_NUTRIENT),
+    fiber: nonNegativeReal(root.fiber, `${field}.fiber`, MAX_FIT_NUTRIENT),
+    sugar: nonNegativeReal(root.sugar, `${field}.sugar`, MAX_FIT_NUTRIENT),
+    sodiumMg: nonNegativeReal(root.sodiumMg, `${field}.sodiumMg`, MAX_FIT_NUTRIENT),
+  };
+}
+
+/** Household measures. An EMPTY list is legal and ordinary — brašno is weighed, not counted. */
+function foodServings(value: unknown, field: string): FoodServing[] {
+  if (!Array.isArray(value)) throw new InvalidFieldError(field);
+  if (value.length > MAX_FIT_FOOD_SERVINGS) throw new InvalidFieldError(field);
+  return value.map((entry: unknown, index) => {
+    const root = expectRecord(entry, `${field}[${index}]`);
+    return {
+      label: trimmedNonEmptyStr(
+        root.label,
+        `${field}[${index}].label`,
+        MAX_FIT_SERVING_LABEL_LENGTH,
+      ),
+      grams: positiveReal(root.grams, `${field}[${index}].grams`, MAX_FIT_SERVING_GRAMS),
+    };
+  });
+}
+
+/** A finite REAL in `[0, max]`. `numberInRange` would do, but it is spelled for retention's own 0..1 band; this names the shape FIT actually has. */
+function nonNegativeReal(value: unknown, field: string, max: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > max) {
+    throw new InvalidFieldError(field);
+  }
+  return value;
+}
+
+/** Strictly positive: an item or a serving weighing nothing is the absence of one, which the archive says by not carrying the row. */
+function positiveReal(value: unknown, field: string, max: number): number {
+  const n = nonNegativeReal(value, field, max);
+  if (n === 0) throw new InvalidFieldError(field);
+  return n;
+}
+
+/** Null stays null — it is the ONLY way to say „no goal", so it is never coerced to zero, and zero is never coerced to it. */
+function nullableGoal(value: unknown, field: string): number | null {
+  return value === null ? null : nonNegativeReal(value, field, MAX_FIT_TARGET);
+}
+
 // --- Private notes (PRIV v1, ADR-057 §6) -------------------------------------
 
 /** Mirrors `PRIV_ATTACHMENTS_MAX_COUNT` (`apps/desktop`'s wire cap) — copied, not imported, on `NOTE_FOLDER_COLORS`' terms: this package cannot depend on the app's shared wire file. */
@@ -2910,6 +3115,9 @@ interface Collections {
   finBudgets: Bucket<ExportFinBudget>;
   habits: Bucket<ExportHabit>;
   habitEntries: Bucket<ExportHabitEntry>;
+  fitFoods: Bucket<ExportFitFood>;
+  fitMealItems: Bucket<ExportFitMealItem>;
+  fitTargets: Bucket<ExportFitTarget>;
 }
 
 function newCollections(): Collections {
@@ -2933,6 +3141,7 @@ function newCollections(): Collections {
     finAccounts: newBucket(), finCategories: newBucket(), finRecurring: newBucket(),
     finTransactions: newBucket(), finBudgets: newBucket(),
     habits: newBucket(), habitEntries: newBucket(),
+    fitFoods: newBucket(), fitMealItems: newBucket(), fitTargets: newBucket(),
   };
 }
 
@@ -3233,6 +3442,24 @@ function dispatchRecord(
     case "habit-entry": {
       const row = parseHabitEntry(raw);
       pushRow(collections.habitEntries, row.id, row, type, path, line, ctx);
+      return;
+    }
+    case "fit-food": {
+      const row = parseFitFood(raw);
+      pushRow(collections.fitFoods, row.id, row, type, path, line, ctx);
+      return;
+    }
+    case "fit-meal-item": {
+      const row = parseFitMealItem(raw);
+      pushRow(collections.fitMealItems, row.id, row, type, path, line, ctx);
+      return;
+    }
+    // Keyed by `profileId`, the `study-settings` arrangement: the row has no id
+    // of its own because migration 058 makes `profile_id` its primary key, so a
+    // second one in the same file is the duplicate the gate is looking for.
+    case "fit-target": {
+      const row = parseFitTarget(raw);
+      pushRow(collections.fitTargets, row.profileId, row, type, path, line, ctx);
       return;
     }
   }
@@ -4804,6 +5031,14 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         // habits", which is exactly what it kept.
         habits: rowsOf(collections.habits),
         habitEntries: rowsOf(collections.habitEntries),
+        // Empty for every pre-1.35.0 archive, which carries no such file at all
+        // — and a restore reads that emptiness as "this profile logs no food",
+        // which is exactly what it logged. `fitFoods` is empty for a second,
+        // ordinary reason besides: a profile that only ever logged catalogue
+        // foods added none of its own, and the catalogue is not in the archive.
+        fitFoods: rowsOf(collections.fitFoods),
+        fitMealItems: rowsOf(collections.fitMealItems),
+        fitTargets: rowsOf(collections.fitTargets),
       };
 
   // Beside `data` and gated identically (ADR-057 §6): empty both for a
