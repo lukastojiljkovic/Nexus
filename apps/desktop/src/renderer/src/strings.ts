@@ -34,6 +34,7 @@ import type {
 } from "../../shared/ipc.js";
 import type { OnboardingOccupation } from "../../shared/onboardingPresets.js";
 import type { ClockPreference } from "./calendarPrefs.js";
+import type { CanvasStrokeWidthId, CanvasToolId } from "./canvasTools.js";
 import type { BlockedInToday } from "./taskPrefs.js";
 import type { WeekStartPreference } from "./weekStart.js";
 
@@ -3480,6 +3481,59 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     /** Nothing drawn yet, and no board either. */
     emptyTitle: "Još nema nijedne table",
     emptyDescription: "Napravi tablu i crtaj — dijagrami, skice, mape ideja.",
+    /**
+     * Our own toolbar (CANV slice b1) — the whole reason Excalidraw's chrome is
+     * hidden. Its own UI ships 54 locales, none of them Serbian and none
+     * addable, so every word a person drawing reads is written here instead.
+     *
+     * The eight colour names are NOT repeated here: they are
+     * `settings.appearance.accentNames`, the same eight the „Izgled" picker
+     * shows, so a colour is called one thing in this product.
+     */
+    toolbar: {
+      /** Names the whole bar for a screen reader; each group below names itself too. */
+      label: "Alatke table",
+      toolLabel: "Alatka",
+      tool: {
+        selection: "Izbor",
+        hand: "Pomeranje",
+        rectangle: "Pravougaonik",
+        diamond: "Romb",
+        ellipse: "Elipsa",
+        arrow: "Strelica",
+        line: "Linija",
+        freedraw: "Olovka",
+        text: "Tekst",
+        image: "Slika",
+        eraser: "Gumica",
+      } satisfies Record<CanvasToolId, string>,
+      /**
+       * Every tool's `title` names the editor's own key: „Pravougaonik ·
+       * prečica R". The keys work with or without this bar, so hiding them
+       * would be teaching the slower route.
+       */
+      shortcut: "prečica",
+      strokeLabel: "Boja poteza",
+      /** The ink swatch — `--nx-text`, the colour a new board already draws in. */
+      inkName: "Mastilo",
+      fillLabel: "Ispuna",
+      /** The default, and the first swatch in the fill row: a shape with no fill at all. */
+      fillNone: "Bez ispune",
+      widthLabel: "Debljina",
+      width: {
+        tanko: "Tanko",
+        srednje: "Srednje",
+        debelo: "Debelo",
+      } satisfies Record<CanvasStrokeWidthId, string>,
+      zoomLabel: "Uvećanje",
+      /** „Uvećaj" and „Umanji" are the buttons' accessible names; what they show is − and +. */
+      zoomIn: "Uvećaj",
+      zoomOut: "Umanji",
+      /** The readout is the button: clicking the percentage puts it back to 100%. */
+      zoomReset: "Vrati uvećanje na 100%",
+      zoomFit: "Uklopi",
+      zoomFitTitle: "Uklopi ceo crtež u prozor",
+    },
   },
 
   settings: {

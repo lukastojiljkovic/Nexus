@@ -22,10 +22,17 @@ import { Button, EmptyState, TextField } from "@nexus/ui";
 import { MAX_CANVAS_BOARD_NAME_LENGTH, MAX_CANVAS_SCENE_LENGTH } from "../../shared/ipc.js";
 import type { CanvasBoard } from "../../shared/ipc.js";
 import { boardAfterDelete, looksLikeMermaid, resolveActiveBoard } from "./canvasBoards.js";
+import { CanvasToolbar } from "./CanvasToolbar.js";
+import {
+  canvasToolbarStateOf,
+  sameCanvasToolbarState,
+  type CanvasToolbarAppState,
+  type CanvasToolbarState,
+} from "./canvasTools.js";
 import { strings } from "./strings.js";
 
 /**
- * Tabla (CANV slice a) — the infinite canvas, over an embedded Excalidraw.
+ * Tabla (CANV slices a–b1) — the infinite canvas, over an embedded Excalidraw.
  *
  * **The scene is a VALUE this page hands in and gets back.** Excalidraw keeps
  * its own document in memory and never touches storage on our behalf; this page
@@ -54,13 +61,24 @@ import { strings } from "./strings.js";
  * definition dialog. The keyword list is a copy and `canvasBoards.ts` says what
  * that costs.
  *
- * **Excalidraw's UI is TEMPORARY here** (`EXCALIDRAW_OWN_UI`). Our own toolbar
- * is slice b's; until then the editor's own is what there is to click. Two
- * pieces of its chrome are NOT temporary, because both are about what this app
- * refuses to have: `<MainMenu>` — ours replaces the default entirely, which is
- * what makes the Help dialog, the social links and „Excalidraw+" absent from
- * the DOM rather than merely hidden — and `closeLibrarySidebar`, which is how
- * „Publish library" is kept out of reach.
+ * **The editor is an ENGINE, not an interface** (slice b1). Excalidraw ships 54
+ * locales, none of them Serbian, and none can be added: the loader is a closed
+ * hard-coded import map inside the bundle and `setLanguage` is not re-exported.
+ * Its colour picker also offers violet, blue and orange, three hues this
+ * project bans. So its chrome is hidden outright — `app.css` names the three
+ * selectors and what each removes — and `CanvasToolbar` drives the editor
+ * through its imperative API with our own controls, tokens and strings. Two
+ * further pieces of chrome are refused in the tree rather than in CSS, because
+ * both are about what this app will not have at all: `<MainMenu>` — ours
+ * replaces the default entirely, which is what makes the Help dialog, the
+ * social links and „Excalidraw+" absent from the DOM rather than merely hidden
+ * — and `closeLibrarySidebar`, which is how „Publish library" is kept out of
+ * reach.
+ *
+ * **What survives the hiding, deliberately: the dialogs, the sidebar and the
+ * canvas.** The mermaid dialog above all — it is portalled onto `document.body`
+ * (`useCreatePortalContainer`), so a rule scoped inside this page's own surface
+ * structurally cannot reach it.
  *
  * **Theme.** Excalidraw's ~209 CSS variables are scoped to `.excalidraw`, not
  * `:root`, so `app.css` restates the ones that paint from our own `--nx-*`
@@ -70,14 +88,6 @@ import { strings } from "./strings.js";
  * read off the computed tokens at mount (`elementDefaults`) rather than written
  * as literals anywhere.
  */
-
-/**
- * TEMPORARY (CANV slice a): renders Excalidraw's own toolbar, islands and
- * footer. Slice b replaces them with ours — set this to `false` and the canvas
- * is chromeless, then delete the constant, the `nx-canvas--chromeless` rule in
- * `app.css`, and this comment together.
- */
-const EXCALIDRAW_OWN_UI: boolean = true;
 
 /**
  * How long the page waits after the last change before writing. Long enough
@@ -145,6 +155,13 @@ export function CanvasPage({ profileId, theme }: CanvasPageProps) {
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
   /** The name form, open for a new board (`{ id: null }`) or for a rename (`{ id }`). */
   const [naming, setNaming] = useState<{ id: string | null; draft: string } | null>(null);
+  /**
+   * What our toolbar draws as active. Null only before an editor exists — it is
+   * seeded from the editor's real state the moment one does (`excalidrawAPI`
+   * runs inside React's commit, so the seeded render lands before any paint)
+   * and kept in step by `onChange` after that.
+   */
+  const [toolbar, setToolbar] = useState<CanvasToolbarState | null>(null);
 
   const api = useRef<ExcalidrawImperativeAPI | null>(null);
   /**
@@ -286,10 +303,24 @@ export function CanvasPage({ profileId, theme }: CanvasPageProps) {
    * The version is computed from the elements the callback was handed rather
    * than read back off the API, so the number the timer eventually records is
    * the one that was current when the change happened.
+   *
+   * The toolbar snapshot is behind the SAME kind of guard, for the same reason:
+   * it is taken on every pointer move, so it is only committed when it
+   * genuinely differs, and the previous object is returned otherwise — React
+   * then skips the render entirely. This is also what makes the keyboard the
+   * equal of the bar: press `R` and the editor's `activeTool` changes, so the
+   * snapshot changes, so our highlight moves.
    */
   const onChange = useCallback(
-    (elements: readonly { version: number }[], appState: { openSidebar: SidebarState }) => {
+    (
+      elements: readonly { version: number }[],
+      appState: CanvasToolbarAppState & { openSidebar: SidebarState },
+    ) => {
       closeLibrarySidebar(api.current, appState.openSidebar);
+      const snapshot = canvasToolbarStateOf(appState);
+      setToolbar((previous) =>
+        previous !== null && sameCanvasToolbarState(previous, snapshot) ? previous : snapshot,
+      );
       if (activeId === null) return;
       const version = sceneVersionOf(elements);
       if (version === savedVersion.current) return;
@@ -353,7 +384,10 @@ export function CanvasPage({ profileId, theme }: CanvasPageProps) {
     const appState = editor.getAppState();
     editor.updateScene({
       elements: [
-        ...editor.getSceneElements(),
+        // INCLUDING deleted: `updateScene` replaces the element list outright,
+        // so handing back only the live ones would drop the tombstones an undo
+        // of a delete stands on.
+        ...editor.getSceneElementsIncludingDeleted(),
         ...convertToExcalidrawElements([
           {
             type: "text",
@@ -477,11 +511,11 @@ export function CanvasPage({ profileId, theme }: CanvasPageProps) {
               >
                 {s.rename}
               </Button>
+              {/* „Mermaid dijagram" is NOT here: it is a drawing action and it
+                  moved into the toolbar with the rest of them (slice b1). This
+                  bar is about boards. */}
               <Button variant="ghost" onClick={() => void deleteBoard(active.id)}>
                 {s.delete}
-              </Button>
-              <Button variant="ghost" title={s.mermaidTitle} onClick={openMermaid}>
-                {s.mermaid}
               </Button>
             </>
           )}
@@ -538,52 +572,72 @@ export function CanvasPage({ profileId, theme }: CanvasPageProps) {
       {active === null ? (
         <EmptyState title={s.emptyTitle} description={s.emptyDescription} />
       ) : (
-        <div
-          className={EXCALIDRAW_OWN_UI ? "canv__surface" : "canv__surface canv__surface--chromeless"}
-        >
-          <Excalidraw
-            // Remounts on a board switch, which is what makes `initialData`
-            // (read once, at mount) the right place to load a scene at all.
-            key={active.id}
-            excalidrawAPI={(instance) => {
-              api.current = instance;
-            }}
-            initialData={initialData}
-            onChange={onChange}
-            onPaste={onPaste}
-            theme={theme === "noc" ? "dark" : "light"}
-            // Excalidraw ships no Serbian locale; English is the honest fallback
-            // until our own toolbar replaces this chrome in slice b.
-            langCode="en"
-            zenModeEnabled
-            aiEnabled={false}
-            UIOptions={{
-              canvasActions: {
-                // Every one of these writes or reads a FILE behind our back —
-                // „Open", „Save to…", „Export image" — and the app has its own
-                // export surface (IMEX). „Clear canvas" is off because a board
-                // is deleted, not emptied in place.
-                loadScene: false,
-                saveToActiveFile: false,
-                saveAsImage: false,
-                export: false,
-                clearCanvas: false,
-                // The theme follows Nexus's own setting; a second toggle inside
-                // the canvas would be a preference that disagrees with the app.
-                toggleTheme: false,
-                changeViewBackgroundColor: true,
-              },
-            }}
-          >
-            {/* NOT temporary, unlike the rest of the chrome: providing a menu
-                replaces Excalidraw's default one, whose items include the Help
-                dialog, „Excalidraw+" and the GitHub/X/Discord links. Ours is
-                deliberately empty — the actions live in the bar above, in
-                Serbian — so those entries are absent from the DOM rather than
-                merely hidden. */}
-            <MainMenu />
-          </Excalidraw>
-        </div>
+        <>
+          {toolbar !== null && (
+            <CanvasToolbar editor={api} state={toolbar} onMermaid={openMermaid} />
+          )}
+          <div className="canv__surface">
+            <Excalidraw
+              // Remounts on a board switch, which is what makes `initialData`
+              // (read once, at mount) the right place to load a scene at all.
+              key={active.id}
+              excalidrawAPI={(instance) => {
+                api.current = instance;
+                // Seeds the toolbar from the editor's REAL state rather than a
+                // guessed default. This runs inside React's commit phase, so the
+                // render it schedules lands before the browser paints and the bar
+                // never appears a frame late.
+                setToolbar(canvasToolbarStateOf(instance.getAppState()));
+              }}
+              initialData={initialData}
+              onChange={onChange}
+              onPaste={onPaste}
+              theme={theme === "noc" ? "dark" : "light"}
+              // English, and stated rather than papered over: Excalidraw ships 54
+              // locales, Serbian is not one of them, and it cannot be added — the
+              // loader is a hard-coded import map inside the bundle and
+              // `setLanguage` is not re-exported. This is why the chrome is ours
+              // (`CanvasToolbar`) instead of translated. The only English a user
+              // can now reach is inside the editor's own mermaid dialog, opened by
+              // a deliberate action, and mermaid is a developer-facing notation
+              // whose keywords are English to begin with.
+              langCode="en"
+              zenModeEnabled
+              aiEnabled={false}
+              UIOptions={{
+                canvasActions: {
+                  // Every one of these writes or reads a FILE behind our back —
+                  // „Open", „Save to…", „Export image" — and the app has its own
+                  // export surface (IMEX). „Clear canvas" is off because a board
+                  // is deleted, not emptied in place.
+                  loadScene: false,
+                  saveToActiveFile: false,
+                  saveAsImage: false,
+                  export: false,
+                  clearCanvas: false,
+                  // The theme follows Nexus's own setting; a second toggle inside
+                  // the canvas would be a preference that disagrees with the app.
+                  toggleTheme: false,
+                  // Off since slice b1, and this is a REMOVAL rather than an
+                  // oversight: the only control for it lived in the left island
+                  // that is now hidden, so leaving it on would be advertising a
+                  // capability nothing can reach. The canvas colour is
+                  // `--nx-bg` (`elementDefaults`) and follows the theme, which is
+                  // the same answer `toggleTheme` above gets.
+                  changeViewBackgroundColor: false,
+                },
+              }}
+            >
+              {/* Refused in the TREE rather than in CSS: providing a menu replaces
+                  Excalidraw's default one, whose items include the Help dialog,
+                  „Excalidraw+" and the GitHub/X/Discord links. Ours is
+                  deliberately empty — every action lives in our own bars above,
+                  in Serbian — so those entries are absent from the DOM rather
+                  than merely hidden. */}
+              <MainMenu />
+            </Excalidraw>
+          </div>
+        </>
       )}
     </div>
   );

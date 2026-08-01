@@ -11261,6 +11261,79 @@ button.cal__grid-event--dragging {
 .canv__notice {
   color: var(--nx-text-muted);
 }
+/* Our own toolbar (CANV slice b1) — see `CanvasToolbar.tsx` for why the editor
+   has none of its own. One block per concern, each on the row it belongs to,
+   wrapping onto a second line before anything is ever cut off. */
+.canv__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-4);
+  flex-wrap: wrap;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.canv__tool-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
+}
+/* The zoom cluster goes to the far end, so the bar reads left-to-right as „what
+   I draw with" and right as „what I am looking at". */
+.canv__tool-group--end {
+  margin-left: auto;
+}
+/* Active is TYPOGRAPHIC — accent text and weight, nothing else. The same rule
+   the board tabs above and the sidebar's active entry follow: never a pill,
+   never an inset bar, never a glow. `.recur__day`'s recipe. */
+.canv__tool.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.canv__tool.nx-button:hover:not(:disabled) {
+  background: transparent;
+  color: var(--nx-text);
+}
+.canv__tool--active.nx-button {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* The zoom readout is also its own reset button, so the figure must not shift
+   the two buttons beside it as it changes width. */
+.canv__zoom.nx-button {
+  min-width: 5ch;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+/* `.note__swatch`'s recipe, unchanged: a chosen swatch takes a ring in the text
+   colour rather than a glow, and „bez ispune" is the same dot carrying a ×. */
+.canv__swatch {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: var(--nx-radius-round);
+  border: 1px solid var(--nx-border);
+  background: var(--nx-surface);
+  color: var(--nx-text-muted);
+  display: grid;
+  place-items: center;
+  font-size: var(--nx-font-size-body-sm);
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color var(--nx-motion-base) var(--nx-motion-ease);
+}
+.canv__swatch:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.canv__swatch--selected {
+  border: 2px solid var(--nx-text);
+}
+
 .canv__surface {
   flex: 1;
   min-height: 0;
@@ -11269,12 +11342,38 @@ button.cal__grid-event--dragging {
   overflow: hidden;
 }
 
-/* TEMPORARY (CANV slice a), and it is only reachable while `EXCALIDRAW_OWN_UI`
-   is false: the editor's own toolbar, islands and footer, hidden until our own
-   toolbar lands. Delete this block together with that constant. */
-.canv__surface--chromeless .excalidraw .layer-ui__wrapper,
-.canv__surface--chromeless .excalidraw .App-toolbar-container,
-.canv__surface--chromeless .excalidraw .App-menu {
+/*
+ * Excalidraw's chrome, removed (CANV slice b1).
+ *
+ * **Three selectors, and each one is the narrowest container of a whole piece
+ * of chrome** — the editor's own DOM, read out of the shipped bundle rather
+ * than guessed:
+ *
+ * - `.layer-ui__wrapper` — the DESKTOP chrome, entirely. Its children are the
+ *   top fixed container (the shape toolbar, the left island holding stroke,
+ *   fill, width, opacity and layers, and the top-right cluster), the footer,
+ *   the welcome screen and the „scroll back to content" button. Nothing else
+ *   is in it.
+ * - `.App-top-bar` and `.App-bottom-bar` — the MOBILE chrome, which is the
+ *   editor's own shape toolbar and its shape-actions sheet. `MobileMenu` is a
+ *   SIBLING of the wrapper above, not a child, so hiding the wrapper alone
+ *   would leave the editor's toolbar showing the moment this pane is narrow
+ *   enough to cross its breakpoint.
+ *
+ * **What survives, and must.** Every DIALOG is portalled onto `document.body`
+ * (`useCreatePortalContainer`), so a rule rooted at `.canv__surface`
+ * structurally cannot reach one — which is what keeps „Mermaid dijagram"
+ * working, the founder having explicitly chosen to keep it. The sidebar
+ * (`renderSidebars`) is also a sibling of the wrapper and stays: it is where
+ * canvas search lives, and `closeLibrarySidebar` already governs its other
+ * tab. The canvases, the text editor, the hyperlink popup and the right-click
+ * context menu are outside `LayerUI` altogether and are untouched — the
+ * context menu deliberately so, since it is the only route to grouping and
+ * layer order and this toolbar replaces neither.
+ */
+.canv__surface .excalidraw .layer-ui__wrapper,
+.canv__surface .excalidraw .App-top-bar,
+.canv__surface .excalidraw .App-bottom-bar {
   display: none;
 }
 
