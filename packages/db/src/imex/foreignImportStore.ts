@@ -2,6 +2,7 @@ import type Database from "better-sqlite3-multiple-ciphers";
 import type { ProfileData } from "@nexus/core";
 import { RestoreValidationError } from "../errors.js";
 import {
+  canvasSceneText,
   exdatesText,
   habitScheduleText,
   offsetsText,
@@ -86,6 +87,7 @@ export class ForeignImportStore {
   private readonly insertHabitEntry: Database.Statement;
   private readonly insertFitFood: Database.Statement;
   private readonly insertFitMealItem: Database.Statement;
+  private readonly insertCanvasBoard: Database.Statement;
   private readonly insertNote: Database.Statement;
   private readonly insertNoteSnapshot: Database.Statement;
   private readonly insertNoteAttachment: Database.Statement;
@@ -291,6 +293,13 @@ export class ForeignImportStore {
           kcal, protein, carbs, fat, fiber, sugar, sodium_mg,
           created_at, updated_at, deleted_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    // CANV (migration 059). Every board is a NEW row on the habits' reasoning —
+    // see the insert loop — and the drawing goes through the same serializer
+    // `CanvasStore` writes through.
+    this.insertCanvasBoard = db.prepare(
+      `INSERT INTO canvas_boards (id, profile_id, name, scene, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertNote = db.prepare(
       `INSERT INTO notes
@@ -880,6 +889,22 @@ export class ForeignImportStore {
           item.per100g.kcal, item.per100g.protein, item.per100g.carbs, item.per100g.fat,
           item.per100g.fiber, item.per100g.sugar, item.per100g.sodiumMg,
           item.createdAt, item.updatedAt,
+        );
+        written += 1;
+      }
+
+      // CANV (migration 059): the boards. Every one is a NEW row on the habits'
+      // reasoning exactly — it carries a whole DRAWING a merge would have to
+      // overwrite, and two „Šema baze" boards in two profiles are two different
+      // diagrams — so nothing here can collide, and the insert-only contract is
+      // kept as literally as it is for the tags. The drawing rides unremapped
+      // because there is nothing in it that points anywhere: an embedded image
+      // lives inside the scene's own `files`, keyed by an id only that scene
+      // uses.
+      for (const board of planned.canvasBoards) {
+        this.insertCanvasBoard.run(
+          board.id, this.profileId, board.name, canvasSceneText(board.scene),
+          board.createdAt, board.updatedAt,
         );
         written += 1;
       }

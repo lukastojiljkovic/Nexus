@@ -86,6 +86,7 @@ function emptyInput(): ExportArchiveInput {
       fitFoods: [],
       fitMealItems: [],
       fitTargets: [],
+    canvasBoards: [],
     },
     hash: sha256,
   };
@@ -229,6 +230,7 @@ describe("buildExportArchive", () => {
           "data/finance.ndjson",
           "data/habits.ndjson",
           "data/fitness.ndjson",
+          "data/canvas.ndjson",
           "data/calendar.ics",
           "tables/tasks.csv",
           "tables/events.csv",
@@ -266,7 +268,7 @@ describe("buildExportArchive", () => {
       expect(archive.totalRecords).toBe(0);
       expect(archive.byModule).toEqual({
         tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0, dashboard: 0, finance: 0,
-        habits: 0, fitness: 0,
+        habits: 0, fitness: 0, canvas: 0,
       });
       expect(archive.binaries).toEqual([]);
     });
@@ -278,7 +280,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.35.0");
+      expect(manifest.schemaVersion).toBe("1.36.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       // `picture: null` is written out loud rather than omitted: the manifest is
@@ -316,6 +318,7 @@ describe("buildExportArchive", () => {
         { id: "finance", records: 0 },
         { id: "habits", records: 0 },
         { id: "fitness", records: 0 },
+        { id: "canvas", records: 0 },
       ]);
       expect(manifest.checksums).toEqual({
         "data/tasks.ndjson": sha256(""),
@@ -328,6 +331,7 @@ describe("buildExportArchive", () => {
         "data/finance.ndjson": sha256(""),
         "data/habits.ndjson": sha256(""),
         "data/fitness.ndjson": sha256(""),
+        "data/canvas.ndjson": sha256(""),
       });
       expect(manifest.blobs).toEqual([]);
       // The private inventory (ADR-057 §6), beside the blob list it mirrors —
@@ -1028,7 +1032,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       expect(archive.byModule).toEqual({
         tasks: 1, calendar: 0, study: 0, notifications: 1, notes: 0, dashboard: 0, finance: 0,
-        habits: 0, fitness: 0,
+        habits: 0, fitness: 0, canvas: 0,
       });
       expect(archive.totalRecords).toBe(2);
     });
@@ -1209,6 +1213,9 @@ describe("buildExportArchive", () => {
         fitTargets: [
           { profileId: "p1", kcal: 2200, proteinG: null, carbsG: null, fatG: null, updatedAt: t },
         ],
+        canvasBoards: [
+          { id: "cb1", profileId: "p1", name: "Šema baze", scene: { type: "excalidraw", version: 2, source: "nexus", elements: [{ id: "el1", type: "rectangle" }], appState: { gridSize: 20 }, files: {} }, createdAt: t, updatedAt: t },
+        ],
       };
     }
 
@@ -1228,6 +1235,7 @@ describe("buildExportArchive", () => {
         // 1 user food + 1 logged item + the goals row. The app's catalogue is
         // counted nowhere, because it is not in the archive at all.
         fitness: 3,
+        canvas: 1, // one board — a count of boards, never of what is drawn on them
       });
     });
 
@@ -1241,7 +1249,7 @@ describe("buildExportArchive", () => {
     it("counts every bucket as zero for empty data", () => {
       expect(countProfileModules(emptyInput().data)).toEqual({
         tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0, dashboard: 0, finance: 0,
-        habits: 0, fitness: 0,
+        habits: 0, fitness: 0, canvas: 0,
       });
     });
   });
@@ -1826,6 +1834,7 @@ describe("buildExportArchive", () => {
         { id: "finance", records: 0 },
         { id: "habits", records: 0 },
         { id: "fitness", records: 0 },
+        { id: "canvas", records: 0 },
       ]);
       expect(archive.byModule.notes).toBeGreaterThan(0);
       expect(archive.totalRecords).toBe(archive.byModule.notes + archive.byModule.dashboard);
@@ -2022,6 +2031,7 @@ describe("filterProfileData", () => {
       finance: 0,
       habits: 0,
       fitness: 0,
+      canvas: 0,
     });
   });
 });

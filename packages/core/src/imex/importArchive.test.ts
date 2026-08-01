@@ -107,6 +107,7 @@ function emptyExportInput(): ExportArchiveInput {
       fitFoods: [],
       fitMealItems: [],
       fitTargets: [],
+    canvasBoards: [],
     },
     hash: sha256,
   };
@@ -756,6 +757,27 @@ function richProfileData(): ProfileData {
         updatedAt: "2026-07-01T00:00:00.000Z",
       },
     ],
+    // A board with something drawn on it AND an embedded image — the image is
+    // the part of a scene with no natural bound, and it rides INSIDE the row
+    // rather than in `blobs/`, so the round trip is what proves the whole
+    // document survives with nothing lifted out of it.
+    canvasBoards: [
+      {
+        id: "board-schema", profileId: "profile1", name: "Šema baze",
+        scene: {
+          type: "excalidraw",
+          version: 2,
+          source: "nexus",
+          elements: [
+            { id: "el-rect", type: "rectangle", x: 10, y: 20, width: 100, height: 60 },
+            { id: "el-img", type: "image", fileId: "file-1", x: 0, y: 0 },
+          ],
+          appState: { gridSize: 20, objectsSnapModeEnabled: true },
+          files: { "file-1": { mimeType: "image/png", dataURL: "data:image/png;base64,AAAA" } },
+        },
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-02T00:00:00.000Z",
+      },
+    ],
   };
 }
 
@@ -838,6 +860,10 @@ const EMPTY_DATA_FILE_NAMES = [
   // keeps no habits. The pre-1.32 test below strips it (and its checksum) back
   // off, because a 1.31 writer never produced it.
   "data/habits.ndjson",
+  // CANV (migration 059, `1.36.0`) — always written, empty for a profile that
+  // drew nothing. The pre-1.36 test below strips it (and its checksum) back
+  // off, on the habits file's exact terms.
+  "data/canvas.ndjson",
 ] as const;
 
 /** A minimal, fully valid manifest+data-files set (5 empty NDJSON files, checksums matching), so an individual test can override exactly one thing and stay isolated from every other rule. */
@@ -1127,12 +1153,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.36.0`: the nearest minor strictly ahead of this build's `1.35.0`.
+  // `1.37.0`: the nearest minor strictly ahead of this build's `1.36.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.36.0" });
+    const files = baseFiles({ schemaVersion: "1.37.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.36.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.37.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -3828,6 +3854,122 @@ describe("parseImportArchive — HABIT (slice a / 1.32.0)", () => {
   });
 });
 
+describe("parseImportArchive — CANV (slice a / 1.36.0)", () => {
+  const T = "2026-07-01T00:00:00.000Z";
+  const SCENE = {
+    type: "excalidraw",
+    version: 2,
+    source: "nexus",
+    elements: [{ id: "el-rect", type: "rectangle", x: 10, y: 20 }],
+    appState: { gridSize: 20 },
+    files: {},
+  };
+  const BOARD = {
+    type: "canvas-board", id: "cb1", profileId: "profile1", name: "Šema baze",
+    scene: SCENE, createdAt: T, updatedAt: T,
+  };
+
+  function parseCanvasFile(rows: readonly Record<string, unknown>[]) {
+    return parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/canvas.ndjson": ndjson(rows) } })),
+    );
+  }
+
+  const invalidDetails = (result: ReturnType<typeof parseCanvasFile>): (string | undefined)[] =>
+    result.problems.filter((problem) => problem.code === "invalid-record").map((p) => p.detail);
+
+  it("carries a board and its whole drawing through field for field", () => {
+    const result = parseCanvasFile([BOARD]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.canvasBoards).toEqual([
+      { id: "cb1", profileId: "profile1", name: "Šema baze", scene: SCENE, createdAt: T, updatedAt: T },
+    ]);
+  });
+
+  /**
+   * The elements are NOT validated, and that is the type's central decision
+   * rather than an omission (see `parseCanvasBoard`): a schema of our own for a
+   * seventy-field element union would fall behind the editor that defines it,
+   * and the first field this reader refused would be a legitimate drawing an
+   * archive could no longer restore.
+   */
+  it("passes an element shape it knows nothing about straight through", () => {
+    const exotic = { ...SCENE, elements: [{ whatever: true, nested: { deep: [1, 2, 3] } }] };
+    const result = parseCanvasFile([{ ...BOARD, scene: exotic }]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.canvasBoards[0]?.scene.elements).toEqual(exotic.elements);
+  });
+
+  it("keeps an embedded image inside the row rather than expecting a blob", () => {
+    const withImage = {
+      ...SCENE,
+      files: { "file-1": { mimeType: "image/png", dataURL: "data:image/png;base64,AAAA" } },
+    };
+    const result = parseCanvasFile([{ ...BOARD, scene: withImage }]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.canvasBoards[0]?.scene.files).toEqual(withImage.files);
+    // Nothing in `blobs/` was named, so nothing was expected there either.
+    expect(result.problems.filter((problem) => problem.code === "missing-blob")).toEqual([]);
+  });
+
+  it.each([
+    ["a missing envelope tag", { ...SCENE, type: undefined }],
+    ["the wrong envelope tag", { ...SCENE, type: "excalidraw-library" }],
+    ["elements that are not an array", { ...SCENE, elements: {} }],
+    ["an appState that is not an object", { ...SCENE, appState: [] }],
+    ["files that are not an object", { ...SCENE, files: "none" }],
+    ["a fractional version", { ...SCENE, version: 2.5 }],
+    ["JSON that is not a scene at all", { hello: "world" }],
+  ])("refuses %s, naming the field", (_label, scene) => {
+    const result = parseCanvasFile([{ ...BOARD, scene }]);
+    expect(invalidDetails(result)).toEqual(["scene"]);
+    expect(result.data).toBeNull();
+  });
+
+  it.each([
+    ["an empty name", { name: "" }],
+    ["an over-long name", { name: "T".repeat(61) }],
+  ])("refuses %s", (_label, patch) => {
+    expect(invalidDetails(parseCanvasFile([{ ...BOARD, ...patch }]))).toEqual(["name"]);
+  });
+
+  it("refuses a scene past the size ceiling before a store ever sees it", () => {
+    // Big enough to pass the ceiling on the SERIALISED form, which is what the
+    // column will hold and what the store would otherwise refuse mid-restore.
+    const huge = { ...SCENE, files: { big: { dataURL: "A".repeat(9 * 1024 * 1024) } } };
+    expect(invalidDetails(parseCanvasFile([{ ...BOARD, scene: huge }]))).toEqual(["scene"]);
+  });
+
+  it("refuses a second board carrying the same id", () => {
+    const result = parseCanvasFile([BOARD, { ...BOARD, name: "Druga" }]);
+    expect(result.problems).toEqual([
+      { severity: "error", code: "duplicate-id", path: "data/canvas.ndjson", line: 2, detail: "cb1" },
+    ]);
+  });
+
+  it("refuses a board filed in somebody else's data file", () => {
+    const result = parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/notes.ndjson": ndjson([BOARD]) } })),
+    );
+    expect(invalidDetails(result)).toEqual(["type"]);
+  });
+
+  it("reads a pre-1.36.0 archive, which carries no boards at all, as an empty one", () => {
+    const files = baseFiles({ schemaVersion: "1.35.0" });
+    const manifest = JSON.parse(files.get("manifest.json") ?? "{}") as {
+      checksums: Record<string, string>;
+    };
+    // A 1.35 writer produced neither the file nor its checksum.
+    delete manifest.checksums["data/canvas.ndjson"];
+    files.delete("data/canvas.ndjson");
+    files.set("manifest.json", JSON.stringify(manifest));
+
+    const result = parseImportArchive(emptyInputWith(files));
+    expect(result.problems).toEqual([]);
+    expect(result.data).toMatchObject({ canvasBoards: [] });
+  });
+});
+
 describe("parseImportArchive — note categories (NOTE-002 / 1.27.0)", () => {
   const VALID_NOTE_CATEGORY = {
     type: "note-category", id: "nc1", profileId: "profile1", name: "sastanak", color: "zlato",
@@ -3962,8 +4104,8 @@ describe("parseImportArchive — note categories (NOTE-002 / 1.27.0)", () => {
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.35.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.35.0");
+  it("is 1.36.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.36.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -4153,11 +4295,11 @@ describe("parseImportArchive — schema version", () => {
     expect(result.manifest?.profile.kind).toBe("personal");
   });
 
-  // `1.36.0`: the nearest minor strictly ahead of this build's `1.35.0`.
+  // `1.37.0`: the nearest minor strictly ahead of this build's `1.36.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.36.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.37.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.36.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.37.0" },
     ]);
     expect(result.data).toBeNull();
   });

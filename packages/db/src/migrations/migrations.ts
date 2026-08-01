@@ -58,6 +58,7 @@ import { migration055 } from "./055-habits.js";
 import { migration056 } from "./056-habit-reminders.js";
 import { migration057 } from "./057-focus-phases.js";
 import { migration058 } from "./058-fitness-nutrition.js";
+import { migration059 } from "./059-canvas.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -127,6 +128,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration056,
   migration057,
   migration058,
+  migration059,
 ];
 
 /**

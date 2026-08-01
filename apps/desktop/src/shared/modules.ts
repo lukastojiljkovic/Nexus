@@ -999,6 +999,38 @@ const V0_MODULES: ModuleManifest[] = [
     settings: TOOLS_SETTINGS,
     tools: TOOLS_TOOLS,
   },
+  // Tabla (CANV slice a, migration 059) — the infinite canvas. Third module in
+  // „Profesionalno i alati", beside „Fokus" and „Alatke", and the category is
+  // the honest one on their exact terms: „Životni centri" holds subjects
+  // somebody HAS, while a whiteboard is a TOOL you use on whichever of them you
+  // are at. It gets its own prefix rather than joining UTIL, because CANV is its
+  // own PRD entry — the sharing UTIL does is one PRD section implemented twice,
+  // not a bin for anything tool-shaped.
+  //
+  // ON by default, like every built module except PRIV.
+  //
+  // THREE contract slots stay empty, and none of them merely „not yet". No
+  // `widgets`: a dashboard card draws a FACT about the profile, and „you have 4
+  // boards" is a count nobody acts on — a thumbnail would be the honest card,
+  // and rendering one means rasterising a scene on the home screen. No
+  // `searchIndexers`: what a board holds is shapes and hand-placed text at
+  // arbitrary positions, so a hit would have to say „somewhere on this board",
+  // which is a result a user cannot use — and a search INSIDE a board is the
+  // surface that question actually belongs on. No `settings`: the module has
+  // nothing to prefer yet, and a card with one checkbox for the sake of having a
+  // card is exactly the padding SET-006 warns about.
+  //
+  // No `imex` either, and that is not a gap: the module DOES ride in every
+  // archive (`canvas-board`, interchange `1.36.0`), but no module in this file
+  // fills that slot — the interchange is assembled in `@nexus/core` from
+  // `ProfileData`, not from manifests, so a declaration here would be the only
+  // one of its kind and would guarantee nothing.
+  {
+    id: "canvas",
+    prefix: "CANV",
+    category: "Professional & utilities",
+    defaultEnabled: true,
+  },
 ];
 
 /**

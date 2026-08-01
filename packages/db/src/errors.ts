@@ -891,3 +891,24 @@ export class FitMealItemNotFoundError extends DatabaseError {}
  * which is why zero is never coerced into it.
  */
 export class FitTargetValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a canvas board write is rejected at the store boundary (CANV slice
+ * a, migration 059): an empty or over-long `name`, a malformed `now` — or the two
+ * worth naming out loud, a `scene` that is not a valid scene document and one
+ * past `MAX_CANVAS_SCENE_LENGTH`.
+ *
+ * That size refusal is deliberately a NAMED error rather than a SQL CHECK: the
+ * only thing that realistically reaches the ceiling is an embedded image, and the
+ * user who just pasted a photograph into a diagram needs a sentence they can act
+ * on rather than a constraint failure from inside a transaction.
+ *
+ * It is also thrown on the way OUT, when a stored scene fails to parse. That is
+ * corruption rather than input — this store writes nothing but canonical
+ * `serializeCanvasScene` text — and reading it back as an empty board would
+ * silently replace somebody's drawing with a blank page.
+ */
+export class CanvasValidationError extends DatabaseError {}
+
+/** Thrown when a board operation targets an id that is not a live board in the store's own profile — unknown, soft-deleted, or owned by another profile. */
+export class CanvasBoardNotFoundError extends DatabaseError {}

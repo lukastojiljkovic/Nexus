@@ -138,6 +138,22 @@ export type {
   FocusPhaseTiming,
 } from "./focus/focusSession.js";
 
+// --- CANV (the canvas module, migration 059) --------------------------------
+//
+// A board's drawing is Excalidraw's own `serializeAsJSON` document kept VERBATIM
+// — never re-modelled into rows — and what this package validates is the
+// envelope alone. `canvasScene.ts`'s header carries the reasoning, which is the
+// one thing about this module a reader must not have to rediscover.
+export {
+  CANVAS_SCENE_TYPE,
+  MAX_CANVAS_SCENE_LENGTH,
+  emptyCanvasScene,
+  parseCanvasScene,
+  serializeCanvasScene,
+  validateCanvasScene,
+} from "./canvas/canvasScene.js";
+export type { CanvasScene } from "./canvas/canvasScene.js";
+
 // --- FIT (the nutrition module, migration 058) ------------------------------
 //
 // The catalogue is APP-SHIPPED read-only data rather than database rows, and a
@@ -411,6 +427,7 @@ export type {
   ExportEvent,
   ExportEventTemplate,
   ExportEventTemplatePayload,
+  ExportCanvasBoard,
   ExportExam,
   ExportExamTopic,
   ExportFinAccount,

@@ -1,9 +1,10 @@
 import {
+  serializeCanvasScene,
   serializeHabitSchedule,
   serializeRecurrenceRule,
   serializeTaskViewConfig,
 } from "@nexus/core";
-import type { HabitSchedule, RecurrenceRule, TaskViewConfig } from "@nexus/core";
+import type { CanvasScene, HabitSchedule, RecurrenceRule, TaskViewConfig } from "@nexus/core";
 
 /**
  * The value-to-column conversions both archive-apply paths share —
@@ -83,4 +84,16 @@ export function viewConfigText(config: TaskViewConfig | null | undefined): strin
  */
 export function habitScheduleText(schedule: HabitSchedule): string {
   return serializeHabitSchedule(schedule);
+}
+
+/**
+ * A board's drawing as `canvas_boards.scene` stores it (migration 059).
+ * `habitScheduleText`'s twin one module over, and for the same reason: the
+ * parser already returned the canonical envelope, so a restored board is
+ * indistinguishable from one `CanvasStore` wrote itself — which is what lets
+ * that store read anything else back as corruption rather than as an empty
+ * drawing.
+ */
+export function canvasSceneText(scene: CanvasScene): string {
+  return serializeCanvasScene(scene);
 }

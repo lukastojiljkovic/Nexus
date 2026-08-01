@@ -157,6 +157,7 @@ describe("resolveModuleSelection", () => {
       fitness: true,
       focus: true,
       tools: true,
+      canvas: true,
     });
   });
 
@@ -186,6 +187,7 @@ describe("moduleFlagWrites", () => {
       { moduleId: "fitness", enabled: true },
       { moduleId: "focus", enabled: true },
       { moduleId: "tools", enabled: true },
+      { moduleId: "canvas", enabled: true },
     ]);
   });
 

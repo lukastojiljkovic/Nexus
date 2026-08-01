@@ -35,6 +35,7 @@ import {
   FitFoodStore,
   FitMealStore,
   FitTargetStore,
+  CanvasStore,
   HabitStore,
   NexusDatabase,
   NoteAttachmentStore,
@@ -158,6 +159,22 @@ function fitTargetRows(profileId: string, store: FitTargetStore): ProfileData["f
   ];
 }
 
+/**
+ * The boards as the interchange carries them — `gatherCanvas`'s own mapping,
+ * restated here so the round trip exercises the same shape main builds: the
+ * store answers canonical TEXT, the archive carries the nested document.
+ */
+function canvasBoardRows(store: CanvasStore): ProfileData["canvasBoards"] {
+  return store.listActiveWithScenes().map((board) => ({
+    id: board.id,
+    profileId: board.profileId,
+    name: board.name,
+    scene: JSON.parse(board.scene) as ProfileData["canvasBoards"][number]["scene"],
+    createdAt: board.createdAt,
+    updatedAt: board.updatedAt,
+  }));
+}
+
 function emptyProfileData(): ProfileData {
   return {
     tasks: [],
@@ -172,6 +189,7 @@ function emptyProfileData(): ProfileData {
     fitFoods: [],
     fitMealItems: [],
     fitTargets: [],
+    canvasBoards: [],
     events: [],
     eventTemplates: [],
     documents: [],
@@ -321,6 +339,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   const fitFoodStore = new FitFoodStore(handle.raw, profileId);
   const fitMealStore = new FitMealStore(handle.raw, profileId);
   const fitTargetStore = new FitTargetStore(handle.raw, profileId);
+  const canvasStore = new CanvasStore(handle.raw, profileId);
 
   // The merged Yjs state and derived body an export would carry for the edited
   // note — stand-ins for real Yjs bytes (see `bytes()`), but genuinely stored
@@ -587,6 +606,28 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   // read NULL as 0 (or 0 as NULL) would fail the round trip.
   fitTargetStore.save({ kcal: 2200, proteinG: null, carbsG: null, fatG: null }, t2);
 
+  // CANV (migration 059): a board with something drawn on it AND an embedded
+  // image, which is the round trip's real subject here — the image lives inside
+  // the scene's own `files` rather than in `blobs/`, so a restore that lifted it
+  // out or dropped it would fail below rather than quietly ship a blank frame.
+  canvasStore.create(
+    {
+      name: `${name} šema`,
+      scene: JSON.stringify({
+        type: "excalidraw",
+        version: 2,
+        source: "nexus",
+        elements: [
+          { id: "el-rect", type: "rectangle", x: 10, y: 20, width: 100, height: 60 },
+          { id: "el-img", type: "image", fileId: "file-1", x: 0, y: 0 },
+        ],
+        appState: { gridSize: 20 },
+        files: { "file-1": { mimeType: "image/png", dataURL: "data:image/png;base64,AAAA" } },
+      }),
+    },
+    t1,
+  );
+
   const session = focusStore.create(
     { subjectId: subject.id, startedAt: "2026-01-01T09:00:00.000Z", endedAt: "2026-01-01T09:30:00.000Z" },
     "2026-01-01T09:31:00.000Z",
@@ -723,6 +764,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     // a puzzle about which list was wrong.
     fitMealItems: fitMealStore.listAll(),
     fitTargets: fitTargetRows(profileId, fitTargetStore),
+    canvasBoards: canvasBoardRows(canvasStore),
   };
 
   const derived = new Map<string, RestoredNoteDerived>([

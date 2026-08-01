@@ -900,6 +900,7 @@ export function translateCsvFinance(
     fitFoods: [],
     fitMealItems: [],
     fitTargets: [],
+    canvasBoards: [],
   };
 
   return {

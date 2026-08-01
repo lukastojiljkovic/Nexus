@@ -1299,6 +1299,7 @@ export function translateLlmRecords(
     fitFoods: [],
     fitMealItems: [],
     fitTargets: [],
+    canvasBoards: [],
   };
 
   return { data, seededIds, planned: tasks.length + events.length + cards.length + decks.length };

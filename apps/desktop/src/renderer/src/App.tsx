@@ -33,6 +33,7 @@ import { FinancePage, type FinanceIntent } from "./FinancePage.js";
 import { HabitsPage } from "./HabitsPage.js";
 import { FocusPage } from "./FocusPage.js";
 import { ToolsPage } from "./ToolsPage.js";
+import { CanvasPage } from "./CanvasPage.js";
 import { FitnessPage } from "./FitnessPage.js";
 import { SettingsPage, formatArchiveInstant } from "./SettingsPage.js";
 import { NotificationCenter } from "./NotificationCenter.js";
@@ -1321,6 +1322,14 @@ export function App() {
             // shaped and stores nothing, so there is no per-profile state to
             // discard when the active profile changes.
             <ToolsPage enabledModules={enabledIds} />
+          ) : effectiveId === "canvas" && activeProfile ? (
+            // `theme` rather than an `intent` pair: CANV publishes no
+            // quick-create command (`searchCommands.ts`'s `CreatableModuleId` is
+            // untouched — a board is made on the page, from a name), but the
+            // embedded editor needs to be told which theme it is drawing in,
+            // because its own ~209 CSS variables are scoped to `.excalidraw`
+            // and never see `<html data-theme>`.
+            <CanvasPage key={activeProfile.id} profileId={activeProfile.id} theme={theme} />
           ) : effectiveId === SEARCH_PAGE_ID && activeProfile ? (
             <SearchPage
               key={activeProfile.id}

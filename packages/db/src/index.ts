@@ -20,6 +20,8 @@ export {
   AttachmentIndexValidationError,
   CalendarOverlayValidationError,
   CalendarSettingsValidationError,
+  CanvasBoardNotFoundError,
+  CanvasValidationError,
   CardNotFoundError,
   CardValidationError,
   DashboardSetNotFoundError,
@@ -537,6 +539,14 @@ export type {
 } from "./fitness/mealStore.js";
 export { FitTargetStore, MAX_FIT_TARGET } from "./fitness/nutritionTargetStore.js";
 export type { FitTargetGoals, FitTargets } from "./fitness/nutritionTargetStore.js";
+
+// --- CANV (canvas boards, migration 059) ------------------------------------
+//
+// ONE store over ONE table, and the drawing is read only when somebody asks for
+// it: `listActive` never selects the scene column, which is why a board list
+// costs nothing to draw.
+export { CanvasStore, MAX_CANVAS_BOARD_NAME_LENGTH } from "./canvas/canvasStore.js";
+export type { CanvasBoard, CanvasBoardWithScene } from "./canvas/canvasStore.js";
 
 export {
   SearchStore,

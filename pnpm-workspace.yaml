@@ -7,29 +7,67 @@ allowBuilds:
   electron-winstaller: true
   esbuild: true
 
-# Transitive advisories the dependency that pulls them in cannot fix for us:
-# every path below runs through electron-builder, which is already at its
-# latest release and still resolves the vulnerable versions. All three are
-# build-time only — none ship inside the app — but the Security workflow audits
-# the whole tree, and lifting them to the patched patch release is strictly
-# better than narrowing that scan. Drop an entry once electron-builder's own
-# tree has moved past it. postcss is deliberately NOT listed: vite depends on
-# it by caret, so ordinary resolution already lands on a patched release.
+# Transitive advisories the dependency that pulls them in cannot fix for us —
+# the direct dependency is already at its latest release and still resolves a
+# vulnerable version, so ordinary caret resolution can never reach the patch.
+#
+# **The one rule this list lives by:** an override is allowed to REMOVE a
+# vulnerable version from the tree. It is never allowed to make a warning
+# quieter. The two are easy to confuse because both end with a green gate, so
+# the test is mechanical — after adding an entry, `pnpm why <pkg>` must no
+# longer list the affected version. If the version is still installed and only
+# the report changed, the entry is a lie and must come out.
+#
+# This list is therefore ALLOWED TO GROW; what it is not allowed to do is
+# outlive its reason. Each entry names the advisory and the condition that
+# retires it, and drops the moment the upstream tree moves past it. postcss is
+# deliberately NOT listed: vite depends on it by caret, so ordinary resolution
+# already lands on a patched release, and an override there would pin a
+# transitive we have no business pinning.
 overrides:
   # GHSA-3jxr-9vmj-r5cp — DoS via exponential-time brace expansion. Three
   # majors coexist in the tree (via @electron/asar, @electron/universal and
-  # ejs>jake>filelist), each with its own patched release.
+  # ejs>jake>filelist), each with its own patched release. Build-time only,
+  # through electron-builder.
   brace-expansion@1: ^1.1.16
   brace-expansion@2: ^2.1.2
   brace-expansion@5: ^5.0.8
   # Host confusion via a literal backslash authority delimiter, reached
-  # through app-builder-lib > ajv.
+  # through app-builder-lib > ajv. Build-time only.
   fast-uri@3: ^3.1.4
+  # GHSA-mwcw-c2x4-8c55 — predictable ids from a non-integer `size`. SHIPPED,
+  # not build-time: it arrives through @excalidraw/excalidraw, which pins
+  # nanoid at an exact `3.3.3`, and through @excalidraw/mermaid-to-excalidraw,
+  # which pins the 4.x line that has no patched release at all (the advisory's
+  # fix landed on 3.3.8 and 5.0.9). An exact pin is unreachable by resolution
+  # by construction, so an override is the only mechanism there is. Both land
+  # on 3.3.16 — the newest 3.x, already in this tree via vite's own toolchain —
+  # and 4.x leaves the tree entirely. Retires when Excalidraw stops pinning.
+  nanoid: ^3.3.16
+  # GHSA-r5fr-rjxr-66jc / -f23m-r3pf-42rh / -xxjr-mmjv-4gpg — prototype
+  # pollution in `_.unset`/`_.omit` via array paths. SHIPPED, through
+  # excalidraw > mermaid-to-excalidraw > @mermaid-js/parser > langium >
+  # chevrotain.
+  #
+  # **The advisories' "patched 4.17.24" does not exist.** The registry goes
+  # 4.17.23 → 4.18.0 → 4.18.1, so the only release that satisfies `>=4.17.24`
+  # is a MINOR bump, not the patch bump the advisory text implies — worth
+  # saying out loud, because the next reader will otherwise assume a typo in
+  # this file rather than in the advisory. chevrotain imports 39 named lodash
+  # functions and none of the changed ones; the suites are what prove it.
+  # Retires when chevrotain's own range reaches 4.18.
+  lodash-es: ^4.18.1
 
-# There is deliberately no `auditConfig.ignoreGhsas` here, and `pnpm audit
-# --ignore` must not be run in this repo — it does not ignore for one command,
-# it WRITES that key. Either way the ignore would then apply to every audit
-# invocation, including the one guarding what actually ships, so a
-# toolchain-only excuse would silently cover a shipped dependency the day one
-# grew the same advisory. The toolchain scan keeps its allow-list in
-# .github/scripts/audit-toolchain.mjs, where it covers that scan alone.
+# `auditConfig.ignoreGhsas` remains FORBIDDEN here — the overrides above are
+# allowed to grow precisely because they are the opposite of it. An override
+# changes what is installed; an ignore changes only what is said about what is
+# installed, and the vulnerable code stays exactly where it was.
+#
+# `pnpm audit --ignore` must not be run in this repo either: it does not ignore
+# for one command, it WRITES that key. Either way the ignore would then apply
+# to every audit invocation, including the one guarding what actually ships, so
+# a toolchain-only excuse would silently cover a shipped dependency the day one
+# grew the same advisory — and a gate taught to stay quiet stays quiet the next
+# time too, about something nobody chose to tolerate. The toolchain scan keeps
+# its allow-list in .github/scripts/audit-toolchain.mjs, where it covers that
+# scan alone, each entry carrying its reasoning and its expiry.

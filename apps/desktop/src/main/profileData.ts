@@ -17,6 +17,7 @@
 import { extractNoteLinkTargets, mergeNoteState } from "@nexus/core";
 import type {
   ExportNote,
+  ExportCanvasBoard,
   ExportNoteAttachment,
   ExportNoteCategory,
   ExportFinAccount,
@@ -52,6 +53,7 @@ import type {
   DashboardWidgetStore,
   DeckStore,
   DocumentStore,
+  CanvasStore,
   EventStore,
   EventTemplateStore,
   ExamStore,
@@ -130,6 +132,7 @@ export interface ProfileDataDeps {
   fitFoodStore(profileId: string): FitFoodStore;
   fitMealStore(profileId: string): FitMealStore;
   fitTargetStore(profileId: string): FitTargetStore;
+  canvasStore(profileId: string): CanvasStore;
 }
 
 /** Every NOTE-module row `ProfileData` requires (ADR-022 section 3) — `gatherNotes`'s return shape. */
@@ -318,6 +321,44 @@ export function gatherProfileData(deps: ProfileDataDeps, profileId: string): Pro
     ...gatherFinance(deps, profileId),
     ...gatherHabits(deps, profileId),
     ...gatherFitness(deps, profileId),
+    ...gatherCanvas(deps, profileId),
+  };
+}
+
+/**
+ * Gathers every CANV-module row for one profile: ONE read, and it is the read
+ * that carries the DRAWINGS (`listActiveWithScenes`) rather than the cheap
+ * metadata one the page draws its list from. A board IS its drawing, so an
+ * archive of board names would restore a profile whose every diagram is a blank
+ * page.
+ *
+ * Embedded images ride whole, inside the scene's own `files` rather than in
+ * `blobs/` (see `SCHEMA_VERSION`'s `1.36.0` entry), so there is no second gather
+ * to keep in step with this one — and no attachment row anywhere that could go
+ * missing.
+ *
+ * The store hands back canonical TEXT (it is what the column holds); the
+ * interchange carries the nested object, so it is parsed here and re-serialised
+ * by `canvasSceneText` on the way back in. The parse cannot fail: the store
+ * already re-validated it on the way out, and a scene that did not parse threw
+ * there rather than arriving here.
+ */
+function gatherCanvas(
+  deps: Pick<ProfileDataDeps, "canvasStore">,
+  profileId: string,
+): { canvasBoards: ExportCanvasBoard[] } {
+  return {
+    canvasBoards: deps
+      .canvasStore(profileId)
+      .listActiveWithScenes()
+      .map((board) => ({
+        id: board.id,
+        profileId: board.profileId,
+        name: board.name,
+        scene: JSON.parse(board.scene) as ExportCanvasBoard["scene"],
+        createdAt: board.createdAt,
+        updatedAt: board.updatedAt,
+      })),
   };
 }
 

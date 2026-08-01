@@ -298,6 +298,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     focus: "Fokus",
     fitness: "Ishrana",
     tools: "Alatke",
+    canvas: "Tabla",
   } as Record<string, string>,
 
   dashboard: {
@@ -3424,6 +3425,63 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     },
   },
 
+  /**
+   * Tabla (CANV slice a) — the infinite canvas.
+   *
+   * **„Mermaid dijagram“ is the module's one piece of copy that explains rather
+   * than labels, and it has to.** Excalidraw converts a mermaid definition into
+   * EDITABLE shapes, which is exactly the „nacrtaj mi bazu pa je doteraj rukom“
+   * case this feature exists for — but the conversion used to happen SILENTLY on
+   * paste, for any text starting with „graph“, „gantt“, „pie“ and a dozen other
+   * ordinary words. So the trigger is now this button and only this button, and
+   * the copy says what will happen before it happens.
+   *
+   * The drawing surface itself carries no Serbian copy at all in this slice, and
+   * that is a fact worth stating rather than a gap: the editor's own toolbar is
+   * temporary (see `CanvasPage.tsx`), and translating a UI that is about to be
+   * replaced would mean writing the same words twice.
+   */
+  canvas: {
+    /** Above the board strip. Reuses nothing from `strings.modules` — this line names the SECTION, not the sidebar entry. */
+    boardsLabel: "Table",
+    /** The board a profile gets the first time it opens the page. */
+    firstBoardName: "Tabla",
+    newBoard: "Nova tabla",
+    /** The name field of the create/rename form — one field, one label, used by both. */
+    nameLabel: "Naziv table",
+    namePlaceholder: "Šema baze",
+    save: "Sačuvaj",
+    cancel: "Otkaži",
+    rename: "Preimenuj",
+    delete: "Obriši",
+    /** One pending undo at a time, exactly as everywhere else. */
+    undo: "Opozovi",
+    deletedNotice: "Tabla je obrisana.",
+    dismiss: "Zatvori",
+    /** The mermaid action — see this section's own header for why it is a button. */
+    mermaid: "Mermaid dijagram",
+    mermaidTitle: "Napiši mermaid definiciju i pretvori je u oblike koje možeš dalje uređivati.",
+    loadErrorTitle: "Tabla nije učitana",
+    loadError: "Učitavanje tabli nije uspelo. Zatvori i ponovo otvori stranicu.",
+    actionError: "Radnja nije uspela. Pokušaj ponovo.",
+    /**
+     * The autosave failed. It says what is true — the drawing is on screen and
+     * NOT on disk — because „sačuvano“ that silently was not is the one thing a
+     * canvas must never imply.
+     */
+    saveError: "Crtež nije sačuvan. Poslednje izmene su samo na ekranu.",
+    /**
+     * The one refusal a user can actually cause: a scene past
+     * `MAX_CANVAS_SCENE_LENGTH`, which in practice means pasted images. It names
+     * the cause rather than the number, because the number is not something
+     * anybody can act on.
+     */
+    tooLarge: "Tabla je prevelika da bi se sačuvala — ubačene slike zauzimaju previše prostora.",
+    /** Nothing drawn yet, and no board either. */
+    emptyTitle: "Još nema nijedne table",
+    emptyDescription: "Napravi tablu i crtaj — dijagrami, skice, mape ideja.",
+  },
+
   settings: {
     // The page title reuses `strings.modules.settings` — no duplicate copy.
     /**
@@ -4085,6 +4143,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         finance: "Finansije",
         habits: "Navike",
         fitness: "Ishrana",
+        canvas: "Tabla",
       } satisfies Record<keyof RestoreModuleCounts, string>,
       columnCurrent: "Sada",
       columnIncoming: "Iz arhive",

@@ -4,6 +4,8 @@ import { TIME_GRID_MAX_END_MINUTES, TIME_GRID_MIN_EVENT_MINUTES } from "../calen
 import { FOCUS_OUTCOMES, FOCUS_PHASE_KINDS } from "../focus/focusSession.js";
 import { FOOD_CATEGORIES, MAX_FOOD_REF_LENGTH, parseFoodRef } from "../fitness/food.js";
 import type { FoodMacros, FoodServing } from "../fitness/food.js";
+import { MAX_CANVAS_SCENE_LENGTH, validateCanvasScene } from "../canvas/canvasScene.js";
+import type { CanvasScene } from "../canvas/canvasScene.js";
 import { validateHabitSchedule } from "../habits/habitSchedule.js";
 import type { HabitSchedule } from "../habits/habitSchedule.js";
 import { validateRecurrenceRule } from "../recurrence/recurrence.js";
@@ -20,6 +22,7 @@ import type {
   ExportPrivateNotes,
   ExportPrivateNoteVersion,
   ExportCalendarSettings,
+  ExportCanvasBoard,
   ExportCard,
   ExportDashboardSet,
   ExportDashboardSettings,
@@ -244,6 +247,29 @@ export interface ImportArchiveResult {
 /**
  * The schema version this build writes and is the newest it accepts, kept in
  * step with `buildExportArchive`'s own `SCHEMA_VERSION`.
+ *
+ * `1.36.0` adds the CANV module's boards (CANV slice a, migration 059): the
+ * record type `canvas-board`, riding alone in its own `data/canvas.ndjson` (a
+ * new `DATA_FILES` entry the checksum walk's union absorbs unchanged), plus a
+ * new `canvas` archive module. It needs no `ArchiveEra` flag — the
+ * whole-absent-type rule below covers it, and a pre-`1.36.0` archive simply
+ * carries no boards, exactly as a profile that drew none does.
+ *
+ * **A board's `scene` is validated as an ENVELOPE and never as a drawing.**
+ * `validateCanvasScene` checks the six top-level fields Excalidraw's
+ * `serializeAsJSON` writes and then leaves the elements alone, deliberately: a
+ * schema of our own for a seventy-field element union would fall behind the
+ * editor that defines it, and the first field this reader refused would be a
+ * legitimate drawing an archive could no longer restore. The size ceiling
+ * (`MAX_CANVAS_SCENE_LENGTH`) IS enforced here, because an embedded image is the
+ * one part of the document with no natural bound and a row nobody can store is
+ * better refused with a line number than accepted and then rejected by a store
+ * mid-restore.
+ *
+ * **There is no reference rule for a board, because a board has no
+ * references.** It names nothing and nothing names it — its images ride inside
+ * its own `scene.files` rather than in `blobs/` — so this is the one record type
+ * in the file that can neither dangle nor be dangled at.
  *
  * `1.35.0` adds FIT's
  * nutrition half (FIT slice a, migration 058): the record types `fit-food`,
@@ -574,7 +600,7 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.35.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.36.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -1237,7 +1263,8 @@ export type ArchiveRecordType =
   | "habit-entry"
   | "fit-food"
   | "fit-meal-item"
-  | "fit-target";
+  | "fit-target"
+  | "canvas-board";
 
 const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "task",
@@ -1290,6 +1317,7 @@ const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "fit-food",
   "fit-meal-item",
   "fit-target",
+  "canvas-board",
 ];
 
 type DataFilePath = (typeof DATA_FILES)[number];
@@ -1350,6 +1378,7 @@ const FILE_RECORD_TYPES: Record<DataFilePath, readonly ArchiveRecordType[]> = {
   ],
   "data/habits.ndjson": ["habit", "habit-entry"],
   "data/fitness.ndjson": ["fit-target", "fit-food", "fit-meal-item"],
+  "data/canvas.ndjson": ["canvas-board"],
 };
 
 /**
@@ -1374,6 +1403,7 @@ const MODULE_OF_DATA_FILE: Record<DataFilePath, ArchiveModuleId | null> = {
   "data/private-notes.ndjson": null,
   "data/finance.ndjson": "finance",
   "data/habits.ndjson": "habits",
+  "data/canvas.ndjson": "canvas",
   "data/fitness.ndjson": "fitness",
 };
 
@@ -2901,6 +2931,55 @@ function nullableGoal(value: unknown, field: string): number | null {
   return value === null ? null : nonNegativeReal(value, field, MAX_FIT_TARGET);
 }
 
+// --- CANV (canvas boards, migration 059) -------------------------------------
+//
+// `MAX_CANVAS_BOARD_NAME_LENGTH`'s value, copied rather than imported on
+// `NOTE_FOLDER_COLORS`' terms — `@nexus/core` never depends on `@nexus/db`, so
+// the bound `CanvasStore` refuses by is restated here, which is also what makes
+// an over-long name a named `invalid-record` with a line number instead of a raw
+// SQLite error inside a restore transaction. `validateCanvasScene` is NOT a
+// copy: it lives in THIS package (`canvas/canvasScene.ts`) and the store imports
+// it from here, so there is exactly one definition of what a scene is.
+const MAX_CANVAS_BOARD_NAME_LENGTH = 60;
+
+/**
+ * One board (migration 059).
+ *
+ * **`scene` is validated as an envelope and never as a drawing** — see
+ * `INTERCHANGE_SCHEMA_VERSION`'s `1.36.0` entry for why, which is the one thing
+ * about this type a reader must not have to rediscover. `validateCanvasScene`
+ * answers null for anything that is not the document Excalidraw writes, and null
+ * becomes an `invalid-record` naming the field, exactly as a bad habit schedule
+ * does one module over.
+ *
+ * The SIZE ceiling is checked on the SERIALISED form rather than on the parsed
+ * object, because that is what the column holds and what the store will refuse:
+ * a row this reader called fine and the store then rejected would abort a
+ * restore halfway through, which is the failure every bound in this file exists
+ * to move earlier.
+ *
+ * No reference rule anywhere for this type: a board names nothing and nothing
+ * names it (its images ride inside `scene.files`, not in `blobs/`), so it can
+ * neither dangle nor be dangled at.
+ */
+function parseCanvasBoard(raw: Record<string, unknown>): ExportCanvasBoard {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const name = trimmedNonEmptyStr(raw.name, "name", MAX_CANVAS_BOARD_NAME_LENGTH);
+  const scene = canvasScene(raw.scene, "scene");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, profileId, name, scene, createdAt, updatedAt };
+}
+
+/** CANV's own scene envelope, validated into its canonical form — see `parseCanvasBoard` for what is deliberately NOT checked. */
+function canvasScene(value: unknown, field: string): CanvasScene {
+  const scene = validateCanvasScene(value);
+  if (scene === null) throw new InvalidFieldError(field);
+  if (JSON.stringify(scene).length > MAX_CANVAS_SCENE_LENGTH) throw new InvalidFieldError(field);
+  return scene;
+}
+
 // --- Private notes (PRIV v1, ADR-057 §6) -------------------------------------
 
 /** Mirrors `PRIV_ATTACHMENTS_MAX_COUNT` (`apps/desktop`'s wire cap) — copied, not imported, on `NOTE_FOLDER_COLORS`' terms: this package cannot depend on the app's shared wire file. */
@@ -3118,6 +3197,7 @@ interface Collections {
   fitFoods: Bucket<ExportFitFood>;
   fitMealItems: Bucket<ExportFitMealItem>;
   fitTargets: Bucket<ExportFitTarget>;
+  canvasBoards: Bucket<ExportCanvasBoard>;
 }
 
 function newCollections(): Collections {
@@ -3142,6 +3222,7 @@ function newCollections(): Collections {
     finTransactions: newBucket(), finBudgets: newBucket(),
     habits: newBucket(), habitEntries: newBucket(),
     fitFoods: newBucket(), fitMealItems: newBucket(), fitTargets: newBucket(),
+    canvasBoards: newBucket(),
   };
 }
 
@@ -3460,6 +3541,11 @@ function dispatchRecord(
     case "fit-target": {
       const row = parseFitTarget(raw);
       pushRow(collections.fitTargets, row.profileId, row, type, path, line, ctx);
+      return;
+    }
+    case "canvas-board": {
+      const row = parseCanvasBoard(raw);
+      pushRow(collections.canvasBoards, row.id, row, type, path, line, ctx);
       return;
     }
   }
@@ -5039,6 +5125,10 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         fitFoods: rowsOf(collections.fitFoods),
         fitMealItems: rowsOf(collections.fitMealItems),
         fitTargets: rowsOf(collections.fitTargets),
+        // Empty for every pre-1.36.0 archive, which carries no such file at all
+        // — and a restore reads that emptiness as "this profile drew nothing",
+        // which is exactly what it drew.
+        canvasBoards: rowsOf(collections.canvasBoards),
       };
 
   // Beside `data` and gated identically (ADR-057 §6): empty both for a

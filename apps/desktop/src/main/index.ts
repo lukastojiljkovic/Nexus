@@ -29,6 +29,8 @@ import {
   dayKeyToUtcMs,
   FOCUS_PHASE_KINDS,
   isValidDayKey,
+  MAX_CANVAS_SCENE_LENGTH,
+  parseCanvasScene,
   parseFoodRef,
   searchFoods,
   phaseProgress,
@@ -85,6 +87,8 @@ import {
   BackupSettingsStore,
   CalendarOverlayStore,
   CalendarSettingsStore,
+  CanvasStore,
+  MAX_CANVAS_BOARD_NAME_LENGTH,
   CARD_RATINGS,
   CardStore,
   DashboardSetStore,
@@ -236,6 +240,8 @@ import {
   type UpdateFinRecurringFields,
   type UpdateFinTransactionFields,
   type CreateHabitInput,
+  type CanvasBoard,
+  type CanvasBoardWithScene,
   type Habit,
   type HabitDayRange,
   type HabitEntry,
@@ -3595,6 +3601,54 @@ function userFoodOption(food: FitFood): FitFoodOption {
   };
 }
 
+// --- Tabla (CANV slice a, migration 059) validators --------------------------
+//
+// SEC-EL-02 as everywhere: structural checks here, semantics in the store. Two
+// things about this block are worth naming.
+//
+// **The name is capped in CHARACTERS, through `asCappedChars`** — migration
+// 059's CHECK is `length(name)`, which SQLite counts in characters, and
+// „Arhitektura“ and „Šema baze“ carry two-byte letters. See `asCappedChars`' own
+// doc for the defect that rule was written from.
+//
+// **The scene is checked for LENGTH before it is parsed.** A scene arrives as
+// text, and the one part of it with no natural size is an embedded image; the
+// bound must therefore be applied to the string rather than after `JSON.parse`
+// has already built a multi-megabyte object out of untrusted input.
+
+/** A board's name: a non-empty string capped where migration 059's own CHECK caps it. */
+function asCanvasBoardName(value: unknown, field: string): string {
+  const name = asCappedChars(value, field, MAX_CANVAS_BOARD_NAME_LENGTH);
+  if (name.trim().length === 0) {
+    throw new Error(`Invalid IPC payload: "${field}" must not be blank.`);
+  }
+  return name;
+}
+
+/**
+ * A scene document from an untrusted caller, through CANV's OWN validator — so a
+ * JSON file that is not a scene is refused at the wire rather than at the column.
+ *
+ * Returns the text UNCHANGED rather than the canonical re-serialisation: the
+ * store re-validates and canonicalises it anyway (it is the one that owns the
+ * column's form), and canonicalising twice would mean serialising several
+ * megabytes for nothing.
+ */
+function asCanvasScene(value: unknown, field: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`Invalid IPC payload: "${field}" must be a string.`);
+  }
+  if (value.length > MAX_CANVAS_SCENE_LENGTH) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must not exceed ${MAX_CANVAS_SCENE_LENGTH} characters.`,
+    );
+  }
+  if (parseCanvasScene(value) === null) {
+    throw new Error(`Invalid IPC payload: "${field}" is not a valid canvas scene document.`);
+  }
+  return value;
+}
+
 // --- FOCUS: the one running phase (UTIL slice b, ADR-077) --------------------
 //
 // SEC-EL-02 as everywhere: structural checks here, semantics in the store. Two
@@ -4079,6 +4133,12 @@ function fitMealStore(profileId: string): FitMealStore {
 
 function fitTargetStore(profileId: string): FitTargetStore {
   return new FitTargetStore(requireDb().raw, profileId);
+}
+
+// CANV (migration 059). One store over one table — a board IS its drawing, so
+// there is no second store for the scenes.
+function canvasStore(profileId: string): CanvasStore {
+  return new CanvasStore(requireDb().raw, profileId);
 }
 
 /** The whole sets state every `dash:*-set` channel answers with (ADR-055): the named boards in board order plus the active choice. */
@@ -5217,6 +5277,7 @@ function restoreDeps(): ImportDeps {
     fitFoodStore,
     fitMealStore,
     fitTargetStore,
+    canvasStore,
     saveBlob: (bytes) => saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes),
     // Injected rather than reached for, so `restore.ts` never has to know WHICH
     // tables reference a blob — that union lives in exactly one place
@@ -5288,6 +5349,7 @@ function imexArchiveDeps(): ImexArchiveDeps {
     fitFoodStore,
     fitMealStore,
     fitTargetStore,
+    canvasStore,
     flagStore,
     readBlob: (sha256) => readBlob(blobStorePathsFor(), requireBlobKeys(), sha256),
     // A private attachment's decrypted bytes, under whatever section is open
@@ -8882,6 +8944,83 @@ function registerIpc(): void {
       asFitTargetGoals(body.goals),
       new Date().toISOString(),
     );
+  });
+
+  // Tabla (CANV slice a, migration 059). SEC-EL-02 as everywhere: trusted
+  // sender, `asRecord`, one `as*` per field, and the store re-validates all of
+  // it — including the scene, which it parses a second time on its own terms
+  // because a store is never the place that assumes its caller did. `now` is
+  // main's clock on every write.
+  //
+  // The list read answers METADATA and the open read answers a DRAWING, two
+  // channels rather than one, because the first is asked for on every mount and
+  // the second carries megabytes (see the channel list's own note).
+  ipcMain.handle(IpcChannel.canvasList, (event, payload): CanvasBoard[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return canvasStore(profileId).listActive();
+  });
+
+  ipcMain.handle(IpcChannel.canvasOpen, (event, payload): CanvasBoardWithScene => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return canvasStore(profileId).readScene(id);
+  });
+
+  // An ABSENT `scene` is „prazna tabla", read off the key being missing rather
+  // than off a sentinel — the store owns what an empty document is, so nothing
+  // here has to construct one.
+  ipcMain.handle(IpcChannel.canvasCreate, (event, payload): CanvasBoardWithScene => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const name = asCanvasBoardName(body.name, "name");
+    const input =
+      body.scene === undefined
+        ? { name }
+        : { name, scene: asCanvasScene(body.scene, "scene") };
+    return canvasStore(profileId).create(input, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.canvasRename, (event, payload): CanvasBoard => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const name = asCanvasBoardName(body.name, "name");
+    return canvasStore(profileId).rename(id, name, new Date().toISOString());
+  });
+
+  // The autosave — the one channel here that fires while somebody is working.
+  // It carries no name and answers no scene: the caller already has the
+  // document, and echoing it back would double the cost of every save.
+  ipcMain.handle(IpcChannel.canvasSaveScene, (event, payload): CanvasBoard => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const scene = asCanvasScene(body.scene, "scene");
+    return canvasStore(profileId).saveScene(id, scene, new Date().toISOString());
+  });
+
+  // A soft delete: the drawing is UNTOUCHED, so the undo beside it brings the
+  // board back exactly as it was.
+  ipcMain.handle(IpcChannel.canvasDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    canvasStore(profileId).softDelete(id, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.canvasRestore, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    canvasStore(profileId).restore(id, new Date().toISOString());
   });
 
   // Global search (ADR-021 / PRD 08 SRCH-001/002): `runSearchQuery`/

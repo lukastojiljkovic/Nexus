@@ -434,6 +434,25 @@ export const IpcChannel = {
   // reads identically in JSON on this wire — see the store's own doc.
   fitTargets: "fit:targets",
   fitTargetsSave: "fit:targets-save",
+  // Table (CANV slice a, migration 059). One channel per store operation, on the
+  // `fin-*:*`/`habits:*` rule, and here it does real work: `canvas:save-scene`
+  // fires every few seconds while somebody draws, so it must not be able to
+  // rename or delete anything, and `canvas:rename` must not be able to carry a
+  // drawing. The store keeps them apart with two statements; this list keeps
+  // them apart on the wire.
+  //
+  // **`canvas:list` and `canvas:open` are two channels because a scene is
+  // LARGE.** The list answers metadata only — it is what the board strip draws,
+  // and it is asked for on every mount — while `canvas:open` is the one call
+  // that carries a whole drawing across this boundary. A single channel would
+  // put several megabytes on the cheap read.
+  canvasList: "canvas:list",
+  canvasOpen: "canvas:open",
+  canvasCreate: "canvas:create",
+  canvasRename: "canvas:rename",
+  canvasSaveScene: "canvas:save-scene",
+  canvasDelete: "canvas:delete",
+  canvasRestore: "canvas:restore",
   searchQuery: "search:query",
   searchRecent: "search:recent",
   searchPage: "search:page",
@@ -4979,6 +4998,103 @@ export interface FitTargetsSaveRequest {
   goals: FitTargetGoals;
 }
 
+// --- Tabla (CANV slice a, migration 059) -------------------------------------
+//
+// Every shape below mirrors `@nexus/db`'s canvas store, redeclared here so the
+// renderer never imports it — the rule this whole file follows.
+//
+// **The scene crosses this wire as TEXT, not as an object**, and that is
+// deliberate. The renderer already has it as a string (`serializeAsJSON`
+// produces one) and main hands it straight to a column that holds one, so
+// parsing it into an object at the bridge and re-serialising it on the other
+// side would be two conversions in service of nothing. Main validates the text
+// through `@nexus/core`'s `validateCanvasScene` exactly as it would an object —
+// the untrusted-input rule is unaffected by the encoding.
+
+/** Mirrors `MAX_CANVAS_BOARD_NAME_LENGTH` in `@nexus/db`, so the field can cap its own input; the store stays authoritative. */
+export const MAX_CANVAS_BOARD_NAME_LENGTH = 60;
+/**
+ * Mirrors `MAX_CANVAS_SCENE_LENGTH` in `@nexus/core` — the ceiling on one
+ * stored drawing. It is not a limit on how much anyone can draw (a scene of
+ * thousands of shapes is a few hundred kilobytes) but a bound on the one part of
+ * the document with no natural size: an embedded image, which rides as a base64
+ * data URL inside the scene.
+ */
+export const MAX_CANVAS_SCENE_LENGTH = 8 * 1024 * 1024;
+
+/**
+ * One board WITHOUT its drawing — what the board strip lists.
+ *
+ * The scene is absent from this shape rather than nullable, exactly as it is
+ * from the store's own `CanvasBoard`: the list read never selects that column,
+ * so a field here would be a value this type can never carry.
+ */
+export interface CanvasBoard {
+  id: string;
+  profileId: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One board WITH its drawing — what `canvas:open` and `canvas:create` answer. */
+export interface CanvasBoardWithScene extends CanvasBoard {
+  /** Canonical `serializeCanvasScene` text — Excalidraw's own document, kept verbatim. */
+  scene: string;
+}
+
+export interface CanvasListRequest {
+  profileId: string;
+}
+
+export interface CanvasOpenRequest {
+  profileId: string;
+  id: string;
+}
+
+/**
+ * Creates a board. An ABSENT `scene` means an empty one — „napravi mi praznu
+ * tablu" is the ordinary case and must not require the renderer to construct a
+ * document it has no opinion about.
+ */
+export interface CanvasCreateRequest {
+  profileId: string;
+  name: string;
+  scene?: string;
+}
+
+/** Renames a board. Cannot carry a drawing — see the channel list's own note. */
+export interface CanvasRenameRequest {
+  profileId: string;
+  id: string;
+  name: string;
+}
+
+/**
+ * Replaces a board's drawing. Cannot carry a name.
+ *
+ * This is the ONE channel the app calls while the user is working — the
+ * autosave — so it is deliberately the narrowest: one id, one document, and a
+ * reply of METADATA rather than an echo of the several megabytes it was just
+ * handed.
+ */
+export interface CanvasSaveSceneRequest {
+  profileId: string;
+  id: string;
+  scene: string;
+}
+
+/** A soft delete. The drawing stays exactly where it is, so the undo brings the whole board back. */
+export interface CanvasDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
+export interface CanvasRestoreRequest {
+  profileId: string;
+  id: string;
+}
+
 /**
  * Global search (ADR-021 / PRD 08 SRCH-001/002). The index itself (migration
  * 017) and its read-only store already exist; these three channels are the
@@ -5513,6 +5629,13 @@ export interface RestoreModuleCounts {
    * snapshot it was logged with.
    */
   fitness: number;
+  /**
+   * The boards (CANV, migration 059) — a count of BOARDS, never of what is drawn
+   * on them. One board is one row, drawing and all: the number a restore preview
+   * must be right about is how many boards are about to be replaced, and „412
+   * shapes" would name something nobody has a name for.
+   */
+  canvas: number;
 }
 
 /** The outcome of the native "pick a restore archive" dialog (IMEX slice 3c). Mirrors `SaveAttachmentResult`'s shape, plus what a restore preview needs before it can even ask for a passphrase: the file's display name and whether it is an `NXA1` container. */
@@ -5731,7 +5854,8 @@ export type ImportRecordType =
   | "habit-entry"
   | "fit-food"
   | "fit-meal-item"
-  | "fit-target";
+  | "fit-target"
+  | "canvas-board";
 
 /**
  * Why rows the archive carried are not in the plan. Mirrors `@nexus/core`'s
@@ -7699,6 +7823,22 @@ export interface NexusApi {
   fitTargets(profileId: string): Promise<FitTargets>;
   /** Writes all four at once; `null` clears one, and `0` is a goal of zero rather than none. */
   fitSaveTargets(profileId: string, goals: FitTargetGoals): Promise<FitTargets>;
+  /** This profile's boards, sr-Latn alphabetical and WITHOUT their drawings — the cheap read the board strip is built from. */
+  listCanvasBoards(profileId: string): Promise<CanvasBoard[]>;
+  /** One board AND its whole drawing. The one call on this surface that carries a scene back. */
+  openCanvasBoard(profileId: string, id: string): Promise<CanvasBoardWithScene>;
+  /** Creates a board; an absent `scene` is an empty one. */
+  createCanvasBoard(profileId: string, name: string, scene?: string): Promise<CanvasBoardWithScene>;
+  /** Renames a board. Cannot touch the drawing. */
+  renameCanvasBoard(profileId: string, id: string, name: string): Promise<CanvasBoard>;
+  /**
+   * Replaces a board's drawing — the autosave. Cannot touch the name, and
+   * answers with METADATA rather than echoing the document back.
+   */
+  saveCanvasScene(profileId: string, id: string, scene: string): Promise<CanvasBoard>;
+  /** Soft-deletes a board. The drawing stays, so the undo brings the whole thing back. */
+  deleteCanvasBoard(profileId: string, id: string): Promise<void>;
+  restoreCanvasBoard(profileId: string, id: string): Promise<void>;
   /** Runs the query pipeline (parse -> FTS match -> bm25 candidates -> rank), falling back to `searchRecent`'s order when the query has no matchable terms (ADR-021). */
   searchQuery(profileId: string, query: string, limit: number): Promise<SearchResult[]>;
   /** The profile's most recently touched entries, already in their final order — no ranking pass, unlike `searchQuery`. */

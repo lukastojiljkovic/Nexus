@@ -17,6 +17,7 @@
     "dist": "node scripts/dist.mjs"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.1",
     "@nexus/core": "workspace:*",
     "@nexus/db": "workspace:*",
     "@nexus/tokens": "workspace:*",

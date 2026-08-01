@@ -583,6 +583,21 @@ const api: NexusApi = {
   fitTargets: (profileId) => ipcRenderer.invoke(IpcChannel.fitTargets, { profileId }),
   fitSaveTargets: (profileId, goals) =>
     ipcRenderer.invoke(IpcChannel.fitTargetsSave, { profileId, goals }),
+  listCanvasBoards: (profileId) => ipcRenderer.invoke(IpcChannel.canvasList, { profileId }),
+  openCanvasBoard: (profileId, id) => ipcRenderer.invoke(IpcChannel.canvasOpen, { profileId, id }),
+  // `scene` is passed through as given, `undefined` included — an absent scene is
+  // „prazna tabla", which main reads off the key being missing rather than off a
+  // sentinel value.
+  createCanvasBoard: (profileId, name, scene) =>
+    ipcRenderer.invoke(IpcChannel.canvasCreate, { profileId, name, scene }),
+  renameCanvasBoard: (profileId, id, name) =>
+    ipcRenderer.invoke(IpcChannel.canvasRename, { profileId, id, name }),
+  saveCanvasScene: (profileId, id, scene) =>
+    ipcRenderer.invoke(IpcChannel.canvasSaveScene, { profileId, id, scene }),
+  deleteCanvasBoard: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.canvasDelete, { profileId, id }),
+  restoreCanvasBoard: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.canvasRestore, { profileId, id }),
   searchQuery: (profileId, query, limit) =>
     ipcRenderer.invoke(IpcChannel.searchQuery, { profileId, query, limit }),
   searchRecent: (profileId, limit) =>

@@ -53,6 +53,7 @@ describe("createModuleRegistry", () => {
       "fitness",
       "focus",
       "tools",
+      "canvas",
     ]);
   });
 
@@ -105,6 +106,7 @@ describe("createModuleRegistry", () => {
       FIT: ["fitness"],
       // The one deliberate sharing — see this test's own comment.
       UTIL: ["focus", "tools"],
+      CANV: ["canvas"],
     });
   });
 
@@ -151,11 +153,14 @@ describe("createModuleRegistry", () => {
     // „Fokus" is the first module in „Profesionalno i alati", and the category
     // is the honest one: „Životni centri" holds three subjects somebody HAS,
     // while a Pomodoro timer is a TOOL you use on whichever of them you are at.
-    // Two modules now, one PRD section: „Fokus" is a timer you run, „Alatke" is
-    // a drawer you open — separate entries because they are separate errands.
+    // Three modules now: „Fokus" is a timer you run, „Alatke" a drawer you
+    // open, „Tabla" a surface you draw on — separate entries because they are
+    // separate errands. The first two share the UTIL prefix (one PRD section
+    // implemented twice); CANV has its own, because it is its own PRD entry.
     expect(grouped.get("Professional & utilities")?.map((manifest) => manifest.id)).toEqual([
       "focus",
       "tools",
+      "canvas",
     ]);
   });
 
@@ -185,6 +190,7 @@ describe("createModuleRegistry", () => {
       "fitness",
       "focus",
       "tools",
+      "canvas",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -319,7 +325,9 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
 
   it("declares a card for exactly the modules that have one, and none for SET itself", () => {
     // „Podešavanja" hand-composes the shell's cards; a settings card inside
-    // Settings would be a mirror facing a mirror.
+    // Settings would be a mirror facing a mirror. CANV is absent for a
+    // different reason and deliberately: „Tabla" has nothing to prefer yet, and
+    // a card with one checkbox for the sake of having a card is padding.
     expect(declared.map(([moduleId]) => moduleId)).toEqual([
       "dashboard",
       "tasks",

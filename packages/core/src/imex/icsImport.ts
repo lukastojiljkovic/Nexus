@@ -1008,5 +1008,6 @@ export function translateIcsEvents(
     fitFoods: [],
     fitMealItems: [],
     fitTargets: [],
+    canvasBoards: [],
   };
 }

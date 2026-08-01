@@ -731,6 +731,7 @@ export function translateApkg(parsed: ParsedApkg, target: ApkgTranslateTarget): 
     fitFoods: [],
     fitMealItems: [],
     fitTargets: [],
+    canvasBoards: [],
   };
 
   return {

@@ -11075,3 +11075,174 @@ button.cal__grid-event--dragging {
   font-size: var(--nx-font-size-body-sm);
   color: var(--nx-danger);
 }
+
+/* --- Tabla (CANV slice a) ------------------------------------------------- */
+
+.canv {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  /* The canvas fills what is left of the page: an infinite surface inside a
+     content-height box would be a scroll bar wrapped around a scroll bar. */
+  height: 100%;
+  min-height: 0;
+}
+.canv__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-3);
+  flex-wrap: wrap;
+}
+.canv__label {
+  font-size: var(--nx-font-size-label);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+.canv__boards {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+/* The active board is TYPOGRAPHIC — gold text and weight, no inset bar and no
+   glow — which is the same rule the sidebar's active entry follows. */
+.canv__tab {
+  border: 0;
+  background: none;
+  padding: var(--nx-space-1) var(--nx-space-2);
+  border-radius: var(--nx-radius-sm);
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+  cursor: pointer;
+}
+.canv__tab:hover {
+  color: var(--nx-text);
+  background: var(--nx-surface-alt);
+}
+.canv__tab--active {
+  color: var(--nx-accent);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.canv__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  margin-left: auto;
+}
+.canv__name-form {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nx-space-2);
+}
+.canv__error,
+.canv__notice {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+}
+.canv__error {
+  color: var(--nx-danger);
+}
+.canv__notice {
+  color: var(--nx-text-muted);
+}
+.canv__surface {
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  overflow: hidden;
+}
+
+/* TEMPORARY (CANV slice a), and it is only reachable while `EXCALIDRAW_OWN_UI`
+   is false: the editor's own toolbar, islands and footer, hidden until our own
+   toolbar lands. Delete this block together with that constant. */
+.canv__surface--chromeless .excalidraw .layer-ui__wrapper,
+.canv__surface--chromeless .excalidraw .App-toolbar-container,
+.canv__surface--chromeless .excalidraw .App-menu {
+  display: none;
+}
+
+/*
+ * Excalidraw's theme, restated from our own tokens.
+ *
+ * **Its ~209 variables are declared on `.excalidraw`, not on `:root`** — which
+ * is exactly why this block exists and why it is scoped the same way. Setting
+ * them at `:root` would lose to the editor's own rule on every one of them, so
+ * they are restated here, on the same selector, where they win by order.
+ *
+ * `--color-primary` leads because it is the one that would otherwise be most
+ * visible: its default is Excalidraw's violet, and it paints every selection
+ * outline, focus ring and active tool in the canvas — a banned hue arriving
+ * through a dependency rather than through our own stylesheet.
+ *
+ * What is NOT restated: the twenty-odd `--color-gray-*` steps, the warning and
+ * success ramps, and the shadow/radius scales. They are the editor's internal
+ * palette rather than surfaces the user reads as „Nexus", and restating a ramp
+ * from tokens that have no ramp would mean inventing eight values.
+ */
+.excalidraw {
+  --color-primary: var(--nx-accent);
+  --color-primary-darker: var(--nx-accent-strong);
+  --color-primary-darkest: var(--nx-accent-strong);
+  --color-primary-light: var(--nx-accent-soft);
+  --color-primary-light-darker: var(--nx-accent-soft);
+  --color-primary-hover: var(--nx-accent-strong);
+  --color-brand-hover: var(--nx-accent-strong);
+  --color-brand-active: var(--nx-accent-strong);
+  --color-selection: var(--nx-accent);
+  --color-on-primary-container: var(--nx-text);
+  --color-surface-primary-container: var(--nx-accent-soft);
+
+  --island-bg-color: var(--nx-surface);
+  --default-bg-color: var(--nx-bg);
+  --default-border-color: var(--nx-border);
+  --dialog-border-color: var(--nx-border);
+  --sidebar-bg-color: var(--nx-surface);
+  --sidebar-border-color: var(--nx-border);
+  --popup-bg-color: var(--nx-surface);
+  --popup-secondary-bg-color: var(--nx-surface-alt);
+  --popup-text-color: var(--nx-text);
+  --overlay-bg-color: var(--nx-surface-alt);
+
+  --text-primary-color: var(--nx-text);
+  --color-on-surface: var(--nx-text);
+  --color-surface-lowest: var(--nx-bg);
+  --color-surface-low: var(--nx-surface);
+  --color-surface-mid: var(--nx-surface-alt);
+  --color-surface-high: var(--nx-surface-alt);
+  --color-muted: var(--nx-text-muted);
+  --color-disabled: var(--nx-text-muted);
+  --link-color: var(--nx-accent);
+
+  --input-bg-color: var(--nx-surface);
+  --input-border-color: var(--nx-border);
+  --input-hover-bg-color: var(--nx-surface-alt);
+  --input-label-color: var(--nx-text-muted);
+  --select-highlight-color: var(--nx-accent);
+
+  --button-bg: var(--nx-surface);
+  --button-color: var(--nx-text);
+  --button-border: var(--nx-border);
+  --button-hover-bg: var(--nx-surface-alt);
+  --button-hover-color: var(--nx-text);
+  --button-hover-border: var(--nx-border);
+  --button-active-bg: var(--nx-accent-soft);
+  --button-active-border: var(--nx-accent);
+  --button-destructive-bg-color: var(--nx-danger-soft);
+  --button-destructive-color: var(--nx-danger);
+  --button-special-active-bg-color: var(--nx-accent-soft);
+
+  --color-danger: var(--nx-danger);
+  --color-danger-text: var(--nx-danger);
+  --color-danger-background: var(--nx-danger-soft);
+  --color-success: var(--nx-success);
+  --color-success-text: var(--nx-success);
+
+  font-family: var(--nx-font-family-ui);
+}

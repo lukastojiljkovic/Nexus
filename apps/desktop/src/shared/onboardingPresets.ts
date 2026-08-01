@@ -45,6 +45,7 @@ export const ESSENTIALS_MODULE_PRESET: ModulePreset = {
   focus: true,
   fitness: true,
   tools: true,
+  canvas: true,
 };
 
 /**
@@ -97,6 +98,13 @@ export const ESSENTIALS_MODULE_PRESET: ModulePreset = {
  * it would be an invented difference ABOUT SOMEBODY'S BODY, which is the last
  * thing a role question has any standing to guess at. It costs nothing to leave
  * on: the module holds nothing until the user logs a first meal.
+ *
+ * CANV („Tabla“) is true in every row on „Alatke“'s argument at one remove: a
+ * whiteboard is a SURFACE rather than a subject, and „skiciraj ovo“ is not
+ * shaped differently for a student and a founder. It holds nothing until
+ * somebody draws on it — the one board a fresh profile gets is empty and is
+ * made on the page rather than at completion — so leaving it on costs a profile
+ * a sidebar entry and nothing else.
  */
 export const OCCUPATION_MODULE_PRESETS: Readonly<Record<OnboardingOccupation, ModulePreset>> = {
   student: ESSENTIALS_MODULE_PRESET,
@@ -112,6 +120,7 @@ export const OCCUPATION_MODULE_PRESETS: Readonly<Record<OnboardingOccupation, Mo
     focus: true,
     fitness: true,
     tools: true,
+    canvas: true,
   },
   preduzetnik: {
     tasks: true,
@@ -125,6 +134,7 @@ export const OCCUPATION_MODULE_PRESETS: Readonly<Record<OnboardingOccupation, Mo
     focus: true,
     fitness: true,
     tools: true,
+    canvas: true,
   },
   drugo: ESSENTIALS_MODULE_PRESET,
 };

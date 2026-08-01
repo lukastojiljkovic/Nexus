@@ -22,8 +22,8 @@ import { CardStore, MIGRATIONS, NexusDatabase, openDatabase, runMigrations } fro
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 58 (focus phases, then FIT nutrition), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(58);
+  it("is at version 59 (FIT nutrition, then the canvas boards), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(59);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -7859,6 +7859,146 @@ describe("migration 058 — FIT nutrition (FIT slice a)", () => {
         0,
       );
     }
+    db.close();
+  });
+});
+
+describe("migration 059 — canvas boards (CANV slice a)", () => {
+  const T = "2026-01-01T00:00:00.000Z";
+  /** Canonical `serializeCanvasScene` output — the only thing this column ever holds. */
+  const EMPTY_SCENE = JSON.stringify({
+    type: "excalidraw",
+    version: 2,
+    source: "nexus",
+    elements: [],
+    appState: {},
+    files: {},
+  });
+
+  const insertBoard = (
+    db: NexusDatabase,
+    id: string,
+    profileId: string,
+    overrides: Partial<{ name: string; scene: string }> = {},
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO canvas_boards (id, profile_id, name, scene, created_at, updated_at, deleted_at)
+         VALUES (?, ?, ?, ?, ?, ?, NULL)`,
+      )
+      .run(id, profileId, overrides.name ?? "Tabla", overrides.scene ?? EMPTY_SCENE, T, T);
+
+  it("creates the board table and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "canvas-fresh.db") });
+    expect(tableNames(db)).toContain("canvas_boards");
+    expect(
+      (db.raw.prepare("PRAGMA table_info(canvas_boards)").all() as { name: string }[]).map(
+        (row) => row.name,
+      ),
+    ).toEqual(["id", "profile_id", "name", "scene", "created_at", "updated_at", "deleted_at"]);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  /**
+   * ADR-042's precondition, CHECKED rather than assumed (see `059-canvas.ts`):
+   * at version 58 there is no `canvas_boards` table and nothing references one,
+   * so migration 059 is a plain `CREATE TABLE` with no rebuild to endanger a
+   * referenced parent — and an upgrade of a populated database keeps every row
+   * it had.
+   */
+  it("adds the table to a database written at 58, whose rows it leaves untouched", () => {
+    const path = join(dir, "canvas-upgrade-058.db");
+    const before = new Database(path);
+    before.pragma("journal_mode = WAL");
+    before.pragma("foreign_keys = ON");
+    before.function("nx_fold", { deterministic: true }, (value: unknown) =>
+      typeof value === "string" ? foldSearchText(value) : null,
+    );
+    runMigrations(
+      before,
+      MIGRATIONS.filter((migration) => migration.version <= 58),
+    );
+    expect(
+      before
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'canvas_boards'")
+        .all(),
+    ).toEqual([]);
+    before
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run("p1", "personal", "Stari profil", T);
+    before.close();
+
+    const db = openDatabase({ path });
+    expect(tableNames(db)).toContain("canvas_boards");
+    // No rows: a profile that predates the module drew nothing, which is what
+    // an empty table says.
+    expect((db.raw.prepare("SELECT count(*) AS n FROM canvas_boards").get() as { n: number }).n).toBe(
+      0,
+    );
+    expect((db.raw.prepare("SELECT count(*) AS n FROM profiles").get() as { n: number }).n).toBe(1);
+    db.close();
+  });
+
+  it.each([
+    ["empty-name", { name: "" }],
+    ["over-long-name", { name: "T".repeat(61) }],
+    ["empty-scene", { scene: "" }],
+  ])("refuses %s", (label, overrides) => {
+    const db = openDatabase({ path: join(dir, `canvas-check-${label}.db`) });
+    insertProfile(db, "p1");
+    expect(() => insertBoard(db, "b1", "p1", overrides)).toThrow(/CHECK/i);
+    db.close();
+  });
+
+  it("lets two boards of one profile share a name — a board is identified by its id", () => {
+    const db = openDatabase({ path: join(dir, "canvas-dupe-name.db") });
+    insertProfile(db, "p1");
+    insertBoard(db, "b1", "p1", { name: "Baza" });
+    expect(() => insertBoard(db, "b2", "p1", { name: "Baza" })).not.toThrow();
+    db.close();
+  });
+
+  it("keeps the scene verbatim, byte for byte", () => {
+    const db = openDatabase({ path: join(dir, "canvas-verbatim.db") });
+    insertProfile(db, "p1");
+    const scene = JSON.stringify({
+      type: "excalidraw",
+      version: 2,
+      source: "nexus",
+      elements: [{ id: "a", type: "rectangle", strokeWidth: 2 }],
+      appState: { gridSize: 20 },
+      files: {},
+    });
+    insertBoard(db, "b1", "p1", { scene });
+    expect(
+      (db.raw.prepare("SELECT scene FROM canvas_boards WHERE id = 'b1'").get() as { scene: string })
+        .scene,
+    ).toBe(scene);
+    db.close();
+  });
+
+  it("takes a profile's boards with it — the table is a CHILD of profiles and never a parent", () => {
+    const db = openDatabase({ path: join(dir, "canvas-cascade.db") });
+    insertProfile(db, "p1");
+    insertProfile(db, "p2");
+    insertBoard(db, "b1", "p1");
+    insertBoard(db, "b2", "p2");
+    db.raw.prepare("DELETE FROM profiles WHERE id = 'p1'").run();
+    expect(db.raw.prepare("SELECT id FROM canvas_boards ORDER BY id").all()).toEqual([{ id: "b2" }]);
+    db.close();
+  });
+
+  it("indexes the live boards by profile and name, and keeps the drawing out of that index", () => {
+    const db = openDatabase({ path: join(dir, "canvas-index.db") });
+    const [index] = db.raw
+      .prepare(
+        "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'canvas_boards_profile_active'",
+      )
+      .all() as { sql: string }[];
+    expect(index?.sql).toContain("(profile_id, name, id)");
+    expect(index?.sql).toContain("WHERE deleted_at IS NULL");
+    expect(index?.sql).not.toContain("scene");
     db.close();
   });
 });

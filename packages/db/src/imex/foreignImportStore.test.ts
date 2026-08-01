@@ -148,6 +148,7 @@ function emptyProfileData(): ProfileData {
     fitFoods: [],
     fitMealItems: [],
     fitTargets: [],
+    canvasBoards: [],
   };
 }
 

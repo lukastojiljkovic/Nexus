@@ -729,6 +729,7 @@ export function translateCsvTasks(
     fitFoods: [],
     fitMealItems: [],
     fitTargets: [],
+    canvasBoards: [],
   };
 
   return {

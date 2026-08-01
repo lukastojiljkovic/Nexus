@@ -776,6 +776,16 @@ const ID_MINTERS: Record<keyof ProfileData, (data: ProfileData, ctx: PlanContext
   // Nothing to mint: the row's key is the profile, and it is not imported at all
   // (see the plan below).
   fitTargets: NO_IDS,
+  /**
+   * A BOARD is minted, always — never absorbed by name, for the habit's reasons
+   * at one remove. It carries CONTENT a merge would overwrite (the whole
+   * drawing), migration 059 puts no uniqueness on its name, and two „Šema baze"
+   * boards in two profiles are two different diagrams rather than one written
+   * twice. Absorbing would be the worst possible outcome here besides: the
+   * target's own drawing would be replaced by somebody else's, silently, by an
+   * import whose card promises DODAJE.
+   */
+  canvasBoards: (data, ctx) => mintAll(data.canvasBoards, ctx),
   noteTagLinks: NO_IDS,
   // The same name-is-identity rule as the two template tables above, against the
   // NOTE module's own name space (migration 015's `UNIQUE (profile_id, name)`).
@@ -1439,6 +1449,16 @@ export function planForeignImport(
     // alone — and the import card promises DODAJE, which an upsert over their row
     // would break. Named in the report below, like every by-design skip.
     fitTargets: [],
+    // --- CANV (migration 059) ---------------------------------------------
+    // Every board imports as its own row: nothing here absorbs one (see
+    // `ID_MINTERS.canvasBoards`), and the drawing rides unremapped because there
+    // is nothing in it that points anywhere — an embedded image lives inside the
+    // scene's own `files`, keyed by an id only that scene uses.
+    canvasBoards: source.canvasBoards.map((row) => ({
+      ...row,
+      id: mapped(row.id, ctx),
+      profileId: target.profileId,
+    })),
   };
 
   return {
@@ -1460,7 +1480,7 @@ export function planForeignImport(
 function zeroPerModule(): Record<ArchiveModuleId, number> {
   return {
     tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0, dashboard: 0, finance: 0,
-    habits: 0, fitness: 0,
+    habits: 0, fitness: 0, canvas: 0,
   };
 }
 

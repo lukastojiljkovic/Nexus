@@ -4,6 +4,7 @@ import { RestoreValidationError } from "../errors.js";
 import { TOGGLEABLE_NOTIFICATION_SOURCES } from "../notify/notificationStore.js";
 import { TASK_ORDER_GAP, TaskListStore } from "../tasks/taskListStore.js";
 import {
+  canvasSceneText,
   exdatesText,
   habitScheduleText,
   offsetsText,
@@ -197,6 +198,9 @@ export const RESTORE_WIPE_TABLES = [
   "fit_meal_items",
   "fit_foods",
   "fit_targets",
+  // CANV (migration 059). One table, scoped straight by `profile_id`: a board
+  // has no children and no parent but the profile itself.
+  "canvas_boards",
 ] as const;
 
 type WipeTable = (typeof RESTORE_WIPE_TABLES)[number];
@@ -290,6 +294,7 @@ export class RestoreStore {
   private readonly insertFitFood: Database.Statement;
   private readonly insertFitMealItem: Database.Statement;
   private readonly insertFitTarget: Database.Statement;
+  private readonly insertCanvasBoard: Database.Statement;
   private readonly insertSubject: Database.Statement;
   private readonly insertSubjectAttachment: Database.Statement;
   private readonly insertSubjectNoteLink: Database.Statement;
@@ -452,6 +457,14 @@ export class RestoreStore {
     this.insertFitTarget = db.prepare(
       `INSERT INTO fit_targets (profile_id, kcal, protein_g, carbs_g, fat_g, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    // CANV (migration 059). The drawing is written through `canvasSceneText` —
+    // the same serializer `CanvasStore` writes through — so a restored board is
+    // byte-identical to one drawn here, which is what lets that store read
+    // anything else back as corruption rather than as a blank page.
+    this.insertCanvasBoard = db.prepare(
+      `INSERT INTO canvas_boards (id, profile_id, name, scene, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertSubject = db.prepare(
       `INSERT INTO subjects
@@ -1347,6 +1360,20 @@ export class RestoreStore {
           item.per100g.kcal, item.per100g.protein, item.per100g.carbs, item.per100g.fat,
           item.per100g.fiber, item.per100g.sugar, item.per100g.sodiumMg,
           item.createdAt, item.updatedAt,
+        );
+        written += 1;
+      }
+
+      // CANV (migration 059): the boards, each carrying its whole drawing.
+      // Nothing here points anywhere — an embedded image lives inside the
+      // scene's own `files`, keyed by an id only that scene uses — so there is
+      // no order to keep and nothing to reconcile. EMPTY for every pre-1.36.0
+      // archive, which restores a profile that drew nothing, exactly as it drew
+      // none.
+      for (const board of input.data.canvasBoards) {
+        this.insertCanvasBoard.run(
+          board.id, this.profileId, board.name, canvasSceneText(board.scene),
+          board.createdAt, board.updatedAt,
         );
         written += 1;
       }

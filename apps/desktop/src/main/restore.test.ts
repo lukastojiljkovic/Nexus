@@ -40,6 +40,7 @@ import {
   ForeignImportStore,
   FitFoodStore,
   FitMealStore,
+  CanvasStore,
   FitTargetStore,
   HabitStore,
   NexusDatabase,
@@ -227,6 +228,7 @@ function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
     fitFoodStore: (profileId) => new FitFoodStore(handle.raw, profileId),
     fitMealStore: (profileId) => new FitMealStore(handle.raw, profileId),
     fitTargetStore: (profileId) => new FitTargetStore(handle.raw, profileId),
+    canvasStore: (profileId) => new CanvasStore(handle.raw, profileId),
   };
 }
 
@@ -535,6 +537,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   const fitFoodStore = new FitFoodStore(handle.raw, profileId);
   const fitMealStore = new FitMealStore(handle.raw, profileId);
   const fitTargetStore = new FitTargetStore(handle.raw, profileId);
+  const canvasStore = new CanvasStore(handle.raw, profileId);
 
   // HABIT (migration 055): one habit of each schedule kind and real days ticked
   // on both, so the zip round trip carries a streak's whole substance rather
@@ -586,6 +589,24 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     t0,
   );
   fitTargetStore.save({ kcal: 2200, proteinG: null, carbsG: null, fatG: null }, t0);
+
+  // CANV (migration 059): a board with shapes AND an embedded image, so the
+  // zip round trip carries a whole drawing rather than an empty module — the
+  // image is the part with no natural size and it rides INSIDE the row.
+  canvasStore.create(
+    {
+      name: `${label} šema`,
+      scene: JSON.stringify({
+        type: "excalidraw",
+        version: 2,
+        source: "nexus",
+        elements: [{ id: "el-rect", type: "rectangle", x: 10, y: 20, width: 100, height: 60 }],
+        appState: { gridSize: 20 },
+        files: { "file-1": { mimeType: "image/png", dataURL: "data:image/png;base64,AAAA" } },
+      }),
+    },
+    t0,
+  );
 
   // A real ledger (migration 051): two same-currency accounts so a TRANSFER
   // rides through the whole zip round trip as the one row it is, a budgeted
@@ -861,6 +882,16 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     fitFoods: fitFoodStore.list(),
     fitMealItems: fitMealStore.listAll(),
     fitTargets: [{ profileId, kcal: 2200, proteinG: null, carbsG: null, fatG: null, updatedAt: t0 }],
+    // CANV (migration 059), read the same way `gatherCanvas` reads it: the
+    // store answers canonical TEXT, the archive carries the nested document.
+    canvasBoards: canvasStore.listActiveWithScenes().map((board) => ({
+      id: board.id,
+      profileId: board.profileId,
+      name: board.name,
+      scene: JSON.parse(board.scene) as ProfileData["canvasBoards"][number]["scene"],
+      createdAt: board.createdAt,
+      updatedAt: board.updatedAt,
+    })),
   };
 
   const derived = deriveRestoredNotes(data.notes);

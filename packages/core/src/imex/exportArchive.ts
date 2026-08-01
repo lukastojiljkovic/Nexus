@@ -27,6 +27,7 @@
 
 import type { FocusOutcome, FocusPhaseKind } from "../focus/focusSession.js";
 import type { FoodMacros, FoodServing } from "../fitness/food.js";
+import type { CanvasScene } from "../canvas/canvasScene.js";
 import type { HabitSchedule } from "../habits/habitSchedule.js";
 import type { RecurrenceRule } from "../recurrence/recurrence.js";
 import type { TaskViewConfig } from "../tasks/taskViewConfig.js";
@@ -46,6 +47,37 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * `tables/*.csv` is for their spreadsheet, and it is checksummed by neither. An
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
+ *
+ * `1.36.0` adds the CANV module's boards (CANV slice a, migration 059): ONE
+ * record type — `canvas-board` — riding in its own `data/canvas.ndjson`, a new
+ * `DATA_FILES` entry checksummed like the ten before it, plus a new `canvas`
+ * member in `ARCHIVE_MODULE_IDS`. A module of its own for `1.32.0`'s reason
+ * exactly: one module↔collection mapping serves both `countProfileModules` and
+ * `filterProfileData`, and filing a drawing under (say) notes would make a
+ * notes-only export carry somebody's boards.
+ *
+ * **The DRAWING travels whole, as the editor's own document, and that is the
+ * fact about this module a reader must not have to rediscover.** `scene` is
+ * Excalidraw's `serializeAsJSON` output kept verbatim (`canvas/canvasScene.ts`),
+ * a nested OBJECT rather than a JSON string for the reason a task's `recurrence`
+ * is one: the interchange is JSON, and a string here would be a second encoding
+ * nobody can read in the file. What the reader validates is the ENVELOPE alone —
+ * `type`, `version`, `source` and the three containers — never the elements,
+ * because a schema of our own for a seventy-field element union would fall
+ * behind the editor that defines it, and the first field we failed to carry
+ * would be a drawing that came back wrong.
+ *
+ * An embedded image rides INSIDE `scene.files`, as the base64 data URL the
+ * editor put there, and is deliberately NOT lifted into `blobs/` the way a note
+ * attachment is. A note attachment is a file the user chose and can point at
+ * again; an image pasted into a diagram is part of the diagram, referenced by an
+ * id only the scene knows. Content-addressing it would buy deduplication of
+ * something that is almost never duplicated, at the cost of a scene that no
+ * longer restores from its own line.
+ *
+ * No `ArchiveEra` flag: the whole-absent-type rule below covers it, and a
+ * pre-`1.36.0` archive simply carries no boards, which is indistinguishable from
+ * a profile that drew none.
  *
  * `1.35.0` adds the FIT module's nutrition half (FIT slice a, migration 058):
  * three record types — `fit-food`, `fit-meal-item` and `fit-target` — riding in
@@ -416,7 +448,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.35.0";
+const SCHEMA_VERSION = "1.36.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -1580,6 +1612,36 @@ export interface ExportFitTarget {
   updatedAt: string;
 }
 
+// --- CANV (canvas boards, migration 059) ------------------------------------
+//
+// One record type, because a board IS its drawing: there is nothing else about
+// it to carry beyond a name and the usual timestamps.
+
+/**
+ * One board (migration 059). Rides alone in `data/canvas.ndjson`; it names
+ * nothing and nothing names it, so the file has no ordering to keep.
+ *
+ * `scene` is the EDITOR's own document, kept verbatim — see `SCHEMA_VERSION`'s
+ * `1.36.0` entry for why it travels whole rather than re-modelled into rows, and
+ * `canvas/canvasScene.ts` for what „whole" means. A nested object rather than a
+ * JSON string, exactly as a habit's `schedule` and a task's `recurrence` are
+ * nested: the interchange is JSON, and a string here would be a second encoding
+ * nobody can read in the file.
+ *
+ * There is no `archivedAt` beside the soft delete, unlike a habit's: nothing is
+ * derived from a board over time, so „gotov sam s ovim" and „obriši ovo" are the
+ * same act here (migration 059).
+ */
+export interface ExportCanvasBoard {
+  id: string;
+  profileId: string;
+  name: string;
+  /** Excalidraw's `serializeAsJSON` document. The reader validates its envelope and never its elements. */
+  scene: CanvasScene;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /**
  * Everything the manifest's "settings" section carries (founder decision #11:
  * flags + NTF settings ship with the export).
@@ -1795,6 +1857,18 @@ export interface ProfileData {
   fitFoods: readonly ExportFitFood[];
   fitMealItems: readonly ExportFitMealItem[];
   fitTargets: readonly ExportFitTarget[];
+  /**
+   * The CANV module's boards (migration 059). Required like every field above:
+   * a module the caller forgets must be a type error, not a quiet omission.
+   * EMPTY both for a pre-`1.36.0` archive and for a profile that drew nothing,
+   * indistinguishable on purpose, because they mean the same thing.
+   *
+   * Every row carries its whole drawing — including any embedded image, which
+   * rides inside `scene.files` rather than in `blobs/` (see `SCHEMA_VERSION`'s
+   * `1.36.0` entry). So this collection alone is what a board is; there is no
+   * second file to keep in step with it.
+   */
+  canvasBoards: readonly ExportCanvasBoard[];
 }
 
 // --- Private notes (PRIV v1, ADR-057 §6) ------------------------------------
@@ -2015,6 +2089,9 @@ export const DATA_FILES = [
   // the same terms — a pre-1.34 archive neither carries it nor declares its
   // checksum, and absent-and-undeclared is nothing at all.
   "data/fitness.ndjson",
+  // The CANV module (migration 059, `1.36.0`): its own file, on the same terms
+  // again — a pre-1.36 archive neither carries it nor declares its checksum.
+  "data/canvas.ndjson",
 ] as const;
 
 /** The manifest's module ids, in manifest order — the grouping `countProfileModules` counts by and `buildExportArchive` builds `manifest.modules` from, so the two can never disagree. */
@@ -2040,6 +2117,10 @@ export const ARCHIVE_MODULE_IDS = [
   // so this bucket counts the user's own foods, their diary and their goals, and
   // nothing the app supplied.
   "fitness",
+  // CANV (migration 059, `1.36.0`) — its own module, on the same terms again.
+  // One board is one row, drawing and all, so this count is the number of
+  // boards rather than of anything drawn on them.
+  "canvas",
 ] as const;
 export type ArchiveModuleId = (typeof ARCHIVE_MODULE_IDS)[number];
 
@@ -2137,6 +2218,10 @@ export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, 
     // change. The app-shipped catalogue is counted nowhere, because it is not
     // in the archive at all.
     fitness: data.fitFoods.length + data.fitMealItems.length + data.fitTargets.length,
+    // One board is one row, drawing and all. This is deliberately NOT a count of
+    // shapes: the number a preview must be right about is how many boards are
+    // being replaced, and „412" would name something nobody has a name for.
+    canvas: data.canvasBoards.length,
   };
 }
 
@@ -2294,6 +2379,11 @@ export function filterProfileData(
     fitFoods: only("fitness", data.fitFoods),
     fitMealItems: only("fitness", data.fitMealItems),
     fitTargets: only("fitness", data.fitTargets),
+    // A board points at nothing and nothing points at a board, so this module
+    // drops on its own with nothing to repair anywhere — the simplest case in
+    // this whole function. The images a board carries go with it, because they
+    // are inside its own row rather than in `blobs/`.
+    canvasBoards: only("canvas", data.canvasBoards),
   };
 }
 
@@ -2445,6 +2535,12 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     ...data.fitMealItems.map((row) => ({ type: "fit-meal-item", ...row })),
   ]);
 
+  // One record type and no ordering to keep: a board names nothing and nothing
+  // names a board, so the file is simply the boards in the order they arrived.
+  const canvasNdjson = toNdjson(
+    data.canvasBoards.map((row) => ({ type: "canvas-board", ...row })),
+  );
+
   const privateNotes = input.privateNotes ?? EMPTY_PRIVATE_NOTES;
   const privateNotesNdjson = toNdjson([
     ...privateNotes.notes.map((row) => ({ type: "private-note", ...row })),
@@ -2461,6 +2557,7 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   files.set("data/finance.ndjson", financeNdjson);
   files.set("data/habits.ndjson", habitsNdjson);
   files.set("data/fitness.ndjson", fitnessNdjson);
+  files.set("data/canvas.ndjson", canvasNdjson);
 
   // --- Notes: Markdown mirror + binary entries (ADR-022 section 3) -------
   const binaries: ExportBinaryEntry[] = [];
