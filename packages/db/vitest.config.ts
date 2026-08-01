@@ -1,52 +1,58 @@
 import { defineConfig } from "vitest/config";
 
 /**
- * The only Vitest config in this repository. It bounds this package's worker
- * pool, and its header exists mostly to stop the next person re-running an
- * experiment that has already been run and has already failed.
+ * The only Vitest config in this repository. It exists for one fixed bug and one
+ * standing warning.
  *
- * **The problem.** `pnpm test` exits 1 intermittently — roughly half of all runs
- * — with `Error: [vitest-worker]: Timeout calling "onTaskUpdate"`, while
- * reporting every one of this package's 1 900+ tests as PASSED. Nothing is ever
- * wrong with a test: the message is a worker's RPC to the main process timing
- * out, so the run is failed by the reporter rather than by an assertion.
+ * **The bug.** `pnpm test` failed roughly half its runs with
+ * `Error: [vitest-worker]: Timeout calling "onTaskUpdate"` while reporting every
+ * one of this package's 1 900+ tests as PASSED. It was never an assertion: a
+ * rejected RPC promise surfaces as an „Unhandled Error" and sets
+ * `process.exitCode = 1`, so a green run went red.
  *
- * **What has been ruled out, by measurement rather than by argument:**
+ * **The cause, established from vitest's own source rather than guessed.** The
+ * 60 s deadline is armed in the WORKER and cleared in exactly one place — the
+ * worker's `process.on("message")` handler — so it measures whether the worker
+ * DISPATCHED the reply, not whether main sent one. Between tests the runner
+ * yields a microtask, which never advances libuv to the poll phase, so a file of
+ * back-to-back synchronous native SQLite work never reads its acks and any file
+ * over 60 s fails the run. `vitest.setup.ts` carries the full chain with
+ * citations; the fix is the awaited `setImmediate` it installs, and it makes
+ * file duration stop mattering.
  *
- *  - *Machine load.* It reproduces on an idle machine — two node processes, CPU
- *    at 30 % — so „another lane was building" does not explain it.
- *  - *A leaked database handle.* Every test file in this package closes its
- *    database in `afterEach`; a sweep confirmed no file opens one without.
- *  - *A specific test.* All 1 933 pass in every occurrence, and the error is
- *    raised by a timer inside vitest's own RPC layer, never by an assertion.
+ * Two things measured in both directions, worth keeping so the diagnosis is
+ * re-checkable: nine files run sequentially in ONE fork totalled 74 s — over the
+ * limit, longest file 20 s — and were CLEAN, which kills „the run is too long";
+ * while single files at 84.1 s, 65.1 s and 64.6 s each fired and the same suite
+ * minus its one long file was clean twice, which is what leaves „the FILE is too
+ * long" standing.
  *
- * **`pool: "threads"` LOOKED like the fix and is not — do not try it again.**
- * The reasoning was sound (threads put the same RPC on an in-process
- * `MessagePort` instead of an OS pipe) and three consecutive isolated
- * `npx vitest run --pool=threads` runs came back clean. Run through
- * `pnpm test`, it **segfaults**: exit `-1073741819`, which is `0xC0000005`,
- * an access violation. The encrypted-SQLite native module does not survive
- * being loaded across worker threads here, and a crashing suite is categorically
- * worse than a noisy one — it can report a false pass, where a reporter timeout
- * can only ever report a false failure. Three green isolated runs turned out not
- * to be evidence about the command the gate actually runs; that is the lesson.
+ * **A correction to this file's own previous header.** It claimed these workers
+ * „run Argon2id at 128 MiB" and are „memory-bound". That is false and was my
+ * error: `@nexus/db` depends on `@nexus/core`, `better-sqlite3-multiple-ciphers`
+ * and `ts-fsrs`, `hash-wasm` appears nowhere in its graph, and SQLCipher here is
+ * keyed with a RAW 256-bit key and no KDF (`src/database.ts:15`). No key
+ * derivation runs in this suite at all, and no single test blocks the loop for
+ * more than about 1.4 s.
  *
- * **What this config does.** Bounds the fork pool to eight. Turbo runs the four
- * packages' test tasks concurrently and Vitest defaults to one worker per core,
- * so a full run asks for roughly sixty forks on a sixteen-core machine; this
- * package is the one that cannot absorb that, because its workers open real
- * encrypted SQLite files and run Argon2id at 128 MiB and are memory-bound rather
- * than CPU-bound. Eight measurably reduces the failure rate and makes the suite
- * FASTER for not thrashing (80 s → 64 s). It does not eliminate it.
- *
- * **So the residual failure is a KNOWN, UNRESOLVED defect**, recorded as one in
- * STATUS rather than papered over here. Every test still runs and nothing about
- * the reporting is relaxed. When it fires, the run is re-run; if a re-run fails
- * for any reason other than this exact reporter timeout with a full green test
- * count, that is a real failure and is treated as one.
+ * **The standing warning — `pool: "threads"` is not the answer, do not try it
+ * again.** The reasoning is tempting (threads put the same RPC on an in-process
+ * `MessagePort`) and three consecutive isolated runs came back clean. Run through
+ * `pnpm test` it SEGFAULTS: exit `-1073741819`, `0xC0000005`. The encrypted
+ * SQLite native module does not survive being loaded across worker threads here,
+ * and a crash can report a false PASS where a reporter timeout can only ever
+ * report a false failure. The lesson that came with it: three green isolated runs
+ * are not evidence about the command the gate actually runs.
  */
 export default defineConfig({
   test: {
+    setupFiles: ["./vitest.setup.ts"],
+    /**
+     * Bounded because turbo runs four packages' suites concurrently and vitest
+     * defaults to one worker per core — about sixty forks on a sixteen-core
+     * machine. This is about thrash, not about the bug above, which the setup
+     * file fixes on its own: measured at 80 s unbounded against 64 s at eight.
+     */
     poolOptions: {
       forks: { maxForks: 8 },
     },
