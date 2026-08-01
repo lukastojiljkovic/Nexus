@@ -102,6 +102,8 @@ function emptyExportInput(): ExportArchiveInput {
       finRecurring: [],
       finTransactions: [],
       finBudgets: [],
+      habits: [],
+      habitEntries: [],
     },
     hash: sha256,
   };
@@ -659,6 +661,50 @@ function richProfileData(): ProfileData {
         createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
       },
     ],
+    habits: [
+      // Both schedule kinds, because neither expresses the other and the round
+      // trip has to prove both survive it.
+      {
+        id: "habit-1", profileId: "profile1", name: "Teretana", color: "maslina",
+        schedule: { kind: "days", weekdays: [1, 3, 5] }, target: null, unit: null,
+        reminderTime: "07:30", archivedAt: null,
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+      {
+        id: "habit-2", profileId: "profile1", name: "Voda", color: null,
+        schedule: { kind: "quota", perWeek: 5 }, target: 8, unit: "čaša",
+        reminderTime: null, archivedAt: null,
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+      // ARCHIVED, and still here: the fact travels beside the row rather than
+      // instead of it (migration 055's two independent timestamps).
+      {
+        id: "habit-3", profileId: "profile1", name: "Čitanje", color: "zlato",
+        schedule: { kind: "days", weekdays: [1, 2, 3, 4, 5, 6, 7] }, target: 20, unit: "strana",
+        reminderTime: "21:00", archivedAt: "2026-07-06T00:00:00.000Z",
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-06T00:00:00.000Z",
+      },
+    ],
+    habitEntries: [
+      {
+        id: "habit-entry-1", habitId: "habit-1", date: "2026-07-01", value: 1,
+        createdAt: "2026-07-01T18:00:00.000Z", updatedAt: "2026-07-01T18:00:00.000Z",
+      },
+      {
+        id: "habit-entry-2", habitId: "habit-1", date: "2026-07-03", value: 1,
+        createdAt: "2026-07-03T18:00:00.000Z", updatedAt: "2026-07-03T18:00:00.000Z",
+      },
+      // A counted day, on the habit that has a target — the same table, one
+      // nullable column apart.
+      {
+        id: "habit-entry-3", habitId: "habit-2", date: "2026-07-01", value: 8,
+        createdAt: "2026-07-01T21:00:00.000Z", updatedAt: "2026-07-01T21:00:00.000Z",
+      },
+      {
+        id: "habit-entry-4", habitId: "habit-3", date: "2026-07-02", value: 25,
+        createdAt: "2026-07-02T22:00:00.000Z", updatedAt: "2026-07-02T22:00:00.000Z",
+      },
+    ],
   };
 }
 
@@ -737,6 +783,10 @@ const EMPTY_DATA_FILE_NAMES = [
   // FIN (migration 051, `1.28.0`) — always written, empty for a profile that
   // keeps no ledger.
   "data/finance.ndjson",
+  // HABIT (migration 055, `1.32.0`) — always written, empty for a profile that
+  // keeps no habits. The pre-1.32 test below strips it (and its checksum) back
+  // off, because a 1.31 writer never produced it.
+  "data/habits.ndjson",
 ] as const;
 
 /** A minimal, fully valid manifest+data-files set (5 empty NDJSON files, checksums matching), so an individual test can override exactly one thing and stay isolated from every other rule. */
@@ -1026,12 +1076,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.32.0`: the nearest minor strictly ahead of this build's `1.31.0`.
+  // `1.33.0`: the nearest minor strictly ahead of this build's `1.32.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.32.0" });
+    const files = baseFiles({ schemaVersion: "1.33.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.32.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.33.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -3551,6 +3601,182 @@ describe("parseImportArchive — FIN subscriptions (FIN slice d / 1.30.0)", () =
   });
 });
 
+describe("parseImportArchive — HABIT (slice a / 1.32.0)", () => {
+  const T = "2026-07-01T00:00:00.000Z";
+  const HABIT = {
+    type: "habit", id: "hb1", profileId: "profile1", name: "Teretana", color: "maslina",
+    schedule: { kind: "days", weekdays: [1, 3, 5] }, target: null, unit: null,
+    reminderTime: "07:30", archivedAt: null, createdAt: T, updatedAt: T,
+  };
+  const COUNTED = {
+    type: "habit", id: "hb2", profileId: "profile1", name: "Voda", color: null,
+    schedule: { kind: "quota", perWeek: 5 }, target: 8, unit: "čaša",
+    reminderTime: null, archivedAt: null, createdAt: T, updatedAt: T,
+  };
+  const ENTRY = {
+    type: "habit-entry", id: "he1", habitId: "hb1", date: "2026-07-01", value: 1,
+    createdAt: T, updatedAt: T,
+  };
+
+  function parseHabitsFile(rows: readonly Record<string, unknown>[]) {
+    return parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/habits.ndjson": ndjson(rows) } })),
+    );
+  }
+
+  const invalidDetails = (result: ReturnType<typeof parseHabitsFile>): (string | undefined)[] =>
+    result.problems.filter((problem) => problem.code === "invalid-record").map((p) => p.detail);
+
+  it("carries a habit and its day through field for field", () => {
+    const result = parseHabitsFile([HABIT, COUNTED, ENTRY]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.habits).toEqual([
+      {
+        id: "hb1", profileId: "profile1", name: "Teretana", color: "maslina",
+        schedule: { kind: "days", weekdays: [1, 3, 5] }, target: null, unit: null,
+        reminderTime: "07:30", archivedAt: null, createdAt: T, updatedAt: T,
+      },
+      {
+        id: "hb2", profileId: "profile1", name: "Voda", color: null,
+        schedule: { kind: "quota", perWeek: 5 }, target: 8, unit: "čaša",
+        reminderTime: null, archivedAt: null, createdAt: T, updatedAt: T,
+      },
+    ]);
+    expect(result.data?.habitEntries).toEqual([
+      { id: "he1", habitId: "hb1", date: "2026-07-01", value: 1, createdAt: T, updatedAt: T },
+    ]);
+  });
+
+  it("returns the schedule CANONICAL, so a restored row and a fresh one are the same bytes", () => {
+    const result = parseHabitsFile([
+      { ...HABIT, schedule: { kind: "days", weekdays: [5, 1, 1, 3] } },
+    ]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.habits[0]?.schedule).toEqual({ kind: "days", weekdays: [1, 3, 5] });
+  });
+
+  /**
+   * The module's central decision, enforced at the archive boundary: HABIT has
+   * its own two-kind schedule vocabulary and speaks no ADR-024. A rule that any
+   * `task`, `event` or `fin-recurring` row in this very archive would carry
+   * happily is `invalid-record` here, because a streak over „every 3rd Tuesday
+   * until March" is not a concept anyone can defend.
+   */
+  it("refuses an ADR-024 recurrence rule in the schedule field", () => {
+    for (const schedule of [
+      { freq: { kind: "daily", interval: 1 }, end: { kind: "never" } },
+      { freq: { kind: "weekly", interval: 1, days: [0, 2, 4] }, end: { kind: "count", total: 10 } },
+    ]) {
+      expect(invalidDetails(parseHabitsFile([{ ...HABIT, schedule }]))).toEqual(["schedule"]);
+    }
+  });
+
+  it.each([
+    ["an empty weekday list", { kind: "days", weekdays: [] }],
+    ["weekday 0 — the recurrence engine's numbering, not this one", { kind: "days", weekdays: [0] }],
+    ["weekday 8", { kind: "days", weekdays: [8] }],
+    ["a quota of eight", { kind: "quota", perWeek: 8 }],
+    ["a quota of zero", { kind: "quota", perWeek: 0 }],
+    ["a schedule that is a string", "days"],
+    ["a missing schedule", undefined],
+  ])("refuses %s", (_label, schedule) => {
+    expect(invalidDetails(parseHabitsFile([{ ...HABIT, schedule }]))).toEqual(["schedule"]);
+  });
+
+  it("refuses a malformed habit, naming the field", () => {
+    expect(invalidDetails(parseHabitsFile([{ ...HABIT, name: "" }]))).toEqual(["name"]);
+    expect(invalidDetails(parseHabitsFile([{ ...HABIT, color: "neon" }]))).toEqual(["color"]);
+    expect(invalidDetails(parseHabitsFile([{ ...COUNTED, target: 8.5 }]))).toEqual(["target"]);
+    expect(invalidDetails(parseHabitsFile([{ ...COUNTED, target: 0 }]))).toEqual(["target"]);
+    expect(invalidDetails(parseHabitsFile([{ ...HABIT, reminderTime: "7am" }]))).toEqual([
+      "reminderTime",
+    ]);
+    expect(invalidDetails(parseHabitsFile([{ ...HABIT, archivedAt: "juče" }]))).toEqual([
+      "archivedAt",
+    ]);
+  });
+
+  it("refuses a unit with no target to be the unit of — migration 055's own pair CHECK", () => {
+    expect(invalidDetails(parseHabitsFile([{ ...HABIT, unit: "čaša" }]))).toEqual(["unit"]);
+  });
+
+  it("carries the archive of a habit its owner has finished with", () => {
+    const result = parseHabitsFile([{ ...HABIT, archivedAt: "2026-07-06T00:00:00.000Z" }]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.habits[0]?.archivedAt).toBe("2026-07-06T00:00:00.000Z");
+  });
+
+  it.each([
+    ["a zero value — an untouched day is the ABSENCE of a row", 0],
+    ["a negative value", -1],
+    ["a fractional value", 2.5],
+  ])("refuses an entry with %s", (_label, value) => {
+    expect(invalidDetails(parseHabitsFile([HABIT, { ...ENTRY, value }]))).toEqual(["value"]);
+  });
+
+  it("refuses an entry whose day is not a real calendar date", () => {
+    expect(invalidDetails(parseHabitsFile([HABIT, { ...ENTRY, date: "2026-02-30" }]))).toEqual([
+      "date",
+    ]);
+  });
+
+  it("refuses either type in another module's file", () => {
+    const result = parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/notes.ndjson": ndjson([HABIT]) } })),
+    );
+    expect(result.problems).toEqual([
+      { severity: "error", code: "invalid-record", path: "data/notes.ndjson", line: 1, detail: "type" },
+    ]);
+  });
+
+  it("refuses a second row with the same id", () => {
+    const result = parseHabitsFile([HABIT, { ...HABIT, name: "Drugo" }]);
+    expect(result.problems).toEqual([
+      { severity: "error", code: "duplicate-id", path: "data/habits.ndjson", line: 2, detail: "hb1" },
+    ]);
+  });
+
+  it("refuses an entry naming a habit the archive does not carry", () => {
+    const result = parseHabitsFile([{ ...ENTRY, habitId: "nema" }]);
+    expect(result.problems).toEqual([
+      {
+        severity: "error", code: "unknown-reference", path: "data/habits.ndjson", line: 1,
+        detail: "habitId=nema",
+      },
+    ]);
+  });
+
+  it("DROPS such an entry in import mode — a tick has nothing to detach into", () => {
+    const result = parseImportArchive(
+      emptyInputWith(
+        baseFiles({
+          fileContents: { "data/habits.ndjson": ndjson([HABIT, ENTRY, { ...ENTRY, id: "he2", habitId: "nema" }]) },
+        }),
+        { mode: "import" },
+      ),
+    );
+    expect(result.data?.habitEntries.map((entry) => entry.id)).toEqual(["he1"]);
+    expect(result.dropped).toEqual([
+      { module: "habits", type: "habit-entry", reason: "unknown-reference", detail: "habitId=nema" },
+    ]);
+  });
+
+  it("reads a pre-1.32.0 archive, which carries no habits at all, as an empty one", () => {
+    const files = baseFiles({ schemaVersion: "1.31.0" });
+    const manifest = JSON.parse(files.get("manifest.json") ?? "{}") as {
+      checksums: Record<string, string>;
+    };
+    // A 1.31 writer produced neither the file nor its checksum.
+    delete manifest.checksums["data/habits.ndjson"];
+    files.delete("data/habits.ndjson");
+    files.set("manifest.json", JSON.stringify(manifest));
+
+    const result = parseImportArchive(emptyInputWith(files));
+    expect(result.problems).toEqual([]);
+    expect(result.data).toMatchObject({ habits: [], habitEntries: [] });
+  });
+});
+
 describe("parseImportArchive — note categories (NOTE-002 / 1.27.0)", () => {
   const VALID_NOTE_CATEGORY = {
     type: "note-category", id: "nc1", profileId: "profile1", name: "sastanak", color: "zlato",
@@ -3685,8 +3911,8 @@ describe("parseImportArchive — note categories (NOTE-002 / 1.27.0)", () => {
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.31.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.31.0");
+  it("is 1.32.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.32.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -3876,11 +4102,11 @@ describe("parseImportArchive — schema version", () => {
     expect(result.manifest?.profile.kind).toBe("personal");
   });
 
-  // `1.32.0`: the nearest minor strictly ahead of this build's `1.31.0`.
+  // `1.33.0`: the nearest minor strictly ahead of this build's `1.32.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.32.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.33.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.32.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.33.0" },
     ]);
     expect(result.data).toBeNull();
   });

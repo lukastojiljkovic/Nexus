@@ -5,6 +5,7 @@ import { TOGGLEABLE_NOTIFICATION_SOURCES } from "../notify/notificationStore.js"
 import { TASK_ORDER_GAP, TaskListStore } from "../tasks/taskListStore.js";
 import {
   exdatesText,
+  habitScheduleText,
   offsetsText,
   recurrenceText,
   requiredRecurrenceText,
@@ -80,13 +81,13 @@ export interface RestoreProfileInput {
  * CASCADE` to reach a row (a future migration's table would silently survive
  * a restore if it relied on cascade alone — see `restoreStore.test.ts`'s
  * guard test, which reads `sqlite_master` and fails until a new table is
- * either added here or explicitly allow-listed as exempt). Twelve tables carry
+ * either added here or explicitly allow-listed as exempt). Thirteen tables carry
  * no `profile_id` of their own and are scoped through their parent instead
  * (`document_renewals` through `tracked_documents`; `task_sections` through
  * `task_lists`; `task_tag_links`, `task_attachments` and `task_dependencies`
  * through `tasks`; `subject_attachments` and `subject_note_links` through
- * `subjects`; the six `note_*` child tables through `notes`) — see `wipeSqlFor`
- * below.
+ * `subjects`; the six `note_*` child tables through `notes`; `habit_entries`
+ * through `habits`) — see `wipeSqlFor` below.
  */
 export const RESTORE_WIPE_TABLES = [
   "document_renewals",
@@ -182,6 +183,13 @@ export const RESTORE_WIPE_TABLES = [
   "fin_recurring",
   "fin_categories",
   "fin_accounts",
+  // HABIT (migration 055), children before parents like everything above: the
+  // day ticks — which carry no `profile_id` of their own and are scoped through
+  // their habit, the `note_attachments` arrangement — then the habits they hang
+  // off. Migration 055's CASCADE is never leaned on to reach a row, the same
+  // rule the note group keeps.
+  "habit_entries",
+  "habits",
 ] as const;
 
 type WipeTable = (typeof RESTORE_WIPE_TABLES)[number];
@@ -209,6 +217,7 @@ const SCOPED_THROUGH_PARENT: Partial<Record<WipeTable, string>> = {
   note_versions: `DELETE FROM note_versions WHERE note_id IN (SELECT id FROM notes WHERE profile_id = ?)`,
   note_snapshots: `DELETE FROM note_snapshots WHERE note_id IN (SELECT id FROM notes WHERE profile_id = ?)`,
   note_updates: `DELETE FROM note_updates WHERE note_id IN (SELECT id FROM notes WHERE profile_id = ?)`,
+  habit_entries: `DELETE FROM habit_entries WHERE habit_id IN (SELECT id FROM habits WHERE profile_id = ?)`,
 };
 
 /** Every wipe statement takes exactly one bound parameter: this store's own `profileId` (R4) — never the archive's. */
@@ -269,6 +278,8 @@ export class RestoreStore {
   private readonly insertFinRecurring: Database.Statement;
   private readonly insertFinTransaction: Database.Statement;
   private readonly insertFinBudget: Database.Statement;
+  private readonly insertHabit: Database.Statement;
+  private readonly insertHabitEntry: Database.Statement;
   private readonly insertSubject: Database.Statement;
   private readonly insertSubjectAttachment: Database.Statement;
   private readonly insertSubjectNoteLink: Database.Statement;
@@ -393,6 +404,20 @@ export class RestoreStore {
       `INSERT INTO fin_budgets
          (id, profile_id, category_id, currency, amount, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    );
+    // HABIT (migration 055). `archived_at` is reproduced from the archive rather
+    // than reset, on `paused_at`'s reasoning one module over: a habit its owner
+    // had finished with must come back finished with, or every retired habit
+    // reappears in today's list on the next restore.
+    this.insertHabit = db.prepare(
+      `INSERT INTO habits
+         (id, profile_id, name, color, schedule, target, unit, reminder_time,
+          archived_at, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    this.insertHabitEntry = db.prepare(
+      `INSERT INTO habit_entries (id, habit_id, entry_date, value, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
     );
     this.insertSubject = db.prepare(
       `INSERT INTO subjects
@@ -1211,6 +1236,35 @@ export class RestoreStore {
         this.insertFinBudget.run(
           budget.id, this.profileId, budget.categoryId, budget.currency, budget.amount,
           budget.createdAt, budget.updatedAt,
+        );
+        written += 1;
+      }
+
+      // HABIT (migration 055): the habits, then the days that name them — the
+      // archive's own dependency order, and the schema's. Nothing here is
+      // reconciled against the profile's own rows (the wipe above removed them
+      // all) and nothing is deduplicated (the parser already refused a duplicate
+      // id, and `UNIQUE (habit_id, entry_date)` is what decides the rest, loudly
+      // rather than quietly). EMPTY for every pre-1.32.0 archive, which restores
+      // a profile with no habits, exactly as it had none.
+      //
+      // The schedule is written through `habitScheduleText` — HABIT's own
+      // serializer, never the recurrence one — so a restored habit is byte-identical
+      // to one `HabitStore` wrote itself. `archivedAt` is reproduced rather than
+      // cleared, on `pausedAt`'s reasoning: a habit its owner had finished with
+      // must not come back asking to be done today.
+      for (const habit of input.data.habits) {
+        this.insertHabit.run(
+          habit.id, this.profileId, habit.name, habit.color,
+          habitScheduleText(habit.schedule), habit.target, habit.unit, habit.reminderTime,
+          habit.archivedAt, habit.createdAt, habit.updatedAt,
+        );
+        written += 1;
+      }
+
+      for (const entry of input.data.habitEntries) {
+        this.insertHabitEntry.run(
+          entry.id, entry.habitId, entry.date, entry.value, entry.createdAt, entry.updatedAt,
         );
         written += 1;
       }

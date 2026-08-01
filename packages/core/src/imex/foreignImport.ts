@@ -728,6 +728,34 @@ const ID_MINTERS: Record<keyof ProfileData, (data: ProfileData, ctx: PlanContext
   // the target's own limit wins, which is `taskTemplateNames`' rule applied to
   // the one FIN table where a merge could overwrite something.
   finBudgets: (data, ctx) => mintAll(data.finBudgets, ctx),
+  /**
+   * A HABIT is minted, always — never absorbed by name, never skipped.
+   *
+   * The two precedents point in opposite directions and this table lands with the
+   * accounts. A note category absorbs because it carries no content to overwrite
+   * (a name and a swatch) and because migration 049's `UNIQUE (profile_id, name)`
+   * makes a second copy impossible anyway. A habit is the reverse on both counts:
+   * it carries a SCHEDULE, a target and a unit — content a merge would have to
+   * overwrite, which additive-only forbids — and migration 055 puts no uniqueness
+   * on its name at all, so nothing even forces the question.
+   *
+   * And absorbing would be worse than merely awkward here, because of what a
+   * habit is FOR. „Trčanje" three times a week in the source and „Trčanje" on
+   * Mon/Wed/Fri in the target are two different schedules, so grafting the
+   * source's days onto the target's row would compute one streak over a history
+   * half of which was never kept under that schedule — a number the app would
+   * then show as a fact. Exactly the „Kupovina"/„Ideje" case
+   * `ImportDuplicateType`'s own comment refuses to guess about, with a wrong
+   * answer that is arithmetic rather than cosmetic.
+   *
+   * The template rule (skip when the name is taken) does not apply either: a
+   * habit is not identified by its name and things DO point at it — every day it
+   * was ever ticked — so skipping would strand them.
+   */
+  habits: (data, ctx) => mintAll(data.habits, ctx),
+  // Minted like any other content row, and its one reference — the habit — is
+  // remapped below onto the new row that habit became.
+  habitEntries: (data, ctx) => mintAll(data.habitEntries, ctx),
   noteTagLinks: NO_IDS,
   // The same name-is-identity rule as the two template tables above, against the
   // NOTE module's own name space (migration 015's `UNIQUE (profile_id, name)`).
@@ -1296,6 +1324,26 @@ export function planForeignImport(
         profileId: target.profileId,
         categoryId: mapped(row.categoryId, ctx),
       })),
+    // --- HABIT (migration 055) --------------------------------------------
+    // Every habit imports as its own row: nothing here absorbs one, so there is
+    // nothing to filter (see `ID_MINTERS.habits`). `archivedAt` rides along
+    // unremapped, on the `pausedAt` reasoning one module over — whether the user
+    // had finished with a habit is a FACT ABOUT THE ROW, not a reference into
+    // the source profile, so an imported habit arrives as retired, or as
+    // current, as it actually was.
+    habits: source.habits.map((row) => ({
+      ...row,
+      id: mapped(row.id, ctx),
+      profileId: target.profileId,
+    })),
+    // Remapped onto the habit that habit became — which is what keeps a streak
+    // reading the same after the import as it did before it, since the days and
+    // the schedule they are judged under arrive together.
+    habitEntries: source.habitEntries.map((row) => ({
+      ...row,
+      id: mapped(row.id, ctx),
+      habitId: mapped(row.habitId, ctx),
+    })),
   };
 
   return {
@@ -1315,7 +1363,10 @@ export function planForeignImport(
 }
 
 function zeroPerModule(): Record<ArchiveModuleId, number> {
-  return { tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0, dashboard: 0, finance: 0 };
+  return {
+    tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0, dashboard: 0, finance: 0,
+    habits: 0,
+  };
 }
 
 /**

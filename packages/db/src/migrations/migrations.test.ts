@@ -22,8 +22,8 @@ import { CardStore, MIGRATIONS, NexusDatabase, openDatabase, runMigrations } fro
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 54 (pausing a subscription), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(54);
+  it("is at version 55 (habits), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(55);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -7046,5 +7046,143 @@ describe("migration 054 — pausing a subscription (ADR-074)", () => {
     } finally {
       raw.close();
     }
+  });
+});
+
+describe("migration 055 — habits (HABIT slice a)", () => {
+  const T = "2026-01-01T00:00:00.000Z";
+  /** Canonical `serializeHabitSchedule` output — the only thing this column ever holds. */
+  const MON_WED_FRI = JSON.stringify({ kind: "days", weekdays: [1, 3, 5] });
+
+  const insertHabit = (
+    db: NexusDatabase,
+    id: string,
+    profileId: string,
+    overrides: Partial<{
+      name: string;
+      color: string | null;
+      target: number | null;
+      unit: string | null;
+    }> = {},
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO habits
+           (id, profile_id, name, color, schedule, target, unit, reminder_time,
+            archived_at, created_at, updated_at, deleted_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL)`,
+      )
+      .run(
+        id,
+        profileId,
+        overrides.name ?? "Teretana",
+        overrides.color === undefined ? "maslina" : overrides.color,
+        MON_WED_FRI,
+        overrides.target ?? null,
+        overrides.unit ?? null,
+        T,
+        T,
+      );
+
+  const insertEntry = (db: NexusDatabase, id: string, habitId: string, day: string, value: number) =>
+    db.raw
+      .prepare(
+        `INSERT INTO habit_entries (id, habit_id, entry_date, value, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, habitId, day, value, T, T);
+
+  it("creates both habit tables and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "habits-fresh.db") });
+    expect(tableNames(db)).toEqual(expect.arrayContaining(["habits", "habit_entries"]));
+    expect(
+      (db.raw.prepare("PRAGMA table_info(habits)").all() as { name: string }[]).map(
+        (row) => row.name,
+      ),
+    ).toEqual([
+      "id",
+      "profile_id",
+      "name",
+      "color",
+      "schedule",
+      "target",
+      "unit",
+      "reminder_time",
+      "archived_at",
+      "created_at",
+      "updated_at",
+      "deleted_at",
+    ]);
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("makes a second tick of the same day unrepresentable", () => {
+    const db = openDatabase({ path: join(dir, "habits-unique.db") });
+    insertProfile(db, "p1");
+    insertHabit(db, "h1", "p1");
+    insertEntry(db, "e1", "h1", "2026-01-05", 1);
+    expect(() => insertEntry(db, "e2", "h1", "2026-01-05", 1)).toThrow(/UNIQUE/i);
+    // The same DAY on a different habit is a different row, which is the whole
+    // point of the pair.
+    insertHabit(db, "h2", "p1", { name: "Čitanje" });
+    expect(() => insertEntry(db, "e3", "h2", "2026-01-05", 1)).not.toThrow();
+    db.close();
+  });
+
+  it.each([
+    ["fractional", 12.5],
+    ["zero", 0],
+    ["negative", -1],
+  ])("refuses a %s value — a tick is a whole count, never a float", (label, value) => {
+    const db = openDatabase({ path: join(dir, `habits-value-${label}.db`) });
+    insertProfile(db, "p1");
+    insertHabit(db, "h1", "p1");
+    expect(() => insertEntry(db, "e1", "h1", "2026-01-05", value)).toThrow(/CHECK/i);
+    db.close();
+  });
+
+  it.each([
+    ["fractional-target", { target: 8.5 }],
+    ["zero-target", { target: 0 }],
+    ["empty-name", { name: "" }],
+    ["unit-without-target", { unit: "čaša" }],
+  ])("refuses %s", (label, overrides) => {
+    const db = openDatabase({ path: join(dir, `habits-check-${label}.db`) });
+    insertProfile(db, "p1");
+    expect(() => insertHabit(db, "h1", "p1", overrides)).toThrow(/CHECK/i);
+    db.close();
+  });
+
+  it("accepts a targeted habit with its unit — one nullable column, one model", () => {
+    const db = openDatabase({ path: join(dir, "habits-target.db") });
+    insertProfile(db, "p1");
+    insertHabit(db, "h1", "p1", { name: "Voda", target: 8, unit: "čaša" });
+    expect(db.raw.prepare("SELECT target, unit FROM habits WHERE id = 'h1'").get()).toEqual({
+      target: 8,
+      unit: "čaša",
+    });
+    db.close();
+  });
+
+  it("keeps archived_at and deleted_at independent — a finished habit is not a deleted one", () => {
+    const db = openDatabase({ path: join(dir, "habits-archive.db") });
+    insertProfile(db, "p1");
+    insertHabit(db, "h1", "p1");
+    db.raw.prepare("UPDATE habits SET archived_at = ?, deleted_at = ? WHERE id = 'h1'").run(T, T);
+    expect(
+      db.raw.prepare("SELECT archived_at, deleted_at FROM habits WHERE id = 'h1'").get(),
+    ).toEqual({ archived_at: T, deleted_at: T });
+    db.close();
+  });
+
+  it("takes a habit's entries with it on a HARD delete, and scopes them through it alone", () => {
+    const db = openDatabase({ path: join(dir, "habits-cascade.db") });
+    insertProfile(db, "p1");
+    insertHabit(db, "h1", "p1");
+    insertEntry(db, "e1", "h1", "2026-01-05", 1);
+    db.raw.prepare("DELETE FROM habits WHERE id = 'h1'").run();
+    expect(db.raw.prepare("SELECT COUNT(*) AS n FROM habit_entries").get()).toEqual({ n: 0 });
+    db.close();
   });
 });

@@ -3236,13 +3236,14 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
        * `strings.modules`, whose key set is the module registry's, not this one.
        *
        * Also what the export's „Šta se izvozi“ picker labels its checkboxes with
-       * (IMEX-003): the same seven archive modules, named once.
+       * (IMEX-003): the same eight archive modules, named once.
        *
-       * „Finansije“ appears here from FIN slice a onward — before the module has
-       * a page — and deliberately: the archive vocabulary is the interchange's,
-       * not the registry's (see the note above), and a backup that silently
-       * omitted a row it actually carries would be the far worse lie. Until the
-       * ledger has a screen the row simply reads 0 on both sides, which is true.
+       * „Finansije“ appeared here from FIN slice a onward — before the module
+       * had a page — and „Navike“ arrives on exactly those terms from HABIT
+       * slice a: the archive vocabulary is the interchange's, not the registry's
+       * (see the note above), and a backup that silently omitted a row it
+       * actually carries would be the far worse lie. Until habits have a screen
+       * the row simply reads 0 on both sides, which is true.
        */
       modules: {
         tasks: "Zadaci",
@@ -3252,6 +3253,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         notes: "Beleške",
         dashboard: "Kontrolna tabla",
         finance: "Finansije",
+        habits: "Navike",
       } satisfies Record<keyof RestoreModuleCounts, string>,
       columnCurrent: "Sada",
       columnIncoming: "Iz arhive",

@@ -71,6 +71,7 @@ function emptyProfileData(): ProfileData {
     noteAttachments: [], noteVersions: [],
     dashboardSettings: [], dashboardSets: [], dashboardWidgets: [],
     finAccounts: [], finCategories: [], finRecurring: [], finTransactions: [], finBudgets: [],
+    habits: [], habitEntries: [],
   };
 }
 

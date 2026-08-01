@@ -1,8 +1,12 @@
-import { serializeRecurrenceRule, serializeTaskViewConfig } from "@nexus/core";
-import type { RecurrenceRule, TaskViewConfig } from "@nexus/core";
+import {
+  serializeHabitSchedule,
+  serializeRecurrenceRule,
+  serializeTaskViewConfig,
+} from "@nexus/core";
+import type { HabitSchedule, RecurrenceRule, TaskViewConfig } from "@nexus/core";
 
 /**
- * The four value-to-column conversions both archive-apply paths share —
+ * The value-to-column conversions both archive-apply paths share —
  * `RestoreStore.replaceProfileData` (ADR-023) and
  * `ForeignImportStore.insertPlanned` (ADR-043). They live here rather than in
  * either store because a difference between them would be invisible: two
@@ -66,4 +70,17 @@ export function offsetsText(offsets: readonly number[]): string {
  */
 export function viewConfigText(config: TaskViewConfig | null | undefined): string | null {
   return serializeTaskViewConfig(config ?? null);
+}
+
+/**
+ * A habit's schedule as `habits.schedule` stores it (migration 055).
+ * `requiredRecurrenceText`'s twin for a column that is also NOT NULL — a habit IS
+ * its schedule — and deliberately a DIFFERENT serializer, because HABIT speaks a
+ * different language: `serializeHabitSchedule`, never `serializeRecurrenceRule`.
+ * The parser already returned the canonical form, so a restored habit is
+ * indistinguishable from one `HabitStore` wrote itself, which is what lets that
+ * store read anything else back as corruption.
+ */
+export function habitScheduleText(schedule: HabitSchedule): string {
+  return serializeHabitSchedule(schedule);
 }

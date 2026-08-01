@@ -4856,6 +4856,8 @@ export interface RestoreModuleCounts {
   dashboard: number;
   /** The whole ledger — accounts, categories, transactions (transfers included, since a transfer IS a row) and budgets (FIN, migration 051). */
   finance: number;
+  /** The habits and every day they were ticked (HABIT, migration 055) — the entries count too, because they ARE the module's substance: a streak is derived from them and nothing else. */
+  habits: number;
 }
 
 /** The outcome of the native "pick a restore archive" dialog (IMEX slice 3c). Mirrors `SaveAttachmentResult`'s shape, plus what a restore preview needs before it can even ask for a passphrase: the file's display name and whether it is an `NXA1` container. */
@@ -5069,7 +5071,9 @@ export type ImportRecordType =
   | "fin-category"
   | "fin-recurring"
   | "fin-transaction"
-  | "fin-budget";
+  | "fin-budget"
+  | "habit"
+  | "habit-entry";
 
 /**
  * Why rows the archive carried are not in the plan. Mirrors `@nexus/core`'s

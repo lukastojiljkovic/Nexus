@@ -94,6 +94,22 @@ export type {
 export { computeStreak } from "./study/studyStats.js";
 export type { StreakResult } from "./study/studyStats.js";
 
+// --- HABIT (migration 055) --------------------------------------------------
+//
+// A schedule vocabulary of its own, deliberately NOT ADR-024's — see
+// `habitSchedule.ts`'s header for the reasoning, which is the one thing about
+// this module a reader must not have to rediscover.
+export {
+  HABIT_MAX_PER_WEEK,
+  HABIT_MAX_WEEKDAY,
+  HABIT_MIN_WEEKDAY,
+  serializeHabitSchedule,
+  validateHabitSchedule,
+} from "./habits/habitSchedule.js";
+export type { HabitSchedule } from "./habits/habitSchedule.js";
+export { computeHabitStreak } from "./habits/habitStreak.js";
+export type { HabitStreakResult } from "./habits/habitStreak.js";
+
 export {
   ALWAYS_ON_SOURCES,
   deriveNotificationCandidates,
@@ -297,6 +313,8 @@ export type {
   ExportFinRecurring,
   ExportFinTransaction,
   ExportFocusSession,
+  ExportHabit,
+  ExportHabitEntry,
   ExportNote,
   ExportNoteAttachment,
   ExportNoteCategory,

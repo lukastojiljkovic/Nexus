@@ -999,5 +999,9 @@ export function translateIcsEvents(
     finRecurring: [],
     finTransactions: [],
     finBudgets: [],
+    // Nor any habits (migration 055): empty, like every other module this
+    // importer does not read.
+    habits: [],
+    habitEntries: [],
   };
 }

@@ -81,6 +81,8 @@ function emptyInput(): ExportArchiveInput {
       finRecurring: [],
       finTransactions: [],
       finBudgets: [],
+      habits: [],
+      habitEntries: [],
     },
     hash: sha256,
   };
@@ -222,6 +224,7 @@ describe("buildExportArchive", () => {
           "data/dashboard.ndjson",
           "data/private-notes.ndjson",
           "data/finance.ndjson",
+          "data/habits.ndjson",
           "data/calendar.ics",
           "tables/tasks.csv",
           "tables/events.csv",
@@ -247,6 +250,8 @@ describe("buildExportArchive", () => {
       expect(archive.files.get("data/private-notes.ndjson")).toBe("");
       // FIN (migration 051): the empty file a profile with no ledger writes.
       expect(archive.files.get("data/finance.ndjson")).toBe("");
+      // HABIT (migration 055): the empty file a profile with no habits writes.
+      expect(archive.files.get("data/habits.ndjson")).toBe("");
 
       // CSV mirrors still carry their header row.
       expect(archive.files.get("tables/tasks.csv")).toMatch(/^id,/);
@@ -257,6 +262,7 @@ describe("buildExportArchive", () => {
       expect(archive.totalRecords).toBe(0);
       expect(archive.byModule).toEqual({
         tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0, dashboard: 0, finance: 0,
+        habits: 0,
       });
       expect(archive.binaries).toEqual([]);
     });
@@ -268,7 +274,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.31.0");
+      expect(manifest.schemaVersion).toBe("1.32.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       // `picture: null` is written out loud rather than omitted: the manifest is
@@ -304,6 +310,7 @@ describe("buildExportArchive", () => {
         { id: "notes", records: 0 },
         { id: "dashboard", records: 0 },
         { id: "finance", records: 0 },
+        { id: "habits", records: 0 },
       ]);
       expect(manifest.checksums).toEqual({
         "data/tasks.ndjson": sha256(""),
@@ -314,6 +321,7 @@ describe("buildExportArchive", () => {
         "data/dashboard.ndjson": sha256(""),
         "data/private-notes.ndjson": sha256(""),
         "data/finance.ndjson": sha256(""),
+        "data/habits.ndjson": sha256(""),
       });
       expect(manifest.blobs).toEqual([]);
       // The private inventory (ADR-057 §6), beside the blob list it mirrors —
@@ -1012,6 +1020,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       expect(archive.byModule).toEqual({
         tasks: 1, calendar: 0, study: 0, notifications: 1, notes: 0, dashboard: 0, finance: 0,
+        habits: 0,
       });
       expect(archive.totalRecords).toBe(2);
     });
@@ -1177,6 +1186,12 @@ describe("buildExportArchive", () => {
         finBudgets: [
           { id: "fb1", profileId: "p1", categoryId: "fc1", currency: "RSD", amount: 300_00, createdAt: t, updatedAt: t },
         ],
+        habits: [
+          { id: "hb1", profileId: "p1", name: "Teretana", color: "maslina", schedule: { kind: "days", weekdays: [1, 3, 5] }, target: null, unit: null, reminderTime: "07:30", archivedAt: null, createdAt: t, updatedAt: t },
+        ],
+        habitEntries: [
+          { id: "he1", habitId: "hb1", date: "2026-01-05", value: 1, createdAt: t, updatedAt: t },
+        ],
       };
     }
 
@@ -1192,6 +1207,7 @@ describe("buildExportArchive", () => {
         // 2 accounts + 1 category + 1 subscription + 3 transactions (one of them
         // the transfer, one of them that subscription's generated charge) + 1 budget
         finance: 8,
+        habits: 2, // 1 habit + 1 day it was ticked
       });
     });
 
@@ -1205,6 +1221,7 @@ describe("buildExportArchive", () => {
     it("counts every bucket as zero for empty data", () => {
       expect(countProfileModules(emptyInput().data)).toEqual({
         tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0, dashboard: 0, finance: 0,
+        habits: 0,
       });
     });
   });
@@ -1787,6 +1804,7 @@ describe("buildExportArchive", () => {
         { id: "notes", records: archive.byModule.notes },
         { id: "dashboard", records: archive.byModule.dashboard },
         { id: "finance", records: 0 },
+        { id: "habits", records: 0 },
       ]);
       expect(archive.byModule.notes).toBeGreaterThan(0);
       expect(archive.totalRecords).toBe(archive.byModule.notes + archive.byModule.dashboard);
@@ -1981,6 +1999,7 @@ describe("filterProfileData", () => {
       notes: 0,
       dashboard: 0,
       finance: 0,
+      habits: 0,
     });
   });
 });

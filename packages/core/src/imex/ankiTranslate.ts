@@ -722,6 +722,10 @@ export function translateApkg(parsed: ParsedApkg, target: ApkgTranslateTarget): 
     finRecurring: [],
     finTransactions: [],
     finBudgets: [],
+    // An `.apkg` carries no habits (migration 055): empty, the same "this source
+    // has nothing of that module" every collection above says.
+    habits: [],
+    habitEntries: [],
   };
 
   return {

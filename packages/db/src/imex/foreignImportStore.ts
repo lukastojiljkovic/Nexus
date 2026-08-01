@@ -3,6 +3,7 @@ import type { ProfileData } from "@nexus/core";
 import { RestoreValidationError } from "../errors.js";
 import {
   exdatesText,
+  habitScheduleText,
   offsetsText,
   recurrenceText,
   requiredRecurrenceText,
@@ -81,6 +82,8 @@ export class ForeignImportStore {
   private readonly insertFinRecurring: Database.Statement;
   private readonly insertFinTransaction: Database.Statement;
   private readonly insertFinBudget: Database.Statement;
+  private readonly insertHabit: Database.Statement;
+  private readonly insertHabitEntry: Database.Statement;
   private readonly insertNote: Database.Statement;
   private readonly insertNoteSnapshot: Database.Statement;
   private readonly insertNoteAttachment: Database.Statement;
@@ -253,6 +256,21 @@ export class ForeignImportStore {
       `INSERT INTO fin_budgets
          (id, profile_id, category_id, currency, amount, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    );
+    // `archived_at` rides along unremapped (migration 055): whether its owner had
+    // finished with a habit is a FACT ABOUT THE ROW, not a reference into the
+    // source profile, so an imported habit arrives as retired — or as current —
+    // as it actually was. Anything else would put somebody else's retired habits
+    // into the target's today list.
+    this.insertHabit = db.prepare(
+      `INSERT INTO habits
+         (id, profile_id, name, color, schedule, target, unit, reminder_time,
+          archived_at, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    this.insertHabitEntry = db.prepare(
+      `INSERT INTO habit_entries (id, habit_id, entry_date, value, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
     );
     this.insertNote = db.prepare(
       `INSERT INTO notes
@@ -786,6 +804,29 @@ export class ForeignImportStore {
         this.insertFinBudget.run(
           budget.id, this.profileId, budget.categoryId, budget.currency, budget.amount,
           budget.createdAt, budget.updatedAt,
+        );
+        written += 1;
+      }
+
+      // HABIT (migration 055): the habits, then the days that name them. Every
+      // habit is a NEW row — the planner never absorbs one (see
+      // `ID_MINTERS.habits`), because a habit carries a SCHEDULE that a merge
+      // would have to overwrite, and „Trčanje" three times a week is not
+      // „Trčanje" on Mon/Wed/Fri: grafting one profile's days onto the other's
+      // row would compute a streak over a history half of which was never kept
+      // under that schedule. So nothing here can collide, and the insert-only
+      // contract is kept as literally as it is for the tags.
+      for (const habit of planned.habits) {
+        this.insertHabit.run(
+          habit.id, this.profileId, habit.name, habit.color,
+          habitScheduleText(habit.schedule), habit.target, habit.unit, habit.reminderTime,
+          habit.archivedAt, habit.createdAt, habit.updatedAt,
+        );
+        written += 1;
+      }
+      for (const entry of planned.habitEntries) {
+        this.insertHabitEntry.run(
+          entry.id, entry.habitId, entry.date, entry.value, entry.createdAt, entry.updatedAt,
         );
         written += 1;
       }

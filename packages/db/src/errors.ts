@@ -831,3 +831,28 @@ export class FinRecurringValidationError extends DatabaseError {}
  * another profile.
  */
 export class FinRecurringNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a habit or habit-entry write is rejected at the store boundary
+ * (HABIT slice a, migration 055): an empty or over-long `name`, a `colour`
+ * outside the folder palette, a `target`/`value` that is not a positive whole
+ * count, a `unit` on a habit with no target to count, a malformed
+ * `reminderTime`/`now`, an entry day that is not a real calendar day — or the one
+ * worth naming out loud, a `schedule` that is not a valid `HabitSchedule`.
+ *
+ * That last refusal is where HABIT's central decision is enforced: this module
+ * has its own two-kind schedule vocabulary and deliberately does NOT speak
+ * ADR-024's rule language (`habitSchedule.ts`), so a recurrence rule offered here
+ * is refused exactly as a habit schedule would be on a task.
+ */
+export class HabitValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a habit operation targets an id that is not a live habit in the
+ * store's own profile — unknown, soft-deleted, or owned by another profile. An
+ * ARCHIVED habit is NOT among these: archiving hides a habit from today's list
+ * and says nothing about whether it is still here (migration 055's two
+ * independent timestamps), so it stays editable and its history stays
+ * correctable.
+ */
+export class HabitNotFoundError extends DatabaseError {}

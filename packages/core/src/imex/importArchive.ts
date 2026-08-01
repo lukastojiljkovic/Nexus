@@ -1,6 +1,8 @@
 import * as Y from "yjs";
 
 import { TIME_GRID_MAX_END_MINUTES, TIME_GRID_MIN_EVENT_MINUTES } from "../calendar/timeGridDrag.js";
+import { validateHabitSchedule } from "../habits/habitSchedule.js";
+import type { HabitSchedule } from "../habits/habitSchedule.js";
 import { validateRecurrenceRule } from "../recurrence/recurrence.js";
 import type { RecurrenceRule } from "../recurrence/recurrence.js";
 import { renderClozeCard } from "../study/clozeText.js";
@@ -32,6 +34,8 @@ import type {
   ExportFinRecurring,
   ExportFinTransaction,
   ExportFocusSession,
+  ExportHabit,
+  ExportHabitEntry,
   ExportNote,
   ExportNoteAttachment,
   ExportNoteCategory,
@@ -233,7 +237,44 @@ export interface ImportArchiveResult {
 
 /**
  * The schema version this build writes and is the newest it accepts, kept in
- * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.31.0` adds the
+ * step with `buildExportArchive`'s own `SCHEMA_VERSION`. `1.32.0` adds the HABIT
+ * module (HABIT slice a, migration 055): the record types `habit` and
+ * `habit-entry`, riding in their own `data/habits.ndjson` (a new `DATA_FILES`
+ * entry the checksum walk's union absorbs unchanged), plus a new `habits` archive
+ * module. Neither type needs an `ArchiveEra` flag — the whole-absent-type rule
+ * below covers them, and a pre-`1.32.0` archive simply carries zero habits,
+ * exactly as a profile that keeps none does.
+ *
+ * **A habit's `schedule` goes through `validateHabitSchedule` and NEVER through
+ * `validateRecurrenceRule`.** That is the module's central decision, restated as
+ * an interchange rule: HABIT has a two-kind vocabulary of its own (`days` with
+ * ISO weekdays, `quota` with a per-week count) precisely because ADR-024's rule
+ * language can express schedules over which a streak is undefinable — `until`,
+ * `count`, „every 3rd Tuesday". An archive that put a recurrence rule in this
+ * field is `invalid-record` naming `schedule`, in every era, and the reader
+ * returns the CANONICAL form so a restored row and a freshly created one are the
+ * same bytes.
+ *
+ * The rest of a habit is re-validated against migration 055's own CHECKs, for the
+ * reason the two money facts below are: they are the contract, not a convention.
+ * `target` and an entry's `value` are POSITIVE WHOLE counts — a REAL in either is
+ * refused rather than rounded, because a half tick is not a thing this module
+ * records — a `unit` may not appear without a `target` to be the unit of (the
+ * table's own pair CHECK), and `archivedAt` is a full ISO-8601 instant like every
+ * other timestamp here, INDEPENDENT of the row's soft delete exactly as a
+ * subscription's `pausedAt` is.
+ *
+ * One reference, with the only answer its row's meaning allows: an entry's
+ * `habitId` DROPS the entry. A tick is a fact about a habit and nothing else —
+ * there is no „uncategorized" state for it to detach into, and a day's count with
+ * no habit to count it towards is not a row anybody could read.
+ *
+ * The bump is owed for the reason every one below was: an older reader handed
+ * this archive would refuse `habit` as an unrecognised type, and the gate turns
+ * that into one sentence about the build rather than one baffling line-error per
+ * day of somebody's history.
+ *
+ * `1.31.0` adds the
  * SUBSCRIPTION PAUSE (ADR-074, migration 054): one nullable `pausedAt` on
  * `fin-recurring`, validated as a full ISO-8601 instant like every other
  * timestamp here.
@@ -459,7 +500,7 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.31.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.32.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -1114,7 +1155,9 @@ export type ArchiveRecordType =
   | "fin-category"
   | "fin-recurring"
   | "fin-transaction"
-  | "fin-budget";
+  | "fin-budget"
+  | "habit"
+  | "habit-entry";
 
 const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "task",
@@ -1162,6 +1205,8 @@ const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "fin-recurring",
   "fin-transaction",
   "fin-budget",
+  "habit",
+  "habit-entry",
 ];
 
 type DataFilePath = (typeof DATA_FILES)[number];
@@ -1220,6 +1265,7 @@ const FILE_RECORD_TYPES: Record<DataFilePath, readonly ArchiveRecordType[]> = {
     "fin-transaction",
     "fin-budget",
   ],
+  "data/habits.ndjson": ["habit", "habit-entry"],
 };
 
 /**
@@ -1243,6 +1289,7 @@ const MODULE_OF_DATA_FILE: Record<DataFilePath, ArchiveModuleId | null> = {
   "data/dashboard.ndjson": "dashboard",
   "data/private-notes.ndjson": null,
   "data/finance.ndjson": "finance",
+  "data/habits.ndjson": "habits",
 };
 
 // --- Per-record parsers, one field validator call per interface field, in --
@@ -2471,6 +2518,87 @@ function nullableTrimmedStr(value: unknown, field: string, maxLength: number): s
   return value === null ? null : trimmedNonEmptyStr(value, field, maxLength);
 }
 
+// --- HABIT (migration 055) ---------------------------------------------------
+//
+// Copied, not imported, on `NOTE_FOLDER_COLORS`' terms — `@nexus/core` never
+// depends on `@nexus/db`, so the bounds `HabitStore` refuses by are restated
+// here, which is also what makes a bad archive a named `invalid-record` with a
+// line number instead of a raw SQLite error inside a restore transaction.
+const MAX_HABIT_NAME_LENGTH = 60;
+const MAX_HABIT_UNIT_LENGTH = 16;
+/** `HabitStore`'s own ceiling on a `target` and on a day's `value` — a bound on an untrusted number that every read sums. */
+const MAX_HABIT_COUNT = 100_000;
+
+/**
+ * One habit (migration 055).
+ *
+ * **`schedule` goes through `validateHabitSchedule`, deliberately NOT
+ * `validateRecurrenceRule`.** Every other scheduled row in this file speaks
+ * ADR-024; this one speaks HABIT's own two-kind vocabulary, because a streak over
+ * „every 3rd Tuesday until March" is not a concept anyone can defend
+ * (`habitSchedule.ts`). An archive carrying a recurrence rule here is refused
+ * naming the field, which is the whole point of validating it through the module's
+ * own gate rather than through the one that happens to be imported already.
+ *
+ * `target`/`unit` are migration 055's pair restated: a positive whole count, and
+ * a unit only ever beside one. `archivedAt` is independent of the soft delete
+ * (which the interchange does not carry at all — an archive holds live rows), so
+ * a restored archived habit is still archived.
+ */
+function parseHabit(raw: Record<string, unknown>): ExportHabit {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const name = trimmedNonEmptyStr(raw.name, "name", MAX_HABIT_NAME_LENGTH);
+  const color = nullableFolderColor(raw.color, "color");
+  const schedule = habitSchedule(raw.schedule, "schedule");
+  const target =
+    raw.target === null ? null : intInRange(raw.target, "target", 1, MAX_HABIT_COUNT);
+  const unit = nullableTrimmedStr(raw.unit, "unit", MAX_HABIT_UNIT_LENGTH);
+  // Migration 055's own CHECK: a unit with no target has nothing to be the unit
+  // OF, and a binary habit's tick is not measured in anything.
+  if (unit !== null && target === null) throw new InvalidFieldError("unit");
+  const reminderTime = nullableHhmm(raw.reminderTime, "reminderTime");
+  const archivedAt = nullableIsoDateTime(raw.archivedAt, "archivedAt");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return {
+    id, profileId, name, color, schedule, target, unit, reminderTime, archivedAt,
+    createdAt, updatedAt,
+  };
+}
+
+/**
+ * One day's tick (migration 055). No `profileId`: an entry is scoped through its
+ * habit, exactly as a `note-attachment` is through its note.
+ *
+ * `value` is a POSITIVE whole count — never zero, never a REAL. An untouched day
+ * is the ABSENCE of a row, so a zero here would be a second way to say „nisam",
+ * and the column's own CHECK refuses it; refusing it too means a restore can
+ * never abort halfway through on a row this reader called fine.
+ *
+ * Uniqueness by `(habitId, date)` is the SCHEMA's, and this parser does not
+ * re-express it: the duplicate-id gate already keys these rows by their own id,
+ * and a restore into a wiped profile inserts against the very index that decides
+ * the question — a second tick of one day would fail loudly there rather than be
+ * quietly dropped here, which is the honest place for it.
+ */
+function parseHabitEntry(raw: Record<string, unknown>): ExportHabitEntry {
+  const id = nonEmptyStr(raw.id, "id");
+  const habitId = nonEmptyStr(raw.habitId, "habitId");
+  const date = bareDate(raw.date, "date");
+  const value = intInRange(raw.value, "value", 1, MAX_HABIT_COUNT);
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, habitId, date, value, createdAt, updatedAt };
+}
+
+/** HABIT's own schedule vocabulary, validated into its CANONICAL form — see `parseHabit` for why this is not the recurrence gate. */
+function habitSchedule(value: unknown, field: string): HabitSchedule {
+  const schedule = validateHabitSchedule(value);
+  if (schedule === null) throw new InvalidFieldError(field);
+  return schedule;
+}
+
 // --- Private notes (PRIV v1, ADR-057 §6) -------------------------------------
 
 /** Mirrors `PRIV_ATTACHMENTS_MAX_COUNT` (`apps/desktop`'s wire cap) — copied, not imported, on `NOTE_FOLDER_COLORS`' terms: this package cannot depend on the app's shared wire file. */
@@ -2683,6 +2811,8 @@ interface Collections {
   finRecurring: Bucket<ExportFinRecurring>;
   finTransactions: Bucket<ExportFinTransaction>;
   finBudgets: Bucket<ExportFinBudget>;
+  habits: Bucket<ExportHabit>;
+  habitEntries: Bucket<ExportHabitEntry>;
 }
 
 function newCollections(): Collections {
@@ -2705,6 +2835,7 @@ function newCollections(): Collections {
     dashboardWidgets: newBucket(), privateNotes: newBucket(), privateNoteVersions: newBucket(),
     finAccounts: newBucket(), finCategories: newBucket(), finRecurring: newBucket(),
     finTransactions: newBucket(), finBudgets: newBucket(),
+    habits: newBucket(), habitEntries: newBucket(),
   };
 }
 
@@ -2995,6 +3126,16 @@ function dispatchRecord(
     case "fin-budget": {
       const row = parseFinBudget(raw);
       pushRow(collections.finBudgets, row.id, row, type, path, line, ctx);
+      return;
+    }
+    case "habit": {
+      const row = parseHabit(raw);
+      pushRow(collections.habits, row.id, row, type, path, line, ctx);
+      return;
+    }
+    case "habit-entry": {
+      const row = parseHabitEntry(raw);
+      pushRow(collections.habitEntries, row.id, row, type, path, line, ctx);
       return;
     }
   }
@@ -4048,6 +4189,23 @@ function referenceRules(collections: Collections): ReferenceRule[] {
       },
       onDangling: { detach: (row) => ({ ...row, recurringId: null }) },
     }),
+    // --- HABIT (migration 055) ----------------------------------------------
+    // The habit a day's tick belongs to. DROPPED when dangling, and it is the
+    // only answer this row admits: an entry is a fact ABOUT a habit and about
+    // nothing else — there is no „uncategorized" state for it to detach into the
+    // way a transaction's label has one — so a count with no habit to count it
+    // towards is not a row anybody could read, let alone draw a streak from.
+    referenceRule({
+      bucket: collections.habitEntries,
+      type: "habit-entry",
+      field: "habitId",
+      ref: (row) => row.habitId,
+      resolver: () => {
+        const ids = idsOf(collections.habits);
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
   ];
 }
 
@@ -4540,6 +4698,11 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         finRecurring: rowsOf(collections.finRecurring),
         finTransactions: rowsOf(collections.finTransactions),
         finBudgets: rowsOf(collections.finBudgets),
+        // Empty for every pre-1.32.0 archive, which carries no such file at all
+        // — and a restore reads that emptiness as "this profile keeps no
+        // habits", which is exactly what it kept.
+        habits: rowsOf(collections.habits),
+        habitEntries: rowsOf(collections.habitEntries),
       };
 
   // Beside `data` and gated identically (ADR-057 §6): empty both for a

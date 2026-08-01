@@ -25,6 +25,7 @@
  * cross-module references it repairs so nothing in a subset archive dangles.
  */
 
+import type { HabitSchedule } from "../habits/habitSchedule.js";
 import type { RecurrenceRule } from "../recurrence/recurrence.js";
 import type { TaskViewConfig } from "../tasks/taskViewConfig.js";
 import { claimUniqueName, sanitizePathSegment, UNTITLED_NOTE_NAME } from "./archivePaths.js";
@@ -43,6 +44,43 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * `tables/*.csv` is for their spreadsheet, and it is checksummed by neither. An
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
+ *
+ * `1.32.0` adds the HABIT module (HABIT slice a, migration 055): two record
+ * types — `habit` and `habit-entry` — riding in their OWN `data/habits.ndjson`, a
+ * new `DATA_FILES` entry checksummed like the eight before it, plus a new
+ * `habits` member in `ARCHIVE_MODULE_IDS` so the module can be counted, filtered
+ * and chosen exactly as the seven it joins. A whole new module rather than rows
+ * filed under an existing one, for `1.28.0`'s reason exactly: one
+ * module↔collection mapping serves both `countProfileModules` and
+ * `filterProfileData`, and filing habits under (say) tasks would make a
+ * tasks-only export carry somebody's habit history — a mapping that says
+ * something untrue.
+ *
+ * **The one fact about this module that IS the interchange contract: a habit's
+ * `schedule` is HABIT's own two-kind vocabulary, deliberately NOT the
+ * `recurrence` every other scheduled row here carries.** The reader runs it
+ * through `validateHabitSchedule` and never through `validateRecurrenceRule` —
+ * see `packages/core/src/habits/habitSchedule.ts` for the argument, which is that
+ * a streak over „every 3rd Tuesday until March" is not a concept anyone can
+ * defend. A writer that put an ADR-024 rule in this field is refused, in every
+ * era, exactly as a writer that put a habit schedule in a task's would be.
+ *
+ * `archivedAt` travels beside the row's soft delete as two independent facts,
+ * exactly as `pausedAt` does one module over (migration 054): a restore of an
+ * archived habit puts back an archived habit, and nothing in the interchange has
+ * to arbitrate between them. The ENTRIES travel as their own record type rather
+ * than as an array inside the habit, because they ARE rows — one per habit per
+ * day, uniqueness the schema's — and a nested array would turn a five-year
+ * history into one NDJSON line nothing could stream or diff.
+ *
+ * Neither type needs an `ArchiveEra` flag: the whole-absent-type rule below
+ * covers them both, exactly as it covered `fin-account` and `note-category`. A
+ * pre-`1.32.0` archive simply carries no habits, which is indistinguishable from
+ * a profile that keeps none, because those mean the same thing. The bump is owed
+ * for the reason every one below was: an older reader handed this archive would
+ * refuse `habit` as an unrecognised type, and the version gate turns that into
+ * one honest sentence about the build instead of one baffling line-error per day
+ * of somebody's history.
  *
  * `1.31.0` adds the SUBSCRIPTION PAUSE (ADR-074, migration 054): one nullable
  * `pausedAt` on `fin-recurring`, the moment its owner said „ne naplaćuj me" —
@@ -299,7 +337,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.31.0";
+const SCHEMA_VERSION = "1.32.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -1271,6 +1309,79 @@ export interface ExportFinBudget {
   updatedAt: string;
 }
 
+// --- HABIT (the habits module, migration 055) -------------------------------
+//
+// The module's whole subject is a STREAK, and a streak is a fact derived from
+// the two row types below and nothing else. Neither the current run nor the best
+// one travels: an archive that shipped a stored streak would ship a number that
+// can disagree with the days beside it — the same reason no account carries a
+// balance, one module over.
+
+/**
+ * One habit (migration 055). Rides in `data/habits.ndjson` ahead of the entries
+ * that name it.
+ *
+ * `schedule` is HABIT's OWN vocabulary — `{ kind: "days", weekdays }` or
+ * `{ kind: "quota", perWeek }` — and deliberately not the `recurrence` a `task`,
+ * an `event` and a `fin-recurring` carry. That is the module's central decision
+ * and it is the interchange's too: see `SCHEMA_VERSION`'s `1.32.0` entry, and
+ * `habitSchedule.ts` for the argument in full. A nested object rather than a JSON
+ * STRING, for the reason a task's `recurrence` is one: the interchange is JSON,
+ * and a string here would be a second encoding nobody can read in the file.
+ *
+ * `target` is the single nullable field that makes „teretana" and „8 čaša vode"
+ * one model: null is a binary habit whose entries carry a `value` of 1, non-null
+ * is a count a day must reach. `unit` names what it counts and is never set
+ * without it (migration 055's own pair CHECK, re-validated by the reader).
+ *
+ * `archivedAt` is when the user finished with this habit, or null while it is
+ * current — a fact INDEPENDENT of the soft delete it outlives, exactly as a
+ * subscription's `pausedAt` is. It must travel: a restore that dropped it would
+ * put every retired habit back into today's list, and the point of archiving one
+ * is that its history survives without cluttering the page.
+ */
+export interface ExportHabit {
+  id: string;
+  profileId: string;
+  name: string;
+  /** A `note_folders` swatch key, from the very same closed palette — one palette, one string. */
+  color: string | null;
+  schedule: HabitSchedule;
+  /** Whole units a day must reach to count, or null for a binary habit. */
+  target: number | null;
+  /** What `target` counts, or null. Never non-null while `target` is null. */
+  unit: string | null;
+  /** Wall-clock `HH:MM`, or null for no reminder. */
+  reminderTime: string | null;
+  /** When the habit was archived, or null while it is current. */
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One day's tick (migration 055). Rides in `data/habits.ndjson` AFTER the habits,
+ * which is the ordering the file's „everything a row points at came before it"
+ * reading requires — an entry names nothing else.
+ *
+ * No `profileId`: an entry is scoped through its habit, exactly as a
+ * `note-attachment` is through its note and a `task-section` through its list.
+ *
+ * `value` is a POSITIVE INTEGER, always — 1 for a binary habit, the count for a
+ * targeted one. Never zero and never a float: an untouched day is the ABSENCE of
+ * a row (migration 055's CHECK refuses both), so „nisam" and „nula" are the same
+ * thing and the interchange has exactly one way to say it.
+ */
+export interface ExportHabitEntry {
+  id: string;
+  habitId: string;
+  /** The LOCAL day as a bare `YYYY-MM-DD`, the way this interchange already carries bare dates. */
+  date: string;
+  value: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /**
  * Everything the manifest's "settings" section carries (founder decision #11:
  * flags + NTF settings ship with the export).
@@ -1457,6 +1568,20 @@ export interface ProfileData {
   finRecurring: readonly ExportFinRecurring[];
   finTransactions: readonly ExportFinTransaction[];
   finBudgets: readonly ExportFinBudget[];
+  /**
+   * The HABIT module's two collections (migration 055). Required like every
+   * field above and for the same reason: a module the caller forgets must be a
+   * type error, not a quiet omission. EMPTY both for a pre-`1.32.0` archive and
+   * for a profile that keeps no habits, indistinguishable on purpose, because
+   * they mean the same thing.
+   *
+   * `habitEntries` is where a habit's whole point lives — the streak is derived
+   * from these rows and nothing else — so an export that carried the habits but
+   * not their days would restore a profile whose every run reads zero, which is
+   * the one number a habit tracker must never invent.
+   */
+  habits: readonly ExportHabit[];
+  habitEntries: readonly ExportHabitEntry[];
 }
 
 // --- Private notes (PRIV v1, ADR-057 §6) ------------------------------------
@@ -1668,6 +1793,11 @@ export const DATA_FILES = [
   // a pre-1.28 archive neither carries it nor declares its checksum, and
   // absent-and-undeclared is nothing at all.
   "data/finance.ndjson",
+  // The HABIT module (migration 055, `1.32.0`): its own file, appended on the
+  // same terms the union-walk comment above promises stay backward-compatible —
+  // a pre-1.32 archive neither carries it nor declares its checksum, and
+  // absent-and-undeclared is nothing at all.
+  "data/habits.ndjson",
 ] as const;
 
 /** The manifest's module ids, in manifest order — the grouping `countProfileModules` counts by and `buildExportArchive` builds `manifest.modules` from, so the two can never disagree. */
@@ -1683,6 +1813,11 @@ export const ARCHIVE_MODULE_IDS = [
   // counter and the filter, so a ledger filed under somebody else's module
   // would make a subset export carry what it says it does not.
   "finance",
+  // HABIT (migration 055, `1.32.0`) — its own module, for the reason FIN's entry
+  // above gives: one module↔collection mapping serves both the counter and the
+  // filter, so habits filed under somebody else's module would make a subset
+  // export carry what it says it does not.
+  "habits",
 ] as const;
 export type ArchiveModuleId = (typeof ARCHIVE_MODULE_IDS)[number];
 
@@ -1769,6 +1904,11 @@ export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, 
       data.finRecurring.length +
       data.finTransactions.length +
       data.finBudgets.length,
+    // The habits and every tick they carry, counted like any other rows: the
+    // entries ARE the module's substance — the streak is derived from them — so
+    // a preview that showed only the habit count would tell the user almost
+    // nothing about what is about to change.
+    habits: data.habits.length + data.habitEntries.length,
   };
 }
 
@@ -1910,6 +2050,12 @@ export function filterProfileData(
     finRecurring: only("finance", data.finRecurring),
     finTransactions: only("finance", data.finTransactions),
     finBudgets: only("finance", data.finBudgets),
+    // An entry's only reference is its habit, and the two drop as ONE module —
+    // so no repair rule is needed here either, unlike the three genuinely
+    // cross-module references documented in the header. Nothing outside HABIT
+    // points into it, so dropping the module dangles nothing elsewhere.
+    habits: only("habits", data.habits),
+    habitEntries: only("habits", data.habitEntries),
   };
 }
 
@@ -2042,6 +2188,14 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     ...data.finBudgets.map((row) => ({ type: "fin-budget", ...row })),
   ]);
 
+  // The habits first, then the entries that name them — the „everything a row
+  // points at came before it" reading every data file keeps. An entry references
+  // nothing else, so this is the whole of the file's ordering.
+  const habitsNdjson = toNdjson([
+    ...data.habits.map((row) => ({ type: "habit", ...row })),
+    ...data.habitEntries.map((row) => ({ type: "habit-entry", ...row })),
+  ]);
+
   const privateNotes = input.privateNotes ?? EMPTY_PRIVATE_NOTES;
   const privateNotesNdjson = toNdjson([
     ...privateNotes.notes.map((row) => ({ type: "private-note", ...row })),
@@ -2056,6 +2210,7 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   files.set("data/dashboard.ndjson", dashboardNdjson);
   files.set("data/private-notes.ndjson", privateNotesNdjson);
   files.set("data/finance.ndjson", financeNdjson);
+  files.set("data/habits.ndjson", habitsNdjson);
 
   // --- Notes: Markdown mirror + binary entries (ADR-022 section 3) -------
   const binaries: ExportBinaryEntry[] = [];

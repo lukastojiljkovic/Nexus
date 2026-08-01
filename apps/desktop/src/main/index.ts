@@ -91,6 +91,7 @@ import {
   isMinorUnits,
   FocusStore,
   ForeignImportStore,
+  HabitStore,
   isPlaintextDatabase,
   MAX_EVENT_REMINDERS,
   MAX_EVENT_REMINDER_MINUTES,
@@ -3372,6 +3373,10 @@ function finRecurringStore(profileId: string): FinRecurringStore {
   return new FinRecurringStore(requireDb().raw, profileId);
 }
 
+function habitStore(profileId: string): HabitStore {
+  return new HabitStore(requireDb().raw, profileId);
+}
+
 /** The whole sets state every `dash:*-set` channel answers with (ADR-055): the named boards in board order plus the active choice. */
 function dashboardSetsState(profileId: string): DashboardSetsState {
   const store = dashboardSetStore(profileId);
@@ -4501,6 +4506,7 @@ function restoreDeps(): ImportDeps {
     finCategoryStore,
     finRecurringStore,
     finTransactionStore,
+    habitStore,
     saveBlob: (bytes) => saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes),
     // Injected rather than reached for, so `restore.ts` never has to know WHICH
     // tables reference a blob — that union lives in exactly one place
@@ -4568,6 +4574,7 @@ function imexArchiveDeps(): ImexArchiveDeps {
     finCategoryStore,
     finRecurringStore,
     finTransactionStore,
+    habitStore,
     flagStore,
     readBlob: (sha256) => readBlob(blobStorePathsFor(), requireBlobKeys(), sha256),
     // A private attachment's decrypted bytes, under whatever section is open

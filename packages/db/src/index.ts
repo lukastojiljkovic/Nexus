@@ -54,6 +54,8 @@ export {
   FinTransactionValidationError,
   FocusNotFoundError,
   FocusValidationError,
+  HabitNotFoundError,
+  HabitValidationError,
   NoteAttachmentNotFoundError,
   NoteAttachmentValidationError,
   NoteCategoryNotFoundError,
@@ -462,6 +464,21 @@ export type {
   FinUpcomingRenewal,
   UpdateFinRecurringFields,
 } from "./finance/recurringStore.js";
+
+// --- HABIT (migration 055) --------------------------------------------------
+export {
+  HabitStore,
+  MAX_HABIT_COUNT,
+  MAX_HABIT_NAME_LENGTH,
+  MAX_HABIT_UNIT_LENGTH,
+} from "./habits/habitStore.js";
+export type {
+  CreateHabitInput,
+  Habit,
+  HabitDayRange,
+  HabitEntry,
+  UpdateHabitFields,
+} from "./habits/habitStore.js";
 
 export {
   SearchStore,

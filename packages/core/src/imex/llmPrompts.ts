@@ -1288,6 +1288,11 @@ export function translateLlmRecords(
     finRecurring: [],
     finTransactions: [],
     finBudgets: [],
+    // Nor a habit (migration 055): a streak is a record of what somebody
+    // actually did, and inventing days they never ticked is the one thing this
+    // extraction must never do.
+    habits: [],
+    habitEntries: [],
   };
 
   return { data, seededIds, planned: tasks.length + events.length + cards.length + decks.length };

@@ -33,6 +33,7 @@ import {
   FinTransactionStore,
   FocusStore,
   ForeignImportStore,
+  HabitStore,
   NexusDatabase,
   NoteAttachmentStore,
   NoteOrgStore,
@@ -142,6 +143,8 @@ function emptyProfileData(): ProfileData {
     finRecurring: [],
     finTransactions: [],
     finBudgets: [],
+    habits: [],
+    habitEntries: [],
   };
 }
 
@@ -310,6 +313,18 @@ function seedProfile(profileId: string, label: string): void {
     t0,
   );
   finRecurring.generateDue(t0, "2026-02-20");
+
+  // HABIT (migration 055). Its NAME is the same in both seeded profiles on
+  // purpose — the planner must MINT it anyway, because two people's „Trčanje"
+  // are two habits under two schedules, and merging their days would compute one
+  // streak over a history half of which was never kept under either.
+  const habits = new HabitStore(db.raw, profileId);
+  const habit = habits.create(
+    { name: "Trčanje", schedule: { kind: "quota", perWeek: 3 } },
+    t0,
+  );
+  habits.setEntry(habit.id, "2026-02-02", 1, t0);
+  habits.setEntry(habit.id, "2026-02-04", 1, t0);
 }
 
 /** One profile's rows in interchange shape — the same read `main`'s `gatherProfileData` performs, minus the Electron-side plumbing. */
@@ -331,6 +346,7 @@ function gather(profileId: string): ProfileData {
   const noteAttachments = new NoteAttachmentStore(db.raw, profileId);
   const taskTags = new TaskTagStore(db.raw, profileId);
   const finCategories = new FinCategoryStore(db.raw, profileId);
+  const habits = new HabitStore(db.raw, profileId);
 
   return {
     ...emptyProfileData(),
@@ -373,6 +389,8 @@ function gather(profileId: string): ProfileData {
     finRecurring: new FinRecurringStore(db.raw, profileId).listActive(),
     finTransactions: new FinTransactionStore(db.raw, profileId).listActive(),
     finBudgets: finCategories.listBudgets(),
+    habits: habits.listActive(),
+    habitEntries: habits.listAllEntries({ from: "1900-01-01", to: "9999-12-31" }),
   };
 }
 
@@ -630,6 +648,39 @@ describe("ForeignImportStore", () => {
         "2026-03-01T09:00:00.000Z",
         null,
       ]);
+    });
+
+    it("merges habits: both same-named rows survive, each keeping its own days (migration 055)", () => {
+      const source = createProfile("Izvor");
+      seedProfile(source, "S");
+      const target = createProfile("Odredište");
+      seedProfile(target, "T");
+
+      const before = gather(target);
+      const plan = planForeignImport(
+        { data: gather(source), dropped: [], profilePicture: null, privateNotes: { notes: 0, versions: 0 } },
+        targetFor(target),
+        uuidv7,
+      );
+      new ForeignImportStore(db.raw, target).insertPlanned(plan.data, new Map(), NOW);
+
+      const habits = new HabitStore(db.raw, target);
+      const after = habits.listActive();
+      // „Trčanje" exists in both profiles and is MINTED anyway — a habit carries
+      // a schedule a merge would have to overwrite, and two people's runs are
+      // two histories, not one. So the target ends with two rows of that name.
+      expect(after.filter((habit) => habit.name === "Trčanje")).toHaveLength(2);
+      expect(after).toHaveLength(before.habits.length + 1);
+
+      // Every imported day landed on the NEW row rather than on the target's own
+      // — which is what keeps each streak reading exactly what it read before.
+      const entries = habits.listAllEntries({ from: "1900-01-01", to: "9999-12-31" });
+      expect(entries).toHaveLength(before.habitEntries.length + 2);
+      const habitIds = new Set(after.map((habit) => habit.id));
+      for (const entry of entries) expect(habitIds.has(entry.habitId)).toBe(true);
+      const perHabit = new Map<string, number>();
+      for (const entry of entries) perHabit.set(entry.habitId, (perHabit.get(entry.habitId) ?? 0) + 1);
+      expect([...perHabit.values()]).toEqual([2, 2]);
     });
 
     it("carries a cloze card's deletion NUMBER through the merge untouched (ADR-068)", () => {

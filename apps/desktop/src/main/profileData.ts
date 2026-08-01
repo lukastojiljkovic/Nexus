@@ -24,6 +24,8 @@ import type {
   ExportFinCategory,
   ExportFinRecurring,
   ExportFinTransaction,
+  ExportHabit,
+  ExportHabitEntry,
   ExportNoteFolder,
   ExportNoteTag,
   ExportNoteTagLink,
@@ -55,6 +57,7 @@ import type {
   FinRecurringStore,
   FinTransactionStore,
   FocusStore,
+  HabitStore,
   NoteAttachmentStore,
   NoteOrgStore,
   NoteStore,
@@ -117,6 +120,7 @@ export interface ProfileDataDeps {
   finCategoryStore(profileId: string): FinCategoryStore;
   finRecurringStore(profileId: string): FinRecurringStore;
   finTransactionStore(profileId: string): FinTransactionStore;
+  habitStore(profileId: string): HabitStore;
 }
 
 /** Every NOTE-module row `ProfileData` requires (ADR-022 section 3) — `gatherNotes`'s return shape. */
@@ -303,8 +307,52 @@ export function gatherProfileData(deps: ProfileDataDeps, profileId: string): Pro
     // every board onto today's default the first time it was backed up.
     dashboardWidgets: deps.dashboardWidgetStore(profileId).listAll(),
     ...gatherFinance(deps, profileId),
+    ...gatherHabits(deps, profileId),
   };
 }
+
+/** Every HABIT-module row `ProfileData` requires (migration 055) — `gatherHabits`'s return shape. */
+interface GatheredHabitData {
+  habits: ExportHabit[];
+  habitEntries: ExportHabitEntry[];
+}
+
+/**
+ * Gathers every HABIT-module row for one profile: two profile-wide reads and no
+ * fan-out at all, because the entry read answers for every habit at once
+ * (`listAllEntries`) rather than per habit — an N+1 over a year of days would be
+ * the obvious wrong shape here.
+ *
+ * `listActive` includes ARCHIVED habits, and that is exactly what an archive
+ * needs: archiving is a fact about today's list, not about whether the row is
+ * here, so a gather that dropped them would restore a profile with its finished
+ * habits — and their whole history — simply gone.
+ *
+ * Nothing DERIVED travels: a streak is computed from these days on every read
+ * (`computeHabitStreak`), so an archive carrying one could only ever contradict
+ * the rows beside it. The window below is the widest a day key can express, so
+ * "every entry this profile has" is what rides.
+ */
+function gatherHabits(
+  deps: Pick<ProfileDataDeps, "habitStore">,
+  profileId: string,
+): GatheredHabitData {
+  const habits = deps.habitStore(profileId);
+  return {
+    habits: habits.listActive(),
+    habitEntries: habits.listAllEntries({ from: MIN_DAY_KEY, to: MAX_DAY_KEY }),
+  };
+}
+
+/**
+ * How „every entry this profile has" is asked for over a range-shaped read. The
+ * lower bound is 1900 rather than year 1 because `isBareDate` refuses a
+ * two-digit year (`Date.UTC(1, …)` rolls into 1901), and it needs no defending:
+ * a habit is something a person is doing now, and this app cannot record a tick
+ * on a day before software existed.
+ */
+const MIN_DAY_KEY = "1900-01-01";
+const MAX_DAY_KEY = "9999-12-31";
 
 /** Every FIN-module row `ProfileData` requires (migrations 051 and 053) — `gatherFinance`'s return shape. */
 interface GatheredFinanceData {

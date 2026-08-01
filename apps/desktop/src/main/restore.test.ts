@@ -38,6 +38,7 @@ import {
   FinTransactionStore,
   FocusStore,
   ForeignImportStore,
+  HabitStore,
   NexusDatabase,
   NoteAttachmentStore,
   NoteOrgStore,
@@ -219,6 +220,7 @@ function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
     finCategoryStore: (profileId) => new FinCategoryStore(handle.raw, profileId),
     finRecurringStore: (profileId) => new FinRecurringStore(handle.raw, profileId),
     finTransactionStore: (profileId) => new FinTransactionStore(handle.raw, profileId),
+    habitStore: (profileId) => new HabitStore(handle.raw, profileId),
   };
 }
 
@@ -523,6 +525,21 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   const finCategoryStore = new FinCategoryStore(handle.raw, profileId);
   const finTransactionStore = new FinTransactionStore(handle.raw, profileId);
   const finRecurringStore = new FinRecurringStore(handle.raw, profileId);
+  const habitStore = new HabitStore(handle.raw, profileId);
+
+  // HABIT (migration 055): one habit of each schedule kind and real days ticked
+  // on both, so the zip round trip carries a streak's whole substance rather
+  // than an empty module.
+  const binaryHabit = habitStore.create(
+    { name: `${label} teretana`, color: "maslina", schedule: { kind: "days", weekdays: [1, 3, 5] } },
+    t0,
+  );
+  const countedHabit = habitStore.create(
+    { name: `${label} voda`, schedule: { kind: "quota", perWeek: 5 }, target: 8, unit: "čaša" },
+    t0,
+  );
+  habitStore.setEntry(binaryHabit.id, "2026-06-01", 1, t0);
+  habitStore.setEntry(countedHabit.id, "2026-06-02", 8, t0);
 
   // A real ledger (migration 051): two same-currency accounts so a TRANSFER
   // rides through the whole zip round trip as the one row it is, a budgeted
@@ -791,6 +808,9 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     finRecurring: finRecurringStore.listActive(),
     finTransactions: finTransactionStore.listActive(),
     finBudgets: finCategoryStore.listBudgets(),
+    // HABIT (migration 055), read the same way `gatherHabits` reads it.
+    habits: habitStore.listActive(),
+    habitEntries: habitStore.listAllEntries({ from: "1900-01-01", to: "9999-12-31" }),
   };
 
   const derived = deriveRestoredNotes(data.notes);

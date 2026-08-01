@@ -32,6 +32,7 @@ import {
   FinRecurringStore,
   FinTransactionStore,
   FocusStore,
+  HabitStore,
   NexusDatabase,
   NoteAttachmentStore,
   NoteOrgStore,
@@ -143,6 +144,8 @@ function emptyProfileData(): ProfileData {
     taskTagLinks: [],
     taskAttachments: [],
     taskDependencies: [],
+    habits: [],
+    habitEntries: [],
     events: [],
     eventTemplates: [],
     documents: [],
@@ -288,6 +291,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   const finCategoryStore = new FinCategoryStore(handle.raw, profileId);
   const finRecurringStore = new FinRecurringStore(handle.raw, profileId);
   const finTransactionStore = new FinTransactionStore(handle.raw, profileId);
+  const habitStore = new HabitStore(handle.raw, profileId);
 
   // The merged Yjs state and derived body an export would carry for the edited
   // note — stand-ins for real Yjs bytes (see `bytes()`), but genuinely stored
@@ -487,6 +491,30 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   );
   finRecurringStore.pause(pausedSubscription.id, "2026-02-25T10:00:00.000Z");
 
+  // HABIT (migration 055): both schedule kinds, both target shapes, one habit
+  // ARCHIVED, and real days ticked on each — a streak is derived from those days
+  // and nothing else, so a round trip that dropped them would restore a profile
+  // whose every run silently reads zero.
+  const binaryHabit = habitStore.create(
+    { name: `${name} teretana`, color: "maslina", schedule: { kind: "days", weekdays: [1, 3, 5] }, reminderTime: "07:30" },
+    t0,
+  );
+  const countedHabit = habitStore.create(
+    { name: `${name} voda`, schedule: { kind: "quota", perWeek: 5 }, target: 8, unit: "čaša" },
+    t0,
+  );
+  // Archived, not deleted: the two facts are independent columns (migration
+  // 055), so a restore that folded them together would fail here.
+  const archivedHabit = habitStore.create(
+    { name: `${name} čitanje`, color: "zlato", schedule: { kind: "days", weekdays: [1, 2, 3, 4, 5, 6, 7] } },
+    t0,
+  );
+  habitStore.archive(archivedHabit.id, t2);
+  habitStore.setEntry(binaryHabit.id, "2026-06-01", 1, t1);
+  habitStore.setEntry(binaryHabit.id, "2026-06-03", 1, t1);
+  habitStore.setEntry(countedHabit.id, "2026-06-02", 8, t1);
+  habitStore.setEntry(archivedHabit.id, "2026-06-02", 1, t1);
+
   const session = focusStore.create(
     { subjectId: subject.id, startedAt: "2026-01-01T09:00:00.000Z", endedAt: "2026-01-01T09:30:00.000Z" },
     "2026-01-01T09:31:00.000Z",
@@ -615,6 +643,8 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     finRecurring: finRecurringStore.listActive(),
     finTransactions: finTransactionStore.listActive(),
     finBudgets: finCategoryStore.listBudgets(),
+    habits: habitStore.listActive(),
+    habitEntries: habitStore.listAllEntries({ from: "2026-01-01", to: "2026-12-31" }),
   };
 
   const derived = new Map<string, RestoredNoteDerived>([
@@ -899,6 +929,24 @@ function assertModulesMatch(
   // transfer moves money between two of the profile's own accounts and so nets
   // to nothing across them.
   expect(finAccountsRead.totalsByCurrency()).toEqual([{ currency: "RSD", minorUnits: 975_60 }]);
+
+  // HABIT (migration 055): both schedule kinds come back canonical, the archived
+  // one comes back ARCHIVED rather than back in today's list, and every ticked
+  // day comes back with it — the streak is derived from those days and nothing
+  // else, so losing them would silently reset every run to zero.
+  const habitsRead = new HabitStore(handle.raw, readProfileId);
+  const restoredHabits = habitsRead.listActive();
+  expect(restoredHabits).toEqual(remap(fixture.data.habits));
+  expect(restoredHabits.filter((habit) => habit.archivedAt !== null)).toHaveLength(1);
+  expect(restoredHabits.map((habit) => habit.schedule)).toEqual(
+    expect.arrayContaining([
+      { kind: "days", weekdays: [1, 3, 5] },
+      { kind: "quota", perWeek: 5 },
+    ]),
+  );
+  expect(habitsRead.listAllEntries({ from: "2026-01-01", to: "2026-12-31" })).toEqual(
+    fixture.data.habitEntries,
+  );
 }
 
 describe("RestoreStore", () => {

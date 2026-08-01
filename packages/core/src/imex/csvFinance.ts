@@ -891,6 +891,10 @@ export function translateCsvFinance(
     finTransactions: transactions,
     finBudgets: [],
     finRecurring: [],
+    // A bank statement carries no habits (migration 055): empty, like every
+    // other module this importer does not read.
+    habits: [],
+    habitEntries: [],
   };
 
   return {
