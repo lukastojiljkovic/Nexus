@@ -327,6 +327,33 @@ const STUDY_SETTINGS: SettingsPanel = {
   ],
 };
 
+/**
+ * FIN slice b. ONE control, and the restraint is the point: a currency is a
+ * fact of each ACCOUNT (migration 051's no-FX design), so the only thing left
+ * for a settings card to decide is which code the „Novi račun" form opens on.
+ *
+ * `device`, honestly: it changes no stored row, it is read by one form, and
+ * forgetting it changes nothing that already exists — which is also what earns
+ * this card the „Vrati na podrazumevano" link that every profile-stored card
+ * above is deliberately denied.
+ *
+ * `value` rather than `choice` because the domain is ISO-4217 — a list Nexus
+ * would have to invent a curated subset of, and an invented list is exactly the
+ * kind of fabricated data this house does not ship.
+ */
+const FINANCE_SETTINGS: SettingsPanel = {
+  titleKey: "settings.sectionTitle.finance",
+  controls: [
+    {
+      kind: "value",
+      key: "primary-currency",
+      labelKey: "settings.finance.primaryCurrencyLabel",
+      storage: "device",
+      keywords: ["finansije", "valuta", "novac", "racun", "dinar", "evro", "iso"],
+    },
+  ],
+};
+
 /** CAL-010 (ADR-054): the semester's fixed dates — one control for the card's one date pair. */
 const CALENDAR_SETTINGS: SettingsPanel = {
   titleKey: "settings.sectionTitle.calendar",
@@ -362,20 +389,16 @@ const CALENDAR_SETTINGS: SettingsPanel = {
  * Settings module gallery — so nothing in the app leads to an empty page.
  * A module's manifest is added here in the same slice that ships its page.
  *
- * FIN is the live example, and its ABSENCE from this list is deliberate. Slice
- * a shipped the module's whole data layer (migration 051) and its archive
- * travel, but no page — so registering it here would put „Finansije“ in the
- * sidebar, in the Moduli gallery and on ADR-065's „Oblasti“ onboarding screen,
- * and clicking it would land on `App.tsx`'s `ModulePage` placeholder, which is
- * exactly the empty page the rule above forbids. No shell guard was added
- * either: the shell is not wrong here, the registration would be. Its manifest
- * lands in the same slice as its page.
- *
- * Note the deliberate asymmetry this creates, so nobody "fixes" it: „Finansije“
- * IS visible in Settings, as a row of the export picker and the restore
- * comparison table. That vocabulary is the INTERCHANGE's (`ARCHIVE_MODULE_IDS`,
- * `strings.settings.restore.modules`), not this registry's, and a backup that
- * silently omitted rows it actually carries would be the far worse lie.
+ * FIN is the live example of that rule being followed to the letter. Slice a
+ * shipped the module's whole data layer (migration 051) and its archive travel
+ * and deliberately did NOT register it, because a „Finansije“ row in the
+ * sidebar would then have landed on `App.tsx`'s `ModulePage` placeholder. Slice
+ * b builds the page, so slice b adds the manifest — which is also why the
+ * asymmetry slice a documented is now gone: „Finansije“ was already visible in
+ * Settings as a row of the export picker and the restore comparison table
+ * (`ARCHIVE_MODULE_IDS`, the INTERCHANGE's vocabulary rather than this
+ * registry's), and it is now visible everywhere else too, for the ordinary
+ * reason that it exists.
  */
 const V0_MODULES: ModuleManifest[] = [
   {
@@ -435,6 +458,21 @@ const V0_MODULES: ModuleManifest[] = [
     defaultEnabled: true,
     widgets: STUDY_WIDGETS,
     settings: STUDY_SETTINGS,
+  },
+  // Finansije (FIN slice b). ON by default, like every other built module and
+  // unlike PRIV: PRIV is off because it is a sealed section with a credential
+  // of its own, an opt-in by nature — nothing about a ledger asks to be opted
+  // into, and a life-management app whose money module had to be switched on
+  // first would be hiding one of the things it is for. It contributes no
+  // widgets and no searchIndexers yet: a dashboard card and an indexed payee
+  // are their own decisions, and a contract slot filled before the surface
+  // exists is exactly the empty-page trap the comment above describes.
+  {
+    id: "finance",
+    prefix: "FIN",
+    category: "Life hubs",
+    defaultEnabled: true,
+    settings: FINANCE_SETTINGS,
   },
 ];
 

@@ -326,6 +326,7 @@ describe("buildSettingsIndex", () => {
       "study:retention",
       "study:new-per-day",
       "study:review-cap",
+      "finance:primary-currency",
     ]);
   });
 

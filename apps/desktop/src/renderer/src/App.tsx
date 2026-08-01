@@ -27,6 +27,7 @@ import { CalendarPage, type CalendarIntent } from "./CalendarPage.js";
 import { NotesPage, type NotesIntent } from "./NotesPage.js";
 import { PrivPage, PRIV_LOCKED_EVENT } from "./PrivPage.js";
 import { StudyPage, type StudyIntent } from "./StudyPage.js";
+import { FinancePage, type FinanceIntent } from "./FinancePage.js";
 import { SettingsPage, formatArchiveInstant } from "./SettingsPage.js";
 import { NotificationCenter } from "./NotificationCenter.js";
 import { NotificationAppetiteDialog } from "./NotificationAppetiteDialog.js";
@@ -65,7 +66,8 @@ type PendingIntent =
   | { module: "tasks"; intent: TasksIntent }
   | { module: "calendar"; intent: CalendarIntent }
   | { module: "notes"; intent: NotesIntent }
-  | { module: "study"; intent: StudyIntent };
+  | { module: "study"; intent: StudyIntent }
+  | { module: "finance"; intent: FinanceIntent };
 
 /**
  * The full search page's `activeId` (ADR-039 §1). Deliberately NOT a registry
@@ -616,6 +618,9 @@ export function App() {
         return;
       case "notes":
         dispatchIntent({ module: "notes", intent: { kind: "create" } });
+        return;
+      case "finance":
+        dispatchIntent({ module: "finance", intent: { kind: "create" } });
         return;
     }
   }
@@ -1236,6 +1241,13 @@ export function App() {
               profileId={activeProfile.id}
               onOpenNote={openNote}
               intent={pending?.module === "study" ? pending.intent : null}
+              onIntentHandled={clearIntent}
+            />
+          ) : effectiveId === "finance" && activeProfile ? (
+            <FinancePage
+              key={activeProfile.id}
+              profileId={activeProfile.id}
+              intent={pending?.module === "finance" ? pending.intent : null}
               onIntentHandled={clearIntent}
             />
           ) : effectiveId === SEARCH_PAGE_ID && activeProfile ? (

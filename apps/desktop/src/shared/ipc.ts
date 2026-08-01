@@ -280,6 +280,37 @@ export const IpcChannel = {
   dashboardSetRename: "dash:rename-set",
   dashboardSetDelete: "dash:delete-set",
   dashboardSetActivate: "dash:set-active-set",
+  // Finansije (FIN slice b, migration 051). One channel per store operation the
+  // page performs, split by TABLE the way `tasks:*`/`task-tags:*` are: an
+  // account, a category and a transaction are three different things to be
+  // wrong about, and a shared channel would be one validated field away from
+  // letting a request to rename a category delete an account.
+  //
+  // The three account READS are three channels rather than one snapshot,
+  // deliberately: `listBalances` and `totalsByCurrency` are DERIVED reads the
+  // store computes on demand, and folding them into the row read would invite a
+  // caller to believe a balance is a column. Every amount on every one of these
+  // channels is an integer of minor units, in both directions.
+  finAccountsList: "fin-accounts:list",
+  finAccountsBalances: "fin-accounts:balances",
+  // Net worth PER CURRENCY — a list, never a number. There is deliberately no
+  // channel answering a single total: with no exchange rate to convert with, a
+  // cross-currency sum could only be invented, and the wire makes asking for
+  // one impossible rather than merely discouraged.
+  finAccountsTotals: "fin-accounts:totals",
+  finAccountsCreate: "fin-accounts:create",
+  finAccountsUpdate: "fin-accounts:update",
+  finAccountsDelete: "fin-accounts:delete",
+  finAccountsRestore: "fin-accounts:restore",
+  finCategoriesList: "fin-categories:list",
+  finCategoriesCreate: "fin-categories:create",
+  finCategoriesRename: "fin-categories:rename",
+  finCategoriesDelete: "fin-categories:delete",
+  finTransactionsList: "fin-transactions:list",
+  finTransactionsCreate: "fin-transactions:create",
+  finTransactionsUpdate: "fin-transactions:update",
+  finTransactionsDelete: "fin-transactions:delete",
+  finTransactionsRestore: "fin-transactions:restore",
   searchQuery: "search:query",
   searchRecent: "search:recent",
   searchPage: "search:page",
@@ -3733,6 +3764,225 @@ export interface DashboardSetActivateRequest {
   setId: string | null;
 }
 
+// --- Finansije (FIN slice b, migration 051) ----------------------------------
+//
+// Every shape below mirrors `@nexus/db`'s finance stores and is redeclared here
+// so the renderer never imports DB code — the rule this whole file follows.
+//
+// **Money crosses this wire as an INTEGER of minor units, always.** There is no
+// field anywhere in this section that carries a decimal string, and that is the
+// contract rather than a convention: the renderer parses what the user types
+// into minor units before it sends anything (`money.ts`), main re-checks that
+// the value is a safe integer, and the store re-checks it again. A channel that
+// accepted „12,34" would be the one place a float could enter a ledger that has
+// no float anywhere else.
+
+/** Closed account-kind domain (migration 051's CHECK; mirrors `FIN_ACCOUNT_KINDS` in `@nexus/db`). */
+export type FinAccountKind = "cash" | "current" | "card" | "savings";
+
+/** The kinds in the order the account form offers them. */
+export const FIN_ACCOUNT_KINDS: readonly FinAccountKind[] = ["cash", "current", "card", "savings"];
+
+/** Closed category-kind domain: money coming in, or money going out. */
+export type FinCategoryKind = "income" | "expense";
+
+/** The kinds in the order the category form offers them. */
+export const FIN_CATEGORY_KINDS: readonly FinCategoryKind[] = ["income", "expense"];
+
+/** Mirrors `MAX_FIN_ACCOUNT_NAME_LENGTH` in `@nexus/db`, so the field can cap its own input; the store stays authoritative. */
+export const MAX_FIN_ACCOUNT_NAME_LENGTH = 60;
+/** Mirrors `MAX_FIN_CATEGORY_NAME_LENGTH` in `@nexus/db`. */
+export const MAX_FIN_CATEGORY_NAME_LENGTH = 60;
+/** Mirrors `MAX_FIN_PAYEE_LENGTH` in `@nexus/db`. */
+export const MAX_FIN_PAYEE_LENGTH = 120;
+/** Mirrors `MAX_FIN_NOTE_LENGTH` in `@nexus/db`. */
+export const MAX_FIN_NOTE_LENGTH = 500;
+
+/**
+ * An account as the renderer sees it. There is deliberately NO `balance` field,
+ * exactly as there is no `balance` column: a balance is DERIVED and arrives on
+ * its own channel (`fin-accounts:balances`), so nothing here can go stale
+ * against the transactions that make it.
+ */
+export interface FinAccount {
+  id: string;
+  profileId: string;
+  name: string;
+  kind: FinAccountKind;
+  /** ISO-4217, upper-case. The ONLY place a currency is decided; nothing converts between two of them. */
+  currency: string;
+  /** Minor units, INTEGER. A fact about the day the account was added; it never changes as money moves. */
+  openingBalance: number;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One account's derived balance, in that account's own currency. */
+export interface FinAccountBalance {
+  accountId: string;
+  currency: string;
+  minorUnits: number;
+}
+
+/**
+ * A total that is meaningful only together with the currency it is in. Every
+ * FIN aggregate answers with a LIST of these and never with a single number,
+ * which is what makes a cross-currency sum impossible to ask for rather than
+ * merely discouraged — there is no exchange rate this app could honestly use.
+ */
+export interface FinCurrencyTotal {
+  currency: string;
+  minorUnits: number;
+}
+
+/** Fields for a new account; `openingBalance` absent means 0 — an account opened at nothing. */
+export interface NewFinAccountFields {
+  name: string;
+  kind: FinAccountKind;
+  currency: string;
+  openingBalance?: number;
+}
+
+/** A partial edit of an account's own fields; an omitted key is untouched. `archived` is how the page closes an account without deleting it. */
+export interface FinAccountFieldChanges {
+  name?: string;
+  kind?: FinAccountKind;
+  currency?: string;
+  openingBalance?: number;
+  archived?: boolean;
+}
+
+/** A flat category with an income/expense kind; there is no `parentId` to read and none to write. */
+export interface FinCategory {
+  id: string;
+  profileId: string;
+  name: string;
+  kind: FinCategoryKind;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One movement of money. A TRANSFER between the user's own accounts is this
+ * SAME row with `counterAccountId` filled — never a pair of rows: `amount` is
+ * signed from `accountId`'s point of view, so the counter account receives
+ * `-amount`, and the two halves of a transfer are one fact that cannot fall out
+ * of step with itself. A transfer never carries a category, and its two sides
+ * must share a currency (there is no FX); the store refuses both by name.
+ */
+export interface FinTransaction {
+  id: string;
+  profileId: string;
+  accountId: string;
+  counterAccountId: string | null;
+  categoryId: string | null;
+  /** The LOCAL day, as a bare `YYYY-MM-DD`. */
+  date: string;
+  /** Minor units, INTEGER, never zero. Negative leaves `accountId`, positive arrives in it. */
+  amount: number;
+  payee: string | null;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Fields for a new transaction; `counterAccountId` is what makes it a transfer. */
+export interface NewFinTransactionFields {
+  accountId: string;
+  counterAccountId?: string | null;
+  categoryId?: string | null;
+  date: string;
+  amount: number;
+  payee?: string | null;
+  note?: string | null;
+}
+
+/** A partial edit; an omitted key is untouched, an explicit `null` clears a nullable field. */
+export interface FinTransactionFieldChanges {
+  accountId?: string;
+  counterAccountId?: string | null;
+  categoryId?: string | null;
+  date?: string;
+  amount?: number;
+  payee?: string | null;
+  note?: string | null;
+}
+
+export interface FinAccountsListRequest {
+  profileId: string;
+}
+
+export interface FinAccountsCreateRequest {
+  profileId: string;
+  account: NewFinAccountFields;
+}
+
+export interface FinAccountsUpdateRequest {
+  profileId: string;
+  id: string;
+  changes: FinAccountFieldChanges;
+}
+
+export interface FinAccountsDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
+/** Undo of a soft delete: the account and every transaction it carries come back together. */
+export interface FinAccountsRestoreRequest {
+  profileId: string;
+  id: string;
+}
+
+export interface FinCategoriesListRequest {
+  profileId: string;
+}
+
+export interface FinCategoriesCreateRequest {
+  profileId: string;
+  name: string;
+  kind: FinCategoryKind;
+}
+
+/** Renames a category. The KIND is deliberately not patchable — flipping it would silently re-classify every transaction filed under it. */
+export interface FinCategoriesRenameRequest {
+  profileId: string;
+  id: string;
+  name: string;
+}
+
+/** A HARD delete, unlike an account's: the transactions filed under it survive, uncategorized (migration 051's `ON DELETE SET NULL`). */
+export interface FinCategoriesDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
+export interface FinTransactionsListRequest {
+  profileId: string;
+}
+
+export interface FinTransactionsCreateRequest {
+  profileId: string;
+  transaction: NewFinTransactionFields;
+}
+
+export interface FinTransactionsUpdateRequest {
+  profileId: string;
+  id: string;
+  changes: FinTransactionFieldChanges;
+}
+
+export interface FinTransactionsDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
+export interface FinTransactionsRestoreRequest {
+  profileId: string;
+  id: string;
+}
+
 /**
  * Global search (ADR-021 / PRD 08 SRCH-001/002). The index itself (migration
  * 017) and its read-only store already exist; these three channels are the
@@ -6045,6 +6295,54 @@ export interface NexusApi {
     profileId: string,
     setId: string | null,
   ): Promise<DashboardSetsState>;
+  /** This profile's live accounts, sr-Latn alphabetical — archived ones included and flagged, since a closed account still has a balance worth showing. */
+  listFinAccounts(profileId: string): Promise<FinAccount[]>;
+  /**
+   * Each live account's DERIVED balance, in that account's own currency —
+   * opening balance plus everything that moved, computed on every read. Never a
+   * stored figure: there is no `balance` column, precisely so one cannot drift.
+   */
+  finAccountBalances(profileId: string): Promise<FinAccountBalance[]>;
+  /**
+   * Net worth PER CURRENCY across the live, non-archived accounts — one entry
+   * per currency. There is deliberately no sibling answering a single number:
+   * with no exchange rate available, a cross-currency total could only be
+   * invented, so this API makes inventing one impossible rather than merely
+   * discouraged.
+   */
+  finCurrencyTotals(profileId: string): Promise<FinCurrencyTotal[]>;
+  /** Creates an account. `openingBalance` is minor units, an integer — never a decimal string. */
+  createFinAccount(profileId: string, account: NewFinAccountFields): Promise<FinAccount>;
+  updateFinAccount(
+    profileId: string,
+    id: string,
+    changes: FinAccountFieldChanges,
+  ): Promise<FinAccount>;
+  /** Soft-deletes an account; its transactions stay on disk and come back with it. */
+  deleteFinAccount(profileId: string, id: string): Promise<void>;
+  restoreFinAccount(profileId: string, id: string): Promise<void>;
+  /** This profile's categories, both kinds together, sr-Latn alphabetical — the picker filters to the kind it needs. */
+  listFinCategories(profileId: string): Promise<FinCategory[]>;
+  /** Creates a category; refuses a name this profile already holds UNDER THE SAME KIND, by name. */
+  createFinCategory(profileId: string, name: string, kind: FinCategoryKind): Promise<FinCategory>;
+  renameFinCategory(profileId: string, id: string, name: string): Promise<FinCategory>;
+  /** Deletes a category. Its transactions are NOT deleted — they simply become uncategorized. */
+  deleteFinCategory(profileId: string, id: string): Promise<void>;
+  /** This profile's live transactions, newest day first — the ledger's own order, which the views engine then leaves untouched. */
+  listFinTransactions(profileId: string): Promise<FinTransaction[]>;
+  /** Creates a transaction — or a transfer, when `counterAccountId` is given. `amount` is minor units, an integer, signed from `accountId`'s point of view. */
+  createFinTransaction(
+    profileId: string,
+    transaction: NewFinTransactionFields,
+  ): Promise<FinTransaction>;
+  updateFinTransaction(
+    profileId: string,
+    id: string,
+    changes: FinTransactionFieldChanges,
+  ): Promise<FinTransaction>;
+  /** Soft-deletes a transaction; the balance derivation stops counting it immediately. */
+  deleteFinTransaction(profileId: string, id: string): Promise<void>;
+  restoreFinTransaction(profileId: string, id: string): Promise<void>;
   /** Runs the query pipeline (parse -> FTS match -> bm25 candidates -> rank), falling back to `searchRecent`'s order when the query has no matchable terms (ADR-021). */
   searchQuery(profileId: string, query: string, limit: number): Promise<SearchResult[]>;
   /** The profile's most recently touched entries, already in their final order — no ranking pass, unlike `searchQuery`. */

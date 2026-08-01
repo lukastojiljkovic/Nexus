@@ -285,6 +285,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     notes: "Beleške",
     study: "Učenje",
     priv: "Privatno",
+    finance: "Finansije",
   } as Record<string, string>,
 
   dashboard: {
@@ -2291,6 +2292,152 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     },
   },
 
+  /**
+   * Finansije (FIN slice b). The copy states the module's two structural rules
+   * out loud wherever the user could otherwise be surprised by them: totals are
+   * per currency because Nexus holds no exchange rate, and a transfer is one
+   * act between two of your own accounts rather than an expense with an odd
+   * category.
+   *
+   * Every amount the user sees is produced by `money.ts` — there is no number
+   * in this table.
+   */
+  finance: {
+    loadErrorTitle: "Finansije nisu učitane",
+    loadError: "Učitavanje finansija nije uspelo. Zatvori i ponovo otvori stranicu.",
+    /** The one line every failed write falls back to when `financeErrorMessage` recognizes nothing more specific. */
+    actionError: "Radnja nije uspela. Pokušaj ponovo.",
+    undo: "Opozovi",
+    dismiss: "Zatvori",
+    accounts: {
+      heading: "Računi",
+      /** The rail's "no account filter" row — a view over every account, not an account. */
+      all: "Svi računi",
+      archivedHeading: "Arhivirani",
+      archivedChip: "Arhiviran",
+      newAccount: "Novi račun",
+      nameLabel: "Naziv računa",
+      namePlaceholder: "Tekući račun",
+      kindLabel: "Vrsta",
+      currencyLabel: "Valuta",
+      /** Three letters, ISO-4217 — the field says the shape rather than offering a list Nexus would have to invent. */
+      currencyHint: "Troslovna oznaka, npr. RSD",
+      openingLabel: "Početno stanje",
+      openingHint: "Stanje na dan kada dodaješ račun. Kasnije se ne menja samo od sebe.",
+      kinds: {
+        cash: "Gotovina",
+        current: "Tekući račun",
+        card: "Kartica",
+        savings: "Štednja",
+      },
+      save: "Sačuvaj",
+      cancel: "Otkaži",
+      edit: "Izmeni",
+      archive: "Arhiviraj",
+      unarchive: "Vrati iz arhive",
+      delete: "Obriši",
+      deletedNotice: "Račun je obrisan, zajedno sa svojim transakcijama.",
+      /** The invitation a profile with no accounts sees — never a sample row. */
+      emptyTitle: "Još nema računa",
+      emptyDescription:
+        "Dodaj prvi račun i Nexus će voditi njegovo stanje — sam ga izračunava iz početnog stanja i transakcija.",
+      invalidCurrency: "Valuta mora biti troslovna oznaka, na primer RSD.",
+      invalidOpening: "Početno stanje nije ispravan iznos.",
+      invalidName: "Naziv računa ne može biti prazan.",
+    },
+    totals: {
+      heading: "Ukupno",
+      /**
+       * Said out loud, because the absence of one number is the design and not
+       * an omission: without kursa nijedan zbir preko valuta ne bi bio istinit.
+       */
+      caption: "Po valuti — Nexus nema kurs, pa se stanja u različitim valutama nikada ne sabiraju.",
+      /** Shown while the profile has accounts but every one of them is archived. */
+      none: "Nema aktivnih računa.",
+    },
+    categories: {
+      heading: "Kategorije",
+      newCategory: "Nova kategorija",
+      namePlaceholder: "Hrana",
+      kinds: {
+        income: "Prihod",
+        expense: "Rashod",
+      },
+      rename: "Preimenuj",
+      delete: "Obriši",
+      /** Stated on the delete affordance itself: what survives matters more than what goes. */
+      deleteHint: "Transakcije ostaju — samo gube kategoriju.",
+      empty: "Još nema kategorija.",
+      duplicate: "Kategorija sa tim imenom već postoji.",
+      invalidName: "Ime kategorije ne može biti prazno.",
+    },
+    ledger: {
+      emptyTitle: "Još nema transakcija",
+      emptyDescription: "Upiši prvu iznad — iznos, opis i datum su dovoljni.",
+      /** When a filter matches nothing, which is a different fact from an empty ledger. */
+      filterEmptyTitle: "Ništa ne odgovara filterima",
+      filterEmptyDescription: "Promeni račun, kategoriju ili period da vidiš više.",
+      uncategorized: "Bez kategorije",
+      transfer: "Prenos",
+      /** Between the two account names on a transfer row: „Tekući → Štednja". */
+      transferArrow: "→",
+      deletedNotice: "Transakcija je obrisana.",
+      edit: "Izmeni",
+      delete: "Obriši",
+    },
+    form: {
+      /** The three acts the one form can perform; the choice decides the sign and what the row may carry. */
+      kindExpense: "Rashod",
+      kindIncome: "Prihod",
+      kindTransfer: "Prenos",
+      kindLabel: "Vrsta unosa",
+      amountLabel: "Iznos",
+      amountPlaceholder: "0,00",
+      payeeLabel: "Opis",
+      payeePlaceholder: "Prodavnica",
+      dateLabel: "Datum",
+      accountLabel: "Račun",
+      fromAccountLabel: "Sa računa",
+      toAccountLabel: "Na račun",
+      categoryLabel: "Kategorija",
+      categoryNone: "Bez kategorije",
+      noteLabel: "Beleška",
+      submitAdd: "Dodaj",
+      submitSave: "Sačuvaj",
+      cancel: "Otkaži",
+      invalidAmount: "Iznos nije ispravan. Upiši ga kao 1234,56.",
+      zeroAmount: "Iznos ne može biti nula.",
+      missingCounter: "Izaberi i račun sa kojeg i račun na koji ide prenos.",
+      needsAccount: "Prvo dodaj račun — transakcija mora negde da stane.",
+    },
+    filters: {
+      categoryLabel: "Filter po kategoriji",
+      categoryAll: "Sve kategorije",
+      categoryNone: "Bez kategorije",
+      fromLabel: "Od",
+      toLabel: "Do",
+      clear: "Poništi filtere",
+      invalidPeriod: "„Od“ ne može biti posle „Do“.",
+    },
+    views: {
+      list: "Lista",
+      cards: "Kartice",
+    },
+    /**
+     * The refusals the three stores name (FIN slice a). Each one is matched off
+     * the store's own message text, exactly as `planErrorMessage` does for
+     * STUDY — the store stays the authority on what is rejected, and this is
+     * only how the page says it in Serbian.
+     */
+    error: {
+      transferSameAccount: "Prenos ide između dva različita računa.",
+      transferCurrency:
+        "Prenos ne može da pređe iz jedne valute u drugu — Nexus nema kurs. Upiši dve obične transakcije.",
+      transferCategory: "Prenos nema kategoriju: to nije ni prihod ni rashod.",
+      notFound: "Taj zapis više ne postoji. Osveži stranicu.",
+    },
+  },
+
   settings: {
     // The page title reuses `strings.modules.settings` — no duplicate copy.
     /**
@@ -2312,6 +2459,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       dashboard: "Kontrolna tabla",
       study: "Učenje",
       calendar: "Kalendar",
+      finance: "Finansije",
       modules: "Moduli",
       notifications: "Obaveštenja",
       backup: "Rezervna kopija",
@@ -2579,6 +2727,20 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       cleared: "Datumi semestra su uklonjeni.",
       error: "Čuvanje datuma semestra nije uspelo. Pokušaj ponovo.",
     },
+    /**
+     * Finansije (FIN slice b). ONE control, and the card says exactly what it
+     * does and does not reach: the currency of your money lives on each
+     * account, and this only decides which code „Novi račun" opens on — which
+     * is also why it is a DEVICE preference and why the card offers a reset.
+     */
+    finance: {
+      caption:
+        "Valuta se bira po računu. Ovo je samo kod na koji se otvara obrazac za novi račun — postojeći računi se ne diraju.",
+      primaryCurrencyLabel: "Podrazumevana valuta",
+      primaryCurrencyHint: "Troslovna oznaka po ISO 4217, na primer RSD ili EUR.",
+      invalidCurrency: "Upiši troslovnu oznaku valute, na primer RSD.",
+      saved: "Podrazumevana valuta je sačuvana.",
+    },
     /** One-line module descriptions for the gallery, keyed by module id. */
     moduleDescriptions: {
       dashboard: "Pregled dana na jednom mestu — obaveze, zadaci i dokumenta koja ističu.",
@@ -2588,6 +2750,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       notes: "Beleške sa blok-editorom — markdown prečice i „/” meni za formatiranje.",
       study: "Predmeti, ispiti, kartice za učenje i planovi pripreme za ispite.",
       priv: "Šifrovane privatne beleške — otključavaju se posebno i ne pojavljuju se u pretrazi.",
+      finance: "Računi, transakcije i prenosi — stanje se računa iz onoga što upišeš.",
     } as Record<string, string>,
     /** Category-group headings above the module gallery, keyed by registry category. */
     moduleCategories: {
@@ -3705,6 +3868,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       newTask: "Novi zadatak",
       newEvent: "Novi događaj",
       newNote: "Nova beleška",
+      newTransaction: "Nova transakcija",
       /**
        * ADR-049: one command per task view, between the quick-creates and the
        * shell actions. Prefixed with the module rather than „Idi na“, because

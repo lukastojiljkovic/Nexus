@@ -80,9 +80,13 @@ import {
   EventTemplateStore,
   EXAM_TYPES,
   ExamStore,
+  FIN_ACCOUNT_KINDS,
+  FIN_CATEGORY_KINDS,
   FinAccountStore,
   FinCategoryStore,
   FinTransactionStore,
+  isCurrencyCode,
+  isMinorUnits,
   FocusStore,
   ForeignImportStore,
   isPlaintextDatabase,
@@ -171,6 +175,17 @@ import {
   type EventTemplate,
   type Exam,
   type ExamType,
+  type CreateFinAccountInput,
+  type CreateFinTransactionInput,
+  type FinAccount,
+  type FinAccountBalance,
+  type FinAccountKind,
+  type FinCategory,
+  type FinCategoryKind,
+  type FinCurrencyTotal,
+  type FinTransaction,
+  type UpdateFinAccountFields,
+  type UpdateFinTransactionFields,
   type FocusSession,
   type LinkedNote,
   type NexusDatabase,
@@ -2610,6 +2625,139 @@ function asNotificationSettingsChanges(value: unknown): UpdateNotificationSettin
   return patch;
 }
 
+// --- Finansije (FIN slice b) validators --------------------------------------
+//
+// SEC-EL-02 as everywhere else: structural checks here, semantics in the store.
+// The one rule worth restating is the module's own — **money is an INTEGER of
+// minor units**: `asMinorUnits` refuses a float outright rather than rounding
+// it, so the wire cannot be the place a decimal enters a ledger that has none.
+// The store re-validates every one of these afterwards, because a store is
+// never the place that assumes its caller did.
+
+/** An amount in minor units: a SAFE integer (the round trip through SQLite and back into a `number` has to survive it). Never a float — a rounded "12.5" would be a silently different amount. */
+function asMinorUnits(value: unknown, field: string): number {
+  if (typeof value !== "number" || !isMinorUnits(value)) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be a safe INTEGER of minor units — money is never a float.`,
+    );
+  }
+  return value;
+}
+
+/** An ISO-4217 code: exactly three upper-case ASCII letters, never up-cased here — a caller sending „rsd" has a bug worth naming. */
+function asCurrencyCode(value: unknown, field: string): string {
+  if (typeof value !== "string" || !isCurrencyCode(value)) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be a three-letter upper-case ISO-4217 code.`,
+    );
+  }
+  return value;
+}
+
+function asFinAccountKind(value: unknown, field: string): FinAccountKind {
+  if (typeof value === "string" && (FIN_ACCOUNT_KINDS as readonly string[]).includes(value)) {
+    return value as FinAccountKind;
+  }
+  throw new Error(`Invalid IPC payload: "${field}" is not a valid account kind.`);
+}
+
+function asFinCategoryKind(value: unknown, field: string): FinCategoryKind {
+  if (typeof value === "string" && (FIN_CATEGORY_KINDS as readonly string[]).includes(value)) {
+    return value as FinCategoryKind;
+  }
+  throw new Error(`Invalid IPC payload: "${field}" is not a valid category kind.`);
+}
+
+/** Validates a `NewFinAccountFields` payload into a store input; only present keys are carried. */
+function asNewFinAccountInput(value: unknown): CreateFinAccountInput {
+  const account = asRecord(value);
+  const input: CreateFinAccountInput = {
+    name: asNonEmptyString(account.name, "account.name"),
+    kind: asFinAccountKind(account.kind, "account.kind"),
+    currency: asCurrencyCode(account.currency, "account.currency"),
+  };
+  if (account.openingBalance !== undefined) {
+    input.openingBalance = asMinorUnits(account.openingBalance, "account.openingBalance");
+  }
+  return input;
+}
+
+/** Validates a `FinAccountFieldChanges` payload into a store patch; an omitted key stays omitted. */
+function asFinAccountFieldChanges(value: unknown): UpdateFinAccountFields {
+  const changes = asRecord(value);
+  const patch: UpdateFinAccountFields = {};
+  if (changes.name !== undefined) patch.name = asNonEmptyString(changes.name, "changes.name");
+  if (changes.kind !== undefined) patch.kind = asFinAccountKind(changes.kind, "changes.kind");
+  if (changes.currency !== undefined) {
+    patch.currency = asCurrencyCode(changes.currency, "changes.currency");
+  }
+  if (changes.openingBalance !== undefined) {
+    patch.openingBalance = asMinorUnits(changes.openingBalance, "changes.openingBalance");
+  }
+  if (changes.archived !== undefined) {
+    patch.archived = asBoolean(changes.archived, "changes.archived");
+  }
+  return patch;
+}
+
+/**
+ * Validates a `NewFinTransactionFields` payload into a store input. Nothing
+ * here knows what a transfer may be: the same-account, cross-currency and
+ * "a transfer carries no category" refusals are `FinTransactionStore.resolve`'s
+ * alone, because each of them needs the accounts LOOKED UP, which is a database
+ * question and not a wire one.
+ */
+function asNewFinTransactionInput(value: unknown): CreateFinTransactionInput {
+  const transaction = asRecord(value);
+  const input: CreateFinTransactionInput = {
+    accountId: asNonEmptyString(transaction.accountId, "transaction.accountId"),
+    date: asBareDate(transaction.date, "transaction.date"),
+    amount: asMinorUnits(transaction.amount, "transaction.amount"),
+  };
+  if (transaction.counterAccountId !== undefined) {
+    input.counterAccountId = asNullableId(
+      transaction.counterAccountId,
+      "transaction.counterAccountId",
+    );
+  }
+  if (transaction.categoryId !== undefined) {
+    input.categoryId = asNullableId(transaction.categoryId, "transaction.categoryId");
+  }
+  if (transaction.payee !== undefined) {
+    input.payee = asNullableString(transaction.payee, "transaction.payee");
+  }
+  if (transaction.note !== undefined) {
+    input.note = asNullableString(transaction.note, "transaction.note");
+  }
+  return input;
+}
+
+/**
+ * Validates a `FinTransactionFieldChanges` payload into a store patch. An
+ * omitted key stays omitted and an explicit `null` clears — which matters here
+ * more than usual: clearing `counterAccountId` is how a transfer stops being
+ * one, and the store re-checks the WHOLE merged row afterwards precisely
+ * because that is not visible from the patched field alone.
+ */
+function asFinTransactionFieldChanges(value: unknown): UpdateFinTransactionFields {
+  const changes = asRecord(value);
+  const patch: UpdateFinTransactionFields = {};
+  if (changes.accountId !== undefined) {
+    patch.accountId = asNonEmptyString(changes.accountId, "changes.accountId");
+  }
+  if (changes.counterAccountId !== undefined) {
+    patch.counterAccountId = asNullableId(changes.counterAccountId, "changes.counterAccountId");
+  }
+  if (changes.categoryId !== undefined) {
+    patch.categoryId = asNullableId(changes.categoryId, "changes.categoryId");
+  }
+  if (changes.date !== undefined) patch.date = asBareDate(changes.date, "changes.date");
+  if (changes.amount !== undefined) patch.amount = asMinorUnits(changes.amount, "changes.amount");
+  if (changes.payee !== undefined) patch.payee = asNullableString(changes.payee, "changes.payee");
+  if (changes.note !== undefined) patch.note = asNullableString(changes.note, "changes.note");
+  return patch;
+}
+
 function requireDb(): NexusDatabase {
   if (!db) throw new Error("Database is locked.");
   return db;
@@ -2991,10 +3139,11 @@ function dashboardSetStore(profileId: string): DashboardSetStore {
   return new DashboardSetStore(requireDb().raw, profileId);
 }
 
-// FIN (migration 051). No IPC channel names these yet — slice a is the data
-// layer alone — but both interchange flows already gather through them, which
-// is what makes a FIN row ride in every archive and every restore from the day
-// the tables exist rather than from the day a page can draw them.
+// FIN (migration 051). Both interchange flows gather through these — which is
+// what made a FIN row ride in every archive and every restore from the day the
+// tables existed rather than from the day a page could draw them — and since
+// slice b the `fin-*:*` channels below serve the „Finansije" page from the
+// same three stores.
 function finAccountStore(profileId: string): FinAccountStore {
   return new FinAccountStore(requireDb().raw, profileId);
 }
@@ -7148,6 +7297,152 @@ function registerIpc(): void {
     const setId = asNullableId(body.setId, "setId");
     dashboardSetStore(profileId).setActive(setId, new Date().toISOString());
     return dashboardSetsState(profileId);
+  });
+
+  // Finansije (FIN slice b, migration 051). SEC-EL-02 as everywhere else:
+  // `assertTrustedSender` first, `asRecord` on the payload, one `as*` validator
+  // per field — and the store re-validates all of it afterwards, because a
+  // store is never the place that assumes its caller did. `now` is stamped from
+  // main's own clock on every write: when money moved is never the renderer's
+  // to say.
+  ipcMain.handle(IpcChannel.finAccountsList, (event, payload): FinAccount[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return finAccountStore(profileId).listActive();
+  });
+
+  // A DERIVED read, computed from the transactions on every call — there is no
+  // balance column for this to go stale against.
+  ipcMain.handle(IpcChannel.finAccountsBalances, (event, payload): FinAccountBalance[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return finAccountStore(profileId).listBalances();
+  });
+
+  // Per currency, always a LIST — the store has no method answering a single
+  // number, so there is nothing here that could be folded into one.
+  ipcMain.handle(IpcChannel.finAccountsTotals, (event, payload): FinCurrencyTotal[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return finAccountStore(profileId).totalsByCurrency();
+  });
+
+  ipcMain.handle(IpcChannel.finAccountsCreate, (event, payload): FinAccount => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return finAccountStore(profileId).create(
+      asNewFinAccountInput(body.account),
+      new Date().toISOString(),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.finAccountsUpdate, (event, payload): FinAccount => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return finAccountStore(profileId).update(
+      id,
+      asFinAccountFieldChanges(body.changes),
+      new Date().toISOString(),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.finAccountsDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    finAccountStore(profileId).softDelete(id, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.finAccountsRestore, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    finAccountStore(profileId).restore(id, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.finCategoriesList, (event, payload): FinCategory[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return finCategoryStore(profileId).list();
+  });
+
+  ipcMain.handle(IpcChannel.finCategoriesCreate, (event, payload): FinCategory => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const name = asNonEmptyString(body.name, "name");
+    const kind = asFinCategoryKind(body.kind, "kind");
+    return finCategoryStore(profileId).create({ name, kind }, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.finCategoriesRename, (event, payload): FinCategory => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const name = asNonEmptyString(body.name, "name");
+    return finCategoryStore(profileId).rename(id, name, new Date().toISOString());
+  });
+
+  // A hard delete, and deliberately so: migration 051 leaves the transactions
+  // standing and uncategorized (`ON DELETE SET NULL`), which is the whole of
+  // what "this label no longer exists" should mean. Nothing to restore, hence
+  // no undo channel beside it.
+  ipcMain.handle(IpcChannel.finCategoriesDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    finCategoryStore(profileId).delete(id);
+  });
+
+  ipcMain.handle(IpcChannel.finTransactionsList, (event, payload): FinTransaction[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return finTransactionStore(profileId).listActive();
+  });
+
+  ipcMain.handle(IpcChannel.finTransactionsCreate, (event, payload): FinTransaction => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return finTransactionStore(profileId).create(
+      asNewFinTransactionInput(body.transaction),
+      new Date().toISOString(),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.finTransactionsUpdate, (event, payload): FinTransaction => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return finTransactionStore(profileId).update(
+      id,
+      asFinTransactionFieldChanges(body.changes),
+      new Date().toISOString(),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.finTransactionsDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    finTransactionStore(profileId).softDelete(id, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.finTransactionsRestore, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    finTransactionStore(profileId).restore(id, new Date().toISOString());
   });
 
   // Global search (ADR-021 / PRD 08 SRCH-001/002): `runSearchQuery`/

@@ -477,6 +477,35 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.dashboardSetDelete, { profileId, setId }),
   setActiveDashboardSet: (profileId, setId) =>
     ipcRenderer.invoke(IpcChannel.dashboardSetActivate, { profileId, setId }),
+  listFinAccounts: (profileId) => ipcRenderer.invoke(IpcChannel.finAccountsList, { profileId }),
+  finAccountBalances: (profileId) =>
+    ipcRenderer.invoke(IpcChannel.finAccountsBalances, { profileId }),
+  finCurrencyTotals: (profileId) => ipcRenderer.invoke(IpcChannel.finAccountsTotals, { profileId }),
+  createFinAccount: (profileId, account) =>
+    ipcRenderer.invoke(IpcChannel.finAccountsCreate, { profileId, account }),
+  updateFinAccount: (profileId, id, changes) =>
+    ipcRenderer.invoke(IpcChannel.finAccountsUpdate, { profileId, id, changes }),
+  deleteFinAccount: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.finAccountsDelete, { profileId, id }),
+  restoreFinAccount: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.finAccountsRestore, { profileId, id }),
+  listFinCategories: (profileId) => ipcRenderer.invoke(IpcChannel.finCategoriesList, { profileId }),
+  createFinCategory: (profileId, name, kind) =>
+    ipcRenderer.invoke(IpcChannel.finCategoriesCreate, { profileId, name, kind }),
+  renameFinCategory: (profileId, id, name) =>
+    ipcRenderer.invoke(IpcChannel.finCategoriesRename, { profileId, id, name }),
+  deleteFinCategory: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.finCategoriesDelete, { profileId, id }),
+  listFinTransactions: (profileId) =>
+    ipcRenderer.invoke(IpcChannel.finTransactionsList, { profileId }),
+  createFinTransaction: (profileId, transaction) =>
+    ipcRenderer.invoke(IpcChannel.finTransactionsCreate, { profileId, transaction }),
+  updateFinTransaction: (profileId, id, changes) =>
+    ipcRenderer.invoke(IpcChannel.finTransactionsUpdate, { profileId, id, changes }),
+  deleteFinTransaction: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.finTransactionsDelete, { profileId, id }),
+  restoreFinTransaction: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.finTransactionsRestore, { profileId, id }),
   searchQuery: (profileId, query, limit) =>
     ipcRenderer.invoke(IpcChannel.searchQuery, { profileId, query, limit }),
   searchRecent: (profileId, limit) =>

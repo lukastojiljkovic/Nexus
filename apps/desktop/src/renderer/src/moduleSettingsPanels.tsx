@@ -14,6 +14,12 @@ import type {
   PrivStatus,
   StudySettings,
 } from "../../shared/ipc.js";
+import {
+  clearStoredFinancePreferences,
+  normalizeCurrencyInput,
+  persistPrimaryCurrency,
+  readStoredPrimaryCurrency,
+} from "./financePrefs.js";
 import { settingsEntryId } from "./moduleSettings.js";
 import {
   clearStoredNotePreferences,
@@ -762,6 +768,73 @@ function PrivSettingsPanel({ profileId, hits }: SettingsPanelProps) {
   );
 }
 
+// --- FIN ----------------------------------------------------------------------
+
+/**
+ * Finansije (FIN slice b): one control, the code the „Novi račun" form opens
+ * on. A DEVICE preference on the Beleške/Zadaci recipe — `localStorage`, no
+ * IPC — because the currency of the user's MONEY lives on each account and
+ * never here; this only decides what a form is pre-filled with.
+ *
+ * The field commits on a valid code and says so when the text is not one,
+ * rather than silently keeping the old value: the domain is ISO-4217, which
+ * this app cannot enumerate into a select without inventing a curated list, so
+ * the refusal is what a `choice` would otherwise have given for free.
+ */
+function FinanceSettingsPanel({ hits }: SettingsPanelProps) {
+  const s = strings.settings.finance;
+  const [draft, setDraft] = useState(() => readStoredPrimaryCurrency());
+  const [message, setMessage] = useState<{ text: string; failed: boolean } | null>(null);
+
+  function commit(text: string): void {
+    setDraft(text);
+    const code = normalizeCurrencyInput(text);
+    if (code === null) {
+      setMessage({ text: s.invalidCurrency, failed: true });
+      return;
+    }
+    persistPrimaryCurrency(code);
+    setMessage({ text: s.saved, failed: false });
+  }
+
+  return (
+    <>
+      <p className="set__section-caption">{s.caption}</p>
+      <div className="set__study-fields">
+        <label className="set__study-field">
+          <span
+            className={labelClass(
+              "set__study-label",
+              hits.has(settingsEntryId("finance", "primary-currency")),
+            )}
+          >
+            {s.primaryCurrencyLabel}
+          </span>
+          <input
+            className="nx-textfield__input set__currency-input"
+            value={draft}
+            maxLength={3}
+            spellCheck={false}
+            autoComplete="off"
+            aria-label={s.primaryCurrencyLabel}
+            onChange={(event) => commit(event.target.value)}
+            // A half-typed code is not a value; blur puts the stored one back
+            // rather than leaving the field showing something nothing holds.
+            onBlur={() => {
+              setDraft(readStoredPrimaryCurrency());
+              setMessage(null);
+            }}
+          />
+          <span className="set__section-caption">{s.primaryCurrencyHint}</span>
+        </label>
+      </div>
+      {message !== null && (
+        <p className={message.failed ? "set__error" : "set__section-caption"}>{message.text}</p>
+      )}
+    </>
+  );
+}
+
 // --- The registry-driven map --------------------------------------------------
 
 /**
@@ -778,4 +851,5 @@ export const MODULE_SETTINGS_PANELS: Record<string, SettingsPanelRenderer> = {
   notes: { Body: NotesSettingsPanel, resetDevice: clearStoredNotePreferences },
   priv: { Body: PrivSettingsPanel },
   study: { Body: StudySettingsPanel },
+  finance: { Body: FinanceSettingsPanel, resetDevice: clearStoredFinancePreferences },
 };

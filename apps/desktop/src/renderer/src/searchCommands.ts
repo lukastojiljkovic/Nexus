@@ -28,8 +28,8 @@ export interface SearchCommand {
  */
 export const REBUILD_COMMAND_ID = "rebuild-search-index";
 
-/** The modules a palette command can create an entity in — the three whose pages accept a "create" intent (021-e). */
-export type CreatableModuleId = "tasks" | "calendar" | "notes";
+/** The modules a palette command can create an entity in — the four whose pages accept a "create" intent (021-e). */
+export type CreatableModuleId = "tasks" | "calendar" | "notes" | "finance";
 
 export interface SearchCommandsContext {
   /** Needed only by the rebuild command's own `rebuildSearchIndex` call. */
@@ -66,6 +66,11 @@ const CREATABLE = [
     keywords: ["dodaj", "dogadjaj", "termin"],
   },
   { moduleId: "notes", label: strings.search.commands.newNote, keywords: ["dodaj", "beleska"] },
+  {
+    moduleId: "finance",
+    label: strings.search.commands.newTransaction,
+    keywords: ["dodaj", "transakcija", "trosak", "rashod", "prihod", "novac"],
+  },
 ] as const satisfies readonly {
   moduleId: CreatableModuleId;
   label: string;

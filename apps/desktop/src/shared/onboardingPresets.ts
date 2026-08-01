@@ -39,6 +39,7 @@ export const ESSENTIALS_MODULE_PRESET: ModulePreset = {
   notes: true,
   priv: false,
   study: true,
+  finance: true,
 };
 
 /**
@@ -52,11 +53,31 @@ export const ESSENTIALS_MODULE_PRESET: ModulePreset = {
  * the neutral preset rather than an invented one. The two work answers drop
  * STUDY, which is the one module their day genuinely has no place for.
  * PRIV is false in every row — see `ESSENTIALS_MODULE_PRESET`.
+ *
+ * FIN is true in every row, and that uniformity is a decision rather than a
+ * default: „Uloga“ tells us how somebody's DAY is shaped, and money is the one
+ * subject here that is shaped the same way for a student, an employee, a
+ * founder and somebody who fits none of those. Dropping it for any of the four
+ * would be inventing a difference the question never asked about.
  */
 export const OCCUPATION_MODULE_PRESETS: Readonly<Record<OnboardingOccupation, ModulePreset>> = {
   student: ESSENTIALS_MODULE_PRESET,
-  zaposleni: { tasks: true, calendar: true, notes: true, priv: false, study: false },
-  preduzetnik: { tasks: true, calendar: true, notes: true, priv: false, study: false },
+  zaposleni: {
+    tasks: true,
+    calendar: true,
+    notes: true,
+    priv: false,
+    study: false,
+    finance: true,
+  },
+  preduzetnik: {
+    tasks: true,
+    calendar: true,
+    notes: true,
+    priv: false,
+    study: false,
+    finance: true,
+  },
   drugo: ESSENTIALS_MODULE_PRESET,
 };
 

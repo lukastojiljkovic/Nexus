@@ -100,6 +100,12 @@ describe("OCCUPATION_MODULE_PRESETS", () => {
     expect(OCCUPATION_MODULE_PRESETS.preduzetnik["study"]).toBe(false);
   });
 
+  it("pre-checks FIN for every answer — „Uloga“ asks about a day, and money is shaped the same in all four", () => {
+    for (const occupation of ONBOARDING_OCCUPATIONS) {
+      expect(OCCUPATION_MODULE_PRESETS[occupation]["finance"], occupation).toBe(true);
+    }
+  });
+
   it("answers „Nešto drugo“ with the neutral preset rather than an invented one", () => {
     expect(OCCUPATION_MODULE_PRESETS.drugo).toEqual(ESSENTIALS_MODULE_PRESET);
   });
@@ -113,6 +119,7 @@ describe("resolveModuleSelection", () => {
       notes: true,
       priv: true,
       study: false,
+      finance: true,
     });
   });
 
@@ -136,6 +143,7 @@ describe("moduleFlagWrites", () => {
       { moduleId: "notes", enabled: true },
       { moduleId: "priv", enabled: false },
       { moduleId: "study", enabled: true },
+      { moduleId: "finance", enabled: true },
     ]);
   });
 

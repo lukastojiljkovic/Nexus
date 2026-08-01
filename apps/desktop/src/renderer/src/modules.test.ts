@@ -33,6 +33,7 @@ describe("createModuleRegistry", () => {
       "notes",
       "priv",
       "study",
+      "finance",
     ]);
   });
 
@@ -70,7 +71,7 @@ describe("createModuleRegistry", () => {
       "notes",
       "priv",
     ]);
-    expect(grouped.get("Life hubs")?.map((manifest) => manifest.id)).toEqual(["study"]);
+    expect(grouped.get("Life hubs")?.map((manifest) => manifest.id)).toEqual(["study", "finance"]);
   });
 
   it("is constructed per call, never a shared singleton (ADR-008)", () => {
@@ -93,6 +94,7 @@ describe("createModuleRegistry", () => {
       "settings",
       "notes",
       "study",
+      "finance",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -133,6 +135,7 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       "notes",
       "priv",
       "study",
+      "finance",
     ]);
   });
 
@@ -199,7 +202,7 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
     expect(optionIds("notes", "width")).toEqual([...NOTE_WIDTHS]);
   });
 
-  it("keeps every card's storage honest: the two device cards, and four the profile owns", () => {
+  it("keeps every card's storage honest: the three device cards, and four the profile owns", () => {
     const storages = (moduleId: string) =>
       new Set(
         declared
@@ -208,6 +211,10 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       );
     expect(storages("tasks")).toEqual(new Set(["device"]));
     expect(storages("notes")).toEqual(new Set(["device"]));
+    // FIN's one control decides which currency code the „Novi račun" form opens
+    // on — a fact about this machine's form, never about the profile's money,
+    // which lives on each account instead.
+    expect(storages("finance")).toEqual(new Set(["device"]));
     expect(storages("dashboard")).toEqual(new Set(["profile"]));
     expect(storages("study")).toEqual(new Set(["profile"]));
     expect(storages("calendar")).toEqual(new Set(["profile"]));
