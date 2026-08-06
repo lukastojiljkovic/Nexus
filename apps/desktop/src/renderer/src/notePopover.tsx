@@ -1,11 +1,6 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
+
+import { useAnchoredPosition } from "./useAnchoredPosition.js";
 
 export interface NotePopoverProps {
   /** Accessible label for the trigger button. */
@@ -26,11 +21,25 @@ export interface NotePopoverProps {
 /**
  * A small "⋯" actions popover (NOTE organizer, slice a3b): a trigger button
  * that reveals a token-styled panel, closing on an outside click or Escape.
- * The panel is `position: fixed`, anchored to the trigger's rect, so it escapes
- * the surrounding `overflow: auto` list/tree instead of being clipped by it —
- * the same reason the slash menu is fixed. Hand-rolled (no floating-ui) to keep
- * the renderer dependency-light; the panel is a real `role="menu"` region and
- * every item inside is a focusable `<button>`.
+ * Hand-rolled (no floating-ui) to keep the renderer dependency-light; the panel
+ * is a real `role="menu"` region and every item inside is a focusable
+ * `<button>`.
+ *
+ * Placement, following and dismissal all belong to `useAnchoredPosition`, which
+ * this component was the original home of. What the move buys, beyond one copy
+ * of the rule instead of four:
+ *
+ * - The panel FLIPS above the trigger when there is no room below. It used to
+ *   be `top: rect.bottom + 2` and nothing else, so a trigger low in the window
+ *   opened a menu below the screen edge — unreachable, because `.app` sets
+ *   `overflow: hidden` and there is nothing to scroll.
+ * - It is clamped inside both horizontal edges. The old `right:` anchoring left
+ *   the panel's LEFT edge wherever its intrinsic width happened to put it,
+ *   which for a 208px-wide sidebar meant off-screen.
+ * - It follows scrolling and resizing, which no render announces and which the
+ *   old `mousedown`-only dismissal did not even close on.
+ * - It is portalled to `<body>`, so escaping the surrounding `overflow: auto`
+ *   list/tree no longer depends on no ancestor ever growing a `transform`.
  */
 export function NotePopover({
   label,
@@ -39,45 +48,23 @@ export function NotePopover({
   children,
 }: NotePopoverProps) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
-  const wrapRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-
-  // Re-measured on every render while open: an action inside the panel can
-  // reflow the trigger's row (e.g. attaching a note's first tag adds a chip
-  // line), and the fixed-position panel must follow the trigger. Returning the
-  // previous object when nothing moved keeps the effect from looping.
-  useLayoutEffect(() => {
-    if (!open || !triggerRef.current) return;
-    const rect = triggerRef.current.getBoundingClientRect();
-    setPos((prev) => {
-      const next = { top: rect.bottom + 2, right: window.innerWidth - rect.right };
-      return prev !== null && prev.top === next.top && prev.right === next.right ? prev : next;
-    });
+  // The panel is portalled, so it is no longer the trigger's DOM neighbour and
+  // assistive technology has nothing to infer the relationship from. `aria-
+  // controls` states it, and only while there is something to point at.
+  const panelId = useId();
+  // `align: "end"` keeps the panel hanging back under the glyph it was opened
+  // from — today's right-aligned look, now with the clamp it never had.
+  const { panelProps, portal } = useAnchoredPosition({
+    open,
+    anchor: triggerRef,
+    trigger: triggerRef,
+    align: "end",
+    onClose: () => setOpen(false),
   });
 
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) setOpen(false);
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
-
-  const panelStyle: CSSProperties | undefined = pos
-    ? { position: "fixed", top: pos.top, right: pos.right }
-    : undefined;
-
   return (
-    <div className="note__menu" ref={wrapRef}>
+    <div className="note__menu">
       <button
         ref={triggerRef}
         type="button"
@@ -85,15 +72,17 @@ export function NotePopover({
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
         onClick={() => setOpen((value) => !value)}
       >
         {triggerContent}
       </button>
-      {open && pos && (
-        <div className="note__menu-panel" role="menu" style={panelStyle}>
-          {children(() => setOpen(false))}
-        </div>
-      )}
+      {open &&
+        portal(
+          <div id={panelId} className="note__menu-panel" role="menu" {...panelProps}>
+            {children(() => setOpen(false))}
+          </div>,
+        )}
     </div>
   );
 }

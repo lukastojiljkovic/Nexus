@@ -3087,10 +3087,13 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                   autoFocus
                   onChange={(event: ChangeEvent<HTMLInputElement>) => setDepDraft(event.target.value)}
                   onKeyDown={(event) => {
-                    // A swallowed Enter: this field sits INSIDE the add/edit
-                    // <form>, so an un-prevented Enter would save the task rather
-                    // than do nothing. Escape is left to `NotePopover`, which
-                    // closes the panel.
+                    // A swallowed Enter. The popover's panel is portalled to
+                    // <body>, so this field is no longer a DOM child of the
+                    // add/edit <form> and implicit submission can no longer
+                    // reach it — but the guard stays: it is what made the field
+                    // safe before, and it is what keeps it safe if the panel
+                    // ever renders in place again. Escape is left to
+                    // `NotePopover`, which closes the panel.
                     if (event.key === "Enter") event.preventDefault();
                   }}
                 />

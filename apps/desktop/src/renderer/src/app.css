@@ -83,10 +83,11 @@ body {
   height: 100vh;
   min-height: 0;
   /* The DOCUMENT never scrolls: the shell is a fixed frame and the two panes
-     inside it own every scrollbar. Safe for the overlays — the palette, the
-     dialogs and the popovers are `position: fixed`, and `.app` sets no
-     transform, filter or containment, so it is not their containing block and
-     cannot clip them. */
+     inside it own every scrollbar. Safe for the overlays — the palette and the
+     dialogs are `position: fixed`, and `.app` sets no transform, filter or
+     containment, so it is not their containing block and cannot clip them. The
+     anchored popovers no longer rely on that promise at all: they are portalled
+     to <body>, outside this element entirely (`useAnchoredPosition`). */
   overflow: hidden;
 }
 /* Full-window centered states (loading, startup failure). */
@@ -6660,15 +6661,29 @@ button.cal__grid-event--dragging {
   opacity: 1;
 }
 .note__menu-panel {
-  /* position: fixed + coordinates are set inline from the trigger's rect, so the
-     panel escapes the surrounding overflow:auto list/tree instead of being clipped. */
-  z-index: 40;
+  /* Portalled to <body> and positioned inline by `useAnchoredPosition`, so the
+     panel escapes the surrounding overflow:auto list/tree instead of being
+     clipped by it — and does so structurally, rather than depending on no
+     ancestor ever growing a transform.
+
+     ABOVE the dialog layer (60), not the 40 this sat at while it was nested.
+     Nesting used to make the question moot: a menu inside a dialog inherited
+     that dialog's stacking context and was drawn over it for free. A portalled
+     panel is a sibling of the dialog instead, so the first "⋯" somebody puts
+     inside one would have vanished behind it. A menu is always the most recent
+     thing the user opened, and this is what says so. */
+  z-index: 70;
   /* One of its homes is a section HEADING, whose uppercase/tracked caption type
      `font: inherit` on the items does NOT reset (the same reason
      .tasks__name-form spells it out). A menu is prose, not a heading. */
   text-transform: none;
   letter-spacing: var(--nx-font-tracking-normal);
   min-width: 180px;
+  /* The PREFERRED scroll window, and the height the panel is measured at:
+     `PANEL_MAX_HEIGHT` in anchoredPlacement.ts carries the same number. What
+     actually applies is the inline value the helper computes from the room the
+     viewport has left — inline wins over this rule, so a short window shrinks
+     the panel rather than pushing it off the edge. Keep the two in step. */
   max-height: 320px;
   overflow-y: auto;
   padding: var(--nx-space-1);
@@ -7680,11 +7695,18 @@ button.cal__grid-event--dragging {
 
 /* Slash menu — a floating, tokens-styled command panel at the caret (portal to
    <body>). Active row is typographic (gold + weight) over a soft surface; no
-   glow, no inset side-bar. Positioned inline via the suggestion clientRect. */
+   glow, no inset side-bar. Placed by `useAnchoredPosition` off the suggestion's
+   live clientRect, which flips it above the caret when the line being typed is
+   near the bottom of the window. */
 .note__slash {
   position: fixed;
-  z-index: 40;
+  /* The same layer as `.note__menu-panel`, and for the same reason — see the
+     note there. Both are portalled panels that belong on top of whatever they
+     were opened from. */
+  z-index: 70;
   min-width: 208px;
+  /* The preferred scroll window — see `.note__menu-panel`; the helper's inline
+     value is what actually applies. */
   max-height: 320px;
   overflow-y: auto;
   padding: var(--nx-space-1);

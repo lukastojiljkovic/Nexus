@@ -25,7 +25,8 @@ function matchesQuery(note: NoteMeta, needle: string): boolean {
 export interface NoteLinkRenderState {
   items: NoteMeta[];
   command: (item: NoteMeta) => void;
-  rect: DOMRect | null;
+  /** The caret's rectangle as a LIVE getter — see `SlashRenderState.getRect`. */
+  getRect: () => DOMRect | null;
 }
 
 /** Imperative hooks the extension calls; the React component owns the UI/state. */
@@ -47,7 +48,7 @@ function toState(props: SuggestionProps<NoteMeta, NoteMeta>): NoteLinkRenderStat
   return {
     items: props.items,
     command: props.command,
-    rect: props.clientRect?.() ?? null,
+    getRect: props.clientRect ?? (() => null),
   };
 }
 
@@ -114,14 +115,14 @@ export interface NoteLinkMenuProps {
 
 /** The floating note picker: delegates to the generic `SuggestionMenu`. */
 export function NoteLinkMenu({ state, registerKeydown }: NoteLinkMenuProps) {
-  const { items, command, rect } = state;
+  const { items, command, getRect } = state;
   return (
     <SuggestionMenu
       items={items}
       getKey={(item) => item.id}
       getLabel={(item) => (item.title.trim().length > 0 ? item.title : strings.notes.untitled)}
       command={command}
-      rect={rect}
+      getRect={getRect}
       registerKeydown={registerKeydown}
     />
   );

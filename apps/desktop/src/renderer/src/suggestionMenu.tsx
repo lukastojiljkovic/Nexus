@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+
+import { CARET_GAP } from "./anchoredPlacement.js";
+import { useAnchoredPosition } from "./useAnchoredPosition.js";
 
 /**
  * The generic floating command/autocomplete panel behind both the slash menu
  * (NOTE slice a2) and the `[[` wiki-link menu (NOTE-004b): a tokens-styled
  * surface positioned at the caret, portalled to `document.body`. Keyboard
  * (↑/↓/Enter) is routed in from whichever `@tiptap/suggestion` plugin owns the
- * trigger; Escape is handled by the plugin itself (it dispatches `onExit`).
+ * trigger; Escape is handled by the plugin itself (it dispatches `onExit`), so
+ * this panel asks `useAnchoredPosition` for placement only and hands it no
+ * `onClose` — its lifetime is not its own.
  * The active row is typographic (gold + weight) over a soft surface — no
  * glow, no inset bar. Extracted from the original `SlashMenu` — no behavior
  * change to the slash menu, which now delegates here.
@@ -17,7 +21,14 @@ export interface SuggestionMenuProps<T> {
   getKey: (item: T) => string;
   getLabel: (item: T) => string;
   command: (item: T) => void;
-  rect: DOMRect | null;
+  /**
+   * The caret's rectangle, as a LIVE getter (`@tiptap/suggestion`'s own
+   * `clientRect`, which re-reads the decoration node every call). Never a
+   * snapshot: the caret can sit on the last visible line of a pane that then
+   * scrolls, and a panel holding the coordinates it was born with would be left
+   * standing where the text used to be.
+   */
+  getRect: () => DOMRect | null;
   /** Publishes the panel's key handler up to the owning extension's `onKeyDown`. */
   registerKeydown: (handler: (event: KeyboardEvent) => boolean) => void;
 }
@@ -27,12 +38,19 @@ export function SuggestionMenu<T>({
   getKey,
   getLabel,
   command,
-  rect,
+  getRect,
   registerKeydown,
 }: SuggestionMenuProps<T>) {
   const [index, setIndex] = useState(0);
   const indexRef = useRef(0);
-  const panelRef = useRef<HTMLDivElement>(null);
+  // `align: "start"` reads left-to-right from the typing point; the wider gap
+  // keeps the panel clear of the descenders on the line being typed.
+  const { panelRef, panelProps, portal } = useAnchoredPosition({
+    open: items.length > 0,
+    anchor: getRect,
+    align: "start",
+    gap: CARET_GAP,
+  });
 
   // A fresh item set (query changed) resets the highlight to the first row.
   useEffect(() => {
@@ -44,11 +62,11 @@ export function SuggestionMenu<T>({
     indexRef.current = index;
   }, [index]);
 
-  // Keeps the keyboard-active row inside the panel's 320px scroll window —
-  // reachable since NOTE-009c appends every template after the ten block
-  // commands, so the list now routinely outgrows the panel. Scrolled by hand
-  // rather than with `scrollIntoView`, which would also be free to scroll the
-  // editor pane behind this portalled, fixed-position panel.
+  // Keeps the keyboard-active row inside the panel's scroll window — reachable
+  // since NOTE-009c appends every template after the ten block commands, so the
+  // list now routinely outgrows the panel. Scrolled by hand rather than with
+  // `scrollIntoView`, which would also be free to scroll the editor pane behind
+  // this portalled, fixed-position panel.
   useEffect(() => {
     const panel = panelRef.current;
     const active = panel?.children[index];
@@ -59,7 +77,7 @@ export function SuggestionMenu<T>({
     } else if (bottom > panel.scrollTop + panel.clientHeight) {
       panel.scrollTop = bottom - panel.clientHeight;
     }
-  }, [index, items]);
+  }, [index, items, panelRef]);
 
   useEffect(() => {
     registerKeydown((event) => {
@@ -81,15 +99,10 @@ export function SuggestionMenu<T>({
     });
   }, [items, command, registerKeydown]);
 
-  if (!rect || items.length === 0) return null;
+  if (items.length === 0) return null;
 
-  return createPortal(
-    <div
-      ref={panelRef}
-      className="note__slash"
-      style={{ top: rect.bottom + 4, left: rect.left }}
-      role="listbox"
-    >
+  return portal(
+    <div className="note__slash" role="listbox" {...panelProps}>
       {items.map((item, position) => (
         <button
           key={getKey(item)}
@@ -112,6 +125,5 @@ export function SuggestionMenu<T>({
         </button>
       ))}
     </div>,
-    document.body,
   );
 }

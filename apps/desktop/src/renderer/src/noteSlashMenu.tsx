@@ -16,7 +16,8 @@ import { strings } from "./strings.js";
  * current block into one of the v1 block types. Built on `@tiptap/suggestion`
  * (the same primitive TipTap mentions use) with a hand-rolled, tokens-styled
  * React portal for the panel — deliberately no tippy.js / floating-ui: the
- * panel is absolutely positioned at the caret via the suggestion `clientRect`.
+ * panel is placed at the caret by `useAnchoredPosition`, off the suggestion's
+ * own live `clientRect`.
  * Executing an item deletes the typed `/query` range, then runs the block
  * command; task lists render visual checkboxes only (they are not TASK items).
  *
@@ -194,7 +195,13 @@ function filterSlashItems(query: string, templates: readonly SlashItem[]): Slash
 export interface SlashRenderState {
   items: SlashItem[];
   command: (item: SlashItem) => void;
-  rect: DOMRect | null;
+  /**
+   * The caret's rectangle as a LIVE getter, not the rectangle itself:
+   * `@tiptap/suggestion` builds `clientRect` over the decoration node and
+   * re-reads it on every call, so keeping the function is what lets the panel
+   * follow the caret when the editor pane scrolls under it.
+   */
+  getRect: () => DOMRect | null;
 }
 
 /** Imperative hooks the extension calls; the React component owns the UI/state. */
@@ -210,7 +217,7 @@ function toState(props: SuggestionProps<SlashItem, SlashItem>): SlashRenderState
   return {
     items: props.items,
     command: props.command,
-    rect: props.clientRect?.() ?? null,
+    getRect: props.clientRect ?? (() => null),
   };
 }
 
@@ -260,14 +267,14 @@ export interface SlashMenuProps {
  * shared with the `[[` wiki-link menu, NOTE-004b). No behavior change.
  */
 export function SlashMenu({ state, registerKeydown }: SlashMenuProps) {
-  const { items, command, rect } = state;
+  const { items, command, getRect } = state;
   return (
     <SuggestionMenu
       items={items}
       getKey={(item) => item.key}
       getLabel={(item) => item.label}
       command={command}
-      rect={rect}
+      getRect={getRect}
       registerKeydown={registerKeydown}
     />
   );

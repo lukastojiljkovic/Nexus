@@ -32,6 +32,7 @@ import {
   termMonthKeys,
 } from "./semesterGrid.js";
 import type { DayDensity } from "./semesterGrid.js";
+import { useAnchoredPosition } from "./useAnchoredPosition.js";
 import {
   buildCalendarItems,
   CALENDAR_SOURCES,
@@ -577,12 +578,13 @@ export function CalendarPage({
   const [overlayFailed, setOverlayFailed] = useState(false);
   /** FIN slice d: the renewals the subscriptions' rules place in the visible range. */
   const [renewals, setRenewals] = useState<FinUpcomingRenewal[]>([]);
-  // The origin popover a foreign item's click opens (CAL-005): the fixed
-  // position derived from the clicked element's rect, or null while closed.
-  // Anchored the way NotePopover anchors its panel — but state-driven, since
-  // its triggers are scattered across three grids and the agenda.
-  const [foreignAnchor, setForeignAnchor] = useState<{ top: number; right: number } | null>(null);
-  const foreignPopoverRef = useRef<HTMLDivElement>(null);
+  // The origin popover a foreign item's click opens (CAL-005): the clicked
+  // element's rectangle, captured at click time, or null while closed. A
+  // captured rect rather than a ref because the triggers are scattered across
+  // three grids and the agenda, all of which re-render their chips freely — a
+  // handle on the element could go detached under an open popover, where a
+  // rectangle simply stays where the user clicked.
+  const [foreignAnchor, setForeignAnchor] = useState<DOMRect | null>(null);
 
   // One form serves both modes; a non-null editingId means "editing that event".
   // When that event is one occurrence of a series, `editingOccurrence` says
@@ -702,34 +704,23 @@ export function CalendarPage({
 
   /**
    * A foreign item's one interaction (CAL-005): opens the origin popover under
-   * the clicked element — never an editor. Anchoring mirrors `NotePopover`'s
-   * fixed-position arithmetic, so the panel escapes the scrolling grids.
+   * the clicked element — never an editor.
+   *
+   * Placement, portalling and dismissal all belong to `useAnchoredPosition`
+   * now. This file used to carry its own copy of `NotePopover`'s arithmetic and
+   * a verbatim copy of its two dismiss listeners, which is how the popover
+   * inherited every one of that arithmetic's faults: no flip, no clamp, and a
+   * `right:` offset that let a wide panel run off the left edge.
    */
   function openForeignPopover(anchor: DOMRect): void {
-    setForeignAnchor({ top: anchor.bottom + 2, right: window.innerWidth - anchor.right });
+    setForeignAnchor(anchor);
   }
 
-  // Outside click / Escape close the origin popover — `NotePopover`'s own
-  // pair of listeners, re-created here because this popover has no single
-  // trigger to live inside. The DOM event types are globalThis-qualified:
-  // this file imports React's KeyboardEvent, which shadows the global.
-  const foreignPopoverOpen = foreignAnchor !== null;
-  useEffect(() => {
-    if (!foreignPopoverOpen) return;
-    const onPointerDown = (event: globalThis.MouseEvent): void => {
-      const wrap = foreignPopoverRef.current;
-      if (wrap && !wrap.contains(event.target as Node)) setForeignAnchor(null);
-    };
-    const onKeyDown = (event: globalThis.KeyboardEvent): void => {
-      if (event.key === "Escape") setForeignAnchor(null);
-    };
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [foreignPopoverOpen]);
+  const foreignPopover = useAnchoredPosition({
+    open: foreignAnchor !== null,
+    anchor: () => foreignAnchor,
+    onClose: () => setForeignAnchor(null),
+  });
 
   function resetForm(): void {
     setEditingId(null);
@@ -1460,13 +1451,14 @@ export function CalendarPage({
           passcode-gated switch every profile change passes (AUTH-024), lifted
           to App through onSwitchToProfile. Reuses NotePopover's panel classes
           so the two cannot drift visually. */}
-      {foreignAnchor !== null && overlayProfile !== null && (
-        <div className="note__menu" ref={foreignPopoverRef}>
+      {foreignAnchor !== null &&
+        overlayProfile !== null &&
+        foreignPopover.portal(
           <div
             className="note__menu-panel"
             role="menu"
             aria-label={strings.calendar.overlay.popoverLabel}
-            style={{ position: "fixed", top: foreignAnchor.top, right: foreignAnchor.right }}
+            {...foreignPopover.panelProps}
           >
             <span className="note__menu-label">{profileDisplayName(overlayProfile)}</span>
             <p className="note__menu-caption">{strings.calendar.overlay.originNote}</p>
@@ -1481,9 +1473,8 @@ export function CalendarPage({
             >
               {strings.calendar.overlay.switchAction}
             </button>
-          </div>
-        </div>
-      )}
+          </div>,
+        )}
 
       <div className="cal__views" role="group" aria-label={strings.calendar.viewLabel}>
         {CALENDAR_VIEWS.map((option) => (
