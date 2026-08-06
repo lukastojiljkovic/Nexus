@@ -356,12 +356,25 @@
 
 /* --- KanbanView (views engine; native DnD — drop target = border/bg shift
    via tokens, no glow, per direction brief) ------------------------------ */
+/* A board divides by N, and `minmax(0, 1fr)` set no bottom to that: eight
+   sections in a task list gave ~70px columns, which is narrower than the cards
+   inside them. A column has a width below which it stops being a column, so
+   that width is the floor and the board scrolls sideways past it — the same
+   trade every board application makes, and the only one that keeps a card
+   readable. `1fr` still wins while there is room, so a two-column board fills
+   the pane exactly as it did. */
 .nx-kanban-view {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-columns: minmax(var(--nx-layout-col-min), 1fr);
   gap: var(--nx-space-2);
   align-items: stretch;
+  overflow-x: auto;
+  /* The board is a scroller now, so it must not also be a flex item that grows
+     past its parent — and a scroller's own edge needs to be reachable. */
+  min-width: 0;
+  overscroll-behavior-x: contain;
+  padding-bottom: var(--nx-space-1);
 }
 .nx-kanban-view__col > .nx-kanban-col {
   height: 100%;

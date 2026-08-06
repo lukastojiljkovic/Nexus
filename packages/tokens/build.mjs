@@ -72,7 +72,19 @@ for (const { theme, semantic } of themes) {
 }
 
 // --- CSS ---------------------------------------------------------------
-const primitiveGroups = { font: global.font, radius: global.radius, space: global.space, motion: global.motion };
+// `layout` joins the primitives for the same reason the others are here: these
+// are values the whole app must agree on, and the app had been disagreeing.
+// Every rail width, every column floor and every reading measure was written
+// inline at its call site, so nothing could state what a pane is ALLOWED to
+// shrink to — which is how the notes editor ended up at 75px on the window
+// size this app itself enforces as its minimum. See `docs/STATUS.md` §5 B.
+const primitiveGroups = {
+  font: global.font,
+  radius: global.radius,
+  space: global.space,
+  motion: global.motion,
+  layout: global.layout,
+};
 const primitiveVars = Object.entries(primitiveGroups).flatMap(([group, node]) =>
   flatten(node, `--nx-${kebab(group)}`),
 );

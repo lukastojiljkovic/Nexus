@@ -1561,7 +1561,25 @@ button.tasks__cal-chip:active {
 }
 
 /* Calendar (CAL page) ------------------------------------------------- */
+/* THE HEIGHT HALF OF THE SAME CONTRACT: a page fills the height it was given
+   and scrolls INSIDE itself. It never makes `.app__main` scroll, and it never
+   sizes an inner scroller against a number picked in advance.
+
+   `.note` has always obeyed this (`flex: 1; min-height: 0`, panes scrolling
+   internally). The calendar did not, and the result was two vertical
+   scrollbars at once: `.cal__grid-body` capped itself at fourteen hours —
+   14 x 44px = 616px, a figure with no relationship to the space available —
+   while the window offers 589px of content height at the size this app ships
+   at (681 viewport, less the 44px topbar, less `.app__main`'s 48px of
+   padding). So the grid was taller than the page, the page was taller than the
+   pane, and the month view began below the fold under two rows of chrome.
+
+   The chrome is `flex: none` and the view claims the remainder. Open the event
+   form and the grid shrinks by exactly the form's height, which is the
+   behaviour the fixed cap was standing in for and never actually delivered. */
 .cal {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-4);
@@ -1594,6 +1612,8 @@ button.tasks__cal-chip:active {
   align-items: center;
   gap: var(--nx-space-2);
   flex-wrap: wrap;
+  /* Chrome: it takes the height it needs and the view below gives it up. */
+  flex: none;
 }
 .cal__title {
   flex: 1;
@@ -1935,6 +1955,9 @@ button.tasks__cal-chip:active {
 
 /* Agenda: day sections in ascending order, each a quiet label over its rows. */
 .cal__agenda {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-5);
@@ -2042,6 +2065,7 @@ button.tasks__cal-chip:active {
   align-items: center;
   gap: var(--nx-space-1);
   flex-wrap: wrap;
+  flex: none;
 }
 .cal__source.nx-button {
   background: transparent;
@@ -2058,7 +2082,12 @@ button.tasks__cal-chip:active {
 }
 
 /* Month grid (CAL Mesec view, ADR-020) --------------------------------- */
+/* The three views each claim what the chrome left and scroll inside it, so the
+   page has exactly one scrollbar wherever you are in it. */
 .cal__month {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-3);
@@ -2697,10 +2726,14 @@ button.cal__grid-header--today {
 
 /* Hour grid: a fixed label gutter + one column per day, both 24 rows of
    var(--cal-hour-h) with a hairline between hours. Only this part scrolls. */
+/* Was `max-height: calc(var(--cal-hour-h) * 14)` — fourteen hours, chosen in
+   advance and unrelated to the height the page actually has. It is the space
+   left over after the day header and the all-day band, whatever that is. */
 .cal__grid-body {
+  flex: 1;
+  min-height: 0;
   display: flex;
   overflow-y: auto;
-  max-height: calc(var(--cal-hour-h) * 14);
 }
 .cal__grid-hour-label {
   height: var(--cal-hour-h);
@@ -5591,8 +5624,14 @@ button.cal__grid-event--dragging {
   gap: var(--nx-space-1);
   flex-wrap: wrap;
 }
+/* Explanatory text has a maximum measure, like every other run of prose in the
+   product. Settings is the one pane that fills the whole main column, so
+   without a cap this ran the full window width — 1600 px lines at 10.5px on a
+   wide monitor, which is not a line anybody's eye can track back from. The cap
+   is a token because it is a typographic decision, not a Settings one. */
 .set__section-caption {
   margin: 0;
+  max-width: var(--nx-layout-prose);
   color: var(--nx-text-muted);
   font-size: var(--nx-font-size-caption);
 }
@@ -6089,13 +6128,39 @@ button.cal__grid-event--dragging {
 }
 
 /* Notes (NOTE page, slice a2) ------------------------------------------ */
-/* Two panes fill the main column: a fixed note list on the left, the block
-   editor on the right. Each pane scrolls internally so the page never grows. */
+/* Three panes fill the main column: the folder organizer, the note list, and
+   the block editor. Each scrolls internally so the page never grows.
+
+   THE WRITING COLUMN IS THE FLOOR; THE RAILS ARE THE SLACK. That is the whole
+   rule, and it is the opposite of what shipped. Two fixed rails and
+   `minmax(0, 1fr)` for the editor meant the rails were paid first and the
+   writing column got the remainder, which arithmetic disposes of:
+
+     window   main content   editor
+      900px      615px         75px   <- the minimum this app ENFORCES
+     1120px      835px        295px   <- the size it SHIPS at
+     1440px     1155px        615px
+     1345px is the first width at which the editor reaches its default measure.
+
+   Worse than narrow: `--note-measure` is a user setting („uska"/„normalna"/
+   „široka" = 55/70/90ch, ADR-036), and at 295px the pane was narrower than the
+   NARROWEST of them. The control could not have any effect at the shipped
+   window size — a preference the product offers and then eats.
+
+   So the floor is derived from that setting rather than invented: the editor
+   track may not fall below the measure the user asked for, plus the pane's own
+   horizontal padding. `min(…, 100%)` caps it against the container, because a
+   floor that can exceed the space available is not a floor, it is an overflow.
+   The rails then yield proportionally, which is the correct trade — reading and
+   writing is what the page is FOR, and a folder tree survives being narrow. */
 .note {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 220px 280px minmax(0, 1fr);
+  grid-template-columns:
+    minmax(0, var(--nx-layout-rail))
+    minmax(0, var(--nx-layout-rail-wide))
+    minmax(min(calc(var(--note-measure) + 2 * var(--nx-space-2)), 100%), 1fr);
   gap: var(--nx-space-5);
 }
 
