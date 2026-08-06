@@ -92,6 +92,7 @@ export default tseslint.config(
       "apps/desktop/src/preload/**/*.ts",
       "apps/desktop/scripts/**/*.mjs",
       ".github/scripts/**/*.mjs",
+      "scripts/**/*.mjs",
     ],
     languageOptions: { globals: { ...globals.node } },
   },
@@ -129,6 +130,44 @@ export default tseslint.config(
   // global. `no-explicit-any` is deliberately left ON for them too — the
   // codebase currently contains not one `any`, in tests or anywhere else, and
   // a baseline should not pre-authorise the first one.
+
+  // --- Raw colour literals ---------------------------------------------
+  // The authoritative gate is `pnpm check:colours` (`scripts/check-colours.mjs`):
+  // it alone covers CSS, HTML and the CSS-declaration-vs-selector distinction,
+  // and it is what CI blocks on. This block is a deliberately narrower
+  // in-editor ECHO of the same rule for TS/TSX string and template literals —
+  // the common case — so a violation is a red squiggle before it is ever a
+  // failed `pnpm check:colours` run. Scoped to the exact same source trees
+  // (every package's `src/`, `packages/tokens` excluded as the one package
+  // allowed to hold real colour values) via `ignores`, since `packages/tokens`
+  // carries no `src/` directory for the positive globs to reach anyway.
+  // A genuinely justified exception uses the same escape hatch ESLint always
+  // has: `// eslint-disable-next-line no-restricted-syntax`.
+  {
+    files: ["apps/*/src/**/*.{ts,tsx}", "packages/*/src/**/*.{ts,tsx}"],
+    ignores: ["packages/tokens/**"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "Literal[value=/#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})(?![0-9a-fA-F])/]",
+          message: "Raw hex colour literal — use a --nx-* design token from packages/tokens (see README.md 'Styling rules').",
+        },
+        {
+          selector: "TemplateElement[value.raw=/#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})(?![0-9a-fA-F])/]",
+          message: "Raw hex colour literal — use a --nx-* design token from packages/tokens (see README.md 'Styling rules').",
+        },
+        {
+          selector: "Literal[value=/\\b(?:rgba?|hsla?|oklch|lab|lch|color)\\(/]",
+          message: "Raw colour function — use a --nx-* design token from packages/tokens (see README.md 'Styling rules').",
+        },
+        {
+          selector: "TemplateElement[value.raw=/\\b(?:rgba?|hsla?|oklch|lab|lch|color)\\(/]",
+          message: "Raw colour function — use a --nx-* design token from packages/tokens (see README.md 'Styling rules').",
+        },
+      ],
+    },
+  },
 
   // --- React ---------------------------------------------------------------
   {

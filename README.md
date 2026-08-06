@@ -109,13 +109,23 @@ Feature modules never import each other; they meet through the contracts in
 ## Styling rules
 
 Every colour, space, radius and type value comes from `packages/tokens` as a
-`--nx-*` CSS variable. **Raw `#hex`, `rgb()` and `hsl()` are forbidden anywhere
-outside that package.** The check is a grep over `apps/*/src` and each package's
-`src`, run before every commit:
+`--nx-*` CSS variable. **Raw `#hex`, `rgb()`/`hsl()` and the newer CSS colour
+functions (`oklch()`, `lab()`, `lch()`, `color()`) are forbidden anywhere
+outside that package.** The rule is enforced by the toolchain, not memory:
+`pnpm check:colours` walks every package's `src`, runs as its own CI step on
+every push and pull request, and has its own Vitest suite
+(`scripts/check-colours.mjs`, `scripts/check-colours.test.mjs`). ESLint echoes
+the same rule for TS/TSX string and template literals so a violation is a red
+squiggle in the editor too, but the script remains the authoritative gate — it
+alone also covers CSS and HTML.
 
 ```sh
-grep -rnE '#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(' apps/*/src packages/*/src   # must be empty
+pnpm check:colours   # exits non-zero and prints file:line: <text> per violation
 ```
+
+A genuinely justified exception is a same-line `// nx-colour-allow: <reason>`
+comment (`/* … */` in CSS, `<!-- … -->` in HTML) — never a blanket ignore, and
+every use is still printed.
 
 Two themes ship: **Dan** (light) and **Noć** (dark).
 
@@ -132,8 +142,9 @@ plain `"sr"` mis-tailors the Latin diacritics (š, č, ć, ž, đ).
 ## CI
 
 - **CI** (`.github/workflows/ci.yml`) — a single `verify` job on `ubuntu-latest`:
-  build, typecheck, lint, tests, on every push to `main` and every pull request.
-  It never launches Electron, so the smoke check is a local gate.
+  the raw-colour check, build, typecheck, lint, tests, on every push to `main`
+  and every pull request. It never launches Electron, so the smoke check is a
+  local gate.
 - **Security** (`.github/workflows/security.yml`) — gitleaks secret scan plus a
   dependency audit, on every push and on a schedule.
 

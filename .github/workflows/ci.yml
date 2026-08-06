@@ -32,6 +32,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Fast, dependency-free static check — the CLAUDE.md/README.md
+      # design-token rule (no raw colour literal outside packages/tokens)
+      # made into a real gate. Runs first: it needs no build output and
+      # should fail before the slower steps spend any time.
+      - run: pnpm check:colours
+
       - run: pnpm build
 
       - run: pnpm typecheck

@@ -11,8 +11,9 @@
   "scripts": {
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
-    "lint": "turbo run lint",
-    "test": "turbo run test"
+    "lint": "turbo run lint && eslint scripts",
+    "test": "turbo run test && vitest run",
+    "check:colours": "node scripts/check-colours.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -21,6 +22,7 @@
     "globals": "^17.8.0",
     "turbo": "^2.10.7",
     "typescript": "^5.8.0",
-    "typescript-eslint": "^8.65.0"
+    "typescript-eslint": "^8.65.0",
+    "vitest": "^3.2.6"
   }
 }
