@@ -154,6 +154,10 @@ export function SearchPalette({
   // filter that is rarely toggled off immediately after being typed.
   const [chipKinds, setChipKinds] = useState<ReadonlySet<SearchKind>>(new Set());
   const [results, setResults] = useState<SearchResult[]>([]);
+  // True when the debounced fetch below (either `searchRecent` or
+  // `searchQuery`) rejected. A failure is not an empty result, and it must
+  // not read as one — see `showSearchError`.
+  const [searchFailed, setSearchFailed] = useState(false);
   const [tagOptions, setTagOptions] = useState<TagOption[]>([]);
   /** The profile's remembered QUERIES (SRCH-009) — a different list from `results`, which holds the entities it touched. */
   const [history, setHistory] = useState<readonly SearchHistoryEntry[]>([]);
@@ -217,6 +221,7 @@ export function SearchPalette({
       setChipKinds(new Set());
       setActiveIndex(0);
       setResults([]);
+      setSearchFailed(false);
       const focusId = window.setTimeout(() => inputRef.current?.focus(), 0);
       return () => window.clearTimeout(focusId);
     }
@@ -274,6 +279,7 @@ export function SearchPalette({
       // commands.
       requestIdRef.current += 1;
       setResults([]);
+      setSearchFailed(false);
       return;
     }
     const requestId = ++requestIdRef.current;
@@ -288,11 +294,15 @@ export function SearchPalette({
                   buildEffectiveQuery(query, chipKinds, parsed.kinds),
                   SEARCH_PAGE_SIZE,
                 );
-          if (requestIdRef.current === requestId) setResults(fetched);
+          if (requestIdRef.current === requestId) {
+            setResults(fetched);
+            setSearchFailed(false);
+          }
         } catch (error) {
           if (requestIdRef.current === requestId) {
             console.error("Nexus: global search failed:", error);
             setResults([]);
+            setSearchFailed(true);
           }
         }
       })();
@@ -690,7 +700,11 @@ export function SearchPalette({
 
   if (!open) return null;
 
+  // A failed fetch is reported instead of the empty state — an empty result
+  // is a real answer ("nothing matches"); a rejected IPC call is not one.
+  const showSearchError = searchFailed && !parsed.commandsOnly;
   const showEmptyState =
+    !showSearchError &&
     query.trim().length > 0 &&
     results.length === 0 &&
     matchedCommands.length === 0 &&
@@ -789,6 +803,12 @@ export function SearchPalette({
               <div className="search__group-heading">{strings.search.commandsGroup}</div>
               {matchedCommands.map((command) => renderCommandRow(command))}
             </div>
+          )}
+
+          {showSearchError && (
+            <p className="search__error" role="alert">
+              {strings.search.searchError}
+            </p>
           )}
 
           {showEmptyState && <p className="search__empty">{strings.search.emptyResults}</p>}

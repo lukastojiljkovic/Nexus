@@ -49,6 +49,11 @@ export interface NotificationCenterProps {
  */
 export function NotificationCenter({ profileId, onNavigate }: NotificationCenterProps) {
   const [notifications, setNotifications] = useState<NotificationRecord[] | null>(null);
+  // True once the load has genuinely failed — distinct from `notifications`
+  // being null while it is still in flight, so loading/empty/failed each get
+  // their own render instead of the failed case reading as "no notifications".
+  const [failed, setFailed] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -56,7 +61,9 @@ export function NotificationCenter({ profileId, onNavigate }: NotificationCenter
   async function reload(): Promise<void> {
     try {
       setNotifications(await window.nexus.listCenterNotifications(profileId));
+      setFailed(false);
     } catch (error) {
+      setFailed(true);
       console.error("Nexus: failed to load notifications:", error);
     }
   }
@@ -68,8 +75,12 @@ export function NotificationCenter({ profileId, onNavigate }: NotificationCenter
     void (async () => {
       try {
         const nextNotifications = await window.nexus.listCenterNotifications(profileId);
-        if (active) setNotifications(nextNotifications);
+        if (active) {
+          setNotifications(nextNotifications);
+          setFailed(false);
+        }
       } catch (error) {
+        if (active) setFailed(true);
         console.error("Nexus: failed to load notification center:", error);
       }
     })();
@@ -126,19 +137,23 @@ export function NotificationCenter({ profileId, onNavigate }: NotificationCenter
    * otherwise need.
    */
   async function snooze(id: string, preset?: SnoozePreset): Promise<void> {
+    setActionError(null);
     try {
       await window.nexus.snoozeNotification(profileId, id, preset);
       await reload();
     } catch (error) {
+      setActionError(s.actionError);
       console.error("Nexus: failed to snooze notification:", error);
     }
   }
 
   async function dismiss(id: string): Promise<void> {
+    setActionError(null);
     try {
       await window.nexus.dismissNotification(profileId, id);
       await reload();
     } catch (error) {
+      setActionError(s.actionError);
       console.error("Nexus: failed to dismiss notification:", error);
     }
   }
@@ -162,7 +177,13 @@ export function NotificationCenter({ profileId, onNavigate }: NotificationCenter
       {open && (
         <div className="ntf__panel" role="region" aria-label={s.bellLabel}>
           <div className="ntf__list">
-            {centerRows.length === 0 ? (
+            {failed ? (
+              <p className="ntf__empty" role="alert">
+                {s.loadError}
+              </p>
+            ) : notifications === null ? (
+              <p className="ntf__empty">{strings.app.loading}</p>
+            ) : centerRows.length === 0 ? (
               <p className="ntf__empty">{s.empty}</p>
             ) : (
               centerRows.map((notification) => (
@@ -241,6 +262,12 @@ export function NotificationCenter({ profileId, onNavigate }: NotificationCenter
               ))
             )}
           </div>
+
+          {actionError != null && (
+            <p className="ntf__error" role="alert">
+              {actionError}
+            </p>
+          )}
 
           <div className="ntf__settings">
             <Button

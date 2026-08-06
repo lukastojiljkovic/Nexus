@@ -5,6 +5,7 @@ import type { NoteCategory, NoteFolder, NoteFolderColor, NoteTag } from "../../s
 import { NotePopover } from "./notePopover.js";
 import { mergeTemplateEntries, type TemplateEntry } from "./noteTemplates.js";
 import { strings } from "./strings.js";
+import { TypedConfirmDialog } from "./TypedConfirmDialog.js";
 
 /** Which slice of notes the middle list shows: everything, only unfiled, or one folder. */
 export type FolderSelection =
@@ -134,6 +135,14 @@ export function NoteOrganizer({
   const [categoryEditing, setCategoryEditing] = useState<CategoryEditing>(null);
   const [categoryDraftName, setCategoryDraftName] = useState("");
   const [categoryFailed, setCategoryFailed] = useState(false);
+  // Folder/tag/category deletes have no undo (unlike a note's) — the typed-name
+  // confirmation is what the rest of the app substitutes for it (see PRIV's own
+  // hard-delete). Closing the dialog fires the delete; a failure surfaces in
+  // the section's existing `note__org-error` line below, exactly as a rename
+  // or recolour failure already does.
+  const [pendingDeleteFolder, setPendingDeleteFolder] = useState<NoteFolder | null>(null);
+  const [pendingDeleteTag, setPendingDeleteTag] = useState<NoteTag | null>(null);
+  const [pendingDeleteCategory, setPendingDeleteCategory] = useState<NoteCategory | null>(null);
   // The template picker's own list (ADR-036), through the same
   // `mergeTemplateEntries` the Šabloni pane and the slash menu read — built-ins
   // first, then this profile's rows sr-Latn sorted — so a folder's default is
@@ -503,7 +512,7 @@ export function NoteOrganizer({
                       role="menuitem"
                       type="button"
                       onClick={() => {
-                        removeCategory(category.id);
+                        setPendingDeleteCategory(category);
                         close();
                       }}
                     >
@@ -643,7 +652,7 @@ export function NoteOrganizer({
                       role="menuitem"
                       type="button"
                       onClick={() => {
-                        remove(node.id);
+                        setPendingDeleteFolder(node);
                         close();
                       }}
                     >
@@ -796,7 +805,7 @@ export function NoteOrganizer({
                       role="menuitem"
                       type="button"
                       onClick={() => {
-                        deleteTag(tag.id);
+                        setPendingDeleteTag(tag);
                         close();
                       }}
                     >
@@ -854,6 +863,66 @@ export function NoteOrganizer({
         <p className="note__org-error" role="status">
           {strings.notes.categoryError}
         </p>
+      )}
+
+      {pendingDeleteFolder !== null && (
+        <TypedConfirmDialog
+          title={strings.notes.deleteFolderDialog.title}
+          name={pendingDeleteFolder.name}
+          warning={strings.notes.deleteFolderDialog.warning}
+          confirmLabel={strings.notes.deleteFolderDialog.confirmLabel}
+          confirmPlaceholder={strings.notes.deleteFolderDialog.confirmPlaceholder}
+          confirmValue={pendingDeleteFolder.name}
+          submitLabel={strings.notes.deleteFolderDialog.submit}
+          cancelLabel={strings.notes.deleteFolderDialog.cancel}
+          danger
+          onConfirm={() => {
+            const folder = pendingDeleteFolder;
+            setPendingDeleteFolder(null);
+            remove(folder.id);
+          }}
+          onCancel={() => setPendingDeleteFolder(null)}
+        />
+      )}
+
+      {pendingDeleteTag !== null && (
+        <TypedConfirmDialog
+          title={strings.notes.deleteTagDialog.title}
+          name={pendingDeleteTag.name}
+          warning={strings.notes.deleteTagDialog.warning}
+          confirmLabel={strings.notes.deleteTagDialog.confirmLabel}
+          confirmPlaceholder={strings.notes.deleteTagDialog.confirmPlaceholder}
+          confirmValue={pendingDeleteTag.name}
+          submitLabel={strings.notes.deleteTagDialog.submit}
+          cancelLabel={strings.notes.deleteTagDialog.cancel}
+          danger
+          onConfirm={() => {
+            const tag = pendingDeleteTag;
+            setPendingDeleteTag(null);
+            deleteTag(tag.id);
+          }}
+          onCancel={() => setPendingDeleteTag(null)}
+        />
+      )}
+
+      {pendingDeleteCategory !== null && (
+        <TypedConfirmDialog
+          title={strings.notes.deleteCategoryDialog.title}
+          name={pendingDeleteCategory.name}
+          warning={strings.notes.deleteCategoryDialog.warning}
+          confirmLabel={strings.notes.deleteCategoryDialog.confirmLabel}
+          confirmPlaceholder={strings.notes.deleteCategoryDialog.confirmPlaceholder}
+          confirmValue={pendingDeleteCategory.name}
+          submitLabel={strings.notes.deleteCategoryDialog.submit}
+          cancelLabel={strings.notes.deleteCategoryDialog.cancel}
+          danger
+          onConfirm={() => {
+            const category = pendingDeleteCategory;
+            setPendingDeleteCategory(null);
+            removeCategory(category.id);
+          }}
+          onCancel={() => setPendingDeleteCategory(null)}
+        />
       )}
     </div>
   );

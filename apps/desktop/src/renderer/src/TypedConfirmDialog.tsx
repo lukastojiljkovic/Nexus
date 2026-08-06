@@ -56,13 +56,18 @@ export function TypedConfirmDialog({
   const titleId = useId();
   const matches = typed.trim() === confirmValue;
 
+  // Guarded on `busy`, exactly like the Cancel button below it: a request
+  // already in flight owns the answer it is about to give, and closing out
+  // from under it — main is mid-write on a name the dialog just released —
+  // would throw away the very error (or success) that write is about to
+  // report. Escape resumes working the instant `busy` clears.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onCancel();
+      if (event.key === "Escape" && !busy) onCancel();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onCancel]);
+  }, [onCancel, busy]);
 
   function submit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
@@ -72,7 +77,7 @@ export function TypedConfirmDialog({
 
   return createPortal(
     <div className="recur-dialog__overlay">
-      <div className="recur-dialog__backdrop" onClick={onCancel} />
+      <div className="recur-dialog__backdrop" onClick={busy ? undefined : onCancel} />
       <form
         className="recur-dialog__panel"
         role="dialog"

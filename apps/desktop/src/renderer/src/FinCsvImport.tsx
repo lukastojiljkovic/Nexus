@@ -136,13 +136,20 @@ function FinCsvMappingDialog({
     bodyRef.current?.querySelector("select")?.focus();
   }, []);
 
+  // Guarded on `busy`: `onCancel` is `FinCsvImportSection`'s `cancel`, which
+  // releases the file main is holding AND resets the phase to idle. Firing it
+  // while a re-map or a confirm is already in flight would release the very
+  // file that in-flight call is still reading, reopening the picker onto a
+  // pick main no longer has and dropping whatever answer was on its way back
+  // (a refusal, a fresh mapping). Escape resumes working the instant `busy`
+  // clears — exactly like the Cancel button beside it.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onCancel();
+      if (event.key === "Escape" && !busy) onCancel();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onCancel]);
+  }, [onCancel, busy]);
 
   const ready = mappingReady(roles);
   // The sign question is asked only when it HAS an answer: a split
@@ -151,7 +158,7 @@ function FinCsvMappingDialog({
 
   return createPortal(
     <div className="recur-dialog__overlay">
-      <div className="recur-dialog__backdrop" onClick={onCancel} />
+      <div className="recur-dialog__backdrop" onClick={busy ? undefined : onCancel} />
       <div
         className="csv-map__panel recur-dialog__panel"
         role="dialog"
@@ -291,7 +298,7 @@ function FinCsvMappingDialog({
           >
             {s.confirmButton}
           </Button>
-          <Button className="recur-dialog__cancel" onClick={onCancel}>
+          <Button className="recur-dialog__cancel" disabled={busy} onClick={onCancel}>
             {shared.cancelButton}
           </Button>
         </div>

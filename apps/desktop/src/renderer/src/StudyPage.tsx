@@ -63,6 +63,7 @@ import {
   shiftDayKey,
 } from "./examDates.js";
 import { focusSessionMinutes, formatDurationMinutes, formatElapsed, formatFocusSessionWhen } from "./focusFormat.js";
+import { FocusDiscardDialog } from "./FocusDiscardDialog.js";
 import { MathText } from "./MathText.js";
 import { NotePopover } from "./notePopover.js";
 import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
@@ -494,6 +495,11 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   const [failed, setFailed] = useState(false);
   const [archivedOpen, setArchivedOpen] = useState(false);
   const { revealedId, reveal } = useRevealedRow();
+  // Shared refusal line for the subject/exam/deck/focus-session/card delete
+  // and undo actions below (plus the plan delete) — all plain delete-with-undo
+  // writes with no validation of their own, so one slot covers all of them,
+  // cleared before each new attempt (the HABIT `actionError` shape).
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // One form serves both add + edit; a non-null id means "editing that subject".
   const [editingSubjectId, setEditingSubjectId] = useState<string | null>(null);
@@ -622,6 +628,9 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   const [statsRecent, setStatsRecent] = useState<StudyStats | null>(null);
   const [focusSessions, setFocusSessions] = useState<FocusSession[] | null>(null);
   const [pendingUndoFocusId, setPendingUndoFocusId] = useState<string | null>(null);
+  // „Odbaci" writes nothing at all and offers no undo afterwards — the same
+  // running phase „Fokus" shows, so it asks the same confirm that page does.
+  const [confirmingFocusDiscard, setConfirmingFocusDiscard] = useState(false);
 
   // Internal routing: the hub, a deck's card-management drill-in, or a review
   // session. No router — a discriminated union kept in component state. A
@@ -1109,6 +1118,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   }
 
   async function removeSubject(subject: Subject): Promise<void> {
+    setActionError(null);
     try {
       await window.nexus.deleteSubject(profileId, subject.id);
       setSubjects((prev) => prev && prev.filter((s) => s.id !== subject.id));
@@ -1123,17 +1133,20 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
       // One pending undo at a time — a fresh delete replaces the previous offer.
       setPendingUndoSubjectId(subject.id);
     } catch (error) {
+      setActionError(strings.study.actionError);
       console.error("Nexus: failed to delete subject:", error);
     }
   }
 
   async function undoSubject(): Promise<void> {
     if (!pendingUndoSubjectId) return;
+    setActionError(null);
     try {
       await window.nexus.restoreSubject(profileId, pendingUndoSubjectId);
       setPendingUndoSubjectId(null);
       await reloadSubjects();
     } catch (error) {
+      setActionError(strings.study.actionError);
       console.error("Nexus: failed to restore subject:", error);
     }
   }
@@ -1293,6 +1306,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   }
 
   async function removeExam(exam: Exam): Promise<void> {
+    setActionError(null);
     try {
       await window.nexus.deleteExam(profileId, exam.id);
       setExams((prev) => prev && prev.filter((e) => e.id !== exam.id));
@@ -1300,17 +1314,20 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
       // One pending undo at a time — a fresh delete replaces the previous offer.
       setPendingUndoExamId(exam.id);
     } catch (error) {
+      setActionError(strings.study.actionError);
       console.error("Nexus: failed to delete exam:", error);
     }
   }
 
   async function undoExam(): Promise<void> {
     if (!pendingUndoExamId) return;
+    setActionError(null);
     try {
       await window.nexus.restoreExam(profileId, pendingUndoExamId);
       setPendingUndoExamId(null);
       await reloadExams();
     } catch (error) {
+      setActionError(strings.study.actionError);
       console.error("Nexus: failed to restore exam:", error);
     }
   }
@@ -1359,6 +1376,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   }
 
   async function removeDeck(deck: Deck): Promise<void> {
+    setActionError(null);
     try {
       await window.nexus.deleteDeck(profileId, deck.id);
       setDecks((prev) => prev && prev.filter((d) => d.id !== deck.id));
@@ -1368,17 +1386,20 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
       setPendingUndoDeckId(deck.id);
       await reloadDeckCounts();
     } catch (error) {
+      setActionError(strings.study.actionError);
       console.error("Nexus: failed to delete deck:", error);
     }
   }
 
   async function undoDeck(): Promise<void> {
     if (!pendingUndoDeckId) return;
+    setActionError(null);
     try {
       await window.nexus.restoreDeck(profileId, pendingUndoDeckId);
       setPendingUndoDeckId(null);
       await Promise.all([reloadDecks(), reloadDeckCounts()]);
     } catch (error) {
+      setActionError(strings.study.actionError);
       console.error("Nexus: failed to restore deck:", error);
     }
   }
@@ -1510,6 +1531,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   }
 
   async function removePlan(planId: string): Promise<void> {
+    setActionError(null);
     try {
       await window.nexus.deletePlan(profileId, planId);
       if (editingPlanId === planId) closePlanForm();
@@ -1520,6 +1542,10 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
       setPlanUndoError(null);
       await refreshPlans();
     } catch (error) {
+      // Unlike a failed RESTORE (`undoPlan`), a failed delete has no
+      // duplicate-collision cause of its own, so it shares the generic slot
+      // rather than `planRestoreError`'s specific copy.
+      setActionError(strings.study.actionError);
       console.error("Nexus: failed to delete study plan:", error);
     }
   }
@@ -1754,51 +1780,64 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
    */
   async function beginFocus(subjectId: string): Promise<void> {
     if (subjectId.length === 0) return;
+    setActionError(null);
     try {
       setFocusRunning(await window.nexus.startFocus(profileId, { subjectId, kind: "work" }));
     } catch (error) {
+      setActionError(strings.study.actionError);
       console.error("Nexus: failed to start focus timer:", error);
     }
   }
 
   async function endFocus(): Promise<void> {
+    setActionError(null);
     try {
       const result = await window.nexus.stopFocus(profileId);
       setFocusRunning(null);
       if (result != null) await refreshStats();
     } catch (error) {
+      setActionError(strings.study.actionError);
       console.error("Nexus: failed to stop focus timer:", error);
     }
   }
 
   async function discardFocus(): Promise<void> {
+    setActionError(null);
     try {
       await window.nexus.cancelFocus(profileId);
-    } catch (error) {
-      console.error("Nexus: failed to discard focus timer:", error);
-    } finally {
+      // Only on success: a rejected cancel leaves the phase running in main,
+      // and clearing it here regardless (the previous `finally`) would show an
+      // idle card over a phase still ticking, unreachable until the page
+      // remounts or `focus:status` catches up.
       setFocusRunning(null);
+    } catch (error) {
+      setActionError(strings.study.actionError);
+      console.error("Nexus: failed to discard focus timer:", error);
     }
   }
 
   async function removeFocusSession(id: string): Promise<void> {
+    setActionError(null);
     try {
       await window.nexus.deleteFocus(profileId, id);
       // One pending undo at a time — a fresh delete replaces the previous offer.
       setPendingUndoFocusId(id);
       await refreshStats();
     } catch (error) {
+      setActionError(strings.study.actionError);
       console.error("Nexus: failed to delete focus session:", error);
     }
   }
 
   async function undoFocusSession(): Promise<void> {
     if (!pendingUndoFocusId) return;
+    setActionError(null);
     try {
       await window.nexus.restoreFocus(profileId, pendingUndoFocusId);
       setPendingUndoFocusId(null);
       await refreshStats();
     } catch (error) {
+      setActionError(strings.study.actionError);
       console.error("Nexus: failed to restore focus session:", error);
     }
   }
@@ -1985,6 +2024,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   }
 
   async function removeCard(card: Card): Promise<void> {
+    setActionError(null);
     try {
       await window.nexus.deleteCard(profileId, card.id);
       setCards((prev) => prev && prev.filter((c) => c.id !== card.id));
@@ -1993,17 +2033,20 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
       setPendingUndoCardId(card.id);
       await reloadDeckCounts();
     } catch (error) {
+      setActionError(strings.study.actionError);
       console.error("Nexus: failed to delete card:", error);
     }
   }
 
   async function undoCard(): Promise<void> {
     if (!pendingUndoCardId || activeDeckId == null) return;
+    setActionError(null);
     try {
       await window.nexus.restoreCard(profileId, pendingUndoCardId);
       setPendingUndoCardId(null);
       await Promise.all([reloadCards(activeDeckId), reloadDeckCounts()]);
     } catch (error) {
+      setActionError(strings.study.actionError);
       console.error("Nexus: failed to restore card:", error);
     }
   }
@@ -2256,6 +2299,20 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
               className="study__undo-dismiss"
               aria-label={strings.study.dismiss}
               onClick={() => setPendingUndoCardId(null)}
+            >
+              ×
+            </Button>
+          </div>
+        )}
+
+        {actionError != null && (
+          <div className="study__undo study__undo--error" role="alert">
+            <span className="study__undo-text">{actionError}</span>
+            <Button
+              size="sm"
+              className="study__undo-dismiss"
+              aria-label={strings.study.dismiss}
+              onClick={() => setActionError(null)}
             >
               ×
             </Button>
@@ -2932,6 +2989,20 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
             className="study__undo-dismiss"
             aria-label={strings.study.dismiss}
             onClick={() => setPlanUndoError(null)}
+          >
+            ×
+          </Button>
+        </div>
+      )}
+
+      {actionError != null && (
+        <div className="study__undo study__undo--error" role="alert">
+          <span className="study__undo-text">{actionError}</span>
+          <Button
+            size="sm"
+            className="study__undo-dismiss"
+            aria-label={strings.study.dismiss}
+            onClick={() => setActionError(null)}
           >
             ×
           </Button>
@@ -3845,10 +3916,26 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                     <Button size="sm" variant="primary" onClick={() => void endFocus()}>
                       {strings.study.focusStop}
                     </Button>
-                    <Button size="sm" className="study__cancel" onClick={() => void discardFocus()}>
+                    {/* Same act as „Fokus"'s own „Odbaci": writes nothing, offers
+                        no undo, so it asks first and stays visually subordinate
+                        to „Završi" (danger-outline vs. filled primary). */}
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => setConfirmingFocusDiscard(true)}
+                    >
                       {strings.study.focusDiscard}
                     </Button>
                   </span>
+                  {confirmingFocusDiscard && (
+                    <FocusDiscardDialog
+                      onConfirm={() => {
+                        setConfirmingFocusDiscard(false);
+                        void discardFocus();
+                      }}
+                      onCancel={() => setConfirmingFocusDiscard(false)}
+                    />
+                  )}
                 </div>
               ) : activeSubjects.length === 0 ? (
                 <p className="study__focus-empty">{strings.study.focusNoSubjects}</p>

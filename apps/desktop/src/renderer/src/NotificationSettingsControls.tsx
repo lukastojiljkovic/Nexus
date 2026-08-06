@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { KeyboardEvent } from "react";
 import { Button, Checkbox, TextField } from "@nexus/ui";
 import type { NotificationSettings, NotificationSource, SnoozePreset } from "../../shared/ipc.js";
 import {
@@ -33,10 +34,20 @@ export function NotificationSettingsControls({
   refreshToken,
 }: NotificationSettingsControlsProps) {
   const [settings, setSettings] = useState<NotificationSettings | null>(null);
+  // True once the load has genuinely failed — distinct from `settings` being
+  // null while still in flight, so a failure renders a line instead of the
+  // section quietly opening onto nothing.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [quietFromInput, setQuietFromInput] = useState("");
   const [quietToInput, setQuietToInput] = useState("");
   const [quietError, setQuietError] = useState<string | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
+  // The morning-hour field's own draft: committed on blur/Enter rather than on
+  // every keystroke, the same idiom every other text field on this page uses
+  // (quiet hours included) — a `type="time"` input fires `onChange` per
+  // segment, and writing to the database that often would be a write per
+  // digit typed.
+  const [morningHourDraft, setMorningHourDraft] = useState("");
   const s = strings.notifications;
 
   useEffect(() => {
@@ -46,9 +57,12 @@ export function NotificationSettingsControls({
         const next = await window.nexus.getNotificationSettings(profileId);
         if (!active) return;
         setSettings(next);
+        setLoadFailed(false);
         setQuietFromInput(next.quietFrom ?? "");
         setQuietToInput(next.quietTo ?? "");
+        setMorningHourDraft(next.morningHour);
       } catch (error) {
+        if (active) setLoadFailed(true);
         console.error("Nexus: failed to load notification settings:", error);
       }
     })();
@@ -102,10 +116,29 @@ export function NotificationSettingsControls({
   async function saveMorningHour(hour: string): Promise<void> {
     setSettingsError(null);
     try {
-      setSettings(await window.nexus.updateNotificationSettings(profileId, { morningHour: hour }));
+      const next = await window.nexus.updateNotificationSettings(profileId, { morningHour: hour });
+      setSettings(next);
+      // Normalizes the field to whatever main actually stored (e.g. a
+      // reformatted "9:00" -> "09:00"), the same round-trip every other field
+      // here already takes.
+      setMorningHourDraft(next.morningHour);
     } catch (error) {
       setSettingsError(s.settings.saveError);
       console.error("Nexus: failed to update morning hour:", error);
+    }
+  }
+
+  /** Commits the draft on blur/Enter — a no-op when nothing actually changed. */
+  function commitMorningHour(): void {
+    if (settings != null && morningHourDraft !== settings.morningHour) {
+      void saveMorningHour(morningHourDraft);
+    }
+  }
+
+  function handleMorningHourKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      event.currentTarget.blur();
     }
   }
 
@@ -132,7 +165,14 @@ export function NotificationSettingsControls({
     }
   }
 
-  if (settings == null) return null;
+  if (loadFailed) {
+    return (
+      <p className="ntf__settings-error" role="alert">
+        {s.settings.loadError}
+      </p>
+    );
+  }
+  if (settings == null) return <p className="ntf__settings-hint">{strings.app.loading}</p>;
 
   return (
     <div className="ntf__settings-body">
@@ -165,8 +205,10 @@ export function NotificationSettingsControls({
         type="time"
         label={s.settings.morningHourLabel}
         className="ntf__settings-time"
-        value={settings.morningHour}
-        onChange={(event) => void saveMorningHour(event.target.value)}
+        value={morningHourDraft}
+        onChange={(event) => setMorningHourDraft(event.target.value)}
+        onBlur={commitMorningHour}
+        onKeyDown={handleMorningHourKeyDown}
       />
 
       {/*

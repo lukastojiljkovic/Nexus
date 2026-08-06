@@ -37,6 +37,10 @@ export function NoteChecklistTasksDialog({
 }: NoteChecklistTasksDialogProps) {
   const s = strings.notes.checklistTasks;
   const [lists, setLists] = useState<TaskList[] | null>(null);
+  // True only when the fetch itself rejected — kept apart from "no lists" so
+  // a failure is never read as "this profile has no lists" (impossible in
+  // practice: every profile has an Inbox).
+  const [failed, setFailed] = useState(false);
   const [listId, setListId] = useState("");
   const selectRef = useRef<HTMLSelectElement>(null);
   const titleId = useId();
@@ -55,7 +59,10 @@ export function NoteChecklistTasksDialog({
         const preferred = snapshot.lists.find((list) => list.isInbox) ?? snapshot.lists[0];
         setListId(preferred?.id ?? "");
       } catch (error) {
-        if (active) setLists([]);
+        if (active) {
+          setLists([]);
+          setFailed(true);
+        }
         console.error("Nexus: failed to load task lists:", error);
       }
     })();
@@ -101,6 +108,10 @@ export function NoteChecklistTasksDialog({
         </p>
         {lists === null ? (
           <p className="recur-dialog__question">{strings.app.loading}</p>
+        ) : failed ? (
+          <p className="recur-dialog__question" role="alert">
+            {s.loadError}
+          </p>
         ) : lists.length === 0 ? (
           <p className="recur-dialog__question">{s.noLists}</p>
         ) : (

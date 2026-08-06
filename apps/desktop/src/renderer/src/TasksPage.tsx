@@ -1063,6 +1063,8 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const [tagDraft, setTagDraft] = useState("");
   /** True when the last tag action failed — kept apart from `listFailed` so the two sections of the rail report their own. */
   const [tagFailed, setTagFailed] = useState(false);
+  /** True when a row's own tag attach/detach failed — kept apart from `tagFailed` (the rail's rename/delete), which a row toggle must not close. */
+  const [tagToggleFailed, setTagToggleFailed] = useState(false);
   /**
    * Prilozi (migration 024): how many files each live task carries (the row/card
    * chip), the edited task's own rows (the form's panel), and that panel's own
@@ -1113,6 +1115,18 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const [reminderOffsets, setReminderOffsets] = useState<number[]>([]);
   /** The quick-add phrase the user waved away, or null — see `activeQuickDate`. */
   const [dismissedPhrase, setDismissedPhrase] = useState<string | null>(null);
+  /** The add/edit form's own save failing at the store/IPC boundary — the CalendarPage `formError` shape. */
+  const [formError, setFormError] = useState<string | null>(null);
+  // True for the span of the form's own write, so a second Enter cannot fire a
+  // second create/update while the first is still in flight.
+  const [saving, setSaving] = useState(false);
+  /**
+   * Every write OUTSIDE the live form and outside the rail/tag/dependency
+   * sections above (each of which already reports its own failure): complete,
+   * toggle, move, re-prioritise, delete, undo, add a subtask — the HABIT page's
+   * own split between a form's `formError` and the page-wide `actionError`.
+   */
+  const [actionError, setActionError] = useState<string | null>(null);
   const [pendingUndo, setPendingUndo] = useState<PendingUndo>(null);
   /**
    * Izbor (ADR-038): whether the list view is in batch-selection mode, and which
@@ -1618,12 +1632,14 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     // Izbor is a LIST-view mode (ADR-038): the board has no rows to pick, so
     // leaving the list view leaves the mode with it.
     if (next !== "list") exitSelection();
+    setActionError(null);
     try {
       await window.nexus.setTaskListView(profileId, list.id, next);
       setLists(
         (prev) => prev && prev.map((row) => (row.id === list.id ? { ...row, defaultView: next } : row)),
       );
     } catch (error) {
+      setActionError(strings.tasks.actionError);
       console.error("Nexus: failed to remember the list view:", error);
     }
   }
@@ -1646,6 +1662,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     // keeps that refusal for real mistakes without sinking an unrelated write.
     const next = pruneStaleSectionColumns(normalizeTaskViewConfig(draft), sectionOrder);
     const stored = isEmptyTaskViewConfig(next) ? null : next;
+    setActionError(null);
     void (async () => {
       try {
         await window.nexus.setTaskListViewConfig(profileId, list.id, stored);
@@ -1653,6 +1670,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
           (prev) => prev && prev.map((row) => (row.id === list.id ? { ...row, viewConfig: stored } : row)),
         );
       } catch (error) {
+        setActionError(strings.tasks.actionError);
         console.error("Nexus: failed to remember the view configuration:", error);
       }
     })();
@@ -2015,6 +2033,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
    * has open in the rail, and it has no inline editor of its own to close.
    */
   async function toggleTaskTag(task: TaskFields, tagId: string, attached: boolean): Promise<void> {
+    setTagToggleFailed(false);
     try {
       if (attached) {
         await window.nexus.detachTaskTag(profileId, task.id, tagId);
@@ -2023,6 +2042,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
       }
       await reloadTags();
     } catch (error) {
+      setTagToggleFailed(true);
       console.error("Nexus: failed to toggle task tag:", error);
     }
   }
@@ -2328,10 +2348,12 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     if (id === null) return;
     event.preventDefault();
     endTaskDrag();
+    setActionError(null);
     try {
       await write(id);
       await reload();
     } catch (error) {
+      setActionError(strings.tasks.actionError);
       console.error("Nexus: failed to move task:", error);
     }
   }
@@ -2349,6 +2371,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     // The rows themselves are cleared by the effect that watches `editingId`;
     // only the transient error is this function's to drop.
     setAttachmentError(null);
+    setFormError(null);
     // The picker's filter was typed against ONE task's candidates; carrying it
     // into the next edit would silently narrow a different list.
     setDepDraft("");
@@ -2369,6 +2392,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     setDraft(task.title);
     setDismissedPhrase(null);
     setAttachmentError(null);
+    setFormError(null);
     setDepDraft("");
     setDepFailed(false);
     // The store accepts a date-time due date too, but this form only speaks in
@@ -2388,6 +2412,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
 
   async function submitForm(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
+    if (saving) return;
     const typed = draft.trim();
     if (typed.length === 0) return;
     // A recognised date takes its phrase out of the title — unless the phrase
@@ -2415,6 +2440,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     // refuses a ladder without one, so it is read off the FIELD for exactly the
     // reason the rule above is — the chips are anchored to the field too.
     const ladder = isValidDayKey(dueDate) ? reminderOffsets : [];
+    setSaving(true);
     try {
       if (editingId != null) {
         const changes: TaskFieldChanges = {
@@ -2458,7 +2484,10 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
       resetForm(editingId == null);
       inputRef.current?.focus();
     } catch (error) {
+      setFormError(strings.tasks.saveError);
       console.error("Nexus: failed to save task:", error);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -2469,6 +2498,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
    * row the user just ticked has moved rather than been struck through.
    */
   async function completeTask(task: TaskFields): Promise<void> {
+    setActionError(null);
     try {
       const updated = await window.nexus.completeTaskOccurrence(profileId, task.id);
       replaceTask(updated);
@@ -2479,6 +2509,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
       // that has already moved on to its next occurrence.
       if (!updated.done && childrenOf(task.id).length > 0) await reload();
     } catch (error) {
+      setActionError(strings.tasks.actionError);
       console.error("Nexus: failed to complete task:", error);
     }
   }
@@ -2536,12 +2567,14 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
    * series. Ending a series stays the recurrence scope dialog's job.
    */
   async function completeWithSubtasks(task: TaskFields): Promise<void> {
+    setActionError(null);
     try {
       for (const descendant of openDescendants(task)) {
         await window.nexus.completeTaskOccurrence(profileId, descendant.id);
       }
       await window.nexus.completeTaskOccurrence(profileId, task.id);
     } catch (error) {
+      setActionError(strings.tasks.actionError);
       console.error("Nexus: failed to complete task with subtasks:", error);
     }
     // Refetch either way: the cascade moves many rows while replying only about
@@ -2562,9 +2595,11 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     }
     // Un-ticking never cascades: reopening a parent says nothing about work
     // that was genuinely finished under it.
+    setActionError(null);
     try {
       replaceTask(await window.nexus.setTaskDone(profileId, task.id, false));
     } catch (error) {
+      setActionError(strings.tasks.actionError);
       console.error("Nexus: failed to toggle task:", error);
     }
   }
@@ -2590,6 +2625,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   async function addSubtask(parentId: string): Promise<void> {
     const title = subtaskDraft.trim();
     if (title.length === 0) return;
+    setActionError(null);
     try {
       const created = await window.nexus.createTask(profileId, { title, parentId });
       setTasks((prev) => (prev ? [...prev, created] : [created]));
@@ -2597,6 +2633,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
       // go, and blurring it empty is what closes it.
       setSubtaskDraft("");
     } catch (error) {
+      setActionError(strings.tasks.actionError);
       console.error("Nexus: failed to add subtask:", error);
     }
   }
@@ -2609,9 +2646,11 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
       await requestComplete(task);
       return;
     }
+    setActionError(null);
     try {
       replaceTask(await window.nexus.updateTask(profileId, task.id, { status }));
     } catch (error) {
+      setActionError(strings.tasks.actionError);
       console.error("Nexus: failed to move task:", error);
     }
   }
@@ -2632,11 +2671,13 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     if ("sectionId" in patch) {
       const sectionId = patch["sectionId"] ?? null;
       if (sectionId === groupKeyOf(task)) return; // already there; the store would only re-append
+      setActionError(null);
       void (async () => {
         try {
           await window.nexus.moveTaskToSection(profileId, task.id, sectionId);
           await reload();
         } catch (error) {
+          setActionError(strings.tasks.actionError);
           console.error("Nexus: failed to move task:", error);
         }
       })();
@@ -2655,23 +2696,28 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   }
 
   async function updatePriority(task: TaskFields, priority: TaskPriority): Promise<void> {
+    setActionError(null);
     try {
       replaceTask(await window.nexus.updateTask(profileId, task.id, { priority }));
     } catch (error) {
+      setActionError(strings.tasks.actionError);
       console.error("Nexus: failed to move task:", error);
     }
   }
 
   /** A drop on a day cell of the month grid: that day becomes the task's rok. */
   async function moveTaskToDay(taskId: string, dayKey: string): Promise<void> {
+    setActionError(null);
     try {
       replaceTask(await window.nexus.updateTask(profileId, taskId, { dueDate: dayKey }));
     } catch (error) {
+      setActionError(strings.tasks.actionError);
       console.error("Nexus: failed to move task:", error);
     }
   }
 
   async function remove(task: TaskFields): Promise<void> {
+    setActionError(null);
     try {
       await window.nexus.deleteTask(profileId, task.id);
       setTasks((prev) => prev && prev.filter((current) => current.id !== task.id));
@@ -2684,6 +2730,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
       // One pending undo at a time — a fresh delete replaces the previous offer.
       setPendingUndo({ kind: "single", id: task.id });
     } catch (error) {
+      setActionError(strings.tasks.actionError);
       console.error("Nexus: failed to delete task:", error);
     }
   }
@@ -2691,6 +2738,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   async function undo(): Promise<void> {
     const pending = pendingUndo;
     if (pending === null) return;
+    setActionError(null);
     try {
       if (pending.kind === "single") {
         await window.nexus.restoreTask(profileId, pending.id);
@@ -2703,6 +2751,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
       // Re-fetch so the restored tasks land back in stable placement order.
       await reload();
     } catch (error) {
+      setActionError(strings.tasks.actionError);
       console.error("Nexus: failed to restore task:", error);
     }
   }
@@ -2930,6 +2979,11 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                               </button>
                             );
                           })}
+                          {tagToggleFailed && (
+                            <p className="note__menu-caption" role="status">
+                              {strings.tasks.tags.actionError}
+                            </p>
+                          )}
                           <div className="note__menu-sep" />
                         </>
                       )}
@@ -3907,7 +3961,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                   autoFocus
                   onChange={(event: ChangeEvent<HTMLInputElement>) => setDraft(event.target.value)}
                 />
-                <Button type="submit" variant="primary">
+                <Button type="submit" variant="primary" disabled={saving}>
                   {editingId != null ? strings.tasks.save : strings.tasks.quickAddSubmit}
                 </Button>
                 {editingId != null && (
@@ -4065,6 +4119,11 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                     store would accept (see `dependencyCandidates`), so the error
                     line below reports a race, never an ordinary refusal. */}
                 {editingId !== null && renderDependencies(editingId)}
+                {formError != null && (
+                  <p className="tasks__form-error" role="alert">
+                    {formError}
+                  </p>
+                )}
               </div>
             </form>
           )}
@@ -4466,6 +4525,12 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
               ×
             </Button>
           </div>
+        )}
+
+        {actionError != null && (
+          <p className="tasks__form-error" role="status">
+            {actionError}
+          </p>
         )}
 
         {advancedTo != null && (

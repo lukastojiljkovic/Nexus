@@ -608,6 +608,13 @@ export function CalendarPage({
   const [recurrence, setRecurrence] = useState<RecurrenceRule | null>(null);
   const [reminderOffsets, setReminderOffsets] = useState<number[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
+  // Every write OUTSIDE the live form (delete, undo, a series-scope choice, a
+  // drag) — the HABIT page's own split between a form's own `formError` and
+  // the page-wide `actionError`.
+  const [actionError, setActionError] = useState<string | null>(null);
+  // True for the span of the form's own write, so a second Enter cannot fire
+  // a second create/update while the first is still in flight.
+  const [saving, setSaving] = useState(false);
   const [pendingSeries, setPendingSeries] = useState<PendingSeries | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
 
@@ -986,8 +993,16 @@ export function CalendarPage({
 
   async function submitForm(formEvent: FormEvent<HTMLFormElement>): Promise<void> {
     formEvent.preventDefault();
+    if (saving) return;
     const trimmedTitle = title.trim();
-    if (trimmedTitle.length === 0 || date.length === 0) return;
+    if (trimmedTitle.length === 0) {
+      setFormError(strings.calendar.invalidTitle);
+      return;
+    }
+    if (date.length === 0) {
+      setFormError(strings.calendar.invalidDate);
+      return;
+    }
 
     // Assemble startAt: all-day is the bare date; timed appends the time (09:00
     // by default) so the "YYYY-MM-DDTHH:MM" form clears the store's ISO check.
@@ -1027,6 +1042,7 @@ export function CalendarPage({
       return;
     }
 
+    setSaving(true);
     try {
       if (editingId != null) {
         const changes: EventFieldChanges = {
@@ -1051,7 +1067,10 @@ export function CalendarPage({
         titleRef.current?.focus();
       }
     } catch (error) {
+      setFormError(strings.calendar.saveError);
       console.error("Nexus: failed to save event:", error);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -1061,6 +1080,7 @@ export function CalendarPage({
       setPendingSeries({ kind: "delete", occurrence });
       return;
     }
+    setActionError(null);
     try {
       await window.nexus.deleteEvent(profileId, event.id);
       setEvents((prev) => prev && prev.filter((current) => current.id !== event.id));
@@ -1069,6 +1089,7 @@ export function CalendarPage({
       // One pending undo at a time — a fresh delete replaces the previous offer.
       setPendingUndoId(event.id);
     } catch (error) {
+      setActionError(strings.calendar.actionError);
       console.error("Nexus: failed to delete event:", error);
     }
   }
@@ -1199,6 +1220,7 @@ export function CalendarPage({
     const pending = pendingSeries;
     if (pending === null) return;
     setPendingSeries(null);
+    setActionError(null);
     try {
       if (pending.kind === "edit") {
         await applyEditScope(scope, pending.occurrence, pending.fields);
@@ -1208,18 +1230,21 @@ export function CalendarPage({
         await applyMoveScope(scope, pending);
       }
     } catch (error) {
+      setActionError(strings.calendar.actionError);
       console.error("Nexus: failed to change the recurring event:", error);
     }
   }
 
   async function undo(): Promise<void> {
     if (!pendingUndoId) return;
+    setActionError(null);
     try {
       await window.nexus.restoreEvent(profileId, pendingUndoId);
       setPendingUndoId(null);
       // Re-fetch so the restored event lands back in chronological order.
       await reload();
     } catch (error) {
+      setActionError(strings.calendar.actionError);
       console.error("Nexus: failed to restore event:", error);
     }
   }
@@ -1242,6 +1267,7 @@ export function CalendarPage({
         });
         return;
       }
+      setActionError(null);
       try {
         const updated = await window.nexus.updateEvent(
           profileId,
@@ -1250,16 +1276,19 @@ export function CalendarPage({
         );
         setEvents((prev) => prev && prev.map((e) => (e.id === updated.id ? updated : e)));
       } catch (error) {
+        setActionError(strings.calendar.actionError);
         console.error("Nexus: failed to move event:", error);
       }
       return;
     }
     if (item.kind === "task") {
       if (item.startKey === dayKey) return;
+      setActionError(null);
       try {
         const updated = await window.nexus.updateTask(profileId, item.task.id, { dueDate: dayKey });
         setTasks((prev) => prev && prev.map((t) => (t.id === updated.id ? updated : t)));
       } catch (error) {
+        setActionError(strings.calendar.actionError);
         console.error("Nexus: failed to move task:", error);
       }
     }
@@ -1288,10 +1317,12 @@ export function CalendarPage({
       });
       return;
     }
+    setActionError(null);
     try {
       await window.nexus.updateEvent(profileId, item.event.id, changes);
       await reload();
     } catch (error) {
+      setActionError(strings.calendar.actionError);
       console.error("Nexus: failed to move event:", error);
     }
   }
@@ -1631,7 +1662,7 @@ export function CalendarPage({
                 })}
               </div>
             </div>
-            <Button type="submit" variant="primary">
+            <Button type="submit" variant="primary" disabled={saving}>
               {editingId != null ? strings.calendar.save : strings.calendar.add}
             </Button>
             {editingId != null && (
@@ -1782,6 +1813,12 @@ export function CalendarPage({
                 ×
               </Button>
             </div>
+          )}
+
+          {actionError != null && (
+            <p className="cal__form-error" role="status">
+              {actionError}
+            </p>
           )}
 
           {failed ? (

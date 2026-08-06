@@ -14,6 +14,7 @@ import {
 } from "./focusFormat.js";
 import { focusDayTotals, plannedWorkPhases, upcomingPhase } from "./focusPhases.js";
 import { readStoredFocusConfig } from "./focusPrefs.js";
+import { FocusDiscardDialog } from "./FocusDiscardDialog.js";
 import { countUnit, strings } from "./strings.js";
 
 /**
@@ -128,6 +129,9 @@ export function FocusPage({ profileId, enabledModules }: FocusPageProps) {
   const [failed, setFailed] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
+  // „Odbaci" writes nothing at all and offers no undo afterwards — the one
+  // running phase, so a boolean is enough to say the confirm is open.
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
 
   // What the NEXT phase is attached to and called. Kept across a phase, so
   // starting the one after it does not begin from a blank form.
@@ -334,16 +338,28 @@ export function FocusPage({ profileId, enabledModules }: FocusPageProps) {
           </Button>
           {/* „Odbaci" is `focus:cancel`: the phase ends and NOTHING is written.
               Offered because a timer started by mistake should not have to
-              become a row somebody then deletes. */}
+              become a row somebody then deletes — but that same asymmetry
+              (no row, no undo) is why it asks first, and stays visually
+              subordinate to „Završi" (danger-outline vs. filled primary,
+              tokens only) rather than sitting beside it as an equal. */}
           <Button
             size="sm"
-            className="foc__quiet"
+            variant="danger"
             title={s.running.discardTitle}
-            onClick={() => void run(async () => window.nexus.cancelFocus(profileId))}
+            onClick={() => setConfirmingDiscard(true)}
           >
             {s.running.discard}
           </Button>
         </div>
+        {confirmingDiscard && (
+          <FocusDiscardDialog
+            onConfirm={() => {
+              setConfirmingDiscard(false);
+              void run(async () => window.nexus.cancelFocus(profileId));
+            }}
+            onCancel={() => setConfirmingDiscard(false)}
+          />
+        )}
       </section>
     );
   }

@@ -10414,7 +10414,9 @@ button.cal__grid-event--dragging {
   font-size: var(--nx-font-size-body-sm);
   color: var(--nx-danger);
 }
-/* Every quiet ghost on this page — dismiss, „Odbaci", the three explicit starts. */
+/* Every quiet ghost on this page — dismiss, the three explicit starts. „Odbaci"
+   uses `variant="danger"` instead (still an outline, still subordinate to
+   „Završi"'s filled primary, but marked as the destructive one). */
 .foc__quiet.nx-button {
   background: transparent;
   border-color: transparent;
@@ -11794,4 +11796,37 @@ button.cal__grid-event--dragging {
   --color-success-text: var(--nx-success);
 
   font-family: var(--nx-font-family-ui);
+}
+
+/* ===========================================================================
+   Silent-failure sweep (2026-08) — visible outcomes for write paths that used
+   to catch, log and act as if the write had succeeded. Each rule below is an
+   existing per-module error rule copied verbatim, prefix swapped only.
+   =========================================================================== */
+
+/* TasksPage's own form-error line — TASK's twin of .cal__form-error above. */
+.tasks__form-error {
+  margin: 0;
+  flex-basis: 100%;
+  color: var(--nx-danger);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+/* SearchPalette's failed-fetch line — .search__empty's shape, danger-toned so
+   a rejected search cannot be mistaken for its "nothing matches" sibling. */
+.search__error {
+  margin: 0;
+  padding: var(--nx-space-4);
+  text-align: center;
+  color: var(--nx-danger);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+/* NotificationCenter's snooze/dismiss failure line — .ntf__empty's shape,
+   danger-toned for the same reason as .search__error above. */
+.ntf__error {
+  margin: 0;
+  padding: var(--nx-space-4);
+  color: var(--nx-danger);
+  font-size: var(--nx-font-size-body-sm);
 }

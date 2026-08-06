@@ -253,6 +253,9 @@ export function FitnessPage({ profileId }: FitnessPageProps) {
   const [pickerSlot, setPickerSlot] = useState<FitMealSlot | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<FitFoodOption[]>([]);
+  // True only when the search fetch itself rejected — kept apart from an
+  // empty `results`, which is a real answer ("nothing matched").
+  const [searchFailed, setSearchFailed] = useState(false);
   const [chosen, setChosen] = useState<FitFoodOption | null>(null);
   const [amountDraft, setAmountDraft] = useState("");
   const [pickerError, setPickerError] = useState<string | null>(null);
@@ -302,6 +305,7 @@ export function FitnessPage({ profileId }: FitnessPageProps) {
     const needle = query.trim();
     if (needle.length === 0) {
       setResults([]);
+      setSearchFailed(false);
       return;
     }
     let active = true;
@@ -309,9 +313,15 @@ export function FitnessPage({ profileId }: FitnessPageProps) {
       void (async () => {
         try {
           const found = await window.nexus.fitFoodSearch(profileId, needle, MAX_FIT_FOOD_RESULTS);
-          if (active) setResults(found);
+          if (active) {
+            setResults(found);
+            setSearchFailed(false);
+          }
         } catch (error) {
-          if (active) setResults([]);
+          if (active) {
+            setResults([]);
+            setSearchFailed(true);
+          }
           console.error("Nexus: the food search failed:", error);
         }
       })();
@@ -343,6 +353,7 @@ export function FitnessPage({ profileId }: FitnessPageProps) {
     setPickerSlot(null);
     setQuery("");
     setResults([]);
+    setSearchFailed(false);
     setChosen(null);
     setAmountDraft("");
     setPickerError(null);
@@ -706,6 +717,10 @@ export function FitnessPage({ profileId }: FitnessPageProps) {
         {chosen === null ? (
           query.trim() === "" ? (
             <p className="fit__note">{p.idle}</p>
+          ) : searchFailed ? (
+            <p className="fit__error" role="alert">
+              {p.searchError}
+            </p>
           ) : results.length === 0 ? (
             <>
               <p className="fit__note">{p.noResults}</p>

@@ -656,6 +656,15 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     deletedNotice: "Zadatak obrisan",
     undo: "Vrati",
     dismiss: "Zatvori",
+    /** The add/edit form's own save failing at the store/IPC boundary. */
+    saveError: "Zadatak nije sačuvan. Pokušaj ponovo.",
+    /**
+     * Generic fallback for every task write outside the form and outside the
+     * rail/tag/dependency sections above (each of which reports its own
+     * failure): complete, toggle, move, re-prioritise, delete, undo, a
+     * subtask — the HABIT page's own `actionError` shape.
+     */
+    actionError: "Radnja nije uspela. Pokušaj ponovo.",
     /**
      * A due date recognised in the quick-add line itself (TASK-007) — "Kupi
      * mleko sutra". The chip shows what will be saved before Enter is pressed,
@@ -1144,6 +1153,22 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     save: "Sačuvaj",
     cancel: "Otkaži",
     folderError: "Radnja nad fasciklom nije uspela. Pokušaj ponovo.",
+    /**
+     * The typed-name confirmation before a folder delete (no undo exists for
+     * this write, unlike a note's — see `TypedConfirmDialog`, shared outright
+     * with PRIV's own hard-delete). Nothing inside the folder is lost: its
+     * subfolders and notes are promoted to its own parent first, which is
+     * exactly what the warning says.
+     */
+    deleteFolderDialog: {
+      title: "Brisanje fascikle",
+      warning:
+        "Fascikla se trajno briše. Njene podfascikle i beleške se premeštaju u nadređenu fasciklu — ništa od toga se ne gubi.",
+      confirmLabel: "Naziv fascikle za potvrdu",
+      confirmPlaceholder: "Upiši tačan naziv",
+      submit: "Obriši",
+      cancel: "Otkaži",
+    },
     /** Tags (slice a3b-2): filter chips + tag CRUD + per-note tag editor. */
     tagsLabel: "Oznake",
     newTag: "Nova oznaka",
@@ -1155,6 +1180,15 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     clearTagFilter: "Poništi",
     tagError: "Radnja nad oznakom nije uspela. Pokušaj ponovo.",
     tagFilterEmptyDescription: "Nijedna beleška ne odgovara izabranim oznakama.",
+    /** The typed-name confirmation before a tag delete — no undo exists for this write. */
+    deleteTagDialog: {
+      title: "Brisanje oznake",
+      warning: "Oznaka se trajno briše i uklanja sa svake beleške koja je nosi. Beleške same ostaju netaknute.",
+      confirmLabel: "Naziv oznake za potvrdu",
+      confirmPlaceholder: "Upiši tačan naziv",
+      submit: "Obriši",
+      cancel: "Otkaži",
+    },
     /**
      * Kategorije (NOTE-002, migration 049) — the third organizational axis:
      * a folder says WHERE a note lives, an oznaka says WHAT IT IS ABOUT, a
@@ -1178,6 +1212,15 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     clearCategoryFilter: "Poništi",
     categoryError: "Radnja nad kategorijom nije uspela. Pokušaj ponovo.",
     categoryFilterEmptyDescription: "Nijedna beleška ne pripada izabranim kategorijama.",
+    /** The typed-name confirmation before a category delete — no undo exists for this write. Its notes are never deleted, only uncategorized (see the store's own `ON DELETE SET NULL`). */
+    deleteCategoryDialog: {
+      title: "Brisanje kategorije",
+      warning: "Kategorija se trajno briše. Beleške koje su u njoj postaju bez kategorije — ni jedna se ne briše.",
+      confirmLabel: "Naziv kategorije za potvrdu",
+      confirmPlaceholder: "Upiši tačan naziv",
+      submit: "Obriši",
+      cancel: "Otkaži",
+    },
     /** The per-note picker in the row menu — „Bez kategorije“ is a real choice there, not an empty state. */
     noteCategoryLabel: "Kategorija",
     noCategory: "Bez kategorije",
@@ -1348,6 +1391,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       error: "Zadaci nisu napravljeni. Pokušaj ponovo.",
       /** The picker has nothing to offer only if the profile has no lists at all, which the Inbox makes impossible — said anyway rather than showing an empty select. */
       noLists: "Napravi listu u modulu Zadaci da bi stavke imale gde da odu.",
+      /** Shown instead of `noLists` when the fetch itself rejected — an empty picker must not be read as "this profile has no lists". */
+      loadError: "Liste zadataka se trenutno ne mogu učitati. Pokušaj ponovo.",
     },
     /**
      * „Pronađi u belešci“ (NOTE-005): the Ctrl+F bar docked above the open
@@ -1553,6 +1598,12 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     endTimeLabel: "Do",
     /** Client-side guard mirroring EventStore's own "end must not be before start" check. */
     endBeforeStart: "Vreme završetka mora biti posle vremena početka.",
+    /** Submitting the form with no title types in — said instead of doing nothing. */
+    invalidTitle: "Upiši naziv događaja.",
+    /** Defensive twin of `invalidTitle`: the date field is `required`, so this is normally unreachable, but a silent no-op is never the fallback. */
+    invalidDate: "Izaberi datum događaja.",
+    /** The form's own save failing at the store/IPC boundary. */
+    saveError: "Događaj nije sačuvan. Pokušaj ponovo.",
     locationPlaceholder: "Mesto (opciono)",
     locationLabel: "Mesto",
     allDay: "Ceo dan",
@@ -1567,6 +1618,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     deletedNotice: "Događaj obrisan",
     undo: "Vrati",
     dismiss: "Zatvori",
+    /** Generic fallback for delete/undo/move/series-resolve failures — the HABIT `actionError` shape, outside the live form. */
+    actionError: "Radnja nije uspela. Pokušaj ponovo.",
     /** Source-filter toggle chips (month grid + agenda share one set of toggles). */
     sourcesLabel: "Izvori",
     sourceEvents: "Događaji",
@@ -2378,11 +2431,23 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     focusSessionsEmpty: "Nema sesija fokusa u poslednjih 7 dana.",
     deleteFocusSessionLabel: "Obriši sesiju fokusa",
     deletedFocusSessionNotice: "Sesija fokusa obrisana",
+    /**
+     * Shared fallback for the subject/exam/deck/focus-session/card delete and
+     * undo actions (and the plan delete, which otherwise shares no copy with
+     * `planError`/`planRestoreError`): all are the same shape — a simple
+     * delete-with-undo, no validation of its own — so one line covers all of
+     * them, exactly like every other module's generic `actionError`.
+     */
+    actionError: "Radnja nije uspela. Pokušaj ponovo.",
   },
 
   notifications: {
     bellLabel: "Obaveštenja",
     empty: "Nema novih obaveštenja.",
+    /** Shown in place of the list when the initial load failed — distinct from `empty`, which is a real answer. */
+    loadError: "Obaveštenja se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
+    /** Shown when a snooze or dismiss failed — the row stays exactly as it was. */
+    actionError: "Radnja nije uspela. Pokušaj ponovo.",
     dismissLabel: "Ukloni obaveštenje",
     snoozedUntil: "odloženo do",
     /** Source tag chip on each center row, keyed by NotificationSource value. */
@@ -2414,6 +2479,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     settings: {
       show: "Podešavanja obaveštenja",
       hide: "Sakrij podešavanja",
+      /** Shown in place of the whole body when the settings fetch itself rejected — the disclosure must never open onto nothing with no explanation. */
+      loadError: "Podešavanja obaveštenja se trenutno ne mogu učitati. Pokušaj ponovo.",
       quietFromLabel: "Tiho od",
       quietToLabel: "Tiho do",
       quietSave: "Sačuvaj",
@@ -2966,6 +3033,13 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       /** Ends the phase without recording it — the same act „Učenje" calls „Odbaci". */
       discard: "Odbaci",
       discardTitle: "Zatvori fazu bez upisivanja u istoriju.",
+      /** Asked before the discard actually runs (shared with STUDY's own „Odbaci" — same phase, same act, one dialog). */
+      discardDialog: {
+        title: "Odbacivanje faze",
+        question: "Faza se zatvara bez upisivanja u istoriju — proteklo vreme se gubi.",
+        confirm: "Odbaci",
+        cancel: "Otkaži",
+      },
     },
     /** Nothing runs: what to start, and what to attach to it. */
     idle: {
@@ -3288,6 +3362,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       /** Nothing matched. The next sentence is the way out, and it is a real one. */
       noResults: "Nema namirnice sa tim imenom.",
       noResultsHint: "Dodaj je u „Moje namirnice” ispod — sa brojevima sa deklaracije.",
+      /** Shown instead of `noResults` when the search itself rejected — an empty list must not be read as "nothing matched". */
+      searchError: "Pretraga namirnica trenutno ne radi. Pokušaj ponovo.",
       /** Before anything is typed: the box has nothing to rank, and says so. */
       idle: "Upiši ime namirnice.",
       /** The chosen food's own line: the amount, and its household measures beside it. */
@@ -5265,6 +5341,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     recentGroup: "Nedavno",
     commandsGroup: "Komande",
     emptyResults: "Nema rezultata.",
+    /** Shown instead of `emptyResults` when the fetch itself rejected — a failure is not an empty result and must not read as one. */
+    searchError: "Pretraga trenutno ne radi. Pokušaj ponovo.",
     hint: "↑↓ kretanje · Enter otvori · Esc zatvori",
     /**
      * SRCH-009: the profile's remembered QUERIES, which are a different list
