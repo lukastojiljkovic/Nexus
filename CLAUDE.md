@@ -42,15 +42,46 @@ and [docs/SPECIFICATION.md](docs/SPECIFICATION.md). For *where we are*:
   what exists, what's in progress, current problems, and what remains. Update it as
   part of finishing each piece of work — that is how the founder (and a non-technical
   PM) can understand the project at any moment without reading code.
-- **Subagent-driven.** The founder prefers work done by **Sonnet** subagents
-  dispatched one at a time (Opus is too expensive — founder, 2026-07-08), with
-  Claude supervising: write a precise self-contained agent prompt, then
-  independently re-verify everything before committing. This saves usage.
-  Agents never touch git.
-- **Verify Sonnet output more strictly than Opus's** (founder, 2026-07-08):
-  Sonnet is a smaller model, so beyond the standard gates, read every changed
-  file in full and review UI work by eye against the design rules (tokens,
-  banned hues, patterns matching existing pages) before committing.
+- **Who does what** (founder, 2026-08-06 — supersedes the 2026-07-08 rule that
+  everything went to Sonnet):
+  - **Opus does the hard part itself.** Design, diagnosis, anything with a trap
+    in it, anything touching security, IPC, crypto, migrations or money, and
+    every judgement call. Not delegated.
+  - **Sonnet subagents do the routine typing** — mechanical implementation,
+    repetitive edits, scaffolding from a spec that is already decided. One at a
+    time, with a precise self-contained prompt. This is what saves usage.
+  - **Fable is the adviser on the genuinely nasty questions and on
+    cybersecurity.** Asked for a plan or a second opinion *before* work starts,
+    not to write the code. Its answer is advice — Opus still decides and still
+    verifies.
+- **Verification is not a skim** (founder, 2026-08-06, restating 2026-07-08
+  more strongly). Whatever produced the change, before it is committed: read
+  **every changed file in full**, re-derive the arithmetic by hand rather than
+  trusting a test that may have been written to match the code, run the full
+  gate set, and review UI work by eye against the design rules (tokens, banned
+  hues, patterns matching existing pages). A subagent's report is a claim, not
+  evidence.
+- **Agents never touch git** — not even read-only — and never touch `docs/`.
+- **A reported bug is a sample, never an incident** (founder, 2026-08-06).
+  *„necu samo da se otkloni taj bug, nego i da se proveri uzrok i sta je sve
+  potencijalno zahvaceno."* Every defect — his or mine — is worked in this
+  order, and the fix is not finished until all four are done:
+  1. **Root cause**, not the symptom. Name the actual rule that is wrong.
+  2. **Blast radius.** Find every other place that rule reaches — grep for the
+     construct, not for the file. A defect in a shared component is a defect at
+     every call site; a defect copied by hand is a defect wherever it was
+     copied to.
+  3. **Fix it once, where it belongs.** If four surfaces had four copies of the
+     arithmetic, the outcome is one helper and four adoptions, never four
+     patches. Prefer a fix that makes the class *unrepresentable* over one that
+     makes this instance correct.
+  4. **Ask whether the subsystem is sound.** If the answer to „why did this
+     ship" is „nothing in this area was ever designed", say so and put the
+     subsystem in `docs/STATUS.md` — the report was the symptom, the subsystem
+     is the finding. One overflow bug can legitimately mean the whole layout
+     layer is unfinished, and that is the more useful answer.
+  Record the class in `docs/STATUS.md`'s defect-class ledger so the same shape
+  is recognised the next time it appears somewhere else.
 - **Concise Serbian status updates** to the founder; the code, comments, and docs
   are in **English**.
 
