@@ -15,7 +15,6 @@ import {
   activeCanvasTool,
   activeStrokeWidth,
   canvasStyleTargets,
-  canvasSwatchToken,
   canvasToolbarStateOf,
   carriesStrokeColour,
   formatZoomPercent,
@@ -104,13 +103,10 @@ describe("the palette", () => {
     expect(ACCENT_IDS).toHaveLength(8);
   });
 
-  it("resolves every swatch to an `--nx-*` token and never to a literal", () => {
-    for (const id of CANVAS_SWATCHES) {
-      expect(canvasSwatchToken(id)).toMatch(/^--nx-/);
-    }
-    expect(canvasSwatchToken(CANVAS_INK_ID)).toBe("--nx-text");
-    expect(canvasSwatchToken("bordo")).toBe("--nx-swatch-bordo");
-  });
+  // What each swatch PAINTS is `canvasSwatchColour`, and its tests live beside
+  // it in `canvasPalette.test.ts` — the rule they pin (every canvas colour is a
+  // Dan colour, because Excalidraw inverts the canvas itself) is that module's,
+  // not this one's.
 
   it("compares colours case-insensitively, so one colour never lights two dots", () => {
     // Opaque values on purpose: what is under test is a string comparison, and

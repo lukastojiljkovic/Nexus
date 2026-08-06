@@ -13,7 +13,6 @@ import {
   CANVAS_ZOOM_STEP,
   activeStrokeWidth,
   canvasStyleTargets,
-  canvasSwatchToken,
   formatZoomPercent,
   sameCanvasColour,
   zoomAboutViewportCentre,
@@ -21,6 +20,7 @@ import {
   type CanvasToolId,
   type CanvasToolbarState,
 } from "./canvasTools.js";
+import { canvasSwatchColour } from "./canvasPalette.js";
 import { strings } from "./strings.js";
 
 /**
@@ -98,15 +98,14 @@ export function CanvasToolbar({ editor, state, onMermaid, onAddCard }: CanvasToo
   const colourNames = strings.settings.appearance.accentNames;
 
   /**
-   * The live computed style, read once — `elementDefaults()`'s shape, and for
-   * its reason: what goes into an element is a colour STRING, and writing one
-   * as a literal here would be a raw hex in this app's own source. The object
-   * `getComputedStyle` returns is LIVE, so the handlers below read through it
-   * too and a swatch always resolves under whichever theme is on right now.
+   * A swatch's colour — Dan's, under both themes, per `canvasPalette`.
+   *
+   * This used to read the LIVE token, which is what put the dot and the stroke
+   * out of step: the value went into the scene, Excalidraw inverted the scene
+   * under Noć, and the dot the user had clicked was never the colour that
+   * appeared. Both now come from the same call, so they cannot disagree.
    */
-  const styles = getComputedStyle(document.documentElement);
-  const swatchColour = (id: CanvasSwatchId): string =>
-    styles.getPropertyValue(canvasSwatchToken(id)).trim();
+  const swatchColour = canvasSwatchColour;
 
   /** A swatch's Serbian name — „Mastilo", then the eight „Izgled" already names. */
   const swatchName = (id: CanvasSwatchId): string =>
@@ -212,8 +211,8 @@ export function CanvasToolbar({ editor, state, onMermaid, onAddCard }: CanvasToo
           <button
             key={id}
             type="button"
-            className={swatchClass(selected)}
-            style={{ background: `var(${canvasSwatchToken(id)})` }}
+            className={`${swatchClass(selected)} canv__swatch--colour`}
+            style={{ background: swatchColour(id) }}
             aria-label={name}
             title={name}
             aria-pressed={selected}

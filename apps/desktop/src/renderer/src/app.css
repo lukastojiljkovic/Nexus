@@ -11432,6 +11432,24 @@ button.cal__grid-event--dragging {
 .canv__swatch--selected {
   border: 2px solid var(--nx-text);
 }
+/* A colour dot shows the colour the stroke will BE, which under Noć is not the
+   colour we hand the editor.
+
+   Excalidraw inverts its whole canvas in dark theme
+   (`.excalidraw.theme--dark canvas { filter: invert(93%) hue-rotate(180deg) }`),
+   so `canvasPalette` feeds it Dan's palette in both themes and lets that filter
+   do the conversion. These dots are drawn in OUR toolbar, outside that canvas,
+   so nothing inverts them — wearing the same filter here is what makes the dot
+   and the stroke agree by construction rather than by a palette coincidence.
+   Excalidraw does exactly this to its own swatches, for exactly this reason.
+
+   The value is duplicated from a dependency, so `canvasPalette.test.ts` reads it
+   back out of the stylesheet that ships and fails if an upgrade changes it.
+   Only the colour dots: the „bez ispune" swatch has no background and inverting
+   its × would just make it wrong. */
+[data-theme="noc"] .canv__swatch--colour {
+  filter: invert(93%) hue-rotate(180deg);
+}
 
 .canv__surface {
   flex: 1;

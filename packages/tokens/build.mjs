@@ -135,6 +135,17 @@ export function cssVar(token: SemanticToken): string {
 
 export const ACCENT_IDS = ${JSON.stringify(accentIds, null, 2)} as const;
 export type AccentId = (typeof ACCENT_IDS)[number];
+
+/**
+ * Every accent's three slots, per theme, resolved to colour strings.
+ *
+ * The CSS carries the same values as \`--nx-swatch-<id>\`, but only the ACTIVE
+ * theme's set is readable from the document at any moment. A consumer that
+ * needs a specific theme's palette — the canvas does, because Excalidraw
+ * applies its own dark transform and must therefore be fed light-theme colours
+ * in both themes — cannot get it from \`getComputedStyle\`. It gets it here.
+ */
+export const accents = ${JSON.stringify(resolvedAccents, null, 2)} as const;
 `;
 
 mkdirSync(join(root, "gen"), { recursive: true });

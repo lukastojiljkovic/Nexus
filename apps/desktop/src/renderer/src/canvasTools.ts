@@ -124,26 +124,14 @@ export type CanvasSwatchId = typeof CANVAS_INK_ID | AccentId;
  *
  * All eight regardless of which one the profile picked, because this is a
  * DRAWING colour and not the app's accent — a diagram wants more than one hue,
- * and the accent that happens to be active is merely the first one it inherits
- * (`elementDefaults`). The tokens package publishes `--nx-swatch-<id>` for
- * exactly this: every accent's colour, readable whichever accent is live.
+ * and the accent that happens to be active is merely the first one it inherits.
+ *
+ * What each one actually paints is `canvasSwatchColour` in `canvasPalette.ts`,
+ * which is also what the dot on screen is drawn with. They used to be two
+ * different reads — a `var(--nx-swatch-*)` for the dot and a computed-style
+ * read for the stroke — and under Noć they disagreed.
  */
 export const CANVAS_SWATCHES: readonly CanvasSwatchId[] = [CANVAS_INK_ID, ...ACCENT_IDS];
-
-/**
- * The CSS custom property a swatch paints from and writes into the scene.
- *
- * Two callers, and the split is the point: the dot on screen is painted with
- * `var(…)` and never reads anything, while the value stored in an element is
- * read off the computed style at PICK time — the same rule `elementDefaults()`
- * follows, and for the same reason. A colour literal in this file would be a
- * raw hex in the app's own source, which the raw-colour gate forbids; reading
- * it live is also what makes a swatch resolve under whichever theme is on when
- * it is clicked.
- */
-export function canvasSwatchToken(id: CanvasSwatchId): string {
-  return id === CANVAS_INK_ID ? "--nx-text" : `--nx-swatch-${id}`;
-}
 
 /**
  * A shape with no fill, and the default for every new one.

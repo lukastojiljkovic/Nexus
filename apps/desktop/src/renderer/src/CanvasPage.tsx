@@ -44,6 +44,15 @@ import {
   type CanvasSceneElement,
 } from "./canvasCards.js";
 import {
+  CANVAS_BACKGROUND,
+  CANVAS_CARD_FILL,
+  CANVAS_CARD_STROKE,
+  CANVAS_INK,
+  canvasAppState,
+  migrateElementColours,
+} from "./canvasPalette.js";
+import {
+  CANVAS_TRANSPARENT,
   canvasToolbarStateOf,
   sameCanvasToolbarState,
   type CanvasToolbarAppState,
@@ -161,15 +170,12 @@ export interface CanvasPageProps {
 }
 
 /**
- * The element defaults a newly-drawn shape starts with, read from the live
- * `--nx-*` tokens.
+ * The element defaults a newly-drawn shape starts with.
  *
- * Read rather than written, because these are SCENE values — colour strings the
- * editor stores inside elements — and a literal here would be a raw hex in
- * this app's own source, which the raw-colour gate forbids outright.
- * `getComputedStyle`
- * resolves whichever theme and accent are active at the moment a board is
- * opened, so this is also how the canvas inherits the user's accent.
+ * Fixed values from `canvasPalette`, not a read of the live theme: Excalidraw
+ * inverts the whole canvas itself under its dark theme, so every colour handed
+ * to it has to be Dan's in BOTH themes or it is inverted twice. That module
+ * carries the full argument; this is one of its five call sites.
  *
  * Only what a NEW shape needs is set: stroke, the background of a filled shape,
  * and the canvas colour behind everything. `"transparent"` is a CSS keyword
@@ -177,15 +183,11 @@ export interface CanvasPageProps {
  * a drawing whose rectangles arrived pre-filled would be deciding something for
  * the user.
  */
-function elementDefaults(): Record<string, string> {
-  const styles = getComputedStyle(document.documentElement);
-  const token = (name: string): string => styles.getPropertyValue(name).trim();
-  return {
-    currentItemStrokeColor: token("--nx-text"),
-    currentItemBackgroundColor: "transparent",
-    viewBackgroundColor: token("--nx-bg"),
-  };
-}
+const ELEMENT_DEFAULTS: Record<string, string> = {
+  currentItemStrokeColor: CANVAS_INK,
+  currentItemBackgroundColor: CANVAS_TRANSPARENT,
+  viewBackgroundColor: CANVAS_BACKGROUND,
+};
 
 /** What one render of this page stands on. `boards` is null until the first read lands. */
 interface CanvasState {
@@ -324,8 +326,11 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
    * predates and repairs what it can, which is exactly what must happen to a
    * scene that has been sitting in a database across an Excalidraw upgrade.
    *
-   * The element defaults are merged UNDER the stored `appState`, so a board that
-   * remembers its own background keeps it and a fresh one inherits the theme.
+   * `canvasAppState` then imposes the colour rule on what came back: the user's
+   * live pick is kept but corrected, the background is always the theme's, and
+   * every element's own colours are brought over from Noć's palette if that is
+   * what they were captured in. A board drawn before that rule existed would
+   * otherwise keep inverting forever.
    */
   const loadScene = useCallback(
     async (boardId: string): Promise<ExcalidrawInitialDataState> => {
@@ -341,8 +346,10 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
       };
       return restore(
         {
-          elements: stored.elements,
-          appState: { ...elementDefaults(), ...stored.appState },
+          // `RestoreElements` admits null — `restore` treats that as an empty
+          // scene, and correcting nothing is the right answer for one.
+          elements: stored.elements?.map(migrateElementColours) ?? null,
+          appState: canvasAppState({ ...ELEMENT_DEFAULTS, ...stored.appState }),
           files: stored.files,
         },
         null,
@@ -517,10 +524,6 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
     setPickerOpen(false);
     const editor = api.current;
     if (editor === null) return;
-    // Read live, never written as literals — `elementDefaults()`'s rule: these
-    // are scene VALUES, and a colour literal here would be a raw hex in the
-    // app's own source.
-    const styles = getComputedStyle(document.documentElement);
     const origin = canvasDropOrigin(
       viewportOf(editor.getAppState()),
       CANVAS_CARD_WIDTH,
@@ -531,8 +534,10 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
       id: crypto.randomUUID(),
       x: origin.x,
       y: origin.y,
-      strokeColor: styles.getPropertyValue("--nx-border").trim(),
-      backgroundColor: styles.getPropertyValue("--nx-surface").trim(),
+      // Dan's values in both themes — `canvasPalette`'s rule, same as
+      // `ELEMENT_DEFAULTS`: these go into the scene, and the scene is inverted.
+      strokeColor: CANVAS_CARD_STROKE,
+      backgroundColor: CANVAS_CARD_FILL,
       roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS },
       seed: Math.floor(Math.random() * 2 ** 31),
       updated: Date.now(),
