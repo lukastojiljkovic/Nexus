@@ -8340,6 +8340,17 @@ button.cal__grid-event--dragging {
 .ntf__appetite-panel {
   position: relative;
   width: min(420px, 92vw);
+  /* The height counterpart of the width above, and for the same reason: this
+     recipe is worn by dialogs that have grown well past a title and two
+     choices (the shortcuts sheet, the CSV column mapper, the practice sheet,
+     the document preview), and on a short window those ran off the bottom with
+     no way to reach the actions. `92vh` leaves the same breathing room the
+     overlay's own padding gives horizontally; the panel scrolls inside it.
+     `min-height: 0` because the panel is itself a flex column — without it a
+     tall child refuses to shrink and the max-height is decorative. */
+  max-height: 92vh;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-3);
