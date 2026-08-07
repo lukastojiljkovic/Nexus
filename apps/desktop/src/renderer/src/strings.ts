@@ -1906,6 +1906,18 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     renewLabel: "Novi datum isteka",
     renewConfirm: "Potvrdi",
     renewCancel: "Otkaži obnovu",
+    /**
+     * The renewal ledger (migration 004), shown under the open renew form. It
+     * had been written on every renewal and readable nowhere in the app — the
+     * `documents:renewals` channel existed end to end with no caller — so a
+     * document's own history lived only inside the export archive.
+     */
+    renewalsTitle: "Ranije obnove",
+    /** „obnovljeno 5. maj 2026 — do 5. maj 2026" — what the old expiry WAS. */
+    renewalsPrevious: "do",
+    /** A real answer: this document has never been renewed. Distinct from the two lines below it. */
+    renewalsEmpty: "Ovaj dokument još nije obnavljan.",
+    renewalsError: "Istorija obnova se ne može učitati.",
     editLabel: "Izmeni dokument",
     deleteLabel: "Obriši dokument",
     emptyTitle: "Nema dokumenata",

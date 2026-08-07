@@ -3,6 +3,7 @@ import type { ChangeEvent, FormEvent } from "react";
 import { Button, Chip, EmptyState, ListRow, LoadingState, TextField } from "@nexus/ui";
 import type {
   DocumentFieldChanges,
+  DocumentRenewal,
   DocumentStatus,
   DocumentType,
   NewDocumentFields,
@@ -118,6 +119,9 @@ export function DocumentsPanel({
   // Inline renew: one row at a time reveals a date input + confirm affordance.
   const [renewingId, setRenewingId] = useState<string | null>(null);
   const [renewDate, setRenewDate] = useState("");
+  /** The open row's renewal ledger; `null` while it is being read. */
+  const [renewals, setRenewals] = useState<DocumentRenewal[] | null>(null);
+  const [renewalsFailed, setRenewalsFailed] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -211,14 +215,40 @@ export function DocumentsPanel({
     }
   }
 
+  /**
+   * Reads the document's own renewal ledger (migration 004) when its renew row
+   * opens, and only then.
+   *
+   * The ledger has been WRITE-ONLY for its whole life: `renewDocument` appends
+   * a row on every renewal, `documents:renewals` was wired end to end — channel,
+   * guarded handler, preload bridge, typed API — and **nothing ever called it**,
+   * so the one place a passport's history could have been read was the export
+   * archive. Opening the renew row is where that history is worth something: it
+   * is the moment somebody is deciding a new expiry date, and the last few
+   * answer „when did I last do this".
+   */
+  async function loadRenewals(id: string): Promise<void> {
+    setRenewals(null);
+    setRenewalsFailed(false);
+    try {
+      setRenewals(await window.nexus.listDocumentRenewals(profileId, id));
+    } catch (error) {
+      setRenewalsFailed(true);
+      console.error("Nexus: failed to read the document's renewal history:", error);
+    }
+  }
+
   function startRenew(doc: TrackedDocument): void {
     setRenewingId(doc.id);
     setRenewDate(doc.expiryDate.slice(0, 10));
+    void loadRenewals(doc.id);
   }
 
   function cancelRenew(): void {
     setRenewingId(null);
     setRenewDate("");
+    setRenewals(null);
+    setRenewalsFailed(false);
   }
 
   async function confirmRenew(doc: TrackedDocument): Promise<void> {
@@ -425,6 +455,35 @@ export function DocumentsPanel({
                   <span className="documents__expiry">{formatExpiry(doc.expiryDate)}</span>
                   <span className="documents__days">{daysUntilLabel(doc.daysUntilExpiry)}</span>
                 </span>
+                {/* The ledger, read only while this row's renew form is open —
+                    which is the moment it is worth something, because that is
+                    when somebody is choosing the next expiry date. Loading and
+                    failure are told apart from „no renewals yet": the last of
+                    those is a real answer and the other two are not. */}
+                {renewingId === doc.id && (
+                  <span className="documents__renewals">
+                    <span className="documents__renewals-title">
+                      {strings.documents.renewalsTitle}
+                    </span>
+                    {renewalsFailed ? (
+                      <span className="documents__renewals-note" role="alert">
+                        {strings.documents.renewalsError}
+                      </span>
+                    ) : renewals === null ? (
+                      <span className="documents__renewals-note">{strings.app.loading}</span>
+                    ) : renewals.length === 0 ? (
+                      <span className="documents__renewals-note">
+                        {strings.documents.renewalsEmpty}
+                      </span>
+                    ) : (
+                      renewals.map((renewal) => (
+                        <span key={renewal.id} className="documents__renewal">
+                          {`${formatExpiry(renewal.renewedAt)} — ${strings.documents.renewalsPrevious} ${formatExpiry(renewal.previousExpiry)}`}
+                        </span>
+                      ))
+                    )}
+                  </span>
+                )}
               </span>
             </ListRow>
           ))}

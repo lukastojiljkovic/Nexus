@@ -2896,6 +2896,29 @@ button.cal__grid-event--dragging {
   flex-direction: column;
 }
 
+/* The renewal ledger under an open renew form — a quiet list, never a card:
+   it is context for the date being chosen above it, not a second subject. */
+.documents__renewals {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: var(--nx-space-2);
+  padding-left: var(--nx-space-3);
+  border-left: 1px solid var(--nx-border);
+}
+.documents__renewals-title {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+.documents__renewal,
+.documents__renewals-note {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+
 /* Row content: label + type on the heading line, expiry + days-until below. */
 .documents__item {
   display: flex;
