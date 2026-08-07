@@ -129,6 +129,20 @@ every use is still printed.
 
 Two themes ship: **Dan** (light) and **Noć** (dark).
 
+The **type scale** is `11 / 13 / 15 / 18 / 24 / 32` in whole pixels, with a
+leading scale (`tight / snug / normal / loose`) beside it and a tighter tracking
+value for large type. `caption` and `label` deliberately share 11px: a label is
+a caption in uppercase with 0.12em of tracking, separated by treatment rather
+than by size. Nothing in the app sets a font size, a line height or a letter
+spacing that is not one of those tokens.
+
+**Selection is typographic.** „Which one of these is on" — view switchers,
+filter chips, reminder ladders, the weekday picker, the canvas tools — is accent
+text plus weight and nothing else: no fill, no border, no glow. One class
+(`.nx-segmented__option`) owns it and keys off `aria-pressed`, so the state a
+screen reader is told and the state an eye is shown cannot drift apart. A filled
+button therefore goes on meaning „press this" everywhere in the product.
+
 ## Testing
 
 Vitest across the workspace. Data and store logic is written test-first. The

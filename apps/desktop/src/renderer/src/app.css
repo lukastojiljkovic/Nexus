@@ -1027,6 +1027,13 @@ body {
   flex: 1;
   min-width: 240px;
 }
+/* The marker on a closed disclosure: something behind the fold is set.
+   Accent, never a badge and never a count — it answers one bit. */
+.tasks__details-mark {
+  color: var(--nx-accent);
+  font-size: var(--nx-font-size-body);
+  line-height: 1;
+}
 .tasks__quick-add {
   display: flex;
   align-items: center;
@@ -1586,7 +1593,7 @@ button.tasks__cal-chip:active {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--nx-space-4);
+  gap: var(--nx-space-5);
 }
 
 /* View toggle (Agenda | Dokumenta) — typographic active state, mirrors tasks. */
@@ -7934,7 +7941,7 @@ button.cal__grid-event--dragging {
 .searchpage {
   display: flex;
   flex-direction: column;
-  gap: var(--nx-space-4);
+  gap: var(--nx-space-5);
 }
 .searchpage__input.nx-textfield__input {
   width: 100%;
@@ -8647,7 +8654,7 @@ button.cal__grid-event--dragging {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--nx-space-4);
+  gap: var(--nx-space-5);
 }
 .priv--center {
   display: grid;
@@ -9526,7 +9533,7 @@ button.cal__grid-event--dragging {
 .doc {
   display: flex;
   flex-direction: column;
-  gap: var(--nx-space-4);
+  gap: var(--nx-space-5);
 }
 .doc__view {
   display: flex;
@@ -9766,7 +9773,7 @@ button.cal__grid-event--dragging {
 .hab {
   display: flex;
   flex-direction: column;
-  gap: var(--nx-space-6);
+  gap: var(--nx-space-5);
 }
 .hab__section {
   display: flex;
@@ -10159,7 +10166,7 @@ button.cal__grid-event--dragging {
 .foc {
   display: flex;
   flex-direction: column;
-  gap: var(--nx-space-6);
+  gap: var(--nx-space-5);
 }
 .foc__section {
   display: flex;
@@ -10412,7 +10419,7 @@ button.cal__grid-event--dragging {
 .fit {
   display: flex;
   flex-direction: column;
-  gap: var(--nx-space-6);
+  gap: var(--nx-space-5);
 }
 .fit__section {
   display: flex;
@@ -10903,7 +10910,7 @@ button.cal__grid-event--dragging {
 .tool {
   display: flex;
   flex-direction: column;
-  gap: var(--nx-space-4);
+  gap: var(--nx-space-5);
 }
 .tool__search {
   max-width: 360px;
@@ -11135,6 +11142,12 @@ button.cal__grid-event--dragging {
 
 /* --- Tabla (CANV slice a) ------------------------------------------------- */
 
+/* The one page whose sections are closer than `--nx-space-5`, and the only
+   one entitled to be: every pixel between the header and the board is a
+   pixel taken from an infinite surface. Every other page root uses the
+   same gap — they had used FOUR different values for the same role, which
+   is what made the app feel like a set of pages rather than one product
+   (STATUS §5 C item 16). */
 .canv {
   display: flex;
   flex-direction: column;

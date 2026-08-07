@@ -7,6 +7,10 @@ import {
   Checkbox,
   Chip,
   EmptyState,
+  Icon,
+  LoadingState,
+  PageHeader,
+  SaveIndicator,
   CardsView,
   KanbanCard,
   KanbanColumn,
@@ -22,6 +26,7 @@ import type {
   KanbanViewConfig,
   ListViewConfig,
 } from "@nexus/core";
+import type { IconName } from "@nexus/ui";
 import type { ThemeName } from "@nexus/tokens";
 
 const focusData = [
@@ -293,6 +298,45 @@ function ThemePanel({ theme, label }: { theme: ThemeName; label: string }) {
         </Card>
       </Section>
 
+      <Section title="PageHeader">
+        <PageHeader
+          title="Beleške"
+          subtitle="Jedan naslov za ceo proizvod — stranica daje samo reči."
+          actions={<Button variant="primary">Nova beleška</Button>}
+        />
+      </Section>
+
+      <Section title="Ikone">
+        {/* The whole set, at the size the rail draws it. Not a library: 27
+            shapes on a 24 grid, stroke only, one weight. */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center" }}>
+          {ICON_NAMES.map((name) => (
+            <span key={name} title={name} style={{ display: "grid", placeItems: "center" }}>
+              <Icon name={name} size={20} />
+            </span>
+          ))}
+        </div>
+      </Section>
+
+      <Section title="SaveIndicator">
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <SaveIndicator status="saving" savingLabel="Čuvanje…" savedLabel="" />
+          <SaveIndicator status="saved" savingLabel="" savedLabel="Sačuvano u 14:32" />
+          <SaveIndicator
+            status="error"
+            savingLabel=""
+            savedLabel=""
+            errorLabel="Crtež nije sačuvan. Poslednje izmene su samo na ekranu."
+          />
+        </div>
+      </Section>
+
+      <Section title="LoadingState">
+        <Card>
+          <LoadingState label="Učitavanje…" rows={4} />
+        </Card>
+      </Section>
+
       <Section title="EmptyState">
         <Card>
           <EmptyState
@@ -305,6 +349,14 @@ function ThemePanel({ theme, label }: { theme: ThemeName; label: string }) {
     </div>
   );
 }
+
+/** Every icon the set ships, in declaration order — the gallery's whole job is to show all of them, not a chosen few. */
+const ICON_NAMES = [
+  "dashboard", "tasks", "calendar", "notes", "study", "focus", "files", "finance",
+  "habits", "fitness", "canvas", "tools", "priv", "settings", "search", "plus",
+  "check", "pencil", "trash", "close", "chevronDown", "chevronRight", "bell",
+  "filter", "export", "import", "undo",
+] as const satisfies readonly IconName[];
 
 export function App() {
   return (

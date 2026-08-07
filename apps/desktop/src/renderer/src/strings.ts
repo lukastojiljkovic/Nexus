@@ -586,6 +586,17 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
   tasks: {
     quickAddPlaceholder: "Novi zadatak — upiši i pritisni Enter",
     quickAddSubmit: "Dodaj",
+    /**
+     * The disclosure over the capture form’s detail fields (rok, prioritet,
+     * lista, sekcija, oznake, podsetnici). They used to be permanently open
+     * above the list, which is roughly half the viewport spent on a form
+     * that most captures never touch — a title and Enter is the whole act.
+     * Editing an existing task opens them regardless: that IS the details.
+     */
+    detailsShow: "Detalji",
+    detailsHide: "Sakrij detalje",
+    /** What the marker on a CLOSED disclosure means, for a reader who cannot see a bullet. */
+    detailsSet: "Neka polja su popunjena",
     quickAddLabel: "Novi zadatak",
     viewLabel: "Prikaz",
     viewList: "Lista",
@@ -4530,6 +4541,14 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         // vezana za profil — tuđi se ne preuzimaju.
         "fit-targets-not-imported":
           "Ciljevi ishrane iz arhive se ne uvoze — tvoje kalorije i makronutrijenti ostaju tvoji.",
+        // Migration 060: pol, datum rođenja, visina i nivo aktivnosti su
+        // odluka o sopstvenom telu, vezana za profil — tuđi se ne preuzimaju.
+        "fit-body-profile-not-imported":
+          "Podaci o telu iz arhive se ne uvoze — tvoji podaci ostaju tvoji.",
+        // Migration 060: merenje je vezano za (profil, dan) — tuđe merenje bi
+        // se ili sudarilo sa tvojim za taj dan, ili ga tiho udvostručilo.
+        "fit-measurements-not-imported":
+          "Merenja tela iz arhive se ne uvoze — tvoja istorija merenja ostaje tvoja.",
         "calendar-settings-not-imported":
           "Datumi semestra iz arhive se ne uvoze — tvoj kalendar ostaje na tvom rasporedu.",
         "profile-picture-not-imported":

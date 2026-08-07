@@ -1125,6 +1125,21 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   // second create/update while the first is still in flight.
   const [saving, setSaving] = useState(false);
   /**
+   * Whether the capture form's detail fields are open. Default closed: a
+   * capture is a title and Enter, and everything below that row is for the
+   * minority of rows that need it. Editing an existing task ignores this and
+   * opens them anyway — see the disclosure's own comment.
+   */
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  /** Whether anything behind the fold is set — what the trigger's marker reports, so a closed disclosure never hides a decision. */
+  const hasDetailValues =
+    dueDate !== "" ||
+    startDate !== "" ||
+    priority !== "none" ||
+    recurrence !== null ||
+    reminderOffsets.length > 0 ||
+    formSectionId !== null;
+  /**
    * Every write OUTSIDE the live form and outside the rail/tag/dependency
    * sections above (each of which already reports its own failure): complete,
    * toggle, move, re-prioritise, delete, undo, add a subtask — the HABIT page's
@@ -3969,6 +3984,38 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                 <Button type="submit" variant="primary" disabled={saving}>
                   {editingId != null ? strings.tasks.save : strings.tasks.quickAddSubmit}
                 </Button>
+                {/* The detail fields are a DISCLOSURE, not the form. A capture
+                    is a title and Enter; rok, prioritet, lista, sekcija, oznake
+                    and the reminder ladder were permanently open above the list
+                    and cost roughly half the viewport to a form most captures
+                    never touch (STATUS §5 C item 14). Editing an existing task
+                    opens them regardless — that IS the details. */}
+                {editingId == null && (
+                  <Button
+                    type="button"
+                    className="nx-segmented__option tasks__view"
+                    aria-expanded={detailsOpen}
+                    onClick={() => setDetailsOpen((open) => !open)}
+                  >
+                    {detailsOpen ? strings.tasks.detailsHide : strings.tasks.detailsShow}
+                    {/* A closed disclosure must never HIDE a decision. Closing
+                        the fold keeps whatever was set — those are the user's
+                        choices, not a draft — so the trigger reports that
+                        something is set, and the submit cannot quietly apply a
+                        rok nobody can see. The bullet carries an aria-label,
+                        because a bullet is not something a screen reader can
+                        interpret. */}
+                    {!detailsOpen && hasDetailValues && (
+                      <span
+                        className="tasks__details-mark"
+                        role="img"
+                        aria-label={strings.tasks.detailsSet}
+                      >
+                        •
+                      </span>
+                    )}
+                  </Button>
+                )}
                 {editingId != null && (
                   <Button type="button" className="tasks__cancel" onClick={() => resetForm()}>
                     {strings.tasks.cancel}
@@ -4006,7 +4053,8 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                 </div>
               )}
 
-              <div className="tasks__fields">
+              {(detailsOpen || editingId !== null) && (
+                <div className="tasks__fields">
                 <TextField
                   type="date"
                   value={dueDate}
@@ -4127,7 +4175,16 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                     {formError}
                   </p>
                 )}
-              </div>
+                </div>
+              )}
+              {/* An error must never be hidden by a closed disclosure: the
+                  refusal belongs to the submit that produced it, and a message
+                  behind a fold is a message nobody reads. */}
+              {formError != null && !detailsOpen && editingId === null && (
+                <p className="tasks__form-error" role="alert">
+                  {formError}
+                </p>
+              )}
             </form>
           )}
 
