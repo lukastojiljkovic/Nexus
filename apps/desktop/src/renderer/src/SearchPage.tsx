@@ -244,11 +244,7 @@ export function SearchPage({
               the query carries, which is the same thing said positively. */}
           <Button
             size="sm"
-            className={
-              activeKinds.size === 0
-                ? "searchpage__chip searchpage__chip--active"
-                : "searchpage__chip"
-            }
+            className="nx-segmented__option searchpage__chip"
             aria-pressed={activeKinds.size === 0}
             onClick={() =>
               setQuery((current) =>
@@ -268,11 +264,7 @@ export function SearchPage({
               <Button
                 key={kind}
                 size="sm"
-                className={
-                  activeKinds.has(kind)
-                    ? "searchpage__chip searchpage__chip--active"
-                    : "searchpage__chip"
-                }
+                className="nx-segmented__option searchpage__chip"
                 aria-pressed={activeKinds.has(kind)}
                 onClick={() => setQuery((current) => toggleKindInQuery(current, kind))}
               >
@@ -292,11 +284,7 @@ export function SearchPage({
               <Button
                 key={facet.token}
                 size="sm"
-                className={
-                  activeTags.has(facet.token)
-                    ? "searchpage__chip searchpage__chip--active"
-                    : "searchpage__chip"
-                }
+                className="nx-segmented__option searchpage__chip"
                 aria-pressed={activeTags.has(facet.token)}
                 onClick={() => setQuery((current) => toggleTagInQuery(current, facet.token))}
               >

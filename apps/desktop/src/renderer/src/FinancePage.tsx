@@ -1687,7 +1687,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
             <Button
               key={option}
               size="sm"
-              className={page === option ? "fin__page fin__page--active" : "fin__page"}
+className="nx-segmented__option fin__page"
               aria-pressed={page === option}
               onClick={() => setPage(option)}
             >
@@ -2128,7 +2128,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
                   <Button
                     key={option}
                     size="sm"
-                    className={view === option ? "fin__view fin__view--active" : "fin__view"}
+className="nx-segmented__option fin__view"
                     aria-pressed={view === option}
                     onClick={() => setView(option)}
                   >

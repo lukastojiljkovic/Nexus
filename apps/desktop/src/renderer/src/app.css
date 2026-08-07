@@ -1211,19 +1211,6 @@ body {
   gap: var(--nx-space-1);
   flex: none;
 }
-.tasks__view.nx-button {
-  background: transparent;
-  border-color: transparent;
-  color: var(--nx-text-muted);
-}
-.tasks__view.nx-button:hover {
-  background: transparent;
-  color: var(--nx-text);
-}
-.tasks__view--active.nx-button {
-  color: var(--nx-accent-strong);
-  font-weight: var(--nx-font-weight-semibold);
-}
 
 /* The view's own controls (ADR-050): sort, grouping and the two filters, on one
    quiet row above the rows they act on. Plain selects rather than a bar with a
@@ -1609,19 +1596,6 @@ button.tasks__cal-chip:active {
   gap: var(--nx-space-1);
   flex: none;
 }
-.cal__view.nx-button {
-  background: transparent;
-  border-color: transparent;
-  color: var(--nx-text-muted);
-}
-.cal__view.nx-button:hover {
-  background: transparent;
-  color: var(--nx-text);
-}
-.cal__view--active.nx-button {
-  color: var(--nx-accent-strong);
-  font-weight: var(--nx-font-weight-semibold);
-}
 
 /* Event form (create + edit) — one wrapping row; the title takes the slack. */
 .cal__form {
@@ -1668,20 +1642,7 @@ button.tasks__cal-chip:active {
 }
 .cal__reminder.nx-button,
 .tasks__reminder.nx-button {
-  background: transparent;
-  border-color: transparent;
-  color: var(--nx-text-muted);
   padding: 2px 8px;
-}
-.cal__reminder.nx-button:hover,
-.tasks__reminder.nx-button:hover {
-  background: transparent;
-  color: var(--nx-text);
-}
-.cal__reminder--active.nx-button,
-.tasks__reminder--active.nx-button {
-  color: var(--nx-accent-strong);
-  font-weight: var(--nx-font-weight-semibold);
 }
 /* Stands in for the chips while the form has no rok to count back from — the
    same muted "why this field is off" line as .recur__caption right beside it.
@@ -2083,19 +2044,6 @@ button.tasks__cal-chip:active {
   gap: var(--nx-space-1);
   flex-wrap: wrap;
   flex: none;
-}
-.cal__source.nx-button {
-  background: transparent;
-  border-color: transparent;
-  color: var(--nx-text-muted);
-}
-.cal__source.nx-button:hover {
-  background: transparent;
-  color: var(--nx-text);
-}
-.cal__source--active.nx-button {
-  color: var(--nx-accent-strong);
-  font-weight: var(--nx-font-weight-semibold);
 }
 
 /* Month grid (CAL Mesec view, ADR-020) --------------------------------- */
@@ -5873,21 +5821,6 @@ button.cal__grid-event--dragging {
 .set__import-duplicate-choice .nx-button {
   align-self: center;
 }
-/* The answer itself is typographic, exactly as `.search__chip` is: no fill, no
-   border, no glow — the active one carried by accent text and weight alone. */
-.set__import-choice.nx-button {
-  background: transparent;
-  border-color: transparent;
-  color: var(--nx-text-muted);
-}
-.set__import-choice.nx-button:hover:not(:disabled) {
-  background: transparent;
-  color: var(--nx-text);
-}
-.set__import-choice--active.nx-button {
-  color: var(--nx-accent-strong);
-  font-weight: var(--nx-font-weight-semibold);
-}
 /* Uvoz iz Anki (ADR-052): the subject choice — a caption, the select, and the
    „Nova oblast" name field when that option is picked. Its own column at the
    same width the security forms use, so the text input does not stretch to the
@@ -6484,19 +6417,6 @@ button.cal__grid-event--dragging {
   align-items: center;
   gap: var(--nx-space-1);
   flex: none;
-}
-.note__view.nx-button {
-  background: transparent;
-  border-color: transparent;
-  color: var(--nx-text-muted);
-}
-.note__view.nx-button:hover {
-  background: transparent;
-  color: var(--nx-text);
-}
-.note__view--active.nx-button {
-  color: var(--nx-accent-strong);
-  font-weight: var(--nx-font-weight-semibold);
 }
 
 /* Kartice (NOTE-002): the same row anatomy the list draws, one per card — so
@@ -7856,19 +7776,6 @@ button.cal__grid-event--dragging {
   padding: var(--nx-space-2) var(--nx-space-4);
   border-bottom: 1px solid var(--nx-border);
 }
-.search__chip.nx-button {
-  background: transparent;
-  border-color: transparent;
-  color: var(--nx-text-muted);
-}
-.search__chip.nx-button:hover {
-  background: transparent;
-  color: var(--nx-text);
-}
-.search__chip--active.nx-button {
-  color: var(--nx-accent-strong);
-  font-weight: var(--nx-font-weight-semibold);
-}
 .search__list {
   flex: 1;
   min-height: 0;
@@ -8045,18 +7952,7 @@ button.cal__grid-event--dragging {
   gap: var(--nx-space-1);
 }
 .searchpage__chip.nx-button {
-  background: transparent;
-  border-color: transparent;
-  color: var(--nx-text-muted);
   gap: var(--nx-space-1);
-}
-.searchpage__chip.nx-button:hover {
-  background: transparent;
-  color: var(--nx-text);
-}
-.searchpage__chip--active.nx-button {
-  color: var(--nx-accent-strong);
-  font-weight: var(--nx-font-weight-semibold);
 }
 .searchpage__chip-count {
   margin-left: var(--nx-space-1);
@@ -8309,18 +8205,7 @@ button.cal__grid-event--dragging {
   flex-wrap: wrap;
 }
 .recur__day.nx-button {
-  background: transparent;
-  border-color: transparent;
-  color: var(--nx-text-muted);
   padding: 2px 8px;
-}
-.recur__day.nx-button:hover {
-  background: transparent;
-  color: var(--nx-text);
-}
-.recur__day--active.nx-button {
-  color: var(--nx-accent-strong);
-  font-weight: var(--nx-font-weight-semibold);
 }
 /* The "this repeats" marker: a quiet glyph, never an icon and never a colour
    of its own beyond the muted text token. */
@@ -9287,19 +9172,6 @@ button.cal__grid-event--dragging {
   gap: var(--nx-space-1);
   flex: none;
 }
-.fin__view.nx-button {
-  background: transparent;
-  border-color: transparent;
-  color: var(--nx-text-muted);
-}
-.fin__view.nx-button:hover {
-  background: transparent;
-  color: var(--nx-text);
-}
-.fin__view--active.nx-button {
-  color: var(--nx-accent-strong);
-  font-weight: var(--nx-font-weight-semibold);
-}
 
 /* „Knjiga" | „Izveštaj" — the page's two halves. Same typographic active state
    as the ledger's view toggle: gold text and weight, no bar and no glow. */
@@ -9308,19 +9180,6 @@ button.cal__grid-event--dragging {
   align-items: center;
   gap: var(--nx-space-1);
   align-self: flex-start;
-}
-.fin__page.nx-button {
-  background: transparent;
-  border-color: transparent;
-  color: var(--nx-text-muted);
-}
-.fin__page.nx-button:hover {
-  background: transparent;
-  color: var(--nx-text);
-}
-.fin__page--active.nx-button {
-  color: var(--nx-accent-strong);
-  font-weight: var(--nx-font-weight-semibold);
 }
 
 /* Pretplate (FIN slice d) — the charges that repeat. Nothing new visually: the
@@ -9688,21 +9547,6 @@ button.cal__grid-event--dragging {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--nx-space-1);
-}
-/* Typographic selection, never a wash: an inactive chip is quiet text, the
-   active one is gold and heavier. */
-.doc__chip.nx-button {
-  background: transparent;
-  border-color: transparent;
-  color: var(--nx-text-muted);
-}
-.doc__chip.nx-button:hover {
-  background: transparent;
-  color: var(--nx-text);
-}
-.doc__chip--active.nx-button {
-  color: var(--nx-accent-strong);
-  font-weight: var(--nx-font-weight-semibold);
 }
 .doc__meta {
   display: flex;
@@ -11358,22 +11202,8 @@ button.cal__grid-event--dragging {
 .canv__tool-group--end {
   margin-left: auto;
 }
-/* Active is TYPOGRAPHIC — accent text and weight, nothing else. The same rule
-   the board tabs above and the sidebar's active entry follow: never a pill,
-   never an inset bar, never a glow. `.recur__day`'s recipe. */
 .canv__tool.nx-button {
-  background: transparent;
-  border-color: transparent;
-  color: var(--nx-text-muted);
   padding: 2px 8px;
-}
-.canv__tool.nx-button:hover:not(:disabled) {
-  background: transparent;
-  color: var(--nx-text);
-}
-.canv__tool--active.nx-button {
-  color: var(--nx-accent-strong);
-  font-weight: var(--nx-font-weight-semibold);
 }
 /* The zoom readout is also its own reset button, so the figure must not shift
    the two buttons beside it as it changes width. */

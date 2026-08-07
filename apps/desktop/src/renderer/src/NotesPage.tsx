@@ -983,7 +983,7 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
                 <Button
                   key={value}
                   size="sm"
-                  className={view === value ? "note__view note__view--active" : "note__view"}
+className="nx-segmented__option note__view"
                   aria-pressed={view === value}
                   onClick={() => void selectView(value)}
                 >

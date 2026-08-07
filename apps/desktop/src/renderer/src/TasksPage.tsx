@@ -4096,9 +4096,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                           <Button
                             key={days}
                             size="sm"
-                            className={
-                              selected ? "tasks__reminder tasks__reminder--active" : "tasks__reminder"
-                            }
+                            className="nx-segmented__option tasks__reminder"
                             aria-pressed={selected}
                             onClick={() => toggleReminder(days)}
                           >
@@ -4193,9 +4191,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                   <Button
                     key={value}
                     size="sm"
-                    className={
-                      view === value ? "tasks__view tasks__view--active" : "tasks__view"
-                    }
+                    className="nx-segmented__option tasks__view"
                     aria-pressed={view === value}
                     onClick={() => void selectView(value)}
                   >
@@ -4212,7 +4208,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
           {view === "list" && (
             <Button
               size="sm"
-              className={selecting ? "tasks__view tasks__view--active" : "tasks__view"}
+className="nx-segmented__option tasks__view"
               aria-pressed={selecting}
               onClick={toggleSelectionMode}
             >

@@ -364,7 +364,13 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
                 <Button
                   key={option}
                   size="sm"
-                  variant={view === option ? "primary" : "ghost"}
+                  // The segmented idiom, not a filled primary. This toggle was
+                  // the app's ONE outlier: it said „selected" with the same
+                  // treatment the product uses for „press this", and it did so
+                  // in a header that also holds real filter chips saying the
+                  // same thing typographically. Two idioms, one page
+                  // (STATUS §5 C item 15).
+                  className="nx-segmented__option doc__chip"
                   aria-pressed={view === option}
                   onClick={() => changeView(option)}
                 >
@@ -390,7 +396,7 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
             <Button
               key={option ?? "all"}
               size="sm"
-              className={ownerKind === option ? "doc__chip doc__chip--active" : "doc__chip"}
+className="nx-segmented__option doc__chip"
               aria-pressed={ownerKind === option}
               onClick={() => setOwnerKind(option)}
             >
@@ -401,7 +407,7 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
         <div className="doc__chips" role="group" aria-label={s.familyFilterLabel}>
           <Button
             size="sm"
-            className={family === null ? "doc__chip doc__chip--active" : "doc__chip"}
+className="nx-segmented__option doc__chip"
             aria-pressed={family === null}
             onClick={() => setFamily(null)}
           >
@@ -411,7 +417,7 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
             <Button
               key={option}
               size="sm"
-              className={family === option ? "doc__chip doc__chip--active" : "doc__chip"}
+className="nx-segmented__option doc__chip"
               aria-pressed={family === option}
               onClick={() => setFamily(option)}
             >

@@ -1525,12 +1525,20 @@ export function CalendarPage({
           </div>,
         )}
 
-      <div className="cal__views" role="group" aria-label={strings.calendar.viewLabel}>
+      {/* Both switcher rows carry a VISIBLE label now. They had identical
+          treatments and sat directly on top of each other, so „which view"
+          and „which calendars" looked like one control that had wrapped —
+          the only thing telling them apart was an `aria-label` nobody sees
+          (STATUS §5 C item 15). */}
+      <div className="cal__views" role="group" aria-labelledby="cal-views-label">
+        <span className="cal__reminders-label" id="cal-views-label">
+          {strings.calendar.viewLabel}
+        </span>
         {CALENDAR_VIEWS.map((option) => (
           <Button
             key={option}
             size="sm"
-            className={view === option ? "cal__view cal__view--active" : "cal__view"}
+className="nx-segmented__option cal__view"
             aria-pressed={view === option}
             onClick={() => selectView(option)}
           >
@@ -1540,7 +1548,10 @@ export function CalendarPage({
       </div>
 
       {!isPanelView(view) && (
-        <div className="cal__sources" role="group" aria-label={strings.calendar.sourcesLabel}>
+        <div className="cal__sources" role="group" aria-labelledby="cal-sources-label">
+          <span className="cal__reminders-label" id="cal-sources-label">
+            {strings.calendar.sourcesLabel}
+          </span>
           {CALENDAR_SOURCES
             // The overlay chip exists only when the account has another
             // profile to overlay (CAL-005) — with one profile there is
@@ -1550,7 +1561,7 @@ export function CalendarPage({
               <Button
                 key={source}
                 size="sm"
-                className={sources.has(source) ? "cal__source cal__source--active" : "cal__source"}
+className="nx-segmented__option cal__source"
                 aria-pressed={sources.has(source)}
                 onClick={() => toggleSource(source)}
               >
@@ -1668,9 +1679,7 @@ export function CalendarPage({
                     <Button
                       key={minutes}
                       size="sm"
-                      className={
-                        selected ? "cal__reminder cal__reminder--active" : "cal__reminder"
-                      }
+                      className="nx-segmented__option cal__reminder"
                       aria-pressed={selected}
                       onClick={() => toggleReminder(minutes)}
                     >

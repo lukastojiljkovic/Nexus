@@ -366,7 +366,7 @@ export function RecurrencePicker({ value, onChange, anchor }: RecurrencePickerPr
                     <Button
                       key={day}
                       size="sm"
-                      className={selected ? "recur__day recur__day--active" : "recur__day"}
+className="nx-segmented__option recur__day"
                       aria-pressed={selected}
                       onClick={() => toggleWeeklyDay(freq, day)}
                     >

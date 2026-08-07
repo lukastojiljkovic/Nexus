@@ -1600,11 +1600,7 @@ function ImportDuplicateRow({ group, choice, disabled, onChoose }: ImportDuplica
           <Button
             key={option}
             size="sm"
-            className={
-              option === choice
-                ? "set__import-choice set__import-choice--active"
-                : "set__import-choice"
-            }
+            className="nx-segmented__option set__import-choice"
             aria-pressed={option === choice}
             disabled={disabled}
             onClick={() => onChoose(option)}
@@ -2302,11 +2298,7 @@ function IcsImportSection({ profileId, hits }: IcsImportSectionProps) {
                   <Button
                     key={option}
                     size="sm"
-                    className={
-                      (option === "import") === importDuplicates
-                        ? "set__import-choice set__import-choice--active"
-                        : "set__import-choice"
-                    }
+                    className="nx-segmented__option set__import-choice"
                     aria-pressed={(option === "import") === importDuplicates}
                     disabled={state.phase === "applying" || replanning}
                     onClick={() =>
@@ -3909,11 +3901,7 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
                   <Button
                     key={option}
                     size="sm"
-                    className={
-                      (option === "import") === importDuplicates
-                        ? "set__import-choice set__import-choice--active"
-                        : "set__import-choice"
-                    }
+                    className="nx-segmented__option set__import-choice"
                     aria-pressed={(option === "import") === importDuplicates}
                     disabled={frozen}
                     onClick={() => void chooseDuplicates(state.preview, option === "import")}

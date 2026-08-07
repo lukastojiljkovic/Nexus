@@ -769,7 +769,7 @@ export function SearchPalette({
             <Button
               key={kind}
               size="sm"
-              className={activeKinds.has(kind) ? "search__chip search__chip--active" : "search__chip"}
+className="nx-segmented__option search__chip"
               aria-pressed={activeKinds.has(kind)}
               onClick={() => toggleChip(kind)}
             >

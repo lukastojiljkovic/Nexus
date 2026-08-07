@@ -234,7 +234,7 @@ export function CanvasToolbar({ editor, state, onMermaid, onAddCard }: CanvasToo
             <Button
               key={tool.id}
               size="sm"
-              className={active ? "canv__tool canv__tool--active" : "canv__tool"}
+className="nx-segmented__option canv__tool"
               aria-pressed={active}
               title={`${s.tool[tool.id]} · ${s.shortcut} ${tool.shortcut}`}
               onMouseDown={keepEditorFocus}
@@ -257,7 +257,7 @@ export function CanvasToolbar({ editor, state, onMermaid, onAddCard }: CanvasToo
             <Button
               key={width.id}
               size="sm"
-              className={active ? "canv__tool canv__tool--active" : "canv__tool"}
+className="nx-segmented__option canv__tool"
               aria-pressed={active}
               onMouseDown={keepEditorFocus}
               onClick={() => restyle({ channel: "strokeWidth", value: width.value })}

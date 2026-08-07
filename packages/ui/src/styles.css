@@ -48,6 +48,38 @@
   -webkit-font-smoothing: antialiased;
 }
 
+/* --- Segmented option -------------------------------------------------- */
+/* „Which one of these is on" — the view switchers, the filter chips, the
+   reminder ladders, the weekday picker, the canvas tools. Thirteen surfaces had
+   written this out separately, in thirteen byte-identical copies of the same
+   three rules, and Datoteke's view toggle had drifted off it entirely into a
+   FILLED primary button — so one page said „selected" two different ways, one
+   of which is how the app says „this is the main action".
+
+   Two rules make this the app's answer rather than a fourteenth copy:
+
+   The treatment keys off `aria-pressed`, not off a modifier class. Every one of
+   the thirteen already set it, so nothing was lost — and now the thing a screen
+   reader is told and the thing an eye is shown are the SAME fact, which no
+   amount of care can keep true across two separate attributes.
+
+   Selection is typographic: accent text and weight, no fill, no border, no
+   glow. That is the same rule the sidebar's active entry follows, and it is why
+   a filled button can go on meaning „press this" everywhere in the product. */
+.nx-segmented__option.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.nx-segmented__option.nx-button:hover:not(:disabled) {
+  background: transparent;
+  color: var(--nx-text);
+}
+.nx-segmented__option.nx-button[aria-pressed="true"] {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+
 /* --- LoadingState ----------------------------------------------------- */
 /* One skeleton for the whole app. It had been two byte-identical copies —
    `.doc__skeleton-line` and `.dash__skeleton-line` — and fourteen other pages

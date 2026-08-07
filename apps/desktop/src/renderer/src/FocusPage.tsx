@@ -330,9 +330,15 @@ export function FocusPage({ profileId, enabledModules }: FocusPageProps) {
               {s.running.pause}
             </Button>
           )}
+          {/* ONE primary at a time. While the phase runs, finishing it is the
+              act the card is for, so „Završi" is filled and „Pauziraj" is not.
+              While it is PAUSED, the act you are most likely reaching for is
+              „Nastavi" — and the two used to be filled side by side, which is
+              not a hierarchy, it is two buttons shouting the same volume
+              (STATUS §5 C item 15). */}
           <Button
             size="sm"
-            variant="primary"
+            variant={progress.isPaused ? "ghost" : "primary"}
             onClick={() => void run(async () => void (await window.nexus.stopFocus(profileId)))}
           >
             {s.running.stop}
