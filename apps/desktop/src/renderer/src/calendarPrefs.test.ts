@@ -12,7 +12,7 @@ import {
   readStoredEventDuration,
   type ClockPreference,
 } from "./calendarPrefs.js";
-import { strings } from "./strings.js";
+import { lookup, strings } from "./strings.js";
 import { memoryStorage } from "./testStorage.js";
 
 /**
@@ -50,7 +50,7 @@ describe("EVENT_DURATIONS", () => {
   it("has a Serbian label for every span the Settings select can offer", () => {
     for (const minutes of EVENT_DURATIONS) {
       expect(
-        strings.settings.appearance.eventDurationOptions[String(minutes)]?.length,
+        lookup(strings.settings.appearance.eventDurationOptions, String(minutes))?.length,
         String(minutes),
       ).toBeGreaterThan(0);
     }

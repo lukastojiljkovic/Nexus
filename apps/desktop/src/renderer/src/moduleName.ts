@@ -1,4 +1,4 @@
-import { strings } from "./strings.js";
+import { lookup, strings } from "./strings.js";
 
 /**
  * A module's display name — the one the sidebar renders, and therefore the one
@@ -15,5 +15,5 @@ import { strings } from "./strings.js";
  * of hiding it behind an em dash.
  */
 export function moduleName(id: string): string {
-  return strings.modules[id] ?? id;
+  return lookup(strings.modules, id) ?? id;
 }

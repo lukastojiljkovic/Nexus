@@ -2,7 +2,7 @@ import { foldSearchText, type ModuleRegistry } from "@nexus/core";
 
 import { lookupString } from "./dashboardLayout.js";
 import { moduleSettingsDeclarations, settingsEntryId } from "./moduleSettings.js";
-import { strings } from "./strings.js";
+import { lookup, strings } from "./strings.js";
 
 /**
  * SET-014: the settings page's own filter index. A hand-composed page of
@@ -58,8 +58,6 @@ interface ShellSettingsSearchEntry extends SettingsSearchEntry {
   readonly section: ShellSettingsSectionId;
 }
 
-const s = strings.settings;
-
 /**
  * SET-014 hit styling: a matched control label goes gold + semibold, exactly
  * like every other active state in the app. Never a background wash or a glow.
@@ -90,321 +88,328 @@ export function sectionClass(visible: boolean): string {
  * A module's controls are deliberately absent: they arrive from the registry
  * (`moduleSettingsEntries`), which is what stops this list and the page from
  * drifting apart the way two hand-written lists do.
+ *
+ * A function, not a module-scope const, so a language switch relabels every
+ * entry the next time the settings index is built instead of freezing them
+ * at import.
  */
-const ENTRIES: readonly ShellSettingsSearchEntry[] = [
-  {
-    id: "profile-name",
-    section: "profile",
-    label: s.profile.nameLabel,
-    keywords: ["profil", "naziv", "preimenuj"],
-  },
-  // SET-001: „slika“ and „profil“ sit in the label already, so the keywords
-  // carry what someone would type instead — the thing itself („avatar“), and
-  // the two actions.
-  {
-    id: "profile-picture",
-    section: "profile",
-    label: s.profile.pictureLabel,
-    keywords: ["avatar", "fotografija", "nalog", "izaberi", "ukloni"],
-  },
-  // SET-003 (ADR-058): the „Profili“ card. „profil“ sits in the section title
-  // already; the keywords carry the business half's own words, „biznis“
-  // included — the word someone types even though the app never prints it.
-  {
-    id: "profiles-business",
-    section: "profiles",
-    label: strings.profiles.createBusiness,
-    keywords: ["profil", "poslovni", "biznis", "posao"],
-  },
-  {
-    id: "security-passcode",
-    section: "security",
-    label: s.security.changeTitle,
-    keywords: ["lozinka", "sifra", "pin"],
-  },
-  {
-    id: "security-recovery",
-    section: "security",
-    label: s.security.recoveryTitle,
-    keywords: ["oporavak", "kljuc", "rezervni"],
-  },
-  {
-    id: "security-auto-lock",
-    section: "security",
-    label: s.security.autoLockTitle,
-    keywords: ["zakljucavanje", "neaktivnost", "privatnost"],
-  },
-  {
-    id: "appearance-theme",
-    section: "appearance",
-    // The three option labels are keywords in their own right: "Noć" is what a
-    // user looking for the dark theme actually types.
-    label: s.appearance.themeLabel,
-    keywords: [s.appearance.system, strings.app.themeDan, strings.app.themeNoc, "tamno", "svetlo"],
-  },
-  {
-    id: "appearance-accent",
-    section: "appearance",
-    label: s.appearance.accentLabel,
-    keywords: ["boja", "paleta"],
-  },
-  {
-    id: "appearance-week-start",
-    section: "appearance",
-    label: s.appearance.weekStartLabel,
-    keywords: [
-      s.appearance.weekStartOptions.monday,
-      s.appearance.weekStartOptions.sunday,
-      "kalendar",
-      "sedmica",
-    ],
-  },
-  // CAL §5's two preferences. They live in the „Izgled“ card beside the week
-  // start, so they are filed under that section — but the words somebody types
-  // hunting for them are the calendar's, which is what the keywords carry.
-  // They stay hand-written here for the same reason they stay in that card:
-  // they are drawn by the shell, and CAL's own declaration covers the card CAL
-  // actually owns (see `shared/modules.ts`).
-  {
-    id: "calendar-event-duration",
-    section: "appearance",
-    label: s.appearance.eventDurationLabel,
-    keywords: ["kalendar", "dogadjaj", "trajanje", "duzina", "sat", "minuta", "kraj"],
-  },
-  {
-    id: "calendar-clock",
-    section: "appearance",
-    // The two option labels answer for themselves: somebody looking for this
-    // types „12“ or „24“ long before they type „prikaz vremena“.
-    label: s.appearance.clockLabel,
-    keywords: [
-      s.appearance.clockOptions["24h"],
-      s.appearance.clockOptions["12h"],
-      "kalendar",
-      "vreme",
-      "sat",
-      "casovni",
-      "am",
-      "pm",
-    ],
-  },
-  // One entry per remappable action (ADR-040) — a user hunting for "novi
-  // unos" or "zakljucaj" should land on the exact row that rebinds it — plus
-  // one for the reference dialog itself.
-  ...(
-    [
-      ["palette", ["paleta", "pretraga", "ctrl", "k"]],
-      ["quickCreate", ["novi", "unos", "kreiranje", "ctrl", "n"]],
-      ["globalCapture", ["globalna", "brzi", "unos", "zadatak", "pozadina", "sistem", "hotkey"]],
-      ["lock", ["zakljucaj", "zakljucavanje", "ctrl", "l"]],
-      ["privLock", ["privatno", "privatne", "beleske", "zakljucaj", "panika", "ctrl", "shift", "l"]],
-      ["settings", ["podesavanja", "ctrl"]],
-      ["shortcutsHelp", ["pomoc", "referenca", "f1"]],
-    ] as const
-  ).map(([actionId, keywords]) => ({
-    id: shortcutEntryId(actionId),
-    section: "shortcuts" as const,
-    label: strings.shortcuts.actions[actionId],
-    keywords: ["precice", "tastatura", ...keywords],
-  })),
-  {
-    id: "shortcuts-reference",
-    section: "shortcuts",
-    label: strings.shortcuts.showAll,
-    keywords: ["precice", "tastatura", "spisak", "pomoc"],
-  },
-  {
-    // ADR-065 §5: the row that reopens the questionnaire. Filed under „Moduli“
-    // because that is the card it sits in and the screen it mostly decides; the
-    // keywords carry the words somebody hunting for it would actually type.
-    id: "modules-onboarding",
-    section: "modules",
-    label: s.onboardingRerunTitle,
-    keywords: ["upitnik", "onboarding", "podesavanje", "ponovo", "pocetak", "moduli", "oblasti"],
-  },
-  {
-    id: "notifications-presets",
-    section: "notifications",
-    label: s.sectionTitle.notifications,
-    keywords: ["podsetnik", "tiho", "izvori", "odlaganje"],
-  },
-  {
-    id: "backup-export",
-    section: "backup",
-    label: s.backup.exportButton,
-    // „moduli“ answers for the „Šta se izvozi“ picker (IMEX-003), which lives
-    // inside this block rather than as an entry of its own: it is one choice
-    // about the export above it, not a fifth thing the card can do.
-    keywords: ["izvoz", "arhiva", "kopija", "moduli"],
-  },
-  {
-    // SET-011 (ADR-056). „automatska“ and „rezervna“ sit in the label already;
-    // the keywords carry the English word half the world types for this exact
-    // thing, plus the schedule the block is about.
-    id: "backup-auto",
-    section: "backup",
-    label: s.autoBackup.title,
-    keywords: ["automatski", "backup", "rezervna", "raspored", "dnevno", "nedeljno", "fascikla"],
-  },
-  // The "Rezervna kopija" card's blocks — export, calendar export, restore,
-  // archive import, calendar import, Anki import, AI import, markdown import —
-  // each get their own entry inside that one section rather than a section of
-  // their own: they are one subject, and splitting the card would hide the
-  // contrast the archive flows are meant to be read against. „uvoz“ is shared
-  // by the import entries, which are then told apart by the words that name
-  // what each one reads; the restore entry answers to the words that describe
-  // what IT does.
-  {
-    // „kalendar“ and „ics“ are the words someone actually types looking for
-    // this; „izvoz“ is deliberately NOT repeated from `backup-export`, which
-    // owns it — an entry that answers every query answers none of them.
-    id: "backup-calendar",
-    section: "backup",
-    label: s.calendarExport.title,
-    keywords: ["kalendar", "ics", "icalendar", "dogadjaji", "google"],
-  },
-  {
-    id: "backup-restore",
-    section: "backup",
-    label: s.restore.title,
-    keywords: ["vracanje", "vrati", "zameni", "arhiva"],
-  },
-  {
-    id: "backup-import",
-    section: "backup",
-    label: s.import.title,
-    keywords: ["uvoz", "uvezi", "spajanje", "dodaj", "arhiva"],
-  },
-  {
-    // ADR-061. The words are the SOURCE's, exactly as the Anki entry's are:
-    // somebody looking for this types „ics“ or „google“, never „uvoz iz
-    // arhive“. „ics“ and „kalendar“ ARE shared with `backup-calendar` above on
-    // purpose — a user typing either is as likely to want the import as the
-    // export, and both blocks answering is the honest result.
-    id: "backup-ics",
-    section: "backup",
-    label: s.icsImport.title,
-    keywords: ["ics", "icalendar", "kalendar", "google", "outlook", "dogadjaji", "uvoz"],
-  },
-  {
-    // ADR-052. The words are the SOURCE's, not the flow's — somebody looking for
-    // this types „anki“ or „apkg“, never „uvoz iz arhive“ — so „arhiva“ is
-    // deliberately absent, exactly as it is from the markdown entry below.
-    id: "backup-apkg",
-    section: "backup",
-    label: s.apkgImport.title,
-    keywords: ["anki", "apkg", "kartice", "spil", "flashcards", "uvoz"],
-  },
-  {
-    // ADR-062. The words are the FORMAT's and the tool's — somebody looking for
-    // this types „csv“, „excel“ or „tabela“ — so „arhiva“ is deliberately
-    // absent, exactly as it is from its neighbours.
-    id: "backup-csv",
-    section: "backup",
-    label: s.csvImport.title,
-    keywords: ["csv", "tabela", "excel", "zadaci", "kolone", "todoist", "uvoz"],
-  },
-  {
-    // FIN slice e. The words are the DOCUMENT's and the bank's — somebody
-    // looking for this types „izvod“, „banka“ or „transakcije“, never „tabela“ —
-    // which is exactly what keeps it apart from the task CSV entry above, whose
-    // words nobody would use for their money.
-    id: "backup-fin-csv",
-    section: "backup",
-    label: s.finCsvImport.title,
-    keywords: ["izvod", "banka", "bankovni", "racun", "transakcije", "promet", "finansije", "uvoz"],
-  },
-  {
-    // IMEX-005. The words are the TOOL's, not the flow's — somebody looking for
-    // this types „chatgpt“ or „ai“, never „uvoz iz arhive“ — so „arhiva“ is
-    // deliberately absent, exactly as it is from the two entries around it.
-    id: "backup-llm",
-    section: "backup",
-    label: s.llmImport.title,
-    keywords: ["ai", "chatgpt", "claude", "gemini", "asistent", "vestacka", "uputstvo", "uvoz"],
-  },
-  {
-    // The words someone looking for THIS types are the format's, not the
-    // flow's: „arhiva“ belongs to the two entries above, which is why it is
-    // deliberately absent here.
-    id: "backup-markdown",
-    section: "backup",
-    label: s.markdownImport.title,
-    keywords: ["markdown", "md", "beleske", "fajlovi", "obsidian", "uvoz"],
-  },
-  {
-    // SET-010: five sentences, one entry. There is nothing to operate in that
-    // card, so it has nothing to highlight and only ever steers visibility —
-    // and the words are the ones a worried user types, not the card's own.
-    id: "privacy-practices",
-    section: "privacy",
-    label: s.sectionTitle.privacy,
-    keywords: [
-      "privatnost",
-      "podaci",
-      "sifrovanje",
-      "telemetrija",
-      "analitika",
-      "mreza",
-      "internet",
-      "offline",
-      "lokalno",
-      "brisanje",
-    ],
-  },
-  {
-    // SRCH-009: the one operable control on the privacy card, so — unlike the
-    // five sentences above it — this entry does get a highlight. Its own entry
-    // rather than more keywords on `privacy-practices`, because somebody
-    // hunting for it is after a BUTTON, not a paragraph. A hand-composed SHELL
-    // entry on purpose: search is not a module, so nothing about it may come
-    // through the per-module settings contract.
-    id: "privacy-search-history",
-    section: "privacy",
-    label: s.privacy.searchHistory.clear,
-    keywords: ["pretraga", "istorija", "upiti", "obrisi", "zaboravi", "privatnost"],
-  },
-  {
-    // One entry for a card that is one long read-only list. Nothing in it is
-    // operable beyond the disclosures, so it only ever steers visibility — and
-    // the words are the ones somebody hunting for a notice types („licenca",
-    // „otvoreni kod", or the name of a licence family), not the card's own.
-    id: "licences-notices",
-    section: "licences",
-    label: s.sectionTitle.licences,
-    keywords: [
-      "licenca",
-      "licence",
-      "otvoreni",
-      "izvorni",
-      "biblioteke",
-      "fontovi",
-      "autorska",
-      "prava",
-      "mit",
-      "apache",
-      "bsd",
-      "ofl",
-      "obavestenja",
-    ],
-  },
-  {
-    // The panel is one read-only block of facts, so it is one entry: splitting
-    // it per row would highlight "Verzija" for a user who typed "chromium".
-    id: "about-facts",
-    section: "about",
-    label: s.sectionTitle.about,
-    keywords: [
-      s.about.version,
-      s.about.electron,
-      s.about.chromium,
-      s.about.node,
-      s.about.dataLocation,
-      "fascikla",
-      "putanja",
-    ],
-  },
-];
+function shellEntries(): readonly ShellSettingsSearchEntry[] {
+  const s = strings.settings;
+  return [
+    {
+      id: "profile-name",
+      section: "profile",
+      label: s.profile.nameLabel,
+      keywords: ["profil", "naziv", "preimenuj"],
+    },
+    // SET-001: „slika“ and „profil“ sit in the label already, so the keywords
+    // carry what someone would type instead — the thing itself („avatar“), and
+    // the two actions.
+    {
+      id: "profile-picture",
+      section: "profile",
+      label: s.profile.pictureLabel,
+      keywords: ["avatar", "fotografija", "nalog", "izaberi", "ukloni"],
+    },
+    // SET-003 (ADR-058): the „Profili“ card. „profil“ sits in the section title
+    // already; the keywords carry the business half's own words, „biznis“
+    // included — the word someone types even though the app never prints it.
+    {
+      id: "profiles-business",
+      section: "profiles",
+      label: strings.profiles.createBusiness,
+      keywords: ["profil", "poslovni", "biznis", "posao"],
+    },
+    {
+      id: "security-passcode",
+      section: "security",
+      label: s.security.changeTitle,
+      keywords: ["lozinka", "sifra", "pin"],
+    },
+    {
+      id: "security-recovery",
+      section: "security",
+      label: s.security.recoveryTitle,
+      keywords: ["oporavak", "kljuc", "rezervni"],
+    },
+    {
+      id: "security-auto-lock",
+      section: "security",
+      label: s.security.autoLockTitle,
+      keywords: ["zakljucavanje", "neaktivnost", "privatnost"],
+    },
+    {
+      id: "appearance-theme",
+      section: "appearance",
+      // The three option labels are keywords in their own right: "Noć" is what a
+      // user looking for the dark theme actually types.
+      label: s.appearance.themeLabel,
+      keywords: [s.appearance.system, strings.app.themeDan, strings.app.themeNoc, "tamno", "svetlo"],
+    },
+    {
+      id: "appearance-accent",
+      section: "appearance",
+      label: s.appearance.accentLabel,
+      keywords: ["boja", "paleta"],
+    },
+    {
+      id: "appearance-week-start",
+      section: "appearance",
+      label: s.appearance.weekStartLabel,
+      keywords: [
+        s.appearance.weekStartOptions.monday,
+        s.appearance.weekStartOptions.sunday,
+        "kalendar",
+        "sedmica",
+      ],
+    },
+    // CAL §5's two preferences. They live in the „Izgled“ card beside the week
+    // start, so they are filed under that section — but the words somebody types
+    // hunting for them are the calendar's, which is what the keywords carry.
+    // They stay hand-written here for the same reason they stay in that card:
+    // they are drawn by the shell, and CAL's own declaration covers the card CAL
+    // actually owns (see `shared/modules.ts`).
+    {
+      id: "calendar-event-duration",
+      section: "appearance",
+      label: s.appearance.eventDurationLabel,
+      keywords: ["kalendar", "dogadjaj", "trajanje", "duzina", "sat", "minuta", "kraj"],
+    },
+    {
+      id: "calendar-clock",
+      section: "appearance",
+      // The two option labels answer for themselves: somebody looking for this
+      // types „12“ or „24“ long before they type „prikaz vremena“.
+      label: s.appearance.clockLabel,
+      keywords: [
+        s.appearance.clockOptions["24h"],
+        s.appearance.clockOptions["12h"],
+        "kalendar",
+        "vreme",
+        "sat",
+        "casovni",
+        "am",
+        "pm",
+      ],
+    },
+    // One entry per remappable action (ADR-040) — a user hunting for "novi
+    // unos" or "zakljucaj" should land on the exact row that rebinds it — plus
+    // one for the reference dialog itself.
+    ...(
+      [
+        ["palette", ["paleta", "pretraga", "ctrl", "k"]],
+        ["quickCreate", ["novi", "unos", "kreiranje", "ctrl", "n"]],
+        ["globalCapture", ["globalna", "brzi", "unos", "zadatak", "pozadina", "sistem", "hotkey"]],
+        ["lock", ["zakljucaj", "zakljucavanje", "ctrl", "l"]],
+        ["privLock", ["privatno", "privatne", "beleske", "zakljucaj", "panika", "ctrl", "shift", "l"]],
+        ["settings", ["podesavanja", "ctrl"]],
+        ["shortcutsHelp", ["pomoc", "referenca", "f1"]],
+      ] as const
+    ).map(([actionId, keywords]) => ({
+      id: shortcutEntryId(actionId),
+      section: "shortcuts" as const,
+      label: strings.shortcuts.actions[actionId],
+      keywords: ["precice", "tastatura", ...keywords],
+    })),
+    {
+      id: "shortcuts-reference",
+      section: "shortcuts",
+      label: strings.shortcuts.showAll,
+      keywords: ["precice", "tastatura", "spisak", "pomoc"],
+    },
+    {
+      // ADR-065 §5: the row that reopens the questionnaire. Filed under „Moduli“
+      // because that is the card it sits in and the screen it mostly decides; the
+      // keywords carry the words somebody hunting for it would actually type.
+      id: "modules-onboarding",
+      section: "modules",
+      label: s.onboardingRerunTitle,
+      keywords: ["upitnik", "onboarding", "podesavanje", "ponovo", "pocetak", "moduli", "oblasti"],
+    },
+    {
+      id: "notifications-presets",
+      section: "notifications",
+      label: s.sectionTitle.notifications,
+      keywords: ["podsetnik", "tiho", "izvori", "odlaganje"],
+    },
+    {
+      id: "backup-export",
+      section: "backup",
+      label: s.backup.exportButton,
+      // „moduli“ answers for the „Šta se izvozi“ picker (IMEX-003), which lives
+      // inside this block rather than as an entry of its own: it is one choice
+      // about the export above it, not a fifth thing the card can do.
+      keywords: ["izvoz", "arhiva", "kopija", "moduli"],
+    },
+    {
+      // SET-011 (ADR-056). „automatska“ and „rezervna“ sit in the label already;
+      // the keywords carry the English word half the world types for this exact
+      // thing, plus the schedule the block is about.
+      id: "backup-auto",
+      section: "backup",
+      label: s.autoBackup.title,
+      keywords: ["automatski", "backup", "rezervna", "raspored", "dnevno", "nedeljno", "fascikla"],
+    },
+    // The "Rezervna kopija" card's blocks — export, calendar export, restore,
+    // archive import, calendar import, Anki import, AI import, markdown import —
+    // each get their own entry inside that one section rather than a section of
+    // their own: they are one subject, and splitting the card would hide the
+    // contrast the archive flows are meant to be read against. „uvoz“ is shared
+    // by the import entries, which are then told apart by the words that name
+    // what each one reads; the restore entry answers to the words that describe
+    // what IT does.
+    {
+      // „kalendar“ and „ics“ are the words someone actually types looking for
+      // this; „izvoz“ is deliberately NOT repeated from `backup-export`, which
+      // owns it — an entry that answers every query answers none of them.
+      id: "backup-calendar",
+      section: "backup",
+      label: s.calendarExport.title,
+      keywords: ["kalendar", "ics", "icalendar", "dogadjaji", "google"],
+    },
+    {
+      id: "backup-restore",
+      section: "backup",
+      label: s.restore.title,
+      keywords: ["vracanje", "vrati", "zameni", "arhiva"],
+    },
+    {
+      id: "backup-import",
+      section: "backup",
+      label: s.import.title,
+      keywords: ["uvoz", "uvezi", "spajanje", "dodaj", "arhiva"],
+    },
+    {
+      // ADR-061. The words are the SOURCE's, exactly as the Anki entry's are:
+      // somebody looking for this types „ics“ or „google“, never „uvoz iz
+      // arhive“. „ics“ and „kalendar“ ARE shared with `backup-calendar` above on
+      // purpose — a user typing either is as likely to want the import as the
+      // export, and both blocks answering is the honest result.
+      id: "backup-ics",
+      section: "backup",
+      label: s.icsImport.title,
+      keywords: ["ics", "icalendar", "kalendar", "google", "outlook", "dogadjaji", "uvoz"],
+    },
+    {
+      // ADR-052. The words are the SOURCE's, not the flow's — somebody looking for
+      // this types „anki“ or „apkg“, never „uvoz iz arhive“ — so „arhiva“ is
+      // deliberately absent, exactly as it is from the markdown entry below.
+      id: "backup-apkg",
+      section: "backup",
+      label: s.apkgImport.title,
+      keywords: ["anki", "apkg", "kartice", "spil", "flashcards", "uvoz"],
+    },
+    {
+      // ADR-062. The words are the FORMAT's and the tool's — somebody looking for
+      // this types „csv“, „excel“ or „tabela“ — so „arhiva“ is deliberately
+      // absent, exactly as it is from its neighbours.
+      id: "backup-csv",
+      section: "backup",
+      label: s.csvImport.title,
+      keywords: ["csv", "tabela", "excel", "zadaci", "kolone", "todoist", "uvoz"],
+    },
+    {
+      // FIN slice e. The words are the DOCUMENT's and the bank's — somebody
+      // looking for this types „izvod“, „banka“ or „transakcije“, never „tabela“ —
+      // which is exactly what keeps it apart from the task CSV entry above, whose
+      // words nobody would use for their money.
+      id: "backup-fin-csv",
+      section: "backup",
+      label: s.finCsvImport.title,
+      keywords: ["izvod", "banka", "bankovni", "racun", "transakcije", "promet", "finansije", "uvoz"],
+    },
+    {
+      // IMEX-005. The words are the TOOL's, not the flow's — somebody looking for
+      // this types „chatgpt“ or „ai“, never „uvoz iz arhive“ — so „arhiva“ is
+      // deliberately absent, exactly as it is from the two entries around it.
+      id: "backup-llm",
+      section: "backup",
+      label: s.llmImport.title,
+      keywords: ["ai", "chatgpt", "claude", "gemini", "asistent", "vestacka", "uputstvo", "uvoz"],
+    },
+    {
+      // The words someone looking for THIS types are the format's, not the
+      // flow's: „arhiva“ belongs to the two entries above, which is why it is
+      // deliberately absent here.
+      id: "backup-markdown",
+      section: "backup",
+      label: s.markdownImport.title,
+      keywords: ["markdown", "md", "beleske", "fajlovi", "obsidian", "uvoz"],
+    },
+    {
+      // SET-010: five sentences, one entry. There is nothing to operate in that
+      // card, so it has nothing to highlight and only ever steers visibility —
+      // and the words are the ones a worried user types, not the card's own.
+      id: "privacy-practices",
+      section: "privacy",
+      label: s.sectionTitle.privacy,
+      keywords: [
+        "privatnost",
+        "podaci",
+        "sifrovanje",
+        "telemetrija",
+        "analitika",
+        "mreza",
+        "internet",
+        "offline",
+        "lokalno",
+        "brisanje",
+      ],
+    },
+    {
+      // SRCH-009: the one operable control on the privacy card, so — unlike the
+      // five sentences above it — this entry does get a highlight. Its own entry
+      // rather than more keywords on `privacy-practices`, because somebody
+      // hunting for it is after a BUTTON, not a paragraph. A hand-composed SHELL
+      // entry on purpose: search is not a module, so nothing about it may come
+      // through the per-module settings contract.
+      id: "privacy-search-history",
+      section: "privacy",
+      label: s.privacy.searchHistory.clear,
+      keywords: ["pretraga", "istorija", "upiti", "obrisi", "zaboravi", "privatnost"],
+    },
+    {
+      // One entry for a card that is one long read-only list. Nothing in it is
+      // operable beyond the disclosures, so it only ever steers visibility — and
+      // the words are the ones somebody hunting for a notice types („licenca",
+      // „otvoreni kod", or the name of a licence family), not the card's own.
+      id: "licences-notices",
+      section: "licences",
+      label: s.sectionTitle.licences,
+      keywords: [
+        "licenca",
+        "licence",
+        "otvoreni",
+        "izvorni",
+        "biblioteke",
+        "fontovi",
+        "autorska",
+        "prava",
+        "mit",
+        "apache",
+        "bsd",
+        "ofl",
+        "obavestenja",
+      ],
+    },
+    {
+      // The panel is one read-only block of facts, so it is one entry: splitting
+      // it per row would highlight "Verzija" for a user who typed "chromium".
+      id: "about-facts",
+      section: "about",
+      label: s.sectionTitle.about,
+      keywords: [
+        s.about.version,
+        s.about.electron,
+        s.about.chromium,
+        s.about.node,
+        s.about.dataLocation,
+        "fascikla",
+        "putanja",
+      ],
+    },
+    ];
+}
 
 /** Entry id for a module row in the Moduli gallery — the page uses the same id to highlight the row's name. */
 export function moduleEntryId(moduleId: string): string {
@@ -449,12 +454,13 @@ function moduleSettingsEntries(registry: ModuleRegistry): SettingsSearchEntry[] 
  * already exists and already says what it is for.
  */
 function moduleGalleryEntries(registry: ModuleRegistry): SettingsSearchEntry[] {
+  const s = strings.settings;
   return [...registry.byCategory()].flatMap(([, members]) =>
     members.map((manifest) => ({
       id: moduleEntryId(manifest.id),
       section: "modules",
-      label: strings.modules[manifest.id] ?? manifest.id,
-      keywords: [s.moduleDescriptions[manifest.id] ?? ""],
+      label: lookup(strings.modules, manifest.id) ?? manifest.id,
+      keywords: [lookup(s.moduleDescriptions, manifest.id) ?? ""],
     })),
   );
 }
@@ -472,8 +478,6 @@ export interface SettingsIndex {
   readonly entries: readonly SettingsSearchEntry[];
 }
 
-const SHELL_SECTION_IDS = Object.keys(s.sectionTitle) as ShellSettingsSectionId[];
-
 /**
  * The whole index for one registry: the shell's hand-written cards and entries,
  * plus everything the registered modules declare.
@@ -484,18 +488,26 @@ const SHELL_SECTION_IDS = Object.keys(s.sectionTitle) as ShellSettingsSectionId[
  * card counted as two.
  */
 export function buildSettingsIndex(registry: ModuleRegistry): SettingsIndex {
+  const s = strings.settings;
+  // Read here, not at module scope, so a language switch is reflected on the
+  // next build instead of freezing the shell's section id list at import.
+  const shellSectionIds = Object.keys(s.sectionTitle) as ShellSettingsSectionId[];
   const moduleSections = moduleSettingsDeclarations(registry).map(({ moduleId, panel }) => ({
     id: moduleId,
     title: lookupString(strings, panel.titleKey) ?? moduleId,
   }));
   const claimed = new Set(moduleSections.map((section) => section.id));
-  const shellSections = SHELL_SECTION_IDS.filter((id) => !claimed.has(id)).map((id) => ({
+  const shellSections = shellSectionIds.filter((id) => !claimed.has(id)).map((id) => ({
     id,
     title: s.sectionTitle[id],
   }));
   return {
     sections: [...shellSections, ...moduleSections],
-    entries: [...ENTRIES, ...moduleSettingsEntries(registry), ...moduleGalleryEntries(registry)],
+    entries: [
+      ...shellEntries(),
+      ...moduleSettingsEntries(registry),
+      ...moduleGalleryEntries(registry),
+    ],
   };
 }
 

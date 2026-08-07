@@ -23,7 +23,7 @@ import { buildTaskListTree, flattenTaskListTree } from "./taskListTree.js";
 import { DASHBOARD_WIDGETS, type DashboardWidgetBodyProps } from "./dashboardWidgets.js";
 import { localTodayKey } from "./examDates.js";
 import { NotePopover } from "./notePopover.js";
-import { strings } from "./strings.js";
+import { lookup, strings } from "./strings.js";
 import { useFocusTrap } from "./useFocusTrap.js";
 
 /** Time-of-day salutation, personalized with the profile name when present. */
@@ -568,7 +568,7 @@ function WidgetGallery({
             {groups.map(({ manifest, widgets }) => (
               <section key={manifest.id} className="dash-gallery__group">
                 <h3 className="set__module-group-title">
-                  {strings.modules[manifest.id] ?? manifest.id}
+                  {lookup(strings.modules, manifest.id) ?? manifest.id}
                 </h3>
                 {widgets.map((widget) => {
                   const qualified = `${manifest.id}:${widget.id}`;

@@ -120,7 +120,7 @@ import { FinCsvImportSection } from "./FinCsvImport.js";
 // data with `import()` instead. A type import is erased, so this line costs
 // nothing at runtime.
 import type { LicenceEntry } from "./licences.js";
-import { countUnit, dayUnit, strings } from "./strings.js";
+import { countUnit, dayUnit, lookup, strings } from "./strings.js";
 import { useFocusTrap } from "./useFocusTrap.js";
 import { moduleName } from "./moduleName.js";
 
@@ -967,7 +967,7 @@ function AutoBackupSection({ profileId, hits }: AutoBackupSectionProps) {
       >
         {BACKUP_KEEP_LAST_CHOICES.map((choice) => (
           <option key={choice} value={choice}>
-            {s.keepLastOptions[String(choice)] ?? String(choice)}
+            {lookup(s.keepLastOptions, String(choice)) ?? String(choice)}
           </option>
         ))}
       </select>
@@ -1006,7 +1006,7 @@ function AutoBackupSection({ profileId, hits }: AutoBackupSectionProps) {
       ) : settings.lastStatus === "failed" ? (
         <p className="set__error">
           {s.lastRunPrefix} {s.lastRunFailed} —{" "}
-          {s.runErrors[settings.lastError ?? "unknown"] ?? s.runErrors.unknown},{" "}
+          {lookup(s.runErrors, settings.lastError ?? "unknown") ?? s.runErrors.unknown},{" "}
           {formatArchiveInstant(settings.lastRunAt)}
         </p>
       ) : (
@@ -4268,7 +4268,7 @@ function SecuritySection({ autoLockMinutes, onAutoLockChange, hits }: SecuritySe
         >
           {AUTO_LOCK_MINUTES.map((minutes) => (
             <option key={minutes} value={minutes}>
-              {s.autoLockOptions[String(minutes)] ?? String(minutes)}
+              {lookup(s.autoLockOptions, String(minutes)) ?? String(minutes)}
             </option>
           ))}
         </select>
@@ -4955,7 +4955,7 @@ export function SettingsPage({
         >
           {EVENT_DURATIONS.map((minutes) => (
             <option key={minutes} value={minutes}>
-              {a.eventDurationOptions[String(minutes)] ?? String(minutes)}
+              {lookup(a.eventDurationOptions, String(minutes)) ?? String(minutes)}
             </option>
           ))}
         </select>
@@ -5053,7 +5053,7 @@ export function SettingsPage({
                         {moduleName(manifest.id)}
                       </span>
                       <span className="set__module-desc">
-                        {strings.settings.moduleDescriptions[manifest.id] ?? ""}
+                        {lookup(strings.settings.moduleDescriptions, manifest.id) ?? ""}
                       </span>
                     </div>
                     {locked ? (

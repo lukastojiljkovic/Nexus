@@ -8,7 +8,7 @@ import type {
   RecurrenceRule,
   RecurrenceWeekday,
 } from "../../shared/ipc.js";
-import { strings } from "./strings.js";
+import { lookup, strings } from "./strings.js";
 
 /**
  * The "Ponavljanje" field (ADR-024), shared by the task form and the event
@@ -437,7 +437,7 @@ className="nx-segmented__option recur__day"
                 >
                   {ORDINALS.map((ordinal) => (
                     <option key={ordinal} value={String(ordinal)}>
-                      {s.ordinal[String(ordinal)] ?? String(ordinal)}
+                      {lookup(s.ordinal, String(ordinal)) ?? String(ordinal)}
                     </option>
                   ))}
                 </select>

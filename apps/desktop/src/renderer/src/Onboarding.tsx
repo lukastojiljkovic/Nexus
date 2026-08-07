@@ -19,7 +19,7 @@ import {
   readOnboardingDraft,
   writeOnboardingDraft,
 } from "./onboardingDraft.js";
-import { strings } from "./strings.js";
+import { lookup, strings } from "./strings.js";
 
 /** Mirrors the main-process rule: 1–80 chars after trimming (UX-side only). */
 const NAME_MAX = 80;
@@ -353,13 +353,13 @@ export function Onboarding({
                     </h2>
                     <div className="onb__module-list">
                       {members.map((manifest) => {
-                        const label = strings.modules[manifest.id] ?? manifest.id;
+                        const label = lookup(strings.modules, manifest.id) ?? manifest.id;
                         return (
                           <div className="onb__module-row" key={manifest.id}>
                             <div className="onb__module-info">
                               <span className="onb__module-name">{label}</span>
                               <span className="onb__module-desc">
-                                {strings.settings.moduleDescriptions[manifest.id] ?? ""}
+                                {lookup(strings.settings.moduleDescriptions, manifest.id) ?? ""}
                               </span>
                             </div>
                             {LOCKED_MODULE_IDS.has(manifest.id) ? (

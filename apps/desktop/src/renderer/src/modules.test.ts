@@ -26,7 +26,9 @@ import {
   businessProfileFlags,
   createModuleRegistry,
 } from "../../shared/modules.js";
-import { strings } from "./strings.js";
+// Aliased: this file already has three local `lookup` helpers of its own
+// that take a dotted path, and the table accessor is a different thing.
+import { lookup as stringFor, strings } from "./strings.js";
 
 /**
  * `modules.ts` is the renderer's one declaration of which modules exist
@@ -742,7 +744,7 @@ describe("the tools the registry publishes (PRD 29 UTIL)", () => {
     // drawer would look unfinished.
     for (const kind of UNIT_KINDS) {
       for (const unit of unitsOfKind(kind)) {
-        expect(typeof strings.tools.unit[unit.id], unit.id).toBe("string");
+        expect(typeof stringFor(strings.tools.unit, unit.id), unit.id).toBe("string");
       }
     }
   });

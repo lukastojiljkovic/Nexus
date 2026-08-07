@@ -23,7 +23,7 @@ import {
   formatToolUnitPrice,
 } from "./toolFormat.js";
 import { readStoredDefaultVatRate } from "./toolPrefs.js";
-import { strings } from "./strings.js";
+import { lookup, strings } from "./strings.js";
 
 /**
  * The bodies of the tools „Alatke" draws — one component per `ToolRegistration`,
@@ -45,11 +45,9 @@ import { strings } from "./strings.js";
  * memory.
  */
 
-const s = strings.tools;
-
 /** A unit's Serbian name, falling back to its own id — an id is at least true. */
 function unitName(id: string): string {
-  return s.unit[id] ?? id;
+  return lookup(strings.tools.unit, id) ?? id;
 }
 
 /** A labelled figure — the shape every result in the drawer is drawn in. */
@@ -111,6 +109,9 @@ interface ConverterSpec {
  * technically fine and would make the tool feel unconsidered.
  */
 function UnitConverter({ kind, from, to }: ConverterSpec) {
+  // Read on every render, not at module scope, so a language switch relabels
+  // the converter instead of freezing it at import.
+  const s = strings.tools;
   const units = unitsOfKind(kind);
   const options = units.map((unit) => ({ id: unit.id, label: unitName(unit.id) }));
   const [fromId, setFromId] = useState(from);
@@ -213,7 +214,9 @@ function PercentRow({
 }
 
 function PercentTool() {
-  const p = s.percent;
+  // Read on every render, not at module scope, so a language switch relabels
+  // the four rows instead of freezing them at import.
+  const p = strings.tools.percent;
   return (
     <div className="tool__body">
       <PercentRow
@@ -248,17 +251,6 @@ function PercentTool() {
   );
 }
 
-/** The two PDV rates as dropdown options — read off `PDV_RATES` so a rate cannot be named here that the law does not have. */
-const PDV_RATE_OPTIONS = PDV_RATES.map((rate) => ({
-  id: String(rate),
-  label: rate === 10 ? s.pdv.rateReduced : s.pdv.rateStandard,
-}));
-
-const PDV_DIRECTIONS = [
-  { id: "add", label: s.pdv.directionAdd },
-  { id: "extract", label: s.pdv.directionExtract },
-] as const;
-
 /**
  * PDV in both directions, because a shopkeeper needs the second more often than
  * the first: the number they have is the one on the shelf, and „koliko je od
@@ -266,6 +258,20 @@ const PDV_DIRECTIONS = [
  * leaving it to be rediscovered.
  */
 function PdvTool() {
+  // Read on every render, not at module scope, so a language switch relabels
+  // the tool instead of freezing it at import.
+  const s = strings.tools;
+  // The two PDV rates as dropdown options — read off `PDV_RATES` so a rate
+  // cannot be named here that the law does not have.
+  const rateOptions = PDV_RATES.map((rate) => ({
+    id: String(rate),
+    label: rate === 10 ? s.pdv.rateReduced : s.pdv.rateStandard,
+  }));
+  const directions = [
+    { id: "add", label: s.pdv.directionAdd },
+    { id: "extract", label: s.pdv.directionExtract },
+  ] as const;
+
   const [text, setText] = useState("");
   const [rate, setRate] = useState(() => String(readStoredDefaultVatRate()));
   const [direction, setDirection] = useState<string>("add");
@@ -287,11 +293,11 @@ function PdvTool() {
         }}
       />
       <div className="tool__pair">
-        <ToolSelect label={s.pdv.rateLabel} value={rate} options={PDV_RATE_OPTIONS} onChange={setRate} />
+        <ToolSelect label={s.pdv.rateLabel} value={rate} options={rateOptions} onChange={setRate} />
         <ToolSelect
           label={s.pdv.directionLabel}
           value={direction}
-          options={PDV_DIRECTIONS}
+          options={directions}
           onChange={setDirection}
         />
       </div>
@@ -313,6 +319,9 @@ function PdvTool() {
  * before the caveat has already formed the wrong expectation.
  */
 function LoanTool() {
+  // Read on every render, not at module scope, so a language switch relabels
+  // the tool instead of freezing it at import.
+  const s = strings.tools;
   const [principal, setPrincipal] = useState("");
   const [rate, setRate] = useState("");
   const [months, setMonths] = useState("");
@@ -396,6 +405,9 @@ const INITIAL_OFFERS: OfferDraft[] = [
  * silently would mean guessing which unit each row was in.
  */
 function UnitPriceTool() {
+  // Read on every render, not at module scope, so a language switch relabels
+  // the tool instead of freezing it at import.
+  const s = strings.tools;
   const [offers, setOffers] = useState<OfferDraft[]>(INITIAL_OFFERS);
   const [nextKey, setNextKey] = useState(INITIAL_OFFERS.length);
 
