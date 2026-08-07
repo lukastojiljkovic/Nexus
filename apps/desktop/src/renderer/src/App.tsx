@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { formatChord, matchesChord, moduleNavPosition, resolveEnabled } from "@nexus/core";
 import type { CanvasRef } from "@nexus/core";
-import { Button, EmptyState, Icon, NavItem, type IconName } from "@nexus/ui";
+import { Button, EmptyState, Icon, NavItem, StarField, type IconName } from "@nexus/ui";
 import type { ThemeName } from "@nexus/tokens";
 import type {
   AppInfo,
@@ -94,15 +94,19 @@ const SEARCH_PAGE_ID = "search";
  * names the wrong thing — which for a button that REPLACES a whole profile is
  * the worst possible gap.
  */
-const RESTORE_UNDO_BANNERS: Record<RestoreUndoKind, string> = {
-  restore: strings.settings.restore.undoBanner,
-  import: strings.settings.import.undoBanner,
-  apkg: strings.settings.apkgImport.undoBanner,
-  llm: strings.settings.llmImport.undoBanner,
-  csv: strings.settings.csvImport.undoBanner,
-  "fin-csv": strings.settings.finCsvImport.undoBanner,
-  ics: strings.settings.icsImport.undoBanner,
-};
+// A function, not a module-scope const, so a language switch is reflected the
+// next time the banner renders instead of being frozen at import.
+function restoreUndoBanners(): Record<RestoreUndoKind, string> {
+  return {
+    restore: strings.settings.restore.undoBanner,
+    import: strings.settings.import.undoBanner,
+    apkg: strings.settings.apkgImport.undoBanner,
+    llm: strings.settings.llmImport.undoBanner,
+    csv: strings.settings.csvImport.undoBanner,
+    "fin-csv": strings.settings.finCsvImport.undoBanner,
+    ics: strings.settings.icsImport.undoBanner,
+  };
+}
 
 /** Idle events that count as activity for the auto-lock timer (AUTH-005). */
 const IDLE_ACTIVITY_EVENTS = ["mousemove", "keydown", "mousedown", "wheel"] as const;
@@ -1085,7 +1089,7 @@ export function App() {
 
   return (
     <div className="nx-app app">
-      <header className="app__topbar">
+      <header className="app__topbar nx-horizon">
         <div className="app__brand">
           <span className="app__brand-mark" aria-hidden="true">✦</span>
           <span className="app__brand-name">{strings.app.brand}</span>
@@ -1102,6 +1106,13 @@ export function App() {
             the last rows painted OUTSIDE the sidebar — see `.app__nav-scroll`
             in `app.css` for the measurement. */}
         <nav className="app__sidebar" aria-label={strings.app.navLabel}>
+          {/* Noć's ground. It lives HERE and not on `.app__main` for a physical
+              reason: the main pane scrolls and paints its own opaque
+              background, so any texture on it travels with the content —
+              correct for paper, which the page is printed on, and wrong for
+              sky, which sits behind. The sidebar is the largest surface in the
+              shell that never scrolls as a whole. */}
+          <StarField enabled={theme === "noc"} />
           <div className="app__nav-scroll">
             {[...registry.byCategory()].map(([category, members], index) => {
               const visible = members.filter((manifest) => enabledIds.has(manifest.id));
@@ -1272,11 +1283,11 @@ export function App() {
           )}
         </nav>
 
-        <main className="app__main">
+        <main className="app__main nx-grain">
           {restoreUndo != null && !restoreBannerHidden && (
             <div className="app__restore-banner" role="status">
               <span className="app__restore-banner-text">
-                {RESTORE_UNDO_BANNERS[restoreUndo.kind]}{" "}
+                {restoreUndoBanners()[restoreUndo.kind]}{" "}
                 <span className="app__restore-banner-when">
                   {formatArchiveInstant(restoreUndo.appliedAt)}
                 </span>

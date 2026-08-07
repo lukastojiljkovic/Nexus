@@ -153,6 +153,20 @@ body {
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-1);
+  /* Host for Noć's star field (`.nx-starfield`), which is absolutely
+     positioned at `z-index: -1`. `position: relative` gives it something to
+     size against; `isolation: isolate` makes this element a stacking context so
+     that negative index lands behind the nav rows but still in FRONT of this
+     element's own `--nx-surface` fill. Without the isolation the layer would
+     escape to the nearest ancestor stacking context and paint behind the whole
+     shell, where nothing would ever see it.
+
+     Deliberately `isolation` rather than `transform`/`filter`/`contain`: those
+     would also create the context, and would additionally make this element a
+     containing block for `position: fixed` descendants — which would trap any
+     dialog or popover rendered from inside the sidebar. */
+  position: relative;
+  isolation: isolate;
 }
 /* The only part of the shell chrome that scrolls. `min-height: 0` is what lets
    it shrink UNDER the foot instead of pushing it out — a flex item's automatic
@@ -185,8 +199,13 @@ body {
   /* The scroller owns its own paint. Inheriting the background from `.app` left
      the scrolling-contents layer non-opaque, so Chromium re-rastered the strip
      every frame instead of blitting it — visible as a colour seam over the
-     dashboard's cover image and its opacity scrim. */
-  background: var(--nx-bg);
+     dashboard's cover image and its opacity scrim.
+
+     `background-color`, NOT the `background` shorthand: the shorthand resets
+     every background property, which would wipe the `background-image` that
+     `.nx-grain` puts here. The colour is still the opaque bottom layer the
+     paragraph above depends on — the grain composites on top of it. */
+  background-color: var(--nx-bg);
   padding: var(--nx-space-6);
   display: flex;
   flex-direction: column;
