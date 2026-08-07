@@ -794,13 +794,13 @@ function richProfileData(): ProfileData {
       {
         id: "fit-routine-item-1", profileId: "profile1", routineId: "fit-routine-1", position: 0,
         exerciseRef: "catalogue:zgibovi", label: "Zgibovi", targetSets: 4,
-        targetRepsMin: 6, targetRepsMax: 10,
+        targetRepsMin: 6, targetRepsMax: 10, targetSeconds: null, targetWeightKg: null, targetDistanceM: null, restSeconds: null,
         createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
       },
       {
         id: "fit-routine-item-2", profileId: "profile1", routineId: "fit-routine-1", position: 1,
         exerciseRef: "user:fit-exercise-1", label: "Moja varijanta zgiba",
-        targetSets: null, targetRepsMin: null, targetRepsMax: null,
+        targetSets: null, targetRepsMin: null, targetRepsMax: null, targetSeconds: null, targetWeightKg: null, targetDistanceM: null, restSeconds: null,
         createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
       },
     ],
@@ -1253,12 +1253,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.38.0`: the nearest minor strictly ahead of this build's `1.37.0`.
+  // `1.39.0`: the nearest minor strictly ahead of this build's `1.38.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.38.0" });
+    const files = baseFiles({ schemaVersion: "1.39.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.38.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.39.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -4087,7 +4087,7 @@ describe("parseImportArchive — FIT training & body (ADR-081 slice b / 1.37.0)"
   const VALID_FIT_ROUTINE_ITEM = {
     type: "fit-routine-item", id: "fri1", profileId: "profile1", routineId: "fr1", position: 0,
     exerciseRef: "catalogue:bench-press", label: "Potisak sa klupe",
-    targetSets: 4, targetRepsMin: 6, targetRepsMax: 10, createdAt: T, updatedAt: T,
+    targetSets: 4, targetRepsMin: 6, targetRepsMax: 10, targetSeconds: null, targetWeightKg: null, targetDistanceM: null, restSeconds: null, createdAt: T, updatedAt: T,
   };
 
   const VALID_FIT_WORKOUT = {
@@ -4285,6 +4285,65 @@ describe("parseImportArchive — FIT training & body (ADR-081 slice b / 1.37.0)"
       expect(invalidDetails(result)).toEqual(["targetRepsMax"]);
     });
 
+    it("reads a 1.37.0 routine item — which carries none of the four targets — as stating none of them", () => {
+      // The backward-compatibility promise of interchange 1.38.0, and the one
+      // that would fail SILENTLY without a test: every archive written before
+      // migration 061 omits these properties entirely, so they arrive as
+      // `undefined` rather than `null`. A validator that only special-cases
+      // `null` would refuse every routine item in every existing backup.
+      const {
+        targetSeconds: _s,
+        targetWeightKg: _w,
+        targetDistanceM: _d,
+        restSeconds: _r,
+        ...oldFormat
+      } = VALID_FIT_ROUTINE_ITEM;
+      const result = parseFitnessFile([VALID_FIT_ROUTINE, oldFormat]);
+      expect(invalidDetails(result)).toEqual([]);
+      expect(result.data?.fitRoutineItems[0]).toMatchObject({
+        id: "fri1",
+        targetSets: 4,
+        targetSeconds: null,
+        targetWeightKg: null,
+        targetDistanceM: null,
+        restSeconds: null,
+      });
+    });
+
+    it("refuses a rest that is not whole seconds, and accepts a rest of zero", () => {
+      // Zero is a real prescription — straight into the next set — and is a
+      // different statement from `null`, which means the routine has no opinion.
+      const bad = parseFitnessFile([
+        VALID_FIT_ROUTINE,
+        { ...VALID_FIT_ROUTINE_ITEM, restSeconds: 90.5 },
+      ]);
+      expect(invalidDetails(bad)).toEqual(["restSeconds"]);
+
+      const zero = parseFitnessFile([
+        VALID_FIT_ROUTINE,
+        { ...VALID_FIT_ROUTINE_ITEM, restSeconds: 0 },
+      ]);
+      expect(invalidDetails(zero)).toEqual([]);
+      expect(zero.data?.fitRoutineItems[0]).toMatchObject({ restSeconds: 0 });
+    });
+
+    it("refuses a hold of zero seconds, which is not a prescription", () => {
+      const result = parseFitnessFile([
+        VALID_FIT_ROUTINE,
+        { ...VALID_FIT_ROUTINE_ITEM, targetSeconds: 0 },
+      ]);
+      expect(invalidDetails(result)).toEqual(["targetSeconds"]);
+    });
+
+    it("accepts a bodyweight target of zero added kilograms", () => {
+      const result = parseFitnessFile([
+        VALID_FIT_ROUTINE,
+        { ...VALID_FIT_ROUTINE_ITEM, targetWeightKg: 0 },
+      ]);
+      expect(invalidDetails(result)).toEqual([]);
+      expect(result.data?.fitRoutineItems[0]).toMatchObject({ targetWeightKg: 0 });
+    });
+
     it("refuses a measurement's muscle reading with an unknown unit", () => {
       const result = parseFitnessFile([{ ...VALID_FIT_MEASUREMENT, muscle: { unit: "lbs", value: 30 } }]);
       expect(invalidDetails(result)).toEqual(["muscle.unit"]);
@@ -4442,8 +4501,8 @@ describe("parseImportArchive — note categories (NOTE-002 / 1.27.0)", () => {
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.37.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.37.0");
+  it("is 1.38.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.38.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -4633,11 +4692,11 @@ describe("parseImportArchive — schema version", () => {
     expect(result.manifest?.profile.kind).toBe("personal");
   });
 
-  // `1.38.0`: the nearest minor strictly ahead of this build's `1.37.0`.
+  // `1.39.0`: the nearest minor strictly ahead of this build's `1.38.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.38.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.39.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.38.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.39.0" },
     ]);
     expect(result.data).toBeNull();
   });

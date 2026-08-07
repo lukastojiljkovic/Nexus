@@ -22,8 +22,8 @@ import { CardStore, MIGRATIONS, NexusDatabase, openDatabase, runMigrations } fro
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 60 (the canvas boards, then FIT training and body), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(60);
+  it("is at version 61 (FIT training, then the routine targets it could not express), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(61);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );

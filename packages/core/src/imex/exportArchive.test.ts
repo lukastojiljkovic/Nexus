@@ -287,7 +287,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.37.0");
+      expect(manifest.schemaVersion).toBe("1.38.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       // `picture: null` is written out loud rather than omitted: the manifest is
@@ -1227,7 +1227,7 @@ describe("buildExportArchive", () => {
           { id: "fr1", profileId: "p1", name: "Push dan", notes: "", createdAt: t, updatedAt: t },
         ],
         fitRoutineItems: [
-          { id: "fri1", profileId: "p1", routineId: "fr1", position: 0, exerciseRef: "user:fe1", label: "Potisak", targetSets: 4, targetRepsMin: 6, targetRepsMax: 10, createdAt: t, updatedAt: t },
+          { id: "fri1", profileId: "p1", routineId: "fr1", position: 0, exerciseRef: "user:fe1", label: "Potisak", targetSets: 4, targetRepsMin: 6, targetRepsMax: 10, targetSeconds: null, targetWeightKg: null, targetDistanceM: null, restSeconds: null, createdAt: t, updatedAt: t },
         ],
         fitWorkouts: [
           { id: "fw1", profileId: "p1", day: "2026-01-05", startedAt: t, endedAt: t, routineRef: "fr1", routineLabel: "Push dan", notes: "", createdAt: t, updatedAt: t },

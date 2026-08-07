@@ -626,7 +626,7 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.37.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.38.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -3120,12 +3120,54 @@ function parseFitRoutineItem(raw: Record<string, unknown>): ExportFitRoutineItem
   if (targetRepsMin !== null && targetRepsMax !== null && targetRepsMin > targetRepsMax) {
     throw new InvalidFieldError("targetRepsMax");
   }
+  // Interchange 1.38.0 (migration 061). ABSENT is not the same as `null` here:
+  // an archive written by 1.37.0 carries no such property at all, so `undefined`
+  // has to read as „said nothing" — passing it to a validator that only special
+  // cases `null` would refuse every routine item in every older backup.
+  const targetSeconds = absentAsNull(raw.targetSeconds, "targetSeconds", nullablePositiveReal);
+  const targetWeightKg = absentAsNull(raw.targetWeightKg, "targetWeightKg", nullableNonNegativeReal);
+  const targetDistanceM = absentAsNull(raw.targetDistanceM, "targetDistanceM", nullablePositiveReal);
+  const restSeconds = absentAsNull(raw.restSeconds, "restSeconds", nullableRestSeconds);
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
   return {
     id, profileId, routineId, position, exerciseRef, label,
-    targetSets, targetRepsMin, targetRepsMax, createdAt, updatedAt,
+    targetSets, targetRepsMin, targetRepsMax,
+    targetSeconds, targetWeightKg, targetDistanceM, restSeconds,
+    createdAt, updatedAt,
   };
+}
+
+/** A property an older archive simply does not carry reads as „not stated". */
+function absentAsNull(
+  value: unknown,
+  field: string,
+  parse: (value: unknown, field: string) => number | null,
+): number | null {
+  return value === undefined ? null : parse(value, field);
+}
+
+/** Seconds and metres are REAL, not counts — a 45.5-second hold is a real prescription. */
+function nullablePositiveReal(value: unknown, field: string): number | null {
+  if (value === null) return null;
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    throw new InvalidFieldError(field);
+  }
+  return value;
+}
+
+/**
+ * Rest is whole seconds, and ZERO IS LEGAL — „straight into the next set" is a
+ * superset, and a different statement from `null`. The 600 ceiling restates
+ * migration 061's own CHECK, which in turn is the rest timer's maximum: a
+ * routine that could carry more would prescribe a rest the app refuses to run.
+ */
+function nullableRestSeconds(value: unknown, field: string): number | null {
+  if (value === null) return null;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 600) {
+    throw new InvalidFieldError(field);
+  }
+  return value;
 }
 
 /**

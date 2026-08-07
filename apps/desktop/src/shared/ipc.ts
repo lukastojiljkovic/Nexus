@@ -5268,6 +5268,22 @@ export interface FitRoutineItem {
   targetSets: number | null;
   targetRepsMin: number | null;
   targetRepsMax: number | null;
+  /**
+   * The targets a rep range cannot state (migration 061). WHICH of these a line
+   * may carry is decided by `metric`, exactly as it is for a logged set — three
+   * of the seven metrics have no reps at all, and a plank's only number is how
+   * long it is held.
+   */
+  targetSeconds: number | null;
+  targetWeightKg: number | null;
+  targetDistanceM: number | null;
+  /**
+   * Rest after each set of THIS line. `0` means „straight into the next set";
+   * `null` means the routine has no opinion and the session default stands.
+   * Bounded by `MAX_FIT_REST_SECONDS`, so a routine can never prescribe a rest
+   * the timer refuses to run.
+   */
+  restSeconds: number | null;
 }
 
 export interface FitRoutine {
@@ -5291,6 +5307,10 @@ export interface FitRoutineItemInput {
   targetSets?: number | null;
   targetRepsMin?: number | null;
   targetRepsMax?: number | null;
+  targetSeconds?: number | null;
+  targetWeightKg?: number | null;
+  targetDistanceM?: number | null;
+  restSeconds?: number | null;
 }
 
 /**

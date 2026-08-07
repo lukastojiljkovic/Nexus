@@ -144,6 +144,135 @@ describe("FitRoutineStore validation", () => {
   });
 });
 
+/**
+ * Migration 061 — the targets a rep range cannot express. Before it, a routine
+ * could prescribe sets and reps and nothing else, which left three of the seven
+ * exercise metrics (`time`, `weight_time`, `distance_time`) unable to state the
+ * only number they have: a plank could be told „3×12 reps" and could not be told
+ * how long to hold.
+ */
+describe("FitRoutineStore — the non-rep targets", () => {
+  const withTargets: CreateFitRoutineInput = {
+    name: "Core",
+    items: [
+      {
+        exerciseRef: "catalogue:plank",
+        label: "Plank",
+        targetSets: 3,
+        targetSeconds: 45.5,
+        restSeconds: 60,
+      },
+      {
+        exerciseRef: "catalogue:farmers-walk",
+        label: "Farmer's walk",
+        targetDistanceM: 40,
+        targetWeightKg: 32,
+        restSeconds: 0,
+      },
+    ],
+  };
+
+  it("round-trips all four through a write and a read", () => {
+    const routines = store();
+    const created = routines.create(withTargets, NOW);
+    const read = routines.get(created.id);
+    expect(read?.items[0]).toMatchObject({
+      targetSets: 3,
+      targetSeconds: 45.5,
+      restSeconds: 60,
+      targetWeightKg: null,
+      targetDistanceM: null,
+    });
+    expect(read?.items[1]).toMatchObject({
+      targetDistanceM: 40,
+      targetWeightKg: 32,
+      restSeconds: 0,
+      targetSeconds: null,
+    });
+  });
+
+  it("keeps a rest of zero distinct from an unstated one", () => {
+    // Zero is „straight into the next set" — a superset. `null` is „this
+    // routine has no opinion, use the session default". Collapsing the two
+    // would silently turn every superset into a normal rest.
+    const routines = store();
+    const created = routines.create(
+      {
+        name: "Superset",
+        items: [
+          { exerciseRef: "user:a", label: "A", restSeconds: 0 },
+          { exerciseRef: "user:b", label: "B" },
+        ],
+      },
+      NOW,
+    );
+    const read = routines.get(created.id);
+    expect(read?.items[0]?.restSeconds).toBe(0);
+    expect(read?.items[1]?.restSeconds).toBeNull();
+  });
+
+  it("accepts a bodyweight target of zero added kilograms", () => {
+    const routines = store();
+    const created = routines.create(
+      { name: "BW", items: [{ exerciseRef: "user:a", label: "A", targetWeightKg: 0 }] },
+      NOW,
+    );
+    expect(routines.get(created.id)?.items[0]?.targetWeightKg).toBe(0);
+  });
+
+  it("refuses a hold of zero seconds, which is not a prescription", () => {
+    expect(() =>
+      store().create(
+        { name: "X", items: [{ exerciseRef: "user:1", label: "L", targetSeconds: 0 }] },
+        NOW,
+      ),
+    ).toThrow(FitRoutineValidationError);
+  });
+
+  it("refuses a rest beyond what the rest timer will actually run", () => {
+    // 600 is MAX_FIT_REST_SECONDS. A routine allowed to store more could
+    // prescribe a rest the app then refuses, and the refusal would land a full
+    // session later, on the set where it mattered.
+    expect(() =>
+      store().create(
+        { name: "X", items: [{ exerciseRef: "user:1", label: "L", restSeconds: 601 }] },
+        NOW,
+      ),
+    ).toThrow(FitRoutineValidationError);
+    expect(() =>
+      store().create(
+        { name: "X", items: [{ exerciseRef: "user:1", label: "L", restSeconds: 90.5 }] },
+        NOW,
+      ),
+    ).toThrow(FitRoutineValidationError);
+  });
+
+  it("refuses NaN and Infinity, which SQLite would take without complaint", () => {
+    for (const value of [Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() =>
+        store().create(
+          { name: "X", items: [{ exerciseRef: "user:1", label: "L", targetSeconds: value }] },
+          NOW,
+        ),
+      ).toThrow(FitRoutineValidationError);
+    }
+  });
+
+  it("clears a target when an update omits it, because items are replaced wholesale", () => {
+    const routines = store();
+    const created = routines.create(withTargets, NOW);
+    routines.update(
+      created.id,
+      { items: [{ exerciseRef: "catalogue:plank", label: "Plank" }] },
+      LATER,
+    );
+    expect(routines.get(created.id)?.items[0]).toMatchObject({
+      targetSeconds: null,
+      restSeconds: null,
+    });
+  });
+});
+
 describe("FitRoutineStore.update", () => {
   it("patches name/notes without touching items when items is omitted", () => {
     const routines = store();

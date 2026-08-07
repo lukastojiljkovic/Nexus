@@ -38,6 +38,23 @@ export interface FitRoutineItem {
   targetSets: number | null;
   targetRepsMin: number | null;
   targetRepsMax: number | null;
+  /**
+   * The targets a rep range cannot express (migration 061). Which of these an
+   * item may carry is decided by the exercise's METRIC, exactly as it is for a
+   * logged set — three of the seven metrics have no reps at all, and before
+   * these existed a routine could not tell a plank how long to hold.
+   *
+   * All nullable, and an absent target is not a target of zero.
+   */
+  targetSeconds: number | null;
+  targetWeightKg: number | null;
+  targetDistanceM: number | null;
+  /**
+   * Rest after each set of THIS item. `0` is a real prescription — straight
+   * into the next set — while `null` means the routine has no opinion and the
+   * session's own default stands.
+   */
+  restSeconds: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -65,6 +82,10 @@ export interface FitRoutineItemInput {
   targetSets?: number | null;
   targetRepsMin?: number | null;
   targetRepsMax?: number | null;
+  targetSeconds?: number | null;
+  targetWeightKg?: number | null;
+  targetDistanceM?: number | null;
+  restSeconds?: number | null;
 }
 
 export interface CreateFitRoutineInput {
@@ -98,6 +119,10 @@ interface RoutineItemRow {
   target_sets: number | null;
   target_reps_min: number | null;
   target_reps_max: number | null;
+  target_seconds: number | null;
+  target_weight_kg: number | null;
+  target_distance_m: number | null;
+  rest_seconds: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -108,12 +133,16 @@ interface ValidatedItem {
   targetSets: number | null;
   targetRepsMin: number | null;
   targetRepsMax: number | null;
+  targetSeconds: number | null;
+  targetWeightKg: number | null;
+  targetDistanceM: number | null;
+  restSeconds: number | null;
 }
 
 const ROUTINE_COLUMNS = "id, profile_id, name, notes, created_at, updated_at";
 const ITEM_COLUMNS =
   "id, routine_id, position, exercise_ref, label, target_sets, target_reps_min, target_reps_max, " +
-  "created_at, updated_at";
+  "target_seconds, target_weight_kg, target_distance_m, rest_seconds, created_at, updated_at";
 
 /**
  * The profile's OWN routines (FIT training, migration 060), over prepared,
@@ -186,8 +215,10 @@ export class FitRoutineStore {
     this.insertItem = db.prepare(
       `INSERT INTO fit_routine_items
          (id, profile_id, routine_id, position, exercise_ref, label,
-          target_sets, target_reps_min, target_reps_max, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          target_sets, target_reps_min, target_reps_max,
+          target_seconds, target_weight_kg, target_distance_m, rest_seconds,
+          created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     this.deleteItemsByRoutine = db.prepare(
       `DELETE FROM fit_routine_items WHERE routine_id = ? AND profile_id = ?`,
@@ -267,6 +298,7 @@ export class FitRoutineStore {
       this.insertItem.run(
         uuidv7(), this.profileId, routineId, index,
         item.exerciseRef, item.label, item.targetSets, item.targetRepsMin, item.targetRepsMax,
+        item.targetSeconds, item.targetWeightKg, item.targetDistanceM, item.restSeconds,
         now, now,
       );
     });
@@ -313,6 +345,10 @@ function toItem(row: RoutineItemRow, profileId: string): FitRoutineItem {
     targetSets: row.target_sets,
     targetRepsMin: row.target_reps_min,
     targetRepsMax: row.target_reps_max,
+    targetSeconds: row.target_seconds,
+    targetWeightKg: row.target_weight_kg,
+    targetDistanceM: row.target_distance_m,
+    restSeconds: row.rest_seconds,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -347,7 +383,33 @@ function validateItem(item: FitRoutineItemInput, index: number): ValidatedItem {
       `"items[${index}]" has a rep range that runs backwards (targetRepsMin > targetRepsMax).`,
     );
   }
-  return { exerciseRef, label, targetSets, targetRepsMin, targetRepsMax };
+  // Migration 061's targets. Bounds mirror the CHECKs on the columns AND the
+  // ones `fit_workout_sets` already imposes on the same quantities, so a
+  // routine cannot prescribe a set the log would refuse to record.
+  const targetSeconds = validatePositiveFiniteOrNull(
+    item?.targetSeconds,
+    `items[${index}].targetSeconds`,
+  );
+  const targetWeightKg = validateNonNegativeFiniteOrNull(
+    item?.targetWeightKg,
+    `items[${index}].targetWeightKg`,
+  );
+  const targetDistanceM = validatePositiveFiniteOrNull(
+    item?.targetDistanceM,
+    `items[${index}].targetDistanceM`,
+  );
+  const restSeconds = validateRestSecondsOrNull(item?.restSeconds, `items[${index}].restSeconds`);
+  return {
+    exerciseRef,
+    label,
+    targetSets,
+    targetRepsMin,
+    targetRepsMax,
+    targetSeconds,
+    targetWeightKg,
+    targetDistanceM,
+    restSeconds,
+  };
 }
 
 /**
@@ -381,6 +443,66 @@ function validatePositiveIntOrNull(value: number | null | undefined, field: stri
   if (value === undefined || value === null) return null;
   if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
     throw new FitRoutineValidationError(`"${field}" must be null or a positive whole number.`);
+  }
+  return value;
+}
+
+/**
+ * A measured quantity, not a count — seconds and metres are REAL in both
+ * `fit_routine_items` and `fit_workout_sets`, because a 45.5-second hold is a
+ * real prescription. `Number.isFinite` rather than a bare `typeof`: NaN and
+ * Infinity are numbers, and SQLite would take either of them without
+ * complaint.
+ */
+function validatePositiveFiniteOrNull(
+  value: number | null | undefined,
+  field: string,
+): number | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    throw new FitRoutineValidationError(`"${field}" must be null or a positive number.`);
+  }
+  return value;
+}
+
+/** Same, but zero is legal — a bodyweight target is 0 kg of added load. */
+function validateNonNegativeFiniteOrNull(
+  value: number | null | undefined,
+  field: string,
+): number | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new FitRoutineValidationError(`"${field}" must be null or a number of at least zero.`);
+  }
+  return value;
+}
+
+/**
+ * Rest is whole seconds, and ZERO IS MEANINGFUL — „straight into the next set"
+ * is a superset, and it is a different statement from `null`, which means the
+ * routine has no opinion and the session default stands.
+ *
+ * The ceiling is the REST TIMER's own maximum, restating migration 061's CHECK.
+ * A routine allowed to store more than the timer accepts could prescribe a rest
+ * the app then refuses to run — and the refusal would land a full session
+ * later, on the set where it mattered.
+ */
+const MAX_ROUTINE_REST_SECONDS = 600;
+
+function validateRestSecondsOrNull(
+  value: number | null | undefined,
+  field: string,
+): number | null {
+  if (value === undefined || value === null) return null;
+  if (
+    typeof value !== "number" ||
+    !Number.isInteger(value) ||
+    value < 0 ||
+    value > MAX_ROUTINE_REST_SECONDS
+  ) {
+    throw new FitRoutineValidationError(
+      `"${field}" must be null or a whole number of seconds from 0 to ${MAX_ROUTINE_REST_SECONDS}.`,
+    );
   }
   return value;
 }

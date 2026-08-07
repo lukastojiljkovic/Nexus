@@ -61,6 +61,17 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
  *
+ * `1.38.0` adds four targets to `fit-routine-item` (migration 061):
+ * `targetSeconds`, `targetWeightKg`, `targetDistanceM` and `restSeconds`. A
+ * PURELY ADDITIVE change, hence the minor bump — `1.37.0` shipped a routine
+ * item that could prescribe sets and reps and nothing else, which left three of
+ * the seven exercise metrics (`time`, `weight_time`, `distance_time`) unable to
+ * state the only number they have. An archive written by 1.37.0 carries none of
+ * the four properties at all, and `parseFitRoutineItem` reads their ABSENCE as
+ * „this routine said nothing about a hold" rather than refusing the record —
+ * the same treatment every earlier additive field got, and the reason a reader
+ * one version behind is no worse off than it was.
+ *
  * `1.37.0` adds FIT's training and body half (ADR-081 slice b, migration 060):
  * seven record types — `fit-exercise`, `fit-routine`, `fit-routine-item`,
  * `fit-workout`, `fit-workout-set`, `fit-measurement`, `fit-body-profile` — all
@@ -530,7 +541,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.37.0";
+const SCHEMA_VERSION = "1.38.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -1764,6 +1775,16 @@ export interface ExportFitRoutineItem {
   targetSets: number | null;
   targetRepsMin: number | null;
   targetRepsMax: number | null;
+  /**
+   * Migration 061's targets — the ones a rep range cannot express. Added in
+   * interchange `1.38.0`; an archive written before it simply has no such
+   * properties, and the reader turns their absence into `null` rather than
+   * refusing the record.
+   */
+  targetSeconds: number | null;
+  targetWeightKg: number | null;
+  targetDistanceM: number | null;
+  restSeconds: number | null;
   createdAt: string;
   updatedAt: string;
 }

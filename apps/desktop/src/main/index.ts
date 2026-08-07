@@ -560,6 +560,7 @@ import {
   type FitMeasurement,
   type FitRestTimer,
   type FitRoutine,
+  type FitRoutineItemInput,
   type FitWorkout,
   type FitWorkoutSet,
   type FlagState,
@@ -3851,8 +3852,16 @@ function asMuscleGroups(value: unknown, field: string): MuscleGroup[] {
   return value.map((entry, index) => asClosedMember(entry, `${field}[${index}]`, MUSCLE_GROUPS));
 }
 
-/** The routine lines as the renderer sends them: a reference and its targets, never a label. */
-function asFitRoutineItemInputs(value: unknown): { exerciseRef: string; targetSets: number | null; targetRepsMin: number | null; targetRepsMax: number | null }[] {
+/**
+ * The routine lines as the renderer sends them: a reference and its targets,
+ * never a label.
+ *
+ * Every bound below is the SAME bound the corresponding logged-set field
+ * carries (`fit:set-log`), and deliberately so: a routine that could prescribe
+ * a number the log refuses to record would put the refusal a whole session
+ * later, on the set where it mattered.
+ */
+function asFitRoutineItemInputs(value: unknown): FitRoutineItemInput[] {
   if (!Array.isArray(value) || value.length > MAX_FIT_ROUTINE_ITEMS) {
     throw new Error(
       `Invalid IPC payload: "items" must be an array of at most ${MAX_FIT_ROUTINE_ITEMS} entries.`,
@@ -3865,6 +3874,24 @@ function asFitRoutineItemInputs(value: unknown): { exerciseRef: string; targetSe
       targetSets: asFitSetCount(item.targetSets, `items[${index}].targetSets`, 99),
       targetRepsMin: asFitSetCount(item.targetRepsMin, `items[${index}].targetRepsMin`, 999),
       targetRepsMax: asFitSetCount(item.targetRepsMax, `items[${index}].targetRepsMax`, 999),
+      targetSeconds: asFitSetNumber(item.targetSeconds, `items[${index}].targetSeconds`, 86_400),
+      targetWeightKg: asFitSetNumber(
+        item.targetWeightKg,
+        `items[${index}].targetWeightKg`,
+        MAX_WEIGHT_KG,
+      ),
+      targetDistanceM: asFitSetNumber(
+        item.targetDistanceM,
+        `items[${index}].targetDistanceM`,
+        1_000_000,
+      ),
+      // The rest timer's own ceiling, not a number invented here — see the
+      // column's CHECK in migration 061.
+      restSeconds: asFitSetCount(
+        item.restSeconds,
+        `items[${index}].restSeconds`,
+        MAX_FIT_REST_SECONDS,
+      ),
     };
   });
 }
@@ -3913,7 +3940,11 @@ function readFitRoutineBody(payload: unknown): {
   profileId: string;
   name: string;
   notes: string;
-  items: { exerciseRef: string; label: string; targetSets: number | null; targetRepsMin: number | null; targetRepsMax: number | null }[];
+  // `FitRoutineItemInput` plus the label main resolved — spelled as an
+  // intersection rather than restated field by field, so migration 061's four
+  // targets (and whatever comes next) reach the store without a second list
+  // here quietly dropping them on the floor.
+  items: (FitRoutineItemInput & { label: string })[];
 } {
   const body = asRecord(payload);
   const profileId = asNonEmptyString(body.profileId, "profileId");

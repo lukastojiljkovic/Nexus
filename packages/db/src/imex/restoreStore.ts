@@ -504,8 +504,10 @@ export class RestoreStore {
     this.insertFitRoutineItem = db.prepare(
       `INSERT INTO fit_routine_items
          (id, profile_id, routine_id, position, exercise_ref, label,
-          target_sets, target_reps_min, target_reps_max, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          target_sets, target_reps_min, target_reps_max,
+          target_seconds, target_weight_kg, target_distance_m, rest_seconds,
+          created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     this.insertFitWorkout = db.prepare(
       `INSERT INTO fit_workouts
@@ -1475,7 +1477,13 @@ export class RestoreStore {
       for (const item of input.data.fitRoutineItems) {
         this.insertFitRoutineItem.run(
           item.id, this.profileId, item.routineId, item.position, item.exerciseRef, item.label,
-          item.targetSets, item.targetRepsMin, item.targetRepsMax, item.createdAt, item.updatedAt,
+          item.targetSets, item.targetRepsMin, item.targetRepsMax,
+          // Migration 061. An archive written before it has no such fields, so
+          // `?? null` is what makes an old backup restore as „this routine said
+          // nothing about a hold" rather than throwing on a missing property.
+          item.targetSeconds ?? null, item.targetWeightKg ?? null,
+          item.targetDistanceM ?? null, item.restSeconds ?? null,
+          item.createdAt, item.updatedAt,
         );
         written += 1;
       }
