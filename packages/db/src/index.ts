@@ -556,6 +556,7 @@ export type { FitTargetGoals, FitTargets } from "./fitness/nutritionTargetStore.
 // lives as JSON in `@nexus/core` and a logged set SNAPSHOTS the metric and
 // muscles it was performed with, which is why none of these ever reads it.
 export { FitBodyProfileStore } from "./fitness/bodyProfileStore.js";
+export type { FitBodyProfile } from "./fitness/bodyProfileStore.js";
 
 export { FitMeasurementStore } from "./fitness/measurementStore.js";
 export type { FitMeasurement } from "./fitness/measurementStore.js";

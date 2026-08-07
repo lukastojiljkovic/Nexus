@@ -1,4 +1,5 @@
 import { foodRefText, parseFoodRef } from "../fitness/food.js";
+import { exerciseRefText, parseExerciseRef } from "../fitness/exercise.js";
 import { remapNoteState } from "../notes/noteLinks.js";
 import { isBuiltinNoteTemplateId } from "../notes/noteTemplateIds.js";
 import { ARCHIVE_MODULE_IDS, countProfileModules } from "./exportArchive.js";
@@ -273,6 +274,10 @@ export type ImportSkipCode =
   | "study-settings-not-imported"
   /** A FIT goals row: the target user's own decision about their own body, never the archive author's (migration 058). Its own code rather than a fold into `study-settings-not-imported`, because a skip line reports one (code, module, type) triple and the sentence a user needs is a different one. */
   | "fit-targets-not-imported"
+  /** The profile's own body facts — sex, birth date, height, activity (migration 060) — `fit-targets-not-imported`'s exact reasoning restated for the row beside it. */
+  | "fit-body-profile-not-imported"
+  /** A body-weight log entry: keyed by `(profileId, day)`, so importing it could only ever collide with or silently duplicate the target's own reading for that day — never a row this planner will merge. */
+  | "fit-measurements-not-imported"
   | "calendar-settings-not-imported"
   | "profile-picture-not-imported"
   | "private-notes-not-imported"
@@ -777,6 +782,57 @@ const ID_MINTERS: Record<keyof ProfileData, (data: ProfileData, ctx: PlanContext
   // (see the plan below).
   fitTargets: NO_IDS,
   /**
+   * An EXERCISE is minted, always — never absorbed by name, `fitFoods`'s exact
+   * reasoning one table over: it carries content a merge would overwrite (a
+   * catalogue's worth of fields), migration 060 puts no uniqueness on its name,
+   * and two „Zgibovi" rows in two profiles are routinely two different
+   * variations somebody built their own name for.
+   */
+  fitExercises: (data, ctx) => mintAll(data.fitExercises, ctx),
+  /**
+   * A ROUTINE is minted, always, `habits`' reasoning applied one table over: it
+   * carries content (the whole item list, via its own minter below) a merge
+   * would overwrite, migration 060 puts no uniqueness on its name, and two
+   * „Push dan" routines in two profiles are two different programs somebody
+   * happened to name alike.
+   */
+  fitRoutines: (data, ctx) => mintAll(data.fitRoutines, ctx),
+  /**
+   * Minted like any other content row. Its one reference — the routine — is
+   * remapped below onto the new row that routine became, `habitEntries`' exact
+   * shape one table over.
+   */
+  fitRoutineItems: (data, ctx) => mintAll(data.fitRoutineItems, ctx),
+  /**
+   * A WORKOUT is minted, always — a logged session is an event that happened,
+   * never a duplicate of somebody else's, `finTransactions`' reasoning applied
+   * to a training log. An imported session that was still OPEN at export time
+   * (`endedAt: null`) keeps that fact: see the remap below for what happens
+   * when the target already has one open.
+   */
+  fitWorkouts: (data, ctx) => mintAll(data.fitWorkouts, ctx),
+  /**
+   * Minted like any other content row. Its one reference — the workout — is
+   * remapped below onto the new row that workout became, `fitRoutineItems`'
+   * exact shape just above.
+   */
+  fitWorkoutSets: (data, ctx) => mintAll(data.fitWorkoutSets, ctx),
+  /**
+   * NOT imported (the remap literal plans an empty array): a body-weight log
+   * keyed by `(profileId, day)` carries no id of its own to mint, and the target
+   * profile's own reading for a day the source also recorded would collide on
+   * that exact key — the same additive-only posture `fitTargets` states above,
+   * for a row this table cannot even represent a merge of.
+   */
+  fitMeasurements: NO_IDS,
+  /**
+   * NOT imported, `fitTargets`' exact reasoning: the profile's own body facts
+   * (sex, birth date, height, activity) are the TARGET user's decision about
+   * their own body, keyed by their profile alone, and a foreign import never
+   * updates a pre-existing row.
+   */
+  fitBodyProfile: NO_IDS,
+  /**
    * A BOARD is minted, always — never absorbed by name, for the habit's reasons
    * at one remove. It carries CONTENT a merge would overwrite (the whole
    * drawing), migration 059 puts no uniqueness on its name, and two „Šema baze"
@@ -951,6 +1007,36 @@ function remappedFoodRef(foodRef: string, ctx: PlanContext): string {
   if (parsed === null || parsed.kind !== "user") return foodRef;
   const next = ctx.ids.get(parsed.id);
   return next === undefined ? foodRef : foodRefText({ kind: "user", id: next });
+}
+
+/**
+ * A routine item's or a logged set's `exerciseRef`, followed onto whatever its
+ * exercise became — `remappedFoodRef`'s exact reasoning, one table over.
+ * `catalogue:<slug>` is left EXACTLY as it is (app-shipped data both profiles
+ * already share); `user:<id>` is remapped, or kept verbatim when the archive
+ * did not carry that exercise, on the same "never throw over a column with no
+ * foreign key" terms.
+ */
+function remappedExerciseRef(exerciseRef: string, ctx: PlanContext): string {
+  const parsed = parseExerciseRef(exerciseRef);
+  if (parsed === null || parsed.kind !== "user") return exerciseRef;
+  const next = ctx.ids.get(parsed.id);
+  return next === undefined ? exerciseRef : exerciseRefText({ kind: "user", id: next });
+}
+
+/**
+ * A workout's `routineRef`: the routine it named, followed onto whatever that
+ * routine became, or null when the map cannot answer — `mappedTaskOrNone`'s
+ * exact posture, restated for the column that carries no grammar and no
+ * foreign key (migration 060). A SOURCE id crossing verbatim would name
+ * nobody's row in the target profile, so an unresolvable one becomes null
+ * rather than a foreign id smuggled into this profile's column; the session
+ * keeps `routineLabel`, the snapshot that already makes it readable without the
+ * routine.
+ */
+function mappedRoutineRefOrNone(routineRef: string | null, ctx: PlanContext): string | null {
+  if (routineRef === null) return null;
+  return ctx.ids.get(routineRef) ?? null;
 }
 
 /**
@@ -1449,6 +1535,61 @@ export function planForeignImport(
     // alone — and the import card promises DODAJE, which an upsert over their row
     // would break. Named in the report below, like every by-design skip.
     fitTargets: [],
+    // --- FIT training & body (migration 060) ------------------------------
+    // Every exercise imports as its own row: nothing here absorbs one (see
+    // `ID_MINTERS.fitExercises`).
+    fitExercises: source.fitExercises.map((row) => ({
+      ...row,
+      id: mapped(row.id, ctx),
+      profileId: target.profileId,
+    })),
+    // Every routine imports as its own row too (see `ID_MINTERS.fitRoutines`).
+    fitRoutines: source.fitRoutines.map((row) => ({
+      ...row,
+      id: mapped(row.id, ctx),
+      profileId: target.profileId,
+    })),
+    // Remapped onto the routine that routine became AND the exercise its
+    // reference names, when that reference names a USER exercise — the
+    // `fitMealItems.foodRef` treatment, one table over.
+    fitRoutineItems: source.fitRoutineItems.map((row) => ({
+      ...row,
+      id: mapped(row.id, ctx),
+      profileId: target.profileId,
+      routineId: mapped(row.routineId, ctx),
+      exerciseRef: remappedExerciseRef(row.exerciseRef, ctx),
+    })),
+    // Every workout imports as its own row (see `ID_MINTERS.fitWorkouts`).
+    // `routineRef` tolerates an id the map cannot answer — the column carries no
+    // foreign key by design, so a session started from a routine this archive
+    // does not carry (or one the target's own copy absorbed under a different
+    // id than the source ever had) is not a bug, `mappedTaskOrNone`'s posture.
+    fitWorkouts: source.fitWorkouts.map((row) => ({
+      ...row,
+      id: mapped(row.id, ctx),
+      profileId: target.profileId,
+      routineRef: mappedRoutineRefOrNone(row.routineRef, ctx),
+    })),
+    // Remapped onto the workout that workout became AND the exercise its
+    // reference names, on `fitRoutineItems`' exact terms just above. The four
+    // numbers and the snapshotted `metric`/`primaryMuscles` ride unremapped —
+    // a fact about the lift performed, not a reference into the source profile.
+    fitWorkoutSets: source.fitWorkoutSets.map((row) => ({
+      ...row,
+      id: mapped(row.id, ctx),
+      profileId: target.profileId,
+      workoutId: mapped(row.workoutId, ctx),
+      exerciseRef: remappedExerciseRef(row.exerciseRef, ctx),
+    })),
+    // NOT imported, on `fitTargets`' exact terms: a body-weight log keyed by
+    // `(profileId, day)` is the target user's own body, and a source reading for
+    // a day the target already recorded would collide on that very key. Named in
+    // the report below.
+    fitMeasurements: [],
+    // NOT imported either, `fitTargets`' terms restated: sex, birth date, height
+    // and activity are the target user's own decision about their own body.
+    // Named in the report below.
+    fitBodyProfile: [],
     // --- CANV (migration 059) ---------------------------------------------
     // Every board imports as its own row: nothing here absorbs one (see
     // `ID_MINTERS.canvasBoards`), and the drawing rides unremapped because there
@@ -1564,6 +1705,13 @@ function buildReport(
   );
   note("study-settings-not-imported", "study", "study-settings", source.studySettings.length);
   note("fit-targets-not-imported", "fitness", "fit-target", source.fitTargets.length);
+  note("fit-body-profile-not-imported", "fitness", "fit-body-profile", source.fitBodyProfile.length);
+  note(
+    "fit-measurements-not-imported",
+    "fitness",
+    "fit-measurement",
+    source.fitMeasurements.length,
+  );
   note(
     "calendar-settings-not-imported",
     "calendar",

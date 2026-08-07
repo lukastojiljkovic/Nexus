@@ -38,10 +38,15 @@ import {
   FinTransactionStore,
   FocusStore,
   ForeignImportStore,
+  FitBodyProfileStore,
+  FitExerciseStore,
   FitFoodStore,
   FitMealStore,
+  FitMeasurementStore,
+  FitRoutineStore,
   CanvasStore,
   FitTargetStore,
+  FitWorkoutStore,
   HabitStore,
   NexusDatabase,
   NoteAttachmentStore,
@@ -228,6 +233,11 @@ function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
     fitFoodStore: (profileId) => new FitFoodStore(handle.raw, profileId),
     fitMealStore: (profileId) => new FitMealStore(handle.raw, profileId),
     fitTargetStore: (profileId) => new FitTargetStore(handle.raw, profileId),
+    fitExerciseStore: (profileId) => new FitExerciseStore(handle.raw, profileId),
+    fitRoutineStore: (profileId) => new FitRoutineStore(handle.raw, profileId),
+    fitWorkoutStore: (profileId) => new FitWorkoutStore(handle.raw, profileId),
+    fitMeasurementStore: (profileId) => new FitMeasurementStore(handle.raw, profileId),
+    fitBodyProfileStore: (profileId) => new FitBodyProfileStore(handle.raw, profileId),
     canvasStore: (profileId) => new CanvasStore(handle.raw, profileId),
   };
 }
@@ -537,6 +547,11 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   const fitFoodStore = new FitFoodStore(handle.raw, profileId);
   const fitMealStore = new FitMealStore(handle.raw, profileId);
   const fitTargetStore = new FitTargetStore(handle.raw, profileId);
+  const fitExerciseStore = new FitExerciseStore(handle.raw, profileId);
+  const fitRoutineStore = new FitRoutineStore(handle.raw, profileId);
+  const fitWorkoutStore = new FitWorkoutStore(handle.raw, profileId);
+  const fitMeasurementStore = new FitMeasurementStore(handle.raw, profileId);
+  const fitBodyProfileStore = new FitBodyProfileStore(handle.raw, profileId);
   const canvasStore = new CanvasStore(handle.raw, profileId);
 
   // HABIT (migration 055): one habit of each schedule kind and real days ticked
@@ -589,6 +604,59 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     t0,
   );
   fitTargetStore.save({ kcal: 2200, proteinG: null, carbsG: null, fatG: null }, t0);
+
+  // FIT training & body (migration 060): a user exercise, a routine naming it
+  // alongside a catalogue reference, a FINISHED workout with a set of each kind
+  // of reference, a full body-weight reading, and the body facts row — the same
+  // catalogue-vs-user pairing the food diary above proves, one slice deeper.
+  const fitExercise = fitExerciseStore.create(
+    {
+      name: `${label} zgib`, nameEn: "Pull-up variation",
+      primaryMuscles: ["latovi", "biceps"], equipment: "sopstvena-tezina",
+      pattern: "vertikalno-privlacenje", metric: "reps",
+    },
+    t0,
+  );
+  const fitRoutine = fitRoutineStore.create(
+    {
+      name: `${label} povuci dan`,
+      items: [
+        { exerciseRef: "catalogue:zgibovi", label: "Zgibovi", targetSets: 4, targetRepsMin: 6, targetRepsMax: 10 },
+        { exerciseRef: `user:${fitExercise.id}`, label: fitExercise.name },
+      ],
+    },
+    t0,
+  );
+  const fitWorkout = fitWorkoutStore.start(
+    { day: "2026-01-01", routineRef: fitRoutine.id, routineLabel: fitRoutine.name },
+    t0,
+  );
+  fitWorkoutStore.logSet(
+    fitWorkout.id,
+    { exerciseRef: "catalogue:zgibovi", label: "Zgibovi", metric: "reps", primaryMuscles: ["latovi", "biceps"], kind: "working", reps: 10 },
+    t0,
+  );
+  fitWorkoutStore.logSet(
+    fitWorkout.id,
+    {
+      exerciseRef: `user:${fitExercise.id}`, label: fitExercise.name, metric: "weighted_reps",
+      primaryMuscles: ["latovi", "biceps"], kind: "drop", weightKg: 10, reps: 6,
+    },
+    t0,
+  );
+  fitWorkoutStore.finish(fitWorkout.id, t0);
+  fitMeasurementStore.save(
+    {
+      day: "2026-01-01", weightKg: 82.4, bodyFatPercent: 18.5,
+      muscle: { unit: "percent", value: 44.2 }, waterPercent: 55,
+      circumferences: { neck: 40, chest: 105, upperArm: 36, waist: 88, hip: 100, thigh: 58 },
+    },
+    t0,
+  );
+  fitBodyProfileStore.save(
+    { sex: "male", birthDate: "1996-03-14", heightCm: 181, activity: "moderate" },
+    t0,
+  );
 
   // CANV (migration 059): a board with shapes AND an embedded image, so the
   // zip round trip carries a whole drawing rather than an empty module — the
@@ -882,6 +950,26 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     fitFoods: fitFoodStore.list(),
     fitMealItems: fitMealStore.listAll(),
     fitTargets: [{ profileId, kcal: 2200, proteinG: null, carbsG: null, fatG: null, updatedAt: t0 }],
+    // FIT training & body (migration 060), read the same way `gatherFitness`
+    // reads it: a routine/workout's nested items/sets split into their own
+    // collections, `profileId` added onto the two child rows whose own store
+    // shape carries none.
+    fitExercises: fitExerciseStore.list(),
+    fitRoutines: fitRoutineStore.list().map(({ items: _items, ...routine }) => routine),
+    fitRoutineItems: fitRoutineStore.list().flatMap((routine) => routine.items),
+    fitWorkouts: fitWorkoutStore
+      .listRange("1900-01-01", "9999-12-31")
+      .map(({ sets: _sets, ...workout }) => workout),
+    fitWorkoutSets: fitWorkoutStore
+      .listRange("1900-01-01", "9999-12-31")
+      .flatMap((workout) => workout.sets.map((set) => ({ ...set, profileId }))),
+    fitMeasurements: fitMeasurementStore
+      .listRange("1900-01-01", "9999-12-31")
+      .map((measurement) => ({ ...measurement, profileId })),
+    fitBodyProfile: (() => {
+      const profile = fitBodyProfileStore.get();
+      return profile === null ? [] : [{ profileId, ...profile }];
+    })(),
     // CANV (migration 059), read the same way `gatherCanvas` reads it: the
     // store answers canonical TEXT, the archive carries the nested document.
     canvasBoards: canvasStore.listActiveWithScenes().map((board) => ({

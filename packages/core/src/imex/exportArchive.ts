@@ -27,6 +27,19 @@
 
 import type { FocusOutcome, FocusPhaseKind } from "../focus/focusSession.js";
 import type { FoodMacros, FoodServing } from "../fitness/food.js";
+import type {
+  ActivityLevel,
+  BodyCircumferences,
+  BodySex,
+  MuscleReading,
+} from "../fitness/body.js";
+import type {
+  ExerciseEquipment,
+  ExerciseMetric,
+  MovementPattern,
+  MuscleGroup,
+} from "../fitness/exercise.js";
+import type { SetKind } from "../fitness/training.js";
 import type { CanvasScene } from "../canvas/canvasScene.js";
 import type { HabitSchedule } from "../habits/habitSchedule.js";
 import type { RecurrenceRule } from "../recurrence/recurrence.js";
@@ -47,6 +60,75 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * `tables/*.csv` is for their spreadsheet, and it is checksummed by neither. An
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
+ *
+ * `1.37.0` adds FIT's training and body half (ADR-081 slice b, migration 060):
+ * seven record types — `fit-exercise`, `fit-routine`, `fit-routine-item`,
+ * `fit-workout`, `fit-workout-set`, `fit-measurement`, `fit-body-profile` — all
+ * riding in the EXISTING `data/fitness.ndjson`, under the EXISTING `fitness`
+ * member of `ARCHIVE_MODULE_IDS`. Deliberately NOT a file or a module of its
+ * own, unlike `1.36.0`'s CANV entry just above: FIT is ONE module with a
+ * nutrition half and a training half, not two modules that happen to share a
+ * name, and a fitness-only export that carried the food diary but not the
+ * training log would be a module choice (IMEX-003) silently lying about what
+ * "fitness" means. `countProfileModules` and `filterProfileData` fold all ten
+ * FIT collections into the one `fitness` bucket for exactly that reason.
+ *
+ * **The EXERCISE CATALOGUE is not exported, on `1.35.0`'s food-catalogue
+ * argument exactly.** The several hundred exercises the app ships with live as
+ * JSON inside `@nexus/core` (`fitness/exercise.ts`), not as rows — see migration
+ * 060. `fit-exercise` carries ONLY the exercises the user added themselves, and
+ * a `fit-routine-item`/`fit-workout-set`'s `exerciseRef` is provenance beside a
+ * required `label` snapshot rather than something this archive resolves —
+ * `catalogue:<slug>` names data that is not a row anywhere, and `user:<uuid>`
+ * may name an exercise this profile has since deleted while the routine or the
+ * logged set stays true. Same for `routineRef` on `fit-workout`: a plain routine
+ * id with no grammar, naming a `fit-routine` that may not have survived to this
+ * archive. Neither gets a reference rule; both are validated for SHAPE alone
+ * (`parseExerciseRef`, a length bound) and left otherwise untouched, on
+ * `foodRef`'s exact reasoning.
+ *
+ * **`fit-routine-item.routineId` and `fit-workout-set.workoutId` ARE real
+ * foreign keys, unlike the two references above, and this archive treats them
+ * as such.** Migration 060 declares both `ON DELETE CASCADE`, so a routine or a
+ * workout that is IN this archive must be named correctly by every item or set
+ * that is a child of it, or the restore's raw `INSERT` fails partway through a
+ * transaction the rest of this file exists to prevent. A dangling one is
+ * therefore refused exactly as `subject-attachment.subjectId` is — the same
+ * `onDangling: "drop"` machinery, one table over. Written PARENTS BEFORE
+ * CHILDREN in the NDJSON, the `data/habits.ndjson` idiom: a routine before its
+ * items, a workout before its sets.
+ *
+ * **Two invariants the SCHEMA enforces that a hand-edited archive could break,
+ * and both are refused AT PARSE TIME rather than surfacing as a raw SQLite
+ * error mid-restore.** `fit_workouts_profile_open`'s UNIQUE partial index — at
+ * most one `fit-workout` per profile with `endedAt: null` — is checked the way
+ * `note-folder.isCaptureDefault`'s per-profile singleton is (ADR-036): every
+ * open workout past the first is refused, and import mode drops it, which
+ * cascades its sets away through the ordinary child-drop rule above. The
+ * `fit_measurements` PRIMARY KEY — at most one `fit-measurement` per
+ * `(profileId, day)` — costs nothing new at all: the row carries no id of its
+ * own, so keying its bucket on `profileId,day` (`fin-recurring`'s composite-key
+ * idiom, one column short) makes a second reading of one day the ORDINARY
+ * `duplicate-id` problem every other keyless row already produces.
+ *
+ * **`fit-measurement.muscle` and `.circumferences` are nested objects, on
+ * `habit.schedule`'s reason exactly: the interchange is JSON.** `muscle` is
+ * `@nexus/core`'s own `MuscleReading` — a unit and a value, never normalised
+ * into one or the other at the boundary — and `circumferences` is `@nexus/core`'s
+ * `BodyCircumferences`, the six tape sites `CIRCUMFERENCE_SITES` names, each
+ * independently nullable because a scale gives some of these numbers and a tape
+ * measure gives the rest.
+ *
+ * None of the seven needs an `ArchiveEra` flag: every field is required from
+ * this version's first release, and the whole-absent-type rule below covers the
+ * types themselves — a pre-`1.37.0` archive simply carries no training rows,
+ * indistinguishable from a profile that trains outside the app, which is what
+ * `data/fitness.ndjson` already meant for every profile before migration 060
+ * existed. The bump is owed for the reason every one below was: an older reader
+ * handed this archive would refuse `fit-exercise` (and the six beside it) as
+ * unrecognised types, and the version gate turns that into one honest sentence
+ * about the build instead of one baffling line-error per exercise, per routine
+ * and per logged set in somebody's training history.
  *
  * `1.36.0` adds the CANV module's boards (CANV slice a, migration 059): ONE
  * record type — `canvas-board` — riding in its own `data/canvas.ndjson`, a new
@@ -448,7 +530,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.36.0";
+const SCHEMA_VERSION = "1.37.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -1612,6 +1694,179 @@ export interface ExportFitTarget {
   updatedAt: string;
 }
 
+// --- FIT training & body (ADR-081 slice b, migration 060) -------------------
+//
+// Seven record types riding in the SAME `data/fitness.ndjson` as the three
+// above — see `SCHEMA_VERSION`'s `1.37.0` entry for why this is one module's
+// two halves rather than a module of its own.
+
+/**
+ * One exercise the USER added (migration 060). The app's own catalogue ships as
+ * JSON inside `@nexus/core` and is NOT exported — `SCHEMA_VERSION`'s `1.37.0`
+ * entry, `1.35.0`'s food-catalogue argument one table over.
+ *
+ * `primaryMuscles`/`secondaryMuscles` are JSON arrays re-validated against
+ * `MUSCLE_GROUPS`, exactly as `equipment`/`pattern`/`metric` are re-validated
+ * against their own closed lists — none of the four is backed by a SQL CHECK
+ * (migration 060's own doc: they are JSON, or a label nothing computes on), so
+ * an archive is the one way a bad value could reach the column unchecked.
+ */
+export interface ExportFitExercise {
+  id: string;
+  profileId: string;
+  name: string;
+  /** Empty is ordinary — a user's own accessory movement need not carry an English name. */
+  nameEn: string;
+  primaryMuscles: readonly MuscleGroup[];
+  secondaryMuscles: readonly MuscleGroup[];
+  equipment: ExerciseEquipment;
+  pattern: MovementPattern;
+  unilateral: boolean;
+  metric: ExerciseMetric;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * A routine is the SHAPE of a session and holds nothing about when it runs
+ * (migration 060's own doc, ADR-035's task templates one module over). Rides in
+ * `data/fitness.ndjson` AHEAD of the `fit-routine-item` rows that name it —
+ * parents before children, the `data/habits.ndjson` idiom.
+ */
+export interface ExportFitRoutine {
+  id: string;
+  profileId: string;
+  name: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One line of a routine (migration 060). `routineId` is a REAL foreign key
+ * (`ON DELETE CASCADE`) and IS reference-checked — see `SCHEMA_VERSION`'s
+ * `1.37.0` entry — unlike `exerciseRef`, which is text with no foreign key by
+ * design and gets shape validation only (`parseExerciseRef`), never a lookup:
+ * it may name the app's catalogue (not a row anywhere) or a user exercise this
+ * profile has since deleted, and `label` is what keeps the line readable either
+ * way. The three targets are independently nullable — "bench, as many sets as
+ * it takes" is a real prescription, and `null` is "no target", never a target of
+ * zero.
+ */
+export interface ExportFitRoutineItem {
+  id: string;
+  profileId: string;
+  routineId: string;
+  position: number;
+  exerciseRef: string;
+  label: string;
+  targetSets: number | null;
+  targetRepsMin: number | null;
+  targetRepsMax: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One logged session (migration 060). `endedAt` is `null` exactly while the
+ * session was open at export time — a fact this archive reproduces rather than
+ * closes, and one the reader's own invariant refuses to let a second row of
+ * (see `SCHEMA_VERSION`'s `1.37.0` entry: at most one open workout per profile,
+ * the schema's own `fit_workouts_profile_open` index). `routineRef` is a bare
+ * routine id with NO grammar and no reference rule — it may be soft-deleted or
+ * simply not in this archive, and `routineLabel` is what the session was called
+ * at the time, so it reads without the routine either way. Rides AHEAD of the
+ * `fit-workout-set` rows that name it.
+ */
+export interface ExportFitWorkout {
+  id: string;
+  profileId: string;
+  day: string;
+  startedAt: string;
+  endedAt: string | null;
+  routineRef: string | null;
+  routineLabel: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One logged set (migration 060). `metric` and `primaryMuscles` are SNAPSHOTTED
+ * with the set — the same decision `fit-meal-item`'s `per100g` makes one module
+ * over, and for the identical reason: an exercise edited tonight must not
+ * re-interpret arithmetic performed on tonight's lift as though it had always
+ * meant that. `workoutId` is a real foreign key and IS reference-checked, on
+ * `routineId`'s exact terms above; `exerciseRef` is shape-checked only, on
+ * `fit-routine-item`'s. The four numeric fields are independently nullable —
+ * which of them mean anything is exactly what `metric` decides.
+ */
+export interface ExportFitWorkoutSet {
+  id: string;
+  profileId: string;
+  workoutId: string;
+  position: number;
+  exerciseRef: string;
+  label: string;
+  metric: ExerciseMetric;
+  primaryMuscles: readonly MuscleGroup[];
+  kind: SetKind;
+  /** Kilograms. Total load for `weight_reps`/`weight_time`, ADDED load for `weighted_reps`, SUBTRACTED assistance for `assisted_reps`. */
+  weightKg: number | null;
+  reps: number | null;
+  seconds: number | null;
+  distanceM: number | null;
+  /** Reps in reserve, 0-5, or null. */
+  rir: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One reading, one day (migration 060) — the table's PRIMARY KEY is
+ * `(profileId, day)`, which is why this row carries no id of its own: a second
+ * reading for a day this archive already carries is the ordinary `duplicate-id`
+ * problem, keyed on the pair (`SCHEMA_VERSION`'s `1.37.0` entry).
+ *
+ * `muscle` is `@nexus/core`'s own `MuscleReading` — a unit and a value kept
+ * VERBATIM, never normalised into the other unit — and `circumferences` is its
+ * `BodyCircumferences`, the six tape sites `CIRCUMFERENCE_SITES` names. Both
+ * nested objects rather than flattened columns, for the reason a habit's
+ * `schedule` is one: the interchange is JSON.
+ */
+export interface ExportFitMeasurement {
+  profileId: string;
+  day: string;
+  weightKg: number;
+  bodyFatPercent: number | null;
+  muscle: MuscleReading | null;
+  waterPercent: number | null;
+  circumferences: BodyCircumferences;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * The profile's own body facts (migration 060) — zero or one row, `fit-target`'s
+ * arrangement: keyed by `profileId` alone, so a second row is `duplicate-id`.
+ *
+ * `birthDate` travels rather than an age, on migration 060's own reasoning:
+ * storing "30" once means being wrong from the next birthday onward, silently,
+ * inside a BMR nobody re-checks. `sex: null` means "not given", never "unknown,
+ * assume male" — its absence closes the Mifflin-St Jeor tier, and a reader that
+ * coerced it to a value would be inventing a demographic.
+ */
+export interface ExportFitBodyProfile {
+  profileId: string;
+  sex: BodySex | null;
+  birthDate: string;
+  heightCm: number;
+  activity: ActivityLevel;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // --- CANV (canvas boards, migration 059) ------------------------------------
 //
 // One record type, because a board IS its drawing: there is nothing else about
@@ -1857,6 +2112,26 @@ export interface ProfileData {
   fitFoods: readonly ExportFitFood[];
   fitMealItems: readonly ExportFitMealItem[];
   fitTargets: readonly ExportFitTarget[];
+  /**
+   * FIT's training and body half (ADR-081 slice b, migration 060) — the other
+   * seven collections the SAME `fitness` bucket carries (`SCHEMA_VERSION`'s
+   * `1.37.0` entry). Required like every field above and for the same reason.
+   * EMPTY both for a pre-`1.37.0` archive and for a profile that trains outside
+   * the app, indistinguishable on purpose, because they mean the same thing.
+   *
+   * `fitExercises` is ONLY the user's own exercises — the catalogue ships inside
+   * the app. `fitRoutineItems`/`fitWorkoutSets` are the children whose parent
+   * `fitRoutines`/`fitWorkouts` come before them in every collection here, on
+   * `taskLists`'/`tasks`' arrangement. `fitBodyProfile` is zero or one row, the
+   * `fitTargets` shape.
+   */
+  fitExercises: readonly ExportFitExercise[];
+  fitRoutines: readonly ExportFitRoutine[];
+  fitRoutineItems: readonly ExportFitRoutineItem[];
+  fitWorkouts: readonly ExportFitWorkout[];
+  fitWorkoutSets: readonly ExportFitWorkoutSet[];
+  fitMeasurements: readonly ExportFitMeasurement[];
+  fitBodyProfile: readonly ExportFitBodyProfile[];
   /**
    * The CANV module's boards (migration 059). Required like every field above:
    * a module the caller forgets must be a type error, not a quiet omission.
@@ -2216,8 +2491,22 @@ export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, 
     // the module's substance, exactly as habit entries are — a preview showing
     // only the food count would say almost nothing about what is about to
     // change. The app-shipped catalogue is counted nowhere, because it is not
-    // in the archive at all.
-    fitness: data.fitFoods.length + data.fitMealItems.length + data.fitTargets.length,
+    // in the archive at all. FIT's training half (migration 060) counts into
+    // this SAME bucket, all ten collections — the user's own exercises, every
+    // routine and its items, every logged workout and set, every body reading
+    // and the body-facts row, on the reason `SCHEMA_VERSION`'s `1.37.0` entry
+    // gives: one module, not two that happen to share a name.
+    fitness:
+      data.fitFoods.length +
+      data.fitMealItems.length +
+      data.fitTargets.length +
+      data.fitExercises.length +
+      data.fitRoutines.length +
+      data.fitRoutineItems.length +
+      data.fitWorkouts.length +
+      data.fitWorkoutSets.length +
+      data.fitMeasurements.length +
+      data.fitBodyProfile.length,
     // One board is one row, drawing and all. This is deliberately NOT a count of
     // shapes: the number a preview must be right about is how many boards are
     // being replaced, and „412" would name something nobody has a name for.
@@ -2379,6 +2668,20 @@ export function filterProfileData(
     fitFoods: only("fitness", data.fitFoods),
     fitMealItems: only("fitness", data.fitMealItems),
     fitTargets: only("fitness", data.fitTargets),
+    // FIT's training half (migration 060) drops as the SAME one unit, all seven
+    // collections — one module, `SCHEMA_VERSION`'s `1.37.0` entry. Its two real
+    // foreign keys (`fit-routine-item.routineId`, `fit-workout-set.workoutId`)
+    // have both ends inside this one module, so they drop together with no
+    // repair rule needed, exactly as FIN's five do. `exerciseRef`/`routineRef`
+    // are not references this archive resolves at all (no foreign key, by
+    // design), so there is nothing to repair for them even in principle.
+    fitExercises: only("fitness", data.fitExercises),
+    fitRoutines: only("fitness", data.fitRoutines),
+    fitRoutineItems: only("fitness", data.fitRoutineItems),
+    fitWorkouts: only("fitness", data.fitWorkouts),
+    fitWorkoutSets: only("fitness", data.fitWorkoutSets),
+    fitMeasurements: only("fitness", data.fitMeasurements),
+    fitBodyProfile: only("fitness", data.fitBodyProfile),
     // A board points at nothing and nothing points at a board, so this module
     // drops on its own with nothing to repair anywhere — the simplest case in
     // this whole function. The images a board carries go with it, because they
@@ -2524,15 +2827,28 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     ...data.habitEntries.map((row) => ({ type: "habit-entry", ...row })),
   ]);
 
-  // The goals row leads (the preferences-first idiom every data file keeps),
-  // then the user's own foods, then the diary. Nothing in this file points at
-  // anything in it — a meal item's `foodRef` is provenance rather than a
-  // reference (see `ExportFitMealItem`) — so this is how the file READS, not
-  // what it requires.
+  // The two settings-shaped rows lead (the preferences-first idiom every data
+  // file keeps), then the user's own exercises and foods — the two catalogues
+  // this profile added to — then the routines (parents before the items that
+  // name them), then the workouts (parents before the sets that name them),
+  // then the food diary, then the body-weight log. `fit-routine-item.routineId`
+  // and `fit-workout-set.workoutId` are the ONLY forward references this file
+  // requires in order (migration 060's real foreign keys); a meal item's
+  // `foodRef` and a routine item's/workout set's `exerciseRef`/`routineRef` are
+  // provenance rather than a reference this archive resolves (see
+  // `ExportFitMealItem`, `SCHEMA_VERSION`'s `1.37.0` entry), so beyond those two
+  // pairs this is how the file READS, not what it requires.
   const fitnessNdjson = toNdjson([
     ...data.fitTargets.map((row) => ({ type: "fit-target", ...row })),
+    ...data.fitBodyProfile.map((row) => ({ type: "fit-body-profile", ...row })),
+    ...data.fitExercises.map((row) => ({ type: "fit-exercise", ...row })),
     ...data.fitFoods.map((row) => ({ type: "fit-food", ...row })),
+    ...data.fitRoutines.map((row) => ({ type: "fit-routine", ...row })),
+    ...data.fitRoutineItems.map((row) => ({ type: "fit-routine-item", ...row })),
+    ...data.fitWorkouts.map((row) => ({ type: "fit-workout", ...row })),
+    ...data.fitWorkoutSets.map((row) => ({ type: "fit-workout-set", ...row })),
     ...data.fitMealItems.map((row) => ({ type: "fit-meal-item", ...row })),
+    ...data.fitMeasurements.map((row) => ({ type: "fit-measurement", ...row })),
   ]);
 
   // One record type and no ordering to keep: a board names nothing and nothing

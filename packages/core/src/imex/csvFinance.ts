@@ -900,6 +900,14 @@ export function translateCsvFinance(
     fitFoods: [],
     fitMealItems: [],
     fitTargets: [],
+    // Nor any training log (migration 060) — same reason.
+    fitExercises: [],
+    fitRoutines: [],
+    fitRoutineItems: [],
+    fitWorkouts: [],
+    fitWorkoutSets: [],
+    fitMeasurements: [],
+    fitBodyProfile: [],
     canvasBoards: [],
   };
 

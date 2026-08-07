@@ -2,7 +2,12 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import * as Y from "yjs";
 import { buildExportArchive, type ExportArchive, type ExportArchiveInput, type ProfileData } from "./exportArchive.js";
-import { INTERCHANGE_SCHEMA_VERSION, parseImportArchive, type ImportArchiveInput } from "./importArchive.js";
+import {
+  INTERCHANGE_SCHEMA_VERSION,
+  parseImportArchive,
+  type ImportArchiveInput,
+  type ImportMode,
+} from "./importArchive.js";
 
 /** The test's own sha256 hex — mirrors the shape `main` injects, kept out of `@nexus/core`. */
 function sha256(content: string): string {
@@ -107,6 +112,13 @@ function emptyExportInput(): ExportArchiveInput {
       fitFoods: [],
       fitMealItems: [],
       fitTargets: [],
+      fitExercises: [],
+      fitRoutines: [],
+      fitRoutineItems: [],
+      fitWorkouts: [],
+      fitWorkoutSets: [],
+      fitMeasurements: [],
+      fitBodyProfile: [],
     canvasBoards: [],
     },
     hash: sha256,
@@ -757,6 +769,89 @@ function richProfileData(): ProfileData {
         updatedAt: "2026-07-01T00:00:00.000Z",
       },
     ],
+    // FIT training & body (migration 060). One user exercise, referenced by a
+    // routine item AND a logged set — the same round trip `fitFoods` proves
+    // one table over, plus a catalogue reference beside it so both halves of
+    // `exerciseRef`'s grammar travel.
+    fitExercises: [
+      {
+        id: "fit-exercise-1", profileId: "profile1", name: "Moja varijanta zgiba",
+        nameEn: "My pull-up variation", primaryMuscles: ["latovi", "biceps"],
+        secondaryMuscles: ["podlaktica"], equipment: "sopstvena-tezina",
+        pattern: "vertikalno-privlacenje", unilateral: false, metric: "reps", notes: "Uža hvat.",
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+    ],
+    fitRoutines: [
+      {
+        id: "fit-routine-1", profileId: "profile1", name: "Povuci dan", notes: "Leđa i biceps.",
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+    ],
+    // Two lines: one with every target set, one with none — "as many sets as
+    // it takes" is a real prescription, and the round trip has to carry both.
+    fitRoutineItems: [
+      {
+        id: "fit-routine-item-1", profileId: "profile1", routineId: "fit-routine-1", position: 0,
+        exerciseRef: "catalogue:zgibovi", label: "Zgibovi", targetSets: 4,
+        targetRepsMin: 6, targetRepsMax: 10,
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+      {
+        id: "fit-routine-item-2", profileId: "profile1", routineId: "fit-routine-1", position: 1,
+        exerciseRef: "user:fit-exercise-1", label: "Moja varijanta zgiba",
+        targetSets: null, targetRepsMin: null, targetRepsMax: null,
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+    ],
+    // A FINISHED session, started from the routine above — `routineRef` names a
+    // row this archive carries, but the rule never resolves it (it has no
+    // reference rule at all), so an unresolvable one would round-trip exactly
+    // the same.
+    fitWorkouts: [
+      {
+        id: "fit-workout-1", profileId: "profile1", day: "2026-07-06",
+        startedAt: "2026-07-06T17:00:00.000Z", endedAt: "2026-07-06T18:00:00.000Z",
+        routineRef: "fit-routine-1", routineLabel: "Povuci dan", notes: "",
+        createdAt: "2026-07-06T17:00:00.000Z", updatedAt: "2026-07-06T18:00:00.000Z",
+      },
+    ],
+    // Two sets, the pair proving the snapshot travels independent of the
+    // exercise it names: a bodyweight set (reps only) and a loaded one.
+    fitWorkoutSets: [
+      {
+        id: "fit-set-1", profileId: "profile1", workoutId: "fit-workout-1", position: 0,
+        exerciseRef: "catalogue:zgibovi", label: "Zgibovi", metric: "reps",
+        primaryMuscles: ["latovi", "biceps"], kind: "working",
+        weightKg: null, reps: 10, seconds: null, distanceM: null, rir: 2,
+        createdAt: "2026-07-06T17:05:00.000Z", updatedAt: "2026-07-06T17:05:00.000Z",
+      },
+      {
+        id: "fit-set-2", profileId: "profile1", workoutId: "fit-workout-1", position: 1,
+        exerciseRef: "user:fit-exercise-1", label: "Moja varijanta zgiba", metric: "weighted_reps",
+        primaryMuscles: ["latovi", "biceps", "podlaktica"], kind: "drop",
+        weightKg: 10, reps: 6, seconds: null, distanceM: null, rir: null,
+        createdAt: "2026-07-06T17:10:00.000Z", updatedAt: "2026-07-06T17:10:00.000Z",
+      },
+    ],
+    // A FULL reading — every optional field present, muscle as a percentage,
+    // all six tape sites — so the round trip proves the whole nested shape
+    // survives rather than its emptiest corner.
+    fitMeasurements: [
+      {
+        profileId: "profile1", day: "2026-07-06", weightKg: 82.4, bodyFatPercent: 18.5,
+        muscle: { unit: "percent", value: 44.2 }, waterPercent: 55,
+        circumferences: { neck: 40, chest: 105, upperArm: 36, waist: 88, hip: 100, thigh: 58 },
+        createdAt: "2026-07-06T07:00:00.000Z", updatedAt: "2026-07-06T07:00:00.000Z",
+      },
+    ],
+    fitBodyProfile: [
+      {
+        profileId: "profile1", sex: "male", birthDate: "1996-03-14", heightCm: 181,
+        activity: "moderate",
+        createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+    ],
     // A board with something drawn on it AND an embedded image — the image is
     // the part of a scene with no natural bound, and it rides INSIDE the row
     // rather than in `blobs/`, so the round trip is what proves the whole
@@ -864,6 +959,11 @@ const EMPTY_DATA_FILE_NAMES = [
   // drew nothing. The pre-1.36 test below strips it (and its checksum) back
   // off, on the habits file's exact terms.
   "data/canvas.ndjson",
+  // FIT's own file already existed at `1.35.0` (nutrition); added HERE only
+  // because no dedicated per-field describe block needed it before FIT training
+  // (`1.37.0`) arrived — every test above this line that never touches fitness
+  // rows is unaffected, since the file was always empty for them either way.
+  "data/fitness.ndjson",
 ] as const;
 
 /** A minimal, fully valid manifest+data-files set (5 empty NDJSON files, checksums matching), so an individual test can override exactly one thing and stay isolated from every other rule. */
@@ -1153,12 +1253,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.37.0`: the nearest minor strictly ahead of this build's `1.36.0`.
+  // `1.38.0`: the nearest minor strictly ahead of this build's `1.37.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.37.0" });
+    const files = baseFiles({ schemaVersion: "1.38.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.37.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.38.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -3970,6 +4070,244 @@ describe("parseImportArchive — CANV (slice a / 1.36.0)", () => {
   });
 });
 
+describe("parseImportArchive — FIT training & body (ADR-081 slice b / 1.37.0)", () => {
+  const T = "2026-07-01T00:00:00.000Z";
+
+  const VALID_FIT_EXERCISE = {
+    type: "fit-exercise", id: "fex1", profileId: "profile1", name: "Čučanj", nameEn: "Squat",
+    primaryMuscles: ["kvadriceps"], secondaryMuscles: [], equipment: "sipka", pattern: "cucanj",
+    unilateral: false, metric: "weight_reps", notes: "", createdAt: T, updatedAt: T,
+  };
+
+  const VALID_FIT_ROUTINE = {
+    type: "fit-routine", id: "fr1", profileId: "profile1", name: "Push dan", notes: "",
+    createdAt: T, updatedAt: T,
+  };
+
+  const VALID_FIT_ROUTINE_ITEM = {
+    type: "fit-routine-item", id: "fri1", profileId: "profile1", routineId: "fr1", position: 0,
+    exerciseRef: "catalogue:bench-press", label: "Potisak sa klupe",
+    targetSets: 4, targetRepsMin: 6, targetRepsMax: 10, createdAt: T, updatedAt: T,
+  };
+
+  const VALID_FIT_WORKOUT = {
+    type: "fit-workout", id: "fw1", profileId: "profile1", day: "2026-07-01",
+    startedAt: "2026-07-01T17:00:00.000Z", endedAt: "2026-07-01T18:00:00.000Z",
+    routineRef: null, routineLabel: "", notes: "",
+    createdAt: "2026-07-01T17:00:00.000Z", updatedAt: "2026-07-01T18:00:00.000Z",
+  };
+
+  const VALID_FIT_WORKOUT_SET = {
+    type: "fit-workout-set", id: "fws1", profileId: "profile1", workoutId: "fw1", position: 0,
+    exerciseRef: "catalogue:bench-press", label: "Potisak sa klupe", metric: "weight_reps",
+    primaryMuscles: ["grudi"], kind: "working",
+    weightKg: 80, reps: 8, seconds: null, distanceM: null, rir: null,
+    createdAt: "2026-07-01T17:05:00.000Z", updatedAt: "2026-07-01T17:05:00.000Z",
+  };
+
+  const VALID_FIT_MEASUREMENT = {
+    type: "fit-measurement", profileId: "profile1", day: "2026-07-01", weightKg: 82.4,
+    bodyFatPercent: null, muscle: null, waterPercent: null,
+    circumferences: { neck: null, chest: null, upperArm: null, waist: null, hip: null, thigh: null },
+    createdAt: T, updatedAt: T,
+  };
+
+  const VALID_FIT_BODY_PROFILE = {
+    type: "fit-body-profile", profileId: "profile1", sex: "male", birthDate: "1996-03-14",
+    heightCm: 181, activity: "moderate", createdAt: T, updatedAt: T,
+  };
+
+  function parseFitnessFile(rows: readonly Record<string, unknown>[], mode?: ImportMode) {
+    return parseImportArchive(
+      emptyInputWith(
+        baseFiles({ fileContents: { "data/fitness.ndjson": ndjson(rows) } }),
+        mode === undefined ? {} : { mode },
+      ),
+    );
+  }
+
+  const invalidDetails = (result: ReturnType<typeof parseFitnessFile>): (string | undefined)[] =>
+    result.problems.filter((problem) => problem.code === "invalid-record").map((p) => p.detail);
+
+  describe("closed vocabularies", () => {
+    it.each([
+      ["metric", { ...VALID_FIT_EXERCISE, metric: "cardio" }],
+      ["equipment", { ...VALID_FIT_EXERCISE, equipment: "sprava-za-mucenje" }],
+      ["pattern", { ...VALID_FIT_EXERCISE, pattern: "nepoznat" }],
+      ["primaryMuscles[0]", { ...VALID_FIT_EXERCISE, primaryMuscles: ["bicepsi-nogu"] }],
+      ["secondaryMuscles[0]", { ...VALID_FIT_EXERCISE, secondaryMuscles: ["bicepsi-nogu"] }],
+    ])("refuses an exercise with an unknown %s, naming the field", (detail, row) => {
+      expect(invalidDetails(parseFitnessFile([row]))).toEqual([detail]);
+    });
+
+    it("refuses a logged set with a kind outside SET_KINDS", () => {
+      const result = parseFitnessFile([VALID_FIT_WORKOUT, { ...VALID_FIT_WORKOUT_SET, kind: "varanje" }]);
+      expect(invalidDetails(result)).toEqual(["kind"]);
+    });
+
+    it("refuses a logged set with a metric outside EXERCISE_METRICS", () => {
+      const result = parseFitnessFile([VALID_FIT_WORKOUT, { ...VALID_FIT_WORKOUT_SET, metric: "cardio" }]);
+      expect(invalidDetails(result)).toEqual(["metric"]);
+    });
+
+    it("refuses a logged set whose primaryMuscles names something outside MUSCLE_GROUPS", () => {
+      const result = parseFitnessFile([
+        VALID_FIT_WORKOUT,
+        { ...VALID_FIT_WORKOUT_SET, primaryMuscles: ["bicepsi-nogu"] },
+      ]);
+      expect(invalidDetails(result)).toEqual(["primaryMuscles[0]"]);
+    });
+
+    it("refuses a body profile with a sex outside BODY_SEXES", () => {
+      expect(invalidDetails(parseFitnessFile([{ ...VALID_FIT_BODY_PROFILE, sex: "other" }]))).toEqual([
+        "sex",
+      ]);
+    });
+
+    it("refuses a body profile with an activity outside ACTIVITY_LEVELS", () => {
+      expect(
+        invalidDetails(parseFitnessFile([{ ...VALID_FIT_BODY_PROFILE, activity: "ekstremna" }])),
+      ).toEqual(["activity"]);
+    });
+  });
+
+  describe("exerciseRef / routineRef — shape only, never a reference lookup", () => {
+    it("accepts an exerciseRef naming a catalogue slug and one naming a user exercise this archive does not carry", () => {
+      const result = parseFitnessFile([
+        VALID_FIT_ROUTINE,
+        { ...VALID_FIT_ROUTINE_ITEM, exerciseRef: "catalogue:bench-press" },
+        VALID_FIT_WORKOUT,
+        // Names a user exercise that is not in this archive at all — exactly
+        // what a soft-deleted one looks like from the reader's side, since it
+        // has no way to tell "deleted" from "never carried" apart, and neither
+        // is a reason to refuse a session that actually happened.
+        { ...VALID_FIT_WORKOUT_SET, exerciseRef: "user:davno-obrisana" },
+      ]);
+      expect(result.problems).toEqual([]);
+      expect(result.data?.fitRoutineItems[0]?.exerciseRef).toBe("catalogue:bench-press");
+      expect(result.data?.fitWorkoutSets[0]?.exerciseRef).toBe("user:davno-obrisana");
+    });
+
+    it("refuses an exerciseRef of the wrong shape", () => {
+      const result = parseFitnessFile([VALID_FIT_ROUTINE, { ...VALID_FIT_ROUTINE_ITEM, exerciseRef: "bench-press" }]);
+      expect(invalidDetails(result)).toEqual(["exerciseRef"]);
+    });
+
+    it("accepts a workout whose routineRef names no routine in this archive, and one that is null", () => {
+      const result = parseFitnessFile([
+        { ...VALID_FIT_WORKOUT, routineRef: "routine-not-in-this-archive" },
+        { ...VALID_FIT_WORKOUT, id: "fw2", routineRef: null },
+      ]);
+      expect(result.problems).toEqual([]);
+      expect(result.data?.fitWorkouts.map((w) => w.routineRef)).toEqual([
+        "routine-not-in-this-archive", null,
+      ]);
+    });
+  });
+
+  describe("real foreign keys: fit-routine-item.routineId, fit-workout-set.workoutId", () => {
+    it("refuses a routine item naming a routine the archive does not carry", () => {
+      const result = parseFitnessFile([{ ...VALID_FIT_ROUTINE_ITEM, routineId: "ghost" }]);
+      expect(result.problems).toEqual([
+        {
+          severity: "error", code: "unknown-reference", path: "data/fitness.ndjson", line: 1,
+          detail: "routineId=ghost",
+        },
+      ]);
+    });
+
+    it("refuses a logged set naming a workout the archive does not carry", () => {
+      const result = parseFitnessFile([{ ...VALID_FIT_WORKOUT_SET, workoutId: "ghost" }]);
+      expect(result.problems).toEqual([
+        {
+          severity: "error", code: "unknown-reference", path: "data/fitness.ndjson", line: 1,
+          detail: "workoutId=ghost",
+        },
+      ]);
+    });
+
+    it("drops a set whose workout is dangling in import mode", () => {
+      const result = parseFitnessFile([{ ...VALID_FIT_WORKOUT_SET, workoutId: "ghost" }], "import");
+      expect(result.data?.fitWorkoutSets).toEqual([]);
+      expect(result.dropped).toEqual([
+        { module: "fitness", type: "fit-workout-set", reason: "unknown-reference", detail: "workoutId=ghost" },
+      ]);
+    });
+  });
+
+  describe("the two schema invariants a hand-edited archive could break", () => {
+    it("refuses a second workout left open in this profile — fit_workouts_profile_open", () => {
+      const result = parseFitnessFile([
+        { ...VALID_FIT_WORKOUT, id: "fw1", endedAt: null },
+        {
+          ...VALID_FIT_WORKOUT, id: "fw2", day: "2026-07-02",
+          startedAt: "2026-07-02T17:00:00.000Z", endedAt: null,
+        },
+      ]);
+      expect(result.problems).toEqual([
+        { severity: "error", code: "invalid-record", path: "data/fitness.ndjson", line: 2, detail: "endedAt" },
+      ]);
+    });
+
+    it("drops every open workout past the first in import mode, cascading its sets away", () => {
+      const result = parseFitnessFile(
+        [
+          { ...VALID_FIT_WORKOUT, id: "fw1", endedAt: null },
+          {
+            ...VALID_FIT_WORKOUT, id: "fw2", day: "2026-07-02",
+            startedAt: "2026-07-02T17:00:00.000Z", endedAt: null,
+          },
+          { ...VALID_FIT_WORKOUT_SET, id: "fws2", workoutId: "fw2" },
+        ],
+        "import",
+      );
+      expect(result.data?.fitWorkouts.map((w) => w.id)).toEqual(["fw1"]);
+      expect(result.data?.fitWorkoutSets).toEqual([]);
+    });
+
+    it("refuses a second measurement for one profile on one day — the table's own PRIMARY KEY", () => {
+      const result = parseFitnessFile([VALID_FIT_MEASUREMENT, { ...VALID_FIT_MEASUREMENT, weightKg: 81 }]);
+      expect(result.problems).toEqual([
+        {
+          severity: "error", code: "duplicate-id", path: "data/fitness.ndjson", line: 2,
+          detail: "profileId=profile1,day=2026-07-01",
+        },
+      ]);
+    });
+  });
+
+  describe("cross-field rules restated from migration 060's own table CHECKs", () => {
+    it("refuses a routine item whose rep range runs backwards", () => {
+      const result = parseFitnessFile([
+        VALID_FIT_ROUTINE,
+        { ...VALID_FIT_ROUTINE_ITEM, targetRepsMin: 10, targetRepsMax: 5 },
+      ]);
+      expect(invalidDetails(result)).toEqual(["targetRepsMax"]);
+    });
+
+    it("refuses a measurement's muscle reading with an unknown unit", () => {
+      const result = parseFitnessFile([{ ...VALID_FIT_MEASUREMENT, muscle: { unit: "lbs", value: 30 } }]);
+      expect(invalidDetails(result)).toEqual(["muscle.unit"]);
+    });
+
+    it("refuses a measurement's body-fat percentage at the boundary — 0 and 100 are both excluded", () => {
+      expect(
+        invalidDetails(parseFitnessFile([{ ...VALID_FIT_MEASUREMENT, bodyFatPercent: 0 }])),
+      ).toEqual(["bodyFatPercent"]);
+      expect(
+        invalidDetails(parseFitnessFile([{ ...VALID_FIT_MEASUREMENT, bodyFatPercent: 100 }])),
+      ).toEqual(["bodyFatPercent"]);
+    });
+  });
+
+  it("refuses a FIT training row filed in somebody else's data file", () => {
+    const result = parseImportArchive(
+      emptyInputWith(baseFiles({ fileContents: { "data/notes.ndjson": ndjson([VALID_FIT_EXERCISE]) } })),
+    );
+    expect(invalidDetails(result)).toEqual(["type"]);
+  });
+});
+
 describe("parseImportArchive — note categories (NOTE-002 / 1.27.0)", () => {
   const VALID_NOTE_CATEGORY = {
     type: "note-category", id: "nc1", profileId: "profile1", name: "sastanak", color: "zlato",
@@ -4104,8 +4442,8 @@ describe("parseImportArchive — note categories (NOTE-002 / 1.27.0)", () => {
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.36.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.36.0");
+  it("is 1.37.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.37.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -4295,11 +4633,11 @@ describe("parseImportArchive — schema version", () => {
     expect(result.manifest?.profile.kind).toBe("personal");
   });
 
-  // `1.37.0`: the nearest minor strictly ahead of this build's `1.36.0`.
+  // `1.38.0`: the nearest minor strictly ahead of this build's `1.37.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.37.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.38.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.37.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.38.0" },
     ]);
     expect(result.data).toBeNull();
   });

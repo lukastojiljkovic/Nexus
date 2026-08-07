@@ -72,7 +72,10 @@ function emptyProfileData(): ProfileData {
     dashboardSettings: [], dashboardSets: [], dashboardWidgets: [],
     finAccounts: [], finCategories: [], finRecurring: [], finTransactions: [], finBudgets: [],
     habits: [], habitEntries: [],
-    fitFoods: [], fitMealItems: [], fitTargets: [], canvasBoards: [],
+    fitFoods: [], fitMealItems: [], fitTargets: [],
+    fitExercises: [], fitRoutines: [], fitRoutineItems: [],
+    fitWorkouts: [], fitWorkoutSets: [], fitMeasurements: [], fitBodyProfile: [],
+    canvasBoards: [],
   };
 }
 

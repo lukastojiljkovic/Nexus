@@ -309,6 +309,13 @@ export class RestoreStore {
   private readonly insertFitFood: Database.Statement;
   private readonly insertFitMealItem: Database.Statement;
   private readonly insertFitTarget: Database.Statement;
+  private readonly insertFitBodyProfile: Database.Statement;
+  private readonly insertFitExercise: Database.Statement;
+  private readonly insertFitRoutine: Database.Statement;
+  private readonly insertFitRoutineItem: Database.Statement;
+  private readonly insertFitWorkout: Database.Statement;
+  private readonly insertFitWorkoutSet: Database.Statement;
+  private readonly insertFitMeasurement: Database.Statement;
   private readonly insertCanvasBoard: Database.Statement;
   private readonly insertSubject: Database.Statement;
   private readonly insertSubjectAttachment: Database.Statement;
@@ -472,6 +479,54 @@ export class RestoreStore {
     this.insertFitTarget = db.prepare(
       `INSERT INTO fit_targets (profile_id, kcal, protein_g, carbs_g, fat_g, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    // FIT training & body (migration 060). Every one of the seven carries its
+    // own `profile_id` (unlike the nutrition half's meal items, which do not),
+    // so every statement below binds it directly rather than through a parent's
+    // subquery.
+    this.insertFitBodyProfile = db.prepare(
+      `INSERT INTO fit_body_profile (profile_id, sex, birth_date, height_cm, activity, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    );
+    // The muscle arrays are re-serialized as JSON text, the exact column shape
+    // `FitExerciseStore` itself writes — the archive carries them as arrays, the
+    // column holds JSON text.
+    this.insertFitExercise = db.prepare(
+      `INSERT INTO fit_exercises
+         (id, profile_id, name, name_en, primary_muscles_json, secondary_muscles_json,
+          equipment, pattern, unilateral, metric, notes, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    this.insertFitRoutine = db.prepare(
+      `INSERT INTO fit_routines (id, profile_id, name, notes, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    this.insertFitRoutineItem = db.prepare(
+      `INSERT INTO fit_routine_items
+         (id, profile_id, routine_id, position, exercise_ref, label,
+          target_sets, target_reps_min, target_reps_max, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    this.insertFitWorkout = db.prepare(
+      `INSERT INTO fit_workouts
+         (id, profile_id, workout_date, started_at, ended_at, routine_ref, routine_label, notes,
+          created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    this.insertFitWorkoutSet = db.prepare(
+      `INSERT INTO fit_workout_sets
+         (id, profile_id, workout_id, position, exercise_ref, label, metric, primary_muscles_json,
+          kind, weight_kg, reps, seconds, distance_m, rir, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    // `muscle_unit`/`muscle_value` unpacked from the archive's nested
+    // `MuscleReading`, both-or-neither exactly as migration 060's own CHECK
+    // requires — a `null` reading writes both columns null.
+    this.insertFitMeasurement = db.prepare(
+      `INSERT INTO fit_measurements
+         (profile_id, day, weight_kg, body_fat_percent, muscle_unit, muscle_value, water_percent,
+          neck_cm, chest_cm, upper_arm_cm, waist_cm, hip_cm, thigh_cm, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     // CANV (migration 059). The drawing is written through `canvasSceneText` —
     // the same serializer `CanvasStore` writes through — so a restored board is
@@ -1375,6 +1430,84 @@ export class RestoreStore {
           item.per100g.kcal, item.per100g.protein, item.per100g.carbs, item.per100g.fat,
           item.per100g.fiber, item.per100g.sugar, item.per100g.sodiumMg,
           item.createdAt, item.updatedAt,
+        );
+        written += 1;
+      }
+
+      // FIT training & body (migration 060): zero-or-one body-facts row, then
+      // the user's own exercises, then the routines (parents before the items
+      // that name them), then the workouts (parents before the sets that name
+      // them), then the body-weight log. Every row already carries its own
+      // `profile_id` from the archive, rewritten onto THIS profile's below —
+      // `RestoreStore`'s rule everywhere else in this method. Both real foreign
+      // keys (`fit-routine-item.routineId`, `fit-workout-set.workoutId`) were
+      // already checked by `parseImportArchive`, and the two invariants a
+      // hand-edited archive could otherwise break — one open workout, one
+      // measurement per day — were refused there too, so nothing here
+      // re-derives either. EMPTY for every pre-1.37.0 archive, which restores a
+      // profile that trains outside the app, exactly as it did.
+      for (const profile of input.data.fitBodyProfile) {
+        this.insertFitBodyProfile.run(
+          this.profileId, profile.sex, profile.birthDate, profile.heightCm, profile.activity,
+          profile.createdAt, profile.updatedAt,
+        );
+        written += 1;
+      }
+
+      for (const exercise of input.data.fitExercises) {
+        this.insertFitExercise.run(
+          exercise.id, this.profileId, exercise.name, exercise.nameEn,
+          JSON.stringify(exercise.primaryMuscles), JSON.stringify(exercise.secondaryMuscles),
+          exercise.equipment, exercise.pattern, exercise.unilateral ? 1 : 0, exercise.metric,
+          exercise.notes, exercise.createdAt, exercise.updatedAt,
+        );
+        written += 1;
+      }
+
+      for (const routine of input.data.fitRoutines) {
+        this.insertFitRoutine.run(
+          routine.id, this.profileId, routine.name, routine.notes,
+          routine.createdAt, routine.updatedAt,
+        );
+        written += 1;
+      }
+
+      for (const item of input.data.fitRoutineItems) {
+        this.insertFitRoutineItem.run(
+          item.id, this.profileId, item.routineId, item.position, item.exerciseRef, item.label,
+          item.targetSets, item.targetRepsMin, item.targetRepsMax, item.createdAt, item.updatedAt,
+        );
+        written += 1;
+      }
+
+      for (const workout of input.data.fitWorkouts) {
+        this.insertFitWorkout.run(
+          workout.id, this.profileId, workout.day, workout.startedAt, workout.endedAt,
+          workout.routineRef, workout.routineLabel, workout.notes,
+          workout.createdAt, workout.updatedAt,
+        );
+        written += 1;
+      }
+
+      for (const set of input.data.fitWorkoutSets) {
+        this.insertFitWorkoutSet.run(
+          set.id, this.profileId, set.workoutId, set.position, set.exerciseRef, set.label,
+          set.metric, JSON.stringify(set.primaryMuscles), set.kind,
+          set.weightKg, set.reps, set.seconds, set.distanceM, set.rir,
+          set.createdAt, set.updatedAt,
+        );
+        written += 1;
+      }
+
+      for (const measurement of input.data.fitMeasurements) {
+        this.insertFitMeasurement.run(
+          this.profileId, measurement.day, measurement.weightKg, measurement.bodyFatPercent,
+          measurement.muscle?.unit ?? null, measurement.muscle?.value ?? null,
+          measurement.waterPercent,
+          measurement.circumferences.neck, measurement.circumferences.chest,
+          measurement.circumferences.upperArm, measurement.circumferences.waist,
+          measurement.circumferences.hip, measurement.circumferences.thigh,
+          measurement.createdAt, measurement.updatedAt,
         );
         written += 1;
       }

@@ -32,9 +32,14 @@ import {
   FinRecurringStore,
   FinTransactionStore,
   FocusStore,
+  FitBodyProfileStore,
+  FitExerciseStore,
   FitFoodStore,
   FitMealStore,
+  FitMeasurementStore,
+  FitRoutineStore,
   FitTargetStore,
+  FitWorkoutStore,
   CanvasStore,
   HabitStore,
   NexusDatabase,
@@ -175,6 +180,55 @@ function canvasBoardRows(store: CanvasStore): ProfileData["canvasBoards"] {
   }));
 }
 
+const FIT_TRAINING_MIN_DAY = "1900-01-01";
+const FIT_TRAINING_MAX_DAY = "9999-12-31";
+
+/**
+ * FIT training & body (migration 060) rows as the interchange carries them —
+ * `gatherFitness`'s own split of a store's nested shape (a routine with its
+ * items, a workout with its sets) into the separate collections `ProfileData`
+ * holds, restated here so the round trip exercises the same shape main builds.
+ */
+function fitRoutineRows(store: FitRoutineStore): ProfileData["fitRoutines"] {
+  return store.list().map(({ items: _items, ...routine }) => routine);
+}
+
+function fitRoutineItemRows(store: FitRoutineStore): ProfileData["fitRoutineItems"] {
+  return store.list().flatMap((routine) => routine.items);
+}
+
+function fitWorkoutRows(store: FitWorkoutStore): ProfileData["fitWorkouts"] {
+  return store
+    .listRange(FIT_TRAINING_MIN_DAY, FIT_TRAINING_MAX_DAY)
+    .map(({ sets: _sets, ...workout }) => workout);
+}
+
+function fitWorkoutSetRows(
+  profileId: string,
+  store: FitWorkoutStore,
+): ProfileData["fitWorkoutSets"] {
+  return store
+    .listRange(FIT_TRAINING_MIN_DAY, FIT_TRAINING_MAX_DAY)
+    .flatMap((workout) => workout.sets.map((set) => ({ ...set, profileId })));
+}
+
+function fitMeasurementRows(
+  profileId: string,
+  store: FitMeasurementStore,
+): ProfileData["fitMeasurements"] {
+  return store
+    .listRange(FIT_TRAINING_MIN_DAY, FIT_TRAINING_MAX_DAY)
+    .map((measurement) => ({ ...measurement, profileId }));
+}
+
+function fitBodyProfileRows(
+  profileId: string,
+  store: FitBodyProfileStore,
+): ProfileData["fitBodyProfile"] {
+  const profile = store.get();
+  return profile === null ? [] : [{ profileId, ...profile }];
+}
+
 function emptyProfileData(): ProfileData {
   return {
     tasks: [],
@@ -189,6 +243,13 @@ function emptyProfileData(): ProfileData {
     fitFoods: [],
     fitMealItems: [],
     fitTargets: [],
+    fitExercises: [],
+    fitRoutines: [],
+    fitRoutineItems: [],
+    fitWorkouts: [],
+    fitWorkoutSets: [],
+    fitMeasurements: [],
+    fitBodyProfile: [],
     canvasBoards: [],
     events: [],
     eventTemplates: [],
@@ -339,6 +400,11 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   const fitFoodStore = new FitFoodStore(handle.raw, profileId);
   const fitMealStore = new FitMealStore(handle.raw, profileId);
   const fitTargetStore = new FitTargetStore(handle.raw, profileId);
+  const fitExerciseStore = new FitExerciseStore(handle.raw, profileId);
+  const fitRoutineStore = new FitRoutineStore(handle.raw, profileId);
+  const fitWorkoutStore = new FitWorkoutStore(handle.raw, profileId);
+  const fitMeasurementStore = new FitMeasurementStore(handle.raw, profileId);
+  const fitBodyProfileStore = new FitBodyProfileStore(handle.raw, profileId);
   const canvasStore = new CanvasStore(handle.raw, profileId);
 
   // The merged Yjs state and derived body an export would carry for the edited
@@ -606,6 +672,71 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   // read NULL as 0 (or 0 as NULL) would fail the round trip.
   fitTargetStore.save({ kcal: 2200, proteinG: null, carbsG: null, fatG: null }, t2);
 
+  // FIT training & body (migration 060): a user exercise, a routine with two
+  // items (one targeted, one open-ended — "as many sets as it takes" is a real
+  // prescription), a FINISHED session started from that routine with two logged
+  // sets (one naming the app's CATALOGUE, which is not in the archive at all,
+  // exactly as the meal item above), a full body-weight reading and the body
+  // facts row. The catalogue-referencing set is this slice's own real subject,
+  // on `fitMealItems`' precedent: it survives on its own snapshotted
+  // `metric`/`primaryMuscles` and label, with nothing for a restore to resolve.
+  const fitExercise = fitExerciseStore.create(
+    {
+      name: `${name} zgib`,
+      nameEn: "Pull-up variation",
+      primaryMuscles: ["latovi", "biceps"],
+      secondaryMuscles: ["podlaktica"],
+      equipment: "sopstvena-tezina",
+      pattern: "vertikalno-privlacenje",
+      metric: "reps",
+      notes: "Uža hvat.",
+    },
+    t0,
+  );
+  const fitRoutine = fitRoutineStore.create(
+    {
+      name: `${name} povuci dan`,
+      notes: "Leđa i biceps.",
+      items: [
+        { exerciseRef: "catalogue:zgibovi", label: "Zgibovi", targetSets: 4, targetRepsMin: 6, targetRepsMax: 10 },
+        { exerciseRef: `user:${fitExercise.id}`, label: fitExercise.name },
+      ],
+    },
+    t0,
+  );
+  const startedWorkout = fitWorkoutStore.start(
+    { day: "2026-01-01", routineRef: fitRoutine.id, routineLabel: fitRoutine.name },
+    t1,
+  );
+  fitWorkoutStore.logSet(
+    startedWorkout.id,
+    { exerciseRef: "catalogue:zgibovi", label: "Zgibovi", metric: "reps", primaryMuscles: ["latovi", "biceps"], kind: "working", reps: 10 },
+    t1,
+  );
+  fitWorkoutStore.logSet(
+    startedWorkout.id,
+    {
+      exerciseRef: `user:${fitExercise.id}`, label: fitExercise.name, metric: "weighted_reps",
+      primaryMuscles: ["latovi", "biceps", "podlaktica"], kind: "drop", weightKg: 10, reps: 6,
+    },
+    t1,
+  );
+  fitWorkoutStore.finish(startedWorkout.id, t2);
+  // A FULL reading — every optional field present, so the round trip proves the
+  // whole nested shape (`muscle`, all six `circumferences` sites) survives.
+  fitMeasurementStore.save(
+    {
+      day: "2026-01-01", weightKg: 82.4, bodyFatPercent: 18.5,
+      muscle: { unit: "percent", value: 44.2 }, waterPercent: 55,
+      circumferences: { neck: 40, chest: 105, upperArm: 36, waist: 88, hip: 100, thigh: 58 },
+    },
+    t2,
+  );
+  fitBodyProfileStore.save(
+    { sex: "male", birthDate: "1996-03-14", heightCm: 181, activity: "moderate" },
+    t0,
+  );
+
   // CANV (migration 059): a board with something drawn on it AND an embedded
   // image, which is the round trip's real subject here — the image lives inside
   // the scene's own `files` rather than in `blobs/`, so a restore that lifted it
@@ -764,6 +895,13 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     // a puzzle about which list was wrong.
     fitMealItems: fitMealStore.listAll(),
     fitTargets: fitTargetRows(profileId, fitTargetStore),
+    fitExercises: fitExerciseStore.list(),
+    fitRoutines: fitRoutineRows(fitRoutineStore),
+    fitRoutineItems: fitRoutineItemRows(fitRoutineStore),
+    fitWorkouts: fitWorkoutRows(fitWorkoutStore),
+    fitWorkoutSets: fitWorkoutSetRows(profileId, fitWorkoutStore),
+    fitMeasurements: fitMeasurementRows(profileId, fitMeasurementStore),
+    fitBodyProfile: fitBodyProfileRows(profileId, fitBodyProfileStore),
     canvasBoards: canvasBoardRows(canvasStore),
   };
 

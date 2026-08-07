@@ -55,22 +55,26 @@ describe("FitBodyProfileStore.save", () => {
   it("stores and returns a profile", () => {
     const profiles = store();
     const saved = profiles.save(VALID_PROFILE, NOW);
-    expect(saved).toEqual(VALID_PROFILE);
-    expect(profiles.get()).toEqual(VALID_PROFILE);
+    expect(saved).toEqual({ ...VALID_PROFILE, createdAt: NOW, updatedAt: NOW });
+    expect(profiles.get()).toEqual({ ...VALID_PROFILE, createdAt: NOW, updatedAt: NOW });
   });
 
   it("round-trips sex: null as null, never coerced to a value", () => {
     const profiles = store();
     profiles.save({ ...VALID_PROFILE, sex: null }, NOW);
-    expect(profiles.get()).toEqual({ ...VALID_PROFILE, sex: null });
+    expect(profiles.get()).toEqual({ ...VALID_PROFILE, sex: null, createdAt: NOW, updatedAt: NOW });
   });
 
-  it("upserts in place — a second save replaces the one row", () => {
+  it("upserts in place — a second save replaces the one row, keeping the original createdAt", () => {
     const profiles = store();
     profiles.save(VALID_PROFILE, NOW);
     const updated = profiles.save({ ...VALID_PROFILE, heightCm: 182 }, LATER);
     expect(updated.heightCm).toBe(182);
-    expect(profiles.get()).toEqual({ ...VALID_PROFILE, heightCm: 182 });
+    expect(updated.createdAt).toBe(NOW);
+    expect(updated.updatedAt).toBe(LATER);
+    expect(profiles.get()).toEqual({
+      ...VALID_PROFILE, heightCm: 182, createdAt: NOW, updatedAt: LATER,
+    });
     expect(db.raw.prepare("SELECT COUNT(*) AS n FROM fit_body_profile").get()).toEqual({ n: 1 });
   });
 

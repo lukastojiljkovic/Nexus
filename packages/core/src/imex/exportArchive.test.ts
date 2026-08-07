@@ -86,6 +86,13 @@ function emptyInput(): ExportArchiveInput {
       fitFoods: [],
       fitMealItems: [],
       fitTargets: [],
+      fitExercises: [],
+      fitRoutines: [],
+      fitRoutineItems: [],
+      fitWorkouts: [],
+      fitWorkoutSets: [],
+      fitMeasurements: [],
+      fitBodyProfile: [],
     canvasBoards: [],
     },
     hash: sha256,
@@ -280,7 +287,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.36.0");
+      expect(manifest.schemaVersion).toBe("1.37.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       // `picture: null` is written out loud rather than omitted: the manifest is
@@ -1213,6 +1220,27 @@ describe("buildExportArchive", () => {
         fitTargets: [
           { profileId: "p1", kcal: 2200, proteinG: null, carbsG: null, fatG: null, updatedAt: t },
         ],
+        fitExercises: [
+          { id: "fe1", profileId: "p1", name: "Moja varijanta", nameEn: "", primaryMuscles: ["grudi"], secondaryMuscles: [], equipment: "bucice", pattern: "horizontalni-potisak", unilateral: false, metric: "weight_reps", notes: "", createdAt: t, updatedAt: t },
+        ],
+        fitRoutines: [
+          { id: "fr1", profileId: "p1", name: "Push dan", notes: "", createdAt: t, updatedAt: t },
+        ],
+        fitRoutineItems: [
+          { id: "fri1", profileId: "p1", routineId: "fr1", position: 0, exerciseRef: "user:fe1", label: "Potisak", targetSets: 4, targetRepsMin: 6, targetRepsMax: 10, createdAt: t, updatedAt: t },
+        ],
+        fitWorkouts: [
+          { id: "fw1", profileId: "p1", day: "2026-01-05", startedAt: t, endedAt: t, routineRef: "fr1", routineLabel: "Push dan", notes: "", createdAt: t, updatedAt: t },
+        ],
+        fitWorkoutSets: [
+          { id: "fws1", profileId: "p1", workoutId: "fw1", position: 0, exerciseRef: "user:fe1", label: "Potisak", metric: "weight_reps", primaryMuscles: ["grudi"], kind: "working", weightKg: 80, reps: 8, seconds: null, distanceM: null, rir: 2, createdAt: t, updatedAt: t },
+        ],
+        fitMeasurements: [
+          { profileId: "p1", day: "2026-01-05", weightKg: 82.4, bodyFatPercent: null, muscle: null, waterPercent: null, circumferences: { neck: null, chest: null, upperArm: null, waist: null, hip: null, thigh: null }, createdAt: t, updatedAt: t },
+        ],
+        fitBodyProfile: [
+          { profileId: "p1", sex: "male", birthDate: "1996-03-14", heightCm: 181, activity: "moderate", createdAt: t, updatedAt: t },
+        ],
         canvasBoards: [
           { id: "cb1", profileId: "p1", name: "Šema baze", scene: { type: "excalidraw", version: 2, source: "nexus", elements: [{ id: "el1", type: "rectangle" }], appState: { gridSize: 20 }, files: {} }, createdAt: t, updatedAt: t },
         ],
@@ -1232,9 +1260,11 @@ describe("buildExportArchive", () => {
         // the transfer, one of them that subscription's generated charge) + 1 budget
         finance: 8,
         habits: 2, // 1 habit + 1 day it was ticked
-        // 1 user food + 1 logged item + the goals row. The app's catalogue is
+        // 1 user food + 1 logged item + the goals row (migration 058), plus
+        // 1 each of exercise/routine/routine-item/workout/workout-set/
+        // measurement/body-profile (migration 060). The app's catalogue is
         // counted nowhere, because it is not in the archive at all.
-        fitness: 3,
+        fitness: 10,
         canvas: 1, // one board — a count of boards, never of what is drawn on them
       });
     });

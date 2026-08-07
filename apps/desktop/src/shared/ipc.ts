@@ -6374,6 +6374,13 @@ export type ImportRecordType =
   | "fit-food"
   | "fit-meal-item"
   | "fit-target"
+  | "fit-exercise"
+  | "fit-routine"
+  | "fit-routine-item"
+  | "fit-workout"
+  | "fit-workout-set"
+  | "fit-measurement"
+  | "fit-body-profile"
   | "canvas-board";
 
 /**
@@ -6398,6 +6405,10 @@ export type ImportSkipCode =
   | "study-settings-not-imported"
   /** A FIT goals row (migration 058): the target user's own decision about their own body, never the archive author's. Its own code, on `study-settings-not-imported`'s terms. */
   | "fit-targets-not-imported"
+  /** The profile's own body facts — sex, birth date, height, activity (migration 060). `fit-targets-not-imported`'s exact reasoning, restated for the row beside it. */
+  | "fit-body-profile-not-imported"
+  /** A body-weight log entry (migration 060): keyed by `(profileId, day)`, so importing it could only ever collide with or silently duplicate the target's own reading for that day. */
+  | "fit-measurements-not-imported"
   | "calendar-settings-not-imported"
   | "profile-picture-not-imported"
   | "private-notes-not-imported"

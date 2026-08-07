@@ -87,6 +87,11 @@ export class ForeignImportStore {
   private readonly insertHabitEntry: Database.Statement;
   private readonly insertFitFood: Database.Statement;
   private readonly insertFitMealItem: Database.Statement;
+  private readonly insertFitExercise: Database.Statement;
+  private readonly insertFitRoutine: Database.Statement;
+  private readonly insertFitRoutineItem: Database.Statement;
+  private readonly insertFitWorkout: Database.Statement;
+  private readonly insertFitWorkoutSet: Database.Statement;
   private readonly insertCanvasBoard: Database.Statement;
   private readonly insertNote: Database.Statement;
   private readonly insertNoteSnapshot: Database.Statement;
@@ -293,6 +298,43 @@ export class ForeignImportStore {
           kcal, protein, carbs, fat, fiber, sugar, sodium_mg,
           created_at, updated_at, deleted_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    // FIT training & body (migration 060). No `fit_measurements` or
+    // `fit_body_profile` statement, deliberately: the planner never imports
+    // either (`fit-measurements-not-imported`, `fit-body-profile-not-imported`)
+    // — a body-weight log and the profile's own body facts are the TARGET
+    // user's, `fit_targets`' exact posture above — so a statement that could
+    // write one would be a way to break that promise.
+    this.insertFitExercise = db.prepare(
+      `INSERT INTO fit_exercises
+         (id, profile_id, name, name_en, primary_muscles_json, secondary_muscles_json,
+          equipment, pattern, unilateral, metric, notes, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    this.insertFitRoutine = db.prepare(
+      `INSERT INTO fit_routines (id, profile_id, name, notes, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    // AFTER the routines it references (foreign keys are enforced, never
+    // deferred, in this store — the class doc's own rule).
+    this.insertFitRoutineItem = db.prepare(
+      `INSERT INTO fit_routine_items
+         (id, profile_id, routine_id, position, exercise_ref, label,
+          target_sets, target_reps_min, target_reps_max, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    this.insertFitWorkout = db.prepare(
+      `INSERT INTO fit_workouts
+         (id, profile_id, workout_date, started_at, ended_at, routine_ref, routine_label, notes,
+          created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    // AFTER the workouts it references, on the routine items' exact terms.
+    this.insertFitWorkoutSet = db.prepare(
+      `INSERT INTO fit_workout_sets
+         (id, profile_id, workout_id, position, exercise_ref, label, metric, primary_muscles_json,
+          kind, weight_kg, reps, seconds, distance_m, rir, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     // CANV (migration 059). Every board is a NEW row on the habits' reasoning —
     // see the insert loop — and the drawing goes through the same serializer
@@ -889,6 +931,62 @@ export class ForeignImportStore {
           item.per100g.kcal, item.per100g.protein, item.per100g.carbs, item.per100g.fat,
           item.per100g.fiber, item.per100g.sugar, item.per100g.sodiumMg,
           item.createdAt, item.updatedAt,
+        );
+        written += 1;
+      }
+
+      // FIT training & body (migration 060): the user's own exercises, then the
+      // routines and the items that name them, then the workouts and the sets
+      // that name them. Every exercise/routine/workout is a NEW row on the
+      // habits' reasoning exactly — see `ID_MINTERS.fitExercises`/
+      // `.fitRoutines`/`.fitWorkouts` (`@nexus/core`) — so nothing here can
+      // collide. Items and sets are written AFTER the parent that names them
+      // (foreign keys are enforced, never deferred, in this store), their
+      // `exerciseRef` already followed onto the exercise it named
+      // (`remappedExerciseRef`), on `food_ref`'s exact terms above. No
+      // `fit_measurements`/`fit_body_profile` write, by design — see the
+      // statement block above.
+      for (const exercise of planned.fitExercises) {
+        this.insertFitExercise.run(
+          exercise.id, this.profileId, exercise.name, exercise.nameEn,
+          JSON.stringify(exercise.primaryMuscles), JSON.stringify(exercise.secondaryMuscles),
+          exercise.equipment, exercise.pattern, exercise.unilateral ? 1 : 0, exercise.metric,
+          exercise.notes, exercise.createdAt, exercise.updatedAt,
+        );
+        written += 1;
+      }
+      for (const routine of planned.fitRoutines) {
+        this.insertFitRoutine.run(
+          routine.id, this.profileId, routine.name, routine.notes,
+          routine.createdAt, routine.updatedAt,
+        );
+        written += 1;
+      }
+      for (const item of planned.fitRoutineItems) {
+        this.insertFitRoutineItem.run(
+          item.id, this.profileId, item.routineId, item.position, item.exerciseRef, item.label,
+          item.targetSets, item.targetRepsMin, item.targetRepsMax, item.createdAt, item.updatedAt,
+        );
+        written += 1;
+      }
+      // `routineRef` arrives already followed onto the routine it named, or null
+      // when the map could not answer (`mappedRoutineRefOrNone`) — the column
+      // carries no foreign key, so this write never depends on the routine
+      // loop above having produced a match.
+      for (const workout of planned.fitWorkouts) {
+        this.insertFitWorkout.run(
+          workout.id, this.profileId, workout.day, workout.startedAt, workout.endedAt,
+          workout.routineRef, workout.routineLabel, workout.notes,
+          workout.createdAt, workout.updatedAt,
+        );
+        written += 1;
+      }
+      for (const set of planned.fitWorkoutSets) {
+        this.insertFitWorkoutSet.run(
+          set.id, this.profileId, set.workoutId, set.position, set.exerciseRef, set.label,
+          set.metric, JSON.stringify(set.primaryMuscles), set.kind,
+          set.weightKg, set.reps, set.seconds, set.distanceM, set.rir,
+          set.createdAt, set.updatedAt,
         );
         written += 1;
       }

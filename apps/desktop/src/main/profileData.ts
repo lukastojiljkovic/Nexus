@@ -25,9 +25,16 @@ import type {
   ExportFinCategory,
   ExportFinRecurring,
   ExportFinTransaction,
+  ExportFitBodyProfile,
+  ExportFitExercise,
   ExportFitFood,
   ExportFitMealItem,
+  ExportFitMeasurement,
+  ExportFitRoutine,
+  ExportFitRoutineItem,
   ExportFitTarget,
+  ExportFitWorkout,
+  ExportFitWorkoutSet,
   ExportHabit,
   ExportHabitEntry,
   ExportNoteFolder,
@@ -61,9 +68,14 @@ import type {
   FinCategoryStore,
   FinRecurringStore,
   FinTransactionStore,
+  FitBodyProfileStore,
+  FitExerciseStore,
   FitFoodStore,
   FitMealStore,
+  FitMeasurementStore,
+  FitRoutineStore,
   FitTargetStore,
+  FitWorkoutStore,
   FocusStore,
   HabitStore,
   NoteAttachmentStore,
@@ -132,6 +144,11 @@ export interface ProfileDataDeps {
   fitFoodStore(profileId: string): FitFoodStore;
   fitMealStore(profileId: string): FitMealStore;
   fitTargetStore(profileId: string): FitTargetStore;
+  fitExerciseStore(profileId: string): FitExerciseStore;
+  fitRoutineStore(profileId: string): FitRoutineStore;
+  fitWorkoutStore(profileId: string): FitWorkoutStore;
+  fitMeasurementStore(profileId: string): FitMeasurementStore;
+  fitBodyProfileStore(profileId: string): FitBodyProfileStore;
   canvasStore(profileId: string): CanvasStore;
 }
 
@@ -395,11 +412,18 @@ function gatherHabits(
   };
 }
 
-/** Every FIT-module row `ProfileData` requires (migration 058) — `gatherFitness`'s return shape. */
+/** Every FIT-module row `ProfileData` requires (migrations 058 and 060) — `gatherFitness`'s return shape. */
 interface GatheredFitnessData {
   fitFoods: ExportFitFood[];
   fitMealItems: ExportFitMealItem[];
   fitTargets: ExportFitTarget[];
+  fitExercises: ExportFitExercise[];
+  fitRoutines: ExportFitRoutine[];
+  fitRoutineItems: ExportFitRoutineItem[];
+  fitWorkouts: ExportFitWorkout[];
+  fitWorkoutSets: ExportFitWorkoutSet[];
+  fitMeasurements: ExportFitMeasurement[];
+  fitBodyProfile: ExportFitBodyProfile[];
 }
 
 /**
@@ -422,12 +446,38 @@ interface GatheredFitnessData {
  * The goals row is zero or one, and which it is is a REAL fact: `updatedAt` is
  * null exactly when the profile never saved any goals, so an absent row here
  * says „never decided" while a row of four nulls says „decided to have none".
+ *
+ * FIT's training half (migration 060) rides in the same gather. `fitRoutines`/
+ * `fitWorkouts` are read as their own store's nested shape (a routine with its
+ * items, a workout with its sets) and then split in two here — the parent row
+ * and the flattened children — because `ProfileData` carries the two as
+ * separate collections, `taskLists`/`taskSections`' arrangement. `listRange`
+ * over the widest possible span is `gatherHabits`' idiom restated: "every
+ * workout/measurement this profile has", never a screen-sized window truncating
+ * a backup. `FitWorkoutStore`'s own `FitWorkoutSet` and
+ * `FitMeasurementStore`'s own `FitMeasurement` carry no `profileId` of their
+ * own (an instance-scoped store's ordinary shape) — added here, at the one
+ * place that already knows it, `calendarSettings`'/`studySettings`' pattern
+ * just above. So does `FitBodyProfileStore.get()`'s zero-or-one row.
  */
 function gatherFitness(
-  deps: Pick<ProfileDataDeps, "fitFoodStore" | "fitMealStore" | "fitTargetStore">,
+  deps: Pick<
+    ProfileDataDeps,
+    | "fitFoodStore"
+    | "fitMealStore"
+    | "fitTargetStore"
+    | "fitExerciseStore"
+    | "fitRoutineStore"
+    | "fitWorkoutStore"
+    | "fitMeasurementStore"
+    | "fitBodyProfileStore"
+  >,
   profileId: string,
 ): GatheredFitnessData {
   const targets = deps.fitTargetStore(profileId).get();
+  const routines = deps.fitRoutineStore(profileId).list();
+  const workouts = deps.fitWorkoutStore(profileId).listRange(MIN_DAY_KEY, MAX_DAY_KEY);
+  const bodyProfile = deps.fitBodyProfileStore(profileId).get();
   return {
     fitFoods: deps.fitFoodStore(profileId).list(),
     fitMealItems: deps.fitMealStore(profileId).listAll(),
@@ -444,6 +494,18 @@ function gatherFitness(
               updatedAt: targets.updatedAt,
             },
           ],
+    fitExercises: deps.fitExerciseStore(profileId).list(),
+    fitRoutines: routines.map(({ items: _items, ...routine }) => routine),
+    fitRoutineItems: routines.flatMap((routine) => routine.items),
+    fitWorkouts: workouts.map(({ sets: _sets, ...workout }) => workout),
+    fitWorkoutSets: workouts.flatMap((workout) =>
+      workout.sets.map((set) => ({ ...set, profileId })),
+    ),
+    fitMeasurements: deps
+      .fitMeasurementStore(profileId)
+      .listRange(MIN_DAY_KEY, MAX_DAY_KEY)
+      .map((measurement) => ({ ...measurement, profileId })),
+    fitBodyProfile: bodyProfile === null ? [] : [{ profileId, ...bodyProfile }],
   };
 }
 

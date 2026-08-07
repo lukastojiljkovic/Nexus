@@ -6,6 +6,24 @@ import { isDateTime } from "../finance/money.js";
 
 type DatabaseHandle = Database.Database;
 
+/**
+ * The profile's body facts AS PERSISTED (migration 060): `BodyProfile`'s own
+ * four fields plus when they were captured. `get`/`save` return this rather
+ * than the bare `BodyProfile` domain type for one reason — the FIT training
+ * interchange record (`fit-body-profile`, `@nexus/core`) carries
+ * `createdAt`/`updatedAt`, and this is where they live; every in-app caller
+ * that only needs the four calculation inputs reads the same four fields
+ * either way, so nothing that already works against `BodyProfile` has to
+ * change. No `profileId` here, on `CalendarSettingsStore`/`StudySettingsStore`'s
+ * terms one module over — a per-profile singleton's CRUD shape carries no id of
+ * its own, and the interchange gatherer spreads the profile's own id on at the
+ * one call site that needs it.
+ */
+export interface FitBodyProfile extends BodyProfile {
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
 interface BodyProfileRow {
   sex: string | null;
   birth_date: string;
@@ -62,13 +80,13 @@ export class FitBodyProfileStore {
   }
 
   /** This profile's body facts, or `null` when none were ever entered. Never writes. */
-  get(): BodyProfile | null {
+  get(): FitBodyProfile | null {
     const row = this.selectProfile.get(this.profileId) as BodyProfileRow | undefined;
     return row === undefined ? null : toProfile(row);
   }
 
   /** Writes the profile's body facts in one upsert and answers with what is now stored. */
-  save(profile: BodyProfile, now: string): BodyProfile {
+  save(profile: BodyProfile, now: string): FitBodyProfile {
     const validNow = validateNow(now);
     const validated = validateProfile(profile, validNow.slice(0, 10));
     const existing = this.selectProfile.get(this.profileId) as BodyProfileRow | undefined;
@@ -83,16 +101,18 @@ export class FitBodyProfileStore {
       createdAt,
       validNow,
     );
-    return validated;
+    return { ...validated, createdAt, updatedAt: validNow };
   }
 }
 
-function toProfile(row: BodyProfileRow): BodyProfile {
+function toProfile(row: BodyProfileRow): FitBodyProfile {
   return {
     sex: row.sex as BodySex | null,
     birthDate: row.birth_date,
     heightCm: row.height_cm,
     activity: row.activity as ActivityLevel,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 

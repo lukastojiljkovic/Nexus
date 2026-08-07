@@ -3786,6 +3786,16 @@ function readFitRoutineBody(payload: unknown): {
   };
 }
 
+/** The four fields the wire declares, and only those — see the `fit:body-profile` handler. */
+function toWireBodyProfile(row: BodyProfile): FitBodyProfile {
+  return {
+    sex: row.sex,
+    birthDate: row.birthDate,
+    heightCm: row.heightCm,
+    activity: row.activity,
+  };
+}
+
 /** The four facts about a person. `sex` is null when not given, and null survives this boundary rather than becoming a guess. */
 function asFitBodyProfileInput(value: unknown): BodyProfile {
   const body = asRecord(value);
@@ -5667,6 +5677,11 @@ function restoreDeps(): ImportDeps {
     fitFoodStore,
     fitMealStore,
     fitTargetStore,
+    fitExerciseStore,
+    fitRoutineStore,
+    fitWorkoutStore,
+    fitMeasurementStore,
+    fitBodyProfileStore,
     canvasStore,
     saveBlob: (bytes) => saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes),
     // Injected rather than reached for, so `restore.ts` never has to know WHICH
@@ -5739,6 +5754,11 @@ function imexArchiveDeps(): ImexArchiveDeps {
     fitFoodStore,
     fitMealStore,
     fitTargetStore,
+    fitExerciseStore,
+    fitRoutineStore,
+    fitWorkoutStore,
+    fitMeasurementStore,
+    fitBodyProfileStore,
     canvasStore,
     flagStore,
     readBlob: (sha256) => readBlob(blobStorePathsFor(), requireBlobKeys(), sha256),
@@ -9643,19 +9663,26 @@ function registerIpc(): void {
     fitMeasurementStore(profileId).remove(asBareDate(body.day, "day"));
   });
 
+  // The store's row carries `createdAt`/`updatedAt` for the interchange's sake;
+  // the WIRE declares four fields and must therefore send four. Structural
+  // typing would let the wider object through silently, which is how a contract
+  // starts describing something other than what crosses it.
   ipcMain.handle(IpcChannel.fitBodyProfile, (event, payload): FitBodyProfile | null => {
     assertTrustedSender(event);
     const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
-    return fitBodyProfileStore(profileId).get();
+    const row = fitBodyProfileStore(profileId).get();
+    return row === null ? null : toWireBodyProfile(row);
   });
 
   ipcMain.handle(IpcChannel.fitBodyProfileSave, (event, payload): FitBodyProfile => {
     assertTrustedSender(event);
     const body = asRecord(payload);
     const profileId = asNonEmptyString(body.profileId, "profileId");
-    return fitBodyProfileStore(profileId).save(
-      asFitBodyProfileInput(body.profile),
-      new Date().toISOString(),
+    return toWireBodyProfile(
+      fitBodyProfileStore(profileId).save(
+        asFitBodyProfileInput(body.profile),
+        new Date().toISOString(),
+      ),
     );
   });
 

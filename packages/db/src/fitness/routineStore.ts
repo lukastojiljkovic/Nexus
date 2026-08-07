@@ -15,14 +15,31 @@ export const MAX_FIT_ROUTINE_ITEMS = 60;
 
 const FIT_COLLATOR = new Intl.Collator(["sr-Latn", "sr"]);
 
-/** One line of a routine: an exercise reference, its label at save time, and the targets a program sets for it — every one nullable, because „bench, as many sets as it takes" is a real prescription. */
+/**
+ * One line of a routine: an exercise reference, its label at save time, and the
+ * targets a program sets for it — every one nullable, because „bench, as many
+ * sets as it takes" is a real prescription.
+ *
+ * Carries `profileId`/`routineId`/`position`/`createdAt`/`updatedAt` — every
+ * column the table has, `FitExercise`'s own arrangement — rather than the
+ * trimmed shape a CRUD screen strictly needs, because the interchange's
+ * `fit-routine-item` record (`@nexus/core`) round-trips the row whole and reads
+ * it straight off this type. `position` is redundant with the array's own
+ * stored order (`FitRoutine.items`, always contiguous from zero) but is spelled
+ * out anyway rather than left for a caller to re-derive from the index.
+ */
 export interface FitRoutineItem {
   id: string;
+  profileId: string;
+  routineId: string;
+  position: number;
   exerciseRef: string;
   label: string;
   targetSets: number | null;
   targetRepsMin: number | null;
   targetRepsMax: number | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /**
@@ -81,6 +98,8 @@ interface RoutineItemRow {
   target_sets: number | null;
   target_reps_min: number | null;
   target_reps_max: number | null;
+  created_at: string;
+  updated_at: string;
 }
 
 interface ValidatedItem {
@@ -93,7 +112,8 @@ interface ValidatedItem {
 
 const ROUTINE_COLUMNS = "id, profile_id, name, notes, created_at, updated_at";
 const ITEM_COLUMNS =
-  "id, routine_id, position, exercise_ref, label, target_sets, target_reps_min, target_reps_max";
+  "id, routine_id, position, exercise_ref, label, target_sets, target_reps_min, target_reps_max, " +
+  "created_at, updated_at";
 
 /**
  * The profile's OWN routines (FIT training, migration 060), over prepared,
@@ -254,7 +274,7 @@ export class FitRoutineStore {
 
   private readItems(routineId: string): FitRoutineItem[] {
     const rows = this.selectItemsByRoutine.all(routineId, this.profileId) as RoutineItemRow[];
-    return rows.map(toItem);
+    return rows.map((row) => toItem(row, this.profileId));
   }
 
   private toRoutine(row: RoutineRow): FitRoutine {
@@ -282,14 +302,19 @@ function byName(a: FitRoutine, b: FitRoutine): number {
   return FIT_COLLATOR.compare(a.name, b.name) || a.id.localeCompare(b.id);
 }
 
-function toItem(row: RoutineItemRow): FitRoutineItem {
+function toItem(row: RoutineItemRow, profileId: string): FitRoutineItem {
   return {
     id: row.id,
+    profileId,
+    routineId: row.routine_id,
+    position: row.position,
     exerciseRef: row.exercise_ref,
     label: row.label,
     targetSets: row.target_sets,
     targetRepsMin: row.target_reps_min,
     targetRepsMax: row.target_reps_max,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 

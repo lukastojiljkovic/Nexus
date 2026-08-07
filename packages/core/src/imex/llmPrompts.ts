@@ -1299,6 +1299,16 @@ export function translateLlmRecords(
     fitFoods: [],
     fitMealItems: [],
     fitTargets: [],
+    // Nor a training log (migration 060), for the same reason: a workout is a
+    // record of what somebody actually lifted, and inventing sessions is the
+    // one thing this extraction must never do.
+    fitExercises: [],
+    fitRoutines: [],
+    fitRoutineItems: [],
+    fitWorkouts: [],
+    fitWorkoutSets: [],
+    fitMeasurements: [],
+    fitBodyProfile: [],
     canvasBoards: [],
   };
 

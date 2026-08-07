@@ -4,6 +4,25 @@ import { TIME_GRID_MAX_END_MINUTES, TIME_GRID_MIN_EVENT_MINUTES } from "../calen
 import { FOCUS_OUTCOMES, FOCUS_PHASE_KINDS } from "../focus/focusSession.js";
 import { FOOD_CATEGORIES, MAX_FOOD_REF_LENGTH, parseFoodRef } from "../fitness/food.js";
 import type { FoodMacros, FoodServing } from "../fitness/food.js";
+import {
+  ACTIVITY_LEVELS,
+  BODY_SEXES,
+  MAX_CIRCUMFERENCE_CM,
+  MAX_HEIGHT_CM,
+  MAX_WEIGHT_KG,
+  MIN_HEIGHT_CM,
+} from "../fitness/body.js";
+import type { BodyCircumferences, MuscleReading } from "../fitness/body.js";
+import {
+  EXERCISE_EQUIPMENT,
+  EXERCISE_METRICS,
+  MAX_EXERCISE_REF_LENGTH,
+  MOVEMENT_PATTERNS,
+  MUSCLE_GROUPS,
+  parseExerciseRef,
+} from "../fitness/exercise.js";
+import type { MuscleGroup } from "../fitness/exercise.js";
+import { SET_KINDS } from "../fitness/training.js";
 import { MAX_CANVAS_SCENE_LENGTH, validateCanvasScene } from "../canvas/canvasScene.js";
 import type { CanvasScene } from "../canvas/canvasScene.js";
 import { validateHabitSchedule } from "../habits/habitSchedule.js";
@@ -39,9 +58,16 @@ import type {
   ExportFinCategory,
   ExportFinRecurring,
   ExportFinTransaction,
+  ExportFitBodyProfile,
+  ExportFitExercise,
   ExportFitFood,
   ExportFitMealItem,
+  ExportFitMeasurement,
+  ExportFitRoutine,
+  ExportFitRoutineItem,
   ExportFitTarget,
+  ExportFitWorkout,
+  ExportFitWorkoutSet,
   ExportFocusSession,
   ExportHabit,
   ExportHabitEntry,
@@ -600,7 +626,7 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.36.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.37.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -1264,6 +1290,13 @@ export type ArchiveRecordType =
   | "fit-food"
   | "fit-meal-item"
   | "fit-target"
+  | "fit-exercise"
+  | "fit-routine"
+  | "fit-routine-item"
+  | "fit-workout"
+  | "fit-workout-set"
+  | "fit-measurement"
+  | "fit-body-profile"
   | "canvas-board";
 
 const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
@@ -1317,6 +1350,13 @@ const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "fit-food",
   "fit-meal-item",
   "fit-target",
+  "fit-exercise",
+  "fit-routine",
+  "fit-routine-item",
+  "fit-workout",
+  "fit-workout-set",
+  "fit-measurement",
+  "fit-body-profile",
   "canvas-board",
 ];
 
@@ -1377,7 +1417,18 @@ const FILE_RECORD_TYPES: Record<DataFilePath, readonly ArchiveRecordType[]> = {
     "fin-budget",
   ],
   "data/habits.ndjson": ["habit", "habit-entry"],
-  "data/fitness.ndjson": ["fit-target", "fit-food", "fit-meal-item"],
+  "data/fitness.ndjson": [
+    "fit-target",
+    "fit-body-profile",
+    "fit-exercise",
+    "fit-food",
+    "fit-routine",
+    "fit-routine-item",
+    "fit-workout",
+    "fit-workout-set",
+    "fit-meal-item",
+    "fit-measurement",
+  ],
   "data/canvas.ndjson": ["canvas-board"],
 };
 
@@ -2931,6 +2982,287 @@ function nullableGoal(value: unknown, field: string): number | null {
   return value === null ? null : nonNegativeReal(value, field, MAX_FIT_TARGET);
 }
 
+// --- FIT training & body (ADR-081 slice b, migration 060) -------------------
+//
+// Copied, not imported, on `NOTE_FOLDER_COLORS`' terms — `@nexus/core` never
+// depends on `@nexus/db`, so the bounds `FitExerciseStore`, `FitRoutineStore`
+// and `FitWorkoutStore` refuse by are restated here. `MUSCLE_GROUPS`,
+// `EXERCISE_EQUIPMENT`, `MOVEMENT_PATTERNS`, `EXERCISE_METRICS`, `SET_KINDS`,
+// `BODY_SEXES`, `ACTIVITY_LEVELS`, `parseExerciseRef` and the four body-bound
+// constants are NOT copies: all nine live in THIS package and the stores import
+// them from here, so both sides genuinely share one definition.
+const MAX_FIT_EXERCISE_NAME_LENGTH = 80;
+const MAX_FIT_EXERCISE_NAME_EN_LENGTH = 80;
+const MAX_FIT_EXERCISE_NOTES_LENGTH = 500;
+const MAX_FIT_ROUTINE_NAME_LENGTH = 80;
+const MAX_FIT_ROUTINE_NOTES_LENGTH = 500;
+const MAX_FIT_ROUTINE_ITEM_LABEL_LENGTH = 80;
+const MAX_FIT_WORKOUT_NOTES_LENGTH = 500;
+const MAX_FIT_SET_LABEL_LENGTH = 80;
+/** `FitWorkoutStore`'s own bound on a session's `routineRef`/`routineLabel` — a plain id and a name, neither backed by a SQL CHECK. */
+const MAX_ROUTINE_REF_LENGTH = 200;
+const MAX_ROUTINE_LABEL_LENGTH = 80;
+
+/**
+ * An exercise reference's SHAPE, and nothing more — `parseFoodRef`'s treatment
+ * of `foodRef` one table over, for the identical reason. `catalogue:<slug>`
+ * names data that is not a row anywhere and `user:<uuid>` may name an exercise
+ * this profile has since deleted, so neither gets a reference rule: the row's
+ * own `label` (and, on a set, its snapshotted `metric`/`primaryMuscles`) is what
+ * keeps it readable regardless.
+ */
+function fitExerciseRef(value: unknown, field: string): string {
+  const ref = str(value, field);
+  if (ref.length > MAX_EXERCISE_REF_LENGTH || parseExerciseRef(ref) === null) {
+    throw new InvalidFieldError(field);
+  }
+  return ref;
+}
+
+/** A routine reference: a bare id with NO grammar (migration 060 declares no foreign key), or null for an ad-hoc session. Shape-checked only, `fitExerciseRef`'s reason. */
+function nullableRoutineRef(value: unknown, field: string): string | null {
+  if (value === null) return null;
+  const s = nonEmptyStr(value, field);
+  if (s.length > MAX_ROUTINE_REF_LENGTH) throw new InvalidFieldError(field);
+  return s;
+}
+
+/** Every element checked against `MUSCLE_GROUPS` — membership only, exactly the closed-vocabulary re-validation every other FIT training field gets. Neither non-emptiness nor de-duplication is enforced here: those are `FitExerciseStore`'s/`FitWorkoutStore`'s own business rules for a user's own row, not a shape that "cannot be anything but wrong". */
+function muscleGroupArray(value: unknown, field: string): MuscleGroup[] {
+  if (!Array.isArray(value)) throw new InvalidFieldError(field);
+  const entries: readonly unknown[] = value;
+  return entries.map((item, index) => enumStr(item, `${field}[${index}]`, MUSCLE_GROUPS));
+}
+
+/** `null`/`undefined` both mean "no target"; anything else must be a positive whole number — `FitRoutineStore.validatePositiveIntOrNull`'s rule, restated. */
+function nullablePositiveInt(value: unknown, field: string): number | null {
+  return value === null ? null : positiveInt(value, field);
+}
+
+/** A finite number that is not negative, or null — `FitWorkoutStore.validateNonNegativeOrNull`'s rule, restated for a set's own numbers, which the schema itself bounds no further than `>= 0`. */
+function nullableNonNegativeReal(value: unknown, field: string): number | null {
+  if (value === null) return null;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new InvalidFieldError(field);
+  }
+  return value;
+}
+
+/** `nullableNonNegativeReal`'s twin for a whole number — a set's `reps`. */
+function nullableNonNegativeInt(value: unknown, field: string): number | null {
+  return value === null ? null : nonNegativeInt(value, field);
+}
+
+/**
+ * One exercise the USER added (migration 060). The catalogue's own gate
+ * (`validateExerciseEntry`) is deliberately NOT applied — `parseFitFood`'s
+ * reasoning restated: that validator refuses a slug shape no user-created row
+ * has, and a cross-field rule (bodyweight is never `weight_reps`) written for a
+ * curated, professionally transcribed dataset. What IS enforced is what cannot
+ * be anything but wrong: an empty name, an unknown muscle, a metric outside the
+ * closed list.
+ */
+function parseFitExercise(raw: Record<string, unknown>): ExportFitExercise {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const name = trimmedNonEmptyStr(raw.name, "name", MAX_FIT_EXERCISE_NAME_LENGTH);
+  const nameEn = str(raw.nameEn, "nameEn");
+  if (nameEn.length > MAX_FIT_EXERCISE_NAME_EN_LENGTH) throw new InvalidFieldError("nameEn");
+  const primaryMuscles = muscleGroupArray(raw.primaryMuscles, "primaryMuscles");
+  const secondaryMuscles = muscleGroupArray(raw.secondaryMuscles, "secondaryMuscles");
+  const equipment = enumStr(raw.equipment, "equipment", EXERCISE_EQUIPMENT);
+  const pattern = enumStr(raw.pattern, "pattern", MOVEMENT_PATTERNS);
+  const unilateral = bool(raw.unilateral, "unilateral");
+  const metric = enumStr(raw.metric, "metric", EXERCISE_METRICS);
+  const notes = str(raw.notes, "notes");
+  if (notes.length > MAX_FIT_EXERCISE_NOTES_LENGTH) throw new InvalidFieldError("notes");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return {
+    id, profileId, name, nameEn, primaryMuscles, secondaryMuscles,
+    equipment, pattern, unilateral, metric, notes, createdAt, updatedAt,
+  };
+}
+
+/**
+ * A routine is the SHAPE of a session and holds nothing about when it runs
+ * (migration 060). Rides ahead of the `fit-routine-item` rows that name it.
+ */
+function parseFitRoutine(raw: Record<string, unknown>): ExportFitRoutine {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const name = trimmedNonEmptyStr(raw.name, "name", MAX_FIT_ROUTINE_NAME_LENGTH);
+  const notes = str(raw.notes, "notes");
+  if (notes.length > MAX_FIT_ROUTINE_NOTES_LENGTH) throw new InvalidFieldError("notes");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, profileId, name, notes, createdAt, updatedAt };
+}
+
+/**
+ * One line of a routine (migration 060). `routineId` is checked for SHAPE only
+ * here — it is a REAL reference and gets a `referenceRule` of its own (see
+ * `referenceRules` below), on `subject-attachment.subjectId`'s terms.
+ * `exerciseRef` gets shape validation and nothing else (`fitExerciseRef`). A rep
+ * range that runs backwards is refused here, restating migration 060's own
+ * table CHECK on the pair.
+ */
+function parseFitRoutineItem(raw: Record<string, unknown>): ExportFitRoutineItem {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const routineId = nonEmptyStr(raw.routineId, "routineId");
+  const position = nonNegativeInt(raw.position, "position");
+  const exerciseRef = fitExerciseRef(raw.exerciseRef, "exerciseRef");
+  const label = trimmedNonEmptyStr(raw.label, "label", MAX_FIT_ROUTINE_ITEM_LABEL_LENGTH);
+  const targetSets = nullablePositiveInt(raw.targetSets, "targetSets");
+  const targetRepsMin = nullablePositiveInt(raw.targetRepsMin, "targetRepsMin");
+  const targetRepsMax = nullablePositiveInt(raw.targetRepsMax, "targetRepsMax");
+  if (targetRepsMin !== null && targetRepsMax !== null && targetRepsMin > targetRepsMax) {
+    throw new InvalidFieldError("targetRepsMax");
+  }
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return {
+    id, profileId, routineId, position, exerciseRef, label,
+    targetSets, targetRepsMin, targetRepsMax, createdAt, updatedAt,
+  };
+}
+
+/**
+ * One logged session (migration 060). `endedAt` travels verbatim, including
+ * `null` for a session that was still open at export time — the reader's own
+ * invariant (see `referenceRules` below) is what refuses a SECOND one in this
+ * archive, on `note-folder.isCaptureDefault`'s per-profile-singleton terms.
+ * `routineRef` is shape-checked only (`nullableRoutineRef`).
+ */
+function parseFitWorkout(raw: Record<string, unknown>): ExportFitWorkout {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const day = bareDate(raw.day, "day");
+  const startedAt = isoDateTime(raw.startedAt, "startedAt");
+  const endedAt = nullableIsoDateTime(raw.endedAt, "endedAt");
+  const routineRef = nullableRoutineRef(raw.routineRef, "routineRef");
+  const routineLabel = str(raw.routineLabel, "routineLabel");
+  if (routineLabel.length > MAX_ROUTINE_LABEL_LENGTH) throw new InvalidFieldError("routineLabel");
+  const notes = str(raw.notes, "notes");
+  if (notes.length > MAX_FIT_WORKOUT_NOTES_LENGTH) throw new InvalidFieldError("notes");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return {
+    id, profileId, day, startedAt, endedAt, routineRef, routineLabel, notes, createdAt, updatedAt,
+  };
+}
+
+/**
+ * One logged set (migration 060). `metric`/`primaryMuscles`/`kind` are the
+ * closed vocabularies migration 060's own doc says a set snapshots and this
+ * reader re-validates on every one, never trusting the file. `workoutId` gets a
+ * `referenceRule` of its own below; `exerciseRef` gets shape validation only.
+ */
+function parseFitWorkoutSet(raw: Record<string, unknown>): ExportFitWorkoutSet {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const workoutId = nonEmptyStr(raw.workoutId, "workoutId");
+  const position = nonNegativeInt(raw.position, "position");
+  const exerciseRef = fitExerciseRef(raw.exerciseRef, "exerciseRef");
+  const label = trimmedNonEmptyStr(raw.label, "label", MAX_FIT_SET_LABEL_LENGTH);
+  const metric = enumStr(raw.metric, "metric", EXERCISE_METRICS);
+  const primaryMuscles = muscleGroupArray(raw.primaryMuscles, "primaryMuscles");
+  const kind = enumStr(raw.kind, "kind", SET_KINDS);
+  const weightKg = nullableNonNegativeReal(raw.weightKg, "weightKg");
+  const reps = nullableNonNegativeInt(raw.reps, "reps");
+  const seconds = nullableNonNegativeReal(raw.seconds, "seconds");
+  const distanceM = nullableNonNegativeReal(raw.distanceM, "distanceM");
+  const rir = raw.rir === null ? null : intInRange(raw.rir, "rir", 0, 5);
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return {
+    id, profileId, workoutId, position, exerciseRef, label, metric, primaryMuscles, kind,
+    weightKg, reps, seconds, distanceM, rir, createdAt, updatedAt,
+  };
+}
+
+/** `{ unit: "percent" | "kg"; value: number }`, or null — `@nexus/core`'s own `MuscleReading`, kept VERBATIM rather than normalised into one unit or the other. `value` is strictly positive, migration 060's own CHECK. */
+function nullableMuscleReading(value: unknown, field: string): MuscleReading | null {
+  if (value === null) return null;
+  const root = expectRecord(value, field);
+  const readingValue = positiveReal(root.value, `${field}.value`, Number.MAX_SAFE_INTEGER);
+  const unit = str(root.unit, `${field}.unit`);
+  if (unit === "percent") return { unit: "percent", value: readingValue };
+  if (unit === "kg") return { unit: "kg", value: readingValue };
+  throw new InvalidFieldError(`${field}.unit`);
+}
+
+/** A tape reading in centimetres, strictly positive and at most `MAX_CIRCUMFERENCE_CM` — migration 060's own bound on each of the six sites, or null for "not taken". */
+function nullableCircumferenceCm(value: unknown, field: string): number | null {
+  return value === null ? null : positiveReal(value, field, MAX_CIRCUMFERENCE_CM);
+}
+
+/** A percentage strictly between 0 and 100 (both exclusive) — migration 060's own CHECK on `body_fat_percent`/`water_percent`: a body cannot be 0% or 100% of either. */
+function nullableBodyPercent(value: unknown, field: string): number | null {
+  if (value === null) return null;
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0 || value >= 100) {
+    throw new InvalidFieldError(field);
+  }
+  return value;
+}
+
+/**
+ * The six tape sites `CIRCUMFERENCE_SITES` names, head to foot, each
+ * independently nullable — a scale gives some of these numbers and a tape
+ * measure gives the rest.
+ */
+function fitCircumferences(value: unknown, field: string): BodyCircumferences {
+  const root = expectRecord(value, field);
+  return {
+    neck: nullableCircumferenceCm(root.neck, `${field}.neck`),
+    chest: nullableCircumferenceCm(root.chest, `${field}.chest`),
+    upperArm: nullableCircumferenceCm(root.upperArm, `${field}.upperArm`),
+    waist: nullableCircumferenceCm(root.waist, `${field}.waist`),
+    hip: nullableCircumferenceCm(root.hip, `${field}.hip`),
+    thigh: nullableCircumferenceCm(root.thigh, `${field}.thigh`),
+  };
+}
+
+/**
+ * One reading, one day (migration 060) — the table's PRIMARY KEY is
+ * `(profileId, day)`, which is why this row carries no id of its own; a second
+ * reading for one day is caught by `pushRow`'s ordinary duplicate-id gate, keyed
+ * on the pair (see the dispatch case below), exactly as `fin-recurring`'s
+ * composite keys are one table over.
+ */
+function parseFitMeasurement(raw: Record<string, unknown>): ExportFitMeasurement {
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const day = bareDate(raw.day, "day");
+  const weightKg = positiveReal(raw.weightKg, "weightKg", MAX_WEIGHT_KG);
+  const bodyFatPercent = nullableBodyPercent(raw.bodyFatPercent, "bodyFatPercent");
+  const muscle = nullableMuscleReading(raw.muscle, "muscle");
+  const waterPercent = nullableBodyPercent(raw.waterPercent, "waterPercent");
+  const circumferences = fitCircumferences(raw.circumferences, "circumferences");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return {
+    profileId, day, weightKg, bodyFatPercent, muscle, waterPercent, circumferences,
+    createdAt, updatedAt,
+  };
+}
+
+/**
+ * The profile's own body facts (migration 060) — zero or one row, `fit-target`'s
+ * arrangement: keyed by `profileId` alone in the dispatch case below, so a
+ * second row is the ordinary `duplicate-id` problem.
+ */
+function parseFitBodyProfile(raw: Record<string, unknown>): ExportFitBodyProfile {
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const sex = raw.sex === null ? null : enumStr(raw.sex, "sex", BODY_SEXES);
+  const birthDate = bareDate(raw.birthDate, "birthDate");
+  const heightCm = numberInRange(raw.heightCm, "heightCm", MIN_HEIGHT_CM, MAX_HEIGHT_CM);
+  const activity = enumStr(raw.activity, "activity", ACTIVITY_LEVELS);
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { profileId, sex, birthDate, heightCm, activity, createdAt, updatedAt };
+}
+
 // --- CANV (canvas boards, migration 059) -------------------------------------
 //
 // `MAX_CANVAS_BOARD_NAME_LENGTH`'s value, copied rather than imported on
@@ -3197,6 +3529,13 @@ interface Collections {
   fitFoods: Bucket<ExportFitFood>;
   fitMealItems: Bucket<ExportFitMealItem>;
   fitTargets: Bucket<ExportFitTarget>;
+  fitExercises: Bucket<ExportFitExercise>;
+  fitRoutines: Bucket<ExportFitRoutine>;
+  fitRoutineItems: Bucket<ExportFitRoutineItem>;
+  fitWorkouts: Bucket<ExportFitWorkout>;
+  fitWorkoutSets: Bucket<ExportFitWorkoutSet>;
+  fitMeasurements: Bucket<ExportFitMeasurement>;
+  fitBodyProfile: Bucket<ExportFitBodyProfile>;
   canvasBoards: Bucket<ExportCanvasBoard>;
 }
 
@@ -3222,6 +3561,9 @@ function newCollections(): Collections {
     finTransactions: newBucket(), finBudgets: newBucket(),
     habits: newBucket(), habitEntries: newBucket(),
     fitFoods: newBucket(), fitMealItems: newBucket(), fitTargets: newBucket(),
+    fitExercises: newBucket(), fitRoutines: newBucket(), fitRoutineItems: newBucket(),
+    fitWorkouts: newBucket(), fitWorkoutSets: newBucket(), fitMeasurements: newBucket(),
+    fitBodyProfile: newBucket(),
     canvasBoards: newBucket(),
   };
 }
@@ -3541,6 +3883,54 @@ function dispatchRecord(
     case "fit-target": {
       const row = parseFitTarget(raw);
       pushRow(collections.fitTargets, row.profileId, row, type, path, line, ctx);
+      return;
+    }
+    case "fit-exercise": {
+      const row = parseFitExercise(raw);
+      pushRow(collections.fitExercises, row.id, row, type, path, line, ctx);
+      return;
+    }
+    case "fit-routine": {
+      const row = parseFitRoutine(raw);
+      pushRow(collections.fitRoutines, row.id, row, type, path, line, ctx);
+      return;
+    }
+    case "fit-routine-item": {
+      const row = parseFitRoutineItem(raw);
+      pushRow(collections.fitRoutineItems, row.id, row, type, path, line, ctx);
+      return;
+    }
+    case "fit-workout": {
+      const row = parseFitWorkout(raw);
+      pushRow(collections.fitWorkouts, row.id, row, type, path, line, ctx);
+      return;
+    }
+    case "fit-workout-set": {
+      const row = parseFitWorkoutSet(raw);
+      pushRow(collections.fitWorkoutSets, row.id, row, type, path, line, ctx);
+      return;
+    }
+    // Keyed by `profileId,day` — the table's actual PRIMARY KEY (migration 060)
+    // — so a second reading of one day in this archive is the ordinary
+    // duplicate-id problem, `fin-recurring`'s composite-key idiom one column
+    // short.
+    case "fit-measurement": {
+      const row = parseFitMeasurement(raw);
+      pushRow(
+        collections.fitMeasurements,
+        `profileId=${row.profileId},day=${row.day}`,
+        row,
+        type,
+        path,
+        line,
+        ctx,
+      );
+      return;
+    }
+    // Keyed by `profileId`, the `fit-target` arrangement: zero or one row.
+    case "fit-body-profile": {
+      const row = parseFitBodyProfile(raw);
+      pushRow(collections.fitBodyProfile, row.profileId, row, type, path, line, ctx);
       return;
     }
     case "canvas-board": {
@@ -4620,7 +5010,83 @@ function referenceRules(collections: Collections): ReferenceRule[] {
       },
       onDangling: "drop",
     }),
+    // --- FIT training & body (migration 060) --------------------------------
+    // The routine a line belongs to, and the workout a set belongs to — BOTH
+    // real foreign keys (`ON DELETE CASCADE`), unlike `exerciseRef`/`routineRef`
+    // beside them, which carry no reference rule at all (see `SCHEMA_VERSION`'s
+    // `1.37.0` entry). DROPPED when dangling: an item or a set naming a routine
+    // or a workout this archive does not carry is a row the schema's own
+    // CASCADE could never have produced.
+    referenceRule({
+      bucket: collections.fitRoutineItems,
+      type: "fit-routine-item",
+      field: "routineId",
+      ref: (row) => row.routineId,
+      resolver: () => {
+        const ids = idsOf(collections.fitRoutines);
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    referenceRule({
+      bucket: collections.fitWorkoutSets,
+      type: "fit-workout-set",
+      field: "workoutId",
+      ref: (row) => row.workoutId,
+      resolver: () => {
+        const ids = idsOf(collections.fitWorkouts);
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    // `fit_workouts_profile_open`'s UNIQUE partial index: at most one open
+    // workout per profile — see `openWorkoutRule`'s own doc.
+    openWorkoutRule(collections),
   ];
+}
+
+/** Every open workout (`endedAt: null`) in file order — `captureClaimants`' shape, one table over. */
+function openFitWorkouts(collections: Collections) {
+  return collections.fitWorkouts.entries.filter((entry) => entry.row.endedAt === null);
+}
+
+/**
+ * `fit_workouts_profile_open`'s UNIQUE partial index (migration 060): at most
+ * one open workout per profile — an invariant no single row can break and
+ * therefore no per-row parser can catch, `note-folder.isCaptureDefault`'s exact
+ * shape one module over. Refused HERE, at parse time, rather than surfacing as
+ * a raw `SQLITE_CONSTRAINT_UNIQUE` mid-restore.
+ *
+ * Import mode DROPS every open workout past the first, rather than clearing a
+ * flag the way the capture-default rule does: there is no representable "not
+ * open" state to fall back to without inventing an `endedAt` this archive never
+ * recorded, and a session with no end is not one this reader can silently
+ * finish. The drop cascades: `fit-workout-set.workoutId`'s reference rule above
+ * picks up the now-dangling sets on the very next sweep of the same fixpoint,
+ * exactly as a dropped subject already takes its decks with it.
+ */
+function openWorkoutRule(collections: Collections): ReferenceRule {
+  return {
+    report(problems) {
+      for (const entry of openFitWorkouts(collections).slice(1)) {
+        problems.push(
+          problem("error", "invalid-record", { path: entry.path, line: entry.line, detail: "endedAt" }),
+        );
+      }
+    },
+    resolve(ctx) {
+      const extra = openFitWorkouts(collections).slice(1);
+      if (extra.length === 0) return false;
+      const doomed = new Set(extra);
+      for (const entry of extra) {
+        rowProblem(ctx, "invalid-record", "fit-workout", entry.path, entry.line, "endedAt");
+      }
+      collections.fitWorkouts.entries = collections.fitWorkouts.entries.filter(
+        (entry) => !doomed.has(entry),
+      );
+      return true;
+    },
+  };
 }
 
 /** The three self-referencing parent chains, in the order restore mode has always reported them. */
@@ -5125,6 +5591,18 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         fitFoods: rowsOf(collections.fitFoods),
         fitMealItems: rowsOf(collections.fitMealItems),
         fitTargets: rowsOf(collections.fitTargets),
+        // Empty for every pre-1.37.0 archive, which carries no such rows at all
+        // — and a restore reads that emptiness as "this profile trains outside
+        // the app", which is exactly what it did. `fitExercises` is empty for a
+        // second, ordinary reason besides: a profile that only ever logged
+        // catalogue exercises added none of its own.
+        fitExercises: rowsOf(collections.fitExercises),
+        fitRoutines: rowsOf(collections.fitRoutines),
+        fitRoutineItems: rowsOf(collections.fitRoutineItems),
+        fitWorkouts: rowsOf(collections.fitWorkouts),
+        fitWorkoutSets: rowsOf(collections.fitWorkoutSets),
+        fitMeasurements: rowsOf(collections.fitMeasurements),
+        fitBodyProfile: rowsOf(collections.fitBodyProfile),
         // Empty for every pre-1.36.0 archive, which carries no such file at all
         // — and a restore reads that emptiness as "this profile drew nothing",
         // which is exactly what it drew.

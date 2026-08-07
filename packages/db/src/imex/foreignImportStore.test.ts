@@ -148,6 +148,13 @@ function emptyProfileData(): ProfileData {
     fitFoods: [],
     fitMealItems: [],
     fitTargets: [],
+    fitExercises: [],
+    fitRoutines: [],
+    fitRoutineItems: [],
+    fitWorkouts: [],
+    fitWorkoutSets: [],
+    fitMeasurements: [],
+    fitBodyProfile: [],
     canvasBoards: [],
   };
 }

@@ -729,6 +729,15 @@ export function translateCsvTasks(
     fitFoods: [],
     fitMealItems: [],
     fitTargets: [],
+    // Nor any training log (migration 060): empty, like every other module this
+    // importer does not read.
+    fitExercises: [],
+    fitRoutines: [],
+    fitRoutineItems: [],
+    fitWorkouts: [],
+    fitWorkoutSets: [],
+    fitMeasurements: [],
+    fitBodyProfile: [],
     canvasBoards: [],
   };
 
