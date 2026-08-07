@@ -162,13 +162,41 @@ export interface SessionExercise {
   readonly label: string;
   readonly metric: ExerciseMetric | null;
   /** From the routine this session started from, or `null` for anything added by hand. */
-  readonly target: {
-    readonly sets: number | null;
-    readonly repsMin: number | null;
-    readonly repsMax: number | null;
-  } | null;
+  readonly target: SessionTarget | null;
+  /**
+   * The rest THIS line prescribes, in seconds, or `null` for a line that
+   * prescribes none.
+   *
+   * Not part of `target`, because it is not something you do — it is the gap
+   * between two things you do, and `targetText` must never read it out as if
+   * it were part of the set. Zero is a real prescription („nema odmora,
+   * superserija") and is not the same as `null`, which means the line says
+   * nothing and the session's own preset applies.
+   */
+  readonly restSeconds: number | null;
   /** In the order they were logged. Empty for a routine line nobody has started yet. */
   readonly sets: readonly FitWorkoutSet[];
+}
+
+/**
+ * Everything a routine line prescribes ABOUT A SET, in the shape `targetText`
+ * reads.
+ *
+ * Every field is stated rather than optional, and that is deliberate: this is
+ * built from a `FitRoutineItem`, which always carries all six columns
+ * (migration 061), so `null` here always means „the user set no target" and
+ * never „this code forgot to copy the field across". `RoutineLineTarget` in
+ * `fitWorkoutCopy.ts` keeps four of them optional because it also serves the
+ * routine EDITOR, where a line being built genuinely has not decided yet.
+ */
+export interface SessionTarget {
+  readonly sets: number | null;
+  readonly repsMin: number | null;
+  readonly repsMax: number | null;
+  readonly seconds: number | null;
+  readonly weightKg: number | null;
+  readonly distanceM: number | null;
+  readonly metric: ExerciseMetric | null;
 }
 
 /**
@@ -222,11 +250,21 @@ export function sessionExercises(
       ref: item.exerciseRef,
       label: logged[0]?.label ?? item.label,
       metric: logged[0]?.metric ?? item.metric,
+      // The line's METRIC travels with its targets rather than the set's,
+      // because the targets were written against it: a line prescribing „45 s"
+      // is a line whose metric was `time` when somebody typed it, and reading
+      // those seconds through a corrected `weight_reps` metric would print a
+      // hold as a weight.
       target: {
         sets: item.targetSets,
         repsMin: item.targetRepsMin,
         repsMax: item.targetRepsMax,
+        seconds: item.targetSeconds,
+        weightKg: item.targetWeightKg,
+        distanceM: item.targetDistanceM,
+        metric: item.metric,
       },
+      restSeconds: item.restSeconds,
       sets: logged,
     });
   }
@@ -240,12 +278,20 @@ export function sessionExercises(
       label: first.label,
       metric: first.metric,
       target: null,
+      restSeconds: null,
       sets: logged,
     });
   }
 
   for (const option of added) {
-    push({ ref: option.ref, label: option.name, metric: option.metric, target: null, sets: [] });
+    push({
+      ref: option.ref,
+      label: option.name,
+      metric: option.metric,
+      target: null,
+      restSeconds: null,
+      sets: [],
+    });
   }
 
   return out;
@@ -274,6 +320,93 @@ export function prefillSet(
   const thisSession = exercise.sets.at(-1);
   if (thisSession !== undefined) return thisSession;
   return lastTime?.sets.at(-1) ?? null;
+}
+
+/**
+ * What ONE target field asks for, as a number the log form can start from, or
+ * `null` where the line asks for nothing.
+ *
+ * The rep answer is the LOWER bound. A range is a commitment with a floor and a
+ * ceiling, and the floor is the number that is always meaningful on its own —
+ * „bar osam" is an instruction, „najviše dvanaest" is not one you can start
+ * from. Where only the ceiling was written it is used, because one stated bound
+ * beats an empty field either way.
+ *
+ * `weight` and `assist` both read `weightKg`, exactly as they both WRITE it —
+ * the schema has one column for the kilograms and the sign lives in the metric
+ * (`SetField`).
+ */
+function plannedValue(field: SetField, target: SessionTarget | null): number | null {
+  if (target === null) return null;
+  switch (field) {
+    case "weight":
+    case "assist":
+      return target.weightKg;
+    case "reps":
+      return target.repsMin ?? target.repsMax;
+    case "seconds":
+      return target.seconds;
+    case "distance":
+      return target.distanceM;
+  }
+}
+
+/**
+ * What the log form for this exercise starts filled with — the module's single
+ * most used interaction (ADR-081 §1.1), and now a THREE-rank rule rather than
+ * two.
+ *
+ * Per FIELD, in order: **what was logged for it last** (this session's last set,
+ * then the last finished session's — `prefillSet`), and failing that **what the
+ * routine asks for**. What you actually did outranks what was planned, always:
+ * the plan is where a session starts and the log is what happened, and a form
+ * that re-suggested the plan after you had already gone heavier would be
+ * arguing with you.
+ *
+ * The fallback is per field rather than per source on purpose. A set logged
+ * before an exercise's metric was corrected can carry reps and no load; the
+ * load then falls back to the plan instead of the whole prefill collapsing to
+ * one source or the other.
+ *
+ * This is what closes migration 061's loop: „Rutine" could prescribe a hold, a
+ * load and a distance, and until now the session never read any of them back,
+ * which made a prescription a note to self rather than a plan the app runs.
+ */
+export function prefillValues(
+  exercise: SessionExercise,
+  lastTime: FitLastPerformed | undefined,
+): Partial<Record<SetField, number>> {
+  const metric = exercise.metric;
+  if (metric === null) return {};
+  const previous = prefillSet(exercise, lastTime);
+  const values: Partial<Record<SetField, number>> = {};
+  for (const field of SET_FIELDS[metric]) {
+    const logged = previous === null ? null : previous[SET_FIELD_COLUMN[field]];
+    // `null` is „this set does not record that quantity", not zero — and a
+    // legitimate `weightKg: 0` (a pull-up with the belt off) must NOT fall
+    // through to the plan, so the test is against null and never falsiness.
+    const value = logged ?? plannedValue(field, exercise.target);
+    if (value !== null) values[field] = value;
+  }
+  return values;
+}
+
+/**
+ * How many sets counted against a prescription of N.
+ *
+ * WORKING sets only, and this is the whole reason the function exists rather
+ * than `sets.length`: a warm-up is the ramp up to the work, so a routine asking
+ * for three sets is asking for three WORKING ones, and counting the ramp would
+ * let somebody finish „3/3" without having done a single one of them. It is the
+ * same line `countsTowardVolume` draws in `@nexus/core` — restated here because
+ * a progress figure and a volume figure disagreeing about what a set is would
+ * be worse than either being wrong alone.
+ *
+ * Drop sets and sets to failure DO count: both are work, both are taken to or
+ * past the point the prescription was about.
+ */
+export function workingSetCount(sets: readonly FitWorkoutSet[]): number {
+  return sets.filter((set) => set.kind !== "warmup").length;
 }
 
 /**

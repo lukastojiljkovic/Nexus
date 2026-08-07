@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { Button, Chip, EmptyState, ListRow, LoadingState, Select, TextField } from "@nexus/ui";
+import {
+  Button,
+  Chip,
+  EmptyState,
+  Icon,
+  ListRow,
+  LoadingState,
+  ProportionBar,
+  Select,
+  TextField,
+} from "@nexus/ui";
 import { SET_KINDS } from "@nexus/core";
 import { clockText } from "../../shared/duration.js";
 import { MAX_FIT_WORKOUT_NOTES_LENGTH } from "../../shared/ipc.js";
@@ -22,11 +32,12 @@ import { FitRoutines } from "./FitRoutines.js";
 import {
   elapsedMinutes,
   isWholeField,
-  prefillSet,
+  prefillValues,
   restRemainingSeconds,
   SET_FIELD_COLUMN,
   SET_FIELDS,
   sessionExercises,
+  workingSetCount,
   workoutTonnage,
   type SessionExercise,
   type SetField,
@@ -225,7 +236,7 @@ export function FitTraining({ profileId }: FitTrainingProps) {
             aria-label={strings.fitness.dismiss}
             onClick={() => setPendingUndo(null)}
           >
-            ×
+            <Icon name="close" size={14} />
           </Button>
         </div>
       )}
@@ -458,16 +469,24 @@ function SessionPanel({ profileId, workout, routine, onChanged, onDiscard }: Ses
     }
   }
 
-  /** The draft for one exercise: what was typed, or — until anything is — what `prefillSet` says to repeat. */
+  /**
+   * The draft for one exercise: what was typed, or — until anything is — what
+   * `prefillValues` says to start from.
+   *
+   * The rule moved into `fitWorkout.ts` when it grew its third rank: what was
+   * logged last still wins, but a line with no history at all now starts from
+   * WHAT THE ROUTINE ASKS FOR. Migration 061 let a routine prescribe a load, a
+   * hold and a distance, and until this the session read none of them back.
+   */
   function draftFor(exercise: SessionExercise): SetDraft {
     const existing = drafts[exercise.ref];
     if (existing !== undefined) return existing;
-    const previous = prefillSet(exercise, lastTime.get(exercise.ref));
+    const planned = prefillValues(exercise, lastTime.get(exercise.ref));
     const values: Partial<Record<SetField, string>> = {};
-    if (previous !== null && exercise.metric !== null) {
+    if (exercise.metric !== null) {
       for (const field of SET_FIELDS[exercise.metric]) {
-        const value = previous[SET_FIELD_COLUMN[field]];
-        if (value !== null) values[field] = gramsInputValue(value);
+        const value = planned[field];
+        if (value !== undefined) values[field] = gramsInputValue(value);
       }
     }
     // Always `working`, never the previous set's kind: a warm-up that prefilled
@@ -513,7 +532,22 @@ function SessionPanel({ profileId, workout, routine, onChanged, onDiscard }: Ses
       // ADR-081 §7: the rest starts when a set is logged. A warm-up does not
       // start one — the ramp up to a working weight is not what a rest timer is
       // for, and it would ring in the middle of the next warm-up set.
-      if (draft.kind !== "warmup") await startRest(restSeconds);
+      //
+      // WHOSE rest, since migration 061: the routine LINE's, when it states one.
+      // The bar's preset is what applies to an exercise nobody prescribed a rest
+      // for, not a setting that overrides the plan — a line that says 120 s
+      // means 120 s, and having to re-pick it after every set is exactly the
+      // work a written routine exists to save.
+      //
+      // A prescribed ZERO is a real instruction and not an absent one: it is a
+      // superset, and it must STOP whatever is counting rather than fall back
+      // to the preset and ring in the middle of the partner movement.
+      if (draft.kind !== "warmup") {
+        const prescribed = exercise.restSeconds;
+        if (prescribed === null) await startRest(restSeconds);
+        else if (prescribed > 0) await startRest(prescribed);
+        else await stopRest();
+      }
       await onChanged();
     } catch (logError) {
       setError(fitTrainingError(logError));
@@ -585,6 +619,22 @@ function SessionPanel({ profileId, workout, routine, onChanged, onDiscard }: Ses
   const tonnage = workoutTonnage(workout.sets);
   const workingCount = tonnage.counted + tonnage.uncounted;
 
+  // How much of the ROUTINE has been started at all — lines carrying at least
+  // one working set, over the lines the routine holds. Deliberately „started"
+  // and not „finished": a line's own bar below says how far through its sets it
+  // is, and rolling both into one figure would hide which of the two a number
+  // was about. A session with no routine behind it has no denominator and draws
+  // nothing, rather than inventing one out of the exercises that happened.
+  const routineLines = routine?.items.length ?? 0;
+  const routineStarted =
+    routine === null
+      ? 0
+      : exercises.filter(
+          (exercise) =>
+            routine.items.some((item) => item.exerciseRef === exercise.ref) &&
+            workingSetCount(exercise.sets) > 0,
+        ).length;
+
   return (
     <section className="fit__section fit__session" aria-label={s.session.heading}>
       <div className="fit__session-head">
@@ -635,6 +685,22 @@ function SessionPanel({ profileId, workout, routine, onChanged, onDiscard }: Ses
       )}
       {tonnage.warmup > 0 && <p className="fit__note">{s.session.warmupNote}</p>}
 
+      {routineLines > 0 && (
+        <ProportionBar
+          label={s.prescription.sessionLabel}
+          value={`${String(routineStarted)}/${String(routineLines)}`}
+          segments={[
+            {
+              key: "started",
+              fraction: routineStarted / routineLines,
+              tone: "accent",
+              label: s.prescription.sessionLabel,
+            },
+          ]}
+          describedAs={`${s.prescription.sessionLabel}: ${String(routineStarted)}/${String(routineLines)}`}
+        />
+      )}
+
       <RestBar
         running={rest !== null}
         remaining={restRemaining}
@@ -661,6 +727,11 @@ function SessionPanel({ profileId, workout, routine, onChanged, onDiscard }: Ses
               Deleting a whole session, one level up, is undoable and says so
               through the „Vrati" bar instead. */}
           <p className="fit__note">{s.set.removeNote}</p>
+          {/* Said once for the whole session rather than under every card: a
+              prefilled field nobody explained is a number somebody may not
+              notice is a suggestion, and repeating the sentence eight times
+              would be eight chances to stop reading it. */}
+          <p className="fit__note">{s.prescription.prefillNote}</p>
           {exercises.map((exercise) => (
             <ExerciseCard
               key={exercise.ref}
@@ -760,14 +831,50 @@ function ExerciseCard({
 }: ExerciseCardProps) {
   const s = strings.fitness.training;
   const target = targetText(exercise.target);
+  // The prescription's set count, and how much of it is met. Warm-ups are not
+  // part of it (`workingSetCount`): a routine asking for three sets is asking
+  // for three WORKING ones, and counting the ramp would let somebody reach
+  // „3/3" without having done a single one of them.
+  const plannedSets = exercise.target?.sets ?? null;
+  const doneSets = workingSetCount(exercise.sets);
 
   return (
     <div className="fit__exercise">
       <div className="fit__exercise-head">
         <span className="fit__row-title">{exercise.label}</span>
         {target !== "" && <Chip>{`${s.target.label}: ${target}`}</Chip>}
+        {/* The rest this LINE asks for. Zero is its own instruction — a
+            superset — and reads as „bez odmora" rather than as „0:00", which
+            would look like a timer that failed to start. */}
+        {exercise.restSeconds !== null && (
+          <Chip>
+            {exercise.restSeconds === 0
+              ? s.prescription.restNone
+              : `${s.prescription.restLabel}: ${clockText(exercise.restSeconds)}`}
+          </Chip>
+        )}
         {exercise.metric !== null && <Chip variant="data">{s.metric[exercise.metric]}</Chip>}
       </div>
+
+      {/* Drawn only where a set COUNT was prescribed. „8–12 ponavljanja, koliko
+          serija ne brojim" is a real routine, and a bar with no denominator
+          would have to invent one. Overshooting fills the track and the figure
+          says „5/3" — the drawing clamps, the number never does. */}
+      {plannedSets !== null && plannedSets > 0 && (
+        <ProportionBar
+          label={s.prescription.setsLabel}
+          value={`${String(doneSets)}/${String(plannedSets)}`}
+          segments={[
+            {
+              key: "done",
+              fraction: doneSets / plannedSets,
+              tone: "accent",
+              label: s.prescription.setsLabel,
+            },
+          ]}
+          describedAs={`${exercise.label} — ${s.prescription.setsLabel}: ${String(doneSets)}/${String(plannedSets)}`}
+        />
+      )}
 
       {/* The single most used number in the module, beside the field it is about
           to be typed into (ADR-081 §1.1). „Prvi put" is said out loud rather
@@ -835,7 +942,7 @@ function ExerciseCard({
                   title={s.set.edit}
                   onClick={() => onEditSet(set)}
                 >
-                  ✎
+                  <Icon name="pencil" size={14} />
                 </Button>
                 <Button
                   size="sm"
@@ -844,7 +951,7 @@ function ExerciseCard({
                   title={s.set.remove}
                   onClick={() => onRemoveSet(set)}
                 >
-                  ×
+                  <Icon name="trash" size={14} />
                 </Button>
               </div>
             ),
@@ -1041,7 +1148,7 @@ function HistoryRow({
               title={expanded ? s.history.close : s.history.open}
               onClick={onToggle}
             >
-              {expanded ? "▾" : "▸"}
+              <Icon name={expanded ? "chevronDown" : "chevronRight"} size={14} />
             </Button>
           </span>
         }

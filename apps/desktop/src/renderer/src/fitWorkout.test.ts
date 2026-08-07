@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EXERCISE_METRICS } from "@nexus/core";
+import { countsTowardVolume, EXERCISE_METRICS, SET_KINDS } from "@nexus/core";
 import type {
   ExerciseMetric,
   FitExerciseOption,
@@ -12,13 +12,16 @@ import {
   isWholeField,
   movedByOne,
   prefillSet,
+  prefillValues,
   restRemainingSeconds,
   SET_FIELD_COLUMN,
   SET_FIELDS,
   sessionExercises,
   toLoggedSet,
+  workingSetCount,
   workoutTonnage,
 } from "./fitWorkout.js";
+import type { SessionExercise, SessionTarget } from "./fitWorkout.js";
 
 function set(over: Partial<FitWorkoutSet> & { exerciseRef: string }): FitWorkoutSet {
   return {
@@ -144,7 +147,15 @@ describe("sessionExercises", () => {
     expect(list.map((entry) => entry.ref)).toEqual(["a", "b", "c", "d"]);
     expect(list[0]?.sets).toHaveLength(1);
     expect(list[1]?.sets).toHaveLength(0);
-    expect(list[1]?.target).toEqual({ sets: 3, repsMin: 8, repsMax: 12 });
+    expect(list[1]?.target).toEqual({
+      sets: 3,
+      repsMin: 8,
+      repsMax: 12,
+      seconds: null,
+      weightKg: null,
+      distanceM: null,
+      metric: "weight_reps",
+    });
     expect(list[2]?.target).toBeNull();
   });
 
@@ -202,6 +213,7 @@ describe("prefillSet", () => {
     label: "a",
     metric: "weight_reps" as ExerciseMetric,
     target: null,
+    restSeconds: null,
     sets,
   });
 
@@ -230,6 +242,182 @@ describe("prefillSet", () => {
 
   it("answers null when there is nothing to know", () => {
     expect(prefillSet(exerciseWith([]), undefined)).toBeNull();
+  });
+});
+
+describe("prefillValues", () => {
+  /** One session line with a full migration-061 prescription behind it. */
+  const planned = (
+    metric: ExerciseMetric,
+    target: Partial<SessionTarget>,
+    sets: FitWorkoutSet[] = [],
+  ): SessionExercise => ({
+    ref: "a",
+    label: "a",
+    metric,
+    target: {
+      sets: null,
+      repsMin: null,
+      repsMax: null,
+      seconds: null,
+      weightKg: null,
+      distanceM: null,
+      metric,
+      ...target,
+    },
+    restSeconds: null,
+    sets,
+  });
+
+  it("starts from the routine when nothing has been logged for the exercise", () => {
+    expect(prefillValues(planned("weight_reps", { weightKg: 60, repsMin: 8, repsMax: 12 }), undefined)).toEqual(
+      { weight: 60, reps: 8 },
+    );
+  });
+
+  it("takes the LOWER bound of a rep range — a floor is an instruction, a ceiling is not", () => {
+    expect(prefillValues(planned("reps", { repsMin: 8, repsMax: 12 }), undefined)).toEqual({ reps: 8 });
+  });
+
+  it("falls back to the ceiling when that is the only bound written", () => {
+    expect(prefillValues(planned("reps", { repsMax: 12 }), undefined)).toEqual({ reps: 12 });
+  });
+
+  it("prefers what was actually logged over what was planned", () => {
+    const done = set({ exerciseRef: "a", weightKg: 72.5, reps: 6 });
+    expect(
+      prefillValues(planned("weight_reps", { weightKg: 60, repsMin: 8 }, [done]), undefined),
+    ).toEqual({ weight: 72.5, reps: 6 });
+  });
+
+  it("prefers the last finished session over the plan too", () => {
+    expect(
+      prefillValues(planned("weight_reps", { weightKg: 60, repsMin: 8 }), {
+        exerciseRef: "a",
+        day: "2026-07-30",
+        workoutId: "w0",
+        sets: [set({ exerciseRef: "a", weightKg: 80, reps: 5 })],
+      }),
+    ).toEqual({ weight: 80, reps: 5 });
+  });
+
+  it("falls back PER FIELD, so a half-recorded set still gets the plan's other half", () => {
+    // A set logged before the exercise's metric was corrected: reps, no load.
+    const half = set({ exerciseRef: "a", weightKg: null, reps: 6 });
+    expect(
+      prefillValues(planned("weight_reps", { weightKg: 60, repsMin: 8 }, [half]), undefined),
+    ).toEqual({ weight: 60, reps: 6 });
+  });
+
+  it("treats a logged ZERO load as recorded, never as absent", () => {
+    // A pull-up on a day the belt stayed off is `weightKg: 0`, and it must not
+    // fall through to the plan's added weight.
+    const beltOff = set({ exerciseRef: "a", metric: "weighted_reps", weightKg: 0, reps: 8 });
+    expect(
+      prefillValues(planned("weighted_reps", { weightKg: 20, repsMin: 5 }, [beltOff]), undefined),
+    ).toEqual({ weight: 0, reps: 8 });
+  });
+
+  it("fills a hold and a distance, which the session used to ignore entirely", () => {
+    expect(prefillValues(planned("time", { seconds: 45 }), undefined)).toEqual({ seconds: 45 });
+    expect(prefillValues(planned("distance_time", { distanceM: 400, seconds: 90 }), undefined)).toEqual({
+      distance: 400,
+      seconds: 90,
+    });
+  });
+
+  it("offers only the fields the metric declares, whatever the line prescribes", () => {
+    // A line carrying a weight from before a metric correction must not put
+    // kilograms into a form for an exercise that records reps alone.
+    expect(prefillValues(planned("reps", { weightKg: 60, repsMin: 8 }), undefined)).toEqual({ reps: 8 });
+  });
+
+  it("answers nothing at all for a line whose exercise no longer resolves", () => {
+    expect(
+      prefillValues(
+        { ref: "a", label: "a", metric: null, target: null, restSeconds: null, sets: [] },
+        undefined,
+      ),
+    ).toEqual({});
+  });
+
+  it("answers nothing when there is neither a log nor a plan", () => {
+    expect(
+      prefillValues(
+        { ref: "a", label: "a", metric: "weight_reps", target: null, restSeconds: null, sets: [] },
+        undefined,
+      ),
+    ).toEqual({});
+  });
+});
+
+describe("workingSetCount", () => {
+  it("does not count the warm-up towards a prescription of three", () => {
+    expect(
+      workingSetCount([
+        set({ exerciseRef: "a", kind: "warmup" }),
+        set({ exerciseRef: "a", kind: "warmup", position: 1 }),
+        set({ exerciseRef: "a", position: 2 }),
+      ]),
+    ).toBe(1);
+  });
+
+  it("counts drop sets and sets to failure — both are work", () => {
+    expect(
+      workingSetCount([
+        set({ exerciseRef: "a", kind: "working" }),
+        set({ exerciseRef: "a", kind: "drop", position: 1 }),
+        set({ exerciseRef: "a", kind: "failure", position: 2 }),
+      ]),
+    ).toBe(3);
+  });
+
+  it("agrees with @nexus/core about what counts, at every kind", () => {
+    // The one rule stated twice must stay one rule: a progress figure and a
+    // volume figure disagreeing about what a set is would be worse than either
+    // being wrong alone.
+    for (const kind of SET_KINDS) {
+      expect(workingSetCount([set({ exerciseRef: "a", kind })])).toBe(countsTowardVolume(kind) ? 1 : 0);
+    }
+  });
+});
+
+describe("a routine line's prescription reaches the session", () => {
+  it("carries all six targets and the rest, not just sets and reps", () => {
+    const plan = routine([{ ref: "a", metric: "time" }]);
+    const line = plan.items[0];
+    if (line === undefined) throw new Error("the fixture must have one item");
+    const withTargets: FitRoutine = {
+      ...plan,
+      items: [{ ...line, targetSeconds: 45, targetWeightKg: 12, targetDistanceM: 400, restSeconds: 120 }],
+    };
+    const [exercise] = sessionExercises([], withTargets, []);
+    expect(exercise?.target).toEqual({
+      sets: 3,
+      repsMin: 8,
+      repsMax: 12,
+      seconds: 45,
+      weightKg: 12,
+      distanceM: 400,
+      metric: "time",
+    });
+    expect(exercise?.restSeconds).toBe(120);
+  });
+
+  it("keeps a prescribed ZERO rest distinct from no prescription at all", () => {
+    const plan = routine([{ ref: "a" }]);
+    const line = plan.items[0];
+    if (line === undefined) throw new Error("the fixture must have one item");
+    const [superset] = sessionExercises([], { ...plan, items: [{ ...line, restSeconds: 0 }] }, []);
+    const [unstated] = sessionExercises([], plan, []);
+    expect(superset?.restSeconds).toBe(0);
+    expect(unstated?.restSeconds).toBeNull();
+  });
+
+  it("gives an exercise added by hand no prescription to meet", () => {
+    const [added] = sessionExercises([], null, [option("b")]);
+    expect(added?.target).toBeNull();
+    expect(added?.restSeconds).toBeNull();
   });
 });
 
