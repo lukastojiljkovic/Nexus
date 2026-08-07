@@ -34,6 +34,20 @@ export class SqliteFlagStore implements FlagStore {
   }
 
   async get(): Promise<FlagState> {
+    return this.getSync();
+  }
+
+  /**
+   * The same read without the promise. `FlagStore`'s async signature exists for
+   * the platform-neutral contract in `@nexus/core`, not because anything here
+   * awaits: the driver is synchronous and always has been.
+   *
+   * Named separately rather than by making `get` sync, so the contract stays
+   * intact for every caller that holds a `FlagStore`. The notification
+   * scheduler is what needs it — its per-profile check is a synchronous
+   * function and a module gate is a read it must do on every cycle.
+   */
+  getSync(): FlagState {
     const rows = this.selectAll.all(this.profileId) as FlagRow[];
     const state: FlagState = {};
     for (const row of rows) {

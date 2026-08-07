@@ -60,6 +60,10 @@ import {
   type SecurityNotice,
 } from "./notificationStrings.js";
 import { IpcChannel } from "../shared/ipc.js";
+import {
+  NOTIFICATION_SOURCE_MODULE,
+  sourcesForEnabledModules,
+} from "../shared/notificationModules.js";
 
 /**
  * Everything the scheduler reads/writes through, as plain functions rather
@@ -89,6 +93,14 @@ export interface NotificationSchedulerDeps {
   /** HABIT slice c: the habits this check reminds about, and the ticks that tell it which of them are already done. */
   habitStore(profileId: string): HabitStore;
   notificationStore(profileId: string): NotificationStore;
+  /**
+   * The modules this profile actually runs (SET-007), so a source whose module
+   * is switched off stops reminding. Supplied as a dep rather than read here
+   * because resolving it needs the flag store AND the module registry, both of
+   * which are `main/index.ts`'s to own — the same split every other store here
+   * follows.
+   */
+  enabledModuleIds(profileId: string): ReadonlySet<string>;
   getMainWindow(): BrowserWindow | null;
 }
 
@@ -103,6 +115,13 @@ export type SecurityNotificationDeps = Pick<
   NotificationSchedulerDeps,
   "listProfiles" | "notificationStore" | "getMainWindow"
 >;
+
+/**
+ * Every notification source there is, taken from the exhaustive source→module
+ * map rather than restated — the `Record<NotificationSource, string>` type makes
+ * a missing entry a compile error, so this list cannot fall behind the union.
+ */
+const DERIVABLE_SOURCES = Object.keys(NOTIFICATION_SOURCE_MODULE) as NotificationSource[];
 
 /** How often the periodic check runs, beyond the immediate on-start check and the `powerMonitor` "resume" hook. */
 const CHECK_INTERVAL_MS = 60_000;
@@ -486,6 +505,22 @@ function checkProfile(
 
   const ntf = deps.notificationStore(profileId);
   const settings = ntf.getSettings();
+  /**
+   * The appetite toggles, narrowed to the modules this profile actually runs.
+   *
+   * **Notifications were the last surface that never asked.** Switching a module
+   * off in Podešavanja takes it out of the sidebar, off the dashboard and (since
+   * ADR-058 §5) out of search — and the scheduler went on deriving from every
+   * source whose NTF toggle happened to be on, so a business profile with STUDY
+   * off still got exam reminders. `sourcesForEnabledModules` is the same shape
+   * as `filterSearchHitsByModules` and exempts the always-on sources for the
+   * same reason `isDeliverable` does: a security notice is about the account,
+   * not about a module anybody chose.
+   */
+  const enabledSources = sourcesForEnabledModules(
+    settings.enabledSources,
+    deps.enabledModuleIds(profileId),
+  );
 
   const documents = deps.documentStore(profileId).listActive();
   const events = deps.eventStore(profileId).listActive();
@@ -546,7 +581,15 @@ function checkProfile(
     tasks: taskReminderInputs(tasks),
     subscriptions: subscriptionReminderInputs(renewals, subscriptionLeads),
     habits: habitReminderInputs(habitRows, today, SCHEDULER_WEEK_START),
-    enabledSources: settings.enabledSources,
+    // EVERY source, deliberately — this call answers „what exists today", and
+    // `isDeliverable` below answers „what may be shown". Filtering here instead
+    // conflated the two, and the cost fell on snoozed rows: a source switched
+    // off stopped deriving, so `dueSnoozed` could not tell „the passport was
+    // deleted" from „the user turned document reminders off", and DISMISSED the
+    // snooze for both. Turning the source back on did not bring it back either,
+    // because the ledger key survives a dismiss. Deriving unconditionally makes
+    // the two cases distinguishable, and holding cost-free.
+    enabledSources: DERIVABLE_SOURCES,
     today,
     nowLocalTime: nowTime,
     morningHour: settings.morningHour,
@@ -554,7 +597,12 @@ function checkProfile(
 
   const ledgerKeys = new Set(ntf.listLedgerKeys().map(occurrenceKey));
   const withinQuiet = isWithinQuietHours(nowTime, settings.quietFrom, settings.quietTo);
-  const currentKeys = new Set(candidates.map(occurrenceKey));
+  // Keyed by occurrence rather than a bare Set of keys, because a re-firing
+  // snoozed row has to be put through the SAME delivery gate a fresh one is,
+  // and the gate reads the candidate's source and priority — neither of which a
+  // ledger row can be trusted for: the source may have been switched off since
+  // the row was snoozed.
+  const currentByKey = new Map(candidates.map((candidate) => [occurrenceKey(candidate), candidate]));
 
   // Everything this cycle would actually put in front of the user, decided
   // before anything is written: fresh candidates that clear both the ledger and
@@ -566,12 +614,35 @@ function checkProfile(
       !ledgerKeys.has(occurrenceKey(candidate)) &&
       // held; re-derives once quiet hours end
       isDeliverable(candidate, {
-        enabledSources: settings.enabledSources,
+        enabledSources,
         withinQuietHours: withinQuiet,
       }),
   );
   const dueSnoozed = ntf.dueSnoozed(nowIso);
-  const refiring = dueSnoozed.filter((row) => currentKeys.has(occurrenceKey(row)));
+  /**
+   * A snoozed row is re-fired only if its occurrence is still derivable AND it
+   * clears the same gate a fresh candidate clears.
+   *
+   * **This gate was missing entirely.** `withinQuiet` was computed once and
+   * consumed once — by the `fresh` filter above — so „Odloži do sutra" landing
+   * at 03:00 rang an OS toast in the middle of the night, and a source the user
+   * had since switched off in Podešavanja re-fired anyway. Both are exactly the
+   * cases `isDeliverable` exists to refuse, and neither of them is the snooze's
+   * fault: the row was legitimate when it was made.
+   *
+   * Holding costs nothing, for the same reason it costs nothing above: a held
+   * row is left untouched — not re-fired, not dismissed, not stamped — so it is
+   * still `dueSnoozed` on the next cycle and delivers the moment the gate opens.
+   */
+  const refireGate = (row: { source: NotificationSource; entityId: string; occurrenceKey: string }): boolean => {
+    const candidate = currentByKey.get(occurrenceKey(row));
+    if (candidate === undefined) return false;
+    return isDeliverable(candidate, {
+      enabledSources,
+      withinQuietHours: withinQuiet,
+    });
+  };
+  const refiring = dueSnoozed.filter((row) => refireGate(row));
 
   // NTF-008 (ADR-033): the one-time "how much should Nexus remind you" ask, put
   // at the first moment it is actually about to remind — the only moment where
@@ -643,12 +714,17 @@ function checkProfile(
   }
 
   for (const row of dueSnoozed) {
-    if (currentKeys.has(occurrenceKey(row))) {
-      const refired = ntf.markRefired(row.id, nowIso);
-      toShow.push({ source: row.source, copy: { title: refired.title, body: refired.body } });
-    } else {
+    const stillDerivable = currentByKey.has(occurrenceKey(row));
+    if (!stillDerivable) {
       ntf.dismiss(row.id, nowIso); // the entity behind it is gone/stale — silent, per the PRD
+      ledgerChanged = true;
+      continue;
     }
+    // Derivable but gated off — quiet hours, or a source switched off since the
+    // snooze was made. Nothing is written, so the row stays due and re-derives.
+    if (!refireGate(row)) continue;
+    const refired = ntf.markRefired(row.id, nowIso);
+    toShow.push({ source: row.source, copy: { title: refired.title, body: refired.body } });
     ledgerChanged = true;
   }
 

@@ -5176,6 +5176,12 @@ function notificationSchedulerDeps(): NotificationSchedulerDeps {
     // ticks that says which of them are already done.
     habitStore,
     notificationStore,
+    // SET-007: a module switched off stops reminding, the way it already stops
+    // appearing in the sidebar, on the dashboard and in search. Read on every
+    // check rather than captured once — a flag toggled in Podešavanja must take
+    // effect on the next cycle, not on the next unlock.
+    enabledModuleIds: (profileId) =>
+      new Set(resolveEnabled(moduleRegistry, flagStore(profileId).getSync())),
     getMainWindow: () => mainWindow,
   };
 }

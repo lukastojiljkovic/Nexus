@@ -15,6 +15,16 @@ vi.mock("electron", () => ({
 
 const { runNotificationCheck } = await import("./notifications.js");
 
+/** Every module a notification source can belong to — the state that leaves SET-007's gate transparent. */
+const ALL_MODULE_IDS: ReadonlySet<string> = new Set([
+  "calendar",
+  "study",
+  "tasks",
+  "settings",
+  "finance",
+  "habits",
+]);
+
 /**
  * ADR-058 (NTF active-profile rule): the check loop serves the ACTIVE profile
  * only. Pinned through the first thing `checkProfile` does per profile —
@@ -73,6 +83,12 @@ function makeDeps(profileIds: readonly string[], activeId: string | null) {
     // absent dep makes `checkProfile` throw at its first habit read, and
     // `logCheckFailure` would swallow it while these assertions still passed.
     habitStore: () => ({ listActive: () => [], listAllEntries: () => [] }),
+    // SET-007's module gate, stubbed for the same reason as the three above —
+    // and it proved the point the moment it was added: without this line the
+    // check threw at `sourcesForEnabledModules`, `logCheckFailure` swallowed it,
+    // and only the `completedProfiles` assertion below noticed. Every module is
+    // on here, which is the state that leaves the gate transparent.
+    enabledModuleIds: () => ALL_MODULE_IDS,
     getMainWindow: () => null,
   } as unknown as NotificationSchedulerDeps;
   return { deps, checkedProfiles, completedProfiles };
