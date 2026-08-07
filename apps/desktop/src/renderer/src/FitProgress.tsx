@@ -6,7 +6,7 @@ import type { ExerciseRecords, MuscleGroup, WeekVolume } from "@nexus/core";
 import type { FitWorkout } from "../../shared/ipc.js";
 import { localTodayKey } from "./examDates.js";
 import { progressSets } from "./fitWorkout.js";
-import { setCountText, tonnageText } from "./fitWorkoutCopy.js";
+import { figureText, setCountText, tonnageText } from "./fitWorkoutCopy.js";
 import { strings } from "./strings.js";
 
 /**
@@ -198,6 +198,11 @@ function muscleRows(week: WeekVolume): [MuscleGroup, number][] {
  * raise, printed as four failures to answer them.
  */
 function RecordCard({ record }: { record: ExerciseRecords }): ReactNode {
+  // Every weight here goes through `figureText`, which keeps a decimal, and NOT
+  // through `tonnageText`, which rounds. A weekly tonnage rounds honestly — a
+  // tenth of a kilo beside a four-digit total is noise. A personal record does
+  // not: 62,5 kg printed as „63 kg" is the app misreporting the one number the
+  // whole card exists to state.
   const s = strings.fitness.training;
   const r = s.progress.record;
   const rows: { label: string; value: string; day: string }[] = [];
@@ -208,15 +213,15 @@ function RecordCard({ record }: { record: ExerciseRecords }): ReactNode {
       label: r.heaviest,
       value:
         reps === null
-          ? `${tonnageText(weightKg)} ${s.set.unitKg}`
-          : `${tonnageText(weightKg)} ${s.set.unitKg} ${s.set.times} ${String(reps)} ${s.set.unitReps}`,
+          ? `${figureText(weightKg)} ${s.set.unitKg}`
+          : `${figureText(weightKg)} ${s.set.unitKg} ${s.set.times} ${String(reps)} ${s.set.unitReps}`,
       day: record.heaviest.day,
     });
   }
   if (record.bestOneRm !== null) {
     rows.push({
       label: r.bestOneRm,
-      value: `${tonnageText(record.bestOneRm.value.kg)} ${s.set.unitKg}`,
+      value: `${figureText(record.bestOneRm.value.kg)} ${s.set.unitKg}`,
       day: record.bestOneRm.day,
     });
   }
@@ -227,7 +232,7 @@ function RecordCard({ record }: { record: ExerciseRecords }): ReactNode {
       value:
         weightKg === null
           ? `${String(reps)} ${s.set.unitReps}`
-          : `${String(reps)} ${s.set.unitReps} ${s.set.times} ${tonnageText(weightKg)} ${s.set.unitKg}`,
+          : `${String(reps)} ${s.set.unitReps} ${s.set.times} ${figureText(weightKg)} ${s.set.unitKg}`,
       day: record.mostReps.day,
     });
   }
@@ -242,7 +247,7 @@ function RecordCard({ record }: { record: ExerciseRecords }): ReactNode {
     const { weightKg, reps } = record.leastAssistance.value;
     rows.push({
       label: r.leastAssistance,
-      value: `${s.set.assistPrefix}${tonnageText(weightKg)} ${s.set.unitKg} ${s.set.times} ${String(reps)} ${s.set.unitReps}`,
+      value: `${s.set.assistPrefix}${figureText(weightKg)} ${s.set.unitKg} ${s.set.times} ${String(reps)} ${s.set.unitReps}`,
       day: record.leastAssistance.day,
     });
   }
