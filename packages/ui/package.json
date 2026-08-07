@@ -20,7 +20,7 @@
     "@nexus/tokens": "workspace:*"
   },
   "devDependencies": {
-    "@types/react": "^19.0.0",
+    "@types/react": "^19.2.18",
     "react": "^19.2.8",
     "typescript": "^5.8.0"
   }
