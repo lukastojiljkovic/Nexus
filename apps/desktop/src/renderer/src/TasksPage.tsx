@@ -89,6 +89,8 @@ import { NotePopover } from "./notePopover.js";
 import { RecurrenceMark, RecurrencePicker } from "./RecurrencePicker.js";
 import { TaskMonthGrid } from "./TaskMonthGrid.js";
 import type { TaskMonthItem } from "./TaskMonthGrid.js";
+import { ConfirmDialog } from "./ConfirmDialog.js";
+import { TypedConfirmDialog } from "./TypedConfirmDialog.js";
 import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
 import { dayUnit, strings } from "./strings.js";
 import { readStoredBlockedInToday, toIncludeBlocked } from "./taskPrefs.js";
@@ -1081,6 +1083,20 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const [attachmentError, setAttachmentError] = useState<"generic" | "tooLarge" | null>(null);
   /** True while the native picker is open — the button is disabled so a second dialog cannot be asked for. */
   const [attaching, setAttaching] = useState(false);
+  /** The attachment a „Ukloni prilog" click is asking about; null when nothing is being asked. */
+  const [pendingAttachmentDelete, setPendingAttachmentDelete] = useState<{
+    taskId: string;
+    attachmentId: string;
+    name: string;
+  } | null>(null);
+  /**
+   * The two hard deletes of user-named containers this page offers, each asked
+   * before it runs. Neither has a restore endpoint, which is the whole reason
+   * the note rail confirms its folders, tags and categories — these two had
+   * simply never been given the same treatment.
+   */
+  const [pendingDeleteTag, setPendingDeleteTag] = useState<TaskTag | null>(null);
+  const [pendingDeleteSection, setPendingDeleteSection] = useState<TaskSection | null>(null);
   // „Pregledaj" (DOC / ADR-064): which attachment the in-app dialog is showing,
   // and as what. PDF rows never land here — their menu item opens the dedicated
   // window over IPC instead.
@@ -3361,7 +3377,11 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
             size="sm"
             className="tasks__section-action tasks__section-delete"
             aria-label={s.deleteSectionLabel}
-            onClick={() => deleteSection(section.id)}
+            // A hard delete of a user-named container asks first, the way the
+            // note rail's folders do. The tasks in it are not lost — they move
+            // to the list body — and the dialog says so, since that is the fact
+            // the answer turns on.
+            onClick={() => setPendingDeleteSection(section)}
           >
             ×
           </Button>
@@ -3513,7 +3533,13 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                       className="note__menu-item note__menu-item--danger"
                       role="menuitem"
                       onClick={() => {
-                        void removeAttachment(taskId, attachment.id);
+                        // Asks first — the row and the encrypted copy on disk
+                        // both go, with no undo behind either.
+                        setPendingAttachmentDelete({
+                          taskId,
+                          attachmentId: attachment.id,
+                          name: attachment.fileName,
+                        });
                         close();
                       }}
                     >
@@ -3924,7 +3950,10 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                         role="menuitem"
                         type="button"
                         onClick={() => {
-                          deleteTag(tag.id);
+                          // Hard delete, and its links go with it through the
+                          // schema's CASCADE — the note rail's tag asks, so
+                          // this one does too.
+                          setPendingDeleteTag(tag);
                           close();
                         }}
                       >
@@ -4908,6 +4937,63 @@ className="nx-segmented__option tasks__view"
           attachment={attachmentPreview.attachment}
           kind={attachmentPreview.kind}
           onClose={() => setAttachmentPreview(null)}
+        />
+      )}
+
+      {pendingDeleteTag !== null && (
+        <TypedConfirmDialog
+          title={strings.tasks.tags.deleteTagDialog.title}
+          name={pendingDeleteTag.name}
+          warning={strings.tasks.tags.deleteTagDialog.warning}
+          confirmLabel={strings.tasks.tags.deleteTagDialog.confirmLabel}
+          confirmPlaceholder={strings.tasks.tags.deleteTagDialog.confirmPlaceholder}
+          confirmValue={pendingDeleteTag.name}
+          submitLabel={strings.tasks.tags.deleteTagDialog.submit}
+          cancelLabel={strings.tasks.tags.deleteTagDialog.cancel}
+          danger
+          onConfirm={() => {
+            const tag = pendingDeleteTag;
+            setPendingDeleteTag(null);
+            deleteTag(tag.id);
+          }}
+          onCancel={() => setPendingDeleteTag(null)}
+        />
+      )}
+
+      {pendingDeleteSection !== null && (
+        <TypedConfirmDialog
+          title={strings.tasks.lists.deleteSectionDialog.title}
+          name={pendingDeleteSection.name}
+          warning={strings.tasks.lists.deleteSectionDialog.warning}
+          confirmLabel={strings.tasks.lists.deleteSectionDialog.confirmLabel}
+          confirmPlaceholder={strings.tasks.lists.deleteSectionDialog.confirmPlaceholder}
+          confirmValue={pendingDeleteSection.name}
+          submitLabel={strings.tasks.lists.deleteSectionDialog.submit}
+          cancelLabel={strings.tasks.lists.deleteSectionDialog.cancel}
+          danger
+          onConfirm={() => {
+            const section = pendingDeleteSection;
+            setPendingDeleteSection(null);
+            deleteSection(section.id);
+          }}
+          onCancel={() => setPendingDeleteSection(null)}
+        />
+      )}
+
+      {pendingAttachmentDelete !== null && (
+        <ConfirmDialog
+          title={strings.app.attachmentDelete.title}
+          name={pendingAttachmentDelete.name}
+          question={strings.app.attachmentDelete.question}
+          note={strings.app.attachmentDelete.note}
+          confirmLabel={strings.app.attachmentDelete.confirm}
+          cancelLabel={strings.app.attachmentDelete.cancel}
+          onConfirm={() => {
+            const doomed = pendingAttachmentDelete;
+            setPendingAttachmentDelete(null);
+            void removeAttachment(doomed.taskId, doomed.attachmentId);
+          }}
+          onCancel={() => setPendingAttachmentDelete(null)}
         />
       )}
     </div>

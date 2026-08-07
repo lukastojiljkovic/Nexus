@@ -66,6 +66,7 @@ import { focusSessionMinutes, formatDurationMinutes, formatElapsed, formatFocusS
 import { FocusDiscardDialog } from "./FocusDiscardDialog.js";
 import { MathText } from "./MathText.js";
 import { NotePopover } from "./notePopover.js";
+import { ConfirmDialog } from "./ConfirmDialog.js";
 import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
 import { intervalLabel, isDueWithinSession } from "./reviewIntervals.js";
 import { countUnit, dayUnit, strings } from "./strings.js";
@@ -536,6 +537,12 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   );
   const [profileNotes, setProfileNotes] = useState<NoteMeta[]>([]);
   const [materialError, setMaterialError] = useState<"generic" | "tooLarge" | null>(null);
+  /** The material a „Ukloni materijal" click is asking about; null when nothing is being asked. */
+  const [pendingMaterialDelete, setPendingMaterialDelete] = useState<{
+    subjectId: string;
+    attachmentId: string;
+    name: string;
+  } | null>(null);
   const [linkedNoteError, setLinkedNoteError] = useState(false);
   const [attaching, setAttaching] = useState(false);
   // „Pregledaj" (DOC / ADR-064): which material the in-app dialog is showing,
@@ -2690,7 +2697,13 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                         className="note__menu-item note__menu-item--danger"
                         role="menuitem"
                         onClick={() => {
-                          void removeMaterial(subjectId, material.id);
+                          // Asks first — the row and the encrypted copy on disk
+                          // both go, with no undo behind either.
+                          setPendingMaterialDelete({
+                            subjectId,
+                            attachmentId: material.id,
+                            name: material.fileName,
+                          });
                           close();
                         }}
                       >
@@ -4129,6 +4142,23 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
           attachment={materialPreview.attachment}
           kind={materialPreview.kind}
           onClose={() => setMaterialPreview(null)}
+        />
+      )}
+
+      {pendingMaterialDelete !== null && (
+        <ConfirmDialog
+          title={strings.app.attachmentDelete.title}
+          name={pendingMaterialDelete.name}
+          question={strings.app.attachmentDelete.question}
+          note={strings.app.attachmentDelete.note}
+          confirmLabel={strings.app.attachmentDelete.confirm}
+          cancelLabel={strings.app.attachmentDelete.cancel}
+          onConfirm={() => {
+            const doomed = pendingMaterialDelete;
+            setPendingMaterialDelete(null);
+            void removeMaterial(doomed.subjectId, doomed.attachmentId);
+          }}
+          onCancel={() => setPendingMaterialDelete(null)}
         />
       )}
     </div>

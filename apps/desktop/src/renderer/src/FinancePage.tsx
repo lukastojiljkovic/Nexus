@@ -39,6 +39,7 @@ import {
 } from "./financeReport.js";
 import { formatMoney, formatMoneyPlain, moneyInputValue, parseMoneyInput } from "./money.js";
 import { strings } from "./strings.js";
+import { TypedConfirmDialog } from "./TypedConfirmDialog.js";
 import { moduleName } from "./moduleName.js";
 
 /**
@@ -341,6 +342,8 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
   const [budgetCurrency, setBudgetCurrency] = useState("");
   const [budgetAmount, setBudgetAmount] = useState("");
   const [railError, setRailError] = useState<string | null>(null);
+  /** The category a „×" click is asking about; null when nothing is being asked. */
+  const [pendingDeleteCategory, setPendingDeleteCategory] = useState<FinCategory | null>(null);
 
   // „Pretplate" (FIN slice d): one form, serving create and edit, exactly as the
   // ledger's own does. The rule is edited by the SAME `RecurrencePicker` the
@@ -1613,9 +1616,10 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
                   className="fin__category-delete"
                   aria-label={`${s.categories.delete}: ${category.name}`}
                   title={s.categories.deleteHint}
-                  onClick={() =>
-                    void runRailAction(() => window.nexus.deleteFinCategory(profileId, category.id))
-                  }
+                  // Asks first: this is a HARD delete with no restore endpoint,
+                  // and NOTE's identical category rail has always asked for the
+                  // name back before running one.
+                  onClick={() => setPendingDeleteCategory(category)}
                 >
                   ×
                 </button>
@@ -2223,6 +2227,26 @@ className="nx-segmented__option fin__view"
           </>
         )}
       </div>
+
+      {pendingDeleteCategory !== null && (
+        <TypedConfirmDialog
+          title={strings.finance.categories.deleteDialog.title}
+          name={pendingDeleteCategory.name}
+          warning={strings.finance.categories.deleteDialog.warning}
+          confirmLabel={strings.finance.categories.deleteDialog.confirmLabel}
+          confirmPlaceholder={strings.finance.categories.deleteDialog.confirmPlaceholder}
+          confirmValue={pendingDeleteCategory.name}
+          submitLabel={strings.finance.categories.deleteDialog.submit}
+          cancelLabel={strings.finance.categories.deleteDialog.cancel}
+          danger
+          onConfirm={() => {
+            const category = pendingDeleteCategory;
+            setPendingDeleteCategory(null);
+            void runRailAction(() => window.nexus.deleteFinCategory(profileId, category.id));
+          }}
+          onCancel={() => setPendingDeleteCategory(null)}
+        />
+      )}
     </div>
   );
 }

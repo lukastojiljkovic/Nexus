@@ -62,6 +62,22 @@ export const strings = {
     themeNoc: "Noć",
     loading: "Učitavanje…",
     /**
+     * Asked before a file is removed, by all THREE attachment panels — notes,
+     * tasks and a subject's materials. One block rather than three, because it
+     * is one act: the row is hard-deleted and the encrypted copy on disk goes
+     * with it when nothing else references that blob. Every one of the three
+     * used to do that on a single click of a „⋯" menu item, with no undo
+     * anywhere behind it.
+     */
+    attachmentDelete: {
+      title: "Ukloniti datoteku?",
+      question: "Priložena kopija se briše zauvek i ne može se vratiti.",
+      /** The one reassurance that is true: the original on disk was never touched. */
+      note: "Original na tvom računaru ostaje netaknut.",
+      confirm: "Ukloni",
+      cancel: "Otkaži",
+    },
+    /**
      * The autosave line, shared by every surface that writes without being
      * asked — the board and the note editor today, whatever comes next
      * tomorrow. The saved label carries a CLOCK because a bare „Sačuvano" is
@@ -902,6 +918,21 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       sectionNamePlaceholder: "Ime sekcije",
       renameSectionLabel: "Preimenuj sekciju",
       deleteSectionLabel: "Obriši sekciju",
+      /**
+       * A heading is a user-named container and the delete is HARD, so it takes
+       * the typed-name confirmation the folder rail takes. The warning states
+       * the reassuring half plainly, because it is the half that decides the
+       * answer: the tasks are not deleted with it, they move to the list body.
+       */
+      deleteSectionDialog: {
+        title: "Brisanje sekcije",
+        warning:
+          "Sekcija se trajno briše. Zadaci iz nje se premeštaju u telo liste — nijedan se ne gubi.",
+        confirmLabel: "Naziv sekcije za potvrdu",
+        confirmPlaceholder: "Upiši tačan naziv",
+        submit: "Obriši",
+        cancel: "Otkaži",
+      },
     },
     /**
      * Oznake (migration 023) — the NOTE module's tag wording one module over,
@@ -929,6 +960,22 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       filterLabel: "Filter po oznakama",
       clearFilter: "Poništi",
       actionError: "Radnja nad oznakom nije uspela. Pokušaj ponovo.",
+      /**
+       * NOTE's own `deleteTagDialog`, one module over and for the identical
+       * reason: `taskTagStore.delete` is a HARD delete whose links go with it
+       * through the schema's CASCADE, and there is no restore endpoint behind
+       * it. This rail had been deleting on a single click of a danger menu item
+       * while the note rail asked — the same act, two answers.
+       */
+      deleteTagDialog: {
+        title: "Brisanje oznake",
+        warning:
+          "Oznaka se trajno briše i uklanja sa svakog zadatka koji je nosi. Zadaci sami ostaju netaknuti.",
+        confirmLabel: "Naziv oznake za potvrdu",
+        confirmPlaceholder: "Upiši tačan naziv",
+        submit: "Obriši",
+        cancel: "Otkaži",
+      },
       /** Shown in place of the rows when the tag filter matches nothing in the selected list. */
       filterEmptyDescription: "Nijedan zadatak ne odgovara izabranim oznakama.",
     },
@@ -2699,6 +2746,23 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       delete: "Obriši",
       /** Stated on the delete affordance itself: what survives matters more than what goes. */
       deleteHint: "Transakcije ostaju — samo gube kategoriju.",
+      /**
+       * The hint above was doing the whole job: a HARD delete (`DELETE FROM
+       * fin_categories`, unlike an account's) fired on one click of a bare „×",
+       * with no restore endpoint behind it, while NOTE's identical category rail
+       * asked for the name back. The warning also states the part the hint left
+       * out — a budget limit set on this category goes with it, and that one
+       * does NOT survive the way the transactions do.
+       */
+      deleteDialog: {
+        title: "Brisanje kategorije",
+        warning:
+          "Kategorija se trajno briše, zajedno sa limitom potrošnje ako ga ima. Transakcije ostaju — samo gube kategoriju.",
+        confirmLabel: "Naziv kategorije za potvrdu",
+        confirmPlaceholder: "Upiši tačan naziv",
+        submit: "Obriši",
+        cancel: "Otkaži",
+      },
       empty: "Još nema kategorija.",
       duplicate: "Kategorija sa tim imenom već postoji.",
       invalidName: "Ime kategorije ne može biti prazno.",

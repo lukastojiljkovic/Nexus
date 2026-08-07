@@ -49,6 +49,7 @@ import { Toggle, ToggleContent, ToggleSummary } from "./noteToggle.js";
 import { mergeTemplateEntries, stripAttachmentNodes, type TemplateEntry } from "./noteTemplates.js";
 import { NoteVersionHistory } from "./noteVersionHistory.js";
 import { formatClockTime } from "./timeFormat.js";
+import { ConfirmDialog } from "./ConfirmDialog.js";
 import { strings } from "./strings.js";
 
 /**
@@ -221,6 +222,11 @@ export function NoteEditor({
   const [backlinks, setBacklinks] = useState<NoteMeta[]>([]);
   const [attachments, setAttachments] = useState<NoteAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState<"generic" | "tooLarge" | null>(null);
+  /** The attachment a „Ukloni prilog" click is asking about; null when nothing is being asked. */
+  const [pendingAttachmentDelete, setPendingAttachmentDelete] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   // „Pregledaj" (DOC / ADR-064): which attachment the in-app dialog is showing,
   // and as what. PDF rows never land here — their menu item opens the dedicated
   // window over IPC instead.
@@ -997,7 +1003,13 @@ export function NoteEditor({
                             className="note__menu-item note__menu-item--danger"
                             role="menuitem"
                             onClick={() => {
-                              void removeAttachment(attachment.id);
+                              // Asks first: this deletes the row AND the
+                              // encrypted copy on disk, and there is no undo
+                              // behind it — see `strings.app.attachmentDelete`.
+                              setPendingAttachmentDelete({
+                                id: attachment.id,
+                                name: attachment.fileName,
+                              });
                               close();
                             }}
                           >
@@ -1038,6 +1050,22 @@ export function NoteEditor({
           attachment={preview.attachment}
           kind={preview.kind}
           onClose={() => setPreview(null)}
+        />
+      )}
+      {pendingAttachmentDelete !== null && (
+        <ConfirmDialog
+          title={strings.app.attachmentDelete.title}
+          name={pendingAttachmentDelete.name}
+          question={strings.app.attachmentDelete.question}
+          note={strings.app.attachmentDelete.note}
+          confirmLabel={strings.app.attachmentDelete.confirm}
+          cancelLabel={strings.app.attachmentDelete.cancel}
+          onConfirm={() => {
+            const doomed = pendingAttachmentDelete;
+            setPendingAttachmentDelete(null);
+            void removeAttachment(doomed.id);
+          }}
+          onCancel={() => setPendingAttachmentDelete(null)}
         />
       )}
     </>
