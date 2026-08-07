@@ -3,7 +3,7 @@ import type { ComponentType, CSSProperties, DragEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { parseWidgetConfig, widgetChoice, widgetCount, widgetTaskLists } from "@nexus/core";
 import type { ModuleRegistry, WidgetContract } from "@nexus/core";
-import { Button, Card, TextField } from "@nexus/ui";
+import { Button, Card, EmptyState, LoadingState, TextField } from "@nexus/ui";
 import { DASHBOARD_SET_NAME_MAX_LENGTH, DASHBOARD_WIDGET_SPANS } from "../../shared/ipc.js";
 import type {
   DashboardSetsState,
@@ -1278,7 +1278,16 @@ export function DashboardPage({
         </div>
       )}
 
-      {layout !== null && (
+      {/* Three states rather than one. The board used to render nothing at
+          all while `layout` was null and an empty grid when it held no
+          cards — and to somebody who has just opened the app those two look
+          exactly alike, which is to say like a product that failed to
+          start. */}
+      {layout === null && <LoadingState label={strings.app.loading} rows={4} />}
+      {layout !== null && placed.length === 0 && (
+        <EmptyState title={s.emptyTitle} description={s.emptyDescription} />
+      )}
+      {layout !== null && placed.length > 0 && (
         <div className="dash__grid">
           {placed.map(({ entry, contract, Body }, index) => {
             const title = widgetTitle(contract);

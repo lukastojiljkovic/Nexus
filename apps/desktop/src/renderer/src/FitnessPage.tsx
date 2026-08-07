@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { Button, Chip, EmptyState, ListRow, PageHeader, TextField } from "@nexus/ui";
+import { Button, Chip, EmptyState, ListRow, LoadingState, PageHeader, TextField } from "@nexus/ui";
 import { FOOD_CATEGORIES, macrosFor } from "@nexus/core";
 import {
   FIT_MEAL_SLOTS,
@@ -1130,7 +1130,7 @@ export function FitnessPage({ profileId }: FitnessPageProps) {
     return <EmptyState title={s.loadErrorTitle} description={s.loadError} />;
   }
   if (snapshot === null) {
-    return <p className="app__muted">{strings.app.loading}</p>;
+    return <LoadingState label={strings.app.loading} rows={6} />;
   }
 
   const goals = macroGoals(snapshot.day.totals, snapshot.targets);

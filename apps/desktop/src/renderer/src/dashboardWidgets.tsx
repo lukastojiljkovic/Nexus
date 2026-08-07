@@ -12,7 +12,7 @@ import {
   widgetTaskLists,
 } from "@nexus/core";
 import type { WidgetContract } from "@nexus/core";
-import { Button, Checkbox, Chip, ListRow } from "@nexus/ui";
+import { Button, Checkbox, Chip, ListRow, LoadingState } from "@nexus/ui";
 import { FIT_MEAL_SLOTS } from "../../shared/ipc.js";
 import type { DocumentStatus, Event, Exam, Subject } from "../../shared/ipc.js";
 import { buildCalendarItems } from "./calendarItems.js";
@@ -208,11 +208,7 @@ function useWidgetData<T>(load: () => Promise<T>): {
 /** The quiet placeholder a widget shows while its own read is in flight. */
 function WidgetSkeleton() {
   return (
-    <div className="dash__skeleton" role="status" aria-label={strings.app.loading}>
-      <span className="dash__skeleton-line" />
-      <span className="dash__skeleton-line" />
-      <span className="dash__skeleton-line" />
-    </div>
+    <LoadingState label={strings.app.loading} rows={3} />
   );
 }
 

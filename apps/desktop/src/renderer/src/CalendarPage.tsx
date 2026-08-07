@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent, KeyboardEvent } from "react";
-import { Button, Checkbox, Chip, EmptyState, ListRow, PageHeader, TextField } from "@nexus/ui";
+import { Button, Checkbox, Chip, EmptyState, ListRow, LoadingState, PageHeader, TextField } from "@nexus/ui";
 import { isValidDayKey, monthKeyOf, shiftDayKey, shiftMonthKey, weekDayKeys } from "@nexus/core";
 import type { WeekStart } from "@nexus/core";
 import { MAX_EVENT_TEMPLATE_NAME_LENGTH } from "../../shared/ipc.js";
@@ -1855,7 +1855,7 @@ export function CalendarPage({
               description={strings.calendar.loadError}
             />
           ) : dataLoading ? (
-            <p className="app__muted">{strings.app.loading}</p>
+            <LoadingState label={strings.app.loading} rows={6} />
           ) : isGridView ? (
             <div className="cal__month" onKeyDown={handleGridKeyDown}>
               <div className="cal__month-nav">

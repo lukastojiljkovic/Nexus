@@ -1,15 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import {
-  Button,
-  CardsView,
-  Chip,
-  EmptyState,
-  ListRow,
-  ListView,
-  PageHeader,
-  TextField,
-} from "@nexus/ui";
+import { Button, CardsView, Chip, EmptyState, ListRow, ListView, LoadingState, PageHeader, TextField } from "@nexus/ui";
 import { applyFilters, isValidDayKey, monthKeyOf, shiftMonthKey } from "@nexus/core";
 import type { CardsViewConfig, CollectionSchema, FilterSpec, ListViewConfig } from "@nexus/core";
 import {
@@ -1464,7 +1455,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
     return <EmptyState title={s.loadErrorTitle} description={s.loadError} />;
   }
   if (accounts === null || transactions === null) {
-    return <p className="app__muted">{strings.app.loading}</p>;
+    return <LoadingState label={strings.app.loading} rows={6} />;
   }
 
   /** The picker offers exactly the kind this entry can carry; a transfer gets no picker at all. */
@@ -1965,7 +1956,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
             {monthFailed ? (
               <EmptyState title={s.report.loadErrorTitle} description={s.report.loadError} />
             ) : month === null ? (
-              <p className="app__muted">{strings.app.loading}</p>
+              <LoadingState label={strings.app.loading} rows={6} />
             ) : accountList.length === 0 ? (
               // No accounts is a different fact from an empty month, and it has
               // a different answer: the same invitation the ledger half offers.

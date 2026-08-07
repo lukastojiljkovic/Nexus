@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { MIME_FAMILIES, isInlineImageMime } from "@nexus/core";
-import { Button, EmptyState, PageHeader } from "@nexus/ui";
+import { Button, EmptyState, LoadingState, PageHeader } from "@nexus/ui";
 import type {
   DocAttachmentEntry,
   DocAttachmentList,
@@ -428,11 +428,7 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
       )}
 
       {state.status === "loading" ? (
-        <div className="doc__skeleton" role="status" aria-label={strings.app.loading}>
-          <span className="doc__skeleton-line" />
-          <span className="doc__skeleton-line" />
-          <span className="doc__skeleton-line" />
-        </div>
+        <LoadingState label={strings.app.loading} rows={6} />
       ) : state.status === "failed" ? (
         <div className="doc__failure" role="alert">
           <p className="doc__error">{s.error}</p>

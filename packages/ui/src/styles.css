@@ -48,6 +48,33 @@
   -webkit-font-smoothing: antialiased;
 }
 
+/* --- LoadingState ----------------------------------------------------- */
+/* One skeleton for the whole app. It had been two byte-identical copies —
+   `.doc__skeleton-line` and `.dash__skeleton-line` — and fourteen other pages
+   with no skeleton at all, just the word „Učitavanje…" in a corner.
+
+   Deliberately still: a shimmer would be the loudest thing on a page whose
+   whole point is calm, and it would have to be exempted from the reduced-motion
+   policy to keep moving. The taper is what makes three grey bars read as text
+   rather than as a chart. */
+.nx-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-1) 0;
+}
+.nx-skeleton__line {
+  height: 10px;
+  border-radius: var(--nx-radius-xs);
+  background: var(--nx-surface-alt);
+}
+.nx-skeleton__line:nth-child(3n + 2) {
+  width: 82%;
+}
+.nx-skeleton__line:nth-child(3n) {
+  width: 64%;
+}
+
 /* --- Icon ------------------------------------------------------------- */
 /* The set itself is in Icon.tsx; this is only how one sits in a line of text. */
 .nx-icon {

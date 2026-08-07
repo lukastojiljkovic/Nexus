@@ -3476,23 +3476,6 @@ button.cal__grid-event--dragging {
 /* One widget's own loading placeholder (ADR-045 section 4) — three bars on the
    surface-alt fill. Deliberately still: a shimmer would be the loudest thing on
    a page whose whole point is calm. */
-.dash__skeleton {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nx-space-2);
-  padding: var(--nx-space-1) 0;
-}
-.dash__skeleton-line {
-  height: 10px;
-  border-radius: var(--nx-radius-xs);
-  background: var(--nx-surface-alt);
-}
-.dash__skeleton-line:nth-child(2) {
-  width: 82%;
-}
-.dash__skeleton-line:nth-child(3) {
-  width: 64%;
-}
 
 /* One widget's isolated failure: this card could not read, and the way to ask
    again. No EmptyState — that block would say the page is empty, and it isn't. */
@@ -9747,23 +9730,6 @@ button.cal__grid-event--dragging {
 /* The page's ONE read, with the dashboard widgets' isolated boundary: a quiet
    placeholder while it is in flight, and a failure that offers to ask again
    rather than an EmptyState claiming there is nothing here. */
-.doc__skeleton {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nx-space-2);
-  padding: var(--nx-space-1) 0;
-}
-.doc__skeleton-line {
-  height: 10px;
-  border-radius: var(--nx-radius-xs);
-  background: var(--nx-surface-alt);
-}
-.doc__skeleton-line:nth-child(2) {
-  width: 82%;
-}
-.doc__skeleton-line:nth-child(3) {
-  width: 64%;
-}
 .doc__failure {
   display: flex;
   flex-direction: column;

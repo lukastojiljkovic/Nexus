@@ -20,7 +20,7 @@ import {
   replaceNoteContent,
   xmlTextContent,
 } from "@nexus/core";
-import { EmptyState } from "@nexus/ui";
+import { EmptyState, LoadingState, SaveIndicator, type SaveStatus } from "@nexus/ui";
 import {
   NOTE_ATTACHMENT_MAX_BYTES,
   NOTE_CARDS_MAX_COUNT,
@@ -48,6 +48,7 @@ import { NoteTemplatePane } from "./noteTemplatePane.js";
 import { Toggle, ToggleContent, ToggleSummary } from "./noteToggle.js";
 import { mergeTemplateEntries, stripAttachmentNodes, type TemplateEntry } from "./noteTemplates.js";
 import { NoteVersionHistory } from "./noteVersionHistory.js";
+import { formatClockTime } from "./timeFormat.js";
 import { strings } from "./strings.js";
 
 /**
@@ -203,6 +204,19 @@ export function NoteEditor({
   const [doc, setDoc] = useState<Y.Doc | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [saveError, setSaveError] = useState<"generic" | "tooLarge" | null>(null);
+  /**
+   * What the editor says about its own persistence.
+   *
+   * The counterpart to `saveError`, and its absence was the whole finding
+   * behind the canvas report: this editor announced every refusal and never
+   * once announced a write, so a note you had just typed looked exactly like
+   * a note that had failed to save quietly. `savedAt` is the instant of the
+   * last successful flush and the line carries it, because a bare
+   * „Sačuvano" is still on screen an hour later and therefore proves
+   * nothing.
+   */
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [savedAt, setSavedAt] = useState<string | null>(null);
   const [titles, setTitles] = useState<Map<string, string>>(new Map());
   const [backlinks, setBacklinks] = useState<NoteMeta[]>([]);
   const [attachments, setAttachments] = useState<NoteAttachment[]>([]);
@@ -546,6 +560,7 @@ export function NoteEditor({
     // the success branch below (Yjs updates commute, so ordering is safe).
     if (inFlightRef.current) return;
     inFlightRef.current = true;
+    setSaveStatus("saving");
     const batch = pendingRef.current;
     pendingRef.current = [];
     // Title, outbound link ids, AND the generated card set are all derived in
@@ -567,6 +582,8 @@ export function NoteEditor({
     try {
       await sendBatch(profileId, noteId, batch, title);
       setSaveError(null);
+      setSavedAt(new Date().toISOString());
+      setSaveStatus("saved");
       onSavedRef.current();
       void loadMeta();
 
@@ -602,6 +619,7 @@ export function NoteEditor({
     } catch (error) {
       // Never drop: put the batch back (chronological) to retry on the next edit.
       pendingRef.current = [...batch, ...pendingRef.current];
+      setSaveStatus("error");
       if (error instanceof OversizeUpdateError) {
         setSaveError("tooLarge");
       } else {
@@ -686,18 +704,21 @@ export function NoteEditor({
   if (doc === null) {
     return (
       <div className="note__editor-empty">
-        <p className="app__muted">{strings.app.loading}</p>
+        <LoadingState label={strings.app.loading} rows={4} />
       </div>
     );
   }
 
   return (
     <>
-      {saveError !== null && (
-        <div className="note__save-error" role="status">
-          {saveError === "tooLarge" ? strings.notes.saveTooLarge : strings.notes.saveError}
-        </div>
-      )}
+      <SaveIndicator
+        status={saveStatus}
+        savingLabel={strings.app.saveSaving}
+        savedLabel={`${strings.app.saveSavedPrefix} ${formatClockTime(savedAt ?? "")}`}
+        errorLabel={
+          saveError === "tooLarge" ? strings.notes.saveTooLarge : strings.notes.saveError
+        }
+      />
       <div
         className={dropActive ? "note__editor-body note__editor-body--drop" : "note__editor-body"}
         onDragOver={(event) => {

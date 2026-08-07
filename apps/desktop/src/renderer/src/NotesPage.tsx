@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { JSONContent } from "@tiptap/core";
 import type { CardsViewConfig, CollectionSchema } from "@nexus/core";
-import { Button, CardsView, EmptyState, PageHeader } from "@nexus/ui";
+import { Button, CardsView, EmptyState, LoadingState, PageHeader } from "@nexus/ui";
 import type {
   NoteCardDisposition,
   NoteCategory,
@@ -1038,7 +1038,7 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
           {failed ? (
             <EmptyState title={strings.notes.listEmptyTitle} description={strings.notes.loadError} />
           ) : notes === null ? (
-            <p className="app__muted">{strings.app.loading}</p>
+            <LoadingState label={strings.app.loading} rows={6} />
           ) : notes.length === 0 ? (
             <EmptyState
               title={strings.notes.listEmptyTitle}

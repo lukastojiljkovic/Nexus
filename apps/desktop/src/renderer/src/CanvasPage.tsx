@@ -23,7 +23,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isCanvasRefText } from "@nexus/core";
 import type { CanvasRef } from "@nexus/core";
 import type { ThemeName } from "@nexus/tokens";
-import { Button, EmptyState, PageHeader, SaveIndicator, TextField, type SaveStatus } from "@nexus/ui";
+import { Button, EmptyState, LoadingState, PageHeader, SaveIndicator, type SaveStatus, TextField } from "@nexus/ui";
 import { MAX_CANVAS_BOARD_NAME_LENGTH, MAX_CANVAS_SCENE_LENGTH } from "../../shared/ipc.js";
 import type { CanvasBoard, CanvasRefCard } from "../../shared/ipc.js";
 import { boardAfterDelete, looksLikeMermaid, resolveActiveBoard } from "./canvasBoards.js";
@@ -700,7 +700,18 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
   if (failed) {
     return <EmptyState title={s.loadErrorTitle} description={s.loadError} />;
   }
-  if (boards === null) return null;
+  // Until 2026-08-07 this returned `null` — the page rendered LITERALLY NOTHING
+  // for its whole initial read, so opening „Tabla" showed a blank pane and gave
+  // no reason to believe anything was happening. A skeleton at least says how
+  // much is coming; the title above it says where you are.
+  if (boards === null) {
+    return (
+      <>
+        <PageHeader className="canv__header" title={moduleName("canvas")} />
+        <LoadingState label={strings.app.loading} rows={4} />
+      </>
+    );
+  }
 
   const active = boards.find((board) => board.id === activeId) ?? null;
 

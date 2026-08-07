@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { ACCENT_IDS } from "@nexus/tokens";
-import { Button, Checkbox, Chip, EmptyState, ListRow, PageHeader, TextField } from "@nexus/ui";
+import { Button, Checkbox, Chip, EmptyState, ListRow, LoadingState, PageHeader, TextField } from "@nexus/ui";
 import { computeHabitStreak } from "@nexus/core";
 import type { WeekStart } from "@nexus/core";
 import {
@@ -869,7 +869,7 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
     return <EmptyState title={s.loadErrorTitle} description={s.loadError} />;
   }
   if (habits === null) {
-    return <p className="app__muted">{strings.app.loading}</p>;
+    return <LoadingState label={strings.app.loading} rows={6} />;
   }
 
   return (

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { ageAtOccurrence, birthdayOccurrencesInRange, shiftDayKey } from "@nexus/core";
-import { Button, Chip, EmptyState, ListRow, TextField } from "@nexus/ui";
+import { Button, Chip, EmptyState, ListRow, LoadingState, TextField } from "@nexus/ui";
 import type { NewPersonFields, Person, PersonFieldChanges, PersonKind } from "../../shared/ipc.js";
 import { localTodayKey } from "./examDates.js";
 import { strings } from "./strings.js";
@@ -355,7 +355,7 @@ export function PeoplePanel({ profileId }: PeoplePanelProps) {
       {failed ? (
         <EmptyState title={s.emptyTitle} description={s.loadError} />
       ) : ordered === null ? (
-        <p className="app__muted">{strings.app.loading}</p>
+        <LoadingState label={strings.app.loading} rows={3} />
       ) : ordered.length === 0 ? (
         <EmptyState title={s.emptyTitle} description={s.emptyDescription} />
       ) : (

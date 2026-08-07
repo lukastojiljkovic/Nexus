@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { ChangeEvent, ReactNode } from "react";
 import { FOCUS_PHASE_KINDS, phaseProgress } from "@nexus/core";
 import type { FocusPhaseKind } from "@nexus/core";
-import { Button, Chip, EmptyState, ListRow, PageHeader, TextField } from "@nexus/ui";
+import { Button, Chip, EmptyState, ListRow, LoadingState, PageHeader, TextField } from "@nexus/ui";
 import { MAX_FOCUS_LABEL_LENGTH } from "../../shared/ipc.js";
 import type { FocusSession, RunningFocusSession, Subject, Task } from "../../shared/ipc.js";
 import { localTodayKey, shiftDayKey } from "./examDates.js";
@@ -515,7 +515,7 @@ export function FocusPage({ profileId, enabledModules }: FocusPageProps) {
     return <EmptyState title={s.loadErrorTitle} description={s.loadError} />;
   }
   if (sessions === null) {
-    return <p className="app__muted">{strings.app.loading}</p>;
+    return <LoadingState label={strings.app.loading} rows={6} />;
   }
 
   return (

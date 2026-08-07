@@ -458,6 +458,14 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     /** The layout itself could not be read — the one failure that is the page's own. */
     layoutError: "Raspored kartica se ne može učitati.",
     /** Edit mode (ADR-045 section 5) — the header actions and each card's „⋯“ menu. */
+    /**
+     * The board with no cards on it, and the board still being read. Until
+     * 2026-08-07 it had neither: an empty board drew an empty grid with no
+     * word on it, and a loading one drew nothing at all — two states that
+     * look identical to somebody who has just opened the app.
+     */
+    emptyTitle: "Na tabli još nema ničega",
+    emptyDescription: "Uredi tablu i dodaj vidžet — svaki uključen modul nudi bar jedan.",
     edit: {
       enter: "Uredi",
       done: "Gotovo",

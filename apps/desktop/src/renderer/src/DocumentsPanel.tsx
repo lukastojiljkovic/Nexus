@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
-import { Button, Chip, EmptyState, ListRow, TextField } from "@nexus/ui";
+import { Button, Chip, EmptyState, ListRow, LoadingState, TextField } from "@nexus/ui";
 import type {
   DocumentFieldChanges,
   DocumentStatus,
@@ -338,7 +338,7 @@ export function DocumentsPanel({
           description={strings.documents.loadError}
         />
       ) : ordered === null ? (
-        <p className="app__muted">{strings.app.loading}</p>
+        <LoadingState label={strings.app.loading} rows={3} />
       ) : ordered.length === 0 ? (
         <EmptyState
           title={strings.documents.emptyTitle}
