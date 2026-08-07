@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { duplicateNoteState, mergeNoteState, remapNoteState } from "@nexus/core";
 import type { NoteAttachmentStore, NoteMeta, NoteOrgStore, NoteStore } from "@nexus/db";
 import { compactNow } from "./notes.js";
+import { NOTE_COPY_SUFFIX as SHELL_NOTE_COPY_SUFFIX } from "./shellStrings.js";
 import { NOTE_UPDATE_MAX_BYTES } from "../shared/ipc.js";
 import type { NoteDuplicateResult } from "../shared/ipc.js";
 
@@ -55,8 +56,13 @@ import type { NoteDuplicateResult } from "../shared/ipc.js";
  *   until its author deliberately points it at a deck again.
  */
 
-/** The mark a copy carries, in the document and in its title. */
-export const NOTE_COPY_SUFFIX = " (kopija)";
+/**
+ * The mark a copy carries, in the document and in its title. Text lives in
+ * `shellStrings.ts` (the main process's shell/persisted-default copy table) —
+ * re-exported under this name so every existing call site and test import is
+ * untouched.
+ */
+export const NOTE_COPY_SUFFIX = SHELL_NOTE_COPY_SUFFIX;
 
 /** Everything this module needs: three stores and a transaction runner. */
 export interface NoteDuplicateDeps {

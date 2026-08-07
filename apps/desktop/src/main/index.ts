@@ -461,6 +461,15 @@ import { filterSearchHitsByModules } from "./searchGate.js";
 import { asCanvasRefs } from "./canvasRefs.js";
 import { focusPhaseEndCopy, restEndCopy } from "./notificationStrings.js";
 import type { SecurityNotice } from "./notificationStrings.js";
+import {
+  ANKI_DECK_FILTER_NAME,
+  ARCHIVE_FILTER_NAME,
+  CALENDAR_FILTER_NAME,
+  CSV_TABLE_FILTER_NAME,
+  IMAGE_FILTER_NAME,
+  STATEMENT_DIALOG_TITLE,
+  STATEMENT_FILTER_NAME,
+} from "./shellStrings.js";
 import { computeSnoozeUntil, resolveDefaultSnoozePreset } from "./snooze.js";
 import { pickProfilePicture } from "./profilePicture.js";
 import {
@@ -5774,7 +5783,7 @@ function restoreDeps(): ImportDeps {
       // file's own magic bytes, never by its extension.
       const options: OpenDialogOptions = {
         properties: ["openFile"],
-        filters: [{ name: "Nexus arhiva", extensions: ["nexus", "zip"] }],
+        filters: [{ name: ARCHIVE_FILTER_NAME, extensions: ["nexus", "zip"] }],
       };
       const { canceled, filePaths } = mainWindow
         ? await dialog.showOpenDialog(mainWindow, options)
@@ -5788,7 +5797,7 @@ function restoreDeps(): ImportDeps {
     pickApkgFile: async () => {
       const options: OpenDialogOptions = {
         properties: ["openFile"],
-        filters: [{ name: "Anki špil", extensions: ["apkg"] }],
+        filters: [{ name: ANKI_DECK_FILTER_NAME, extensions: ["apkg"] }],
       };
       const { canceled, filePaths } = mainWindow
         ? await dialog.showOpenDialog(mainWindow, options)
@@ -5802,7 +5811,7 @@ function restoreDeps(): ImportDeps {
     pickCsvFile: async () => {
       const options: OpenDialogOptions = {
         properties: ["openFile"],
-        filters: [{ name: "CSV tabela", extensions: ["csv", "txt"] }],
+        filters: [{ name: CSV_TABLE_FILTER_NAME, extensions: ["csv", "txt"] }],
       };
       const { canceled, filePaths } = mainWindow
         ? await dialog.showOpenDialog(mainWindow, options)
@@ -5818,8 +5827,8 @@ function restoreDeps(): ImportDeps {
     pickFinCsvFile: async () => {
       const options: OpenDialogOptions = {
         properties: ["openFile"],
-        title: "Izaberi izvod (.csv)",
-        filters: [{ name: "Izvod (CSV)", extensions: ["csv", "txt"] }],
+        title: STATEMENT_DIALOG_TITLE,
+        filters: [{ name: STATEMENT_FILTER_NAME, extensions: ["csv", "txt"] }],
       };
       const { canceled, filePaths } = mainWindow
         ? await dialog.showOpenDialog(mainWindow, options)
@@ -5833,7 +5842,7 @@ function restoreDeps(): ImportDeps {
     pickIcsFile: async () => {
       const options: OpenDialogOptions = {
         properties: ["openFile"],
-        filters: [{ name: "Kalendar (iCalendar)", extensions: ["ics"] }],
+        filters: [{ name: CALENDAR_FILTER_NAME, extensions: ["ics"] }],
       };
       const { canceled, filePaths } = mainWindow
         ? await dialog.showOpenDialog(mainWindow, options)
@@ -6215,7 +6224,7 @@ async function handlePrivAttachmentPick(profileId: string): Promise<PrivAttachme
 async function handleDashboardPick(profileId: string): Promise<DashboardPickResult> {
   const options: OpenDialogOptions = {
     properties: ["openFile"],
-    filters: [{ name: "Slika", extensions: ["png", "jpg", "jpeg", "gif", "webp"] }],
+    filters: [{ name: IMAGE_FILTER_NAME, extensions: ["png", "jpg", "jpeg", "gif", "webp"] }],
   };
   const { canceled, filePaths } = mainWindow
     ? await dialog.showOpenDialog(mainWindow, options)

@@ -12,6 +12,7 @@ import {
   writeSync,
 } from "node:fs";
 import { join } from "node:path";
+import { DEFAULT_ACCOUNT_LABEL as SHELL_DEFAULT_ACCOUNT_LABEL } from "./shellStrings.js";
 
 /**
  * The local-account registry and the one-way move from the old flat layout
@@ -51,8 +52,12 @@ export const ACCOUNTS_DIR_NAME = "accounts";
  * registry entry never landed (a create that died between writing the keychain
  * and writing the entry). Both are renameable from the picker, so a generic
  * name costs the user one rename and never costs them their data.
+ *
+ * Text lives in `shellStrings.ts` (the main process's shell/persisted-default
+ * copy table) — re-exported under this name so every existing call site and
+ * test import is untouched.
  */
-export const DEFAULT_ACCOUNT_LABEL = "Moj nalog";
+export const DEFAULT_ACCOUNT_LABEL = SHELL_DEFAULT_ACCOUNT_LABEL;
 
 /** Same cap as a profile name (`asProfileName`) — the two are the same kind of short, user-chosen title. */
 export const MAX_ACCOUNT_LABEL_LENGTH = 80;

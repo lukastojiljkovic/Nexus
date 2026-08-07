@@ -2,6 +2,7 @@ import { readFile, stat } from "node:fs/promises";
 import type { BrowserWindow, OpenDialogOptions } from "electron";
 import { dialog, nativeImage } from "electron";
 import { centerSquareCrop, isInlineImageMime, sniffMime, PROFILE_PICTURE_SIZE } from "@nexus/core";
+import { IMAGE_FILTER_NAME } from "./shellStrings.js";
 import type { ProfilePicturePickErrorCode } from "../shared/ipc.js";
 
 /**
@@ -88,7 +89,7 @@ export async function pickProfilePicture(
 ): Promise<PickedProfilePicture> {
   const options: OpenDialogOptions = {
     properties: ["openFile"],
-    filters: [{ name: "Slika", extensions: IMAGE_EXTENSIONS }],
+    filters: [{ name: IMAGE_FILTER_NAME, extensions: IMAGE_EXTENSIONS }],
   };
   const { canceled, filePaths } = win
     ? await dialog.showOpenDialog(win, options)

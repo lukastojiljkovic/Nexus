@@ -120,7 +120,13 @@ import { FinCsvImportSection } from "./FinCsvImport.js";
 // data with `import()` instead. A type import is erased, so this line costs
 // nothing at runtime.
 import type { LicenceEntry } from "./licences.js";
-import { countUnit, dayUnit, lookup, strings } from "./strings.js";
+import { applyLocale, countUnit, dayUnit, lookup, strings, type Locale } from "./strings.js";
+import {
+  availableLocales,
+  clearStoredLocale,
+  persistLocale,
+  readStoredLocale,
+} from "./localePrefs.js";
 import { useFocusTrap } from "./useFocusTrap.js";
 import { moduleName } from "./moduleName.js";
 
@@ -4642,6 +4648,13 @@ export interface SettingsPageProps {
   onDeleteProfile: (profile: Profile) => Promise<void>;
   preference: ThemePreference;
   onPreferenceChange: (preference: ThemePreference) => void;
+  /**
+   * Told AFTER the copy table has been served a new language, so the shell can
+   * redraw. The table is one object rewritten in place, which React has no way
+   * to observe — this page re-renders from its own state, and the sidebar, the
+   * topbar and every other page would not.
+   */
+  onLocaleChanged: () => void;
   registry: ModuleRegistry;
   autoLockMinutes: AutoLockMinutes;
   onAutoLockChange: (value: AutoLockMinutes) => void;
@@ -4691,6 +4704,7 @@ export function SettingsPage({
   onDeleteProfile,
   preference,
   onPreferenceChange,
+  onLocaleChanged,
   registry,
   autoLockMinutes,
   onAutoLockChange,
@@ -4796,6 +4810,14 @@ export function SettingsPage({
       clearStoredAccent(profileId, activeKind);
       clearStoredWeekStart();
       clearStoredCalendarPreferences();
+      // The language is part of „Izgled“, so „Vrati na podrazumevano“ returns
+      // it too — and `applyLocale` runs before the state update, so the page
+      // that redraws is already in the restored language rather than in the
+      // one that was just discarded.
+      clearStoredLocale();
+      applyLocale(readStoredLocale());
+      setLocale(readStoredLocale());
+      onLocaleChanged();
       setAccent(readStoredAccent(profileId, activeKind));
       setWeekStart(readStoredWeekStart());
       setEventDuration(readStoredEventDuration());
@@ -4820,6 +4842,10 @@ export function SettingsPage({
   // The module cards this build draws, in registry order and gated by SET-007's
   // flags — the page composes them, it does not know them.
   const moduleCards = useMemo(() => moduleSettingsCards(registry, flags), [registry, flags]);
+  // Held in state only so that changing it re-renders THIS page — the copy
+  // table itself is one object rewritten in place, so nothing else on screen
+  // needs to be told (`strings.ts`).
+  const [locale, setLocale] = useState<Locale>(() => readStoredLocale());
   const a = strings.settings.appearance;
 
   return (
@@ -4868,6 +4894,35 @@ export function SettingsPage({
       </Card>
 
       <Card title={strings.settings.sectionTitle.appearance} className={sectionClass(sections.has("appearance"))}>
+        {/* First in the card, because it governs every other word on the page.
+            One option today; the row is shown all the same — it is the answer
+            to „gde se menja jezik", and a settings row reading „Jezik: Srpski"
+            is an ordinary thing for a one-language product to say. A locale
+            added to `LOCALES` appears here without this block changing.
+            `applyLocale` runs BEFORE the state bump on purpose: the table is
+            rewritten in place, so the render that follows reads the new copy
+            (see `strings.ts`). */}
+        <div className="set__field">
+        <Select
+          label={a.languageLabel}
+          className="set__select"
+          value={locale}
+          onChange={(event) => {
+            const next = event.target.value as Locale;
+            persistLocale(next);
+            applyLocale(next);
+            setLocale(next);
+            onLocaleChanged();
+          }}
+        >
+          {availableLocales().map((code) => (
+            <option key={code} value={code}>
+              {lookup(a.languageNames, code) ?? code}
+            </option>
+          ))}
+        </Select>
+        <p className="set__section-caption">{a.languageHint}</p>
+        </div>
         <div className="set__field">
         <p className={labelClass("set__section-caption", hits.has("appearance-theme"))}>
           {a.themeLabel}

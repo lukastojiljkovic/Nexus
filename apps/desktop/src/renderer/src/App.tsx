@@ -171,6 +171,10 @@ function moduleIcon(id: string): ReactNode {
 
 export function App() {
   const [preference, setPreference] = useState<ThemePreference>(readStoredThemePreference);
+  // Bumped when the language changes. Its VALUE means nothing — it exists only
+  // to make React redraw a tree whose text came from an object that was
+  // rewritten in place (`strings.ts`), which React has no way to observe.
+  const [localeEpoch, setLocaleEpoch] = useState(0);
   // The resolved theme lives in state (not derived inline) so an OS light/dark
   // switch while in system mode re-renders the topbar toggle's label.
   const [theme, setTheme] = useState<ThemeName>(() => resolveTheme(preference));
@@ -613,6 +617,21 @@ export function App() {
     persistThemePreference(next);
     setPreference(next);
     setTheme(resolveTheme(next));
+  }
+
+  /**
+   * Redraws the WHOLE shell after the copy table has been served a new
+   * language.
+   *
+   * `strings` is one object rewritten in place, so anything that renders again
+   * sees the new text — but React does not know that anything changed. Settings
+   * re-renders itself from its own state; the sidebar, the topbar and the page
+   * behind the settings page would not, and would sit in the old language until
+   * something unrelated happened to touch them. This is the bump that makes the
+   * switch instant everywhere, which is the whole point of the design.
+   */
+  function redrawInNewLocale(): void {
+    setLocaleEpoch((epoch) => epoch + 1);
   }
 
   // The quick-toggle flips to the explicit opposite of the *resolved* theme,
@@ -1088,7 +1107,14 @@ export function App() {
   }
 
   return (
-    <div className="nx-app app">
+    // The key REMOUNTS the shell when the language changes, which is deliberate
+    // and is the only thing that makes the switch complete. A bare re-render
+    // would redraw whatever reads `strings.…` at render time and leave behind
+    // anything that had already copied a string into state — a page title held
+    // in a reducer, a comparator built once — still speaking the old language.
+    // A language switch is a rare, deliberate act; losing an open dialog to it
+    // is a smaller cost than a shell that is half translated.
+    <div className="nx-app app" key={localeEpoch}>
       <header className="app__topbar nx-horizon">
         <div className="app__brand">
           <span className="app__brand-mark" aria-hidden="true">✦</span>
@@ -1219,7 +1245,7 @@ export function App() {
                             className={`note__menu-check${isActive ? "" : " note__menu-check--hidden"}`}
                             aria-hidden="true"
                           >
-                            ✓
+                            <Icon name="check" size={14} />
                           </span>
                           {profileDisplayName(profile)}
                           {profile.kind === "business" && (
@@ -1309,7 +1335,7 @@ export function App() {
                 aria-label={strings.settings.restore.undoDismiss}
                 onClick={() => setRestoreBannerHidden(true)}
               >
-                ×
+                <Icon name="close" size={14} />
               </Button>
             </div>
           )}
@@ -1454,6 +1480,7 @@ export function App() {
               onDeleteProfile={deleteProfileAnywhere}
               preference={preference}
               onPreferenceChange={changePreference}
+              onLocaleChanged={redrawInNewLocale}
               registry={registry}
               autoLockMinutes={autoLockMinutes}
               onAutoLockChange={changeAutoLock}

@@ -139,6 +139,14 @@ function shellEntries(): readonly ShellSettingsSearchEntry[] {
       keywords: ["zakljucavanje", "neaktivnost", "privatnost"],
     },
     {
+      id: "appearance-language",
+      section: "appearance",
+      // „jezik" is what a Serbian speaker types; „language" and „srpski" are
+      // what somebody who has just switched away from Serbian would.
+      label: s.appearance.languageLabel,
+      keywords: ["jezik", "language", "srpski", "prevod", "locale"],
+    },
+    {
       id: "appearance-theme",
       section: "appearance",
       // The three option labels are keywords in their own right: "Noć" is what a
