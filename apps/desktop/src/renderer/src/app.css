@@ -6072,36 +6072,52 @@ button.cal__grid-event--dragging {
 /* Three panes fill the main column: the folder organizer, the note list, and
    the block editor. Each scrolls internally so the page never grows.
 
-   THE WRITING COLUMN IS THE FLOOR; THE RAILS ARE THE SLACK. That is the whole
-   rule, and it is the opposite of what shipped. Two fixed rails and
-   `minmax(0, 1fr)` for the editor meant the rails were paid first and the
-   writing column got the remainder, which arithmetic disposes of:
+   A PANE IS FULL WIDTH OR IT IS NOT THERE. That replaces two earlier rules, and
+   it is the founder's call (2026-08-07) rather than a technique. What shipped
+   first paid the two fixed rails and gave writing the remainder — 75px of
+   editor at the window size this app ENFORCES. `f1fa51a` inverted it: the
+   editor held a floor derived from `--note-measure` and the rails took the
+   squeeze instead. Better arithmetic, still the wrong answer, because a folder
+   tree at 119px is not a narrow folder tree, it is an unusable one — and with
+   the „široka" measure the floor only moved the slivers into a wider band.
 
-     window   main content   editor
-      900px      615px         75px   <- the minimum this app ENFORCES
-     1120px      835px        295px   <- the size it SHIPS at
-     1440px     1155px        615px
-     1345px is the first width at which the editor reaches its default measure.
+   So nothing yields. The rails are fixed, the editor is the slack, and the
+   width at which the slack falls below the default measure is where a pane
+   LEAVES:
 
-   Worse than narrow: `--note-measure` is a user setting („uska"/„normalna"/
-   „široka" = 55/70/90ch, ADR-036), and at 295px the pane was narrower than the
-   NARROWEST of them. The control could not have any effect at the shipped
-   window size — a preference the product offers and then eats.
+     content = window − 220px sidebar − 48px of `.app__main` padding
+     three panes = 220 + 280 + two 20px gaps + 70ch + the editor's own 16px
+                 = 1076px of content = 1344px of window
 
-   So the floor is derived from that setting rather than invented: the editor
-   track may not fall below the measure the user asked for, plus the pane's own
-   horizontal padding. `min(…, 100%)` caps it against the container, because a
-   floor that can exceed the space available is not a floor, it is an overflow.
-   The rails then yield proportionally, which is the correct trade — reading and
-   writing is what the page is FOR, and a folder tree survives being narrow. */
+   1345px is the first width at which all three fit with the writing column at
+   its default measure — the same figure `f1fa51a` computed and could not act
+   on. Below it the organizer leaves and comes back as a drawer over the list
+   (the media query under `.note__org-pane`); the LIST stays, because a notes
+   app whose note list can vanish is a worse trade than a narrower column. Two
+   panes are 280 + 20 + the slack, so at the shipped 1120px window the editor
+   gets 552px — clear of the default measure — and at the enforced 900px minimum
+   it gets 332px: narrow, but a readable column, and a width the user has to
+   drag to on purpose. `.priv__body` has drawn exactly this shape all along.
+
+   The measure is a user setting („uska"/„normalna"/„široka" = 55/70/90ch,
+   ADR-036) and the breakpoint is stated once, at the default: inside a media
+   query font-relative units resolve against the browser's initial font rather
+   than this page's, so `ch` there would not mean what it means here. „Široka"
+   simply reaches its 90ch at a wider window, and nothing collapses on the way,
+   because no track can be squeezed any more.
+
+   `position: relative` is the drawer's containing block. The only other
+   absolutely positioned thing under `.note` is ProseMirror's gapcursor, which
+   sets no offsets and is therefore placed at its static position either way. */
 .note {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: grid;
   grid-template-columns:
-    minmax(0, var(--nx-layout-rail))
-    minmax(0, var(--nx-layout-rail-wide))
-    minmax(min(calc(var(--note-measure) + 2 * var(--nx-space-2)), 100%), 1fr);
+    var(--nx-layout-rail)
+    var(--nx-layout-rail-wide)
+    minmax(0, 1fr);
   gap: var(--nx-space-5);
 }
 
@@ -6115,6 +6131,64 @@ button.cal__grid-event--dragging {
   overflow-y: auto;
   padding-right: var(--nx-space-4);
   border-right: 1px solid var(--nx-border);
+}
+
+/* The drawer's two extra elements — the disclosure that opens it and the
+   outside-click target — exist only under the breakpoint, and both are stated
+   off HERE, before the query that turns them on.
+
+   One query rather than a matching `min-width` pair, because window widths are
+   fractional under display scaling and 1344.5px would match neither: the wide
+   layout with a toggle that names a pane already on screen. Off by default also
+   means a browser that ignores the query lands on the wide layout whole, rather
+   than on a scrim stretched across the page as a third grid item. */
+.note__org-toggle.nx-button,
+.note__org-scrim {
+  display: none;
+}
+/* Under 1345px the organizer leaves the grid and becomes a drawer over the list.
+
+   `position: absolute` is what takes it out: the template is restated with two
+   tracks and the two panes that stayed fill them — no empty column, no
+   `display: contents` trick. Closed is `display: none` rather than merely
+   invisible, so a drawer nobody opened is out of the tab order too.
+
+   These rules sit AFTER `.note__org-pane`'s own block deliberately. A media
+   query adds no specificity, so from above it the base `padding-right` and
+   `border-right` would win on source order and leave the drawer trimmed down
+   one side only. */
+@media (max-width: 1344px) {
+  .note {
+    grid-template-columns: var(--nx-layout-rail-wide) minmax(0, 1fr);
+  }
+  .note__org-pane {
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    /* Over `.note__find`'s sticky 3 and under every portalled panel (50–70), so
+       a folder menu opened inside the drawer still paints above it. */
+    z-index: 5;
+    width: calc(var(--nx-layout-rail) + 2 * var(--nx-space-2));
+    padding: var(--nx-space-2);
+    border: 1px solid var(--nx-border);
+    border-radius: var(--nx-radius-lg);
+    background: var(--nx-surface);
+  }
+  .note:not([data-organizer="open"]) .note__org-pane {
+    display: none;
+  }
+  .note__org-toggle.nx-button {
+    display: inline-flex;
+  }
+  /* Transparent on purpose: the drawer is navigation, not a modal, and a wash
+     over the page would claim otherwise. It still covers the panes, which is
+     the point — one click anywhere outside puts the drawer away. */
+  .note__org-scrim {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+  }
 }
 .note__org-heading {
   display: flex;
@@ -6951,21 +7025,35 @@ button.cal__grid-event--dragging {
 
 /* Istorija verzija (NOTE-008b / ADR-015): the in-pane version browser that
    replaces canvas + Prilozi + backlinks while `mode === "history"`. Same
-   reading measure as the rest of the pane, split into a fixed-width list
-   column and a fluid preview column. Selecting a row is typographic only —
-   the .note__folder--active / .nx-nav-item--active recipe — never a fill,
-   border or glow. */
+   reading measure as the rest of the pane, split into a list column and a
+   preview column. Selecting a row is typographic only — the
+   .note__folder--active / .nx-nav-item--active recipe — never a fill, border or
+   glow.
+
+   THE SPLIT IS CONDITIONAL, and that is `.note`'s own defect one level down.
+   A fixed 280px list beside a column with no floor, inside a box already capped
+   at `--note-measure`, left the preview 208px at the default measure and 100px
+   at „uska" — a version preview too narrow to preview anything, at every window
+   width, since the day it was written. `auto-fit` states the rule rather than a
+   breakpoint: two columns when 260px each will fit, one when they will not, and
+   `min(…, 100%)` so a pane narrower than a single column still cannot overflow.
+   This reads BOTH axes the width depends on — the user's measure and the pane —
+   which no media query on the window could do.
+
+   The list keeps a two-row span, which is what puts the preview and the restore
+   row in the second column when there is one; with a single column it spans two
+   auto rows of one item and is invisible. Everything else auto-places, in DOM
+   order, which is the order it has to stack in. */
 .note__history {
   max-width: var(--note-measure);
   margin: 0 auto;
   padding: var(--nx-space-4) var(--nx-space-2) var(--nx-space-8);
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
   gap: var(--nx-space-4);
 }
 .note__history-list {
-  grid-column: 1;
-  grid-row: 1 / span 2;
+  grid-row: span 2;
   min-width: 0;
 }
 .note__history-title {
@@ -7014,17 +7102,14 @@ button.cal__grid-event--dragging {
   font-weight: var(--nx-font-weight-semibold);
 }
 .note__history-preview {
-  grid-column: 2;
-  grid-row: 1;
   min-width: 0;
   padding: var(--nx-space-4);
   border: 1px solid var(--nx-border);
   border-radius: var(--nx-radius-lg);
 }
 .note__history-restore-row {
-  grid-column: 2;
-  grid-row: 2;
   display: flex;
+  min-width: 0;
   align-items: baseline;
   gap: var(--nx-space-3);
 }
@@ -7053,19 +7138,19 @@ button.cal__grid-event--dragging {
 
 /* Šabloni (NOTE-009b / ADR-016): the in-pane template picker that replaces
    canvas + Prilozi + backlinks while `mode === "templates"` — the same grid
-   shape as .note__history* (fixed-width list column, fluid preview column).
-   Selecting a row is typographic only, same recipe as .note__history-item. */
+   shape as .note__history*, including the conditional split and the reason for
+   it, which is written out once there. Selecting a row is typographic only,
+   same recipe as .note__history-item. */
 .note__templates {
   max-width: var(--note-measure);
   margin: 0 auto;
   padding: var(--nx-space-4) var(--nx-space-2) var(--nx-space-8);
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
   gap: var(--nx-space-4);
 }
 .note__templates-list {
-  grid-column: 1;
-  grid-row: 1 / span 2;
+  grid-row: span 2;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -7140,17 +7225,14 @@ button.cal__grid-event--dragging {
   padding: var(--nx-space-1) var(--nx-space-3);
 }
 .note__templates-preview {
-  grid-column: 2;
-  grid-row: 1;
   min-width: 0;
   padding: var(--nx-space-4);
   border: 1px solid var(--nx-border);
   border-radius: var(--nx-radius-lg);
 }
 .note__templates-actions {
-  grid-column: 2;
-  grid-row: 2;
   display: flex;
+  min-width: 0;
   align-items: baseline;
   gap: var(--nx-space-3);
 }
@@ -8686,11 +8768,17 @@ button.cal__grid-event--dragging {
 .priv__clipboard > span {
   flex: 1;
 }
+/* The same two-pane shape `.note` falls back to under 1345px, and deliberately
+   so: one fixed list rail, the editor taking the slack, and no third pane to
+   take away. The 300px this carried was a hand-written copy of a rail the
+   tokens already name — the list in it IS `.note__list-pane`, so the two pages
+   were drawing one component at two widths. At the enforced 900px minimum the
+   editor here gets 332px, which is the figure NOTE's own fallback lands on. */
 .priv__body {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-columns: var(--nx-layout-rail-wide) minmax(0, 1fr);
   gap: var(--nx-space-5);
 }
 /* Row actions (move out / delete): hover-revealed exactly as the NOTE row

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { JSONContent } from "@tiptap/core";
 import type { CardsViewConfig, CollectionSchema } from "@nexus/core";
 import { Button, CardsView, EmptyState, LoadingState, PageHeader } from "@nexus/ui";
@@ -15,7 +15,7 @@ import type {
 import { NoteCardsDeleteDialog } from "./NoteCardsDeleteDialog.js";
 import { NoteChecklistTasksDialog } from "./NoteChecklistTasksDialog.js";
 import { NoteEditor } from "./NoteEditor.js";
-import { NoteOrganizer, type FolderSelection } from "./NoteOrganizer.js";
+import { NOTE_ORGANIZER_PANE_ID, NoteOrganizer, type FolderSelection } from "./NoteOrganizer.js";
 import { PRIV_LOCKED_EVENT } from "./PrivPage.js";
 import { TypedConfirmDialog } from "./TypedConfirmDialog.js";
 import { formatNotificationWhen } from "./notificationFormat.js";
@@ -149,6 +149,11 @@ export interface NotesPageProps {
 export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps) {
   const [folders, setFolders] = useState<NoteFolder[]>([]);
   const [selection, setSelection] = useState<FolderSelection>({ kind: "all" });
+  // Below 1345px the organizer is a drawer over the list rather than a column
+  // (see `.note` in app.css). The state exists at every width; above the
+  // breakpoint the pane is a column and CSS ignores it, toggle included.
+  const [organizerOpen, setOrganizerOpen] = useState(false);
+  const organizerToggleRef = useRef<HTMLButtonElement>(null);
   const [notes, setNotes] = useState<NoteMeta[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -274,6 +279,31 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
   useEffect(() => {
     void loadCategories();
   }, [loadCategories]);
+
+  /**
+   * Escape puts the drawer away, and the „Fascikle" button takes focus back.
+   *
+   * The guard is not defensive coding, it is the whole rule: a folder menu and
+   * a typed-name confirmation both portal to `<body>`, so neither is a DOM
+   * descendant of the drawer, and `useAnchoredPosition` closes ITS panel from a
+   * document listener of its own. Two listeners see the same keystroke, and the
+   * innermost surface has to be the one that closes — asking the document
+   * whether such a surface is present is what distinguishes them, because by
+   * the time this runs the other one has not re-rendered yet.
+   */
+  useEffect(() => {
+    if (!organizerOpen) return;
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== "Escape") return;
+      if (document.querySelector('[role="dialog"], .note__menu-panel') !== null) return;
+      setOrganizerOpen(false);
+      organizerToggleRef.current?.focus();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [organizerOpen]);
 
   // `priv:status` answers facts, never contents, so this is safe while locked.
   useEffect(() => {
@@ -949,13 +979,35 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
           organizer's cell. `.app__main` is already the flex column both of
           these are items of — the header is `flex: none`, the grid keeps its
           `flex: 1; min-height: 0`, and the height contract is unchanged. */}
-      <PageHeader title={moduleName("notes")} />
-      <div className="note">
+      <PageHeader
+        title={moduleName("notes")}
+        actions={
+          // A disclosure for the organizer, hidden by CSS at the widths where
+          // the organizer is a column and there is nothing to disclose.
+          <Button
+            ref={organizerToggleRef}
+            className="note__org-toggle"
+            aria-expanded={organizerOpen}
+            aria-controls={NOTE_ORGANIZER_PANE_ID}
+            onClick={() => setOrganizerOpen((open) => !open)}
+          >
+            {strings.notes.foldersLabel}
+          </Button>
+        }
+      />
+      <div className="note" data-organizer={organizerOpen ? "open" : "closed"}>
         <NoteOrganizer
           profileId={profileId}
           folders={folders}
           selection={selection}
-          onSelect={setSelection}
+          onSelect={(next) => {
+            setSelection(next);
+            // Choosing a folder is choosing what the list shows, and the drawer
+            // covers the list — so it puts itself away. Tags and categories do
+            // NOT close it: those are multi-select filters, and closing after
+            // every toggle would make a two-tag filter a four-click job.
+            setOrganizerOpen(false);
+          }}
           onChanged={onFoldersChanged}
           tags={tags}
           tagFilter={tagFilter}
@@ -968,6 +1020,18 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
           onClearCategoryFilter={onClearCategoryFilter}
           onCategoriesChanged={onCategoriesChanged}
         />
+
+        {/* The drawer's outside-click target. A folder menu opened from inside
+            the drawer portals to <body> and paints above this, so clicking one
+            never reaches it — which is why dismissal is a scrim here and not a
+            document listener that would have to name every portalled panel. */}
+        {organizerOpen && (
+          <div
+            className="note__org-scrim"
+            aria-hidden="true"
+            onPointerDown={() => setOrganizerOpen(false)}
+          />
+        )}
 
         <div className="note__list-pane">
           <Button variant="primary" className="note__new" onClick={() => void create()}>

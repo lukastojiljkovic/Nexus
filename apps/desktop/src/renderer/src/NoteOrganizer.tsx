@@ -42,6 +42,14 @@ interface FolderNode extends NoteFolder {
   children: FolderNode[];
 }
 
+/**
+ * The pane's own element id. A constant rather than a prop because the notes
+ * page renders exactly one organizer: below 1345px that pane is a drawer, and
+ * the „Fascikle" disclosure that opens it lives in the page header, too far
+ * away to share a `useId`.
+ */
+export const NOTE_ORGANIZER_PANE_ID = "note-organizer";
+
 /** sr-Latn collation — plain "sr" mis-tailors Latin š/č/ć. */
 const collator = new Intl.Collator(["sr-Latn", "sr"]);
 
@@ -721,7 +729,7 @@ export function NoteOrganizer({
   const addingRoot = editing !== null && editing.mode === "new" && editing.parentId === null;
 
   return (
-    <div className="note__org-pane">
+    <div className="note__org-pane" id={NOTE_ORGANIZER_PANE_ID}>
       <div className="note__folder-row">
         <button
           type="button"
