@@ -27,15 +27,7 @@ export {
   type BarChartDatum,
 } from "./components/BarChart.js";
 export { StarField, type StarFieldProps } from "./components/StarField.js";
-export {
-  mulberry32,
-  grainTileBytes,
-  starField,
-  GRAIN_TILE,
-  SKY_WORLD,
-  type Star,
-} from "./material.js";
-export { bakeGrain, installGrain, grainVar } from "./materialDom.js";
+export { mulberry32, starField, SKY_WORLD, type Star } from "./material.js";
 export { ListView, type ListViewProps } from "./views/ListView.js";
 export {
   KanbanView,

@@ -201,10 +201,11 @@ body {
      every frame instead of blitting it — visible as a colour seam over the
      dashboard's cover image and its opacity scrim.
 
-     `background-color`, NOT the `background` shorthand: the shorthand resets
-     every background property, which would wipe the `background-image` that
-     `.nx-grain` puts here. The colour is still the opaque bottom layer the
-     paragraph above depends on — the grain composites on top of it. */
+     `background-color` rather than the `background` shorthand, which resets
+     every background property at once. Nothing layers here today, so the two
+     are equivalent — but the longhand states the ONE thing this rule is
+     actually responsible for (the opaque fill the paragraph above depends on)
+     and cannot silently wipe a sibling declaration added later. */
   background-color: var(--nx-bg);
   padding: var(--nx-space-6);
   display: flex;

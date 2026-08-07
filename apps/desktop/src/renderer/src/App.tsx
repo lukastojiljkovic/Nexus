@@ -1283,7 +1283,7 @@ export function App() {
           )}
         </nav>
 
-        <main className="app__main nx-grain">
+        <main className="app__main">
           {restoreUndo != null && !restoreBannerHidden && (
             <div className="app__restore-banner" role="status">
               <span className="app__restore-banner-text">

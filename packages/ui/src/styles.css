@@ -696,31 +696,13 @@
   pointer-events: none;
 }
 
-/* The paper substrate, as a BACKGROUND LAYER rather than an overlay element.
-   That is forced by where it has to go. Its host is the scrolling pane, which
-   must paint its own opaque background (a deliberate Chromium repaint fix) —
-   and an absolutely-positioned pseudo-element inside a scroll container
-   resolves `inset: 0` against the SCROLLPORT while still scrolling with the
-   content, so it would texture the first screenful and then slide away. A
-   background layer covers the pane correctly and costs one compositor blit.
-
-   The host supplies `background-color` (never the `background` shorthand,
-   which would reset this image), so the opaque bottom layer that the repaint
-   fix depends on is still there.
-
-   `background-size` matches GRAIN_TILE in material.ts; the tile itself is
-   baked at the peak alpha its theme's token asks for, because a background
-   layer has no opacity of its own. */
-.nx-grain {
-  background-repeat: repeat;
-  background-size: 256px 256px;
-}
-[data-theme="dan"] .nx-grain {
-  background-image: var(--nx-material-grain-dan, none);
-}
-[data-theme="noc"] .nx-grain {
-  background-image: var(--nx-material-grain-noc, none);
-}
+/* The paper grain that used to live here is GONE (founder, 2026-08-07:
+   „taj papir kao pozadinu necemo"). Recorded rather than silently deleted
+   because the reasoning generalises: a texture behind the content is
+   decoration competing with the content, and this product's job is to make a
+   life legible — the graphics budget belongs to the DATA, not to the ground
+   under it. Any future „let's add a subtle background" idea should re-read
+   this line first. */
 
 /* Noć's atmosphere: a single gradient between two adjacent night steps. It
    earns its place twice — as depth near the top of the shell, and as dither,
@@ -736,9 +718,6 @@
    (`scripts/check-contrast.mjs`). `!important` because the per-theme rules
    above are more specific than this selector could otherwise be. */
 @media (prefers-contrast: more) {
-  .nx-grain {
-    background-image: none !important;
-  }
   .nx-starfield,
   .nx-horizon {
     display: none;
@@ -748,9 +727,6 @@
 /* Simulated paper printed onto real paper is where the metaphor eats itself,
    and a note must print as ink on white. */
 @media print {
-  .nx-grain {
-    background-image: none !important;
-  }
   .nx-starfield {
     display: none;
   }
