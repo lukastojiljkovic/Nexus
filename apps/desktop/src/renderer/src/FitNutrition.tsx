@@ -1,6 +1,15 @@
 import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { Button, Chip, EmptyState, ListRow, LoadingState, Select, TextField } from "@nexus/ui";
+import {
+  Button,
+  Chip,
+  EmptyState,
+  ListRow,
+  LoadingState,
+  ProportionBar,
+  Select,
+  TextField,
+} from "@nexus/ui";
 import { FOOD_CATEGORIES, macrosFor } from "@nexus/core";
 import {
   FIT_MEAL_SLOTS,
@@ -551,14 +560,18 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
     const figure = macroText(goal.macro, goal.value);
     if (goal.target === null) {
       return (
-        <div key={goal.macro} className="fit__bar-row">
-          <span className="fit__bar-label">{name}</span>
-          <span className="fit__bar-track fit__bar-track--empty" aria-hidden="true" />
-          <span className="fit__bar-value">
-            <span className="fit__bar-figure">{figure}</span>
-            <span className="fit__bar-nogoal">{t.noGoal}</span>
-          </span>
-        </div>
+        <ProportionBar
+          key={goal.macro}
+          label={name}
+          value={
+            <>
+              {figure}
+              <span className="fit__bar-nogoal">{t.noGoal}</span>
+            </>
+          }
+          segments={[]}
+          unmeasured
+        />
       );
     }
     const goalText = macroText(goal.macro, goal.target);
@@ -567,35 +580,39 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
     // FLOOR (protein) is the goal being MET, so it takes the reached grammar
     // instead — painting „preko cilja" red on protein would turn eating enough
     // of it into a warning, which is the one thing this page must never do.
+    //
+    // `reached` gets no fill tone of its own: `--nx-success` and `--nx-data`
+    // are the same jade (see tokens/themes/*.json), so the FILL already reads
+    // identically whether the floor is reached or not — only the FIGURE below
+    // changes weight and colour. `ProportionBar` has no `success` tone; it
+    // needs none here.
     const past = goal.over && goal.sense === "ceiling";
     const reached = goal.over && goal.sense === "floor";
     const state = past ? `, ${t.over}` : reached ? `, ${t.reached}` : "";
     const modifier = past ? "--over" : reached ? "--reached" : "";
+    // `describedAs` carries the state a screen reader cannot see — see the
+    // same note on FIN's report line.
     return (
-      <div key={goal.macro} className="fit__bar-row">
-        <span className="fit__bar-label">{name}</span>
-        <span
-          className="fit__bar-track"
-          role="img"
-          aria-label={`${name}: ${figure} / ${goalText}${state}`}
-        >
-          <span
-            className={modifier ? `fit__bar-fill fit__bar-fill${modifier}` : "fit__bar-fill"}
-            style={{ width: `${goal.valueRatio * 100}%` }}
-          />
-          {/* The goal, as a tick ON the same scale — taller than the track, so it
-              stays legible whatever the fill under it happens to be. */}
-          <span className="fit__bar-goal" style={{ left: `${goal.targetRatio * 100}%` }} />
-        </span>
-        <span className="fit__bar-value">
-          <span
-            className={modifier ? `fit__bar-figure fit__bar-figure${modifier}` : "fit__bar-figure"}
-          >
-            {figure}
-          </span>
-          <span className="fit__bar-goal-text">{`/ ${goalText}`}</span>
-        </span>
-      </div>
+      <ProportionBar
+        key={goal.macro}
+        describedAs={`${name}: ${figure} / ${goalText}${state}`}
+        label={name}
+        value={
+          <>
+            <span className={modifier ? `fit__bar-figure${modifier}` : undefined}>{figure}</span>
+            <span className="fit__bar-goal-text">{`/ ${goalText}`}</span>
+          </>
+        }
+        segments={[
+          {
+            key: goal.macro,
+            fraction: goal.valueRatio,
+            tone: past ? "danger" : "data",
+            label: figure,
+          },
+        ]}
+        target={{ fraction: goal.targetRatio, label: goalText }}
+      />
     );
   }
 

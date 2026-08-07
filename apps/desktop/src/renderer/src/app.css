@@ -9441,69 +9441,18 @@ button.cal__grid-event--dragging {
 
 /* The bars: one row per category, all drawn against the SECTION's single scale,
    so two of them can be compared by eye. Data, not decoration — no gradient, no
-   animation, no glow. */
+   animation, no glow. Row, label, track, fill and limit are `ProportionBar`'s
+   now — see `renderReportLine` — these are only the colour states it has no
+   slot for. */
 .fin__bars {
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-2);
 }
-.fin__bar-row {
-  display: grid;
-  grid-template-columns: minmax(80px, 140px) minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--nx-space-3);
-}
-.fin__bar-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-text);
-}
 /* „Bez kategorije" is a real line and stays visible — quieter, because it is
    the leftover rather than a category. */
 .fin__bar-label--muted {
   color: var(--nx-text-muted);
-}
-.fin__bar-track {
-  position: relative;
-  height: 10px;
-  border-radius: var(--nx-radius-round);
-  background: var(--nx-surface-alt);
-}
-.fin__bar-fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  border-radius: inherit;
-  background: var(--nx-data);
-}
-/* Over the limit takes the semantic danger colour, which is this app's warning
-   state — no hue is invented for it, and only the bars that ARE over change. */
-.fin__bar-fill--over {
-  background: var(--nx-danger);
-}
-/* The limit, as a tick on the same scale. Taller than the track on both sides,
-   so it stays legible over an empty track and over a full one alike. */
-.fin__bar-limit {
-  position: absolute;
-  top: -4px;
-  bottom: -4px;
-  width: 2px;
-  margin-left: -1px;
-  border-radius: 1px;
-  background: var(--nx-text);
-}
-.fin__bar-value {
-  display: flex;
-  align-items: baseline;
-  justify-content: flex-end;
-  gap: var(--nx-space-1);
-  font-size: var(--nx-font-size-body-sm);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.fin__bar-spent {
-  color: var(--nx-text);
 }
 .fin__bar-spent--over {
   color: var(--nx-danger);
@@ -10629,36 +10578,23 @@ button.cal__grid-event--dragging {
   color: var(--nx-text);
 }
 
-/* The day's four figures, on the FIN report's scale-and-tick grammar. */
+/* The day's four figures, on the FIN report's scale-and-tick grammar. Row,
+   label, empty track and value are `ProportionBar`'s now — see
+   `renderGoalRow`. Track, fill, over and goal survive here because the
+   dashboard's „Ishrana danas" card still draws a bare bar with them directly
+   (`FitnessTodayWidget`): it has no label or value column to hand
+   `ProportionBar`, only a track under a figure the card already drew itself. */
 .fit__bars {
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-2);
   align-self: stretch;
 }
-.fit__bar-row {
-  display: grid;
-  grid-template-columns: minmax(96px, 160px) minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--nx-space-3);
-}
-.fit__bar-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-text);
-}
 .fit__bar-track {
   position: relative;
   height: 10px;
   border-radius: var(--nx-radius-round);
   background: var(--nx-surface-alt);
-}
-/* No goal: the track keeps the row's grid so four rows still line up, and says
-   nothing — there is no proportion to draw. */
-.fit__bar-track--empty {
-  opacity: 0.4;
 }
 .fit__bar-fill {
   position: absolute;
@@ -10671,13 +10607,6 @@ button.cal__grid-event--dragging {
 .fit__bar-fill--over {
   background: var(--nx-danger);
 }
-/* Past a goal meant as a FLOOR — protein — is the goal being MET, so it takes
-   the data-secondary jade rather than the danger hue. Same fact, read the way
-   the user meant the goal: nobody sets a protein target hoping to stay under it,
-   and painting that red would be the scold this page is not allowed to be. */
-.fit__bar-fill--reached {
-  background: var(--nx-success);
-}
 /* The goal, as a tick on the same scale — taller than the track on both sides,
    so it stays legible over an empty track and a full one alike. */
 .fit__bar-goal {
@@ -10689,24 +10618,16 @@ button.cal__grid-event--dragging {
   border-radius: 1px;
   background: var(--nx-text);
 }
-.fit__bar-value {
-  display: flex;
-  align-items: baseline;
-  justify-content: flex-end;
-  gap: var(--nx-space-1);
-  font-size: var(--nx-font-size-body-sm);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.fit__bar-figure {
-  color: var(--nx-text);
-}
 .fit__bar-figure--over {
   color: var(--nx-danger);
   font-weight: var(--nx-font-weight-medium);
 }
 /* A floor goal that has been reached: the same emphasis, the success semantic
-   rather than the danger one. */
+   rather than the danger one. Only the FIGURE takes it — the fill does not,
+   because `--nx-success` and `--nx-data` are the same jade (see
+   tokens/themes/*.json), so a reached and an unreached floor already draw the
+   same bar; `renderGoalRow` gives `ProportionBar` the ordinary `data` tone for
+   both and lets this rule carry the whole distinction. */
 .fit__bar-figure--reached {
   color: var(--nx-success);
   font-weight: var(--nx-font-weight-medium);
@@ -11331,8 +11252,18 @@ button.cal__grid-event--dragging {
   align-self: stretch;
   overflow: visible;
 }
+/* A zero-length subpath with a round cap — a filled circle of exactly the
+   stroke width, the same way the icon set draws a dot. `non-scaling-stroke` is
+   what makes it survive the chart's deliberate horizontal stretch: stroke
+   geometry is exempted from the user-space transform, so the cap stays a true
+   circle instead of the ellipse a `<circle r>` became at every container width
+   other than 320px. */
 .fit__chart-dot {
-  fill: var(--nx-text-muted);
+  fill: none;
+  stroke: var(--nx-text-muted);
+  stroke-width: 3.6;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
   opacity: 0.45;
 }
 .fit__chart-line {
@@ -11340,6 +11271,9 @@ button.cal__grid-event--dragging {
   stroke-width: 1.75;
   stroke-linecap: round;
   stroke-linejoin: round;
+  /* Same reason as the dots: under a non-uniform scale a diagonal stroke
+     thickens and thins along its own length. */
+  vector-effect: non-scaling-stroke;
 }
 
 /* „Ishrana danas" on the dashboard: the figure, the goal under it, and the same

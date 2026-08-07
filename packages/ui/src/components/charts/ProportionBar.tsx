@@ -52,6 +52,22 @@ export interface ProportionBarProps {
    * empty track pretending to be one.
    */
   unmeasured?: boolean;
+  /**
+   * One sentence naming the row and its finding — „Hrana: 12 400 od 15 000 RSD,
+   * prekoračeno".
+   *
+   * When present the whole row becomes a single `role="img"` and its inner text
+   * turns presentational. That is deliberate: the row's STATE — over budget,
+   * goal reached — is carried by colour and by a font weight, and neither
+   * reaches a screen reader. Without this the row reads out its numbers and
+   * silently omits the one thing it was drawn to say.
+   *
+   * It is a prop rather than something each page wraps for itself, because
+   * every call site wrapping the component in its own `role="img"` div is the
+   * same rule applied in two places instead of held in one — and the third
+   * adoption is the one that forgets.
+   */
+  describedAs?: string;
 }
 
 function clamp01(n: number): number {
@@ -65,6 +81,7 @@ export function ProportionBar({
   segments,
   target,
   unmeasured = false,
+  describedAs,
 }: ProportionBarProps) {
   // Segments lay end to end; each one's offset is the sum of those before it.
   let offset = 0;
@@ -76,7 +93,10 @@ export function ProportionBar({
   });
 
   return (
-    <div className="nx-proportion">
+    <div
+      className="nx-proportion"
+      {...(describedAs === undefined ? {} : { role: "img", "aria-label": describedAs })}
+    >
       <span className="nx-proportion__label">{label}</span>
       <span
         className={`nx-proportion__track${unmeasured ? " nx-proportion__track--unmeasured" : ""}`}

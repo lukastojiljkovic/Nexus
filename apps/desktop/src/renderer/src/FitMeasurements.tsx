@@ -855,15 +855,27 @@ function TrendChart({ points, label }: { points: readonly TrendPoint[]; label: s
       viewBox={`0 0 ${String(CHART_WIDTH)} ${String(CHART_HEIGHT)}`}
       width="100%"
       height={CHART_HEIGHT}
+      /* The trend line SHOULD stretch to whatever width it is given — that is
+         what „none" is for, and the chart's whole job is to fill its column at
+         a fixed height. What must not stretch with it is anything round.
+         `width="100%"` at a fixed pixel height scales the two axes by
+         different factors, and under „none" that turned every reading dot into
+         an ellipse, widened by exactly `containerWidth / 320`.
+         The fix is not to give up the stretch — it is to draw the dots so the
+         stretch cannot reach them. A dot is a ZERO-LENGTH subpath with a round
+         cap, which is the same idiom the icon set uses, and
+         `vector-effect: non-scaling-stroke` exempts stroke geometry from the
+         user-space transform: the cap stays a true circle of exactly the
+         stroke width at every container size. The line takes the same
+         treatment, because a stroke on a diagonal under a non-uniform scale
+         thickens and thins along its length. */
       preserveAspectRatio="none"
     >
       {points.map((point, index) => (
-        <circle
+        <path
           key={point.day}
           className="fit__chart-dot"
-          cx={x(days[index] ?? minDay)}
-          cy={y(point.value)}
-          r={1.8}
+          d={`M${String(x(days[index] ?? minDay))} ${String(y(point.value))}h0`}
         />
       ))}
       {line !== "" && <polyline className="fit__chart-line" points={line} fill="none" />}

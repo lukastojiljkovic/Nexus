@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { Button, CardsView, Chip, EmptyState, ListRow, ListView, LoadingState, PageHeader, TextField } from "@nexus/ui";
+import {
+  Button,
+  CardsView,
+  Chip,
+  EmptyState,
+  ListRow,
+  ListView,
+  LoadingState,
+  PageHeader,
+  ProportionBar,
+  TextField,
+} from "@nexus/ui";
 import { applyFilters, isValidDayKey, monthKeyOf, shiftMonthKey } from "@nexus/core";
 import type { CardsViewConfig, CollectionSchema, FilterSpec, ListViewConfig } from "@nexus/core";
 import {
@@ -1218,38 +1229,35 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
         : `${name}: ${formatMoney(line.spent, currency)} / ` +
           `${formatMoney(line.budget, currency)}${line.over ? `, ${s.report.over}` : ""}`;
 
+    // `describedAs` makes the whole row one `role="img"` carrying this
+    // sentence. Necessary because „over budget" is drawn as a colour and a
+    // font weight, and neither reaches a screen reader — without it the row
+    // reads out its numbers and omits the one thing it exists to say.
     return (
-      <div key={line.categoryId ?? ""} className="fin__bar-row">
-        <span
-          className={
-            line.name === null ? "fin__bar-label fin__bar-label--muted" : "fin__bar-label"
-          }
-        >
-          {name}
-        </span>
-        <span className="fin__bar-track" role="img" aria-label={label}>
-          <span
-            className={line.over ? "fin__bar-fill fin__bar-fill--over" : "fin__bar-fill"}
-            style={{ width: `${line.spentRatio * 100}%` }}
-          />
-          {/* The limit, as a tick ON the same scale — taller than the track, so
-              it stays legible whatever colour the fill under it happens to be. */}
-          {line.budgetRatio !== null && (
-            <span className="fin__bar-limit" style={{ left: `${line.budgetRatio * 100}%` }} />
-          )}
-        </span>
-        <span className="fin__bar-value">
-          <span className={line.over ? "fin__bar-spent fin__bar-spent--over" : "fin__bar-spent"}>
-            {spent}
-          </span>
-          {line.budget === null ? (
-            // The honesty rule, on the row itself: no limit means no number.
-            <span className="fin__bar-nobudget">{s.report.noBudget}</span>
-          ) : (
-            <span className="fin__bar-budget">{`/ ${formatMoneyPlain(line.budget, currency)}`}</span>
-          )}
-        </span>
-      </div>
+      <ProportionBar
+        key={line.categoryId ?? ""}
+        describedAs={label}
+        label={
+          <span className={line.name === null ? "fin__bar-label--muted" : undefined}>{name}</span>
+        }
+        value={
+          <>
+            <span className={line.over ? "fin__bar-spent--over" : undefined}>{spent}</span>
+            {line.budget === null ? (
+              // The honesty rule, on the row itself: no limit means no number.
+              <span className="fin__bar-nobudget">{s.report.noBudget}</span>
+            ) : (
+              <span className="fin__bar-budget">
+                {`/ ${formatMoneyPlain(line.budget, currency)}`}
+              </span>
+            )}
+          </>
+        }
+        segments={[
+          { key: "spent", fraction: line.spentRatio, tone: line.over ? "danger" : "data", label },
+        ]}
+        {...(line.budgetRatio === null ? {} : { target: { fraction: line.budgetRatio, label } })}
+      />
     );
   }
 
