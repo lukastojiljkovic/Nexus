@@ -27,23 +27,20 @@ import { promisify } from "node:util";
 const MINIMUM_SEVERITY = ["high", "critical"];
 
 /** Advisories this scan tolerates, each with why it is not exploitable here and what retires it. */
-const ALLOWED = [
-  {
-    ghsa: "GHSA-mh99-v99m-4gvg",
-    package: "brace-expansion",
-    why:
-      "Out-of-memory crash from an oversized brace expansion. It reaches us only " +
-      "through electron-builder (already at its latest release), and the only patterns " +
-      "the expander ever sees are the globs in this repo's own packaging config — there " +
-      "is no untrusted input, so it is not exploitable under SEC-VER-03. It also cannot " +
-      "be patched away: the advisory marks every release at or below 5.0.7 affected " +
-      "while the fix shipped on 5.x alone, so 1.1.16 and 2.1.2 — the newest releases of " +
-      "the two majors minimatch@3 and minimatch@5/9 accept — match it permanently, and " +
-      "v5 cannot replace them (v1/v2 export `module.exports = fn`, v5 exports " +
-      "`{ expand }`, so `require(...)(pattern)` would throw).",
-    retireWhen: "electron-builder's tree stops reaching brace-expansion 1.x/2.x.",
-  },
-];
+/**
+ * Advisories this scan tolerates, each with why it is not exploitable here and
+ * what retires it.
+ *
+ * **Empty on 2026-08-07, and that is the healthy state.** The one entry it
+ * carried — `GHSA-mh99-v99m-4gvg` on `brace-expansion` — argued that the fix
+ * had shipped on 5.x alone and could therefore never reach the 1.x/2.x lines
+ * `minimatch@3` and `minimatch@5/9` accept. Upstream has since backported it
+ * (1.1.18, 2.1.4), the overrides in `pnpm-workspace.yaml` moved past it, and
+ * the advisory stopped appearing at all — at which point this script failed the
+ * job on the SPENT allowance rather than letting the excuse sit here unread,
+ * which is exactly what it was built to do.
+ */
+const ALLOWED = [];
 
 /** Runs the audit and returns its JSON report. A non-zero exit is expected whenever findings exist. */
 async function runAudit() {

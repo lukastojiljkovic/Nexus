@@ -29,12 +29,24 @@ overrides:
   # majors coexist in the tree (via @electron/asar, @electron/universal and
   # ejs>jake>filelist), each with its own patched release. Build-time only,
   # through electron-builder.
-  brace-expansion@1: ^1.1.16
-  brace-expansion@2: ^2.1.2
-  brace-expansion@5: ^5.0.8
+  brace-expansion@1: ^1.1.18
+  brace-expansion@2: ^2.1.4
+  brace-expansion@5: ^5.0.9
   # Host confusion via a literal backslash authority delimiter, reached
   # through app-builder-lib > ajv. Build-time only.
-  fast-uri@3: ^3.1.4
+  fast-uri@3: ^3.1.5
+  # GHSA-5p4m-2wfm-xmqj — quadratic CPU in `!!omap` resolution. Reached BOTH
+  # ways: `electron-updater` ships it (so the shipped audit sees it) and
+  # `app-builder-lib` builds with it. Every dependant asks for `^4.1.0`, so
+  # ordinary resolution reaches 4.3.1 on its own — the entry exists because the
+  # two halves of the tree otherwise settle on one shared 4.3.0 and the build
+  # half keeps it there. Retires when nothing resolves below 4.3.1.
+  js-yaml@4: ^4.3.1
+  # GHSA-4cwx-7wf7-3272 — cross-user information disclosure and a parse-time
+  # crash via degenerate private cache directives. Build-time only, through
+  # electron-builder's fetch path. 6.x is a separate line with its own tree and
+  # is not covered by this advisory's range.
+  undici@7: ^7.29.0
   # GHSA-mwcw-c2x4-8c55 — predictable ids from a non-integer `size`. SHIPPED,
   # not build-time: it arrives through @excalidraw/excalidraw, which pins
   # nanoid at an exact `3.3.3`, and through @excalidraw/mermaid-to-excalidraw,

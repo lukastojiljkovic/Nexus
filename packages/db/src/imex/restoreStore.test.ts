@@ -1205,6 +1205,44 @@ function assertModulesMatch(
   expect(habitsRead.listAllEntries({ from: "2026-01-01", to: "2026-12-31" })).toEqual(
     fixture.data.habitEntries,
   );
+
+  // FIT training & body (migration 060): every one of the seven tables
+  // `RESTORE_WIPE_TABLES` empties, proven to come back — the exercise, the
+  // routine with its two items (parent read back before the child, on the
+  // items' own stored position order), the finished workout with its two
+  // logged sets, the full body-weight reading (`muscle`, all six
+  // `circumferences` sites) and the body-facts row.
+  expect(new FitExerciseStore(handle.raw, readProfileId).list()).toEqual(
+    remap(fixture.data.fitExercises),
+  );
+  const restoredRoutines = new FitRoutineStore(handle.raw, readProfileId).list();
+  expect(restoredRoutines.map(({ items: _items, ...routine }) => routine)).toEqual(
+    remap(fixture.data.fitRoutines),
+  );
+  expect(restoredRoutines.flatMap((routine) => routine.items)).toEqual(
+    remap(fixture.data.fitRoutineItems),
+  );
+  const restoredWorkouts = new FitWorkoutStore(handle.raw, readProfileId).listRange(
+    FIT_TRAINING_MIN_DAY,
+    FIT_TRAINING_MAX_DAY,
+  );
+  expect(restoredWorkouts.map(({ sets: _sets, ...workout }) => workout)).toEqual(
+    remap(fixture.data.fitWorkouts),
+  );
+  expect(
+    restoredWorkouts.flatMap((workout) =>
+      workout.sets.map((set) => ({ ...set, profileId: remapTo })),
+    ),
+  ).toEqual(remap(fixture.data.fitWorkoutSets));
+  expect(
+    new FitMeasurementStore(handle.raw, readProfileId)
+      .listRange(FIT_TRAINING_MIN_DAY, FIT_TRAINING_MAX_DAY)
+      .map((measurement) => ({ ...measurement, profileId: remapTo })),
+  ).toEqual(remap(fixture.data.fitMeasurements));
+  const restoredBodyProfile = new FitBodyProfileStore(handle.raw, readProfileId).get();
+  expect(
+    restoredBodyProfile === null ? [] : [{ profileId: remapTo, ...restoredBodyProfile }],
+  ).toEqual(remap(fixture.data.fitBodyProfile));
 }
 
 describe("RestoreStore", () => {
