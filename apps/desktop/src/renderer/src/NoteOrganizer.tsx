@@ -4,6 +4,7 @@ import { Button, TextField } from "@nexus/ui";
 import type { NoteCategory, NoteFolder, NoteFolderColor, NoteTag } from "../../shared/ipc.js";
 import { NotePopover } from "./notePopover.js";
 import { mergeTemplateEntries, type TemplateEntry } from "./noteTemplates.js";
+import { isDuplicateNameError } from "./storeErrors.js";
 import { strings } from "./strings.js";
 import { TypedConfirmDialog } from "./TypedConfirmDialog.js";
 
@@ -155,10 +156,12 @@ export function NoteOrganizer({
   const [failed, setFailed] = useState(false);
   const [tagEditing, setTagEditing] = useState<TagEditing>(null);
   const [tagDraftName, setTagDraftName] = useState("");
-  const [tagFailed, setTagFailed] = useState(false);
+  /** The tag rail's error line — the SENTENCE, not a boolean, so a taken name can say which one. */
+  const [tagFailed, setTagFailed] = useState<string | null>(null);
   const [categoryEditing, setCategoryEditing] = useState<CategoryEditing>(null);
   const [categoryDraftName, setCategoryDraftName] = useState("");
-  const [categoryFailed, setCategoryFailed] = useState(false);
+  /** The category rail's error line — the SENTENCE, not a boolean (see `tagFailed`). */
+  const [categoryFailed, setCategoryFailed] = useState<string | null>(null);
   // Folder/tag/category deletes have no undo (unlike a note's) — the typed-name
   // confirmation is what the rest of the app substitutes for it (see PRIV's own
   // hard-delete). Closing the dialog fires the delete; a failure surfaces in
@@ -285,25 +288,28 @@ export function NoteOrganizer({
   }
 
   function beginNewTag(): void {
-    setTagFailed(false);
+    setTagFailed(null);
     setTagDraftName("");
     setTagEditing({ mode: "new" });
   }
 
   function beginRenameTag(tag: NoteTag): void {
-    setTagFailed(false);
+    setTagFailed(null);
     setTagDraftName(tag.name);
     setTagEditing({ mode: "rename", id: tag.id });
   }
 
   async function runTag(action: () => Promise<void>): Promise<void> {
     try {
-      setTagFailed(false);
+      setTagFailed(null);
       await action();
       cancelTag();
       await onTagsChanged();
     } catch (error) {
-      setTagFailed(true);
+      // „Pokušaj ponovo" is the one action that fails identically forever
+      // against a UNIQUE index, so a taken name says so instead. FIN has mapped
+      // this exact refusal since its rail shipped; NOTE's never did.
+      setTagFailed(isDuplicateNameError(error) ? strings.notes.tagDuplicate : strings.notes.tagError);
       console.error("Nexus: tag action failed:", error);
     }
   }
@@ -331,24 +337,28 @@ export function NoteOrganizer({
 
   async function runCategory(action: () => Promise<void>): Promise<void> {
     try {
-      setCategoryFailed(false);
+      setCategoryFailed(null);
       await action();
       cancelCategory();
       await onCategoriesChanged();
     } catch (error) {
-      setCategoryFailed(true);
+      setCategoryFailed(
+        isDuplicateNameError(error)
+          ? strings.notes.categoryDuplicate
+          : strings.notes.categoryError,
+      );
       console.error("Nexus: category action failed:", error);
     }
   }
 
   function beginNewCategory(): void {
-    setCategoryFailed(false);
+    setCategoryFailed(null);
     setCategoryDraftName("");
     setCategoryEditing({ mode: "new" });
   }
 
   function beginRenameCategory(category: NoteCategory): void {
-    setCategoryFailed(false);
+    setCategoryFailed(null);
     setCategoryDraftName(category.name);
     setCategoryEditing({ mode: "rename", id: category.id });
   }
@@ -541,7 +551,7 @@ export function NoteOrganizer({
                       role="menuitem"
                       type="button"
                       onClick={() => {
-                        setCategoryFailed(false);
+                        setCategoryFailed(null);
                         setCategoryEditing({ mode: "recolor", id: category.id });
                         close();
                       }}
@@ -916,9 +926,9 @@ export function NoteOrganizer({
         </Button>
       )}
 
-      {tagFailed && (
+      {tagFailed !== null && (
         <p className="note__org-error" role="status">
-          {strings.notes.tagError}
+          {tagFailed}
         </p>
       )}
 
@@ -946,9 +956,9 @@ export function NoteOrganizer({
         </Button>
       )}
 
-      {categoryFailed && (
+      {categoryFailed !== null && (
         <p className="note__org-error" role="status">
-          {strings.notes.categoryError}
+          {categoryFailed}
         </p>
       )}
 

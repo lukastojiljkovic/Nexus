@@ -180,6 +180,16 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
         setFormError(s.set.invalidWhole);
         return;
       }
+      // The store refuses a range that runs backwards, and `errors.ts` says
+      // that refusal is named there rather than left to migration 060's CHECK
+      // precisely so it can be a user-facing message (ADR-081 §6). It never
+      // became one: `fitTrainingError` matched seven substrings and not this,
+      // so „od 12 do 8" fell through to „Radnja nije uspela. Pokušaj ponovo."
+      // Caught here, before the round trip, naming the two fields it is about.
+      if (repsMin !== null && repsMax !== null && repsMin > repsMax) {
+        setFormError(s.routines.invalidRange);
+        return;
+      }
       payload.push({
         exerciseRef: item.exerciseRef,
         targetSets: sets,

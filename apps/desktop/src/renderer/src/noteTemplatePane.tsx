@@ -9,6 +9,7 @@ import { AttachmentImage, NoteAttachmentProvider } from "./noteAttachmentImage.j
 import { NoteLink, NoteLinkProvider } from "./noteLink.js";
 import { NotePopover } from "./notePopover.js";
 import { mergeTemplateEntries, type TemplateEntry } from "./noteTemplates.js";
+import { isDuplicateNameError } from "./storeErrors.js";
 import { strings } from "./strings.js";
 
 /**
@@ -52,7 +53,8 @@ export function NoteTemplatePane({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(null);
   const [draftName, setDraftName] = useState("");
-  const [failed, setFailed] = useState(false);
+  /** The pane's error LINE rather than a boolean, so a taken name can name itself. */
+  const [failed, setFailed] = useState<string | null>(null);
   const [tooLarge, setTooLarge] = useState(false);
 
   // Loads on mount and after every mutation; `mergeTemplateEntries` (shared
@@ -96,19 +98,19 @@ export function NoteTemplatePane({
   function cancelForm(): void {
     setForm(null);
     setDraftName("");
-    setFailed(false);
+    setFailed(null);
     setTooLarge(false);
   }
 
   function beginSave(): void {
-    setFailed(false);
+    setFailed(null);
     setTooLarge(false);
     setDraftName("");
     setForm({ mode: "save" });
   }
 
   function beginRename(entry: TemplateEntry): void {
-    setFailed(false);
+    setFailed(null);
     setTooLarge(false);
     setDraftName(entry.name);
     setForm({ mode: "rename", id: entry.id });
@@ -116,13 +118,20 @@ export function NoteTemplatePane({
 
   async function run(action: () => Promise<void>): Promise<void> {
     try {
-      setFailed(false);
+      setFailed(null);
       setTooLarge(false);
       await action();
       cancelForm();
       await load();
     } catch (error) {
-      setFailed(true);
+      // A rename onto a name this profile already uses is refused by the store
+      // (`save` is an upsert, so rename is the only path to it). „Pokusaj
+      // ponovo" cannot succeed against that, so the taken name says so.
+      setFailed(
+        isDuplicateNameError(error)
+          ? strings.notes.templateNameTaken
+          : strings.notes.templateError,
+      );
       console.error("Nexus: template action failed:", error);
     }
   }
@@ -286,7 +295,7 @@ export function NoteTemplatePane({
         )}
         {(failed || tooLarge) && (
           <p className="note__templates-error" role="status">
-            {tooLarge ? strings.notes.templateTooLarge : strings.notes.templateError}
+            {tooLarge ? strings.notes.templateTooLarge : failed}
           </p>
         )}
       </div>

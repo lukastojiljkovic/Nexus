@@ -149,5 +149,9 @@ export function fitTrainingError(error: unknown): string {
   if (message.includes(`"name" must`)) return t.exercises.invalidName;
   if (message.includes("names no exercise this build ships")) return t.routines.missingExercise;
   if (message.includes("No live exercise")) return t.routines.missingExercise;
+  // The backstop for the range the routine form now catches before the round
+  // trip. Kept as well as the client-side check, not instead of it: an
+  // interchange import reaches the store without passing that form.
+  if (message.includes("rep range that runs backwards")) return t.routines.invalidRange;
   return t.exercises.actionError;
 }

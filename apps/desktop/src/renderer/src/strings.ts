@@ -960,6 +960,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       filterLabel: "Filter po oznakama",
       clearFilter: "Poništi",
       actionError: "Radnja nad oznakom nije uspela. Pokušaj ponovo.",
+      /** The one refusal a user can act on — a rename onto a taken name. NOTE's rail says the same about its own tags. */
+      duplicate: "Oznaka sa tim imenom već postoji.",
       /**
        * NOTE's own `deleteTagDialog`, one module over and for the identical
        * reason: `taskTagStore.delete` is a HARD delete whose links go with it
@@ -1300,6 +1302,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     tagFilterLabel: "Filter po oznakama",
     clearTagFilter: "Poništi",
     tagError: "Radnja nad oznakom nije uspela. Pokušaj ponovo.",
+    /** The one refusal a user can act on: the name is taken. FIN has said this since its rail shipped; this rail asked for a retry that could not work. */
+    tagDuplicate: "Oznaka sa tim imenom već postoji.",
     tagFilterEmptyDescription: "Nijedna beleška ne odgovara izabranim oznakama.",
     /** The typed-name confirmation before a tag delete — no undo exists for this write. */
     deleteTagDialog: {
@@ -1332,6 +1336,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     categoryFilterLabel: "Filter po kategorijama",
     clearCategoryFilter: "Poništi",
     categoryError: "Radnja nad kategorijom nije uspela. Pokušaj ponovo.",
+    /** As `tagDuplicate`: the store refuses a duplicate name, so the line names that instead of asking for a retry against a UNIQUE index. */
+    categoryDuplicate: "Kategorija sa tim imenom već postoji.",
     categoryFilterEmptyDescription: "Nijedna beleška ne pripada izabranim kategorijama.",
     /** The typed-name confirmation before a category delete — no undo exists for this write. Its notes are never deleted, only uncategorized (see the store's own `ON DELETE SET NULL`). */
     deleteCategoryDialog: {
@@ -1386,6 +1392,13 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     templateBroken: "Ovaj šablon se ne može prikazati.",
     templateTooLarge: "Beleška je prevelika da bi se sačuvala kao šablon.",
     templateError: "Radnja nad šablonima nije uspela. Pokušaj ponovo.",
+    /**
+     * Only a RENAME can hit this — saving is an upsert and replaces instead of
+     * refusing, which is what `templateOverwriteNote` says. „Biće zamenjen" is
+     * therefore false for a rename, so this one gets its own sentence rather
+     * than borrowing that one.
+     */
+    templateNameTaken: "Šablon sa tim imenom već postoji.",
     /** Prefix for a template's slash-menu label (NOTE-009c), e.g. "Šablon: Sastanak". */
     slashTemplatePrefix: "Šablon: ",
     templateBuiltins: {
@@ -2488,6 +2501,23 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       moveUp: "Pomeri temu naviše",
       moveDown: "Pomeri temu naniže",
       remove: "Obriši temu",
+      /**
+       * The store soft-deletes a topic and promotes its plan blocks off it —
+       * but it has no `restore`, and there is no `topics:restore` channel, so
+       * from the user's side the act is final. Until this dialog it fired on a
+       * bare „×" beside a list row. The warning states the consequence that
+       * costs something and is not obvious: the plan keeps its blocks, they
+       * simply stop naming this topic.
+       */
+      deleteDialog: {
+        title: "Brisanje teme",
+        warning:
+          "Tema se briše i ne može se vratiti. Blokovi u planu ostaju, samo prestaju da nose njeno ime.",
+        confirmLabel: "Naziv teme za potvrdu",
+        confirmPlaceholder: "Upiši tačan naziv",
+        submit: "Obriši",
+        cancel: "Otkaži",
+      },
       confidenceLabel: "Pouzdanje",
       confidenceUnknown: "Nepoznato",
       /** Muted „izvedeno: 72" beside an unknown manual confidence a LIVE linked špil resolved. */
@@ -4021,6 +4051,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         notesLabel: "Beleška",
         notesPlaceholder: "npr. zagrevanje 10 min pre prve vežbe",
         itemsLabel: "Vežbe",
+        /** Names the two fields, because „nije uspelo" over a form of them names none. */
+        invalidRange: "„Ponavljanja od“ ne može biti veće od „do“.",
         addItem: "Dodaj vežbu",
         removeItem: "Ukloni",
         moveUp: "Pomeri gore",

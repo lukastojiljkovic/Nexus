@@ -90,6 +90,7 @@ import { RecurrenceMark, RecurrencePicker } from "./RecurrencePicker.js";
 import { TaskMonthGrid } from "./TaskMonthGrid.js";
 import type { TaskMonthItem } from "./TaskMonthGrid.js";
 import { ConfirmDialog } from "./ConfirmDialog.js";
+import { isDuplicateNameError } from "./storeErrors.js";
 import { TypedConfirmDialog } from "./TypedConfirmDialog.js";
 import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
 import { dayUnit, strings } from "./strings.js";
@@ -1069,7 +1070,8 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const [tagEditing, setTagEditing] = useState<TagEditing>(null);
   const [tagDraft, setTagDraft] = useState("");
   /** True when the last tag action failed — kept apart from `listFailed` so the two sections of the rail report their own. */
-  const [tagFailed, setTagFailed] = useState(false);
+  /** The tag rail's error LINE rather than a boolean, so a taken name can name itself. */
+  const [tagFailed, setTagFailed] = useState<string | null>(null);
   /** True when a row's own tag attach/detach failed — kept apart from `tagFailed` (the rail's rename/delete), which a row toggle must not close. */
   const [tagToggleFailed, setTagToggleFailed] = useState(false);
   /**
@@ -2016,12 +2018,19 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
    */
   async function runTagAction(action: () => Promise<void>): Promise<void> {
     try {
-      setTagFailed(false);
+      setTagFailed(null);
       await action();
       closeTagEditor();
       await reloadTags();
     } catch (error) {
-      setTagFailed(true);
+      // A rename onto a name the profile already has is refused by the store,
+      // and „Pokusaj ponovo" cannot succeed against a UNIQUE index. (Creating
+      // is get-or-create and never lands here.)
+      setTagFailed(
+        isDuplicateNameError(error)
+          ? strings.tasks.tags.duplicate
+          : strings.tasks.tags.actionError,
+      );
       console.error("Nexus: tag action failed:", error);
     }
   }
@@ -2032,13 +2041,13 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   }
 
   function beginNewTag(): void {
-    setTagFailed(false);
+    setTagFailed(null);
     setTagDraft("");
     setTagEditing({ mode: "new" });
   }
 
   function beginRenameTag(tag: TaskTag): void {
-    setTagFailed(false);
+    setTagFailed(null);
     setTagDraft(tag.name);
     setTagEditing({ mode: "rename", id: tag.id });
   }
@@ -3987,7 +3996,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         )}
         {tagFailed && (
           <p className="tasks__rail-error" role="status">
-            {strings.tasks.tags.actionError}
+            {tagFailed}
           </p>
         )}
       </aside>

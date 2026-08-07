@@ -67,6 +67,7 @@ import { FocusDiscardDialog } from "./FocusDiscardDialog.js";
 import { MathText } from "./MathText.js";
 import { NotePopover } from "./notePopover.js";
 import { ConfirmDialog } from "./ConfirmDialog.js";
+import { TypedConfirmDialog } from "./TypedConfirmDialog.js";
 import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
 import { intervalLabel, isDueWithinSession } from "./reviewIntervals.js";
 import { countUnit, dayUnit, strings } from "./strings.js";
@@ -543,6 +544,8 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     attachmentId: string;
     name: string;
   } | null>(null);
+  /** The topic a „×" click is asking about; null when nothing is being asked. */
+  const [pendingDeleteTopic, setPendingDeleteTopic] = useState<ExamTopic | null>(null);
   const [linkedNoteError, setLinkedNoteError] = useState(false);
   const [attaching, setAttaching] = useState(false);
   // „Pregledaj" (DOC / ADR-064): which material the in-app dialog is showing,
@@ -1104,6 +1107,12 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
         nameRef.current?.focus();
       }
     } catch (error) {
+      // The three save paths were the only ones on this page that
+      // reported a refusal to the CONSOLE and nowhere else: the form
+      // simply stayed open with no line under it, which reads as a
+      // click that did not register. Every delete beside them has
+      // always set this same state.
+      setActionError(strings.study.actionError);
       console.error("Nexus: failed to save subject:", error);
     }
   }
@@ -1310,6 +1319,12 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
       }
       closeExamForm();
     } catch (error) {
+      // The three save paths were the only ones on this page that
+      // reported a refusal to the CONSOLE and nowhere else: the form
+      // simply stayed open with no line under it, which reads as a
+      // click that did not register. Every delete beside them has
+      // always set this same state.
+      setActionError(strings.study.actionError);
       console.error("Nexus: failed to save exam:", error);
     }
   }
@@ -1380,6 +1395,12 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
       }
       closeDeckForm();
     } catch (error) {
+      // The three save paths were the only ones on this page that
+      // reported a refusal to the CONSOLE and nowhere else: the form
+      // simply stayed open with no line under it, which reads as a
+      // click that did not register. Every delete beside them has
+      // always set this same state.
+      setActionError(strings.study.actionError);
       console.error("Nexus: failed to save deck:", error);
     }
   }
@@ -3848,11 +3869,14 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                                   size="sm"
                                   className="study__delete"
                                   aria-label={strings.study.topics.remove}
-                                  onClick={() =>
-                                    void mutateTopics(topic.examId, () =>
-                                      window.nexus.deleteExamTopic(profileId, topic.id),
-                                    )
-                                  }
+                                  // Asks first. `TopicStore.softDelete` marks
+                                  // the row deleted and promotes its plan
+                                  // blocks' `topic_id` to NULL — and there is
+                                  // no `restore` on that store and no
+                                  // `topics:restore` channel, so from the
+                                  // user's side the act is final. It reached
+                                  // that state through a bare „×" on a list row.
+                                  onClick={() => setPendingDeleteTopic(topic)}
                                 >
                                   ×
                                 </Button>
@@ -4142,6 +4166,28 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
           attachment={materialPreview.attachment}
           kind={materialPreview.kind}
           onClose={() => setMaterialPreview(null)}
+        />
+      )}
+
+      {pendingDeleteTopic !== null && (
+        <TypedConfirmDialog
+          title={strings.study.topics.deleteDialog.title}
+          name={pendingDeleteTopic.name}
+          warning={strings.study.topics.deleteDialog.warning}
+          confirmLabel={strings.study.topics.deleteDialog.confirmLabel}
+          confirmPlaceholder={strings.study.topics.deleteDialog.confirmPlaceholder}
+          confirmValue={pendingDeleteTopic.name}
+          submitLabel={strings.study.topics.deleteDialog.submit}
+          cancelLabel={strings.study.topics.deleteDialog.cancel}
+          danger
+          onConfirm={() => {
+            const topic = pendingDeleteTopic;
+            setPendingDeleteTopic(null);
+            void mutateTopics(topic.examId, () =>
+              window.nexus.deleteExamTopic(profileId, topic.id),
+            );
+          }}
+          onCancel={() => setPendingDeleteTopic(null)}
         />
       )}
 
