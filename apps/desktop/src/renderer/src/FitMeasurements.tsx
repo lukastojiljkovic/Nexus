@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { Button, Chip, EmptyState, ListRow, LoadingState, TextField } from "@nexus/ui";
+import { Button, Chip, EmptyState, ListRow, LoadingState, Select, TextField } from "@nexus/ui";
 import {
   ACTIVITY_LEVELS,
   BODY_WEIGHT_MIN_SAMPLES,
@@ -348,20 +348,18 @@ export function FitMeasurements({ profileId }: FitMeasurementsProps) {
         <div className="fit__heading">{s.profile.heading}</div>
         <p className="fit__note">{s.profile.caption}</p>
         <form className="fit__form" onSubmit={(event) => void saveProfile(event)}>
-          <label className="fit__field">
-            <span className="fit__field-label">{s.profile.sexLabel}</span>
-            <select
-              className="fit__select"
-              value={profileDraft.sex}
-              onChange={(event) =>
-                setProfileDraft({ ...profileDraft, sex: event.target.value as BodySex | "" })
-              }
-            >
-              <option value="">{s.profile.sexNone}</option>
-              <option value="male">{s.profile.sexMale}</option>
-              <option value="female">{s.profile.sexFemale}</option>
-            </select>
-          </label>
+          <Select
+            label={s.profile.sexLabel}
+            className="fit__select"
+            value={profileDraft.sex}
+            onChange={(event) =>
+            setProfileDraft({ ...profileDraft, sex: event.target.value as BodySex | "" })
+            }
+          >
+            <option value="">{s.profile.sexNone}</option>
+            <option value="male">{s.profile.sexMale}</option>
+            <option value="female">{s.profile.sexFemale}</option>
+          </Select>
           <TextField
             label={s.profile.birthLabel}
             type="date"
@@ -378,22 +376,20 @@ export function FitMeasurements({ profileId }: FitMeasurementsProps) {
             className="fit__set-field"
             onChange={(event) => setProfileDraft({ ...profileDraft, heightCm: event.target.value })}
           />
-          <label className="fit__field">
-            <span className="fit__field-label">{s.profile.activityLabel}</span>
-            <select
-              className="fit__select"
-              value={profileDraft.activity}
-              onChange={(event) =>
-                setProfileDraft({ ...profileDraft, activity: event.target.value as ActivityLevel })
-              }
-            >
-              {ACTIVITY_LEVELS.map((level) => (
-                <option key={level} value={level}>
-                  {s.profile.activity[level]}
-                </option>
-              ))}
-            </select>
-          </label>
+          <Select
+            label={s.profile.activityLabel}
+            className="fit__select"
+            value={profileDraft.activity}
+            onChange={(event) =>
+            setProfileDraft({ ...profileDraft, activity: event.target.value as ActivityLevel })
+            }
+          >
+            {ACTIVITY_LEVELS.map((level) => (
+              <option key={level} value={level}>
+                {s.profile.activity[level]}
+              </option>
+            ))}
+          </Select>
           <span className="fit__field-hint">{s.profile.activityHint}</span>
           {profileError !== null && (
             <p className="fit__error" role="alert">
@@ -515,20 +511,18 @@ export function FitMeasurements({ profileId }: FitMeasurementsProps) {
         <section className="fit__section" aria-label={s.suggest.heading}>
           <div className="fit__heading">{s.suggest.heading}</div>
           <div className="fit__start">
-            <label className="fit__field">
-              <span className="fit__field-label">{s.suggest.goalLabel}</span>
-              <select
-                className="fit__select"
-                value={goal}
-                onChange={(event) => setGoal(event.target.value as WeightGoal)}
-              >
-                {WEIGHT_GOALS.map((option) => (
-                  <option key={option} value={option}>
-                    {s.suggest.goal[option]}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <Select
+              label={s.suggest.goalLabel}
+              className="fit__select"
+              value={goal}
+              onChange={(event) => setGoal(event.target.value as WeightGoal)}
+            >
+              {WEIGHT_GOALS.map((option) => (
+                <option key={option} value={option}>
+                  {s.suggest.goal[option]}
+                </option>
+              ))}
+            </Select>
             {goal !== "maintain" && (
               <TextField
                 label={s.suggest.rateLabel}
@@ -600,19 +594,17 @@ export function FitMeasurements({ profileId }: FitMeasurementsProps) {
               className="fit__set-field"
               onChange={(event) => setEntry({ ...entry, muscleValue: event.target.value })}
             />
-            <label className="fit__field">
-              <span className="fit__field-label">{s.entry.muscleUnitLabel}</span>
-              <select
-                className="fit__select"
-                value={entry.muscleUnit}
-                onChange={(event) =>
-                  setEntry({ ...entry, muscleUnit: event.target.value as "percent" | "kg" })
-                }
-              >
-                <option value="percent">{s.entry.muscleUnitPercent}</option>
-                <option value="kg">{s.entry.muscleUnitKg}</option>
-              </select>
-            </label>
+            <Select
+              label={s.entry.muscleUnitLabel}
+              className="fit__select"
+              value={entry.muscleUnit}
+              onChange={(event) =>
+              setEntry({ ...entry, muscleUnit: event.target.value as "percent" | "kg" })
+              }
+            >
+              <option value="percent">{s.entry.muscleUnitPercent}</option>
+              <option value="kg">{s.entry.muscleUnitKg}</option>
+            </Select>
           </div>
           <span className="fit__field-hint">{s.entry.muscleHint}</span>
 

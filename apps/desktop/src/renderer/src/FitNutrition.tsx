@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { Button, Chip, EmptyState, ListRow, LoadingState, TextField } from "@nexus/ui";
+import { Button, Chip, EmptyState, ListRow, LoadingState, Select, TextField } from "@nexus/ui";
 import { FOOD_CATEGORIES, macrosFor } from "@nexus/core";
 import {
   FIT_MEAL_SLOTS,
@@ -1007,20 +1007,18 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
           onChange={(event) => setNameDraft(event.target.value)}
         />
 
-        <label className="fit__field">
-          <span className="fit__field-label">{f.categoryLabel}</span>
-          <select
-            className="fit__select"
-            value={categoryDraft}
-            onChange={(event) => setCategoryDraft(event.target.value as FoodCategory)}
-          >
-            {FOOD_CATEGORIES.map((category) => (
-              <option key={category} value={category}>
-                {s.category[category]}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Select
+          label={f.categoryLabel}
+          className="fit__select"
+          value={categoryDraft}
+          onChange={(event) => setCategoryDraft(event.target.value as FoodCategory)}
+        >
+          {FOOD_CATEGORIES.map((category) => (
+            <option key={category} value={category}>
+              {s.category[category]}
+            </option>
+          ))}
+        </Select>
 
         <span className="fit__field-label">{f.macrosLabel}</span>
         <div className="fit__macro-grid">

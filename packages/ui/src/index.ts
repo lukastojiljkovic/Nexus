@@ -4,6 +4,7 @@ export { Chip, type ChipProps } from "./components/Chip.js";
 export { Card, type CardProps } from "./components/Card.js";
 export { NavItem, type NavItemProps } from "./components/NavItem.js";
 export { TextField, type TextFieldProps } from "./components/TextField.js";
+export { Select, type SelectProps } from "./components/Select.js";
 export { EmptyState, type EmptyStateProps } from "./components/EmptyState.js";
 export { LoadingState, type LoadingStateProps } from "./components/LoadingState.js";
 export { PageHeader, type PageHeaderProps } from "./components/PageHeader.js";

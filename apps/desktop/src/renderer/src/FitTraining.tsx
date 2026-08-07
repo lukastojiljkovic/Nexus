@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { Button, Chip, EmptyState, ListRow, LoadingState, TextField } from "@nexus/ui";
+import { Button, Chip, EmptyState, ListRow, LoadingState, Select, TextField } from "@nexus/ui";
 import { SET_KINDS } from "@nexus/core";
 import { clockText } from "../../shared/duration.js";
 import { MAX_FIT_WORKOUT_NOTES_LENGTH } from "../../shared/ipc.js";
@@ -831,20 +831,18 @@ function ExerciseCard({
         <p className="fit__note">{s.routines.missingExercise}</p>
       ) : (
         <div className="fit__logform">
-          <label className="fit__field">
-            <span className="fit__field-label">{s.set.kindLabel}</span>
-            <select
-              className="fit__select"
-              value={draft.kind}
-              onChange={(event) => onDraft({ ...draft, kind: event.target.value as SetKind })}
-            >
-              {SET_KINDS.map((kind) => (
-                <option key={kind} value={kind}>
-                  {s.set.kind[kind]}
-                </option>
-              ))}
-            </select>
-          </label>
+          <Select
+            label={s.set.kindLabel}
+            className="fit__select"
+            value={draft.kind}
+            onChange={(event) => onDraft({ ...draft, kind: event.target.value as SetKind })}
+          >
+            {SET_KINDS.map((kind) => (
+              <option key={kind} value={kind}>
+                {s.set.kind[kind]}
+              </option>
+            ))}
+          </Select>
           <SetFields
             metric={exercise.metric}
             draft={draft}

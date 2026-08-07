@@ -18,6 +18,7 @@ import {
   ListRow,
   ListView,
   NavItem,
+  Select,
   TextField,
 } from "@nexus/ui";
 import type {
@@ -225,6 +226,27 @@ function ThemePanel({ theme, label }: { theme: ThemeName; label: string }) {
           <TextField label="Naziv zadatka" placeholder="npr. Kombinatorika — 12 kartica" />
           <TextField label="Rok" defaultValue="12.07." />
           <TextField placeholder="Pretraži…  (Ctrl+K)" aria-label="Pretraga" />
+        </div>
+      </Section>
+
+      {/* A select CANNOT ship unlabelled here: `label` is required and rendered,
+          so the visible name and the accessible name are the same string. Both
+          layouts are labelled — stacked for a form, inline for a controls row. */}
+      <Section title="Select (oznaka je obavezna)">
+        <div className="gallery__form">
+          <Select label="Kategorija" defaultValue="mahunarke">
+            <option value="povrce">Povrće</option>
+            <option value="mahunarke">Mahunarke</option>
+            <option value="meso">Meso</option>
+          </Select>
+          <Select label="Redosled" layout="inline" defaultValue="rok">
+            <option value="rucno">Ručno</option>
+            <option value="rok">Rok ↑</option>
+            <option value="prioritet">Prioritet ↓</option>
+          </Select>
+          <Select label="Status" layout="inline" disabled defaultValue="sve">
+            <option value="sve">Svi</option>
+          </Select>
         </div>
       </Section>
 

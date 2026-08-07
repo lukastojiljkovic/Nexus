@@ -12,6 +12,7 @@ import {
   ListRow,
   ListView,
   PageHeader,
+  Select,
   TextField,
 } from "@nexus/ui";
 import {
@@ -4290,10 +4291,11 @@ className="nx-segmented__option tasks__view"
             {/* The calendar's order IS the calendar, so it is the one view with
                 no sort to offer — and an inert select would be worse than none. */}
             {view !== "calendar" && (
-              <select
+              <Select
+                label={strings.tasks.controls.sortLabel}
+                layout="inline"
                 className="tasks__select"
                 value={sortValue(activeSort)}
-                aria-label={strings.tasks.controls.sortLabel}
                 onChange={(event) => setActiveSort(parseSortValue(event.target.value))}
               >
                 <option value="">{strings.tasks.controls.sortManual}</option>
@@ -4304,14 +4306,15 @@ className="nx-segmented__option tasks__view"
                     </option>
                   )),
                 )}
-              </select>
+              </Select>
             )}
 
             {view === "kanban" && (
-              <select
+              <Select
+                label={strings.tasks.controls.groupLabel}
+                layout="inline"
                 className="tasks__select"
                 value={kanbanGroupBy}
-                aria-label={strings.tasks.controls.groupLabel}
                 onChange={(event) => setKanbanGroupBy(asKanbanGroup(event.target.value))}
               >
                 {TASK_VIEW_KANBAN_GROUPS.map((option) => (
@@ -4319,7 +4322,7 @@ className="nx-segmented__option tasks__view"
                     {strings.tasks.controls.group[option]}
                   </option>
                 ))}
-              </select>
+              </Select>
             )}
 
             {/* „Kolone“ (ADR-060): one row per column of the CURRENT grouping,
@@ -4401,10 +4404,11 @@ className="nx-segmented__option tasks__view"
               </span>
             )}
 
-            <select
+            <Select
+              label={strings.tasks.controls.statusLabel}
+              layout="inline"
               className="tasks__select"
               value={activeFilters.status ?? ""}
-              aria-label={strings.tasks.controls.statusLabel}
               onChange={(event) => {
                 const next: TaskViewFilters = { ...activeFilters };
                 const status = asFilterStatus(event.target.value);
@@ -4419,12 +4423,13 @@ className="nx-segmented__option tasks__view"
                   {strings.tasks.status[option]}
                 </option>
               ))}
-            </select>
+            </Select>
 
-            <select
+            <Select
+              label={strings.tasks.controls.priorityLabel}
+              layout="inline"
               className="tasks__select"
               value={activeFilters.priority ?? ""}
-              aria-label={strings.tasks.controls.priorityLabel}
               onChange={(event) => {
                 const next: TaskViewFilters = { ...activeFilters };
                 const priority = asFilterPriority(event.target.value);
@@ -4439,7 +4444,7 @@ className="nx-segmented__option tasks__view"
                   {strings.tasks.priority[option]}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         )}
 

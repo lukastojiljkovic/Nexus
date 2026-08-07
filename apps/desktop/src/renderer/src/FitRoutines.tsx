@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { Button, Chip, EmptyState, ListRow, TextField } from "@nexus/ui";
+import { Button, Chip, EmptyState, ListRow, Select, TextField } from "@nexus/ui";
 import {
   EXERCISE_EQUIPMENT,
   EXERCISE_METRICS,
@@ -506,59 +506,53 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
           )}
         </div>
 
-        <label className="fit__field">
-          <span className="fit__field-label">{f.equipmentLabel}</span>
-          <select
-            className="fit__select"
-            value={exerciseForm.equipment}
-            onChange={(event) =>
-              setExerciseForm({
-                ...exerciseForm,
-                equipment: event.target.value as ExerciseEquipment,
-              })
-            }
-          >
-            {EXERCISE_EQUIPMENT.map((equipment) => (
-              <option key={equipment} value={equipment}>
-                {s.equipment[equipment]}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Select
+          label={f.equipmentLabel}
+          className="fit__select"
+          value={exerciseForm.equipment}
+          onChange={(event) =>
+          setExerciseForm({
+          ...exerciseForm,
+          equipment: event.target.value as ExerciseEquipment,
+          })
+          }
+        >
+          {EXERCISE_EQUIPMENT.map((equipment) => (
+            <option key={equipment} value={equipment}>
+              {s.equipment[equipment]}
+            </option>
+          ))}
+        </Select>
 
-        <label className="fit__field">
-          <span className="fit__field-label">{f.patternLabel}</span>
-          <select
-            className="fit__select"
-            value={exerciseForm.pattern}
-            onChange={(event) =>
-              setExerciseForm({ ...exerciseForm, pattern: event.target.value as MovementPattern })
-            }
-          >
-            {MOVEMENT_PATTERNS.map((pattern) => (
-              <option key={pattern} value={pattern}>
-                {s.pattern[pattern]}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Select
+          label={f.patternLabel}
+          className="fit__select"
+          value={exerciseForm.pattern}
+          onChange={(event) =>
+          setExerciseForm({ ...exerciseForm, pattern: event.target.value as MovementPattern })
+          }
+        >
+          {MOVEMENT_PATTERNS.map((pattern) => (
+            <option key={pattern} value={pattern}>
+              {s.pattern[pattern]}
+            </option>
+          ))}
+        </Select>
 
-        <label className="fit__field">
-          <span className="fit__field-label">{f.metricLabel}</span>
-          <select
-            className="fit__select"
-            value={exerciseForm.metric}
-            onChange={(event) =>
-              setExerciseForm({ ...exerciseForm, metric: event.target.value as ExerciseMetric })
-            }
-          >
-            {EXERCISE_METRICS.map((metric) => (
-              <option key={metric} value={metric}>
-                {s.metric[metric]}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Select
+          label={f.metricLabel}
+          className="fit__select"
+          value={exerciseForm.metric}
+          onChange={(event) =>
+          setExerciseForm({ ...exerciseForm, metric: event.target.value as ExerciseMetric })
+          }
+        >
+          {EXERCISE_METRICS.map((metric) => (
+            <option key={metric} value={metric}>
+              {s.metric[metric]}
+            </option>
+          ))}
+        </Select>
         <span className="fit__field-hint">{f.metricHint}</span>
 
         <label className="fit__checkline">
