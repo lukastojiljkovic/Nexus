@@ -204,8 +204,12 @@ export type {
 export {
   EXERCISE_EQUIPMENT,
   EXERCISE_METRICS,
+  exerciseRefText,
+  MAX_EXERCISE_REF_LENGTH,
   MOVEMENT_PATTERNS,
   MUSCLE_GROUPS,
+  parseExerciseRef,
+  searchExercises,
   validateExerciseEntry,
 } from "./fitness/exercise.js";
 export type {
@@ -214,6 +218,7 @@ export type {
   ExerciseEquipment,
   ExerciseMetric,
   ExerciseProblemCode,
+  ExerciseRef,
   MovementPattern,
   MuscleGroup,
 } from "./fitness/exercise.js";

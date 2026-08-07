@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3-multiple-ciphers";
-import { EXERCISE_METRICS, MUSCLE_GROUPS, SET_KINDS } from "@nexus/core";
+import { EXERCISE_METRICS, MAX_EXERCISE_REF_LENGTH, MUSCLE_GROUPS, SET_KINDS, parseExerciseRef } from "@nexus/core";
 import type { ExerciseMetric, MuscleGroup, SetKind } from "@nexus/core";
 import { FitSetNotFoundError, FitWorkoutNotFoundError, FitWorkoutValidationError, isUniqueConstraintViolation } from "../errors.js";
 import { uuidv7 } from "../ids.js";
@@ -8,8 +8,6 @@ import { isBareDate, isDateTime } from "../finance/money.js";
 
 type DatabaseHandle = Database.Database;
 
-const EXERCISE_REF_RE = /^(catalogue|user):.+$/;
-const MAX_EXERCISE_REF_LENGTH = 200;
 const MAX_ROUTINE_REF_LENGTH = 200;
 const MAX_ROUTINE_LABEL_LENGTH = 80;
 const MAX_WORKOUT_NOTES_LENGTH = 500;
@@ -653,15 +651,11 @@ function validateNotes(value: string): string {
   return value;
 }
 
+/** `@nexus/core`'s grammar, never a second one — see `FitRoutineStore`'s own `validateExerciseRef` for why that matters. */
 function validateExerciseRef(value: string): string {
-  if (
-    typeof value !== "string" ||
-    value.length === 0 ||
-    value.length > MAX_EXERCISE_REF_LENGTH ||
-    !EXERCISE_REF_RE.test(value)
-  ) {
+  if (typeof value !== "string" || parseExerciseRef(value) === null) {
     throw new FitWorkoutValidationError(
-      `"exerciseRef" must be "catalogue:<id>" or "user:<id>", at most ${MAX_EXERCISE_REF_LENGTH} characters.`,
+      `"exerciseRef" must be "catalogue:<slug>" or "user:<id>", at most ${MAX_EXERCISE_REF_LENGTH} characters.`,
     );
   }
   return value;

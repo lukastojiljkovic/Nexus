@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3-multiple-ciphers";
+import { MAX_EXERCISE_REF_LENGTH, parseExerciseRef } from "@nexus/core";
 import { FitRoutineNotFoundError, FitRoutineValidationError } from "../errors.js";
 import { uuidv7 } from "../ids.js";
 import { isDateTime } from "../finance/money.js";
@@ -11,9 +12,6 @@ export const MAX_FIT_ROUTINE_ITEM_LABEL_LENGTH = 80;
 /** Past this many exercises a routine stops being a shape somebody warms up and reads off, and starts being a spreadsheet. */
 export const MAX_FIT_ROUTINE_ITEMS = 60;
 
-/** `catalogue:<id>` or `user:<uuid>` — `parseFoodRef`'s grammar, restated for FIT training's own reference (a routine item names a row that may not be a row at all). */
-const EXERCISE_REF_RE = /^(catalogue|user):.+$/;
-const MAX_EXERCISE_REF_LENGTH = 200;
 
 const FIT_COLLATOR = new Intl.Collator(["sr-Latn", "sr"]);
 
@@ -327,15 +325,17 @@ function validateItem(item: FitRoutineItemInput, index: number): ValidatedItem {
   return { exerciseRef, label, targetSets, targetRepsMin, targetRepsMax };
 }
 
+/**
+ * `@nexus/core`'s grammar, never a second one. The store that WRITES a
+ * reference, the IPC boundary that RECEIVES one from an untrusted renderer and
+ * the interchange reader that RE-VALIDATES one on import have to agree on what
+ * a legal reference is; three regexes is three chances to disagree, and the
+ * disagreement shows up as a routine that silently points at nothing.
+ */
 function validateExerciseRef(value: string, index: number): string {
-  if (
-    typeof value !== "string" ||
-    value.length === 0 ||
-    value.length > MAX_EXERCISE_REF_LENGTH ||
-    !EXERCISE_REF_RE.test(value)
-  ) {
+  if (typeof value !== "string" || parseExerciseRef(value) === null) {
     throw new FitRoutineValidationError(
-      `"items[${index}].exerciseRef" must be "catalogue:<id>" or "user:<id>", at most ${MAX_EXERCISE_REF_LENGTH} characters.`,
+      `"items[${index}].exerciseRef" must be "catalogue:<slug>" or "user:<id>", at most ${MAX_EXERCISE_REF_LENGTH} characters.`,
     );
   }
   return value;

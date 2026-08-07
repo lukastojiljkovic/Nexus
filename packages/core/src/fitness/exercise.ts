@@ -35,6 +35,8 @@
  * Nothing here reads a clock, touches a DOM or imports `node:` anything.
  */
 
+import { foldSearchText } from "../search/searchText.js";
+
 /**
  * The muscles an exercise can be attributed to. Serbian keys, for `food.ts`'s
  * reason: they are DATA in a Serbian dataset rather than copy, and an English
@@ -388,3 +390,107 @@ function muscleListProblems(
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+
+/**
+ * How a stored row points at an exercise — `catalogue:<slug>` for one the app
+ * ships, `user:<uuid>` for one the profile added.
+ *
+ * `FoodRef`'s grammar, one table over and for its reason: the store that writes
+ * `fit_routine_items.exercise_ref` and `fit_workout_sets.exercise_ref`, the IPC
+ * boundary that receives one from an untrusted renderer, and the interchange
+ * reader that re-validates one on import must all agree on what a legal
+ * reference IS. Three copies of a regex is three chances to disagree, and the
+ * disagreement would show up as a routine that silently points at nothing.
+ *
+ * Deliberately NOT `FoodRef` itself: a food reference and an exercise reference
+ * resolve against different catalogues, and a type that admitted both would let
+ * a food id be written into a set.
+ */
+export type ExerciseRef =
+  | { readonly kind: "catalogue"; readonly id: string }
+  | { readonly kind: "user"; readonly id: string };
+
+/** Longest reference this grammar admits — a bound on an untrusted string that goes into an indexed column. */
+export const MAX_EXERCISE_REF_LENGTH = 80;
+
+/** A user exercise's id is a UUIDv7 as `@nexus/db` mints them; the class is wider than that and still narrow enough to be a token. */
+const USER_EXERCISE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+/** The text an `exercise_ref` column holds. The ONE place that spelling is decided. */
+export function exerciseRefText(ref: ExerciseRef): string {
+  return `${ref.kind}:${ref.id}`;
+}
+
+/**
+ * Reads a stored or transmitted reference, or null when it is not one. Each
+ * half is checked by the rules its own side uses — a `catalogue:` id must be a
+ * real catalogue slug — so a reference that could never resolve is refused
+ * where it ENTERS rather than where it is read.
+ */
+export function parseExerciseRef(text: string): ExerciseRef | null {
+  if (text.length > MAX_EXERCISE_REF_LENGTH) return null;
+  const separator = text.indexOf(":");
+  if (separator <= 0) return null;
+  const id = text.slice(separator + 1);
+  switch (text.slice(0, separator)) {
+    case "catalogue":
+      return EXERCISE_ID_RE.test(id) ? { kind: "catalogue", id } : null;
+    case "user":
+      return USER_EXERCISE_ID_RE.test(id) ? { kind: "user", id } : null;
+    default:
+      return null;
+  }
+}
+
+/**
+ * One ranked list over a pool assembled from BOTH sources — the shipped
+ * catalogue and the profile's own exercises — exactly as `searchFoods` is, and
+ * for its reason: two lists merged by the caller would be a second definition
+ * of „best match".
+ *
+ * **Both names are searched, and that is the point.** „RDL", „hip thrust" and
+ * „good morning" are what the lifting world writes, and a Serb reaching for
+ * their exercise types whichever comes to hand first. The Serbian name is what
+ * gets DISPLAYED; the English one only has to be findable.
+ *
+ * Prefix beats substring, Serbian name beats English, then sr-Latn
+ * alphabetical, then `id` so the order is TOTAL. A blank query answers nothing
+ * rather than everything.
+ */
+export function searchExercises<T extends { readonly id: string; readonly name: string; readonly nameEn: string }>(
+  entries: readonly T[],
+  query: string,
+  limit: number,
+): readonly T[] {
+  const needle = foldSearchText(query.trim());
+  const cap = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0;
+  if (needle.length === 0 || cap === 0) return [];
+
+  const hits: { entry: T; rank: number }[] = [];
+  for (const entry of entries) {
+    const rank = exerciseMatchRank(entry.name, entry.nameEn, needle);
+    if (rank !== null) hits.push({ entry, rank });
+  }
+  hits.sort(
+    (a, b) =>
+      a.rank - b.rank ||
+      EXERCISE_COLLATOR.compare(a.entry.name, b.entry.name) ||
+      a.entry.id.localeCompare(b.entry.id),
+  );
+  return hits.slice(0, cap).map((hit) => hit.entry);
+}
+
+/** Serbian prefix < Serbian substring < English prefix < English substring; `null` for no match at all. */
+function exerciseMatchRank(name: string, nameEn: string, needle: string): number | null {
+  const sr = foldSearchText(name);
+  if (sr.startsWith(needle)) return 0;
+  if (sr.includes(needle)) return 1;
+  const en = foldSearchText(nameEn);
+  if (en.length === 0) return null;
+  if (en.startsWith(needle)) return 2;
+  if (en.includes(needle)) return 3;
+  return null;
+}
+
+/** sr-Latn, the app's one collator spelling — plain "sr" mis-tailors š/č/ć/ž. */
+const EXERCISE_COLLATOR = new Intl.Collator(["sr-Latn", "sr"]);

@@ -2,8 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   EXERCISE_EQUIPMENT,
   EXERCISE_METRICS,
+  exerciseRefText,
+  MAX_EXERCISE_REF_LENGTH,
   MOVEMENT_PATTERNS,
   MUSCLE_GROUPS,
+  parseExerciseRef,
+  searchExercises,
   validateExerciseEntry,
 } from "./exercise.js";
 import type { ExerciseEntry } from "./exercise.js";
@@ -159,5 +163,78 @@ describe("validateExerciseEntry — bodyweight is never weight_reps", () => {
     expect(codes({ ...BENCH, equipment: "sopstvena-tezina", metric: "kg-x-reps" })).toEqual([
       "metric:metric",
     ]);
+  });
+});
+
+describe("exerciseRefText / parseExerciseRef", () => {
+  it("round-trips both kinds", () => {
+    expect(exerciseRefText({ kind: "catalogue", id: "potisak-sa-klupe" })).toBe(
+      "catalogue:potisak-sa-klupe",
+    );
+    expect(parseExerciseRef("catalogue:potisak-sa-klupe")).toEqual({
+      kind: "catalogue",
+      id: "potisak-sa-klupe",
+    });
+    expect(parseExerciseRef("user:0191f2c0-1234-7abc-8def-0123456789ab")).toEqual({
+      kind: "user",
+      id: "0191f2c0-1234-7abc-8def-0123456789ab",
+    });
+  });
+
+  it("refuses a catalogue id that is not a catalogue slug", () => {
+    // The half is checked by the rules ITS side uses, so a reference that could
+    // never resolve is refused where it enters rather than where it is read.
+    expect(parseExerciseRef("catalogue:Potisak Sa Klupe")).toBeNull();
+    expect(parseExerciseRef("catalogue:")).toBeNull();
+    expect(parseExerciseRef("catalogue:-leading")).toBeNull();
+  });
+
+  it("refuses an unknown kind, a missing separator and an over-long reference", () => {
+    expect(parseExerciseRef("shipped:potisak")).toBeNull();
+    expect(parseExerciseRef("potisak-sa-klupe")).toBeNull();
+    expect(parseExerciseRef(":potisak")).toBeNull();
+    expect(parseExerciseRef(`user:${"a".repeat(MAX_EXERCISE_REF_LENGTH)}`)).toBeNull();
+  });
+});
+
+describe("searchExercises", () => {
+  const pool = [
+    { id: "a", name: "Mrtvo dizanje", nameEn: "Deadlift" },
+    { id: "b", name: "Rumunsko mrtvo dizanje", nameEn: "Romanian deadlift" },
+    { id: "c", name: "Potisak kukovima", nameEn: "Hip thrust" },
+    { id: "d", name: "Sklekovi", nameEn: "" },
+  ];
+
+  it("ranks a Serbian prefix above a Serbian substring", () => {
+    expect(searchExercises(pool, "mrtvo", 10).map((e) => e.id)).toEqual(["a", "b"]);
+  });
+
+  it("finds the English name, which is what the lifting world writes", () => {
+    expect(searchExercises(pool, "hip thrust", 10).map((e) => e.id)).toEqual(["c"]);
+    expect(searchExercises(pool, "deadlift", 10).map((e) => e.id)).toEqual(["a", "b"]);
+  });
+
+  it("puts a Serbian match ahead of an English one", () => {
+    // „Potisak" is Serbian for c and appears nowhere in a's or b's Serbian name.
+    expect(searchExercises(pool, "potisak", 10).map((e) => e.id)).toEqual(["c"]);
+  });
+
+  it("folds Serbian diacritics the way the rest of the app does", () => {
+    const withDiacritics = [{ id: "e", name: "Čučanj", nameEn: "Squat" }];
+    expect(searchExercises(withDiacritics, "cucanj", 10).map((e) => e.id)).toEqual(["e"]);
+  });
+
+  it("answers nothing for a blank query or a zero limit", () => {
+    expect(searchExercises(pool, "   ", 10)).toEqual([]);
+    expect(searchExercises(pool, "mrtvo", 0)).toEqual([]);
+  });
+
+  it("caps at the limit", () => {
+    expect(searchExercises(pool, "dizanje", 1)).toHaveLength(1);
+  });
+
+  it("ignores an empty English name rather than matching everything against it", () => {
+    expect(searchExercises(pool, "", 10)).toEqual([]);
+    expect(searchExercises(pool, "squat", 10)).toEqual([]);
   });
 });
