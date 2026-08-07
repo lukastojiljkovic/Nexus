@@ -71,11 +71,17 @@ function formatNoteDate(iso: string): string {
     : new Intl.DateTimeFormat("sr-Latn", { day: "2-digit", month: "short" }).format(date);
 }
 
-/** The two shapes the middle pane can draw, in toggle order (NOTE-002). */
-const VIEW_OPTIONS: readonly { value: NoteFolderView; label: string }[] = [
-  { value: "list", label: strings.notes.viewNames.list },
-  { value: "cards", label: strings.notes.viewNames.cards },
-];
+/**
+ * The two shapes the middle pane can draw, in toggle order (NOTE-002). A
+ * function, not a module-scope const, so a language switch relabels the
+ * toggle the next time it renders instead of freezing it at import.
+ */
+function viewOptions(): readonly { value: NoteFolderView; label: string }[] {
+  return [
+    { value: "list", label: strings.notes.viewNames.list },
+    { value: "cards", label: strings.notes.viewNames.cards },
+  ];
+}
 
 /**
  * `NoteMeta` through a structurally identical mapped type — `CardsView`'s bound
@@ -1043,7 +1049,7 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
               still a folder whose shape can be set. */}
           <div className="note__list-head">
             <div className="note__views" role="group" aria-label={strings.notes.viewLabel}>
-              {VIEW_OPTIONS.map(({ value, label }) => (
+              {viewOptions().map(({ value, label }) => (
                 <Button
                   key={value}
                   size="sm"

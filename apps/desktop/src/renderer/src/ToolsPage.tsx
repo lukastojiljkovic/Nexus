@@ -28,8 +28,6 @@ import { moduleName } from "./moduleName.js";
  * typing to find the next one never clears the answer you are still reading.
  */
 
-const s = strings.tools;
-
 /**
  * A `titleKey` resolved against `strings` — the same dotted-path lookup
  * `modules.test.ts` pins for widget titles. A path is used rather than a direct
@@ -56,6 +54,9 @@ export interface ToolsPageProps {
 }
 
 export function ToolsPage({ enabledModules }: ToolsPageProps) {
+  // Read on every render, not at module scope, so a language switch relabels
+  // the drawer instead of freezing it at import.
+  const s = strings.tools;
   const tools = useMemo<SearchableTool[]>(() => {
     const registry = createModuleRegistry();
     return registry

@@ -31,12 +31,16 @@ import { strings } from "./strings.js";
  * `strings.ts`. `role="note"` + this name is what carries the distinction to
  * a screen reader instead.
  */
-const CALLOUT_ARIA_LABELS: Record<CalloutVariant, string> = {
-  info: strings.notes.callout.info,
-  tip: strings.notes.callout.tip,
-  warning: strings.notes.callout.warning,
-  danger: strings.notes.callout.danger,
-};
+// A function, not a module-scope const, so a language switch relabels the
+// block the next time it is rendered instead of freezing it at import.
+function calloutAriaLabels(): Record<CalloutVariant, string> {
+  return {
+    info: strings.notes.callout.info,
+    tip: strings.notes.callout.tip,
+    warning: strings.notes.callout.warning,
+    danger: strings.notes.callout.danger,
+  };
+}
 
 export const Callout = Node.create({
   name: "callout",
@@ -70,7 +74,7 @@ export const Callout = Node.create({
       mergeAttributes(HTMLAttributes, {
         "data-callout": "",
         role: "note",
-        "aria-label": CALLOUT_ARIA_LABELS[variant],
+        "aria-label": calloutAriaLabels()[variant],
       }),
       0,
     ];

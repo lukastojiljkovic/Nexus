@@ -50,83 +50,120 @@ interface SlashItem {
  * one — and re-running the row that is already active lifts the block out,
  * exactly as re-running „Citat" does.
  */
-const CALLOUT_SLASH_LABELS: Record<CalloutVariant, string> = {
-  info: strings.notes.slash.calloutInfo,
-  tip: strings.notes.slash.calloutTip,
-  warning: strings.notes.slash.calloutWarning,
-  danger: strings.notes.slash.calloutDanger,
-};
+// A function, not a module-scope const, so a language switch relabels these
+// entries the next time the menu opens instead of freezing them at import.
+function calloutSlashLabels(): Record<CalloutVariant, string> {
+  return {
+    info: strings.notes.slash.calloutInfo,
+    tip: strings.notes.slash.calloutTip,
+    warning: strings.notes.slash.calloutWarning,
+    danger: strings.notes.slash.calloutDanger,
+  };
+}
 
 const CALLOUT_ITEMS: readonly SlashItem[] = CALLOUT_VARIANTS.map((variant) => ({
   key: `callout:${variant}`,
-  label: CALLOUT_SLASH_LABELS[variant],
+  // Getter, not a captured field: re-reads the label on every open, so the
+  // item list itself never needs to be rebuilt on a language switch.
+  get label() {
+    return calloutSlashLabels()[variant];
+  },
   run: (editor: Editor, range: Range) => applyCallout(editor, range, variant),
 }));
 
-/** The v1 command set, in menu order (ADR-012). Each deletes `/query` first. */
+/**
+ * The v1 command set, in menu order (ADR-012). Each deletes `/query` first.
+ * `label` is a getter on every entry, not a captured field — this array is
+ * built once at import, so a plain field would freeze the Serbian label
+ * forever; the getter re-reads `strings` on every menu open instead.
+ */
 const SLASH_ITEMS: readonly SlashItem[] = [
   {
     key: "paragraph",
-    label: strings.notes.slash.paragraph,
+    get label() {
+      return strings.notes.slash.paragraph;
+    },
     run: (editor, range) => editor.chain().focus().deleteRange(range).setParagraph().run(),
   },
   {
     key: "heading1",
-    label: strings.notes.slash.heading1,
+    get label() {
+      return strings.notes.slash.heading1;
+    },
     run: (editor, range) =>
       editor.chain().focus().deleteRange(range).setNode("heading", { level: 1 }).run(),
   },
   {
     key: "heading2",
-    label: strings.notes.slash.heading2,
+    get label() {
+      return strings.notes.slash.heading2;
+    },
     run: (editor, range) =>
       editor.chain().focus().deleteRange(range).setNode("heading", { level: 2 }).run(),
   },
   {
     key: "heading3",
-    label: strings.notes.slash.heading3,
+    get label() {
+      return strings.notes.slash.heading3;
+    },
     run: (editor, range) =>
       editor.chain().focus().deleteRange(range).setNode("heading", { level: 3 }).run(),
   },
   {
     key: "bulletList",
-    label: strings.notes.slash.bulletList,
+    get label() {
+      return strings.notes.slash.bulletList;
+    },
     run: (editor, range) => editor.chain().focus().deleteRange(range).toggleBulletList().run(),
   },
   {
     key: "orderedList",
-    label: strings.notes.slash.orderedList,
+    get label() {
+      return strings.notes.slash.orderedList;
+    },
     run: (editor, range) => editor.chain().focus().deleteRange(range).toggleOrderedList().run(),
   },
   {
     key: "taskList",
-    label: strings.notes.slash.taskList,
+    get label() {
+      return strings.notes.slash.taskList;
+    },
     run: (editor, range) => editor.chain().focus().deleteRange(range).toggleTaskList().run(),
   },
   {
     key: "blockquote",
-    label: strings.notes.slash.blockquote,
+    get label() {
+      return strings.notes.slash.blockquote;
+    },
     run: (editor, range) => editor.chain().focus().deleteRange(range).toggleBlockquote().run(),
   },
   {
     key: "codeBlock",
-    label: strings.notes.slash.codeBlock,
+    get label() {
+      return strings.notes.slash.codeBlock;
+    },
     run: (editor, range) => editor.chain().focus().deleteRange(range).toggleCodeBlock().run(),
   },
   {
     key: "divider",
-    label: strings.notes.slash.divider,
+    get label() {
+      return strings.notes.slash.divider;
+    },
     run: (editor, range) => editor.chain().focus().deleteRange(range).setHorizontalRule().run(),
   },
   ...CALLOUT_ITEMS,
   {
     key: "toggle",
-    label: strings.notes.slash.toggle,
+    get label() {
+      return strings.notes.slash.toggle;
+    },
     run: (editor, range) => insertToggle(editor, range),
   },
   {
     key: "tableOfContents",
-    label: strings.notes.slash.tableOfContents,
+    get label() {
+      return strings.notes.slash.tableOfContents;
+    },
     // A leaf atom with no attributes: everything it shows is derived from the
     // document's headings at render time (see `noteTableOfContents.tsx`).
     run: (editor, range) =>
@@ -134,7 +171,9 @@ const SLASH_ITEMS: readonly SlashItem[] = [
   },
   {
     key: "flashcard",
-    label: strings.notes.slash.flashcard,
+    get label() {
+      return strings.notes.slash.flashcard;
+    },
     // The scaffold is text the author types over (NOTE-006c / ADR-017) — it
     // immediately becomes a real card via `NoteFlashcard`'s key plugin.
     run: (editor, range) =>
@@ -142,7 +181,9 @@ const SLASH_ITEMS: readonly SlashItem[] = [
   },
   {
     key: "clozeBlank",
-    label: strings.notes.slash.clozeBlank,
+    get label() {
+      return strings.notes.slash.clozeBlank;
+    },
     // The `/query` goes first, as every item's does; the deletion is then
     // inserted at the caret it left behind, numbered by `insertClozeDeletion`
     // (ADR-068) — never by the author counting braces.

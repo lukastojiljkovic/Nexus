@@ -158,13 +158,19 @@ function isSortField(value: string): value is SortField {
  */
 const KANBAN_PRIORITY_COLUMNS: readonly TaskPriority[] = ["high", "medium", "low", "none"];
 
-/** The four shapes a list can open in, in toggle order (ADR-050). */
-const VIEW_OPTIONS: readonly { value: TaskListView; label: string }[] = [
-  { value: "list", label: strings.tasks.viewList },
-  { value: "kanban", label: strings.tasks.viewKanban },
-  { value: "cards", label: strings.tasks.viewCards },
-  { value: "calendar", label: strings.tasks.viewCalendar },
-];
+/**
+ * The four shapes a list can open in, in toggle order (ADR-050). A function,
+ * not a module-scope const, so a language switch relabels the toggle the
+ * next time it renders instead of freezing it at import.
+ */
+function viewOptions(): readonly { value: TaskListView; label: string }[] {
+  return [
+    { value: "list", label: strings.tasks.viewList },
+    { value: "kanban", label: strings.tasks.viewKanban },
+    { value: "cards", label: strings.tasks.viewCards },
+    { value: "calendar", label: strings.tasks.viewCalendar },
+  ];
+}
 
 /**
  * The list view carries NO sort spec UNLESS the user has picked one, and that
@@ -177,8 +183,6 @@ const VIEW_OPTIONS: readonly { value: TaskListView; label: string }[] = [
  * a drag under a sort would write a `position` nothing on screen reads.
  */
 const LIST_CONFIG: ListViewConfig = { type: "list" };
-
-const STATUS_TITLES: Record<TaskStatus, string> = strings.tasks.status;
 
 /** sr-Latn collation for the tag chips — plain "sr" mis-tailors Latin š/č/ć, and the store orders by SQLite's binary collation. */
 const collator = new Intl.Collator(["sr-Latn", "sr"]);
@@ -195,7 +199,7 @@ function asPriority(value: string): TaskPriority {
 
 /** Kanban column title for a status value; falls back to the raw value. */
 function statusTitle(value: string): string {
-  return isTaskStatus(value) ? STATUS_TITLES[value] : value;
+  return isTaskStatus(value) ? strings.tasks.status[value] : value;
 }
 
 /** The same for a priority column — the labels are presentation, the engine groups by value. */
@@ -4283,7 +4287,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                 drawn rather than drawn disabled. Four shapes since ADR-050. */}
             {smartListId === null && (
               <div className="tasks__views" role="group" aria-label={strings.tasks.viewLabel}>
-                {VIEW_OPTIONS.map(({ value, label }) => (
+                {viewOptions().map(({ value, label }) => (
                   <Button
                     key={value}
                     size="sm"

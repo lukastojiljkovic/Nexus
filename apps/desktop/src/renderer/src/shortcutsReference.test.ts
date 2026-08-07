@@ -17,7 +17,11 @@ import { strings } from "./strings.js";
  * something else.
  */
 
-const r = strings.shortcuts.reference;
+// A function, not a module-scope alias, so a language switch is reflected in
+// tests reading `r()` too — see check-string-capture.mjs.
+function r(): typeof strings.shortcuts.reference {
+  return strings.shortcuts.reference;
+}
 
 function groupById(id: string): ShortcutReferenceGroup {
   const group = SHORTCUT_REFERENCE.find((candidate) => candidate.id === id);
@@ -74,7 +78,7 @@ describe("SHORTCUT_REFERENCE", () => {
   });
 
   it("draws every description from strings.shortcuts.reference", () => {
-    const known = new Set<string>(Object.values(r));
+    const known = new Set<string>(Object.values(r()));
     for (const group of SHORTCUT_REFERENCE) {
       for (const row of group.rows) {
         expect(known.has(row.description), `${group.id}: ${row.description}`).toBe(true);
@@ -86,7 +90,7 @@ describe("SHORTCUT_REFERENCE", () => {
     const printed = SHORTCUT_REFERENCE.flatMap((group) =>
       group.rows.map((row) => row.description),
     );
-    expect([...printed].sort()).toEqual(Object.values(r).sort());
+    expect([...printed].sort()).toEqual(Object.values(r()).sort());
   });
 });
 
@@ -94,11 +98,11 @@ describe("the Zadaci group", () => {
   it("documents the Izbor mode exit, alongside the two other Esc/Enter rows", () => {
     const rows = groupById("tasks").rows;
     expect(rows.map((row) => row.description)).toEqual([
-      r.tasksSubtask,
-      r.tasksCancel,
-      r.tasksExitSelection,
+      r().tasksSubtask,
+      r().tasksCancel,
+      r().tasksExitSelection,
     ]);
-    const exitSelection = rows.find((row) => row.description === r.tasksExitSelection);
+    const exitSelection = rows.find((row) => row.description === r().tasksExitSelection);
     expect(exitSelection?.keys).toEqual(["Esc"]);
   });
 });
@@ -107,15 +111,15 @@ describe("the Beleške group", () => {
   it("documents every markdown input rule the editor answers to", () => {
     const rows = groupById("notes").rows;
     expect(rows.map((row) => row.description)).toEqual([
-      r.notesHeading,
-      r.notesBulletList,
-      r.notesOrderedList,
-      r.notesBlockquote,
-      r.notesCodeBlock,
-      r.notesSlash,
-      r.notesLink,
-      r.notesCloze,
-      r.notesHistory,
+      r().notesHeading,
+      r().notesBulletList,
+      r().notesOrderedList,
+      r().notesBlockquote,
+      r().notesCodeBlock,
+      r().notesSlash,
+      r().notesLink,
+      r().notesCloze,
+      r().notesHistory,
     ]);
   });
 
@@ -124,19 +128,19 @@ describe("the Beleške group", () => {
     // the user types — and it earns a row because a number the editor assigns
     // is not something anyone can guess from the syntax alone (ADR-068).
     const rows = groupById("notes").rows;
-    expect(rows.find((row) => row.description === r.notesCloze)?.keys).toEqual(["Ctrl+Shift+C"]);
+    expect(rows.find((row) => row.description === r().notesCloze)?.keys).toEqual(["Ctrl+Shift+C"]);
   });
 
   it("prints the markdown triggers as the characters the user types", () => {
     const keysFor = (description: string): readonly string[] =>
       groupById("notes").rows.find((row) => row.description === description)?.keys ?? [];
-    expect(keysFor(r.notesHeading)).toEqual(["#", "##", "###"]);
-    expect(keysFor(r.notesBulletList)).toEqual(["-", "*"]);
-    expect(keysFor(r.notesOrderedList)).toEqual(["1."]);
-    expect(keysFor(r.notesBlockquote)).toEqual([">"]);
-    expect(keysFor(r.notesCodeBlock)).toEqual(["```"]);
-    expect(keysFor(r.notesSlash)).toEqual(["/"]);
-    expect(keysFor(r.notesLink)).toEqual(["[["]);
+    expect(keysFor(r().notesHeading)).toEqual(["#", "##", "###"]);
+    expect(keysFor(r().notesBulletList)).toEqual(["-", "*"]);
+    expect(keysFor(r().notesOrderedList)).toEqual(["1."]);
+    expect(keysFor(r().notesBlockquote)).toEqual([">"]);
+    expect(keysFor(r().notesCodeBlock)).toEqual(["```"]);
+    expect(keysFor(r().notesSlash)).toEqual(["/"]);
+    expect(keysFor(r().notesLink)).toEqual(["[["]);
   });
 
   it("says where the markdown rules apply, rather than implying they are global", () => {
@@ -148,9 +152,9 @@ describe("the Pretraga u belešci group", () => {
   it("documents opening the bar, stepping through hits, and closing it", () => {
     const rows = groupById("notesFind").rows;
     expect(rows.map((row) => row.description)).toEqual([
-      r.notesFindOpen,
-      r.notesFindStep,
-      r.notesFindClose,
+      r().notesFindOpen,
+      r().notesFindStep,
+      r().notesFindClose,
     ]);
   });
 

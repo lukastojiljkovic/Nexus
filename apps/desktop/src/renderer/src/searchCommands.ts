@@ -57,25 +57,31 @@ export interface SearchCommandsContext {
  * enabled — a command that switched to a disabled module would be a dead end.
  * Keywords are matched through `foldSearchText`, so they are spelled already
  * folded (plain ASCII); the label carries the real Serbian orthography.
+ *
+ * A function, not a module-scope const, so a language switch relabels these
+ * commands the next time the palette builds its list instead of freezing them
+ * at import.
  */
-const CREATABLE = [
-  { moduleId: "tasks", label: strings.search.commands.newTask, keywords: ["dodaj", "zadatak"] },
-  {
-    moduleId: "calendar",
-    label: strings.search.commands.newEvent,
-    keywords: ["dodaj", "dogadjaj", "termin"],
-  },
-  { moduleId: "notes", label: strings.search.commands.newNote, keywords: ["dodaj", "beleska"] },
-  {
-    moduleId: "finance",
-    label: strings.search.commands.newTransaction,
-    keywords: ["dodaj", "transakcija", "trosak", "rashod", "prihod", "novac"],
-  },
-] as const satisfies readonly {
+function creatable(): readonly {
   moduleId: CreatableModuleId;
   label: string;
   keywords: readonly string[];
-}[];
+}[] {
+  return [
+    { moduleId: "tasks", label: strings.search.commands.newTask, keywords: ["dodaj", "zadatak"] },
+    {
+      moduleId: "calendar",
+      label: strings.search.commands.newEvent,
+      keywords: ["dodaj", "dogadjaj", "termin"],
+    },
+    { moduleId: "notes", label: strings.search.commands.newNote, keywords: ["dodaj", "beleska"] },
+    {
+      moduleId: "finance",
+      label: strings.search.commands.newTransaction,
+      keywords: ["dodaj", "transakcija", "trosak", "rashod", "prihod", "novac"],
+    },
+  ];
+}
 
 /**
  * Extra words each TASK view answers to (ADR-049), beside its own name in the
@@ -113,7 +119,7 @@ export function buildSearchCommands(context: SearchCommandsContext): SearchComma
     run: () => context.onNavigate(moduleId),
   }));
 
-  for (const entry of CREATABLE) {
+  for (const entry of creatable()) {
     if (!context.enabledModuleIds.includes(entry.moduleId)) continue;
     commands.push({
       id: `create-${entry.moduleId}`,

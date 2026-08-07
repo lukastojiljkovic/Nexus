@@ -29,10 +29,14 @@ import { strings } from "./strings.js";
  * is asserted below is the derivation, never a hand-copied twin of it.
  */
 
-const s = strings.settings;
+// A function, not a module-scope alias, so a language switch is reflected in
+// tests reading `s()` too — see check-string-capture.mjs.
+function s(): typeof strings.settings {
+  return strings.settings;
+}
 const INDEX = buildSettingsIndex(createModuleRegistry());
 const ENTRIES = INDEX.entries;
-const SECTION_IDS = Object.keys(s.sectionTitle) as SettingsSectionId[];
+const SECTION_IDS = Object.keys(s().sectionTitle) as SettingsSectionId[];
 
 /** The page's own call shape: a raw string in, a result out. */
 function search(query: string): ReturnType<typeof matchSettings> {
@@ -85,7 +89,7 @@ describe("matchSettings with nothing typed", () => {
 
 describe("matchSettings", () => {
   it("highlights the entry whose own label matched, and keeps its section", () => {
-    const result = search(s.notes.widthLabel);
+    const result = search(s().notes.widthLabel);
     expect(result.hits.has(settingsEntryId("notes", "width"))).toBe(true);
     expect([...result.sections]).toEqual(["notes"]);
   });
@@ -106,7 +110,7 @@ describe("matchSettings", () => {
   });
 
   it("keeps a whole card when its TITLE matched, even with no entry hit inside it", () => {
-    const result = search(s.sectionTitle.security);
+    const result = search(s().sectionTitle.security);
     expect(result.sections.has("security")).toBe(true);
     const securityEntries = ENTRIES.filter((entry) => entry.section === "security");
     expect(securityEntries.length).toBeGreaterThan(0);
@@ -116,7 +120,7 @@ describe("matchSettings", () => {
   it("keeps a MODULE's card by its declared title, which is that card's own heading", () => {
     // The module cards' titles come from the manifest's `titleKey` now, so this
     // is what pins that the declaration still resolves to the drawn heading.
-    const result = search(s.sectionTitle.study);
+    const result = search(s().sectionTitle.study);
     expect(result.sections.has("study")).toBe(true);
   });
 
@@ -145,7 +149,7 @@ describe("matchSettings", () => {
 
   it("matches on a plain substring, not on a word prefix", () => {
     // Deliberate divergence from `matchCommands` — see the module's own comment.
-    const label = foldSearchText(s.notes.widthLabel);
+    const label = foldSearchText(s().notes.widthLabel);
     const middle = label.slice(2, 6);
     expect(middle.length).toBeGreaterThan(0);
     expect(search(middle).hits.has(settingsEntryId("notes", "width"))).toBe(true);
@@ -167,7 +171,7 @@ describe("matchSettings", () => {
     // A hand-composed SHELL entry: search is not a module, so this control can
     // never arrive through `moduleSettingsEntries` — the assertion on its
     // section is what would fail if somebody moved it there.
-    const byLabel = search(s.privacy.searchHistory.clear);
+    const byLabel = search(s().privacy.searchHistory.clear);
     expect(byLabel.hits.has("privacy-search-history")).toBe(true);
     expect(byLabel.sections.has("privacy")).toBe(true);
     expect(entryById("privacy-search-history").section).toBe("privacy");
@@ -185,7 +189,7 @@ describe("matchSettings", () => {
     expect(folded.hits.has(settingsEntryId("notes", "width"))).toBe(true);
     expect(folded.sections.has("notes")).toBe(true);
     expect(
-      search(s.tasks.blockedInTodayOptions.sakrij).hits.has(
+      search(s().tasks.blockedInTodayOptions.sakrij).hits.has(
         settingsEntryId("tasks", "blocked-today"),
       ),
     ).toBe(true);
@@ -259,7 +263,9 @@ describe("buildSettingsIndex", () => {
     expect(new Set(sections.map((section) => section.id)).size).toBe(sections.length);
     expect([...sections.map((section) => section.id)].sort()).toEqual([...SECTION_IDS].sort());
     for (const section of sections) {
-      expect(section.title, section.id).toBe(s.sectionTitle[section.id as keyof typeof s.sectionTitle]);
+      expect(section.title, section.id).toBe(
+        s().sectionTitle[section.id as keyof typeof strings.settings.sectionTitle],
+      );
     }
   });
 
@@ -280,7 +286,7 @@ describe("buildSettingsIndex", () => {
   it("labels a module row with the sidebar's name and keywords it with its description", () => {
     const notes = entryById(moduleEntryId("notes"));
     expect(notes.label).toBe(strings.modules.notes);
-    expect(notes.keywords).toEqual([s.moduleDescriptions.notes]);
+    expect(notes.keywords).toEqual([s().moduleDescriptions.notes]);
   });
 
   it("carries one row per remappable action, plus the reference itself", () => {
@@ -342,21 +348,23 @@ describe("buildSettingsIndex", () => {
   });
 
   it("labels a derived entry with the control's own drawn label", () => {
-    expect(entryById(settingsEntryId("notes", "width")).label).toBe(s.notes.widthLabel);
-    expect(entryById(settingsEntryId("study", "review-cap")).label).toBe(s.study.reviewCapLabel);
-    expect(entryById(settingsEntryId("dashboard", "background")).label).toBe(s.dashboard.pick);
-    expect(entryById(settingsEntryId("dashboard", "dim")).label).toBe(s.dashboard.dimLabel);
-    expect(entryById(settingsEntryId("calendar", "semester-dates")).label).toBe(s.calendar.datesLabel);
-    expect(entryById(settingsEntryId("priv", "kit-status")).label).toBe(s.priv.caption);
+    expect(entryById(settingsEntryId("notes", "width")).label).toBe(s().notes.widthLabel);
+    expect(entryById(settingsEntryId("study", "review-cap")).label).toBe(s().study.reviewCapLabel);
+    expect(entryById(settingsEntryId("dashboard", "background")).label).toBe(s().dashboard.pick);
+    expect(entryById(settingsEntryId("dashboard", "dim")).label).toBe(s().dashboard.dimLabel);
+    expect(entryById(settingsEntryId("calendar", "semester-dates")).label).toBe(
+      s().calendar.datesLabel,
+    );
+    expect(entryById(settingsEntryId("priv", "kit-status")).label).toBe(s().priv.caption);
   });
 
   it("folds a choice's option labels into its keywords, so nobody spells them twice", () => {
     const width = entryById(settingsEntryId("notes", "width"));
-    expect(width.keywords).toContain(s.notes.widthNames.siroka);
-    expect(width.keywords).toContain(s.notes.widthNames.uska);
+    expect(width.keywords).toContain(s().notes.widthNames.siroka);
+    expect(width.keywords).toContain(s().notes.widthNames.uska);
     const blocked = entryById(settingsEntryId("tasks", "blocked-today"));
-    expect(blocked.keywords).toContain(s.tasks.blockedInTodayOptions.sakrij);
-    expect(blocked.keywords).toContain(s.tasks.blockedInTodayOptions.prikazi);
+    expect(blocked.keywords).toContain(s().tasks.blockedInTodayOptions.sakrij);
+    expect(blocked.keywords).toContain(s().tasks.blockedInTodayOptions.prikazi);
   });
 
   it("indexes a switched-off module's controls all the same — the flags are the page's question, not the filter's", () => {

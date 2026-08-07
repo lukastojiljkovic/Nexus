@@ -71,10 +71,15 @@ function doc(...content: JSONContent[]): JSONContent {
   return { type: "doc", content };
 }
 
+// `name` is a getter on every entry below, not a captured field — this array
+// is built once at import, so a plain field would freeze the Serbian name
+// forever; the getter re-reads `strings` wherever a name is read instead.
 export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
   {
     id: "builtin:sastanak",
-    name: strings.notes.templateBuiltins.sastanak,
+    get name() {
+      return strings.notes.templateBuiltins.sastanak;
+    },
     content: doc(
       heading(1, "Sastanak"),
       paragraph("Datum:"),
@@ -89,7 +94,9 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
   },
   {
     id: "builtin:dnevnik",
-    name: strings.notes.templateBuiltins.dnevnik,
+    get name() {
+      return strings.notes.templateBuiltins.dnevnik;
+    },
     content: doc(
       heading(1, "Dnevnik"),
       heading(2, "Šta se danas desilo"),
@@ -102,7 +109,9 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
   },
   {
     id: "builtin:recept",
-    name: strings.notes.templateBuiltins.recept,
+    get name() {
+      return strings.notes.templateBuiltins.recept;
+    },
     content: doc(
       heading(1, "Naziv jela"),
       paragraph("Porcije:"),
@@ -117,7 +126,9 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
   },
   {
     id: "builtin:predmet",
-    name: strings.notes.templateBuiltins.predmet,
+    get name() {
+      return strings.notes.templateBuiltins.predmet;
+    },
     content: doc(
       heading(1, "Predmet"),
       paragraph("Profesor:"),
@@ -134,7 +145,9 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
   },
   {
     id: "builtin:projekat",
-    name: strings.notes.templateBuiltins.projekat,
+    get name() {
+      return strings.notes.templateBuiltins.projekat;
+    },
     content: doc(
       heading(1, "Projekat"),
       paragraph("Cilj:"),

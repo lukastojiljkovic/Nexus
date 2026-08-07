@@ -13,7 +13,9 @@
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint && eslint scripts",
     "test": "turbo run test && vitest run --config vitest.scripts.config.mjs",
-    "check:colours": "node scripts/check-colours.mjs"
+    "check:colours": "node scripts/check-colours.mjs",
+    "check:contrast": "node scripts/check-contrast.mjs",
+    "check:strings": "node scripts/check-string-capture.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -22,7 +22,11 @@ import { strings } from "./strings.js";
  * (registry order, the flag gate, which cards may offer a reset).
  */
 
-const s = strings.settings;
+// A function, not a module-scope alias, so a language switch is reflected in
+// tests reading `s()` too — see check-string-capture.mjs.
+function s(): typeof strings.settings {
+  return strings.settings;
+}
 
 /** A module this build does not have, declared exactly as a real one would be. */
 const FAKE_PANEL: SettingsPanel = {
@@ -127,17 +131,17 @@ describe("moduleSettingsCards", () => {
       "tools",
     ]);
     expect(cards.map((card) => card.title)).toEqual([
-      s.sectionTitle.dashboard,
-      s.sectionTitle.tasks,
-      s.sectionTitle.calendar,
-      s.sectionTitle.notes,
-      s.sectionTitle.files,
-      s.sectionTitle.study,
-      s.sectionTitle.finance,
-      s.sectionTitle.habits,
-      s.sectionTitle.fitness,
-      s.sectionTitle.focus,
-      s.sectionTitle.tools,
+      s().sectionTitle.dashboard,
+      s().sectionTitle.tasks,
+      s().sectionTitle.calendar,
+      s().sectionTitle.notes,
+      s().sectionTitle.files,
+      s().sectionTitle.study,
+      s().sectionTitle.finance,
+      s().sectionTitle.habits,
+      s().sectionTitle.fitness,
+      s().sectionTitle.focus,
+      s().sectionTitle.tools,
     ]);
   });
 
@@ -220,7 +224,7 @@ describe("a module this build has never heard of", () => {
     const cards = moduleSettingsCards(registry, {});
     const fake = cards.at(-1);
     expect(fake?.moduleId).toBe("fake");
-    expect(fake?.title).toBe(s.sectionTitle.privacy);
+    expect(fake?.title).toBe(s().sectionTitle.privacy);
     expect(fake?.panel).toBe(FAKE_PANEL);
   });
 
@@ -233,7 +237,7 @@ describe("a module this build has never heard of", () => {
   it("gets a section of its own in the filter index", () => {
     const index = buildSettingsIndex(registry);
     expect(index.sections.find((section) => section.id === "fake")?.title).toBe(
-      s.sectionTitle.privacy,
+      s().sectionTitle.privacy,
     );
   });
 
@@ -242,9 +246,9 @@ describe("a module this build has never heard of", () => {
       (entry) => entry.section === "fake",
     );
     expect(entries.map((entry) => entry.id)).toEqual(["fake:mode", "fake:amount"]);
-    expect(entries[0]?.label).toBe(s.privacy.storage);
+    expect(entries[0]?.label).toBe(s().privacy.storage);
     // The choice's option label rides along as a keyword, unasked.
-    expect(entries[0]?.keywords).toEqual(["izmisljeno", s.privacy.offline]);
+    expect(entries[0]?.keywords).toEqual(["izmisljeno", s().privacy.offline]);
     // An unresolvable label key falls back to the key, so a typo is visible.
     expect(entries[1]?.label).toBe("settings.nothing.here");
   });

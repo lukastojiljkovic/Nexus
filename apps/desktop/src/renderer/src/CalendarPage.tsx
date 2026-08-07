@@ -85,15 +85,19 @@ const CALENDAR_VIEWS = [
   "dokumenta",
   "ljudi",
 ] as const satisfies readonly CalendarView[];
-const VIEW_LABEL: Record<CalendarView, string> = {
-  mesec: strings.calendar.viewMesec,
-  nedelja: strings.calendar.viewNedelja,
-  dan: strings.calendar.viewDan,
-  semestar: strings.calendar.viewSemestar,
-  agenda: strings.calendar.viewAgenda,
-  dokumenta: strings.calendar.viewDokumenta,
-  ljudi: strings.calendar.viewLjudi,
-};
+// A function, not a module-scope const, so a language switch relabels the
+// view toggle on the next render instead of freezing it at import.
+function viewLabel(): Record<CalendarView, string> {
+  return {
+    mesec: strings.calendar.viewMesec,
+    nedelja: strings.calendar.viewNedelja,
+    dan: strings.calendar.viewDan,
+    semestar: strings.calendar.viewSemestar,
+    agenda: strings.calendar.viewAgenda,
+    dokumenta: strings.calendar.viewDokumenta,
+    ljudi: strings.calendar.viewLjudi,
+  };
+}
 const VIEW_KEY_PREFIX = "nexus.calendar.view.";
 
 /** The two views that replace the whole event surface with a panel of their own. */
@@ -123,14 +127,18 @@ const collator = new Intl.Collator(["sr-Latn", "sr"]);
 // „Poslovni kalendar“ / „Privatni kalendar“), so the page derives it from the
 // OTHER profile's kind where the chip renders, and `Exclude` makes forgetting
 // that a compile error rather than an undefined label.
-const SOURCE_LABEL: Record<Exclude<CalendarSource, "overlay">, string> = {
-  events: strings.calendar.sourceEvents,
-  tasks: strings.calendar.sourceTasks,
-  exams: strings.calendar.sourceExams,
-  blocks: strings.calendar.sourceBlocks,
-  birthdays: strings.calendar.sourceBirthdays,
-  subscriptions: strings.calendar.sourceSubscriptions,
-};
+// A function, not a module-scope const, so a language switch relabels the
+// source chips on the next render instead of freezing it at import.
+function sourceLabel(): Record<Exclude<CalendarSource, "overlay">, string> {
+  return {
+    events: strings.calendar.sourceEvents,
+    tasks: strings.calendar.sourceTasks,
+    exams: strings.calendar.sourceExams,
+    blocks: strings.calendar.sourceBlocks,
+    birthdays: strings.calendar.sourceBirthdays,
+    subscriptions: strings.calendar.sourceSubscriptions,
+  };
+}
 
 // --- Agenda grouping (page-level, not the views engine) ---------------------
 //
@@ -1542,7 +1550,7 @@ className="nx-segmented__option cal__view"
             aria-pressed={view === option}
             onClick={() => selectView(option)}
           >
-            {VIEW_LABEL[option]}
+            {viewLabel()[option]}
           </Button>
         ))}
       </div>
@@ -1570,7 +1578,7 @@ className="nx-segmented__option cal__source"
                     overlayProfile?.kind === "business"
                     ? strings.calendar.sourceOverlayBusiness
                     : strings.calendar.sourceOverlayPrivate
-                  : SOURCE_LABEL[source]}
+                  : sourceLabel()[source]}
               </Button>
             ))}
         </div>
