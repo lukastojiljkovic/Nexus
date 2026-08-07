@@ -969,7 +969,15 @@ describe("NoteStore — version history (note_versions, ADR-015)", () => {
     const large = bytes(500_000, 3);
 
     expect(() => notes.captureVersion(note.id, large, 1, T1)).not.toThrow();
-    expect(notes.loadVersion(note.id, 1)).toEqual(large);
+    // Compared as a memcmp rather than through `toEqual`. The claim is
+    // identical — byte for byte over half a megabyte — but Vitest's structural
+    // walk visits 500 000 elements one at a time and took this test past the
+    // default 5 s timeout on CI, where it failed the whole build while passing
+    // locally on a faster machine. A slow ASSERTION is not the thing this test
+    // is about; the size of the snapshot is.
+    const loaded = notes.loadVersion(note.id, 1);
+    expect(loaded.byteLength).toBe(large.byteLength);
+    expect(Buffer.from(loaded).equals(Buffer.from(large))).toBe(true);
   });
 
   it("round-trips loadVersion's snapshot bytes exactly", () => {
