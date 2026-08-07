@@ -12003,10 +12003,15 @@ button.cal__grid-event--dragging {
   font-size: var(--nx-font-size-body-sm);
 }
 
-/* SearchPalette's failed-fetch line — the quiet-line shape, danger-toned so a
-   rejected search cannot be mistaken for „nothing matches", which is now
-   `EmptyState variant="inline"` and a different statement entirely. */
-.search__error {
+/* The failed-fetch line for both search surfaces — the palette's overlay and
+   the „Pretraga" page. The quiet-line shape, danger-toned so a rejected search
+   cannot be mistaken for „nothing matches", which is now
+   `EmptyState variant="inline"` and a different statement entirely. One rule
+   for both because they say the same sentence: the page had the palette's
+   defect for as long as the palette did, and giving it its own near-identical
+   rule is how the pair starts to drift. */
+.search__error,
+.searchpage__error {
   margin: 0;
   padding: var(--nx-space-4);
   text-align: center;

@@ -74,6 +74,14 @@ export function SearchPage({
   const [query, setQuery] = useState("");
   const [data, setData] = useState<SearchPageResult>(EMPTY_RESULT);
   const [visible, setVisible] = useState(RESULT_CHUNK);
+  /**
+   * True only when the fetch below REJECTED. The palette has carried this since
+   * the silent-failure sweep; this page kept the defect the sweep was named
+   * after, one file over — it caught the rejection, emptied `data` and let the
+   * render say „Nema rezultata", which is a real answer to a question that was
+   * never actually asked.
+   */
+  const [searchFailed, setSearchFailed] = useState(false);
   /** The profile's remembered QUERIES (SRCH-009), shown in browse mode beside the recent entities — never instead of them. */
   const [history, setHistory] = useState<readonly SearchHistoryEntry[]>([]);
   const requestIdRef = useRef(0);
@@ -131,11 +139,13 @@ export function SearchPage({
           if (requestIdRef.current === requestId) {
             setData(fetched);
             setVisible(RESULT_CHUNK);
+            setSearchFailed(false);
           }
         } catch (error) {
           if (requestIdRef.current === requestId) {
             console.error("Nexus: search page query failed:", error);
             setData(EMPTY_RESULT);
+            setSearchFailed(true);
           }
         }
       })();
@@ -345,7 +355,17 @@ export function SearchPage({
         </div>
       )}
 
-      {data.hits.length === 0 ? (
+      {/* A rejection is reported instead of the empty state, and it is reported
+          in browse mode too: the recent-entities list comes from the same
+          `search:page` call, so a browse that failed is exactly as silent as a
+          query that did. One sentence, shared with the palette rather than
+          copied — the two surfaces cannot drift into two ways of saying that
+          search is down. */}
+      {searchFailed ? (
+        <p className="searchpage__error" role="alert">
+          {strings.search.searchError}
+        </p>
+      ) : data.hits.length === 0 ? (
         !isBrowsing && (
           <EmptyState
             title={strings.search.page.emptyTitle}
