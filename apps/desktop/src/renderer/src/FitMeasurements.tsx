@@ -158,7 +158,6 @@ export function FitMeasurements({ profileId }: FitMeasurementsProps) {
 
   const [goal, setGoal] = useState<WeightGoal>("maintain");
   const [rate, setRate] = useState("");
-  const [suggestError, setSuggestError] = useState<string | null>(null);
 
   const from = windowStart(today, range);
 
@@ -323,6 +322,10 @@ export function FitMeasurements({ profileId }: FitMeasurementsProps) {
   });
   // BMI adds nothing beside a real body-fat reading, so it is not drawn beside
   // one (§8a). It is drawn — labelled — only in its absence.
+  // Read HERE rather than in the suggestion component, so an unparseable rate is
+  // a visible refusal instead of a panel that quietly fails to appear.
+  const weeklyKg = goal === "maintain" ? 0 : parseAmountInput(rate.trim());
+
   const bmi =
     profile !== null && measurement !== null && measurement.bodyFatPercent === null
       ? bmiFor(profile, measurement)
@@ -534,17 +537,26 @@ export function FitMeasurements({ profileId }: FitMeasurementsProps) {
             )}
           </div>
           {goal !== "maintain" && <span className="fit__field-hint">{s.suggest.rateHint}</span>}
-          <Suggestion
-            estimate={tiers.estimate}
-            goal={goal}
-            rate={rate}
-            onInvalid={() => setSuggestError(s.suggest.invalidRate)}
-            onAdopt={(kcal) => void adoptTarget(kcal)}
-          />
-          {suggestError !== null && (
-            <p className="fit__error" role="alert">
-              {suggestError}
-            </p>
+          {/* Three states, and the middle one is the reason the parse lives here
+              rather than inside `Suggestion`: an EMPTY rate is „you have not said
+              yet" and draws nothing, a rate that is not a number is a REFUSAL
+              and says so, and only a real one produces a figure. A component
+              that returned null for both of the first two would swallow the
+              refusal — the user would type „pola" and watch the panel simply not
+              appear. */}
+          {weeklyKg !== null ? (
+            <Suggestion
+              estimate={tiers.estimate}
+              goal={goal}
+              weeklyKg={weeklyKg}
+              onAdopt={(kcal) => void adoptTarget(kcal)}
+            />
+          ) : (
+            rate.trim() !== "" && (
+              <p className="fit__error" role="alert">
+                {s.suggest.invalidRate}
+              </p>
+            )
           )}
           <p className="fit__note">{s.suggest.note}</p>
         </section>
@@ -743,19 +755,16 @@ function EnergyReport({ estimate }: { estimate: EnergyEstimate }): ReactNode {
 function Suggestion({
   estimate,
   goal,
-  rate,
-  onInvalid,
+  weeklyKg,
   onAdopt,
 }: {
   estimate: EnergyEstimate;
   goal: WeightGoal;
-  rate: string;
-  onInvalid: () => void;
+  /** A magnitude the CALLER has already read — this component never parses, so it can never silently decline to render. */
+  weeklyKg: number;
   onAdopt: (kcal: number) => void;
 }): ReactNode {
   const s = strings.fitness.measure.suggest;
-  const weeklyKg = goal === "maintain" ? 0 : parseAmountInput(rate.trim());
-  if (weeklyKg === null || weeklyKg < 0) return null;
   const suggestion = suggestDailyEnergy(estimate, goal, weeklyKg);
   return (
     <div className="fit__figures">
@@ -765,16 +774,7 @@ function Suggestion({
           {`${formatKcal(suggestion.kcal)} ${strings.fitness.measure.energy.unit}`}
         </span>
       </span>
-      <Button
-        size="sm"
-        onClick={() => {
-          if (weeklyKg === null) {
-            onInvalid();
-            return;
-          }
-          onAdopt(suggestion.kcal);
-        }}
-      >
+      <Button size="sm" onClick={() => onAdopt(suggestion.kcal)}>
         {s.adopt}
       </Button>
     </div>
