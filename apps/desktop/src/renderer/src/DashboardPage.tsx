@@ -3,7 +3,7 @@ import type { ComponentType, CSSProperties, DragEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { parseWidgetConfig, widgetChoice, widgetCount, widgetTaskLists } from "@nexus/core";
 import type { ModuleRegistry, WidgetContract } from "@nexus/core";
-import { Button, Card, EmptyState, LoadingState, TextField } from "@nexus/ui";
+import { Button, Card, EmptyState, Icon, LoadingState, TextField } from "@nexus/ui";
 import { DASHBOARD_SET_NAME_MAX_LENGTH, DASHBOARD_WIDGET_SPANS } from "../../shared/ipc.js";
 import type {
   DashboardSetsState,
@@ -178,7 +178,7 @@ function WidgetMenuContent({
             className={`note__menu-check${preset === size ? "" : " note__menu-check--hidden"}`}
             aria-hidden="true"
           >
-            ✓
+            <Icon name="check" size={14} />
           </span>
           {s.size[preset]}
         </button>
@@ -288,14 +288,14 @@ function WidgetConfigForm({ profileId, contract, config, onApply, onBack }: Widg
     lookupString(strings, `dashboard.config.fields.${key}`) ?? key;
   const check = (on: boolean): ReactNode => (
     <span className={`note__menu-check${on ? "" : " note__menu-check--hidden"}`} aria-hidden="true">
-      ✓
+      <Icon name="check" size={14} />
     </span>
   );
 
   return (
     <>
       <button className="note__menu-item" role="menuitem" type="button" onClick={onBack}>
-        ‹ {s.back}
+        <Icon name="chevronLeft" size={14} /> {s.back}
       </button>
       {fields.map((field) => {
         if (field.kind === "count") {
@@ -1152,7 +1152,7 @@ export function DashboardPage({
                                 className={`note__menu-check${isActive ? "" : " note__menu-check--hidden"}`}
                                 aria-hidden="true"
                               >
-                                ✓
+                                <Icon name="check" size={14} />
                               </span>
                               {entry.name}
                             </button>

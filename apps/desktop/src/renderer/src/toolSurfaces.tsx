@@ -13,7 +13,7 @@ import {
   PDV_RATES,
   type UnitKind,
 } from "@nexus/core";
-import { Button, TextField } from "@nexus/ui";
+import { Button, Icon, TextField } from "@nexus/ui";
 import { useState, type ComponentType, type ReactNode } from "react";
 
 import {
@@ -145,7 +145,7 @@ function UnitConverter({ kind, from, to }: ConverterSpec) {
             setToId(fromId);
           }}
         >
-          ⇄
+          <Icon name="swap" />
         </Button>
         <ToolSelect label={s.convert.toLabel} value={toId} options={options} onChange={setToId} />
       </div>
@@ -466,7 +466,7 @@ function UnitPriceTool() {
                 setOffers((current) => current.filter((candidate) => candidate.key !== offer.key));
               }}
             >
-              ✕
+              <Icon name="close" />
             </Button>
           )}
         </div>

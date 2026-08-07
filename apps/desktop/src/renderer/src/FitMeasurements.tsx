@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { Button, Chip, EmptyState, ListRow, LoadingState, Select, TextField } from "@nexus/ui";
+import { Button, Chip, EmptyState, Icon, ListRow, LoadingState, Select, TextField } from "@nexus/ui";
 import {
   ACTIVITY_LEVELS,
   BODY_WEIGHT_MIN_SAMPLES,
@@ -365,7 +365,7 @@ export function FitMeasurements({ profileId }: FitMeasurementsProps) {
             aria-label={strings.fitness.dismiss}
             onClick={() => setNotice(null)}
           >
-            ×
+            <Icon name="close" size={14} />
           </Button>
         </div>
       )}
@@ -693,7 +693,7 @@ export function FitMeasurements({ profileId }: FitMeasurementsProps) {
                       title={strings.fitness.training.set.edit}
                       onClick={() => loadEntry(row)}
                     >
-                      ✎
+                      <Icon name="pencil" size={14} />
                     </Button>
                     <Button
                       size="sm"
@@ -706,7 +706,7 @@ export function FitMeasurements({ profileId }: FitMeasurementsProps) {
                         })
                       }
                     >
-                      ×
+                      <Icon name="trash" size={14} />
                     </Button>
                   </span>
                 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { ageAtOccurrence, birthdayOccurrencesInRange, shiftDayKey } from "@nexus/core";
-import { Button, Chip, EmptyState, ListRow, LoadingState, TextField } from "@nexus/ui";
+import { Button, Chip, EmptyState, Icon, ListRow, LoadingState, TextField } from "@nexus/ui";
 import type { NewPersonFields, Person, PersonFieldChanges, PersonKind } from "../../shared/ipc.js";
 import { localTodayKey } from "./examDates.js";
 import { strings } from "./strings.js";
@@ -347,7 +347,7 @@ export function PeoplePanel({ profileId }: PeoplePanelProps) {
             aria-label={s.dismiss}
             onClick={() => setPendingUndoId(null)}
           >
-            ×
+            <Icon name="close" size={14} />
           </Button>
         </div>
       )}
@@ -374,7 +374,7 @@ export function PeoplePanel({ profileId }: PeoplePanelProps) {
                       aria-label={s.editLabel}
                       onClick={() => startEdit(person)}
                     >
-                      ✎
+                      <Icon name="pencil" size={14} />
                     </Button>
                     <Button
                       size="sm"
@@ -382,7 +382,7 @@ export function PeoplePanel({ profileId }: PeoplePanelProps) {
                       aria-label={s.deleteLabel}
                       onClick={() => void remove(person)}
                     >
-                      ×
+                      <Icon name="trash" size={14} />
                     </Button>
                   </span>
                 }

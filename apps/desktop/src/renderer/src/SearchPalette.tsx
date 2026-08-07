@@ -3,7 +3,7 @@ import type { KeyboardEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { foldSearchTag, parseSearchQuery, SEARCH_KINDS } from "@nexus/core";
 import type { SearchKind } from "@nexus/core";
-import { Button, Chip, EmptyState } from "@nexus/ui";
+import { Button, Chip, EmptyState, Icon } from "@nexus/ui";
 import type { NoteTag, SearchHistoryEntry, SearchResult, TaskTag } from "../../shared/ipc.js";
 import { REBUILD_COMMAND_ID, matchCommands } from "./searchCommands.js";
 import type { SearchCommand } from "./searchCommands.js";
@@ -651,7 +651,7 @@ export function SearchPalette({
             forgetQuery(entry.query);
           }}
         >
-          ×
+          <Icon name="close" size={14} />
         </button>
       </div>
     );

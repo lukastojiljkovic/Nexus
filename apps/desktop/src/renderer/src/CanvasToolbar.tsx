@@ -1,7 +1,7 @@
 import { CaptureUpdateAction, newElementWith } from "@excalidraw/excalidraw";
 import type { ExcalidrawImperativeAPI, NormalizedZoomValue } from "@excalidraw/excalidraw/types";
 import type { ReactNode, RefObject } from "react";
-import { Button } from "@nexus/ui";
+import { Button, Icon } from "@nexus/ui";
 import {
   CANVAS_INK_ID,
   CANVAS_MAX_ZOOM,
@@ -198,7 +198,7 @@ export function CanvasToolbar({ editor, state, onMermaid, onAddCard }: CanvasToo
           onMouseDown={keepEditorFocus}
           onClick={() => restyle({ channel, value: CANVAS_TRANSPARENT })}
         >
-          ×
+          <Icon name="swatchNone" size={14} />
         </button>
       )}
       {CANVAS_SWATCHES.map((id) => {
@@ -302,7 +302,7 @@ className="nx-segmented__option canv__tool"
           onMouseDown={keepEditorFocus}
           onClick={() => zoomTo(state.zoom - CANVAS_ZOOM_STEP)}
         >
-          −
+          <Icon name="minus" size={14} />
         </Button>
         {/* The readout IS the reset, exactly as the editor's own zoom island
             has it: the percentage is the button that puts it back to 100%. */}
@@ -325,7 +325,7 @@ className="nx-segmented__option canv__tool"
           onMouseDown={keepEditorFocus}
           onClick={() => zoomTo(state.zoom + CANVAS_ZOOM_STEP)}
         >
-          +
+          <Icon name="plus" size={14} />
         </Button>
         <Button
           size="sm"

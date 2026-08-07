@@ -1,6 +1,6 @@
 import { Fragment, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { Button, Chip, EmptyState, ListRow, Select, TextField } from "@nexus/ui";
+import { Button, Chip, EmptyState, Icon, ListRow, Select, TextField } from "@nexus/ui";
 import {
   EXERCISE_EQUIPMENT,
   EXERCISE_METRICS,
@@ -547,7 +547,7 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
                 title={s.routines.moveUp}
                 onClick={() => setItems(movedByOne(items, index, -1))}
               >
-                ↑
+                <Icon name="arrowUp" size={14} />
               </Button>
               <Button
                 type="button"
@@ -558,7 +558,7 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
                 title={s.routines.moveDown}
                 onClick={() => setItems(movedByOne(items, index, 1))}
               >
-                ↓
+                <Icon name="arrowDown" size={14} />
               </Button>
               <Button
                 type="button"
@@ -568,7 +568,7 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
                 title={s.routines.removeItem}
                 onClick={() => setItems(items.filter((_, at) => at !== index))}
               >
-                ×
+                <Icon name="close" size={14} />
               </Button>
             </span>
           </div>
@@ -768,7 +768,7 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
             aria-label={strings.fitness.dismiss}
             onClick={() => setPendingUndo(null)}
           >
-            ×
+            <Icon name="close" size={14} />
           </Button>
         </div>
       )}
@@ -806,7 +806,7 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
                           title={s.routines.edit}
                           onClick={() => beginEditRoutine(routine)}
                         >
-                          ✎
+                          <Icon name="pencil" size={14} />
                         </Button>
                         <Button
                           size="sm"
@@ -815,7 +815,7 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
                           title={s.routines.delete}
                           onClick={() => void deleteRoutine(routine)}
                         >
-                          ×
+                          <Icon name="trash" size={14} />
                         </Button>
                       </span>
                     }
@@ -879,7 +879,7 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
                         title={s.exercises.edit}
                         onClick={() => beginEditExercise(exercise)}
                       >
-                        ✎
+                        <Icon name="pencil" size={14} />
                       </Button>
                       <Button
                         size="sm"
@@ -888,7 +888,7 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
                         title={s.exercises.delete}
                         onClick={() => void deleteExercise(exercise)}
                       >
-                        ×
+                        <Icon name="trash" size={14} />
                       </Button>
                     </span>
                   }

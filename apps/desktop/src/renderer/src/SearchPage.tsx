@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { parseSearchQuery } from "@nexus/core";
-import { Button, Chip, EmptyState, PageHeader } from "@nexus/ui";
+import { Button, Chip, EmptyState, Icon, PageHeader } from "@nexus/ui";
 import type { SearchHistoryEntry, SearchPageResult, SearchResult } from "../../shared/ipc.js";
 import {
   SEARCH_DEBOUNCE_MS,
@@ -348,7 +348,7 @@ export function SearchPage({
                 title={strings.search.historyRemove}
                 onClick={() => forgetQuery(entry.query)}
               >
-                ×
+                <Icon name="close" size={14} />
               </button>
             </div>
           ))}

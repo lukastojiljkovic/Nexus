@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { DragEvent, MouseEvent, ReactNode } from "react";
 import { isoWeekNumber, layoutMonthBars, monthGridDays } from "@nexus/core";
 import type { MonthGridDay, SpanItem, WeekStart } from "@nexus/core";
+import { Icon } from "@nexus/ui";
 import type { Event } from "../../shared/ipc.js";
 import { isMutedItem, isSpanItem, isTimedEventItem, isTimedForeignItem } from "./calendarItems.js";
 import type {
@@ -103,20 +104,20 @@ export function itemLabel(item: CalendarItem): string {
 }
 
 /**
- * The origin glyph every cross-profile item carries (CAL-005 / ADR-058 §5) —
- * typographic like the ↻ series marker, never a new hue: ⇄ reads as "from the
- * other side", and the popover behind the item says which profile in words.
- * Exported for the week/day grid and the agenda, which mark the same guests.
+ * The origin marker every cross-profile item carries (CAL-005 / ADR-058 §5) —
+ * the drawn `swap` icon, never a new hue: it reads as "from the other side",
+ * and the popover behind the item says which profile in words. Exported for
+ * the week/day grid and the agenda, which mark the same guests.
  */
 export function ForeignMark() {
   return (
     <span className="cal__foreign-mark" role="img" aria-label={strings.calendar.overlay.markerLabel}>
-      ⇄
+      <Icon name="swap" size={14} />
     </span>
   );
 }
 
-/** A subject-swatch dot (exam/block), a series marker (a recurring event's occurrence) or the ⇄ origin glyph (a foreign item), followed by the ellipsized label. Exported for the week/day grid's all-day band, which reuses these very classes. */
+/** A subject-swatch dot (exam/block), a series marker (a recurring event's occurrence) or the swap origin marker (a foreign item), followed by the ellipsized label. Exported for the week/day grid's all-day band, which reuses these very classes. */
 export function renderBarContent(item: CalendarItem): ReactNode {
   switch (item.kind) {
     case "exam":

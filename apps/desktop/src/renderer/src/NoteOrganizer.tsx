@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { ACCENT_IDS } from "@nexus/tokens";
-import { Button, TextField } from "@nexus/ui";
+import { Button, Icon, TextField } from "@nexus/ui";
 import type { NoteCategory, NoteFolder, NoteFolderColor, NoteTag } from "../../shared/ipc.js";
 import { NotePopover } from "./notePopover.js";
 import { mergeTemplateEntries, type TemplateEntry } from "./noteTemplates.js";
@@ -482,7 +482,7 @@ export function NoteOrganizer({
         aria-pressed={current === null}
         onClick={() => onPick(null)}
       >
-        ×
+        <Icon name="swatchNone" size={14} />
       </button>
     </div>
   );
@@ -739,7 +739,7 @@ export function NoteOrganizer({
                         className={`note__menu-check${node.isCaptureDefault ? "" : " note__menu-check--hidden"}`}
                         aria-hidden="true"
                       >
-                        ✓
+                        <Icon name="check" size={14} />
                       </span>
                       {strings.notes.folderCaptureDefault}
                     </button>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Button, Chip, EmptyState } from "@nexus/ui";
+import { Button, Chip, EmptyState, Icon } from "@nexus/ui";
 import type { NotificationRecord, NotificationSource, SnoozePreset } from "../../shared/ipc.js";
 import {
   ALWAYS_ON_NOTIFICATION_SOURCES,
@@ -255,7 +255,7 @@ export function NotificationCenter({ profileId, onNavigate }: NotificationCenter
                       aria-label={s.dismissLabel}
                       onClick={() => void dismiss(notification.id)}
                     >
-                      ×
+                      <Icon name="close" size={14} />
                     </Button>
                   </div>
                 </div>

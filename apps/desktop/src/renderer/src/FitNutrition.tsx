@@ -4,6 +4,7 @@ import {
   Button,
   Chip,
   EmptyState,
+  Icon,
   ListRow,
   LoadingState,
   ProportionBar,
@@ -898,7 +899,7 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
                 title={s.item.edit}
                 onClick={() => beginItemEdit(item)}
               >
-                ✎
+                <Icon name="pencil" size={14} />
               </Button>
               <Button
                 size="sm"
@@ -907,7 +908,7 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
                 title={s.item.remove}
                 onClick={() => void removeItem(item)}
               >
-                ×
+                <Icon name="trash" size={14} />
               </Button>
             </span>
           )
@@ -971,7 +972,7 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
                 title={expanded ? s.foods.collapse : s.foods.expand}
                 onClick={() => setExpandedFoodId(expanded ? null : food.id)}
               >
-                {expanded ? "▾" : "▸"}
+                <Icon name={expanded ? "chevronDown" : "chevronRight"} size={14} />
               </Button>
               <Button
                 size="sm"
@@ -980,7 +981,7 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
                 title={s.foods.edit}
                 onClick={() => beginEditFood(food)}
               >
-                ✎
+                <Icon name="pencil" size={14} />
               </Button>
               <Button
                 size="sm"
@@ -989,7 +990,7 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
                 title={s.foods.delete}
                 onClick={() => void deleteFood(food)}
               >
-                ×
+                <Icon name="trash" size={14} />
               </Button>
             </span>
           }
@@ -1112,7 +1113,7 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
               title={f.removeServing}
               onClick={() => setServingDrafts((rows) => rows.filter((_, at) => at !== index))}
             >
-              ×
+              <Icon name="close" size={14} />
             </Button>
           </div>
         ))}
@@ -1183,7 +1184,7 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
             aria-label={s.dismiss}
             onClick={() => setPendingUndo(null)}
           >
-            ×
+            <Icon name="close" size={14} />
           </Button>
         </div>
       )}
@@ -1196,7 +1197,7 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
           title={s.day.previous}
           onClick={() => goToDay(shiftDayKey(day, -ONE_DAY))}
         >
-          ‹
+          <Icon name="chevronLeft" size={14} />
         </Button>
         <span className="fit__day-name">{formatDayLong(day)}</span>
         <Button
@@ -1207,7 +1208,7 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
           disabled={!forward}
           onClick={() => goToDay(shiftDayKey(day, ONE_DAY))}
         >
-          ›
+          <Icon name="chevronRight" size={14} />
         </Button>
         {day !== today && (
           <Button size="sm" className="fit__quiet" onClick={() => goToDay(today)}>

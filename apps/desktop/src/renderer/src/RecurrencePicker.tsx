@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button } from "@nexus/ui";
+import { Button, Icon } from "@nexus/ui";
 import { MAX_RECURRENCE_COUNT, MAX_RECURRENCE_INTERVAL, isValidDayKey, shiftDayKey } from "@nexus/core";
 import type {
   RecurrenceEnd,
@@ -212,14 +212,14 @@ function asOrdinal(value: string): RecurrenceOrdinal {
 // --- The marker -------------------------------------------------------------
 
 /**
- * The "this repeats" marker: a text glyph in the muted token colour, never an
- * icon library and never a glow (design rules). Carries its own accessible
- * name, so a row that repeats says so out loud too.
+ * The "this repeats" marker: the app's own drawn `repeat` icon in the muted
+ * token colour, never a glow (design rules). Carries its own accessible name,
+ * so a row that repeats says so out loud too.
  */
 export function RecurrenceMark() {
   return (
     <span className="recur__mark" role="img" aria-label={strings.recurrence.marker}>
-      ↻
+      <Icon name="repeat" size={14} />
     </span>
   );
 }

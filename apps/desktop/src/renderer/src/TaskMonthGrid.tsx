@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import type { DragEvent, MouseEvent } from "react";
-import { Button } from "@nexus/ui";
+import { Button, Icon } from "@nexus/ui";
 import { layoutMonthBars, monthGridDays, monthKeyOf, shiftMonthKey } from "@nexus/core";
 import type { MonthGridDay, SpanItem } from "@nexus/core";
 import { localTodayKey } from "./examDates.js";
@@ -150,7 +150,7 @@ export function TaskMonthGrid({ items, undated, onOpen, onMoveToDay }: TaskMonth
             aria-label={s.prevMonth}
             onClick={() => setMonthKey((key) => shiftMonthKey(key, -1))}
           >
-            ‹
+            <Icon name="chevronLeft" size={14} />
           </Button>
           <Button size="sm" onClick={() => setMonthKey(monthKeyOf(localTodayKey()))}>
             {s.today}
@@ -160,7 +160,7 @@ export function TaskMonthGrid({ items, undated, onOpen, onMoveToDay }: TaskMonth
             aria-label={s.nextMonth}
             onClick={() => setMonthKey((key) => shiftMonthKey(key, 1))}
           >
-            ›
+            <Icon name="chevronRight" size={14} />
           </Button>
         </span>
       </div>

@@ -23,7 +23,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isCanvasRefText } from "@nexus/core";
 import type { CanvasRef } from "@nexus/core";
 import type { ThemeName } from "@nexus/tokens";
-import { Button, EmptyState, LoadingState, PageHeader, SaveIndicator, type SaveStatus, TextField } from "@nexus/ui";
+import { Button, EmptyState, Icon, LoadingState, PageHeader, SaveIndicator, type SaveStatus, TextField } from "@nexus/ui";
 import { MAX_CANVAS_BOARD_NAME_LENGTH, MAX_CANVAS_SCENE_LENGTH } from "../../shared/ipc.js";
 import type { CanvasBoard, CanvasRefCard } from "../../shared/ipc.js";
 import { boardAfterDelete, looksLikeMermaid, resolveActiveBoard } from "./canvasBoards.js";
@@ -767,7 +767,7 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
                           className={`note__menu-check${isActive ? "" : " note__menu-check--hidden"}`}
                           aria-hidden="true"
                         >
-                          ✓
+                          <Icon name="check" size={14} />
                         </span>
                         {board.name}
                       </button>

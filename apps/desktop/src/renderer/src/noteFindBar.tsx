@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+import { Icon } from "@nexus/ui";
 import { Extension } from "@tiptap/core";
 import type { Editor } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
@@ -504,7 +505,7 @@ export function NoteFindBar({ editor, focusNonce, onClose }: NoteFindBarProps) {
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => step(-1)}
         >
-          ↑
+          <Icon name="chevronUp" size={14} />
         </button>
         <button
           type="button"
@@ -514,7 +515,7 @@ export function NoteFindBar({ editor, focusNonce, onClose }: NoteFindBarProps) {
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => step(1)}
         >
-          ↓
+          <Icon name="chevronDown" size={14} />
         </button>
         <button
           type="button"
@@ -532,7 +533,7 @@ export function NoteFindBar({ editor, focusNonce, onClose }: NoteFindBarProps) {
           onMouseDown={(event) => event.preventDefault()}
           onClick={close}
         >
-          ×
+          <Icon name="close" size={14} />
         </button>
       </div>
       {replaceOpen && (

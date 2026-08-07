@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Icon } from "@nexus/ui";
 
 import { firstFocusableIndex, lastFocusableIndex, nextFocusableIndex } from "./focusOrder.js";
 import { elementToFocusCandidate } from "./useFocusTrap.js";
@@ -62,7 +63,7 @@ function menuItems(panel: HTMLElement | null): HTMLElement[] {
 export function NotePopover({
   label,
   triggerClassName,
-  triggerContent = "⋯",
+  triggerContent = <Icon name="more" size={14} />,
   children,
   menu = true,
 }: NotePopoverProps) {
