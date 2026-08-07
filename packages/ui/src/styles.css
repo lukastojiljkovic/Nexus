@@ -669,6 +669,162 @@
   color: var(--nx-text-muted);
 }
 
+/* --- Charts ------------------------------------------------------------
+   The drawn-data layer. House rules, so the ninth chart added next year still
+   matches the first — and so that the ways a graphic can LIE are the ways it
+   cannot be built:
+
+   - Three colour ROLES and no fourth: accent is what the person did, data
+     (jade) is the comparison, danger is a genuinely bad state. „A third
+     series" is a sign the chart is doing two jobs, not a reason for a fourth
+     hue. The banned hues stay banned inside SVG too.
+   - Intensity is ONE hue at four steps. Never a continuous ramp: nobody reads
+     step 6 from step 7, and a ten-stop ramp claims precision the counts do not
+     have.
+   - No frame, no box, no gridlines. At most ONE reference rule per chart —
+     target, zero, today — labelled in place, never in a legend.
+   - Colour never carries a state alone; it is always redundant with position,
+     shape or a label. Same rule that gave the status icons four distinct
+     silhouettes.
+   - Every value is a `--nx-*` var applied through a class here. No `fill="#…"`
+     ever reaches a component. */
+
+.nx-chart {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+.nx-chart__title {
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-text-muted);
+}
+.nx-chart__svg {
+  display: block;
+  overflow: visible;
+}
+/* The refusal, not an empty chart. `ChartFrame` emits no `<svg>` at all when
+   there is nothing to draw, so this is the whole graphic in that case. */
+.nx-chart__empty,
+.nx-chart__caption {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-text-muted);
+}
+.nx-chart__caption {
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- CellMatrix -------------------------------------------------------- */
+/* One hue, four steps. `--l0` is a MEASURED ZERO — the day was asked of you
+   and nothing happened — and is deliberately the same neutral in every tone,
+   because „nothing happened" has no hue. A day that was never asked of you is
+   not drawn at all; that is `cellAt` returning null, and it is why silence and
+   zero cannot be confused here. */
+.nx-cell {
+  --nx-cell-hue: var(--nx-accent);
+}
+.nx-cell--data {
+  --nx-cell-hue: var(--nx-data);
+}
+.nx-cell--danger {
+  --nx-cell-hue: var(--nx-danger);
+}
+.nx-cell--neutral {
+  --nx-cell-hue: var(--nx-text-muted);
+}
+.nx-cell--l0 {
+  fill: var(--nx-surface-alt);
+}
+.nx-cell--l1 {
+  fill: color-mix(in oklab, var(--nx-cell-hue) 30%, var(--nx-surface-alt));
+}
+.nx-cell--l2 {
+  fill: color-mix(in oklab, var(--nx-cell-hue) 62%, var(--nx-surface-alt));
+}
+.nx-cell--l3 {
+  fill: var(--nx-cell-hue);
+}
+/* Outside the mark, never inset — the sidebar's selection ban applies here
+   too. A cell is small, so the ring needs the offset to stay legible. */
+.nx-cell[role="button"] {
+  cursor: pointer;
+}
+.nx-cell[role="button"]:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+
+/* --- ProportionBar ----------------------------------------------------- */
+/* The house's ONE part-of-whole form. Replaces `.fin__bar-*` and `.fit__bar-*`,
+   which were five pairs of byte-identical rules in two modules with the
+   dashboard borrowing a third module's classes on top. */
+.nx-proportion {
+  display: grid;
+  grid-template-columns: minmax(80px, 150px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--nx-space-3);
+}
+.nx-proportion__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+.nx-proportion__track {
+  position: relative;
+  height: 10px;
+  border-radius: var(--nx-radius-round);
+  background: var(--nx-surface-alt);
+}
+/* No measurement behind the row — distinct from a measured zero, and it must
+   not read as a full track waiting to fill. */
+.nx-proportion__track--unmeasured {
+  opacity: 0.4;
+}
+.nx-proportion__fill {
+  position: absolute;
+  inset-block: 0;
+  border-radius: inherit;
+  background: var(--nx-data);
+}
+.nx-proportion__fill--accent {
+  background: var(--nx-accent);
+}
+.nx-proportion__fill--danger {
+  background: var(--nx-danger);
+}
+.nx-proportion__fill--neutral {
+  background: var(--nx-text-muted);
+}
+/* The single reference mark. Full-height and darker than the fill so it reads
+   over a filled track as well as an empty one. */
+.nx-proportion__target {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--nx-text);
+}
+.nx-proportion__value {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: var(--nx-space-1);
+  font-size: var(--nx-font-size-body-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--nx-text);
+}
+
 /* --- Material ----------------------------------------------------------
    The two substrates. Everything here is STATIC — no animation, no parallax,
    no pointer response — which is what keeps it a ground rather than a

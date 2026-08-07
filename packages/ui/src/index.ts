@@ -26,6 +26,19 @@ export {
   type BarChartProps,
   type BarChartDatum,
 } from "./components/BarChart.js";
+export { ChartFrame, type ChartFrameProps } from "./components/charts/ChartFrame.js";
+export {
+  CellMatrix,
+  type CellMatrixProps,
+  type ChartLevel,
+  type ChartTone,
+  type MatrixCell,
+} from "./components/charts/CellMatrix.js";
+export {
+  ProportionBar,
+  type ProportionBarProps,
+  type ProportionSegment,
+} from "./components/charts/ProportionBar.js";
 export { StarField, type StarFieldProps } from "./components/StarField.js";
 export { mulberry32, starField, SKY_WORLD, type Star } from "./material.js";
 export { ListView, type ListViewProps } from "./views/ListView.js";

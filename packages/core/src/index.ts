@@ -996,3 +996,13 @@ export {
   parseChord,
 } from "./shortcuts/shortcuts.js";
 export type { Chord, ChordEvent } from "./shortcuts/shortcuts.js";
+export {
+  areaPath,
+  extent,
+  heatmapWeeks,
+  linePath,
+  niceStep,
+  niceTicks,
+  scaleLinear,
+} from "./charts/geometry.js";
+export type { Point } from "./charts/geometry.js";
