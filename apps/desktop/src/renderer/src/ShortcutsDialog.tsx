@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { formatChord, MODULE_NAV_MAX, moduleNavChord } from "@nexus/core";
@@ -6,6 +6,7 @@ import { Button } from "@nexus/ui";
 import { SHORTCUT_ACTIONS, type ShortcutBindings } from "./shortcuts.js";
 import { SHORTCUT_REFERENCE } from "./shortcutsReference.js";
 import { strings } from "./strings.js";
+import { useFocusTrap } from "./useFocusTrap.js";
 
 /**
  * One key as a chip. The single `<kbd>` recipe in the app — the Settings
@@ -96,22 +97,13 @@ export interface ShortcutsDialogProps {
  */
 export function ShortcutsDialog({ bindings, moduleIds, onClose }: ShortcutsDialogProps) {
   const s = strings.shortcuts;
-  const actionsRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
 
   // Focus goes to the only control there is, and back where it came from on
-  // close — the palette's own rule, so dismissing the reference never strands
-  // the keyboard on a portal that no longer exists.
-  useEffect(() => {
-    previousFocusRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    actionsRef.current?.querySelector("button")?.focus();
-    return () => {
-      previousFocusRef.current?.focus();
-      previousFocusRef.current = null;
-    };
-  }, []);
+  // close — the trap's own default (the first tabbable descendant), since the
+  // reference body carries no focusable rows of its own. It also cycles Tab
+  // within the panel, which the dialog never did before.
+  const panelRef = useFocusTrap<HTMLDivElement>({ open: true });
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -128,6 +120,7 @@ export function ShortcutsDialog({ bindings, moduleIds, onClose }: ShortcutsDialo
     <div className="recur-dialog__overlay">
       <div className="recur-dialog__backdrop" onClick={onClose} />
       <div
+        ref={panelRef}
         className="recur-dialog__panel shortcuts-dialog__panel"
         role="dialog"
         aria-modal="true"
@@ -174,7 +167,7 @@ export function ShortcutsDialog({ bindings, moduleIds, onClose }: ShortcutsDialo
           ))}
         </div>
 
-        <div className="recur-dialog__actions" ref={actionsRef}>
+        <div className="recur-dialog__actions">
           <Button className="recur-dialog__cancel" onClick={onClose}>
             {s.dialogClose}
           </Button>

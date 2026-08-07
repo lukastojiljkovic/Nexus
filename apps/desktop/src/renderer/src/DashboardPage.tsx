@@ -23,6 +23,7 @@ import { DASHBOARD_WIDGETS, type DashboardWidgetBodyProps } from "./dashboardWid
 import { localTodayKey } from "./examDates.js";
 import { NotePopover } from "./notePopover.js";
 import { strings } from "./strings.js";
+import { useFocusTrap } from "./useFocusTrap.js";
 
 /** Time-of-day salutation, personalized with the profile name when present. */
 function greeting(name: string, hour: number): string {
@@ -428,13 +429,13 @@ interface DashboardSetDeleteDialogProps {
  */
 function DashboardSetDeleteDialog({ set, onConfirm, onCancel }: DashboardSetDeleteDialogProps) {
   const s = strings.dashboard.sets.deleteDialog;
-  const choicesRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const questionId = useId();
 
-  useEffect(() => {
-    choicesRef.current?.querySelector("button")?.focus();
-  }, []);
+  // Focus lands on the one choice, not on a default — the trap's own default
+  // (the first tabbable descendant), since the choice comes before „Otkaži".
+  // It also cycles Tab within the panel and hands focus back on close.
+  const panelRef = useFocusTrap<HTMLDivElement>({ open: true });
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -448,6 +449,7 @@ function DashboardSetDeleteDialog({ set, onConfirm, onCancel }: DashboardSetDele
     <div className="recur-dialog__overlay">
       <div className="recur-dialog__backdrop" onClick={onCancel} />
       <div
+        ref={panelRef}
         className="recur-dialog__panel"
         role="dialog"
         aria-modal="true"
@@ -461,7 +463,7 @@ function DashboardSetDeleteDialog({ set, onConfirm, onCancel }: DashboardSetDele
         <p id={questionId} className="recur-dialog__question">
           {s.question}
         </p>
-        <div className="recur-dialog__choices" ref={choicesRef}>
+        <div className="recur-dialog__choices">
           <Button className="recur-dialog__choice" onClick={onConfirm}>
             {s.confirm}
           </Button>
@@ -505,19 +507,14 @@ function WidgetGallery({
   onClose,
 }: WidgetGalleryProps) {
   const s = strings.dashboard.gallery;
-  const actionsRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
 
-  useEffect(() => {
-    previousFocusRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    actionsRef.current?.querySelector("button")?.focus();
-    return () => {
-      previousFocusRef.current?.focus();
-      previousFocusRef.current = null;
-    };
-  }, []);
+  // Focus lands on „Zatvori", not on the first „Dodaj": the body is a
+  // scrollable catalogue of add actions, and the trap's own default (the
+  // first tabbable descendant) would land there — reachable from the
+  // keyboard, but Enter would silently place a widget before it is read.
+  const panelRef = useFocusTrap<HTMLDivElement>({ open: true, initialFocusRef: closeButtonRef });
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -547,6 +544,7 @@ function WidgetGallery({
     <div className="recur-dialog__overlay">
       <div className="recur-dialog__backdrop" onClick={onClose} />
       <div
+        ref={panelRef}
         className="recur-dialog__panel dash-gallery__panel"
         role="dialog"
         aria-modal="true"
@@ -587,8 +585,8 @@ function WidgetGallery({
           </div>
         )}
 
-        <div className="recur-dialog__actions" ref={actionsRef}>
-          <Button className="recur-dialog__cancel" onClick={onClose}>
+        <div className="recur-dialog__actions">
+          <Button ref={closeButtonRef} className="recur-dialog__cancel" onClick={onClose}>
             {s.close}
           </Button>
         </div>

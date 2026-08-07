@@ -90,6 +90,7 @@ import type { TaskMonthItem } from "./TaskMonthGrid.js";
 import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
 import { dayUnit, strings } from "./strings.js";
 import { readStoredBlockedInToday, toIncludeBlocked } from "./taskPrefs.js";
+import { useFocusTrap } from "./useFocusTrap.js";
 
 // --- Field orderings (renderer mirror of @nexus/db) -------------------------
 //
@@ -666,15 +667,14 @@ interface SubtaskCompletionDialogProps {
  */
 function SubtaskCompletionDialog({ onChoose, onCancel }: SubtaskCompletionDialogProps) {
   const s = strings.tasks.subtasks;
-  const choicesRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const questionId = useId();
 
   // Focus lands on the first choice, not on a default: answerable from the
-  // keyboard without any key already meaning "and the subtasks too".
-  useEffect(() => {
-    choicesRef.current?.querySelector("button")?.focus();
-  }, []);
+  // keyboard without any key already meaning "and the subtasks too" — the
+  // trap's own default (the first tabbable descendant), since the choices
+  // come before „Otkaži". It also cycles Tab and hands focus back on close.
+  const panelRef = useFocusTrap<HTMLDivElement>({ open: true });
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -688,6 +688,7 @@ function SubtaskCompletionDialog({ onChoose, onCancel }: SubtaskCompletionDialog
     <div className="tasks__dialog-overlay">
       <div className="tasks__dialog-backdrop" onClick={onCancel} />
       <div
+        ref={panelRef}
         className="tasks__dialog-panel"
         role="dialog"
         aria-modal="true"
@@ -700,7 +701,7 @@ function SubtaskCompletionDialog({ onChoose, onCancel }: SubtaskCompletionDialog
         <p id={questionId} className="tasks__dialog-question">
           {s.question}
         </p>
-        <div className="tasks__dialog-choices" ref={choicesRef}>
+        <div className="tasks__dialog-choices">
           <Button className="tasks__dialog-choice" onClick={() => onChoose("all")}>
             {s.completeAll}
           </Button>
@@ -912,13 +913,13 @@ interface TaskListDeleteDialogProps {
  */
 function TaskListDeleteDialog({ list, inboxName, onChoose, onCancel }: TaskListDeleteDialogProps) {
   const s = strings.tasks.lists.dialog;
-  const choicesRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const questionId = useId();
 
-  useEffect(() => {
-    choicesRef.current?.querySelector("button")?.focus();
-  }, []);
+  // Focus lands on the first choice, not on „Otkaži" — the trap's own default
+  // (the first tabbable descendant), since the choices come before it. It
+  // also cycles Tab within the panel and hands focus back on close.
+  const panelRef = useFocusTrap<HTMLDivElement>({ open: true });
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -932,6 +933,7 @@ function TaskListDeleteDialog({ list, inboxName, onChoose, onCancel }: TaskListD
     <div className="tasks__dialog-overlay">
       <div className="tasks__dialog-backdrop" onClick={onCancel} />
       <div
+        ref={panelRef}
         className="tasks__dialog-panel"
         role="dialog"
         aria-modal="true"
@@ -945,7 +947,7 @@ function TaskListDeleteDialog({ list, inboxName, onChoose, onCancel }: TaskListD
         <p id={questionId} className="tasks__dialog-question">
           {s.question}
         </p>
-        <div className="tasks__dialog-choices" ref={choicesRef}>
+        <div className="tasks__dialog-choices">
           <Button className="tasks__dialog-choice" onClick={() => onChoose("move-to-inbox")}>
             {s.moveToInboxPrefix} „{inboxName}“
           </Button>

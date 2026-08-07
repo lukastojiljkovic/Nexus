@@ -121,6 +121,7 @@ import { FinCsvImportSection } from "./FinCsvImport.js";
 // nothing at runtime.
 import type { LicenceEntry } from "./licences.js";
 import { countUnit, dayUnit, strings } from "./strings.js";
+import { useFocusTrap } from "./useFocusTrap.js";
 
 /** Sidebar/page display name for a module id; mirrors App.tsx's private helper (kept local — App renders this page, so importing it back would be circular). */
 function moduleName(id: string): string {
@@ -347,6 +348,11 @@ function ProfileDeleteDialog({ profile, busy, error, onConfirm, onCancel }: Prof
   const titleId = useId();
   const questionId = useId();
 
+  // Focus lands on the typed-name field — the trap's own default (the first
+  // tabbable descendant), which `autoFocus` used to do less reliably (and
+  // without cycling Tab inside the panel or returning focus on close).
+  const panelRef = useFocusTrap<HTMLDivElement>({ open: true });
+
   const match = confirmText.trim() === displayName;
 
   // Ignored while the delete is in flight, so a cancel cannot close the dialog
@@ -368,6 +374,7 @@ function ProfileDeleteDialog({ profile, busy, error, onConfirm, onCancel }: Prof
         }}
       />
       <div
+        ref={panelRef}
         className="recur-dialog__panel"
         role="dialog"
         aria-modal="true"
@@ -393,7 +400,6 @@ function ProfileDeleteDialog({ profile, busy, error, onConfirm, onCancel }: Prof
             placeholder={s.deleteConfirmPlaceholder}
             value={confirmText}
             maxLength={NAME_MAX}
-            autoFocus
             required
             onChange={(event) => setConfirmText(event.target.value)}
           />
@@ -2853,13 +2859,12 @@ function CsvMappingDialog({
   const shared = strings.settings.restore;
   const titleId = useId();
   const questionId = useId();
-  const bodyRef = useRef<HTMLDivElement>(null);
 
   // Focus lands on the first role select: the dialog exists to be answered,
-  // and the first answer is the first column's.
-  useEffect(() => {
-    bodyRef.current?.querySelector("select")?.focus();
-  }, []);
+  // and the first answer is the first column's — the trap's own default (the
+  // first tabbable descendant), since the toggles/selects come before
+  // „Otkaži". It also cycles Tab within the panel and hands focus back on close.
+  const panelRef = useFocusTrap<HTMLDivElement>({ open: true });
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -2877,6 +2882,7 @@ function CsvMappingDialog({
     <div className="recur-dialog__overlay">
       <div className="recur-dialog__backdrop" onClick={onCancel} />
       <div
+        ref={panelRef}
         className="csv-map__panel recur-dialog__panel"
         role="dialog"
         aria-modal="true"
@@ -2891,7 +2897,7 @@ function CsvMappingDialog({
           {s.mapQuestion}
         </p>
 
-        <div className="csv-map__body" ref={bodyRef}>
+        <div className="csv-map__body">
           <div className="csv-map__toggles">
             <label className="csv-map__toggle">
               <span className="set__section-caption">{s.delimiterLabel}</span>

@@ -11836,3 +11836,15 @@ button.cal__grid-event--dragging {
   color: var(--nx-danger);
   font-size: var(--nx-font-size-body-sm);
 }
+
+/* ===========================================================================
+   Keyboard focus — notePopover.tsx's roving `role="menu"` (waves: keyboard &
+   focus management). ArrowUp/Down/Home/End now genuinely move DOM focus
+   between `.note__menu-item`s, which had no focus style of its own — the
+   `.nx-button:focus-visible` / `.tasks__pick:focus-visible` recipe, so the
+   ring reads the same wherever keyboard focus lands.
+   =========================================================================== */
+.note__menu-item:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}

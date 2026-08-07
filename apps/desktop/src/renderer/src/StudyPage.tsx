@@ -70,6 +70,7 @@ import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
 import { intervalLabel, isDueWithinSession } from "./reviewIntervals.js";
 import { countUnit, dayUnit, strings } from "./strings.js";
 import { STUDY_LOG_WINDOW_DAYS, studyLogExamLabels, studyLogFacts } from "./studyLog.js";
+import { useFocusTrap } from "./useFocusTrap.js";
 import {
   blockKindChipLabel,
   cutTopicsLine,
@@ -4155,21 +4156,14 @@ function PracticeDialog({ decks, countsFor, onStart, onClose }: PracticeDialogPr
     () => new Set(decks.map((deck) => deck.id)),
   );
   const [problemsOnly, setProblemsOnly] = useState(false);
-  const bodyRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
 
   // Focus lands on the first špil, not on „Počni": the selection is what there
-  // is to answer here, and „Počni" is disabled the moment nothing is checked.
-  useEffect(() => {
-    previousFocusRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    bodyRef.current?.querySelector("input")?.focus();
-    return () => {
-      previousFocusRef.current?.focus();
-      previousFocusRef.current = null;
-    };
-  }, []);
+  // is to answer here, and „Počni" is disabled the moment nothing is checked —
+  // the trap's own default (the first tabbable descendant), since the deck
+  // checkboxes come before the actions row. It also cycles Tab within the
+  // panel and hands focus back on close.
+  const panelRef = useFocusTrap<HTMLDivElement>({ open: true });
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -4194,6 +4188,7 @@ function PracticeDialog({ decks, countsFor, onStart, onClose }: PracticeDialogPr
     <div className="recur-dialog__overlay">
       <div className="recur-dialog__backdrop" onClick={onClose} />
       <div
+        ref={panelRef}
         className="recur-dialog__panel study-practice__panel"
         role="dialog"
         aria-modal="true"
@@ -4204,7 +4199,7 @@ function PracticeDialog({ decks, countsFor, onStart, onClose }: PracticeDialogPr
         </h2>
         <p className="recur-dialog__question">{s.decksLabel}</p>
 
-        <div className="study-practice__body" ref={bodyRef}>
+        <div className="study-practice__body">
           {decks.map((deck) => {
             const counts = countsFor(deck.id);
             return (
@@ -4282,21 +4277,13 @@ interface ScopeCutDialogProps {
  */
 function ScopeCutDialog({ proposal, rows, failed, onAccept, onClose }: ScopeCutDialogProps) {
   const s = strings.study.scopeCut;
-  const panelRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
 
   // Focus lands on „Odustani" — the panel's first button — so Enter cannot
-  // reach the cut before the user has read what it takes.
-  useEffect(() => {
-    previousFocusRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    panelRef.current?.querySelector("button")?.focus();
-    return () => {
-      previousFocusRef.current?.focus();
-      previousFocusRef.current = null;
-    };
-  }, []);
+  // reach the cut before the user has read what it takes. That is also the
+  // trap's own default (the first tabbable descendant): the rows above it are
+  // plain text, never inputs. It also cycles Tab and hands focus back on close.
+  const panelRef = useFocusTrap<HTMLDivElement>({ open: true });
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

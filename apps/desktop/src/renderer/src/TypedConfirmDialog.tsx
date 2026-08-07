@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Button, TextField } from "@nexus/ui";
+import { useFocusTrap } from "./useFocusTrap.js";
 
 /**
  * The typed-name confirmation dialog (PRIV v1 / ADR-057), extracted because
@@ -56,6 +57,11 @@ export function TypedConfirmDialog({
   const titleId = useId();
   const matches = typed.trim() === confirmValue;
 
+  // Focus lands on the typed-name field — the trap's own default (the first
+  // tabbable descendant), which `autoFocus` used to do less reliably (and
+  // without cycling Tab inside the panel or returning focus on close).
+  const panelRef = useFocusTrap<HTMLFormElement>({ open: true });
+
   // Guarded on `busy`, exactly like the Cancel button below it: a request
   // already in flight owns the answer it is about to give, and closing out
   // from under it — main is mid-write on a name the dialog just released —
@@ -79,6 +85,7 @@ export function TypedConfirmDialog({
     <div className="recur-dialog__overlay">
       <div className="recur-dialog__backdrop" onClick={busy ? undefined : onCancel} />
       <form
+        ref={panelRef}
         className="recur-dialog__panel"
         role="dialog"
         aria-modal="true"
@@ -95,7 +102,6 @@ export function TypedConfirmDialog({
           label={confirmLabel}
           placeholder={confirmPlaceholder}
           value={typed}
-          autoFocus
           required
           onChange={(event) => setTyped(event.target.value)}
         />

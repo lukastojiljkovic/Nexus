@@ -15,6 +15,7 @@ import type {
   FinCsvImportSignConvention,
 } from "../../shared/ipc.js";
 import { strings } from "./strings.js";
+import { useFocusTrap } from "./useFocusTrap.js";
 
 /**
  * Uvoz izvoda (.csv) → Finansije (FIN slice e).
@@ -128,13 +129,12 @@ function FinCsvMappingDialog({
   const shared = strings.settings.restore;
   const titleId = useId();
   const questionId = useId();
-  const bodyRef = useRef<HTMLDivElement>(null);
 
   // Focus lands on the first role select: the dialog exists to be answered, and
-  // the first answer is the first column's.
-  useEffect(() => {
-    bodyRef.current?.querySelector("select")?.focus();
-  }, []);
+  // the first answer is the first column's — the trap's own default (the
+  // first tabbable descendant), since the toggles/selects come before
+  // „Otkaži". It also cycles Tab within the panel and hands focus back on close.
+  const panelRef = useFocusTrap<HTMLDivElement>({ open: true });
 
   // Guarded on `busy`: `onCancel` is `FinCsvImportSection`'s `cancel`, which
   // releases the file main is holding AND resets the phase to idle. Firing it
@@ -160,6 +160,7 @@ function FinCsvMappingDialog({
     <div className="recur-dialog__overlay">
       <div className="recur-dialog__backdrop" onClick={busy ? undefined : onCancel} />
       <div
+        ref={panelRef}
         className="csv-map__panel recur-dialog__panel"
         role="dialog"
         aria-modal="true"
@@ -174,7 +175,7 @@ function FinCsvMappingDialog({
           {s.mapQuestion}
         </p>
 
-        <div className="csv-map__body" ref={bodyRef}>
+        <div className="csv-map__body">
           <div className="csv-map__toggles">
             <label className="csv-map__toggle">
               <span className="set__section-caption">{s.delimiterLabel}</span>

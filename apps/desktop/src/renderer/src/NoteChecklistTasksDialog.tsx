@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Button } from "@nexus/ui";
 import type { TaskList } from "../../shared/ipc.js";
 import { countUnit, strings } from "./strings.js";
+import { useFocusTrap } from "./useFocusTrap.js";
 
 export interface NoteChecklistTasksDialogProps {
   profileId: string;
@@ -45,6 +46,13 @@ export function NoteChecklistTasksDialog({
   const selectRef = useRef<HTMLSelectElement>(null);
   const titleId = useId();
   const questionId = useId();
+
+  // The trap's own default initial focus (the first tabbable descendant) is
+  // wrong here while `lists` is still loading — the list picker does not
+  // exist yet, so it would land on „Otkaži". The dedicated effect below,
+  // unchanged, re-focuses the picker itself the moment it mounts; the trap
+  // still owns cycling Tab within the panel and returning focus on close.
+  const panelRef = useFocusTrap<HTMLDivElement>({ open: true });
 
   // The Inbox is the default because it is where a task with no named home
   // lands everywhere else in the app (`TaskStore.create`'s own default), and a
@@ -93,6 +101,7 @@ export function NoteChecklistTasksDialog({
     <div className="recur-dialog__overlay">
       <div className="recur-dialog__backdrop" onClick={onCancel} />
       <div
+        ref={panelRef}
         className="recur-dialog__panel"
         role="dialog"
         aria-modal="true"

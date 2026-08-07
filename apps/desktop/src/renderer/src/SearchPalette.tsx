@@ -16,6 +16,7 @@ import {
   renderHighlighted,
 } from "./searchShared.js";
 import { strings } from "./strings.js";
+import { useFocusTrap } from "./useFocusTrap.js";
 
 /**
  * The ADR-021 global search palette (021-d): a Spotlight-style overlay,
@@ -229,6 +230,19 @@ export function SearchPalette({
     previousFocusRef.current = null;
     return undefined;
   }, [open]);
+
+  // Tab/Shift+Tab cycle within the panel (input, then the kind chips) rather
+  // than walking out into the page behind it. Declared AFTER the effect
+  // above on purpose — effects run in call order, and this one moves focus
+  // onto the input synchronously; declared first, it would steal focus
+  // before that effect's own `document.activeElement` read captured the
+  // element the palette actually opened from. Initial focus and focus-return
+  // otherwise stay that effect's job — the input is deliberately focused
+  // again after a `setTimeout(0)`, clear of whatever the opening keystroke's
+  // own handlers are still doing, and `leaveFor` suppresses the return when
+  // the palette closed because the user navigated somewhere, a policy the
+  // generic trap has no way to express.
+  const panelRef = useFocusTrap<HTMLDivElement>({ open, restoreFocus: false });
 
   // The profile's tag vocabulary and its remembered queries, loaded once per
   // opening through the existing list bridges — the `#` suggestions and the
@@ -718,6 +732,7 @@ export function SearchPalette({
           the backdrop" means. */}
       <div className="search__backdrop" onClick={onClose} />
       <div
+        ref={panelRef}
         className="search__panel"
         role="dialog"
         aria-modal="true"

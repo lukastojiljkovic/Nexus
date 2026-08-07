@@ -1,7 +1,8 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@nexus/ui";
 import { strings } from "./strings.js";
+import { useFocusTrap } from "./useFocusTrap.js";
 
 /** Which occurrences an edit or a delete reaches (ADR-024). */
 export type RecurrenceScope = "this" | "future" | "all";
@@ -30,15 +31,14 @@ export interface RecurrenceScopeDialogProps {
  */
 export function RecurrenceScopeDialog({ action, onChoose, onCancel }: RecurrenceScopeDialogProps) {
   const s = strings.recurrence.scope;
-  const choicesRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const questionId = useId();
 
   // Focus lands on the first choice, not on a default: the dialog opens ready
-  // to be answered from the keyboard without any key already meaning "yes".
-  useEffect(() => {
-    choicesRef.current?.querySelector("button")?.focus();
-  }, []);
+  // to be answered from the keyboard without any key already meaning "yes" —
+  // the trap's own default (the first tabbable descendant), since the choices
+  // come before „Otkaži". It also cycles Tab and hands focus back on close.
+  const panelRef = useFocusTrap<HTMLDivElement>({ open: true });
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -54,6 +54,7 @@ export function RecurrenceScopeDialog({ action, onChoose, onCancel }: Recurrence
     <div className="recur-dialog__overlay">
       <div className="recur-dialog__backdrop" onClick={onCancel} />
       <div
+        ref={panelRef}
         className="recur-dialog__panel"
         role="dialog"
         aria-modal="true"
@@ -66,7 +67,7 @@ export function RecurrenceScopeDialog({ action, onChoose, onCancel }: Recurrence
         <p id={questionId} className="recur-dialog__question">
           {action === "delete" ? s.questionDelete : s.questionEdit}
         </p>
-        <div className="recur-dialog__choices" ref={choicesRef}>
+        <div className="recur-dialog__choices">
           {SCOPES.map((scope) => (
             <Button key={scope} className="recur-dialog__choice" onClick={() => onChoose(scope)}>
               {label[scope]}

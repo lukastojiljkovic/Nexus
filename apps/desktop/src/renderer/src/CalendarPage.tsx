@@ -729,6 +729,16 @@ export function CalendarPage({
     onClose: () => setForeignAnchor(null),
   });
 
+  // Focus moves onto the one action the instant this `role="menu"` opens —
+  // the same WAI-ARIA APG rule `notePopover.tsx` follows; this panel is
+  // hand-rolled rather than built on `NotePopover` (there is no persistent
+  // trigger element to anchor it to — see `openForeignPopover`'s own note),
+  // so the one-item version of that rule is repeated here rather than shared.
+  useEffect(() => {
+    if (foreignAnchor === null) return;
+    foreignPopover.panelRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+  }, [foreignAnchor, foreignPopover.panelRef]);
+
   function resetForm(): void {
     setEditingId(null);
     setEditingOccurrence(null);
@@ -1489,6 +1499,12 @@ export function CalendarPage({
             className="note__menu-panel"
             role="menu"
             aria-label={strings.calendar.overlay.popoverLabel}
+            // A menu is not a modal (WAI-ARIA APG): Tab closes it and moves
+            // on, matching `notePopover.tsx`'s own menus, rather than
+            // leaving it open with focus already gone.
+            onKeyDown={(event) => {
+              if (event.key === "Tab") setForeignAnchor(null);
+            }}
             {...foreignPopover.panelProps}
           >
             <span className="note__menu-label">{profileDisplayName(overlayProfile)}</span>
@@ -1676,7 +1692,14 @@ export function CalendarPage({
                 either panel is a `<form>` or a submit button — they sit inside
                 this one, and a nested form is not a thing HTML has. */}
             {editingId === null ? (
+              // `menu={false}`: each row carries a SECOND, non-menuitem
+              // control (the „×" delete button below) beside the apply
+              // action — a real `role="menu"` admits only menuitems (and
+              // separators), so claiming the role here would promise
+              // ArrowUp/Down roving focus over a list that is not
+              // exclusively menuitems. An honest labelled group instead.
               <NotePopover
+                menu={false}
                 label={strings.calendar.templates.menuLabel}
                 triggerClassName="cal__templates-trigger"
                 triggerContent={strings.calendar.templates.title}
@@ -1696,7 +1719,6 @@ export function CalendarPage({
                         <div key={template.id} className="cal__template-row">
                           <button
                             className="note__menu-item cal__template-apply"
-                            role="menuitem"
                             type="button"
                             title={strings.calendar.templates.applyTitle}
                             onClick={() => void applyTemplate(template, close)}
@@ -1723,7 +1745,12 @@ export function CalendarPage({
                 )}
               </NotePopover>
             ) : (
+              // `menu={false}`: naming a template swaps this panel's content
+              // for a form (a text field plus Save/Cancel) — never a
+              // `role="menu"`'s business, so the honest role holds for both
+              // of the panel's states rather than switching underneath it.
               <NotePopover
+                menu={false}
                 label={strings.calendar.templates.saveMenuLabel}
                 triggerClassName="cal__template-menu"
               >
@@ -1775,7 +1802,6 @@ export function CalendarPage({
                     ) : (
                       <button
                         className="note__menu-item"
-                        role="menuitem"
                         type="button"
                         onClick={() => beginSaveTemplate(title)}
                       >

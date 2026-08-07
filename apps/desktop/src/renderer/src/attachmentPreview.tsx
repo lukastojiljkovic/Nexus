@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import * as Y from "yjs";
 import { EditorContent, useEditor } from "@tiptap/react";
@@ -13,6 +13,7 @@ import { Callout } from "./noteCallout.js";
 import { NoteTableOfContents } from "./noteTableOfContents.js";
 import { Toggle, ToggleContent, ToggleSummary } from "./noteToggle.js";
 import { strings } from "./strings.js";
+import { useFocusTrap } from "./useFocusTrap.js";
 
 /**
  * The „Pregledaj" dialog (DOC tier 0, ADR-064): ONE house preview component
@@ -60,22 +61,13 @@ export function AttachmentPreviewDialog({
   kind,
   onClose,
 }: AttachmentPreviewDialogProps) {
-  const actionsRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
 
   // Focus goes to the only control there is, and back where it came from on
-  // close — ShortcutsDialog's rule, so dismissing the preview never strands
-  // the keyboard on a portal that no longer exists.
-  useEffect(() => {
-    previousFocusRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    actionsRef.current?.querySelector("button")?.focus();
-    return () => {
-      previousFocusRef.current?.focus();
-      previousFocusRef.current = null;
-    };
-  }, []);
+  // close — the trap's own default (the first tabbable descendant), since
+  // neither the image nor the read-only text/markdown body is focusable. It
+  // also cycles Tab within the panel, which the dialog never did before.
+  const panelRef = useFocusTrap<HTMLDivElement>({ open: true });
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -92,6 +84,7 @@ export function AttachmentPreviewDialog({
     <div className="recur-dialog__overlay">
       <div className="recur-dialog__backdrop" onClick={onClose} />
       <div
+        ref={panelRef}
         className="recur-dialog__panel doc-preview__panel"
         role="dialog"
         aria-modal="true"
@@ -117,7 +110,7 @@ export function AttachmentPreviewDialog({
             />
           )}
         </div>
-        <div className="recur-dialog__actions" ref={actionsRef}>
+        <div className="recur-dialog__actions">
           <Button className="recur-dialog__cancel" onClick={onClose}>
             {strings.attachmentPreview.close}
           </Button>

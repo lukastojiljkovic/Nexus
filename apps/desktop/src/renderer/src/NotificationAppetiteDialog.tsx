@@ -4,6 +4,7 @@ import { Button } from "@nexus/ui";
 import type { NotificationSource } from "../../shared/ipc.js";
 import { NOTIFICATION_PRESETS } from "./notificationFormat.js";
 import { strings } from "./strings.js";
+import { useFocusTrap } from "./useFocusTrap.js";
 
 export interface NotificationAppetiteDialogProps {
   profileId: string;
@@ -35,7 +36,6 @@ export function NotificationAppetiteDialog({
   onAnswered,
 }: NotificationAppetiteDialogProps) {
   const s = strings.notifications.appetite;
-  const choicesRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const questionId = useId();
   const [saving, setSaving] = useState(false);
@@ -66,9 +66,11 @@ export function NotificationAppetiteDialog({
     [profileId, onAnswered],
   );
 
-  useEffect(() => {
-    choicesRef.current?.querySelector("button")?.focus();
-  }, []);
+  // Focus lands on the first preset, not on „Zadrži podrazumevano": answerable
+  // from the keyboard without any key already meaning "keep the default" —
+  // the trap's own default (the first tabbable descendant), since the presets
+  // come before it. It also cycles Tab and hands focus back on close.
+  const panelRef = useFocusTrap<HTMLDivElement>({ open: true });
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -83,6 +85,7 @@ export function NotificationAppetiteDialog({
     <div className="ntf__appetite-overlay">
       <div className="ntf__appetite-backdrop" onClick={() => void answer(null)} />
       <div
+        ref={panelRef}
         className="ntf__appetite-panel"
         role="dialog"
         aria-modal="true"
@@ -95,7 +98,7 @@ export function NotificationAppetiteDialog({
         <p id={questionId} className="ntf__appetite-question">
           {s.question}
         </p>
-        <div className="ntf__appetite-choices" ref={choicesRef}>
+        <div className="ntf__appetite-choices">
           {NOTIFICATION_PRESETS.map((preset) => (
             <Button
               key={preset.key}

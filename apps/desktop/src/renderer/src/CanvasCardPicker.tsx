@@ -6,6 +6,7 @@ import { canvasPickerRows } from "./canvasCards.js";
 import type { CanvasPickerRow } from "./canvasCards.js";
 import { SEARCH_DEBOUNCE_MS } from "./searchShared.js";
 import { strings } from "./strings.js";
+import { useFocusTrap } from "./useFocusTrap.js";
 
 /**
  * „Dodaj karticu" (CANV slice c): which Nexus object goes on the board.
@@ -51,6 +52,11 @@ export function CanvasCardPicker({ profileId, onPick, onCancel }: CanvasCardPick
   const [activeIndex, setActiveIndex] = useState(0);
   const titleId = useId();
   const descriptionId = useId();
+
+  // Focus lands on the search field — the trap's own default (the first
+  // tabbable descendant), which `autoFocus` used to do less reliably (and
+  // without cycling Tab inside the panel or returning focus on close).
+  const panelRef = useFocusTrap<HTMLDivElement>({ open: true });
   /**
    * Which request may still write `rows` — the palette's guard, for its reason:
    * a slow query issued before a fast one must not repaint the list after it.
@@ -118,6 +124,7 @@ export function CanvasCardPicker({ profileId, onPick, onCancel }: CanvasCardPick
     <div className="recur-dialog__overlay">
       <div className="recur-dialog__backdrop" onClick={onCancel} />
       <div
+        ref={panelRef}
         className="recur-dialog__panel canv-picker"
         role="dialog"
         aria-modal="true"
@@ -135,7 +142,6 @@ export function CanvasCardPicker({ profileId, onPick, onCancel }: CanvasCardPick
           label={s.searchLabel}
           placeholder={s.placeholder}
           value={query}
-          autoFocus
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={onInputKeyDown}
         />

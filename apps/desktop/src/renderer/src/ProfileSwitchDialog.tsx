@@ -6,6 +6,7 @@ import type { Profile } from "../../shared/ipc.js";
 import { authErrorMessage, formatCountdown } from "./AuthGate.js";
 import { profileDisplayName } from "./profilePrefs.js";
 import { strings } from "./strings.js";
+import { useFocusTrap } from "./useFocusTrap.js";
 
 export interface ProfileSwitchDialogProps {
   /** The profile being switched INTO — named in the dialog, the reset dialog's own idiom. */
@@ -35,6 +36,11 @@ export function ProfileSwitchDialog({ profile, onVerified, onCancel }: ProfileSw
   const [lockedForMs, setLockedForMs] = useState(0);
   const titleId = useId();
   const questionId = useId();
+
+  // Focus lands on the passcode field — the trap's own default (the first
+  // tabbable descendant), which `autoFocus` used to do less reliably (and
+  // without cycling Tab inside the panel or returning focus on close).
+  const panelRef = useFocusTrap<HTMLDivElement>({ open: true });
 
   const stillLocked = lockedForMs > 0;
 
@@ -88,6 +94,7 @@ export function ProfileSwitchDialog({ profile, onVerified, onCancel }: ProfileSw
     <div className="recur-dialog__overlay">
       <div className="recur-dialog__backdrop" onClick={cancel} />
       <div
+        ref={panelRef}
         className="recur-dialog__panel"
         role="dialog"
         aria-modal="true"
@@ -106,7 +113,6 @@ export function ProfileSwitchDialog({ profile, onVerified, onCancel }: ProfileSw
             type="password"
             label={s.switchPasscodeLabel}
             value={passcode}
-            autoFocus
             required
             disabled={stillLocked}
             onChange={(event) => setPasscode(event.target.value)}
