@@ -10,6 +10,7 @@ import type {
 import { AttachmentPreviewDialog } from "./attachmentPreview.js";
 import { attachmentPreviewKind, type AttachmentPreviewKind } from "./attachmentPreviewKind.js";
 import { fileExtensionMark, formatFileSize, totalFileBytes } from "./fileRows.js";
+import { FileSpace } from "./FileSpace.js";
 import { persistFileView, readStoredFileView, FILE_VIEWS, type FileView } from "./filePrefs.js";
 import { NotePopover } from "./notePopover.js";
 import { SEARCH_DEBOUNCE_MS, formatContextDate } from "./searchShared.js";
@@ -443,7 +444,11 @@ className="nx-segmented__option doc__chip"
           </Button>
         </div>
       ) : (
-        renderBody(state.data)
+        <>
+          {/* The summary the list below is the detail of — same entries, same read, no second call. */}
+          <FileSpace entries={state.data.entries} truncated={state.data.truncated} />
+          {renderBody(state.data)}
+        </>
       )}
 
       {preview !== null && (

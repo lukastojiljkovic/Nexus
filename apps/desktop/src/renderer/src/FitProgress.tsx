@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { BarChart, Button, Chip, EmptyState, LoadingState } from "@nexus/ui";
+import { Button, Chip, ColumnPlot, EmptyState, LoadingState } from "@nexus/ui";
 import { exerciseRecords, weeklyVolume } from "@nexus/core";
 import type { ExerciseRecords, MuscleGroup, WeekVolume } from "@nexus/core";
 import type { FitWorkout } from "../../shared/ipc.js";
 import { localTodayKey } from "./examDates.js";
+import { FitBodyMap } from "./FitBodyMap.js";
 import { progressSets } from "./fitWorkout.js";
 import { figureText, setCountText, tonnageText } from "./fitWorkoutCopy.js";
-import { strings } from "./strings.js";
+import { countUnit, strings } from "./strings.js";
 
 /**
  * „Napredak" (FIT slice d, ADR-081 §5) — what the training log adds up to.
@@ -105,6 +106,23 @@ export function FitProgress({ profileId }: FitProgressProps) {
   const recentWeeks = weeks.slice(-WEEKS_SHOWN);
   const latestWeek = recentWeeks.at(-1);
 
+  // The chart's read-aloud sentence, derived from the same `recentWeeks` the
+  // bars are drawn from so it can never state a total or a peak the bars do
+  // not show. Ties on the peak keep the EARLIEST week — `recentWeeks` is
+  // oldest-first — so the sentence is deterministic rather than picking
+  // whichever week happens to iterate last.
+  const volumeTotalSets = recentWeeks.reduce((sum, week) => sum + week.sets, 0);
+  const volumePeakWeek = recentWeeks.reduce<WeekVolume | null>(
+    (peak, week) => (peak === null || week.sets > peak.sets ? week : peak),
+    null,
+  );
+  // `recentWeeks` empty means the chart draws as `empty` below, so this
+  // fallback is never read aloud — it only keeps `description` a real string.
+  const volumeDescription =
+    volumePeakWeek === null
+      ? s.emptyDescription
+      : `${s.volumeChartLead}: ${setCountText(volumeTotalSets)} ${s.volumeChartAcross} ${String(recentWeeks.length)} ${countUnit(recentWeeks.length, s.volumeWeekUnitOne, s.volumeWeekUnitFew, s.volumeWeekUnitMany)}, ${s.volumeChartPeak} ${weekLabel(volumePeakWeek)}.`;
+
   return (
     <section className="fit__section" aria-label={s.heading}>
       <div className="fit__heading">{s.heading}</div>
@@ -129,9 +147,18 @@ export function FitProgress({ profileId }: FitProgressProps) {
         <EmptyState title={s.emptyTitle} description={s.emptyDescription} />
       ) : (
         <>
-          <div className="fit__figures-heading">{s.volumeHeading}</div>
-          <BarChart
-            data={recentWeeks.map((week) => ({ label: weekLabel(week), value: week.sets }))}
+          {/* A week is a discrete slot, not a position on a continuous axis —
+              `ColumnPlot`, not `SeriesPlot`. A week with no training must be
+              a missing bar, never a line interpolating a session that never
+              happened. */}
+          <ColumnPlot
+            title={s.volumeHeading}
+            description={volumeDescription}
+            caption={s.volumeChartCaption}
+            empty={recentWeeks.length === 0 ? { reason: s.emptyDescription } : null}
+            slots={recentWeeks.map((week) => ({ key: week.weekStart, label: weekLabel(week) }))}
+            series={[{ key: "sets", tone: "accent", values: recentWeeks.map((week) => week.sets) }]}
+            width={720}
           />
           <div className="fit__weeks">
             {[...recentWeeks].reverse().map((week) => (
@@ -147,6 +174,14 @@ export function FitProgress({ profileId }: FitProgressProps) {
               </div>
             ))}
           </div>
+
+          {/* The body before the counts. „Šta nisam trenirao" is answered by a
+              silhouette at a glance and by twenty sorted chips only in
+              sequence, so the map comes first and the per-muscle figures below
+              are its detail. Its own window is seven days, stated in its
+              caption — deliberately not the 90/365 range this section is set
+              to, because a week is what a training week balances over. */}
+          <FitBodyMap sets={sets} today={today} />
 
           {latestWeek !== undefined && (
             <>

@@ -5,6 +5,7 @@ import {
   CardsView,
   Chip,
   EmptyState,
+  Icon,
   ListRow,
   ListView,
   LoadingState,
@@ -39,6 +40,7 @@ import type {
 } from "../../shared/ipc.js";
 import { RecurrencePicker } from "./RecurrencePicker.js";
 import { localTodayKey, shiftDayKey } from "./examDates.js";
+import { FinBalanceFlow } from "./FinBalanceFlow.js";
 import { FinCsvImportSection } from "./FinCsvImport.js";
 import { normalizeCurrencyInput, readStoredPrimaryCurrency } from "./financePrefs.js";
 import {
@@ -353,7 +355,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
   const [budgetCurrency, setBudgetCurrency] = useState("");
   const [budgetAmount, setBudgetAmount] = useState("");
   const [railError, setRailError] = useState<string | null>(null);
-  /** The category a „×" click is asking about; null when nothing is being asked. */
+  /** The category a delete click is asking about; null when nothing is being asked. */
   const [pendingDeleteCategory, setPendingDeleteCategory] = useState<FinCategory | null>(null);
 
   // „Pretplate" (FIN slice d): one form, serving create and edit, exactly as the
@@ -1076,7 +1078,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
           aria-label={`${s.ledger.edit}: ${rowTitle(row)}`}
           onClick={() => beginEdit(row)}
         >
-          ✎
+          <Icon name="pencil" size={14} />
         </Button>
         <Button
           size="sm"
@@ -1084,7 +1086,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
           aria-label={`${s.ledger.delete}: ${rowTitle(row)}`}
           onClick={() => void deleteTransaction(row)}
         >
-          ×
+          <Icon name="trash" size={14} />
         </Button>
       </span>
     );
@@ -1161,7 +1163,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
                         )
                       }
                     >
-                      ×
+                      <Icon name="trash" size={14} />
                     </button>
                   </div>
                 ))}
@@ -1285,6 +1287,12 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
             </span>
           </span>
         </div>
+        <FinBalanceFlow
+          currency={section.currency}
+          monthKey={monthKey}
+          accounts={accountList}
+          transactions={rows}
+        />
         {section.lines.length === 0 ? (
           <p className="fin__report-note">{s.report.noSpending}</p>
         ) : (
@@ -1342,7 +1350,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
               title={paused ? s.subscriptions.resume : s.subscriptions.pause}
               onClick={() => void togglePause(subscription)}
             >
-              {paused ? "▷" : "‖"}
+              <Icon name={paused ? "play" : "pause"} size={14} />
             </Button>
             <Button
               size="sm"
@@ -1350,7 +1358,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
               aria-label={`${s.subscriptions.edit}: ${subscription.name}`}
               onClick={() => beginEditSubscription(subscription)}
             >
-              ✎
+              <Icon name="pencil" size={14} />
             </Button>
             <Button
               size="sm"
@@ -1358,7 +1366,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
               aria-label={`${s.subscriptions.delete}: ${subscription.name}`}
               onClick={() => void deleteSubscription(subscription)}
             >
-              ×
+              <Icon name="trash" size={14} />
             </Button>
           </span>
         }
@@ -1423,7 +1431,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
             title={s.accounts.edit}
             onClick={() => beginEditAccount(account)}
           >
-            ✎
+            <Icon name="pencil" size={14} />
           </Button>
           <Button
             size="sm"
@@ -1438,7 +1446,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
               })
             }
           >
-            {account.archived ? "↩" : "▤"}
+            <Icon name={account.archived ? "unarchive" : "archive"} size={14} />
           </Button>
           <Button
             size="sm"
@@ -1453,7 +1461,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
               })
             }
           >
-            ×
+            <Icon name="trash" size={14} />
           </Button>
         </span>
       </div>
@@ -1629,7 +1637,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
                   // name back before running one.
                   onClick={() => setPendingDeleteCategory(category)}
                 >
-                  ×
+                  <Icon name="trash" size={14} />
                 </button>
               </span>
             ))}
@@ -1732,7 +1740,7 @@ className="nx-segmented__option fin__page"
               aria-label={s.dismiss}
               onClick={() => setPendingUndo(null)}
             >
-              ×
+              <Icon name="close" size={14} />
             </Button>
           </div>
         )}
@@ -1939,7 +1947,7 @@ className="nx-segmented__option fin__page"
                 title={s.report.previousMonth}
                 onClick={() => setMonthKey(shiftMonthKey(monthKey, -1))}
               >
-                ‹
+                <Icon name="chevronLeft" size={14} />
               </Button>
               <span className="fin__report-month">{formatFinMonthLabel(monthKey)}</span>
               <Button
@@ -1949,7 +1957,7 @@ className="nx-segmented__option fin__page"
                 title={s.report.nextMonth}
                 onClick={() => setMonthKey(shiftMonthKey(monthKey, 1))}
               >
-                ›
+                <Icon name="chevronRight" size={14} />
               </Button>
               {monthKey !== currentMonthKey && (
                 <Button

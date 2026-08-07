@@ -7,6 +7,7 @@ import {
   Checkbox,
   Chip,
   EmptyState,
+  Icon,
   KanbanCard,
   KanbanView,
   ListRow,
@@ -52,6 +53,7 @@ import type {
   TaskViewKanbanGroup,
   TaskViewSort,
   TaskViewSortDirection,
+  WeekStart,
 } from "@nexus/core";
 import {
   MAX_TASK_LIST_NAME_LENGTH,
@@ -97,6 +99,8 @@ import { dayUnit, strings } from "./strings.js";
 import { readStoredBlockedInToday, toIncludeBlocked } from "./taskPrefs.js";
 import { useFocusTrap } from "./useFocusTrap.js";
 import { moduleName } from "./moduleName.js";
+import { TaskFlow } from "./TaskFlow.js";
+import { readStoredWeekStart, toWeekStart } from "./weekStart.js";
 
 // --- Field orderings (renderer mirror of @nexus/db) -------------------------
 //
@@ -1061,6 +1065,12 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
    * switching remounts it.
    */
   const [blockedInToday] = useState(() => readStoredBlockedInToday());
+  /**
+   * The device's first-day-of-week preference (PRD 04 §5), read once on
+   * mount exactly as the calendar and HABIT's own wall read it — „Priliv i
+   * odliv" buckets weeks by it below.
+   */
+  const [weekStart] = useState<WeekStart>(() => toWeekStart(readStoredWeekStart()));
   /** True when the last list/section action failed — the rail says so rather than failing silently. */
   const [listFailed, setListFailed] = useState(false);
   const [railEditing, setRailEditing] = useState<RailEditing>(null);
@@ -2937,7 +2947,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
               className={picked ? "tasks__pick-mark" : "tasks__pick-mark tasks__pick-mark--off"}
               aria-hidden="true"
             >
-              ✓
+              <Icon name="check" size={14} />
             </span>
           </button>
           {depth > 0 && <span className={indentClass(depth)} />}
@@ -2959,7 +2969,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         onDragStart={(event) => startTaskDrag(event, task)}
         onDragEnd={endTaskDrag}
       >
-        ⠿
+        <Icon name="drag" size={14} />
       </span>
     );
   }
@@ -3022,7 +3032,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                                   className={`note__menu-check${attached ? "" : " note__menu-check--hidden"}`}
                                   aria-hidden="true"
                                 >
-                                  ✓
+                                  <Icon name="check" size={14} />
                                 </span>
                                 {tag.name}
                               </button>
@@ -3082,7 +3092,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                     aria-label={strings.tasks.addSubtaskLabel}
                     onClick={() => openSubtaskInput(task.id)}
                   >
-                    +
+                    <Icon name="plus" size={14} />
                   </Button>
                 )}
                 <Button
@@ -3091,7 +3101,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                   aria-label={strings.tasks.editLabel}
                   onClick={() => startEdit(task)}
                 >
-                  ✎
+                  <Icon name="pencil" size={14} />
                 </Button>
                 <Button
                   size="sm"
@@ -3099,7 +3109,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                   aria-label={strings.tasks.deleteLabel}
                   onClick={() => void remove(task)}
                 >
-                  ×
+                  <Icon name="trash" size={14} />
                 </Button>
               </>
             )}
@@ -3170,7 +3180,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                   aria-label={s.removeLabel}
                   onClick={() => removeDependency(blocker.id, taskId)}
                 >
-                  ×
+                  <Icon name="close" size={14} />
                 </Button>
               </span>
             ))
@@ -3374,7 +3384,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
             aria-label={s.renameSectionLabel}
             onClick={() => beginRenameSection(section)}
           >
-            ✎
+            <Icon name="pencil" size={14} />
           </Button>
           {/* A lone heading has nothing to step past — see the rail row. */}
           {order.length > 1 && (
@@ -3396,7 +3406,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
             // the answer turns on.
             onClick={() => setPendingDeleteSection(section)}
           >
-            ×
+            <Icon name="trash" size={14} />
           </Button>
         </span>
       </div>
@@ -3634,7 +3644,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                   aria-label={s.renameListLabel}
                   onClick={() => beginRenameList(list)}
                 >
-                  ✎
+                  <Icon name="pencil" size={14} />
                 </Button>
                 <Button
                   size="sm"
@@ -3642,7 +3652,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                   aria-label={s.newSubList}
                   onClick={() => beginNewList(list.id)}
                 >
-                  +
+                  <Icon name="plus" size={14} />
                 </Button>
                 {/* The Inbox is where "premesti u Inbox" moves things and where a
                     task lands when the user names no list, so it can neither be
@@ -3671,7 +3681,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                       aria-label={s.deleteListLabel}
                       onClick={() => setDeletePrompt(list)}
                     >
-                      ×
+                      <Icon name="trash" size={14} />
                     </Button>
                   </>
                 )}
@@ -4006,6 +4016,14 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
       </aside>
 
       <div className="tasks__main">
+        {/* The regimen's shape before its rows, the wall's own precedent
+            (HabitWall): a summary of the whole profile, never gated on
+            which list or view the rail has selected. Absent while the fetch
+            is still in flight or has failed — a chart drawn over data that
+            is not actually in hand yet would be a picture of nothing. */}
+        {!failed && tasks !== null && (
+          <TaskFlow tasks={tasks} today={todayKey} weekStart={weekStart} />
+        )}
         <div className="tasks__toolbar">
           {/* The add/edit form is hidden inside a VIEW while nothing is being
               edited (ADR-049): a capture typed under „Danas“ would file into the
@@ -4047,7 +4065,14 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                         something is set, and the submit cannot quietly apply a
                         rok nobody can see. The bullet carries an aria-label,
                         because a bullet is not something a screen reader can
-                        interpret. */}
+                        interpret.
+
+                        DELIBERATELY STILL A GLYPH after the icon sweep. A
+                        bullet is a typographic mark, not a pictogram — the same
+                        argument that keeps the ✦ brand mark in CSS rather than
+                        in the icon set. Drawing a 24×24 icon whose whole
+                        content is one dot would add a name to the set that
+                        depicts nothing. */}
                     {!detailsOpen && hasDetailValues && (
                       <span
                         className="tasks__details-mark"
@@ -4073,7 +4098,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                   aria-label={strings.tasks.quickDate.regionLabel}
                 >
                   <span className="tasks__quick-date-mark" aria-hidden="true">
-                    →
+                    <Icon name="arrowRight" />
                   </span>
                   <Chip variant="data" title={strings.tasks.quickDate.chipTitle}>
                     {formatQuickDate(activeQuickDate.date)}
@@ -4091,7 +4116,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                       inputRef.current?.focus();
                     }}
                   >
-                    ×
+                    <Icon name="close" size={14} />
                   </Button>
                 </div>
               )}
@@ -4267,7 +4292,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                             aria-label={strings.tasks.templates.delete}
                             onClick={() => void deleteTemplate(template.id)}
                           >
-                            ×
+                            <Icon name="trash" size={14} />
                           </button>
                         </div>
                       ))
@@ -4403,7 +4428,7 @@ className="nx-segmented__option tasks__view"
                               className={`note__menu-check${hidden ? " note__menu-check--hidden" : ""}`}
                               aria-hidden="true"
                             >
-                              ✓
+                              <Icon name="check" size={14} />
                             </span>
                             {title}
                           </button>
@@ -4416,7 +4441,7 @@ className="nx-segmented__option tasks__view"
                                 disabled={index === 0}
                                 onClick={() => moveKanbanColumnKey(key, -1)}
                               >
-                                ↑
+                                <Icon name="arrowUp" size={14} />
                               </button>
                               <button
                                 className="tasks__column-step"
@@ -4425,7 +4450,7 @@ className="nx-segmented__option tasks__view"
                                 disabled={index === kanbanRows.length - 1}
                                 onClick={() => moveKanbanColumnKey(key, 1)}
                               >
-                                ↓
+                                <Icon name="arrowDown" size={14} />
                               </button>
                             </>
                           )}
@@ -4627,7 +4652,7 @@ className="nx-segmented__option tasks__view"
               aria-label={strings.tasks.dismiss}
               onClick={() => setPendingUndo(null)}
             >
-              ×
+              <Icon name="close" size={14} />
             </Button>
           </div>
         )}
@@ -4649,7 +4674,7 @@ className="nx-segmented__option tasks__view"
               aria-label={strings.tasks.dismiss}
               onClick={() => setAdvancedTo(null)}
             >
-              ×
+              <Icon name="close" size={14} />
             </Button>
           </div>
         )}
@@ -4666,7 +4691,7 @@ className="nx-segmented__option tasks__view"
               aria-label={strings.tasks.dismiss}
               onClick={() => setPendingListUndoId(null)}
             >
-              ×
+              <Icon name="close" size={14} />
             </Button>
           </div>
         )}

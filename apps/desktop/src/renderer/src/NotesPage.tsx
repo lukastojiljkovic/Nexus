@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { JSONContent } from "@tiptap/core";
 import type { CardsViewConfig, CollectionSchema } from "@nexus/core";
-import { Button, CardsView, EmptyState, LoadingState, PageHeader } from "@nexus/ui";
+import { Button, CardsView, EmptyState, Icon, LoadingState, PageHeader } from "@nexus/ui";
 import type {
   NoteCardDisposition,
   NoteCategory,
@@ -16,6 +16,7 @@ import { NoteCardsDeleteDialog } from "./NoteCardsDeleteDialog.js";
 import { NoteChecklistTasksDialog } from "./NoteChecklistTasksDialog.js";
 import { NoteEditor } from "./NoteEditor.js";
 import { NOTE_ORGANIZER_PANE_ID, NoteOrganizer, type FolderSelection } from "./NoteOrganizer.js";
+import { NoteRhythm } from "./NoteRhythm.js";
 import { PRIV_LOCKED_EVENT } from "./PrivPage.js";
 import { TypedConfirmDialog } from "./TypedConfirmDialog.js";
 import { formatNotificationWhen } from "./notificationFormat.js";
@@ -770,7 +771,7 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
           aria-pressed={note.pinned}
           onClick={() => void togglePin(note)}
         >
-          {note.pinned ? "★" : "☆"}
+          {note.pinned ? <Icon name="pinFilled" size={14} /> : <Icon name="pin" size={14} />}
         </button>
         <button
           type="button"
@@ -863,7 +864,7 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
                       className={`note__menu-check${note.categoryId === null ? "" : " note__menu-check--hidden"}`}
                       aria-hidden="true"
                     >
-                      ✓
+                      <Icon name="check" size={14} />
                     </span>
                     {strings.notes.noCategory}
                   </button>
@@ -885,7 +886,7 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
                           className={`note__menu-check${chosen ? "" : " note__menu-check--hidden"}`}
                           aria-hidden="true"
                         >
-                          ✓
+                          <Icon name="check" size={14} />
                         </span>
                         {category.name}
                       </button>
@@ -912,7 +913,7 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
                           className={`note__menu-check${attached ? "" : " note__menu-check--hidden"}`}
                           aria-hidden="true"
                         >
-                          ✓
+                          <Icon name="check" size={14} />
                         </span>
                         {tag.name}
                       </button>
@@ -1001,6 +1002,10 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
           </Button>
         }
       />
+      {/* The library's own summary, not any one note's — a page-level sibling of
+          the three-pane grid rather than a child of any one pane, so it reads as
+          being about the whole profile regardless of which folder is selected. */}
+      <NoteRhythm profileId={profileId} />
       <div className="note" data-organizer={organizerOpen ? "open" : "closed"}>
         <NoteOrganizer
           profileId={profileId}
@@ -1079,7 +1084,7 @@ className="nx-segmented__option note__view"
                 aria-label={strings.notes.dismiss}
                 onClick={() => setPendingUndo(null)}
               >
-                ×
+                <Icon name="close" size={14} />
               </Button>
             </div>
           )}

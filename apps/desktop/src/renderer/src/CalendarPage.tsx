@@ -1,6 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent, KeyboardEvent } from "react";
-import { Button, Checkbox, Chip, EmptyState, ListRow, LoadingState, PageHeader, TextField } from "@nexus/ui";
+import {
+  Button,
+  Checkbox,
+  Chip,
+  EmptyState,
+  Icon,
+  ListRow,
+  LoadingState,
+  PageHeader,
+  TextField,
+} from "@nexus/ui";
 import { isValidDayKey, monthKeyOf, shiftDayKey, shiftMonthKey, weekDayKeys } from "@nexus/core";
 import type { WeekStart } from "@nexus/core";
 import { MAX_EVENT_TEMPLATE_NAME_LENGTH } from "../../shared/ipc.js";
@@ -68,6 +78,7 @@ import { readStoredWeekStart, toWeekStart } from "./weekStart.js";
 import { formatMoney } from "./money.js";
 import { dayUnit, strings } from "./strings.js";
 import { moduleName } from "./moduleName.js";
+import { CalendarHourRing } from "./CalendarHourRing.js";
 
 // --- Per-profile view memory (interim, mirrors TasksPage) -------------------
 //
@@ -1472,6 +1483,20 @@ export function CalendarPage({
         sources,
         expansionRange,
       );
+  // „Sat dana"'s own scope. `calendarItems` is deliberately WIDER than the
+  // period on screen — a one-off event, a task or an exam flows through
+  // `buildCalendarItems` untouched however far outside `expansionRange` it
+  // falls (see that module's header); only a recurring master's occurrences
+  // and birthdays are actually bounded by it. A grid draws that narrower
+  // slice itself, cell by cell (`CalendarMonth` filters by `startKey` per
+  // day it renders); the ring has no cells to filter through, so it does the
+  // same filter once here — by `startKey`, „did this item START inside the
+  // horizon this page currently treats as the visible one," the same
+  // `expansionRange` every view (agenda included, per its own comment above)
+  // already reads as that horizon.
+  const visibleCalendarItems = calendarItems.filter(
+    (item) => item.startKey >= expansionRange.from && item.startKey <= expansionRange.to,
+  );
   // Only Semestar reads density, and it reads it off that single merge.
   const dayDensity = view === "semestar" ? buildDayDensity(calendarItems) : EMPTY_DENSITY;
   const periodLabel =
@@ -1750,7 +1775,7 @@ className="nx-segmented__option cal__source"
                             aria-label={strings.calendar.templates.delete}
                             onClick={() => void deleteTemplate(template.id)}
                           >
-                            ×
+                            <Icon name="trash" size={14} />
                           </button>
                         </div>
                       ))
@@ -1855,7 +1880,7 @@ className="nx-segmented__option cal__source"
                 aria-label={strings.calendar.dismiss}
                 onClick={() => setPendingUndoId(null)}
               >
-                ×
+                <Icon name="close" size={14} />
               </Button>
             </div>
           )}
@@ -1865,6 +1890,13 @@ className="nx-segmented__option cal__source"
               {actionError}
             </p>
           )}
+
+          {/* The one thing the grid below cannot say (CAL's signature
+              graphic): which HOURS the visible period is busy in, not just
+              which days. Re-derives with `calendarItems` itself, so it never
+              needs a fetch of its own and always matches whatever range the
+              grid or agenda is currently showing. */}
+          {!failed && !dataLoading && <CalendarHourRing items={visibleCalendarItems} />}
 
           {failed ? (
             <EmptyState
@@ -1887,7 +1919,7 @@ className="nx-segmented__option cal__source"
                     disabled={view === "semestar" && activeTerm !== null}
                     onClick={() => shiftPeriod(-1)}
                   >
-                    ‹
+                    <Icon name="chevronLeft" size={14} />
                   </Button>
                   <Button size="sm" onClick={goToday}>
                     {strings.calendar.today}
@@ -1898,7 +1930,7 @@ className="nx-segmented__option cal__source"
                     disabled={view === "semestar" && activeTerm !== null}
                     onClick={() => shiftPeriod(1)}
                   >
-                    ›
+                    <Icon name="chevronRight" size={14} />
                   </Button>
                 </span>
               </div>
@@ -1991,7 +2023,7 @@ className="nx-segmented__option cal__source"
                                 aria-label={strings.calendar.editLabel}
                                 onClick={() => startEdit(item.event, item.occurrence)}
                               >
-                                ✎
+                                <Icon name="pencil" size={14} />
                               </Button>
                               <Button
                                 size="sm"
@@ -1999,7 +2031,7 @@ className="nx-segmented__option cal__source"
                                 aria-label={strings.calendar.deleteLabel}
                                 onClick={() => void remove(item.event, item.occurrence)}
                               >
-                                ×
+                                <Icon name="trash" size={14} />
                               </Button>
                             </span>
                           }
@@ -2034,7 +2066,7 @@ className="nx-segmented__option cal__source"
                                 openForeignPopover(e.currentTarget.getBoundingClientRect())
                               }
                             >
-                              ⋯
+                              <Icon name="more" size={14} />
                             </Button>
                           }
                         >

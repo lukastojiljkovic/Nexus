@@ -4470,10 +4470,12 @@ button.cal__grid-event--dragging {
 
 /* Study stats + focus timer (Statistika i fokus, STUDY piece 4b) — a
    top-level hub section mirroring .study__plans' visual weight exactly: same
-   card surfaces, same muted section headings. Proportion rows replace
-   BarChart here (see StudyPage's join helper) since subject names are
-   variable-length and the subject count is unbounded — BarChart's fixed-width
-   equal columns are built for a short, constant label set (e.g. weekdays).
+   card surfaces, same muted section headings. Per-subject figures are
+   PROPORTION ROWS rather than columns (see StudyPage's join helper): a column
+   chart gives every slot the same width and puts its label under it, which
+   works for a short constant label set like weekdays and fails here, where
+   subject names are variable-length and the subject count is unbounded. A row
+   per subject reads its name at full length and grows downward instead.
    Missed blocks and the "Ostalo" rollup stay muted text, never red/glowing. */
 .study__stats {
   display: flex;
@@ -9863,6 +9865,28 @@ button.cal__grid-event--dragging {
   font-size: var(--nx-font-size-caption);
   color: var(--nx-text-muted);
 }
+/* --- „Zid navika" ---------------------------------------------------------
+   The module's signature graphic, and it deliberately carries no colour of its
+   own: the squares are `CellMatrix`'s `.nx-cell` recipe verbatim, so the wall
+   and every other drawn graphic in the app share one intensity ramp rather
+   than two that can drift. The wrapper is `.nx-chart-group` (packages/ui) —
+   four surfaces had each grown the same one before it was hoisted.
+
+   Only the two TEXT roles are defined here, because SVG text does not inherit
+   the page's type scale — and both are given a token, which inside a viewBox
+   is read as user units and therefore scales with the squares it labels. That
+   is the whole reason the names live in the drawing instead of in a column
+   beside it: a flex column would keep its own px height while the SVG shrank,
+   and the labels would slide off their rows. */
+.hab__wall-name {
+  font-size: var(--nx-font-size-caption);
+  fill: var(--nx-text);
+}
+.hab__wall-week {
+  font-size: var(--nx-font-size-caption);
+  fill: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
 .hab__error {
   margin: 0;
   font-size: var(--nx-font-size-body-sm);
@@ -10788,6 +10812,26 @@ button.cal__grid-event--dragging {
   letter-spacing: var(--nx-font-tracking-label);
   text-transform: uppercase;
   color: var(--nx-text-muted);
+}
+/* --- „Mapa tela" ----------------------------------------------------------
+   FIT's signature graphic. The plates carry no colour of their own: they are
+   `CellMatrix`'s `.nx-cell` recipe verbatim, so the body map, the habit wall
+   and every other drawn graphic share one intensity ramp instead of three that
+   can drift apart. The wrapper is `.nx-chart-group` (packages/ui) — four
+   surfaces had each grown the identical one before it was hoisted. Defined here
+   are only the two things SVG does not inherit — the outline that turns the
+   plates into a figure, and the view labels. */
+.fit__body-outline {
+  fill: none;
+  stroke: var(--nx-border);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+.fit__body-side {
+  font-size: var(--nx-font-size-caption);
+  fill: var(--nx-text-muted);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
 }
 .fit__facts {
   display: flex;

@@ -13,7 +13,7 @@ import {
   withClozeDeletion,
 } from "@nexus/core";
 import type { ClozeSegment } from "@nexus/core";
-import { Button, Checkbox, Chip, EmptyState, ListRow, PageHeader, TextField } from "@nexus/ui";
+import { Button, Checkbox, Chip, EmptyState, Icon, ListRow, PageHeader, TextField } from "@nexus/ui";
 import type {
   Card,
   CardFieldChanges,
@@ -72,6 +72,7 @@ import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
 import { intervalLabel, isDueWithinSession } from "./reviewIntervals.js";
 import { countUnit, dayUnit, strings } from "./strings.js";
 import { STUDY_LOG_WINDOW_DAYS, studyLogExamLabels, studyLogFacts } from "./studyLog.js";
+import { StudyPlanVsActual } from "./StudyPlanVsActual.js";
 import { useFocusTrap } from "./useFocusTrap.js";
 import {
   blockKindChipLabel,
@@ -544,7 +545,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     attachmentId: string;
     name: string;
   } | null>(null);
-  /** The topic a „×" click is asking about; null when nothing is being asked. */
+  /** The topic a delete click is asking about; null when nothing is being asked. */
   const [pendingDeleteTopic, setPendingDeleteTopic] = useState<ExamTopic | null>(null);
   const [linkedNoteError, setLinkedNoteError] = useState(false);
   const [attaching, setAttaching] = useState(false);
@@ -2330,7 +2331,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
               aria-label={strings.study.dismiss}
               onClick={() => setPendingUndoCardId(null)}
             >
-              ×
+              <Icon name="close" size={14} />
             </Button>
           </div>
         )}
@@ -2344,7 +2345,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
               aria-label={strings.study.dismiss}
               onClick={() => setActionError(null)}
             >
-              ×
+              <Icon name="close" size={14} />
             </Button>
           </div>
         )}
@@ -2389,7 +2390,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                               aria-label={strings.study.editCardLabel}
                               onClick={() => startEditCard(card)}
                             >
-                              ✎
+                              <Icon name="pencil" size={14} />
                             </Button>
                             <Button
                               size="sm"
@@ -2397,7 +2398,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                               aria-label={strings.study.deleteCardLabel}
                               onClick={() => void removeCard(card)}
                             >
-                              ×
+                              <Icon name="trash" size={14} />
                             </Button>
                           </>
                         )}
@@ -2828,7 +2829,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                   title={copy.unlink}
                   onClick={() => void unlinkNote(subjectId, note.id)}
                 >
-                  ×
+                  <Icon name="unlink" size={14} />
                 </button>
               </span>
             ))}
@@ -2969,7 +2970,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
             aria-label={strings.study.dismiss}
             onClick={() => setPendingUndoSubjectId(null)}
           >
-            ×
+            <Icon name="close" size={14} />
           </Button>
         </div>
       )}
@@ -2986,7 +2987,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
             aria-label={strings.study.dismiss}
             onClick={() => setPendingUndoExamId(null)}
           >
-            ×
+            <Icon name="close" size={14} />
           </Button>
         </div>
       )}
@@ -3003,7 +3004,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
             aria-label={strings.study.dismiss}
             onClick={() => setPendingUndoDeckId(null)}
           >
-            ×
+            <Icon name="close" size={14} />
           </Button>
         </div>
       )}
@@ -3020,7 +3021,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
             aria-label={strings.study.dismiss}
             onClick={() => setPendingUndoPlanId(null)}
           >
-            ×
+            <Icon name="close" size={14} />
           </Button>
         </div>
       )}
@@ -3034,7 +3035,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
             aria-label={strings.study.dismiss}
             onClick={() => setPlanUndoError(null)}
           >
-            ×
+            <Icon name="close" size={14} />
           </Button>
         </div>
       )}
@@ -3048,7 +3049,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
             aria-label={strings.study.dismiss}
             onClick={() => setActionError(null)}
           >
-            ×
+            <Icon name="close" size={14} />
           </Button>
         </div>
       )}
@@ -3065,7 +3066,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
             aria-label={strings.study.dismiss}
             onClick={() => setPendingUndoFocusId(null)}
           >
-            ×
+            <Icon name="close" size={14} />
           </Button>
         </div>
       )}
@@ -3108,7 +3109,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                         aria-label={strings.study.editLabel}
                         onClick={() => startEditSubject(subject)}
                       >
-                        ✎
+                        <Icon name="pencil" size={14} />
                       </Button>
                       <Button size="sm" className="study__archive" onClick={() => void toggleArchived(subject)}>
                         {strings.study.archiveLabel}
@@ -3119,7 +3120,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                         aria-label={strings.study.deleteLabel}
                         onClick={() => void removeSubject(subject)}
                       >
-                        ×
+                        <Icon name="trash" size={14} />
                       </Button>
                     </span>
                   </div>
@@ -3145,7 +3146,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                                   aria-label={strings.study.editExamLabel}
                                   onClick={() => startEditExam(exam)}
                                 >
-                                  ✎
+                                  <Icon name="pencil" size={14} />
                                 </Button>
                                 <Button
                                   size="sm"
@@ -3153,7 +3154,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                                   aria-label={strings.study.deleteExamLabel}
                                   onClick={() => void removeExam(exam)}
                                 >
-                                  ×
+                                  <Icon name="trash" size={14} />
                                 </Button>
                               </span>
                             }
@@ -3273,7 +3274,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                                   aria-label={strings.study.editDeckLabel}
                                   onClick={() => startEditDeck(deck)}
                                 >
-                                  ✎
+                                  <Icon name="pencil" size={14} />
                                 </Button>
                                 <Button
                                   size="sm"
@@ -3281,7 +3282,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                                   aria-label={strings.study.deleteDeckLabel}
                                   onClick={() => void removeDeck(deck)}
                                 >
-                                  ×
+                                  <Icon name="trash" size={14} />
                                 </Button>
                                 <Button size="sm" onClick={() => setRoute({ kind: "deck", deckId: deck.id })}>
                                   {strings.study.openCards}
@@ -3372,7 +3373,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                             aria-label={strings.study.deleteLabel}
                             onClick={() => void removeSubject(subject)}
                           >
-                            ×
+                            <Icon name="trash" size={14} />
                           </Button>
                         </span>
                       }
@@ -3851,7 +3852,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                                     )
                                   }
                                 >
-                                  ↑
+                                  <Icon name="arrowUp" size={14} />
                                 </Button>
                                 <Button
                                   size="sm"
@@ -3863,7 +3864,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                                     )
                                   }
                                 >
-                                  ↓
+                                  <Icon name="arrowDown" size={14} />
                                 </Button>
                                 <Button
                                   size="sm"
@@ -3875,10 +3876,10 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                                   // no `restore` on that store and no
                                   // `topics:restore` channel, so from the
                                   // user's side the act is final. It reached
-                                  // that state through a bare „×" on a list row.
+                                  // that state through the trash icon on a list row.
                                   onClick={() => setPendingDeleteTopic(topic)}
                                 >
-                                  ×
+                                  <Icon name="trash" size={14} />
                                 </Button>
                               </span>
                             </div>
@@ -3943,6 +3944,8 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
 
           <div className="study__stats">
             <h2 className="study__stats-title">{strings.study.statsTitle}</h2>
+
+            <StudyPlanVsActual profileId={profileId} />
 
             <div className="study__focus-card">
               <h3 className="study__focus-heading">{strings.study.focusTitle}</h3>
@@ -4119,7 +4122,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                             aria-label={strings.study.deleteFocusSessionLabel}
                             onClick={() => void removeFocusSession(session.id)}
                           >
-                            ×
+                            <Icon name="trash" size={14} />
                           </Button>
                         </span>
                       }

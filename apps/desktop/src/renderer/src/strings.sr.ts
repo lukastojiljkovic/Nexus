@@ -633,6 +633,30 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
   },
 
   tasks: {
+    /**
+     * „Priliv i odliv" — TASK's signature graphic. Two banded series over
+     * weeks: how many tasks came into existence, and how many were closed.
+     *
+     * The caption names THREE things the drawing cannot show, and it names them
+     * because each one makes the closed series a FLOOR rather than a count: a
+     * deleted task leaves the list entirely (its creation disappears from
+     * history too), reopening a task clears its completion instant, and a
+     * recurring task stamps no completion at all until its rule is exhausted.
+     * A chart that let any of those pass silently would be reporting a figure
+     * it knows is short.
+     */
+    chart: {
+      heading: "Priliv i odliv",
+      createdLabel: "Nastalo",
+      completedLabel: "Zatvoreno",
+      caption:
+        "Po nedelji: koliko je zadataka nastalo i koliko ih je zatvoreno. „Zatvoreno“ je donja granica — obrisan zadatak nestaje sa istorijom, ponovo otvoren zadatak gubi datum završetka, a zadatak koji se ponavlja upisuje završetak tek kada se serija istroši.",
+      descriptionLead: "Priliv i odliv po nedelji",
+      weekUnitOne: "nedelju",
+      weekUnitFew: "nedelje",
+      weekUnitMany: "nedelja",
+      emptyReason: "Grafik se crta čim postoji bar jedan zadatak sa datumom nastanka.",
+    },
     quickAddPlaceholder: "Novi zadatak — upiši i pritisni Enter",
     quickAddSubmit: "Dodaj",
     /**
@@ -1221,6 +1245,32 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
   },
 
   notes: {
+    /**
+     * „Ritam pisanja" — NOTE's signature graphic: a year of days, shaded by how
+     * much was written or touched on each.
+     *
+     * It is honestly a FLOOR and the caption says so. A note keeps two instants
+     * — when it was made and when it was last changed — and nothing in
+     * between, so a note edited on nine different days contributes exactly two
+     * shaded squares. There is no third instant to read and inventing one would
+     * mean claiming edits that were never recorded.
+     *
+     * A word count is deliberately absent from this and from everywhere else:
+     * the text of a note never leaves its own document, and a library-wide
+     * figure would mean opening and replaying every note in the profile to
+     * print one number.
+     */
+    chart: {
+      heading: "Ritam pisanja",
+      caption:
+        "Jedan kvadrat je jedan dan. Broji se dan kada je beleška napravljena i dan njene poslednje izmene — ranije izmene se ne pamte, pa je ovo najmanje što se desilo, ne tačan zbir.",
+      descriptionLead: "Ritam pisanja",
+      descriptionDays: "dana sa upisom",
+      legendSome: "Jedna ili dve",
+      legendMore: "Tri do pet",
+      legendMost: "Šest i više",
+      emptyReason: "Ritam se crta čim postoji bar jedna beleška.",
+    },
     newNote: "Nova beleška",
     untitled: "Bez naslova",
     listEmptyTitle: "Nema beležaka",
@@ -1594,6 +1644,19 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
    * second person, the house register.
    */
   priv: {
+    /**
+     * Every other module in the app got a signature graphic in this pass. This
+     * one deliberately did not, and saying so is better product than leaving a
+     * conspicuous gap for somebody to read as an oversight and „fix" later.
+     *
+     * The reason is not technical. A heatmap of when the private section is
+     * opened, or how many notes it holds, is itself a fact about the person —
+     * visible over their shoulder, and readable by anyone who gets as far as
+     * the locked screen. The section exists so that a class of information has
+     * no picture; drawing its shape would defeat it.
+     */
+    noChartNote:
+      "Ovde namerno nema nijednog grafika. Slika koja pokazuje kada i koliko koristiš privatne beleške i sama je podatak o tebi — i vidi se preko ramena.",
     /** First open, nothing set up yet: the two-sentence honest explanation, the credential choice, the kit step. */
     setup: {
       title: "Privatne beleške",
@@ -1726,6 +1789,26 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
   },
 
   calendar: {
+    /**
+     * „Sat dana" — CAL's signature graphic, and deliberately the one thing the
+     * grid cannot say. A month view shows WHICH DAYS are busy; nobody can read
+     * off it that every evening after seven is gone and every morning is free.
+     * The ring is the same period folded onto a single 24-hour dial, so the
+     * shape of a life shows up instead of the shape of a month.
+     *
+     * All-day events carry no hour and are excluded rather than parked at
+     * midnight — a spike at 00 that is really „ceo dan" is a fabricated hour.
+     */
+    chart: {
+      heading: "Sat dana",
+      caption:
+        "Koliko događaja počinje u kom satu, kroz period koji je trenutno na ekranu. Celodnevni događaji nemaju sat i ne ulaze u ovaj krug.",
+      descriptionLead: "Sat dana",
+      descriptionBusiest: "najviše u",
+      hourSuffix: "h",
+      emptyReason:
+        "Krug se crta čim u prikazanom periodu postoji bar jedan događaj sa vremenom.",
+    },
     viewLabel: "Prikaz",
     viewMesec: "Mesec",
     viewNedelja: "Nedelja",
@@ -1947,6 +2030,33 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
   },
 
   documents: {
+    /**
+     * „Rokovi" — DOC's signature graphic: every tracked document as a lane on
+     * one horizon, with today standing in it.
+     *
+     * A list of „ističe za 41 dan" answers each document one at a time; the
+     * horizon answers the question people actually have, which is „šta mi sve
+     * ističe do kraja godine" — and it answers it by position, so two documents
+     * expiring in the same fortnight are visibly a problem before either one
+     * turns red.
+     *
+     * The lane's LENGTH is the current validity period, which is only known
+     * where a renewal recorded when it began. A document entered once with an
+     * expiry and no renewal history has no start date anywhere in the store,
+     * and its lane is a MARK at the expiry rather than a span from an invented
+     * beginning.
+     */
+    chart: {
+      heading: "Rokovi",
+      caption:
+        "Vodoravno je vreme, a uspravna crta je danas. Traka se crta samo tamo gde je upisano produženje — dokument bez istorije produženja nema poznat početak važenja, pa nosi samo oznaku roka.",
+      descriptionLead: "Rokovi",
+      descriptionDocuments: "dokumenata",
+      descriptionSoonest: "prvi ističe",
+      descriptionExpired: "isteklo",
+      todayLabel: "danas",
+      emptyReason: "Horizont se crta čim dodaš prvi dokument sa rokom.",
+    },
     /** Type-label map, keyed by document type value (labels are presentation). */
     type: {
       licna_karta: "Lična karta",
@@ -2025,6 +2135,24 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
    * rather than implying a total nothing measured.
    */
   files: {
+    /**
+     * „Šta zauzima prostor" — FILES's signature graphic: one bar per kind of
+     * file, sized by bytes rather than by count, because ten photographs and
+     * ten notes-in-text are not the same amount of disk.
+     *
+     * The index answers with at most 500 newest entries. When it truncates, the
+     * total is a FLOOR and the caption changes to say so — a progress bar
+     * labelled with a number that silently excluded older files would be the
+     * most quietly wrong figure in the product.
+     */
+    chart: {
+      heading: "Šta zauzima prostor",
+      caption: "Zbir veličina po vrsti datoteke.",
+      truncatedCaption:
+        "Prikazano je 500 najnovijih datoteka, pa je ovo najmanje što zauzimaju — ne ukupno.",
+      descriptionLead: "Šta zauzima prostor",
+      emptyReason: "Pregled se crta čim postoji bar jedna priložena datoteka.",
+    },
     title: "Datoteke",
     caption: "Sve datoteke priložene uz beleške, zadatke i predmete.",
     searchPlaceholder: "Pretraži po nazivu datoteke ili nosiocu…",
@@ -2089,6 +2217,30 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
   },
 
   study: {
+    /**
+     * „Plan i stvarnost" — STUDY's signature graphic. Two banded series over
+     * days: the minutes the plan asked for, and the minutes the focus timer
+     * actually measured.
+     *
+     * They are two different KINDS of fact and the chart says so rather than
+     * blending them into an „adherence" percentage: a block stores planned
+     * minutes and a status, never an actual duration, so the only measured time
+     * in the product comes from FOCUS. Drawing them side by side is the honest
+     * comparison; drawing one bar labelled „učinak" would be an invented
+     * figure standing where two real ones belong.
+     */
+    chart: {
+      heading: "Plan i stvarnost",
+      plannedLabel: "Planirano",
+      actualLabel: "Izmereno",
+      minuteUnit: "min",
+      caption:
+        "Po danu: minuti koje je plan tražio i minuti koje je fokus stvarno izmerio. Blok pamti planirano vreme i ishod, nikada stvarno trajanje — izmereno vreme dolazi samo iz fokusa.",
+      descriptionLead: "Plan i stvarnost",
+      descriptionPlanned: "planirano",
+      descriptionActual: "izmereno",
+      emptyReason: "Grafik se crta čim postoji planiran ili izmeren minut.",
+    },
     title: "Predmeti",
     nameLabel: "Naziv predmeta",
     namePlaceholder: "Naziv predmeta",
@@ -2707,6 +2859,30 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
    * in this table.
    */
   finance: {
+    /**
+     * „Tok stanja" — FIN's signature graphic: what the money actually did,
+     * day by day, in ONE currency.
+     *
+     * One chart per currency and never a combined one. Nothing in this product
+     * converts between currencies — there is no rate anywhere and there
+     * deliberately will not be one — so a single line summing dinars and euros
+     * would be the one fabricated number FIN has spent its whole design
+     * refusing.
+     *
+     * A transfer between two of your own accounts moves nothing in or out of
+     * the total, and the line is flat across it. That is correct and is said
+     * out loud, because a ledger row that visibly „happened" and visibly did
+     * nothing to the curve otherwise reads as a bug.
+     */
+    chart: {
+      heading: "Tok stanja",
+      caption:
+        "Zbir svih računa u ovoj valuti, dan po dan. Prenos između dva sopstvena računa ne menja zbir, pa se na liniji ne vidi.",
+      descriptionLead: "Stanje u valuti",
+      descriptionFrom: "od",
+      descriptionTo: "na",
+      emptyReason: "Linija se crta čim u ovom mesecu postoji bar jedna stavka.",
+    },
     loadErrorTitle: "Finansije nisu učitane",
     loadError: "Učitavanje finansija nije uspelo. Zatvori i ponovo otvori stranicu.",
     /** The one line every failed write falls back to when `financeErrorMessage` recognizes nothing more specific. */
@@ -3025,6 +3201,42 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     actionError: "Radnja nije uspela. Pokušaj ponovo.",
     undo: "Opozovi",
     dismiss: "Zatvori",
+    /**
+     * „Zid navika" — the module's signature graphic: every habit as a row, every
+     * day as a square, the whole regimen's texture at once.
+     *
+     * Deliberately NOT a second version of the per-habit calendar below it. That
+     * one answers „how is THIS habit going" and is a control — its cells are
+     * buttons. The wall answers „is my regimen alive", is read at a glance, and
+     * is only ever looked at: a 8px square is texture, not a target, and two
+     * places to correct the same day is how they would start disagreeing.
+     */
+    wall: {
+      heading: "Zid navika",
+      /** The window comes from `WALL_WEEKS`, so this line never names a number the drawing does not honour. */
+      captionPrefix: "Poslednjih",
+      caption:
+        "Jedan kvadrat je jedan dan jedne navike. Prazno mesto znači da tog dana navika nije ni tražena — kvota ne traži nijedan dan posebno.",
+      /**
+       * The read-aloud sentence is composed from these and the counts
+       * themselves, so it cannot drift from the picture. Label-first („ispunjeno
+       * 41") rather than counted-noun („41 ispunjen dan") on purpose: a tally
+       * read out label-first needs no numeral agreement at all, and three
+       * counted nouns would have cost nine strings to inflect correctly.
+       */
+      descriptionLead: "Zid navika",
+      descriptionDone: "ispunjeno",
+      descriptionPartial: "započeto",
+      descriptionMissed: "propušteno",
+      legendDone: "Ispunjeno",
+      /** Only a MEASURED habit can be half-done; a binary one has no middle. */
+      legendPartial: "Započeto",
+      legendMissed: "Propušteno",
+      /** A wall with no habits is absent, not an empty lattice waiting to be filled. */
+      emptyReason: "Zid se crta čim postoji bar jedna navika.",
+      /** Said once: the picture is not where a day is corrected. */
+      note: "Zid se samo gleda. Dan se ispravlja u kalendaru same navike, ispod.",
+    },
     today: {
       heading: "Danas",
       /**
@@ -3191,6 +3403,34 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
    *   phases that really ran, and a day with none says so in words.
    */
   focus: {
+    /**
+     * „Trake pažnje" — FOCUS's signature graphic: today's finished phases laid
+     * on one time axis, so the RHYTHM of the day shows — three long blocks
+     * before noon and nothing after, or twelve fragments with breaks between
+     * them.
+     *
+     * A phase's bar is wall clock, start to end, because that is the span it
+     * occupied in the day. The MINUTES figure beside it subtracts pauses,
+     * because that is the attention it actually held. Those two are not the
+     * same number and the caption says so, rather than letting a reader
+     * discover it by comparing them.
+     *
+     * There is no „prekinuto" lane. A cancelled timer is never written down at
+     * all, so a bucket for it would be permanently empty and would read as
+     * „you never abandon anything", which is a claim the data cannot make.
+     */
+    chart: {
+      heading: "Trake pažnje",
+      workLane: "Rad",
+      shortBreakLane: "Kratka pauza",
+      longBreakLane: "Duga pauza",
+      caption:
+        "Današnje faze na jednoj vremenskoj osi. Traka ide od početka do kraja faze, pa uključuje i pauze unutar nje; izmereni minuti pored ne uključuju.",
+      descriptionLead: "Trake pažnje danas",
+      descriptionPhases: "faza",
+      nowLabel: "sada",
+      emptyReason: "Trake se crtaju čim danas postoji bar jedna završena faza.",
+    },
     loadErrorTitle: "Fokus nije učitan",
     loadError: "Učitavanje fokusa nije uspelo. Zatvori i ponovo otvori stranicu.",
     actionError: "Radnja nije uspela. Pokušaj ponovo.",
@@ -4000,6 +4240,30 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         repsRange: "–",
       },
       /**
+       * What a routine ASKS FOR, met by the session that is running.
+       *
+       * Migration 061 gave a routine line four more things to prescribe — a
+       * hold, a load, a distance and a rest — and „Rutine" learned to write all
+       * of them. For a while the session did not read any of them back, which
+       * made the prescription a note to self rather than a plan the app runs.
+       * Everything under this key is that gap closed: the form starts from what
+       * the routine asks, the countdown lasts as long as the line says, and
+       * each exercise says how far through its sets it is.
+       */
+      prescription: {
+        /** Working sets logged against the routine's own count — „2/3". Warm-ups are not part of a prescription of three. */
+        setsLabel: "Serije po rutini",
+        /** The rest THIS line asks for, as opposed to the bar's preset. */
+        restLabel: "Odmor po rutini",
+        /** A line that prescribes zero rest — a real instruction, and not the same as prescribing nothing. */
+        restNone: "Bez odmora",
+        /** Said once under the log form, because a prefilled field nobody explained is a number somebody may not notice is a suggestion. */
+        prefillNote:
+          "Polja kreću od poslednje upisane serije; kada nje nema, od onoga što rutina traži.",
+        /** How much of the routine has been touched at all — lines with at least one working set, over lines in the routine. */
+        sessionLabel: "Urađeno po rutini",
+      },
+      /**
        * The rest countdown (ADR-081 §7). The note is not decoration: the founder's
        * one-timer rule is about what the product RECORDS, and this records
        * nothing — so the surface says so where the timer is, rather than leaving
@@ -4171,6 +4435,18 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         emptyDescription: "Upiši prvi trening i napredak će se pojaviti ovde.",
         /** Weekly volume — the figure a week is actually balanced against. */
         volumeHeading: "Nedeljni obim",
+        /**
+         * The drawn weekly-volume chart. Its read-aloud sentence is composed
+         * from these fragments and the figures themselves, so it can never
+         * describe bars other than the ones on screen.
+         */
+        volumeChartCaption: "Jedan stubac je jedna nedelja. Zagrevanje se nigde ne broji.",
+        volumeChartLead: "Tvrdih serija po nedelji",
+        volumeChartAcross: "kroz",
+        volumeChartPeak: "najviše u nedelji od",
+        volumeWeekUnitOne: "nedelju",
+        volumeWeekUnitFew: "nedelje",
+        volumeWeekUnitMany: "nedelja",
         weekLabel: "Nedelja",
         setsLabel: "Tvrde serije",
         tonnageLabel: "Tonaža",
@@ -4179,6 +4455,46 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         /** Said where the per-muscle counts are: the snapshot carries primaries, and that is the right vocabulary rather than a limitation. */
         muscleNote:
           "Serija se broji glavnim mišićima vežbe. Pomoćni se ne broje — jedan potisak sa klupe bi inače bio i grudi i tricepsi i ramena.",
+        /**
+         * „Mapa tela" — FIT's signature graphic, and the one question a sorted
+         * list of chips answers only in sequence: WHAT DID I NOT TRAIN. Twenty
+         * chips read one by one; a silhouette with two pale shoulders reads at
+         * once.
+         *
+         * The bands are a DRAWING decision and are stated as such in the
+         * caption. Nothing here claims a muscle is „undertrained" — the app does
+         * not know a person's programme, and inventing that verdict is exactly
+         * the kind of figure this house refuses.
+         */
+        bodyMap: {
+          heading: "Mapa tela",
+          /**
+           * Every NUMBER in this caption comes from the constant that actually
+           * governs it (`WINDOW_DAYS`, the two band edges, `MUSCLE_GROUPS`),
+           * exactly as the habit grid's heading does — so the sentence cannot
+           * outlive the drawing it explains.
+           */
+          captionLead: "Zasićenost je broj tvrdih serija po mišiću u poslednjih",
+          captionDayUnit: "dana",
+          captionBands: "nijanse:",
+          captionAndUp: "i više",
+          captionTail:
+            "Bledo znači nijedna serija, a ne da je mišić zapostavljen — to zavisi od plana koji Nexus ne zna.",
+          front: "Napred",
+          back: "Nazad",
+          /** Composed with the counts themselves. */
+          descriptionLead: "Mapa tela, poslednjih",
+          descriptionOf: "od",
+          descriptionTrained: "mišićnih grupa je dobilo bar jednu tvrdu seriju",
+          /** The truth behind the picture, as text and as chips — the map is only the shortcut. */
+          untouchedHeading: "Bez ijedne serije u poslednjih",
+          untouchedNone: "Svaka mišićna grupa je dobila bar jednu seriju u ovom periodu.",
+          setsSuffix: "ser.",
+          /** A muscle's own label, read aloud on hover and by a reader: „Grudi: 6 ser. · poslednji put 2026-08-05". */
+          lastPrefix: "poslednji put",
+          neverTrained: "bez serije u ovom periodu",
+          emptyReason: "Mapa se crta čim upišeš prvu seriju.",
+        },
         /** Personal records, derived on read. A stored PR row and a set table can disagree, and only one of them is the truth. */
         recordsHeading: "Lični rekordi",
         record: {
@@ -4594,6 +4910,26 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     /** Theme-preference option labels; Dan/Noć reuse `strings.app.themeDan/themeNoc`. */
     appearance: {
       system: "Sistemski",
+      /**
+       * The language of the whole interface.
+       *
+       * Offers exactly what `LOCALES` holds, and today that is one entry. It is
+       * shown all the same rather than hidden until a second language exists,
+       * because the control IS the answer to „gde se menja jezik" and a
+       * settings row reading „Jezik: Srpski" is an ordinary, honest thing for a
+       * one-language product to say. Hiding it would leave the machinery
+       * invisible and the question unanswered.
+       *
+       * A translation, when it is written, is one file and one line in
+       * `LOCALES` — and it appears here without anybody editing this row.
+       */
+      languageLabel: "Jezik",
+      /** Keyed by locale code; read through `lookup` so the table keeps literal keys. */
+      languageNames: {
+        sr: "Srpski",
+      } satisfies Record<string, string>,
+      languageHint:
+        "Menja se odmah, bez ponovnog pokretanja. Spisak nudi jezike koji su prevedeni — obaveštenja koja šalje sistem prate isti izbor.",
       /** Names the theme segmented row now that a second one (the week start) stands beside it. */
       themeLabel: "Tema",
       accentLabel: "Boja akcenta",

@@ -2,7 +2,16 @@ import { useEffect, useState } from "react";
 import type { ChangeEvent, ReactNode } from "react";
 import { FOCUS_PHASE_KINDS, phaseProgress } from "@nexus/core";
 import type { FocusPhaseKind } from "@nexus/core";
-import { Button, Chip, EmptyState, ListRow, LoadingState, PageHeader, TextField } from "@nexus/ui";
+import {
+  Button,
+  Chip,
+  EmptyState,
+  Icon,
+  ListRow,
+  LoadingState,
+  PageHeader,
+  TextField,
+} from "@nexus/ui";
 import { MAX_FOCUS_LABEL_LENGTH } from "../../shared/ipc.js";
 import type { FocusSession, RunningFocusSession, Subject, Task } from "../../shared/ipc.js";
 import { localTodayKey, shiftDayKey } from "./examDates.js";
@@ -15,6 +24,7 @@ import {
 import { focusDayTotals, plannedWorkPhases, upcomingPhase } from "./focusPhases.js";
 import { readStoredFocusConfig } from "./focusPrefs.js";
 import { FocusDiscardDialog } from "./FocusDiscardDialog.js";
+import { FocusLanes } from "./FocusLanes.js";
 import { countUnit, strings } from "./strings.js";
 import { moduleName } from "./moduleName.js";
 
@@ -547,7 +557,7 @@ export function FocusPage({ profileId, enabledModules }: FocusPageProps) {
             aria-label={s.dismiss}
             onClick={() => setPendingUndoId(null)}
           >
-            ×
+            <Icon name="close" size={14} />
           </Button>
         </div>
       )}
@@ -593,6 +603,10 @@ export function FocusPage({ profileId, enabledModules }: FocusPageProps) {
             <div className="foc__list">{todaySessions.map((session) => renderRow(session))}</div>
           </>
         )}
+      </section>
+
+      <section className="foc__section" aria-label={s.chart.heading}>
+        <FocusLanes sessions={todaySessions} />
       </section>
 
       <section className="foc__section" aria-label={s.history.heading}>

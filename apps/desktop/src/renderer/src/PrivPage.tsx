@@ -641,6 +641,12 @@ function PrivSection({ profileId, onStatusChange, onRecheck }: PrivSectionProps)
         }
       />
 
+      {/* Every other module got a signature graphic in this pass; this one deliberately
+          did not (see the string's own comment), and says so rather than leaving a
+          gap someone reads as an oversight. Only meaningful once inside, so it lives
+          here rather than on the setup or lock screen. */}
+      <p className="app__muted">{strings.priv.noChartNote}</p>
+
       {clipboardArmed && (
         <div className="priv__clipboard" role="status">
           <span>{strings.priv.clipboard.notice}</span>

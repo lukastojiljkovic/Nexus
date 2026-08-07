@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
-import { Button, Chip, EmptyState, ListRow, LoadingState, TextField } from "@nexus/ui";
+import { Button, Chip, EmptyState, Icon, ListRow, LoadingState, TextField } from "@nexus/ui";
 import type {
   DocumentFieldChanges,
   DocumentRenewal,
@@ -9,6 +9,8 @@ import type {
   NewDocumentFields,
   TrackedDocument,
 } from "../../shared/ipc.js";
+import { DocDeadlines } from "./DocDeadlines.js";
+import { localTodayKey } from "./examDates.js";
 import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
 import { dayUnit, strings } from "./strings.js";
 
@@ -357,7 +359,7 @@ export function DocumentsPanel({
             aria-label={strings.documents.dismiss}
             onClick={() => setPendingUndoId(null)}
           >
-            ×
+            <Icon name="close" size={14} />
           </Button>
         </div>
       )}
@@ -375,7 +377,13 @@ export function DocumentsPanel({
           description={strings.documents.emptyDescription}
         />
       ) : (
-        <div className="documents__list">
+        <>
+          {/* The horizon before the list it summarises. A list answers each
+              document on its own — „ističe za 41 dan", „ističe za 58 dana" —
+              and leaves the reader holding four numbers to notice that three
+              things fall due in the same fortnight. */}
+          <DocDeadlines profileId={profileId} documents={ordered} today={localTodayKey()} />
+          <div className="documents__list">
           {ordered.map((doc) => (
             <ListRow
               key={doc.id}
@@ -409,7 +417,7 @@ export function DocumentsPanel({
                       aria-label={strings.documents.renewCancel}
                       onClick={cancelRenew}
                     >
-                      ×
+                      <Icon name="close" size={14} />
                     </Button>
                   </span>
                 ) : (
@@ -427,7 +435,7 @@ export function DocumentsPanel({
                       aria-label={strings.documents.editLabel}
                       onClick={() => startEdit(doc)}
                     >
-                      ✎
+                      <Icon name="pencil" size={14} />
                     </Button>
                     <Button
                       size="sm"
@@ -435,7 +443,7 @@ export function DocumentsPanel({
                       aria-label={strings.documents.deleteLabel}
                       onClick={() => void remove(doc)}
                     >
-                      ×
+                      <Icon name="trash" size={14} />
                     </Button>
                   </span>
                 )
@@ -487,7 +495,8 @@ export function DocumentsPanel({
               </span>
             </ListRow>
           ))}
-        </div>
+          </div>
+        </>
       )}
     </div>
   );

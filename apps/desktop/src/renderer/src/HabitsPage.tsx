@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { ACCENT_IDS } from "@nexus/tokens";
-import { Button, Checkbox, Chip, EmptyState, ListRow, LoadingState, PageHeader, TextField } from "@nexus/ui";
+import { Button, Checkbox, Chip, EmptyState, Icon, ListRow, LoadingState, PageHeader, TextField } from "@nexus/ui";
 import { computeHabitStreak } from "@nexus/core";
 import type { WeekStart } from "@nexus/core";
 import {
@@ -35,6 +35,7 @@ import {
   weekStartKey,
   type HabitEntryIndex,
 } from "./habitDone.js";
+import { HabitWall } from "./HabitWall.js";
 import { habitDayPhrase, habitPeriodPhrase, habitWeekPhrase } from "./habitFormat.js";
 import { readStoredDefaultReminder } from "./habitPrefs.js";
 import { strings } from "./strings.js";
@@ -426,6 +427,9 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
   const habitList = habits ?? [];
   const index: HabitEntryIndex = indexHabitEntries(entries);
 
+  /** What „Zid navika" is about: the regimen as it stands, which an archived habit has left. */
+  const liveHabits = habitList.filter((habit) => habit.archivedAt === null);
+
   /**
    * What is expected today. The rule lives in `habitDone.ts` rather than here
    * since slice c: the „Navike danas" widget draws this same list, and two
@@ -475,7 +479,7 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
           aria-pressed={colorDraft === null}
           onClick={() => setColorDraft(null)}
         >
-          ×
+          <Icon name="swatchNone" size={14} />
         </button>
       </div>
     );
@@ -507,7 +511,7 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
           disabled={value === 0}
           onClick={() => void setDay(habit, today, value - 1)}
         >
-          −
+          <Icon name="minus" size={14} />
         </Button>
         <span className={countsAsDone(habit.target, value) ? "hab__count hab__count--done" : "hab__count"}>
           {`${value}/${habit.target}${habit.unit === null ? "" : ` ${habit.unit}`}`}
@@ -518,7 +522,7 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
           aria-label={`${s.stepper.increase}: ${habit.name}`}
           onClick={() => void setDay(habit, today, value + 1)}
         >
-          +
+          <Icon name="plus" size={14} />
         </Button>
       </span>
     );
@@ -714,7 +718,7 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
                 title={expanded ? s.all.collapse : s.all.expand}
                 onClick={() => setExpandedId(expanded ? null : habit.id)}
               >
-                {expanded ? "▾" : "▸"}
+                <Icon name={expanded ? "chevronDown" : "chevronRight"} size={14} />
               </Button>
               <Button
                 size="sm"
@@ -723,7 +727,7 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
                 title={s.all.edit}
                 onClick={() => beginEdit(habit)}
               >
-                ✎
+                <Icon name="pencil" size={14} />
               </Button>
               <Button
                 size="sm"
@@ -737,7 +741,7 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
                   })
                 }
               >
-                {archived ? "↩" : "▤"}
+                <Icon name={archived ? "unarchive" : "archive"} size={14} />
               </Button>
               <Button
                 size="sm"
@@ -746,7 +750,7 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
                 title={s.all.delete}
                 onClick={() => void deleteHabit(habit)}
               >
-                ×
+                <Icon name="trash" size={14} />
               </Button>
             </span>
           }
@@ -887,9 +891,19 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
             aria-label={s.dismiss}
             onClick={() => setPendingUndoId(null)}
           >
-            ×
+            <Icon name="close" size={14} />
           </Button>
         </div>
+      )}
+
+      {/* The regimen before its parts. „Danas" and „Sve navike" are both lists
+          of one habit at a time; the wall is the only thing on this page that
+          shows the shape of the whole thing, so it opens the page. Live habits
+          only — an archived one is no longer part of the regimen. */}
+      {liveHabits.length > 0 && (
+        <section className="hab__section" aria-label={s.wall.heading}>
+          <HabitWall habits={liveHabits} index={index} today={today} weekStart={weekStart} />
+        </section>
       )}
 
       <section className="hab__section" aria-label={s.today.heading}>
