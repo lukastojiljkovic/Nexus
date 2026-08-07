@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { KeyboardEvent } from "react";
 import { Button, Chip, ListRow, TextField } from "@nexus/ui";
 import { MAX_FIT_EXERCISE_QUERY_LENGTH, MAX_FIT_EXERCISE_RESULTS } from "../../shared/ipc.js";
 import type { FitExerciseOption } from "../../shared/ipc.js";
@@ -45,6 +46,8 @@ export function FitExercisePicker({
   // Kept apart from an empty `results`, which is a real answer („nothing
   // matched") rather than a failure to ask.
   const [failed, setFailed] = useState(false);
+  /** Which row ↑/↓ have moved to. Reset on every new result set — see the effect below. */
+  const [activeIndex, setActiveIndex] = useState(0);
 
   /**
    * The search, debounced. The ranking runs in main over a few hundred entries,
@@ -87,6 +90,44 @@ export function FitExercisePicker({
     };
   }, [profileId, query]);
 
+  // A new list is a new first row. Without this, typing a narrower query while
+  // the highlight sat on row 7 would leave it pointing at whatever landed there.
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [results]);
+
+  /**
+   * ↑/↓ move, Enter picks — the whole list reachable from the box the caret is
+   * already in, which is what CANV's picker and the global palette have always
+   * done. This one had a search box, a ranked list and no way to reach the list
+   * except with the mouse: the same job, two answers, in one app.
+   *
+   * Enter is `preventDefault`ed even when nothing is highlighted, because this
+   * picker is opened from INSIDE the routine form — an un-prevented Enter would
+   * submit that form while the user was still choosing an exercise for it.
+   */
+  function onInputKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
+    if (results.length === 0) {
+      if (event.key === "Enter") event.preventDefault();
+      return;
+    }
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveIndex((index) => (index + 1) % results.length);
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveIndex((index) => (index - 1 + results.length) % results.length);
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const option = results[activeIndex];
+      if (option !== undefined) onChoose(option);
+    }
+  }
+
   const v = strings.fitness.training;
 
   return (
@@ -107,6 +148,7 @@ export function FitExercisePicker({
         maxLength={MAX_FIT_EXERCISE_QUERY_LENGTH}
         autoFocus
         onChange={(event) => setQuery(event.target.value)}
+        onKeyDown={onInputKeyDown}
       />
 
       {query.trim() === "" ? (
@@ -125,6 +167,9 @@ export function FitExercisePicker({
           {results.map((option) => (
             <ListRow
               key={option.ref}
+              className={
+                option.ref === (results[activeIndex]?.ref ?? "") ? "fit__result--active" : undefined
+              }
               trailing={
                 <Button size="sm" onClick={() => onChoose(option)}>
                   {s.choose}

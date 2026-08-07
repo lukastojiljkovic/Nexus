@@ -790,7 +790,24 @@ function ExerciseCard({
         <div className="fit__sets">
           {exercise.sets.map((set, index) =>
             editingSetId === set.id && editDraft !== null ? (
-              <div key={set.id} className="fit__set fit__set--editing">
+              // Enter saves the correction, Escape abandons it — the same two
+              // keys the meal row and TASK's inline row answer. On the wrapper
+              // rather than on a field, because a set has up to three of them
+              // and every one should answer the same way.
+              <div
+                key={set.id}
+                className="fit__set fit__set--editing"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    onSaveSet(set);
+                  }
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    onCancelEdit();
+                  }
+                }}
+              >
                 <span className="fit__set-index">{String(index + 1)}</span>
                 <SetFields
                   metric={set.metric}

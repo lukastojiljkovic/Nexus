@@ -842,12 +842,27 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
         trailing={
           editingThis ? (
             <span className="fit__row-actions">
+              {/* Opens with the caret in it, commits on Enter, backs out on
+                  Escape — the inline row TASK has always had. This one opened a
+                  field the user then had to click into, and offered no key at
+                  all for either answer. */}
               <TextField
                 value={itemGramsDraft}
                 inputMode="decimal"
                 aria-label={s.picker.amountLabel}
                 className="fit__grams-field"
+                autoFocus
                 onChange={(event) => setItemGramsDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void submitItemEdit(item);
+                  }
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    setEditingItemId(null);
+                  }
+                }}
               />
               <Button size="sm" variant="primary" onClick={() => void submitItemEdit(item)}>
                 {s.item.save}

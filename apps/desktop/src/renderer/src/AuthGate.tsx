@@ -351,7 +351,9 @@ function AccountPicker({ status, onStatusChange, onSelected, onAdd, onEmptied }:
         className="auth__form"
         onSubmit={(event) => void submitDelete(event)}
         onKeyDown={(event) => {
-          if (event.key === "Escape") setDeleting(null);
+          // Guarded on `busy` like every other cancel on this screen: Escape
+          // must not walk away from a delete already in flight.
+          if (event.key === "Escape" && !busy) setDeleting(null);
         }}
       >
         <h1 className="auth__title">{strings.auth.picker.deleteTitle}</h1>
@@ -385,9 +387,18 @@ function AccountPicker({ status, onStatusChange, onSelected, onAdd, onEmptied }:
     );
   }
 
+  // The rename overlay gets the same Escape its sibling forty lines up has had
+  // all along. Two overlays that replace the same account picker, one of which
+  // could be backed out of with a key and one of which could not.
   if (renaming !== null) {
     return (
-      <form className="auth__form" onSubmit={(event) => void submitRename(event)}>
+      <form
+        className="auth__form"
+        onSubmit={(event) => void submitRename(event)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && !busy) setRenaming(null);
+        }}
+      >
         <h1 className="auth__title">{strings.auth.picker.rename}</h1>
         <p className="auth__note">{strings.auth.create.labelNote}</p>
         <TextField

@@ -11940,8 +11940,10 @@ button.cal__grid-event--dragging {
   cursor: pointer;
 }
 /* Active is TYPOGRAPHIC over a soft surface — `suggestionMenu`'s rule, which
-   the search palette's own rows already follow. No inset bar, no glow. */
-.canv-picker__row--active {
+   the search palette's own rows already follow. No inset bar, no glow. The FIT
+   exercise picker joins it: same job, same keys, so the same treatment. */
+.canv-picker__row--active,
+.fit__result--active.nx-list-row {
   background: var(--nx-surface-alt);
   color: var(--nx-accent);
   font-weight: var(--nx-font-weight-semibold);
