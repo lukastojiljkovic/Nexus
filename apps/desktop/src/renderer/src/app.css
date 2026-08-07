@@ -6166,7 +6166,20 @@ button.cal__grid-event--dragging {
     inset-block: 0;
     left: 0;
     /* Over `.note__find`'s sticky 3 and under every portalled panel (50–70), so
-       a folder menu opened inside the drawer still paints above it. */
+       a folder menu opened inside the drawer still paints above it. It cannot
+       be `auto`: `.note__menu` is `position: relative` on every row of the note
+       list, which comes LATER in the DOM, so the row menus would show through.
+
+       KNOWN, and the reason it is written down: a positioned box with a
+       z-index is a stacking context, so the three typed-name confirmations
+       `NoteOrganizer` renders inside this pane sit in ITS layer (5) rather than
+       their own (60) while the drawer is the drawer. Nothing reaches that
+       today — the dialog's own fixed overlay covers the bell and the sidebar,
+       Escape is guarded on `[role="dialog"]`, and a folder menu closes when its
+       item is chosen — so the only observable difference is that Ctrl+K over an
+       open confirmation would draw the palette above it instead of behind it,
+       which is a layering question the app has anyway. The real answer is a
+       declared layer scale, which belongs to the overhaul and not to this. */
     z-index: 5;
     width: calc(var(--nx-layout-rail) + 2 * var(--nx-space-2));
     padding: var(--nx-space-2);
