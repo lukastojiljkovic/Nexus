@@ -22,8 +22,8 @@ import { CardStore, MIGRATIONS, NexusDatabase, openDatabase, runMigrations } fro
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 59 (FIT nutrition, then the canvas boards), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(59);
+  it("is at version 60 (the canvas boards, then FIT training and body), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(60);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -7999,6 +7999,478 @@ describe("migration 059 — canvas boards (CANV slice a)", () => {
     expect(index?.sql).toContain("(profile_id, name, id)");
     expect(index?.sql).toContain("WHERE deleted_at IS NULL");
     expect(index?.sql).not.toContain("scene");
+    db.close();
+  });
+});
+
+/**
+ * Migration 060 — FIT training and body (ADR-081 slice b). Seven tables, and
+ * the suite is organised around what the SCHEMA is asked to make impossible
+ * rather than around the tables: an unreadable set, a backwards rep range, a
+ * muscle unit with no reading, two readings for one day, and a cascade that
+ * reaches further than a profile.
+ */
+describe("migration 060 — FIT training and body", () => {
+  const T = "2026-08-07T09:00:00.000Z";
+  const DAY = "2026-08-07";
+
+  const insertExercise = (
+    db: NexusDatabase,
+    id: string,
+    profileId: string,
+    overrides: Partial<{ name: string; metric: string; unilateral: number }> = {},
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO fit_exercises (id, profile_id, name, name_en, primary_muscles_json,
+           secondary_muscles_json, equipment, pattern, unilateral, metric, notes,
+           created_at, updated_at, deleted_at)
+         VALUES (?, ?, ?, '', '["grudi"]', '[]', 'sipka', 'potisak', ?, ?, '', ?, ?, NULL)`,
+      )
+      .run(
+        id,
+        profileId,
+        overrides.name ?? "Potisak sa klupe",
+        overrides.unilateral ?? 0,
+        overrides.metric ?? "weight_reps",
+        T,
+        T,
+      );
+
+  const insertRoutine = (db: NexusDatabase, id: string, profileId: string) =>
+    db.raw
+      .prepare(
+        `INSERT INTO fit_routines (id, profile_id, name, notes, created_at, updated_at, deleted_at)
+         VALUES (?, ?, 'Gornji dan', '', ?, ?, NULL)`,
+      )
+      .run(id, profileId, T, T);
+
+  const insertRoutineItem = (
+    db: NexusDatabase,
+    id: string,
+    profileId: string,
+    routineId: string,
+    overrides: Partial<{
+      position: number;
+      targetSets: number | null;
+      repsMin: number | null;
+      repsMax: number | null;
+    }> = {},
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO fit_routine_items (id, profile_id, routine_id, position, exercise_ref, label,
+           target_sets, target_reps_min, target_reps_max, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'catalogue:bench-press', 'Potisak sa klupe', ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        profileId,
+        routineId,
+        overrides.position ?? 0,
+        overrides.targetSets === undefined ? 3 : overrides.targetSets,
+        overrides.repsMin === undefined ? 6 : overrides.repsMin,
+        overrides.repsMax === undefined ? 10 : overrides.repsMax,
+        T,
+        T,
+      );
+
+  const insertWorkout = (
+    db: NexusDatabase,
+    id: string,
+    profileId: string,
+    overrides: Partial<{ day: string; endedAt: string | null }> = {},
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO fit_workouts (id, profile_id, workout_date, started_at, ended_at,
+           routine_ref, routine_label, notes, created_at, updated_at, deleted_at)
+         VALUES (?, ?, ?, ?, ?, NULL, '', '', ?, ?, NULL)`,
+      )
+      .run(
+        id,
+        profileId,
+        overrides.day ?? DAY,
+        T,
+        overrides.endedAt === undefined ? T : overrides.endedAt,
+        T,
+        T,
+      );
+
+  const insertSet = (
+    db: NexusDatabase,
+    id: string,
+    profileId: string,
+    workoutId: string,
+    overrides: Partial<{
+      kind: string;
+      metric: string;
+      rir: number | null;
+      reps: number | null;
+      weight: number | null;
+      position: number;
+    }> = {},
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO fit_workout_sets (id, profile_id, workout_id, position, exercise_ref, label,
+           metric, primary_muscles_json, kind, weight_kg, reps, seconds, distance_m, rir,
+           created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'catalogue:bench-press', 'Potisak sa klupe', ?, '["grudi"]', ?,
+                 ?, ?, NULL, NULL, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        profileId,
+        workoutId,
+        overrides.position ?? 0,
+        overrides.metric ?? "weight_reps",
+        overrides.kind ?? "working",
+        overrides.weight === undefined ? 80 : overrides.weight,
+        overrides.reps === undefined ? 8 : overrides.reps,
+        overrides.rir === undefined ? 2 : overrides.rir,
+        T,
+        T,
+      );
+
+  const insertMeasurement = (
+    db: NexusDatabase,
+    profileId: string,
+    overrides: Partial<{
+      day: string;
+      weight: number;
+      fat: number | null;
+      muscleUnit: string | null;
+      muscleValue: number | null;
+      water: number | null;
+      neck: number | null;
+    }> = {},
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO fit_measurements (profile_id, day, weight_kg, body_fat_percent,
+           muscle_unit, muscle_value, water_percent, neck_cm, chest_cm, upper_arm_cm,
+           waist_cm, hip_cm, thigh_cm, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, ?, ?)`,
+      )
+      .run(
+        profileId,
+        overrides.day ?? DAY,
+        overrides.weight ?? 82.4,
+        overrides.fat === undefined ? 17.5 : overrides.fat,
+        overrides.muscleUnit === undefined ? "kg" : overrides.muscleUnit,
+        overrides.muscleValue === undefined ? 38.2 : overrides.muscleValue,
+        overrides.water === undefined ? 55 : overrides.water,
+        overrides.neck === undefined ? 39 : overrides.neck,
+        T,
+        T,
+      );
+
+  const insertBodyProfile = (
+    db: NexusDatabase,
+    profileId: string,
+    overrides: Partial<{ sex: string | null; height: number; activity: string }> = {},
+  ) =>
+    db.raw
+      .prepare(
+        `INSERT INTO fit_body_profile (profile_id, sex, birth_date, height_cm, activity,
+           created_at, updated_at)
+         VALUES (?, ?, '1995-04-12', ?, ?, ?, ?)`,
+      )
+      .run(
+        profileId,
+        overrides.sex === undefined ? "male" : overrides.sex,
+        overrides.height ?? 183,
+        overrides.activity ?? "moderate",
+        T,
+        T,
+      );
+
+  it("creates all seven tables and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "fit-training-fresh.db") });
+    for (const table of [
+      "fit_exercises",
+      "fit_routines",
+      "fit_routine_items",
+      "fit_workouts",
+      "fit_workout_sets",
+      "fit_measurements",
+      "fit_body_profile",
+    ]) {
+      expect(tableNames(db)).toContain(table);
+    }
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("gives a logged set the snapshot columns that decide how it is READ", () => {
+    const db = openDatabase({ path: join(dir, "fit-set-columns.db") });
+    const columns = (
+      db.raw.prepare("PRAGMA table_info(fit_workout_sets)").all() as { name: string }[]
+    ).map((row) => row.name);
+    // `metric` says which of the four numbers mean anything; the muscles decide
+    // which weekly total the set lands in. Both belong to the SET, not to an
+    // exercise row that may be edited tonight.
+    expect(columns).toContain("metric");
+    expect(columns).toContain("primary_muscles_json");
+    expect(columns).toContain("label");
+    db.close();
+  });
+
+  it("refuses a set whose kind no volume read knows what to do with", () => {
+    const db = openDatabase({ path: join(dir, "fit-set-kind.db") });
+    insertProfile(db, "p1");
+    insertWorkout(db, "w1", "p1");
+    expect(() => insertSet(db, "s1", "p1", "w1", { kind: "cooldown" })).toThrow(/CHECK/i);
+    for (const kind of ["warmup", "working", "drop", "failure"]) {
+      expect(() => insertSet(db, `s-${kind}`, "p1", "w1", { kind })).not.toThrow();
+    }
+    db.close();
+  });
+
+  it("refuses a set whose metric would make its own numbers unreadable", () => {
+    const db = openDatabase({ path: join(dir, "fit-set-metric.db") });
+    insertProfile(db, "p1");
+    insertWorkout(db, "w1", "p1");
+    expect(() => insertSet(db, "s1", "p1", "w1", { metric: "calories" })).toThrow(/CHECK/i);
+    db.close();
+  });
+
+  it("keeps RIR inside 0–5 and lets it be absent", () => {
+    const db = openDatabase({ path: join(dir, "fit-set-rir.db") });
+    insertProfile(db, "p1");
+    insertWorkout(db, "w1", "p1");
+    expect(() => insertSet(db, "s1", "p1", "w1", { rir: 6 })).toThrow(/CHECK/i);
+    expect(() => insertSet(db, "s2", "p1", "w1", { rir: -1 })).toThrow(/CHECK/i);
+    expect(() => insertSet(db, "s3", "p1", "w1", { rir: null })).not.toThrow();
+    expect(() => insertSet(db, "s4", "p1", "w1", { rir: 0 })).not.toThrow();
+    db.close();
+  });
+
+  it("lets a set carry no weight and no reps — a plank has neither", () => {
+    const db = openDatabase({ path: join(dir, "fit-set-nulls.db") });
+    insertProfile(db, "p1");
+    insertWorkout(db, "w1", "p1");
+    expect(() =>
+      insertSet(db, "s1", "p1", "w1", { metric: "time", weight: null, reps: null }),
+    ).not.toThrow();
+    db.close();
+  });
+
+  it("refuses a rep range that runs backwards, and admits a single target", () => {
+    const db = openDatabase({ path: join(dir, "fit-routine-range.db") });
+    insertProfile(db, "p1");
+    insertRoutine(db, "r1", "p1");
+    expect(() =>
+      insertRoutineItem(db, "i1", "p1", "r1", { repsMin: 12, repsMax: 8 }),
+    ).toThrow(/CHECK/i);
+    expect(() =>
+      insertRoutineItem(db, "i2", "p1", "r1", { repsMin: 5, repsMax: 5 }),
+    ).not.toThrow();
+    // „As many sets as it takes" is a real routine, so all three targets are
+    // allowed to be absent — NULL is „no target", never a target of zero.
+    expect(() =>
+      insertRoutineItem(db, "i3", "p1", "r1", {
+        position: 1,
+        targetSets: null,
+        repsMin: null,
+        repsMax: null,
+      }),
+    ).not.toThrow();
+    expect(() => insertRoutineItem(db, "i4", "p1", "r1", { targetSets: 0 })).toThrow(/CHECK/i);
+    db.close();
+  });
+
+  it("takes a routine's items with it, and a workout's sets with it", () => {
+    const db = openDatabase({ path: join(dir, "fit-cascade-children.db") });
+    insertProfile(db, "p1");
+    insertRoutine(db, "r1", "p1");
+    insertRoutine(db, "r2", "p1");
+    insertRoutineItem(db, "i1", "p1", "r1");
+    insertRoutineItem(db, "i2", "p1", "r2");
+    insertWorkout(db, "w1", "p1");
+    insertWorkout(db, "w2", "p1");
+    insertSet(db, "s1", "p1", "w1");
+    insertSet(db, "s2", "p1", "w2");
+
+    db.raw.prepare("DELETE FROM fit_routines WHERE id = 'r1'").run();
+    db.raw.prepare("DELETE FROM fit_workouts WHERE id = 'w1'").run();
+
+    expect(db.raw.prepare("SELECT id FROM fit_routine_items ORDER BY id").all()).toEqual([
+      { id: "i2" },
+    ]);
+    expect(db.raw.prepare("SELECT id FROM fit_workout_sets ORDER BY id").all()).toEqual([
+      { id: "s2" },
+    ]);
+    db.close();
+  });
+
+  it("takes every FIT training row of a profile with the profile", () => {
+    const db = openDatabase({ path: join(dir, "fit-cascade-profile.db") });
+    insertProfile(db, "p1");
+    insertProfile(db, "p2");
+    insertExercise(db, "e1", "p1");
+    insertExercise(db, "e2", "p2");
+    insertRoutine(db, "r1", "p1");
+    insertRoutineItem(db, "i1", "p1", "r1");
+    insertWorkout(db, "w1", "p1");
+    insertSet(db, "s1", "p1", "w1");
+    insertMeasurement(db, "p1");
+    insertBodyProfile(db, "p1");
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = 'p1'").run();
+
+    for (const table of [
+      "fit_routines",
+      "fit_routine_items",
+      "fit_workouts",
+      "fit_workout_sets",
+      "fit_measurements",
+      "fit_body_profile",
+    ]) {
+      expect(db.raw.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get()).toEqual({ n: 0 });
+    }
+    expect(db.raw.prepare("SELECT id FROM fit_exercises ORDER BY id").all()).toEqual([{ id: "e2" }]);
+    db.close();
+  });
+
+  it("holds one reading per day and says so with its primary key", () => {
+    const db = openDatabase({ path: join(dir, "fit-measurement-key.db") });
+    insertProfile(db, "p1");
+    insertProfile(db, "p2");
+    insertMeasurement(db, "p1");
+    expect(() => insertMeasurement(db, "p1")).toThrow(/UNIQUE|PRIMARY/i);
+    // Same day, different profile, and different days of one profile are both fine.
+    expect(() => insertMeasurement(db, "p2")).not.toThrow();
+    expect(() => insertMeasurement(db, "p1", { day: "2026-08-08" })).not.toThrow();
+    db.close();
+  });
+
+  it("refuses a muscle unit with no reading, and a reading with no unit", () => {
+    const db = openDatabase({ path: join(dir, "fit-measurement-muscle.db") });
+    insertProfile(db, "p1");
+    expect(() => insertMeasurement(db, "p1", { muscleUnit: "kg", muscleValue: null })).toThrow(
+      /CHECK/i,
+    );
+    expect(() =>
+      insertMeasurement(db, "p1", { day: "2026-08-08", muscleUnit: null, muscleValue: 38 }),
+    ).toThrow(/CHECK/i);
+    expect(() =>
+      insertMeasurement(db, "p1", { day: "2026-08-09", muscleUnit: null, muscleValue: null }),
+    ).not.toThrow();
+    expect(() =>
+      insertMeasurement(db, "p1", { day: "2026-08-10", muscleUnit: "percent", muscleValue: 42 }),
+    ).not.toThrow();
+    db.close();
+  });
+
+  it("refuses percentages a body cannot have, and weights a person cannot be", () => {
+    const db = openDatabase({ path: join(dir, "fit-measurement-bounds.db") });
+    insertProfile(db, "p1");
+    expect(() => insertMeasurement(db, "p1", { fat: 0 })).toThrow(/CHECK/i);
+    expect(() => insertMeasurement(db, "p1", { fat: 100 })).toThrow(/CHECK/i);
+    expect(() => insertMeasurement(db, "p1", { water: 0 })).toThrow(/CHECK/i);
+    expect(() => insertMeasurement(db, "p1", { weight: 0 })).toThrow(/CHECK/i);
+    expect(() => insertMeasurement(db, "p1", { weight: 501 })).toThrow(/CHECK/i);
+    // „Not measured" is the ordinary case for everything except the weight.
+    expect(() =>
+      insertMeasurement(db, "p1", { fat: null, water: null, neck: null }),
+    ).not.toThrow();
+    db.close();
+  });
+
+  it("stores a birth date rather than an age, and lets the sex be absent", () => {
+    const db = openDatabase({ path: join(dir, "fit-body-profile.db") });
+    insertProfile(db, "p1");
+    const columns = (
+      db.raw.prepare("PRAGMA table_info(fit_body_profile)").all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(columns).toContain("birth_date");
+    expect(columns).not.toContain("age");
+    expect(() => insertBodyProfile(db, "p1", { sex: null })).not.toThrow();
+    db.close();
+  });
+
+  it("refuses an implausible height and an activity level nothing has a factor for", () => {
+    const db = openDatabase({ path: join(dir, "fit-body-bounds.db") });
+    insertProfile(db, "p1");
+    expect(() => insertBodyProfile(db, "p1", { height: 49 })).toThrow(/CHECK/i);
+    expect(() => insertBodyProfile(db, "p1", { height: 261 })).toThrow(/CHECK/i);
+    expect(() => insertBodyProfile(db, "p1", { activity: "athlete" })).toThrow(/CHECK/i);
+    expect(() => insertBodyProfile(db, "p1", { sex: "other" })).toThrow(/CHECK/i);
+    db.close();
+  });
+
+  it("refuses a second open session, and lets a finished one be followed by a new one", () => {
+    const db = openDatabase({ path: join(dir, "fit-one-open.db") });
+    insertProfile(db, "p1");
+    insertProfile(db, "p2");
+    insertWorkout(db, "w1", "p1", { endedAt: null });
+    // Two open at once would make „the current workout" ambiguous.
+    expect(() => insertWorkout(db, "w2", "p1", { endedAt: null })).toThrow(/UNIQUE/i);
+    // Another profile is another person.
+    expect(() => insertWorkout(db, "w3", "p2", { endedAt: null })).not.toThrow();
+    // Finished sessions do not occupy the slot, however many there are.
+    expect(() => insertWorkout(db, "w4", "p1")).not.toThrow();
+    expect(() => insertWorkout(db, "w5", "p1")).not.toThrow();
+    db.raw.prepare("UPDATE fit_workouts SET ended_at = ? WHERE id = 'w1'").run(T);
+    expect(() => insertWorkout(db, "w6", "p1", { endedAt: null })).not.toThrow();
+    db.close();
+  });
+
+  it("indexes the read the module exists for — this exercise, last time", () => {
+    const db = openDatabase({ path: join(dir, "fit-index.db") });
+    const indexes = Object.fromEntries(
+      (
+        db.raw
+          .prepare("SELECT name, sql FROM sqlite_master WHERE type = 'index' AND name LIKE 'fit_%'")
+          .all() as { name: string; sql: string | null }[]
+      ).map((row) => [row.name, row.sql ?? ""]),
+    );
+    expect(indexes["fit_workout_sets_profile_exercise"]).toContain("(profile_id, exercise_ref");
+    expect(indexes["fit_workout_sets_workout"]).toContain("(workout_id, position, id)");
+    expect(indexes["fit_workouts_profile_day"]).toContain("WHERE deleted_at IS NULL");
+    expect(indexes["fit_exercises_profile_active"]).toContain("WHERE deleted_at IS NULL");
+    expect(indexes["fit_routines_profile_active"]).toContain("WHERE deleted_at IS NULL");
+    // The date lives on the workout and is JOINed for, never copied onto every
+    // set: a copied date drifts the first time a session is re-dated.
+    expect(
+      (db.raw.prepare("PRAGMA table_info(fit_workout_sets)").all() as { name: string }[]).map(
+        (row) => row.name,
+      ),
+    ).not.toContain("workout_date");
+    db.close();
+  });
+
+  it("adds the seven tables to a database written at 59, whose rows it leaves untouched", () => {
+    const path = join(dir, "fit-upgrade-059.db");
+    const before = new Database(path);
+    before.pragma("journal_mode = WAL");
+    before.pragma("foreign_keys = ON");
+    before.function("nx_fold", { deterministic: true }, (value: unknown) =>
+      typeof value === "string" ? foldSearchText(value) : null,
+    );
+    runMigrations(
+      before,
+      MIGRATIONS.filter((migration) => migration.version <= 59),
+    );
+    before
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run("p1", "personal", "P", T);
+    before
+      .prepare(
+        `INSERT INTO fit_targets (profile_id, kcal, protein_g, carbs_g, fat_g, updated_at)
+         VALUES ('p1', 2600, 180, NULL, NULL, ?)`,
+      )
+      .run(T);
+    expect(before.pragma("user_version", { simple: true })).toBe(59);
+    before.close();
+
+    const db = openDatabase({ path });
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    expect(tableNames(db)).toContain("fit_workout_sets");
+    expect(db.raw.prepare("SELECT kcal, protein_g FROM fit_targets WHERE profile_id = 'p1'").get())
+      .toEqual({ kcal: 2600, protein_g: 180 });
     db.close();
   });
 });

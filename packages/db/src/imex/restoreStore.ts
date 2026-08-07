@@ -201,6 +201,21 @@ export const RESTORE_WIPE_TABLES = [
   // CANV (migration 059). One table, scoped straight by `profile_id`: a board
   // has no children and no parent but the profile itself.
   "canvas_boards",
+  // FIT training and body (migration 060). Every one of the seven carries its
+  // own `profile_id`, including the two child tables — which is deliberate, and
+  // is what lets this list scope them directly instead of through a subquery.
+  // They are still written children-first: `ON DELETE CASCADE` exists on
+  // `routine_id` and `workout_id`, and this list never leans on it to reach a
+  // row, for the reason the whole file states. References OUT of the group are
+  // `exercise_ref`/`routine_ref` TEXT with no foreign key, so nothing here
+  // depends on the order relative to `fit_exercises`.
+  "fit_routine_items",
+  "fit_routines",
+  "fit_workout_sets",
+  "fit_workouts",
+  "fit_exercises",
+  "fit_measurements",
+  "fit_body_profile",
 ] as const;
 
 type WipeTable = (typeof RESTORE_WIPE_TABLES)[number];
