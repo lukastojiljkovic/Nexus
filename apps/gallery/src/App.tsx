@@ -359,13 +359,21 @@ function ThemePanel({ theme, label }: { theme: ThemeName; label: string }) {
         </Card>
       </Section>
 
-      <Section title="EmptyState">
+      {/* Two shapes, one component. `page` is the whole surface being empty and
+          is allowed the space; `inline` is ONE list inside a populated page —
+          a card that said the same thing in 18px centred type with sixty-four
+          pixels of air would be shouting about the one thing that did not
+          happen. */}
+      <Section title="EmptyState (dva oblika)">
         <Card>
           <EmptyState
             title="Još nema beleški"
             description="Zabeleži prvu misao — ideje, citate ili plan za ispit. Sve ostaje na tvom uređaju."
             action={<Button variant="primary">Nova beleška</Button>}
           />
+        </Card>
+        <Card>
+          <EmptyState variant="inline" title="Danas još nema upisanih obroka" />
         </Card>
       </Section>
     </div>

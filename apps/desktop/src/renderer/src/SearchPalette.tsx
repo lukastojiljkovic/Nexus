@@ -3,7 +3,7 @@ import type { KeyboardEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { foldSearchTag, parseSearchQuery, SEARCH_KINDS } from "@nexus/core";
 import type { SearchKind } from "@nexus/core";
-import { Button, Chip } from "@nexus/ui";
+import { Button, Chip, EmptyState } from "@nexus/ui";
 import type { NoteTag, SearchHistoryEntry, SearchResult, TaskTag } from "../../shared/ipc.js";
 import { REBUILD_COMMAND_ID, matchCommands } from "./searchCommands.js";
 import type { SearchCommand } from "./searchCommands.js";
@@ -826,7 +826,7 @@ className="nx-segmented__option search__chip"
             </p>
           )}
 
-          {showEmptyState && <p className="search__empty">{strings.search.emptyResults}</p>}
+          {showEmptyState && <EmptyState variant="inline" title={strings.search.emptyResults} />}
 
           {showAllRow && (
             <div

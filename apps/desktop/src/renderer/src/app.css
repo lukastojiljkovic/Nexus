@@ -3546,7 +3546,10 @@ button.cal__grid-event--dragging {
 }
 
 /* In-card empty state — a calm muted line, not the full EmptyState block. */
-.dash__empty {
+/* A quiet line on a card that is NOT „nothing here" — the failure notice, which
+   `EmptyState` must never be used for: a card that could not READ has not been
+   told there is nothing to read. Empty states are the component's now. */
+.dash__quiet {
   margin: 0;
   padding: var(--nx-space-2) 0;
   color: var(--nx-text-muted);
@@ -5115,7 +5118,10 @@ button.cal__grid-event--dragging {
   display: flex;
   flex-direction: column;
 }
-.ntf__empty {
+/* The centre's loading and failure lines. Same rule as `.dash__quiet` and named
+   the same way on purpose — an empty list is `EmptyState`, and these two are not
+   empty lists. */
+.ntf__quiet {
   margin: 0;
   padding: var(--nx-space-4);
   color: var(--nx-text-muted);
@@ -7903,13 +7909,6 @@ button.cal__grid-event--dragging {
   color: var(--nx-accent-strong);
   border-radius: var(--nx-radius-xs);
   padding: 0 1px;
-}
-.search__empty {
-  margin: 0;
-  padding: var(--nx-space-4);
-  text-align: center;
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
 }
 .search__footer {
   display: flex;
@@ -11903,8 +11902,9 @@ button.cal__grid-event--dragging {
   font-size: var(--nx-font-size-body-sm);
 }
 
-/* SearchPalette's failed-fetch line — .search__empty's shape, danger-toned so
-   a rejected search cannot be mistaken for its "nothing matches" sibling. */
+/* SearchPalette's failed-fetch line — the quiet-line shape, danger-toned so a
+   rejected search cannot be mistaken for „nothing matches", which is now
+   `EmptyState variant="inline"` and a different statement entirely. */
 .search__error {
   margin: 0;
   padding: var(--nx-space-4);
@@ -11913,7 +11913,7 @@ button.cal__grid-event--dragging {
   font-size: var(--nx-font-size-body-sm);
 }
 
-/* NotificationCenter's snooze/dismiss failure line — .ntf__empty's shape,
+/* NotificationCenter's snooze/dismiss failure line — `.ntf__quiet`'s shape,
    danger-toned for the same reason as .search__error above. */
 .ntf__error {
   margin: 0;

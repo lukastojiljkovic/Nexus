@@ -473,6 +473,17 @@
 .nx-empty__action {
   margin-top: var(--nx-space-2);
 }
+/* The inline shape: one quiet line where the rows would be. It overrides the
+   block above rather than sitting beside it, because the two ARE one component —
+   an app with two independent empty-state rules is how it grew three of them. */
+.nx-empty.nx-empty--inline {
+  display: block;
+  margin: 0;
+  padding: var(--nx-space-2) 0;
+  text-align: left;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
 
 /* --- ListRow (generic dense row; future task/agenda row) --------------- */
 .nx-list-row {

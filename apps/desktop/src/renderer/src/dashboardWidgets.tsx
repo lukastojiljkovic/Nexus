@@ -13,7 +13,7 @@ import {
   widgetTaskLists,
 } from "@nexus/core";
 import type { WidgetContract } from "@nexus/core";
-import { Button, Checkbox, Chip, ListRow, LoadingState } from "@nexus/ui";
+import { Button, Checkbox, Chip, EmptyState, ListRow, LoadingState } from "@nexus/ui";
 import { FIT_MEAL_SLOTS } from "../../shared/ipc.js";
 import type { DocumentStatus, Event, Exam, Subject } from "../../shared/ipc.js";
 import { buildCalendarItems } from "./calendarItems.js";
@@ -218,7 +218,7 @@ function WidgetFailure({ onRetry }: { onRetry: () => void }) {
   const s = strings.dashboard.widget;
   return (
     <div className="dash__failure" role="alert">
-      <p className="dash__empty">{s.error}</p>
+      <p className="dash__quiet">{s.error}</p>
       <Button size="sm" onClick={onRetry}>
         {s.retry}
       </Button>
@@ -359,7 +359,7 @@ function TodayWidget({
           }),
         );
         if (todayEvents.length + todayBirthdays.length + todayTasks.length === 0) {
-          return <p className="dash__empty">{s.empty}</p>;
+          return <EmptyState variant="inline" title={s.empty} />;
         }
         // The one knob this card has (ADR-059): a cap over the WHOLE row list,
         // in draw order — uncapped as shipped (the infinity default).
@@ -449,7 +449,7 @@ function UpcomingTasksWidget({ profileId, contract, config, onOpenModule }: Dash
           period: widgetChoice(cfg, "period"),
           listIds: widgetTaskLists(cfg, "lists"),
         });
-        if (upcoming.length === 0) return <p className="dash__empty">{s.empty}</p>;
+        if (upcoming.length === 0) return <EmptyState variant="inline" title={s.empty} />;
         return (
           <div className="dash__list">
             {upcoming.map((task) => (
@@ -499,7 +499,7 @@ function UrgentTasksWidget({ profileId, contract, config, onOpenModule }: Dashbo
         // is the cap over the union, five as shipped.
         const cfg = parseWidgetConfig(contract, config);
         const rows = urgentTaskRows(tasks, todayKey, widgetCount(cfg, "count"));
-        if (rows.length === 0) return <p className="dash__empty">{s.empty}</p>;
+        if (rows.length === 0) return <EmptyState variant="inline" title={s.empty} />;
         return (
           <div className="dash__list">
             {rows.map((task) => {
@@ -565,7 +565,7 @@ function RecentNotesWidget({ profileId, contract, config, onOpenNote }: Dashboar
         const recent = [...notes]
           .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id))
           .slice(0, widgetCount(cfg, "count"));
-        if (recent.length === 0) return <p className="dash__empty">{s.empty}</p>;
+        if (recent.length === 0) return <EmptyState variant="inline" title={s.empty} />;
         return (
           <div className="dash__list">
             {recent.map((note) => (
@@ -606,7 +606,7 @@ function ExpiringDocumentsWidget({ profileId, contract, config, onOpenModule }: 
       {(documents) => {
         const cfg = parseWidgetConfig(contract, config);
         const expiring = expiringDocumentRows(documents, widgetChoice(cfg, "horizon"));
-        if (expiring.length === 0) return <p className="dash__empty">{s.empty}</p>;
+        if (expiring.length === 0) return <EmptyState variant="inline" title={s.empty} />;
         return (
           <div className="dash__list">
             {expiring.map((doc) => (
@@ -669,7 +669,7 @@ function ExamsWidget({ profileId, contract, config, onOpenModule }: DashboardWid
           .sort((a, b) => a.days - b.days || a.exam.id.localeCompare(b.exam.id))
           .slice(0, 5);
         if (upcoming.length === 0) {
-          return <p className="dash__empty">{strings.study.dashboardEmpty}</p>;
+          return <EmptyState variant="inline" title={strings.study.dashboardEmpty} />;
         }
         return (
           <div className="dash__list">
@@ -724,7 +724,7 @@ function StudyWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps) {
         );
         const hasStreak = streak.current > 0;
         if (!hasStreak && focusMinutes === 0) {
-          return <p className="dash__empty">{strings.study.streakZero}</p>;
+          return <EmptyState variant="inline" title={strings.study.streakZero} />;
         }
         return (
           <div className="dash__list">
@@ -787,7 +787,7 @@ function UpcomingRenewalsWidget({ profileId, contract, config, onOpenModule }: D
         const rows = renewals
           .filter((renewal) => renewal.date <= limit)
           .slice(0, widgetCount(cfg, "count"));
-        if (rows.length === 0) return <p className="dash__empty">{s.empty}</p>;
+        if (rows.length === 0) return <EmptyState variant="inline" title={s.empty} />;
         return (
           <div className="dash__list">
             {rows.map((renewal) => (
@@ -857,7 +857,7 @@ function HabitsTodayWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps
   return (
     <WidgetData state={state} retry={retry}>
       {({ expected, index, today }) => {
-        if (expected.length === 0) return <p className="dash__empty">{s.empty}</p>;
+        if (expected.length === 0) return <EmptyState variant="inline" title={s.empty} />;
         return (
           <div className="dash__list">
             {expected.map((habit) => {
@@ -1020,7 +1020,7 @@ function FocusWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps) {
           (total, session) => total + focusSessionMinutes(session),
           0,
         );
-        if (minutes === 0) return <p className="dash__empty">{s.empty}</p>;
+        if (minutes === 0) return <EmptyState variant="inline" title={s.empty} />;
         return (
           <div className="dash__list">
             <DashRow
@@ -1071,9 +1071,9 @@ function FitnessTodayWidget({ profileId, onOpenModule }: DashboardWidgetBodyProp
     <WidgetData state={state} retry={retry}>
       {({ day, targets }) => {
         const [kcal] = macroGoals(day.totals, targets);
-        if (kcal === undefined) return <p className="dash__empty">{s.empty}</p>;
+        if (kcal === undefined) return <EmptyState variant="inline" title={s.empty} />;
         const logged = FIT_MEAL_SLOTS.some((slot) => day.slots[slot].length > 0);
-        if (!logged) return <p className="dash__empty">{s.empty}</p>;
+        if (!logged) return <EmptyState variant="inline" title={s.empty} />;
         const figure = `${formatKcal(kcal.value)} ${t.unitKcal}`;
         return (
           <div className="dash__list">
@@ -1174,7 +1174,7 @@ function FitnessTrainingWidget({ profileId, onOpenModule }: DashboardWidgetBodyP
         )[0];
 
         if (open === null && done === 0 && stalest === undefined) {
-          return <p className="dash__empty">{s.empty}</p>;
+          return <EmptyState variant="inline" title={s.empty} />;
         }
         return (
           <div className="dash__list">

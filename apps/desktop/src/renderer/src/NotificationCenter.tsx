@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Button, Chip } from "@nexus/ui";
+import { Button, Chip, EmptyState } from "@nexus/ui";
 import type { NotificationRecord, NotificationSource, SnoozePreset } from "../../shared/ipc.js";
 import {
   ALWAYS_ON_NOTIFICATION_SOURCES,
@@ -178,13 +178,13 @@ export function NotificationCenter({ profileId, onNavigate }: NotificationCenter
         <div className="ntf__panel" role="region" aria-label={s.bellLabel}>
           <div className="ntf__list">
             {failed ? (
-              <p className="ntf__empty" role="alert">
+              <p className="ntf__quiet" role="alert">
                 {s.loadError}
               </p>
             ) : notifications === null ? (
-              <p className="ntf__empty">{strings.app.loading}</p>
+              <p className="ntf__quiet">{strings.app.loading}</p>
             ) : centerRows.length === 0 ? (
-              <p className="ntf__empty">{s.empty}</p>
+              <EmptyState variant="inline" title={s.empty} />
             ) : (
               centerRows.map((notification) => (
                 <div className="ntf__row" key={notification.id}>
