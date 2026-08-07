@@ -39,6 +39,36 @@ export {
   type ProportionBarProps,
   type ProportionSegment,
 } from "./components/charts/ProportionBar.js";
+export {
+  ColumnPlot,
+  type ColumnPlotProps,
+  type ColumnPlotSeries,
+  type ColumnPlotSlot,
+} from "./components/charts/ColumnPlot.js";
+export {
+  SeriesPlot,
+  type SeriesPlotProps,
+  type SeriesPlotSeries,
+} from "./components/charts/SeriesPlot.js";
+export {
+  SpanLanes,
+  type SpanLanesProps,
+  type SpanLanesLane,
+  type SpanLanesMark,
+  type SpanLanesSpan,
+} from "./components/charts/SpanLanes.js";
+export {
+  RadialCycle,
+  type RadialCycleProps,
+  type RadialMark,
+  type RadialPeriod,
+  type RadialSpoke,
+} from "./components/charts/RadialCycle.js";
+export {
+  ChartLegend,
+  type ChartLegendItem,
+  type ChartLegendProps,
+} from "./components/charts/ChartLegend.js";
 export { StarField, type StarFieldProps } from "./components/StarField.js";
 export { mulberry32, starField, SKY_WORLD, type Star } from "./material.js";
 export { ListView, type ListViewProps } from "./views/ListView.js";

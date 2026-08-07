@@ -825,6 +825,215 @@
   color: var(--nx-text);
 }
 
+/* --- Chart tone hues -----------------------------------------------------
+   One custom property, set by a tone modifier class, consumed by every mark
+   drawn in ColumnPlot, SeriesPlot, SpanLanes, RadialCycle and ChartLegend
+   below. A mark never paints a colour of its own — it paints `--nx-tone`,
+   and `--nx-tone` is only ever set to one of these four. That is what keeps
+   "three roles and no fourth" a structural fact rather than a rule someone
+   has to remember: the `ChartTone` union has exactly four members, and there
+   is exactly one class per member, so there is nowhere a fifth hue could
+   come from. `CellMatrix` predates this file and keeps its own
+   `--nx-cell-hue` — the two must never drift apart, but retrofitting it was
+   out of scope for adding primitives. */
+.nx-tone--accent {
+  --nx-tone: var(--nx-accent);
+}
+.nx-tone--data {
+  --nx-tone: var(--nx-data);
+}
+.nx-tone--danger {
+  --nx-tone: var(--nx-danger);
+}
+.nx-tone--neutral {
+  --nx-tone: var(--nx-text-muted);
+}
+
+/* --- Chart reference rule ------------------------------------------------
+   The ONE reference line a chart is allowed — target, zero, today, a
+   threshold — shared by ColumnPlot, SeriesPlot and SpanLanes so there is one
+   recipe instead of three near-identical ones. The LINE is always the
+   neutral hairline dash: what a rule IS never changes, so a reader who has
+   learned to spot it once spots it everywhere. Colour lives on the LABEL
+   instead, because the tone is a fact about what the threshold MEANS — a
+   limit reads danger, a personal best reads accent — not about the line. */
+.nx-chart-rule {
+  stroke: var(--nx-border);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.nx-chart-rule__label {
+  font-size: var(--nx-font-size-caption);
+  font-variant-numeric: tabular-nums;
+}
+.nx-chart-rule__label--accent {
+  fill: var(--nx-accent);
+}
+.nx-chart-rule__label--data {
+  fill: var(--nx-data);
+}
+.nx-chart-rule__label--danger {
+  fill: var(--nx-danger);
+}
+.nx-chart-rule__label--neutral {
+  fill: var(--nx-text-muted);
+}
+
+/* --- ColumnPlot ---------------------------------------------------------- */
+.nx-columnplot__bar {
+  fill: var(--nx-tone);
+}
+.nx-columnplot__label {
+  font-size: var(--nx-font-size-caption);
+  fill: var(--nx-text-muted);
+}
+/* The zero of a SIGNED chart — the axis, not the one allowed reference rule,
+   which is why it is solid rather than dashed and carries no label. It exists
+   because a reader can otherwise only infer the hinge from slots that happen to
+   carry both directions, and a run of all-positive columns reads as an ordinary
+   bar chart with a strange top. */
+.nx-columnplot__zero {
+  stroke: var(--nx-border);
+  stroke-width: 1;
+}
+
+/* --- SeriesPlot ------------------------------------------------------------
+   One stroke weight everywhere a line is data: 1.75, round caps and joins,
+   so a single point still reads as a dot (see `linePath`'s own note on a
+   zero-length segment) without a special case here. Area fill is the same
+   tone at low opacity rather than a per-tone "soft" token, because neutral
+   has no soft token of its own and a chart primitive should not need one to
+   exist just to stay consistent across all four roles. */
+.nx-seriesplot__tick {
+  font-size: var(--nx-font-size-caption);
+  fill: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.nx-seriesplot__line {
+  fill: none;
+  stroke: var(--nx-tone);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.nx-seriesplot__area {
+  fill: var(--nx-tone);
+  opacity: 0.16;
+  stroke: none;
+}
+.nx-seriesplot__dot {
+  fill: var(--nx-tone);
+}
+
+/* --- SpanLanes -------------------------------------------------------------
+   Intervals and marks on a shared time axis. The scroll wrapper only ever
+   activates past twelve lanes — under that its `max-height` simply exceeds
+   the drawn content, so nothing about the layout changes for the common
+   case. Lanes are never shrunk to make room; a row squeezed under its
+   readable height is worse than a scrollbar. */
+.nx-spanlanes__scroll {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.nx-spanlanes__label {
+  font-size: var(--nx-font-size-caption);
+  fill: var(--nx-text-muted);
+}
+.nx-spanlanes__span {
+  fill: var(--nx-tone);
+}
+.nx-spanlanes__mark-tick {
+  stroke: var(--nx-tone);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+}
+.nx-spanlanes__mark-terminus {
+  fill: var(--nx-tone);
+}
+
+/* --- RadialCycle -----------------------------------------------------------
+   A period, not a category — the ring is a clock face or a compass, never a
+   pie. Value is encoded as SPOKE LENGTH, not as angular sweep or slice area;
+   angle only ever carries the fixed position within the period, which is why
+   this reads as a wind rose rather than the banned pie/donut shape. Dial
+   ticks are a structural guide (hairline, like a reference rule) rather than
+   data, so they get weight 1; spokes and the hand are data-bearing marks and
+   share the house's 1.75. */
+.nx-radialcycle__dial-tick {
+  stroke: var(--nx-border);
+  stroke-width: 1;
+}
+.nx-radialcycle__spoke {
+  stroke: var(--nx-tone);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+}
+.nx-radialcycle__mark-dot {
+  fill: var(--nx-tone);
+}
+.nx-radialcycle__mark-label {
+  fill: var(--nx-tone);
+  font-size: var(--nx-font-size-caption);
+}
+/* The hand is a position indicator ("now"), not a data series, so it takes
+   neither a chart tone nor the rule's hairline — a plain neutral stroke, the
+   way an analogue clock's hand is never itself the thing being measured. */
+.nx-radialcycle__hand {
+  stroke: var(--nx-text);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+}
+.nx-radialcycle__hand-tip {
+  fill: var(--nx-text);
+}
+
+/* --- ChartLegend -----------------------------------------------------------
+   Not decoration — the enforcement point for "state is never carried by
+   colour alone". Every item pairs its tone with a distinct glyph shape, so a
+   reader who cannot tell two hues apart still has a second channel. */
+.nx-legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.nx-legend--inline {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--nx-space-4);
+}
+.nx-legend__item {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.nx-legend__glyph {
+  flex: none;
+  overflow: visible;
+}
+.nx-legend__label {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.nx-legend__mark-line {
+  stroke: var(--nx-tone);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+}
+.nx-legend__mark-dash {
+  stroke: var(--nx-tone);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-dasharray: 3 3;
+}
+.nx-legend__mark-tick {
+  stroke: var(--nx-tone);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+}
+
 /* --- Material ----------------------------------------------------------
    The two substrates. Everything here is STATIC — no animation, no parallax,
    no pointer response — which is what keeps it a ground rather than a
