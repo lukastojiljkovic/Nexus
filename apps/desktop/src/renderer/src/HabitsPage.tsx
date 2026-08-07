@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { ACCENT_IDS } from "@nexus/tokens";
-import { Button, Checkbox, Chip, EmptyState, ListRow, TextField } from "@nexus/ui";
+import { Button, Checkbox, Chip, EmptyState, ListRow, PageHeader, TextField } from "@nexus/ui";
 import { computeHabitStreak } from "@nexus/core";
 import type { WeekStart } from "@nexus/core";
 import {
@@ -39,6 +39,7 @@ import { habitDayPhrase, habitPeriodPhrase, habitWeekPhrase } from "./habitForma
 import { readStoredDefaultReminder } from "./habitPrefs.js";
 import { strings } from "./strings.js";
 import { readStoredWeekStart, toWeekStart } from "./weekStart.js";
+import { moduleName } from "./moduleName.js";
 
 /**
  * Navike (HABIT slices b and c) — the module's page. Slice a shipped the storage
@@ -873,6 +874,7 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
 
   return (
     <div className="hab">
+      <PageHeader title={moduleName("habits")} />
       {pendingUndoId !== null && (
         <div className="hab__undo" role="status">
           <span className="hab__undo-text">{s.all.deletedNotice}</span>

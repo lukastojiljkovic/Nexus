@@ -645,6 +645,10 @@ body {
   gap: var(--nx-space-5);
   align-items: start;
 }
+/* The page header spans both rail and main columns, above them both. */
+.tasks__header {
+  grid-column: 1 / -1;
+}
 .tasks__main {
   min-width: 0;
   display: flex;
@@ -3650,14 +3654,6 @@ button.cal__grid-event--dragging {
   flex-direction: column;
   gap: var(--nx-space-5);
 }
-.study__title {
-  margin: 0;
-  font-size: var(--nx-font-size-h1);
-  line-height: var(--nx-font-leading-tight);
-  font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: var(--nx-font-tracking-tight);
-}
-
 /* Subject form (create + edit) — one wrapping row; the name field takes the slack. */
 .study__subject-form {
   display: flex;
@@ -5354,13 +5350,6 @@ button.cal__grid-event--dragging {
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-5);
-}
-.set__title {
-  margin: 0;
-  font-size: var(--nx-font-size-h1);
-  line-height: var(--nx-font-leading-tight);
-  font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: var(--nx-font-tracking-tight);
 }
 /* Section cards reuse nx-card's surface; this only spaces their innards. */
 .set__section {
@@ -8057,29 +8046,6 @@ button.cal__grid-event--dragging {
   flex-direction: column;
   gap: var(--nx-space-4);
 }
-.searchpage__header {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nx-space-3);
-}
-.searchpage__heading {
-  display: flex;
-  align-items: baseline;
-  gap: var(--nx-space-3);
-  flex-wrap: wrap;
-}
-.searchpage__title {
-  margin: 0;
-  font-size: var(--nx-font-size-title);
-  letter-spacing: var(--nx-font-tracking-tight);
-  line-height: var(--nx-font-leading-tight);
-  font-weight: var(--nx-font-weight-semibold);
-  color: var(--nx-text);
-}
-.searchpage__shortcut {
-  font-size: var(--nx-font-size-label);
-  color: var(--nx-text-muted);
-}
 .searchpage__input.nx-textfield__input {
   width: 100%;
   font-size: var(--nx-font-size-body);
@@ -8824,22 +8790,12 @@ button.cal__grid-event--dragging {
 .priv__gate {
   width: 100%;
 }
-.priv__head {
-  display: flex;
-  align-items: center;
-  gap: var(--nx-space-3);
-}
-.priv__title {
-  margin: 0;
-  font-size: var(--nx-font-size-h1);
-  line-height: var(--nx-font-leading-tight);
-  font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: var(--nx-font-tracking-tight);
-}
+/* Sized, not stretched: it sits in the page header's actions slot now, which is
+   already pushed to the trailing edge — the `flex: 1` and `margin-left: auto`
+   it carried were doing that job back when the field lived in a bare header row
+   beside the title, and inside the actions row they only fought the gap. */
 .priv__search {
-  flex: 1;
-  max-width: 360px;
-  margin-left: auto;
+  width: 240px;
 }
 /* The best-effort clipboard notice (PRIV-012) -- the undo bar's quiet recipe. */
 .priv__clipboard {
@@ -8923,6 +8879,10 @@ button.cal__grid-event--dragging {
   grid-template-columns: 230px minmax(0, 1fr);
   gap: var(--nx-space-5);
   align-items: start;
+}
+/* The page header spans both rail and main columns, above them both. */
+.fin__header {
+  grid-column: 1 / -1;
 }
 .fin__main {
   min-width: 0;
@@ -9725,31 +9685,6 @@ button.cal__grid-event--dragging {
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-4);
-}
-.doc__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--nx-space-3);
-  flex-wrap: wrap;
-}
-.doc__heading {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nx-space-1);
-  min-width: 0;
-}
-.doc__title {
-  margin: 0;
-  font-size: var(--nx-font-size-title);
-  letter-spacing: var(--nx-font-tracking-tight);
-  line-height: var(--nx-font-leading-tight);
-  font-weight: var(--nx-font-weight-semibold);
-  color: var(--nx-text);
-}
-.doc__caption {
-  font-size: var(--nx-font-size-label);
-  color: var(--nx-text-muted);
 }
 .doc__view {
   display: flex;

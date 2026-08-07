@@ -11,6 +11,7 @@ import {
   KanbanView,
   ListRow,
   ListView,
+  PageHeader,
   TextField,
 } from "@nexus/ui";
 import {
@@ -91,6 +92,7 @@ import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
 import { dayUnit, strings } from "./strings.js";
 import { readStoredBlockedInToday, toIncludeBlocked } from "./taskPrefs.js";
 import { useFocusTrap } from "./useFocusTrap.js";
+import { moduleName } from "./moduleName.js";
 
 // --- Field orderings (renderer mirror of @nexus/db) -------------------------
 //
@@ -3802,6 +3804,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
 
   return (
     <div className="tasks">
+      <PageHeader title={moduleName("tasks")} className="tasks__header" />
       <aside className="tasks__rail" aria-label={strings.tasks.lists.railLabel}>
         {/* Pregledi (ADR-049), above the lists: five VIRTUAL lists — queries
             over every list at once, never places anything is filed into. */}

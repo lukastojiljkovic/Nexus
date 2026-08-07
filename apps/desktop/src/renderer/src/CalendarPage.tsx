@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent, KeyboardEvent } from "react";
-import { Button, Checkbox, Chip, EmptyState, ListRow, TextField } from "@nexus/ui";
+import { Button, Checkbox, Chip, EmptyState, ListRow, PageHeader, TextField } from "@nexus/ui";
 import { isValidDayKey, monthKeyOf, shiftDayKey, shiftMonthKey, weekDayKeys } from "@nexus/core";
 import type { WeekStart } from "@nexus/core";
 import { MAX_EVENT_TEMPLATE_NAME_LENGTH } from "../../shared/ipc.js";
@@ -67,6 +67,7 @@ import { daysUntilExam, examCountdownLabel, examCountdownVariant, localTodayKey 
 import { readStoredWeekStart, toWeekStart } from "./weekStart.js";
 import { formatMoney } from "./money.js";
 import { dayUnit, strings } from "./strings.js";
+import { moduleName } from "./moduleName.js";
 
 // --- Per-profile view memory (interim, mirrors TasksPage) -------------------
 //
@@ -1478,6 +1479,7 @@ export function CalendarPage({
 
   return (
     <div className="cal">
+      <PageHeader title={moduleName("calendar")} />
       {pendingSeries !== null && (
         <RecurrenceScopeDialog
           action={pendingSeries.kind === "delete" ? "delete" : "edit"}

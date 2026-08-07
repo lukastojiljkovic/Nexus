@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { parseSearchQuery } from "@nexus/core";
-import { Button, Chip, EmptyState } from "@nexus/ui";
+import { Button, Chip, EmptyState, PageHeader } from "@nexus/ui";
 import type { SearchHistoryEntry, SearchPageResult, SearchResult } from "../../shared/ipc.js";
 import {
   SEARCH_DEBOUNCE_MS,
@@ -224,23 +224,19 @@ export function SearchPage({
 
   return (
     <section className="searchpage">
-      <header className="searchpage__header">
-        <div className="searchpage__heading">
-          <h1 className="searchpage__title">{strings.search.page.title}</h1>
-          <span className="searchpage__shortcut">
-            {`${paletteChordLabel} ${strings.search.page.shortcutHint}`}
-          </span>
-        </div>
-        <input
-          ref={inputRef}
-          type="text"
-          className="nx-textfield__input searchpage__input"
-          placeholder={strings.search.placeholder}
-          aria-label={strings.search.page.title}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-      </header>
+      <PageHeader
+        title={strings.search.page.title}
+        subtitle={`${paletteChordLabel} ${strings.search.page.shortcutHint}`}
+      />
+      <input
+        ref={inputRef}
+        type="text"
+        className="nx-textfield__input searchpage__input"
+        placeholder={strings.search.placeholder}
+        aria-label={strings.search.page.title}
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+      />
 
       <div className="searchpage__facets">
         <div className="searchpage__chips" role="group" aria-label={strings.search.kindFilterLabel}>

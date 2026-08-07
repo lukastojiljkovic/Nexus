@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { MIME_FAMILIES, isInlineImageMime } from "@nexus/core";
-import { Button, EmptyState } from "@nexus/ui";
+import { Button, EmptyState, PageHeader } from "@nexus/ui";
 import type {
   DocAttachmentEntry,
   DocAttachmentList,
@@ -14,6 +14,7 @@ import { persistFileView, readStoredFileView, FILE_VIEWS, type FileView } from "
 import { NotePopover } from "./notePopover.js";
 import { SEARCH_DEBOUNCE_MS, formatContextDate } from "./searchShared.js";
 import { countUnit, strings } from "./strings.js";
+import { moduleName } from "./moduleName.js";
 
 /**
  * Datoteke (DOC) — one place for every file in the profile.
@@ -349,25 +350,31 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
 
   return (
     <section className="doc">
-      <header className="doc__header">
-        <div className="doc__heading">
-          <h1 className="doc__title">{s.title}</h1>
-          <span className="doc__caption">{s.caption}</span>
-        </div>
-        <div className="doc__view" role="group" aria-label={s.viewLabel}>
-          {FILE_VIEWS.map((option) => (
-            <Button
-              key={option}
-              size="sm"
-              variant={view === option ? "primary" : "ghost"}
-              aria-pressed={view === option}
-              onClick={() => changeView(option)}
-            >
-              {s.views[option]}
-            </Button>
-          ))}
-        </div>
-      </header>
+      <PageHeader
+        title={moduleName("files")}
+        // „Sve datoteke priložene uz beleške, zadatke i predmete." is what this
+        // page IS, so it belongs under the title rather than beside the view
+        // switcher — a sentence sitting in a row of buttons reads as a control
+        // that lost its button.
+        subtitle={s.caption}
+        actions={
+          <>
+            <div className="doc__view" role="group" aria-label={s.viewLabel}>
+              {FILE_VIEWS.map((option) => (
+                <Button
+                  key={option}
+                  size="sm"
+                  variant={view === option ? "primary" : "ghost"}
+                  aria-pressed={view === option}
+                  onClick={() => changeView(option)}
+                >
+                  {s.views[option]}
+                </Button>
+              ))}
+            </div>
+          </>
+        }
+      />
 
       <div className="doc__filters">
         <input

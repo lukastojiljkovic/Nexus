@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { Button, Chip, EmptyState, ListRow, TextField } from "@nexus/ui";
+import { Button, Chip, EmptyState, ListRow, PageHeader, TextField } from "@nexus/ui";
 import { FOOD_CATEGORIES, macrosFor } from "@nexus/core";
 import {
   FIT_MEAL_SLOTS,
@@ -37,6 +37,7 @@ import {
   type MacroGoal,
 } from "./fitDay.js";
 import { strings } from "./strings.js";
+import { moduleName } from "./moduleName.js";
 
 /**
  * Ishrana (FIT slice b) — the module's page. Slice a shipped the food
@@ -1138,6 +1139,7 @@ export function FitnessPage({ profileId }: FitnessPageProps) {
 
   return (
     <div className="fit">
+      <PageHeader title={moduleName("fitness")} />
       {pendingUndo !== null && (
         <div className="fit__undo" role="status">
           <span className="fit__undo-text">

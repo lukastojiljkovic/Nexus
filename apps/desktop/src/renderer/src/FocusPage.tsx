@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { ChangeEvent, ReactNode } from "react";
 import { FOCUS_PHASE_KINDS, phaseProgress } from "@nexus/core";
 import type { FocusPhaseKind } from "@nexus/core";
-import { Button, Chip, EmptyState, ListRow, TextField } from "@nexus/ui";
+import { Button, Chip, EmptyState, ListRow, PageHeader, TextField } from "@nexus/ui";
 import { MAX_FOCUS_LABEL_LENGTH } from "../../shared/ipc.js";
 import type { FocusSession, RunningFocusSession, Subject, Task } from "../../shared/ipc.js";
 import { localTodayKey, shiftDayKey } from "./examDates.js";
@@ -16,6 +16,7 @@ import { focusDayTotals, plannedWorkPhases, upcomingPhase } from "./focusPhases.
 import { readStoredFocusConfig } from "./focusPrefs.js";
 import { FocusDiscardDialog } from "./FocusDiscardDialog.js";
 import { countUnit, strings } from "./strings.js";
+import { moduleName } from "./moduleName.js";
 
 /**
  * Fokus (UTIL slice b) — the page of the ONE focus timer. Slice a shipped the
@@ -519,6 +520,7 @@ export function FocusPage({ profileId, enabledModules }: FocusPageProps) {
 
   return (
     <div className="foc">
+      <PageHeader title={moduleName("focus")} />
       {pendingUndoId !== null && (
         <div className="foc__undo" role="status">
           <span className="foc__undo-text">{s.history.deletedNotice}</span>

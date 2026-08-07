@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { createPortal } from "react-dom";
-import { Button, Card, Checkbox, Chip, TextField } from "@nexus/ui";
+import { Button, Card, Checkbox, Chip, PageHeader, TextField } from "@nexus/ui";
 import {
   buildLlmPrompt,
   chordAccelerator,
@@ -122,11 +122,7 @@ import { FinCsvImportSection } from "./FinCsvImport.js";
 import type { LicenceEntry } from "./licences.js";
 import { countUnit, dayUnit, strings } from "./strings.js";
 import { useFocusTrap } from "./useFocusTrap.js";
-
-/** Sidebar/page display name for a module id; mirrors App.tsx's private helper (kept local — App renders this page, so importing it back would be circular). */
-function moduleName(id: string): string {
-  return strings.modules[id] ?? id;
-}
+import { moduleName } from "./moduleName.js";
 
 const THEME_OPTIONS: ThemePreference[] = ["system", "dan", "noc"];
 
@@ -4831,7 +4827,7 @@ export function SettingsPage({
 
   return (
     <div className="set">
-      <h1 className="set__title">{moduleName("settings")}</h1>
+      <PageHeader title={moduleName("settings")} />
 
       <TextField
         className="set__search"

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, FormEvent, SetStateAction } from "react";
 import * as Y from "yjs";
-import { Button, Card, Checkbox, EmptyState, TextField } from "@nexus/ui";
+import { Button, Card, Checkbox, EmptyState, PageHeader, TextField } from "@nexus/ui";
 import type { PrivNoteListEntry, PrivStatus } from "../../shared/ipc.js";
 import { formatCountdown, passcodeMeetsPolicy, RecoveryKitPanel } from "./AuthGate.js";
 import { PrivNoteEditor } from "./PrivNoteEditor.js";
 import { TypedConfirmDialog } from "./TypedConfirmDialog.js";
 import { strings } from "./strings.js";
+import { moduleName } from "./moduleName.js";
 
 /**
  * The „Privatno" section page (PRIV v1 / ADR-057 §5): one component, three
@@ -621,20 +622,24 @@ function PrivSection({ profileId, onStatusChange, onRecheck }: PrivSectionProps)
 
   return (
     <div className="priv" onCopy={onSectionCopy}>
-      <header className="priv__head">
-        <h1 className="priv__title">{strings.modules.priv ?? "Privatno"}</h1>
-        <TextField
-          className="priv__search"
-          value={query}
-          aria-label={s.searchLabel}
-          placeholder={s.searchPlaceholder}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        {/* The persistent manual lock — the header's one promise (ADR-057 §5). */}
-        <Button size="sm" onClick={() => void lock()}>
-          {s.lockNow}
-        </Button>
-      </header>
+      <PageHeader
+        title={moduleName("priv")}
+        actions={
+          <>
+            <TextField
+              className="priv__search"
+              value={query}
+              aria-label={s.searchLabel}
+              placeholder={s.searchPlaceholder}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+            {/* The persistent manual lock — the header's one promise (ADR-057 §5). */}
+            <Button size="sm" onClick={() => void lock()}>
+              {s.lockNow}
+            </Button>
+          </>
+        }
+      />
 
       {clipboardArmed && (
         <div className="priv__clipboard" role="status">

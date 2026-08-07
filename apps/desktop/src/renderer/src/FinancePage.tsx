@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { Button, CardsView, Chip, EmptyState, ListRow, ListView, TextField } from "@nexus/ui";
+import {
+  Button,
+  CardsView,
+  Chip,
+  EmptyState,
+  ListRow,
+  ListView,
+  PageHeader,
+  TextField,
+} from "@nexus/ui";
 import { applyFilters, isValidDayKey, monthKeyOf, shiftMonthKey } from "@nexus/core";
 import type { CardsViewConfig, CollectionSchema, FilterSpec, ListViewConfig } from "@nexus/core";
 import {
@@ -39,6 +48,7 @@ import {
 } from "./financeReport.js";
 import { formatMoney, formatMoneyPlain, moneyInputValue, parseMoneyInput } from "./money.js";
 import { strings } from "./strings.js";
+import { moduleName } from "./moduleName.js";
 
 /**
  * Finansije (FIN slice b) — the ledger's page. Slice a shipped the data layer
@@ -1477,6 +1487,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
 
   return (
     <div className="fin">
+      <PageHeader title={moduleName("finance")} className="fin__header" />
       <aside className="fin__rail" aria-label={s.accounts.heading}>
         {/* Per CURRENCY, drawn straight from the store's list. Nothing here adds
             two rows together, and no method exists that could: without an

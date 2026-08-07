@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { JSONContent } from "@tiptap/core";
 import type { CardsViewConfig, CollectionSchema } from "@nexus/core";
-import { Button, CardsView, EmptyState } from "@nexus/ui";
+import { Button, CardsView, EmptyState, PageHeader } from "@nexus/ui";
 import type {
   NoteCardDisposition,
   NoteCategory,
@@ -21,6 +21,7 @@ import { TypedConfirmDialog } from "./TypedConfirmDialog.js";
 import { formatNotificationWhen } from "./notificationFormat.js";
 import { NotePopover } from "./notePopover.js";
 import { persistRootNoteView, readStoredRootNoteView } from "./notePrefs.js";
+import { moduleName } from "./moduleName.js";
 import { mergeTemplateEntries } from "./noteTemplates.js";
 import { countUnit, strings } from "./strings.js";
 
@@ -942,223 +943,231 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
   }
 
   return (
-    <div className="note">
-      <NoteOrganizer
-        profileId={profileId}
-        folders={folders}
-        selection={selection}
-        onSelect={setSelection}
-        onChanged={onFoldersChanged}
-        tags={tags}
-        tagFilter={tagFilter}
-        onToggleTag={onToggleTag}
-        onClearTagFilter={onClearTagFilter}
-        onTagsChanged={loadTags}
-        categories={categories}
-        categoryFilter={categoryFilter}
-        onToggleCategory={onToggleCategory}
-        onClearCategoryFilter={onClearCategoryFilter}
-        onCategoriesChanged={onCategoriesChanged}
-      />
+    <>
+      {/* A sibling of the grid rather than a child of it: `.note` IS the
+          three-column grid, so a header placed inside it would land in the
+          organizer's cell. `.app__main` is already the flex column both of
+          these are items of — the header is `flex: none`, the grid keeps its
+          `flex: 1; min-height: 0`, and the height contract is unchanged. */}
+      <PageHeader title={moduleName("notes")} />
+      <div className="note">
+        <NoteOrganizer
+          profileId={profileId}
+          folders={folders}
+          selection={selection}
+          onSelect={setSelection}
+          onChanged={onFoldersChanged}
+          tags={tags}
+          tagFilter={tagFilter}
+          onToggleTag={onToggleTag}
+          onClearTagFilter={onClearTagFilter}
+          onTagsChanged={loadTags}
+          categories={categories}
+          categoryFilter={categoryFilter}
+          onToggleCategory={onToggleCategory}
+          onClearCategoryFilter={onClearCategoryFilter}
+          onCategoriesChanged={onCategoriesChanged}
+        />
 
-      <div className="note__list-pane">
-        <Button variant="primary" className="note__new" onClick={() => void create()}>
-          {strings.notes.newNote}
-        </Button>
+        <div className="note__list-pane">
+          <Button variant="primary" className="note__new" onClick={() => void create()}>
+            {strings.notes.newNote}
+          </Button>
 
-        {/* The shape toggle (NOTE-002). Always drawn: it is a property of the
-            SELECTION, not of what happens to be in it, so an empty folder is
-            still a folder whose shape can be set. */}
-        <div className="note__list-head">
-          <div className="note__views" role="group" aria-label={strings.notes.viewLabel}>
-            {VIEW_OPTIONS.map(({ value, label }) => (
-              <Button
-                key={value}
-                size="sm"
-                className={view === value ? "note__view note__view--active" : "note__view"}
-                aria-pressed={view === value}
-                onClick={() => void selectView(value)}
-              >
-                {label}
-              </Button>
-            ))}
+          {/* The shape toggle (NOTE-002). Always drawn: it is a property of the
+              SELECTION, not of what happens to be in it, so an empty folder is
+              still a folder whose shape can be set. */}
+          <div className="note__list-head">
+            <div className="note__views" role="group" aria-label={strings.notes.viewLabel}>
+              {VIEW_OPTIONS.map(({ value, label }) => (
+                <Button
+                  key={value}
+                  size="sm"
+                  className={view === value ? "note__view note__view--active" : "note__view"}
+                  aria-pressed={view === value}
+                  onClick={() => void selectView(value)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
           </div>
+
+          {pendingUndo != null && (
+            <div className="note__undo" role="status">
+              <span className="note__undo-text">
+                {pendingUndo.withCards
+                  ? strings.notes.deletedWithCardsNotice
+                  : strings.notes.deletedNotice}
+              </span>
+              <Button size="sm" className="note__undo-action" onClick={() => void undo()}>
+                {strings.notes.undo}
+              </Button>
+              <Button
+                size="sm"
+                className="note__undo-dismiss"
+                aria-label={strings.notes.dismiss}
+                onClick={() => setPendingUndo(null)}
+              >
+                ×
+              </Button>
+            </div>
+          )}
+
+          {duplicateError !== null && (
+            <p className="note__list-error" role="status">
+              {duplicateError === "tooLarge"
+                ? strings.notes.duplicateTooLarge
+                : strings.notes.duplicateError}
+            </p>
+          )}
+
+          {checklistNotice !== null &&
+            (checklistNotice.kind === "error" ? (
+              <p className="note__list-error" role="status">
+                {strings.notes.checklistTasks.error}
+              </p>
+            ) : (
+              <p className="note__list-notice" role="status">
+                {checklistNotice.kind === "empty"
+                  ? strings.notes.checklistTasks.empty
+                  : formatChecklistResult(checklistNotice.result)}
+              </p>
+            ))}
+
+          {failed ? (
+            <EmptyState title={strings.notes.listEmptyTitle} description={strings.notes.loadError} />
+          ) : notes === null ? (
+            <p className="app__muted">{strings.app.loading}</p>
+          ) : notes.length === 0 ? (
+            <EmptyState
+              title={strings.notes.listEmptyTitle}
+              description={strings.notes.listEmptyDescription}
+            />
+          ) : visibleNotes.length === 0 ? (
+            // Two filters, two sentences: the line has to name the one the user
+            // actually set, and only the tag filter is on when both are off. With
+            // both on, the tag line is the more specific of the two.
+            <EmptyState
+              title={strings.notes.listEmptyTitle}
+              description={
+                tagFilter.length === 0
+                  ? strings.notes.categoryFilterEmptyDescription
+                  : strings.notes.tagFilterEmptyDescription
+              }
+            />
+          ) : view === "list" ? (
+            <ul className="note__list">
+              {visibleNotes.map((note) => (
+                <li key={note.id} className="note__item-row">
+                  {renderNoteEntry(note, formatNoteDate(note.updatedAt))}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            // The same notes, one card each, in the same order (the config
+            // carries no sort — see CARDS_CONFIG). The wrapper owns the scroll the
+            // <ul> owns in the other shape; the grid, the card frame and its
+            // padding are the UI package's.
+            <div className="note__cards">
+              <CardsView<NoteFields>
+                items={visibleNotes}
+                schema={NOTE_SCHEMA}
+                config={CARDS_CONFIG}
+                itemKey={(note) => note.id}
+                renderItem={(note) => (
+                  <div className="note__item-row">
+                    {renderNoteEntry(note, formatNotificationWhen(note.updatedAt))}
+                  </div>
+                )}
+              />
+            </div>
+          )}
         </div>
 
-        {pendingUndo != null && (
-          <div className="note__undo" role="status">
-            <span className="note__undo-text">
-              {pendingUndo.withCards
-                ? strings.notes.deletedWithCardsNotice
-                : strings.notes.deletedNotice}
-            </span>
-            <Button size="sm" className="note__undo-action" onClick={() => void undo()}>
-              {strings.notes.undo}
-            </Button>
-            <Button
-              size="sm"
-              className="note__undo-dismiss"
-              aria-label={strings.notes.dismiss}
-              onClick={() => setPendingUndo(null)}
-            >
-              ×
-            </Button>
-          </div>
-        )}
-
-        {duplicateError !== null && (
-          <p className="note__list-error" role="status">
-            {duplicateError === "tooLarge"
-              ? strings.notes.duplicateTooLarge
-              : strings.notes.duplicateError}
-          </p>
-        )}
-
-        {checklistNotice !== null &&
-          (checklistNotice.kind === "error" ? (
-            <p className="note__list-error" role="status">
-              {strings.notes.checklistTasks.error}
-            </p>
+        <div className="note__editor-pane">
+          {selectedId != null ? (
+            <NoteEditor
+              key={selectedId}
+              profileId={profileId}
+              noteId={selectedId}
+              onSaved={() => void loadNotes()}
+              onOpenNote={setSelectedId}
+              // Handed over only to the note it was resolved for, and dropped the
+              // moment the editor reports it applied — otherwise navigating away
+              // and back to that note would append the template a second time.
+              initialTemplate={
+                pendingTemplate?.noteId === selectedId ? pendingTemplate.blocks : null
+              }
+              onInitialTemplateApplied={clearPendingTemplate}
+            />
           ) : (
-            <p className="note__list-notice" role="status">
-              {checklistNotice.kind === "empty"
-                ? strings.notes.checklistTasks.empty
-                : formatChecklistResult(checklistNotice.result)}
-            </p>
-          ))}
+            <div className="note__editor-empty">
+              <EmptyState
+                title={strings.notes.noSelectionTitle}
+                description={strings.notes.noSelectionDescription}
+              />
+            </div>
+          )}
+        </div>
 
-        {failed ? (
-          <EmptyState title={strings.notes.listEmptyTitle} description={strings.notes.loadError} />
-        ) : notes === null ? (
-          <p className="app__muted">{strings.app.loading}</p>
-        ) : notes.length === 0 ? (
-          <EmptyState
-            title={strings.notes.listEmptyTitle}
-            description={strings.notes.listEmptyDescription}
-          />
-        ) : visibleNotes.length === 0 ? (
-          // Two filters, two sentences: the line has to name the one the user
-          // actually set, and only the tag filter is on when both are off. With
-          // both on, the tag line is the more specific of the two.
-          <EmptyState
-            title={strings.notes.listEmptyTitle}
-            description={
-              tagFilter.length === 0
-                ? strings.notes.categoryFilterEmptyDescription
-                : strings.notes.tagFilterEmptyDescription
+        {pendingDelete != null && (
+          <NoteCardsDeleteDialog
+            noteTitle={
+              pendingDelete.note.title.trim().length > 0
+                ? pendingDelete.note.title
+                : strings.notes.untitled
             }
+            cardCount={pendingDelete.cardCount}
+            onChoose={(disposition) => {
+              const { note } = pendingDelete;
+              setPendingDelete(null);
+              void performDelete(note, disposition);
+            }}
+            onCancel={() => setPendingDelete(null)}
           />
-        ) : view === "list" ? (
-          <ul className="note__list">
-            {visibleNotes.map((note) => (
-              <li key={note.id} className="note__item-row">
-                {renderNoteEntry(note, formatNoteDate(note.updatedAt))}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          // The same notes, one card each, in the same order (the config
-          // carries no sort — see CARDS_CONFIG). The wrapper owns the scroll the
-          // <ul> owns in the other shape; the grid, the card frame and its
-          // padding are the UI package's.
-          <div className="note__cards">
-            <CardsView<NoteFields>
-              items={visibleNotes}
-              schema={NOTE_SCHEMA}
-              config={CARDS_CONFIG}
-              itemKey={(note) => note.id}
-              renderItem={(note) => (
-                <div className="note__item-row">
-                  {renderNoteEntry(note, formatNotificationWhen(note.updatedAt))}
-                </div>
-              )}
-            />
-          </div>
         )}
-      </div>
 
-      <div className="note__editor-pane">
-        {selectedId != null ? (
-          <NoteEditor
-            key={selectedId}
+        {pendingMoveIn != null && (
+          <TypedConfirmDialog
+            title={strings.notes.moveToPriv.title}
+            name={
+              pendingMoveIn.title.trim().length > 0 ? pendingMoveIn.title : strings.notes.untitled
+            }
+            warning={strings.notes.moveToPriv.warning}
+            note={strings.notes.moveToPriv.keepNote}
+            confirmLabel={strings.notes.moveToPriv.confirmLabel}
+            confirmPlaceholder={strings.notes.moveToPriv.confirmPlaceholder}
+            confirmValue={
+              pendingMoveIn.title.trim().length > 0 ? pendingMoveIn.title : strings.notes.untitled
+            }
+            submitLabel={strings.notes.moveToPriv.submit}
+            cancelLabel={strings.notes.moveToPriv.cancel}
+            error={moveInError}
+            busy={movingIn}
+            onConfirm={() => void performMoveIn(pendingMoveIn)}
+            onCancel={() => setPendingMoveIn(null)}
+          />
+        )}
+
+        {pendingChecklist != null && (
+          <NoteChecklistTasksDialog
             profileId={profileId}
-            noteId={selectedId}
-            onSaved={() => void loadNotes()}
-            onOpenNote={setSelectedId}
-            // Handed over only to the note it was resolved for, and dropped the
-            // moment the editor reports it applied — otherwise navigating away
-            // and back to that note would append the template a second time.
-            initialTemplate={
-              pendingTemplate?.noteId === selectedId ? pendingTemplate.blocks : null
+            noteTitle={
+              pendingChecklist.note.title.trim().length > 0
+                ? pendingChecklist.note.title
+                : strings.notes.untitled
             }
-            onInitialTemplateApplied={clearPendingTemplate}
+            itemCount={pendingChecklist.itemCount}
+            onConvert={(listId) => {
+              const { note } = pendingChecklist;
+              setPendingChecklist(null);
+              void performChecklistConversion(note, listId);
+            }}
+            onCancel={() => setPendingChecklist(null)}
           />
-        ) : (
-          <div className="note__editor-empty">
-            <EmptyState
-              title={strings.notes.noSelectionTitle}
-              description={strings.notes.noSelectionDescription}
-            />
-          </div>
         )}
       </div>
-
-      {pendingDelete != null && (
-        <NoteCardsDeleteDialog
-          noteTitle={
-            pendingDelete.note.title.trim().length > 0
-              ? pendingDelete.note.title
-              : strings.notes.untitled
-          }
-          cardCount={pendingDelete.cardCount}
-          onChoose={(disposition) => {
-            const { note } = pendingDelete;
-            setPendingDelete(null);
-            void performDelete(note, disposition);
-          }}
-          onCancel={() => setPendingDelete(null)}
-        />
-      )}
-
-      {pendingMoveIn != null && (
-        <TypedConfirmDialog
-          title={strings.notes.moveToPriv.title}
-          name={
-            pendingMoveIn.title.trim().length > 0 ? pendingMoveIn.title : strings.notes.untitled
-          }
-          warning={strings.notes.moveToPriv.warning}
-          note={strings.notes.moveToPriv.keepNote}
-          confirmLabel={strings.notes.moveToPriv.confirmLabel}
-          confirmPlaceholder={strings.notes.moveToPriv.confirmPlaceholder}
-          confirmValue={
-            pendingMoveIn.title.trim().length > 0 ? pendingMoveIn.title : strings.notes.untitled
-          }
-          submitLabel={strings.notes.moveToPriv.submit}
-          cancelLabel={strings.notes.moveToPriv.cancel}
-          error={moveInError}
-          busy={movingIn}
-          onConfirm={() => void performMoveIn(pendingMoveIn)}
-          onCancel={() => setPendingMoveIn(null)}
-        />
-      )}
-
-      {pendingChecklist != null && (
-        <NoteChecklistTasksDialog
-          profileId={profileId}
-          noteTitle={
-            pendingChecklist.note.title.trim().length > 0
-              ? pendingChecklist.note.title
-              : strings.notes.untitled
-          }
-          itemCount={pendingChecklist.itemCount}
-          onConvert={(listId) => {
-            const { note } = pendingChecklist;
-            setPendingChecklist(null);
-            void performChecklistConversion(note, listId);
-          }}
-          onCancel={() => setPendingChecklist(null)}
-        />
-      )}
-    </div>
+    </>
   );
 }

@@ -13,7 +13,7 @@ import {
   withClozeDeletion,
 } from "@nexus/core";
 import type { ClozeSegment } from "@nexus/core";
-import { Button, Checkbox, Chip, EmptyState, ListRow, TextField } from "@nexus/ui";
+import { Button, Checkbox, Chip, EmptyState, ListRow, PageHeader, TextField } from "@nexus/ui";
 import type {
   Card,
   CardFieldChanges,
@@ -81,6 +81,7 @@ import {
   weekdayMinutesForSave,
 } from "./studyPlanView.js";
 import type { ScopeCutRow } from "./studyPlanView.js";
+import { moduleName } from "./moduleName.js";
 
 // --- Field orderings (renderer mirror of @nexus/db) -------------------------
 //
@@ -2884,7 +2885,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   // --- Hub route (subjects, exams, decks) -------------------------------------
   return (
     <div className="study">
-      <h1 className="study__title">{strings.study.title}</h1>
+      <PageHeader title={moduleName("study")} />
 
       <form className="study__subject-form" onSubmit={(e) => void submitSubjectForm(e)}>
         <input

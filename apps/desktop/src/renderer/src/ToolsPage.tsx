@@ -1,11 +1,12 @@
 import { TOOL_CATEGORIES, type ToolRegistration } from "@nexus/core";
-import { TextField } from "@nexus/ui";
+import { PageHeader, TextField } from "@nexus/ui";
 import { useMemo, useState } from "react";
 
 import { createModuleRegistry } from "../../shared/modules.js";
 import { filterTools, type SearchableTool } from "./toolSearch.js";
 import { TOOL_SURFACES } from "./toolSurfaces.js";
 import { strings } from "./strings.js";
+import { moduleName } from "./moduleName.js";
 
 /**
  * „Alatke" (UTIL slice c) — the tool drawer, and the utilities HOST the
@@ -79,6 +80,7 @@ export function ToolsPage({ enabledModules }: ToolsPageProps) {
 
   return (
     <div className="tool">
+      <PageHeader title={moduleName("tools")} />
       <TextField
         className="tool__search"
         type="search"
