@@ -183,6 +183,10 @@ import {
   type FitMealItem,
   FitMealStore,
   FitMeasurementStore,
+  // The STORED routine, aliased apart from the wire's `FitRoutine`: the two
+  // differ by exactly the two fields `toWireRoutine` resolves, and letting one
+  // name mean both is how a resolve gets skipped without anything noticing.
+  type FitRoutine as StoredFitRoutine,
   FitRoutineStore,
   type FitTargetGoals,
   type FitTargets,
@@ -455,7 +459,7 @@ import {
 } from "./notifications.js";
 import { filterSearchHitsByModules } from "./searchGate.js";
 import { asCanvasRefs } from "./canvasRefs.js";
-import { focusPhaseEndCopy } from "./notificationStrings.js";
+import { focusPhaseEndCopy, restEndCopy } from "./notificationStrings.js";
 import type { SecurityNotice } from "./notificationStrings.js";
 import { computeSnoozeUntil, resolveDefaultSnoozePreset } from "./snooze.js";
 import { pickProfilePicture } from "./profilePicture.js";
@@ -553,6 +557,7 @@ import {
   type FitFoodOption,
   type FitLastPerformed,
   type FitMeasurement,
+  type FitRestTimer,
   type FitRoutine,
   type FitWorkout,
   type FitWorkoutSet,
@@ -584,6 +589,7 @@ import {
   MAX_EVENT_TEMPLATE_NAME_LENGTH,
   MAX_FIT_EXERCISE_QUERY_LENGTH,
   MAX_FIT_EXERCISE_RESULTS,
+  MAX_FIT_REST_SECONDS,
   MAX_FIT_WORKOUT_NOTES_LENGTH,
   MAX_NEW_PER_DAY,
   MAX_PROFILE_PICTURE_BYTES,
@@ -591,6 +597,7 @@ import {
   MAX_TARGET_RETENTION,
   MAX_TASK_TAG_NAME_LENGTH,
   MAX_TASK_TEMPLATE_NAME_LENGTH,
+  MIN_FIT_REST_SECONDS,
   MIN_TARGET_RETENTION,
   NOTE_CARD_DISPOSITIONS,
   NOTE_CARD_KEY_MAX_LENGTH,
@@ -899,6 +906,83 @@ function closedPauseSeconds(pausedAt: string | null, until: string): number {
 function spanSeconds(startedAt: string, endedAt: string): number {
   const seconds = Math.floor((Date.parse(endedAt) - Date.parse(startedAt)) / 1000);
   return Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+}
+
+// The rest countdown between sets (FIT slice c, ADR-081 §7). It borrows the
+// runtime shape directly above it and nothing else: a Map keyed by profile, a
+// `setTimeout` that only ANNOUNCES, and no row anywhere.
+//
+// What it deliberately does NOT borrow is the ending. A focus phase ends by
+// writing a `focus_sessions` row, which is what makes it a tracked timer; this
+// one ends by being over. It records nothing, so „koliko sam danas bio
+// fokusiran" cannot absorb it and the one-timer rule stays exactly where
+// ADR-077 put it.
+//
+// ONE per profile, for the reason there is one open workout: a rest is the rest
+// after the set you just did, and two of them would be two answers to „koliko mi
+// je još ostalo".
+const runningRestTimers = new Map<string, RunningRestTimer>();
+
+/** The running rest, plus the alarm handle the wire has no business carrying (`RunningFocusPhase`'s arrangement). */
+interface RunningRestTimer extends FitRestTimer {
+  timer: NodeJS.Timeout | null;
+}
+
+/** What `fit:rest-*` answers with — the countdown without main's private alarm handle. */
+function toWireRestTimer(rest: RunningRestTimer): FitRestTimer {
+  const { timer: _timer, ...wire } = rest;
+  return wire;
+}
+
+/**
+ * Drops the running countdown and its alarm. Called on stop, before starting a
+ * fresh one, and when the profile goes away — a handle that outlived its
+ * countdown would announce a rest nobody is taking.
+ */
+function clearRestTimer(profileId: string): void {
+  const rest = runningRestTimers.get(profileId);
+  if (rest === undefined) return;
+  if (rest.timer !== null) clearTimeout(rest.timer);
+  runningRestTimers.delete(profileId);
+}
+
+/**
+ * Starts a countdown of `seconds`, replacing whatever was running: logging
+ * another set mid-rest restarts the rest, because that is what actually
+ * happened.
+ *
+ * The alarm says the rest is over and does nothing else — there is no state to
+ * transition, and the entry stays in the map afterwards so a page that comes
+ * back can still see that the rest it started has elapsed rather than finding
+ * nothing and drawing no timer at all.
+ */
+function startRestTimer(profileId: string, seconds: number): FitRestTimer {
+  clearRestTimer(profileId);
+  const startedAt = new Date();
+  const rest: RunningRestTimer = {
+    startedAt: startedAt.toISOString(),
+    endsAt: new Date(startedAt.getTime() + seconds * 1000).toISOString(),
+    seconds,
+    timer: null,
+  };
+  rest.timer = setTimeout(() => {
+    // The countdown that armed this must still be the one in the map: a stop and
+    // a fresh start inside the window would otherwise announce the wrong rest.
+    if (runningRestTimers.get(profileId) !== rest) return;
+    rest.timer = null;
+    if (!Notification.isSupported()) return;
+    const copy = restEndCopy(seconds);
+    const notification = new Notification({ title: copy.title, body: copy.body });
+    notification.on("click", () => {
+      const win = mainWindow;
+      if (!win) return;
+      if (win.isMinimized()) win.restore();
+      win.focus();
+    });
+    notification.show();
+  }, seconds * 1000);
+  runningRestTimers.set(profileId, rest);
+  return toWireRestTimer(rest);
 }
 
 // --- Accounts (ADR-044) -----------------------------------------------------
@@ -3588,6 +3672,66 @@ function resolveLoggedExercise(
   };
 }
 
+/**
+ * The same lookup `resolveLoggedExercise` performs, in the shape a READ needs:
+ * it answers `null` instead of throwing, and it reads the profile's own
+ * exercises ONCE for however many references the caller is about to resolve.
+ *
+ * Both differences are the difference between a write and a read.
+ *
+ * - **A write must refuse.** Logging a set against an exercise that does not
+ *   exist would put a name with no meaning in the history, so
+ *   `resolveLoggedExercise` throws and the act fails.
+ * - **A read must not.** A routine is allowed to name an exercise the user
+ *   deleted afterwards — nothing stops them, `exercise_ref` is text with no
+ *   foreign key by design — and answering that whole routine with an exception
+ *   would take a working page down over one stale line. `null` is what lets
+ *   „Trening" draw that one line as unusable and the other eleven as usable.
+ * - **One `list()` for the batch.** `fit:routines-list` resolves every item of
+ *   every routine; a per-item store call would be the N+1 `fit:last-performed`
+ *   exists to avoid, on a read that happens on every mount of the page.
+ */
+function fitExerciseLookup(
+  profileId: string,
+): (reference: string) => { label: string; metric: ExerciseMetric } | null {
+  let own: Map<string, FitExercise> | null = null;
+  return (reference) => {
+    const parsed = parseExerciseRef(reference);
+    if (parsed === null) return null;
+    if (parsed.kind === "catalogue") {
+      const entry = catalogueExercise(parsed.id);
+      return entry === undefined ? null : { label: entry.name, metric: entry.metric };
+    }
+    // Read on first use rather than eagerly: a profile with no routines, or one
+    // whose routines are all catalogue movements, never touches the table.
+    own ??= new Map(fitExerciseStore(profileId).list().map((entry) => [entry.id, entry]));
+    const entry = own.get(parsed.id);
+    return entry === undefined ? null : { label: entry.name, metric: entry.metric };
+  };
+}
+
+/**
+ * A stored routine as the wire declares it: every item's `label` and `metric`
+ * resolved LIVE, with the stored label kept as the fallback for a reference that
+ * resolves to nothing (`FitRoutineItem` carries the reasoning).
+ */
+function toWireRoutine(
+  routine: StoredFitRoutine,
+  lookup: (reference: string) => { label: string; metric: ExerciseMetric } | null,
+): FitRoutine {
+  return {
+    ...routine,
+    items: routine.items.map((item) => {
+      const resolved = lookup(item.exerciseRef);
+      return {
+        ...item,
+        label: resolved?.label ?? item.label,
+        metric: resolved?.metric ?? null,
+      };
+    }),
+  };
+}
+
 /** One catalogue exercise as the picker reads it. `catalogue: true` is what tells a surface there is no row here to edit. */
 function catalogueExerciseOption(entry: ExerciseEntry): FitExerciseOption {
   return {
@@ -5249,6 +5393,10 @@ function performLock(): void {
   // A picked archive holds decrypted bytes and an undo snapshot holds a whole
   // profile's plaintext — both must die with the session's keys (ADR-023).
   clearRestoreState();
+  // The rest countdowns hold nothing secret and write nothing, so this is about
+  // lifetime rather than secrecy: a lock ends the session, and a kitchen timer
+  // that outlived it would ring for a set nobody is in the middle of.
+  for (const profileId of [...runningRestTimers.keys()]) clearRestTimer(profileId);
   try {
     db?.close();
   } catch {
@@ -9440,10 +9588,16 @@ function registerIpc(): void {
     fitExerciseStore(profileId).restore(asNonEmptyString(body.id, "id"), new Date().toISOString());
   });
 
+  // Every routine's items are resolved LIVE against one read of the profile's
+  // own exercises — see `toWireRoutine` for why a routine's label and metric are
+  // not the snapshot a logged set's are.
   ipcMain.handle(IpcChannel.fitRoutinesList, (event, payload): FitRoutine[] => {
     assertTrustedSender(event);
     const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
-    return fitRoutineStore(profileId).list();
+    const lookup = fitExerciseLookup(profileId);
+    return fitRoutineStore(profileId)
+      .list()
+      .map((routine) => toWireRoutine(routine, lookup));
   });
 
   // Create and rewrite share one body-reader: both send the routine WHOLE, and
@@ -9452,7 +9606,10 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitRoutineCreate, (event, payload): FitRoutine => {
     assertTrustedSender(event);
     const { profileId, name, notes, items } = readFitRoutineBody(payload);
-    return fitRoutineStore(profileId).create({ name, notes, items }, new Date().toISOString());
+    return toWireRoutine(
+      fitRoutineStore(profileId).create({ name, notes, items }, new Date().toISOString()),
+      fitExerciseLookup(profileId),
+    );
   });
 
   ipcMain.handle(IpcChannel.fitRoutineUpdate, (event, payload): FitRoutine => {
@@ -9460,7 +9617,10 @@ function registerIpc(): void {
     const body = asRecord(payload);
     const id = asNonEmptyString(body.id, "id");
     const { profileId, name, notes, items } = readFitRoutineBody(payload);
-    return fitRoutineStore(profileId).update(id, { name, notes, items }, new Date().toISOString());
+    return toWireRoutine(
+      fitRoutineStore(profileId).update(id, { name, notes, items }, new Date().toISOString()),
+      fitExerciseLookup(profileId),
+    );
   });
 
   ipcMain.handle(IpcChannel.fitRoutineDelete, (event, payload): void => {
@@ -9684,6 +9844,45 @@ function registerIpc(): void {
         new Date().toISOString(),
       ),
     );
+  });
+
+  // The rest countdown. SEC-EL-02 exactly as `focus:*`: both instants are
+  // main's clock, and the renderer supplies only how long — a countdown whose
+  // start the renderer could name would be a timer that can be told it began in
+  // the past. Nothing here touches the database, because there is nothing to
+  // write (`runningRestTimers`).
+  ipcMain.handle(IpcChannel.fitRestStart, (event, payload): FitRestTimer => {
+    assertTrustedSender(event);
+    // The one thing this handler needs the database for: not to read it, but to
+    // require that the session is UNLOCKED. `performLock` clears every running
+    // countdown, so a rest started while locked would be an orphan nothing ever
+    // cancels — and every other channel is implicitly gated the same way by
+    // touching a store.
+    requireDb();
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const seconds = asPositiveInteger(body.seconds, "seconds");
+    if (seconds < MIN_FIT_REST_SECONDS || seconds > MAX_FIT_REST_SECONDS) {
+      throw new Error(
+        `Invalid IPC payload: "seconds" must be between ${MIN_FIT_REST_SECONDS} and ${MAX_FIT_REST_SECONDS}.`,
+      );
+    }
+    return startRestTimer(profileId, seconds);
+  });
+
+  // Idempotent: a rest that already elapsed is stopped the same way one still
+  // running is, because dismissing a finished countdown is the ordinary way it
+  // ends and must not read as an error.
+  ipcMain.handle(IpcChannel.fitRestStop, (event, payload): void => {
+    assertTrustedSender(event);
+    clearRestTimer(asNonEmptyString(asRecord(payload).profileId, "profileId"));
+  });
+
+  ipcMain.handle(IpcChannel.fitRestStatus, (event, payload): FitRestTimer | null => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const rest = runningRestTimers.get(profileId);
+    return rest === undefined ? null : toWireRestTimer(rest);
   });
 
   // Tabla (CANV slice a, migration 059). SEC-EL-02 as everywhere: trusted

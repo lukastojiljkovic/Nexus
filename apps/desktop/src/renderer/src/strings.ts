@@ -322,7 +322,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     finance: "Finansije",
     habits: "Navike",
     focus: "Fokus",
-    fitness: "Ishrana",
+    fitness: "Fitnes",
     tools: "Alatke",
     canvas: "Tabla",
   } as Record<string, string>,
@@ -3395,7 +3395,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       /** Nothing has been logged for this day at all. */
       emptyDay: "Za ovaj dan još nema ničega.",
       /** Points at the one place goals are set, once, under the bars. */
-      setGoals: "Dnevne ciljeve postavljaš u Podešavanjima, u kartici „Ishrana”.",
+      setGoals: "Dnevne ciljeve postavljaš u Podešavanjima, u kartici „Fitnes”.",
     },
     /** Adding something to a meal: the search, the amount, and what the food says about itself. */
     picker: {
@@ -3543,6 +3543,360 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       pica: "Pića",
       jela: "Gotova jela",
       zacini: "Začini",
+    },
+    /**
+     * The page's two halves (ADR-081 §9). FIT is ONE hub — a person tracking
+     * their body does not think of food and training as two applications — so
+     * this is a section switch inside one page and not a second module.
+     */
+    sections: {
+      label: "Odeljak",
+      nutrition: "Ishrana",
+      training: "Trening",
+    },
+    /**
+     * „Trening" (FIT slice c). Two rules run through every line, and they are the
+     * same two „Ishrana" is written under, restated for a domain where the
+     * temptation is stronger.
+     *
+     * **Nothing here coaches.** No suggested weight, no „trebalo bi da povećaš",
+     * no verdict on a session. The app records what was lifted and says what the
+     * numbers are; deciding what to do next is the lifter's, and an app that
+     * decided it would have to be right about deloads, failed weeks and injuries
+     * it knows nothing about.
+     *
+     * **Nothing here is invented.** There is no calorie burn, no estimated
+     * one-rep max above ten reps and no tonnage for a metric that has none —
+     * every one of those is a refusal with a reason (`training.ts`), and the copy
+     * SAYS the refusal rather than leaving a suspicious blank.
+     */
+    training: {
+      loadErrorTitle: "Trening nije učitan",
+      loadError: "Učitavanje treninga nije uspelo. Zatvori i ponovo otvori stranicu.",
+      /**
+       * „Serija" counted, in all three Serbian forms — 1 serija, 2 serije, 5
+       * serija. ONE set of forms for the whole section, because it is one noun:
+       * the session summary, the tonnage coverage line, a routine's target and a
+       * history row all count the same thing, and four copies of this would be
+       * four chances to get the teens wrong.
+       */
+      setsUnit: { one: "serija", few: "serije", many: "serija" },
+      /** The session in progress — there is at most one, which the schema itself guarantees. */
+      session: {
+        heading: "Trening u toku",
+        /** A session started without a routine. Named, rather than left blank: a blank would read as a session missing its name. */
+        adHoc: "Slobodan trening",
+        elapsedLabel: "Traje",
+        elapsedUnit: "min",
+        finish: "Završi trening",
+        finishError: "Trening nije mogao da se završi. Pokušaj ponovo.",
+        /**
+         * The way out of a session started by mistake. Without it the only exit
+         * is „Završi" — which would leave an empty finished session in the
+         * history to be deleted from there, and a log full of sessions nobody
+         * did is a log nobody trusts. Undoable, like every other delete here.
+         */
+        discard: "Odbaci trening",
+        addExercise: "Dodaj vežbu",
+        notesLabel: "Beleška o treningu",
+        notesPlaceholder: "Kako je išlo, kako se osećaš…",
+        notesSave: "Sačuvaj belešku",
+        empty: "Još nijedna serija nije upisana.",
+        /** The session's own two figures. Never one figure called „obim" — see `tonnageCoverage`. */
+        setsLabel: "Radne serije",
+        tonnageLabel: "Tonaža",
+        tonnageUnit: "kg",
+        /**
+         * Said whenever a session held sets the tonnage could not count — a
+         * plank, a run, a pull-up. „Tonaža: 4.280 kg — računato na 14 od 18
+         * serija." Without it the figure implies it covered everything, which is
+         * exactly the failure `setTonnage`'s refusal exists to prevent.
+         */
+        tonnageCoverage: "računato na",
+        tonnageCoverageOf: "od",
+        /** Shown instead of a tonnage when NOTHING in the session had one. A zero would be a claim about the work. */
+        tonnageNone: "Tonaža se za ove vežbe ne računa",
+        warmupNote: "Zagrevanje se ne računa u obim.",
+      },
+      /** One logged set, and the form that writes the next one. */
+      set: {
+        log: "Upiši",
+        edit: "Izmeni",
+        save: "Sačuvaj",
+        cancel: "Otkaži",
+        remove: "Obriši seriju",
+        /** A set is removed for good — it was a typo, not history. Said where removing is possible. */
+        removeNote: "Obrisana serija se ne vraća.",
+        kindLabel: "Vrsta serije",
+        kind: {
+          warmup: "Zagrevanje",
+          working: "Radna",
+          drop: "Drop",
+          failure: "Do otkaza",
+        },
+        /**
+         * RIR rather than RPE (ADR-081 §4): „koliko si još mogao" is a question
+         * a person can answer, and a field people answer wrongly is worse than
+         * one they leave empty.
+         */
+        rirLabel: "RIR",
+        rirHint: "Koliko si ponavljanja još mogao. 0–5, prazno ako ne znaš.",
+        /**
+         * The five fields, named by what they MEAN. „Pomoć" and „Dodatna težina"
+         * are two labels over one column, because assistance getting smaller is
+         * the improvement while added weight getting bigger is — see `SET_FIELDS`.
+         */
+        field: {
+          weight: "Težina (kg)",
+          assist: "Pomoć (kg)",
+          reps: "Ponavljanja",
+          seconds: "Sekunde",
+          distance: "Metri",
+        },
+        unitKg: "kg",
+        /** Abbreviated on purpose: „10 ponavljanja" and „2 ponavljanja" decline, and a set list is not the place to fight Serbian numerals. */
+        unitReps: "pon.",
+        unitSeconds: "s",
+        unitMeters: "m",
+        /** Between the load and the count in a set's one-line reading: „60 kg × 10". */
+        times: "×",
+        /** In front of the load for `weighted_reps` and `assisted_reps` — added, and taken away. */
+        addedPrefix: "+",
+        assistPrefix: "−",
+        /** A number the set does not record. Never a zero, which would be a claim. */
+        missing: "—",
+        invalidNumber: "Upiši broj.",
+        invalidWhole: "Upiši ceo broj.",
+        actionError: "Serija nije upisana. Pokušaj ponovo.",
+      },
+      /** ADR-081 §1.1: the single most used number in any training app. */
+      lastTime: {
+        label: "Prošli put",
+        none: "Prvi put",
+      },
+      target: {
+        label: "Cilj",
+        /** „3 × 8–12" — sets, then the rep range. A missing half simply is not drawn. */
+        repsRange: "–",
+      },
+      /**
+       * The rest countdown (ADR-081 §7). The note is not decoration: the founder's
+       * one-timer rule is about what the product RECORDS, and this records
+       * nothing — so the surface says so where the timer is, rather than leaving
+       * somebody to wonder why their „Fokus" statistics did not move.
+       */
+      rest: {
+        heading: "Odmor",
+        start: "Odmor",
+        stop: "Prekini",
+        done: "Odmor je gotov",
+        lengthLabel: "Dužina odmora",
+        note: "Odbrojavanje se nigde ne beleži i nije deo statistike u „Fokusu”.",
+        error: "Odmor nije mogao da se pokrene.",
+      },
+      /** What the section shows when nothing is open. */
+      start: {
+        heading: "Novi trening",
+        adHoc: "Slobodan trening",
+        fromRoutine: "Počni",
+        dayLabel: "Dan",
+        caption: "Počni od rutine ili slobodno — vežbe možeš dodavati u toku treninga.",
+        error: "Trening nije mogao da se započne. Pokušaj ponovo.",
+        /** The schema allows exactly one open session, so this refusal is a real state rather than a race. */
+        alreadyOpen: "Jedan trening je već u toku.",
+      },
+      /** Finished sessions, newest first. */
+      history: {
+        heading: "Poslednji treninzi",
+        emptyTitle: "Još nema upisanih treninga",
+        emptyDescription: "Kad završiš prvi trening, pojaviće se ovde.",
+        /** Ranges the list can be read over. A day is a range of one, so these are the same read. */
+        rangeLabel: "Period",
+        range30: "30 dana",
+        range90: "90 dana",
+        range365: "Godina",
+        open: "Otvori",
+        close: "Zatvori",
+        /** Reopening a finished session for a correction. Refused while another is open. */
+        reopen: "Nastavi",
+        reopenBlocked: "Ne može dok je drugi trening u toku.",
+        delete: "Obriši trening",
+        deletedNotice: "Trening je obrisan.",
+        adHoc: "Slobodan trening",
+      },
+      /**
+       * Routines (ADR-081 §6). A routine is a SHAPE — the order of the exercises
+       * and what each one is aiming at — and holds nothing about when. The
+       * caption says that out loud, because every other fitness app calls the
+       * same thing a „plan" and means a calendar.
+       */
+      routines: {
+        heading: "Rutine",
+        caption: "Rutina je oblik treninga: redosled vežbi i ciljevi, bez datuma.",
+        newRoutine: "Nova rutina",
+        newTitle: "Nova rutina",
+        editTitle: "Izmena rutine",
+        nameLabel: "Naziv",
+        namePlaceholder: "npr. Gornji dan A",
+        notesLabel: "Beleška",
+        notesPlaceholder: "npr. zagrevanje 10 min pre prve vežbe",
+        itemsLabel: "Vežbe",
+        addItem: "Dodaj vežbu",
+        removeItem: "Ukloni",
+        moveUp: "Pomeri gore",
+        moveDown: "Pomeri dole",
+        targetSetsLabel: "Serije",
+        repsMinLabel: "Ponavljanja od",
+        repsMaxLabel: "Ponavljanja do",
+        targetHint: "Ciljevi nisu obavezni — prazno polje znači da cilja nema.",
+        save: "Sačuvaj rutinu",
+        cancel: "Otkaži",
+        edit: "Izmeni",
+        delete: "Obriši",
+        deletedNotice: "Rutina je obrisana.",
+        emptyTitle: "Još nema rutina",
+        emptyDescription: "Sačuvaj oblik treninga koji ponavljaš i sledeći put kreni od njega.",
+        invalidName: "Rutina treba naziv.",
+        needsItems: "Rutina treba bar jednu vežbu.",
+        /**
+         * A line naming an exercise that no longer resolves — one of the
+         * profile's own since deleted, or a catalogue entry a later build
+         * dropped. The line keeps the name it was written with and cannot be
+         * logged against; saying so beats an empty row nobody can explain.
+         */
+        missingExercise: "Ova vežba više ne postoji",
+      },
+      /**
+       * „Moje vežbe" — the profile's own, and only those. The catalogue ships
+       * with the app and is not a table, so there is nothing here that could edit
+       * a catalogue entry: „Ishrana" says the same thing about foods, for the
+       * same reason.
+       */
+      exercises: {
+        heading: "Moje vežbe",
+        caption: "Katalog aplikacije se ne menja — ovde su samo vežbe koje si sam dodao.",
+        newExercise: "Nova vežba",
+        newTitle: "Nova vežba",
+        editTitle: "Izmena vežbe",
+        nameLabel: "Naziv",
+        namePlaceholder: "npr. Potisak sa klupe uskim hvatom",
+        nameEnLabel: "Naziv na engleskom",
+        nameEnPlaceholder: "npr. close-grip bench press",
+        nameEnHint: "Nije obavezno. Pretraga ga koristi, prikaz ne — pola sveta traži „RDL”.",
+        primaryLabel: "Glavni mišići",
+        secondaryLabel: "Pomoćni mišići",
+        equipmentLabel: "Sprava",
+        patternLabel: "Obrazac pokreta",
+        metricLabel: "Šta jedna serija beleži",
+        /**
+         * The one field of this form that decides how the exercise behaves
+         * everywhere else, so it is the one with an explanation under it.
+         */
+        metricHint:
+          "Bira koja polja se upisuju uz seriju i kako se računa obim. Plank nema tonažu, a pomoć na spravi se oduzima.",
+        unilateralLabel: "Jednostrano (po strani)",
+        unilateralHint: "Osam ponavljanja jednoručnog veslanja je osam PO STRANI.",
+        notesLabel: "Beleška",
+        notesPlaceholder: "npr. postavka klupe, hvat",
+        save: "Sačuvaj",
+        cancel: "Otkaži",
+        edit: "Izmeni",
+        delete: "Obriši",
+        deletedNotice: "Vežba je obrisana.",
+        /** Said where deleting is possible: what goes is the exercise, never what was lifted with it. */
+        deleteNote: "Brisanje vežbe ne dira serije koje su već upisane.",
+        emptyTitle: "Nema tvojih vežbi",
+        emptyDescription:
+          "Katalog pokriva najveći deo. Dodaj vežbu ako radiš nešto što u njemu ne postoji.",
+        invalidName: "Vežba treba naziv.",
+        needsPrimary: "Izaberi bar jedan glavni mišić.",
+        actionError: "Radnja nije uspela. Pokušaj ponovo.",
+      },
+      /** One ranked list over the catalogue and the profile's own — one channel, one definition of „best match". */
+      picker: {
+        title: "Izaberi vežbu",
+        searchLabel: "Pretraga vežbi",
+        searchPlaceholder: "npr. potisak, RDL, zgib…",
+        idle: "Počni da kucaš da bi našao vežbu.",
+        noResults: "Nijedna vežba ne odgovara pretrazi.",
+        noResultsHint: "Proveri naziv ili dodaj svoju vežbu u „Moje vežbe”.",
+        searchError: "Pretraga nije uspela. Pokušaj ponovo.",
+        choose: "Izaberi",
+        cancel: "Otkaži",
+        /** The one chip that tells the two sources apart. */
+        mine: "Moja",
+      },
+      /** The twenty muscle groups, as the closed vocabulary names them. */
+      muscle: {
+        grudi: "Grudi",
+        latovi: "Latovi",
+        romboidi: "Romboidi",
+        trapez: "Trapez",
+        "donja-ledja": "Donja leđa",
+        "prednja-ramena": "Prednja ramena",
+        "bocna-ramena": "Bočna ramena",
+        "zadnja-ramena": "Zadnja ramena",
+        biceps: "Biceps",
+        triceps: "Triceps",
+        podlaktica: "Podlaktica",
+        kvadriceps: "Kvadriceps",
+        "zadnja-loza": "Zadnja loža",
+        gluteusi: "Gluteusi",
+        adduktori: "Adduktori",
+        abduktori: "Abduktori",
+        listovi: "Listovi",
+        trbusnjaci: "Trbušnjaci",
+        "kosi-trbusni": "Kosi trbušni",
+        "fleksori-kuka": "Fleksori kuka",
+      },
+      /** What provides the resistance — never „what is in the room". */
+      equipment: {
+        sipka: "Šipka",
+        "ez-sipka": "EZ šipka",
+        "t-sipka": "T-šipka",
+        bucice: "Bučice",
+        girja: "Girja",
+        sprava: "Sprava",
+        smit: "Smit mašina",
+        kabl: "Kabl",
+        "sopstvena-tezina": "Sopstvena težina",
+        guma: "Guma",
+        karike: "Karike",
+        trx: "TRX",
+        medicinka: "Medicinka",
+        tocak: "Točak za trbušnjake",
+        vijaca: "Vijača",
+        "traka-za-trcanje": "Traka za trčanje",
+        bicikl: "Bicikl",
+        veslac: "Veslač",
+        elipticna: "Eliptična",
+        stepper: "Stepper",
+      },
+      /** The shape of the movement — the vocabulary a week is actually balanced against. */
+      pattern: {
+        "horizontalni-potisak": "Horizontalni potisak",
+        "vertikalni-potisak": "Vertikalni potisak",
+        "horizontalno-privlacenje": "Horizontalno privlačenje",
+        "vertikalno-privlacenje": "Vertikalno privlačenje",
+        cucanj: "Čučanj",
+        "pregib-kuka": "Pregib u kuku",
+        iskorak: "Iskorak",
+        nosenje: "Nošenje",
+        olimpijski: "Olimpijski",
+        trup: "Trup",
+        izolacija: "Izolacija",
+        kardio: "Kardio",
+      },
+      /** What one set records (ADR-081 §3) — the field that makes the schema honest. */
+      metric: {
+        weight_reps: "Težina × ponavljanja",
+        reps: "Ponavljanja",
+        weighted_reps: "Dodatna težina × ponavljanja",
+        assisted_reps: "Pomoć × ponavljanja",
+        time: "Vreme",
+        weight_time: "Težina × vreme",
+        distance_time: "Rastojanje × vreme",
+      },
     },
   },
 
@@ -3743,7 +4097,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       finance: "Finansije",
       habits: "Navike",
       focus: "Fokus",
-      fitness: "Ishrana",
+      fitness: "Fitnes",
       tools: "Alatke",
       modules: "Moduli",
       notifications: "Obaveštenja",
@@ -4131,7 +4485,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       finance: "Računi, transakcije i prenosi — stanje se računa iz onoga što upišeš.",
       habits: "Dnevne i nedeljne navike — niz, istorija i ono što se danas očekuje.",
       focus: "Pomodoro tajmer i istorija fokusa — isti tajmer koji „Učenje“ koristi.",
-      fitness: "Dnevnik ishrane — obroci po danu, ugrađena lista namirnica i dnevni ciljevi.",
+      fitness:
+        "Ishrana i trening — obroci i dnevni ciljevi, dnevnik treninga sa rutinama i katalogom vežbi.",
       tools: "Pretvarači jedinica i svakodnevni računi — procenat, PDV, kredit i cena po jedinici.",
     } as Record<string, string>,
     /** Category-group headings above the module gallery, keyed by registry category. */
@@ -4379,7 +4734,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         dashboard: "Kontrolna tabla",
         finance: "Finansije",
         habits: "Navike",
-        fitness: "Ishrana",
+        fitness: "Fitnes",
         canvas: "Tabla",
       } satisfies Record<keyof RestoreModuleCounts, string>,
       columnCurrent: "Sada",

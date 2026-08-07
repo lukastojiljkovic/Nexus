@@ -515,6 +515,20 @@ export const IpcChannel = {
   // which tier produced it.
   fitBodyProfile: "fit:body-profile",
   fitBodyProfileSave: "fit:body-profile-save",
+  // The rest countdown between sets (ADR-081 §7). It is NOT the focus timer and
+  // it is not a second one either, because it is not a tracked timer at all: it
+  // writes no row, keeps no history, produces no statistic and appears nowhere
+  // in „Fokus". The one-timer rule is about what the product RECORDS as time
+  // spent, of which there remains exactly one.
+  //
+  // It lives in MAIN's memory for the reason the running focus phase does: a
+  // countdown that a page navigation or a window reload silently cancelled would
+  // be a kitchen timer that lies, and the alarm has to be able to fire while the
+  // user is looking at another app. Losing it on a crash is honest — there was
+  // never a row to lose.
+  fitRestStart: "fit:rest-start",
+  fitRestStop: "fit:rest-stop",
+  fitRestStatus: "fit:rest-status",
   // Table (CANV slice a, migration 059). One channel per store operation, on the
   // `fin-*:*`/`habits:*` rule, and here it does real work: `canvas:save-scene`
   // fires every few seconds while somebody draws, so it must not be able to
@@ -5195,11 +5209,30 @@ export interface NewFitExerciseFields {
 /** A partial patch of one of the profile's own exercises; an omitted key is left untouched. */
 export type FitExerciseFieldChanges = Partial<NewFitExerciseFields>;
 
-/** One line of a routine. Every target is nullable: "bench, as many sets as it takes" is a real prescription, and `null` is "no target" rather than a target of zero. */
+/**
+ * One line of a routine. Every target is nullable: "bench, as many sets as it
+ * takes" is a real prescription, and `null` is "no target" rather than a target
+ * of zero.
+ *
+ * **`label` and `metric` are resolved when the routine is READ, not stored as a
+ * snapshot** — and the difference from a logged set is the whole point. A set is
+ * history and must keep meaning what it meant; a routine is a SHAPE (ADR-081
+ * §6), so a renamed exercise should carry its new name into every routine that
+ * names it, and a corrected `metric` must reach the input the session draws for
+ * that line or the page would offer kilograms for a plank.
+ *
+ * When the reference no longer resolves — a user exercise since deleted, a
+ * catalogue slug a later build dropped — `metric` is `null` and `label` falls
+ * back to the name the line was written with. That pair is what lets „Trening"
+ * draw the line as unusable and still say what it used to be, instead of either
+ * crashing on the read or showing an empty row nobody can explain.
+ */
 export interface FitRoutineItem {
   id: string;
   exerciseRef: string;
   label: string;
+  /** What one set of it records — `null` exactly when the reference resolves to nothing. */
+  metric: ExerciseMetric | null;
   targetSets: number | null;
   targetRepsMin: number | null;
   targetRepsMax: number | null;
@@ -5442,6 +5475,43 @@ export interface FitBodyProfileRequest {
 export interface FitBodyProfileSaveRequest {
   profileId: string;
   profile: FitBodyProfile;
+}
+
+/** The shortest rest a countdown may be set to. Below this a timer costs more attention than it saves. */
+export const MIN_FIT_REST_SECONDS = 15;
+
+/**
+ * The longest. Ten minutes covers the heaviest single a person rests for; past
+ * it this stops being „the rest between two sets" and starts being a session
+ * somebody left running, and this timer records nothing that could explain it
+ * later.
+ */
+export const MAX_FIT_REST_SECONDS = 600;
+
+/**
+ * The running rest countdown — ADR-081 §7's kitchen timer, and the one thing on
+ * this contract that is neither a row nor derived from one.
+ *
+ * Both instants are stamped by MAIN's clock (SEC-EL-02, `focus:*`'s rule), so a
+ * renderer cannot declare when a rest began or when it ends; it subtracts
+ * `endsAt` from its own clock to draw the number, which is the same machine's
+ * clock and therefore the same answer. `seconds` travels too so the surface can
+ * say what was ASKED for after the countdown is over, without inferring it back
+ * out of two timestamps.
+ */
+export interface FitRestTimer {
+  startedAt: string;
+  endsAt: string;
+  seconds: number;
+}
+
+export interface FitRestStartRequest {
+  profileId: string;
+  seconds: number;
+}
+
+export interface FitRestRequest {
+  profileId: string;
 }
 
 /** A picker query over both sources at once. A blank query answers nothing rather than everything. */
@@ -8454,6 +8524,12 @@ export interface NexusApi {
   /** The body profile, or null while it has never been set — never a default-shaped guess. */
   fitBodyProfile(profileId: string): Promise<FitBodyProfile | null>;
   fitSaveBodyProfile(profileId: string, profile: FitBodyProfile): Promise<FitBodyProfile>;
+  /** Starts the rest countdown, replacing whatever was running — a new set logged mid-rest restarts the rest, which is what actually happened. */
+  fitStartRest(profileId: string, seconds: number): Promise<FitRestTimer>;
+  /** Cancels it. Idempotent: stopping a timer that already elapsed is not an error, it is the ordinary way one ends. */
+  fitStopRest(profileId: string): Promise<void>;
+  /** The running countdown, or null. What the page asks for on mount — a rest survives leaving the page. */
+  fitRestStatus(profileId: string): Promise<FitRestTimer | null>;
   /** This profile's boards, sr-Latn alphabetical and WITHOUT their drawings — the cheap read the board strip is built from. */
   listCanvasBoards(profileId: string): Promise<CanvasBoard[]>;
   /** One board AND its whole drawing. The one call on this surface that carries a scene back. */

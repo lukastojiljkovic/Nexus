@@ -1,4 +1,5 @@
 import type { FocusPhaseKind, HabitSchedule, NotificationSource } from "@nexus/core";
+import { clockText } from "../shared/duration.js";
 
 /**
  * Serbian copy for OS notifications, fired only from the main process (NTF
@@ -375,6 +376,26 @@ export function focusPhaseEndCopy(
   const parts = [`${plannedMinutes} min`];
   if (label !== null && label.trim().length > 0) parts.push(label.trim());
   return { title: FOCUS_PHASE_TITLES[kind], body: parts.join(" · ") };
+}
+
+/**
+ * The rest between two sets is over (FIT slice c, ADR-081 §7).
+ *
+ * Outside the NTF ledger for `focusPhaseEndCopy`'s reason and one more: this
+ * countdown is not even a tracked timer. It writes no row of its own either, so
+ * there is nothing for a scheduled reminder to be about — it is a kitchen timer
+ * that rings once and is finished.
+ *
+ * The body names the rest that just ended and stops. Whether the next set
+ * happens now is the lifter's call; a notification that said „idi na sledeću
+ * seriju" would be coaching from behind a toast, which is the one thing this
+ * module does not do.
+ */
+export function restEndCopy(seconds: number): NotificationCopy {
+  // `clockText` is the SHARED formatter, not a copy of one: the page draws the
+  // same rest ticking down, and a toast that spelled it differently would be two
+  // descriptions of one countdown.
+  return { title: "Odmor je gotov", body: `Pauza od ${clockText(seconds)}` };
 }
 
 /** Today's study-day reminder copy: how many blocks are planned and their total length. */

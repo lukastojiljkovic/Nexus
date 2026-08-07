@@ -640,6 +640,10 @@ const api: NexusApi = {
   fitBodyProfile: (profileId) => ipcRenderer.invoke(IpcChannel.fitBodyProfile, { profileId }),
   fitSaveBodyProfile: (profileId, profile) =>
     ipcRenderer.invoke(IpcChannel.fitBodyProfileSave, { profileId, profile }),
+  fitStartRest: (profileId, seconds) =>
+    ipcRenderer.invoke(IpcChannel.fitRestStart, { profileId, seconds }),
+  fitStopRest: (profileId) => ipcRenderer.invoke(IpcChannel.fitRestStop, { profileId }),
+  fitRestStatus: (profileId) => ipcRenderer.invoke(IpcChannel.fitRestStatus, { profileId }),
   listCanvasBoards: (profileId) => ipcRenderer.invoke(IpcChannel.canvasList, { profileId }),
   openCanvasBoard: (profileId, id) => ipcRenderer.invoke(IpcChannel.canvasOpen, { profileId, id }),
   // `scene` is passed through as given, `undefined` included — an absent scene is

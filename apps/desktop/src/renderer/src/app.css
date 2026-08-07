@@ -10880,6 +10880,258 @@ button.cal__grid-event--dragging {
   align-self: stretch;
 }
 
+/* --- Trening (FIT slice c) ---------------------------------------------------
+   The FIT page's other half. Every colour, space and radius is a token; the
+   only two states with any colour of their own are the accent on a finished
+   countdown and the danger hue the shared row-delete already owns.
+
+   Selection everywhere below is the app's ONE grammar — `.nx-segmented__option`
+   keyed off `aria-pressed`, typographic and never a bar, a fill or a glow. */
+
+/* The page's two halves. */
+.fit__sections {
+  display: flex;
+  gap: var(--nx-space-1);
+  align-self: flex-start;
+}
+
+/* Starting a session: a day and the two ways in. */
+.fit__start {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+  align-self: stretch;
+}
+.fit__day-field {
+  max-width: 180px;
+}
+.fit__ranges {
+  display: flex;
+  gap: var(--nx-space-1);
+}
+
+/* The session in progress. Its own surface, because it is the one thing on the
+   page that is HAPPENING — everything else is a list of things that are not. */
+.fit__session {
+  padding: var(--nx-space-4);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  align-self: stretch;
+}
+.fit__session-head {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  align-self: stretch;
+}
+.fit__session-title {
+  flex: 1;
+  font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.fit__figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-4);
+}
+
+/* The rest countdown. One row: what it is, the clock or the lengths to pick
+   from, and the sentence saying it is recorded nowhere. */
+.fit__rest {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  align-self: stretch;
+}
+.fit__rest-label {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+.fit__rest-presets {
+  display: flex;
+  gap: var(--nx-space-1);
+}
+.fit__rest-clock {
+  font-size: var(--nx-font-size-title);
+  font-weight: var(--nx-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  min-width: 4ch;
+}
+/* Accent, not danger: a rest being over is a fact, not a fault. */
+.fit__rest-clock--done {
+  font-size: var(--nx-font-size-body);
+  color: var(--nx-accent-strong);
+}
+.fit__rest-note {
+  flex: 1 1 100%;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+
+/* One exercise inside the session. */
+.fit__exercises {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  align-self: stretch;
+}
+.fit__exercise {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border-radius: var(--nx-radius-md);
+}
+.fit__exercise-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+
+/* „Prošli put" — the single most used line in the module, and therefore its own
+   row rather than a chip somewhere at the end. */
+.fit__lasttime {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+}
+.fit__lasttime-label {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+.fit__lasttime-day,
+.fit__lasttime-none {
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.fit__lasttime-sets {
+  color: var(--nx-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The sets logged so far. */
+.fit__sets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.fit__set {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+}
+.fit__set--editing {
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.fit__set-index {
+  min-width: 2ch;
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.fit__set-text {
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The log form: the kind, the metric's own fields, RIR, and one button. */
+.fit__logform {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+.fit__set-field {
+  max-width: 110px;
+}
+.fit__set-field--rir {
+  max-width: 72px;
+}
+.fit__notes-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nx-space-2);
+  align-self: stretch;
+}
+.fit__notes-row .nx-textfield {
+  flex: 1;
+}
+
+/* One finished session in the history. */
+.fit__history {
+  display: flex;
+  flex-direction: column;
+}
+.fit__history-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-3) 0 var(--nx-space-3) var(--nx-space-4);
+}
+.fit__history-exercise {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The routine editor: one line per exercise, its three targets and the moves. */
+.fit__item-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(3, 88px) auto auto auto;
+  align-items: end;
+  gap: var(--nx-space-2);
+  align-self: stretch;
+}
+.fit__item-name {
+  font-size: var(--nx-font-size-body-sm);
+  padding-bottom: 6px;
+}
+.fit__item-missing {
+  color: var(--nx-text-muted);
+}
+.fit__target-field {
+  max-width: 88px;
+}
+@media (max-width: 900px) {
+  .fit__item-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The muscle pickers. Twenty toggles twice over, so they wrap and stay small —
+   and the chosen ones read typographically, like every other selection. */
+.fit__muscles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1);
+  align-self: stretch;
+}
+.fit__checkline {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+}
+
 /* „Ishrana danas" on the dashboard: the figure, the goal under it, and the same
    track the page draws — one bar grammar, never a second one for a card. */
 .dash__fit {
