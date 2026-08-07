@@ -190,6 +190,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 function ThemePanel({ theme, label }: { theme: ThemeName; label: string }) {
+  const [segmented, setSegmented] = useState("Lista");
   return (
     <div className="gallery__panel nx-app" data-theme={theme}>
       <div className="gallery__panel-title">{label}</div>
@@ -201,6 +202,28 @@ function ThemePanel({ theme, label }: { theme: ThemeName; label: string }) {
           <Button variant="danger">Obriši</Button>
           <Button variant="primary" size="sm">Sačuvaj</Button>
           <Button size="sm" disabled>Nedostupno</Button>
+        </div>
+      </Section>
+
+      {/* `.nx-segmented__option` is a FOURTH Button treatment and not a
+          `variant`, so nothing in this gallery showed it — while thirteen
+          surfaces in the app depend on it, and one of them had already drifted
+          off it into a filled primary before the class existed. Both states are
+          on screen here, in both themes, because the whole point of the recipe
+          is that the selected one is typographic rather than filled. */}
+      <Section title="Segmented (selection = aria-pressed)">
+        <div className="gallery__row" role="group" aria-label="Prikaz">
+          {["Lista", "Tabla", "Kalendar"].map((option) => (
+            <Button
+              key={option}
+              size="sm"
+              className="nx-segmented__option"
+              aria-pressed={segmented === option}
+              onClick={() => setSegmented(option)}
+            >
+              {option}
+            </Button>
+          ))}
         </div>
       </Section>
 
@@ -252,10 +275,28 @@ function ThemePanel({ theme, label }: { theme: ThemeName; label: string }) {
 
       <Section title="Navigation (selection = tipografija + ✦)">
         <nav className="gallery__nav-demo">
-          <NavItem href="#" active>Dashboard</NavItem>
-          <NavItem href="#" badge={7}>Zadaci</NavItem>
-          <NavItem href="#">Beleške</NavItem>
-          <NavItem href="#" badge={2}>Kalendar</NavItem>
+          {/* With icons, because the rail always has them and the stylesheet
+              devotes three rules to what a nav icon does — muted, accent on
+              hover, accent when active. None of the three had ever been on
+              screen here, so the one state that most needed reviewing by eye
+              was the one the gallery could not show. `size={16}` is the rail's
+              own. */}
+          <NavItem href="#" active>
+            <Icon name="dashboard" size={16} />
+            Dashboard
+          </NavItem>
+          <NavItem href="#" badge={7}>
+            <Icon name="tasks" size={16} />
+            Zadaci
+          </NavItem>
+          <NavItem href="#">
+            <Icon name="notes" size={16} />
+            Beleške
+          </NavItem>
+          <NavItem href="#" badge={2}>
+            <Icon name="calendar" size={16} />
+            Kalendar
+          </NavItem>
         </nav>
       </Section>
 
