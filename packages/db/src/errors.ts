@@ -912,3 +912,104 @@ export class CanvasValidationError extends DatabaseError {}
 
 /** Thrown when a board operation targets an id that is not a live board in the store's own profile — unknown, soft-deleted, or owned by another profile. */
 export class CanvasBoardNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a USER exercise write is rejected at the store boundary (FIT
+ * training, migration 060): an empty or over-80-character `name`, an over-80
+ * `nameEn`, over-500-character `notes`, an empty `primaryMuscles` list, any
+ * muscle outside `MUSCLE_GROUPS`, or an `equipment`/`pattern`/`metric` outside
+ * its closed core vocabulary.
+ *
+ * Raised on the way IN (an untrusted caller, SEC-EL-02) and equally on the way
+ * OUT, where it reports a stored `primary_muscles_json`/`secondary_muscles_json`
+ * that no longer parses to an array of known muscle groups — corruption, never
+ * something to coerce to `[]`, the `TaskTemplateValidationError` posture applied
+ * to this module's own JSON column.
+ *
+ * The catalogue's own gate (`validateExerciseEntry`) is deliberately NOT applied
+ * here — `FitFoodValidationError`'s reason restated: a user's own accessory
+ * movement is their claim about their own exercise, not a curated dataset entry.
+ */
+export class FitExerciseValidationError extends DatabaseError {}
+
+/** Thrown when an exercise operation targets an id that is not a live exercise in the store's own profile — unknown, soft-deleted, or owned by another profile. */
+export class FitExerciseNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a routine write is rejected at the store boundary (FIT training,
+ * migration 060): an empty or over-80-character `name`, over-500-character
+ * `notes`, more than 60 items, an item's `exerciseRef` that is not
+ * `catalogue:<id>`/`user:<id>` shaped or over 200 characters, an empty or
+ * over-80-character item `label`, a non-positive `targetSets`, or a
+ * `targetRepsMin`/`targetRepsMax` pair that runs backwards. That last refusal is
+ * named here rather than left to migration 060's own CHECK, which is the
+ * backstop and not the message (ADR-081 §6).
+ */
+export class FitRoutineValidationError extends DatabaseError {}
+
+/** Thrown when a routine operation targets an id that is not a live routine in the store's own profile — unknown, soft-deleted, or owned by another profile. */
+export class FitRoutineNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a workout write is rejected at the store boundary (FIT training,
+ * migration 060): a malformed `day`/`now`, an `exerciseRef` that is not legally
+ * shaped, a blank `label`, a `metric`/`kind` outside its closed vocabulary, an
+ * empty `primaryMuscles` list or a muscle outside `MUSCLE_GROUPS`, a numeric
+ * field outside its bound (a negative `weightKg`/`seconds`/`distanceM`, a
+ * non-integer or negative `reps`, an `rir` outside 0-5), more than 200
+ * `exerciseRefs` in one `lastPerformed` call — or one of the three session
+ * refusals migration 060's `fit_workouts_profile_open` UNIQUE partial index
+ * exists to make unrepresentable: `start`/`reopen` while another session is
+ * already open, and `finish` on a session that is not open. The index is the
+ * backstop; this is the message a raw `SQLITE_CONSTRAINT` would not have given.
+ */
+export class FitWorkoutValidationError extends DatabaseError {}
+
+/** Thrown when a workout operation targets an id that is not a live workout in the store's own profile — unknown, soft-deleted, or owned by another profile. */
+export class FitWorkoutNotFoundError extends DatabaseError {}
+
+/** Thrown when a set operation targets an id that is not a row of the store's own profile — unknown, or belonging to a different profile. `fit_workout_sets` carries no soft delete (`removeSet` is a hard delete), so there is no deleted state to distinguish here. */
+export class FitSetNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a measurement write is rejected at the store boundary (FIT body,
+ * migration 060), naming the failing field from `@nexus/core`'s
+ * `validateBodyMeasurement` (`BodyProblem[]`) rather than the raw problem list —
+ * a day that is not real or is in the future, a `weightKg` outside its bound, a
+ * `bodyFatPercent`/`waterPercent` outside (0, 100), a `muscle` reading whose unit
+ * is neither `percent` nor `kg` or whose value exceeds the same day's weight, or
+ * a circumference outside its bound.
+ */
+export class FitMeasurementValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a body-profile write is rejected at the store boundary (FIT body,
+ * migration 060), naming the failing field from `@nexus/core`'s
+ * `validateBodyProfile`: a `sex` outside `BODY_SEXES` (and not null), a
+ * `birthDate` that is not real or is in the future, a `heightCm` outside its
+ * bound, or an `activity` outside `ACTIVITY_LEVELS`.
+ */
+export class FitBodyProfileValidationError extends DatabaseError {}
+
+/**
+ * Whether a driver error is a violated UNIQUE (or partial-UNIQUE) index.
+ *
+ * A store that leans on such an index to make a state unrepresentable — the
+ * study plan's one-active-plan rule, the notification dedupe key, FIT's
+ * one-open-session rule — has to translate the raw `SQLITE_CONSTRAINT_UNIQUE`
+ * into a sentence, because the index is the guarantee and the store is the
+ * message. This predicate had been written out three times, once per store, and
+ * each copy is a chance for the next one to test a different property of the
+ * same error object.
+ *
+ * Deliberately narrow: `SQLITE_CONSTRAINT_UNIQUE` and not the whole
+ * `SQLITE_CONSTRAINT` family. A violated CHECK or foreign key is a different
+ * fact and must not be reported as „that already exists".
+ */
+export function isUniqueConstraintViolation(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "SQLITE_CONSTRAINT_UNIQUE"
+  );
+}

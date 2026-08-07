@@ -54,11 +54,20 @@ export {
   FinRecurringValidationError,
   FinTransactionNotFoundError,
   FinTransactionValidationError,
+  FitBodyProfileValidationError,
+  FitExerciseNotFoundError,
+  FitExerciseValidationError,
   FitFoodNotFoundError,
   FitFoodValidationError,
   FitMealItemNotFoundError,
   FitMealValidationError,
+  FitMeasurementValidationError,
+  FitRoutineNotFoundError,
+  FitRoutineValidationError,
+  FitSetNotFoundError,
   FitTargetValidationError,
+  FitWorkoutNotFoundError,
+  FitWorkoutValidationError,
   FocusNotFoundError,
   FocusValidationError,
   HabitNotFoundError,
@@ -539,6 +548,58 @@ export type {
 } from "./fitness/mealStore.js";
 export { FitTargetStore, MAX_FIT_TARGET } from "./fitness/nutritionTargetStore.js";
 export type { FitTargetGoals, FitTargets } from "./fitness/nutritionTargetStore.js";
+
+// --- FIT training & body (migration 060) ------------------------------------
+//
+// Five stores over the seven tables migration 060 adds. Like the nutrition
+// slice above, there is no exercise-catalogue table: the app-shipped catalogue
+// lives as JSON in `@nexus/core` and a logged set SNAPSHOTS the metric and
+// muscles it was performed with, which is why none of these ever reads it.
+export { FitBodyProfileStore } from "./fitness/bodyProfileStore.js";
+
+export { FitMeasurementStore } from "./fitness/measurementStore.js";
+export type { FitMeasurement } from "./fitness/measurementStore.js";
+
+export {
+  FitExerciseStore,
+  MAX_FIT_EXERCISE_NAME_EN_LENGTH,
+  MAX_FIT_EXERCISE_NAME_LENGTH,
+  MAX_FIT_EXERCISE_NOTES_LENGTH,
+} from "./fitness/exerciseStore.js";
+export type {
+  CreateFitExerciseInput,
+  FitExercise,
+  UpdateFitExerciseFields,
+} from "./fitness/exerciseStore.js";
+
+export {
+  FitRoutineStore,
+  MAX_FIT_ROUTINE_ITEMS,
+  MAX_FIT_ROUTINE_ITEM_LABEL_LENGTH,
+  MAX_FIT_ROUTINE_NAME_LENGTH,
+  MAX_FIT_ROUTINE_NOTES_LENGTH,
+} from "./fitness/routineStore.js";
+export type {
+  CreateFitRoutineInput,
+  FitRoutine,
+  FitRoutineItem,
+  FitRoutineItemInput,
+  UpdateFitRoutineFields,
+} from "./fitness/routineStore.js";
+
+export {
+  FitWorkoutStore,
+  MAX_FIT_LAST_PERFORMED_REFS,
+} from "./fitness/workoutStore.js";
+export type {
+  FitLastPerformed,
+  FitWorkout,
+  FitWorkoutSet,
+  LogFitSetInput,
+  StartFitWorkoutInput,
+  UpdateFitSetFields,
+  UpdateFitWorkoutFields,
+} from "./fitness/workoutStore.js";
 
 // --- CANV (canvas boards, migration 059) ------------------------------------
 //

@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { isAlwaysOnSource } from "@nexus/core";
 import type { NotificationSource } from "@nexus/core";
-import { NotificationNotFoundError, NotificationValidationError } from "../errors.js";
+import { NotificationNotFoundError, NotificationValidationError, isUniqueConstraintViolation } from "../errors.js";
 import { uuidv7 } from "../ids.js";
 
 type DatabaseHandle = Database.Database;
@@ -641,13 +641,4 @@ function validateLimit(value: number): number {
     throw new NotificationValidationError('"limit" must be a positive integer.');
   }
   return value;
-}
-
-/** better-sqlite3 raises `SQLITE_CONSTRAINT_UNIQUE` for a violated UNIQUE index. */
-function isUniqueConstraintViolation(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    "code" in error &&
-    (error as { code?: unknown }).code === "SQLITE_CONSTRAINT_UNIQUE"
-  );
 }

@@ -6,7 +6,7 @@ import {
   planDayCapacity,
 } from "@nexus/core";
 import type { PlanBlockDate, PlanCapacitySpec, PlanTopic } from "@nexus/core";
-import { ExamTopicNotFoundError, PlanNotFoundError, PlanValidationError } from "../errors.js";
+import { ExamTopicNotFoundError, PlanNotFoundError, PlanValidationError, isUniqueConstraintViolation } from "../errors.js";
 import { uuidv7 } from "../ids.js";
 import { TopicStore } from "./topicStore.js";
 
@@ -975,13 +975,4 @@ function validateNow(value: string): string {
     throw new PlanValidationError('"now" must be an ISO-8601 date-time.');
   }
   return value;
-}
-
-/** better-sqlite3 raises `SQLITE_CONSTRAINT_UNIQUE` for a violated UNIQUE/partial-unique index. */
-function isUniqueConstraintViolation(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    "code" in error &&
-    (error as { code?: unknown }).code === "SQLITE_CONSTRAINT_UNIQUE"
-  );
 }
