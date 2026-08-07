@@ -23,10 +23,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isCanvasRefText } from "@nexus/core";
 import type { CanvasRef } from "@nexus/core";
 import type { ThemeName } from "@nexus/tokens";
-import { Button, EmptyState, TextField } from "@nexus/ui";
+import { Button, EmptyState, PageHeader, SaveIndicator, TextField, type SaveStatus } from "@nexus/ui";
 import { MAX_CANVAS_BOARD_NAME_LENGTH, MAX_CANVAS_SCENE_LENGTH } from "../../shared/ipc.js";
 import type { CanvasBoard, CanvasRefCard } from "../../shared/ipc.js";
 import { boardAfterDelete, looksLikeMermaid, resolveActiveBoard } from "./canvasBoards.js";
+import { moduleName } from "./moduleName.js";
+import { NotePopover } from "./notePopover.js";
+import { formatClockTime } from "./timeFormat.js";
 import { CanvasCard } from "./CanvasCard.js";
 import { CanvasCardPicker } from "./CanvasCardPicker.js";
 import { CanvasToolbar } from "./CanvasToolbar.js";
@@ -202,6 +205,23 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
   const [failed, setFailed] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
+  /**
+   * What the board says about its own persistence.
+   *
+   * The founder's fourth report was that the canvas „treba opciju za čuvanje
+   * table" — and boards had been saving themselves since the day the page
+   * shipped. That is the finding: the autosave SAID its failures and never said
+   * its successes, so from the user's side the page was silent either way, and
+   * silence about your drawing reads as „this is not being kept". A drawing you
+   * are not sure is saved is a drawing you cannot walk away from.
+   *
+   * `savedAt` is the instant of the last successful write, and the line carries
+   * it: a bare „Sačuvano" is still on screen an hour later and therefore
+   * proves nothing.
+   */
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   /** The name form, open for a new board (`{ id: null }`) or for a rename (`{ id }`). */
   const [naming, setNaming] = useState<{ id: string | null; draft: string } | null>(null);
   /**
@@ -287,6 +307,14 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
     // standing, or a card would draw the previous board's title for a frame.
     setRefs([]);
     setCards(NO_CARDS);
+    // And so does the save line. „Sačuvano u 14:32" carried across a switch
+    // would be a statement about the board you just LEFT, made on the one you
+    // just opened — which is precisely the false reassurance this line exists
+    // to replace. A failure does not survive the switch either: it belonged to
+    // a write into the other board.
+    setSaveStatus("idle");
+    setSavedAt(null);
+    setSaveError(null);
   }, [activeId]);
 
   /**
@@ -379,15 +407,24 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
         editor.getFiles(),
         "local",
       );
+      setSaveStatus("saving");
       try {
         await window.nexus.saveCanvasScene(profileId, boardId, scene);
         savedVersion.current = version;
-        setActionError(null);
+        setSaveError(null);
+        setSavedAt(new Date().toISOString());
+        setSaveStatus("saved");
       } catch (error) {
         // Two sentences, told apart by the one refusal a user can cause on
         // purpose: a scene past the wire's ceiling, which in practice means
         // pasted images. Anything else is unexpected and says so.
-        setActionError(scene.length > MAX_CANVAS_SCENE_LENGTH ? s.tooLarge : s.saveError);
+        //
+        // This is the save state and NOT `actionError`, which belongs to the
+        // board actions (create, rename, delete) and is dismissible. A failed
+        // autosave must not be dismissible: dismissing it would leave the page
+        // claiming nothing while the drawing is still only on screen.
+        setSaveError(scene.length > MAX_CANVAS_SCENE_LENGTH ? s.tooLarge : s.saveError);
+        setSaveStatus("error");
         console.error("Nexus: failed to save canvas scene:", error);
       }
     },
@@ -669,43 +706,89 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
 
   return (
     <div className="canv">
-      <header className="canv__bar">
-        <span className="canv__label">{s.boardsLabel}</span>
-        <nav className="canv__boards" aria-label={s.boardsLabel}>
-          {boards.map((board) => (
-            <button
-              key={board.id}
-              type="button"
-              className={board.id === activeId ? "canv__tab canv__tab--active" : "canv__tab"}
-              aria-current={board.id === activeId ? "page" : undefined}
-              onClick={() => openBoard(board.id)}
+      {/* The board strip used to be a row of tabs with an unlabelled „Table"
+          caption beside it, and three ghost buttons at the end of which the
+          destructive one looked exactly like the other two. It is now the page
+          header every other page has, and the strip is a NAMED list of the
+          user's own boards — which is the affordance the founder asked for
+          („da mogu da učitavam table koje sam već koristio"): tabs read as
+          what is open, a list reads as what you have. The list also stops
+          growing sideways past the window, which the tab row did. */}
+      <PageHeader
+        className="canv__header"
+        title={moduleName("canvas")}
+        {...(active === null ? {} : { subtitle: active.name })}
+        actions={
+          <>
+            <SaveIndicator
+              status={saveStatus}
+              savingLabel={strings.app.saveSaving}
+              savedLabel={`${strings.app.saveSavedPrefix} ${formatClockTime(savedAt ?? "")}`}
+              {...(saveError === null ? {} : { errorLabel: saveError })}
+            />
+            <NotePopover
+              label={s.boardsLabel}
+              triggerClassName="canv__board-switcher"
+              triggerContent={
+                <>
+                  {s.boardsLabel}
+                  <span aria-hidden="true"> ({boards.length})</span>
+                </>
+              }
             >
-              {board.name}
-            </button>
-          ))}
-        </nav>
-        <div className="canv__actions">
-          <Button variant="ghost" onClick={() => setNaming({ id: null, draft: "" })}>
-            {s.newBoard}
-          </Button>
-          {active !== null && (
-            <>
-              <Button
-                variant="ghost"
-                onClick={() => setNaming({ id: active.id, draft: active.name })}
-              >
-                {s.rename}
-              </Button>
-              {/* „Mermaid dijagram" is NOT here: it is a drawing action and it
-                  moved into the toolbar with the rest of them (slice b1). This
-                  bar is about boards. */}
-              <Button variant="ghost" onClick={() => void deleteBoard(active.id)}>
-                {s.delete}
-              </Button>
-            </>
-          )}
-        </div>
-      </header>
+              {(close) => (
+                <>
+                  {boards.map((board) => {
+                    const isActive = board.id === activeId;
+                    return (
+                      <button
+                        key={board.id}
+                        type="button"
+                        className={`note__menu-item note__menu-item--check${isActive ? " dash__set-item--active" : ""}`}
+                        role="menuitemradio"
+                        aria-checked={isActive}
+                        onClick={() => {
+                          openBoard(board.id);
+                          close();
+                        }}
+                      >
+                        <span
+                          className={`note__menu-check${isActive ? "" : " note__menu-check--hidden"}`}
+                          aria-hidden="true"
+                        >
+                          ✓
+                        </span>
+                        {board.name}
+                      </button>
+                    );
+                  })}
+                </>
+              )}
+            </NotePopover>
+            <Button variant="ghost" onClick={() => setNaming({ id: null, draft: "" })}>
+              {s.newBoard}
+            </Button>
+            {active !== null && (
+              <>
+                <Button
+                  variant="ghost"
+                  onClick={() => setNaming({ id: active.id, draft: active.name })}
+                >
+                  {s.rename}
+                </Button>
+                {/* „Mermaid dijagram" is NOT here: it is a drawing action and it
+                    moved into the toolbar with the rest of them (slice b1). This
+                    header is about boards. `danger` because deleting one is not
+                    the same kind of act as renaming it, and until now the two
+                    buttons were indistinguishable. */}
+                <Button variant="danger" onClick={() => void deleteBoard(active.id)}>
+                  {s.delete}
+                </Button>
+              </>
+            )}
+          </>
+        }
+      />
 
       {naming !== null && (
         <form

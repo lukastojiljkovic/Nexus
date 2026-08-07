@@ -55,6 +55,21 @@
   display: block;
 }
 
+/* --- SaveIndicator ---------------------------------------------------- */
+/* Quiet by construction: this is a background fact, and a surface that shouts
+   „Sačuvano" every few seconds is worse than one that says nothing. Tabular
+   figures so the clock does not shuffle sideways as the minute changes. */
+.nx-save-state {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.nx-save-state--error {
+  color: var(--nx-danger);
+}
+
 /* --- PageHeader ------------------------------------------------------- */
 /* One page title treatment for the whole app. See PageHeader.tsx. */
 .nx-page-header {

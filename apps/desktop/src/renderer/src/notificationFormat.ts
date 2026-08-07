@@ -5,6 +5,7 @@
  * focusFormat.ts's small-pure-helper-module idiom.
  */
 import type { NotificationSource, SnoozePreset } from "../../shared/ipc.js";
+import { formatClockTime } from "./timeFormat.js";
 
 /** The seven toggleable NTF sources, in the fixed order every source list/loop uses. */
 export const ALL_NOTIFICATION_SOURCES: NotificationSource[] = [
@@ -103,9 +104,7 @@ function isSameLocalDay(a: Date, b: Date): boolean {
 export function formatNotificationWhen(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  const time = new Intl.DateTimeFormat("sr-Latn", { hour: "2-digit", minute: "2-digit" }).format(
-    date,
-  );
+  const time = formatClockTime(date);
   if (isSameLocalDay(date, new Date())) return time;
   const day = new Intl.DateTimeFormat("sr-Latn", { day: "numeric", month: "short" }).format(date);
   return `${day}, ${time}`;

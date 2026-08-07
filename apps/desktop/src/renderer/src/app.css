@@ -11399,50 +11399,20 @@ button.cal__grid-event--dragging {
   height: 100%;
   min-height: 0;
 }
-.canv__bar {
-  display: flex;
-  align-items: center;
-  gap: var(--nx-space-3);
-  flex-wrap: wrap;
-}
-.canv__label {
-  font-size: var(--nx-font-size-label);
-  letter-spacing: var(--nx-font-tracking-label);
-  text-transform: uppercase;
-  color: var(--nx-text-muted);
-}
-.canv__boards {
-  display: flex;
-  align-items: center;
-  gap: var(--nx-space-1);
-  flex-wrap: wrap;
-  min-width: 0;
-}
-/* The active board is TYPOGRAPHIC — gold text and weight, no inset bar and no
-   glow — which is the same rule the sidebar's active entry follows. */
-.canv__tab {
-  border: 0;
-  background: none;
-  padding: var(--nx-space-1) var(--nx-space-2);
-  border-radius: var(--nx-radius-sm);
-  font: inherit;
+/* The board bar was a caption, a row of tabs and three identical ghost buttons.
+   It is the shared page header now; what remains here is the board switcher's
+   trigger, which is `.dash__set-switcher`'s arrangement of the house popover
+   trigger — a word on the header's own baseline rather than a control. */
+.canv__board-switcher.note__menu-trigger {
+  width: auto;
+  height: auto;
+  padding: 2px var(--nx-space-2);
   font-size: var(--nx-font-size-body-sm);
   color: var(--nx-text-muted);
-  cursor: pointer;
 }
-.canv__tab:hover {
+.canv__board-switcher.note__menu-trigger:hover,
+.canv__board-switcher.note__menu-trigger[aria-expanded="true"] {
   color: var(--nx-text);
-  background: var(--nx-surface-alt);
-}
-.canv__tab--active {
-  color: var(--nx-accent);
-  font-weight: var(--nx-font-weight-semibold);
-}
-.canv__actions {
-  display: flex;
-  align-items: center;
-  gap: var(--nx-space-1);
-  margin-left: auto;
 }
 .canv__name-form {
   display: flex;

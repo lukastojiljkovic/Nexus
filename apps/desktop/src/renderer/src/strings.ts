@@ -61,6 +61,16 @@ export const strings = {
     themeDan: "Dan",
     themeNoc: "Noć",
     loading: "Učitavanje…",
+    /**
+     * The autosave line, shared by every surface that writes without being
+     * asked — the board and the note editor today, whatever comes next
+     * tomorrow. The saved label carries a CLOCK because a bare „Sačuvano" is
+     * still on screen an hour after the last write and therefore proves
+     * nothing; see `SaveIndicator` for why the absence of this line was read
+     * as the absence of saving.
+     */
+    saveSaving: "Čuvanje…",
+    saveSavedPrefix: "Sačuvano u",
     loadErrorTitle: "Pokretanje nije uspelo",
     loadErrorDescription:
       "Veza sa lokalnom bazom podataka nije uspostavljena. Zatvori aplikaciju i pokreni je ponovo.",

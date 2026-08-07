@@ -18,6 +18,7 @@ import { ProfileSwitchDialog } from "./ProfileSwitchDialog.js";
 import { NotePopover } from "./notePopover.js";
 import { applyProfileAccent, defaultAccent, seedAccent } from "./accent.js";
 import { pruneOnboardingDrafts } from "./onboardingDraft.js";
+import { moduleName } from "./moduleName.js";
 import {
   persistActiveProfile,
   profileDisplayName,
@@ -126,10 +127,14 @@ function reportActiveProfile(profileId: string): void {
   });
 }
 
-/** Sidebar/page display name for a module id; falls back to the id. Exported for `searchCommands.ts`'s "Idi na: <modul>" labels, so they are never re-spelled. */
-export function moduleName(id: string): string {
-  return strings.modules[id] ?? id;
-}
+/**
+ * Sidebar/page display name for a module id. Re-exported rather than defined
+ * here since 2026-08-07: the pages need it for their own titles and cannot
+ * import `App.tsx` (which imports every one of them), so it moved to
+ * `moduleName.ts` and this line keeps `searchCommands.ts`'s existing import
+ * working.
+ */
+export { moduleName };
 
 /**
  * Which drawn icon a module wears in the rail. Deliberately a lookup and not a

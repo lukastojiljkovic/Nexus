@@ -10,6 +10,7 @@
  */
 
 import type { FocusPhaseProgress } from "@nexus/core";
+import { formatClockTime } from "./timeFormat.js";
 
 const SECOND_MS = 1000;
 const MINUTE_MS = 60 * SECOND_MS;
@@ -114,6 +115,5 @@ export function formatFocusSessionWhen(startedAt: string): string {
     day: "numeric",
     month: "long",
   }).format(date);
-  const time = new Intl.DateTimeFormat("sr-Latn", { hour: "2-digit", minute: "2-digit" }).format(date);
-  return `${day}, ${time}`;
+  return `${day}, ${formatClockTime(date)}`;
 }
