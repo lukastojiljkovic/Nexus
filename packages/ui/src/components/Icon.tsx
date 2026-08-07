@@ -81,8 +81,11 @@ export type IconName =
   | "star"
   | "starFilled"
   | "pin"
+  | "pinFilled"
+  | "swatchNone"
   | "tag"
   | "link"
+  | "unlink"
   | "attach"
   | "copy"
   | "image"
@@ -467,6 +470,24 @@ const SHAPES: Record<IconName, ReactNode> = {
       <path d="M8 4.6h8l-1 5.2 2.6 2.4v2.4H6.4v-2.4L9 9.8z" />
     </>
   ),
+  // The second fill in the set, and it earns it exactly as `starFilled` does:
+  // „pinned" is a STATE, and a state carried by colour alone fails the house
+  // rule. Hollow and solid are two silhouettes; gold and grey are one.
+  pinFilled: (
+    <>
+      <path d="M12 21v-6.4" />
+      <path d="M8 4.6h8l-1 5.2 2.6 2.4v2.4H6.4v-2.4L9 9.8z" fill="currentColor" />
+    </>
+  ),
+  // The „no colour" choice in a swatch row, and deliberately not `close`. It is
+  // a state toggle inside a group of tiles, not a dismiss — a close glyph there
+  // reads as „shut the picker" — so it draws the tile itself, struck through.
+  swatchNone: (
+    <>
+      <rect x="4" y="4" width="16" height="16" rx="3" />
+      <path d="m5.8 18.2 12.4-12.4" />
+    </>
+  ),
   tag: (
     <>
       <path d="M11.2 3.6H4.6a1 1 0 0 0-1 1v6.6a1 1 0 0 0 .3.7l8.4 8.4a1 1 0 0 0 1.4 0l6.6-6.6a1 1 0 0 0 0-1.4L11.9 3.9a1 1 0 0 0-.7-.3z" />
@@ -477,6 +498,17 @@ const SHAPES: Record<IconName, ReactNode> = {
     <>
       <path d="M10.2 13.8a3.6 3.6 0 0 0 5.4.4l2.8-2.8a3.6 3.6 0 0 0-5.1-5.1l-1.6 1.6" />
       <path d="M13.8 10.2a3.6 3.6 0 0 0-5.4-.4l-2.8 2.8a3.6 3.6 0 0 0 5.1 5.1l1.6-1.6" />
+    </>
+  ),
+  // The chain with the set's own negation slash — `eyeOff`'s convention, and it
+  // is the convention because a broken chain and a whole one are the same
+  // smudge at 16px, while a slash reads at any size. Detaching is not deleting
+  // and not dismissing, which is why neither `trash` nor `close` can stand here.
+  unlink: (
+    <>
+      <path d="M10.2 13.8a3.6 3.6 0 0 0 5.4.4l2.8-2.8a3.6 3.6 0 0 0-5.1-5.1l-1.6 1.6" />
+      <path d="M13.8 10.2a3.6 3.6 0 0 0-5.4-.4l-2.8 2.8a3.6 3.6 0 0 0 5.1 5.1l1.6-1.6" />
+      <path d="m4.4 4.4 15.2 15.2" />
     </>
   ),
   attach: (
@@ -693,6 +725,23 @@ const SHAPES: Record<IconName, ReactNode> = {
   ),
   moon: <path d="M20 14.4A8.6 8.6 0 0 1 9.6 4a8.4 8.4 0 1 0 10.4 10.4z" />,
 };
+
+/**
+ * Every icon the set ships, in declaration order.
+ *
+ * DERIVED, never typed out. The gallery used to hold its own hand-written list
+ * under a comment claiming it showed all of them; it showed twenty-seven of
+ * ninety-one, and had done since the day the second batch landed. That is the
+ * defect exactly: a list somebody has to remember to extend is a list that
+ * quietly stops being true, and nothing fails when it does. Reading the keys
+ * off the shape table makes the claim structural — a new icon is in the gallery
+ * the moment it is drawn, and there is no second place to forget.
+ *
+ * The cast is safe by construction: `SHAPES` is a `Record<IconName, …>`, so its
+ * keys ARE the union, and `Object.keys` preserves the declaration order of
+ * string keys.
+ */
+export const ICON_NAMES = Object.keys(SHAPES) as readonly IconName[];
 
 export interface IconProps {
   name: IconName;

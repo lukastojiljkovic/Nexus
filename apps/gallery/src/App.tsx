@@ -1,16 +1,24 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import {
-  BarChart,
   Button,
   Card,
+  CellMatrix,
+  ChartFrame,
+  ChartLegend,
   Checkbox,
   Chip,
+  ColumnPlot,
   EmptyState,
   Icon,
+  ICON_NAMES,
   LoadingState,
   PageHeader,
+  ProportionBar,
+  RadialCycle,
   SaveIndicator,
+  SeriesPlot,
+  SpanLanes,
   CardsView,
   KanbanCard,
   KanbanColumn,
@@ -27,7 +35,6 @@ import type {
   KanbanViewConfig,
   ListViewConfig,
 } from "@nexus/core";
-import type { IconName } from "@nexus/ui";
 import type { ThemeName } from "@nexus/tokens";
 
 const focusData = [
@@ -38,6 +45,17 @@ const focusData = [
   { label: "pe", value: 85 },
   { label: "su", value: 60 },
   { label: "ne", value: 30 },
+];
+
+// CellMatrix demo — a small habit heatmap. `null` (weekend cells for
+// "Trčanje") is NOT a measured zero: those days were never scheduled, so the
+// component draws no cell there rather than a false "skipped" one.
+const heatmapDays = ["po", "ut", "sr", "če", "pe", "su", "ne"] as const;
+const heatmapHabits = ["Trčanje", "Čitanje", "Meditacija"] as const;
+const heatmapLevels: (0 | 1 | 2 | 3 | null)[][] = [
+  [3, 0, 3, 0, 3, null, null],
+  [2, 3, 1, 3, 2, 3, 1],
+  [1, 2, 3, 2, 3, 3, 3],
 ];
 
 type StudijskiZadatak = {
@@ -355,10 +373,245 @@ function ThemePanel({ theme, label }: { theme: ThemeName; label: string }) {
 
       <ViewsEngineDemo />
 
-      <Section title="BarChart">
-        <Card title="Fokus — poslednjih 7 dana">
-          <BarChart data={focusData} />
+      {/* The whole drawn-data vocabulary, in the order a reader meets it: the
+          frame every chart shares (empty state included — that is the part
+          nobody ever sees otherwise), then each primitive, then the legend
+          that explains a chart's tones without adding a fifth colour. */}
+      <Section title="ChartFrame (prazno stanje)">
+        <Card title="Fokus — ova nedelja">
+          <ChartFrame
+            title="Fokus po danu"
+            description="Nema zabeleženih fokus sesija ove nedelje."
+            viewBox={[320, 160]}
+            empty={{ reason: "Nema zabeleženih fokus sesija ove nedelje." }}
+          >
+            {/* Never rendered — ChartFrame emits only the reason paragraph
+                while `empty` is set. Present so the type (children required)
+                is satisfied without pretending there is a real drawing. */}
+            <circle cx={160} cy={80} r={3} aria-hidden="true" />
+          </ChartFrame>
         </Card>
+      </Section>
+
+      <Section title="CellMatrix">
+        <Card title="Navike — poslednja nedelja">
+          <CellMatrix
+            title="Navike po danu"
+            description="Tri navike praćene sedam dana; „Trčanje” se ne prati vikendom, „Meditacija” ima niz od pet dana zaredom."
+            empty={null}
+            columns={heatmapDays}
+            rows={heatmapHabits}
+            cellAt={(row, col) => {
+              const level = heatmapLevels[heatmapHabits.indexOf(row)]?.[heatmapDays.indexOf(col)];
+              if (level == null) return null;
+              return {
+                tone: "accent",
+                level,
+                label: `${row}, ${col}: ${level > 0 ? "urađeno" : "preskočeno"}`,
+              };
+            }}
+          />
+        </Card>
+      </Section>
+
+      <Section title="ProportionBar">
+        <Card title="Ishrana — makroi">
+          <div className="gallery__stack">
+            <ProportionBar
+              label="Belančevine"
+              value="128 od 150 g"
+              segments={[{ key: "p", fraction: 128 / 150, tone: "accent", label: "128 od 150 g" }]}
+              target={{ fraction: 1, label: "cilj" }}
+              describedAs="Belančevine: 128 od 150 g, cilj još nije dostignut."
+            />
+            <ProportionBar
+              label="Ugljeni hidrati"
+              value="210 od 180 g"
+              segments={[
+                { key: "u", fraction: 180 / 210, tone: "accent", label: "180 od 210 g" },
+                { key: "p", fraction: 30 / 210, tone: "danger", label: "30 g preko cilja" },
+              ]}
+              target={{ fraction: 180 / 210, label: "cilj" }}
+              describedAs="Ugljeni hidrati: 210 od 180 g, prekoračeno za 30 g."
+            />
+            {/* `unmeasured`: no goal set — distinct from a goal of zero, so this
+                must not draw as a full empty track pretending to be one. */}
+            <ProportionBar
+              label="Masti"
+              segments={[]}
+              unmeasured
+              describedAs="Masti: cilj nije postavljen."
+            />
+          </div>
+        </Card>
+      </Section>
+
+      <Section title="ColumnPlot">
+        <div className="gallery__row">
+          <Card title="baseline: zero — fokus po danu">
+            <ColumnPlot
+              title="Fokus po danu"
+              description="Fokus po danu: 353 minuta kroz 7 dana, najviše u petak."
+              caption="Jedan stubac je jedan dan."
+              empty={null}
+              slots={focusData.map((d) => ({ key: d.label, label: d.label }))}
+              series={[{ key: "focus", tone: "accent", values: focusData.map((d) => d.value) }]}
+              width={320}
+            />
+          </Card>
+          <Card title="baseline: signed — neto kalorije">
+            <ColumnPlot
+              title="Neto kalorije po danu"
+              description="Neto kalorije: suficit pet dana, deficit dva dana, najveći suficit u ponedeljak."
+              caption="Iznad linije suficit, ispod deficit."
+              empty={null}
+              baseline="signed"
+              slots={["po", "ut", "sr", "če", "pe", "su", "ne"].map((label) => ({ key: label, label }))}
+              series={[
+                { key: "kcal", tone: "accent", values: [420, 180, -150, 260, -300, 90, 310] },
+              ]}
+              width={320}
+            />
+          </Card>
+        </div>
+      </Section>
+
+      <Section title="SeriesPlot">
+        <div className="gallery__row">
+          <Card title="shape: line — telesna težina">
+            <SeriesPlot
+              title="Telesna težina"
+              description="Telesna težina: pad sa 82,4 na 79,5 kg za deset dana, bez merenja petog dana."
+              caption="Praznina je dan bez merenja, ne interpolirana vrednost."
+              empty={null}
+              x={{ domain: [1, 10] }}
+              series={[
+                {
+                  key: "weight",
+                  tone: "accent",
+                  shape: "line",
+                  dots: true,
+                  points: [
+                    { x: 1, y: 82.4 },
+                    { x: 2, y: 82.0 },
+                    { x: 3, y: 81.6 },
+                    { x: 4, y: 81.3 },
+                    null,
+                    { x: 6, y: 80.7 },
+                    { x: 7, y: 80.4 },
+                    { x: 8, y: 80.1 },
+                    { x: 9, y: 79.8 },
+                    { x: 10, y: 79.5 },
+                  ],
+                },
+              ]}
+              width={320}
+            />
+          </Card>
+          <Card title="shape: area — unos vode">
+            <SeriesPlot
+              title="Unos vode"
+              description="Unos vode: prosečno 2057 ml dnevno, najviše u subotu."
+              caption="Sedam dana, u mililitrima."
+              empty={null}
+              x={{ domain: [0, 6] }}
+              series={[
+                {
+                  key: "water",
+                  tone: "data",
+                  shape: "area",
+                  points: [
+                    { x: 0, y: 1800 },
+                    { x: 1, y: 2100 },
+                    { x: 2, y: 1600 },
+                    { x: 3, y: 2400 },
+                    { x: 4, y: 2000 },
+                    { x: 5, y: 2600 },
+                    { x: 6, y: 1900 },
+                  ],
+                },
+              ]}
+              width={320}
+            />
+          </Card>
+        </div>
+      </Section>
+
+      <Section title="SpanLanes">
+        <Card title="Avgust — obaveze">
+          <SpanLanes
+            title="Obaveze po danu"
+            domain={[1, 31]}
+            description="Ispitni rok traje od 5. do 20. avgusta sa usmenim 12. avgusta; odmor je otvoren od 22. avgusta i još traje."
+            caption="Jedan dan je jedna jedinica."
+            empty={null}
+            rule={{ at: 15, label: "danas", tone: "neutral" }}
+            width={320}
+            lanes={[
+              {
+                key: "ispit",
+                label: "Ispitni rok",
+                tone: "accent",
+                spans: [{ from: 5, to: 20, label: "Ispitni rok: 5–20. avgust" }],
+                marks: [{ at: 12, kind: "tick", label: "Usmeni ispit, 12. avgust" }],
+              },
+              {
+                key: "odmor",
+                label: "Odmor",
+                tone: "data",
+                spans: [{ from: 22, to: "open", label: "Odmor od 22. avgusta, u toku" }],
+                marks: [],
+              },
+            ]}
+          />
+        </Card>
+      </Section>
+
+      <Section title="RadialCycle">
+        <Card title="Navika — nedeljni ritam">
+          <RadialCycle
+            title="Navika po danu u nedelji"
+            description="Navika praćena radnim danima; najjača sreda i petak, vikend nije praćen."
+            caption="Ponedeljak je prva pozicija."
+            empty={null}
+            period={{ kind: "week", weekStartsOn: 1 }}
+            spokes={[
+              { at: 0, value: 0.6, tone: "accent" },
+              { at: 1, value: 1, tone: "accent" },
+              { at: 2, value: 0.8, tone: "accent" },
+              { at: 3, value: 0.4, tone: "accent" },
+              { at: 4, value: 1, tone: "accent" },
+            ]}
+            marks={[{ at: 2, label: "danas", tone: "accent" }]}
+            hand={{ at: 2 }}
+            absent={[5, 6]}
+            size={320}
+          />
+        </Card>
+      </Section>
+
+      <Section title="ChartLegend">
+        <div className="gallery__row">
+          <Card title="podrazumevano (stubac)">
+            <ChartLegend
+              items={[
+                { label: "Uneto", tone: "accent", shape: "swatch" },
+                { label: "Prosek", tone: "data", shape: "line" },
+                { label: "Cilj", tone: "accent", shape: "dash" },
+                { label: "Danas", tone: "neutral", shape: "tick" },
+              ]}
+            />
+          </Card>
+          <Card title="inline (red ispod kartice)">
+            <ChartLegend
+              inline
+              items={[
+                { label: "Uneto", tone: "accent", shape: "swatch" },
+                { label: "Prekoračeno", tone: "danger", shape: "swatch" },
+              ]}
+            />
+          </Card>
+        </div>
       </Section>
 
       <Section title="PageHeader">
@@ -370,8 +623,12 @@ function ThemePanel({ theme, label }: { theme: ThemeName; label: string }) {
       </Section>
 
       <Section title="Ikone">
-        {/* The whole set, at the size the rail draws it. Not a library: 27
-            shapes on a 24 grid, stroke only, one weight. */}
+        {/* The whole set, at the size the rail draws it, and „whole" is now a
+            fact rather than a promise: `ICON_NAMES` is read off the shape table
+            in `@nexus/ui`, so an icon drawn tomorrow appears here without
+            anybody remembering to add it. The hand-written list this replaced
+            claimed the same thing and had been showing 27 of 91 for months.
+            Not a library: shapes on a 24 grid, stroke only, one weight. */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center" }}>
           {ICON_NAMES.map((name) => (
             <span key={name} title={name} style={{ display: "grid", placeItems: "center" }}>
@@ -420,14 +677,6 @@ function ThemePanel({ theme, label }: { theme: ThemeName; label: string }) {
     </div>
   );
 }
-
-/** Every icon the set ships, in declaration order — the gallery's whole job is to show all of them, not a chosen few. */
-const ICON_NAMES = [
-  "dashboard", "tasks", "calendar", "notes", "study", "focus", "files", "finance",
-  "habits", "fitness", "canvas", "tools", "priv", "settings", "search", "plus",
-  "check", "pencil", "trash", "close", "chevronDown", "chevronRight", "bell",
-  "filter", "export", "import", "undo",
-] as const satisfies readonly IconName[];
 
 export function App() {
   return (

@@ -43,6 +43,21 @@ export interface ColumnPlotProps {
    * and a labelled one is available via `rule` when the chart needs it named.
    */
   baseline?: "zero" | "signed";
+  /**
+   * How two or more series share a slot.
+   *
+   * "stacked" (the default) puts them end to end, which STATES THAT THEY ADD
+   * UP — the bar's full height is a real total. "grouped" stands them side by
+   * side inside the band, for series that are two measurements of the same
+   * thing rather than two parts of it.
+   *
+   * This is not a styling preference. Stacking „nastalo" on „zatvoreno", or
+   * „planirano" on „izmereno", draws a column whose height is a number that
+   * does not exist — twenty tasks created and twenty closed would tower over a
+   * week where nothing happened at all, and a reader would have no way to know
+   * the total was meaningless. One series behaves identically either way.
+   */
+  layout?: "stacked" | "grouped";
   /** The one allowed reference line — a goal, a cap, a threshold. */
   rule?: { value: number; label: string; tone: ChartTone };
   /** Caller-supplied ceiling for the value axis. Computed from the data when omitted. */
@@ -64,6 +79,7 @@ export function ColumnPlot({
   slots,
   series,
   baseline = "zero",
+  layout = "stacked",
   rule,
   max,
   width = 320,
@@ -71,11 +87,18 @@ export function ColumnPlot({
 }: ColumnPlotProps) {
   const plotHeight = Math.max(1, height - LABEL_ROW);
   const bandStep = slots.length > 0 ? width / slots.length : width;
-  const barWidth = Math.max(1, bandStep - GAP);
+  const bandWidth = Math.max(1, bandStep - GAP);
+  const grouped = layout === "grouped" && series.length > 1;
+  // A grouped band is split between the series, with a hairline between them
+  // so two adjacent bars of the same height never read as one wide bar.
+  const barWidth = grouped ? Math.max(1, (bandWidth - (series.length - 1)) / series.length) : bandWidth;
 
   // The value domain. Each slot's positive and negative stacks are summed
   // independently so "signed" data — gains one day, losses the next — never
-  // lets one direction dwarf the other's scale on the same chart.
+  // lets one direction dwarf the other's scale on the same chart. Grouped
+  // series do NOT sum: they stand side by side, so the tallest single bar sets
+  // the ceiling and summing them would leave the axis with headroom nothing
+  // ever reaches.
   let computedMax = 0;
   for (let i = 0; i < slots.length; i += 1) {
     let pos = 0;
@@ -83,8 +106,14 @@ export function ColumnPlot({
     for (const s of series) {
       const v = s.values[i];
       if (v == null) continue;
-      if (v >= 0) pos += v;
-      else neg += v;
+      if (grouped) {
+        pos = Math.max(pos, v);
+        neg = Math.min(neg, v);
+      } else if (v >= 0) {
+        pos += v;
+      } else {
+        neg += v;
+      }
     }
     computedMax = Math.max(computedMax, pos, baseline === "signed" ? -neg : 0);
   }
@@ -122,23 +151,27 @@ export function ColumnPlot({
       {slots.map((slot, i) => {
         let posCum = 0;
         let negCum = 0;
-        const x = i * bandStep + (bandStep - barWidth) / 2;
+        const bandX = i * bandStep + (bandStep - bandWidth) / 2;
         return (
           <g key={slot.key}>
-            {series.map((s) => {
+            {series.map((s, seriesIndex) => {
               const v = s.values[i];
               if (v == null) return null;
-              const from = v >= 0 ? posCum : negCum;
+              // Grouped bars each start from the baseline; stacked ones start
+              // where the previous series left off.
+              const from = grouped ? 0 : v >= 0 ? posCum : negCum;
               const to = from + v;
-              if (v >= 0) posCum = to;
-              else negCum = to;
+              if (!grouped) {
+                if (v >= 0) posCum = to;
+                else negCum = to;
+              }
               const yFrom = yScale(from);
               const yTo = yScale(to);
               return (
                 <rect
                   key={s.key}
                   className={`nx-columnplot__bar nx-tone--${s.tone}`}
-                  x={x}
+                  x={grouped ? bandX + seriesIndex * (barWidth + 1) : bandX}
                   y={Math.min(yFrom, yTo)}
                   width={barWidth}
                   height={Math.max(0, Math.abs(yFrom - yTo))}

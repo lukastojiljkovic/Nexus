@@ -8,7 +8,7 @@ export { Select, type SelectProps } from "./components/Select.js";
 export { EmptyState, type EmptyStateProps } from "./components/EmptyState.js";
 export { LoadingState, type LoadingStateProps } from "./components/LoadingState.js";
 export { PageHeader, type PageHeaderProps } from "./components/PageHeader.js";
-export { Icon, type IconName, type IconProps } from "./components/Icon.js";
+export { Icon, ICON_NAMES, type IconName, type IconProps } from "./components/Icon.js";
 export {
   SaveIndicator,
   type SaveIndicatorProps,
@@ -21,11 +21,6 @@ export {
   KanbanCard,
   type KanbanCardProps,
 } from "./components/Kanban.js";
-export {
-  BarChart,
-  type BarChartProps,
-  type BarChartDatum,
-} from "./components/BarChart.js";
 export { ChartFrame, type ChartFrameProps } from "./components/charts/ChartFrame.js";
 export {
   CellMatrix,

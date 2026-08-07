@@ -651,24 +651,6 @@
   cursor: pointer;
 }
 
-/* --- BarChart (widget-scale mini chart; jade→gold bars, no axes) -------- */
-.nx-barchart__svg {
-  display: block;
-  width: 100%;
-  overflow: hidden;
-}
-.nx-barchart__labels {
-  display: flex;
-  gap: var(--nx-space-2);
-  margin-top: var(--nx-space-2);
-}
-.nx-barchart__labels span {
-  flex: 1;
-  text-align: center;
-  font-size: var(--nx-font-size-caption);
-  color: var(--nx-text-muted);
-}
-
 /* --- Charts ------------------------------------------------------------
    The drawn-data layer. House rules, so the ninth chart added next year still
    matches the first — and so that the ways a graphic can LIE are the ways it
@@ -718,6 +700,25 @@
 }
 .nx-chart__caption {
   font-variant-numeric: tabular-nums;
+}
+/* A graphic together with the things that explain it — a legend, a one-line
+   note, the list of records it summarises. `.nx-chart` already spaces a
+   figure's own title and caption; this is for the pieces that sit BESIDE the
+   figure rather than inside it.
+
+   It exists because four surfaces each invented the identical wrapper within a
+   day of each other („Zid navika", „Mapa tela", „Trake pažnje", „Ritam
+   pisanja"), which is the shape of a rule that belongs in one place rather than
+   at every call site. `align-self: stretch` is the load-bearing declaration:
+   most module sections are flex columns with `align-items: flex-start`, and
+   without it a chart shrinks to its content and stops filling the width its
+   viewBox was sized for. */
+.nx-chart-group {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  min-width: 0;
 }
 
 /* --- CellMatrix -------------------------------------------------------- */
